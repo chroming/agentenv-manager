@@ -182,6 +182,7 @@ interface SkillLibraryPanelProps {
   targetNames?: TargetNameIndex;
   preparedTargetsBySkill?: Record<string, PreparedSkillTarget[]>;
   activeTool?: "import" | "discoveries";
+  cleanupScope?: "all" | "shared";
   isRefreshingInventory?: boolean;
   onCloseTool?(): void;
   onRefreshInventory(announce?: boolean): Promise<void>;
@@ -323,6 +324,7 @@ export const SkillLibraryPanel = ({
   targetNames = {},
   preparedTargetsBySkill = {},
   activeTool,
+  cleanupScope = "all",
   isRefreshingInventory = false,
   onCloseTool,
   onRefreshInventory,
@@ -870,12 +872,19 @@ export const SkillLibraryPanel = ({
       setDeleteCandidate(skill);
     }
   };
-  const cleanupGroups = useMemo(
+  const allCleanupGroups = useMemo(
     () => buildSkillCleanupGroups(skillInventory, {
       installedTargetIds,
       preparedTargetsBySkill
     }),
     [installedTargetIds, preparedTargetsBySkill, skillInventory]
+  );
+  const cleanupGroups = useMemo(
+    () =>
+      cleanupScope === "shared"
+        ? allCleanupGroups.filter((group) => Boolean(group.sharedMigration))
+        : allCleanupGroups,
+    [allCleanupGroups, cleanupScope]
   );
   const automaticCleanupRequests = useMemo(
     () =>
@@ -956,6 +965,18 @@ export const SkillLibraryPanel = ({
       ? t(readyCleanupCount === 1 ? "1 ready to clean up" : "{{count}} ready to clean up", { count: readyCleanupCount })
       : ""
   ].filter(Boolean).join(" · ");
+  const cleanupToolTitle =
+    cleanupScope === "shared" ? t("Shared Skill Review") : t("Local Skill Cleanup");
+  const cleanupToolHelp =
+    cleanupScope === "shared"
+      ? t("Review shared compatibility copies before Profiles can control them.")
+      : t("Review local Skill copies, add a canonical version to Library, and remove redundant copies with a restorable backup.");
+  const cleanupListTitle =
+    cleanupScope === "shared" ? t("Shared Skills on this Mac") : t("Skills on this Mac");
+  const cleanupEmptyCopy =
+    cleanupScope === "shared"
+      ? t("No shared Skills need review.")
+      : t("No Agent Skills detected. Install Skills for an enabled Agent and scan again.");
   const localSkillPath = localSkillSource?.path ?? "";
   const normalizedLocalSkillPath = localSkillSource?.kind === "folder"
     ? localSkillPath.trim().replace(/\/+$/, "")
@@ -3433,8 +3454,8 @@ export const SkillLibraryPanel = ({
           <div className="library-drawer__header">
             <div>
               <strong>
-                {t("Local Skill Cleanup")}
-                <InfoTip label={t("Review local Skill copies, add a canonical version to Library, and remove redundant copies with a restorable backup.")} />
+                {cleanupToolTitle}
+                <InfoTip label={cleanupToolHelp} />
               </strong>
             </div>
             <div className="library-drawer__actions">
@@ -3466,7 +3487,7 @@ export const SkillLibraryPanel = ({
             <div className="cleanup-section-heading">
               <div>
                 <div className="resource-heading">
-                  {t("Skills on this Mac")}
+                  {cleanupListTitle}
                   <InfoTip label={t("Each group shows one Skill, its detected copies, and the next safe cleanup action.")} />
                 </div>
                 <small>{migrationSummary || t("No cleanup actions needed")}</small>
@@ -3475,7 +3496,7 @@ export const SkillLibraryPanel = ({
             <div className="resource-list resource-list--unmanaged">
               {cleanupGroups.length === 0 ? (
                 <p className="muted library-empty">
-                  {t("No Agent Skills detected. Install Skills for an enabled Agent and scan again.")}
+                  {cleanupEmptyCopy}
                 </p>
               ) : null}
               {cleanupGroups.map((group, index) => {

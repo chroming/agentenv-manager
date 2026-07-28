@@ -60,6 +60,7 @@ describe("Repository Skill source", () => {
     });
     const page = await app.firstWindow();
     await page.setViewportSize({ width: 920, height: 620 });
+    await page.getByRole("button", { name: "Skills", exact: true }).click();
     await page.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });
 
     await page.getByRole("button", { name: "Import skills" }).click();
@@ -320,6 +321,7 @@ describe("Repository Skill source", () => {
     });
     const page = await app.firstWindow();
     await page.setViewportSize({ width: 920, height: 620 });
+    await page.getByRole("button", { name: "Skills", exact: true }).click();
     await page.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });
 
     const importDirectory = async (directory: string) => {

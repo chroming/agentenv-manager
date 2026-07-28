@@ -37,12 +37,12 @@ export const buildQuickOpenItems = ({
   onRefreshTargets
 }: QuickOpenItemOptions): QuickOpenItem[] => [
   {
-    id: "workspace:skills",
+    id: "workspace:targets",
     group: t("Pages"),
-    label: t("Skills"),
-    description: t("Skill library"),
-    icon: <BookOpenText size={16} strokeWidth={2.2} />,
-    onSelect: () => onOpenWorkspace("library")
+    label: t("Agents"),
+    description: t("Local agent tools"),
+    icon: <Monitor size={16} strokeWidth={2.2} />,
+    onSelect: () => onOpenWorkspace("targets")
   },
   {
     id: "workspace:profiles",
@@ -61,12 +61,12 @@ export const buildQuickOpenItems = ({
     onSelect: () => onOpenWorkspace("conversations")
   },
   {
-    id: "workspace:targets",
+    id: "workspace:skills",
     group: t("Pages"),
-    label: t("Agents"),
-    description: t("Local agent tools"),
-    icon: <Monitor size={16} strokeWidth={2.2} />,
-    onSelect: () => onOpenWorkspace("targets")
+    label: t("Skills"),
+    description: t("Skill library"),
+    icon: <BookOpenText size={16} strokeWidth={2.2} />,
+    onSelect: () => onOpenWorkspace("library")
   },
   {
     id: "workspace:settings",

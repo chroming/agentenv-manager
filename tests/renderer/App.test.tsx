@@ -17,6 +17,7 @@ import type {
   AgentEnvSettings,
   ApplyIssue,
   ProfileDetail,
+  SkillInventoryEntry,
   SkillLibraryEntry,
   SkillUpdateInfo,
   TargetInfo,
@@ -786,9 +787,9 @@ describe("App", () => {
     });
     render(<App />);
 
-    expect(await screen.findByRole("region", { name: "Library workspace" }))
+    expect(await screen.findByRole("region", { name: "Agents" }))
       .toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Skills" }))
+    expect(screen.getByRole("button", { name: "Agents" }))
       .toHaveAttribute("aria-current", "page");
 
     requestSettings?.();
@@ -796,7 +797,7 @@ describe("App", () => {
     expect(await screen.findByRole("region", { name: "Settings" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Settings" }))
       .toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("button", { name: "Skills" }))
+    expect(screen.getByRole("button", { name: "Agents" }))
       .not.toHaveAttribute("aria-current");
   });
 
@@ -816,15 +817,133 @@ describe("App", () => {
       within(workspace).getByRole("button", { name: "Configure OpenCode" })
     ).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).toBeNull();
+    expect(await within(workspace).findByText("Set up your first Agent")).toBeInTheDocument();
     await waitFor(() =>
       expect(window.localStorage.getItem("agentenv:last-workspace")).toBe("targets")
     );
   });
 
+  it("keeps Agent configuration available while the environment scan is pending", async () => {
+    const inventoryRequest =
+      deferred<Awaited<ReturnType<AgentEnvApi["scanSkillInventory"]>>>();
+    installApi({
+      scanSkillInventory: vi.fn().mockReturnValue(inventoryRequest.promise)
+    });
+
+    render(<App />);
+
+    const workspace = await screen.findByRole("region", { name: "Agents" });
+    expect(within(workspace).getByText("Checking local Skills")).toBeInTheDocument();
+    expect(
+      within(workspace).getByRole("button", { name: "Configure OpenCode" })
+    ).toBeEnabled();
+
+    await act(async () => {
+      inventoryRequest.resolve([]);
+      await Promise.resolve();
+    });
+    expect(await within(workspace).findByText("Environment ready")).toBeInTheDocument();
+  });
+
+  it("keeps Agents usable when the optional environment scan fails", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    installApi({
+      scanSkillInventory: vi.fn().mockRejectedValue(
+        new Error("Local inventory is temporarily unavailable")
+      )
+    });
+
+    render(<App />);
+
+    const workspace = await screen.findByRole("region", { name: "Agents" });
+    expect(
+      await within(workspace).findByText("Environment check unavailable")
+    ).toBeInTheDocument();
+    expect(
+      within(workspace).getByRole("button", { name: "Configure OpenCode" })
+    ).toBeEnabled();
+    expect(
+      within(
+        within(workspace).getByRole("region", { name: "Environment status" })
+      ).getByRole("button", { name: "Retry" })
+    ).toBeEnabled();
+    expect(warning).toHaveBeenCalledWith(
+      expect.stringContaining("Local Skill inventory is unavailable")
+    );
+  });
+
+  it("reviews only shared compatibility Skills from the Agents environment status", async () => {
+    const inventory: SkillInventoryEntry[] = [
+      {
+        id: "shared-review",
+        name: "Shared review",
+        description: "Loaded from the shared compatibility path",
+        path: "/tmp/home/.agents/skills/shared-review",
+        foundIn: ["opencode"],
+        status: "outside",
+        skillKey: "shared-review",
+        contentHash: "shared-hash",
+        sharedLocation: true,
+        sharedLocationId: "agents-skills",
+        locationManagement: "migration-only"
+      },
+      {
+        id: "agent-only",
+        name: "Agent only",
+        description: "Only in the Agent-specific path",
+        path: "/tmp/home/.config/opencode/skills/agent-only",
+        foundIn: ["opencode"],
+        status: "outside",
+        skillKey: "agent-only",
+        contentHash: "agent-hash"
+      }
+    ];
+    installApi({
+      scanSkillInventory: vi.fn().mockResolvedValue(inventory)
+    });
+
+    render(<App />);
+
+    const workspace = await screen.findByRole("region", { name: "Agents" });
+    expect(
+      await within(workspace).findByText("1 shared Skill needs review")
+    ).toBeInTheDocument();
+    fireEvent.click(within(workspace).getByRole("button", { name: "Review" }));
+
+    const drawer = await screen.findByRole("region", { name: "Environment skills" });
+    expect(within(drawer).getByText("Shared Skill Review")).toBeInTheDocument();
+    expect(
+      within(drawer).getByRole("group", { name: "Cleanup group shared-review" })
+    ).toBeInTheDocument();
+    expect(
+      within(drawer).queryByRole("group", { name: "Cleanup group agent-only" })
+    ).toBeNull();
+  });
+
+  it("orders the primary navigation by the environment workflow", async () => {
+    installApi();
+    render(<App />);
+
+    const navigation = screen.getByRole("navigation", { name: "Workspace" });
+    const agents = within(navigation).getByRole("button", { name: "Agents" });
+    const profiles = within(navigation).getByRole("button", { name: "Profiles" });
+    const conversations = within(navigation).getByRole("button", {
+      name: "Conversations"
+    });
+    const skills = within(navigation).getByRole("button", { name: "Skills" });
+
+    expect(agents.compareDocumentPosition(profiles) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+    expect(profiles.compareDocumentPosition(conversations) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+    expect(conversations.compareDocumentPosition(skills) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+  });
+
   it("restores the last stable workspace on the next launch", async () => {
     installApi();
     const firstLaunch = render(<App />);
-    await screen.findByRole("region", { name: "Library workspace" });
+    await screen.findByRole("region", { name: "Agents" });
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     await screen.findByRole("region", { name: "Settings" });
     await waitFor(() =>
@@ -969,6 +1088,10 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Profiles" }));
   };
 
+  const openLibrary = async () => {
+    fireEvent.click(await screen.findByRole("button", { name: "Skills" }));
+  };
+
   const openSettingsCategory = async (category: "General" | "Agents" | "Skills" | "Connections" | "Data") => {
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
     fireEvent.click(screen.getByRole("tab", { name: category }));
@@ -1088,6 +1211,7 @@ describe("App", () => {
     });
     render(<App />);
 
+    await openLibrary();
     expect(
       await screen.findByRole("group", { name: "Library item startup-reviewer" })
     ).toBeInTheDocument();
@@ -1212,6 +1336,7 @@ describe("App", () => {
     });
     render(<App />);
 
+    await openLibrary();
     expect(
       await screen.findByRole("group", {
         name: "Library item github-reviewer"
@@ -1276,6 +1401,7 @@ describe("App", () => {
     });
     render(<App />);
 
+    await openLibrary();
     await screen.findByRole("group", { name: "Library item github-reviewer" });
     fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
 
@@ -1318,6 +1444,7 @@ describe("App", () => {
     });
     render(<App />);
 
+    await openLibrary();
     const localRow = await screen.findByRole("group", { name: "Library item local-reviewer" });
     expect(within(localRow).queryByRole("button", { name: "Check update local-reviewer" })).toBeNull();
     fireEvent.click(within(localRow).getByRole("button", { name: "More actions for local-reviewer" }));
@@ -1379,6 +1506,7 @@ describe("App", () => {
     });
     render(<App />);
 
+    await openLibrary();
     const row = await screen.findByRole("group", { name: "Library item source-reviewer" });
     await waitFor(() => expect(
       within(row).getByRole("button", { name: "Update source-reviewer" })
@@ -1443,6 +1571,7 @@ describe("App", () => {
     });
     render(<App />);
 
+    await openLibrary();
     fireEvent.click(await screen.findByRole("tab", { name: "By source" }));
     const checkButton = await screen.findByRole("button", { name: "Check for updates" });
     fireEvent.click(checkButton);
@@ -1470,6 +1599,7 @@ describe("App", () => {
     });
     render(<App />);
 
+    await openLibrary();
     const localRow = await screen.findByRole("group", { name: "Library item local-reviewer" });
     const unrelatedReads = [
       api.listTargets,
@@ -1553,6 +1683,7 @@ describe("App", () => {
     });
     render(<App />);
 
+    await openLibrary();
     await screen.findByRole("region", { name: "Skill library" });
     expect(api.scanSkillInventory).toHaveBeenCalledTimes(1);
 
@@ -1667,7 +1798,7 @@ describe("App", () => {
     const api = installApi();
     render(<App />);
 
-    await screen.findByRole("region", { name: "Library workspace" });
+    await screen.findByRole("region", { name: "Agents" });
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
 
     const unrelatedReads = [
@@ -1931,6 +2062,7 @@ describe("App", () => {
     });
     render(<App />);
 
+    await openLibrary();
     await screen.findByRole("region", { name: "Skill library" });
     expect(
       within(screen.getByRole("navigation", { name: "Workspace" })).queryByRole(
@@ -2128,8 +2260,7 @@ describe("App", () => {
     });
     render(<App />);
 
-    await screen.findByRole("region", { name: "Skill library" });
-    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    await screen.findByRole("region", { name: "Agents" });
     expect(await screen.findByRole("article", { name: "Agent OpenCode" })).toHaveTextContent("Ready");
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
@@ -2163,8 +2294,7 @@ describe("App", () => {
     });
     render(<App />);
 
-    await screen.findByRole("region", { name: "Skill library" });
-    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    await screen.findByRole("region", { name: "Agents" });
     const targetCard = await screen.findByRole("article", { name: "Agent OpenCode" });
     fireEvent.click(within(targetCard).getByRole("button", { name: "OpenCode" }));
 
@@ -3179,8 +3309,7 @@ describe("App", () => {
     });
     render(<App />);
 
-    await screen.findByRole("region", { name: "Library workspace" });
-    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    await screen.findByRole("region", { name: "Agents" });
 
     const openCodeCard = await screen.findByRole("article", { name: "Agent OpenCode" });
     expect(within(openCodeCard).getByText("Applied")).toBeInTheDocument();
@@ -3211,8 +3340,7 @@ describe("App", () => {
     });
     render(<App />);
 
-    await screen.findByRole("region", { name: "Skill library" });
-    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    await screen.findByRole("region", { name: "Agents" });
     const targetCard = await screen.findByRole("article", { name: "Agent OpenCode" });
     fireEvent.click(
       within(targetCard).getByRole("button", { name: "Configure OpenCode" })
@@ -3236,8 +3364,7 @@ describe("App", () => {
     });
     render(<App />);
 
-    await screen.findByRole("region", { name: "Skill library" });
-    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    await screen.findByRole("region", { name: "Agents" });
     const targetCard = await screen.findByRole("article", { name: "Agent Codex" });
     fireEvent.click(
       within(targetCard).getByRole("button", { name: "Configure Codex" })
@@ -3287,8 +3414,7 @@ describe("App", () => {
     });
     render(<App />);
 
-    await screen.findByRole("region", { name: "Skill library" });
-    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    await screen.findByRole("region", { name: "Agents" });
     const targetCard = await screen.findByRole("article", { name: "Agent OpenCode" });
     fireEvent.click(
       within(targetCard).getByRole("button", { name: "Configure OpenCode" })
@@ -3323,8 +3449,7 @@ describe("App", () => {
     });
     render(<App />);
 
-    await screen.findByRole("region", { name: "Library workspace" });
-    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    await screen.findByRole("region", { name: "Agents" });
     fireEvent.click(await screen.findByRole("button", { name: "Show OpenCode diagnostics" }));
     expect(screen.getByText("Detected via")).toBeInTheDocument();
     expect(screen.getByText("opencode command")).toBeInTheDocument();
@@ -3620,8 +3745,7 @@ describe("App", () => {
     installApi();
     render(<App />);
 
-    await screen.findByRole("region", { name: "Skill library" });
-    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    await screen.findByRole("region", { name: "Agents" });
     const targetsWorkspace = await screen.findByRole("region", { name: "Agents" });
     const targetCard = within(targetsWorkspace).getByRole("article", { name: "Agent OpenCode" });
     fireEvent.click(within(targetCard).getByRole("button", { name: "Configure OpenCode" }));
@@ -3822,8 +3946,7 @@ describe("App", () => {
     });
     render(<App />);
 
-    await screen.findByRole("region", { name: "Skill library" });
-    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    await screen.findByRole("region", { name: "Agents" });
     expect(screen.queryByRole("region", { name: "History" })).not.toBeInTheDocument();
     const recoveryTrigger = screen.getByRole("button", { name: /Recovery/ });
     fireEvent.click(recoveryTrigger);

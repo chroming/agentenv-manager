@@ -208,6 +208,10 @@ import {
   updatesFromSourceGroups
 } from "./skillUpdateSummary";
 import { createTargetNameIndex } from "./targetPresentation";
+import {
+  deriveEnvironmentReview,
+  type EnvironmentScanStatus
+} from "./environmentReview";
 
 const emptyProfileResources: ProfileResources = {
   skills: [],
@@ -302,6 +306,8 @@ const AppContent = ({
   const [skillLibraryMode, setSkillLibraryMode] = useState<"skills" | "sources">("skills");
   const [skillUpdates, setSkillUpdates] = useState<SkillUpdateInfo[]>([]);
   const [skillInventory, setSkillInventory] = useState<SkillInventoryEntry[]>([]);
+  const [environmentScanStatus, setEnvironmentScanStatus] =
+    useState<EnvironmentScanStatus>("checking");
   const [skillInventoryRefreshing, setSkillInventoryRefreshing] = useState(false);
   const [skillCleanupBackups, setSkillCleanupBackups] = useState<SkillCleanupBackupSummary[]>([]);
   const [skillCleanupResult, setSkillCleanupResult] = useState<SkillCleanupResult>();
@@ -353,7 +359,7 @@ const AppContent = ({
   const [rollbackError, setRollbackError] = useState<string>();
   const [initialWorkspacePreference] = useState(readWorkspacePreference);
   const [activeWorkspace, setActiveWorkspace] = useState<AppWorkspace>(
-    initialWorkspacePreference ?? "library"
+    initialWorkspacePreference ?? "targets"
   );
   const [conversationViewState, setConversationViewState] =
     useState<ConversationWorkspaceViewState>();
@@ -366,6 +372,8 @@ const AppContent = ({
     defaultSkillLibraryViewState
   );
   const [skillLibraryTool, setSkillLibraryTool] = useState<"import" | "discoveries">();
+  const [skillCleanupScope, setSkillCleanupScope] =
+    useState<"all" | "shared">("all");
   const [skillUpdateCheckStatus, setSkillUpdateCheckStatus] =
     useState<SkillUpdateCheckStatus>();
   const [skillUpdateFeedbackWorkspace, setSkillUpdateFeedbackWorkspace] =
@@ -704,6 +712,9 @@ const AppContent = ({
     shouldApply: () => boolean = () => true,
     forceSkillUpdateCheck = false
   ) => {
+    if (shouldApply()) {
+      setEnvironmentScanStatus("checking");
+    }
     const skillUpdateResultRevision = skillUpdateResultRevisionRef.current;
     const {
       supportedTargetItems,
@@ -726,8 +737,6 @@ const AppContent = ({
     const skillUpdateItems = checkedSources
       ? updatesFromSourceGroups(checkedSources.groups, skillItems)
       : skillUpdates;
-    const skillInventoryItems =
-      skillInventoryResult.status === "fulfilled" ? skillInventoryResult.value : skillInventory;
     const githubStatus =
       githubStatusResult.status === "fulfilled"
         ? githubStatusResult.value
@@ -764,7 +773,19 @@ const AppContent = ({
       setSkillUpdates(skillUpdateItems);
       if (checkedSources) setSkillSourceGroups(checkedSources.groups);
     }
-    setSkillInventory(skillInventoryItems);
+    if (skillInventoryResult.status === "fulfilled") {
+      setSkillInventory(skillInventoryResult.value);
+      setEnvironmentScanStatus("ready");
+    } else {
+      setEnvironmentScanStatus("error");
+      console.warn(
+        `[AgentEnv] Local Skill inventory is unavailable: ${
+          skillInventoryResult.reason instanceof Error
+            ? skillInventoryResult.reason.message
+            : String(skillInventoryResult.reason)
+        }`
+      );
+    }
     setGithubAuthStatus(githubStatus);
     setSkillUsage(usage);
     setProfileLibraryVersions(nextProfileLibraryVersions);
@@ -804,11 +825,17 @@ const AppContent = ({
     }
     setError(undefined);
     setSkillRefreshStatus("refreshing");
+    setEnvironmentScanStatus("checking");
+    const inventoryPromise = window.agentEnv.scanSkillInventory();
+    void inventoryPromise.then(
+      () => setEnvironmentScanStatus("ready"),
+      () => setEnvironmentScanStatus("error")
+    );
     try {
       const [skillItems, inventoryItems, , sourceGroupItems] =
         await Promise.all([
           window.agentEnv.listSkillLibrary(),
-          window.agentEnv.scanSkillInventory(),
+          inventoryPromise,
           loadSkillCleanupHistory(),
           skillLibraryMode === "sources"
             ? window.agentEnv.listSkillSourceGroups()
@@ -816,6 +843,7 @@ const AppContent = ({
         ]);
       setLibrarySkills(skillItems);
       setSkillInventory(inventoryItems);
+      setEnvironmentScanStatus("ready");
       if (sourceGroupItems) setSkillSourceGroups(sourceGroupItems);
       setSkillRefreshStatus("refreshed");
     } catch (unknownError) {
@@ -922,18 +950,7 @@ const AppContent = ({
         const { profileItems, targetItems, targetStateItems } = core;
         const usableProfiles = profileItems.filter((profile) => !profile.loadError);
         if (!initialWorkspacePreference) {
-          const installedTargets = targetItems.filter((target) =>
-            isTargetInstalled(target.health)
-          );
-          if (usableProfiles.length === 0 && installedTargets.length > 0) {
-            setActiveWorkspace("targets");
-          }
           setWorkspacePreferenceReady(true);
-        } else if (
-          initialWorkspacePreference === "targets" &&
-          targetItems.length === 0
-        ) {
-          setActiveWorkspace("library");
         }
         if (usableProfiles.length === 0) {
           return;
@@ -1833,6 +1850,7 @@ const AppContent = ({
       }
       if (skillLibraryTool) {
         setSkillLibraryTool(undefined);
+        setSkillCleanupScope("all");
         return;
       }
       if (isProfileActionsOpen) {
@@ -1924,6 +1942,25 @@ const AppContent = ({
           return bySkill;
         }, {}),
     [targetStates]
+  );
+  const environmentReview = useMemo(
+    () =>
+      deriveEnvironmentReview({
+        scanStatus: environmentScanStatus,
+        inventory: skillInventory,
+        installedTargetIds: installedTargets.map((target) => target.id),
+        profiles,
+        targetStates,
+        preparedTargetsBySkill: preparedSkillTargetsBySkill
+      }),
+    [
+      environmentScanStatus,
+      installedTargets,
+      preparedSkillTargetsBySkill,
+      profiles,
+      skillInventory,
+      targetStates
+    ]
   );
   const selectedTargetState = targetStates.find((state) => state.targetId === selectedTarget?.id);
   const deleteProfileCandidate = deleteProfileCandidateId
@@ -2722,6 +2759,7 @@ const AppContent = ({
   const refreshSkillDiscoveries = async (announce = true) => {
     setBusy(true);
     setSkillInventoryRefreshing(true);
+    setEnvironmentScanStatus("checking");
     setError(undefined);
     if (announce) {
       setSkillUpdateCheckStatus({ state: "checking", message: "Refreshing local skills..." });
@@ -2729,12 +2767,14 @@ const AppContent = ({
     try {
       const inventory = await window.agentEnv.scanSkillInventory();
       setSkillInventory(inventory);
+      setEnvironmentScanStatus("ready");
       if (announce) {
         setSkillUpdateCheckStatus({ state: "success", message: "Local skills refreshed" });
       }
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
       setError(message);
+      setEnvironmentScanStatus("error");
       if (announce) {
         setSkillUpdateCheckStatus({ state: "error", message: "Local skill refresh failed" });
       }
@@ -2745,8 +2785,21 @@ const AppContent = ({
   };
 
   const openSkillDiscoveries = async () => {
+    setSkillCleanupScope("all");
     setSkillLibraryTool("discoveries");
     await refreshSkillDiscoveries(false);
+  };
+
+  const openEnvironmentReview = () => {
+    guardProfileAction("review shared Skills", () => {
+      libraryScroll.captureScroll();
+      setSkillUpdateFeedbackWorkspace("library");
+      setSkillLibraryMode("skills");
+      setSkillCleanupScope("shared");
+      setSkillLibraryTool("discoveries");
+      setActiveWorkspace("library");
+      void refreshSkillDiscoveries(false);
+    });
   };
 
   const setSkillPathPolicies = async (input: SkillPathPolicyUpdate) => {
@@ -4227,8 +4280,12 @@ const AppContent = ({
                 targetNames={targetNames}
                 preparedTargetsBySkill={preparedSkillTargetsBySkill}
                 activeTool={skillLibraryTool}
+                cleanupScope={skillCleanupScope}
                 isRefreshingInventory={skillInventoryRefreshing}
-                onCloseTool={() => setSkillLibraryTool(undefined)}
+                onCloseTool={() => {
+                  setSkillLibraryTool(undefined);
+                  setSkillCleanupScope("all");
+                }}
                 onRefreshInventory={refreshSkillDiscoveries}
                 onSelectLocalSkillSource={() => window.agentEnv.selectLocalSkillSource()}
                 onReleaseSkillArchive={(token) => window.agentEnv.releaseSkillArchive(token)}
@@ -4853,6 +4910,8 @@ const AppContent = ({
             <TargetWorkspace
               targets={targets}
               targetStates={targetStates}
+              environmentReview={environmentReview}
+              targetNames={targetNames}
               mcpConnections={nativeMcpConnections ?? []}
               backups={backups}
               rollbackPreview={rollbackPreview}
@@ -4862,6 +4921,7 @@ const AppContent = ({
               busy={busy}
               onRefresh={refreshTargets}
               onConfigure={openAgentConfiguration}
+              onReviewEnvironment={openEnvironmentReview}
               onCreateProfileFromTarget={(targetId) =>
                 openCreateFromTargetDialog(targetId, "all")}
               onPreviewRollback={previewSelectedRollback}

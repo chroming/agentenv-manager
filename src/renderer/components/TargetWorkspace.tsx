@@ -25,10 +25,14 @@ import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { Button, ControlGroup, ModalFrame, PageHeader } from "./ui";
 import { isTargetInstalled } from "../../shared/targetHealth";
+import type { EnvironmentReviewSummary } from "../environmentReview";
+import { EnvironmentStatusStrip } from "./EnvironmentStatusStrip";
 
 interface TargetWorkspaceProps {
   targets: TargetInfo[];
   targetStates: TargetManagementState[];
+  environmentReview: EnvironmentReviewSummary;
+  targetNames: Record<string, string>;
   mcpConnections: NativeMcpConnection[];
   backups: BackupSummary[];
   rollbackPreview?: RollbackPreview;
@@ -38,6 +42,7 @@ interface TargetWorkspaceProps {
   busy: boolean;
   onRefresh(): Promise<void>;
   onConfigure(targetId: string): void;
+  onReviewEnvironment(): void;
   onCreateProfileFromTarget(targetId: string): void;
   onPreviewRollback(backupId: string): void;
   onCancelRollback(): void;
@@ -83,6 +88,8 @@ const lifecycleLabel: Record<TargetManagementState["lifecycleStatus"], string> =
 export const TargetWorkspace = ({
   targets,
   targetStates,
+  environmentReview,
+  targetNames,
   mcpConnections,
   backups,
   rollbackPreview,
@@ -92,6 +99,7 @@ export const TargetWorkspace = ({
   busy,
   onRefresh,
   onConfigure,
+  onReviewEnvironment,
   onCreateProfileFromTarget,
   onPreviewRollback,
   onCancelRollback,
@@ -163,6 +171,17 @@ export const TargetWorkspace = ({
             </Button>
           </ControlGroup>
         )}
+      />
+
+      <EnvironmentStatusStrip
+        summary={environmentReview}
+        targetNames={targetNames}
+        busy={busy}
+        onConfigure={onConfigure}
+        onRefresh={() => {
+          void onRefresh();
+        }}
+        onReviewShared={onReviewEnvironment}
       />
 
       <div className="target-list">

@@ -24,7 +24,6 @@ import { createFileGitHubTokenStore, createGitHubAuthService } from "./githubAut
 import { registerIpcHandlers } from "./ipc";
 import { createPaths } from "./paths";
 import { createProfileStore } from "./profileStore";
-import { seedDefaultProfiles } from "./seedProfiles";
 import { createSettingsStore } from "./settingsStore";
 import { createSkillLibraryStore } from "./skillLibraryStore";
 import { createTargetDiscoveryService } from "./targetDiscovery";
@@ -46,7 +45,7 @@ import {
   windowBackgroundColor,
   windowChromeOptionsFor
 } from "./windowConfig";
-import { pathEntryExists, recoverPendingReplacementsInDirectory } from "./fileUtils";
+import { recoverPendingReplacementsInDirectory } from "./fileUtils";
 import { createMutationCoordinator } from "./mutationCoordinator";
 import { ensureAppDataFormat } from "./appDataFormat";
 import { migrateAppDataToV2 } from "./appDataMigration";
@@ -726,13 +725,6 @@ const createServices = async (
     },
     findManagedInstallPaths: skillLibraryStore.findManagedInstallPaths
   });
-
-  reportPhase("preparing-workspace");
-  if (!(await pathEntryExists(paths.workspaceSyncJournalPath))) {
-    await mutationCoordinator.runExclusive("Initialize Profiles", () =>
-      seedDefaultProfiles(paths, targetRegistry)
-    );
-  }
 
   return {
     paths,

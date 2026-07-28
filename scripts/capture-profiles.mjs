@@ -642,6 +642,18 @@ try {
   const windowHandle = await app.browserWindow(page);
   await page.waitForLoadState("domcontentloaded");
   await setWindowSize(page, windowHandle, 1180, 728);
+  const agentsWorkspace = page.getByRole("region", { name: "Agents", exact: true });
+  await agentsWorkspace.waitFor({ state: "visible" });
+  await agentsWorkspace.getByRole("article", { name: "Agent OpenCode" }).waitFor({
+    state: "visible"
+  });
+  await page.waitForFunction(() =>
+    !document
+      .querySelector(".environment-status-strip")
+      ?.classList.contains("environment-status-strip--checking")
+  );
+  await capturePage(page, join(outputDir, "agents-first-run-1180x728.png"));
+  await page.getByRole("button", { name: "Skills", exact: true }).click();
   await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({ state: "visible" });
   await page.getByRole("group", { name: "Library item react-best-practices" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-1180x728.png"));

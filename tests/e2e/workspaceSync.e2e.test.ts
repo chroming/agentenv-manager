@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -31,7 +31,36 @@ describe("Workspace Sync desktop flow", () => {
     const remote = join(root, "workspace.git");
     await execFileAsync("/usr/bin/git", ["init", "--bare", remote]);
     const home = join(root, "home");
+    const dataRoot = join(root, "data");
     await mkdir(home, { recursive: true });
+    const profileRoot = join(dataRoot, "profiles", "portable-workspace");
+    await mkdir(profileRoot, { recursive: true });
+    await writeFile(
+      join(dataRoot, "agentenv-data.json"),
+      `${JSON.stringify({ formatVersion: 2 }, null, 2)}\n`,
+      "utf8"
+    );
+    await writeFile(
+      join(profileRoot, "profile.json"),
+      `${JSON.stringify({
+        id: "portable-workspace",
+        name: "Portable Workspace",
+        description: "Workspace Sync e2e fixture",
+        preferredTargetId: "opencode",
+        version: 2
+      }, null, 2)}\n`,
+      "utf8"
+    );
+    await writeFile(
+      join(profileRoot, "INSTRUCTIONS.md"),
+      "# Portable Workspace\n",
+      "utf8"
+    );
+    await writeFile(
+      join(profileRoot, "resources.json"),
+      `${JSON.stringify({ skills: [], managementByTarget: {}, mcpByTarget: {} }, null, 2)}\n`,
+      "utf8"
+    );
     app = await electron.launch({
       executablePath: electronPath as unknown as string,
       args: [`--user-data-dir=${join(root, "electron-user-data")}`, "."],
@@ -39,7 +68,7 @@ describe("Workspace Sync desktop flow", () => {
       env: {
         ...process.env,
         AGENTENV_AUTOMATION: "1",
-        AGENTENV_DATA_ROOT: join(root, "data"),
+        AGENTENV_DATA_ROOT: dataRoot,
         AGENTENV_CACHE_ROOT: join(root, "cache"),
         AGENTENV_HOME: home
       }
@@ -84,7 +113,7 @@ describe("Workspace Sync desktop flow", () => {
       env: {
         ...process.env,
         AGENTENV_AUTOMATION: "1",
-        AGENTENV_DATA_ROOT: join(root, "data"),
+        AGENTENV_DATA_ROOT: dataRoot,
         AGENTENV_CACHE_ROOT: join(root, "cache"),
         AGENTENV_HOME: home
       }

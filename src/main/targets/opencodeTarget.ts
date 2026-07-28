@@ -114,7 +114,6 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     description: "Manage OpenCode instructions, Skills, and MCP activation.",
     iconKey: "opencode",
     displayOrder: 0,
-    defaultProfileId: "opencode-daily-coding",
     instructionsLabel: "AGENTS.md",
     configLabel: "opencode.jsonc",
     configLanguage: "jsonc",

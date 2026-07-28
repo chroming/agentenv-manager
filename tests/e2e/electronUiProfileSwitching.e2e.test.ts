@@ -461,7 +461,10 @@ const launchApp = async (
     missingProfileSkill?: boolean;
     openCodeDesktopOnly?: boolean;
     omitOpenCodeProfiles?: boolean;
+    omitAllProfiles?: boolean;
     projectSkillFixture?: boolean;
+    sharedSkillFixture?: boolean;
+    initialWorkspace?: "library" | "profiles" | "conversations" | "targets" | "settings" | null;
   } = {}
 ) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-electron-ui-"));
@@ -575,19 +578,23 @@ const launchApp = async (
     ].join("\n"),
     "utf8"
   );
-  if (!options.omitOpenCodeProfiles) {
+  if (!options.omitAllProfiles && !options.omitOpenCodeProfiles) {
     await writeOpenCodeProfile(appDataRoot, "alpha");
     await writeOpenCodeProfile(appDataRoot, "beta", options.openCodeBetaProfileName);
   }
-  await writeCodexProfile(appDataRoot, "alpha");
-  await writeCodexProfile(appDataRoot, "beta");
-  if (options.malformedProfile) {
+  if (!options.omitAllProfiles) {
+    await writeCodexProfile(appDataRoot, "alpha");
+    await writeCodexProfile(appDataRoot, "beta");
+  }
+  if (!options.omitAllProfiles && options.malformedProfile) {
     const brokenProfileDir = join(appDataRoot, "profiles", "broken-profile");
     await mkdir(brokenProfileDir, { recursive: true });
     await writeFile(join(brokenProfileDir, "profile.json"), "{}\n", "utf8");
   }
   if (options.includeClaudeTarget) {
-    await writeClaudeProfile(appDataRoot);
+    if (!options.omitAllProfiles) {
+      await writeClaudeProfile(appDataRoot);
+    }
     await writeJson(join(homeDir, ".claude.json"), {
       mcpServers: {
         "claude-native": {
@@ -599,7 +606,9 @@ const launchApp = async (
     });
   }
   if (options.includeTraeTarget) {
-    await writeTraeProfile(appDataRoot);
+    if (!options.omitAllProfiles) {
+      await writeTraeProfile(appDataRoot);
+    }
     await mkdir(join(traeDir, "rules"), { recursive: true });
     await writeFile(join(traeDir, "AGENTS.md"), "# Existing UI Trae\n", "utf8");
     await writeFile(join(traeDir, "traecli.toml"), [
@@ -659,6 +668,15 @@ const launchApp = async (
       "utf8"
     );
   }
+  if (options.sharedSkillFixture) {
+    const sharedSkillDir = join(homeDir, ".agents", "skills", "shared-onboarding");
+    await mkdir(sharedSkillDir, { recursive: true });
+    await writeFile(
+      join(sharedSkillDir, "SKILL.md"),
+      "---\nname: Shared Onboarding\ndescription: Shared compatibility fixture.\n---\n\n# Shared Onboarding\n",
+      "utf8"
+    );
+  }
   if (options.migratedBackupFixtures) {
     await writeMigratedBackupFixtures(appDataRoot);
   }
@@ -692,6 +710,19 @@ const launchApp = async (
     state: "visible",
     timeout: 15_000
   });
+  const initialWorkspace =
+    options.initialWorkspace === undefined ? "library" : options.initialWorkspace;
+  if (initialWorkspace) {
+    await page.evaluate((workspace) => {
+      window.localStorage.setItem("agentenv:last-workspace", workspace);
+    }, initialWorkspace);
+    await page.reload();
+    await page.waitForLoadState("domcontentloaded");
+    await page.getByRole("complementary", { name: "Global navigation" }).waitFor({
+      state: "visible",
+      timeout: 15_000
+    });
+  }
 
   return {
     app,
@@ -965,6 +996,73 @@ afterEach(async () => {
 });
 
 describe("Electron UI profile switching e2e", () => {
+  it("keeps a new workspace empty until the user explicitly captures an Agent", async () => {
+    const { appDataRoot, page } = await launchApp({
+      initialWorkspace: null,
+      omitAllProfiles: true
+    });
+
+    const agents = page.getByRole("region", { name: "Agents", exact: true });
+    await agents.waitFor({ state: "visible" });
+    await agents.getByText("Set up your first Agent", { exact: true }).waitFor({
+      state: "visible"
+    });
+    expect(
+      await readdir(join(appDataRoot, "profiles")).catch(() => [])
+    ).toEqual([]);
+    expect(await page.getByRole("dialog").count()).toBe(0);
+
+    await agents.getByRole("button", { name: "Configure OpenCode" }).click();
+    await page.getByRole("dialog", {
+      name: "Create profile from OpenCode"
+    }).waitFor({ state: "visible" });
+    expect(
+      await readdir(join(appDataRoot, "profiles")).catch(() => [])
+    ).toEqual([]);
+  }, 30_000);
+
+  it("opens Agents first and routes shared environment review into scoped cleanup", async () => {
+    const { page } = await launchApp({
+      initialWorkspace: null,
+      sharedSkillFixture: true
+    });
+
+    const agents = page.getByRole("region", { name: "Agents", exact: true });
+    await agents.waitFor({ state: "visible" });
+    await agents.getByRole("article", { name: "Agent OpenCode" }).waitFor({
+      state: "visible"
+    });
+    await agents.getByText("1 shared Skill needs review", { exact: true }).waitFor({
+      state: "visible"
+    });
+
+    const navigation = page.getByRole("navigation", { name: "Workspace" });
+    const order = await navigation.locator(".workspace-button").evaluateAll((items) =>
+      items.map((item) => item.getAttribute("data-workspace"))
+    );
+    expect(order).toEqual([
+      "targets",
+      "profiles",
+      "conversations",
+      "library",
+      "settings"
+    ]);
+
+    await agents.getByRole("button", { name: "Review", exact: true }).click();
+    const cleanup = page.getByRole("region", { name: "Environment skills" });
+    await cleanup.waitFor({ state: "visible" });
+    await cleanup.getByText("Shared Skill Review", { exact: true }).waitFor({
+      state: "visible"
+    });
+    await cleanup.getByRole("group", {
+      name: "Cleanup group shared-onboarding"
+    }).waitFor({ state: "visible" });
+    await expectNoHorizontalOverflow(page, [
+      ".editor-panel",
+      ".library-drawer"
+    ]);
+  }, 30_000);
+
   it("opens Profiles and Skills from the global quick search", async () => {
     const { page } = await launchApp();
 
@@ -3923,8 +4021,24 @@ describe("Electron UI profile switching e2e", () => {
       }
     }
 
-    const profilePositions = await Promise.all([skillsButton.boundingBox(), profilesButton.boundingBox()]);
-    expect(profilePositions[0]!.y).toBeLessThan(profilePositions[1]!.y);
+    const agentsButton = navigation.getByRole("button", {
+      name: "Agents",
+      exact: true
+    });
+    const conversationsButton = navigation.getByRole("button", {
+      name: "Conversations",
+      exact: true
+    });
+    const navigationPositions = await Promise.all([
+      agentsButton.boundingBox(),
+      profilesButton.boundingBox(),
+      conversationsButton.boundingBox(),
+      skillsButton.boundingBox()
+    ]);
+    for (let index = 1; index < navigationPositions.length; index += 1) {
+      expect(navigationPositions[index - 1]!.y)
+        .toBeLessThan(navigationPositions[index]!.y);
+    }
     const navigationBeforeHover = await skillsButton.boundingBox();
     await skillsButton.hover();
     await page.waitForTimeout(220);

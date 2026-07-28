@@ -223,8 +223,7 @@ export type StartupPhase =
   | "migrating-data"
   | "upgrading-skills"
   | "recovering-writes"
-  | "recovering-sync"
-  | "preparing-workspace";
+  | "recovering-sync";
 
 export type StartupStatus =
   | { state: "initializing"; phase?: StartupPhase }
@@ -1234,7 +1233,6 @@ export interface TargetDescriptor {
   description: string;
   iconKey?: string;
   displayOrder?: number;
-  defaultProfileId?: string;
   instructionsLabel: string;
   configLabel: string;
   configLanguage: "json" | "jsonc" | "toml" | "yaml" | "text";

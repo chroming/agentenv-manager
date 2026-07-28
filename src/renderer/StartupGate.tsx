@@ -17,8 +17,7 @@ export const StartupGate = () => {
     "migrating-data": "Checking data format…",
     "upgrading-skills": "Updating Skill metadata…",
     "recovering-writes": "Recovering interrupted changes…",
-    "recovering-sync": "Checking Workspace recovery…",
-    "preparing-workspace": "Preparing Profiles and Library…"
+    "recovering-sync": "Checking Workspace recovery…"
   };
 
   useEffect(() => {

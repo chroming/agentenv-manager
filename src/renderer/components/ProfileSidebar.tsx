@@ -321,14 +321,14 @@ export const ProfileSidebar = ({
     detail: string;
     icon: LucideIcon;
   }> = [
+    { id: "targets", label: t("Agents"), detail: t("Configure and inspect"), icon: Monitor },
     { id: "profiles", label: t("Profiles"), detail: t("Compose environments"), icon: Boxes },
     {
       id: "conversations",
       label: t("Conversations"),
       detail: t("Continue across Agents"),
       icon: MessageSquareText
-    },
-    { id: "targets", label: t("Agents"), detail: t("Configure and inspect"), icon: Monitor }
+    }
   ];
 
   return (
@@ -349,21 +349,6 @@ export const ProfileSidebar = ({
           <Search size={15} strokeWidth={2.2} aria-hidden="true" />
           <span>{t("Quick open")}</span>
           <kbd>⌘K</kbd>
-        </button>
-        <div className="nav-section-label">{t("Library")}</div>
-        <button
-          aria-label={t("Skills")}
-          aria-current={activeWorkspace === "library" ? "page" : undefined}
-          className={`workspace-button${activeWorkspace === "library" ? " is-active" : ""}`}
-          data-workspace="library"
-          type="button"
-          onClick={() => onWorkspaceSelect("library")}
-        >
-          <span className="workspace-button__icon" aria-hidden="true">
-            <BookOpen size={16} strokeWidth={2.2} />
-          </span>
-          <span>{t("Skills")}</span>
-          <small>{t("Skill library")}</small>
         </button>
         <div className="nav-section-label">{t("Workspace")}</div>
         {workspaceItems.map((item) => {
@@ -386,6 +371,21 @@ export const ProfileSidebar = ({
             </button>
           );
         })}
+        <div className="nav-section-label">{t("Library")}</div>
+        <button
+          aria-label={t("Skills")}
+          aria-current={activeWorkspace === "library" ? "page" : undefined}
+          className={`workspace-button${activeWorkspace === "library" ? " is-active" : ""}`}
+          data-workspace="library"
+          type="button"
+          onClick={() => onWorkspaceSelect("library")}
+        >
+          <span className="workspace-button__icon" aria-hidden="true">
+            <BookOpen size={16} strokeWidth={2.2} />
+          </span>
+          <span>{t("Skills")}</span>
+          <small>{t("Skill library")}</small>
+        </button>
         <div className="nav-section-label">{t("Settings")}</div>
         <button
           aria-label={t("Settings")}

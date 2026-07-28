@@ -252,10 +252,54 @@ Preview/Apply transaction, never a second editor or a reduced resource model.
   silently create a replacement or fall back to a partial editor.
 - On first run with no usable Profile, Agents shows the detected Agent list and a clear
   Configure action. It does not open a modal or begin Capture without user intent.
+- An empty workspace MUST remain empty until the user explicitly creates or captures a
+  Profile. Startup MUST NOT seed a sample, adapter-default, or otherwise invented Profile.
 - Later launches restore the last stable top-level workspace.
 
 Status: one Agent-to-Profile configuration entry, complete Capture, canonical Profile
 composition, and shared Preview/Apply orchestration are `Implemented`.
+
+### 4.4.3 Environment Review
+
+Environment Review is the repeatable readiness projection on Agents. It is not a Home page,
+onboarding destination, filesystem mutation command, or second Local Skill Cleanup
+implementation.
+
+- Agents is the first top-level Workspace destination. Profiles and Conversations follow it;
+  Skills remains the sole global Library destination, and Settings remains separate.
+- With no saved Workspace preference, the stable shell opens Agents immediately. A new
+  workspace stays on Agents after local core discovery; later launches restore the last stable
+  destination.
+- Agent discovery and local Skill inventory run as independent readiness stages. Agents and
+  canonical local data render before optional inventory and remote enrichment complete. A
+  Skill scan failure reports that Environment Review is unavailable without hiding Agents,
+  Profiles, or Library content.
+- Environment Review derives its state from installed Agents, usable Profiles, Target
+  lifecycle state, and the current local Skill inventory. It stores no wizard step and owns no
+  duplicate lifecycle state.
+- The compact status projection shows exactly one of: checking local Skills, environment
+  check unavailable, shared Skills need review, first Agent setup, Agent changes need review,
+  or environment ready. It exposes at most one current action.
+- Shared compatibility findings open the canonical Local Skill Cleanup surface already scoped
+  to shared locations. The same scan, grouping, preview, Backup, mutation, verification, path
+  policy, and rollback contracts apply whether the user enters from Agents or Skills.
+- Automatic checks are read-only. Startup, Refresh, Capture, Apply, Import, Update, and Cleanup
+  MAY invalidate or refresh readiness, but no background or first-run check may move, delete,
+  import, link, copy, or rewrite a Skill.
+- A shared compatibility location is discovered before Capture, included in Capture's
+  effective environment, and must be reviewed before a Profile can claim to disable or omit a
+  Skill that the Agent still loads from that location. Deferring migration remains an explicit
+  machine-local exception and must produce `Applied with outside resources`, never a false
+  `Applied` or `Environment ready` state.
+- Refresh is idempotent. An unchanged inventory produces no canonical write, Backup, ownership
+  change, or timestamp churn. A changed inventory invalidates stale review plans and exposes
+  only the remaining current work.
+- First-run presentation may give the same status projection stronger explanatory copy.
+  Completion changes only presentation emphasis; every Environment Review action remains
+  available on later runs.
+
+Status: repeatable Environment Review, shared-location scoping, and first-run presentation are
+`Implemented`.
 
 ### 4.5 Conversations
 
@@ -1370,17 +1414,30 @@ provider session ID, the captured working directory, and the resolved Pi environ
 
 ## 23.2 First-Run Workflow
 
-The first useful journey adapts to user complexity:
+The first useful journey is the empty-workspace presentation of the repeatable Environment
+Review and canonical Agent/Profile workflows:
 
-1. Detect installed Agents without blocking local Library access on background enrichment.
-2. When no usable Profile exists, open Agents as the contextual starting point. If exactly one installed Agent exists, open its Skill detail directly; otherwise show the ordered Agent list.
-3. Preserve that Agent's readable Skills into the canonical Library and an ordinary reusable Profile without changing the Agent.
-4. Review and Apply the saved Profile through the standard Preview, ownership, Backup, verification, and rollback transaction.
-5. Restore the last stable top-level workspace on later launches.
+1. Render the stable shell on Agents and detect installed Agents without waiting for optional
+   local inventory or remote enrichment.
+2. Run a read-only local Skill inventory. Shared compatibility findings appear in Environment
+   Review; no modal opens and no file changes without an explicit command.
+3. Configure opens the complete Create from Target flow. Capture reads Instructions, Skills,
+   supported MCP activation policy, and effective shared resources without changing the Agent.
+4. Save creates an ordinary reusable Profile. It does not Apply, prepare another Agent, or
+   mutate a shared compatibility location.
+5. When shared Skills require normalization, Review opens Local Skill Cleanup scoped to those
+   findings. Reviewed preparation preserves affected Agent behavior before moving a shared
+   copy into canonical Library and Agent-specific deployment locations.
+6. Review and Apply the saved Profile through the standard Preview, ownership, Backup,
+   verification, and rollback transaction.
+7. Later launches restore the last stable top-level workspace. Environment Review remains
+   manually refreshable and automatically reflects newly discovered shared Skills.
 
 Local Skill Cleanup, By source maintenance, and full Profile composition remain available for advanced migration and reuse, but a user with one Agent MUST NOT be required to understand all three before preserving and managing that Agent's Skills. The product MAY use contextual empty states for this journey; it MUST NOT require a marketing-style onboarding page.
 
-The Local Agents summary is contextual navigation, not decoration. Each visible Agent icon and each Agent inside the overflow list opens that Agent's Skill detail directly; its accessible name MUST describe the same destination.
+The Local Agents summary is contextual navigation, not decoration. Each visible Agent icon and
+each Agent inside the overflow list opens the same complete Agent configuration entry as the
+Agents row; its accessible name MUST describe the same destination.
 
 ## 23.3 Localization Contract
 
