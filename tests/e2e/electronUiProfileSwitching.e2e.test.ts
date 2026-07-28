@@ -7153,7 +7153,7 @@ describe("Electron UI profile switching e2e", () => {
 
   it("reveals sidebar Agents hidden behind the overflow count", async () => {
     const { page } = await launchApp();
-    const overflow = page.getByRole("button", { name: "Show hidden Agent list, 2 items" });
+    const overflow = page.getByRole("button", { name: "Show hidden Agent list, 3 items" });
     await overflow.waitFor({ state: "visible" });
 
     await overflow.hover();
@@ -7161,8 +7161,10 @@ describe("Electron UI profile switching e2e", () => {
     await popover.waitFor({ state: "visible" });
     await expect.poll(() => popover.textContent()).toContain("Antigravity");
     await expect.poll(() => popover.textContent()).toContain("Trae CLI");
+    await expect.poll(() => popover.textContent()).toContain("Pi");
     expect(await popover.locator(".agent-chip--antigravity .agent-chip__logo").count()).toBe(1);
     expect(await popover.locator(".agent-chip--trae .agent-chip__logo").count()).toBe(1);
+    expect(await popover.locator(".agent-chip--pi .agent-chip__logo").count()).toBe(1);
     await expectTopmost(popover);
 
     for (const viewport of [
@@ -7299,7 +7301,7 @@ describe("Electron UI profile switching e2e", () => {
           };
         })
       );
-      expect(rowGeometry).toHaveLength(5);
+      expect(rowGeometry).toHaveLength(6);
       for (const geometry of rowGeometry) {
         for (const child of geometry.children) {
           expect(child.left).toBeGreaterThanOrEqual(geometry.row.left);
@@ -7345,6 +7347,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("switch", { name: "Turn off Claude Code" }).click();
     await page.getByRole("switch", { name: "Turn off Antigravity" }).click();
     await page.getByRole("switch", { name: "Turn off Trae CLI" }).click();
+    await page.getByRole("switch", { name: "Turn off Pi" }).click();
     await expect
       .poll(async () => {
         const settings = await readJson<{ enabledTargetIds?: string[] }>(

@@ -8,6 +8,7 @@ import {
 } from "../../../src/main/targets/sharedSkillLocations";
 import { createCodexTargetAdapter } from "../../../src/main/targets/codexTarget";
 import { createOpenCodeTargetAdapter } from "../../../src/main/targets/opencodeTarget";
+import { createPiTargetAdapter } from "../../../src/main/targets/integrations/pi";
 import type { TargetPaths } from "../../../src/shared/types";
 
 const basePaths = (homeDir: string): TargetPaths => {
@@ -94,11 +95,12 @@ describe("shared Skill location registry", () => {
     ).toThrow("cannot use a shared Skill location as its managed Skills directory");
   });
 
-  it("gives Codex and OpenCode the same registered shared location semantics", () => {
+  it("gives all shared-Skill consumers the same registered location semantics", () => {
     const homeDir = "/tmp/agentenv-home";
     const paths = [
       createCodexTargetAdapter().createTargetPaths({ homeDir }),
-      createOpenCodeTargetAdapter().createTargetPaths({ homeDir })
+      createOpenCodeTargetAdapter().createTargetPaths({ homeDir }),
+      createPiTargetAdapter().createTargetPaths({ homeDir })
     ];
 
     for (const target of paths) {

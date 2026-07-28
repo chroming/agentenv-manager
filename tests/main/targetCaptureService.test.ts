@@ -289,6 +289,59 @@ describe("target capture service v2", () => {
     });
   });
 
+  it("captures Pi Instructions and Skills while leaving native settings untouched", async () => {
+    const { homeDir, service } = await setup("pi");
+    const piDir = join(homeDir, ".pi", "agent");
+    const skillDir = join(piDir, "skills", "review-workflow");
+    const settings = JSON.stringify({
+      defaultProvider: "anthropic",
+      packages: ["git:github.com/example/pi-package"]
+    }, null, 2);
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(join(piDir, "AGENTS.md"), "# Pi instructions\n");
+    await writeFile(join(piDir, "settings.json"), `${settings}\n`);
+    await writeFile(
+      join(skillDir, "SKILL.md"),
+      "---\nname: review-workflow\ndescription: Review changes.\n---\n"
+    );
+
+    const preview = await service.previewTarget("pi");
+
+    expect(preview.resources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "instructions", action: "include" }),
+      expect.objectContaining({
+        kind: "skill",
+        id: "review-workflow",
+        action: "import"
+      })
+    ]));
+    expect(preview.resources.some(({ kind }) => kind === "mcp")).toBe(false);
+    expect(preview.warnings).toContain(
+      "Pi settings, authentication, packages, and extensions remain Agent-owned"
+    );
+
+    const result = await service.createFromTarget({
+      previewId: preview.id,
+      name: "Pi Existing"
+    });
+
+    expect(result.profile.manifest).toMatchObject({
+      iconKey: "pi",
+      preferredTargetId: "pi",
+      createdFromTargetId: "pi"
+    });
+    expect(result.profile.instructions).toBe("# Pi instructions\n");
+    expect(result.profile.resources.skills).toEqual([
+      { libraryId: "review-workflow", targetName: "review-workflow", enabled: true }
+    ]);
+    expect(result.profile.resources.mcpByTarget.pi).toEqual({
+      mode: "ignore",
+      selections: []
+    });
+    await expect(readFile(join(piDir, "settings.json"), "utf8"))
+      .resolves.toBe(`${settings}\n`);
+  });
+
   it("warns and skips a broken Trae Skill link without blocking Profile capture", async () => {
     const { homeDir, service } = await setup("trae-cli");
     const traeDir = join(homeDir, ".trae");

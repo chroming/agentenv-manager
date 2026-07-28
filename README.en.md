@@ -16,7 +16,7 @@ the Agent.
 
 AgentEnv Manager is pre-release software at version `0.1.0`. The current build
 has real integration coverage for OpenCode, Claude Code, Codex, Antigravity,
-and Trae CLI. Review every Preview carefully and keep an independent backup
+Trae CLI, and Pi Coding Agent. Review every Preview carefully and keep an independent backup
 before first taking over an important Agent environment.
 
 | Platform | Status |
@@ -120,5 +120,5 @@ semantics and filesystem ownership rules are documented in
 AgentEnv Manager is licensed under the [Apache License 2.0](LICENSE). Product
 names and logos belong to their respective owners; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). This independent project is
-not affiliated with or endorsed by OpenAI, Anthropic, OpenCode, Google, or
-ByteDance.
+not affiliated with or endorsed by OpenAI, Anthropic, OpenCode, Google,
+ByteDance, or Earendil Works.

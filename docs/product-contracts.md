@@ -18,7 +18,7 @@ The product succeeds when a user can answer all of these questions without inspe
 6. How can the user recover or stop AgentEnv management?
 
 User-facing product language uses **Agent** for a local coding tool such as OpenCode, Codex,
-Claude Code, Antigravity, or Trae CLI. The implementation keeps `Target`, `TargetAdapter`, and `targetId` as stable internal
+Claude Code, Antigravity, Trae CLI, or Pi. The implementation keeps `Target`, `TargetAdapter`, and `targetId` as stable internal
 architecture terms. Internal names MUST NOT leak into navigation, commands, status, confirmation,
 or recovery copy.
 
@@ -195,7 +195,7 @@ Each Target MCP policy follows these rules:
 
 ### 4.4 Agent (internal Target)
 
-An Agent is a supported local coding tool and its deployment locations. OpenCode, Codex, Claude Code, Antigravity, and Trae CLI are Agents.
+An Agent is a supported local coding tool and its deployment locations. OpenCode, Codex, Claude Code, Antigravity, Trae CLI, and Pi are Agents.
 
 - Target files are deployed copies, links, or serialized output.
 - Target files are never the canonical Library source.
@@ -687,7 +687,7 @@ Status: stale checks and no-op detection are `Implemented`.
 
 Apply means complete replacement of the AgentEnv-managed portion of one Target with one saved Profile.
 
-Instructions and dedicated Skill deployments may be fully AgentEnv-owned paths. Agent native configuration remains shared and Agent-owned except for explicit sparse MCP activation fields. OpenCode Legacy may patch only `mcp.<name>.enabled`, while OpenCode V2 may patch only `mcp.servers.<name>.disabled`; Codex may patch only `mcp_servers.<name>.enabled`; Trae CLI V2 may patch only `mcp_servers.<name>.enabled` in `traecli.toml`, while its Legacy layout may patch only an existing MCP's `disabled` field in `traecli.yaml`. Claude Code, Antigravity, and any adapter without a verified activation field MUST NOT write MCP configuration.
+Instructions and dedicated Skill deployments may be fully AgentEnv-owned paths. Agent native configuration remains shared and Agent-owned except for explicit sparse MCP activation fields. OpenCode Legacy may patch only `mcp.<name>.enabled`, while OpenCode V2 may patch only `mcp.servers.<name>.disabled`; Codex may patch only `mcp_servers.<name>.enabled`; Trae CLI V2 may patch only `mcp_servers.<name>.enabled` in `traecli.toml`, while its Legacy layout may patch only an existing MCP's `disabled` field in `traecli.yaml`. Claude Code, Antigravity, Pi, and any adapter without a verified activation field MUST NOT write MCP configuration.
 
 When the selected Target's MCP policy is `Keep current`, Apply MUST preserve its configuration byte-for-byte, omit the path from Preview freshness and Backup, and clear prior MCP ownership metadata. When the policy is `Use Profile` or `Turn off`, the adapter parses the current file, patches only named existing activation fields, preserves every definition and unknown field, and includes that file in freshness and Backup only when a semantic change is planned. Configuration files MUST NOT be recorded as whole-file AgentEnv-managed resources.
 
@@ -1019,7 +1019,7 @@ Status: local, read-only Project, recursive GitHub, and System Git Repository im
 - AgentEnv discovers only user/global MCP names, activation state, transport hint, source path, and control capability. Project, plugin, workspace, and policy-managed MCPs MAY be observed but MUST NOT be adopted or mutated.
 - Discovery MUST include credential-bearing definitions such as `computer-use` and `node_repl`; secret values MUST NOT enter Profile data, renderer payloads, logs, or diagnostics.
 - A Profile stores a policy per Target. `Keep current` opts that Target entirely out of MCP activation changes. `Use Profile` stores sparse three-state rows: an absent row is shown as `Agent setting` and performs no mutation, while explicit `On` and `Off` choices update only a verified native activation field. Selecting `Use Profile` MUST NOT synthesize overrides for discovered MCPs; returning a row to `Agent setting` removes its saved selection. `Turn off` retains those sparse choices but treats every retained selection as `Off` for the selected Target.
-- Codex, OpenCode, and Trae CLI activation control are `Implemented`. Claude Code and Antigravity are read-only until an official, reliable user-scope activation mechanism is verified.
+- Codex, OpenCode, and Trae CLI activation control are `Implemented`. Claude Code and Antigravity are read-only until an official, reliable user-scope activation mechanism is verified. Pi has no built-in MCP configuration and remains outside MCP discovery and mutation.
 - Apply MUST preserve command, URL, arguments, headers, environment, OAuth state, and every unknown definition field byte-for-byte or semantically unchanged.
 - A managed `On` selection missing from the Target is `Setup required` and blocks Apply because AgentEnv cannot create definitions. A managed `Off` selection missing from the Target is equivalent to Off and is a no-op.
 - A new native MCP added outside AgentEnv remains valid. Whole-file drift MUST NOT block it or remove it.
@@ -1028,7 +1028,7 @@ Status: local, read-only Project, recursive GitHub, and System Git Repository im
 - Profile v2 has no MCP Library store or IPC. Legacy MCP definitions survive only inside the external one-time migration backup and report; runtime MUST NOT read, mutate, or delete that old file.
 - MCP interaction exists only inside a selected Profile as native Agent discovery and activation choice.
 
-Status: native discovery across all five Agents, per-Target opt-in and sparse editing, Codex, OpenCode, and Trae CLI activation, read-only Claude Code and Antigravity visibility, blocking missing-On remediation, no-op, definition preservation, and one-time legacy reference migration are `Implemented`.
+Status: native discovery across Agents with built-in MCP configuration, per-Target opt-in and sparse editing, Codex, OpenCode, and Trae CLI activation, read-only Claude Code and Antigravity visibility, explicit Pi unsupported state, blocking missing-On remediation, no-op, definition preservation, and one-time legacy reference migration are `Implemented`.
 
 ## 18. Create From Target Contract
 
@@ -1066,7 +1066,7 @@ Create from Target gives an existing native environment a reusable Profile repre
 - Takeover, backup, Target-specific deployment, and managed-resource replacement occur only during the later explicit Apply. Local duplicate cleanup remains an explicit Scan local workflow.
 - Failure while saving MUST remove the partially created Profile and newly imported Library resources while leaving the Target unchanged.
 
-Status: OpenCode, Codex, Claude Code, Antigravity, and Trae CLI adapter capture, reviewed Skill Library import, native MCP activation capture, stale protection, source preservation, and saved-never-applied handoff are `Implemented`.
+Status: OpenCode, Codex, Claude Code, Antigravity, Trae CLI, and Pi adapter capture, reviewed Skill Library import, native MCP activation capture where supported, stale protection, source preservation, and saved-never-applied handoff are `Implemented`.
 
 ## 19. Profile Deletion Contract
 
@@ -1305,6 +1305,25 @@ provider session ID, captured working directory, and the exact `TRAE_HOME` and `
 Legacy exposes no Trae CLI conversation history rather than attributing another product's runtime
 files to Trae.
 
+Pi uses `PI_CODING_AGENT_DIR` when it is available to the application and otherwise defaults to
+`~/.pi/agent`. `PI_CODING_AGENT_SESSION_DIR` selects the conversation root; otherwise a valid
+absolute or home-relative `settings.json.sessionDir` is used, then `sessions/` is used. A relative
+`sessionDir` depends on the Pi process startup directory and MUST NOT be guessed as a global path.
+AgentEnv manages only Pi's independent `AGENTS.md` and dedicated `skills/` directory. Native
+settings, authentication, packages, extensions, prompts, themes, and all unknown files remain
+Pi-owned and MUST NOT be parsed into a Profile or rewritten by Apply.
+
+Pi also consumes the registered shared `~/.agents/skills` compatibility location. That location
+retains the same migration-only authority used by other consumers: ordinary Apply deploys only
+to Pi's dedicated Skills directory, while shared cleanup remains a separately reviewed,
+cross-Agent operation. Pi has no built-in MCP configuration; extension-provided protocols MUST
+NOT be inferred as native MCP support.
+
+Pi Conversations recursively discovers session JSONL files from the resolved session root. A
+session is a tree, so the visible conversation is the parent chain from the final entry to the
+root rather than every historical branch in file order. Native reopen uses `pi --session`, the
+provider session ID, the captured working directory, and the resolved Pi environment roots.
+
 ## 23.1 AgentEnv Data Lifecycle
 
 - AgentEnv data has an explicit format version. Runtime Profile reads accept only v2.
@@ -1395,7 +1414,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Create from Target captures portable resources, reuses exact Library matches, and leaves Target files and deployment state unchanged.
 - Create from Target MUST retain AgentEnv-owned legacy Skills as migration inputs so the first Apply cannot remove a legacy copy without installing the captured Skill into its current runtime location.
 - Kept-outside resources and unsupported native data remain unchanged after Create from Target.
-- Applying the same Library Skill to OpenCode, Codex, Claude Code, Antigravity, and Trae CLI creates isolated Target-specific runtime copies.
+- Applying the same Library Skill to OpenCode, Codex, Claude Code, Antigravity, Trae CLI, and Pi creates isolated Target-specific runtime copies.
 - Create from Target followed by first Apply isolates a Target Skills root that aliases a shared directory, preserves the shared destination byte-for-byte, installs Target-owned child references, and restores the original root link through Rollback.
 - Create from Target followed by first Apply adopts an exact Agent-private duplicate transactionally even when an identical shared compatibility copy remains active; Rollback restores the original unowned private copy and shared content byte-for-byte.
 - The machine-local Capture receipt is consumed after that first successful Apply. Missing, malformed, stale, or content-mismatched evidence never expands replacement authority.
@@ -1410,7 +1429,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Empty Instructions and all-Off resource choices remain valid complete replacement states and Preview their removals or disable operations explicitly.
 - Unsupported portable resources block with remediation.
 - `Keep current` performs no MCP read, hash, diff, Backup, write, or ownership retention and ignores retained editor selections in the Profile hash. `Turn off` fingerprints retained MCP names but normalizes every saved value to `Off`, so changing an inactive saved `On` to `Off` is a Target no-op while adding another name still requires Apply.
-- Native MCP discovery includes credential-bearing entries without copying secrets; Codex, OpenCode, and Trae CLI change only verified activation state; Claude Code and Antigravity remain Agent-controlled.
+- Native MCP discovery includes credential-bearing entries without copying secrets; Codex, OpenCode, and Trae CLI change only verified activation state; Claude Code and Antigravity remain Agent-controlled; Pi reports no built-in MCP support.
 - Managed MCP On/present, On/missing, Off/present, Off/missing, and absent-selection cases follow the sparse policy matrix.
 - Codex native disabled Skill detection accepts both runtime-name and manifest-path entries; either form blocks a Profile that expects the disabled Skill to run.
 - Source Target remains unchanged.
@@ -1517,7 +1536,7 @@ AgentEnv Manager is production-ready only when all of these are true:
 - All supported Targets pass native and cross-Target contract tests.
 - Default and minimum desktop viewports pass containment and overlay checks.
 - Packaged Electron application passes a real startup and primary-workflow smoke test.
-- The packaged Agent discovery smoke runs with a Finder-style minimal `PATH` and proves fallback discovery for OpenCode, Claude Code, Codex, Antigravity CLI, and Trae CLI.
+- The packaged Agent discovery smoke runs with a Finder-style minimal `PATH` and proves fallback discovery for OpenCode, Claude Code, Codex, Antigravity CLI, Trae CLI, and Pi.
 
 Current verdict: **Needs refinement**. Core Skill Library, v2 Profile, Preview, transactional Apply, backup, retention, rollback, stale rollback protection, no-op, cross-Target Instructions and Skills, Create from Target, Target-specific Skill deployment, compatibility-copy consolidation, canonical Target lifecycle, data backup and restore, active-Profile deletion recovery, Stop Managing workflows, and sparse native MCP activation are functional. Broader Skill identity edge coverage and signed/notarized distribution remain release work.
 
@@ -1547,7 +1566,7 @@ The current machine-readable totals, source commit, deterministic tracked-and-un
 - Local Skill cleanup distinguishes Library-managed, outside, kept, and conflict states; consolidation remains transactional, preserves backup history, and never treats a cleanup choice as a Profile Apply omission.
 - Native MCP discovery includes all configured names without copying credential values. OpenCode, Codex, and Trae CLI Apply change only native activation fields, preserve definitions added outside AgentEnv, block an enabled missing definition, treat a disabled missing definition as a no-op, and produce a real no-op when states already match. Trae CLI tests cover V2 TOML and Legacy YAML independently and prove that inactive or obsolete version files remain untouched.
 - Claude Code and Antigravity expose Agent-owned MCPs read-only. Antigravity CLI requires `agy`, applies and rolls back `GEMINI.md` and dedicated CLI Skills, transactionally migrates AgentEnv-owned legacy Skill copies, and leaves `mcp_config.json` unchanged.
-- All five built-in adapters expose the same read-only Skill runtime contract. Tests cover direct and recursive discovery, symlink-cycle safety, frontmatter runtime identity, duplicate declarations, Claude plugin ownership, duplicate desired runtime names, Antigravity legacy migration with rollback, and Trae CLI's version-neutral shared Skill location. Profile Skill On/Off is represented only by managed install presence, never by an Agent configuration switch.
+- All six built-in adapters expose the same read-only Skill runtime contract. Tests cover direct and recursive discovery, symlink-cycle safety, frontmatter runtime identity, duplicate declarations, Claude plugin ownership, duplicate desired runtime names, Antigravity legacy migration with rollback, Trae CLI's version-neutral shared Skill location, and Pi's dedicated plus shared-compatible roots. Profile Skill On/Off is represented only by managed install presence, never by an Agent configuration switch.
 - GitHub Device Flow respects server polling intervals, absorbs `slow_down` as a longer pending interval, blocks overlapping token requests, and refreshes connected account state after browser authorization.
 - Apply Preview puts readiness or blocking state first, separates final payload from actual mutations, groups changes by resource meaning, keeps full paths in selectable detail, and opens each file diff on its owning row without widening the dialog. Replaceable drift is shown once as an explicit review requirement.
 - Profile list icon and content columns remain aligned at the minimum viewport, and a deliberately long truncated Profile name keeps the same text origin before and after selection.

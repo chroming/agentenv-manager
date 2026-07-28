@@ -27,6 +27,7 @@ const antigravityIconUrl = new URL("../assets/target-icons/antigravity.png", imp
 const claudeIconUrl = new URL("../assets/target-icons/claude.svg", import.meta.url).href;
 const openAiIconUrl = new URL("../assets/target-icons/openai.svg", import.meta.url).href;
 const openCodeIconUrl = new URL("../assets/target-icons/opencode.svg", import.meta.url).href;
+const piIconUrl = new URL("../assets/target-icons/pi.svg", import.meta.url).href;
 const traeIconUrl = new URL("../assets/target-icons/trae.png", import.meta.url).href;
 
 export const supportedAgentIconOptions: ReadonlyArray<{
@@ -38,7 +39,8 @@ export const supportedAgentIconOptions: ReadonlyArray<{
   { key: "codex", label: "Codex CLI", assetUrl: openAiIconUrl },
   { key: "claude", label: "Claude Code", assetUrl: claudeIconUrl },
   { key: "antigravity", label: "Antigravity CLI", assetUrl: antigravityIconUrl },
-  { key: "trae", label: "Trae CLI", assetUrl: traeIconUrl }
+  { key: "trae", label: "Trae CLI", assetUrl: traeIconUrl },
+  { key: "pi", label: "Pi", assetUrl: piIconUrl }
 ];
 
 const agentIconUrlByKey = new Map(
@@ -71,6 +73,7 @@ type TargetIconFlavor =
   | "claude"
   | "antigravity"
   | "trae"
+  | "pi"
   | "generic";
 
 const targetInitials = (target: Pick<TargetDescriptor, "id" | "name">) => {
@@ -93,7 +96,8 @@ export const targetIconFor = (
     codex: "codex",
     "claude-code": "claude",
     antigravity: "antigravity",
-    "trae-cli": "trae"
+    "trae-cli": "trae",
+    pi: "pi"
   } as Record<string, string>)[target.id];
   if (iconKey === "opencode") {
     return { flavor: "opencode", assetUrl: openCodeIconUrl };
@@ -109,6 +113,9 @@ export const targetIconFor = (
   }
   if (iconKey === "trae") {
     return { flavor: "trae", assetUrl: traeIconUrl };
+  }
+  if (iconKey === "pi") {
+    return { flavor: "pi", assetUrl: piIconUrl };
   }
 
   return { flavor: "generic" };

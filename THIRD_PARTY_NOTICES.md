@@ -11,9 +11,9 @@ notices in the packaged application.
 ## Product Names and Icons
 
 AgentEnv Manager displays names and icons for compatible third-party products,
-including OpenAI Codex, Anthropic Claude, OpenCode, Google Antigravity, and
-ByteDance Trae. These assets are used only to identify interoperability
-targets.
+including OpenAI Codex, Anthropic Claude, OpenCode, Google Antigravity,
+ByteDance Trae, and Earendil Works Pi. These assets are used only to identify
+interoperability targets.
 
 All product names, logos, and trademarks belong to their respective owners.
 AgentEnv Manager is an independent project and is not affiliated with,

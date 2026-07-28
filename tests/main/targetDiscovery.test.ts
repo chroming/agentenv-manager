@@ -11,6 +11,7 @@ import { createOpenCodeTargetAdapter } from "../../src/main/targets/opencodeTarg
 import { createTargetRegistry } from "../../src/main/targets/registry";
 import { createTargetScope } from "../../src/main/targets/targetScope";
 import { createAntigravityTargetAdapter } from "../../src/main/targets/integrations/antigravity";
+import { createPiTargetAdapter } from "../../src/main/targets/integrations/pi";
 import { createTraeCliTargetAdapter } from "../../src/main/targets/integrations/trae-cli";
 
 let root = "";
@@ -28,7 +29,8 @@ const makeService = async (options: { platform?: NodeJS.Platform } = {}) => {
     createOpenCodeTargetAdapter(),
     createClaudeCodeTargetAdapter(),
     createCodexTargetAdapter(),
-    createTraeCliTargetAdapter()
+    createTraeCliTargetAdapter(),
+    createPiTargetAdapter()
   ]);
   const settingsStore = createSettingsStore(paths, {
     supportedTargetIds: targetRegistry.list().map((target) => target.id)
@@ -161,6 +163,44 @@ describe("target discovery", () => {
       }
     });
     expect(trae?.health.checks).toContainEqual(expect.objectContaining({
+      id: "runtimeDir",
+      label: "Runtime directory",
+      path: runtimeDir,
+      exists: true,
+      required: false
+    }));
+  });
+
+  it("reports Pi's configured session directory separately from its resource root", async () => {
+    const { binDir, service } = await makeService();
+    const executable = join(binDir, "pi");
+    const agentRoot = join(root, ".pi", "agent");
+    const runtimeDir = join(root, "pi-history");
+    await writeFile(executable, "#!/bin/sh\n");
+    await chmod(executable, 0o755);
+    await mkdir(runtimeDir, { recursive: true });
+    await mkdir(agentRoot, { recursive: true });
+    await writeFile(
+      join(agentRoot, "settings.json"),
+      `${JSON.stringify({ sessionDir: runtimeDir })}\n`
+    );
+
+    const targets = await service.listTargets({ forceRefresh: true });
+    const pi = targets.find((target) => target.id === "pi");
+
+    expect(pi).toMatchObject({
+      paths: {
+        configDir: agentRoot,
+        runtimeDir,
+        configPath: join(agentRoot, "settings.json")
+      },
+      conversationCapabilities: {
+        history: { state: "available" },
+        openOriginal: { state: "available" },
+        continue: { state: "available" }
+      }
+    });
+    expect(pi?.health.checks).toContainEqual(expect.objectContaining({
       id: "runtimeDir",
       label: "Runtime directory",
       path: runtimeDir,

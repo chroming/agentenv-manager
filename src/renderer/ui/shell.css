@@ -77,6 +77,17 @@ html[data-platform="darwin"] {
   width: 18px;
 }
 
+.agent-chip--pi {
+  background: #050505;
+  border-color: #252525;
+  color: #fff;
+}
+
+.agent-chip--pi .agent-chip__logo {
+  height: 17px;
+  width: 17px;
+}
+
 .agent-chip-row > .agent-chip {
   aspect-ratio: 1;
   block-size: var(--agent-chip-size);

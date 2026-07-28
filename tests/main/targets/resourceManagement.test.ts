@@ -13,7 +13,7 @@ afterEach(async () => {
 });
 
 describe("Target resource management contract", () => {
-  it.each(["codex", "opencode", "claude-code", "antigravity", "trae-cli"])(
+  it.each(["codex", "opencode", "claude-code", "antigravity", "trae-cli", "pi"])(
     "leaves Instructions and Skills untouched for %s when their Profile modes are off",
     async (targetId) => {
       root = await mkdtemp(join(tmpdir(), `agentenv-${targetId}-resource-policy-`));

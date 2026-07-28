@@ -10,6 +10,7 @@ export const ResourceIconKeySchema = z.enum([
   "claude",
   "antigravity",
   "trae",
+  "pi",
   "github",
   "folder",
   "code",

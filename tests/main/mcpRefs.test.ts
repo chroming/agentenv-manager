@@ -3,6 +3,7 @@ import { createClaudeCodeTargetAdapter } from "../../src/main/targets/claudeCode
 import { createCodexTargetAdapter } from "../../src/main/targets/codexTarget";
 import { createOpenCodeTargetAdapter } from "../../src/main/targets/opencodeTarget";
 import { createAntigravityTargetAdapter } from "../../src/main/targets/integrations/antigravity";
+import { createPiTargetAdapter } from "../../src/main/targets/integrations/pi";
 import { createTraeCliTargetAdapter } from "../../src/main/targets/integrations/trae-cli";
 
 describe("MCP management boundary", () => {
@@ -12,5 +13,6 @@ describe("MCP management boundary", () => {
     expect(createClaudeCodeTargetAdapter().descriptor.capabilities.mcpActivation).toBe(false);
     expect(createAntigravityTargetAdapter().descriptor.capabilities.mcpActivation).toBe(false);
     expect(createTraeCliTargetAdapter().descriptor.capabilities.mcpActivation).toBe(true);
+    expect(createPiTargetAdapter().descriptor.capabilities.mcpActivation).toBe(false);
   });
 });

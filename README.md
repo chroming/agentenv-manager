@@ -86,8 +86,11 @@ Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/pr
 - Codex
 - Antigravity CLI (`agy`)
 - Trae CLI (`traecli` / `trae-cli` / `trae-agent`)
+- Pi Coding Agent (`pi`)
 
 Trae CLI 会优先识别 2.0 布局：配置和共享资源位于 `~/.trae`，会话等运行时状态位于 `~/.trae/cli`。仅在没有新版证据且存在 `traecli.yaml` 时使用 Legacy 布局。两版共用 `~/.trae/skills` 和 AgentEnv 自有的 `~/.trae/rules/agentenv-manager.md`；版本差异不会出现在 Profile 操作中。
+
+Pi 使用 `~/.pi/agent`，并兼容 `PI_CODING_AGENT_DIR`、`PI_CODING_AGENT_SESSION_DIR` 和 `settings.json` 中的 `sessionDir`。AgentEnv 只管理 Pi 的 `AGENTS.md` 与 `skills/`；原生设置、认证、包和扩展保持 Pi 所有。Pi 没有内置 MCP 配置，因此不会在 Profile 中修改 MCP。
 
 新增 agent 的理想方式是写一个独立 integration 模块，然后注册到 `src/main/targets/integrations/index.ts`。安装检测、路径、Profile、Skill 运行时扫描规则、原生 MCP 发现与启停能力和资源部署都由该模块声明。适配器只报告 Agent 特有事实，Preview、备份、原子 Apply、校验和回滚仍由统一核心完成。
 

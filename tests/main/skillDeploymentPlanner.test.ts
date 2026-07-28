@@ -116,7 +116,7 @@ describe("skill deployment planner", () => {
     expect(result.effectiveSkills).toEqual(selectedProfile.resources.skills);
   });
 
-  it.each(["codex", "opencode", "claude-code", "antigravity", "trae-cli"])(
+  it.each(["codex", "opencode", "claude-code", "antigravity", "trae-cli", "pi"])(
     "plans a missing dedicated copy for %s without Target-specific branches",
     (targetId) => {
       expect(plan({ targetId }).decisions).toContainEqual(

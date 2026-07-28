@@ -11,7 +11,8 @@ describe("target configuration root overrides", () => {
       opencode: override,
       "claude-code": override,
       antigravity: join(override, "config"),
-      "trae-cli": override
+      "trae-cli": override,
+      pi: override
     };
 
     for (const adapter of createTargetRegistry().listAdapters()) {
