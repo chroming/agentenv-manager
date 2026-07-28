@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import type { Dirent } from "node:fs";
 import { cp, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
@@ -1428,9 +1429,9 @@ export const createSkillLibraryStore = (
   };
 
   const listCleanupBackups = async (): Promise<SkillCleanupBackupSummary[]> => {
-    let entries: string[];
+    let entries: Dirent[];
     try {
-      entries = await readdir(cleanupBackupRoot());
+      entries = await readdir(cleanupBackupRoot(), { withFileTypes: true });
     } catch (error) {
       if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
         return [];
@@ -1439,9 +1440,12 @@ export const createSkillLibraryStore = (
     }
 
     const summaries = await Promise.all(
-      entries.map(async (entry): Promise<SkillCleanupBackupSummary | undefined> => {
+      entries.filter((entry) => entry.isDirectory()).map(async (entry): Promise<SkillCleanupBackupSummary | undefined> => {
+        if (!SafeIdSchema.safeParse(entry.name).success) {
+          return undefined;
+        }
         try {
-          const { manifest } = await readCleanupBackup(entry);
+          const { manifest } = await readCleanupBackup(entry.name);
           return {
             id: manifest.id,
             libraryId: manifest.libraryId,
@@ -1458,7 +1462,12 @@ export const createSkillLibraryStore = (
           if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
             return undefined;
           }
-          throw error;
+          console.warn(
+            `[AgentEnv] Ignoring invalid Skill cleanup backup ${entry.name}: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+          return undefined;
         }
       })
     );

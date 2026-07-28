@@ -1001,6 +1001,40 @@ describe("App", () => {
     });
   });
 
+  it("keeps Agents and Profiles available when optional recovery data cannot load", async () => {
+    const cleanupHistoryError =
+      "Skill cleanup backup contains an unsafe path: cleanup-1784603431398-4571ea80";
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const api = installApi({
+      listSkillCleanupBackups: vi.fn().mockRejectedValue(new Error(cleanupHistoryError)),
+      listBackups: vi.fn().mockRejectedValue(new Error("Recovery history is unavailable")),
+      listNativeMcpConnections: vi.fn().mockRejectedValue(
+        new Error("Native MCP diagnostics are unavailable")
+      )
+    });
+    render(<App />);
+
+    expect(
+      await screen.findByRole("button", { name: "Agents" })
+    ).toBeInTheDocument();
+    await openProfiles();
+    expect(
+      await screen.findByRole("button", { name: /Daily Coding/ })
+    ).toBeInTheDocument();
+    expect(api.readProfile).toHaveBeenCalledWith("daily-coding");
+    expect(screen.queryByText("Action failed")).not.toBeInTheDocument();
+    expect(screen.queryByText(cleanupHistoryError)).not.toBeInTheDocument();
+    expect(warning).toHaveBeenCalledWith(
+      expect.stringContaining("Cleanup history is unavailable")
+    );
+    expect(warning).toHaveBeenCalledWith(
+      expect.stringContaining("Target recovery history is unavailable")
+    );
+    expect(warning).toHaveBeenCalledWith(
+      expect.stringContaining("Native MCP diagnostics are unavailable")
+    );
+  });
+
   it("opens libraries as an app-level workspace", async () => {
     const listSkillLibrary = vi.fn().mockResolvedValue([
       {

@@ -728,6 +728,13 @@ Status: transactional backup, reviewed outside-path replacement, kept-path prese
 
 Apply is a single transactional user operation even when it writes multiple resource types. It is not a filesystem-atomic operation across paths.
 
+- The stable shell, Agent inventory, Profile summaries, Library contents, and Settings are startup
+  core data. Optional recovery history, update checks, source observations, native diagnostics, and
+  other derived enrichment MUST NOT prevent those core surfaces from loading.
+- Listing recovery history MUST isolate malformed, missing, or path-unsafe neighboring Backups. A
+  rejected Backup remains byte-for-byte unchanged and unavailable for Restore; valid Backups remain
+  visible. Restore continues to perform the complete strict path and manifest validation before any
+  write.
 - If any write fails, AgentEnv MUST attempt to restore all affected paths and prior deployment state.
 - If restore succeeds, the result is `Apply failed`; the previous environment remains active.
 - If restore fails, the result is `Recovery required`; normal Apply is blocked until recovery is resolved.

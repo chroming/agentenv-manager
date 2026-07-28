@@ -587,6 +587,44 @@ const AppContent = ({
     }
   };
 
+  const loadSkillCleanupHistory = async (
+    shouldApply: () => boolean = () => true
+  ) => {
+    try {
+      const cleanupBackupItems = await window.agentEnv.listSkillCleanupBackups();
+      if (shouldApply()) {
+        setSkillCleanupBackups(cleanupBackupItems);
+      }
+      return cleanupBackupItems;
+    } catch (unknownError) {
+      console.warn(
+        `[AgentEnv] Cleanup history is unavailable: ${
+          unknownError instanceof Error ? unknownError.message : String(unknownError)
+        }`
+      );
+      return [];
+    }
+  };
+
+  const loadTargetRecoveryHistory = async (
+    shouldApply: () => boolean = () => true
+  ) => {
+    try {
+      const backupItems = await window.agentEnv.listBackups();
+      if (shouldApply()) {
+        setBackups(backupItems);
+      }
+      return backupItems;
+    } catch (unknownError) {
+      console.warn(
+        `[AgentEnv] Target recovery history is unavailable: ${
+          unknownError instanceof Error ? unknownError.message : String(unknownError)
+        }`
+      );
+      return [];
+    }
+  };
+
   const loadProfileCore = async (
     settingsOverride?: AgentEnvSettings,
     shouldApply: () => boolean = () => true,
@@ -605,17 +643,21 @@ const AppContent = ({
         if (shouldApply()) {
           setNativeMcpConnections(undefined);
           setNativeMcpIssues([]);
-          setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+          console.warn(
+            `[AgentEnv] Native MCP diagnostics are unavailable: ${
+              unknownError instanceof Error ? unknownError.message : String(unknownError)
+            }`
+          );
         }
       });
+    void loadSkillCleanupHistory(shouldApply);
+    void loadTargetRecoveryHistory(shouldApply);
     const corePromise = Promise.all([
       window.agentEnv.listSupportedTargets(),
       window.agentEnv.listTargets(forceTargetRefresh),
       window.agentEnv.listTargetStates(),
       window.agentEnv.listProfiles(),
-      window.agentEnv.listBackups(),
       skillItemsPromise,
-      window.agentEnv.listSkillCleanupBackups(),
       settingsOverride ?? window.agentEnv.readSettings()
     ]);
 
@@ -629,9 +671,7 @@ const AppContent = ({
       targetItems,
       targetStateItems,
       profileItems,
-      backupItems,
       ,
-      cleanupBackupItems,
       settings
     ] = await corePromise;
 
@@ -641,7 +681,6 @@ const AppContent = ({
         targetItems,
         targetStateItems,
         profileItems,
-        backupItems,
         skillItems,
         settings
       };
@@ -658,8 +697,6 @@ const AppContent = ({
       }))
     );
     setProfiles(profileItems);
-    setBackups(backupItems);
-    setSkillCleanupBackups(cleanupBackupItems);
     setSkillSettings(settings);
     onLocalePreferenceChange(settings.locale);
     setSelectedTargetId((current) =>
@@ -673,7 +710,6 @@ const AppContent = ({
       targetItems,
       targetStateItems,
       profileItems,
-      backupItems,
       skillItems,
       settings
     };
@@ -795,18 +831,17 @@ const AppContent = ({
     setError(undefined);
     setSkillRefreshStatus("refreshing");
     try {
-      const [skillItems, inventoryItems, cleanupBackupItems, sourceGroupItems] =
+      const [skillItems, inventoryItems, , sourceGroupItems] =
         await Promise.all([
           window.agentEnv.listSkillLibrary(),
           window.agentEnv.scanSkillInventory(),
-          window.agentEnv.listSkillCleanupBackups(),
+          loadSkillCleanupHistory(),
           skillLibraryMode === "sources"
             ? window.agentEnv.listSkillSourceGroups()
             : Promise.resolve(undefined)
         ]);
       setLibrarySkills(skillItems);
       setSkillInventory(inventoryItems);
-      setSkillCleanupBackups(cleanupBackupItems);
       if (sourceGroupItems) setSkillSourceGroups(sourceGroupItems);
       setSkillRefreshStatus("refreshed");
     } catch (unknownError) {

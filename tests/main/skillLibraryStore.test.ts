@@ -395,6 +395,76 @@ description: >
     expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);
     await expect(readlink(targetDir)).resolves.toBe(join(root, "removed-source"));
   });
+
+  it("keeps valid cleanup history available when a neighboring backup is unsafe", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "app-data"),
+      homeDir: join(root, "home")
+    });
+    const backupRoot = join(paths.backupsDir, "skill-cleanup");
+    const validId = "cleanup-1784603431397-valid";
+    const validSource = join(paths.userSkillsDir, "valid-reviewer");
+    const validBackup = join(backupRoot, validId, "locations", "0-valid-reviewer");
+    await mkdir(validSource, { recursive: true });
+    await mkdir(validBackup, { recursive: true });
+    await writeFile(join(validSource, "SKILL.md"), "# Current\n", "utf8");
+    await writeFile(join(validBackup, "SKILL.md"), "# Before cleanup\n", "utf8");
+    await writeFile(
+      join(backupRoot, validId, "manifest.json"),
+      `${JSON.stringify({
+        id: validId,
+        libraryId: "valid-reviewer",
+        libraryCreated: false,
+        createdAt: "2026-07-21T03:10:31.397Z",
+        operation: "cleanup",
+        entries: [{ sourcePath: validSource, backupPath: validBackup }]
+      }, null, 2)}\n`,
+      "utf8"
+    );
+
+    const unsafeId = "cleanup-1784603431398-4571ea80";
+    const unsafeBackup = join(backupRoot, unsafeId, "locations", "0-outside-reviewer");
+    await mkdir(unsafeBackup, { recursive: true });
+    await writeFile(join(unsafeBackup, "SKILL.md"), "# Unsafe\n", "utf8");
+    await writeFile(
+      join(backupRoot, unsafeId, "manifest.json"),
+      `${JSON.stringify({
+        id: unsafeId,
+        libraryId: "outside-reviewer",
+        libraryCreated: false,
+        createdAt: "2026-07-21T03:10:31.398Z",
+        operation: "cleanup",
+        entries: [{
+          sourcePath: join(root, "outside", "outside-reviewer"),
+          backupPath: unsafeBackup
+        }]
+      }, null, 2)}\n`,
+      "utf8"
+    );
+    await writeFile(join(backupRoot, ".DS_Store"), "system file\n", "utf8");
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const store = createSkillLibraryStore(paths);
+
+    await expect(store.listCleanupBackups()).resolves.toEqual([
+      {
+        id: validId,
+        libraryId: "valid-reviewer",
+        createdAt: "2026-07-21T03:10:31.397Z",
+        locationCount: 1,
+        operation: "cleanup"
+      }
+    ]);
+    expect(warning).toHaveBeenCalledWith(
+      expect.stringContaining(`Ignoring invalid Skill cleanup backup ${unsafeId}`)
+    );
+    await expect(store.rollbackSkillCleanup(unsafeId)).rejects.toThrow(
+      `Skill cleanup backup contains an unsafe path: ${unsafeId}`
+    );
+    await expect(readFile(join(backupRoot, unsafeId, "manifest.json"), "utf8"))
+      .resolves.toContain(unsafeId);
+  });
+
   it("lists reusable skills from the central library directory", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: root });

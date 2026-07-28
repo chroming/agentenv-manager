@@ -31,6 +31,14 @@ const repositoryRemote = join(root, "repository.git");
 const repositoryWork = join(root, "repository-work");
 const legacyOwnerSidecar = join(homeDir, ".claude", "skills", "as-ops.agentenv-owner.json");
 const legacyTargetState = join(appDataRoot, "target-states", "claude-code.json");
+const unsafeCleanupBackupId = "cleanup-1784603431398-4571ea80";
+const unsafeCleanupBackupDir = join(
+  appDataRoot,
+  "backups",
+  "skill-cleanup",
+  unsafeCleanupBackupId
+);
+const unsafeCleanupBackupManifest = join(unsafeCleanupBackupDir, "manifest.json");
 let application;
 
 try {
@@ -65,6 +73,24 @@ try {
       contentHash: "legacy"
     }],
     sharedSkillPreparations: []
+  }, null, 2)}\n`, "utf8");
+  const unsafeCleanupBackupPath = join(
+    unsafeCleanupBackupDir,
+    "locations",
+    "0-outside-reviewer"
+  );
+  await mkdir(unsafeCleanupBackupPath, { recursive: true });
+  await writeFile(join(unsafeCleanupBackupPath, "SKILL.md"), "# Unsafe backup fixture\n", "utf8");
+  await writeFile(unsafeCleanupBackupManifest, `${JSON.stringify({
+    id: unsafeCleanupBackupId,
+    libraryId: "outside-reviewer",
+    libraryCreated: false,
+    createdAt: "2026-07-21T03:10:31.398Z",
+    operation: "cleanup",
+    entries: [{
+      sourcePath: join(root, "outside", "outside-reviewer"),
+      backupPath: unsafeCleanupBackupPath
+    }]
   }, null, 2)}\n`, "utf8");
 
   const runGit = (cwd, args) => execFileAsync("/usr/bin/git", args, {
@@ -104,6 +130,9 @@ try {
   const page = await application.firstWindow();
   await page.setViewportSize({ width: 1180, height: 728 });
   await page.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Agents", exact: true }).waitFor({ state: "visible" });
+  assert.equal(await page.getByText("Action failed").count(), 0);
+  assert.match(await readFile(unsafeCleanupBackupManifest, "utf8"), /outside-reviewer/);
   const migratedTargetState = JSON.parse(await readFile(legacyTargetState, "utf8"));
   assert.deepEqual(migratedTargetState.managedResources, []);
   assert.equal(await readFile(legacyOwnerSidecar, "utf8"), legacyOwnerContent);
