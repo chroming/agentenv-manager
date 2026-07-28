@@ -219,8 +219,19 @@ export const forEachJsonLine = async (
 };
 
 export const sourceByteSize = (version: string): number | undefined => {
-  const value = Number(version.split(":", 1)[0]);
-  return Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+  const [size, mtime, dev, ino, headHash, tailHash] = version.split(":");
+  const value = Number(size);
+  return (
+    Number.isSafeInteger(value) &&
+    value >= 0 &&
+    /^\d+$/.test(mtime ?? "") &&
+    Boolean(dev) &&
+    Boolean(ino) &&
+    /^[a-f0-9]{64}$/i.test(headHash ?? "") &&
+    /^[a-f0-9]{64}$/i.test(tailHash ?? "")
+  )
+    ? value
+    : undefined;
 };
 
 const parseFileSourceVersion = (version: string) => {
@@ -326,6 +337,7 @@ export const createConversationDetail = (
     createdAt: metadata.createdAt ?? candidate.createdAt ?? candidate.updatedAt,
     updatedAt: candidate.updatedAt,
     messageCount: messages.length || candidate.messageCount || 0,
+    sizeBytes: sourceByteSize(candidate.source.version),
     detailState: candidate.detailState,
     archived: candidate.archived,
     messages

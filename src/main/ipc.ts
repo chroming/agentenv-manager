@@ -983,6 +983,9 @@ export const registerIpcHandlers = ({
   );
   ipcMain.handle("backups:list", () => backupStore.listBackups());
   ipcMain.handle("backups:list-managed", () => backupMaintenanceService.listInventory());
+  ipcMain.handle("backups:preview-managed", (_event, input: unknown) =>
+    backupMaintenanceService.previewBackup(parseManagedBackupInput(input))
+  );
   handleMutation("backups:delete-managed", (_event, input: unknown) =>
     backupMaintenanceService.deleteBackup(parseManagedBackupInput(input))
   );

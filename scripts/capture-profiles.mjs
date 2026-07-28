@@ -821,6 +821,12 @@ try {
   await updateSettingsDialog.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-update-settings-920x620.png"));
   await page.keyboard.press("Escape");
+  await skillActionsButton.click();
+  await page.getByRole("menuitem", { name: "Remove from library" }).click();
+  const deleteSkillDialog = page.getByRole("dialog", { name: "Delete library skill" });
+  await deleteSkillDialog.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "skills-delete-confirmation-920x620.png"));
+  await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "Scan local" }).click();
   const cleanupGroup = page.getByRole("group", {
@@ -840,16 +846,14 @@ try {
     name: "Cleanup group shared-compatibility-reviewer"
   });
   await sharedCleanupGroup.waitFor({ state: "visible", timeout: 5_000 });
-  await sharedCleanupGroup.getByRole("button", {
-    name: "Review Agents shared-compatibility-reviewer"
-  }).click();
-  const sharedTargetReview = page.getByRole("dialog", {
-    name: "Prepare shared Skill migration"
+  await cleanupAction.click();
+  const sharedCleanupReview = page.getByRole("dialog", {
+    name: "Clean up local Skills"
   });
-  await sharedTargetReview.waitFor({ state: "visible", timeout: 5_000 });
+  await sharedCleanupReview.waitFor({ state: "visible", timeout: 5_000 });
   await capturePage(page, join(outputDir, "skills-cleanup-shared-review-920x620.png"));
   await page.keyboard.press("Escape");
-  await sharedTargetReview.waitFor({ state: "hidden", timeout: 5_000 });
+  await sharedCleanupReview.waitFor({ state: "hidden", timeout: 5_000 });
   const cleanupSummary = cleanupGroup.getByLabel(
     "Full cleanup summary cross-agent-review-workflow-with-a-long-name"
   );
@@ -1230,6 +1234,17 @@ try {
   await workspaceSyncReview.waitFor({ state: "hidden" });
   await page.getByRole("tab", { name: "Data" }).click();
   await capturePage(page, join(outputDir, "settings-data-920x620.png"));
+  await page.getByRole("button", { name: "Manage", exact: true }).click();
+  const backupManager = page.getByRole("dialog", { name: "Manage Backups" });
+  await backupManager.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "settings-backups-920x620.png"));
+  await backupManager.getByRole("button", { name: /Preview backup/ }).first().click();
+  await backupManager.getByText("Backup contents", { exact: true }).waitFor({
+    state: "visible"
+  });
+  await capturePage(page, join(outputDir, "settings-backup-contents-920x620.png"));
+  await backupManager.getByRole("button", { name: "Back" }).click();
+  await backupManager.getByRole("button", { name: "Close" }).click();
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "settings-data-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);

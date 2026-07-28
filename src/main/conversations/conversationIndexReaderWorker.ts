@@ -46,6 +46,24 @@ const visibleColumns = [
   "archived"
 ].join(", ");
 
+const sourceByteSize = (encodedVersion) => {
+  const parserPrefix = "agentenv-parser:5\n";
+  const version = String(encodedVersion || "").startsWith(parserPrefix)
+    ? String(encodedVersion).slice(parserPrefix.length)
+    : String(encodedVersion || "");
+  const [size, mtime, dev, ino, headHash, tailHash] = version.split(":");
+  const value = Number(size);
+  return Number.isSafeInteger(value) &&
+    value >= 0 &&
+    /^\d+$/.test(mtime || "") &&
+    Boolean(dev) &&
+    Boolean(ino) &&
+    /^[a-f0-9]{64}$/i.test(headHash || "") &&
+    /^[a-f0-9]{64}$/i.test(tailHash || "")
+      ? value
+      : undefined;
+};
+
 const summaryFromRow = (row) => ({
   id: row.id,
   agentId: row.agent_id,
@@ -57,6 +75,7 @@ const summaryFromRow = (row) => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   messageCount: Number(row.message_count),
+  sizeBytes: sourceByteSize(row.source_version),
   detailState: row.detail_state,
   archived: Number(row.archived) === 1 || undefined
 });

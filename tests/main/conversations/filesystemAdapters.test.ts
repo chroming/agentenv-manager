@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createClaudeConversationCapability } from "../../../src/main/targets/conversations/claudeConversations";
 import { createCodexConversationCapability } from "../../../src/main/targets/conversations/codexConversations";
+import { createOpenCodeConversationCapability } from "../../../src/main/targets/conversations/opencodeConversations";
 import type { AgentConversationContext } from "../../../src/main/targets/types";
 
 let root = "";
@@ -38,6 +39,51 @@ describe("filesystem conversation adapters", () => {
   it("uses private context files for best-effort continuation", () => {
     expect(createCodexConversationCapability().continueWithContext).toBeTypeOf("function");
     expect(createClaudeConversationCapability().continueWithContext).toBeTypeOf("function");
+  });
+
+  it("seeds OpenCode with the private file and resumes the created session in its full TUI", () => {
+    const launch = createOpenCodeConversationCapability().continueWithContext?.({
+      ...contextFor("/tmp/.config/opencode"),
+      executablePath: "/usr/local/bin/opencode",
+      conversation: {
+        id: "agy:conversation",
+        agentId: "antigravity",
+        agentName: "Antigravity CLI",
+        sourceId: "conversation",
+        title: "Continue the release",
+        snippet: "Continue the release",
+        workspacePath: "/work/project",
+        createdAt: "2026-07-24T05:00:00.000Z",
+        updatedAt: "2026-07-24T06:00:00.000Z",
+        messageCount: 1,
+        detailState: "full",
+        messages: [{ id: "u1", role: "user", text: "Continue the release" }]
+      },
+      contextFilePath: "/tmp/agentenv/handoff.md"
+    });
+
+    expect(launch).toMatchObject({
+      executablePath: "/usr/local/bin/opencode",
+      cwd: "/work/project",
+      args: [
+        "run",
+        "--dir",
+        "/work/project",
+        "--file",
+        "/tmp/agentenv/handoff.md",
+        "--title",
+        "Continued conversation",
+        "--format",
+        "json",
+        "Continue the work using the attached conversation context."
+      ],
+      resumeAfterExit: {
+        kind: "json-session",
+        sessionIdField: "sessionID",
+        argsBeforeSessionId: ["/work/project", "--session"]
+      }
+    });
+    expect(launch?.args).not.toContain("--interactive");
   });
 
   it("keeps large Claude transcripts and excludes subagent logs from top-level history", async () => {

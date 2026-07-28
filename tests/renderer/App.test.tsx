@@ -718,6 +718,11 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       eligibleCount: 0,
       retentionDays: null
     }),
+    previewManagedBackup: vi.fn().mockResolvedValue({
+      id: "backup",
+      kind: "target-recovery",
+      files: []
+    }),
     deleteManagedBackup: vi.fn().mockResolvedValue({ deletedCount: 1, freedBytes: 0 }),
     cleanupManagedBackups: vi.fn().mockResolvedValue({
       deletedCount: 0,
@@ -3319,8 +3324,23 @@ describe("App", () => {
       eligibleCount: 1,
       retentionDays: 30
     });
+    const previewManagedBackup = vi.fn().mockResolvedValue({
+      id: requiredBackup.id,
+      kind: requiredBackup.kind,
+      files: [
+        {
+          path: "/Users/test/.config/opencode/AGENTS.md",
+          state: "saved" as const
+        },
+        {
+          path: "/Users/test/.config/opencode/skills/reviewer",
+          state: "missing" as const
+        }
+      ]
+    });
     const api = installApi({
       listManagedBackups,
+      previewManagedBackup,
       readSettings: vi.fn().mockResolvedValue({
         locale: "system",
         skillSyncMethod: "symlink",
@@ -3342,6 +3362,18 @@ describe("App", () => {
     expect(within(manager).getByText("Takeover baseline")).toBeInTheDocument();
     expect(within(manager).getByText("Required")).toBeInTheDocument();
     expect(within(manager).queryByRole("button", { name: /Delete backup Daily Coding/ })).not.toBeInTheDocument();
+
+    fireEvent.click(within(manager).getByRole("button", {
+      name: "Preview backup Daily Coding · opencode"
+    }));
+    expect(await within(manager).findByText("Backup contents")).toBeInTheDocument();
+    expect(within(manager).getByText("/Users/test/.config/opencode/AGENTS.md")).toBeInTheDocument();
+    expect(within(manager).getByText("Missing before change")).toBeInTheDocument();
+    expect(previewManagedBackup).toHaveBeenCalledWith({
+      id: requiredBackup.id,
+      kind: requiredBackup.kind
+    });
+    fireEvent.click(within(manager).getByRole("button", { name: "Back" }));
 
     fireEvent.click(within(manager).getByRole("button", { name: /Delete backup Skill cleanup/ }));
     expect(within(manager).getByText("Delete backup?")).toBeInTheDocument();

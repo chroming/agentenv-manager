@@ -28,7 +28,10 @@ describe("backup maintenance service", () => {
     const backupStore = createBackupStore(paths, {
       now: () => new Date(dates[dateIndex++] ?? dates.at(-1) ?? "2026-07-01T00:00:00.000Z")
     });
-    const baseline = await backupStore.createBackup([], {
+    const instructionsPath = join(root, "home", ".config", "opencode", "AGENTS.md");
+    await mkdir(join(root, "home", ".config", "opencode"), { recursive: true });
+    await writeFile(instructionsPath, "# Previous instructions\n");
+    const baseline = await backupStore.createBackup([instructionsPath], {
       operation: "apply",
       targetId: "opencode",
       profileId: "daily",
@@ -99,6 +102,9 @@ describe("backup maintenance service", () => {
           locationCount: 1,
           operation: "cleanup"
         }]),
+        previewCleanupBackup: vi.fn().mockResolvedValue([
+          { path: join(root, "home", ".agents", "skills", "reviewer"), state: "saved" }
+        ]),
         deleteCleanupBackup
       },
       { readSettings: vi.fn().mockResolvedValue({ backupRetentionDays: 30 }) },
@@ -123,6 +129,18 @@ describe("backup maintenance service", () => {
     expect(inventory.items.find((item) => item.id === restoredCleanupId)).toMatchObject({
       restored: true,
       cleanupStatus: "eligible"
+    });
+    await expect(service.previewBackup({
+      id: baseline.id,
+      kind: "target-recovery"
+    })).resolves.toMatchObject({
+      files: [{ path: instructionsPath, state: "saved" }]
+    });
+    await expect(service.previewBackup({
+      id: cleanupId,
+      kind: "skill-cleanup"
+    })).resolves.toMatchObject({
+      files: [{ path: join(root, "home", ".agents", "skills", "reviewer"), state: "saved" }]
     });
 
     const result = await service.cleanup();
@@ -155,7 +173,11 @@ describe("backup maintenance service", () => {
     const service = createBackupMaintenanceService(
       paths,
       backupStore,
-      { listCleanupBackups: vi.fn().mockResolvedValue([]), deleteCleanupBackup: vi.fn() },
+      {
+        listCleanupBackups: vi.fn().mockResolvedValue([]),
+        previewCleanupBackup: vi.fn().mockResolvedValue([]),
+        deleteCleanupBackup: vi.fn()
+      },
       { readSettings: vi.fn().mockResolvedValue({ backupRetentionDays: null }) },
       { now: () => new Date("2026-07-01T00:00:00.000Z") }
     );
@@ -181,7 +203,11 @@ describe("backup maintenance service", () => {
     const service = createBackupMaintenanceService(
       paths,
       backupStore,
-      { listCleanupBackups: vi.fn().mockResolvedValue([]), deleteCleanupBackup: vi.fn() },
+      {
+        listCleanupBackups: vi.fn().mockResolvedValue([]),
+        previewCleanupBackup: vi.fn().mockResolvedValue([]),
+        deleteCleanupBackup: vi.fn()
+      },
       { readSettings: vi.fn().mockResolvedValue({ backupRetentionDays: 30 }) }
     );
 

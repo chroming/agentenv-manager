@@ -395,15 +395,24 @@ export const createOpenCodeConversationCapability = (): AgentConversationCapabil
         executablePath,
         args: [
           "run",
-          "--interactive",
           ...(conversation.workspacePath ? ["--dir", conversation.workspacePath] : []),
           "--file",
           contextFilePath,
           "--title",
           "Continued conversation",
+          "--format",
+          "json",
           "Continue the work using the attached conversation context."
         ],
-        cwd: conversation.workspacePath
+        cwd: conversation.workspacePath,
+        resumeAfterExit: {
+          kind: "json-session",
+          sessionIdField: "sessionID",
+          argsBeforeSessionId: [
+            ...(conversation.workspacePath ? [conversation.workspacePath] : []),
+            "--session"
+          ]
+        }
       }
     : undefined
 });

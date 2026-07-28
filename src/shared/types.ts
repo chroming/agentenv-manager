@@ -164,6 +164,7 @@ export interface AgentEnvApi {
   ): Promise<ApplyResult>;
   listBackups(): Promise<BackupSummary[]>;
   listManagedBackups(): Promise<ManagedBackupInventory>;
+  previewManagedBackup(input: DeleteManagedBackupInput): Promise<ManagedBackupPreview>;
   deleteManagedBackup(input: DeleteManagedBackupInput): Promise<ManagedBackupDeleteResult>;
   cleanupManagedBackups(): Promise<ManagedBackupCleanupResult>;
   previewRollback(backupId: string): Promise<RollbackPreview>;
@@ -264,6 +265,7 @@ export interface ConversationSummary {
   createdAt: string;
   updatedAt: string;
   messageCount: number;
+  sizeBytes?: number;
   detailState: ConversationDetailState;
   archived?: boolean;
 }
@@ -1066,6 +1068,17 @@ export interface ManagedBackupInventory {
 export interface DeleteManagedBackupInput {
   id: string;
   kind: ManagedBackupKind;
+}
+
+export interface ManagedBackupFile {
+  path: string;
+  state: "saved" | "missing";
+}
+
+export interface ManagedBackupPreview {
+  id: string;
+  kind: ManagedBackupKind;
+  files: ManagedBackupFile[];
 }
 
 export interface ManagedBackupDeleteResult {

@@ -89,6 +89,12 @@ export interface ConversationLaunchSpec {
   cwd?: string;
   env?: Record<string, string>;
   envToDelete?: string[];
+  resumeAfterExit?: {
+    kind: "json-session";
+    sessionIdField: string;
+    argsBeforeSessionId: string[];
+    argsAfterSessionId?: string[];
+  };
 }
 
 export interface ConversationContinuationInput extends AgentConversationContext {

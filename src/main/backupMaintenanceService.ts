@@ -1,11 +1,13 @@
 import { lstat, readFile, readdir, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import type {
   AgentEnvSettings,
   DeleteManagedBackupInput,
+  ManagedBackupFile,
   ManagedBackupCleanupResult,
   ManagedBackupInventory,
   ManagedBackupItem,
+  ManagedBackupPreview,
   ManagedBackupRequiredReason,
   TargetState
 } from "../shared/types";
@@ -20,6 +22,7 @@ export interface BackupMaintenanceServiceOptions {
 
 export interface BackupMaintenanceService {
   listInventory(): Promise<ManagedBackupInventory>;
+  previewBackup(input: DeleteManagedBackupInput): Promise<ManagedBackupPreview>;
   deleteBackup(input: DeleteManagedBackupInput): Promise<{ deletedCount: number; freedBytes: number }>;
   cleanup(): Promise<ManagedBackupCleanupResult>;
 }
@@ -92,7 +95,20 @@ const readRestoredCleanupBackups = async (paths: AgentEnvPaths) => {
         createdAt: manifest.createdAt,
         libraryId: manifest.libraryId,
         operation: manifest.operation,
-        locationCount: manifest.entries.length
+        locationCount: manifest.entries.length,
+        files: manifest.entries.flatMap((item): ManagedBackupFile[] => {
+          if (
+            !item ||
+            typeof item !== "object" ||
+            !("sourcePath" in item) ||
+            typeof item.sourcePath !== "string" ||
+            !isAbsolute(item.sourcePath) ||
+            item.sourcePath.endsWith(".agentenv-owner.json")
+          ) {
+            return [];
+          }
+          return [{ path: item.sourcePath, state: "saved" }];
+        })
       };
     } catch {
       return undefined;
@@ -113,8 +129,11 @@ const readWorkspaceSyncRecoveryBackupId = async (paths: AgentEnvPaths) => {
 
 export const createBackupMaintenanceService = (
   paths: AgentEnvPaths,
-  backupStore: Pick<BackupStore, "listBackups" | "deleteBackup">,
-  skillLibraryStore: Pick<SkillLibraryStore, "listCleanupBackups" | "deleteCleanupBackup">,
+  backupStore: Pick<BackupStore, "listBackups" | "readBackup" | "deleteBackup">,
+  skillLibraryStore: Pick<
+    SkillLibraryStore,
+    "listCleanupBackups" | "previewCleanupBackup" | "deleteCleanupBackup"
+  >,
   settingsStore: { readSettings(): Promise<Pick<AgentEnvSettings, "backupRetentionDays">> },
   options: BackupMaintenanceServiceOptions = {}
 ): BackupMaintenanceService => {
@@ -234,6 +253,31 @@ export const createBackupMaintenanceService = (
     } else await skillLibraryStore.deleteCleanupBackup(item.id);
   };
 
+  const previewBackup = async (
+    input: DeleteManagedBackupInput
+  ): Promise<ManagedBackupPreview> => {
+    const inventory = await listInventory();
+    const item = inventory.items.find(
+      (candidate) => candidate.id === input.id && candidate.kind === input.kind
+    );
+    if (!item) throw new Error(`Backup does not exist: ${input.id}`);
+
+    let files: ManagedBackupFile[];
+    if (item.kind === "target-recovery" || item.kind === "workspace-sync") {
+      const manifest = await backupStore.readBackup(item.id);
+      files = manifest.entries.map((entry) => ({
+        path: entry.sourcePath,
+        state: entry.missing ? "missing" : "saved"
+      }));
+    } else if (item.restored) {
+      const restored = await readRestoredCleanupBackups(paths);
+      files = restored.find((backup) => backup.id === item.id)?.files ?? [];
+    } else {
+      files = await skillLibraryStore.previewCleanupBackup(item.id);
+    }
+    return { id: item.id, kind: item.kind, files };
+  };
+
   const deleteBackup = async (input: DeleteManagedBackupInput) => {
     if (activeMutation) throw new Error("Backup cleanup is already running");
     activeMutation = true;
@@ -276,5 +320,5 @@ export const createBackupMaintenanceService = (
     }
   };
 
-  return { listInventory, deleteBackup, cleanup };
+  return { listInventory, previewBackup, deleteBackup, cleanup };
 };

@@ -16,6 +16,7 @@ type ConversationTerminal = AgentEnvSettings["conversationTerminal"];
 
 const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 const environmentName = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const jsonFieldName = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 const environmentLines = (spec: ConversationLaunchSpec) => {
   const names = [
@@ -35,14 +36,50 @@ const environmentLines = (spec: ConversationLaunchSpec) => {
 export const terminalScriptFor = (
   scriptPath: string,
   spec: ConversationLaunchSpec
-) => [
-  "#!/bin/zsh",
-  "set -e",
-  `rm -f -- ${shellQuote(scriptPath)}`,
-  ...environmentLines(spec),
-  ...(spec.cwd ? [`cd -- ${shellQuote(spec.cwd)}`] : []),
-  `exec ${[spec.executablePath, ...spec.args].map(shellQuote).join(" ")}`
-].join("\n") + "\n";
+) => {
+  const resume = spec.resumeAfterExit;
+  if (resume && !jsonFieldName.test(resume.sessionIdField)) {
+    throw new Error(`Invalid launch JSON field name: ${resume.sessionIdField}`);
+  }
+  const eventPath = `${scriptPath}.events`;
+  const command = [spec.executablePath, ...spec.args].map(shellQuote).join(" ");
+  const launchLines = resume
+    ? [
+        "umask 077",
+        `events_path=${shellQuote(eventPath)}`,
+        `trap 'rm -f -- \"$events_path\"' EXIT HUP INT TERM`,
+        `print -r -- ${shellQuote("Preparing the interactive conversation...")}`,
+        `${command} > \"$events_path\"`,
+        `session_id=$(/usr/bin/grep -Eo ${shellQuote(
+          `"${resume.sessionIdField}"[[:space:]]*:[[:space:]]*"[^"]+"`
+        )} \"$events_path\" | /usr/bin/head -n 1 | /usr/bin/sed -E ${shellQuote(
+          `s/.*"${resume.sessionIdField}"[[:space:]]*:[[:space:]]*"([^"]+)".*/\\1/`
+        )})`,
+        "if [[ -z \"$session_id\" ]]; then",
+        `  print -u2 -r -- ${shellQuote("OpenCode created no resumable session.")}`,
+        "  exit 1",
+        "fi",
+        "rm -f -- \"$events_path\"",
+        "trap - EXIT HUP INT TERM",
+        `exec ${[
+          spec.executablePath,
+          ...resume.argsBeforeSessionId
+        ].map(shellQuote).join(" ")} "$session_id"${
+          resume.argsAfterSessionId?.length
+            ? ` ${resume.argsAfterSessionId.map(shellQuote).join(" ")}`
+            : ""
+        }`
+      ]
+    : [`exec ${command}`];
+  return [
+    "#!/bin/zsh",
+    "set -e",
+    `rm -f -- ${shellQuote(scriptPath)}`,
+    ...environmentLines(spec),
+    ...(spec.cwd ? [`cd -- ${shellQuote(spec.cwd)}`] : []),
+    ...launchLines
+  ].join("\n") + "\n";
+};
 
 export const terminalOpenArgumentsFor = (
   terminal: ConversationTerminal,

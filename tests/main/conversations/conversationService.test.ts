@@ -557,9 +557,14 @@ describe("conversation service", () => {
 
     expect(result.mode).toBe("context-file");
     expect(launched).toHaveLength(1);
+    expect(launched[0].resumeAfterExit).toMatchObject({
+      kind: "json-session",
+      sessionIdField: "sessionID",
+      argsBeforeSessionId: ["/work/project", "--session"]
+    });
     expect(launched[0].args.join(" ")).not.toContain("failing step");
-    expect(await readFile(contextPath, "utf8")).toContain("I found the failing step.");
-    expect((await stat(contextPath)).mode & 0o777).toBe(0o600);
+    expect(await readFile(contextPath!, "utf8")).toContain("I found the failing step.");
+    expect((await stat(contextPath!)).mode & 0o777).toBe(0o600);
     await expect(service.previewContinuation({
       conversationId: "codex:session-1",
       targetId: "codex"

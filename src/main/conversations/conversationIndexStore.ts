@@ -9,6 +9,7 @@ import type {
   ConversationSummary
 } from "../../shared/types";
 import type { AgentConversationCandidate } from "../targets/types";
+import { sourceByteSize } from "./adapterUtils";
 import { createConversationIndexReader } from "./conversationIndexReaderWorker";
 
 interface ConversationRow {
@@ -75,6 +76,7 @@ const summaryFromRow = (row: ConversationRow): ConversationSummary => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   messageCount: row.message_count,
+  sizeBytes: sourceByteSize(decodeSourceVersion(row.source_version)),
   detailState: row.detail_state,
   archived: row.archived === 1 || undefined
 });

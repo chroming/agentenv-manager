@@ -9,7 +9,8 @@ import { defaultSkillLibraryViewState } from "../../src/renderer/libraryViewStat
 import type { SkillUpdateRun } from "../../src/renderer/skillUpdateQueue";
 import type {
   GitHubSkillImportInput,
-  RepositorySkillImportInput
+  RepositorySkillImportInput,
+  SkillCleanupRequest
 } from "../../src/shared/types";
 
 afterEach(() => {
@@ -125,7 +126,9 @@ describe("SkillLibraryPanel", () => {
     const onSetIcon = vi.fn();
     const onManageTargetSkill = vi.fn();
     const onConsolidateSkillGroup = vi.fn().mockResolvedValue(true);
-    const onAutoConsolidateSkillGroups = vi.fn().mockResolvedValue(undefined);
+    const onAutoConsolidateSkillGroups = vi.fn().mockImplementation(
+      async (inputs: SkillCleanupRequest[]) => inputs.map((input) => input.skillKey)
+    );
     const onKeepSkillGroupOutside = vi.fn();
     const onReviewSkillGroupAgain = vi.fn();
     const onSetSharedSkillRetention = vi.fn().mockResolvedValue(true);
@@ -856,6 +859,7 @@ describe("SkillLibraryPanel", () => {
     const deleteDialog = screen.getByRole("dialog", { name: "Delete library skill" });
     expect(deleteDialog).toHaveTextContent("Shared Reviewer");
     expect(deleteDialog).toHaveTextContent("used by Daily Coding");
+    expect(deleteDialog).toHaveTextContent("/tmp/skills-library/shared-reviewer");
     fireEvent.click(within(deleteDialog).getByRole("button", { name: "Review profiles" }));
     expect(onReviewSkillUsage).toHaveBeenCalledWith("shared-reviewer");
     expect(onRemoveLibrarySkill).not.toHaveBeenCalled();
@@ -865,6 +869,8 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: /Remove from library/ }));
     const installedDeleteDialog = screen.getByRole("dialog", { name: "Delete library skill" });
     expect(installedDeleteDialog).toHaveTextContent("1 managed Agent install");
+    expect(installedDeleteDialog).toHaveTextContent("/tmp/skills-library/copied-local");
+    expect(installedDeleteDialog).toHaveTextContent("/tmp/opencode/skills/copied-local");
     fireEvent.click(
       within(installedDeleteDialog).getByRole("button", { name: "Remove skill and installs" })
     );
@@ -1043,18 +1049,25 @@ describe("SkillLibraryPanel", () => {
     let sharedMigrationGroup = screen.getByRole("group", {
       name: "Cleanup group compat-reviewer"
     });
-    expect(sharedMigrationGroup).toHaveTextContent("Needs choice");
-    fireEvent.click(
-      within(sharedMigrationGroup).getByRole("button", {
+    expect(sharedMigrationGroup).toHaveTextContent("Ready");
+    expect(
+      within(sharedMigrationGroup).queryByRole("button", {
         name: "Review Agents compat-reviewer"
       })
-    );
-    const prepareDialog = screen.getByRole("dialog", {
-      name: "Prepare shared Skill migration"
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Clean up \d+ ready Skills/ }));
+    const automaticCleanupDialog = screen.getByRole("dialog", {
+      name: "Clean up local Skills"
     });
-    expect(prepareDialog).toHaveTextContent("Codex");
-    expect(prepareDialog).toHaveTextContent("capture current Skills into a new Profile");
-    fireEvent.click(within(prepareDialog).getByRole("button", { name: "Move to Agents" }));
+    expect(automaticCleanupDialog).toHaveTextContent("Codex");
+    expect(automaticCleanupDialog).toHaveTextContent(
+      "/tmp/home/.agents/skills/compat-reviewer"
+    );
+    fireEvent.click(
+      within(automaticCleanupDialog).getByRole("button", {
+        name: /Clean up \d+ skills/
+      })
+    );
     await waitFor(() =>
       expect(onMoveSharedSkillToAgents).toHaveBeenCalledWith(
         {
@@ -1113,8 +1126,12 @@ describe("SkillLibraryPanel", () => {
     ).not.toBeInTheDocument();
     let resolveAutoCleanup: (() => void) | undefined;
     onAutoConsolidateSkillGroups.mockImplementationOnce(
-      () => new Promise<void>((resolve) => {
-        resolveAutoCleanup = resolve;
+      () => new Promise<string[]>((resolve) => {
+        resolveAutoCleanup = () => resolve([
+          "copied-local",
+          "legacy-reviewer",
+          "target-only-reviewer"
+        ]);
       })
     );
     const takeOverAllButton = within(discoveries).getByRole("button", {
@@ -1527,7 +1544,7 @@ describe("SkillLibraryPanel", () => {
         onCancelRepositoryOperations={onCancelRepositoryOperations}
         onManageTargetSkill={noop}
         onConsolidateSkillGroup={vi.fn().mockResolvedValue(false)}
-        onAutoConsolidateSkillGroups={vi.fn().mockResolvedValue(undefined)}
+        onAutoConsolidateSkillGroups={vi.fn().mockResolvedValue([])}
         onSaveUpdateSettings={vi.fn().mockResolvedValue(true)}
         onSetAvailability={vi.fn().mockResolvedValue(true)}
         onSetIcon={noop}
@@ -1715,7 +1732,7 @@ describe("SkillLibraryPanel", () => {
         onCancelRepositoryOperations={vi.fn().mockResolvedValue(undefined)}
         onManageTargetSkill={noop}
         onConsolidateSkillGroup={vi.fn().mockResolvedValue(false)}
-        onAutoConsolidateSkillGroups={vi.fn().mockResolvedValue(undefined)}
+        onAutoConsolidateSkillGroups={vi.fn().mockResolvedValue([])}
         onSaveUpdateSettings={vi.fn().mockResolvedValue(true)}
         onSetAvailability={vi.fn().mockResolvedValue(true)}
         onSetIcon={noop}

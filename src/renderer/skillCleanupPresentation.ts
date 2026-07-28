@@ -1,0 +1,120 @@
+import type { SkillInventoryEntry } from "../shared/types";
+import type {
+  SkillCleanupAutomaticEffect,
+  SkillCleanupDisplayState,
+  SkillCleanupRecommendedAction
+} from "../shared/skillCleanup";
+import { targetNameFor, type TargetNameIndex } from "./targetPresentation";
+
+export const cleanupLocationLabel = (
+  item: SkillInventoryEntry,
+  targetNames: TargetNameIndex
+) => {
+  const names = item.foundIn.map((targetId) =>
+    targetNameFor(targetId, targetNames, "Unknown Agent")
+  );
+  return names.length > 1 ? `Shared: ${names.join(" + ")}` : names[0] ?? "Unknown Agent";
+};
+
+const inventoryStatusLabel = (status: SkillInventoryEntry["status"]) => {
+  if (status === "library") return "Imported";
+  if (status === "outside") return "Outside AgentEnv";
+  if (status === "kept-outside") return "Kept outside";
+  return "Managed";
+};
+
+export const cleanupInventoryStatusLabel = (item: SkillInventoryEntry) =>
+  item.externalEvidence?.state === "broken-link"
+    ? "Unavailable"
+    : inventoryStatusLabel(item.status);
+
+export const cleanupInventoryStatusClass = (item: SkillInventoryEntry) =>
+  item.externalEvidence?.state === "broken-link" ? "stale" : item.status;
+
+export const externalManagerLabel = (skill: SkillInventoryEntry | undefined) =>
+  skill?.externalEvidence?.displayName ??
+  (skill?.externalEvidence?.manager === "skills-cli"
+    ? "Skills CLI"
+    : skill?.externalEvidence?.manager ?? "Detected source");
+
+export const isCleanupManageable = (item: SkillInventoryEntry) =>
+  item.status !== "kept-outside" &&
+  item.locationRole !== "discovery-only" &&
+  (item.locationManagement !== "observed" || item.sharedLocation === true);
+
+export const cleanupPresentationLabel = (state: SkillCleanupDisplayState) => {
+  if (state === "not-in-library") return "Not in Library";
+  if (state === "duplicate-copies") return "Duplicate copies";
+  if (state === "multiple-versions") return "Multiple versions";
+  if (state === "copies-not-managed") return "Copies not managed";
+  if (state === "local-changes-found") return "Local changes found";
+  if (state === "managed-copy-changed") return "Managed copy changed";
+  if (state === "outside-agentenv") return "Outside AgentEnv";
+  if (state === "shared-copy-needs-decisions") return "Needs Agent choices";
+  if (state === "shared-copy-ready-to-move") return "Ready to move out of shared folder";
+  if (state === "kept-shared") return "Kept shared";
+  if (state === "kept-outside") return "Kept outside";
+  if (state === "unavailable") return "Unavailable";
+  return "Managed";
+};
+
+export const cleanupPresentationCompactLabel = (state: SkillCleanupDisplayState) => {
+  if (state === "duplicate-copies") return "Duplicate";
+  if (state === "unavailable") return "Unavailable";
+  if (state === "multiple-versions") return "Multiple versions";
+  if (state === "local-changes-found" || state === "managed-copy-changed") return "Changed";
+  if (state === "outside-agentenv") return "Outside";
+  if (state === "shared-copy-needs-decisions") return "Needs choice";
+  if (state === "shared-copy-ready-to-move") return "Ready";
+  if (state === "kept-shared" || state === "kept-outside") return "Kept";
+  if (state === "managed") return "Managed";
+  return "Unmanaged";
+};
+
+export const cleanupPresentationChipClass = (state: SkillCleanupDisplayState) => {
+  if (state === "managed" || state === "shared-copy-ready-to-move") return "managed";
+  if (state === "kept-outside" || state === "kept-shared") return "kept-outside";
+  if (state === "outside-agentenv") return "outside";
+  if (state === "multiple-versions" || state === "local-changes-found") return "conflict";
+  if (state === "managed-copy-changed") return "stale";
+  if (state === "shared-copy-needs-decisions") return "pending";
+  if (state === "duplicate-copies") return "library";
+  if (state === "unavailable") return "stale";
+  return "outside";
+};
+
+export const cleanupActionLabel = (action: SkillCleanupRecommendedAction) => {
+  if (action === "add-to-library") return "Add to Library";
+  if (action === "manage-copies") return "Manage copies";
+  if (action === "review-differences") return "Review differences";
+  if (action === "review-drift") return "Review drift";
+  if (action === "review-paths") return "Review paths";
+  if (action === "review-agents") return "Review Agents";
+  if (action === "move-from-shared") return "Move out of shared folder";
+  if (action === "review-details") return "Review details";
+  return "";
+};
+
+export const cleanupActionDisplayLabel = (action: SkillCleanupRecommendedAction) => {
+  if (action === "review-agents") return "Review Agents";
+  if (action === "move-from-shared") return "Move";
+  if (
+    action === "review-differences" ||
+    action === "review-drift" ||
+    action === "review-paths" ||
+    action === "review-details"
+  ) {
+    return "Review";
+  }
+  return cleanupActionLabel(action);
+};
+
+export const cleanupEffectLabel = (effect: SkillCleanupAutomaticEffect) => {
+  if (effect === "import-and-link") return "Add to Library and link copies";
+  if (effect === "import-shared") return "Add shared copy to Library and remove duplicates";
+  if (effect === "move-shared-to-agents") return "Move Skills out of shared folder";
+  if (effect === "link-to-library") return "Link copies to Library";
+  if (effect === "archive-and-link") return "Back up local changes and link to Library";
+  if (effect === "repair-link") return "Repair managed links";
+  return "Remove unavailable links";
+};

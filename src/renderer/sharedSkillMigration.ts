@@ -103,11 +103,6 @@ export const moveSharedSkillToAgents = async ({
   if (!librarySkill) {
     throw new Error(`Library Skill is unavailable: ${migration.libraryId}`);
   }
-  if (librarySkill.globallyEnabled === false) {
-    throw new Error(
-      `${librarySkill.name} is disabled in the Library. Enable it before moving active Agent copies.`
-    );
-  }
 
   const states = await api.listTargetStates();
   const statesByTarget = new Map(states.map((state) => [state.targetId, state]));

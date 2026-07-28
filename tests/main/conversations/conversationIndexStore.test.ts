@@ -53,6 +53,15 @@ const candidate: AgentConversationCandidate = {
   detailState: "full"
 };
 
+const fileVersion = (size: number) => [
+  size,
+  1784863200000,
+  16777234,
+  12345,
+  "a".repeat(64),
+  "b".repeat(64)
+].join(":");
+
 const setup = async () => {
   root = await mkdtemp(join(tmpdir(), "agentenv-conversation-index-"));
   const path = join(root, "cache", "conversations.sqlite");
@@ -95,6 +104,33 @@ describe("conversation index store", () => {
     });
     expect(await readFile(source, "utf8")).toBe(before);
     expect((await stat(path)).mode & 0o777).toBe(0o600);
+  });
+
+  it("exposes a transcript size only for verified file fingerprints", async () => {
+    const { store: index } = await setup();
+    index.upsert(detail, {
+      ...candidate,
+      source: {
+        ...candidate.source,
+        version: fileVersion(24_576)
+      }
+    });
+
+    expect((await index.list()).items[0]).toMatchObject({ sizeBytes: 24_576 });
+    expect(await index.read(detail.id)).toMatchObject({ sizeBytes: 24_576 });
+
+    index.upsert({ ...detail, id: "opencode:database" }, {
+      ...candidate,
+      recordId: "database",
+      source: {
+        locator: "opencode-sqlite:/tmp/opencode.db",
+        version: "1784863200000:42"
+      }
+    });
+    expect(
+      (await index.list()).items.find((item) => item.id === "opencode:database")
+        ?.sizeBytes
+    ).toBeUndefined();
   });
 
   it("persists the Agent discovery version without changing indexed history", async () => {

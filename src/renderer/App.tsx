@@ -29,7 +29,6 @@ import {
   ScanLine,
   Settings2,
   TriangleAlert,
-  Trash2,
   X
 } from "lucide-react";
 import type {
@@ -63,6 +62,7 @@ import type {
   ManageTargetSkillInput,
   ManagedBackupInventory,
   ManagedBackupItem,
+  ManagedBackupPreview,
   NativeMcpConnection,
   NativeMcpInspectionIssue,
   RetireSharedSkillInput,
@@ -98,7 +98,7 @@ import type {
   TargetManagementState
 } from "../shared/types";
 import { profileWithoutLocalSkillExceptions } from "../shared/effectiveProfile";
-import { I18nProvider, useI18n, type TranslationValues } from "./i18n";
+import { I18nProvider, useI18n } from "./i18n";
 import { acceptAppliedProfileState } from "./appliedProfileState";
 import { activationPreviewHasWork } from "./activationPreview";
 import { moveSharedSkillToAgents } from "./sharedSkillMigration";
@@ -118,6 +118,10 @@ import {
   AppFeedback,
   type AppFeedbackMessage
 } from "./components/AppFeedback";
+import {
+  BackupManagerDialog,
+  type BackupManagerNotice
+} from "./components/BackupManagerDialog";
 import { DataRootPath } from "./components/DataRootPath";
 import { DiffViewer } from "./components/DiffViewer";
 import {
@@ -241,11 +245,6 @@ interface PendingSkillImport {
   committing?: boolean;
 }
 
-interface BackupManagerNotice {
-  kind: "success" | "error";
-  message: string;
-}
-
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
 const formatBytes = (bytes: number): string => {
@@ -259,31 +258,6 @@ const formatBytes = (bytes: number): string => {
   }
   return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${unit}`;
 };
-
-const managedBackupTitle = (item: ManagedBackupItem, t: Translate): string =>
-  item.kind === "skill-cleanup"
-    ? t(item.restored ? "Restored skill cleanup · {{name}}" : "Skill cleanup · {{name}}", {
-        name: item.libraryId ?? item.id
-      })
-    : item.kind === "workspace-sync"
-      ? t("Workspace update")
-    : item.profileName
-      ? t("{{profile}} · {{target}}", {
-          profile: item.profileName,
-          target: item.targetId ?? t("Agent")
-        })
-      : t("Agent recovery · {{target}}", { target: item.targetId ?? t("Unknown Agent") });
-
-const managedBackupStatusLabel = (item: ManagedBackupItem, t: Translate): string => {
-  if (item.requiredReason === "recovery-required") return t("Required for recovery");
-  if (item.requiredReason === "workspace-sync-recovery") return t("Required for Workspace recovery");
-  if (item.requiredReason === "takeover-baseline") return t("Takeover baseline");
-  if (item.cleanupStatus === "retained") return t("Latest recovery point");
-  if (item.cleanupStatus === "eligible") return t("Ready to clean");
-  return t("Kept by policy");
-};
-
-type Translate = (message: string, values?: TranslationValues) => string;
 
 const toSaveInput = (profile: ProfileDetail): SaveProfileInput => ({
   manifest: profile.manifest,
@@ -404,6 +378,9 @@ const AppContent = ({
   const [managedBackups, setManagedBackups] = useState<ManagedBackupInventory>();
   const [managedBackupsLoading, setManagedBackupsLoading] = useState(false);
   const [backupManagerOpen, setBackupManagerOpen] = useState(false);
+  const [backupPreviewCandidate, setBackupPreviewCandidate] = useState<ManagedBackupItem>();
+  const [managedBackupPreview, setManagedBackupPreview] = useState<ManagedBackupPreview>();
+  const [managedBackupPreviewLoading, setManagedBackupPreviewLoading] = useState(false);
   const [backupDeleteCandidate, setBackupDeleteCandidate] = useState<ManagedBackupItem>();
   const [backupCleanupConfirm, setBackupCleanupConfirm] = useState(false);
   const [backupManagerNotice, setBackupManagerNotice] = useState<BackupManagerNotice>();
@@ -1747,6 +1724,8 @@ const AppContent = ({
               ? "restore"
               : backupDeleteCandidate
                 ? "delete-backup"
+                : backupPreviewCandidate
+                  ? `preview-backup:${backupPreviewCandidate.kind}:${backupPreviewCandidate.id}`
                 : backupCleanupConfirm
                   ? "cleanup-backups"
                   : backupManagerOpen
@@ -3266,7 +3245,7 @@ const AppContent = ({
 
   const autoConsolidateSkillGroups = async (inputs: SkillCleanupRequest[]) => {
     if (inputs.length === 0) {
-      return;
+      return [];
     }
     setBusy(true);
     setError(undefined);
@@ -3276,10 +3255,12 @@ const AppContent = ({
       message: `Managing ${plural(inputs.length, "skill")}...`
     });
     const completed: SkillCleanupResult[] = [];
+    const completedSkillKeys: string[] = [];
     const failures: string[] = [];
     for (const input of inputs) {
       try {
         completed.push(await window.agentEnv.consolidateSkillGroup(input));
+        completedSkillKeys.push(input.skillKey);
       } catch (unknownError) {
         failures.push(
           `${input.skillKey}: ${unknownError instanceof Error ? unknownError.message : String(unknownError)}`
@@ -3311,6 +3292,7 @@ const AppContent = ({
     } finally {
       setBusy(false);
     }
+    return completedSkillKeys;
   };
 
   const undoSkillCleanup = async (backupId = skillCleanupResult?.backupId) => {
@@ -3514,6 +3496,9 @@ const AppContent = ({
     backupManagerReturnFocusRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setBackupDeleteCandidate(undefined);
+    setBackupPreviewCandidate(undefined);
+    setManagedBackupPreview(undefined);
+    setManagedBackupPreviewLoading(false);
     setBackupCleanupConfirm(false);
     setBackupManagerNotice(undefined);
     setBackupManagerOpen(true);
@@ -3521,6 +3506,12 @@ const AppContent = ({
   };
 
   const closeBackupManager = () => {
+    if (backupPreviewCandidate) {
+      setBackupPreviewCandidate(undefined);
+      setManagedBackupPreview(undefined);
+      setManagedBackupPreviewLoading(false);
+      return;
+    }
     if (backupDeleteCandidate) {
       setBackupDeleteCandidate(undefined);
       return;
@@ -3531,6 +3522,28 @@ const AppContent = ({
     }
     setBackupManagerOpen(false);
     setBackupManagerNotice(undefined);
+  };
+
+  const previewManagedBackup = async (item: ManagedBackupItem) => {
+    setBackupPreviewCandidate(item);
+    setManagedBackupPreview(undefined);
+    setManagedBackupPreviewLoading(true);
+    setBackupManagerNotice(undefined);
+    try {
+      const previewResult = await window.agentEnv.previewManagedBackup({
+        id: item.id,
+        kind: item.kind
+      });
+      setManagedBackupPreview(previewResult);
+    } catch (unknownError) {
+      setBackupPreviewCandidate(undefined);
+      setBackupManagerNotice({
+        kind: "error",
+        message: unknownError instanceof Error ? unknownError.message : String(unknownError)
+      });
+    } finally {
+      setManagedBackupPreviewLoading(false);
+    }
   };
 
   const deleteSelectedManagedBackup = async () => {
@@ -5028,146 +5041,29 @@ const AppContent = ({
             ) : null}
             </div>
             {backupManagerOpen ? (
-              <div className="preview-modal-backdrop" onClick={busy ? undefined : closeBackupManager}>
-                <section
-                  ref={appModalDialogRef}
-                  className="profile-form-dialog backup-manager-dialog"
-                  role="dialog"
-                  aria-modal="true"
-                  aria-label={t("Manage Backups")}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  {backupDeleteCandidate ? (
-                    <>
-                      <header className="profile-dialog-header">
-                        <div className="ui-dialog-header__copy">
-                          <div className="section-title ui-dialog-title">{t("Delete backup?")}</div>
-                          <p className="muted ui-dialog-description">{managedBackupTitle(backupDeleteCandidate, t)}</p>
-                        </div>
-                      </header>
-                      <div className="backup-confirm-summary">
-                        <strong>{formatBytes(backupDeleteCandidate.sizeBytes)}</strong>
-                        <p>{t("This recovery point cannot be restored after deletion. Profiles, Library resources, and current Agent files are unchanged.")}</p>
-                      </div>
-                      <footer className="preview-actions">
-                        <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={() => setBackupDeleteCandidate(undefined)}>
-                          {t("Cancel")}
-                        </button>
-                        <button className="danger-action" type="button" disabled={busy} onClick={() => void deleteSelectedManagedBackup()}>
-                          {t("Delete backup")}
-                        </button>
-                      </footer>
-                    </>
-                  ) : backupCleanupConfirm ? (
-                    <>
-                      <header className="profile-dialog-header">
-                        <div className="ui-dialog-header__copy">
-                          <div className="section-title ui-dialog-title">{t("Clean up backups?")}</div>
-                          <p className="muted ui-dialog-description">
-                            {t((managedBackups?.eligibleCount ?? 0) === 1 ? "Delete 1 backup and free approximately {{size}}." : "Delete {{count}} backups and free approximately {{size}}.", {
-                              count: managedBackups?.eligibleCount ?? 0,
-                              size: formatBytes(managedBackups?.eligibleBytes ?? 0)
-                            })}
-                          </p>
-                        </div>
-                      </header>
-                      <div className="backup-confirm-summary">
-                        <p>{t("Only recovery points outside the retention period are removed. Required recovery and takeover backups stay available.")}</p>
-                      </div>
-                      <footer className="preview-actions">
-                        <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={() => setBackupCleanupConfirm(false)}>
-                          {t("Cancel")}
-                        </button>
-                        <button className="danger-action" type="button" disabled={busy} onClick={() => void cleanupManagedBackups()}>
-                          {t((managedBackups?.eligibleCount ?? 0) === 1 ? "Clean up 1 backup" : "Clean up {{count}} backups", { count: managedBackups?.eligibleCount ?? 0 })}
-                        </button>
-                      </footer>
-                    </>
-                  ) : (
-                    <>
-                      <header className="profile-dialog-header backup-manager-header">
-                        <div className="ui-dialog-header__copy">
-                          <div className="section-title ui-dialog-title">{t("Manage Backups")}</div>
-                          <p className="muted ui-dialog-description">
-                            {t((managedBackups?.items.length ?? 0) === 1 ? "{{count}} backup · {{size}}" : "{{count}} backups · {{size}}", {
-                              count: managedBackups?.items.length ?? 0,
-                              size: formatBytes(managedBackups?.totalBytes ?? 0)
-                            })}
-                          </p>
-                        </div>
-                      </header>
-                      {backupManagerNotice ? (
-                        <div className={`backup-manager-notice is-${backupManagerNotice.kind}`} role={backupManagerNotice.kind === "error" ? "alert" : "status"}>
-                          {backupManagerNotice.message}
-                        </div>
-                      ) : null}
-                      <div className="backup-manager-list" aria-busy={managedBackupsLoading}>
-                        {managedBackupsLoading && !managedBackups ? (
-                          <div className="backup-manager-empty">{t("Calculating storage...")}</div>
-                        ) : managedBackups?.items.length ? (
-                          managedBackups.items.map((item) => (
-                            <article className="backup-manager-row" key={`${item.kind}:${item.id}`}>
-                              <span className={`backup-kind-icon is-${item.kind}`} aria-hidden="true">
-                                {item.kind === "skill-cleanup" ? <Database size={17} /> : item.kind === "workspace-sync" ? <GitFork size={17} /> : <History size={17} />}
-                              </span>
-                              <span className="backup-row-copy">
-                                <strong title={managedBackupTitle(item, t)}>{managedBackupTitle(item, t)}</strong>
-                                <small>
-                                  {formatDate(item.createdAt)} · {t("{{count}} files", { count: item.fileCount })} · {formatBytes(item.sizeBytes)}
-                                </small>
-                              </span>
-                              <span className={`backup-status is-${item.cleanupStatus}`} title={managedBackupStatusLabel(item, t)}>
-                                {managedBackupStatusLabel(item, t)}
-                              </span>
-                              {item.deletable ? (
-                                <button
-                                  className="backup-row-delete"
-                                  type="button"
-                                  disabled={busy}
-                                  aria-label={t("Delete backup {{name}}", { name: managedBackupTitle(item, t) })}
-                                  onClick={() => setBackupDeleteCandidate(item)}
-                                >
-                                  <Trash2 size={15} aria-hidden="true" />
-                                  {t("Delete")}
-                                </button>
-                              ) : (
-                                <span className="backup-required-lock" title={managedBackupStatusLabel(item, t)}>{t("Required")}</span>
-                              )}
-                            </article>
-                          ))
-                        ) : (
-                          <div className="backup-manager-empty">
-                            <History size={22} aria-hidden="true" />
-                            <strong>{t("No managed backups")}</strong>
-                            <span>{t("Recovery points will appear here after AgentEnv changes local environments.")}</span>
-                          </div>
-                        )}
-                      </div>
-                      <footer className="preview-actions backup-manager-actions">
-                        <span>
-                          {managedBackups?.eligibleCount
-                            ? t("{{count}} eligible · {{size}}", {
-                                count: managedBackups.eligibleCount,
-                                size: formatBytes(managedBackups.eligibleBytes)
-                              })
-                            : t("Nothing to clean")}
-                        </span>
-                        <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={closeBackupManager}>
-                          {t("Close")}
-                        </button>
-                        <button
-                          className="danger-action"
-                          type="button"
-                          disabled={busy || !managedBackups?.eligibleCount}
-                          onClick={() => setBackupCleanupConfirm(true)}
-                        >
-                          {t("Clean up now")}
-                        </button>
-                      </footer>
-                    </>
-                  )}
-                </section>
-              </div>
+              <BackupManagerDialog
+                busy={busy}
+                cleanupConfirm={backupCleanupConfirm}
+                deleteCandidate={backupDeleteCandidate}
+                dialogRef={appModalDialogRef}
+                initialFocusRef={appModalInitialFocusRef}
+                inventory={managedBackups}
+                inventoryLoading={managedBackupsLoading}
+                notice={backupManagerNotice}
+                preview={managedBackupPreview}
+                previewCandidate={backupPreviewCandidate}
+                previewLoading={managedBackupPreviewLoading}
+                formatBytes={formatBytes}
+                formatDate={formatDate}
+                onBackOrClose={closeBackupManager}
+                onCancelCleanup={() => setBackupCleanupConfirm(false)}
+                onCancelDelete={() => setBackupDeleteCandidate(undefined)}
+                onCleanup={() => void cleanupManagedBackups()}
+                onDelete={() => void deleteSelectedManagedBackup()}
+                onOpenCleanupConfirm={() => setBackupCleanupConfirm(true)}
+                onOpenDelete={setBackupDeleteCandidate}
+                onPreview={(item) => void previewManagedBackup(item)}
+              />
             ) : null}
             {dataRestorePreview ? (
               <div className="preview-modal-backdrop" onClick={() => {

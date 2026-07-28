@@ -81,6 +81,19 @@ const workspaceName = (path?: string) => {
   return normalized?.split(/[\\/]/).filter(Boolean).at(-1) ?? path ?? "";
 };
 
+const formatConversationSize = (sizeBytes: number) => {
+  if (sizeBytes < 1024) return `${sizeBytes} B`;
+  const units = ["KB", "MB", "GB"];
+  let value = sizeBytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const precision = value >= 10 ? 0 : 1;
+  return `${value.toFixed(precision)} ${units[unitIndex]}`;
+};
+
 const conversationDateGroup = (value: string) => {
   const date = new Date(value);
   const now = new Date();
@@ -1118,13 +1131,24 @@ export const ConversationWorkspace = ({
                           {item.workspacePath ? (
                             <>
                               <span aria-hidden="true">·</span>
-                              <span title={item.workspacePath}>
+                              <span
+                                className="conversation-list-item__workspace"
+                                title={item.workspacePath}
+                              >
                                 {workspaceName(item.workspacePath)}
                               </span>
                             </>
                           ) : null}
                           <span aria-hidden="true">·</span>
                           <time dateTime={item.updatedAt}>{formatListTime(item.updatedAt)}</time>
+                          {item.sizeBytes !== undefined ? (
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <span className="conversation-list-item__size">
+                                {formatConversationSize(item.sizeBytes)}
+                              </span>
+                            </>
+                          ) : null}
                         </small>
                       </span>
                     </button>

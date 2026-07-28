@@ -29,6 +29,7 @@ import type {
   SkillMergeInput,
   SkillMergePreview,
   SkillMergeResult,
+  ManagedBackupFile,
   SkillProvenance,
   ResourceIconKey,
   SkillSourceType,
@@ -45,7 +46,6 @@ import type {
   SkillPathPolicy,
   SkillPathPolicyInput,
   SkillPathPolicyUpdate,
-  SkillRuntimeObservation,
   SkillRuntimeSnapshot,
   SkillSourceCheckAllResult,
   SkillSourceCollectionRef,
@@ -54,7 +54,6 @@ import type {
   SkillSourceMergePreviewInput,
   SkillSourceMergeResult,
   SkillSourceScope,
-  TargetSkillLocation,
   TargetPaths,
   UnmanagedSkillEntry,
   SharedSkillRetentionInput
@@ -72,7 +71,6 @@ import type { ProfileStore } from "./profileStore";
 import { resolveSkillsLibraryDir, type SettingsStore } from "./settingsStore";
 import { parseSkillFrontmatter } from "./skillFrontmatter";
 import { inspectSkillsCliLocks } from "./skillsCliInspector";
-import { sharedSkillLocationAuthority } from "./targets/sharedSkillLocations";
 import { deploySkillDirectory, removeSkillDeployment } from "./skillDeployment";
 import { createTargetRegistry } from "./targets/registry";
 import { targetPathInputFor } from "./targets/pathInput";
@@ -116,6 +114,7 @@ import {
   type GitHubTreeResponse,
   type ParsedGitHubSkillSource
 } from "./githubSkillClient";
+import { mergeInventoryLocation } from "./skillInventoryLocation";
 
 interface SkillCleanupBackupManifest {
   id: string;
@@ -127,57 +126,6 @@ interface SkillCleanupBackupManifest {
   operation?: "cleanup" | "remove" | "retire" | "update" | "merge";
   entries: Array<{ sourcePath: string; backupPath: string }>;
 }
-
-const mergeInventoryLocation = (
-  entry: SkillInventoryEntry,
-  targetId: string,
-  location: TargetSkillLocation | undefined,
-  observation?: SkillRuntimeObservation
-): void => {
-  const replacesLocation =
-    sharedSkillLocationAuthority(location) >
-    sharedSkillLocationAuthority(
-      entry.locationRole && entry.sharedLocation !== undefined
-        ? {
-            role: entry.locationRole,
-            shared: entry.sharedLocation,
-            sharedLocationId: entry.sharedLocationId,
-            management: entry.locationManagement
-          }
-        : undefined
-    );
-
-  if (replacesLocation) {
-    entry.locationRole = location?.role;
-    entry.sharedLocation = location?.shared;
-    entry.sharedLocationId = location?.sharedLocationId;
-    entry.runtimeScope = location?.scope ?? (location?.shared ? "shared" : "user");
-    entry.legacyLocation = location?.management === "legacy";
-    entry.locationManagement = location?.management;
-    if (observation) {
-      entry.runtimeAvailability = observation.availability;
-      entry.runtimeConfidence = observation.confidence;
-    }
-    entry.foundIn = [targetId, ...entry.foundIn.filter((item) => item !== targetId)];
-  } else if (!entry.foundIn.includes(targetId)) {
-    entry.foundIn.push(targetId);
-  }
-  if (observation) {
-    entry.runtimeStates = [
-      ...(entry.runtimeStates ?? []).filter((state) => state.targetId !== targetId),
-      {
-        targetId,
-        availability: observation.availability,
-        confidence: observation.confidence,
-        issues: observation.issues
-      }
-    ];
-    entry.runtimeIssues = [...new Map(
-      (entry.runtimeStates ?? []).flatMap((state) => state.issues)
-        .map((issue) => [`${issue.code}:${issue.message}`, issue])
-    ).values()];
-  }
-};
 
 export interface ImportSkillStoreInput extends SkillImportInput {
   sourceType?: SkillSourceType;
@@ -223,6 +171,7 @@ export interface SkillLibraryStore {
   ): Promise<SkillInventoryEntry[]>;
   findManagedInstallPaths(libraryId: string, targetPaths: TargetPaths[]): Promise<string[]>;
   listCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;
+  previewCleanupBackup(id: string): Promise<ManagedBackupFile[]>;
   setSkillPathPolicies(input: SkillPathPolicyUpdate): Promise<SkillPathPolicy[]>;
   scanUnmanaged(targetPaths: TargetPaths[]): Promise<UnmanagedSkillEntry[]>;
   scanLocalSkillSource(rootPath: string): Promise<ProjectSkillScanResult>;
@@ -1473,6 +1422,16 @@ export const createSkillLibraryStore = (
     return summaries
       .filter((item): item is SkillCleanupBackupSummary => Boolean(item))
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  };
+
+  const previewCleanupBackup = async (id: string): Promise<ManagedBackupFile[]> => {
+    const { manifest } = await readCleanupBackup(id);
+    return manifest.entries
+      .filter((entry) => !entry.sourcePath.endsWith(".agentenv-owner.json"))
+      .map((entry) => ({
+        path: entry.sourcePath,
+        state: "saved" as const
+      }));
   };
 
   const restoreCleanupBackup = async (manifest: SkillCleanupBackupManifest) => {
@@ -3206,6 +3165,7 @@ export const createSkillLibraryStore = (
     scanInventory,
     findManagedInstallPaths,
     listCleanupBackups,
+    previewCleanupBackup,
     setSkillPathPolicies,
     scanUnmanaged,
     previewImport,

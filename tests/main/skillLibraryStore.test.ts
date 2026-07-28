@@ -390,6 +390,9 @@ description: >
         operation: "cleanup"
       })
     ]);
+    await expect(store.previewCleanupBackup(result.backupId)).resolves.toEqual([
+      { path: targetDir, state: "saved" }
+    ]);
 
     await store.rollbackSkillCleanup(result.backupId);
     expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);

@@ -8,6 +8,7 @@
 @import "./shell.css" layer(shell);
 @import "./pages/targets.css" layer(pages);
 @import "./pages/settings.css" layer(pages);
+@import "./pages/settings-backups.css" layer(pages);
 @import "./pages/library-import.css" layer(pages);
 @import "./pages/skills.css" layer(pages);
 @import "./pages/skill-sources.css" layer(pages);

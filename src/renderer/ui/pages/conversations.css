@@ -217,9 +217,15 @@
   white-space: nowrap;
 }
 
-.conversation-list-item__copy small > span:not([aria-hidden="true"]) {
-  flex: 0 1 auto;
-  max-width: 42%;
+.conversation-list-item__copy small > .conversation-list-item__workspace {
+  flex: 1 1 auto;
+}
+
+.conversation-list-item__copy small > .conversation-list-item__agent,
+.conversation-list-item__copy small > .conversation-list-item__size,
+.conversation-list-item__copy small > time,
+.conversation-list-item__copy small > span[aria-hidden="true"] {
+  flex: 0 0 auto;
 }
 
 .conversation-list-item.has-search-preview {

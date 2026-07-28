@@ -79,6 +79,7 @@ const detail: ConversationDetail = {
   createdAt: "2026-07-24T05:00:00.000Z",
   updatedAt: "2026-07-24T06:00:00.000Z",
   messageCount: 2,
+  sizeBytes: 24_576,
   detailState: "full",
   messages: [
     { id: "u1", role: "user", text: "Please repair the release workflow." },
@@ -141,6 +142,22 @@ afterEach(() => {
 });
 
 describe("ConversationWorkspace", () => {
+  it("shows the indexed transcript size without crowding the conversation title", async () => {
+    installApi();
+    render(
+      <ConversationWorkspace
+        targets={[target("codex", "Codex"), target("opencode", "OpenCode")]}
+      />
+    );
+
+    const option = await screen.findByRole("option", {
+      name: /Repair release workflow/
+    });
+    expect(option).toHaveTextContent("24 KB");
+    expect(within(option).getByText("Repair release workflow"))
+      .toHaveClass("conversation-list-item__title");
+  });
+
   it("restores its local view context after the workspace is remounted", async () => {
     const api = installApi();
     let savedState: Parameters<

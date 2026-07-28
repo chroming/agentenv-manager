@@ -94,9 +94,7 @@ import {
   automaticSkillCleanupRequest,
   buildSkillCleanupGroups,
   isSkillCleanupPreparationCurrent,
-  type SkillCleanupAutomaticEffect,
-  type SkillCleanupDisplayState,
-  type SkillCleanupRecommendedAction
+  type SkillCleanupAutomaticEffect
 } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
 import { ActionMenu, Button, IconButton, ModalFrame, Switch } from "./ui";
@@ -113,6 +111,19 @@ import {
 } from "./SkillUpdateSettingsDialog";
 import { CleanupBucketHeader } from "./CleanupBucketHeader";
 import { BulkSkillUpdateDialog } from "./BulkSkillUpdateDialog";
+import {
+  cleanupActionDisplayLabel,
+  cleanupActionLabel,
+  cleanupEffectLabel,
+  cleanupInventoryStatusClass,
+  cleanupInventoryStatusLabel,
+  cleanupLocationLabel,
+  cleanupPresentationChipClass,
+  cleanupPresentationCompactLabel,
+  cleanupPresentationLabel,
+  externalManagerLabel,
+  isCleanupManageable
+} from "../skillCleanupPresentation";
 
 export type SkillUpdateCheckStatus = {
   state: "checking" | "success" | "error" | "info";
@@ -209,7 +220,7 @@ interface SkillLibraryPanelProps {
   onCancelRepositoryOperations(): Promise<void>;
   onManageTargetSkill(input: ManageTargetSkillInput): void;
   onConsolidateSkillGroup(input: SkillCleanupRequest): Promise<boolean>;
-  onAutoConsolidateSkillGroups(inputs: SkillCleanupRequest[]): Promise<void>;
+  onAutoConsolidateSkillGroups(inputs: SkillCleanupRequest[]): Promise<string[]>;
   onSaveUpdateSettings(change: SkillUpdateSettingsInput): Promise<boolean>;
   onSetAvailability(input: SkillAvailabilityInput): Promise<boolean>;
   onSetIcon(input: SkillIconInput): void;
@@ -288,126 +299,6 @@ const sourceName = (skill: SkillLibraryEntry) => {
     return [repository, skill.upstream?.subpath].filter(Boolean).join("/");
   }
   return source;
-};
-
-const cleanupLocationLabel = (
-  item: SkillInventoryEntry,
-  targetNames: TargetNameIndex
-) => {
-  const names = item.foundIn.map((targetId) =>
-    targetNameFor(targetId, targetNames, "Unknown Agent")
-  );
-  if (names.length > 1) {
-    return `Shared: ${names.join(" + ")}`;
-  }
-  return names[0] ?? "Unknown Agent";
-};
-
-const inventoryStatusLabel = (status: SkillInventoryEntry["status"]) => {
-  if (status === "library") return "Imported";
-  if (status === "outside") return "Outside AgentEnv";
-  if (status === "kept-outside") return "Kept outside";
-  return "Managed";
-};
-
-const cleanupInventoryStatusLabel = (item: SkillInventoryEntry) =>
-  item.externalEvidence?.state === "broken-link"
-    ? "Unavailable"
-    : inventoryStatusLabel(item.status);
-
-const cleanupInventoryStatusClass = (item: SkillInventoryEntry) =>
-  item.externalEvidence?.state === "broken-link" ? "stale" : item.status;
-
-const externalManagerLabel = (skill: SkillInventoryEntry | undefined) =>
-  skill?.externalEvidence?.displayName ??
-  (skill?.externalEvidence?.manager === "skills-cli"
-    ? "Skills CLI"
-    : skill?.externalEvidence?.manager ?? "Detected source");
-
-const isCleanupManageable = (item: SkillInventoryEntry) =>
-  item.status !== "kept-outside" &&
-  item.locationRole !== "discovery-only" &&
-  (item.locationManagement !== "observed" || item.sharedLocation === true);
-
-const cleanupPresentationLabel = (state: SkillCleanupDisplayState) => {
-  if (state === "not-in-library") return "Not in Library";
-  if (state === "duplicate-copies") return "Duplicate copies";
-  if (state === "multiple-versions") return "Multiple versions";
-  if (state === "copies-not-managed") return "Copies not managed";
-  if (state === "local-changes-found") return "Local changes found";
-  if (state === "managed-copy-changed") return "Managed copy changed";
-  if (state === "outside-agentenv") return "Outside AgentEnv";
-  if (state === "shared-copy-needs-decisions") return "Needs Agent choices";
-  if (state === "shared-copy-ready-to-move") return "Ready to move out of shared folder";
-  if (state === "kept-shared") return "Kept shared";
-  if (state === "kept-outside") return "Kept outside";
-  if (state === "unavailable") return "Unavailable";
-  return "Managed";
-};
-
-const cleanupPresentationCompactLabel = (state: SkillCleanupDisplayState) => {
-  if (state === "duplicate-copies") return "Duplicate";
-  if (state === "unavailable") return "Unavailable";
-  if (state === "multiple-versions") return "Multiple versions";
-  if (state === "local-changes-found" || state === "managed-copy-changed") return "Changed";
-  if (state === "outside-agentenv") return "Outside";
-  if (state === "shared-copy-needs-decisions") return "Needs choice";
-  if (state === "shared-copy-ready-to-move") return "Ready";
-  if (state === "kept-shared") return "Kept";
-  if (state === "kept-outside") return "Kept";
-  if (state === "managed") return "Managed";
-  return "Unmanaged";
-};
-
-const cleanupPresentationChipClass = (state: SkillCleanupDisplayState) => {
-  if (state === "managed" || state === "shared-copy-ready-to-move") return "managed";
-  if (state === "kept-outside" || state === "kept-shared") return "kept-outside";
-  if (state === "outside-agentenv") return "outside";
-  if (state === "multiple-versions" || state === "local-changes-found") return "conflict";
-  if (state === "managed-copy-changed") return "stale";
-  if (state === "shared-copy-needs-decisions") return "pending";
-  if (state === "duplicate-copies") return "library";
-  if (state === "unavailable") return "stale";
-  return "outside";
-};
-
-const cleanupActionLabel = (action: SkillCleanupRecommendedAction) => {
-  if (action === "add-to-library") return "Add to Library";
-  if (action === "manage-copies") return "Manage copies";
-  if (action === "review-differences") return "Review differences";
-  if (action === "review-drift") return "Review drift";
-  if (action === "review-paths") return "Review paths";
-  if (action === "review-agents") return "Review Agents";
-  if (action === "move-from-shared") return "Move out of shared folder";
-  if (action === "review-details") return "Review details";
-  return "";
-};
-
-const cleanupActionDisplayLabel = (action: SkillCleanupRecommendedAction) => {
-  if (action === "review-agents") {
-    return "Review Agents";
-  }
-  if (action === "move-from-shared") {
-    return "Move";
-  }
-  if (
-    action === "review-differences" ||
-    action === "review-drift" ||
-    action === "review-paths" ||
-    action === "review-details"
-  ) {
-    return "Review";
-  }
-  return cleanupActionLabel(action);
-};
-
-const cleanupEffectLabel = (effect: SkillCleanupAutomaticEffect) => {
-  if (effect === "import-and-link") return "Add to Library and link copies";
-  if (effect === "import-shared") return "Add shared copy to Library and remove duplicates";
-  if (effect === "link-to-library") return "Link copies to Library";
-  if (effect === "archive-and-link") return "Back up local changes and link to Library";
-  if (effect === "repair-link") return "Repair managed links";
-  return "Remove unavailable links";
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -557,7 +448,6 @@ export const SkillLibraryPanel = ({
   const [availabilityOperation, setAvailabilityOperation] = useState<SkillAvailabilityInput>();
   const [localPreviewingSkillId, setLocalPreviewingSkillId] = useState<string>();
   const [cleanupDetailsKey, setCleanupDetailsKey] = useState<string>();
-  const [sharedTargetReviewKey, setSharedTargetReviewKey] = useState<string>();
   const [sharedRetireKey, setSharedRetireKey] = useState<string>();
   const [cleanupDraft, setCleanupDraft] = useState<{
     skillKey: string;
@@ -642,8 +532,6 @@ export const SkillLibraryPanel = ({
       setMergePreview(undefined);
     } else if (cleanupDetailsKey) {
       setCleanupDetailsKey(undefined);
-    } else if (sharedTargetReviewKey) {
-      setSharedTargetReviewKey(undefined);
     } else if (sharedRetireKey) {
       setSharedRetireKey(undefined);
     } else if (autoCleanupReviewOpen) {
@@ -663,7 +551,6 @@ export const SkillLibraryPanel = ({
       browsingSkill ||
       externalImport ||
       cleanupDetailsKey ||
-      sharedTargetReviewKey ||
       sharedRetireKey ||
       autoCleanupReviewOpen ||
       cleanupDraft
@@ -1009,26 +896,58 @@ export const SkillLibraryPanel = ({
   const cleanupRequestsByEffect = useMemo(() => {
     const requests = new Map<
       SkillCleanupAutomaticEffect,
-      Array<{ request: SkillCleanupRequest; name: string }>
+      Array<{
+        request: SkillCleanupRequest;
+        name: string;
+        paths: string[];
+        secondary?: string;
+      }>
     >();
     for (const request of automaticCleanupRequests) {
       const group = cleanupGroups.find((item) => item.skillKey === request.skillKey);
       if (!group?.automaticEffect) continue;
       requests.set(group.automaticEffect, [
         ...(requests.get(group.automaticEffect) ?? []),
-        { request, name: group.primary?.name ?? group.skillKey }
+        {
+          request,
+          name: group.primary?.name ?? group.skillKey,
+          paths: [
+            ...(request.sharedLocations ?? []).map((location) => location.path),
+            ...request.locations.map((location) => location.path)
+          ],
+          secondary: group.sharedMigration?.state === "not-imported"
+            ? group.sharedMigration.consumers
+                .map((targetId) => targetNameFor(targetId, targetNames, targetId))
+                .join(", ")
+            : undefined
+        }
       ]);
     }
     return requests;
   }, [automaticCleanupRequests, cleanupGroups]);
   const manualCleanupCount = cleanupGroupsByBucket.decision.length;
+  const sharedPreparationCandidates = cleanupGroupsByBucket.ready.filter(
+    (group) =>
+      group.automaticEffect === "move-shared-to-agents" &&
+      group.sharedMigration?.state === "waiting" &&
+      Boolean(group.sharedMigration.libraryId)
+  );
+  const sharedImportCandidates = cleanupGroupsByBucket.ready.filter(
+    (group) =>
+      group.automaticEffect === "import-shared" &&
+      group.sharedMigration?.state === "not-imported"
+  );
   const sharedReplacementCandidates = cleanupGroupsByBucket.ready.filter(
     (group) =>
       group.sharedMigration?.state === "ready" &&
       Boolean(group.sharedMigration.libraryId)
   );
+  const sharedCleanupCandidates = [
+    ...sharedPreparationCandidates,
+    ...sharedReplacementCandidates
+  ];
   const readyCleanupCount =
-    automaticCleanupRequests.length + sharedReplacementCandidates.length;
+    automaticCleanupRequests.length + sharedCleanupCandidates.length;
   const migrationSummary = [
     manualCleanupCount > 0
       ? t(manualCleanupCount === 1 ? "1 needs your decision" : "{{count}} need your decision", { count: manualCleanupCount })
@@ -1104,9 +1023,6 @@ export const SkillLibraryPanel = ({
           left.key === "unavailable" ? 1 : right.key === "unavailable" ? -1 : left.key.localeCompare(right.key)
         )
     : [];
-  const sharedTargetReview = sharedTargetReviewKey
-    ? cleanupGroups.find((group) => group.skillKey === sharedTargetReviewKey)
-    : undefined;
   const sharedRetireCandidate = sharedRetireKey
     ? cleanupGroups.find((group) => group.skillKey === sharedRetireKey)
     : undefined;
@@ -1555,13 +1471,27 @@ export const SkillLibraryPanel = ({
   ) => {
     if (
       automaticCleanupKey ||
-      (requests.length === 0 && sharedReplacementCandidates.length === 0)
+      (requests.length === 0 && sharedCleanupCandidates.length === 0)
     ) {
       return;
     }
     setAutomaticCleanupKey(key);
     setAutoCleanupReviewOpen(false);
     try {
+      for (const group of sharedPreparationCandidates) {
+        const migration = group.sharedMigration;
+        if (!migration?.libraryId) continue;
+        setSharedOperation({ skillKey: group.skillKey, action: "prepare" });
+        const completed = await onMoveSharedSkillToAgents(
+          {
+            skillKey: group.skillKey,
+            libraryId: migration.libraryId,
+            paths: migration.paths
+          },
+          migration.pendingConsumers
+        );
+        if (!completed) return;
+      }
       for (const group of sharedReplacementCandidates) {
         const migration = group.sharedMigration;
         if (!migration?.libraryId) continue;
@@ -1574,7 +1504,32 @@ export const SkillLibraryPanel = ({
         if (!completed) return;
       }
       if (requests.length > 0) {
-        await onAutoConsolidateSkillGroups(requests);
+        const completedSkillKeys = new Set(
+          await onAutoConsolidateSkillGroups(requests)
+        );
+        for (const group of sharedImportCandidates) {
+          const request = requests.find(
+            (item) => item.skillKey === group.skillKey
+          );
+          const migration = group.sharedMigration;
+          if (
+            !request ||
+            !migration ||
+            !completedSkillKeys.has(group.skillKey)
+          ) {
+            continue;
+          }
+          setSharedOperation({ skillKey: group.skillKey, action: "prepare" });
+          const retirement = {
+            skillKey: group.skillKey,
+            libraryId: request.libraryId,
+            paths: migration.paths
+          };
+          const completed = migration.consumers.length > 0
+            ? await onMoveSharedSkillToAgents(retirement, migration.consumers)
+            : await onRetireSharedSkill(retirement);
+          if (!completed) return;
+        }
       }
     } finally {
       setSharedOperation(undefined);
@@ -1618,35 +1573,6 @@ export const SkillLibraryPanel = ({
         paths: sharedRetireCandidate.sharedMigration.paths
       })) {
         setSharedRetireKey(undefined);
-      }
-    } finally {
-      setSharedOperation(undefined);
-    }
-  };
-
-  const moveSharedCopyToAgents = async () => {
-    const migration = sharedTargetReview?.sharedMigration;
-    if (
-      !sharedTargetReview ||
-      !migration?.libraryId ||
-      migration.state !== "waiting" ||
-      sharedOperation
-    ) {
-      return;
-    }
-    setSharedOperation({ skillKey: sharedTargetReview.skillKey, action: "prepare" });
-    try {
-      if (
-        await onMoveSharedSkillToAgents(
-          {
-            skillKey: sharedTargetReview.skillKey,
-            libraryId: migration.libraryId,
-            paths: migration.paths
-          },
-          migration.pendingConsumers
-        )
-      ) {
-        setSharedTargetReviewKey(undefined);
       }
     } finally {
       setSharedOperation(undefined);
@@ -2626,6 +2552,34 @@ export const SkillLibraryPanel = ({
                 </p>
               </div>
             </header>
+            <div className="skill-delete-paths ui-dialog-body">
+              <div>
+                <strong>{t("Library")}</strong>
+                <PreviewText
+                  ariaLabel={t("Full Library path {{path}}", {
+                    path: deleteCandidate.path
+                  })}
+                  className="skill-delete-path"
+                  text={deleteCandidate.path}
+                  tooltipClassName="library-source-tooltip"
+                />
+              </div>
+              {installsFor(deleteCandidate.id)
+                .filter((item) => item.status === "managed")
+                .map((item) => (
+                  <div key={item.path}>
+                    <strong>{t(cleanupLocationLabel(item, targetNames))}</strong>
+                    <PreviewText
+                      ariaLabel={t("Full managed install path {{path}}", {
+                        path: item.path
+                      })}
+                      className="skill-delete-path"
+                      text={item.path}
+                      tooltipClassName="library-source-tooltip"
+                    />
+                  </div>
+                ))}
+            </div>
             <footer className="preview-actions">
               <button
                 ref={modalInitialFocusRef}
@@ -2687,31 +2641,83 @@ export const SkillLibraryPanel = ({
             <div className="cleanup-bulk-review-list ui-dialog-body">
               {([...cleanupRequestsByEffect.entries()]).map(([effect, items]) => (
                 <section className="cleanup-bulk-effect" key={effect}>
-                  <div>
+                  <div className="cleanup-bulk-effect__header">
                     <strong>{t(cleanupEffectLabel(effect))}</strong>
                     <span>{items.length}</span>
                   </div>
-                  <p>{items.map((item) => item.name).join(", ")}</p>
+                  <div className="cleanup-bulk-items">
+                    {items.map((item) => (
+                      <div className="cleanup-bulk-item" key={item.request.skillKey}>
+                        <strong>{item.name}</strong>
+                        {item.secondary ? <small>{t(item.secondary)}</small> : null}
+                        <PreviewText
+                          ariaLabel={t("Full cleanup paths for {{id}}", {
+                            id: item.request.skillKey
+                          })}
+                          className="cleanup-bulk-item__path"
+                          displayText={
+                            item.paths.length > 1
+                              ? t("{{path}} and {{count}} more", {
+                                  path: item.paths[0],
+                                  count: item.paths.length - 1
+                                })
+                              : item.paths[0]
+                          }
+                          text={item.paths.join("\n")}
+                          tooltipClassName="library-source-tooltip"
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </section>
               ))}
-              {sharedReplacementCandidates.length > 0 ? (
+              {sharedCleanupCandidates.length > 0 ? (
                 <section className="cleanup-bulk-effect">
-                  <div>
+                  <div className="cleanup-bulk-effect__header">
                     <strong>{t("Move Skills out of shared folder")}</strong>
-                    <span>{sharedReplacementCandidates.length}</span>
+                    <span>{sharedCleanupCandidates.length}</span>
                   </div>
-                  <p>
-                    {sharedReplacementCandidates.map((group) => {
-                      const decisions = preparedTargetsForCleanupGroup(group)
-                        .map((target) =>
-                          target.disposition === "install"
-                            ? `${targetNameFor(target.targetId, targetNames, target.targetId)}: ${t("Install as {{name}}", { name: target.targetName })}`
-                            : `${targetNameFor(target.targetId, targetNames, target.targetId)}: ${t("Do not install")}`
-                        )
-                        .join("; ");
-                      return `${group.primary?.name ?? group.skillKey}${decisions ? ` - ${decisions}` : ""}`;
-                    }).join("\n")}
-                  </p>
+                  <div className="cleanup-bulk-items">
+                    {sharedCleanupCandidates.map((group) => {
+                      const migration = group.sharedMigration;
+                      const decisions = migration?.state === "waiting"
+                        ? migration.pendingConsumers
+                            .map((targetId) =>
+                              t(targetNameFor(targetId, targetNames, targetId))
+                            )
+                            .join(", ")
+                        : preparedTargetsForCleanupGroup(group)
+                            .map((target) =>
+                              target.disposition === "install"
+                                ? `${targetNameFor(target.targetId, targetNames, target.targetId)}: ${t("Install as {{name}}", { name: target.targetName })}`
+                                : `${targetNameFor(target.targetId, targetNames, target.targetId)}: ${t("Do not install")}`
+                            )
+                            .join("; ");
+                      const paths = migration?.paths ?? [];
+                      return (
+                        <div className="cleanup-bulk-item" key={group.skillKey}>
+                          <strong>{group.primary?.name ?? group.skillKey}</strong>
+                          {decisions ? <small>{decisions}</small> : null}
+                          <PreviewText
+                            ariaLabel={t("Full cleanup paths for {{id}}", {
+                              id: group.skillKey
+                            })}
+                            className="cleanup-bulk-item__path"
+                            displayText={
+                              paths.length > 1
+                                ? t("{{path}} and {{count}} more", {
+                                    path: paths[0],
+                                    count: paths.length - 1
+                                  })
+                                : paths[0]
+                            }
+                            text={paths.join("\n")}
+                            tooltipClassName="library-source-tooltip"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
                 </section>
               ) : null}
               <small>{t("Each Skill is backed up independently. A failure does not undo completed Skills.")}</small>
@@ -2731,78 +2737,6 @@ export const SkillLibraryPanel = ({
                 onClick={() => void runAutomaticCleanup("all", automaticCleanupRequests)}
               >
                 {t("Clean up {{count}} skills", { count: readyCleanupCount })}
-              </button>
-            </footer>
-          </section>
-        </div>,
-        document.body
-      ) : null}
-
-      {sharedTargetReview?.sharedMigration?.state === "waiting" ? createPortal(
-        <div className="preview-modal-backdrop" onClick={() => setSharedTargetReviewKey(undefined)}>
-          <section
-            ref={modalDialogRef}
-            className="profile-form-dialog profile-form-dialog--compact shared-target-review-dialog ui-dialog-shell"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t("Prepare shared Skill migration")}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="profile-dialog-header ui-dialog-header">
-              <div className="ui-dialog-header__copy">
-                <div className="section-title ui-dialog-title">{t("Prepare affected Agents")}</div>
-                <p className="muted ui-dialog-description">
-                  {t("{{name}} is still loaded by {{count}} Agents from one shared folder.", {
-                    name: sharedTargetReview.primary?.name ?? sharedTargetReview.skillKey,
-                    count: sharedTargetReview.sharedMigration.pendingConsumers.length
-                  })}
-                </p>
-              </div>
-            </header>
-            <div className="cleanup-bulk-review-list ui-dialog-body">
-              {sharedTargetReview.sharedMigration.pendingConsumers.map((targetId) => (
-                <span key={targetId}>
-                  <strong>{t(targetNameFor(targetId, targetNames, targetId))}</strong>
-                  {t("Use an active Profile, or capture current Skills into a new Profile")}
-                </span>
-              ))}
-              <p className="shared-target-review-guidance">
-                {t("AgentEnv will preserve current use of this Skill, apply each Agent's Profile, then move the Skill out of the shared folder.")}
-              </p>
-              <small>{t("Instructions and MCPs stay unchanged when AgentEnv creates a Profile for an unmanaged Agent.")}</small>
-            </div>
-            <footer className="preview-actions ui-dialog-footer">
-              <button
-                ref={modalInitialFocusRef}
-                className="secondary-action"
-                type="button"
-                onClick={() => setSharedTargetReviewKey(undefined)}
-              >
-                {t("Cancel")}
-              </button>
-              <button
-                className="secondary-action shared-keep-action"
-                type="button"
-                disabled={Boolean(sharedOperation)}
-                onClick={() => void changeSharedRetention(sharedTargetReview, true).then((succeeded) => {
-                  if (succeeded) setSharedTargetReviewKey(undefined);
-                })}
-              >
-                {t("Keep shared copy")}
-              </button>
-              <button
-                className="primary-action"
-                type="button"
-                aria-busy={sharedOperation?.action === "prepare"}
-                disabled={Boolean(sharedOperation)}
-                onClick={() => void moveSharedCopyToAgents()}
-              >
-                {sharedOperation?.action === "prepare" ? (
-                  <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
-                ) : null}
-                {sharedOperation?.action === "prepare"
-                  ? t("Moving...")
-                  : t("Move to Agents")}
               </button>
             </footer>
           </section>
@@ -3630,10 +3564,6 @@ export const SkillLibraryPanel = ({
                     } else {
                       setCleanupDetailsKey(group.skillKey);
                     }
-                    return;
-                  }
-                  if (group.presentation.action === "review-agents") {
-                    setSharedTargetReviewKey(group.skillKey);
                     return;
                   }
                   if (group.presentation.action === "move-from-shared") {

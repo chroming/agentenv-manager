@@ -128,6 +128,38 @@ describe("moveSharedSkillToAgents", () => {
     expect(mockApi.retireSharedSkill).toHaveBeenCalledTimes(1);
   });
 
+  it("allows current Profile policy to remove a globally disabled shared Skill", async () => {
+    const mockApi = api();
+    mockApi.listSkillLibrary.mockResolvedValue([
+      { ...librarySkill(), globallyEnabled: false }
+    ]);
+    mockApi.listTargetStates.mockResolvedValue([
+      {
+        targetId: "pi",
+        activeProfileId: "pi-profile",
+        status: "managed",
+        lifecycleStatus: "applied",
+        managedResourceCount: 0,
+        warningCount: 0,
+        errorCount: 0
+      } satisfies TargetManagementState
+    ]);
+
+    await moveSharedSkillToAgents({
+      api: mockApi as unknown as AgentEnvApi,
+      migration: {
+        skillKey: "as-ops",
+        libraryId: "as-ops",
+        paths: ["/home/.agents/skills/as-ops"]
+      },
+      targetIds: ["pi"]
+    });
+
+    expect(mockApi.previewApply).toHaveBeenCalledWith("pi-profile", "pi");
+    expect(mockApi.applyProfile).toHaveBeenCalled();
+    expect(mockApi.retireSharedSkill).toHaveBeenCalled();
+  });
+
   it("captures current Skills for an unmanaged Agent before moving the shared copy", async () => {
     const mockApi = api();
     const capturedProfile = {

@@ -17,6 +17,7 @@ export type SkillCleanupBucket = "decision" | "ready" | "managed" | "kept";
 export type SkillCleanupAutomaticEffect =
   | "import-and-link"
   | "import-shared"
+  | "move-shared-to-agents"
   | "link-to-library"
   | "archive-and-link"
   | "repair-link"
@@ -262,7 +263,7 @@ export const buildSkillCleanupGroups = (
       const sharedCopyReplaceable = sharedMigration?.state === "ready";
       const resolution: SkillCleanupResolution =
         sharedCopyWaiting
-          ? "manual"
+          ? "automatic"
           : state === "kept-outside" || state === "managed"
             ? "resolved"
             : canRemoveBrokenLinks ||
@@ -278,7 +279,9 @@ export const buildSkillCleanupGroups = (
       const automaticEffect: SkillCleanupAutomaticEffect | undefined =
         resolution !== "automatic"
           ? undefined
-          : canRemoveBrokenLinks
+          : sharedCopyWaiting
+            ? "move-shared-to-agents"
+            : canRemoveBrokenLinks
             ? "remove-broken-link"
             : canImportSharedCopies
               ? "import-shared"
@@ -292,9 +295,7 @@ export const buildSkillCleanupGroups = (
       const bucket: SkillCleanupBucket =
         sharedCopyReplaceable
           ? "ready"
-          : sharedCopyWaiting
-            ? "decision"
-            : resolution === "automatic"
+          : resolution === "automatic"
               ? "ready"
               : resolution === "manual"
                 ? "decision"
@@ -303,7 +304,7 @@ export const buildSkillCleanupGroups = (
                   : "kept";
       const resolutionReason =
         sharedCopyWaiting
-          ? "Consumer Agents need an applied Skill decision before AgentEnv can move this Skill out of the shared folder."
+          ? "AgentEnv can preserve the current Skill use, prepare affected Agents, and move the shared copy in one reviewed cleanup."
           : resolution === "resolved"
             ? state === "kept-outside"
               ? "Intentionally excluded from management."
@@ -344,7 +345,7 @@ export const buildSkillCleanupGroups = (
             : sharedMigration?.state === "ready"
               ? { state: "shared-copy-ready-to-move", action: "move-from-shared" }
               : sharedMigration?.state === "waiting"
-                ? { state: "shared-copy-needs-decisions", action: "review-agents" }
+                ? { state: "shared-copy-ready-to-move", action: "move-from-shared" }
                 : sharedMigration?.state === "kept"
                   ? { state: "kept-shared", action: "none" }
                   : sharedMigration?.state === "outside"
