@@ -298,6 +298,7 @@ export interface ConversationListResult {
   total: number;
   workspacePaths?: string[];
   agentCounts?: Record<string, number>;
+  refreshRequired?: boolean;
 }
 
 export interface ConversationRefreshFailure {

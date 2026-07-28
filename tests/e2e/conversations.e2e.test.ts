@@ -4,6 +4,7 @@ import {
   mkdtemp,
   readFile,
   rm,
+  utimes,
   writeFile
 } from "node:fs/promises";
 import { delimiter, join } from "node:path";
@@ -15,6 +16,7 @@ import {
   type ElectronApplication
 } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
+import { createConversationIndexStore } from "../../src/main/conversations/conversationIndexStore";
 import {
   expectInViewport,
   expectNoHorizontalOverflow,
@@ -83,6 +85,34 @@ describe("Conversations desktop workflow", () => {
       })
     ].join("\n") + "\n";
     await writeFile(sourcePath, source, "utf8");
+    const olderConversationTime = new Date("2026-01-01T00:00:00.000Z");
+    await Promise.all(Array.from({ length: 197 }, async (_, index) => {
+      const id = `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
+      const path = join(
+        sessionDir,
+        `rollout-2026-01-01T00-00-00-000Z-${id}.jsonl`
+      );
+      await writeFile(path, [
+        JSON.stringify({
+          timestamp: olderConversationTime.toISOString(),
+          type: "session_meta",
+          payload: {
+            id,
+            cwd: "/work/archive",
+            model_provider: "openai"
+          }
+        }),
+        JSON.stringify({
+          type: "response_item",
+          payload: {
+            type: "message",
+            role: "user",
+            content: [{ type: "input_text", text: `Older indexed task ${index + 1}` }]
+          }
+        })
+      ].join("\n"));
+      await utimes(path, olderConversationTime, olderConversationTime);
+    }));
     const openCodeDataDir = join(home, ".local", "share", "opencode");
     const openCodeDatabasePath = join(openCodeDataDir, "opencode.db");
     await mkdir(openCodeDataDir, { recursive: true });
@@ -213,6 +243,42 @@ describe("Conversations desktop workflow", () => {
     const openCodeSource = await readFile(openCodeDatabasePath);
     const antigravitySource = await readFile(antigravityTranscriptPath);
     const traeSource = await readFile(traeSessionPath);
+    const staleIndex = await createConversationIndexStore(
+      join(cacheRoot, "conversations.sqlite")
+    );
+    staleIndex.upsert({
+      id: "codex:cached-before-trae-support",
+      agentId: "codex",
+      agentName: "Codex",
+      sourceId: "cached-before-trae-support",
+      title: "Cached before Trae support",
+      snippet: "Existing history keeps the old index non-empty",
+      workspacePath: "/work/legacy-cache",
+      createdAt: "2026-07-20T05:00:00.000Z",
+      updatedAt: "2026-07-20T06:00:00.000Z",
+      messageCount: 1,
+      detailState: "full",
+      messages: [{
+        id: "cached-user",
+        role: "user",
+        text: "This record predates Trae V2 support"
+      }]
+    }, {
+      recordId: "cached-before-trae-support",
+      source: {
+        version: "cached-v1",
+        locator: join(root, "cached-before-trae-support.jsonl")
+      },
+      providerSession: {
+        kind: "native",
+        id: "cached-before-trae-support",
+        resumeLocator: "cached-before-trae-support"
+      },
+      workspacePath: "/work/legacy-cache",
+      updatedAt: "2026-07-20T06:00:00.000Z",
+      detailState: "full"
+    });
+    staleIndex.close();
     await executable(join(binDir, "codex"), "exit 0");
     await executable(
       join(binDir, "opencode"),
@@ -259,6 +325,16 @@ describe("Conversations desktop workflow", () => {
       state: "visible",
       timeout: 15_000
     });
+    await expect.poll(() => page.getByText("Could not complete this step").count()).toBe(0);
+    await page.getByText("200 of 201 conversations", { exact: true }).waitFor();
+    const historySearch = page.getByRole("searchbox", { name: "Search conversations" });
+    await historySearch.fill("Older indexed task 197");
+    await page.getByRole("option", { name: /Older indexed task 197/ }).waitFor();
+    await historySearch.fill("");
+    await page.getByText("200 of 201 conversations", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Load 1 more" }).click();
+    await page.getByText("201 conversations", { exact: true }).waitFor();
+    await expect.poll(() => page.getByRole("button", { name: "Load 1 more" }).count()).toBe(0);
     expect(await page.locator(".conversation-list-item__agent img").count())
       .toBeGreaterThanOrEqual(4);
     const selectedConversation = page.getByRole("option", {

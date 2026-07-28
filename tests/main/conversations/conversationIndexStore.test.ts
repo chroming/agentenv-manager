@@ -97,6 +97,22 @@ describe("conversation index store", () => {
     expect((await stat(path)).mode & 0o777).toBe(0o600);
   });
 
+  it("persists the Agent discovery version without changing indexed history", async () => {
+    const { path, store: index } = await setup();
+    index.upsert(detail, candidate);
+    expect(index.discoveryVersion()).toBeUndefined();
+
+    index.setDiscoveryVersion("2");
+    index.close();
+    store = undefined;
+    store = await createConversationIndexStore(path);
+
+    expect(store.discoveryVersion()).toBe("2");
+    expect((await store.list()).items).toEqual([
+      expect.objectContaining({ id: detail.id })
+    ]);
+  });
+
   it("replaces messages atomically and removes only stale records for one Agent", async () => {
     const { store: index } = await setup();
     index.upsert(detail, candidate);

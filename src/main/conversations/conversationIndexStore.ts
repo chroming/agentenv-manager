@@ -44,6 +44,8 @@ interface ConversationIndexListInput extends ConversationListInput {
 
 export interface ConversationIndexStore {
   sourceVersion(id: string): string | undefined;
+  discoveryVersion(): string | undefined;
+  setDiscoveryVersion(version: string): void;
   upsert(detail: ConversationDetail, candidate: AgentConversationCandidate): void;
   removeMissing(agentId: string, observedIds: Set<string>): number;
   list(input?: ConversationIndexListInput): Promise<ConversationListResult>;
@@ -122,6 +124,10 @@ const createDatabase = (path: string) => {
         created_at TEXT,
         PRIMARY KEY (conversation_id, ordinal)
       );
+      CREATE TABLE IF NOT EXISTS conversation_index_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
     `);
     if (version < 2) {
       const columns = new Set(
@@ -197,6 +203,14 @@ export const createConversationIndexStore = async (
   const versionStatement = database.prepare(
     "SELECT source_version FROM conversations WHERE id = ?"
   );
+  const metadataStatement = database.prepare(
+    "SELECT value FROM conversation_index_metadata WHERE key = ?"
+  );
+  const upsertMetadataStatement = database.prepare(`
+    INSERT INTO conversation_index_metadata (key, value)
+    VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `);
   const recordStatement = database.prepare(
     `SELECT
       id, agent_id, agent_name, record_id, source_id, source_version, source_locator,
@@ -252,6 +266,12 @@ export const createConversationIndexStore = async (
     sourceVersion: (id) => {
       const row = versionStatement.get(id) as { source_version?: string } | undefined;
       return compatibleSourceVersion(row?.source_version);
+    },
+    discoveryVersion: () => (
+      metadataStatement.get("discovery-version") as { value?: string } | undefined
+    )?.value,
+    setDiscoveryVersion: (version) => {
+      upsertMetadataStatement.run("discovery-version", version);
     },
     upsert: (detail, candidate) => {
       const searchText = [

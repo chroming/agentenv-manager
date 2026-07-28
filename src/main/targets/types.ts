@@ -101,6 +101,7 @@ export interface AgentConversationCapability {
   discover(context: AgentConversationContext): Promise<{
     candidates: AgentConversationCandidate[];
     complete: boolean;
+    failures?: string[];
   }>;
   read(
     context: AgentConversationContext,

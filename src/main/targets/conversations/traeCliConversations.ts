@@ -1,6 +1,9 @@
 import { stat } from "node:fs/promises";
-import { basename, join } from "node:path";
-import type { AgentConversationCapability } from "../types";
+import { basename, join, resolve } from "node:path";
+import type {
+  AgentConversationCandidate,
+  AgentConversationCapability
+} from "../types";
 import {
   candidateForFile,
   listFilesRecursively,
@@ -12,47 +15,97 @@ const agent = { id: "trae-cli", name: "Trae CLI" };
 
 export const createTraeCliConversationCapability = (): AgentConversationCapability => ({
   historyDetail: "full",
-  discover: async ({ targetPaths }) => {
-    const runtimeRoot = targetPaths.runtimeDir;
-    if (!runtimeRoot) return { candidates: [], complete: false };
-    const roots = [
-      { path: join(runtimeRoot, "sessions"), archived: false },
-      { path: join(runtimeRoot, "archived_sessions"), archived: true }
-    ];
-    const candidates = [];
-    let primaryRootObserved = false;
-    for (const root of roots) {
-      try {
-        await stat(root.path);
-        if (!root.archived) primaryRootObserved = true;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
-        throw error;
-      }
-      const files = await listFilesRecursively(
-        root.path,
-        (path) => /^rollout-.*\.jsonl$/i.test(basename(path)),
-        {
-          shouldEnterDirectory: (_path, name) =>
-            !name.endsWith(".artifacts") && name !== "background-tasks"
+  discover: async ({ homeDir, targetPaths }) => {
+    const runtimeRoots = [...new Set([
+      targetPaths.runtimeDir,
+      join(targetPaths.configDir, "cli"),
+      join(homeDir, ".trae", "cli")
+    ].filter((path): path is string => Boolean(path)).map((path) => resolve(path)))];
+    const candidates: AgentConversationCandidate[] = [];
+    const failures: string[] = [];
+    let selectedRuntimeRoot: string | undefined;
+    let selectedRoots: Array<{ path: string; archived: boolean }> = [];
+    for (const runtimeRoot of runtimeRoots) {
+      const roots = [
+        { path: join(runtimeRoot, "sessions"), archived: false },
+        { path: join(runtimeRoot, "archived_sessions"), archived: true }
+      ];
+      for (const root of roots) {
+        try {
+          const info = await stat(root.path);
+          if (!info.isDirectory()) {
+            failures.push(`History path is not a directory: ${root.path}`);
+            continue;
+          }
+          selectedRoots.push(root);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+          failures.push(
+            `Could not inspect ${root.path}: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
         }
-      );
-      for (const path of files) {
-        const sourceId = sourceIdFromFilename(path);
-        candidates.push(await candidateForFile(path, {
-          recordId: sourceId,
-          providerSession: {
-            kind: "native",
-            id: sourceId,
-            resumeLocator: sourceId
-          },
-          runtimeHome: runtimeRoot,
-          detailState: "full",
-          archived: root.archived
-        }));
+      }
+      if (selectedRoots.length > 0) {
+        selectedRuntimeRoot = runtimeRoot;
+        break;
       }
     }
-    return { candidates, complete: primaryRootObserved };
+    if (!selectedRuntimeRoot) {
+      return {
+        candidates,
+        complete: false,
+        ...(failures.length > 0 ? { failures } : {})
+      };
+    }
+    for (const root of selectedRoots) {
+      let files: string[];
+      try {
+        files = await listFilesRecursively(
+          root.path,
+          (path) => /^rollout-.*\.jsonl$/i.test(basename(path)),
+          {
+            shouldEnterDirectory: (_path, name) =>
+              !name.endsWith(".artifacts") && name !== "background-tasks"
+          }
+        );
+      } catch (error) {
+        failures.push(
+          `Could not scan ${root.path}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        continue;
+      }
+      for (const path of files) {
+        const sourceId = sourceIdFromFilename(path);
+        try {
+          candidates.push(await candidateForFile(path, {
+            recordId: sourceId,
+            providerSession: {
+              kind: "native",
+              id: sourceId,
+              resumeLocator: sourceId
+            },
+            runtimeHome: selectedRuntimeRoot,
+            detailState: "full",
+            archived: root.archived
+          }));
+        } catch (error) {
+          failures.push(
+            `Could not read ${path}: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
+      }
+    }
+    return {
+      candidates,
+      complete: selectedRoots.some((root) => !root.archived) && failures.length === 0,
+      ...(failures.length > 0 ? { failures } : {})
+    };
   },
   read: async (_context, candidate, previous) =>
     readRolloutConversation(agent, candidate, previous),

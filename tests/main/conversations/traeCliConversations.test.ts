@@ -1,5 +1,6 @@
 import {
   appendFile,
+  chmod,
   mkdir,
   mkdtemp,
   rm,
@@ -146,6 +147,114 @@ describe("Trae CLI V2 conversations", () => {
         archived: true
       })
     ]));
+  });
+
+  it("finds the default V2 runtime when a saved Target path points elsewhere", async () => {
+    const { context, runtimeDir } = await setup();
+    const sessionDir = join(runtimeDir, "sessions", "2026", "07", "27");
+    const sourcePath = join(
+      sessionDir,
+      "rollout-2026-07-27T12-11-26-019fa1c5-3f8c-7fe0-bfd7-1d4cdf9361a3.jsonl"
+    );
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(sourcePath, rollout({
+      id: "019fa1c5-3f8c-7fe0-bfd7-1d4cdf9361a3",
+      cwd: "/work/trae-v2",
+      user: "Find the current Trae runtime"
+    }));
+    context.targetPaths.configDir = join(root, ".trae-stale");
+    context.targetPaths.runtimeDir = join(root, ".trae-stale", "cli");
+
+    const discovery = await createTraeCliConversationCapability().discover(context);
+
+    expect(discovery.complete).toBe(true);
+    expect(discovery.candidates).toEqual([
+      expect.objectContaining({
+        recordId: "019fa1c5-3f8c-7fe0-bfd7-1d4cdf9361a3",
+        source: expect.objectContaining({
+          locator: sourcePath,
+          runtimeHome: runtimeDir
+        })
+      })
+    ]);
+  });
+
+  it("does not mix the default runtime into an active custom V2 runtime", async () => {
+    const { context, runtimeDir } = await setup();
+    const defaultSessionDir = join(runtimeDir, "sessions", "2026", "07", "27");
+    const customRuntimeDir = join(root, "custom-trae-runtime");
+    const customSessionDir = join(customRuntimeDir, "sessions", "2026", "07", "28");
+    await mkdir(defaultSessionDir, { recursive: true });
+    await mkdir(customSessionDir, { recursive: true });
+    await writeFile(
+      join(
+        defaultSessionDir,
+        "rollout-2026-07-27T12-11-26-11111111-1111-4111-8111-111111111111.jsonl"
+      ),
+      rollout({
+        id: "11111111-1111-4111-8111-111111111111",
+        cwd: "/work/default",
+        user: "Default runtime history"
+      })
+    );
+    const customSourcePath = join(
+      customSessionDir,
+      "rollout-2026-07-28T12-11-26-22222222-2222-4222-8222-222222222222.jsonl"
+    );
+    await writeFile(customSourcePath, rollout({
+      id: "22222222-2222-4222-8222-222222222222",
+      cwd: "/work/custom",
+      user: "Custom runtime history"
+    }));
+    context.targetPaths.runtimeDir = customRuntimeDir;
+
+    const discovery = await createTraeCliConversationCapability().discover(context);
+
+    expect(discovery.complete).toBe(true);
+    expect(discovery.candidates).toEqual([
+      expect.objectContaining({
+        recordId: "22222222-2222-4222-8222-222222222222",
+        source: expect.objectContaining({
+          locator: customSourcePath,
+          runtimeHome: customRuntimeDir
+        })
+      })
+    ]);
+  });
+
+  it("keeps readable V2 histories when a neighboring rollout cannot be read", async () => {
+    const { context, runtimeDir } = await setup();
+    const sessionDir = join(runtimeDir, "sessions", "2026", "07", "27");
+    const readablePath = join(
+      sessionDir,
+      "rollout-2026-07-27T12-11-26-019fa1c5-3f8c-7fe0-bfd7-1d4cdf9361a3.jsonl"
+    );
+    const unreadablePath = join(
+      sessionDir,
+      "rollout-2026-07-27T12-12-00-11111111-1111-4111-8111-111111111111.jsonl"
+    );
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(readablePath, rollout({
+      id: "019fa1c5-3f8c-7fe0-bfd7-1d4cdf9361a3",
+      cwd: "/work/trae-v2",
+      user: "Keep this readable history"
+    }));
+    await writeFile(unreadablePath, rollout({
+      id: "11111111-1111-4111-8111-111111111111",
+      cwd: "/work/trae-v2",
+      user: "This file is unavailable"
+    }));
+    await chmod(unreadablePath, 0o000);
+
+    const discovery = await createTraeCliConversationCapability().discover(context);
+
+    expect(discovery.complete).toBe(false);
+    expect(discovery.candidates.map((candidate) => candidate.recordId)).toEqual([
+      "019fa1c5-3f8c-7fe0-bfd7-1d4cdf9361a3"
+    ]);
+    expect(discovery.failures).toEqual([
+      expect.stringContaining(unreadablePath)
+    ]);
   });
 
   it("reads visible messages, top-level time, provider identity, and workspace", async () => {

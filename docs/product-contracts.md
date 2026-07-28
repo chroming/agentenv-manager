@@ -345,8 +345,10 @@ an archive, or a native-session database migration tool.
 - Conversation discovery MUST NOT delay startup, Profile loading, Library loading, or Agent
   discovery. Opening Conversations reads the last-good cached index only; revisiting the page does
   not implicitly rescan every Agent. An empty cache MAY start one first-use refresh per application
-  session after the empty cached read has completed. Later refreshes require the explicit Refresh
-  command.
+  session after the empty cached read has completed. A persisted discovery-version mismatch MAY
+  likewise start one first-use refresh so an existing non-empty cache gains newly supported Agent
+  histories after an application upgrade. Once that version is recorded, later refreshes require
+  the explicit Refresh command.
 - Index list, search, and transcript reads MUST run outside the Electron main thread. Refresh
   parsing MUST yield between records so window navigation and clean shutdown remain responsive
   during a large first index. Parser upgrades invalidate record versions without clearing the
@@ -368,6 +370,10 @@ an archive, or a native-session database migration tool.
 - Agent and workspace filters are index queries, not renderer-only hiding. Changing search or a
   filter invalidates older pending list requests, preserves selection only when the selected task
   remains in the result, and never mutates source history.
+- Search queries the complete device-local index, including indexed visible message text, rather
+  than only the currently loaded list page. Bounded list pages disclose loaded and total counts;
+  the next-page command names how many records it will add and ignores a stale response after the
+  query or filters change.
 - Agent filters show indexed counts for every enabled history-capable Agent. A zero count is an
   honest source state, not an implication that another Agent's records belong to that Agent.
   Metadata-only histories remain useful by displaying their source summary while clearly disabling
@@ -384,6 +390,11 @@ an archive, or a native-session database migration tool.
   cannot saturate IPC or Markdown rendering. Earlier messages load in explicit bounded pages while
   preserving chronological order. Copy and Continue remain whole-conversation commands and fetch
   the complete indexed transcript only after the user invokes them.
+- Trae CLI V2 discovery selects the first available runtime from the resolved runtime, the active
+  Trae config root's `cli` directory, and the default `~/.trae/cli` runtime in that order. It never
+  mixes histories from separate runtimes or probes unrelated legacy products. One missing,
+  malformed, or unreadable rollout is reported and skipped without hiding readable neighboring
+  histories; an incomplete scan never removes the last-good Trae index.
 - A stale search or refresh result MUST NOT replace a newer result. Initial cached loading and
   first-use source refresh are sequential so the workspace does not flash an empty duplicate load.
   Search input is debounced, query work is asynchronous, and older pending results cannot replace

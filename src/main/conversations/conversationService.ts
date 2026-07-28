@@ -33,6 +33,8 @@ import {
 const MAX_CONTEXT_CHARACTERS = 120_000;
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
 const HANDOFF_TTL_MS = 24 * 60 * 60 * 1000;
+// Increment when enabled Agent discovery roots or formats change.
+const CONVERSATION_DISCOVERY_VERSION = "2";
 
 interface PendingContinuation {
   preview: ConversationContinuationPreview;
@@ -254,18 +256,25 @@ export const createConversationService = async (options: {
     return target;
   };
 
+  const listIndexed = async (
+    input: Parameters<ConversationIndexStore["list"]>[0]
+  ): Promise<ConversationListResult> => ({
+    ...await index.list(input),
+    refreshRequired: index.discoveryVersion() !== CONVERSATION_DISCOVERY_VERSION
+  });
+
   return {
     list: async (input = {}) => {
       const enabled = await enabledAgentIds();
       const requested = input.agentIds?.filter((id) => enabled.has(id));
       if (input.agentIds && requested?.length === 0) {
-        return index.list({
+        return listIndexed({
           ...input,
           agentIds: ["__agentenv_no_agent__"],
           facetAgentIds: [...enabled]
         });
       }
-      return index.list({
+      return listIndexed({
         ...input,
         agentIds: input.agentIds ? requested : [...enabled],
         facetAgentIds: [...enabled]
@@ -294,6 +303,9 @@ export const createConversationService = async (options: {
           const discovery = await capability.discover(context);
           candidates = dedupeCandidates(discovery.candidates);
           discoveryComplete = discovery.complete;
+          for (const message of discovery.failures ?? []) {
+            failures.push({ agentId: target.id, message });
+          }
         } catch (error) {
           failures.push({
             agentId: target.id,
@@ -348,6 +360,7 @@ export const createConversationService = async (options: {
         }
         await yieldToMainLoop();
       });
+      index.setDiscoveryVersion(CONVERSATION_DISCOVERY_VERSION);
       return { indexed, unchanged, removed, failures: compactRefreshFailures(failures) };
     },
     openOriginal: async (id) => {

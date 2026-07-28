@@ -48,7 +48,7 @@ import {
 } from "./ui";
 
 let conversationRefreshOperation: Promise<ConversationRefreshResult> | undefined;
-let emptyIndexRefreshAttempted = false;
+let automaticIndexRefreshAttempted = false;
 
 const refreshConversationIndex = () => {
   if (conversationRefreshOperation) return conversationRefreshOperation;
@@ -425,6 +425,10 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
   agentFilterRef.current = agentFilter;
   workspaceFilterRef.current = workspaceFilter;
   const busy = Boolean(operation);
+  const nextConversationPageCount = Math.min(
+    conversationPageSize,
+    Math.max(0, total - items.length)
+  );
 
   useModalDialog({
     open: Boolean(review),
@@ -467,6 +471,7 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
 
   const loadMore = async () => {
     if (loadingMore || items.length >= total) return;
+    const requestId = ++listRequestRef.current;
     setLoadingMore(true);
     setError("");
     try {
@@ -479,6 +484,7 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
         offset: items.length,
         limit: conversationPageSize
       });
+      if (requestId !== listRequestRef.current) return;
       setItems((current) => {
         const seen = new Set(current.map((item) => item.id));
         return [...current, ...result.items.filter((item) => !seen.has(item.id))];
@@ -498,6 +504,7 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
     try {
       const result = await refreshConversationIndex();
       await loadList();
+      setError("");
       setDetailReloadNonce((current) => current + 1);
       if (result.failures.length > 0) {
         setWarning(result.failures.map((failure) => {
@@ -528,8 +535,12 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
       } finally {
         if (active) setLoading(false);
       }
-      if (active && result?.total === 0 && !emptyIndexRefreshAttempted) {
-        emptyIndexRefreshAttempted = true;
+      if (
+        active &&
+        (result?.refreshRequired || result?.total === 0) &&
+        !automaticIndexRefreshAttempted
+      ) {
+        automaticIndexRefreshAttempted = true;
         void refresh(true);
       }
     })();
@@ -557,6 +568,7 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
   }, [agentFilter, query, workspaceFilter]);
 
   useEffect(() => {
+    if (refreshing) return;
     if (!selectedId) {
       setDetail(undefined);
       return;
@@ -579,7 +591,7 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
     return () => {
       active = false;
     };
-  }, [detailReloadNonce, selectedId]);
+  }, [detailReloadNonce, refreshing, selectedId]);
 
   const loadEarlierMessages = async () => {
     if (!detail || loadingEarlier || !detail.loadedMessageOffset) return;
@@ -834,8 +846,9 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
                   ref={searchInputRef}
                   type="search"
                   value={query}
-                  placeholder={t("Search conversations…")}
+                  placeholder={t("Search indexed history…")}
                   aria-label={t("Search conversations")}
+                  title={t("Searches all indexed conversations and message text.")}
                   onChange={(event) => setQuery(event.target.value)}
                 />
               </label>
@@ -871,7 +884,14 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
               </div>
             </div>
             <div className="conversation-list-meta">
-              <span>{t("{{count}} conversations", { count: total })}</span>
+              <span>
+                {items.length < total
+                  ? t("{{loaded}} of {{total}} conversations", {
+                      loaded: items.length,
+                      total
+                    })
+                  : t("{{count}} conversations", { count: total })}
+              </span>
             </div>
             <div
               className="conversation-list"
@@ -1007,7 +1027,10 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
                     : undefined}
                   onClick={() => void loadMore()}
                 >
-                  {t(loadingMore ? "Loading more" : "Load more")}
+                  {t(
+                    loadingMore ? "Loading {{count}} more" : "Load {{count}} more",
+                    { count: nextConversationPageCount }
+                  )}
                 </Button>
               </div>
             ) : null}

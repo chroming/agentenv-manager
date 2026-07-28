@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createConversationService } from "../../../src/main/conversations/conversationService";
 import { createPaths } from "../../../src/main/paths";
@@ -127,7 +128,11 @@ describe("conversation service", () => {
       ...createCodexTargetAdapter(),
       conversations: {
         historyDetail: "full" as const,
-        discover: async () => ({ candidates: [candidate], complete: true }),
+        discover: async () => ({
+          candidates: [candidate],
+          complete: false,
+          failures: ["One neighboring history could not be read"]
+        }),
         read
       }
     };
@@ -161,19 +166,93 @@ describe("conversation service", () => {
     expect(first).toMatchObject({
       indexed: 1,
       unchanged: 0,
-      failures: [{ agentId: "opencode", message: "OpenCode history unavailable" }]
+      failures: [
+        { agentId: "codex", message: "One neighboring history could not be read" },
+        { agentId: "opencode", message: "OpenCode history unavailable" }
+      ]
     });
     expect(second).toMatchObject({ indexed: 0, unchanged: 1 });
     expect(read).toHaveBeenCalledTimes(1);
+    expect((await service.list()).refreshRequired).toBe(false);
     expect((await service.list({ query: "failing step" })).items).toHaveLength(1);
     expect(await service.list({ agentIds: ["disabled-agent"] })).toEqual({
       items: [],
       total: 0,
       workspacePaths: [],
-      agentCounts: { codex: 1 }
+      agentCounts: { codex: 1 },
+      refreshRequired: false
     });
     expect(await readFile(history, "utf8")).toBe(before);
     service.dispose();
+  });
+
+  it("requests one discovery refresh for a populated index created by an older adapter set", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-conversation-upgrade-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "data"),
+      homeDir: join(root, "home"),
+      conversationIndexPath: join(root, "cache", "conversations.sqlite"),
+      conversationHandoffDir: join(root, "cache", "handoffs")
+    });
+    const candidate = sourceCandidate(join(root, "source-history.jsonl"));
+    const codex = {
+      ...createCodexTargetAdapter(),
+      conversations: {
+        historyDetail: "full" as const,
+        discover: async () => ({ candidates: [candidate], complete: true }),
+        read: async () => sourceDetail()
+      }
+    };
+    const service = await createConversationService({
+      paths,
+      targetRegistry: createTargetRegistry([codex]),
+      targetDiscoveryService: {
+        listTargets: async () => [makeTarget(codex, paths.homeDir)]
+      },
+      settingsStore: {
+        ...settingsStore,
+        readSettings: async () => ({
+          ...await settingsStore.readSettings(),
+          enabledTargetIds: ["codex"]
+        })
+      },
+      clipboard: { writeText: vi.fn() },
+      launcher: { launch: vi.fn() }
+    });
+
+    await service.refresh();
+    service.dispose();
+
+    const database = new DatabaseSync(paths.conversationIndexPath);
+    database.prepare(
+      "DELETE FROM conversation_index_metadata WHERE key = 'discovery-version'"
+    ).run();
+    database.close();
+
+    const upgraded = await createConversationService({
+      paths,
+      targetRegistry: createTargetRegistry([codex]),
+      targetDiscoveryService: {
+        listTargets: async () => [makeTarget(codex, paths.homeDir)]
+      },
+      settingsStore: {
+        ...settingsStore,
+        readSettings: async () => ({
+          ...await settingsStore.readSettings(),
+          enabledTargetIds: ["codex"]
+        })
+      },
+      clipboard: { writeText: vi.fn() },
+      launcher: { launch: vi.fn() }
+    });
+
+    expect(await upgraded.list()).toMatchObject({
+      total: 1,
+      refreshRequired: true
+    });
+    await upgraded.refresh();
+    expect((await upgraded.list()).refreshRequired).toBe(false);
+    upgraded.dispose();
   });
 
   it("coalesces repeated database lock failures and keeps the last-good index", async () => {

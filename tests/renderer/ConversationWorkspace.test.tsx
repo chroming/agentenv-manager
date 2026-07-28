@@ -158,6 +158,11 @@ describe("ConversationWorkspace", () => {
     fireEvent.change(screen.getByRole("searchbox", { name: "Search conversations" }), {
       target: { value: "release" }
     });
+    expect(screen.getByRole("searchbox", { name: "Search conversations" }))
+      .toHaveAttribute(
+        "title",
+        "Searches all indexed conversations and message text."
+      );
     await waitFor(() => expect(api.listConversations).toHaveBeenLastCalledWith({
       query: "release",
       limit: 200
@@ -177,6 +182,54 @@ describe("ConversationWorkspace", () => {
     await waitFor(() => expect(api.continueConversation).toHaveBeenCalledWith("preview-1"));
     expect(await screen.findByText("Started a new conversation in OpenCode"))
       .toBeInTheDocument();
+  });
+
+  it("refreshes an old populated index once without surfacing a stale-detail error", async () => {
+    const api = installApi();
+    const stale = {
+      ...detail,
+      id: "codex:stale",
+      sourceId: "stale",
+      title: "Cached before adapter upgrade",
+      messages: undefined
+    };
+    const current = {
+      ...detail,
+      id: "codex:current",
+      sourceId: "current",
+      title: "Current indexed conversation",
+      messages: undefined
+    };
+    api.listConversations
+      .mockResolvedValueOnce({
+        items: [stale],
+        total: 1,
+        refreshRequired: true
+      })
+      .mockResolvedValue({
+        items: [current],
+        total: 1,
+        refreshRequired: false
+      });
+    api.readConversation.mockImplementation(async (id: string) => {
+      if (id === stale.id) {
+        throw new Error("Conversation is no longer available in the local index");
+      }
+      return { ...detail, ...current, messages: detail.messages };
+    });
+
+    render(<ConversationWorkspace targets={[
+      target("codex", "Codex"),
+      target("opencode", "OpenCode")
+    ]} />);
+
+    expect(await screen.findByText("Current indexed conversation")).toBeInTheDocument();
+    expect(await screen.findByText("Please repair the release workflow."))
+      .toBeInTheDocument();
+    await waitFor(() => expect(api.refreshConversations).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText("Conversation is no longer available in the local index"))
+      .toBeNull();
   });
 
   it("requires confirmation for a warned continuation and dismisses with Escape", async () => {
@@ -295,10 +348,13 @@ describe("ConversationWorkspace", () => {
       target("opencode", "OpenCode")
     ]} />);
     await screen.findByText("Repair release workflow");
+    expect(screen.getByText("1 of 2 conversations")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    fireEvent.click(screen.getByRole("button", { name: "Load 1 more" }));
 
     expect(await screen.findByText("Second indexed conversation")).toBeInTheDocument();
+    expect(screen.getByText("2 conversations")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Load 1 more" })).toBeNull();
     expect(api.listConversations).toHaveBeenCalledWith({
       offset: 1,
       limit: 200

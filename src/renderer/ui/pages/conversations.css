@@ -140,6 +140,10 @@
   padding: 6px;
 }
 
+.conversation-list-footer .ui-button {
+  min-width: 128px;
+}
+
 .conversation-list-item {
   background: transparent;
   border: 0;
