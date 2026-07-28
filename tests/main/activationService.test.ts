@@ -180,6 +180,51 @@ describe("activation service v2", () => {
     });
   });
 
+  it("removes a managed Codex Skill after editing the active Profile and converges", async () => {
+    const { paths, profile, profileStore, service } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const installedSkill = join(paths.codexHome, "skills", "review");
+    const first = await service.previewProfile(profile.id, "codex");
+    expect((await service.applyProfile(profile.id, first.id)).ok).toBe(true);
+    await expect(readFile(join(installedSkill, "SKILL.md"), "utf8"))
+      .resolves.toContain("# Review");
+
+    await profileStore.saveProfile({
+      manifest: profile.manifest,
+      instructions: profile.instructions,
+      resources: {
+        ...profile.resources,
+        skills: []
+      }
+    });
+
+    const removal = await service.previewProfile(profile.id, "codex");
+    expect(blockingMessages(removal.issues)).toEqual([]);
+    expect(removal.resourceChanges).toContainEqual(
+      expect.objectContaining({
+        kind: "skill",
+        action: "remove",
+        name: "review",
+        path: installedSkill
+      })
+    );
+    expect(removal.targetStateChanged).toBe(true);
+    expect((await service.applyProfile(profile.id, removal.id)).ok).toBe(true);
+    await expect(lstat(installedSkill)).rejects.toThrow();
+    expect((await service.listTargetStates())[0]).toMatchObject({
+      targetId: "codex",
+      activeProfileId: profile.id,
+      lifecycleStatus: "applied",
+      appliedLibraryVersions: { skills: {} }
+    });
+
+    const stable = await service.previewProfile(profile.id, "codex");
+    expect(stable.changes).toEqual([]);
+    expect(stable.resourceChanges).toEqual([]);
+    expect(stable.sharedSkillPreparationChanged).toBe(false);
+    expect(stable.targetStateChanged).toBe(false);
+  });
+
   it("restores a missing managed Skill without treating the fresh Preview as stale", async () => {
     const { paths, profile, profileStore, service, skillLibraryStore } = await makeEnv();
     await writeCodexLiveFiles(paths);

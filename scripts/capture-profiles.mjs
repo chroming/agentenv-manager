@@ -645,7 +645,9 @@ try {
   await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({ state: "visible" });
   await page.getByRole("group", { name: "Library item react-best-practices" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-1180x728.png"));
-  const hiddenAgents = page.getByRole("button", { name: "Show hidden Agent list, 2 items" });
+  const hiddenAgents = page.getByRole("button", {
+    name: /^Show hidden Agent list, \d+ items?$/
+  });
   await hiddenAgents.hover();
   const hiddenAgentsPopover = page.getByRole("menu", { name: "Hidden Agents" })
     .filter({ hasText: "Antigravity" })

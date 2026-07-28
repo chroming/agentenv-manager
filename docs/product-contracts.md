@@ -1391,7 +1391,13 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - One Profile active on multiple Targets.
 - Different Profiles active on different Targets.
 - Switching active Profile removes only previous managed resources.
-- Identical second Preview produces no changes and no Apply action.
+- Identical second Preview produces no changes and no Apply action. A true no-op Preview is
+  presented as `No changes to apply`, exposes only `Close`, omits the payload and recovery-point
+  promise, and refreshes canonical Target state so stale renderer state cannot leave Apply pending.
+- Removing a Skill from an active Profile plans removal of its AgentEnv-owned Target copy and
+  converges to `applied` after one Apply. A shared compatibility copy remains outside ordinary
+  Profile Apply and is disclosed as preserved until the separate shared-cleanup workflow resolves
+  it.
 - Preview followed by Apply followed by another Preview converges to no changes for every supported Agent unless a named external writer changes a deployment-relevant fact.
 - A missing AgentEnv-managed resource is restored by one fresh Apply and the next Preview is a no-op.
 - Adding or changing an unrelated local Skill after Preview does not stale Apply; adding a Skill that conflicts with a desired runtime name does.

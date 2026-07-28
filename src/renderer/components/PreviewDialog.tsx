@@ -17,6 +17,7 @@ import type {
   StopManagingPreview
 } from "../../shared/types";
 import { useI18n, type TranslationValues } from "../i18n";
+import { activationPreviewHasWork } from "../activationPreview";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { PreviewChangeList } from "./PreviewChangeList";
@@ -230,6 +231,9 @@ export const PreviewDialog = ({
     .filter((issue) => issue.disposition === "notice" && issue.resolution !== "preserve")
     .map((issue) => ({ id: issue.id, ...presentIssue(issue, targetName, t) }));
   const payload = isActivationPreview ? preview.effectivePayload : undefined;
+  const isNoOp =
+    isActivationPreview &&
+    !activationPreviewHasWork(preview);
   const status =
     blockedItems.length > 0 ? "blocked" : reviewItems.length > 0 ? "review" : "ready";
   const statusTitle =
@@ -237,7 +241,9 @@ export const PreviewDialog = ({
       ? t("Cannot apply")
       : status === "review"
         ? t("Review required")
-        : t("Ready to apply");
+        : isNoOp
+          ? t("No changes to apply")
+          : t("Ready to apply");
   const statusDetail =
     status === "blocked"
       ? isActivationPreview
@@ -249,6 +255,8 @@ export const PreviewDialog = ({
           })
       : status === "review"
         ? t("Existing Agent resources need confirmation before they can be replaced.")
+        : isNoOp
+          ? t("This Agent already matches the Profile.")
         : isActivationPreview
           ? t("Review the changes below before applying this Profile.")
           : t("Review the changes below before continuing.");
@@ -390,7 +398,7 @@ export const PreviewDialog = ({
             </section>
           ) : null}
 
-          {payload ? (
+          {payload && !isNoOp ? (
             <section className="apply-preview-payload" aria-label={t("After applying")}>
               <header className="apply-preview-section-heading">
                 <strong>{t("After applying")}</strong>
@@ -487,6 +495,8 @@ export const PreviewDialog = ({
                 ? isActivationPreview
                   ? t("Resolve blocking issues before Apply.")
                   : t("Resolve blocking issues before continuing.")
+                : isNoOp
+                  ? t("No files or AgentEnv state will change.")
                 : isActivationPreview
                     ? t("A recovery point will be created before changes.")
                     : t("Review the changes below before continuing.")}
@@ -499,17 +509,19 @@ export const PreviewDialog = ({
             variant="secondary"
             onClick={onCancel}
           >
-            {t(cancelLabel)}
+            {t(isNoOp ? "Close" : cancelLabel)}
           </Button>
-          <Button
-            className="primary-action"
-            disabled={confirmDisabled}
-            busy={confirmBusy}
-            variant="primary"
-            onClick={onConfirm}
-          >
-            {t(confirmLabel)}
-          </Button>
+          {!isNoOp ? (
+            <Button
+              className="primary-action"
+              disabled={confirmDisabled}
+              busy={confirmBusy}
+              variant="primary"
+              onClick={onConfirm}
+            >
+              {t(confirmLabel)}
+            </Button>
+          ) : null}
         </footer>
       ) : null}
     </section>

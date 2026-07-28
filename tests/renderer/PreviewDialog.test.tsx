@@ -33,6 +33,30 @@ afterEach(() => {
 });
 
 describe("PreviewDialog", () => {
+  it("presents a true no-op as current state with one Close action", () => {
+    render(
+      <PreviewDialog
+        preview={{
+          ...preview,
+          changes: [],
+          resourceChanges: [],
+          sharedSkillPreparationChanged: false,
+          targetStateChanged: false,
+          operation: "apply"
+        }}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("No changes to apply")).toBeInTheDocument();
+    expect(screen.getByText("This Agent already matches the Profile.")).toBeInTheDocument();
+    expect(screen.getByText("No files or AgentEnv state will change.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Confirm" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "After applying" })).not.toBeInTheDocument();
+  });
+
   it("renders a structured syntax-highlighted diff", async () => {
     render(<PreviewDialog preview={preview} />);
 

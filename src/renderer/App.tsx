@@ -100,6 +100,7 @@ import type {
 import { profileWithoutLocalSkillExceptions } from "../shared/effectiveProfile";
 import { I18nProvider, useI18n, type TranslationValues } from "./i18n";
 import { acceptAppliedProfileState } from "./appliedProfileState";
+import { activationPreviewHasWork } from "./activationPreview";
 import {
   collectLibraryResourceVersions,
   libraryResourceVersionsEqual
@@ -2084,10 +2085,7 @@ const AppContent = ({
     preview?.issues.some((issue) => issue.disposition === "block") === true;
   const canApply = Boolean(
     preview &&
-      (preview.changes.length > 0 ||
-        preview.resourceChanges.length > 0 ||
-        preview.sharedSkillPreparationChanged ||
-        preview.targetStateChanged) &&
+      activationPreviewHasWork(preview) &&
       !previewHasBlockingIssues &&
       localValidationErrors.length === 0 &&
       !rollbackPreview &&
@@ -2118,6 +2116,13 @@ const AppContent = ({
       );
       if (requestId !== profileFlowRequestRef.current) {
         return;
+      }
+      if (!activationPreviewHasWork(nextPreview)) {
+        const refreshedStates = await window.agentEnv.listTargetStates();
+        if (requestId !== profileFlowRequestRef.current) {
+          return;
+        }
+        setTargetStates(refreshedStates);
       }
       const rendererBlockers: ApplyIssue[] = [
         ...(!selectedTarget?.health.canWrite

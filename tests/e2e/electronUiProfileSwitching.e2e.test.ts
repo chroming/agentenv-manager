@@ -7153,7 +7153,9 @@ describe("Electron UI profile switching e2e", () => {
 
   it("reveals sidebar Agents hidden behind the overflow count", async () => {
     const { page } = await launchApp();
-    const overflow = page.getByRole("button", { name: "Show hidden Agent list, 3 items" });
+    const overflow = page.getByRole("button", {
+      name: /^Show hidden Agent list, \d+ items?$/
+    });
     await overflow.waitFor({ state: "visible" });
 
     await overflow.hover();

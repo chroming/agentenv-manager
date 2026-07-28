@@ -1756,6 +1756,8 @@ Object.assign(zhCN, {
   "Another AgentEnv operation is still running. Try Apply again shortly.":
     "另一个 AgentEnv 操作仍在进行，请稍后再次应用。",
   "This Agent already matches the Profile.": "此 Agent 已与配置方案一致。",
+  "No changes to apply": "没有需要应用的变更",
+  "No files or AgentEnv state will change.": "不会修改任何文件或 AgentEnv 状态。",
   "Resolve {{count}} blocking issues before applying this Profile.":
     "请先解决 {{count}} 个阻断问题，再应用此配置方案。",
   "Resolve {{count}} blocking issues before continuing.":
