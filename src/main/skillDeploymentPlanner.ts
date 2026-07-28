@@ -111,6 +111,7 @@ export const fingerprintSkillInventory = (inventory: SkillInventoryEntry[]): str
       contentMatchesLibrary: entry.contentMatchesLibrary ?? null,
       locationRole: entry.locationRole ?? null,
       sharedLocation: entry.sharedLocation ?? null,
+      sharedLocationId: entry.sharedLocationId ?? null,
       legacyLocation: entry.legacyLocation ?? null,
       pathPolicyId: entry.pathPolicyId ?? null,
       pathPolicy: entry.pathPolicy ?? null,

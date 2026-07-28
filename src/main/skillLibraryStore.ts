@@ -54,7 +54,6 @@ import type {
   SkillSourceMergePreviewInput,
   SkillSourceMergeResult,
   SkillSourceScope,
-  TargetSkillLocationRole,
   TargetSkillLocation,
   TargetPaths,
   UnmanagedSkillEntry,
@@ -73,6 +72,7 @@ import type { ProfileStore } from "./profileStore";
 import { resolveSkillsLibraryDir, type SettingsStore } from "./settingsStore";
 import { parseSkillFrontmatter } from "./skillFrontmatter";
 import { inspectSkillsCliLocks } from "./skillsCliInspector";
+import { sharedSkillLocationAuthority } from "./targets/sharedSkillLocations";
 import { deploySkillDirectory, removeSkillDeployment } from "./skillDeployment";
 import { createTargetRegistry } from "./targets/registry";
 import { targetPathInputFor } from "./targets/pathInput";
@@ -128,20 +128,6 @@ interface SkillCleanupBackupManifest {
   entries: Array<{ sourcePath: string; backupPath: string }>;
 }
 
-const skillLocationAuthority = (
-  role: TargetSkillLocationRole | undefined,
-  shared: boolean | undefined
-): number => {
-  if (!role && shared === undefined) return -1;
-  const roleRank: Record<TargetSkillLocationRole, number> = {
-    "preferred-runtime": 4,
-    "alternate-runtime": 3,
-    "compatibility-runtime": 2,
-    "discovery-only": 1
-  };
-  return (shared === false ? 10 : 0) + (role ? roleRank[role] : 0);
-};
-
 const mergeInventoryLocation = (
   entry: SkillInventoryEntry,
   targetId: string,
@@ -149,12 +135,22 @@ const mergeInventoryLocation = (
   observation?: SkillRuntimeObservation
 ): void => {
   const replacesLocation =
-    skillLocationAuthority(location?.role, location?.shared) >
-    skillLocationAuthority(entry.locationRole, entry.sharedLocation);
+    sharedSkillLocationAuthority(location) >
+    sharedSkillLocationAuthority(
+      entry.locationRole && entry.sharedLocation !== undefined
+        ? {
+            role: entry.locationRole,
+            shared: entry.sharedLocation,
+            sharedLocationId: entry.sharedLocationId,
+            management: entry.locationManagement
+          }
+        : undefined
+    );
 
   if (replacesLocation) {
     entry.locationRole = location?.role;
     entry.sharedLocation = location?.shared;
+    entry.sharedLocationId = location?.sharedLocationId;
     entry.runtimeScope = location?.scope ?? (location?.shared ? "shared" : "user");
     entry.legacyLocation = location?.management === "legacy";
     entry.locationManagement = location?.management;
@@ -1040,6 +1036,7 @@ export const createSkillLibraryStore = (
             locationManagement: location?.management,
             locationRole: observation.locationRole,
             sharedLocation: observation.shared,
+            sharedLocationId: observation.sharedLocationId,
             legacyLocation: observation.legacy,
             externalEvidence
           });
@@ -1157,6 +1154,7 @@ export const createSkillLibraryStore = (
           externalEvidence,
           locationRole: observation.locationRole,
           sharedLocation: observation.shared,
+          sharedLocationId: observation.sharedLocationId,
           legacyLocation: observation.legacy,
           locationManagement: location?.management
         });

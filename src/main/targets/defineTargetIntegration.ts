@@ -1,6 +1,7 @@
 import type { TargetDescriptor, TargetPaths } from "../../shared/types";
 import type { AgentTargetIntegration } from "./contract";
 import type { AgentTargetAdapter } from "./types";
+import { materializeSharedSkillLocations } from "./sharedSkillLocations";
 
 const TARGET_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -36,7 +37,13 @@ export const defineTargetIntegration = (
     descriptor: integration.descriptor,
     detectInstallation: (input) => integration.discovery.detectInstallation(input),
     createTargetPaths: (input) =>
-      validatePaths(integration.descriptor, integration.paths.createTargetPaths(input)),
+      validatePaths(
+        integration.descriptor,
+        materializeSharedSkillLocations(
+          integration.paths.createTargetPaths(input),
+          { homeDir: input.homeDir }
+        )
+      ),
     skills: integration.skills,
     conversations: integration.conversations,
     createDefaultProfile: (id) => integration.profile.createDefaultProfile(id),

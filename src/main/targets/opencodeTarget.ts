@@ -20,6 +20,7 @@ import { readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
 import { captureNativeJsonMcpConnections } from "./capture";
 import { createInstallationDriver } from "./installationDiscovery";
+import { materializeSharedSkillLocations } from "./sharedSkillLocations";
 import { createDirectoryAssetDriver } from "./shared/assetDeployment";
 import { createFilesystemSkillDriver } from "./shared/skillRuntime";
 import type { AgentTargetAdapter } from "./types";
@@ -136,8 +137,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
   createTargetPaths: ({ homeDir, rootDirOverride }) => {
     const configDir = rootDirOverride ?? join(homeDir, ".config", "opencode");
     const privateSkillsDir = join(configDir, "skills");
-    const sharedSkillsDir = join(homeDir, ".agents", "skills");
-    return {
+    return materializeSharedSkillLocations({
       targetId: "opencode",
       configDir,
       instructionsPath: join(configDir, "AGENTS.md"),
@@ -161,14 +161,6 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
           management: "observed"
         },
         {
-          path: sharedSkillsDir,
-          role: "compatibility-runtime",
-          shared: true,
-          scope: "shared",
-          scanDepth: "recursive",
-          management: "observed"
-        },
-        {
           path: join(homeDir, ".claude", "skills"),
           role: "compatibility-runtime",
           shared: true,
@@ -186,10 +178,10 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       skillScanDirs: [
         privateSkillsDir,
         join(configDir, "skill"),
-        sharedSkillsDir,
         join(homeDir, ".claude", "skills")
-      ]
-    };
+      ],
+      sharedSkillLocationIds: ["agents-skills"]
+    }, { homeDir });
   },
   skills,
   conversations: createOpenCodeConversationCapability(),

@@ -14,6 +14,7 @@ import { pathExists, readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
 import { setMcpServerEnabled, validateToml } from "../tomlConfig";
 import { createInstallationDriver } from "./installationDiscovery";
+import { materializeSharedSkillLocations } from "./sharedSkillLocations";
 import { createDirectoryAssetDriver } from "./shared/assetDeployment";
 import { createFilesystemSkillDriver } from "./shared/skillRuntime";
 import type { AgentTargetAdapter } from "./types";
@@ -73,8 +74,7 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
   createTargetPaths: ({ homeDir, rootDirOverride }) => {
     const codexHome = rootDirOverride ?? join(homeDir, ".codex");
     const skillsDir = join(codexHome, "skills");
-    const sharedSkillsDir = join(homeDir, ".agents", "skills");
-    return {
+    return materializeSharedSkillLocations({
       targetId: "codex",
       configDir: codexHome,
       instructionsPath: join(codexHome, "AGENTS.md"),
@@ -89,18 +89,11 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
           scope: "user",
           scanDepth: "direct",
           management: "managed"
-        },
-        {
-          path: sharedSkillsDir,
-          role: "compatibility-runtime",
-          shared: true,
-          scope: "shared",
-          scanDepth: "recursive",
-          management: "legacy"
         }
       ],
-      skillScanDirs: [skillsDir, sharedSkillsDir]
-    };
+      skillScanDirs: [skillsDir],
+      sharedSkillLocationIds: ["agents-skills"]
+    }, { homeDir });
   },
   skills,
   conversations: createCodexConversationCapability(),

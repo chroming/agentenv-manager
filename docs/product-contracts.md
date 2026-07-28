@@ -83,6 +83,9 @@ The active data root is a startup-owned location, not an ordinary live preferenc
 
 `~/.agents/skills` and other cross-tool compatibility paths MAY be consumed by more than one Target. They are migration sources, not canonical Library storage or AgentEnv's default deployment destination.
 
+- Shared runtime locations are first-class registered objects. The registry owns their stable identity, path resolution, discovery depth, scope, and mutation authority. Target adapters declare only which registered locations they consume; they MUST NOT redefine the same physical path as `managed`, `observed`, or `legacy` independently.
+- `~/.agents/skills` has the stable identity `agents-skills` and `migration-only` authority. Runtime inventory carries that identity through scanning, deduplication, Capture evidence, and Apply freshness fingerprints. Generic Target deployment and generic target-copy consolidation MUST NOT write it; only the dedicated reviewed shared-location migration may cross that boundary.
+- A registered shared location is scanned through each installed consumer only to preserve Agent-specific runtime availability, then merged into one physical inventory entry with an explicit consumer list. Adapter order MUST NOT change its role or mutation authority.
 - Canonical Skill content MUST remain under AgentEnv data.
 - Apply normally deploys Skills to the selected Target's dedicated managed directory. While an equivalent shared compatibility copy is active, Apply MUST record that Target's current `install` or `omit` intent without creating a duplicate dedicated copy.
 - Applying an OpenCode Profile MUST NOT change Codex or Claude Code Skill directories, and equivalent isolation applies to every Target pair.

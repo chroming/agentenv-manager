@@ -213,7 +213,8 @@ export const createTargetCaptureService = ({
           path: entry.path,
           contentHash: entry.contentHash,
           locationRole: entry.locationRole,
-          sharedLocation: entry.sharedLocation
+          sharedLocation: entry.sharedLocation,
+          sharedLocationId: entry.sharedLocationId
         })),
         existing: Boolean(existing),
         conflictResolution

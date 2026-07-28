@@ -9,7 +9,8 @@ const CaptureSkillCopySchema = z.object({
   path: z.string().min(1),
   contentHash: z.string().min(1),
   locationRole: z.string().optional(),
-  sharedLocation: z.boolean().optional()
+  sharedLocation: z.boolean().optional(),
+  sharedLocationId: z.string().optional()
 });
 
 const CaptureSkillReceiptSchema = z.object({

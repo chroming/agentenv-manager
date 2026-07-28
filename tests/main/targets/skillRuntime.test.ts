@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createFilesystemSkillDriver } from "../../../src/main/targets/shared/skillRuntime";
+import { materializeSharedSkillLocations } from "../../../src/main/targets/sharedSkillLocations";
 import type { TargetPaths } from "../../../src/shared/types";
 
 let root = "";
@@ -117,6 +118,29 @@ describe("filesystem Skill runtime driver", () => {
         displayName: "Claude Code plugin",
         importable: false
       }
+    });
+  });
+
+  it("preserves registered shared-location identity in runtime observations", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-runtime-"));
+    const sharedSkill = join(root, ".agents", "skills", "reviewer");
+    await writeSkill(sharedSkill, "reviewer");
+    const targetPaths = materializeSharedSkillLocations({
+      ...pathsFor("codex", join(root, ".codex", "skills")),
+      sharedSkillLocationIds: ["agents-skills"]
+    }, { homeDir: root });
+
+    const snapshot = await createFilesystemSkillDriver({ targetId: "codex" })
+      .inspectRuntime(targetPaths);
+    const sharedObservation = snapshot.observations.find(
+      (observation) => observation.path === sharedSkill
+    );
+
+    expect(sharedObservation).toMatchObject({
+      shared: true,
+      sharedLocationId: "agents-skills",
+      locationRole: "compatibility-runtime",
+      legacy: false
     });
   });
 });

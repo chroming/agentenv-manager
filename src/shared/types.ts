@@ -823,6 +823,7 @@ export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   externalEvidence?: SkillExternalEvidence;
   locationRole?: TargetSkillLocationRole;
   sharedLocation?: boolean;
+  sharedLocationId?: SharedSkillLocationId;
   legacyLocation?: boolean;
   locationManagement?: TargetSkillLocation["management"];
 }
@@ -865,6 +866,7 @@ export interface SkillRuntimeObservation {
   confidence: SkillRuntimeConfidence;
   locationRole: TargetSkillLocationRole;
   shared: boolean;
+  sharedLocationId?: SharedSkillLocationId;
   legacy: boolean;
   externalEvidence?: SkillExternalEvidence;
   issues: SkillRuntimeIssue[];
@@ -1199,7 +1201,10 @@ export interface TargetPaths {
   skillsDir?: string;
   skillScanDirs?: string[];
   skillLocations?: TargetSkillLocation[];
+  sharedSkillLocationIds?: SharedSkillLocationId[];
 }
+
+export type SharedSkillLocationId = "agents-skills";
 
 export type TargetSkillLocationRole =
   | "preferred-runtime"
@@ -1211,9 +1216,10 @@ export interface TargetSkillLocation {
   path: string;
   role: TargetSkillLocationRole;
   shared: boolean;
+  sharedLocationId?: SharedSkillLocationId;
   scope?: SkillRuntimeScope;
   scanDepth?: SkillScanDepth;
-  management?: "managed" | "observed" | "legacy";
+  management?: "managed" | "observed" | "legacy" | "migration-only";
   externalContainerMarkers?: TargetSkillExternalContainerMarker[];
 }
 

@@ -396,6 +396,16 @@ describe("skill deployment planner", () => {
     expect(
       fingerprintSkillInventory([inventoryEntry({ sharedLocation: true })])
     ).not.toBe(fingerprint);
+    expect(
+      fingerprintSkillInventory([
+        inventoryEntry({
+          sharedLocation: true,
+          sharedLocationId: "agents-skills"
+        })
+      ])
+    ).not.toBe(
+      fingerprintSkillInventory([inventoryEntry({ sharedLocation: true })])
+    );
   });
 
   it("projects only inventory facts that can change the current deployment plan", () => {

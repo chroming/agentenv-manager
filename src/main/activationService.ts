@@ -216,8 +216,14 @@ const targetPathFingerprint = (targetPaths: TargetPaths) =>
     agentsDir: targetPaths.agentsDir ? resolve(targetPaths.agentsDir) : undefined,
     skillsDir: targetPaths.skillsDir ? resolve(targetPaths.skillsDir) : undefined,
     skillLocations: (targetPaths.skillLocations ?? [])
-      .map((location) => resolve(location.path))
-      .sort()
+      .map((location) => ({
+        path: resolve(location.path),
+        role: location.role,
+        shared: location.shared,
+        sharedLocationId: location.sharedLocationId,
+        management: location.management
+      }))
+      .sort((left, right) => left.path.localeCompare(right.path))
   }));
 
 const normalizeSharedSkillPreparations = (

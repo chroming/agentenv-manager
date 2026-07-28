@@ -59,6 +59,11 @@ import { pathEntryExists } from "./fileUtils";
 import { createSkillArchiveService } from "./skillArchiveService";
 import { createSkillFileBrowser } from "./skillFileBrowser";
 import type { ConversationService } from "./conversations/conversationService";
+import {
+  assertSharedSkillCleanupAuthority,
+  materializeSharedSkillLocations,
+  resolveSharedSkillLocation
+} from "./targets/sharedSkillLocations";
 
 export interface IpcServices {
   profileStore: ProfileStore;
@@ -149,30 +154,29 @@ export const registerIpcHandlers = ({
       });
     });
   };
-  const sharedSkillTargetPaths: TargetPaths = {
+  const agentsSkillsLocation = resolveSharedSkillLocation("agents-skills", {
+    homeDir: paths.homeDir,
+    pathOverride: paths.userSkillsDir
+  });
+  const agentsSkillsRoot = resolve(agentsSkillsLocation.path);
+  const sharedSkillTargetPaths: TargetPaths = materializeSharedSkillLocations({
     targetId: "shared-compatibility",
     configDir: dirname(paths.userSkillsDir),
     instructionsPath: join(dirname(paths.userSkillsDir), "AGENTS.md"),
     configPath: join(dirname(paths.userSkillsDir), "config.json"),
-    skillsDir: paths.userSkillsDir,
-    skillScanDirs: [paths.userSkillsDir],
-    skillLocations: [
-      {
-        path: paths.userSkillsDir,
-        role: "compatibility-runtime",
-        shared: true,
-        scope: "shared",
-        scanDepth: "recursive",
-        management: "observed"
-      }
-    ]
-  };
+    sharedSkillLocationIds: ["agents-skills"]
+  }, {
+    homeDir: paths.homeDir,
+    pathOverrides: { "agents-skills": paths.userSkillsDir }
+  });
   const inventoryPathsFor = (targets: Awaited<ReturnType<TargetDiscoveryService["listTargets"]>>) => {
     const targetPaths = targets.map((target) => target.paths);
-    const sharedRoot = resolve(paths.userSkillsDir);
     const includesSharedRoot = targetPaths.some((target) =>
-      (target.skillLocations ?? []).some(
-        (location) => location.shared && resolve(location.path) === sharedRoot
+      target.sharedSkillLocationIds?.includes("agents-skills") &&
+      target.skillLocations?.some(
+        (location) =>
+          location.sharedLocationId === "agents-skills" &&
+          resolve(location.path) === agentsSkillsRoot
       )
     );
     return includesSharedRoot ? targetPaths : [...targetPaths, sharedSkillTargetPaths];
@@ -204,7 +208,7 @@ export const registerIpcHandlers = ({
     }
     const targets = await targetDiscoveryService.listTargets();
     const sharedRoots = new Set([
-      resolve(paths.userSkillsDir),
+      agentsSkillsRoot,
       ...targets.flatMap((target) =>
         (target.paths.skillLocations ?? [])
           .filter((location) => location.shared && location.role === "compatibility-runtime")
@@ -667,6 +671,12 @@ export const registerIpcHandlers = ({
           `${skillKey} changed after the cleanup preview. Refresh and review it again.`
         );
       }
+      assertSharedSkillCleanupAuthority({
+        path: targetDir,
+        sharedLocation: current.sharedLocation,
+        mode: input.mode,
+        unavailableLinkCleanup
+      });
       return { targetPaths: target.paths, targetDir };
     });
     if (input.mode === "shared-compatibility") {
@@ -684,6 +694,8 @@ export const registerIpcHandlers = ({
           !current ||
           current.skillKey !== skillKey ||
           current.sharedLocation !== true ||
+          (dirname(sharedPath) === agentsSkillsRoot &&
+            current.sharedLocationId !== "agents-skills") ||
           current.contentHash !== expected.contentHash
         ) {
           throw new Error(

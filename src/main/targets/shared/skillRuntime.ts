@@ -202,6 +202,7 @@ export const createFilesystemSkillDriver = (
             confidence: "inferred",
             locationRole: location.role,
             shared: location.shared,
+            sharedLocationId: location.sharedLocationId,
             legacy: location.management === "legacy",
             issues: [issue]
           });
@@ -230,6 +231,7 @@ export const createFilesystemSkillDriver = (
             confidence: "inferred",
             locationRole: location.role,
             shared: location.shared,
+            sharedLocationId: location.sharedLocationId,
             legacy: location.management === "legacy",
             issues: [issue]
           });
@@ -294,6 +296,7 @@ export const createFilesystemSkillDriver = (
           confidence: frontmatter.name ? "verified" : "inferred",
           locationRole: location.role,
           shared: location.shared,
+          sharedLocationId: location.sharedLocationId,
           legacy: location.management === "legacy",
           externalEvidence,
           issues

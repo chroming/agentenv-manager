@@ -575,6 +575,7 @@ description: >
           confidence: "verified",
           locationRole: "compatibility-runtime",
           shared: true,
+          sharedLocationId: "agents-skills",
           legacy: false,
           issues: []
         }]
@@ -585,6 +586,7 @@ description: >
 
     expect(inventory).toHaveLength(1);
     expect(inventory[0].foundIn).toEqual(["codex", "opencode"]);
+    expect(inventory[0].sharedLocationId).toBe("agents-skills");
     expect(inventory[0].runtimeStates).toEqual([
       expect.objectContaining({ targetId: "codex", availability: "disabled" }),
       expect.objectContaining({ targetId: "opencode", availability: "enabled" })
