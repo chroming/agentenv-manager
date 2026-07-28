@@ -112,7 +112,6 @@ import {
 } from "../shared/profileResources";
 import { AgentsEditor } from "./components/AgentsEditor";
 import { AgentSettingsSection } from "./components/AgentSettingsSection";
-import { AgentSkillWorkspaceRoute } from "./components/AgentSkillWorkspaceRoute";
 import {
   AppFeedback,
   type AppFeedbackMessage
@@ -181,12 +180,10 @@ import {
 import { useLibraryScrollRestoration } from "./hooks/useLibraryScrollRestoration";
 import { useModalDialog } from "./hooks/useModalDialog";
 import { useDesktopShortcuts } from "./hooks/useDesktopShortcuts";
-import { useAgentSkillWorkspace } from "./hooks/useAgentSkillWorkspace";
 import {
   preferredTargetForProfile,
   reconcileProfileUsage,
-  summarizeProfile,
-  type ProfileResourceSummary
+  summarizeProfile
 } from "./profileSummary";
 import { buildQuickOpenItems } from "./quickOpenItems";
 import {
@@ -333,9 +330,6 @@ const AppContent = ({
     SkillUpdatePreviewBatchResult["failed"]
   >([]);
   const [skillUpdateRun, setSkillUpdateRun] = useState<SkillUpdateRun>({});
-  const [profileResourceCounts, setProfileResourceCounts] = useState<
-    Record<string, ProfileResourceSummary>
-  >({});
   const [profileLibraryVersions, setProfileLibraryVersions] = useState<
     Record<string, LibraryResourceVersions>
   >({});
@@ -379,8 +373,6 @@ const AppContent = ({
   const [workspacePreferenceReady, setWorkspacePreferenceReady] = useState(
     Boolean(initialWorkspacePreference)
   );
-  const [pendingInitialAgentTargetId, setPendingInitialAgentTargetId] =
-    useState<string>();
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("general");
   const [quickOpen, setQuickOpen] = useState(false);
   const [skillLibraryViewState, setSkillLibraryViewState] = useState(
@@ -758,7 +750,6 @@ const AppContent = ({
         .map((profile) => window.agentEnv.readProfile(profile.id))
     );
     const usage: Record<string, string[]> = {};
-    const nextProfileResourceCounts: Record<string, ProfileResourceSummary> = {};
     const nextProfileLibraryVersions: Record<string, LibraryResourceVersions> = {};
     for (const profile of profileDetails) {
       const profileTarget = supportedTargetItems.find(
@@ -769,13 +760,6 @@ const AppContent = ({
         skillItems,
         profileTarget?.id
       );
-      if (profileTarget) {
-        nextProfileResourceCounts[profile.id] = summarizeProfile(
-          profile,
-          profileTarget,
-          skillItems
-        );
-      }
       for (const skillRef of profile.resources.skills) {
         usage[skillRef.libraryId] = (usage[skillRef.libraryId] ?? []).concat(
           profile.manifest.name
@@ -792,7 +776,6 @@ const AppContent = ({
     setSkillInventory(skillInventoryItems);
     setGithubAuthStatus(githubStatus);
     setSkillUsage(usage);
-    setProfileResourceCounts(nextProfileResourceCounts);
     setProfileLibraryVersions(nextProfileLibraryVersions);
     return { skillUpdateItems };
   };
@@ -953,9 +936,6 @@ const AppContent = ({
           );
           if (usableProfiles.length === 0 && installedTargets.length > 0) {
             setActiveWorkspace("targets");
-            if (installedTargets.length === 1) {
-              setPendingInitialAgentTargetId(installedTargets[0].id);
-            }
           }
           setWorkspacePreferenceReady(true);
         } else if (
@@ -1101,9 +1081,6 @@ const AppContent = ({
 
   const selectWorkspace = (workspace: AppWorkspace) => {
     if (workspace === activeWorkspace) {
-      if (workspace === "targets" && agentWorkspace.selectedTargetId) {
-        agentWorkspace.close();
-      }
       return;
     }
     const label = {
@@ -1115,21 +1092,11 @@ const AppContent = ({
     }[workspace];
     guardProfileAction(label, () => {
       libraryScroll.captureScroll();
-      agentWorkspace.clearImportReturn();
-      agentWorkspace.clearImportedSkills();
       if (workspace === "library") {
         setSkillUpdateFeedbackWorkspace("library");
       }
       setActiveWorkspace(workspace);
     });
-  };
-
-  const openAgentSkills = (targetId: string) => {
-    const targetName = targets.find((target) => target.id === targetId)?.name ?? "Agent";
-    guardProfileAction(
-      `manage ${targetName} Skills`,
-      () => agentWorkspace.open(targetId)
-    );
   };
 
   const selectProfile = (
@@ -1161,6 +1128,27 @@ const AppContent = ({
     guardProfileAction(`switch to ${profileName}`, () =>
       selectProfileNow(profileId, composerSection, targetOverrideId)
     );
+  };
+
+  const openAgentConfiguration = (targetId: string) => {
+    const targetName =
+      targets.find((target) => target.id === targetId)?.name ?? "Agent";
+    const activeProfileId = targetStates.find(
+      (state) => state.targetId === targetId
+    )?.activeProfileId;
+    const capturedProfileId = profiles.find(
+      (profile) =>
+        !profile.loadError && profile.createdFromTargetId === targetId
+    )?.id;
+    const profileId = activeProfileId ?? capturedProfileId;
+
+    if (profileId) {
+      selectProfile(profileId, undefined, targetId);
+      return;
+    }
+    guardProfileAction(`configure ${targetName}`, () => {
+      openCreateFromTargetDialogNow(targetId, "all");
+    });
   };
 
   const updateDraftProfile = (profile: ProfileDetail) => {
@@ -1333,12 +1321,6 @@ const AppContent = ({
       const preferredTarget = targets.find(
         (target) => target.id === saved.manifest.preferredTargetId
       ) ?? targets[0];
-      if (preferredTarget) {
-        setProfileResourceCounts((current) => ({
-          ...current,
-          [saved.id]: summarizeProfile(saved, preferredTarget, librarySkills)
-        }));
-      }
       setProfileLibraryVersions((current) => ({
         ...current,
         [saved.id]: collectLibraryResourceVersions(
@@ -1566,9 +1548,6 @@ const AppContent = ({
                   name: saved.manifest.name
                 })
           );
-          if (profileCaptureScope === "skills") {
-            agentWorkspace.acceptCapturedProfile(profileForm.targetId, saved);
-          }
         }
       } else if (draftProfile) {
         setProfileSaveStatus("Saving profile details");
@@ -1926,40 +1905,6 @@ const AppContent = ({
     window.requestAnimationFrame(() => focusInitialActionMenuItem(profileActionsMenuRef.current));
   }, [isProfileActionsOpen]);
 
-  const agentWorkspace = useAgentSkillWorkspace({
-    targets,
-    targetStates,
-    profiles,
-    librarySkills,
-    skillInventory,
-    draftProfile,
-    isProfileDirty,
-    setProfiles,
-    setTargetStates,
-    setProfileResourceCounts,
-    setProfileLibraryVersions,
-    setSkillInventory,
-    setSkillUsage,
-    setDraftProfile,
-    setBackups,
-    setSelectedTargetId,
-    setError,
-    openTargetsWorkspace: () => setActiveWorkspace("targets")
-  });
-
-  useEffect(() => {
-    if (
-      !pendingInitialAgentTargetId ||
-      activeWorkspace !== "targets" ||
-      !targets.some((target) => target.id === pendingInitialAgentTargetId)
-    ) {
-      return;
-    }
-    const targetId = pendingInitialAgentTargetId;
-    setPendingInitialAgentTargetId(undefined);
-    void agentWorkspace.open(targetId);
-  }, [activeWorkspace, pendingInitialAgentTargetId, targets]);
-
   const selectedTarget = targets.find((target) => target.id === selectedTargetId);
   const loadingProfileSummary = profileLoadingId
     ? profiles.find((profile) => profile.id === profileLoadingId)
@@ -2269,9 +2214,13 @@ const AppContent = ({
         setError(result.errors.join("\n"));
         return;
       }
+      const reloadNotice = preview.issues.find(
+        (issue) => issue.code === "runtime-reload-required"
+      );
       acceptAppliedProfile(draftProfile, preview);
       setPreview(undefined);
       setRollbackPreview(undefined);
+      if (reloadNotice) setProfileSaveStatus(t(reloadNotice.message));
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -2438,7 +2387,6 @@ const AppContent = ({
       });
       if (!prepared || prepared.kind !== "local") return false;
       const result = await window.agentEnv.importSkillToLibrary(prepared.input);
-      agentWorkspace.rememberImportedSkills([result.skill]);
       setPendingSkillImport(undefined);
       setSelectedSkillUpdatePlan(undefined);
       await refreshProfiles();
@@ -2490,7 +2438,6 @@ const AppContent = ({
       });
       if (!prepared || prepared.kind !== "local") return false;
       const result = await window.agentEnv.importSkillToLibrary(prepared.input);
-      agentWorkspace.rememberImportedSkills([result.skill]);
       setPendingSkillImport(undefined);
       setSelectedSkillUpdatePlan(undefined);
       await refreshProfiles();
@@ -3135,7 +3082,6 @@ const AppContent = ({
         imported: queueResult.imported,
         failed: queueResult.failed
       };
-      agentWorkspace.rememberImportedSkills(result.imported);
       const updatedSourceCount = queueResult.updatedSourceCount;
       setSelectedSkillUpdatePlan(undefined);
       try {
@@ -3194,7 +3140,6 @@ const AppContent = ({
         imported: queueResult.imported,
         failed: queueResult.failed
       };
-      agentWorkspace.rememberImportedSkills(result.imported);
       const updatedSourceCount = queueResult.updatedSourceCount;
       setSelectedSkillUpdatePlan(undefined);
       try {
@@ -4065,7 +4010,7 @@ const AppContent = ({
       selectWorkspace("library");
     },
     onOpenTarget: (targetId) => {
-      openAgentSkills(targetId);
+      openAgentConfiguration(targetId);
     },
     onRefreshSkills: refreshSkills,
     onRefreshTargets: refreshTargets
@@ -4085,7 +4030,7 @@ const AppContent = ({
         isLoading={isLoading}
         activeWorkspace={activeWorkspace}
         onWorkspaceSelect={selectWorkspace}
-        onAgentSelect={openAgentSkills}
+        onAgentSelect={openAgentConfiguration}
         onQuickOpen={() => setQuickOpen(true)}
       />
 
@@ -4121,30 +4066,6 @@ const AppContent = ({
                   refreshing={
                     skillRefreshStatus === "refreshing" ||
                     skillSourceGroupsLoading
-                  }
-                  returnTargetName={
-                    agentWorkspace.importReturnTargetId
-                      ? targets.find(
-                          (target) =>
-                            target.id ===
-                            agentWorkspace.importReturnTargetId
-                        )?.name ?? t("Agent")
-                      : undefined
-                  }
-                  onReturn={
-                    agentWorkspace.importReturnTargetId
-                      ? () => {
-                          const targetId =
-                            agentWorkspace.importReturnTargetId;
-                          if (!targetId) return;
-                          setSkillLibraryTool(undefined);
-                          agentWorkspace.clearImportReturn();
-                          void agentWorkspace.open(
-                            targetId,
-                            agentWorkspace.profileByTarget[targetId]
-                          );
-                        }
-                      : undefined
                   }
                   onImport={() => setSkillLibraryTool("import")}
                   onScanLocal={() => {
@@ -4293,7 +4214,6 @@ const AppContent = ({
                 selectedProfileId={profileLoadingId ?? selectedProfileId}
                 draftProfile={draftProfile}
                 isProfileDirty={isProfileDirty}
-                profileResourceCounts={profileResourceCounts}
                 profileLibraryVersions={profileLibraryVersions}
                 targets={targets}
                 targetStates={targetStates}
@@ -4302,7 +4222,6 @@ const AppContent = ({
                 onDuplicate={duplicateProfile}
                 onSearchChange={setProfileSearch}
                 onSelect={selectProfile}
-                onIconChange={changeProfileIcon}
               />
               <div className="profile-editor-surface">
                 {profileLoadingId ? (
@@ -4516,6 +4435,9 @@ const AppContent = ({
                             profileTarget?.instructionsLabel ??
                             t("Instructions")
                           }
+                          path={selectedTarget?.paths.instructionsPath}
+                          policy={resourceSummary?.instructions.mode ?? "manage"}
+                          targetName={activeTargetName}
                           value={draftProfile.instructions}
                           onChange={(instructions) => {
                             updateDraftProfile({
@@ -4801,47 +4723,6 @@ const AppContent = ({
         ) : activeWorkspace === "conversations" ? (
           <ConversationWorkspace targets={targets} />
         ) : activeWorkspace === "targets" ? (
-          agentWorkspace.selectedTarget ? (
-            <AgentSkillWorkspaceRoute
-              workspace={agentWorkspace}
-              librarySkills={librarySkills}
-              skillUpdates={skillUpdates}
-              checkingSkillUpdates={checkingProfileSkillUpdates}
-              selectedSkillUpdatePlan={selectedSkillUpdatePlan}
-              updateProgress={selectedSkillUpdatePlan
-                ? skillUpdateRun[selectedSkillUpdatePlan.id]
-                : undefined}
-              updateBusy={busy}
-              onBeginSetup={(scope) =>
-                openCreateFromTargetDialog(
-                  agentWorkspace.selectedTarget!.id,
-                  scope
-                )}
-              onOpenProfile={(profileId, targetId) =>
-                selectProfile(profileId, "skills", targetId)}
-              onOpenImport={() => {
-                agentWorkspace.beginImport();
-                setSkillLibraryTool("import");
-                setSkillLibraryMode("skills");
-                setActiveWorkspace("library");
-              }}
-              onCheckSkillUpdates={(ids) => void checkProfileSkillUpdates(ids)}
-              onPreviewSkillUpdate={(id) => void previewLibrarySkillUpdate(id)}
-              onCloseSkillUpdate={() => {
-                setSelectedSkillUpdatePlan(undefined);
-                setSkillUpdateRun({});
-              }}
-              onConfirmSkillUpdate={(plan) => void updateLibrarySkill(plan)}
-              onKeepSkillOutside={(issue) =>
-                keepPreviewSkillOutside(
-                  issue,
-                  agentWorkspace.selectedTarget!.id,
-                  async () => {
-                    await agentWorkspace.previewApply();
-                  }
-                )}
-            />
-          ) : (
             <TargetWorkspace
               targets={targets}
               targetStates={targetStates}
@@ -4852,7 +4733,7 @@ const AppContent = ({
               stopManagingPreview={stopManagingPreview}
               busy={busy}
               onRefresh={refreshTargets}
-              onManageSkills={openAgentSkills}
+              onConfigure={openAgentConfiguration}
               onCreateProfileFromTarget={(targetId) =>
                 openCreateFromTargetDialog(targetId, "all")}
               onPreviewRollback={previewSelectedRollback}
@@ -4865,7 +4746,6 @@ const AppContent = ({
               onCancelStopManaging={() => setStopManagingPreview(undefined)}
               onStopManaging={confirmStopManaging}
             />
-          )
         ) : activeWorkspace === "settings" ? (
           <section className="settings-page" aria-label={t("Settings")}>
             <PageHeader

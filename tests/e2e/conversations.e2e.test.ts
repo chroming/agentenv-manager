@@ -313,6 +313,14 @@ describe("Conversations desktop workflow", () => {
       .getByRole("complementary", { name: "Global navigation" })
       .getByRole("button", { name: "Conversations" })
       .click();
+    const conversationHelp = page.getByLabel(
+      "Find local Agent history and continue it in another Agent."
+    );
+    await conversationHelp.hover();
+    await page.getByRole("tooltip").filter({
+      hasText: "Find local Agent history and continue it in another Agent."
+    }).waitFor({ state: "visible" });
+    await page.mouse.move(600, 400);
     await page.getByRole("option", { name: /测试111/ }).waitFor({
       state: "visible",
       timeout: 15_000

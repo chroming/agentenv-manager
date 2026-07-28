@@ -139,6 +139,34 @@ describe("Trae CLI adapter", () => {
     expect(preview.targetState.managedMcpNames).toEqual([]);
   });
 
+  it("reports a new-session requirement only when Instructions change", async () => {
+    const { adapter, paths, profile } = await setup();
+
+    const changed = await adapter.createPreview({
+      profile,
+      targetPaths: paths,
+      state: { managedMcpNames: [] }
+    });
+
+    expect(changed.issues).toContainEqual(expect.objectContaining({
+      code: "runtime-reload-required",
+      disposition: "notice",
+      path: paths.instructionsPath
+    }));
+
+    await writeFile(paths.instructionsPath, profile.instructions);
+    const current = await adapter.createPreview({
+      profile,
+      targetPaths: paths,
+      state: { managedMcpNames: [] }
+    });
+
+    expect(current.changes.map(({ path }) => path)).not.toContain(paths.instructionsPath);
+    expect(current.issues.map(({ code }) => code)).not.toContain(
+      "runtime-reload-required"
+    );
+  });
+
   it("patches only selected V2 TOML enabled fields and preserves native settings", async () => {
     const { adapter, paths, profile } = await setup();
     const live = [

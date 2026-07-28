@@ -1441,6 +1441,7 @@ export type ApplyIssueCode =
   | "missing-native-mcp"
   | "unsupported-mcp-management"
   | "target-instruction-limit"
+  | "runtime-reload-required"
   | "duplicate-native-mcp"
   | "agent-owned-native-mcp"
   | "unsafe-native-mcp-update"

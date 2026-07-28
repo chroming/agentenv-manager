@@ -477,6 +477,14 @@ export const traeCliIntegration: AgentTargetIntegration = {
           liveInstructions,
           profile.instructions
         );
+        if (liveInstructions !== profile.instructions) {
+          issues.push(createApplyIssue({
+            code: "runtime-reload-required",
+            resourceKind: "instructions",
+            path: targetPaths.instructionsPath,
+            message: "Instruction changes load in new Trae CLI sessions."
+          }));
+        }
       }
 
       const policy = profile.resources.mcpByTarget["trae-cli"] ?? {

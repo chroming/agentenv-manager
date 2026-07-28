@@ -944,7 +944,7 @@ try {
   await page.getByRole("button", { name: /^Code Review/ }).click();
   await page.getByRole("heading", { name: "Code Review" }).waitFor({ state: "visible" });
   await page
-    .getByRole("group", { name: "Profile Code Review" })
+    .locator(".profile-hero")
     .getByRole("button", { name: "Change icon for profile code-review" })
     .click();
   await page.getByRole("menu", { name: "Icons for Code Review" }).waitFor({ state: "visible" });
@@ -1082,36 +1082,29 @@ try {
     () => page.getByRole("region", { name: "Agents", exact: true })
   );
   const claudeAgent = page.getByRole("article", { name: "Agent Claude Code" });
-  await claudeAgent.getByRole("button", { name: "Manage Claude Code Skills" }).click();
-  const unmanagedAgentSkillWorkspace = page.getByRole("region", {
-    name: "Manage Claude Code Skills"
+  await claudeAgent.getByRole("button", { name: "Configure Claude Code" }).click();
+  const unmanagedAgentCapture = page.getByRole("dialog", {
+    name: "Create profile from Claude Code"
   });
-  await unmanagedAgentSkillWorkspace.waitFor({ state: "visible" });
-  await unmanagedAgentSkillWorkspace.getByText("Skills are not managed yet").waitFor({
-    state: "visible"
-  });
-  await capturePage(page, join(outputDir, "target-skills-unmanaged-920x620.png"));
+  await unmanagedAgentCapture.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "agent-configure-unmanaged-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
-  await capturePage(page, join(outputDir, "target-skills-unmanaged-1180x728.png"));
+  await capturePage(page, join(outputDir, "agent-configure-unmanaged-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
-  await unmanagedAgentSkillWorkspace.getByRole("button", { name: "Agents" }).click();
+  await unmanagedAgentCapture.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
   await page.getByRole("region", { name: "Agents", exact: true }).waitFor({
     state: "visible"
   });
   const openCodeAgent = page.getByRole("article", { name: "Agent OpenCode" });
-  await openCodeAgent.getByRole("button", { name: "Manage OpenCode Skills" }).click();
-  const agentSkillWorkspace = page.getByRole("region", {
-    name: "Manage OpenCode Skills"
-  });
-  await agentSkillWorkspace.waitFor({ state: "visible" });
-  await agentSkillWorkspace.getByRole("region", { name: "Profile skills" }).waitFor({
-    state: "visible"
-  });
-  await capturePage(page, join(outputDir, "target-skills-920x620.png"));
+  await openCodeAgent.getByRole("button", { name: "Configure OpenCode" }).click();
+  const agentProfileComposer = page.getByRole("region", { name: "Profile composer" });
+  await agentProfileComposer.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "agent-profile-config-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
-  await capturePage(page, join(outputDir, "target-skills-1180x728.png"));
+  await capturePage(page, join(outputDir, "agent-profile-config-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
-  await agentSkillWorkspace.getByRole("button", { name: "Agents" }).click();
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
   await page.getByRole("region", { name: "Agents", exact: true }).waitFor({
     state: "visible"
   });

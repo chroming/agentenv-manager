@@ -1,3 +1,31 @@
+.instruction-editor__header {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr) 18px;
+  min-width: 0;
+}
+
+.instruction-editor__header > label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: var(--font-weight-regular);
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.instruction-editor__path {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    monospace;
+  font-size: 11px;
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .profile-composer-section__trigger {
   height: var(--profile-composer-row-height);
 }

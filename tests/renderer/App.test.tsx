@@ -765,7 +765,7 @@ afterEach(() => {
 });
 
 describe("App", () => {
-  it("opens the single installed Agent directly for a first-run Skill setup", async () => {
+  it("shows the detected Agent and waits for explicit first-run configuration", async () => {
     installApi({
       listProfiles: vi.fn().mockResolvedValue([]),
       listTargetStates: vi.fn().mockResolvedValue([])
@@ -773,13 +773,14 @@ describe("App", () => {
 
     render(<App />);
 
-    const workspace = await screen.findByRole("region", {
-      name: "Manage OpenCode Skills"
-    });
-    expect(within(workspace).getByText("Skills are not managed yet")).toBeInTheDocument();
+    const workspace = await screen.findByRole("region", { name: "Agents" });
     expect(
-      within(workspace).getByRole("button", { name: "Manage OpenCode Skills" })
+      within(workspace).getByRole("article", { name: "Agent OpenCode" })
     ).toBeInTheDocument();
+    expect(
+      within(workspace).getByRole("button", { name: "Configure OpenCode" })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
     await waitFor(() =>
       expect(window.localStorage.getItem("agentenv:last-workspace")).toBe("targets")
     );
@@ -1991,7 +1992,7 @@ describe("App", () => {
     expect(screen.queryByRole("button", { name: "Dismiss message" })).not.toBeInTheDocument();
   });
 
-  it("opens Agent Skills from its name and explains unavailable setup", async () => {
+  it("opens full Agent capture from its name and explains unavailable setup", async () => {
     const unavailableTarget = {
       ...target,
       health: {
@@ -2016,16 +2017,11 @@ describe("App", () => {
     const targetCard = await screen.findByRole("article", { name: "Agent OpenCode" });
     fireEvent.click(within(targetCard).getByRole("button", { name: "OpenCode" }));
 
-    const workspace = await screen.findByRole("region", { name: "Manage OpenCode Skills" });
-    expect(within(workspace).getByRole("heading", { name: "OpenCode is not installed" }))
-      .toBeInTheDocument();
-    expect(workspace).toHaveTextContent(
-      "AgentEnv cannot manage this Agent's Skills until its command or app is detected."
-    );
-    expect(within(workspace).getByRole("button", { name: "Manage OpenCode Skills" }))
-      .toBeDisabled();
-    expect(within(workspace).getByRole("button", { name: "Manage OpenCode Skills" }))
-      .toHaveAttribute("title", "OpenCode is not detected");
+    const dialog = await screen.findByRole("dialog", {
+      name: "Create profile from OpenCode"
+    });
+    expect(dialog).toHaveTextContent("Installation not detected");
+    expect(within(dialog).getByRole("button", { name: "Review" })).toBeDisabled();
   });
 
   it("opens at most one composer section and allows all sections to collapse", async () => {
@@ -2178,7 +2174,7 @@ describe("App", () => {
     );
   });
 
-  it("shows rich profile row metadata", async () => {
+  it("keeps profile rows focused on identity and deployment state", async () => {
     installApi({
       listTargets: vi.fn().mockResolvedValue([target, codexTarget]),
       readProfile: vi.fn().mockResolvedValue(richProfile),
@@ -2204,12 +2200,12 @@ describe("App", () => {
     const profileList = screen.getByRole("complementary", { name: "Profile list" });
     const row = within(profileList).getByRole("button", { name: /Daily Coding/ });
     expect(row).toHaveAttribute("aria-current", "page");
-    expect(row).toHaveTextContent("2 skills");
-    expect(row).toHaveTextContent("3 MCP");
-    expect(row).toHaveTextContent("1 file");
-    expect(within(row).getByLabelText("Active on: Codex, OpenCode")).toBeInTheDocument();
-    expect(row).toHaveTextContent("Codex active");
-    expect(row).toHaveTextContent("+1");
+    expect(row).not.toHaveTextContent("2 skills");
+    expect(row).not.toHaveTextContent("3 MCP");
+    expect(row).not.toHaveTextContent("1 file");
+    expect(row).not.toHaveTextContent("Default developer environment");
+    expect(within(row).getByLabelText("Codex · Active, OpenCode · Active")).toBeInTheDocument();
+    expect(row).toHaveTextContent("2 Agents · Active");
     expect(document.querySelector(".profile-hero")).not.toHaveTextContent("Applied Jul 9");
 
     fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
@@ -2297,7 +2293,10 @@ describe("App", () => {
       target: { value: "# Unsaved instructions\n" }
     });
     const row = screen.getByRole("group", { name: "Profile Daily Coding" });
-    const icon = within(row).getByRole("button", {
+    expect(within(row).queryByRole("button", {
+      name: "Change icon for profile daily-coding"
+    })).not.toBeInTheDocument();
+    const icon = within(document.querySelector(".profile-hero") as HTMLElement).getByRole("button", {
       name: "Change icon for profile daily-coding"
     });
     expect(icon).toHaveAttribute("data-icon", "folder");
@@ -3032,48 +3031,27 @@ describe("App", () => {
     expect(within(openCodeCard).getByText("Daily Coding")).toBeInTheDocument();
   });
 
-  it("opens the active Agent Profile as a contextual Skill workspace and saves Skill intent", async () => {
+  it("opens an Agent's active Profile in the canonical full editor", async () => {
     const managedProfile: ProfileDetail = {
       ...profile,
+      instructions: "Use the reviewed workflow.",
       resources: {
         skills: [
           { libraryId: "review-workflow", targetName: "review-workflow", enabled: true }
         ],
-        mcpByTarget: {}
-      }
-    };
-    const librarySkill: SkillLibraryEntry = {
-      id: "review-workflow",
-      name: "Review Workflow",
-      description: "Review changes",
-      path: "/tmp/library/review-workflow",
-      sourceType: "local",
-      source: "/tmp/source/review-workflow",
-      updatePolicy: "untracked",
-      contentHash: "skill-hash",
-      updatedAt: "2026-07-24T00:00:00.000Z"
-    };
-    const updateProfileSkills = vi.fn().mockImplementation(async (input) => ({
-      changed: true,
-      profile: {
-        ...managedProfile,
-        contentHash: "profile-hash-2",
-        targetContentHashes: { opencode: "profile-hash-2" },
-        resources: {
-          ...managedProfile.resources,
-          skills: input.skills
+        mcpByTarget: {
+          opencode: {
+            mode: "manage",
+            selections: [{ name: "filesystem", enabled: true }]
+          }
         }
       }
-    }));
-    const api = installApi({
+    };
+    installApi({
       readProfile: vi.fn().mockResolvedValue(managedProfile),
-      listSkillLibrary: vi.fn().mockResolvedValue([librarySkill]),
       listTargetStates: vi.fn().mockResolvedValue([
-        managedState({
-          appliedLibraryVersions: { skills: { "review-workflow": "skill-hash" } }
-        })
-      ]),
-      updateProfileSkills
+        managedState()
+      ])
     });
     render(<App />);
 
@@ -3081,166 +3059,18 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
     const targetCard = await screen.findByRole("article", { name: "Agent OpenCode" });
     fireEvent.click(
-      within(targetCard).getByRole("button", { name: "Manage OpenCode Skills" })
+      within(targetCard).getByRole("button", { name: "Configure OpenCode" })
     );
 
-    const workspace = await screen.findByRole("region", {
-      name: "Manage OpenCode Skills"
-    });
-    expect(within(workspace).getByText("Skills managed by AgentEnv")).toBeInTheDocument();
-    fireEvent.click(
-      await within(workspace).findByRole("switch", { name: "Disable Review Workflow" })
-    );
-
-    await waitFor(() =>
-      expect(updateProfileSkills).toHaveBeenCalledWith(
-        expect.objectContaining({
-          profileId: "daily-coding",
-          targetId: "opencode",
-          expectedContentHash: "profile-hash",
-          skills: [
-            {
-              libraryId: "review-workflow",
-              targetName: "review-workflow",
-              enabled: false
-            }
-          ]
-        })
-      )
-    );
-    expect(api.applyProfile).not.toHaveBeenCalled();
-    expect(await within(workspace).findByText("Skill changes saved")).toBeInTheDocument();
-    fireEvent.click(within(workspace).getByRole("button", { name: "Agents" }));
-    expect(
-      within(await screen.findByRole("article", { name: "Agent OpenCode" }))
-        .getByText("Changes pending")
-    ).toBeInTheDocument();
+    await screen.findByRole("region", { name: "Profiles" });
+    const composer = screen.getByRole("region", { name: "Profile composer" });
+    expect(within(composer).getByRole("button", { name: "Instructions" })).toBeInTheDocument();
+    expect(within(composer).getByRole("button", { name: "Skills" })).toBeInTheDocument();
+    expect(within(composer).getByRole("button", { name: "MCPs" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
   });
 
-  it("asks before changing a Profile that is active on another Agent", async () => {
-    const sharedProfile: ProfileDetail = {
-      ...profile,
-      resources: {
-        skills: [
-          { libraryId: "review-workflow", targetName: "review-workflow", enabled: true }
-        ],
-        mcpByTarget: {}
-      }
-    };
-    const librarySkill: SkillLibraryEntry = {
-      id: "review-workflow",
-      name: "Review Workflow",
-      description: "",
-      path: "/tmp/library/review-workflow",
-      sourceType: "local",
-      updatePolicy: "untracked",
-      contentHash: "skill-hash",
-      updatedAt: "2026-07-24T00:00:00.000Z"
-    };
-    const forkProfileSkills = vi.fn().mockResolvedValue({
-      changed: true,
-      profile: {
-        ...sharedProfile,
-        id: "daily-coding-open-code",
-        manifest: {
-          ...sharedProfile.manifest,
-          id: "daily-coding-open-code",
-          name: "Daily Coding (OpenCode)"
-        },
-        contentHash: "fork-hash"
-      }
-    });
-    installApi({
-      listTargets: vi.fn().mockResolvedValue([target, codexTarget]),
-      listTargetStates: vi.fn().mockResolvedValue([
-        managedState(),
-        managedState({ targetId: "codex" })
-      ]),
-      readProfile: vi.fn().mockResolvedValue(sharedProfile),
-      listSkillLibrary: vi.fn().mockResolvedValue([librarySkill]),
-      forkProfileSkills
-    });
-    render(<App />);
-
-    await screen.findByRole("region", { name: "Skill library" });
-    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
-    const targetCard = await screen.findByRole("article", { name: "Agent OpenCode" });
-    fireEvent.click(
-      within(targetCard).getByRole("button", { name: "Manage OpenCode Skills" })
-    );
-    const workspace = await screen.findByRole("region", {
-      name: "Manage OpenCode Skills"
-    });
-    fireEvent.click(
-      await within(workspace).findByRole("switch", { name: "Disable Review Workflow" })
-    );
-
-    const dialog = screen.getByRole("dialog", { name: "This Profile is shared" });
-    expect(dialog).toHaveTextContent("OpenCode · Codex");
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: "Create OpenCode copy" })
-    );
-
-    await waitFor(() =>
-      expect(forkProfileSkills).toHaveBeenCalledWith(
-        expect.objectContaining({
-          profileId: "daily-coding",
-          targetId: "opencode",
-          name: "Daily Coding (OpenCode)"
-        })
-      )
-    );
-  });
-
-  it("keeps Agent import context only for the explicit return path", async () => {
-    installApi({
-      listTargetStates: vi.fn().mockResolvedValue([managedState()]),
-      readProfile: vi.fn().mockResolvedValue(profile)
-    });
-    render(<App />);
-
-    await screen.findByRole("region", { name: "Skill library" });
-    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
-    const targetCard = await screen.findByRole("article", {
-      name: "Agent OpenCode"
-    });
-    fireEvent.click(
-      within(targetCard).getByRole("button", {
-        name: "Manage OpenCode Skills"
-      })
-    );
-    const workspace = await screen.findByRole("region", {
-      name: "Manage OpenCode Skills"
-    });
-    fireEvent.click(within(workspace).getByRole("button", { name: "Add" }));
-    const picker = screen.getByRole("dialog", { name: "Add library skills" });
-    fireEvent.click(
-      within(picker).getByRole("button", { name: "Import new Skill" })
-    );
-
-    expect(
-      await screen.findByRole("button", { name: "Back to OpenCode" })
-    ).toBeInTheDocument();
-    const navigation = screen.getByRole("complementary", {
-      name: "Global navigation"
-    });
-    fireEvent.click(
-      within(navigation).getByRole("button", { name: "Agents" })
-    );
-    await screen.findByRole("region", { name: "Manage OpenCode Skills" });
-    fireEvent.click(
-      within(navigation).getByRole("button", { name: "Agents" })
-    );
-    await screen.findByRole("article", { name: "Agent OpenCode" });
-    fireEvent.click(
-      within(navigation).getByRole("button", { name: "Skills" })
-    );
-    expect(
-      screen.queryByRole("button", { name: "Back to OpenCode" })
-    ).toBeNull();
-  });
-
-  it("keeps the Agent Target when opening the same Profile in the full editor", async () => {
+  it("keeps the invoking Agent selected when opening a shared Profile", async () => {
     installApi({
       listTargets: vi.fn().mockResolvedValue([target, codexTarget]),
       listTargetStates: vi.fn().mockResolvedValue([
@@ -3251,26 +3081,10 @@ describe("App", () => {
     render(<App />);
 
     await screen.findByRole("region", { name: "Skill library" });
-    const globalNavigation = screen.getByRole("complementary", {
-      name: "Global navigation"
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    const targetCard = await screen.findByRole("article", { name: "Agent Codex" });
     fireEvent.click(
-      within(globalNavigation).getByRole("button", { name: "Agents" })
-    );
-    const targetCard = await screen.findByRole("article", {
-      name: "Agent Codex"
-    });
-    fireEvent.click(
-      within(targetCard).getByRole("button", { name: "Manage Codex Skills" })
-    );
-
-    const workspace = await screen.findByRole("region", {
-      name: "Manage Codex Skills"
-    });
-    await within(workspace).findByText("Skills managed by AgentEnv");
-    fireEvent.click(within(workspace).getByText("Advanced"));
-    fireEvent.click(
-      within(workspace).getByRole("button", { name: "Open full Profile" })
+      within(targetCard).getByRole("button", { name: "Configure Codex" })
     );
 
     await screen.findByRole("region", { name: "Profiles" });
@@ -3281,68 +3095,23 @@ describe("App", () => {
     ).toHaveAttribute("aria-checked", "true");
   });
 
-  it("shows a retryable Profile error instead of treating a broken Agent as unmanaged", async () => {
-    let profileReadFails = false;
-    const readProfile = vi.fn().mockImplementation(async () => {
-      if (profileReadFails) {
-        throw new Error("Profile resources are invalid");
-      }
-      return profile;
-    });
-    installApi({
-      listTargetStates: vi.fn().mockResolvedValue([managedState()]),
-      readProfile
-    });
-    render(<App />);
-
-    await screen.findByRole("region", { name: "Skill library" });
-    profileReadFails = true;
-    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
-    const targetCard = await screen.findByRole("article", {
-      name: "Agent OpenCode"
-    });
-    fireEvent.click(
-      within(targetCard).getByRole("button", { name: "Manage OpenCode Skills" })
-    );
-
-    const workspace = await screen.findByRole("region", {
-      name: "Manage OpenCode Skills"
-    });
-    const alert = await within(workspace).findByRole("alert");
-    expect(alert).toHaveTextContent("This Agent's Profile could not be loaded");
-    expect(alert).toHaveTextContent("Profile resources are invalid");
-    expect(within(workspace).queryByText("Skills are not managed yet")).toBeNull();
-    profileReadFails = false;
-    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
-    expect(await within(workspace).findByText("Skills managed by AgentEnv")).toBeInTheDocument();
-  });
-
-  it("starts an unmanaged Agent through a Skills-only capture flow", async () => {
+  it("starts an unmanaged Agent through complete Profile capture", async () => {
     const capturedProfile: ProfileDetail = {
       ...profile,
-      id: "opencode-skills",
+      id: "opencode-profile",
       manifest: {
         ...profile.manifest,
-        id: "opencode-skills",
+        id: "opencode-profile",
         name: "OpenCode",
         createdFromTargetId: "opencode"
       },
-      instructions: "",
-      resources: {
-        skills: [],
-        managementByTarget: {
-          opencode: { instructions: "ignore", skills: "manage" }
-        },
-        mcpByTarget: {
-          opencode: { mode: "ignore", selections: [] }
-        }
-      }
+      instructions: "Captured instructions"
     };
     const previewCapture = {
-      id: "skills-capture",
+      id: "profile-capture",
       targetId: "opencode",
       targetName: "OpenCode",
-      scope: "skills" as const,
+      scope: "all" as const,
       suggestedName: "OpenCode",
       createdAt: "2026-07-24T00:00:00.000Z",
       resources: [],
@@ -3366,36 +3135,30 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
     const targetCard = await screen.findByRole("article", { name: "Agent OpenCode" });
     fireEvent.click(
-      within(targetCard).getByRole("button", { name: "Manage OpenCode Skills" })
+      within(targetCard).getByRole("button", { name: "Configure OpenCode" })
     );
-    let workspace = await screen.findByRole("region", {
-      name: "Manage OpenCode Skills"
-    });
-    fireEvent.click(
-      within(workspace).getByRole("button", { name: "Manage OpenCode Skills" })
-    );
-    let dialog = screen.getByRole("dialog", { name: "Manage OpenCode Skills" });
-    expect(dialog).toHaveTextContent("Instructions and MCPs stay Agent-controlled");
+    let dialog = screen.getByRole("dialog", { name: "Create profile from OpenCode" });
+    expect(dialog).toHaveTextContent("Save the current environment as a reusable Profile");
     fireEvent.click(within(dialog).getByRole("button", { name: "Review" }));
 
     await waitFor(() =>
       expect(api.previewCreateProfileFromTarget).toHaveBeenCalledWith(
         "opencode",
-        "skills"
+        "all"
       )
     );
-    dialog = screen.getByRole("dialog", { name: "Review OpenCode Skill setup" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save setup" }));
+    dialog = screen.getByRole("dialog", { name: "Review OpenCode capture" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save Profile" }));
 
     await waitFor(() =>
       expect(api.createProfileFromTarget).toHaveBeenCalledWith({
-        previewId: "skills-capture",
+        previewId: "profile-capture",
         name: "OpenCode"
       })
     );
-    workspace = screen.getByRole("region", { name: "Manage OpenCode Skills" });
-    expect(within(workspace).getByText("Skills managed by AgentEnv")).toBeInTheDocument();
-    expect(screen.getByText("Skill setup saved. Agent unchanged.")).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Profiles" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Profile composer" })).toBeInTheDocument();
+    expect(screen.getByText("OpenCode created. Agent unchanged.")).toBeInTheDocument();
   });
 
   it("reviews and confirms Stop Managing from Target diagnostics", async () => {
@@ -3678,7 +3441,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
     const targetsWorkspace = await screen.findByRole("region", { name: "Agents" });
     const targetCard = within(targetsWorkspace).getByRole("article", { name: "Agent OpenCode" });
-    fireEvent.click(within(targetCard).getByRole("button", { name: "Create profile from OpenCode" }));
+    fireEvent.click(within(targetCard).getByRole("button", { name: "Configure OpenCode" }));
 
     const dialog = screen.getByRole("dialog", { name: "Create profile from OpenCode" });
     expect(screen.getByRole("region", { name: "Agents" })).toBeInTheDocument();

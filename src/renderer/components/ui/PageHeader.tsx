@@ -24,7 +24,7 @@ export const PageHeader = ({
       <div className="ui-page-header__copy">
         <h2 aria-label={title}>
           <span>{title}</span>
-          {help}
+          {help ? <span className="ui-page-header__help">{help}</span> : null}
         </h2>
         {description ? <p>{description}</p> : null}
       </div>

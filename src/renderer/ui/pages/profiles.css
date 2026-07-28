@@ -396,14 +396,14 @@
 }
 
 .profile-row {
-  align-items: start;
+  align-items: center;
   border: 0;
   border-bottom: 1px solid var(--border);
   border-radius: 0;
-  gap: 4px;
+  gap: 7px;
   grid-template-columns: var(--profile-icon-slot) minmax(0, 1fr);
-  min-height: 68px;
-  padding: 7px 9px;
+  min-height: 54px;
+  padding: 6px 10px;
   position: relative;
 }
 
@@ -423,18 +423,19 @@
 .profile-row__icon--selected {
   background: transparent;
   color: var(--muted);
+  display: grid;
   height: var(--profile-icon-slot);
   margin-top: 0;
+  place-items: center;
   width: var(--profile-icon-slot);
 }
 
 .profile-row__content {
   display: grid;
-  gap: 1px 8px;
+  gap: 2px;
   grid-template-areas:
     "title"
-    "description"
-    "footer";
+    "deployment";
   grid-template-columns: minmax(0, 1fr);
   justify-content: stretch;
   justify-items: stretch;
@@ -470,49 +471,6 @@
 .profile-row__title .profile-row__dirty {
   background: var(--warning-bg);
   color: var(--warning);
-}
-
-.profile-row__description {
-  color: var(--muted);
-  display: block;
-  font-size: 11px;
-  line-height: 15px;
-  min-height: 15px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  grid-area: description;
-}
-
-.profile-row__footer {
-  align-items: center;
-  display: grid;
-  gap: 1px;
-  grid-area: footer;
-  grid-template-columns: minmax(0, 1fr);
-  min-height: 35px;
-  min-width: 0;
-}
-
-.profile-row__stats {
-  flex-wrap: nowrap;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: var(--font-weight-regular);
-  gap: 0;
-  line-height: 15px;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.profile-row__stats > span {
-  flex: 0 0 auto;
-}
-
-.profile-row__stats > span + span::before {
-  color: #b2bdcc;
-  content: "·";
-  margin: 0 6px;
 }
 
 .profile-editor-surface {
@@ -1219,21 +1177,13 @@
   }
 
   .profile-row {
-    gap: 4px;
-    min-height: 68px;
+    gap: 6px;
+    min-height: 52px;
     padding: 7px 8px;
-  }
-
-  .profile-row__description {
-    display: block;
   }
 
   .profile-row__deployments {
     display: flex;
-  }
-
-  .profile-row__stats {
-    font-size: 10px;
   }
 
   .profile-hero {

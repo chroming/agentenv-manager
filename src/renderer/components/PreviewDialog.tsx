@@ -80,7 +80,7 @@ const presentIssue = (
     };
   }
 
-  return { title: issue.message, detail: issue.detail ?? issue.path };
+  return { title: t(issue.message), detail: issue.detail ?? issue.path };
 };
 
 export const PreviewDialog = ({

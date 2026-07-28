@@ -149,8 +149,9 @@
   align-items: center;
   display: flex;
   flex-wrap: nowrap;
-  font-size: 10px;
-  gap: 4px;
+  font-size: 11px;
+  grid-area: deployment;
+  gap: 0;
   line-height: 17px;
   max-height: 18px;
   min-height: 17px;
@@ -161,7 +162,7 @@
 }
 
 .profile-row__deployments--empty,
-.profile-row__deployments--preferred { color: #94a3b8; }
+.profile-row__deployments--empty { color: #94a3b8; }
 
 .profile-row__deployment-label {
   min-width: 0;
@@ -170,7 +171,6 @@
   white-space: nowrap;
 }
 
-.profile-row__deployment-more { color: var(--muted); flex: 0 0 auto; }
 .profile-row__deployments--current { color: #177a52; }
 .profile-row__deployments--pending { color: #9a6518; }
 .profile-row__deployments--attention { color: #b83a31; }

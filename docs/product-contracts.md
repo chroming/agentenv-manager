@@ -222,61 +222,37 @@ Settings owns the explicit set of enabled Agents.
 
 Status: explicit persisted scope, discovery filtering, command and compatible macOS desktop-application evidence, renderer filtering, operation guards, managed-Agent confirmation, and recovery lock are `Implemented`. IDE extension discovery is intentionally out of scope.
 
-### 4.4.2 Agent Skill Management
+### 4.4.2 Agent Profile Configuration
 
-Agents is the contextual entry for users who want to manage the Skills used by one
-installed Agent without first learning Library maintenance, Profile composition, or local
-cleanup. It is a facade over the same canonical Library, ordinary v2 Profile, and
-Preview/Apply transaction used everywhere else; it is not a simple mode or a second
-resource model.
+Agents is the contextual entry for users who begin with one installed Agent rather than
+with a reusable Profile. It is a navigation facade over the canonical Profile editor and
+Preview/Apply transaction, never a second editor or a reduced resource model.
 
-- `Manage Skills` opens a dedicated Agent detail surface. The Agent list MUST NOT expand a
-  second editor inside a row.
-- An unmanaged Agent first offers to preserve its current Skills. This command reuses
-  Create from Target: the read-only Capture review creates an ordinary Profile and imports
-  or reuses canonical Library Skills. It never changes the Agent.
-- Skills-only Capture MUST NOT parse or depend on native Instructions or MCP configuration.
-  A malformed native config cannot block Skill management when the Skill directories remain
-  readable.
-- Saving the captured setup and applying it are separate persistence boundaries inside
-  one guided intent. If saving fails, partial Profile and Library changes are rolled back.
-  If Apply later fails, the valid saved setup remains available for retry while the Agent
-  is restored or left unchanged by the normal Apply contract.
-- If a previously captured Profile for the Agent was saved but never applied, `Manage
-  Skills` resumes the newest valid saved setup instead of asking the user to capture the
-  same Agent again.
-- A managed Agent detail shows the active Profile's Skill references, Library identity,
-  version, source, deployed state, and availability. It does not duplicate global source
-  settings, global disable, duplicate cleanup, or Library deletion.
-- Enabling, disabling, adding, relinking, or removing a Skill from this surface updates
-  the ordinary Profile intent atomically and marks affected Agent deployments pending.
-  It does not write an Agent until the user chooses `Review and apply`.
-- An Agent detail Skill edit MUST use the latest persisted Profile and reject stale
-  content. A semantic no-op performs no write and does not create pending deployment.
-- If the Profile is active on more than one Agent, the first edit MUST ask whether to
-  update the shared Profile or create an Agent-specific copy. It MUST NOT silently change
-  the desired environment of peer Agents.
-- Adding from Library filters out globally disabled and already attached Skills. Importing
-  new content remains a Library operation, but an import initiated from Agent detail MUST
-  retain the parent intent and offer to attach the imported Skills to that Agent's Profile.
-- A Library update remains a global canonical mutation. Agent detail may start its review,
-  but impact disclosure MUST name every affected Profile and linked Agent. Live-link
-  effects are never represented as Apply-gated.
-- Drift, outside or observe-only resources, broken links, ambiguous duplicates, and recovery are
-  conditional decisions inside `Manage Skills`. They do not become permanent peer
-  workflows or require the user to visit Local Skill Cleanup unless that owning surface is
-  necessary to resolve the exact issue.
-- A missing or malformed active Profile is a recoverable local error, never an unmanaged
-  state. The Agent detail shows the failure and Retry instead of offering a new takeover.
-- On first run with no usable Profile, one detected enabled Agent opens directly to its
-  detail; multiple Agents first show the ordered Agent list. Back returns to that list
-  without changing persisted state. Later launches restore the last stable top-level
-  workspace instead of repeatedly forcing the first-run route.
+- `Configure` and the Agent name open the same configuration entry.
+- If the Agent has an active Profile, Configure opens that Profile in the canonical
+  Profile editor and selects the invoking Agent as the Preview/Apply target.
+- If the Agent has no active Profile but has a valid Profile previously captured from that
+  Agent, Configure resumes the newest captured Profile instead of capturing it again.
+- If no such Profile exists, Configure starts the complete read-only Create from Target
+  flow. The saved result is an ordinary Profile containing the reviewed Instructions,
+  Skills, and supported MCP activation policy.
+- The Agent entry MUST NOT provide a Skills-only editor or its own Save, Preview, or Apply
+  implementation. Every resource type that Apply may evaluate MUST be visible and
+  configurable in the Profile editor before Apply.
+- Saving Profile intent and applying it remain separate persistence boundaries. Editing
+  never writes Agent files; Apply always uses the standard impact preview, ownership
+  checks, backup, transaction, verification, and recovery contract.
+- Global Skill source settings, global disable, duplicate cleanup, Library deletion,
+  diagnostics, and recovery stay on their owning surfaces. Configure only composes the
+  selected Profile and applies it to the selected Agent.
+- A missing or malformed active Profile is a recoverable Profile error, not permission to
+  silently create a replacement or fall back to a partial editor.
+- On first run with no usable Profile, Agents shows the detected Agent list and a clear
+  Configure action. It does not open a modal or begin Capture without user intent.
+- Later launches restore the last stable top-level workspace.
 
-Status: contextual Agent detail, Skills-only Capture, atomic Profile Skill intent editing,
-shared-Profile guard, Library import return, local load recovery, and guided
-Capture-to-Apply orchestration are `Implemented`, including first-run direct entry for one
-installed Agent and persisted top-level workspace restoration.
+Status: one Agent-to-Profile configuration entry, complete Capture, canonical Profile
+composition, and shared Preview/Apply orchestration are `Implemented`.
 
 ### 4.5 Conversations
 
@@ -523,7 +499,7 @@ Rules:
 - Readiness remediation links MUST show a visible verb and object. Icon-only arrows and backend phase labels such as `Review preview` are not executable product intents and MUST NOT appear as commands.
 - When no Target is selected, the visible Target selector remains the single selection entry point. When the Profile is dirty, the visible Save button remains the single persistence action.
 - Edit, Duplicate, Delete, Save, Target selection, and Apply are selected-Profile commands and MUST remain inside the selected Profile surface. The Profiles page header owns only page creation.
-- Every Profile row MUST list all Targets currently using that Profile, even when legacy deployment state has no application timestamp. Each Target is visibly distinguished as current, pending, or needing attention.
+- Every Profile row is a stable two-line selector: Profile icon and name with only exceptional state such as `Unsaved` on the first line, then one compressed deployment summary on the second line. One Agent is shown as `Agent · Active`, `Agent · Pending`, or `Agent · Attention`; multiple Agents are summarized as `N Agents · State`, with the per-Agent states available from the row's accessible hover label. A Profile with no deployment shows only `Not applied`. Description, resource counts, preferred Target, provenance, and Agent artwork belong to the selected Profile detail, not the list.
 - The Profile list is always ordered by persisted creation time, newest first. Selection, the chosen Apply Target, deployment state, Save, and Apply MUST NOT reorder it.
 - Selected-Target lifecycle status belongs beside Save and Apply inside the selected Profile surface. It MUST NOT be repeated as a separate page-level summary strip.
 - Unsaved changes MUST block Preview and Apply.
@@ -650,6 +626,7 @@ The complete issue policy is normative:
 | `missing-native-mcp` | `block` | `edit-profile` | Profile requests an MCP connection absent from the Agent. |
 | `unsupported-mcp-management` | `block` | `edit-profile` | Profile requests MCP control the adapter cannot provide safely. |
 | `target-instruction-limit` | `block` | `edit-profile` | Profile Instructions exceed an Agent capability. |
+| `runtime-reload-required` | `notice` | `external-action` | Applied Instructions require a new Agent session before they enter runtime context. |
 | `duplicate-native-mcp` | `block` | `external-action` | One MCP identity is defined ambiguously in multiple native locations. |
 | `agent-owned-native-mcp` | `block` | `external-action` | Requested MCP activation is owned by an unsupported Agent surface. |
 | `unsafe-native-mcp-update` | `block` | `external-action` | The native MCP activation field cannot be changed without touching unrelated settings. |
@@ -963,7 +940,7 @@ Shared compatibility migration contract:
 - A shared Skill not yet in Library follows the same `Add to Library` intent as every other local Skill. One content version is eligible for the confirmed `Clean up N` plan; multiple different content hashes remain in `Needs your decision`, show the number of different versions in the row, and add version choice inside `Add to Library`.
 - Adding a shared Skill to Library is one transaction: back up all copies, create the Library canonical copy, keep exactly one shared compatibility copy active, and remove redundant Target-specific copies. The shared copy MUST NOT receive a Target ownership marker.
 - Once Library is ready, Cleanup shows the compact `Shared` badge and states that consumer Targets still load the compatibility copy independently of Profile references. This is a managed compatibility state, not a content decision, so it belongs in the collapsed `Managed` section. `Review shared copy` presents the two valid outcomes in one workflow: open Profiles so each affected Target can receive its intended Profile, or `Keep shared copy`. A Profile that omits the Skill is a valid explicit decision to remove it for that Target. Cleanup MUST NOT show per-Target `Needs Apply` chips, expose internal preparation or migration phases as commands, or pretend Profile Apply is a Cleanup step.
-- An installed Target that still reads the compatibility location remains a consumer even when AgentEnv does not manage its Profile. AgentEnv MUST preserve the shared copy and block replacement until that Target records an explicit applied decision. A successfully applied Skills-only Profile is a valid decision because it records install-or-omit intent while leaving Instructions and MCPs unmanaged; merely opening Agent detail, capturing, or saving that Profile is not. `Keep shared copy` remains the non-takeover outcome.
+- An installed Target that still reads the compatibility location remains a consumer even when AgentEnv does not manage its Profile. AgentEnv MUST preserve the shared copy and block replacement until that Target records an explicit applied decision. A successfully applied Profile that manages Skills while leaving Instructions and MCPs unchanged is a valid decision because it records install-or-omit intent; merely opening Configure, capturing, or saving that Profile is not. `Keep shared copy` remains the non-takeover outcome.
 - After every affected Target has an explicit current decision for the current Library ID and exact current shared-path set, the row moves to `Ready to clean up` and shows `Ready` / `Replace shared copy`; either the dedicated confirmation or the reviewed `Clean up N` batch may cross the mutation boundary. A preparation for an older or different shared copy is stale, does not count toward readiness, and directs the user to Apply that Target's saved Profile again.
 - Profiles independently save and apply each Target's install-or-omit decision. Apply Preview describes the final outcome as `After cleanup: install as <name>` or `After cleanup: remove from this Target`; it MUST NOT expose preparation records or migration decisions. Preparation MUST leave the shared path active and MUST NOT create a same-name Target-specific duplicate.
 - `Replace shared copy` requires confirmation that lists each prepared Target's final `Install as <name>` or `Do not install` decision. It executes one cross-Target transaction: back up all shared, destination, and state paths; remove the shared source; deploy or omit per prepared Profile; verify every destination; then clear preparations. Any failed step restores all paths and states.
@@ -1052,10 +1029,12 @@ Create from Target gives an existing native environment a reusable Profile repre
 - Blank Profile creation MUST start with empty Instructions, Skills, and MCP policy. Native Agent resources are discovery candidates only and MUST NOT be adopted until the user explicitly adds an override; only Create from Target may intentionally capture the current environment.
 - Create from Target defaults the Profile name to the Agent display name. The default MUST NOT add transient state words such as `Current`; users may edit the name before saving.
 - A Target-row capture command MUST keep the invoking Targets workspace visible until the user confirms. Cancel and Escape return focus to that exact command without changing workspace.
-- Every installed Target presents `Manage Skills` as the stable primary action. An
-  unmanaged Target runs the guided Capture-to-Apply path; a managed Target opens the
-  active Profile's contextual Skill surface. `Create Profile from Agent`, `Open Profile`,
-  Diagnostics, and Recovery remain secondary or advanced commands.
+- Every Target presents `Configure` as the stable primary action. It opens the active
+  Profile, otherwise the newest valid Profile captured from that Agent, in the canonical
+  editor with the invoking Agent selected; when neither exists, it starts complete
+  Capture. `Capture` remains available for every detected Agent because creating a new
+  snapshot of the Agent's current environment is distinct from editing a reusable
+  Profile. Diagnostics and Recovery remain separate commands with distinct ownership.
 - Profiles may offer a general `From Target` entry, but a Target-row entry MUST bind the source Target directly and MUST NOT ask the user to choose Blank versus From Target again.
 - Capture uses two explicit steps: setup and capture review. Review provides Back without losing the Profile name or selected Target.
 - Preview MUST list portable resources to include or reuse, new Skill Library imports, discovered native MCP activation choices, excluded resources, and conflicts.
@@ -1142,7 +1121,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Page-level creation and import commands remain in the page header. A resource list MUST NOT repeat the page title and primary command inside a nested header.
 - First-level pages use the shared page-header anatomy: one title, optional concise context or help, then one right-aligned command group. Page titles use the same type scale and left origin across workspaces.
 - Interface typography uses four semantic weights only: regular `400` for body, controls, routine navigation, status, and metadata; medium `500` for repeated-row identity anchors, section and preference labels, decision-group headings, and the current navigation item; semibold `600` only for dialog titles, the selected primary object, and the brand; and heading `650` for first-level page titles. Native `strong` and `b` elements inherit by default because semantic markup does not grant visual emphasis to layout values. Each repeated row or compact decision group MUST expose one medium-or-stronger scanning anchor, while descriptions, paths, counts, sources, versions, timestamps, routine statuses, badges, and ordinary buttons remain regular. Interface CSS MUST NOT use weights above `650`, and the product-wide semibold declaration budget is enforced by the style audit.
-- Reusable resources use one reading order: `identity -> metadata -> lifecycle state -> contextual actions`. Identity includes a fixed compact icon slot defined by its shared row primitive, name, and at most one visible supporting line; longer content remains available through the selectable overflow tooltip. Skill and Profile list icons are optically centered, transparent at rest, and gain one even hover/focus surface without changing either axis. Profile icon selection includes every supported Agent brand plus the shared generic icon library; a newly created or captured Profile defaults to its initial or source Agent artwork and remains user-editable.
+- Reusable resources use one reading order: `identity -> metadata -> lifecycle state -> contextual actions`. Identity includes a fixed compact icon slot defined by its shared row primitive, name, and at most one visible supporting line; longer content remains available through the selectable overflow tooltip. Skill and Profile list icons are optically centered and transparent at rest. A Profile list icon is display-only so selecting a Profile cannot accidentally open icon editing; icon selection lives in the selected Profile detail, includes every supported Agent brand plus the shared generic icon library, and a newly created or captured Profile defaults to its initial or source Agent artwork.
 - Standard resource rows use the shared `52px`, `60px`, or `68px` density tokens. A page MAY choose a denser table only when comparison across named columns is the primary task, as in Skills Library.
 - A lifecycle state owns a stable lane and MUST NOT move into the action lane when another value is absent. State labels MUST fit without ellipsis; long explanations belong in a tooltip or focused review surface.
 - Repeated rows implemented as independent Grid or Flex containers MUST reserve the same fixed state and action tracks. Content-sized `auto` tracks MUST NOT make status text change its horizontal origin between sibling rows; a missing secondary line keeps the same top-aligned state slot.
@@ -1168,7 +1147,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Profile Composer resource triggers remain `52px` high before, during, and after expansion. Expanding one resource MUST NOT compress, hide metadata from, or reposition its sibling triggers. The expanded trigger and editor surface MUST be visually distinguishable from ordinary collapsed rows without turning the editor into a nested card.
 - Profile Skills with zero or one item fit their content without stretching empty list space. Larger collections grow only within the available editor region and keep the Skill list as the scroll owner.
 - Agents use one continuous ordered management list at every supported width, with ordinary healthy state rendered as quiet metadata rather than a filled badge or separate card. Agent identity, health, management state, active Profile, last-applied time, and actions own stable sibling lanes. Every Capture, Profile, and Diagnostics control uses the shared control primitives and identical geometry across all Agent rows, regardless of Agent name, lifecycle state, or action label. Diagnostics expands to the full width of its owning Agent, shifts only later rows, leaves no peer-column void, and opening a second Diagnostics region closes the first.
-- The Agent name and `Manage Skills` command open the same Agent Skills work surface. The name is visibly interactive without changing its identity lane geometry or duplicating the command's accessible name.
+- The Agent name and `Configure` command open the same canonical Profile editor or complete Capture entry. The name is visibly interactive without changing its identity lane geometry or duplicating the command's accessible name.
 - Settings renders ordinary preferences as stable `name and explanation -> control` rows. Labels are never detached into a separate alignment scheme, and toggles, selects, read-only values, and numeric inputs share one right-hand control lane.
 - Settings MAY override one configuration root per Agent. The Adapter remains the sole owner of deriving Instructions, Skills, and native configuration paths below that root. Selecting a root performs no migration, does not move existing files, and performs no Agent write. All later reads and writes use the same resolved paths. An Agent with retained AgentEnv ownership state MUST be stopped before its root can change even when that Agent is disabled and hidden from ordinary active-state lists. Full custom paths use the shared selectable overflow-detail behavior, and Choose, Change, and Use default show progress on their owning row.
 - Truncated values and contextual explanations use one shared hover-detail primitive. Plain text opens detail only when it is measurably clipped; short fitting text MUST NOT create a hover surface. Complete text remains selectable and pointer-enterable, uses regular body weight and neutral overlay styling, stays inside the viewport with bounded scrolling, closes on Escape or owning-list scroll, and never relies on a browser `title` as the only readable copy. Wheel input at a detail layer's scroll boundary continues scrolling the nearest owning list rather than making the interface appear frozen.
@@ -1177,8 +1156,8 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - A related command group MAY move below its heading at narrower supported widths, but its individual controls MUST remain together rather than orphan-wrapping one control onto another line.
 - Profile rows keep one stable hierarchy at default and minimum sizes: name, one-line description, resource counts, and optional deployment state. Responsive rules MAY truncate long values but MUST NOT remove these semantic layers.
 - Every Profile row shares fixed icon and content columns. Selection, dirty/current badges, hover, and long-name truncation MUST NOT move the icon, name, description, counts, or deployment text origin.
-- Profile list icons use one consistent compact slot and icon family. Decorative per-row icon colors MUST NOT imply unsupported categories or state.
-- Profile icons MAY use the shared built-in task-oriented icon set. Changing a Profile icon auto-saves identity metadata, preserves any unsaved environment draft, and MUST NOT enable or bypass whole-Profile Save.
+- Profile list icons use one consistent compact, non-interactive slot and icon family. Decorative per-row icon colors MUST NOT imply unsupported categories or state.
+- Profile icons MAY use the shared built-in task-oriented icon set. Changing a Profile icon from the selected Profile detail auto-saves identity metadata, preserves any unsaved environment draft, and MUST NOT enable or bypass whole-Profile Save.
 - Icon pickers MUST use one shared component, expose the selected state without color alone, remain topmost inside the viewport, and close on selection, Escape, or safe outside click.
 - Lists and expanded editors own intentional internal scrolling. In Library/Skills, page chrome, metrics, tabs, filters, and table header stay fixed; only the Skill table body scrolls, with no document or editor-panel scrolling.
 - Visual verification pairs the same viewport and data immediately before and after an interaction. Numeric containment and computed geometry are necessary evidence, but optical shape, hierarchy, emphasis, and layout stability also require inspection of the rendered pixels. Zero, one, and many-resource captures MUST use the same build artifact as the corresponding Electron E2E.
@@ -1298,6 +1277,11 @@ and the obsolete `~/.trae/trae_cli.yaml` path are capture fallbacks or disclosed
 they are never startup evidence or silent mutation targets. Readiness accepts the unambiguous
 official command aliases `traecli`, `trae-cli`, and `trae-agent`; the short `ta` alias is not
 authoritative because of collision risk.
+
+The Profile editor and Apply preview MUST disclose the resolved Trae instruction path. Updating
+that personal rule does not rewrite the context of a running conversation: Apply verifies the file
+write, then tells the user to start a new Trae CLI session to load changed Instructions. An
+unchanged rule is a semantic no-op and MUST NOT emit a reload notice.
 
 V2 discovers MCP names only from `~/.trae/traecli.toml` and may patch only an existing
 `mcp_servers.<name>.enabled` Boolean. Legacy discovers MCP names only from
@@ -1521,7 +1505,7 @@ The current machine-readable totals, source commit, deterministic tracked-and-un
 - The automated suite covers preferred-Target and cross-Target use, Create from Target, real Electron UI, progressive startup, localization persistence and completeness, stable Profile loading, scoped feedback, stale Preview, rollback, recovery, MCP ownership release, and externally replaced managed-Skill recovery scenarios.
 - The CSS architecture gate passed with named container-query contracts, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - The CSS architecture gate rejects page-owned animation declarations and spatial transforms on high-frequency navigation or resource rows. Renderer and Electron tests cover scoped global feedback, delayed-then-instant adjacent tooltips, trigger-origin transitions, and fixed row geometry through hover.
-- Fixed-state visual captures are regenerated through the Electron compositor at the supported default and minimum viewports, including the stable Profile loading state, sidebar Agent overflow, managed and unmanaged Agent Skill detail, Profile icon selection, Profile Skill selection and applied revisions, native MCP Profile states, available-update rows, disabled, empty, Simplified and Traditional Chinese Skills, Profiles, and Settings, source-specific Import, shared-Skill management guidance, Agent Diagnostics, Conversations list/detail/continuation, Workspace Sync review, startup failure, and focused update-setting states.
+- Fixed-state visual captures are regenerated through the Electron compositor at the supported default and minimum viewports, including the stable Profile loading state, sidebar Agent overflow, Agent-to-Profile configuration, complete Capture, Profile icon selection, Profile Skill selection and applied revisions, native MCP Profile states, available-update rows, disabled, empty, Simplified and Traditional Chinese Skills, Profiles, and Settings, source-specific Import, shared-Skill management guidance, Agent Diagnostics, Conversations list/detail/continuation, Workspace Sync review, startup failure, and focused update-setting states.
 - Skills, Profiles, Agents, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - The macOS inset hidden title bar, native-control safe area, full-width draggable top chrome, draggable page headings, and no-drag interactive controls passed main-process configuration and real Electron geometry assertions.
 - Shared page headers, vertically centered navigation rows, uninterrupted work-surface edges, contained composite search fields, `32px` resource identities, compact/default row heights, Profile commit controls, MCP rows, Cleanup state/action lanes, `220px` context menus, and Apply resource rows passed cross-workspace geometry and overflow assertions.

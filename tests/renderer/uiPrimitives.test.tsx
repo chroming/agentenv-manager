@@ -247,12 +247,15 @@ describe("renderer UI primitives", () => {
       <PageHeader
         title="Skills"
         description="Manage shared resources."
+        help={<InfoTip label="Skills page guidance" />}
         actions={<Button variant="primary">Import</Button>}
       />
     );
 
     expect(screen.getByRole("heading", { name: "Skills" })).toBeInTheDocument();
     expect(screen.getByText("Manage shared resources.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Skills page guidance").closest(".ui-page-header__help"))
+      .toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Import" }).closest(".ui-page-header__actions"))
       .toBeInTheDocument();
   });

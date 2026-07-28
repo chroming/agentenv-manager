@@ -1,7 +1,6 @@
 import {
   Activity,
   ArchiveRestore,
-  ArrowRight,
   Clock3,
   CopyPlus,
   Monitor,
@@ -37,7 +36,7 @@ interface TargetWorkspaceProps {
   stopManagingPreview?: StopManagingPreview;
   busy: boolean;
   onRefresh(): Promise<void>;
-  onManageSkills(targetId: string): void;
+  onConfigure(targetId: string): void;
   onCreateProfileFromTarget(targetId: string): void;
   onPreviewRollback(backupId: string): void;
   onCancelRollback(): void;
@@ -90,7 +89,7 @@ export const TargetWorkspace = ({
   stopManagingPreview,
   busy,
   onRefresh,
-  onManageSkills,
+  onConfigure,
   onCreateProfileFromTarget,
   onPreviewRollback,
   onCancelRollback,
@@ -135,7 +134,7 @@ export const TargetWorkspace = ({
       <PageHeader
         className="page-header workspace-page-header"
         title={t("Agents")}
-        help={<InfoTip label={t("Manage one Agent's Skills here, compose reusable environments in Profiles, and open diagnostics only when troubleshooting.")} />}
+        help={<InfoTip label={t("Configure each Agent through the same reusable Profile editor, then review every change before Apply.")} />}
         actions={(
           <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
             <Button
@@ -198,8 +197,8 @@ export const TargetWorkspace = ({
                     <button
                       className="target-workflow-name-action"
                       type="button"
-                      title={t("Manage {{name}} Skills", { name: target.name })}
-                      onClick={() => onManageSkills(target.id)}
+                      title={t("Configure {{name}}", { name: target.name })}
+                      onClick={() => onConfigure(target.id)}
                     >
                       <strong>{target.name}</strong>
                     </button>
@@ -234,11 +233,10 @@ export const TargetWorkspace = ({
                   <Button
                     className="target-profile-action"
                     size="compact"
-                    aria-label={t("Manage {{name}} Skills", { name: target.name })}
-                    onClick={() => onManageSkills(target.id)}
+                    aria-label={t("Configure {{name}}", { name: target.name })}
+                    onClick={() => onConfigure(target.id)}
                   >
-                    <span>{t("Skills")}</span>
-                    <ArrowRight size={14} strokeWidth={2.2} />
+                    <span>{t("Configure")}</span>
                   </Button>
                   <Button
                     className="target-diagnostics-toggle"

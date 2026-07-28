@@ -1794,12 +1794,12 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => openCodeCard.textContent()).toContain("UI OpenCode alpha");
     await expect
       .poll(() =>
-        openCodeCard.getByRole("button", { name: "Manage OpenCode Skills" }).textContent()
+        openCodeCard.getByRole("button", { name: "Configure OpenCode" }).textContent()
       )
-      .toContain("Skills");
+      .toContain("Configure");
   }, 30_000);
 
-  it("starts Skill management from an unmanaged Agent without touching other resources", async () => {
+  it("starts complete Profile capture from an unmanaged Agent without changing it", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp({
       omitOpenCodeProfiles: true
     });
@@ -1818,27 +1818,19 @@ describe("Electron UI profile switching e2e", () => {
     await resizeAppWindow(page, 920, 620);
     await page.getByRole("button", { name: "Agents", exact: true }).click();
     const targetCard = page.getByRole("article", { name: "Agent OpenCode" });
-    await targetCard.getByRole("button", { name: "Manage OpenCode Skills" }).click();
+    await targetCard.getByRole("button", { name: "Configure OpenCode" }).click();
 
-    const workspace = page.getByRole("region", { name: "Manage OpenCode Skills" });
-    await workspace.getByText("Skills are not managed yet", { exact: true }).waitFor({
+    let dialog = page.getByRole("dialog", { name: "Create profile from OpenCode" });
+    await dialog.getByRole("button", { name: "Review" }).click();
+    dialog = page.getByRole("dialog", { name: "Review OpenCode capture" });
+    await expect.poll(() => dialog.textContent()).toContain("Target Only Reviewer");
+    await dialog.getByRole("region", { name: "Instructions" }).waitFor({
       state: "visible"
     });
-    await expectNoHorizontalOverflow(page, [".agent-skill-page"]);
-    await workspace
-      .getByRole("button", { name: "Manage OpenCode Skills" })
-      .click();
-
-    let dialog = page.getByRole("dialog", { name: "Manage OpenCode Skills" });
-    await dialog.getByRole("button", { name: "Review" }).click();
-    dialog = page.getByRole("dialog", { name: "Review OpenCode Skill setup" });
-    await expect.poll(() => dialog.textContent()).toContain("Target Only Reviewer");
-    expect(await dialog.getByRole("region", { name: "Instructions" }).count()).toBe(0);
-    expect(await dialog.getByRole("region", { name: "MCPs" }).count()).toBe(0);
     await dialog.getByRole("region", { name: "Skills" }).waitFor({
       state: "visible"
     });
-    await dialog.getByRole("button", { name: "Save setup" }).click();
+    await dialog.getByRole("button", { name: "Save Profile" }).click();
     await dialog.waitFor({ state: "hidden" });
 
     const captured = await findProfileByName(appDataRoot, "OpenCode");
@@ -1861,35 +1853,19 @@ describe("Electron UI profile switching e2e", () => {
         })
       ])
     );
-    expect(capturedResources.managementByTarget?.opencode).toEqual({
-      instructions: "ignore",
-      skills: "manage"
-    });
-    expect(capturedResources.mcpByTarget.opencode?.mode).toBe("ignore");
+    expect(capturedResources.managementByTarget?.opencode?.instructions).toBe("manage");
+    expect(capturedResources.managementByTarget?.opencode?.skills).toBe("manage");
     await expect(readFile(instructionsPath, "utf8")).resolves.toBe(originalInstructions);
     await expect(readFile(configPath, "utf8")).resolves.toBe(originalConfig);
     await expect(readFile(originalSkillPath, "utf8")).resolves.toBe(originalSkill);
-
-    await workspace
-      .getByRole("button", { name: "Review and apply" })
-      .waitFor({ state: "visible" });
-    await workspace.getByRole("button", { name: "Review and apply" }).click();
-    const previewDialog = page.getByRole("dialog", { name: "Preview" });
-    await previewDialog.waitFor({ state: "visible" });
-    await previewDialog.getByRole("button", { name: /^Apply/ }).click();
-    await previewDialog.waitFor({ state: "hidden" });
-
-    await expect(readFile(instructionsPath, "utf8")).resolves.toBe(originalInstructions);
-    await expect(readFile(configPath, "utf8")).resolves.toBe(originalConfig);
-    await expect(readFile(originalSkillPath, "utf8")).resolves.toBe(originalSkill);
-    const managedSkillDir = join(opencodeDir, "skills", "target-only-reviewer");
-    expect(
-      (await fileExists(join(managedSkillDir, ".agentenv-owner.json"))) ||
-      (await fileExists(`${managedSkillDir}.agentenv-owner.json`))
-    ).toBe(true);
+    await page.getByRole("region", { name: "Profiles" }).waitFor({ state: "visible" });
+    const composer = page.getByRole("region", { name: "Profile composer" });
+    await composer.getByRole("button", { name: "Instructions", exact: true }).waitFor();
+    await composer.getByRole("button", { name: "Skills", exact: true }).waitFor();
+    await composer.getByRole("button", { name: "MCPs", exact: true }).waitFor();
   }, 30_000);
 
-  it("saves Agent Skill edits before Apply changes the live Agent", async () => {
+  it("routes Agent configuration through Profile Save and Apply", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
     await selectProfile(page, "UI OpenCode alpha");
     await previewAndApply(page, "OpenCode");
@@ -1904,19 +1880,18 @@ describe("Electron UI profile switching e2e", () => {
     await resizeAppWindow(page, 920, 620);
     await page.getByRole("button", { name: "Agents", exact: true }).click();
     const targetCard = page.getByRole("article", { name: "Agent OpenCode" });
-    await targetCard.getByRole("button", { name: "Manage OpenCode Skills" }).click();
-    const workspace = page.getByRole("region", { name: "Manage OpenCode Skills" });
-    const skillSwitch = workspace.getByRole("switch", {
+    await targetCard.getByRole("button", { name: "Configure OpenCode" }).click();
+    const composer = page.getByRole("region", { name: "Profile composer" });
+    await composer.getByRole("button", { name: "Skills", exact: true }).click();
+    const skillSwitch = composer.getByRole("switch", {
       name: "Disable ui-alpha-skill"
     });
     await skillSwitch.waitFor({ state: "visible" });
-    await expectNoHorizontalOverflow(page, [".agent-skill-page"]);
     await skillSwitch.click();
-    await workspace.getByText("Skill changes saved", { exact: true }).waitFor({
-      state: "visible"
-    });
 
     await expect(fileExists(runtimeSkillPath)).resolves.toBe(true);
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await page.getByRole("status").filter({ hasText: "Profile saved" }).waitFor();
     const savedResources = await readJson<{
       skills: Array<{ libraryId: string; enabled?: boolean }>;
     }>(
@@ -1932,9 +1907,7 @@ describe("Electron UI profile switching e2e", () => {
         ?.enabled
     ).toBe(false);
 
-    const applyButton = workspace.getByRole("button", {
-      name: "Review and apply"
-    });
+    const applyButton = page.getByRole("button", { name: "Apply", exact: true });
     await expect.poll(() => applyButton.isEnabled()).toBe(true);
     await applyButton.click();
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
@@ -2019,7 +1992,7 @@ describe("Electron UI profile switching e2e", () => {
         contentGap: Math.round(content.left - icon.right)
       };
     });
-    expect(newProfileGeometry).toEqual({ iconSize: 24, contentGap: 4 });
+    expect(newProfileGeometry).toEqual({ iconSize: 24, contentGap: 7 });
     expect(await findProfileByName(appDataRoot, "Docs Writing")).toMatchObject({
       name: "Docs Writing",
       description: "Writing workspace",
@@ -2860,7 +2833,7 @@ describe("Electron UI profile switching e2e", () => {
       };
     });
     expect(profileObjectGeometry.iconTextGap).toBeGreaterThanOrEqual(3);
-    expect(profileObjectGeometry.iconTextGap).toBeLessThanOrEqual(5);
+    expect(profileObjectGeometry.iconTextGap).toBeLessThanOrEqual(8);
     expect(profileObjectGeometry.iconWidth).toBe(24);
     expect(profileObjectGeometry.headerTargetControls).toBe(0);
 
@@ -3466,8 +3439,8 @@ describe("Electron UI profile switching e2e", () => {
       const profileGeometry = await page.locator(".profile-row.is-active").evaluate((row) => {
         const icon = row.querySelector<HTMLElement>(".profile-row__icon");
         const content = row.querySelector<HTMLElement>(".profile-row__content");
-        const description = row.querySelector<HTMLElement>("small");
-        const stats = row.querySelector<HTMLElement>(".profile-row__stats");
+        const title = row.querySelector<HTMLElement>(".profile-row__title");
+        const deployment = row.querySelector<HTMLElement>(".profile-row__deployments");
         const rowBox = row.getBoundingClientRect();
         const iconBox = icon?.getBoundingClientRect();
         const contentBox = content?.getBoundingClientRect();
@@ -3478,20 +3451,22 @@ describe("Electron UI profile switching e2e", () => {
             iconBox!.bottom <= rowBox.bottom &&
             contentBox!.top >= rowBox.top &&
             contentBox!.bottom <= rowBox.bottom,
-          descriptionDisplay: description ? getComputedStyle(description).display : "missing",
+          deploymentFits:
+            Boolean(deployment) &&
+            deployment!.scrollWidth <= deployment!.clientWidth,
           gap: iconBox && contentBox ? contentBox.left - iconBox.right : Number.NaN,
           iconHeight: iconBox?.height ?? 0,
           rowHeight: rowBox.height,
-          statsOverflow: stats ? stats.scrollWidth - stats.clientWidth : Number.POSITIVE_INFINITY
+          titleFits: Boolean(title) && title!.scrollWidth <= title!.clientWidth
         };
       });
       expect(profileGeometry.childrenFit).toBe(true);
-      expect(profileGeometry.descriptionDisplay).not.toBe("none");
+      expect(profileGeometry.deploymentFits).toBe(true);
       expect(profileGeometry.iconHeight).toBeLessThanOrEqual(30);
-      expect(profileGeometry.rowHeight).toBeLessThanOrEqual(92);
+      expect(profileGeometry.rowHeight).toBeLessThanOrEqual(56);
       expect(profileGeometry.gap).toBeGreaterThanOrEqual(3);
-      expect(profileGeometry.gap).toBeLessThanOrEqual(5);
-      expect(profileGeometry.statsOverflow).toBeLessThanOrEqual(1);
+      expect(profileGeometry.titleFits).toBe(true);
+      expect(profileGeometry.gap).toBeLessThanOrEqual(8);
 
       const heroContent = await page.locator(".profile-hero").evaluate((hero) => ({
         description: getComputedStyle(
@@ -3661,20 +3636,20 @@ describe("Electron UI profile switching e2e", () => {
     const claudeTarget = page.getByRole("article", { name: "Agent Claude Code" });
     await expect
       .poll(() =>
-        openCodeTarget.getByRole("button", { name: "Manage OpenCode Skills" }).textContent()
+        openCodeTarget.getByRole("button", { name: "Configure OpenCode" }).textContent()
       )
-      .toContain("Skills");
+      .toContain("Configure");
     await expect
       .poll(() =>
         claudeTarget
-          .getByRole("button", { name: "Manage Claude Code Skills" })
+          .getByRole("button", { name: "Configure Claude Code" })
           .textContent()
       )
-      .toContain("Skills");
+      .toContain("Configure");
     const targetPeerActions = await Promise.all(
       [
         openCodeTarget.getByRole("button", { name: "Create profile from OpenCode" }),
-        openCodeTarget.getByRole("button", { name: "Manage OpenCode Skills" })
+        openCodeTarget.getByRole("button", { name: "Configure OpenCode" })
       ].map((button) =>
         button.evaluate((element) => ({
           background: getComputedStyle(element).backgroundColor,
@@ -4130,6 +4105,14 @@ describe("Electron UI profile switching e2e", () => {
     const { page } = await launchApp();
     await page.setViewportSize({ width: 1180, height: 728 });
     await page.getByRole("button", { name: "Agents", exact: true }).click();
+    const agentsHelp = page.getByLabel(
+      "Configure each Agent through the same reusable Profile editor, then review every change before Apply."
+    );
+    await agentsHelp.hover();
+    await page.getByRole("tooltip").filter({
+      hasText: "Configure each Agent through the same reusable Profile editor"
+    }).waitFor({ state: "visible" });
+    await page.mouse.move(600, 400);
 
     const expectAgentRowGeometry = async () => {
       const geometry = await page.locator(".target-list").evaluate((list) => {
@@ -4137,13 +4120,15 @@ describe("Electron UI profile switching e2e", () => {
         const laneLefts = (selector: string) => rows.map((row) =>
           row.querySelector<HTMLElement>(selector)!.getBoundingClientRect().left
         );
-        const sizes = (selector: string) => rows.map((row) => {
-          const box = row.querySelector<HTMLElement>(selector)!.getBoundingClientRect();
-          return { height: Math.round(box.height), width: Math.round(box.width) };
+        const sizes = (selector: string) => rows.flatMap((row) => {
+          const element = row.querySelector<HTMLElement>(selector);
+          if (!element) return [];
+          const box = element.getBoundingClientRect();
+          return [{ height: Math.round(box.height), width: Math.round(box.width) }];
         });
         const hasStableValues = (values: number[]) => Math.max(...values) - Math.min(...values) <= 1;
         const hasStableSizes = (values: Array<{ height: number; width: number }>) =>
-          new Set(values.map(({ height, width }) => `${width}x${height}`)).size === 1;
+          new Set(values.map(({ height, width }) => `${width}x${height}`)).size <= 1;
         const first = rows[0];
         return {
           actionLanesAligned: hasStableValues(laneLefts(".target-workflow-actions")),
@@ -4230,13 +4215,13 @@ describe("Electron UI profile switching e2e", () => {
     expect(compactClaudeBox!.y).toBeGreaterThan(compactOpenCodeBox!.y);
 
     await openCodeCard
-      .getByRole("button", { name: "Manage OpenCode Skills" })
+      .getByRole("button", { name: "Configure OpenCode" })
       .waitFor({ state: "visible" });
     await expect
       .poll(() => openCodeCard.getByRole("button", { name: "Create profile from OpenCode" }).getAttribute("class"))
       .toContain("ui-button--ghost");
     await expect
-      .poll(() => openCodeCard.getByRole("button", { name: "Manage OpenCode Skills" }).getAttribute("class"))
+      .poll(() => openCodeCard.getByRole("button", { name: "Configure OpenCode" }).getAttribute("class"))
       .toContain("ui-button--secondary");
     expect(
       await claudeCard.getByRole("button", { name: "Show Claude Code diagnostics" }).getAttribute("aria-expanded")
@@ -4286,7 +4271,8 @@ describe("Electron UI profile switching e2e", () => {
     expect(await recoveryTrigger.evaluate((element) => document.activeElement === element)).toBe(true);
 
     await codexCard.getByRole("button", { name: "Codex", exact: true }).click();
-    await page.getByRole("region", { name: "Manage Codex Skills" }).waitFor({ state: "visible" });
+    await page.getByRole("region", { name: "Profiles" }).waitFor({ state: "visible" });
+    await page.getByRole("region", { name: "Profile composer" }).waitFor({ state: "visible" });
   }, 45_000);
 
   it("stops managing OpenCode while keeping deployed files and clearing ownership", async () => {
@@ -4298,7 +4284,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Agents", exact: true }).click();
     const openCodeCard = page.getByRole("article", { name: "Agent OpenCode" });
     await expect
-      .poll(() => openCodeCard.getByRole("button", { name: "Manage OpenCode Skills" }).getAttribute("class"))
+      .poll(() => openCodeCard.getByRole("button", { name: "Configure OpenCode" }).getAttribute("class"))
       .toContain("ui-button--secondary");
     await expect
       .poll(() => openCodeCard.getByRole("button", { name: "Create profile from OpenCode" }).getAttribute("class"))
@@ -6073,7 +6059,13 @@ describe("Electron UI profile switching e2e", () => {
 
     await selectProfile(page, "UI OpenCode alpha");
     const profileRow = page.getByRole("group", { name: "Profile UI OpenCode alpha" });
-    await profileRow
+    expect(
+      await profileRow.getByRole("button", {
+        name: "Change icon for profile ui-opencode-alpha"
+      }).count()
+    ).toBe(0);
+    await page
+      .locator(".profile-hero")
       .getByRole("button", { name: "Change icon for profile ui-opencode-alpha" })
       .click();
     await page
@@ -6140,13 +6132,39 @@ describe("Electron UI profile switching e2e", () => {
 
     await selectProfile(page, "UI Trae daily");
     await selectTarget(page, "Trae CLI");
+    await expandComposerSection(page, "Instructions");
+    await page.getByText(
+      join(traeDir, "rules", "agentenv-manager.md"),
+      { exact: true }
+    ).waitFor({ state: "visible" });
+    const instructionsHelp = page.getByLabel(
+      "Profile Apply writes this file. New Trae CLI sessions load changes; running conversations keep their current context."
+    );
+    await instructionsHelp.hover();
+    await page.getByRole("tooltip").filter({
+      hasText: "New Trae CLI sessions load changes"
+    }).waitFor({ state: "visible" });
+    await page.mouse.move(600, 400);
     await expandComposerSection(page, "MCPs");
     const editor = page.locator(".profile-mcp-editor");
     await editor.waitFor({ state: "visible" });
     await expect.poll(() => editor.getByLabel("docs Profile behavior").inputValue()).toBe("on");
     await expect.poll(() => editor.getByLabel("browser Profile behavior").inputValue()).toBe("off");
 
-    await previewAndApply(page, "Trae CLI");
+    await applyActionButton(page, "Trae CLI").click();
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    await previewDialog.waitFor({ state: "visible" });
+    await previewDialog.getByText("Review notes", { exact: true }).click();
+    await previewDialog.getByText(
+      "Instruction changes load in new Trae CLI sessions.",
+      { exact: true }
+    ).waitFor({ state: "visible" });
+    await previewDialog.getByRole("button", { name: "Apply", exact: true }).click();
+    await previewDialog.waitFor({ state: "hidden" });
+    await page.getByText(
+      "Instruction changes load in new Trae CLI sessions.",
+      { exact: true }
+    ).waitFor({ state: "visible" });
 
     await expect(readFile(join(traeDir, "rules", "agentenv-manager.md"), "utf8"))
       .resolves.toContain("Use the managed Trae CLI environment");
@@ -7092,15 +7110,19 @@ describe("Electron UI profile switching e2e", () => {
     await overflow.click();
     await popover.waitFor({ state: "visible" });
     await popover.getByRole("menuitem", { name: /Antigravity/ }).click();
-    const antigravitySkills = page.getByRole("region", {
-      name: "Manage Antigravity CLI Skills"
+    const captureDialog = page.getByRole("dialog", {
+      name: "Create profile from Antigravity CLI"
     });
-    await antigravitySkills.waitFor({ state: "visible" });
-    await antigravitySkills.getByRole("button", { name: "Agents", exact: true }).click();
+    await captureDialog.waitFor({ state: "visible" });
+    await captureDialog.getByRole("button", { name: "Cancel" }).click();
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
 
-    await page.getByRole("button", { name: "Open Codex details" }).click();
     await page
-      .getByRole("region", { name: "Manage Codex Skills" })
+      .getByRole("article", { name: "Agent Codex" })
+      .getByRole("button", { name: "Configure Codex" })
+      .click();
+    await page
+      .getByRole("region", { name: "Profiles" })
       .waitFor({ state: "visible" });
   }, 30_000);
 
@@ -7141,21 +7163,14 @@ describe("Electron UI profile switching e2e", () => {
     await nameAction.waitFor({ state: "visible", timeout: 5_000 });
     await nameAction.click();
 
-    const workspace = page.getByRole("region", {
-      name: "Manage Antigravity CLI Skills"
+    const dialog = page.getByRole("dialog", {
+      name: "Create profile from Antigravity CLI"
     });
-    await workspace.waitFor({ state: "visible", timeout: 5_000 });
-    await workspace
-      .getByRole("heading", { name: "Antigravity CLI is not installed" })
-      .waitFor({ state: "visible", timeout: 5_000 });
+    await dialog.waitFor({ state: "visible", timeout: 5_000 });
     await expect
-      .poll(() => workspace.textContent())
-      .toContain("AgentEnv cannot manage this Agent's Skills until its command or app is detected.");
-    const setup = workspace.getByRole("button", {
-      name: "Manage Antigravity CLI Skills"
-    });
-    expect(await setup.isDisabled()).toBe(true);
-    expect(await setup.getAttribute("title")).toBe("Antigravity CLI is not detected");
+      .poll(() => dialog.textContent())
+      .toContain("Installation not detected");
+    expect(await dialog.getByRole("button", { name: "Review" }).isDisabled()).toBe(true);
   }, 30_000);
 
   it("persists enabled Agents and excludes disabled Agents from operations", async () => {
@@ -8377,24 +8392,24 @@ describe("Electron UI profile switching e2e", () => {
     const profileRow = page.getByRole("button", { name: /UI OpenCode alpha/ });
     await expect
       .poll(() => profileRow.locator(".profile-row__deployments").getAttribute("aria-label"))
-      .toBe("Active on: Codex");
+      .toBe("Codex · Active");
 
     await selectTarget(page, "OpenCode");
     await previewAndApply(page, "OpenCode");
     await expect
       .poll(() => profileRow.locator(".profile-row__deployments").getAttribute("aria-label"))
-      .toBe("Active on: OpenCode, Codex");
+      .toBe("OpenCode · Active, Codex · Active");
     await resizeAppWindow(page, 920, 620);
     const deploymentGeometry = await profileRow.locator(".profile-row__deployments").evaluate(
       (element) => ({
         clientWidth: element.clientWidth,
         scrollWidth: element.scrollWidth,
         hasTextLabel: Boolean(element.querySelector(".profile-row__deployment-label")),
-        moreLabel: element.querySelector(".profile-row__deployment-more")?.textContent
+        label: element.textContent
       })
     );
     expect(deploymentGeometry.hasTextLabel).toBe(true);
-    expect(deploymentGeometry.moreLabel).toBe("+1");
+    expect(deploymentGeometry.label).toBe("2 Agents · Active");
     expect(deploymentGeometry.scrollWidth - deploymentGeometry.clientWidth).toBeLessThanOrEqual(1);
   }, 30_000);
 
@@ -8624,14 +8639,14 @@ describe("Electron UI profile switching e2e", () => {
       composerTitle: getComputedStyle(
         document.querySelector<HTMLElement>(".profile-composer-section__title")!
       ).fontWeight,
-      description: getComputedStyle(document.querySelector<HTMLElement>(".profile-row__description")!).fontWeight,
+      deployment: getComputedStyle(document.querySelector<HTMLElement>(".profile-row__deployments")!).fontWeight,
       name: getComputedStyle(document.querySelector<HTMLElement>(".profile-row__name")!).fontWeight,
       selectedName: getComputedStyle(document.querySelector<HTMLElement>(".profile-hero__title h2")!).fontWeight
     }));
     expect(profileTypography).toEqual({
       composerDescription: "400",
       composerTitle: "500",
-      description: "400",
+      deployment: "400",
       name: "500",
       selectedName: "600"
     });

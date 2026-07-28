@@ -1,11 +1,10 @@
 import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Monitor, Search, TriangleAlert } from "lucide-react";
+import { Search, TriangleAlert } from "lucide-react";
 import type {
   LibraryResourceVersions,
   ProfileDetail,
   ProfileSummary,
-  ResourceIconKey,
   TargetInfo,
   TargetManagementState
 } from "../../shared/types";
@@ -13,13 +12,17 @@ import { libraryResourceVersionsEqual } from "../../shared/libraryVersions";
 import { useI18n } from "../i18n";
 import {
   compareProfilesByCreationTime,
-  listProfileApplications,
-  type ProfileResourceSummary
+  listProfileApplications
 } from "../profileSummary";
-import { targetIconFor } from "./ProfileSidebar";
-import { OverflowTooltip } from "./OverflowTooltip";
-import { ResourceIconPicker } from "./ResourceIconPicker";
+import { ResourceIcon } from "./ResourceIconPicker";
 import { ProfileActionsMenu } from "./ProfileActionsMenu";
+
+const deploymentStatusLabels = {
+  attention: "Attention",
+  current: "Active",
+  pending: "Pending",
+  empty: "Not applied"
+} as const;
 
 interface ProfileListProps {
   isLoading: boolean;
@@ -29,7 +32,6 @@ interface ProfileListProps {
   selectedProfileId?: string;
   draftProfile?: ProfileDetail;
   isProfileDirty: boolean;
-  profileResourceCounts: Record<string, ProfileResourceSummary>;
   profileLibraryVersions: Record<string, LibraryResourceVersions>;
   targets: TargetInfo[];
   targetStates: TargetManagementState[];
@@ -38,7 +40,6 @@ interface ProfileListProps {
   onDuplicate(profileId: string): void;
   onSearchChange(value: string): void;
   onSelect(profileId: string): void;
-  onIconChange(profileId: string, iconKey: ResourceIconKey): void;
 }
 
 export const ProfileList = ({
@@ -49,7 +50,6 @@ export const ProfileList = ({
   selectedProfileId,
   draftProfile,
   isProfileDirty,
-  profileResourceCounts,
   profileLibraryVersions,
   targets,
   targetStates,
@@ -57,8 +57,7 @@ export const ProfileList = ({
   onDelete,
   onDuplicate,
   onSearchChange,
-  onSelect,
-  onIconChange
+  onSelect
 }: ProfileListProps) => {
   const { t } = useI18n();
   const [contextMenu, setContextMenu] = useState<{
@@ -159,79 +158,66 @@ export const ProfileList = ({
         ) : null}
         {visibleProfiles.map((profile) => {
           const isBroken = Boolean(profile.loadError);
-          const counts = profileResourceCounts[profile.id];
           const applications = listProfileApplications(profile.id, targetStates, targets);
           const isSelected = profile.id === selectedProfileId;
           const iconKey =
             (isSelected ? draftProfile?.manifest.iconKey : undefined) ??
             profile.iconKey ??
             "folder";
-          const primaryApplication = applications[0];
-          const preferredTarget = !primaryApplication
-            ? targets.find((target) => target.id === profile.preferredTargetId)
-            : undefined;
-          const applicationTargetName = primaryApplication
-            ? primaryApplication.target?.name ?? primaryApplication.state.targetId
-            : preferredTarget?.name;
-          const applicationNeedsAttention = Boolean(
-            primaryApplication &&
-            (
-              primaryApplication.state.lifecycleStatus === "drifted" ||
-              primaryApplication.state.lifecycleStatus === "recovery-required" ||
-              (primaryApplication.state.errorCount ?? 0) > 0
-            )
-          );
-          const applicationIsCurrent = Boolean(
-            primaryApplication &&
-            !applicationNeedsAttention &&
-            (
-              primaryApplication.state.lifecycleStatus === "applied" ||
-              primaryApplication.state.lifecycleStatus === "applied-with-outside"
-            ) &&
-            primaryApplication.state.appliedProfileHash &&
-            primaryApplication.state.appliedProfileHash ===
-              (profile.targetContentHashes?.[primaryApplication.state.targetId] ??
-                profile.contentHash) &&
-            (
-              primaryApplication.state.lifecycleStatus === "applied-with-outside" ||
-              libraryResourceVersionsEqual(
-                primaryApplication.state.appliedLibraryVersions,
-                profileLibraryVersions[profile.id]
-              )
-            )
-          );
-          const deploymentState = primaryApplication
-            ? applicationNeedsAttention
+          const applicationStates = applications.map((application) => {
+            const needsAttention =
+              application.state.lifecycleStatus === "drifted" ||
+              application.state.lifecycleStatus === "recovery-required" ||
+              (application.state.errorCount ?? 0) > 0;
+            const isCurrent =
+              !needsAttention &&
+              (
+                application.state.lifecycleStatus === "applied" ||
+                application.state.lifecycleStatus === "applied-with-outside"
+              ) &&
+              Boolean(application.state.appliedProfileHash) &&
+              application.state.appliedProfileHash ===
+                (profile.targetContentHashes?.[application.state.targetId] ??
+                  profile.contentHash) &&
+              (
+                application.state.lifecycleStatus === "applied-with-outside" ||
+                libraryResourceVersionsEqual(
+                  application.state.appliedLibraryVersions,
+                  profileLibraryVersions[profile.id]
+                )
+              );
+            return {
+              name: application.target?.name ?? application.state.targetId,
+              state: needsAttention ? "attention" : isCurrent ? "current" : "pending"
+            } as const;
+          });
+          const deploymentState = applicationStates.length === 0
+            ? "empty"
+            : applicationStates.some((application) => application.state === "attention")
               ? "attention"
-              : applicationIsCurrent
+              : applicationStates.every((application) => application.state === "current")
                 ? "current"
-                : "pending"
-            : preferredTarget
-              ? "preferred"
-              : "empty";
-          const deploymentLabel = primaryApplication
-            ? t(
-                applicationNeedsAttention
-                  ? "{{name}} needs attention"
-                  : applicationIsCurrent
-                    ? "{{name}} active"
-                    : "{{name}} pending",
-                { name: applicationTargetName ?? primaryApplication.state.targetId }
-              )
-            : preferredTarget
-              ? t("{{name}} preferred", { name: preferredTarget.name })
-              : t("Not applied");
-          const deploymentTitle = applications.length > 0
-            ? t("Active on: {{targets}}", {
-                targets: applications
-                  .map((application) => application.target?.name ?? application.state.targetId)
-                  .join(", ")
+                : "pending";
+          const deploymentStatus = t(deploymentStatusLabels[deploymentState]);
+          const deploymentLabel = applicationStates.length > 1
+            ? t("{{count}} Agents · {{status}}", {
+                count: applicationStates.length,
+                status: deploymentStatus
               })
+            : applicationStates.length === 1
+              ? t("{{name}} · {{status}}", {
+                  name: applicationStates[0].name,
+                  status: deploymentStatus
+                })
+              : deploymentStatus;
+          const deploymentTitle = applicationStates.length > 0
+            ? applicationStates
+                .map((application) => t("{{name}} · {{status}}", {
+                  name: application.name,
+                  status: t(deploymentStatusLabels[application.state])
+                }))
+                .join(", ")
             : deploymentLabel;
-          const deploymentTarget = primaryApplication?.target ?? preferredTarget;
-          const deploymentTargetIcon = deploymentTarget
-            ? targetIconFor(deploymentTarget)
-            : undefined;
           return (
             <div
               className={`profile-row${isSelected ? " is-active" : ""}${isBroken ? " is-invalid" : ""}`}
@@ -256,16 +242,9 @@ export const ProfileList = ({
                   <TriangleAlert size={18} strokeWidth={2.2} />
                 </span>
               ) : (
-                <ResourceIconPicker
-                  className="profile-row__icon"
-                  iconKey={iconKey}
-                  label={profile.name}
-                  showAgentIcons
-                  triggerLabel={t("Change icon for profile {{id}}", { id: profile.id })}
-                  onChange={(nextIconKey) => {
-                    if (nextIconKey) onIconChange(profile.id, nextIconKey);
-                  }}
-                />
+                <span className="profile-row__icon" aria-hidden="true">
+                  <ResourceIcon iconKey={iconKey} size={18} />
+                </span>
               )}
               <button
                 className="profile-row__content"
@@ -285,40 +264,13 @@ export const ProfileList = ({
                     {t("Stored Profile data could not be loaded")}
                   </span>
                 ) : (
-                  <>
-                    <OverflowTooltip
-                      ariaLabel={t("Full profile description {{id}}", { id: profile.id })}
-                      className="profile-row__description"
-                      focusable={false}
-                      text={profile.description || t("No description")}
-                    />
-                    <span className="profile-row__footer">
-                      <span className="profile-row__stats">
-                        <span>{t("{{count}} skills", { count: counts?.skills.count ?? 0 })}</span>
-                        <span>{counts?.mcp.count ?? 0} MCP</span>
-                        <span>{t("{{count}} files", { count: counts?.instructions.count ?? 0 })}</span>
-                      </span>
-                      <span
-                        className={`profile-row__deployments profile-row__deployments--${deploymentState}`}
-                        aria-label={deploymentTitle}
-                        title={deploymentTitle}
-                      >
-                        {deploymentTargetIcon?.assetUrl ? (
-                          <img
-                            className={`profile-target-logo profile-target-logo--${deploymentTargetIcon.flavor}`}
-                            src={deploymentTargetIcon.assetUrl}
-                            alt=""
-                          />
-                        ) : (
-                          <Monitor size={12} strokeWidth={2} aria-hidden="true" />
-                        )}
-                        <span className="profile-row__deployment-label">{deploymentLabel}</span>
-                        {applications.length > 1 ? (
-                          <span className="profile-row__deployment-more">+{applications.length - 1}</span>
-                        ) : null}
-                      </span>
-                    </span>
-                  </>
+                  <span
+                    className={`profile-row__deployments profile-row__deployments--${deploymentState}`}
+                    aria-label={deploymentTitle}
+                    title={deploymentTitle}
+                  >
+                    <span className="profile-row__deployment-label">{deploymentLabel}</span>
+                  </span>
                 )}
               </button>
             </div>

@@ -30,6 +30,7 @@ export const APPLY_ISSUE_POLICY: Record<ApplyIssueCode, ApplyIssuePolicy> = {
   "missing-native-mcp": { disposition: "block", resolution: "edit-profile" },
   "unsupported-mcp-management": { disposition: "block", resolution: "edit-profile" },
   "target-instruction-limit": { disposition: "block", resolution: "edit-profile" },
+  "runtime-reload-required": { disposition: "notice", resolution: "external-action" },
   "duplicate-native-mcp": { disposition: "block", resolution: "external-action" },
   "agent-owned-native-mcp": { disposition: "block", resolution: "external-action" },
   "unsafe-native-mcp-update": { disposition: "block", resolution: "external-action" },

@@ -321,7 +321,7 @@ export const ProfileSidebar = ({
       icon: MessageSquareText
     },
     ...(targets.length > 0
-      ? [{ id: "targets" as const, label: t("Agents"), detail: t("Local agent tools"), icon: Monitor }]
+      ? [{ id: "targets" as const, label: t("Agents"), detail: t("Configure and inspect"), icon: Monitor }]
       : [])
   ];
 
@@ -409,7 +409,7 @@ export const ProfileSidebar = ({
                 title={`${target.name} · ${t(targetStatusMessage(target.health.status))}`}
                 key={target.id}
                 type="button"
-                aria-label={t("Open {{name}} details", { name: target.name })}
+                aria-label={t("Configure {{name}}", { name: target.name })}
                 onClick={() => onAgentSelect(target.id)}
               >
                 {targetIcon.assetUrl ? (

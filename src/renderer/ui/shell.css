@@ -215,6 +215,7 @@ html[data-platform="darwin"] .page-header.ui-page-header input,
 html[data-platform="darwin"] .page-header.ui-page-header select,
 html[data-platform="darwin"] .page-header.ui-page-header textarea,
 html[data-platform="darwin"] .page-header.ui-page-header a,
+html[data-platform="darwin"] .page-header.ui-page-header .ui-page-header__help,
 html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
   app-region: no-drag;
   -webkit-app-region: no-drag;
