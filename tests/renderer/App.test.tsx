@@ -315,6 +315,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     openStartupDataFolder: vi.fn().mockResolvedValue(undefined),
     exportStartupDiagnostics: vi.fn().mockResolvedValue(undefined),
     quitApp: vi.fn(),
+    onOpenSettingsRequested: vi.fn().mockReturnValue(() => undefined),
     onWindowCloseRequested: vi.fn().mockReturnValue(() => undefined),
     setWindowCloseGuard: vi.fn(),
     confirmWindowClose: vi.fn(),
@@ -765,6 +766,30 @@ afterEach(() => {
 });
 
 describe("App", () => {
+  it("opens Settings from the native menu event and marks active navigation", async () => {
+    let requestSettings: (() => void) | undefined;
+    installApi({
+      onOpenSettingsRequested: vi.fn((callback) => {
+        requestSettings = callback;
+        return () => undefined;
+      })
+    });
+    render(<App />);
+
+    expect(await screen.findByRole("region", { name: "Library workspace" }))
+      .toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Skills" }))
+      .toHaveAttribute("aria-current", "page");
+
+    requestSettings?.();
+
+    expect(await screen.findByRole("region", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Settings" }))
+      .toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Skills" }))
+      .not.toHaveAttribute("aria-current");
+  });
+
   it("shows the detected Agent and waits for explicit first-run configuration", async () => {
     installApi({
       listProfiles: vi.fn().mockResolvedValue([]),

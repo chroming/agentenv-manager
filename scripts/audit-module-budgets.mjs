@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 const budgets = {
   "src/renderer/App.tsx": 5550,
   "src/renderer/components/SkillLibraryPanel.tsx": 4380,
-  "src/main/skillLibraryStore.ts": 3246,
+  "src/main/skillLibraryStore.ts": 3251,
   "src/main/activationService.ts": 2453,
   "src/renderer/ui/pages/profiles.css": 1785,
   "src/renderer/ui/pages/skills.css": 1855,

@@ -58,7 +58,7 @@
   gap: 8px;
   grid-template-columns:
     32px minmax(128px, 1.1fr) 76px minmax(84px, 0.65fr)
-    minmax(110px, 0.9fr) minmax(100px, 0.8fr) 258px;
+    minmax(110px, 0.9fr) minmax(100px, 0.8fr) 160px;
   min-height: 32px;
   padding: 0 12px;
   width: 100%;
@@ -93,7 +93,7 @@
   gap: 8px;
   grid-template-columns:
     32px minmax(128px, 1.1fr) 76px minmax(84px, 0.65fr)
-    minmax(110px, 0.9fr) minmax(100px, 0.8fr) 240px;
+    minmax(110px, 0.9fr) minmax(100px, 0.8fr) 160px;
   min-height: 60px;
   min-width: 0;
 }
@@ -102,9 +102,9 @@
   align-items: center;
   display: grid;
   gap: 5px;
-  grid-template-columns: 74px 78px 96px;
+  grid-template-columns: var(--control-height-compact) 78px var(--control-height-compact);
   justify-self: end;
-  width: 258px;
+  width: 160px;
 }
 
 .target-workflow-actions .ui-button {
@@ -113,6 +113,11 @@
   min-width: 0;
   white-space: nowrap;
   width: 100%;
+}
+
+.target-workflow-actions .target-capture-action,
+.target-workflow-actions .target-diagnostics-toggle {
+  padding: 0;
 }
 
 .target-workflow-actions .target-capture-action {

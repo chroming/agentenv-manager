@@ -1,4 +1,14 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  dialog,
+  ipcMain,
+  Menu,
+  safeStorage,
+  screen,
+  shell
+} from "electron";
 import { createHash } from "node:crypto";
 import { chmod, mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -49,6 +59,16 @@ import { createWorkspaceSyncService } from "./workspaceSync/workspaceSyncService
 import type { StartupStatus } from "../shared/types";
 import { classifyStartupFailure, createStartupDiagnostics } from "./startupDiagnostics";
 import { targetPathInputFor } from "./targets/pathInput";
+import {
+  createApplicationMenuTemplate,
+  requestSettingsForWindow
+} from "./applicationMenu";
+import {
+  constrainWindowState,
+  readWindowState,
+  writeWindowState,
+  type PersistedWindowState
+} from "./windowStateStore";
 
 const createGitHubFixtureFetch = (fixtureRoot: string) => {
   const fixtureTrees = new Map<string, string>();
@@ -210,6 +230,8 @@ let startupStatus: StartupStatus = { state: "initializing" };
 let startupAttempt: Promise<void> | undefined;
 let startupDataRoot: string | undefined;
 let startupDiagnostics: ReturnType<typeof createStartupDiagnostics> | undefined;
+let lastWindowState: PersistedWindowState | undefined;
+let windowStateSaveTimer: ReturnType<typeof setTimeout> | undefined;
 
 const broadcastStartupStatus = () => {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -268,10 +290,50 @@ ipcMain.on("window:cancel-close", () => {
   appQuitRequested = false;
 });
 
+const windowStatePath = () =>
+  startupDataRoot ? join(startupDataRoot, "window-state.json") : undefined;
+
+const captureWindowState = (win: BrowserWindow): PersistedWindowState => ({
+  ...win.getNormalBounds(),
+  maximized: win.isMaximized()
+});
+
+const saveWindowState = (win: BrowserWindow) => {
+  const path = windowStatePath();
+  if (!path || win.isDestroyed()) return;
+  lastWindowState = captureWindowState(win);
+  try {
+    writeWindowState(path, lastWindowState);
+  } catch (error) {
+    console.warn(
+      `[AgentEnv] Window state could not be saved: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
+};
+
+const scheduleWindowStateSave = (win: BrowserWindow) => {
+  if (windowStateSaveTimer) clearTimeout(windowStateSaveTimer);
+  windowStateSaveTimer = setTimeout(() => {
+    windowStateSaveTimer = undefined;
+    saveWindowState(win);
+  }, 250);
+};
+
 const createWindow = () => {
+  const restoredState = lastWindowState
+    ? constrainWindowState(
+        lastWindowState,
+        screen.getDisplayMatching(lastWindowState).workArea
+      )
+    : undefined;
   const win = new BrowserWindow({
-    width: 1180,
-    height: 760,
+    width: restoredState?.width ?? 1180,
+    height: restoredState?.height ?? 760,
+    ...(restoredState
+      ? { x: restoredState.x, y: restoredState.y }
+      : {}),
     minWidth: 920,
     minHeight: 620,
     ...windowChromeOptionsFor(process.platform),
@@ -286,6 +348,7 @@ const createWindow = () => {
   });
 
   win.on("close", (event) => {
+    saveWindowState(win);
     if (
       approvedWindowCloses.has(win) ||
       (process.env.AGENTENV_AUTOMATION === "1" &&
@@ -299,6 +362,10 @@ const createWindow = () => {
     event.preventDefault();
     win.webContents.send("window:close-requested");
   });
+  win.on("move", () => scheduleWindowStateSave(win));
+  win.on("resize", () => scheduleWindowStateSave(win));
+  win.on("maximize", () => scheduleWindowStateSave(win));
+  win.on("unmaximize", () => scheduleWindowStateSave(win));
 
   win.webContents.on("did-start-loading", () => {
     guardedWindowCloses.delete(win);
@@ -317,6 +384,7 @@ const createWindow = () => {
   } else {
     void win.loadFile(join(__dirname, "../renderer/index.html"));
   }
+  if (restoredState?.maximized) win.maximize();
   return win;
 };
 
@@ -683,6 +751,19 @@ if (!ownsSingleInstance) {
 
 if (ownsSingleInstance) void app.whenReady().then(() => {
   startupDataRoot = resolveStartupDataRoot();
+  const savedWindowState = readWindowState(join(startupDataRoot, "window-state.json"));
+  if (savedWindowState) {
+    lastWindowState = constrainWindowState(
+      savedWindowState,
+      screen.getDisplayMatching(savedWindowState).workArea
+    );
+  }
+  Menu.setApplicationMenu(Menu.buildFromTemplate(createApplicationMenuTemplate({
+    isDevelopment: Boolean(process.env.ELECTRON_RENDERER_URL),
+    openSettings: () => requestSettingsForWindow(
+      BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+    )
+  })));
   startupDiagnostics = createStartupDiagnostics({
     directory: join(app.getPath("logs"), "diagnostics"),
     homeDir: app.getPath("home")

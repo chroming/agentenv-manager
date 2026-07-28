@@ -4238,7 +4238,8 @@ describe("Electron UI profile switching e2e", () => {
         return { height: Math.round(box.height), width: Math.round(box.width) };
       });
     expect(diagnosticsGeometry.height).toBeGreaterThanOrEqual(28);
-    expect(diagnosticsGeometry.width).toBeGreaterThan(diagnosticsGeometry.height);
+    expect(Math.abs(diagnosticsGeometry.width - diagnosticsGeometry.height))
+      .toBeLessThanOrEqual(1);
     expect(
       await openCodeCard
         .getByRole("region", { name: "OpenCode diagnostics" })
@@ -7374,6 +7375,11 @@ describe("Electron UI profile switching e2e", () => {
       }));
       expect(containment.documentWidth).toBe(containment.viewportWidth);
       expect(containment.documentHeight).toBe(containment.viewportHeight);
+      const sidebarScroll = await page.evaluate(() => ({
+        sidebar: document.querySelector<HTMLElement>(".global-sidebar")?.scrollLeft ?? -1,
+        navigation: document.querySelector<HTMLElement>(".workspace-nav")?.scrollLeft ?? -1
+      }));
+      expect(sidebarScroll).toEqual({ sidebar: 0, navigation: 0 });
     }
 
     await page.getByTestId("locale-select").selectOption("en");

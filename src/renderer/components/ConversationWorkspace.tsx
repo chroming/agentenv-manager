@@ -392,18 +392,53 @@ const ConversationActionsMenu = ({
   );
 };
 
-export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) => {
+export interface ConversationWorkspaceViewState {
+  items: ConversationSummary[];
+  total: number;
+  query: string;
+  agentFilter: string;
+  workspaceFilter: string;
+  workspacePaths: string[];
+  agentCounts: Record<string, number>;
+  selectedId?: string;
+  detail?: ConversationDetail;
+  scrollTop: number;
+}
+
+export const ConversationWorkspace = ({
+  targets,
+  initialViewState,
+  onViewStateChange
+}: {
+  targets: TargetInfo[];
+  initialViewState?: ConversationWorkspaceViewState;
+  onViewStateChange?(state: ConversationWorkspaceViewState): void;
+}) => {
   const { t, formatDate, localeTag } = useI18n();
-  const [items, setItems] = useState<ConversationSummary[]>([]);
-  const [total, setTotal] = useState(0);
-  const [query, setQuery] = useState("");
-  const [agentFilter, setAgentFilter] = useState("");
-  const [workspaceFilter, setWorkspaceFilter] = useState("");
-  const [workspacePaths, setWorkspacePaths] = useState<string[]>([]);
-  const [agentCounts, setAgentCounts] = useState<Record<string, number>>({});
-  const [selectedId, setSelectedId] = useState<string>();
-  const [detail, setDetail] = useState<ConversationDetail>();
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<ConversationSummary[]>(
+    () => initialViewState?.items ?? []
+  );
+  const [total, setTotal] = useState(() => initialViewState?.total ?? 0);
+  const [query, setQuery] = useState(() => initialViewState?.query ?? "");
+  const [agentFilter, setAgentFilter] = useState(
+    () => initialViewState?.agentFilter ?? ""
+  );
+  const [workspaceFilter, setWorkspaceFilter] = useState(
+    () => initialViewState?.workspaceFilter ?? ""
+  );
+  const [workspacePaths, setWorkspacePaths] = useState<string[]>(
+    () => initialViewState?.workspacePaths ?? []
+  );
+  const [agentCounts, setAgentCounts] = useState<Record<string, number>>(
+    () => initialViewState?.agentCounts ?? {}
+  );
+  const [selectedId, setSelectedId] = useState<string | undefined>(
+    () => initialViewState?.selectedId
+  );
+  const [detail, setDetail] = useState<ConversationDetail | undefined>(
+    () => initialViewState?.detail
+  );
+  const [loading, setLoading] = useState(!initialViewState);
   const [searching, setSearching] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailReloadNonce, setDetailReloadNonce] = useState(0);
@@ -425,9 +460,37 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
   const workspaceFilterRef = useRef("");
   const listRequestRef = useRef(0);
   const queryEffectReadyRef = useRef(false);
+  const scrollTopRef = useRef(initialViewState?.scrollTop ?? 0);
+  const restoredScrollRef = useRef(false);
+  const onViewStateChangeRef = useRef(onViewStateChange);
+  const viewStateRef = useRef<ConversationWorkspaceViewState>({
+    items,
+    total,
+    query,
+    agentFilter,
+    workspaceFilter,
+    workspacePaths,
+    agentCounts,
+    selectedId,
+    detail,
+    scrollTop: scrollTopRef.current
+  });
+  onViewStateChangeRef.current = onViewStateChange;
   queryRef.current = query;
   agentFilterRef.current = agentFilter;
   workspaceFilterRef.current = workspaceFilter;
+  viewStateRef.current = {
+    items,
+    total,
+    query,
+    agentFilter,
+    workspaceFilter,
+    workspacePaths,
+    agentCounts,
+    selectedId,
+    detail,
+    scrollTop: scrollTopRef.current
+  };
   const busy = Boolean(operation);
   const nextConversationPageCount = Math.min(
     conversationPageSize,
@@ -436,13 +499,27 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
   const updateConversationListEnd = () => {
     const list = conversationListRef.current;
     if (!list) return;
+    scrollTopRef.current = list.scrollTop;
+    viewStateRef.current.scrollTop = list.scrollTop;
     const distanceFromEnd = list.scrollHeight - list.scrollTop - list.clientHeight;
     setConversationListAtEnd(distanceFromEnd <= conversationListEndThreshold);
   };
 
   useLayoutEffect(() => {
+    if (!restoredScrollRef.current && conversationListRef.current) {
+      restoredScrollRef.current = true;
+      const list = conversationListRef.current;
+      list.scrollTop = Math.min(
+        scrollTopRef.current,
+        Math.max(0, list.scrollHeight - list.clientHeight)
+      );
+    }
     updateConversationListEnd();
   }, [items.length, query, agentFilter, workspaceFilter]);
+
+  useEffect(() => () => {
+    onViewStateChangeRef.current?.(viewStateRef.current);
+  }, []);
 
   useEffect(() => {
     const list = conversationListRef.current;
@@ -472,7 +549,8 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
     nextQuery = queryRef.current,
     nextAgentFilter = agentFilterRef.current,
     nextWorkspaceFilter = workspaceFilterRef.current,
-    trackSearch = false
+    trackSearch = false,
+    limit = conversationPageSize
   ) => {
     const requestId = ++listRequestRef.current;
     try {
@@ -480,7 +558,7 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
         query: nextQuery || undefined,
         agentIds: nextAgentFilter ? [nextAgentFilter] : undefined,
         workspacePaths: nextWorkspaceFilter ? [nextWorkspaceFilter] : undefined,
-        limit: conversationPageSize
+        limit
       });
       if (requestId !== listRequestRef.current) return undefined;
       setItems(result.items);
@@ -556,7 +634,13 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
     void (async () => {
       let result;
       try {
-        result = await loadList("");
+        result = await loadList(
+          queryRef.current,
+          agentFilterRef.current,
+          workspaceFilterRef.current,
+          false,
+          Math.min(500, Math.max(conversationPageSize, initialViewState?.items.length ?? 0))
+        );
       } catch (unknownError) {
         if (active) {
           setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -1068,7 +1152,7 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
           </aside>
 
           <article className="conversation-detail" aria-busy={detailLoading}>
-            {detailLoading ? (
+            {detailLoading && !detail ? (
               <div className="conversation-empty conversation-empty--detail">
                 <LoaderCircle className="is-spinning" size={20} aria-hidden="true" />
                 <span>{t("Loading conversation")}</span>

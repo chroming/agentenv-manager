@@ -118,7 +118,10 @@ import {
 } from "./components/AppFeedback";
 import { DataRootPath } from "./components/DataRootPath";
 import { DiffViewer } from "./components/DiffViewer";
-import { ConversationWorkspace } from "./components/ConversationWorkspace";
+import {
+  ConversationWorkspace,
+  type ConversationWorkspaceViewState
+} from "./components/ConversationWorkspace";
 import { LibraryHeaderActions } from "./components/LibraryHeaderActions";
 import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileMcpEditor } from "./components/ProfileMcpEditor";
@@ -370,6 +373,8 @@ const AppContent = ({
   const [activeWorkspace, setActiveWorkspace] = useState<AppWorkspace>(
     initialWorkspacePreference ?? "library"
   );
+  const [conversationViewState, setConversationViewState] =
+    useState<ConversationWorkspaceViewState>();
   const [workspacePreferenceReady, setWorkspacePreferenceReady] = useState(
     Boolean(initialWorkspacePreference)
   );
@@ -1098,6 +1103,13 @@ const AppContent = ({
       setActiveWorkspace(workspace);
     });
   };
+
+  useEffect(
+    () => window.agentEnv.onOpenSettingsRequested(() => {
+      selectWorkspace("settings");
+    }),
+    [isProfileDirty, pendingProfileAction]
+  );
 
   const selectProfile = (
     profileId: string,
@@ -3884,6 +3896,8 @@ const AppContent = ({
               title: settingsSaveStatus
             }
         : undefined;
+  const hasPersistentAppFeedback =
+    appFeedback?.kind === "error" || appFeedback?.kind === "warning";
   const profileApplyControl = targets.length > 0 ? (
     <div className="profile-apply-control" ref={profileApplyControlRef}>
       <button
@@ -4041,7 +4055,9 @@ const AppContent = ({
       />
 
       <section
-        className="editor-panel"
+        className={`editor-panel${
+          hasPersistentAppFeedback ? " editor-panel--has-persistent-feedback" : ""
+        }`}
         aria-label={
           activeWorkspace === "library"
             ? t("Library workspace")
@@ -4721,7 +4737,11 @@ const AppContent = ({
             </section>
           </>
         ) : activeWorkspace === "conversations" ? (
-          <ConversationWorkspace targets={targets} />
+          <ConversationWorkspace
+            targets={targets}
+            initialViewState={conversationViewState}
+            onViewStateChange={setConversationViewState}
+          />
         ) : activeWorkspace === "targets" ? (
             <TargetWorkspace
               targets={targets}

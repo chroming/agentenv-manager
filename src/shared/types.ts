@@ -62,6 +62,7 @@ export interface AgentEnvApi {
   openStartupDataFolder(): Promise<void>;
   exportStartupDiagnostics(): Promise<string | undefined>;
   quitApp(): void;
+  onOpenSettingsRequested(callback: () => void): () => void;
   onWindowCloseRequested(callback: () => void): () => void;
   setWindowCloseGuard(enabled: boolean): void;
   confirmWindowClose(): void;

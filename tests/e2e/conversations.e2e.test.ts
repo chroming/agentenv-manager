@@ -524,9 +524,14 @@ describe("Conversations desktop workflow", () => {
       .getByRole("complementary", { name: "Global navigation" })
       .getByRole("button", { name: "Conversations" })
       .click();
+    await expect.poll(() => page.getByRole("searchbox", {
+      name: "Search conversations"
+    }).inputValue()).toBe("desktop release");
     await page.getByRole("option", {
       name: /Repair the desktop release workflow/
     }).waitFor();
+    await page.getByRole("searchbox", { name: "Search conversations" }).fill("");
+    await page.getByText("200 of 201 conversations", { exact: true }).waitFor();
     await page.waitForTimeout(450);
     await expect(page.getByRole("option", {
       name: /Long conversation performance test/

@@ -15,6 +15,11 @@ const api: AgentEnvApi = {
   openStartupDataFolder: () => ipcRenderer.invoke("startup:open-data-folder"),
   exportStartupDiagnostics: () => ipcRenderer.invoke("startup:export-diagnostics"),
   quitApp: () => ipcRenderer.send("startup:quit"),
+  onOpenSettingsRequested: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("app:open-settings-requested", listener);
+    return () => ipcRenderer.off("app:open-settings-requested", listener);
+  },
   onWindowCloseRequested: (callback) => {
     const listener = () => callback();
     ipcRenderer.on("window:close-requested", listener);

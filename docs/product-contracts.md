@@ -1447,6 +1447,20 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 
 ### UI and accessibility
 
+- The packaged desktop application owns its native menu: Settings is available through
+  `Cmd/Ctrl+,`, while browser Reload, Force Reload, and developer tools are absent outside
+  the development server so unsaved work cannot bypass navigation guards.
+- Window bounds and maximized state are device-local UI state. They restore inside an
+  available display, and malformed or stale state never blocks startup.
+- Leaving and returning to Conversations preserves the current query, filters, selection,
+  loaded page depth, detail, and list scroll while inactive page effects are unmounted.
+- Persistent warning and error feedback reserves workspace space and keeps long selectable
+  detail internally scrollable; it must not cover the active page. Transient success and
+  informational feedback remains non-blocking and expires automatically.
+- Active global navigation exposes `aria-current="page"`. Agents rows keep one visible
+  text workflow action; secondary Capture and Diagnostics commands use labeled icon controls.
+- Global navigation never becomes a horizontal scroll container. Long localized labels truncate
+  within their lane and activating them must not shift or crop the sidebar.
 - Empty, one-item, long-content, 50, 100, and 500-item cases where relevant.
 - Default and minimum viewport without document overflow.
 - Skill table headers and every data row MUST share one column contract; contextual actions MUST NOT resize preceding columns. Compact width uses a visible grouped header and retains Skill, source, version, Profile usage, update, install, and action information rather than hiding columns.

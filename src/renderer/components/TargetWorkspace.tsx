@@ -227,9 +227,7 @@ export const TargetWorkspace = ({
                     title={isTargetInstalled(target.health) ? t("Capture") : t("{{name}} is not detected", { name: target.name })}
                     icon={<CopyPlus size={15} strokeWidth={2.2} />}
                     onClick={() => onCreateProfileFromTarget(target.id)}
-                  >
-                    {t("Capture")}
-                  </Button>
+                  />
                   <Button
                     className="target-profile-action"
                     size="compact"
@@ -247,9 +245,7 @@ export const TargetWorkspace = ({
                     title={t("Diagnostics")}
                     icon={<Activity size={15} strokeWidth={2.2} />}
                     onClick={() => setExpandedTargetId(isExpanded ? undefined : target.id)}
-                  >
-                    {t("Diagnostics")}
-                  </Button>
+                  />
                 </ControlGroup>
               </header>
               {isExpanded ? (

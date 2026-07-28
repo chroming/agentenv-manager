@@ -347,6 +347,7 @@ export const ProfileSidebar = ({
         <div className="nav-section-label">{t("Library")}</div>
         <button
           aria-label={t("Skills")}
+          aria-current={activeWorkspace === "library" ? "page" : undefined}
           className={`workspace-button${activeWorkspace === "library" ? " is-active" : ""}`}
           data-workspace="library"
           type="button"
@@ -364,6 +365,7 @@ export const ProfileSidebar = ({
           return (
             <button
               aria-label={item.label}
+              aria-current={activeWorkspace === item.id ? "page" : undefined}
               className={`workspace-button${activeWorkspace === item.id ? " is-active" : ""}`}
               data-workspace={item.id}
               type="button"
@@ -381,6 +383,7 @@ export const ProfileSidebar = ({
         <div className="nav-section-label">{t("Settings")}</div>
         <button
           aria-label={t("Settings")}
+          aria-current={activeWorkspace === "settings" ? "page" : undefined}
           className={`workspace-button${activeWorkspace === "settings" ? " is-active" : ""}`}
           data-workspace="settings"
           type="button"

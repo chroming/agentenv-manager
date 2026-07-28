@@ -442,6 +442,20 @@ const capturePage = async (
     }
   }
   await page.evaluate(async ({ shouldPreserveFocus }) => {
+    document.documentElement.dataset.agentenvCapture = "true";
+    let captureStyle = document.getElementById("agentenv-capture-style");
+    if (!captureStyle) {
+      captureStyle = document.createElement("style");
+      captureStyle.id = "agentenv-capture-style";
+      captureStyle.textContent = `
+        html[data-agentenv-capture] .global-sidebar,
+        html[data-agentenv-capture] .page-header.ui-page-header,
+        html[data-agentenv-capture] .window-drag-strip {
+          -webkit-app-region: no-drag;
+        }
+      `;
+      document.head.append(captureStyle);
+    }
     await document.fonts?.ready;
     for (const animation of document.getAnimations()) {
       try {
@@ -470,7 +484,13 @@ const capturePage = async (
     browserWindow.webContents.invalidate();
     await new Promise((resolveFrame) => setTimeout(resolveFrame, 200));
   });
-  await page.screenshot({ path, animations: "disabled" });
+  try {
+    await page.screenshot({ path, animations: "disabled" });
+  } finally {
+    await page.evaluate(() => {
+      delete document.documentElement.dataset.agentenvCapture;
+    });
+  }
 };
 
 const fileExists = async (path) => {
@@ -1215,6 +1235,11 @@ try {
   await page.getByRole("tab", { name: "General" }).click();
   await page.getByLabel("Interface language").selectOption("zh_CN");
   await page.getByRole("heading", { name: "设置" }).waitFor({ state: "visible" });
+  await page.getByRole("status").filter({ hasText: "设置已保存" }).waitFor({
+    state: "visible"
+  });
+  await page.reload();
+  await page.getByRole("heading", { name: "设置" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "settings-zh-cn-920x620.png"));
   await page.getByRole("button", { name: "技能", exact: true }).click();
   await page.getByRole("region", { name: "技能资源库", exact: true }).waitFor({
@@ -1235,6 +1260,11 @@ try {
   });
   await page.getByRole("tab", { name: "通用" }).click();
   await page.getByLabel("界面语言").selectOption("zh_TW");
+  await page.getByRole("heading", { name: "設定" }).waitFor({ state: "visible" });
+  await page.getByRole("status").filter({ hasText: "設定已儲存" }).waitFor({
+    state: "visible"
+  });
+  await page.reload();
   await page.getByRole("heading", { name: "設定" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "settings-zh-tw-920x620.png"));
   await page.getByRole("button", { name: "技能", exact: true }).click();

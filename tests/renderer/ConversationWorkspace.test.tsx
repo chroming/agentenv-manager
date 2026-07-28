@@ -141,6 +141,47 @@ afterEach(() => {
 });
 
 describe("ConversationWorkspace", () => {
+  it("restores its local view context after the workspace is remounted", async () => {
+    const api = installApi();
+    let savedState: Parameters<
+      NonNullable<React.ComponentProps<typeof ConversationWorkspace>["onViewStateChange"]>
+    >[0] | undefined;
+    const first = render(
+      <ConversationWorkspace
+        targets={[target("codex", "Codex"), target("opencode", "OpenCode")]}
+        onViewStateChange={(state) => {
+          savedState = state;
+        }}
+      />
+    );
+    expect(await screen.findByText("Please repair the release workflow."))
+      .toBeInTheDocument();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search conversations" }), {
+      target: { value: "release" }
+    });
+    await waitFor(() => expect(screen.getByRole("searchbox", {
+      name: "Search conversations"
+    })).toHaveValue("release"));
+    first.unmount();
+
+    expect(savedState).toEqual(expect.objectContaining({
+      query: "release",
+      selectedId: detail.id,
+      detail: expect.objectContaining({ id: detail.id })
+    }));
+
+    render(
+      <ConversationWorkspace
+        targets={[target("codex", "Codex"), target("opencode", "OpenCode")]}
+        initialViewState={savedState}
+      />
+    );
+    expect(screen.getByRole("searchbox", { name: "Search conversations" }))
+      .toHaveValue("release");
+    expect(screen.getByText("Please repair the release workflow.")).toBeInTheDocument();
+    expect(api.listConversations).toHaveBeenCalled();
+  });
+
   it("loads, searches, copies, and continues a full conversation", async () => {
     const api = installApi();
     render(<ConversationWorkspace targets={[

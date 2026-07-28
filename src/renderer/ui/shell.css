@@ -47,6 +47,7 @@ html[data-platform="darwin"] {
   border-right: 1px solid var(--border);
   box-shadow: none;
   gap: var(--space-2);
+  overflow: clip;
   padding: 10px 8px 12px;
 }
 
@@ -236,6 +237,7 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow: clip;
 }
 
 .workspace-nav .nav-section-label {
@@ -384,6 +386,26 @@ html[data-platform="darwin"] .window-drag-strip {
 
 .editor-panel > .app-feedback--dismissible {
   grid-template-columns: 16px minmax(0, 1fr) 60px;
+}
+
+.editor-panel--has-persistent-feedback {
+  padding-bottom: 106px;
+}
+
+.editor-panel > .app-feedback--dismissible {
+  bottom: 18px;
+  left: 222px;
+  max-height: 76px;
+  max-width: none;
+  right: 18px;
+  width: auto;
+}
+
+.editor-panel > .app-feedback--dismissible span {
+  max-height: 38px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  user-select: text;
 }
 
 .app-feedback__controls {
