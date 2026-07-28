@@ -33,6 +33,11 @@ describe("renderer i18n", () => {
       })
     ).toBe("将 Code Review 应用到 OpenCode？");
     expect(translate("zh_TW", "Review required")).toBe("需要確認");
+    expect(
+      translate("zh_TW", "{{count}} shared Skill needs review", { count: 1 })
+    ).toBe("1 個共享 Skill 需要檢查");
+    expect(translate("zh_TW", "Review Skills")).toBe("檢查 Skills");
+    expect(translate("zh_TW", "Configure Agent")).toBe("設定 Agent");
   });
 
   it("falls back to the source message and exposes stable locale tags", () => {

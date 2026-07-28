@@ -279,7 +279,12 @@ implementation.
   duplicate lifecycle state.
 - The compact status projection shows exactly one of: checking local Skills, environment
   check unavailable, shared Skills need review, first Agent setup, Agent changes need review,
-  or environment ready. It exposes at most one current action.
+  or environment ready. It exposes at most one current action. Commands name their affected
+  object: `Review Skills`, `Review Profile`, `Configure Agent`, or `Retry check`; a bare
+  lifecycle verb such as `Review` is not an Environment Review command.
+- Status detail remains a single compact line. When it overflows, the complete selectable value
+  is available through the shared enterable detail overlay; truncation MUST NOT discard affected
+  Agent names or recovery context.
 - Shared compatibility findings open the canonical Local Skill Cleanup surface already scoped
   to shared locations. The same scan, grouping, preview, Backup, mutation, verification, path
   policy, and rollback contracts apply whether the user enters from Agents or Skills.

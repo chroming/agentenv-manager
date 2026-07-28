@@ -50,7 +50,9 @@
 }
 
 .environment-status-strip__copy strong,
-.environment-status-strip__copy small {
+.environment-status-strip__detail {
+  display: block;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -62,9 +64,13 @@
   font-weight: var(--font-weight-medium);
 }
 
-.environment-status-strip__copy small {
+.environment-status-strip__detail {
   color: var(--muted);
   font-size: var(--font-size-metadata);
+}
+
+.environment-status-strip__tooltip {
+  user-select: text;
 }
 
 .environment-status-strip__action {

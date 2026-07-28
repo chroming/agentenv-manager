@@ -192,11 +192,11 @@ export const registerIpcHandlers = ({
     );
     return includesSharedRoot ? targetPaths : [...targetPaths, sharedSkillTargetPaths];
   };
-  const automationBackgroundDelayMs =
-    process.env.AGENTENV_AUTOMATION === "1"
-      ? Math.max(0, Number(process.env.AGENTENV_AUTOMATION_BACKGROUND_DELAY_MS ?? 0))
-      : 0;
   const waitForAutomationBackgroundDelay = async () => {
+    const automationBackgroundDelayMs =
+      process.env.AGENTENV_AUTOMATION === "1"
+        ? Math.max(0, Number(process.env.AGENTENV_AUTOMATION_BACKGROUND_DELAY_MS ?? 0))
+        : 0;
     if (!Number.isFinite(automationBackgroundDelayMs) || automationBackgroundDelayMs <= 0) {
       return;
     }
@@ -392,6 +392,12 @@ export const registerIpcHandlers = ({
   });
   diagnosticHandle("skills:scan-inventory", async () => {
     await waitForAutomationBackgroundDelay();
+    if (
+      process.env.AGENTENV_AUTOMATION === "1" &&
+      process.env.AGENTENV_AUTOMATION_SKILL_SCAN_FAILURE === "1"
+    ) {
+      throw new Error("Simulated local Skill inventory failure");
+    }
     const targets = await targetDiscoveryService.listTargets();
     return skillLibraryStore.scanInventory(inventoryPathsFor(targets));
   });

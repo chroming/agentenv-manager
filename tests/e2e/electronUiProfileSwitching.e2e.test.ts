@@ -1048,7 +1048,7 @@ describe("Electron UI profile switching e2e", () => {
       "settings"
     ]);
 
-    await agents.getByRole("button", { name: "Review", exact: true }).click();
+    await agents.getByRole("button", { name: "Review Skills", exact: true }).click();
     const cleanup = page.getByRole("region", { name: "Environment skills" });
     await cleanup.waitFor({ state: "visible" });
     await cleanup.getByText("Shared Skill Review", { exact: true }).waitFor({

@@ -818,6 +818,11 @@ describe("App", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(await within(workspace).findByText("Set up your first Agent")).toBeInTheDocument();
+    expect(
+      within(
+        within(workspace).getByRole("region", { name: "Environment status" })
+      ).getByRole("button", { name: "Configure Agent" })
+    ).toBeEnabled();
     await waitFor(() =>
       expect(window.localStorage.getItem("agentenv:last-workspace")).toBe("targets")
     );
@@ -865,7 +870,7 @@ describe("App", () => {
     expect(
       within(
         within(workspace).getByRole("region", { name: "Environment status" })
-      ).getByRole("button", { name: "Retry" })
+      ).getByRole("button", { name: "Retry check" })
     ).toBeEnabled();
     expect(warning).toHaveBeenCalledWith(
       expect.stringContaining("Local Skill inventory is unavailable")
@@ -908,7 +913,17 @@ describe("App", () => {
     expect(
       await within(workspace).findByText("1 shared Skill needs review")
     ).toBeInTheDocument();
-    fireEvent.click(within(workspace).getByRole("button", { name: "Review" }));
+    const environmentStatus = within(workspace).getByRole("region", {
+      name: "Environment status"
+    });
+    expect(
+      within(environmentStatus).getByText(
+        "Shared locations are used by OpenCode."
+      )
+    ).toHaveAttribute("data-ui-overflow-detail", "true");
+    fireEvent.click(
+      within(environmentStatus).getByRole("button", { name: "Review Skills" })
+    );
 
     const drawer = await screen.findByRole("region", { name: "Environment skills" });
     expect(within(drawer).getByText("Shared Skill Review")).toBeInTheDocument();
@@ -917,6 +932,33 @@ describe("App", () => {
     ).toBeInTheDocument();
     expect(
       within(drawer).queryByRole("group", { name: "Cleanup group agent-only" })
+    ).toBeNull();
+  });
+
+  it("names an Agent lifecycle review after the affected Profile", async () => {
+    installApi({
+      listTargetStates: vi.fn().mockResolvedValue([
+        managedState({
+          lifecycleStatus: "pending",
+          lifecycleReason: "Saved Profile changed after the last Apply"
+        })
+      ])
+    });
+
+    render(<App />);
+
+    const workspace = await screen.findByRole("region", { name: "Agents" });
+    const environmentStatus = await within(workspace).findByRole("region", {
+      name: "Environment status"
+    });
+    expect(
+      await within(environmentStatus).findByText("1 Agent needs review")
+    ).toBeInTheDocument();
+    expect(
+      within(environmentStatus).getByRole("button", { name: "Review Profile" })
+    ).toBeEnabled();
+    expect(
+      within(environmentStatus).queryByRole("button", { name: "Review" })
     ).toBeNull();
   });
 

@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import type { EnvironmentReviewSummary } from "../environmentReview";
 import { useI18n } from "../i18n";
+import { OverflowTooltip } from "./OverflowTooltip";
 import { Button } from "./ui";
 
 interface EnvironmentStatusStripProps {
@@ -35,7 +36,7 @@ const statusCopy = (
     case "unavailable":
       return {
         title: t("Environment check unavailable"),
-        detail: t("Agent configuration is still available. Refresh to try again.")
+        detail: t("Agent configuration is still available. Retry the check when ready.")
       };
     case "shared-review":
       return {
@@ -120,7 +121,13 @@ export const EnvironmentStatusStrip = ({
       </span>
       <span className="environment-status-strip__copy">
         <strong>{copy.title}</strong>
-        <small>{copy.detail}</small>
+        <OverflowTooltip
+          className="environment-status-strip__detail"
+          focusable={false}
+          preferredPlacement="bottom"
+          text={copy.detail}
+          tooltipClassName="environment-status-strip__tooltip"
+        />
       </span>
       {summary.state === "shared-review" ? (
         <Button
@@ -129,7 +136,7 @@ export const EnvironmentStatusStrip = ({
           disabled={busy}
           onClick={onReviewShared}
         >
-          {t("Review")}
+          {t("Review Skills")}
         </Button>
       ) : summary.state === "unavailable" ? (
         <Button
@@ -138,7 +145,7 @@ export const EnvironmentStatusStrip = ({
           disabled={busy}
           onClick={onRefresh}
         >
-          {t("Retry")}
+          {t("Retry check")}
         </Button>
       ) : firstSetupTargetId ? (
         <Button
@@ -147,7 +154,7 @@ export const EnvironmentStatusStrip = ({
           disabled={busy}
           onClick={() => onConfigure(firstSetupTargetId)}
         >
-          {t("Configure")}
+          {t("Configure Agent")}
         </Button>
       ) : reviewTargetId ? (
         <Button
@@ -156,7 +163,7 @@ export const EnvironmentStatusStrip = ({
           disabled={busy}
           onClick={() => onConfigure(reviewTargetId)}
         >
-          {t("Review")}
+          {t("Review Profile")}
         </Button>
       ) : null}
     </section>

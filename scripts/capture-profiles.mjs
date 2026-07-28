@@ -6,6 +6,7 @@ import {
   copyFile,
   mkdir,
   mkdtemp,
+  rename,
   readdir,
   readFile,
   rm,
@@ -626,6 +627,7 @@ try {
     env: {
       ...process.env,
       AGENTENV_AUTOMATION: "1",
+      AGENTENV_AUTOMATION_BACKGROUND_DELAY_MS: "4000",
       AGENTENV_DATA_ROOT: appDataRoot,
       AGENTENV_FAKE_HOME: join(fixtureRoot, "fake-home"),
       AGENTENV_GITHUB_FIXTURE_ROOT: githubFixtureRoot,
@@ -647,12 +649,102 @@ try {
   await agentsWorkspace.getByRole("article", { name: "Agent OpenCode" }).waitFor({
     state: "visible"
   });
+  await agentsWorkspace.getByText("Checking local Skills", { exact: true }).waitFor({
+    state: "visible"
+  });
+  await capturePage(page, join(outputDir, "agents-checking-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(page, join(outputDir, "agents-checking-920x620.png"));
+  await app.evaluate(() => {
+    delete process.env.AGENTENV_AUTOMATION_BACKGROUND_DELAY_MS;
+  });
   await page.waitForFunction(() =>
     !document
       .querySelector(".environment-status-strip")
       ?.classList.contains("environment-status-strip--checking")
   );
+  await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "agents-first-run-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(page, join(outputDir, "agents-first-run-920x620.png"));
+
+  const sharedSkillDir = join(
+    homeDir,
+    ".agents",
+    "skills",
+    "shared-compatibility-reviewer"
+  );
+  await rm(sharedSkillDir, { recursive: true, force: true });
+  await page.reload();
+  await agentsWorkspace.getByText("Environment ready", { exact: true }).waitFor({
+    state: "visible"
+  });
+  await capturePage(page, join(outputDir, "agents-ready-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "agents-ready-1180x728.png"));
+
+  const profilesDir = join(appDataRoot, "profiles");
+  const heldProfilesDir = join(appDataRoot, "profiles-capture-hold");
+  await rename(profilesDir, heldProfilesDir);
+  await page.reload();
+  await agentsWorkspace.getByText("Set up your first Agent", { exact: true }).waitFor({
+    state: "visible"
+  });
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(page, join(outputDir, "agents-setup-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "agents-setup-1180x728.png"));
+  await rename(heldProfilesDir, profilesDir);
+
+  await app.evaluate(() => {
+    process.env.AGENTENV_AUTOMATION_SKILL_SCAN_FAILURE = "1";
+  });
+  await page.reload();
+  await agentsWorkspace.getByText("Environment check unavailable", { exact: true }).waitFor({
+    state: "visible"
+  });
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(page, join(outputDir, "agents-unavailable-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "agents-unavailable-1180x728.png"));
+  await app.evaluate(() => {
+    delete process.env.AGENTENV_AUTOMATION_SKILL_SCAN_FAILURE;
+  });
+
+  await mkdir(sharedSkillDir, { recursive: true });
+  await copyFile(
+    join(appDataRoot, "skills-library", "shared-compatibility-reviewer", "SKILL.md"),
+    join(sharedSkillDir, "SKILL.md")
+  );
+  await page.reload();
+  await agentsWorkspace.getByText("1 shared Skill needs review", { exact: true }).waitFor({
+    state: "visible"
+  });
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByLabel("Interface language").selectOption("zh_CN");
+  await page.getByRole("heading", { name: "设置" }).waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
+  await agentsWorkspace.getByText("1 个共享 Skill 需要检查", { exact: true }).waitFor({
+    state: "visible"
+  });
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(page, join(outputDir, "agents-first-run-zh-cn-920x620.png"));
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  await page.getByLabel("界面语言").selectOption("zh_TW");
+  await page.getByRole("heading", { name: "設定" }).waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
+  await agentsWorkspace.getByText("1 個共享 Skill 需要檢查", { exact: true }).waitFor({
+    state: "visible"
+  });
+  await capturePage(page, join(outputDir, "agents-first-run-zh-tw-920x620.png"));
+  await page.getByRole("button", { name: "設定", exact: true }).click();
+  await page.getByLabel("介面語言").selectOption("en");
+  await page.getByRole("heading", { name: "Settings" }).waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
+  await agentsWorkspace.getByText("1 shared Skill needs review", { exact: true }).waitFor({
+    state: "visible"
+  });
+  await setWindowSize(page, windowHandle, 1180, 728);
   await page.getByRole("button", { name: "Skills", exact: true }).click();
   await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({ state: "visible" });
   await page.getByRole("group", { name: "Library item react-best-practices" }).waitFor({ state: "visible" });
