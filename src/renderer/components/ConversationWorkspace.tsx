@@ -16,6 +16,7 @@ import {
   Fragment,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -72,6 +73,7 @@ const continuationText = (detail: ConversationDetail) => [
 
 const conversationPageSize = 200;
 const conversationMessagePageSize = 60;
+const conversationListEndThreshold = 56;
 type ConversationOperation = "copy" | "open-original" | "continue";
 
 const workspaceName = (path?: string) => {
@@ -408,6 +410,7 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [conversationListAtEnd, setConversationListAtEnd] = useState(false);
   const [operation, setOperation] = useState<ConversationOperation>();
   const [message, setMessage] = useState("");
   const [warning, setWarning] = useState("");
@@ -416,6 +419,7 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
   const reviewDialogRef = useRef<HTMLElement>(null);
   const reviewCancelRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const conversationListRef = useRef<HTMLDivElement>(null);
   const queryRef = useRef("");
   const agentFilterRef = useRef("");
   const workspaceFilterRef = useRef("");
@@ -429,6 +433,31 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
     conversationPageSize,
     Math.max(0, total - items.length)
   );
+  const updateConversationListEnd = () => {
+    const list = conversationListRef.current;
+    if (!list) return;
+    const distanceFromEnd = list.scrollHeight - list.scrollTop - list.clientHeight;
+    setConversationListAtEnd(distanceFromEnd <= conversationListEndThreshold);
+  };
+
+  useLayoutEffect(() => {
+    updateConversationListEnd();
+  }, [items.length, query, agentFilter, workspaceFilter]);
+
+  useEffect(() => {
+    const list = conversationListRef.current;
+    if (!list) return undefined;
+    const handleResize = () => updateConversationListEnd();
+    window.addEventListener("resize", handleResize);
+    const observer = typeof ResizeObserver === "undefined"
+      ? undefined
+      : new ResizeObserver(handleResize);
+    observer?.observe(list);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      observer?.disconnect();
+    };
+  }, []);
 
   useModalDialog({
     open: Boolean(review),
@@ -895,8 +924,10 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
             </div>
             <div
               className="conversation-list"
+              ref={conversationListRef}
               role="listbox"
               aria-busy={loading || searching}
+              onScroll={updateConversationListEnd}
             >
               {loading ? (
                 <div className="conversation-empty">
@@ -1016,24 +1047,24 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
                   </Fragment>
                 );
               })}
+              {items.length < total && (conversationListAtEnd || loadingMore) ? (
+                <div className="conversation-list-footer">
+                  <Button
+                    size="compact"
+                    disabled={loadingMore}
+                    icon={loadingMore
+                      ? <LoaderCircle className="is-spinning" size={14} />
+                      : undefined}
+                    onClick={() => void loadMore()}
+                  >
+                    {t(
+                      loadingMore ? "Loading {{count}} more" : "Load {{count}} more",
+                      { count: nextConversationPageCount }
+                    )}
+                  </Button>
+                </div>
+              ) : null}
             </div>
-            {items.length < total ? (
-              <div className="conversation-list-footer">
-                <Button
-                  size="compact"
-                  disabled={loadingMore}
-                  icon={loadingMore
-                    ? <LoaderCircle className="is-spinning" size={14} />
-                    : undefined}
-                  onClick={() => void loadMore()}
-                >
-                  {t(
-                    loadingMore ? "Loading {{count}} more" : "Load {{count}} more",
-                    { count: nextConversationPageCount }
-                  )}
-                </Button>
-              </div>
-            ) : null}
           </aside>
 
           <article className="conversation-detail" aria-busy={detailLoading}>

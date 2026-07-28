@@ -340,6 +340,12 @@ describe("Conversations desktop workflow", () => {
     await page.getByRole("option", { name: /Older indexed task 197/ }).waitFor();
     await historySearch.fill("");
     await page.getByText("200 of 201 conversations", { exact: true }).waitFor();
+    await expect.poll(() => page.getByRole("button", { name: "Load 1 more" }).count()).toBe(0);
+    await page.locator(".conversation-list").evaluate((list) => {
+      list.scrollTop = list.scrollHeight;
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await expect.poll(() => page.getByRole("button", { name: "Load 1 more" }).count()).toBe(1);
     await page.getByRole("button", { name: "Load 1 more" }).click();
     await page.getByText("201 conversations", { exact: true }).waitFor();
     await expect.poll(() => page.getByRole("button", { name: "Load 1 more" }).count()).toBe(0);

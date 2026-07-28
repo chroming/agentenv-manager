@@ -349,7 +349,9 @@ an archive, or a native-session database migration tool.
 - Search queries the complete device-local index, including indexed visible message text, rather
   than only the currently loaded list page. Bounded list pages disclose loaded and total counts;
   the next-page command names how many records it will add and ignores a stale response after the
-  query or filters change.
+  query or filters change. The command stays out of the reading surface until the user reaches the
+  end of the currently loaded list, remains visible with local progress while loading, and after
+  appending records appears again only when the user reaches the new end.
 - Agent filters show indexed counts for every enabled history-capable Agent. A zero count is an
   honest source state, not an implication that another Agent's records belong to that Agent.
   Metadata-only histories remain useful by displaying their source summary while clearly disabling

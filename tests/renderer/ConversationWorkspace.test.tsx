@@ -350,6 +350,17 @@ describe("ConversationWorkspace", () => {
     await screen.findByText("Repair release workflow");
     expect(screen.getByText("1 of 2 conversations")).toBeInTheDocument();
 
+    const list = screen.getByRole("listbox");
+    Object.defineProperties(list, {
+      clientHeight: { configurable: true, value: 200 },
+      scrollHeight: { configurable: true, value: 600 },
+      scrollTop: { configurable: true, value: 0, writable: true }
+    });
+    fireEvent.scroll(list);
+    expect(screen.queryByRole("button", { name: "Load 1 more" })).toBeNull();
+
+    list.scrollTop = 400;
+    fireEvent.scroll(list);
     fireEvent.click(screen.getByRole("button", { name: "Load 1 more" }));
 
     expect(await screen.findByText("Second indexed conversation")).toBeInTheDocument();
