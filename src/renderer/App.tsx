@@ -101,6 +101,7 @@ import { profileWithoutLocalSkillExceptions } from "../shared/effectiveProfile";
 import { I18nProvider, useI18n, type TranslationValues } from "./i18n";
 import { acceptAppliedProfileState } from "./appliedProfileState";
 import { activationPreviewHasWork } from "./activationPreview";
+import { moveSharedSkillToAgents } from "./sharedSkillMigration";
 import {
   collectLibraryResourceVersions,
   libraryResourceVersionsEqual
@@ -1780,14 +1781,6 @@ const AppContent = ({
     guardProfileAction(`apply to ${targetName}`, () => selectTargetNow(targetId));
   };
 
-  const openProfilesForSharedSkill = () => {
-    guardProfileAction("open Profiles", () => {
-      setSkillLibraryTool(undefined);
-      setActiveComposerSection("skills");
-      setActiveWorkspace("profiles");
-    });
-  };
-
   const continuePendingProfileAction = async (saveFirst: boolean) => {
     const action = pendingProfileActionRef.current;
     if (!action) {
@@ -2887,6 +2880,48 @@ const AppContent = ({
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       return false;
+    }
+  };
+
+  const moveSharedSkillToAgentDirectories = async (
+    input: RetireSharedSkillInput,
+    targetIds: string[]
+  ) => {
+    const activeProfileIds = new Set(
+      targetStates
+        .filter((state) => targetIds.includes(state.targetId))
+        .map((state) => state.activeProfileId)
+        .filter((id): id is string => Boolean(id))
+    );
+    if (isProfileDirty && draftProfile && activeProfileIds.has(draftProfile.id)) {
+      setError("Save or discard the open Profile changes before moving this shared Skill.");
+      return false;
+    }
+
+    setError(undefined);
+    setBusy(true);
+    try {
+      const result = await moveSharedSkillToAgents({
+        api: window.agentEnv,
+        migration: input,
+        targetIds,
+        targetNames
+      });
+      setSkillCleanupResult(result);
+      await refreshProfiles({ checkSkillUpdates: false });
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: `Moved ${input.skillKey} to ${targetIds.length} ${
+          targetIds.length === 1 ? "Agent" : "Agents"
+        }`
+      });
+      return true;
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      await refreshProfiles({ checkSkillUpdates: false }).catch(() => undefined);
+      return false;
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -4194,7 +4229,7 @@ const AppContent = ({
                 onSetSkillPathPolicies={setSkillPathPolicies}
                 onSetSharedSkillRetention={setSharedSkillRetention}
                 onRetireSharedSkill={retireSharedSkill}
-                onOpenProfiles={openProfilesForSharedSkill}
+                onMoveSharedSkillToAgents={moveSharedSkillToAgentDirectories}
                 importConflictOpen={Boolean(pendingSkillImport)}
                 onRestoreCleanup={(backupId) => void undoSkillCleanup(backupId)}
                 updateActivity={skillUpdateActivity}

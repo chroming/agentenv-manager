@@ -232,7 +232,10 @@ interface SkillLibraryPanelProps {
   onSetSkillPathPolicies?(input: SkillPathPolicyUpdate): Promise<boolean>;
   onSetSharedSkillRetention(input: SharedSkillRetentionInput): Promise<boolean>;
   onRetireSharedSkill(input: RetireSharedSkillInput): Promise<boolean>;
-  onOpenProfiles(): void;
+  onMoveSharedSkillToAgents(
+    input: RetireSharedSkillInput,
+    targetIds: string[]
+  ): Promise<boolean>;
   onRestoreCleanup(backupId: string): void;
   updateActivity?: SkillUpdateActivity;
   viewState: SkillLibraryViewState;
@@ -478,7 +481,7 @@ export const SkillLibraryPanel = ({
   onSetSkillPathPolicies,
   onSetSharedSkillRetention,
   onRetireSharedSkill,
-  onOpenProfiles,
+  onMoveSharedSkillToAgents,
   onRestoreCleanup,
   updateActivity,
   viewState,
@@ -514,7 +517,7 @@ export const SkillLibraryPanel = ({
   >({ managed: false, kept: false });
   const [sharedOperation, setSharedOperation] = useState<{
     skillKey: string;
-    action: "keep" | "review" | "retire";
+    action: "keep" | "review" | "prepare" | "retire";
   }>();
   const [githubOperationError, setGithubOperationError] = useState("");
   const [localSkillSource, setLocalSkillSource] = useState<LocalSkillSourceSelection>();
@@ -1615,6 +1618,35 @@ export const SkillLibraryPanel = ({
         paths: sharedRetireCandidate.sharedMigration.paths
       })) {
         setSharedRetireKey(undefined);
+      }
+    } finally {
+      setSharedOperation(undefined);
+    }
+  };
+
+  const moveSharedCopyToAgents = async () => {
+    const migration = sharedTargetReview?.sharedMigration;
+    if (
+      !sharedTargetReview ||
+      !migration?.libraryId ||
+      migration.state !== "waiting" ||
+      sharedOperation
+    ) {
+      return;
+    }
+    setSharedOperation({ skillKey: sharedTargetReview.skillKey, action: "prepare" });
+    try {
+      if (
+        await onMoveSharedSkillToAgents(
+          {
+            skillKey: sharedTargetReview.skillKey,
+            libraryId: migration.libraryId,
+            paths: migration.paths
+          },
+          migration.pendingConsumers
+        )
+      ) {
+        setSharedTargetReviewKey(undefined);
       }
     } finally {
       setSharedOperation(undefined);
@@ -2729,12 +2761,15 @@ export const SkillLibraryPanel = ({
             </header>
             <div className="cleanup-bulk-review-list ui-dialog-body">
               {sharedTargetReview.sharedMigration.pendingConsumers.map((targetId) => (
-                <span key={targetId}>{t(targetNameFor(targetId, targetNames, targetId))}</span>
+                <span key={targetId}>
+                  <strong>{t(targetNameFor(targetId, targetNames, targetId))}</strong>
+                  {t("Use an active Profile, or capture current Skills into a new Profile")}
+                </span>
               ))}
               <p className="shared-target-review-guidance">
-                {t("Apply the intended Profile to each Agent, then return here to move this Skill out of the shared folder.")}
+                {t("AgentEnv will preserve current use of this Skill, apply each Agent's Profile, then move the Skill out of the shared folder.")}
               </p>
-              <small>{t("Profiles without this Skill will keep it absent from that Agent after the shared copy is removed.")}</small>
+              <small>{t("Instructions and MCPs stay unchanged when AgentEnv creates a Profile for an unmanaged Agent.")}</small>
             </div>
             <footer className="preview-actions ui-dialog-footer">
               <button
@@ -2758,12 +2793,16 @@ export const SkillLibraryPanel = ({
               <button
                 className="primary-action"
                 type="button"
-                onClick={() => {
-                  setSharedTargetReviewKey(undefined);
-                  onOpenProfiles();
-                }}
+                aria-busy={sharedOperation?.action === "prepare"}
+                disabled={Boolean(sharedOperation)}
+                onClick={() => void moveSharedCopyToAgents()}
               >
-                {t("Open Profiles")}
+                {sharedOperation?.action === "prepare" ? (
+                  <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
+                ) : null}
+                {sharedOperation?.action === "prepare"
+                  ? t("Moving...")
+                  : t("Move to Agents")}
               </button>
             </footer>
           </section>

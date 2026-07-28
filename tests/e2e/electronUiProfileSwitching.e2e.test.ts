@@ -453,6 +453,8 @@ const launchApp = async (
     migratedBackupFixtures?: boolean;
     includeClaudeTarget?: boolean;
     includeTraeTarget?: boolean;
+    includePiTarget?: boolean;
+    enabledTargetIds?: string[];
     openCodeBetaProfileName?: string;
     malformedProfile?: boolean;
     malformedOpenCodeConfig?: boolean;
@@ -472,12 +474,25 @@ const launchApp = async (
   const codexDir = join(homeDir, ".codex");
   const claudeDir = join(homeDir, ".claude");
   const traeDir = join(homeDir, ".trae");
+  const piDir = join(homeDir, ".pi", "agent");
   const projectSkillRoot = join(root, "project-skills");
   await mkdir(binDir, { recursive: true });
   await mkdir(opencodeDir, { recursive: true });
   await mkdir(codexDir, { recursive: true });
   await mkdir(appDataRoot, { recursive: true });
   await writeJson(join(appDataRoot, "agentenv-data.json"), { formatVersion: 2 });
+  if (options.enabledTargetIds) {
+    await writeJson(join(appDataRoot, "settings.json"), {
+      locale: "system",
+      conversationTerminal: "default",
+      skillSyncMethod: "symlink",
+      skillStorageLocation: "appData",
+      skillAutoCheckEnabled: true,
+      skillAutoCheckIntervalMinutes: 60,
+      backupRetentionDays: null,
+      enabledTargetIds: options.enabledTargetIds
+    });
+  }
   const opencodeExecutable = join(binDir, "opencode");
   const codexExecutable = join(binDir, "codex");
   if (options.openCodeDesktopOnly) {
@@ -499,6 +514,12 @@ const launchApp = async (
     await writeFile(traeExecutable, "#!/bin/sh\necho fake-traecli\n", "utf8");
     await chmod(traeExecutable, 0o755);
     await mkdir(traeDir, { recursive: true });
+  }
+  if (options.includePiTarget) {
+    const piExecutable = join(binDir, "pi");
+    await writeFile(piExecutable, "#!/bin/sh\necho fake-pi\n", "utf8");
+    await chmod(piExecutable, 0o755);
+    await mkdir(piDir, { recursive: true });
   }
   await writeFile(join(opencodeDir, "AGENTS.md"), "# Existing UI OpenCode\n", "utf8");
   if (options.malformedOpenCodeConfig) {
@@ -680,6 +701,7 @@ const launchApp = async (
     codexDir,
     claudeDir,
     traeDir,
+    piDir,
     librarySkill,
     githubFixtureRoot,
     projectSkillRoot,
@@ -5273,13 +5295,13 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => sharedTargetReview.textContent()).toContain("OpenCode");
     await expect.poll(() => sharedTargetReview.textContent()).toContain("Codex");
     await expect.poll(() => sharedTargetReview.textContent()).toContain(
-      "return here to move this Skill out of the shared folder"
+      "apply each Agent's Profile, then move the Skill out of the shared folder"
     );
     await expect(sharedTargetReview.getByRole("button", { name: "Keep shared copy" }).count()).resolves.toBe(1);
-    await sharedTargetReview.getByRole("button", { name: "Open Profiles" }).click();
-    await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
-    await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await expect(
+      sharedTargetReview.getByRole("button", { name: "Move to Agents" }).count()
+    ).resolves.toBe(1);
+    await sharedTargetReview.getByRole("button", { name: "Cancel" }).click();
     await cleanupGroup.waitFor({ state: "visible" });
 
     const retirementError = await page.evaluate(async ({ skillKey, libraryId, path }) => {
@@ -5440,6 +5462,82 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => fileExists(join(opencodeDir, "skills", skillId))).toBe(false);
     await expect.poll(() => fileExists(join(codexDir, "skills", skillId))).toBe(false);
   }, 45_000);
+
+  it("moves a shared Skill directly into an unmanaged Pi Profile from Scan local", async () => {
+    const { appDataRoot, homeDir, piDir, page } = await launchApp({
+      includePiTarget: true,
+      enabledTargetIds: ["pi"]
+    });
+    const skillId = "pi-shared-ops";
+    const sharedSkillDir = join(homeDir, ".agents", "skills", skillId);
+    await mkdir(sharedSkillDir, { recursive: true });
+    await writeFile(
+      join(sharedSkillDir, "SKILL.md"),
+      `---\nname: ${skillId}\ndescription: Shared Pi operations.\n---\n\n# Pi Shared Ops\n`,
+      "utf8"
+    );
+
+    const inventory = await page.evaluate(() => window.agentEnv.scanSkillInventory());
+    expect(inventory).toContainEqual(
+      expect.objectContaining({
+        skillKey: skillId,
+        path: sharedSkillDir,
+        foundIn: ["pi"],
+        sharedLocation: true
+      })
+    );
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Scan local" }).click();
+    const environmentSkills = page.getByRole("region", { name: "Environment skills" });
+    await environmentSkills.getByRole("button", { name: "Refresh local skills" }).click();
+    await expect.poll(() => environmentSkills.textContent()).toContain(skillId);
+    const cleanupGroup = page.getByRole("group", { name: `Cleanup group ${skillId}` });
+    await page.getByRole("button", { name: /Clean up \d+ ready Skills/ }).click();
+    const addDialog = page.getByRole("dialog", { name: "Clean up local Skills" });
+    await addDialog.getByRole("button", { name: /Clean up \d+ skills/ }).click();
+    await expect
+      .poll(() => fileExists(join(appDataRoot, "skills-library", skillId, "SKILL.md")))
+      .toBe(true);
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Needs choice");
+
+    await cleanupGroup
+      .getByRole("button", { name: `Review Agents ${skillId}` })
+      .click();
+    const migrationDialog = page.getByRole("dialog", {
+      name: "Prepare shared Skill migration"
+    });
+    await expect.poll(() => migrationDialog.textContent()).toContain("Pi");
+    const moveButton = migrationDialog.locator("button.primary-action");
+    await moveButton.click();
+    await expect
+      .poll(() => moveButton.getAttribute("aria-busy"), { timeout: 2_000 })
+      .toBe("true");
+    await migrationDialog.waitFor({ state: "hidden", timeout: 15_000 });
+
+    await expect(fileExists(sharedSkillDir)).resolves.toBe(false);
+    const piSkillDir = join(piDir, "skills", skillId);
+    await expect(fileExists(join(piSkillDir, "SKILL.md"))).resolves.toBe(true);
+    await expect(fileExists(`${piSkillDir}.agentenv-owner.json`)).resolves.toBe(true);
+
+    const profileEntries = await readdir(join(appDataRoot, "profiles"));
+    const piProfileDir = profileEntries.find((entry) => entry.startsWith("pi-"));
+    expect(piProfileDir).toBeTruthy();
+    const resources = await readJson<{
+      skills: Array<{ libraryId: string; targetName: string; enabled: boolean }>;
+      managementByTarget?: Record<string, { instructions: string; skills: string }>;
+      mcpByTarget: Record<string, { mode: string }>;
+    }>(join(appDataRoot, "profiles", piProfileDir!, "resources.json"));
+    expect(resources.skills).toContainEqual({
+      libraryId: skillId,
+      targetName: skillId,
+      enabled: true
+    });
+    expect(resources.managementByTarget?.pi).toEqual({
+      instructions: "ignore",
+      skills: "manage"
+    });
+    expect(resources.mcpByTarget.pi).toMatchObject({ mode: "ignore" });
+  }, 60_000);
 
   it("auto-manages safe cleanup groups while leaving content conflicts for review", async () => {
     const { appDataRoot, opencodeDir, homeDir, page } = await launchApp();

@@ -1307,6 +1307,13 @@ Object.assign(zhCN, {
   "Choose how Targets use this Skill": "选择各目标如何使用此技能",
   "Prepare shared Skill migration": "准备迁移共享技能",
   "Prepare affected Agents": "准备受影响的 Agent",
+  "Move to Agents": "迁移到 Agent",
+  "Use an active Profile, or capture current Skills into a new Profile":
+    "使用当前生效的配置方案；若尚未接管，则从现有技能创建新配置方案",
+  "AgentEnv will preserve current use of this Skill, apply each Agent's Profile, then move the Skill out of the shared folder.":
+    "AgentEnv 会保留此技能当前的使用状态，应用各 Agent 的配置方案，然后将技能迁出共享目录。",
+  "Instructions and MCPs stay unchanged when AgentEnv creates a Profile for an unmanaged Agent.":
+    "为尚未接管的 Agent 创建配置方案时，Instructions 和 MCP 保持不变。",
   "{{name}} is still loaded by {{count}} Targets from one shared folder.": "仍有 {{count}} 个目标从同一个共享目录加载 {{name}}。",
   "Apply the intended Profile to each Target, then return here to replace the shared copy.": "为每个目标应用预期的配置方案，然后返回此处替换共享副本。",
   "Apply the intended Profile to each Agent, then return here to move this Skill out of the shared folder.": "为每个 Agent 应用预期的配置方案，然后返回这里将此技能迁出共享目录。",

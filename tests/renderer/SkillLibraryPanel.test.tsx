@@ -130,7 +130,7 @@ describe("SkillLibraryPanel", () => {
     const onReviewSkillGroupAgain = vi.fn();
     const onSetSharedSkillRetention = vi.fn().mockResolvedValue(true);
     const onRetireSharedSkill = vi.fn().mockResolvedValue(true);
-    const onOpenProfiles = vi.fn();
+    const onMoveSharedSkillToAgents = vi.fn().mockResolvedValue(true);
     const onRestoreCleanup = vi.fn();
     const onPreviewSkillMerge = vi.fn();
     const onMergeLibrarySkills = vi.fn().mockResolvedValue(true);
@@ -151,6 +151,25 @@ describe("SkillLibraryPanel", () => {
       path: "/tmp/opencode/skills/target-only-reviewer",
       rootPath: "/tmp/opencode/skills/target-only-reviewer"
     });
+    const preparedTargets = {
+      "compat-reviewer": [
+        {
+          targetId: "opencode",
+          targetName: "compat-reviewer",
+          disposition: "install" as const,
+          libraryId: "compat-reviewer",
+          sharedPaths: ["/tmp/home/.agents/skills/compat-reviewer"]
+        },
+        {
+          targetId: "codex",
+          targetName: "compat-reviewer",
+          disposition: "omit" as const,
+          libraryId: "compat-reviewer",
+          sharedPaths: ["/tmp/home/.agents/skills/compat-reviewer"]
+        }
+      ]
+    };
+    let visiblePreparedTargets = preparedTargets;
 
     const renderPanel = (
       activeTool?: "import" | "discoveries",
@@ -520,24 +539,7 @@ describe("SkillLibraryPanel", () => {
         updateRun={updateRun}
         skillUsage={{ "shared-reviewer": ["Daily Coding"] }}
         installedTargetIds={["opencode", "codex"]}
-        preparedTargetsBySkill={{
-          "compat-reviewer": [
-            {
-              targetId: "opencode",
-              targetName: "compat-reviewer",
-              disposition: "install",
-              libraryId: "compat-reviewer",
-              sharedPaths: ["/tmp/home/.agents/skills/compat-reviewer"]
-            },
-            {
-              targetId: "codex",
-              targetName: "compat-reviewer",
-              disposition: "omit",
-              libraryId: "compat-reviewer",
-              sharedPaths: ["/tmp/home/.agents/skills/compat-reviewer"]
-            }
-          ]
-        }}
+        preparedTargetsBySkill={visiblePreparedTargets}
         activeTool={activeTool}
         isRefreshingInventory={false}
         onCloseTool={onCloseTool}
@@ -577,7 +579,7 @@ describe("SkillLibraryPanel", () => {
         onReviewSkillGroupAgain={onReviewSkillGroupAgain}
         onSetSharedSkillRetention={onSetSharedSkillRetention}
         onRetireSharedSkill={onRetireSharedSkill}
-        onOpenProfiles={onOpenProfiles}
+        onMoveSharedSkillToAgents={onMoveSharedSkillToAgents}
         onRestoreCleanup={onRestoreCleanup}
         viewState={{ ...defaultSkillLibraryViewState, scrollTop: 180 }}
         onViewStateChange={onViewStateChange}
@@ -1034,7 +1036,39 @@ describe("SkillLibraryPanel", () => {
     expect(discoveries).toHaveTextContent("Kept outside AgentEnv");
     expect(discoveries).toHaveTextContent("External");
     expect(discoveries).toHaveTextContent("Shared: OpenCode + Codex");
-    const sharedMigrationGroup = screen.getByRole("group", {
+    visiblePreparedTargets = {
+      "compat-reviewer": preparedTargets["compat-reviewer"].slice(0, 1)
+    };
+    rerender(renderPanel("discoveries"));
+    let sharedMigrationGroup = screen.getByRole("group", {
+      name: "Cleanup group compat-reviewer"
+    });
+    expect(sharedMigrationGroup).toHaveTextContent("Needs choice");
+    fireEvent.click(
+      within(sharedMigrationGroup).getByRole("button", {
+        name: "Review Agents compat-reviewer"
+      })
+    );
+    const prepareDialog = screen.getByRole("dialog", {
+      name: "Prepare shared Skill migration"
+    });
+    expect(prepareDialog).toHaveTextContent("Codex");
+    expect(prepareDialog).toHaveTextContent("capture current Skills into a new Profile");
+    fireEvent.click(within(prepareDialog).getByRole("button", { name: "Move to Agents" }));
+    await waitFor(() =>
+      expect(onMoveSharedSkillToAgents).toHaveBeenCalledWith(
+        {
+          skillKey: "compat-reviewer",
+          libraryId: "compat-reviewer",
+          paths: ["/tmp/home/.agents/skills/compat-reviewer"]
+        },
+        ["codex"]
+      )
+    );
+
+    visiblePreparedTargets = preparedTargets;
+    rerender(renderPanel("discoveries"));
+    sharedMigrationGroup = screen.getByRole("group", {
       name: "Cleanup group compat-reviewer"
     });
     expect(sharedMigrationGroup).toHaveTextContent("Ready");
@@ -1515,7 +1549,7 @@ describe("SkillLibraryPanel", () => {
         onReviewSkillGroupAgain={noop}
         onSetSharedSkillRetention={vi.fn().mockResolvedValue(false)}
         onRetireSharedSkill={vi.fn().mockResolvedValue(false)}
-        onOpenProfiles={noop}
+        onMoveSharedSkillToAgents={vi.fn().mockResolvedValue(false)}
         onRestoreCleanup={noop}
         viewState={defaultSkillLibraryViewState}
         onViewStateChange={noop}
@@ -1703,7 +1737,7 @@ describe("SkillLibraryPanel", () => {
         onReviewSkillGroupAgain={noop}
         onSetSharedSkillRetention={vi.fn().mockResolvedValue(true)}
         onRetireSharedSkill={vi.fn().mockResolvedValue(true)}
-        onOpenProfiles={noop}
+        onMoveSharedSkillToAgents={vi.fn().mockResolvedValue(true)}
         onRestoreCleanup={noop}
         viewState={defaultSkillLibraryViewState}
         onViewStateChange={noop}

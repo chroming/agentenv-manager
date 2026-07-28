@@ -910,6 +910,17 @@
   margin: 2px 0 0;
 }
 
+.shared-target-review-dialog .cleanup-bulk-review-list > span {
+  display: grid;
+  gap: 2px;
+}
+
+.shared-target-review-dialog .cleanup-bulk-review-list > span > strong {
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  line-height: 1.35;
+}
+
 .shared-target-review-dialog .shared-keep-action {
   margin-left: auto;
 }
