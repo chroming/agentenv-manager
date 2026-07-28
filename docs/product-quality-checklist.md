@@ -14,6 +14,9 @@ an E2E selector can click the new control. Every applicable invariant below must
 hold across sibling surfaces, supported states, languages, window sizes, and the
 rebuilt desktop artifact.
 
+The evidence layers and Target conformance gate are defined in
+[`testing-strategy.md`](testing-strategy.md).
+
 ## 1. Product Read
 
 AgentEnv Manager is a local-first macOS desktop tool for technical users who
@@ -78,6 +81,12 @@ Use one verdict for every audit or release:
 - [ ] No refresh, navigation, or background enrichment flashes a false empty
   page.
 - [ ] No release claim uses stale renderer or Electron build output.
+- [ ] Every built-in Target passes the shared Capture, Apply, no-op, drift,
+  restart, and exact-rollback contract.
+- [ ] A failure-injection test proves automatic rollback restores file content,
+  type, permissions, links, and directories.
+- [ ] Packaged evidence includes every built-in Target, not only the most common
+  Agent used during development.
 
 ## 4. Skills Library P0 Contract
 

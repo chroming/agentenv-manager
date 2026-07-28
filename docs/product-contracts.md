@@ -599,6 +599,8 @@ Rules:
 - Cross-Target Preview MUST calculate an effective payload from the managed Instructions file, enabled Library Skills, and only the selected Target's MCP policy. Empty Instructions still represent one explicit managed file state, and Off still represents one managed MCP switch.
 - Cross-Target Preview MUST show the final destination representation, not only the source Profile.
 - Adding a Target MUST require a single adapter plus contract tests for capabilities, paths, serialization, preview, Apply, drift, and rollback.
+- Every built-in Target MUST pass one shared conformance suite for command discovery, read-only Capture, A-to-B replacement, restart persistence, semantic no-op, ownership policy, stale Preview rejection, and exact failure rollback. Target-specific happy-path tests are not a substitute.
+- Compatibility evidence MUST include materialized machine-layout fixtures for legacy and current paths, symbolic-link roots, broken resources, and externally owned resources where the Target supports them.
 - An adapter MUST NOT receive arbitrary native configuration from a Profile.
 
 Status: adapter capability declaration, effective-payload review, cross-Target Instructions and Skills, and Target-specific native MCP activation are `Implemented`.
@@ -807,7 +809,7 @@ Status: active Profile deletion is blocked; both Stop Managing paths, safety bac
 
 - Every mutating Apply, takeover, cleanup, Library deletion with installs, and Stop Managing action MUST have a recoverable Backup when feasible.
 - Rollback MUST be previewed before it writes.
-- Rollback MUST restore files, directories, links, ownership markers, and deployment state consistently.
+- Rollback MUST restore files, directories, links, permissions, ownership markers, deployment state, and originally absent managed directories consistently.
 - Rollback MUST detect live changes made after the Backup and require explicit confirmation before replacing them.
 - A Rollback Preview becomes stale when any affected live path changes after Preview. Rollback MUST reject the stale plan without writing and require a fresh Preview.
 - A successful rollback MUST refresh Target lifecycle and active Profile metadata.

@@ -1,7 +1,7 @@
 import { readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { profileManagesResource } from "../../../shared/profileResources";
-import { pathExists } from "../../fileUtils";
+import { pathEntryExists, pathExists } from "../../fileUtils";
 import { isAgentEnvOwnedDir, markerPathForFile } from "../../ownershipMarkers";
 import { removeSkillDeployment } from "../../skillDeployment";
 import {
@@ -21,6 +21,35 @@ const isOwnedTargetSkill = (path: string, input: TargetAssetInput) =>
 
 const managesSkills = (input: TargetAssetInput) =>
   profileManagesResource(input.profile.resources, input.targetPaths.targetId, "skills");
+
+const isWithin = (parent: string, child: string) => {
+  const relativePath = relative(resolve(parent), resolve(child));
+  return (
+    relativePath === "" ||
+    (!relativePath.startsWith("..") && !relativePath.includes("/../"))
+  );
+};
+
+const missingManagedSkillDirectories = async (input: TargetAssetInput) => {
+  const skillsDir = input.targetPaths.skillsDir;
+  if (!skillsDir) return [];
+  const containers = [
+    input.targetPaths.configDir,
+    dirname(input.targetPaths.instructionsPath)
+  ].filter(Boolean);
+  const missing: string[] = [];
+  let candidate = resolve(skillsDir);
+  while (
+    containers.some((container) => isWithin(container, candidate)) &&
+    !(await pathEntryExists(candidate))
+  ) {
+    missing.push(candidate);
+    const parent = dirname(candidate);
+    if (parent === candidate) break;
+    candidate = parent;
+  }
+  return missing;
+};
 
 const staleOwnedSkillPaths = async (input: TargetAssetInput) => {
   const root = input.targetPaths.skillsDir;
@@ -43,6 +72,9 @@ export const createDirectoryAssetDriver = (
   getAssetBackupPaths: async (input) => {
     if (!managesSkills(input)) return [];
     const paths = new Set<string>();
+    for (const missingPath of await missingManagedSkillDirectories(input)) {
+      paths.add(missingPath);
+    }
     addSkillRefBackupPaths(paths, input.targetPaths, input);
     for (const stalePath of await staleOwnedSkillPaths(input)) {
       paths.add(stalePath);

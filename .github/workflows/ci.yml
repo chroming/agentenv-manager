@@ -28,5 +28,7 @@ jobs:
       - run: npm run audit:modules
       - run: npm run audit:translations
       - run: npm run build
+      - run: npm run test:targets
+      - run: npm run test:compat:installed
       - run: npm test
       - run: npm run test:e2e:packaged

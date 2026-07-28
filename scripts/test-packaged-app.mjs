@@ -41,17 +41,139 @@ const unsafeCleanupBackupDir = join(
 const unsafeCleanupBackupManifest = join(unsafeCleanupBackupDir, "manifest.json");
 let application;
 
+const packagedTargets = [
+  {
+    id: "opencode",
+    name: "OpenCode",
+    executable: [join(homeDir, ".local", "bin", "opencode"), "opencode"],
+    instructionsPath: join(homeDir, ".config", "opencode", "AGENTS.md"),
+    skillsDir: join(homeDir, ".config", "opencode", "skills")
+  },
+  {
+    id: "claude-code",
+    name: "Claude Code",
+    executable: [join(homeDir, ".bun", "bin", "claude"), "claude"],
+    instructionsPath: join(homeDir, ".claude", "CLAUDE.md"),
+    skillsDir: join(homeDir, ".claude", "skills")
+  },
+  {
+    id: "codex",
+    name: "Codex",
+    executable: [join(homeDir, ".cargo", "bin", "codex"), "codex"],
+    instructionsPath: join(homeDir, ".codex", "AGENTS.md"),
+    skillsDir: join(homeDir, ".codex", "skills")
+  },
+  {
+    id: "antigravity",
+    name: "Antigravity CLI",
+    executable: [join(homeDir, "Library", "pnpm", "agy"), "agy"],
+    instructionsPath: join(homeDir, ".gemini", "GEMINI.md"),
+    skillsDir: join(homeDir, ".gemini", "antigravity-cli", "skills")
+  },
+  {
+    id: "trae-cli",
+    name: "Trae CLI",
+    executable: [join(homeDir, ".local", "bin", "traecli"), "traecli"],
+    instructionsPath: join(homeDir, ".trae", "rules", "agentenv-manager.md"),
+    skillsDir: join(homeDir, ".trae", "skills")
+  },
+  {
+    id: "pi",
+    name: "Pi",
+    executable: [join(homeDir, ".local", "bin", "pi"), "pi"],
+    instructionsPath: join(homeDir, ".pi", "agent", "AGENTS.md"),
+    skillsDir: join(homeDir, ".pi", "agent", "skills")
+  }
+];
+
+const writeJson = async (path, value) => {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+};
+
+const writePackagedTargetProfile = async (target) => {
+  const profileId = `packaged-${target.id}`;
+  const profileDir = join(appDataRoot, "profiles", profileId);
+  await mkdir(profileDir, { recursive: true });
+  await writeJson(join(profileDir, "profile.json"), {
+    id: profileId,
+    name: `Packaged ${target.name}`,
+    description: "Packaged Target contract Profile",
+    preferredTargetId: target.id,
+    createdFromTargetId: target.id,
+    version: 2
+  });
+  await writeFile(
+    join(profileDir, "INSTRUCTIONS.md"),
+    `# Packaged ${target.name}\n\n- Keep changes scoped and reversible.\n`,
+    "utf8"
+  );
+  await writeJson(join(profileDir, "resources.json"), {
+    skills: [{
+      libraryId: "packaged-contract-skill",
+      targetName: "packaged-contract-skill",
+      enabled: true
+    }],
+    managementByTarget: {
+      [target.id]: {
+        instructions: "manage",
+        skills: "manage"
+      }
+    },
+    mcpByTarget: {
+      [target.id]: {
+        mode: "ignore",
+        selections: []
+      }
+    }
+  });
+  return profileId;
+};
+
+const launchPackagedApplication = () =>
+  electron.launch({
+    executablePath,
+    args: [`--user-data-dir=${join(root, "electron-user-data")}`],
+    env: {
+      ...process.env,
+      AGENTENV_AUTOMATION: "1",
+      AGENTENV_TEST_CLOSE_GUARD: "1",
+      AGENTENV_DATA_ROOT: appDataRoot,
+      AGENTENV_CACHE_ROOT: join(root, "cache"),
+      AGENTENV_FAKE_HOME: fakeHomeRoot,
+      AGENTENV_HOME: homeDir,
+      PATH: "/usr/bin:/bin:/usr/sbin:/sbin"
+    }
+  });
+
+const closePackagedApplication = async (app, page) => {
+  await page.evaluate(() => window.agentEnv.setWindowCloseGuard(false));
+  const windowHandle = await app.browserWindow(page);
+  const closed = page.waitForEvent("close", { timeout: 5_000 });
+  await windowHandle.evaluate((browserWindow) => browserWindow.close());
+  await closed;
+  const childProcess = app.process();
+  let timeout;
+  try {
+    await Promise.race([
+      app.close(),
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => {
+          childProcess.kill("SIGKILL");
+          reject(new Error("Packaged application did not terminate within 5 seconds"));
+        }, 5_000);
+      })
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 try {
   await mkdir(opencodeDir, { recursive: true });
   await mkdir(repositoryRemote, { recursive: true });
   await mkdir(repositoryWork, { recursive: true });
-  const packagedAgentCommands = [
-    [join(homeDir, ".local", "bin", "opencode"), "opencode"],
-    [join(homeDir, ".bun", "bin", "claude"), "claude"],
-    [join(homeDir, ".cargo", "bin", "codex"), "codex"],
-    [join(homeDir, "Library", "pnpm", "agy"), "agy"],
-    [join(homeDir, ".local", "bin", "traecli"), "traecli"]
-  ];
+  const packagedAgentCommands = packagedTargets.map((target) => target.executable);
   for (const [executablePath, name] of packagedAgentCommands) {
     await mkdir(dirname(executablePath), { recursive: true });
     await writeFile(executablePath, `#!/bin/sh\necho packaged-e2e-${name}\n`, "utf8");
@@ -92,6 +214,26 @@ try {
       backupPath: unsafeCleanupBackupPath
     }]
   }, null, 2)}\n`, "utf8");
+  const contractSkillDir = join(
+    appDataRoot,
+    "skills-library",
+    "packaged-contract-skill"
+  );
+  await mkdir(contractSkillDir, { recursive: true });
+  await writeFile(
+    join(contractSkillDir, "SKILL.md"),
+    "---\nname: packaged-contract-skill\ndescription: Packaged Target contract Skill.\n---\n# Packaged contract\n",
+    "utf8"
+  );
+  await writeJson(join(contractSkillDir, ".agentenv-skill.json"), {
+    sourceType: "local",
+    updateCheckEnabled: false,
+    updatedAt: "2026-07-28T00:00:00.000Z"
+  });
+  const packagedProfileIds = new Map();
+  for (const target of packagedTargets) {
+    packagedProfileIds.set(target.id, await writePackagedTargetProfile(target));
+  }
 
   const runGit = (cwd, args) => execFileAsync("/usr/bin/git", args, {
     cwd,
@@ -113,20 +255,7 @@ try {
   await runGit(repositoryWork, ["commit", "-m", "add packaged repository skill"]);
   await runGit(repositoryWork, ["push", "origin", "HEAD:refs/heads/main"]);
 
-  application = await electron.launch({
-    executablePath,
-    args: [`--user-data-dir=${join(root, "electron-user-data")}`],
-    env: {
-      ...process.env,
-      AGENTENV_AUTOMATION: "1",
-      AGENTENV_TEST_CLOSE_GUARD: "1",
-      AGENTENV_DATA_ROOT: appDataRoot,
-      AGENTENV_CACHE_ROOT: join(root, "cache"),
-      AGENTENV_FAKE_HOME: fakeHomeRoot,
-      AGENTENV_HOME: homeDir,
-      PATH: "/usr/bin:/bin:/usr/sbin:/sbin"
-    }
-  });
+  application = await launchPackagedApplication();
   const page = await application.firstWindow();
   await page.setViewportSize({ width: 1180, height: 728 });
   await page.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });
@@ -137,8 +266,8 @@ try {
   assert.deepEqual(migratedTargetState.managedResources, []);
   assert.equal(await readFile(legacyOwnerSidecar, "utf8"), legacyOwnerContent);
   await page.getByRole("button", { name: "Agents", exact: true }).click();
-  for (const agentName of ["OpenCode", "Claude Code", "Codex", "Antigravity CLI", "Trae CLI"]) {
-    const agent = page.getByRole("article", { name: `Agent ${agentName}` });
+  for (const target of packagedTargets) {
+    const agent = page.getByRole("article", { name: `Agent ${target.name}` });
     await agent.waitFor({ state: "visible" });
     assert.match((await agent.textContent()) ?? "", /Ready/);
   }
@@ -163,31 +292,74 @@ try {
     ),
     /Finder PATH repository smoke test/
   );
-  await page
-    .getByRole("complementary", { name: "Global navigation" })
-    .getByRole("button", { name: "Profiles", exact: true })
-    .click();
-  await page.getByRole("button", { name: /OpenCode Daily Coding/ }).click();
-  const applyButton = page.getByRole("button", { name: "Apply", exact: true });
-  await applyButton.click();
-  const preview = page.getByRole("dialog", { name: "Preview" });
-  await preview.getByRole("button", { name: "Apply", exact: true }).click();
-  await preview.waitFor({ state: "hidden" });
-
-  assert.match(
-    await readFile(join(opencodeDir, "AGENTS.md"), "utf8"),
-    /Keep changes scoped and reversible/
+  for (const target of packagedTargets) {
+    const profileId = packagedProfileIds.get(target.id);
+    const outcome = await page.evaluate(
+      async ({ profileId, targetId }) => {
+        const preview = await window.agentEnv.previewApply(profileId, targetId);
+        const blocking = preview.issues.filter((issue) => issue.severity === "blocking");
+        if (blocking.length > 0) {
+          return {
+            ok: false,
+            errors: blocking.map((issue) => issue.message)
+          };
+        }
+        return window.agentEnv.applyProfile(profileId, preview.id);
+      },
+      { profileId, targetId: target.id }
+    );
+    assert.equal(
+      outcome.ok,
+      true,
+      `${target.name} packaged Apply failed: ${outcome.errors?.join("; ")}`
+    );
+    assert.match(
+      await readFile(target.instructionsPath, "utf8"),
+      new RegExp(`Packaged ${target.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`)
+    );
+    assert.match(
+      await readFile(join(target.skillsDir, "packaged-contract-skill", "SKILL.md"), "utf8"),
+      /Packaged contract/
+    );
+  }
+  const appliedStates = await page.evaluate(() => window.agentEnv.listTargetStates());
+  assert.deepEqual(
+    appliedStates.map((state) => state.targetId).sort(),
+    packagedTargets.map((target) => target.id).sort()
   );
   assert.equal(
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     true
   );
-  const windowHandle = await application.browserWindow(page);
-  const closed = page.waitForEvent("close");
-  await windowHandle.evaluate((browserWindow) => browserWindow.close());
-  await closed;
-  process.stdout.write("Packaged macOS profile and Repository workflows passed\n");
+  await closePackagedApplication(application, page);
+  application = undefined;
+  application = await launchPackagedApplication();
+  const restartedPage = await application.firstWindow();
+  await restartedPage.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });
+  const restartedStates = await restartedPage.evaluate(() =>
+    window.agentEnv.listTargetStates()
+  );
+  assert.deepEqual(
+    restartedStates.map((state) => [state.targetId, state.lifecycleStatus]).sort(),
+    packagedTargets.map((target) => [target.id, "applied"]).sort()
+  );
+  await closePackagedApplication(application, restartedPage);
+  application = undefined;
+  process.stdout.write(
+    "Packaged macOS six-Agent Apply, restart, and Repository workflows passed\n"
+  );
 } finally {
-  await application?.close();
+  if (application) {
+    const process = application.process();
+    await Promise.race([
+      application.close(),
+      new Promise((resolve) => {
+        setTimeout(() => {
+          process.kill("SIGKILL");
+          resolve();
+        }, 5_000);
+      })
+    ]);
+  }
   await rm(root, { recursive: true, force: true });
 }

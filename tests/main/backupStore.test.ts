@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -57,6 +57,44 @@ describe("backup store", () => {
       missing: true
     });
     expect(manifest.entries[0]?.backupPath).toBeUndefined();
+  });
+
+  it("records file permissions needed for an exact rollback", async () => {
+    const paths = await makePaths();
+    await writeFile(paths.globalAgentsPath, "# Agent\n");
+    await chmod(paths.globalAgentsPath, 0o644);
+    const store = createBackupStore(paths, {
+      now: () => new Date("2026-06-30T00:00:00.000Z")
+    });
+
+    const manifest = await store.createBackup([paths.globalAgentsPath]);
+
+    expect(manifest.entries[0]?.mode).toBe(0o644);
+    await expect(store.readBackup(manifest.id)).resolves.toMatchObject({
+      entries: [{ mode: 0o644 }]
+    });
+  });
+
+  it("recovers permissions from legacy backup content without a recorded mode", async () => {
+    const paths = await makePaths();
+    await writeFile(paths.globalAgentsPath, "# Agent\n");
+    await chmod(paths.globalAgentsPath, 0o640);
+    const store = createBackupStore(paths, {
+      now: () => new Date("2026-06-30T00:00:00.000Z")
+    });
+    const manifest = await store.createBackup([paths.globalAgentsPath]);
+    const manifestPath = join(paths.backupsDir, manifest.id, "manifest.json");
+    const legacyManifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    delete legacyManifest.entries[0].mode;
+    await writeFile(
+      manifestPath,
+      `${JSON.stringify(legacyManifest, null, 2)}\n`,
+      "utf8"
+    );
+
+    const restored = await store.readBackup(manifest.id);
+
+    expect(restored.entries[0]?.mode).toBe(0o640);
   });
 
   it("creates the backup root with owner-only permissions where supported", async () => {

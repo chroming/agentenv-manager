@@ -1594,6 +1594,7 @@ export interface BackupEntry {
   sourcePath: string;
   backupPath?: string;
   sha256?: string;
+  mode?: number;
   missing: boolean;
   kind?: "file" | "directory" | "symlink";
 }

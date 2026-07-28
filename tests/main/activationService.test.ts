@@ -972,6 +972,25 @@ describe("activation service v2", () => {
       .resolves.toContain("# Late");
   });
 
+  it("rejects a Preview when a missing Skills directory becomes a non-directory", async () => {
+    const { paths, service } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const preview = await service.previewProfile("daily-coding", "codex");
+    const skillsRoot = join(paths.codexHome, "skills");
+    await writeFile(skillsRoot, "occupied by a file\n", "utf8");
+
+    await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual(
+      expect.objectContaining({
+        ok: false,
+        kind: "stale",
+        errors: [expect.stringContaining("Skills root changed after preview")]
+      })
+    );
+    await expect(readFile(skillsRoot, "utf8")).resolves.toBe(
+      "occupied by a file\n"
+    );
+  });
+
   it("rejects a Preview when a deployment-relevant runtime Skill appears", async () => {
     const { paths, service } = await makeEnv();
     await writeCodexLiveFiles(paths);

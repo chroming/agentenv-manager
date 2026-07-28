@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { appendFile, cp, lstat, mkdir, readFile, readdir, readlink, rm, stat, symlink } from "node:fs/promises";
+import { appendFile, cp, lstat, mkdir, readFile, readdir, readlink, rm, stat } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createBackupStore } from "./backupStore";
@@ -9,9 +9,9 @@ import {
   pathExists,
   readTextIfExists,
   replacePathAtomically,
-  replacePathWithCopy,
   writeAtomic
 } from "./fileUtils";
+import { restoreBackupEntries } from "./backupRestore";
 import type { AgentEnvPaths } from "./paths";
 import type { ProfileStore } from "./profileStore";
 import {
@@ -152,6 +152,7 @@ interface InternalActivationPreview extends ActivationPreview {
   targetStateFingerprint: string;
   targetPathFingerprint: string;
   assetBackupPaths: string[];
+  missingAssetDirectories: string[];
   resourceManagement: {
     instructions: boolean;
     skills: boolean;
@@ -173,6 +174,7 @@ const publicPreview = (preview: InternalActivationPreview): ActivationPreview =>
     targetStateFingerprint: _targetStateFingerprint,
     targetPathFingerprint: _targetPathFingerprint,
     assetBackupPaths: _assetBackupPaths,
+    missingAssetDirectories: _missingAssetDirectories,
     resourceManagement: _resourceManagement,
     skillDeployment: _skillDeployment,
     ...publicValue
@@ -395,33 +397,6 @@ const createRollbackChange = async (
   };
 };
 
-const restoreBackupEntries = async (backup: BackupManifest) => {
-  for (const entry of backup.entries) {
-    if (entry.missing) {
-      await rm(entry.sourcePath, { recursive: true, force: true });
-      continue;
-    }
-
-    if (entry.kind === "directory") {
-      await replacePathWithCopy(entry.backupPath ?? "", entry.sourcePath, {
-        dereference: false
-      });
-      continue;
-    }
-
-    if (entry.kind === "symlink") {
-      const linkTarget = await readlink(entry.backupPath ?? "");
-      await replacePathAtomically(entry.sourcePath, (stagingPath) =>
-        symlink(linkTarget, stagingPath, "dir")
-      );
-      continue;
-    }
-
-    const content = await readFile(entry.backupPath ?? "", "utf8");
-    await writeAtomic(entry.sourcePath, content);
-  }
-};
-
 const materializeManagedSkillLink = async (path: string) => {
   const stats = await lstat(path).catch(() => undefined);
   if (!stats?.isSymbolicLink()) return;
@@ -563,6 +538,7 @@ export const createActivationService = ({
   const restoreBackupSafely = async (backup: BackupManifest) => {
     const exactPaths = new Set<string>();
     const resourceRoots = new Set<string>();
+    const resourceContainers = new Set<string>();
     const targetIds = [...new Set([backup.targetId, ...(backup.targetIds ?? [])])].filter(
       (id): id is string => Boolean(id)
     );
@@ -571,6 +547,8 @@ export const createActivationService = ({
       exactPaths.add(resolve(targetPaths.instructionsPath));
       exactPaths.add(resolve(targetPaths.configPath));
       exactPaths.add(resolve(statePathFor(targetId)));
+      resourceContainers.add(resolve(targetPaths.configDir));
+      resourceContainers.add(resolve(dirname(targetPaths.instructionsPath)));
       if (targetPaths.mcpConfigPath) exactPaths.add(resolve(targetPaths.mcpConfigPath));
       for (const root of [
         targetPaths.skillsDir,
@@ -589,12 +567,36 @@ export const createActivationService = ({
       const sourcePath = resolve(entry.sourcePath);
       const allowedResource = [...resourceRoots].some((root) => {
         if (sourcePath === root) {
-          return entry.kind === "symlink";
+          return entry.missing || entry.kind === "symlink";
         }
         const child = relative(root, sourcePath);
         return child.length > 0 && !child.startsWith("..") && !child.includes("/../") && dirname(sourcePath) === root;
       });
-      if (!exactPaths.has(sourcePath) && !allowedResource) {
+      const allowedMissingContainer = Boolean(
+        entry.missing &&
+        [...resourceContainers].some((container) => {
+          const fromContainer = relative(container, sourcePath);
+          if (
+            fromContainer.startsWith("..") ||
+            fromContainer.includes("/../")
+          ) {
+            return false;
+          }
+          return [...resourceRoots].some((root) => {
+            const toResource = relative(sourcePath, root);
+            return (
+              toResource.length > 0 &&
+              !toResource.startsWith("..") &&
+              !toResource.includes("/../")
+            );
+          });
+        })
+      );
+      if (
+        !exactPaths.has(sourcePath) &&
+        !allowedResource &&
+        !allowedMissingContainer
+      ) {
         throw new Error(`Backup contains a path outside AgentEnv-managed locations: ${entry.sourcePath}`);
       }
     }
@@ -862,6 +864,7 @@ export const createActivationService = ({
     targetPaths: TargetPaths,
     assetPaths: string[],
     skillLibraryDir: string,
+    topologyOnlyPaths: ReadonlySet<string>,
     skillRootTransition?: SkillRootTransition
   ) => {
     if (!profileManagesResource(profile.resources, targetPaths.targetId, "skills")) {
@@ -900,7 +903,7 @@ export const createActivationService = ({
         skillRootTransition &&
         dirname(path) === skillRootTransition.path
       );
-      if (!behindTransitionedRoot) {
+      if (!behindTransitionedRoot && !topologyOnlyPaths.has(resolve(path))) {
         resourceFingerprints[path] = (await hashPath(path)) ?? "";
       }
       if (skillRootTransition && path === skillRootTransition.path) {
@@ -1236,11 +1239,32 @@ export const createActivationService = ({
       replaceablePaths,
       isolateSkillRoot: Boolean(skillRootTransition)
     });
+    const resolvedSkillsDir = targetPaths.skillsDir
+      ? resolve(targetPaths.skillsDir)
+      : undefined;
+    const missingAssetDirectories = (
+      await Promise.all(
+        [...new Set(assetBackupPaths)].map(async (path) => {
+          if (!resolvedSkillsDir || await pathEntryExists(path)) return undefined;
+          const candidate = resolve(path);
+          const relativeToCandidate = relative(candidate, resolvedSkillsDir);
+          return (
+            (candidate === resolvedSkillsDir ||
+              (relativeToCandidate.length > 0 &&
+                !relativeToCandidate.startsWith("..") &&
+                !relativeToCandidate.includes("/../")))
+              ? candidate
+              : undefined
+          );
+        })
+      )
+    ).filter((path): path is string => Boolean(path));
     const assetPlan = await planAssetResources(
       materializedProfile,
       targetPaths,
       assetBackupPaths,
       skillLibraryDir,
+      new Set(missingAssetDirectories),
       skillRootTransition
     );
     const sharedFingerprints = Object.fromEntries(
@@ -1334,6 +1358,7 @@ export const createActivationService = ({
       skillRootTransition,
       legacySkillPaths,
       assetBackupPaths: [...new Set(assetBackupPaths)].sort(),
+      missingAssetDirectories: [...new Set(missingAssetDirectories)].sort(),
       resourceManagement: {
         instructions: managesInstructions,
         skills: managesSkills,
@@ -1568,6 +1593,16 @@ export const createActivationService = ({
             ok: false,
             kind: "stale",
             errors: [`Live resource changed after preview: ${path}`]
+          };
+        }
+      }
+      for (const path of preview.missingAssetDirectories) {
+        const current = await lstat(path).catch(() => undefined);
+        if (current && !current.isDirectory()) {
+          return {
+            ok: false,
+            kind: "stale",
+            errors: [`Managed resource directory changed after preview: ${path}`]
           };
         }
       }

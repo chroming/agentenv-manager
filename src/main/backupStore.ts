@@ -112,7 +112,13 @@ export const createBackupStore = (
       ) {
         throw new Error(`AgentEnv backup content does not match its manifest: ${safeId}`);
       }
-      normalizedEntries.push({ ...entry, backupPath: expectedBackupPath });
+      const mode =
+        entry.kind === "symlink"
+          ? undefined
+          : typeof entry.mode === "number" && Number.isInteger(entry.mode)
+            ? entry.mode & 0o777
+            : backupStats.mode & 0o777;
+      normalizedEntries.push({ ...entry, backupPath: expectedBackupPath, mode });
     }
     return { ...manifest, entries: normalizedEntries };
   };
@@ -162,6 +168,7 @@ export const createBackupStore = (
           entries.push({
             sourcePath,
             backupPath,
+            mode: sourceStats.mode & 0o777,
             missing: false,
             kind: "directory"
           });
@@ -172,6 +179,7 @@ export const createBackupStore = (
             sourcePath,
             backupPath,
             sha256: sha256(content),
+            mode: sourceStats.mode & 0o777,
             missing: false,
             kind: "file"
           });
