@@ -615,6 +615,27 @@ None substitutes for the others.
 11. Update the product contract or this checklist when the defect reveals a
     missing invariant.
 
+### 9.1 Stop conditions
+
+Do not edit or approve the change while any applicable condition remains:
+
+- The governing contract, user intent, or owning layer is unknown.
+- A shared primitive, shell, overlay, row, feedback, localization, or runtime
+  defect has no recorded sibling-surface sweep.
+- Renderer, CSS, preload, or main-process source is newer than the Electron
+  artifact used by E2E or screenshots.
+- A visual verdict relies only on selectors, accessibility, or geometry without
+  equal-state pixel inspection.
+- A mutation claim lacks isolated persisted-effect, no-op, verification, and
+  recovery evidence.
+- A packaged-runtime claim was inferred from the development server.
+- A direct user observation contradicts the current verdict and the defect
+  class has not been reopened.
+
+The Change-to-Evidence Map is required before changing a shared primitive,
+shell, resource row, overlay, or feedback component. The Completion Evidence
+Receipt is required before declaring a substantial product change complete.
+
 ## 10. Change-to-Evidence Map
 
 Complete this before changing a shared primitive, shell, resource row, overlay,

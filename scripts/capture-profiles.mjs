@@ -18,6 +18,7 @@ import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import electronPath from "electron";
 import { _electron as electron } from "playwright-core";
+import { assertCurrentBuild } from "./build-fingerprint.mjs";
 
 const projectRoot = resolve(import.meta.dirname, "..");
 const defaultOutputDir = join(
@@ -55,6 +56,7 @@ const parseArguments = (argumentsList) => {
 const { outputDir, suppliedReference } = parseArguments(process.argv.slice(2));
 const referencePath = join(outputDir, "reference.png");
 const execFile = promisify(execFileCallback);
+const capturedBuild = await assertCurrentBuild(projectRoot);
 
 const writeJson = async (path, value) => {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -586,6 +588,11 @@ const writeCaptureManifest = async () => {
   }
   await writeJson(join(outputDir, "capture-manifest.json"), {
     generatedAt: new Date().toISOString(),
+    build: {
+      sourceFingerprint: capturedBuild.source.sha256,
+      artifactFingerprint: capturedBuild.artifact.sha256,
+      generatedAt: capturedBuild.generatedAt
+    },
     viewports: ["1180x728", "920x620"],
     files
   });

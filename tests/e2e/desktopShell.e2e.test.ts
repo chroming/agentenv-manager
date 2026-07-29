@@ -4,9 +4,12 @@ import { join } from "node:path";
 import electronPath from "electron";
 import { _electron as electron, type ElectronApplication } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
+import { requireCurrentElectronBuild } from "./currentBuild";
 
 let root = "";
 let app: ElectronApplication | undefined;
+
+requireCurrentElectronBuild();
 
 const launch = async () => electron.launch({
   executablePath: electronPath as unknown as string,

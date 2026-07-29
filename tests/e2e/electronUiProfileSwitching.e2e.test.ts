@@ -34,10 +34,13 @@ import {
   expectTopmost,
   findVisibleTextLayoutDefects
 } from "./layoutAssertions";
+import { requireCurrentElectronBuild } from "./currentBuild";
 import { createStoredZip } from "../helpers/createStoredZip";
 
 let root = "";
 let app: ElectronApplication | undefined;
+
+requireCurrentElectronBuild();
 
 const fileExists = async (path: string) => {
   try {

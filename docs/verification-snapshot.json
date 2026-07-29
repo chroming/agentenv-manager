@@ -1,19 +1,26 @@
 {
-  "generatedAt": "2026-07-29T04:54:32.628Z",
+  "generatedAt": "2026-07-29T11:54:43.093Z",
   "source": {
-    "commit": "c0cd9db7c384773daaddcbd53dee871b5548c610",
+    "commit": "9bcb490d05382c7f5713030aa678d9392e29d6c4",
     "dirty": true,
-    "fingerprint": "a88fbb6a4da062704172a2a30d2b230b88029beb656a822c51abf485af567fe4",
-    "files": 518
+    "fingerprint": "7f9c72b27dd539d7898433f41f793dfe4a5510df3ca3b14549c007310afdf1d0",
+    "files": 545
+  },
+  "build": {
+    "generatedAt": "2026-07-29T11:49:42.604Z",
+    "sourceFingerprint": "3cf7370d6e3f711ecfb86878d9a6c138ca772f57bf179d5356e7b1b1c8f914b3",
+    "sourceFiles": 268,
+    "artifactFingerprint": "e2292b0a790e79979e8692bb8c8b2ed686d3d0ef83a56f6c13f6ea019e9e5f3f",
+    "artifactFiles": 26
   },
   "tests": {
     "passed": true,
-    "files": 140,
-    "assertions": 991,
+    "files": 149,
+    "assertions": 1024,
     "e2eFiles": 15,
-    "e2eAssertions": 174,
+    "e2eAssertions": 176,
     "electronUiFiles": 1,
-    "electronUiAssertions": 115
+    "electronUiAssertions": 117
   },
   "audits": {
     "styles": "passed",
@@ -23,6 +30,7 @@
   },
   "captures": {
     "directory": "/var/folders/c4/vw8cxnvd7rv46sv4kq0lkg0h0000gn/T/agentenv-ui-captures/verification",
+    "artifactFingerprint": "e2292b0a790e79979e8692bb8c8b2ed686d3d0ef83a56f6c13f6ea019e9e5f3f",
     "files": 114,
     "viewports": [
       "1180x728",

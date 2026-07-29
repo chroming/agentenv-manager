@@ -13,10 +13,13 @@ import {
   expectTopmost,
   findVisibleTextLayoutDefects
 } from "./layoutAssertions";
+import { requireCurrentElectronBuild } from "./currentBuild";
 
 const execFileAsync = promisify(execFile);
 let root = "";
 let app: ElectronApplication | undefined;
+
+requireCurrentElectronBuild();
 
 afterEach(async () => {
   await app?.close().catch(() => undefined);

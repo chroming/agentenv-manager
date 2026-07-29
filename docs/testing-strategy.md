@@ -34,6 +34,24 @@ under `tests/main` and `tests/e2e`.
 `npm test` is the complete source-level gate. New Targets must pass the common
 contract before Target-specific tests are accepted as sufficient.
 
+## Electron artifact identity
+
+`npm run build` writes `out/.agentenv-build.json` after compilation. It binds:
+
+- the Renderer, main, preload, build configuration, TypeScript configuration,
+  package manifest, and lockfile used as build inputs;
+- the exact compiled files under `out/`.
+
+Electron E2E and UI capture entry points reject a missing, modified, or stale
+identity before launching the desktop process. `npm test` builds first so the
+complete suite cannot accidentally exercise an older `out/`.
+
+`npm run verify:product` binds the source fingerprint, compiled-artifact
+fingerprint, tests, audits, and capture manifest into
+`docs/verification-snapshot.json`. `npm run verify:current` is the inexpensive
+check that all three identities still match. A source, E2E, screenshot, or
+packaged claim is invalid when the corresponding identity is stale.
+
 ## Desktop and packaged evidence
 
 The Electron UI E2E covers visible workflows, supported viewport geometry,

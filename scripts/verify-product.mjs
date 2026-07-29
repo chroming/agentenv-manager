@@ -1,8 +1,9 @@
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { assertCurrentBuild } from "./build-fingerprint.mjs";
+import { computeVerificationSourceFingerprint } from "./verification-fingerprint.mjs";
 
 const execFileAsync = promisify(execFile);
 const projectRoot = resolve(import.meta.dirname, "..");
@@ -31,39 +32,10 @@ const run = async (command, args, options = {}) => {
   }
 };
 
-const computeSourceFingerprint = async () => {
-  const { stdout } = await execFileAsync(
-    "git",
-    ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
-    { cwd: projectRoot, maxBuffer: 40 * 1024 * 1024 }
-  );
-  const files = stdout
-    .split("\0")
-    .filter(Boolean)
-    .filter((file) => file !== "docs/verification-snapshot.json")
-    .sort();
-  const hash = createHash("sha256");
-  for (const file of files) {
-    hash.update(file);
-    hash.update("\0");
-    try {
-      hash.update(await readFile(join(projectRoot, file)));
-    } catch (error) {
-      if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") {
-        throw error;
-      }
-      hash.update("<deleted>");
-    }
-    hash.update("\0");
-  }
-  return {
-    sha256: hash.digest("hex"),
-    files: files.length
-  };
-};
-
 await rm(reportPath, { force: true });
 await rm(captureRoot, { recursive: true, force: true });
+await run("npm", ["run", "build"]);
+const testedBuild = await assertCurrentBuild(projectRoot);
 await run("npx", [
   "vitest",
   "run",
@@ -73,16 +45,32 @@ await run("npx", [
 for (const script of ["audit:styles", "audit:modules", "audit:targets", "audit:translations"]) {
   await run("npm", ["run", script]);
 }
-await run("npm", ["run", "build"]);
-await run("node", ["scripts/capture-profiles.mjs", "--output", captureRoot]);
 if (includePackaged) {
   await run("npm", ["run", "test:e2e:packaged"]);
 }
+const finalBuild = await assertCurrentBuild(projectRoot);
+if (
+  finalBuild.source.sha256 !== testedBuild.source.sha256 ||
+  finalBuild.artifact.sha256 !== testedBuild.artifact.sha256
+) {
+  throw new Error(
+    "Electron build changed between automated tests and capture. Rebuild and rerun product verification."
+  );
+}
+await run("node", ["scripts/capture-profiles.mjs", "--output", captureRoot]);
 
 const testReport = JSON.parse(await readFile(reportPath, "utf8"));
 const captureManifest = JSON.parse(
   await readFile(join(captureRoot, "capture-manifest.json"), "utf8")
 );
+if (
+  captureManifest.build?.sourceFingerprint !== finalBuild.source.sha256 ||
+  captureManifest.build?.artifactFingerprint !== finalBuild.artifact.sha256
+) {
+  throw new Error(
+    "UI captures were produced from a different Electron build."
+  );
+}
 const testFiles = testReport.testResults ?? [];
 const e2eFiles = testFiles.filter((result) => result.name?.includes("/tests/e2e/"));
 const electronUiFiles = e2eFiles.filter((result) => result.name?.includes("electronUi"));
@@ -96,7 +84,7 @@ const { stdout: head } = await execFileAsync("git", ["rev-parse", "HEAD"], {
 const { stdout: worktree } = await execFileAsync("git", ["status", "--porcelain"], {
   cwd: projectRoot
 });
-const sourceFingerprint = await computeSourceFingerprint();
+const sourceFingerprint = await computeVerificationSourceFingerprint(projectRoot);
 
 const snapshot = {
   generatedAt: new Date().toISOString(),
@@ -105,6 +93,13 @@ const snapshot = {
     dirty: worktree.trim().length > 0,
     fingerprint: sourceFingerprint.sha256,
     files: sourceFingerprint.files
+  },
+  build: {
+    generatedAt: finalBuild.generatedAt,
+    sourceFingerprint: finalBuild.source.sha256,
+    sourceFiles: finalBuild.source.files,
+    artifactFingerprint: finalBuild.artifact.sha256,
+    artifactFiles: finalBuild.artifact.files
   },
   tests: {
     passed: testReport.success === true,
@@ -123,6 +118,7 @@ const snapshot = {
   },
   captures: {
     directory: captureRoot,
+    artifactFingerprint: captureManifest.build.artifactFingerprint,
     files: captureManifest.files.length,
     viewports: captureManifest.viewports,
     includesProfileLoadingState: captureManifest.files.some(

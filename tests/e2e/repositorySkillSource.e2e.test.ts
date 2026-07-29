@@ -5,10 +5,13 @@ import { tmpdir } from "node:os";
 import electronPath from "electron";
 import { _electron as electron, type ElectronApplication } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
+import { requireCurrentElectronBuild } from "./currentBuild";
 import { createGitTestRepository } from "../main/skillSources/gitTestRepository";
 
 let root = "";
 let app: ElectronApplication | undefined;
+
+requireCurrentElectronBuild();
 
 const exists = async (path: string) => {
   try {
