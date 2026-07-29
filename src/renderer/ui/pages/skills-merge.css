@@ -1,0 +1,246 @@
+.skill-merge-dialog {
+  display: flex;
+  width: min(840px, calc(100vw - 40px));
+  max-width: 840px;
+  height: min(720px, calc(100vh - 40px));
+  max-height: calc(100vh - 40px);
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+}
+
+.skill-merge-dialog > .profile-dialog-header {
+  flex: 0 0 auto;
+  align-items: flex-start;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.skill-merge-body {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+  grid-template-rows: auto 1fr auto;
+  gap: 14px 16px;
+  padding: 16px 18px;
+  overflow-y: auto;
+}
+
+.skill-merge-choice-group:not(.skill-merge-source-group) {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.skill-merge-source-group {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.skill-merge-choice-group {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.skill-merge-choice-group legend,
+.skill-merge-diff strong,
+.skill-merge-impact strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: var(--font-weight-regular);
+}
+
+.skill-merge-choice-group > p {
+  margin: -4px 0 0;
+  color: var(--subtle);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.skill-merge-choice-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.skill-merge-choice-grid label,
+.skill-merge-source-list label {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.skill-merge-choice-grid label.is-selected,
+.skill-merge-source-list label.is-selected {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+
+.skill-merge-choice-grid input,
+.skill-merge-source-list input {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+}
+
+.skill-merge-choice-grid label > span,
+.skill-merge-source-list label > span {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 2px;
+}
+
+.skill-merge-choice-grid small,
+.skill-merge-source-list small {
+  overflow: hidden;
+  color: var(--subtle);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-merge-source-list {
+  display: grid;
+  gap: 6px;
+}
+
+.skill-merge-source-list label {
+  align-items: center;
+  padding-block: 8px;
+}
+
+.skill-merge-source-list em {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.skill-merge-diff {
+  display: flex;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-height: 180px;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+
+.skill-merge-diff > header {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+.skill-merge-diff > header > div {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.skill-merge-diff > header .skill-merge-diff__actions {
+  align-items: center;
+  flex: 0 1 auto;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.skill-merge-diff > header span {
+  overflow: hidden;
+  color: var(--subtle);
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-merge-diff select {
+  max-width: 240px;
+  height: 30px;
+  padding: 0 28px 0 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.skill-merge-diff .diff-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+}
+
+.skill-merge-identical {
+  display: flex;
+  min-height: 138px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: var(--success);
+  font-size: 12px;
+}
+
+.skill-merge-impact {
+  display: flex;
+  grid-column: 1 / -1;
+  grid-row: 3;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--surface-muted);
+}
+
+.skill-merge-impact span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: right;
+}
+
+.skill-merge-dialog > .preview-actions {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border-soft);
+}
+
+@media (max-width: 760px) {
+  .skill-merge-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  .skill-merge-choice-group:not(.skill-merge-source-group),
+  .skill-merge-source-group,
+  .skill-merge-diff,
+  .skill-merge-impact {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .skill-merge-choice-grid {
+    grid-template-columns: 1fr;
+  }
+}

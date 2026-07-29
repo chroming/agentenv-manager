@@ -8,13 +8,16 @@
 @import "./shell.css" layer(shell);
 @import "./pages/targets.css" layer(pages);
 @import "./pages/settings.css" layer(pages);
+@import "./pages/settings-sync.css" layer(pages);
 @import "./pages/settings-backups.css" layer(pages);
 @import "./pages/library-import.css" layer(pages);
 @import "./pages/skills.css" layer(pages);
+@import "./pages/skills-merge.css" layer(pages);
 @import "./pages/skill-sources.css" layer(pages);
 @import "./pages/skill-cleanup.css" layer(pages);
 @import "./pages/skills-dialogs.css" layer(pages);
 @import "./pages/profiles.css" layer(pages);
+@import "./pages/profile-skills.css" layer(pages);
 @import "./pages/conversations.css" layer(pages);
 @import "./pages/diagnostics.css" layer(pages);
 @import "./pages/profile-mcp.css" layer(pages);
