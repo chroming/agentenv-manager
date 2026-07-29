@@ -45,7 +45,6 @@ import type {
   RollbackPreview,
   StopManagingMode,
   StopManagingPreview,
-  SaveProfileInput,
   AgentEnvSettings,
   AppLocale,
   BackupRetentionDays,
@@ -203,9 +202,9 @@ import { useAgentRefresh } from "./hooks/useAgentRefresh";
 import { useWorkspaceFreshness } from "./hooks/useWorkspaceFreshness";
 import { useWorkspaceNavigation } from "./hooks/useWorkspaceNavigation";
 import { useProfileActionGuard } from "./hooks/useProfileActionGuard";
+import { useProfileDraftController } from "./hooks/useProfileDraftController";
 import {
   preferredTargetForProfile,
-  reconcileProfileUsage,
   summarizeProfile
 } from "./profileSummary";
 import { buildQuickOpenItems } from "./quickOpenItems";
@@ -252,12 +251,6 @@ const formatBytes = (bytes: number): string => {
   }
   return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${unit}`;
 };
-
-const toSaveInput = (profile: ProfileDetail): SaveProfileInput => ({
-  manifest: profile.manifest,
-  instructions: profile.instructions,
-  resources: profile.resources
-});
 
 export { AppFeedback };
 
@@ -326,9 +319,6 @@ const AppContent = ({
   const [backups, setBackups] = useState<BackupSummary[]>([]);
   const [selectedTargetId, setSelectedTargetId] = useState<string>();
   const [profileTargetSelections, setProfileTargetSelections] = useState<Record<string, string>>({});
-  const [selectedProfileId, setSelectedProfileId] = useState<string>();
-  const [profileLoadingId, setProfileLoadingId] = useState<string>();
-  const [draftProfile, setDraftProfile] = useState<ProfileDetail>();
   const [preview, setPreview] = useState<ActivationPreview>();
   const [rollbackPreview, setRollbackPreview] = useState<RollbackPreview>();
   const [stopManagingPreview, setStopManagingPreview] = useState<StopManagingPreview>();
@@ -355,12 +345,9 @@ const AppContent = ({
   const [skillUpdateFeedbackWorkspace, setSkillUpdateFeedbackWorkspace] =
     useState<"library" | "profiles" | "targets">("library");
   const [checkingProfileSkillUpdates, setCheckingProfileSkillUpdates] = useState(false);
-  const [isProfileDirty, setIsProfileDirty] = useState(false);
-  const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [profileMetadataSavingId, setProfileMetadataSavingId] = useState<string>();
   const [isProfilePreviewing, setIsProfilePreviewing] = useState(false);
   const [isProfileApplying, setIsProfileApplying] = useState(false);
-  const [profileSaveStatus, setProfileSaveStatus] = useState("");
   const [profileApplyRefreshDetail, setProfileApplyRefreshDetail] = useState<string>();
   const [settingsSaveStatus, setSettingsSaveStatus] = useState("");
   const [dataBackupStatus, setDataBackupStatus] = useState("");
@@ -413,15 +400,50 @@ const AppContent = ({
   const skillSearchInputRef = useRef<HTMLInputElement>(null);
   const dataRefreshRequestRef = useRef(0);
   const skillUpdateResultRevisionRef = useRef(0);
-  const profileFlowRequestRef = useRef(0);
-  const activeProfileFlowRequestRef = useRef<number | undefined>(undefined);
-  const saveInFlightRef = useRef(false);
   const rollbackReturnFocusRef = useRef<HTMLElement | null>(null);
   const dataRestoreReturnFocusRef = useRef<HTMLElement | null>(null);
   const backupManagerReturnFocusRef = useRef<HTMLElement | null>(null);
   const appModalDialogRef = useRef<HTMLElement>(null);
   const appModalInitialFocusRef = useRef<HTMLButtonElement>(null);
   const appModalFallbackFocusRef = useRef<HTMLElement>(null);
+  const invalidateProfilePresentation = useCallback(() => {
+    setSkillUpdateCheckStatus(undefined);
+    setPreview(undefined);
+    setRollbackPreview(undefined);
+    setIsProfilePreviewing(false);
+  }, []);
+  const {
+    acceptProfile: acceptSelectedProfile,
+    acceptProfileMetadata,
+    beginFlow: beginProfileFlow,
+    clearProfile: clearSelectedProfile,
+    discardDraft: discardProfileDraft,
+    draftProfile,
+    isDirty: isProfileDirty,
+    isFlowCurrent: isProfileFlowCurrent,
+    isSaving: isProfileSaving,
+    profileLoadingId,
+    replaceSavedProfile,
+    saveDraft,
+    saveSelectedProfile,
+    selectProfile: loadSelectedProfile,
+    selectedProfileId,
+    setStatus: setProfileSaveStatus,
+    status: profileSaveStatus,
+    updateDraft: updateDraftProfile
+  } = useProfileDraftController({
+    profiles,
+    targets,
+    librarySkills,
+    profileLibraryVersions,
+    setProfiles,
+    setProfileLibraryVersions,
+    setSkillUsage,
+    setTargetStates,
+    onBusyChange: setBusy,
+    onError: setError,
+    onDraftInvalidated: invalidateProfilePresentation
+  });
   const { activity: skillUpdateActivity, activityRef: skillUpdateActivityRef,
     begin: beginSkillUpdateActivity, finish: finishSkillUpdateActivity
   } = useSkillUpdateActivity(() => setSkillRefreshStatus(undefined));
@@ -510,17 +532,6 @@ const AppContent = ({
   }, [settingsSaveStatus]);
 
   useEffect(() => {
-    if (
-      profileSaveStatus !== "Profile saved" &&
-      profileSaveStatus !== "Profile details saved"
-    ) {
-      return undefined;
-    }
-    const timeout = window.setTimeout(() => setProfileSaveStatus(""), 2400);
-    return () => window.clearTimeout(timeout);
-  }, [profileSaveStatus]);
-
-  useEffect(() => {
     if (targetRefreshStatus !== "refreshed") {
       return undefined;
     }
@@ -543,15 +554,6 @@ const AppContent = ({
     const timeout = window.setTimeout(() => setSkillUpdateCheckStatus(undefined), 5000);
     return () => window.clearTimeout(timeout);
   }, [skillUpdateCheckStatus]);
-
-  const invalidateProfileFlow = () => {
-    profileFlowRequestRef.current += 1;
-    if (activeProfileFlowRequestRef.current !== undefined) {
-      activeProfileFlowRequestRef.current = undefined;
-      setIsProfilePreviewing(false);
-      setBusy(false);
-    }
-  };
 
   const loadSkillCleanupHistory = async (
     shouldApply: () => boolean = () => true
@@ -1017,14 +1019,11 @@ const AppContent = ({
           initialTargetId ?? initialProfile.preferredTargetId ?? targetItems[0]?.id;
         setSelectedTargetId(initialProfileTargetId);
         setProfileTargetSelections({ [initialProfile.id]: initialProfileTargetId });
-        setSelectedProfileId(initialProfile.id);
         setActiveComposerSection(activeProfileId === initialProfile.id ? "skills" : undefined);
-        const requestId = ++profileFlowRequestRef.current;
+        const requestId = beginProfileFlow();
         const profile = await window.agentEnv.readProfile(initialProfile.id);
-        if (isMounted && requestId === profileFlowRequestRef.current) {
-          setDraftProfile(profile);
-          setIsProfileDirty(false);
-          setProfileSaveStatus("");
+        if (isMounted && isProfileFlowCurrent(requestId)) {
+          acceptSelectedProfile(profile);
         }
       })
       .catch((unknownError) => {
@@ -1059,102 +1058,6 @@ const AppContent = ({
     }
   });
 
-  const saveDraft = async () => {
-    if (!draftProfile) {
-      return undefined;
-    }
-
-    const previousName =
-      profiles.find((profile) => profile.id === draftProfile.id)?.name ??
-      draftProfile.manifest.name;
-    const previousLibraryVersions = profileLibraryVersions[draftProfile.id];
-    setIsProfileSaving(true);
-    setProfileSaveStatus("Saving profile");
-    try {
-      const saved = await window.agentEnv.saveProfile(toSaveInput(draftProfile));
-      const summary: ProfileSummary = {
-        id: saved.id,
-        preferredTargetId: saved.manifest.preferredTargetId,
-        createdFromTargetId: saved.manifest.createdFromTargetId,
-        name: saved.manifest.name,
-        description: saved.manifest.description,
-        createdAt: saved.manifest.createdAt,
-        iconKey: saved.manifest.iconKey,
-        contentHash: saved.contentHash,
-        targetContentHashes: saved.targetContentHashes
-      };
-      setProfiles((current) =>
-        current.some((profile) => profile.id === saved.id)
-          ? current.map((profile) => profile.id === saved.id ? summary : profile)
-          : current.concat(summary)
-      );
-      const preferredTarget = targets.find(
-        (target) => target.id === saved.manifest.preferredTargetId
-      ) ?? targets[0];
-      setProfileLibraryVersions((current) => ({
-        ...current,
-        [saved.id]: collectLibraryResourceVersions(
-          saved,
-          librarySkills,
-          preferredTarget?.id
-        )
-      }));
-      setSkillUsage((current) => reconcileProfileUsage(
-        current,
-        Object.keys(previousLibraryVersions?.skills ?? {}),
-        saved.resources.skills.map((reference) => reference.libraryId),
-        previousName,
-        saved.manifest.name
-      ));
-      setTargetStates((current) =>
-        current.map((state) => {
-          if (state.activeProfileId !== saved.id) return state;
-          const expectedHash =
-            saved.targetContentHashes?.[state.targetId];
-          const contentChanged =
-            !expectedHash || expectedHash !== state.appliedProfileHash;
-          return {
-            ...state,
-            activeProfileName: saved.manifest.name,
-            ...(contentChanged &&
-            state.lifecycleStatus !== "drifted" &&
-            state.lifecycleStatus !== "recovery-required"
-              ? {
-                  lifecycleStatus: "pending" as const,
-                  lifecycleReason: "Saved Profile changed after the last Apply"
-                }
-              : {})
-          };
-        })
-      );
-      setDraftProfile(saved);
-      setIsProfileDirty(false);
-      setProfileSaveStatus("Profile saved");
-      setSkillUpdateCheckStatus(undefined);
-      return saved;
-    } catch (error) {
-      setProfileSaveStatus("");
-      throw error;
-    } finally {
-      setIsProfileSaving(false);
-    }
-  };
-
-  const discardProfileDraft = useCallback(async () => {
-    if (draftProfile) {
-      try {
-        setDraftProfile(await window.agentEnv.readProfile(draftProfile.id));
-      } catch {
-        setDraftProfile(undefined);
-        setSelectedProfileId(undefined);
-      }
-    }
-    setIsProfileDirty(false);
-    setProfileSaveStatus("");
-    setPreview(undefined);
-    setRollbackPreview(undefined);
-  }, [draftProfile]);
-
   const {
     cancelPendingAction: cancelPendingProfileAction,
     continuePendingAction: continuePendingProfileAction,
@@ -1173,55 +1076,32 @@ const AppContent = ({
     composerSection?: ComposerSection,
     targetOverrideId?: string
   ) => {
-    const requestId = ++profileFlowRequestRef.current;
-    activeProfileFlowRequestRef.current = requestId;
-    const isDifferentProfile = profileId !== selectedProfileId;
-    setBusy(true);
-    setError(undefined);
-    setPreview(undefined);
-    setRollbackPreview(undefined);
-    if (isDifferentProfile) {
-      setProfileLoadingId(profileId);
-      setProfileSaveStatus("");
-    }
     setActiveComposerSection(composerSection);
     openWorkspaceNow("profiles");
-    try {
-      const profile = await window.agentEnv.readProfile(profileId);
-      if (requestId !== profileFlowRequestRef.current) {
-        return;
+    await loadSelectedProfile(profileId, {
+      onBeforeLoad: () => {
+        setPreview(undefined);
+        setRollbackPreview(undefined);
+      },
+      onLoaded: (profile) => {
+        const profileTargetId =
+          targetOverrideId ??
+          preferredTargetForProfile(
+            profile.id,
+            profile.manifest.preferredTargetId,
+            targetStates,
+            targets,
+            profileTargetSelections[profile.id]
+          );
+        setSelectedTargetId(profileTargetId);
+        if (profileTargetId) {
+          setProfileTargetSelections((current) => ({
+            ...current,
+            [profile.id]: profileTargetId
+          }));
+        }
       }
-      const profileTargetId =
-        targetOverrideId ??
-        preferredTargetForProfile(
-          profile.id,
-          profile.manifest.preferredTargetId,
-          targetStates,
-          targets,
-          profileTargetSelections[profile.id]
-        );
-      setSelectedTargetId(profileTargetId);
-      setSelectedProfileId(profileId);
-      if (profileTargetId) {
-        setProfileTargetSelections((current) => ({
-          ...current,
-          [profile.id]: profileTargetId
-        }));
-      }
-      setDraftProfile(profile);
-      setIsProfileDirty(false);
-      setProfileSaveStatus("");
-    } catch (unknownError) {
-      if (requestId === profileFlowRequestRef.current) {
-        setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-      }
-    } finally {
-      if (requestId === profileFlowRequestRef.current) {
-        activeProfileFlowRequestRef.current = undefined;
-        setProfileLoadingId(undefined);
-        setBusy(false);
-      }
-    }
+    });
   };
 
   const selectWorkspace = useCallback((workspace: AppWorkspace) => {
@@ -1308,16 +1188,6 @@ const AppContent = ({
     });
   };
 
-  const updateDraftProfile = (profile: ProfileDetail) => {
-    invalidateProfileFlow();
-    setDraftProfile(profile);
-    setIsProfileDirty(true);
-    setProfileSaveStatus("");
-    setSkillUpdateCheckStatus(undefined);
-    setPreview(undefined);
-    setRollbackPreview(undefined);
-  };
-
   const prepareSkillImport = async (
     source: SkillImportPreviewInput,
     preferredResolution?: SkillImportConflictResolution
@@ -1371,54 +1241,6 @@ const AppContent = ({
     );
   };
 
-  const acceptProfileMetadata = (saved: ProfileDetail, previousName: string) => {
-    const summary: ProfileSummary = {
-      id: saved.id,
-      preferredTargetId: saved.manifest.preferredTargetId,
-      createdFromTargetId: saved.manifest.createdFromTargetId,
-      name: saved.manifest.name,
-      description: saved.manifest.description,
-      createdAt: saved.manifest.createdAt,
-      iconKey: saved.manifest.iconKey,
-      contentHash: saved.contentHash,
-      targetContentHashes: saved.targetContentHashes
-    };
-    setProfiles((current) =>
-      current.map((profile) => profile.id === saved.id ? summary : profile)
-    );
-    const versions = profileLibraryVersions[saved.id];
-    setSkillUsage((current) => reconcileProfileUsage(
-      current,
-      Object.keys(versions?.skills ?? {}),
-      Object.keys(versions?.skills ?? {}),
-      previousName,
-      saved.manifest.name
-    ));
-    setTargetStates((current) =>
-      current.map((state) =>
-        state.activeProfileId === saved.id
-          ? { ...state, activeProfileName: saved.manifest.name }
-          : state
-      )
-    );
-    setDraftProfile((current) =>
-      current?.id === saved.id
-        ? {
-            ...current,
-            manifest: {
-              ...current.manifest,
-              name: saved.manifest.name,
-              description: saved.manifest.description,
-              iconKey: saved.manifest.iconKey
-            },
-            contentHash: saved.contentHash,
-            targetContentHashes: saved.targetContentHashes
-          }
-        : current
-    );
-    setProfileSaveStatus("Profile details saved");
-  };
-
   const changeProfileIconNow = async (profileId: string, iconKey: ResourceIconKey) => {
     if (profileMetadataSavingId === profileId) {
       return;
@@ -1448,21 +1270,6 @@ const AppContent = ({
 
   const changeProfileIcon = (profileId: string, iconKey: ResourceIconKey) => {
     void changeProfileIconNow(profileId, iconKey);
-  };
-
-  const saveSelectedProfile = async () => {
-    if (saveInFlightRef.current) {
-      return;
-    }
-    saveInFlightRef.current = true;
-    setError(undefined);
-    try {
-      await saveDraft();
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-    } finally {
-      saveInFlightRef.current = false;
-    }
   };
 
   useDesktopShortcuts({
@@ -1618,8 +1425,7 @@ const AppContent = ({
           ...current,
           [saved.id]: saved.manifest.preferredTargetId ?? profileForm.targetId
         }));
-        setSelectedProfileId(saved.id);
-        setDraftProfile(saved);
+        acceptSelectedProfile(saved);
         if (profileCreateSource === "target") {
           setProfileCaptureStatus(
             profileCaptureScope === "skills"
@@ -1680,8 +1486,7 @@ const AppContent = ({
           ? { [saved.id]: saved.manifest.preferredTargetId }
           : {})
       }));
-      setSelectedProfileId(saved.id);
-      setDraftProfile(saved);
+      acceptSelectedProfile(saved);
       setActiveComposerSection(undefined);
       setPreview(undefined);
       setRollbackPreview(undefined);
@@ -1715,7 +1520,6 @@ const AppContent = ({
         );
         if (nextProfile) {
           const nextDetail = await window.agentEnv.readProfile(nextProfile.id);
-          setSelectedProfileId(nextProfile.id);
           setSelectedTargetId(nextProfile.preferredTargetId ?? deletedTargetId);
           setProfileTargetSelections((current) => ({
             ...current,
@@ -1723,10 +1527,9 @@ const AppContent = ({
               ? { [nextProfile.id]: nextProfile.preferredTargetId }
               : {})
           }));
-          setDraftProfile(nextDetail);
+          acceptSelectedProfile(nextDetail);
         } else {
-          setSelectedProfileId(undefined);
-          setDraftProfile(undefined);
+          clearSelectedProfile();
         }
       }
       setDeleteProfileCandidateId(undefined);
@@ -2121,8 +1924,7 @@ const AppContent = ({
       return;
     }
 
-    const requestId = ++profileFlowRequestRef.current;
-    activeProfileFlowRequestRef.current = requestId;
+    const requestId = beginProfileFlow();
     setIsProfilePreviewing(true);
     setBusy(true);
     try {
@@ -2130,12 +1932,12 @@ const AppContent = ({
         draftProfile.id,
         selectedTarget?.id
       );
-      if (requestId !== profileFlowRequestRef.current) {
+      if (!isProfileFlowCurrent(requestId)) {
         return;
       }
       if (!activationPreviewHasWork(nextPreview)) {
         const refreshedStates = await window.agentEnv.listTargetStates();
-        if (requestId !== profileFlowRequestRef.current) {
+        if (!isProfileFlowCurrent(requestId)) {
           return;
         }
         setTargetStates(refreshedStates);
@@ -2167,12 +1969,11 @@ const AppContent = ({
         issues: [...rendererBlockers, ...nextPreview.issues]
       });
     } catch (unknownError) {
-      if (requestId === profileFlowRequestRef.current) {
+      if (isProfileFlowCurrent(requestId)) {
         setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       }
     } finally {
-      if (requestId === profileFlowRequestRef.current) {
-        activeProfileFlowRequestRef.current = undefined;
+      if (isProfileFlowCurrent(requestId)) {
         setIsProfilePreviewing(false);
         setBusy(false);
       }
@@ -2295,8 +2096,7 @@ const AppContent = ({
         draftProfile.id,
         selectedTarget.id
       );
-      setDraftProfile(result.profile);
-      setIsProfileDirty(false);
+      replaceSavedProfile(result.profile);
       setPreview(undefined);
       const adoptedLabels = result.adopted.map((kind) =>
         t(
@@ -3764,14 +3564,12 @@ const AppContent = ({
     try {
       const result = await window.agentEnv.restoreDataBackup(dataRestorePreview.path);
       setDataRestorePreview(undefined);
-      setSelectedProfileId(undefined);
-      setDraftProfile(undefined);
+      clearSelectedProfile();
       const refreshed = await refreshProfiles();
       const firstProfile = refreshed.profileItems.find((profile) => !profile.loadError);
       if (firstProfile) {
-        setSelectedProfileId(firstProfile.id);
         setSelectedTargetId(firstProfile.preferredTargetId ?? targets[0]?.id);
-        setDraftProfile(await window.agentEnv.readProfile(firstProfile.id));
+        acceptSelectedProfile(await window.agentEnv.readProfile(firstProfile.id));
       }
       setDataBackupStatus(`AgentEnv data restored; safety backup created at ${result.safetyBackupPath}`);
     } catch (unknownError) {
