@@ -31,10 +31,10 @@
     "target:new": "node scripts/create-target-integration.mjs",
     "capture:ui": "npm run build && node scripts/capture-profiles.mjs --output /tmp/agentenv-ui-captures/current",
     "capture:profiles": "npm run build && node scripts/capture-profiles.mjs",
-    "test": "npm run build && vitest run",
+    "test": "npm run build && node scripts/run-vitest-groups.mjs",
     "test:targets": "vitest run tests/e2e/targetConformance.e2e.test.ts tests/e2e/targetCompatibilityFixtures.e2e.test.ts",
     "test:compat:installed": "node scripts/probe-installed-agents.mjs",
-    "test:e2e": "npm run build && vitest run tests/e2e",
+    "test:e2e": "npm run build && node scripts/run-vitest-groups.mjs --e2e",
     "test:e2e:packaged": "npm run pack && node scripts/test-packaged-app.mjs",
     "test:watch": "vitest"
   },

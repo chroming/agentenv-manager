@@ -4,10 +4,16 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { assertCurrentBuild } from "./build-fingerprint.mjs";
 import { computeVerificationSourceFingerprint } from "./verification-fingerprint.mjs";
+import {
+  electronE2eExcludeGlob,
+  electronE2eTestFiles
+} from "./vitest-groups.mjs";
 
 const execFileAsync = promisify(execFile);
 const projectRoot = resolve(import.meta.dirname, "..");
-const reportPath = join(process.env.TMPDIR ?? "/tmp", "agentenv-product-vitest.json");
+const reportRoot = process.env.TMPDIR ?? "/tmp";
+const parallelReportPath = join(reportRoot, "agentenv-product-vitest-parallel.json");
+const electronReportPath = join(reportRoot, "agentenv-product-vitest-electron.json");
 const captureRoot = join(process.env.TMPDIR ?? "/tmp", "agentenv-ui-captures", "verification");
 const snapshotPath = join(projectRoot, "docs", "verification-snapshot.json");
 const visualBaselineRoot = join(projectRoot, "tests", "visual", "golden");
@@ -44,15 +50,27 @@ const run = async (command, args, options = {}) => {
   }
 };
 
-await rm(reportPath, { force: true });
+await rm(parallelReportPath, { force: true });
+await rm(electronReportPath, { force: true });
 await rm(captureRoot, { recursive: true, force: true });
 await run("npm", ["run", "build"]);
 const testedBuild = await assertCurrentBuild(projectRoot);
 await run("npx", [
   "vitest",
   "run",
+  "--exclude",
+  electronE2eExcludeGlob,
   "--reporter=json",
-  `--outputFile=${reportPath}`
+  `--outputFile=${parallelReportPath}`
+]);
+await run("npx", [
+  "vitest",
+  "run",
+  ...electronE2eTestFiles,
+  "--maxWorkers=1",
+  "--no-file-parallelism",
+  "--reporter=json",
+  `--outputFile=${electronReportPath}`
 ]);
 for (const script of ["audit:styles", "audit:modules", "audit:targets", "audit:translations"]) {
   await run("npm", ["run", script]);
@@ -83,7 +101,11 @@ await run("swift", [
   visualReportRoot
 ]);
 
-const testReport = JSON.parse(await readFile(reportPath, "utf8"));
+const testReports = await Promise.all(
+  [parallelReportPath, electronReportPath].map(async (path) =>
+    JSON.parse(await readFile(path, "utf8"))
+  )
+);
 const captureManifest = JSON.parse(
   await readFile(join(captureRoot, "capture-manifest.json"), "utf8")
 );
@@ -98,9 +120,12 @@ if (
     "UI captures were produced from a different Electron build."
   );
 }
-const testFiles = testReport.testResults ?? [];
+const testFiles = testReports.flatMap((report) => report.testResults ?? []);
 const e2eFiles = testFiles.filter((result) => result.name?.includes("/tests/e2e/"));
 const electronUiFiles = e2eFiles.filter((result) => result.name?.includes("electronUi"));
+const desktopElectronFiles = e2eFiles.filter((result) =>
+  electronE2eTestFiles.some((file) => result.name?.endsWith(`/${file}`))
+);
 const countTests = (files) => files.reduce(
   (total, file) => total + (file.assertionResults?.length ?? 0),
   0
@@ -129,11 +154,16 @@ const snapshot = {
     artifactFiles: finalBuild.artifact.files
   },
   tests: {
-    passed: testReport.success === true,
+    passed: testReports.every((report) => report.success === true),
     files: testFiles.length,
-    assertions: testReport.numTotalTests,
+    assertions: testReports.reduce(
+      (total, report) => total + (report.numTotalTests ?? 0),
+      0
+    ),
     e2eFiles: e2eFiles.length,
     e2eAssertions: countTests(e2eFiles),
+    desktopElectronFiles: desktopElectronFiles.length,
+    desktopElectronAssertions: countTests(desktopElectronFiles),
     electronUiFiles: electronUiFiles.length,
     electronUiAssertions: countTests(electronUiFiles)
   },
