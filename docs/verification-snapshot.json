@@ -1,24 +1,26 @@
 {
-  "generatedAt": "2026-07-29T13:28:03.384Z",
+  "generatedAt": "2026-07-29T15:49:01.813Z",
   "source": {
-    "commit": "9fb308e8d67a55bd4d0d467b4eb52bda5b352918",
+    "commit": "5ce3af935f7d9ceeccd0460677b19c5129a87723",
     "dirty": false,
-    "fingerprint": "7981afba4e60f7ddf8ce39edbd896d9ae5c027e7a56d8f795448bcdc36a9e5ae",
-    "files": 553
+    "fingerprint": "a4ac1beee7eb524d576fcff18bb427d834317bff4838770369c9b8a21728ff1d",
+    "files": 583
   },
   "build": {
-    "generatedAt": "2026-07-29T13:22:55.137Z",
-    "sourceFingerprint": "88e7e8a9069c2da92f3568f361ce8469eb5d8518dc098c9838ba21ba4be81786",
-    "sourceFiles": 272,
-    "artifactFingerprint": "01953b53892dc6b253ee88d7f27a6d8e66ad5d1b7a96e8936a4c17d3377e9be3",
+    "generatedAt": "2026-07-29T15:47:08.744Z",
+    "sourceFingerprint": "b803a016526f45235b79023662a9e44d451b25b76c0fe353485621581ff47921",
+    "sourceFiles": 280,
+    "artifactFingerprint": "156c082fd17e4b6dc900433281d469490327dd5b9908f178e77fe26298e0b458",
     "artifactFiles": 26
   },
   "tests": {
     "passed": true,
-    "files": 153,
-    "assertions": 1037,
+    "files": 156,
+    "assertions": 1044,
     "e2eFiles": 15,
     "e2eAssertions": 176,
+    "desktopElectronFiles": 6,
+    "desktopElectronAssertions": 123,
     "electronUiFiles": 1,
     "electronUiAssertions": 117
   },
@@ -30,13 +32,18 @@
   },
   "captures": {
     "directory": "/var/folders/c4/vw8cxnvd7rv46sv4kq0lkg0h0000gn/T/agentenv-ui-captures/verification",
-    "artifactFingerprint": "01953b53892dc6b253ee88d7f27a6d8e66ad5d1b7a96e8936a4c17d3377e9be3",
+    "artifactFingerprint": "156c082fd17e4b6dc900433281d469490327dd5b9908f178e77fe26298e0b458",
     "files": 114,
     "viewports": [
       "1180x728",
       "920x620"
     ],
-    "includesProfileLoadingState": true
+    "includesProfileLoadingState": true,
+    "visualContract": {
+      "passed": true,
+      "files": 13,
+      "maxChangedPixelRatio": 0.0067303646563814865
+    }
   },
-  "packagedSmoke": "not-run"
+  "packagedSmoke": "passed"
 }
