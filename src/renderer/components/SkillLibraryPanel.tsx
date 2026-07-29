@@ -9,14 +9,12 @@ import {
 } from "react";
 import {
   CheckCircle2,
-  ChevronDown,
   Circle,
   CircleAlert,
   CircleArrowUp,
   CircleSlash2,
   Combine,
   Copy,
-  Download,
   ExternalLink,
   Folder,
   GitBranch,
@@ -34,8 +32,7 @@ import {
   Sparkles,
   Trash2,
   TriangleAlert,
-  X,
-  XCircle
+  X
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useModalDialog } from "../hooks/useModalDialog";
@@ -105,7 +102,6 @@ import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { isExternalSkillImportable } from "../../shared/skillIdentity";
 import { sourceSubpathFor } from "../../shared/skillSourceGrouping";
 import { SkillSourceView } from "./SkillSourceView";
-import { ProjectSkillDiscoveryPanel } from "./ProjectSkillDiscoveryPanel";
 import type { SkillUpdateActivity } from "../skillUpdateActivity";
 import type { SkillUpdateRun } from "../skillUpdateQueue";
 import { SkillFileBrowserDialog } from "./SkillFileBrowserDialog";
@@ -113,6 +109,7 @@ import { SkillCleanupDetailsFooter } from "./SkillCleanupDetailsFooter";
 import { SkillUpdateSettingsDialog } from "./SkillUpdateSettingsDialog";
 import { CleanupBucketHeader } from "./CleanupBucketHeader";
 import { BulkSkillUpdateDialog } from "./BulkSkillUpdateDialog";
+import { SkillImportDialog } from "./SkillImportDialog";
 import {
   SkillCollectionDialog,
   SkillCollectionRows,
@@ -469,27 +466,6 @@ export const SkillLibraryPanel = ({
     .filter((update) => skillsById.get(update.id)?.updatePolicy === "tracked")
     .map((update) => update.id);
   const availableUpdateCount = updateableSkillIds.length;
-  const githubReadyCandidateSources = githubScanResult?.candidates
-    .filter((candidate) => candidate.status === "ready")
-    .map((candidate) => candidate.sourceUrl) ?? [];
-  const githubSelectedReadyCount = githubReadyCandidateSources.filter((sourceUrl) =>
-    githubSelectedSources.includes(sourceUrl)
-  ).length;
-  const githubAllReadySelected =
-    githubReadyCandidateSources.length > 0 &&
-    githubSelectedReadyCount === githubReadyCandidateSources.length;
-  const githubSomeReadySelected =
-    githubSelectedReadyCount > 0 && !githubAllReadySelected;
-  const githubImportProgressItems = Object.values(githubImportProgress);
-  const githubImportedProgressCount = githubImportProgressItems.filter(
-    (progress) => progress.status === "imported"
-  ).length;
-  const githubFailedImportCount = githubImportProgressItems.filter(
-    (progress) => progress.status === "failed"
-  ).length;
-  const githubSkippedImportCount = githubImportProgressItems.filter(
-    (progress) => progress.status === "skipped"
-  ).length;
   const dismissModal = () => {
     if (browsingSkill) {
       setBrowsingSkill(undefined);
@@ -3861,483 +3837,65 @@ export const SkillLibraryPanel = ({
         </section>
       ) : null}
 
-      {activeTool === "import"
-        ? (
-            <ModalFrame
-              ariaLabel={t("Import skills")}
-              backdropClassName="library-import-backdrop"
-              className="library-import-dialog"
-              dialogRef={importDialogRef}
-              dismissDisabled={Boolean(githubOperation) && !repositoryOperationCancelable}
-              onDismiss={() => void closeImportTool()}
-              suspended={importConflictOpen}
-            >
-                <header className="profile-dialog-header library-import-header ui-dialog-header">
-                  <div className="section-title ui-dialog-title">{t("Import skills")}</div>
-                  <IconButton
-                    label={t("Close import")}
-                    disabled={
-                      localImportOperation ||
-                      (Boolean(githubOperation) && !repositoryOperationCancelable)
-                    }
-                    onClick={() => void closeImportTool()}
-                    size="default"
-                    variant="ghost"
-                  >
-                    <X size={16} strokeWidth={2.2} />
-                  </IconButton>
-                </header>
+      {activeTool === "import" ? (
+        <SkillImportDialog
+          dialogRef={importDialogRef}
+          suspended={importConflictOpen}
+          source={importSource}
+          localSkillPath={localSkillPath}
+          localSkillSource={localSkillSource}
+          selectedLocalInventory={selectedLocalInventory}
+          localImportImpact={localImportImpact}
+          localImportBlocked={localImportBlocked}
+          localImportOperation={localImportOperation}
+          githubUrl={githubUrl}
+          repositoryRef={repositoryRef}
+          repositoryDirectory={repositoryDirectory}
+          repositoryConnection={repositoryConnection}
+          githubScanResult={githubScanResult}
+          repositoryScanSummary={repositoryScanSummary}
+          githubSelectedSources={githubSelectedSources}
+          githubCandidateIds={githubCandidateIds}
+          githubImportProgress={githubImportProgress}
+          githubImportResult={githubImportResult}
+          githubRetrySourceUrl={githubRetrySourceUrl}
+          githubOperation={githubOperation}
+          githubOperationError={githubOperationError}
+          githubApiRetryAvailable={githubApiRetryAvailable}
+          repositoryOperationCancelable={repositoryOperationCancelable}
+          importStopRequested={importStopRequested}
+          onClose={() => void closeImportTool()}
+          onSourceChange={setImportSource}
+          onChooseLocalSource={() => void selectLocalSkillFolder()}
+          onScanLocalSource={onScanLocalSkillSource}
+          onImportLocalSource={onImportLocalSourceSkill}
+          onGithubUrlChange={setGithubUrl}
+          onRepositoryRefChange={setRepositoryRef}
+          onRepositoryDirectoryChange={setRepositoryDirectory}
+          onRepositoryConnectionChange={setRepositoryConnection}
+          onChangeRepositorySource={() => {
+            setGithubScanResult(undefined);
+            setGithubImportResult(undefined);
+            setGithubOperationError("");
+            setRepositoryScanKind(undefined);
+            setRepositoryScanSummary("");
+            setRepositoryCandidateInputs({});
+            resetRepositoryImportDraft();
+          }}
+          onSelectAllCandidates={selectAllRepositoryCandidates}
+          onSelectCandidate={selectRepositoryCandidate}
+          onSetCandidateId={setRepositoryCandidateId}
+          onRetryCandidate={(candidate) => void retryGitHubSkill(candidate)}
+          onRetryWithSystemGit={() => {
+            setRepositoryConnection("system-git");
+            void scanRepository(true);
+          }}
+          onImportLocal={() => void importLocalSkill()}
+          onScanRepository={() => void scanRepository()}
+          onImportSelected={() => void importSelectedGitHubSkills()}
+        />
+      ) : null}
 
-                <div className="library-import-source-tabs" role="tablist" aria-label={t("Import source")}>
-                  <button
-                    className={importSource === "local" ? "is-active" : ""}
-                    type="button"
-                    role="tab"
-                    aria-selected={importSource === "local"}
-                    disabled={Boolean(githubOperation) || localImportOperation}
-                    onClick={() => setImportSource("local")}
-                  >
-                    <Folder size={15} strokeWidth={2.2} aria-hidden="true" />
-                    {t("Local")}
-                  </button>
-                  <button
-                    className={importSource === "github" ? "is-active" : ""}
-                    type="button"
-                    role="tab"
-                    aria-selected={importSource === "github"}
-                    disabled={Boolean(githubOperation) || localImportOperation}
-                    onClick={() => setImportSource("github")}
-                  >
-                    <GitBranch size={15} strokeWidth={2.2} aria-hidden="true" />
-                    {t("Repository")}
-                  </button>
-                </div>
-
-                {importSource === "local" ? (
-                  <div className="library-import-content">
-                    <section className="library-import-panel">
-                      <div className="library-import-grid">
-                        <label>
-                          <span>{t("Folder or ZIP")}</span>
-                          <input
-                            aria-label={t("Local Skill source path")}
-                            placeholder={t("No source selected")}
-                            readOnly
-                            value={localSkillPath}
-                          />
-                        </label>
-                        <Button
-                          aria-label={t("Choose local Skill source")}
-                          disabled={localImportOperation || Boolean(githubOperation)}
-                          icon={<Folder size={15} strokeWidth={2.2} />}
-                          onClick={() => {
-                            void selectLocalSkillFolder();
-                          }}
-                        >
-                          {t("Choose source")}
-                        </Button>
-                      </div>
-                      {localImportImpact ? (
-                        <div
-                          className={`local-import-impact${
-                            localImportBlocked ? " local-import-impact--warning" : ""
-                          }`}
-                          role={localImportBlocked ? "alert" : "status"}
-                        >
-                          {localImportBlocked ? (
-                            <TriangleAlert size={15} strokeWidth={2.2} aria-hidden="true" />
-                          ) : (
-                            <CheckCircle2 size={15} strokeWidth={2.2} aria-hidden="true" />
-                          )}
-                          <span>{t(localImportImpact.message, localImportImpact.values)}</span>
-                        </div>
-                      ) : null}
-                      {localSkillSource && !selectedLocalInventory && onScanLocalSkillSource && onImportLocalSourceSkill ? (
-                        <ProjectSkillDiscoveryPanel
-                          rootPath={localSkillSource.rootPath}
-                          sourceKind={localSkillSource.kind}
-                          sourcePath={localSkillSource.path}
-                          onScan={onScanLocalSkillSource}
-                          onImport={onImportLocalSourceSkill}
-                        />
-                      ) : null}
-                    </section>
-                  </div>
-                ) : !githubScanResult ? (
-                  <div className="library-import-content">
-                    <section className="library-import-panel">
-                      <div className="github-scan-field">
-                        <span className="library-import-field-label">
-                          {t("Repository")}
-                          <InfoTip label={t("Paste a GitHub URL or a Git HTTPS/SSH clone address. Repository scans never modify your checkout.")} />
-                        </span>
-                        <input
-                          aria-label={t("Repository address")}
-                          placeholder="https://github.com/owner/repo or git@host:team/repo.git"
-                          disabled={localImportOperation}
-                          value={githubUrl}
-                          onChange={(event) => setGithubUrl(event.currentTarget.value)}
-                        />
-                      </div>
-                      <details className="repository-advanced">
-                        <summary>
-                          <Settings2 size={14} strokeWidth={2.1} aria-hidden="true" />
-                          {t("Advanced")}
-                          <ChevronDown
-                            className="repository-advanced-chevron"
-                            size={14}
-                            strokeWidth={2.1}
-                            aria-hidden="true"
-                          />
-                        </summary>
-                        <div className="repository-advanced-grid">
-                          <label>
-                            <span>{t("Ref")}</span>
-                            <input
-                              aria-label={t("Repository ref")}
-                              placeholder={t("Default branch")}
-                              disabled={Boolean(githubOperation)}
-                              value={repositoryRef}
-                              onChange={(event) => setRepositoryRef(event.currentTarget.value)}
-                            />
-                          </label>
-                          <label>
-                            <span>{t("Directory")}</span>
-                            <input
-                              aria-label={t("Repository directory")}
-                              placeholder="skills/review"
-                              disabled={Boolean(githubOperation)}
-                              value={repositoryDirectory}
-                              onChange={(event) => setRepositoryDirectory(event.currentTarget.value)}
-                            />
-                          </label>
-                          <label>
-                            <span>{t("Connection")}</span>
-                            <select
-                              aria-label={t("Repository connection")}
-                              disabled={Boolean(githubOperation)}
-                              value={repositoryConnection}
-                              onChange={(event) =>
-                                setRepositoryConnection(event.currentTarget.value as "auto" | "system-git")
-                              }
-                            >
-                              <option value="auto">{t("Automatic")}</option>
-                              <option value="system-git">{t("System Git")}</option>
-                            </select>
-                          </label>
-                        </div>
-                      </details>
-                    </section>
-                  </div>
-                ) : (
-                  <div className="github-scan-results">
-                    <div className="github-scan-summary">
-                      <div>
-                        <strong>{t("{{count}} found", { count: githubScanResult.candidates.length })}</strong>
-                        <PreviewText
-                          ariaLabel={t("Repository scan source")}
-                          className="repository-scan-summary-path"
-                          text={repositoryScanSummary || `${githubScanResult.owner}/${githubScanResult.repo} · ${githubScanResult.ref}`}
-                          tooltipClassName="library-source-tooltip"
-                        />
-                      </div>
-                      <Button
-                        disabled={Boolean(githubOperation) || Boolean(githubImportResult)}
-                        onClick={() => {
-                          setGithubScanResult(undefined);
-                          setGithubImportResult(undefined);
-                          setGithubOperationError("");
-                          setRepositoryScanKind(undefined);
-                          setRepositoryScanSummary("");
-                          setRepositoryCandidateInputs({});
-                          resetRepositoryImportDraft();
-                        }}
-                      >
-                        {t("Change source")}
-                      </Button>
-                    </div>
-                    {githubScanResult.truncated ? (
-                      <div className="inline-state inline-state--warning" role="status">
-                        <TriangleAlert size={15} aria-hidden="true" />
-                        {t("Results are incomplete. Narrow the repository directory and scan again.")}
-                      </div>
-                    ) : null}
-                    <div className="github-selection-bar">
-                      <label className="github-select-all">
-                        <input
-                          type="checkbox"
-                          aria-label={t("Select all discovered skills")}
-                          checked={githubAllReadySelected}
-                          disabled={
-                            githubReadyCandidateSources.length === 0 ||
-                            Boolean(githubOperation) ||
-                            Boolean(githubImportResult)
-                          }
-                          ref={(checkbox) => {
-                            if (checkbox) {
-                              checkbox.indeterminate = githubSomeReadySelected;
-                            }
-                          }}
-                          onChange={(event) => selectAllRepositoryCandidates(event.currentTarget.checked)}
-                        />
-                        <span>{t("Select all")}</span>
-                      </label>
-                      <span
-                        className={`github-selection-count${
-                          githubImportResult
-                            ? githubFailedImportCount > 0 || githubSkippedImportCount > 0
-                              ? " is-partial"
-                              : " is-complete"
-                            : ""
-                        }`}
-                        role="status"
-                      >
-                        {githubImportResult ? (
-                          <>
-                            {githubFailedImportCount > 0 || githubSkippedImportCount > 0 ? (
-                              <TriangleAlert size={14} strokeWidth={2.2} aria-hidden="true" />
-                            ) : (
-                              <CheckCircle2 size={14} strokeWidth={2.2} aria-hidden="true" />
-                            )}
-                            {t(
-                              githubFailedImportCount > 0 && githubSkippedImportCount > 0
-                                ? "{{imported}} imported · {{failed}} failed · {{skipped}} skipped"
-                                : githubFailedImportCount > 0
-                                  ? "{{imported}} imported · {{failed}} failed"
-                                  : githubSkippedImportCount > 0
-                                    ? "{{imported}} imported · {{skipped}} skipped"
-                                    : "All {{count}} skills imported",
-                              {
-                                count: githubImportedProgressCount,
-                                imported: githubImportedProgressCount,
-                                failed: githubFailedImportCount,
-                                skipped: githubSkippedImportCount
-                              }
-                            )}
-                          </>
-                        ) : t("{{count}} selected", { count: githubSelectedSources.length })}
-                      </span>
-                      <span className="github-selection-id-heading">{t("Library ID")}</span>
-                    </div>
-                    <div className="github-candidate-list">
-                      {githubScanResult.candidates.length === 0 ? (
-                        <div className="inline-state">{t("No skills found")}</div>
-                      ) : null}
-                      {githubScanResult.candidates.map((candidate) => {
-                        const selectable = candidate.status === "ready";
-                        const checked = githubSelectedSources.includes(candidate.sourceUrl);
-                        const progress = githubImportProgress[candidate.sourceUrl];
-                        const failure = githubImportResult?.failed.find(
-                          (item) => item.sourceUrl === candidate.sourceUrl
-                        );
-                        const failureMessage = progress?.error ?? failure?.error;
-                        const progressStatus = progress?.status ?? (failureMessage ? "failed" : undefined);
-                        const retrying = githubRetrySourceUrl === candidate.sourceUrl;
-                        return (
-                          <div
-                            className={`github-candidate-row${selectable ? "" : " is-disabled"}`}
-                            key={candidate.sourceUrl}
-                          >
-                            {progressStatus ? (
-                              <span
-                                className={`github-import-state github-import-state--${progressStatus}`}
-                                role="status"
-                                aria-label={t("{{name}}: {{status}}", {
-                                  name: candidate.name,
-                                  status: t(progressStatus)
-                                })}
-                              >
-                                {progressStatus === "waiting" ? (
-                                  <Circle size={16} strokeWidth={2} aria-hidden="true" />
-                                ) : progressStatus === "reviewing" || progressStatus === "importing" ? (
-                                  <LoaderCircle className="is-spinning" size={16} aria-hidden="true" />
-                                ) : progressStatus === "imported" ? (
-                                  <CheckCircle2 size={16} strokeWidth={2.2} aria-hidden="true" />
-                                ) : progressStatus === "skipped" ? (
-                                  <CircleSlash2 size={16} strokeWidth={2.1} aria-hidden="true" />
-                                ) : (
-                                  <PreviewText
-                                    ariaLabel={t("Import failure for {{name}}", { name: candidate.name })}
-                                    className="github-import-state__failure"
-                                    displayContent={<XCircle size={16} strokeWidth={2.2} aria-hidden="true" />}
-                                    text={failureMessage ?? t("Import failed")}
-                                    tooltipClassName="library-source-tooltip import-error-tooltip"
-                                  />
-                                )}
-                              </span>
-                            ) : (
-                              <input
-                                type="checkbox"
-                                aria-label={t("Select {{name}}", { name: candidate.name })}
-                                disabled={!selectable || Boolean(githubOperation) || Boolean(githubImportResult)}
-                                checked={checked}
-                                onChange={(event) => {
-                                  const checked = event.currentTarget.checked;
-                                  selectRepositoryCandidate(candidate.sourceUrl, checked);
-                                }}
-                              />
-                            )}
-                            <span className="github-candidate-icon" aria-hidden="true">
-                              <GitBranch size={16} strokeWidth={2.2} />
-                            </span>
-                            <span className="github-candidate-main">
-                              <strong>{candidate.name}</strong>
-                              <PreviewText
-                                ariaLabel={t("Full repository path {{id}}", { id: candidate.id })}
-                                className="github-candidate-path"
-                                text={candidate.remotePath || "/"}
-                                tooltipClassName="library-source-tooltip"
-                              />
-                              {candidate.description ? <small>{candidate.description}</small> : null}
-                              {progressStatus === "failed" ? (
-                                <small className="github-import-state-label field-error">{t("Import failed")}</small>
-                              ) : progress ? (
-                                <small className="github-import-state-label">{t(progress.status)}</small>
-                              ) : null}
-                            </span>
-                            {selectable && (progressStatus === "failed" || progressStatus === "skipped" || retrying) ? (
-                              <Button
-                                className="github-candidate-retry"
-                                size="compact"
-                                variant="secondary"
-                                aria-label={t(
-                                  progressStatus === "skipped" ? "Import {{name}}" : "Retry {{name}}",
-                                  { name: candidate.name }
-                                )}
-                                disabled={Boolean(githubOperation)}
-                                icon={retrying
-                                  ? <LoaderCircle className="is-spinning" size={15} />
-                                  : progressStatus === "skipped"
-                                    ? <Download size={15} strokeWidth={2.2} />
-                                    : <RotateCcw size={15} strokeWidth={2.2} />}
-                                onClick={() => void retryGitHubSkill(candidate)}
-                              >
-                                {t(progressStatus === "skipped" ? "Import" : "Retry")}
-                              </Button>
-                            ) : selectable ? (
-                              <input
-                                className="github-candidate-id"
-                                aria-label={t("Library ID for {{name}}", { name: candidate.name })}
-                                disabled={Boolean(githubOperation) || Boolean(githubImportResult)}
-                                value={githubCandidateIds[candidate.sourceUrl] ?? candidate.id}
-                                onChange={(event) => {
-                                  const value = event.currentTarget.value;
-                                  setRepositoryCandidateId(candidate.sourceUrl, value);
-                                }}
-                              />
-                            ) : (
-                              <PreviewText
-                                ariaLabel={t("Status details for {{id}}", { id: candidate.id })}
-                                className={`resource-chip resource-chip--managed${
-                                  candidate.status === "invalid" ? " resource-chip--warning" : ""
-                                }`}
-                                displayText={t(
-                                  candidate.status === "duplicate"
-                                    ? "Duplicate"
-                                    : candidate.status === "invalid"
-                                      ? "Invalid"
-                                      : "Imported"
-                                )}
-                                focusable={candidate.status === "invalid"}
-                                text={candidate.error ?? t("Already in Library")}
-                                tooltipClassName="library-source-tooltip"
-                              />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {githubOperationError ? (
-                  <div className="inline-state inline-state--error import-inline-error" role="alert">
-                    <TriangleAlert size={15} aria-hidden="true" />
-                    <span>{githubOperationError}</span>
-                    {githubApiRetryAvailable ? (
-                      <button
-                        className="inline-state-action"
-                        type="button"
-                        disabled={Boolean(githubOperation)}
-                        onClick={() => {
-                          setRepositoryConnection("system-git");
-                          void scanRepository(true);
-                        }}
-                      >
-                        {t("Try with System Git")}
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-                <footer className="preview-actions import-dialog-actions ui-dialog-footer">
-                  <Button
-                    variant={githubImportResult ? "primary" : "secondary"}
-                    disabled={
-                      localImportOperation ||
-                      (Boolean(githubOperation) && !repositoryOperationCancelable) ||
-                      importStopRequested
-                    }
-                    onClick={() => void closeImportTool()}
-                    icon={importStopRequested
-                      ? <LoaderCircle className="is-spinning" size={15} />
-                      : undefined}
-                  >
-                    {t(
-                      githubOperation === "importing"
-                        ? importStopRequested ? "Stopping..." : "Stop import"
-                        : "Close"
-                    )}
-                  </Button>
-                  {importSource === "local" && selectedLocalInventory ? (
-                    <Button
-                      variant="primary"
-                      aria-busy={localImportOperation}
-                      disabled={
-                        !localSkillPath.trim() ||
-                        localImportOperation ||
-                        Boolean(githubOperation) ||
-                        localImportBlocked
-                      }
-                      onClick={() => void importLocalSkill()}
-                      icon={localImportOperation
-                        ? <LoaderCircle className="is-spinning" size={15} />
-                        : undefined}
-                    >
-                      {localImportOperation ? t("Importing...") : t(localImportLabel)}
-                    </Button>
-                  ) : importSource === "local" ? null : !githubScanResult ? (
-                    <Button
-                      variant="primary"
-                      aria-busy={githubOperation === "scanning"}
-                      disabled={!githubUrl.trim() || Boolean(githubOperation) || localImportOperation}
-                      icon={githubOperation === "scanning"
-                        ? <LoaderCircle className="is-spinning" size={15} />
-                        : undefined}
-                      onClick={() => {
-                        void scanRepository();
-                      }}
-                    >
-                      {t(githubOperation === "scanning" ? "Scanning..." : "Scan")}
-                    </Button>
-                  ) : githubImportResult ? null : (
-                    <Button
-                      variant="primary"
-                      aria-busy={githubOperation === "importing"}
-                      disabled={githubSelectedSources.length === 0 || Boolean(githubOperation)}
-                      icon={githubOperation === "importing"
-                        ? <LoaderCircle className="is-spinning" size={15} />
-                        : undefined}
-                      onClick={() => {
-                        void importSelectedGitHubSkills();
-                      }}
-                    >
-                      {githubOperation === "importing" ? t("Importing...") : t("Import {{count}}", { count: githubSelectedSources.length })}
-                    </Button>
-                  )}
-                </footer>
-            </ModalFrame>
-          )
-        : null}
     </section>
   );
 };
