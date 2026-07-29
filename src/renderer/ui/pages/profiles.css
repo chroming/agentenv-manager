@@ -275,11 +275,6 @@
   min-height: var(--page-header-height);
 }
 
-.profile-page-header h2 {
-  font-size: var(--font-size-page-title);
-  line-height: 1.15;
-}
-
 .profile-page-actions,
 .profile-commit-actions {
   align-items: center;
@@ -332,8 +327,7 @@
 }
 
 .primary-inline-action,
-.workspace-page-header > .secondary-action,
-.github-settings-section .primary-button {
+.workspace-page-header > .secondary-action {
   height: var(--profile-control-height, 40px);
   min-height: var(--profile-control-height, 40px);
 }

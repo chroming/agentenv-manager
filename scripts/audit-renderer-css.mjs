@@ -53,6 +53,68 @@ const highFrequencySpatialSelectors = [
   ".resource-row",
   ".resource-picker-option"
 ];
+const intentionalSharedSelectorOwners = new Map([
+  [":root", [
+    "src/renderer/ui/base.css",
+    "src/renderer/ui/tokens.css"
+  ]],
+  [".app-shell--settings .editor-panel", [
+    "src/renderer/ui/pages/responsive.css",
+    "src/renderer/ui/pages/settings.css"
+  ]],
+  [".is-spinning", [
+    "src/renderer/ui/accessibility.css",
+    "src/renderer/ui/primitives.css"
+  ]],
+  [".preview-dialog--modal .preview-actions", [
+    "src/renderer/ui/overlays.css",
+    "src/renderer/ui/pages/profiles.css"
+  ]],
+  [".preview-dialog--modal .preview-summary-grid", [
+    "src/renderer/ui/overlays.css",
+    "src/renderer/ui/pages/profiles.css"
+  ]],
+  [".profile-target-workspace-button", [
+    "src/renderer/ui/pages/profiles.css",
+    "src/renderer/ui/pages/responsive.css"
+  ]],
+  [".skill-source-counts", [
+    "src/renderer/ui/pages/catalog-contract.css",
+    "src/renderer/ui/pages/skill-sources.css"
+  ]],
+  [".target-card--workflow", [
+    "src/renderer/ui/pages/responsive.css",
+    "src/renderer/ui/pages/targets.css"
+  ]],
+  [".target-workflow-description", [
+    "src/renderer/ui/pages/responsive.css",
+    "src/renderer/ui/pages/targets.css"
+  ]],
+  [".target-workflow-icon", [
+    "src/renderer/ui/pages/responsive.css",
+    "src/renderer/ui/pages/targets.css"
+  ]],
+  [".ui-action-menu > button", [
+    "src/renderer/ui/overlays.css",
+    "src/renderer/ui/primitives.css"
+  ]],
+  [".ui-button:active:not(:disabled)", [
+    "src/renderer/ui/accessibility.css",
+    "src/renderer/ui/primitives.css"
+  ]],
+  [".ui-hover-detail", [
+    "src/renderer/ui/accessibility.css",
+    "src/renderer/ui/overlays.css"
+  ]],
+  [".ui-icon-button:active:not(:disabled)", [
+    "src/renderer/ui/accessibility.css",
+    "src/renderer/ui/primitives.css"
+  ]],
+  ["*", [
+    "src/renderer/ui/accessibility.css",
+    "src/renderer/ui/base.css"
+  ]]
+]);
 
 const selectorCounts = (content) => {
   const counts = new Map();
@@ -133,6 +195,24 @@ const sharedSelectors = [...selectorFiles.entries()]
       right.reduce((total, location) => total + location.count, 0) -
       left.reduce((total, location) => total + location.count, 0)
   );
+const legacySharedSelectors = sharedSelectors.filter(([, locations]) =>
+  locations.some(({ file }) => file === "src/renderer/styles.css")
+);
+const unapprovedSharedSelectors = sharedSelectors
+  .filter(([, locations]) =>
+    locations.every(({ file }) => file !== "src/renderer/styles.css")
+  )
+  .filter(([selector, locations]) => {
+    const expectedOwners = intentionalSharedSelectorOwners.get(selector);
+    const actualOwners = locations.map(({ file }) => file).sort();
+    return !expectedOwners ||
+      expectedOwners.length !== actualOwners.length ||
+      expectedOwners.some((file, index) => file !== actualOwners[index]);
+  })
+  .map(([selector, locations]) => ({
+    selector,
+    files: locations.map(({ file }) => file)
+  }));
 
 const pagePrimitiveRedefinitions = reports.flatMap((report) => {
   if (!report.file.startsWith("src/renderer/ui/pages/")) return [];
@@ -192,7 +272,9 @@ const result = {
   architecture: {
     animationOwnerViolations,
     highFrequencySpatialMotion,
+    legacyCrossFileSelectors: legacySharedSelectors.length,
     pagePrimitiveRedefinitions,
+    unapprovedCrossFileSelectors: unapprovedSharedSelectors,
     undefinedCustomProperties,
     usesLateSystemLayer: /(?:\bsystem\b|system\.css)/.test(rendererIndex)
   },
@@ -240,10 +322,18 @@ if (shouldCheck) {
           .map(({ property, files }) => `${property} (${files.join(", ")})`)
           .join("; ")}`
       : undefined,
-    result.totals.crossFileSelectors > 141
+    result.architecture.unapprovedCrossFileSelectors.length > 0
+      ? `Cross-file selectors need one explicit owner or an intentional responsive/accessibility contract: ${result.architecture.unapprovedCrossFileSelectors
+          .map(({ selector, files }) => `${selector} (${files.join(", ")})`)
+          .join("; ")}`
+      : undefined,
+    result.architecture.legacyCrossFileSelectors > 98
+      ? "Legacy selector ownership grew beyond the current migration baseline"
+      : undefined,
+    result.totals.crossFileSelectors > 113
       ? "Cross-file selector duplication grew beyond the ownership migration baseline"
       : undefined,
-    (legacyStyles?.lines ?? Number.POSITIVE_INFINITY) > 5776
+    (legacyStyles?.lines ?? Number.POSITIVE_INFINITY) > 4973
       ? "src/renderer/styles.css grew beyond its frozen migration baseline"
       : undefined,
     result.totals.containerQueries < 2

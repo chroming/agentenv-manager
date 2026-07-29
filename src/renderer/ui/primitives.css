@@ -561,8 +561,7 @@
 
 .ui-dialog-header__copy h2,
 .ui-dialog-header__copy strong,
-.ui-dialog-title,
-.profile-dialog-header .section-title {
+.ui-dialog-title {
   font-size: 16px;
   font-weight: var(--font-weight-semibold);
   line-height: 20px;

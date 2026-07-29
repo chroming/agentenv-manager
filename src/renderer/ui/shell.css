@@ -338,10 +338,6 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
   color: var(--text);
 }
 
-.profile-page-actions button {
-  min-height: var(--control-height-default);
-}
-
 .editor-panel {
   padding: var(--window-chrome-inset-top, 20px) 24px 22px;
 }

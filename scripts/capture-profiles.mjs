@@ -876,6 +876,10 @@ try {
   await capturePage(page, join(outputDir, "skills-update-review-920x620.png"));
   await skillUpdateDialog.getByRole("button", { name: "Cancel" }).click();
   await skillUpdateDialog.waitFor({ state: "hidden" });
+  await page.locator(".app-feedback--success, .app-feedback--info").waitFor({
+    state: "hidden",
+    timeout: 8_000
+  });
 
   await page.getByRole("button", { name: "Import skills" }).click();
   const importDialog = page.getByRole("dialog", { name: "Import skills" });
