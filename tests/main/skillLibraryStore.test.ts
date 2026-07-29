@@ -87,6 +87,16 @@ describe("skill library store", () => {
     await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8"))
       .resolves.toContain("# Existing");
 
+    const keptExisting = await store.importSkill({
+      sourcePath: incomingDir,
+      id: "reviewer",
+      expectedContentHash: preview.incoming.contentHash,
+      conflictResolution: { action: "keep-existing", existingId: "reviewer" }
+    });
+    expect(keptExisting.id).toBe("reviewer");
+    await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8"))
+      .resolves.toContain("# Existing");
+
     await writeFile(join(incomingDir, "SKILL.md"), `${incomingContent}\nChanged after preview.\n`);
     await expect(
       store.importSkill({

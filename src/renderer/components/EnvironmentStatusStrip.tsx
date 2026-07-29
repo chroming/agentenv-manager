@@ -65,17 +65,6 @@ const statusCopy = (
         ),
         detail: t("Open the affected Profile before the next Apply.")
       };
-    case "ready-with-outside": {
-      const outsideNames = summary.outsideResourceTargetIds
-        .map((targetId) => targetNames[targetId] ?? targetId)
-        .join(", ");
-      return {
-        title: t("Environment ready with local exceptions"),
-        detail: outsideNames
-          ? t("Resources remain outside AgentEnv for {{agents}}.", { agents: outsideNames })
-          : t("Some resources remain outside AgentEnv.")
-      };
-    }
     case "no-agents":
       return {
         title: t("No Agents detected"),
@@ -111,7 +100,7 @@ export const EnvironmentStatusStrip = ({
   const Icon =
     summary.state === "checking"
       ? LoaderCircle
-      : summary.state === "ready" || summary.state === "ready-with-outside"
+      : summary.state === "ready"
         ? CheckCircle2
         : summary.state === "setup" || summary.state === "no-agents"
           ? Monitor

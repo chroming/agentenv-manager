@@ -40,6 +40,7 @@ import {
 import { createPortal } from "react-dom";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useRepositoryImportDraft } from "../hooks/useRepositoryImportDraft";
+import { useSkillCollectionSelection } from "../hooks/useSkillCollectionSelection";
 import type {
   GitHubSkillImportInput,
   GitHubSkillImportResult,
@@ -186,8 +187,10 @@ interface SkillLibraryPanelProps {
   preparedTargetsBySkill?: Record<string, PreparedSkillTarget[]>;
   activeTool?: "import" | "discoveries";
   cleanupScope?: "all" | "shared";
+  focusCollectionPath?: string;
   isRefreshingInventory?: boolean;
   onCloseTool?(): void;
+  onFocusCollectionHandled?(): void;
   onRefreshInventory(announce?: boolean): Promise<void>;
   onSelectLocalSkillSource(): Promise<LocalSkillSourceSelection | undefined>;
   onReleaseSkillArchive(token: string): Promise<void>;
@@ -285,8 +288,10 @@ export const SkillLibraryPanel = ({
   preparedTargetsBySkill = {},
   activeTool,
   cleanupScope = "all",
+  focusCollectionPath,
   isRefreshingInventory = false,
   onCloseTool,
+  onFocusCollectionHandled,
   onRefreshInventory,
   onSelectLocalSkillSource,
   onReleaseSkillArchive,
@@ -412,7 +417,12 @@ export const SkillLibraryPanel = ({
   const [availabilityOperation, setAvailabilityOperation] = useState<SkillAvailabilityInput>();
   const [localPreviewingSkillId, setLocalPreviewingSkillId] = useState<string>();
   const [cleanupDetailsKey, setCleanupDetailsKey] = useState<string>();
-  const [collectionDetailsPath, setCollectionDetailsPath] = useState<string>();
+  const collectionGroups = useMemo(
+    () => buildSkillCollectionLinkGroups(skillInventory, { installedTargetIds }),
+    [installedTargetIds, skillInventory]
+  );
+  const [collectionDetailsPath, setCollectionDetailsPath, selectedCollection] =
+    useSkillCollectionSelection(collectionGroups, focusCollectionPath, activeTool === "discoveries", onFocusCollectionHandled);
   const {
     operation: collectionOperation,
     changeRetention: changeCollectionRetention,
@@ -618,7 +628,7 @@ export const SkillLibraryPanel = ({
       if (event.key !== "Escape") {
         return;
       }
-      if (modalOpen) {
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) {
         return;
       }
       if (openActionId) {
@@ -645,7 +655,7 @@ export const SkillLibraryPanel = ({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTool, filtersOpen, githubOperation, modalOpen, onCloseTool, openActionId, repositoryOperationCancelable]);
+  }, [activeTool, filtersOpen, githubOperation, onCloseTool, openActionId, repositoryOperationCancelable]);
   useModalDialog({
     open: modalOpen,
     dialogRef: modalDialogRef,
@@ -854,13 +864,6 @@ export const SkillLibraryPanel = ({
       setDeleteCandidate(skill);
     }
   };
-  const collectionGroups = useMemo(
-    () => buildSkillCollectionLinkGroups(skillInventory, { installedTargetIds }),
-    [installedTargetIds, skillInventory]
-  );
-  const selectedCollection = collectionDetailsPath
-    ? collectionGroups.find((group) => group.path === collectionDetailsPath)
-    : undefined;
   const allCleanupGroups = useMemo(
     () => buildSkillCleanupGroups(skillInventory, {
       installedTargetIds,

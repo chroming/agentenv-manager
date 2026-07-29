@@ -279,9 +279,10 @@ implementation.
   duplicate lifecycle state.
 - The compact status projection shows exactly one of: checking local Skills, environment
   check unavailable, shared Skills need review, first Agent setup, Agent changes need review,
-  environment ready with local exceptions, or environment ready. `Applied with outside
-  resources` is a stable current deployment and MUST NOT be counted as an Agent that needs
-  review. It exposes at most one current action. Commands name their affected object:
+  or environment ready. `Applied with outside resources` is a stable current deployment and
+  MUST NOT be counted as an Agent that needs review or promoted to a separate global warning;
+  its machine-local exception remains visible on the affected Agent and Profile. The projection
+  exposes at most one current action. Commands name their affected object:
   `Review Skills`, `Review Profile`, `Configure Agent`, or `Retry check`; a bare lifecycle verb
   such as `Review` is not an Environment Review command.
 - Status detail remains a single compact line. When it overflows, the complete selectable value
@@ -296,8 +297,10 @@ implementation.
 - A shared compatibility location is discovered before Capture, included in Capture's
   effective environment, and must be reviewed before a Profile can claim to disable or omit a
   Skill that the Agent still loads from that location. Deferring migration remains an explicit
-  machine-local exception and must produce `Applied with outside resources` plus `Environment
-  ready with local exceptions`, never a false plain `Applied` or plain `Environment ready` state.
+  machine-local exception and must produce `Applied with outside resources` on the affected
+  Agent. The global Environment Review may still show `Environment ready` because it answers
+  whether an action is currently required; it MUST NOT hide the exception from Agent or Profile
+  detail.
 - Refresh is idempotent. An unchanged inventory produces no canonical write, Backup, ownership
   change, or timestamp churn. A changed inventory invalidates stale review plans and exposes
   only the remaining current work.
@@ -711,7 +714,7 @@ The complete issue policy is normative:
 | `runtime-state-unavailable` | `block` | `external-action` | Required runtime state cannot be inspected reliably. |
 | `runtime-skill-conflict` | `block` | `external-action` | Runtime discovery reports ambiguous or conflicting Skill identity. |
 | `unsupported-skill-management` | `block` | `edit-profile` | Profile requests Skill management unsupported by the adapter. |
-| `shared-skill-conflict` | `block` | `external-action` | Shared compatibility content conflicts with canonical intent. |
+| `shared-skill-conflict` | `block` | `review-local-skills` | Shared compatibility content conflicts with canonical intent and must open the exact Local Skills collection review. |
 | `shared-skill-deferred` | `notice` | `preserve` | Shared compatibility content remains until all consumers have explicit intent. |
 | `skill-root-isolation` | `review` | `backup-replace` | A linked Agent Skill root will be isolated without modifying its destination. |
 | `invalid-skill-root` | `block` | `external-action` | The Agent Skill root is an unsafe non-directory boundary. |
@@ -920,7 +923,7 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 - Import validates `SKILL.md` and rejects unsafe or ambiguous directory layouts.
 - Skill version metadata is normalized from either ClawHub's top-level `version` field or Agent Skills' `metadata.version` field. String and numeric scalar versions are accepted. Conflicting values declared in both locations are rejected rather than silently prioritized.
 - Library identity is the stable `id`; duplicate detection uses the normalized frontmatter `name` and also guards storage-ID collisions. Import MUST NOT silently create a suffixed ID when a same-name Skill exists.
-- A same-name import opens one conditional review step before any write. It compares declared version, full content hash, source, modified time, `SKILL.md`, and every changed file against each matching Library entry. Modified time uses the upstream Skill-subtree commit time when available and otherwise the local `SKILL.md` modification time; unavailable values remain explicitly unknown. Identical content is labelled explicitly and can only reuse the existing entry. Different content requires an explicit choice between replacing a selected Library entry or saving under a validated unique ID.
+- A same-name import opens one conditional review step before any write. It compares declared version, full content hash, source, modified time, `SKILL.md`, and every changed file against each matching Library entry. Modified time uses the upstream Skill-subtree commit time when available and otherwise the local `SKILL.md` modification time; unavailable values remain explicitly unknown. Identical content is labelled explicitly and can only reuse the existing entry. Different local content requires an explicit choice between keeping the current Library copy without changing the incoming source, replacing a selected Library entry, or saving under a validated unique ID.
 - Import comparison treats trackable online provenance as part of the Skill's useful state. When content is identical but an incoming Repository source differs from or improves on the existing local provenance, the review labels `Source available` and offers `Update source`. This operation preserves every Skill file and stable Library ID while updating source, revision, upstream, transport, and `Tracked` policy metadata. Different local paths alone do not create a source conflict, and a local import never silently downgrades an existing online source.
 - When an online source exposes a verified commit time for the Skill subtree, AgentEnv stores it separately from the local Library write time. Generic Git reads use a bounded blobless history window and MUST omit a path time when its newest visible match is the shallow-history boundary; a repository HEAD time is never substituted for a Skill path time. The Skill list and duplicate-import comparison label this as the upstream update time; unavailable source time is omitted rather than inferred from repository or local file timestamps.
 - Replacing preserves the selected Library ID so Profile references remain valid, preserves Library-only presentation and availability metadata, backs up the current content, and atomically installs the reviewed source. Saving another copy makes the duplicate IDs visible in the Skill list so intentionally same-name entries remain distinguishable.
@@ -1019,6 +1022,7 @@ Shared compatibility migration contract:
 - A Skill collection link is one physical migration boundary. `Keep external` records one path policy on the outer link and applies it to every current descendant; `Review again` removes only that policy. Newly discovered descendants inherit the collection policy because the decision is attached to the outer link, not to a list of child paths.
 - Until every readable collection member has an exact Library copy, a Skills-managing Profile MUST NOT install a same-runtime-name Target copy or claim the external member is absent. Apply blocks with the outer collection path and directs the user to review or explicitly keep the collection; an explicit keep policy preserves the external runtime without creating a duplicate.
 - Moving a Skill collection first requires an exact Library copy for every readable descendant. Missing Skills may be copied into Library without changing the source; same-name content differences use the ordinary explicit import conflict review. The migration adds the currently loaded members to each consumer Agent's active Skills-managing Profile, applies each affected Profile once, and refuses pending, drifted, ignored, disabled-Agent, or recovery-required states.
+- When Apply is blocked by an unresolved Skill collection, the blocking issue exposes `Review collection` and opens the matching Local Skills collection review directly. It MUST NOT require the user to locate the collection manually, and it MUST NOT auto-replace conflicting Library content.
 - Collection migration is one recoverable transaction: verify the outer entry is still a symbolic link to the reviewed canonical folder; back up the link, every affected Agent destination, ownership sidecar, and Target state; remove only the outer link; deploy and verify Target-specific Library copies; then clear every member preparation. It MUST never write, rename, or delete the canonical source folder or a descendant through the link. Failure restores the original link topology and all Agent state before reporting completion.
 - A shared Skill not yet in Library follows the same `Add to Library` intent as every other local Skill. One content version is eligible for the confirmed `Clean up N` plan; multiple different content hashes remain in `Needs your decision`, show the number of different versions in the row, and add version choice inside `Add to Library`.
 - Adding a shared Skill to Library is one transaction: back up all copies, create the Library canonical copy, keep exactly one shared compatibility copy active, and remove redundant Target-specific copies. The shared copy MUST NOT receive a Target ownership marker.
@@ -1294,7 +1298,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Settings switches sit beside the setting label they control, with supporting copy on the following line; they MUST NOT float as visually detached controls at the far edge of a wide row.
 - Hover/focus tooltips are mutually exclusive and use a subtle trigger-anchored entry. The first pointer disclosure uses a short intentional delay; moving directly to an adjacent tooltip while one remains active opens the next immediately. Long-text tooltips allow pointer entry and native text selection for copying, then close after the pointer leaves both trigger and tooltip. Repeated passive overflow spans MUST NOT each add a Tab stop: an existing row command or identity action owns keyboard focus and its full accessible name, while standalone error or decision details MAY opt into focus explicitly.
 - Modal dialogs trap keyboard focus until they close.
-- Escape closes dismissible layers; safe outside click closes them; focus returns to the trigger or the next logical surviving control.
+- Escape closes only the topmost dismissible layer; the handled event MUST NOT continue and close a parent dialog or drawer. A non-dismissible working layer consumes Escape without exposing or closing the layer beneath it. Safe outside click closes the topmost layer; focus returns to the trigger or the next logical surviving control.
 - Primary workflows work with keyboard only.
 - Status is never communicated through color alone.
 - Dynamic visible copy and accessible labels use the active locale. Truncated Profile descriptions use the shared selectable overflow detail instead of native browser title tooltips.

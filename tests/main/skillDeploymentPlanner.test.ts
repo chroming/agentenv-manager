@@ -277,6 +277,11 @@ describe("skill deployment planner", () => {
     expect(blockingMessages(result.issues)).toEqual([
       expect.stringContaining("2 Skills are loaded through collection")
     ]);
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      code: "shared-skill-conflict",
+      resolution: "review-local-skills",
+      path: collectionPath
+    }));
     expect(result.effectiveSkills).toEqual([]);
     expect(result.decisions).not.toContainEqual(
       expect.objectContaining({ action: "install" })

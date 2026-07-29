@@ -58,8 +58,9 @@ export const useModalDialog = ({
       }
 
       if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
         if (!dismissDisabledRef.current) {
-          event.preventDefault();
           onDismissRef.current();
         }
         return;

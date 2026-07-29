@@ -479,7 +479,9 @@ export const registerIpcHandlers = ({
     return {
       skill,
       managedLocations: [],
-      reused: input.conflictResolution?.action === "reuse",
+      reused:
+        input.conflictResolution?.action === "reuse" ||
+        input.conflictResolution?.action === "keep-existing",
       sourceUpdated: input.conflictResolution?.action === "update-source"
     };
   });

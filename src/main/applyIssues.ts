@@ -47,7 +47,7 @@ export const APPLY_ISSUE_POLICY: Record<ApplyIssueCode, ApplyIssuePolicy> = {
   "runtime-state-unavailable": { disposition: "block", resolution: "external-action" },
   "runtime-skill-conflict": { disposition: "block", resolution: "external-action" },
   "unsupported-skill-management": { disposition: "block", resolution: "edit-profile" },
-  "shared-skill-conflict": { disposition: "block", resolution: "external-action" },
+  "shared-skill-conflict": { disposition: "block", resolution: "review-local-skills" },
   "shared-skill-deferred": { disposition: "notice", resolution: "preserve" },
   "skill-root-isolation": { disposition: "review", resolution: "backup-replace" },
   "invalid-skill-root": { disposition: "block", resolution: "external-action" },

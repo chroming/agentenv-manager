@@ -968,7 +968,7 @@ describe("App", () => {
     ).toBeNull();
   });
 
-  it("keeps applied local exceptions out of the Agent review count", async () => {
+  it("keeps applied local exceptions in Agent detail without promoting them globally", async () => {
     installApi({
       listTargetStates: vi.fn().mockResolvedValue([
         managedState({
@@ -985,15 +985,13 @@ describe("App", () => {
       name: "Environment status"
     });
     expect(
-      within(environmentStatus).getByText("Environment ready with local exceptions")
-    ).toBeInTheDocument();
-    expect(
-      within(environmentStatus).getByText(
-        "Resources remain outside AgentEnv for OpenCode."
-      )
+      within(environmentStatus).getByText("Environment ready")
     ).toBeInTheDocument();
     expect(
       within(environmentStatus).queryByText(/Agent needs review/)
+    ).toBeNull();
+    expect(
+      within(environmentStatus).queryByText(/local exceptions/i)
     ).toBeNull();
     expect(
       within(environmentStatus).queryByRole("button", { name: "Review Profile" })

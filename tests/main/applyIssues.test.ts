@@ -81,7 +81,7 @@ describe("Apply issues", () => {
     const contract = await readFile("docs/product-contracts.md", "utf8");
     const contractPolicy = Object.fromEntries(
       [...contract.matchAll(
-        /^\| `([^`]+)` \| `(notice|review|block)` \| `(automatic|backup-replace|edit-profile|external-action|open-recovery|preserve)` \|/gm
+        /^\| `([^`]+)` \| `(notice|review|block)` \| `(automatic|backup-replace|edit-profile|external-action|open-recovery|preserve|review-local-skills)` \|/gm
       )].map((match) => [
         match[1],
         { disposition: match[2], resolution: match[3] }

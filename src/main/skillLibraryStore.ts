@@ -1220,6 +1220,12 @@ export const createSkillLibraryStore = (
       }
       return { id: selected.existing.id, replace: false, reused: true, sourceOnly: false };
     }
+    if (resolution.action === "keep-existing") {
+      if (!selected) {
+        throw new Error("The selected Library skill is no longer a matching conflict");
+      }
+      return { id: selected.existing.id, replace: false, reused: true, sourceOnly: false };
+    }
     if (resolution.action === "update-source") {
       if (!selected?.contentIdentical || !selected.sourceUpdateAvailable) {
         throw new Error("The selected Skill no longer has an available source-only update");

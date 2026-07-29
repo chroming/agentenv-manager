@@ -500,6 +500,7 @@ export interface SkillImportPreview {
 
 export type SkillImportConflictResolution =
   | { action: "reuse"; existingId: string }
+  | { action: "keep-existing"; existingId: string }
   | { action: "update-source"; existingId: string }
   | { action: "replace"; existingId: string }
   | { action: "keep-both"; id: string };
@@ -1505,7 +1506,8 @@ export type ApplyIssueResolution =
   | "edit-profile"
   | "external-action"
   | "open-recovery"
-  | "preserve";
+  | "preserve"
+  | "review-local-skills";
 
 export type ApplyIssueResourceKind =
   | "profile"

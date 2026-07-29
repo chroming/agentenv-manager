@@ -1063,7 +1063,7 @@ describe("Electron UI profile switching e2e", () => {
     ]);
   }, 30_000);
 
-  it("presents applied outside resources as a stable local exception", async () => {
+  it("keeps applied outside resources in Agent detail without a global warning", async () => {
     const { appDataRoot, homeDir, page } = await launchApp({
       initialWorkspace: "targets"
     });
@@ -1093,14 +1093,11 @@ describe("Electron UI profile switching e2e", () => {
     const agents = page.getByRole("region", { name: "Agents", exact: true });
     await agents.waitFor({ state: "visible" });
     const status = agents.getByRole("region", { name: "Environment status" });
-    await status.getByText("Environment ready with local exceptions", {
+    await status.getByText("Environment ready", {
       exact: true
     }).waitFor({ state: "visible" });
-    expect(await status.getByText(
-      "Resources remain outside AgentEnv for OpenCode.",
-      { exact: true }
-    ).count()).toBe(1);
     expect(await status.getByText(/Agent needs review/).count()).toBe(0);
+    expect(await status.getByText(/local exceptions/i).count()).toBe(0);
     expect(await status.getByRole("button", { name: "Review Profile" }).count()).toBe(0);
     await expectNoHorizontalOverflow(page, [".environment-status-strip"]);
     expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
@@ -5289,6 +5286,63 @@ describe("Electron UI profile switching e2e", () => {
       .resolves.toBe(true);
   }, 45_000);
 
+  it("keeps the Library copy when a local same-name import is rejected", async () => {
+    const { appDataRoot, page } = await launchApp();
+    const incomingDir = join(appDataRoot, "manual-import-skills", "shared-reviewer-rejected");
+    await mkdir(incomingDir, { recursive: true });
+    await writeFile(
+      join(incomingDir, "SKILL.md"),
+      "---\nname: Shared Reviewer\ndescription: Local content that should stay outside Library.\nversion: 9.0.0\n---\n# Rejected Local Reviewer\n",
+      "utf8"
+    );
+    await app!.evaluate(
+      ({ dialog }, selectedPath) => {
+        dialog.showOpenDialog = async () => ({
+          canceled: false,
+          filePaths: [selectedPath],
+          bookmarks: []
+        });
+      },
+      incomingDir
+    );
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Import skills" }).click();
+    const importDialog = page.getByRole("dialog", { name: "Import skills" });
+    await importDialog.getByRole("button", { name: "Choose local Skill source" }).click();
+    const incomingRow = page.locator(".project-skill-row").filter({
+      hasText: "Shared Reviewer"
+    });
+    await incomingRow.getByRole("button", { name: "Import", exact: true }).click();
+
+    let conflict = page.getByRole("dialog", { name: "Review duplicate Skill" });
+    await conflict.waitFor({ state: "visible" });
+    expect(await conflict.getByRole("radio", { name: /Keep Library copy/ }).count()).toBe(1);
+    expect(await conflict.getByRole("radio", { name: /Replace Library copy/ }).count()).toBe(1);
+    expect(await conflict.getByRole("radio", { name: /Keep both/ }).count()).toBe(1);
+    await page.keyboard.press("Escape");
+    await conflict.waitFor({ state: "hidden" });
+    await importDialog.waitFor({ state: "visible" });
+
+    await incomingRow.getByRole("button", { name: "Import", exact: true }).click();
+    conflict = page.getByRole("dialog", { name: "Review duplicate Skill" });
+    await conflict.getByRole("radio", { name: /Keep Library copy/ }).check();
+    await conflict.getByRole("button", { name: "Keep Library copy" }).click();
+    await conflict.waitFor({ state: "hidden" });
+    await importDialog.waitFor({ state: "visible" });
+
+    await expect(readFile(
+      join(appDataRoot, "skills-library", "shared-reviewer", "SKILL.md"),
+      "utf8"
+    )).resolves.toContain("Review code changes before applying them.");
+    await expect(
+      fileExists(join(appDataRoot, "skills-library", "shared-reviewer-rejected"))
+    ).resolves.toBe(false);
+    await expect(fileExists(join(incomingDir, "SKILL.md"))).resolves.toBe(true);
+    await importDialog.getByRole("button", { name: "Close", exact: true }).click();
+    await importDialog.waitFor({ state: "hidden" });
+  }, 45_000);
+
   it("imports a Target-local Skill as an independent Library copy", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
     const localSkillDir = join(opencodeDir, "skills", "managed-after-import");
@@ -5493,11 +5547,29 @@ describe("Electron UI profile switching e2e", () => {
       page.getByRole("group", { name: "Cleanup group collection-alpha" }).count()
     ).resolves.toBe(0);
 
-    await collectionRow.getByRole("button", { name: "Review" }).click();
-    const dialog = page.getByRole("dialog", {
+    await page.getByRole("button", { name: "Close library tool" }).click();
+    await page.getByRole("button", { name: "Profiles" }).click();
+    await selectProfile(page, "UI OpenCode alpha");
+    await applyActionButton(page, "OpenCode").click();
+    const applyDialog = page.getByRole("dialog", { name: "Preview" });
+    await expect.poll(() => applyDialog.textContent()).toContain(
+      "without exact Library copies"
+    );
+    await applyDialog.getByRole("button", { name: "Review collection" }).click();
+    let dialog = page.getByRole("dialog", {
       name: "Review Skill collection superpowers"
     });
     await expectInViewport(page, dialog);
+    await page.keyboard.press("Escape");
+    await dialog.waitFor({ state: "hidden" });
+
+    const focusedCollectionRow = page.getByRole("group", {
+      name: "Skill collection superpowers"
+    });
+    await focusedCollectionRow.getByRole("button", { name: "Review" }).click();
+    dialog = page.getByRole("dialog", {
+      name: "Review Skill collection superpowers"
+    });
     await expectInViewport(page, dialog.getByRole("button", { name: "Add missing to Library" }));
     await expect.poll(() => dialog.textContent()).toContain(collectionLink);
     await expect.poll(() => dialog.textContent()).toContain(collectionSource);

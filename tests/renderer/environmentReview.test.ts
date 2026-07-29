@@ -90,13 +90,12 @@ describe("environment review", () => {
     expect(derive({ profiles: [] }).state).toBe("setup");
   });
 
-  it("separates stable outside resources from Agents that require review", () => {
+  it("keeps stable outside resources out of the action-oriented review state", () => {
     expect(
       derive({ targetStates: [targetState("applied-with-outside")] })
     ).toMatchObject({
-      state: "ready-with-outside",
-      attentionTargetIds: [],
-      outsideResourceTargetIds: ["opencode"]
+      state: "ready",
+      attentionTargetIds: []
     });
     expect(
       derive({ targetStates: [targetState("pending")] }).state
@@ -111,8 +110,7 @@ describe("environment review", () => {
       })
     ).toMatchObject({
       state: "agent-review",
-      attentionTargetIds: ["codex"],
-      outsideResourceTargetIds: ["opencode"]
+      attentionTargetIds: ["codex"]
     });
   });
 

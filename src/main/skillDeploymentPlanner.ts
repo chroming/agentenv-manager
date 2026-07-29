@@ -246,7 +246,7 @@ export const buildSkillDeploymentPlan = ({
       message:
         `${entries.length} ${entries.length === 1 ? "Skill is" : "Skills are"} loaded through collection ${collectionPath} without exact Library copies`,
       detail:
-        "Review this collection in Local Skills before Apply, or keep the collection outside AgentEnv."
+        "Choose the Library versions for this collection, or keep the collection outside AgentEnv."
     }));
     for (const entry of entries) {
       const runtimeKeys = new Set(

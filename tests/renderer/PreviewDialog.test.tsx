@@ -272,6 +272,33 @@ describe("PreviewDialog", () => {
     expect(blocker.compareDocumentPosition(changes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("opens the exact Local Skills collection from an actionable blocker", () => {
+    const onReviewSkillCollection = vi.fn();
+    const issue = {
+      id: "shared-skill-conflict:/Users/test/.agents/skills/superpowers",
+      code: "shared-skill-conflict" as const,
+      disposition: "block" as const,
+      resolution: "review-local-skills" as const,
+      resourceKind: "skill" as const,
+      resourceId: "/Users/test/.agents/skills/superpowers",
+      path: "/Users/test/.agents/skills/superpowers",
+      message: "14 Skills are loaded through collection without exact Library copies",
+      detail: "Choose the Library versions for this collection, or keep the collection outside AgentEnv."
+    };
+
+    render(
+      <PreviewDialog
+        preview={{ ...preview, issues: [issue] }}
+        onReviewSkillCollection={onReviewSkillCollection}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Review collection" }));
+    expect(onReviewSkillCollection).toHaveBeenCalledWith(issue);
+  });
+
   it("separates preserved resources from non-blocking review notes", () => {
     render(
       <PreviewDialog

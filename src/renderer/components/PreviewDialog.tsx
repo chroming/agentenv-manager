@@ -36,6 +36,7 @@ interface PreviewDialogProps {
   onOpenRecovery?(): void;
   onAdoptTargetChanges?(): void;
   onKeepSkillOutside?(issue: ApplyIssue): Promise<void> | void;
+  onReviewSkillCollection?(issue: ApplyIssue): void;
   onCancel?(): void;
   onConfirm?(): void;
 }
@@ -97,6 +98,7 @@ export const PreviewDialog = ({
   onOpenRecovery,
   onAdoptTargetChanges,
   onKeepSkillOutside,
+  onReviewSkillCollection,
   onCancel,
   onConfirm
 }: PreviewDialogProps) => {
@@ -152,8 +154,9 @@ export const PreviewDialog = ({
       if (!dialog || topmostDialog !== dialog) return;
 
       if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
         if (onCancelRef.current) {
-          event.preventDefault();
           onCancelRef.current();
         }
         return;
@@ -308,6 +311,17 @@ export const PreviewDialog = ({
                 }}
               >
                 {t("Keep outside")}
+              </Button>
+            ) : null}
+            {kind === "blocked" &&
+            onReviewSkillCollection &&
+            item.issue.resolution === "review-local-skills" ? (
+              <Button
+                className="apply-preview-issue-action secondary-action"
+                size="compact"
+                onClick={() => onReviewSkillCollection(item.issue)}
+              >
+                {t("Review collection")}
               </Button>
             ) : null}
             {item.detail ? (

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useRef } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { RefreshCw } from "lucide-react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -15,6 +16,7 @@ import {
 } from "../../src/renderer/components/ui";
 import { OverflowTooltip } from "../../src/renderer/components/OverflowTooltip";
 import { InfoTip } from "../../src/renderer/components/InfoTip";
+import { useModalDialog } from "../../src/renderer/hooks/useModalDialog";
 
 afterEach(cleanup);
 
@@ -111,6 +113,92 @@ describe("renderer UI primitives", () => {
 
     fireEvent.click(screen.getByRole("dialog", { name: "Busy modal" }).parentElement!);
     expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("lets only the topmost modal consume Escape", () => {
+    const dismissParent = vi.fn();
+    const dismissChild = vi.fn();
+    const underlyingEscape = vi.fn();
+    const Layer = ({
+      label,
+      onDismiss,
+      dismissDisabled = false
+    }: {
+      label: string;
+      onDismiss(): void;
+      dismissDisabled?: boolean;
+    }) => {
+      const dialogRef = useRef<HTMLElement>(null);
+      useModalDialog({
+        open: true,
+        dialogRef,
+        onDismiss,
+        dismissDisabled
+      });
+      return (
+        <ModalFrame
+          ariaLabel={label}
+          dialogRef={dialogRef}
+          dismissDisabled={dismissDisabled}
+          onDismiss={onDismiss}
+        >
+          {label}
+        </ModalFrame>
+      );
+    };
+
+    render(
+      <>
+        <Layer label="Parent modal" onDismiss={dismissParent} />
+        <Layer label="Child modal" onDismiss={dismissChild} />
+      </>
+    );
+    document.addEventListener("keydown", underlyingEscape);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(dismissChild).toHaveBeenCalledOnce();
+    expect(dismissParent).not.toHaveBeenCalled();
+    expect(underlyingEscape).not.toHaveBeenCalled();
+    document.removeEventListener("keydown", underlyingEscape);
+  });
+
+  it("lets a busy topmost modal consume Escape without exposing its parent", () => {
+    const dismissParent = vi.fn();
+    const dismissChild = vi.fn();
+    const Layer = ({
+      label,
+      onDismiss,
+      dismissDisabled = false
+    }: {
+      label: string;
+      onDismiss(): void;
+      dismissDisabled?: boolean;
+    }) => {
+      const dialogRef = useRef<HTMLElement>(null);
+      useModalDialog({ open: true, dialogRef, onDismiss, dismissDisabled });
+      return (
+        <ModalFrame
+          ariaLabel={label}
+          dialogRef={dialogRef}
+          dismissDisabled={dismissDisabled}
+          onDismiss={onDismiss}
+        >
+          {label}
+        </ModalFrame>
+      );
+    };
+
+    render(
+      <>
+        <Layer label="Parent modal" onDismiss={dismissParent} />
+        <Layer label="Busy child modal" onDismiss={dismissChild} dismissDisabled />
+      </>
+    );
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(dismissChild).not.toHaveBeenCalled();
+    expect(dismissParent).not.toHaveBeenCalled();
   });
 
   it("keeps long text open while the pointer moves into the selectable tooltip", () => {
