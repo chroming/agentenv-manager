@@ -233,13 +233,41 @@ describe("ConversationWorkspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     const menu = await screen.findByRole("menu");
-    expect(within(menu).queryByText("Codex")).toBeNull();
+    expect(within(menu).getByRole("menuitem", {
+      name: "Codex, Open original"
+    })).toBeInTheDocument();
     expect(within(menu).getByText("Continue automatically")).toBeInTheDocument();
     fireEvent.click(within(menu).getByRole("menuitem", { name: /^OpenCode/ }));
 
     await waitFor(() => expect(api.continueConversation).toHaveBeenCalledWith("preview-1"));
     expect(await screen.findByText("Started a new conversation in OpenCode"))
       .toBeInTheDocument();
+  });
+
+  it("opens the original native conversation from Continue without creating a handoff", async () => {
+    const api = installApi();
+    render(<ConversationWorkspace targets={[
+      target("codex", "Codex"),
+      target("opencode", "OpenCode")
+    ]} />);
+    await screen.findByText("Please repair the release workflow.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    const menu = await screen.findByRole("menu", { name: "Continue in" });
+    const original = within(menu).getByRole("menuitem", {
+      name: "Codex, Open original"
+    });
+    expect(original.getAttribute("title")).toContain(
+      "Resume the original conversation in this Agent."
+    );
+    fireEvent.click(original);
+
+    await waitFor(() =>
+      expect(api.openOriginalConversation).toHaveBeenCalledWith(detail.id)
+    );
+    expect(api.previewConversationContinuation).not.toHaveBeenCalled();
+    expect(api.continueConversation).not.toHaveBeenCalled();
+    expect(await screen.findByText("Opened in Codex")).toBeInTheDocument();
   });
 
   it("refreshes an old populated index once without surfacing a stale-detail error", async () => {
@@ -610,7 +638,14 @@ describe("ConversationWorkspace", () => {
     expect(screen.getByText(
       "The source exposes this useful conversation summary."
     )).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Continue/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /^Continue/ }));
+    const menu = await screen.findByRole("menu", { name: "Continue in" });
+    expect(within(menu).getByRole("menuitem", {
+      name: "OpenCode, Open original"
+    })).toBeInTheDocument();
+    expect(within(menu).queryByRole("menuitem", {
+      name: /Codex/
+    })).toBeNull();
   });
 
   it("renders Markdown safely and groups consecutive messages by role", async () => {

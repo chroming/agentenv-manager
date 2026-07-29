@@ -425,6 +425,9 @@ describe("Conversations desktop workflow", () => {
     await targetMenu.waitFor({ state: "visible" });
     await expectInViewport(page, targetMenu);
     await expectTopmost(targetMenu);
+    await targetMenu.getByRole("menuitem", {
+      name: /Open original/
+    }).waitFor();
     expect(await targetMenu.getByText("Continue automatically", { exact: true }).count())
       .toBeGreaterThan(0);
     expect(await targetMenu.getByText("Copy and paste", { exact: true }).count())

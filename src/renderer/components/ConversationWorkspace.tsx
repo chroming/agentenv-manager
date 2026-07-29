@@ -119,12 +119,14 @@ const groupMessages = (messages: ConversationDetail["messages"]) =>
 
 const TargetMenu = ({
   targets,
+  sourceAgentId,
   disabled,
   disabledReason,
   busy,
   onSelect
 }: {
   targets: TargetInfo[];
+  sourceAgentId: string;
   disabled: boolean;
   disabledReason?: string;
   busy: boolean;
@@ -236,15 +238,18 @@ const TargetMenu = ({
                 {t("Continue in")}
               </span>
               {targets.map((target) => {
+                const isOriginal = target.id === sourceAgentId;
                 const icon = targetIconFor(target);
                 const delivery = target.conversationCapabilities.continue.delivery ??
                   (target.conversationCapabilities.continue.state === "degraded"
                     ? "clipboard"
                     : "context-file");
-                const requiresPaste = delivery === "clipboard";
-                const methodLabel = requiresPaste
-                  ? "Copy and paste"
-                  : "Continue automatically";
+                const requiresPaste = !isOriginal && delivery === "clipboard";
+                const methodLabel = isOriginal
+                  ? "Open original"
+                  : requiresPaste
+                    ? "Copy and paste"
+                    : "Continue automatically";
                 return (
                   <button
                     type="button"
@@ -252,9 +257,11 @@ const TargetMenu = ({
                     key={target.id}
                     disabled={Boolean(pendingTargetId)}
                     aria-label={`${target.name}, ${t(methodLabel)}`}
-                    title={`${target.name} — ${t(requiresPaste
-                      ? "Context will be copied. Paste it into the new conversation."
-                      : "The Agent will open with a private context file. A fallback copy is also ready.")}`}
+                    title={`${target.name} — ${t(isOriginal
+                      ? "Resume the original conversation in this Agent."
+                      : requiresPaste
+                        ? "Context will be copied. Paste it into the new conversation."
+                        : "The Agent will open with a private context file. A fallback copy is also ready.")}`}
                     onClick={() => void selectTarget(target.id)}
                   >
                     <span className="conversation-target-menu__row">
@@ -782,6 +789,13 @@ export const ConversationWorkspace = ({
     () => targets.find((target) => target.id === detail?.agentId),
     [detail?.agentId, targets]
   );
+  const continuationDestinations = useMemo(() => {
+    const portableTargets = detail?.detailState === "full" ? continueTargets : [];
+    const originalTarget = detailTarget?.conversationCapabilities.openOriginal.state === "available"
+      ? detailTarget
+      : undefined;
+    return originalTarget ? [originalTarget, ...portableTargets] : portableTargets;
+  }, [continueTargets, detail?.detailState, detailTarget]);
   const detailIcon = detail
     ? targetIconFor(detailTarget ?? {
         id: detail.agentId,
@@ -865,6 +879,7 @@ export const ConversationWorkspace = ({
 
   const chooseTarget = async (targetId: string): Promise<boolean> => {
     if (!detail) return false;
+    if (targetId === detail.agentId) return openOriginal();
     setOperation("continue");
     setError("");
     try {
@@ -886,15 +901,17 @@ export const ConversationWorkspace = ({
     }
   };
 
-  const openOriginal = async () => {
-    if (!detail) return;
+  const openOriginal = async (): Promise<boolean> => {
+    if (!detail) return false;
     setOperation("open-original");
     setError("");
     try {
       const result = await window.agentEnv.openOriginalConversation(detail.id);
       setMessage(result.message);
+      return true;
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      return false;
     } finally {
       setOperation(undefined);
     }
@@ -1262,17 +1279,20 @@ export const ConversationWorkspace = ({
                       operation={operation}
                       canOpenOriginal={sourceCanOpenOriginal}
                       onCopy={copyConversation}
-                      onOpenOriginal={openOriginal}
+                      onOpenOriginal={async () => {
+                        await openOriginal();
+                      }}
                     />
                     <TargetMenu
-                      targets={continueTargets}
-                      disabled={detail.detailState !== "full"}
+                      targets={continuationDestinations}
+                      sourceAgentId={detail.agentId}
+                      disabled={continuationDestinations.length === 0}
                       disabledReason={
-                        detail.detailState !== "full"
-                          ? t("Full transcript is unavailable")
-                          : continueTargets.length === 0
-                            ? t("No other Agent can continue this conversation")
-                            : undefined
+                        continuationDestinations.length === 0
+                          ? detail.detailState !== "full"
+                            ? t("Full transcript is unavailable")
+                            : t("No Agent can continue this conversation")
+                          : undefined
                       }
                       busy={busy}
                       onSelect={chooseTarget}

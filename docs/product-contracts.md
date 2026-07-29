@@ -328,9 +328,11 @@ an archive, or a native-session database migration tool.
 - Sensitive-looking values explicitly present in visible messages MAY remain in the device-local
   index so the original conversation can be found, but Continue MUST require review and redact
   those values before creating a handoff artifact.
-- `Continue in` normally creates a new target conversation initialized from the selected visible
-  context. It MUST NOT claim that a native session ID, hidden model state, or running tools moved
-  between Agents.
+- `Continue in` always keeps the source Agent as the first destination. Choosing it is equivalent
+  to `Open original`: AgentEnv invokes the source adapter's native resume command and creates no
+  handoff artifact. Choosing another Agent creates a new target conversation initialized from the
+  selected visible context. It MUST NOT claim that a native session ID, hidden model state, or
+  running tools moved between Agents.
 - A direct CLI continuation MUST end in the target's persistent interactive entry point. A
   one-shot bootstrap MAY create the seeded target session only when the same terminal captures its
   provider session identity and immediately resumes that session in the full interactive client.
