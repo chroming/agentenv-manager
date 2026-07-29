@@ -295,14 +295,6 @@ h2 {
   width: 100%;
 }
 
-.profile-row__title {
-  color: var(--text);
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .profile-row.is-active {
   border-color: #b9ccfb;
 }
@@ -621,8 +613,7 @@ h2 {
   font-size: 13px;
 }
 
-.preview-resource-plan > header span,
-.preview-resource-plan__kind {
+.preview-resource-plan > header span {
   color: var(--muted);
   font-size: 11px;
 }
@@ -1730,14 +1721,6 @@ summary {
   gap: 6px;
 }
 
-.github-settings-actions,
-.github-device-actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 .github-status-pill {
   align-items: center;
   background: #f8fafc;
@@ -1793,17 +1776,6 @@ summary {
   justify-content: space-between;
   min-height: 38px;
   padding: 0 10px;
-}
-
-@media (max-width: 980px) {
-  .github-settings-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .github-settings-actions,
-  .github-device-actions {
-    justify-content: flex-start;
-  }
 }
 
 .mcp-server-form {
@@ -2623,24 +2595,11 @@ summary {
 }
 
 .page-actions button,
-.primary-inline-action,
 .secondary-action,
 .library-toolbar button,
 .library-toolbar select,
 .library-quick-tab {
   white-space: nowrap;
-}
-
-.primary-inline-action {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-  min-width: 118px;
-}
-
-.primary-inline-action:hover:not(:disabled) {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
 }
 
 .icon-action {
@@ -3070,13 +3029,6 @@ summary {
   min-width: 0;
 }
 
-.profile-commit-actions {
-  display: flex;
-  min-width: 0;
-  position: relative;
-  z-index: var(--z-dropdown);
-}
-
 .profile-apply-control {
   align-items: center;
   background: transparent;
@@ -3231,13 +3183,6 @@ summary {
 
 .profile-row__content {
   min-width: 0;
-}
-
-.profile-row__title strong {
-  background: #eafaf1;
-  border-radius: var(--radius-pill);
-  color: #168455;
-  flex: 0 0 auto;
 }
 
 .profile-row__stats {
@@ -3634,7 +3579,6 @@ summary {
 }
 
 /* Icon polish pass */
-.primary-inline-action,
 .secondary-action,
 .icon-action {
   align-items: center;
@@ -3642,7 +3586,6 @@ summary {
   justify-content: center;
 }
 
-.primary-inline-action,
 .secondary-action {
   gap: 8px;
 }
@@ -3727,11 +3670,6 @@ button svg,
   height: 19px;
   stroke-width: 2.35;
   width: 19px;
-}
-
-.primary-inline-action svg {
-  height: 16px;
-  width: 16px;
 }
 
 .secondary-action svg {
@@ -4307,8 +4245,7 @@ button svg,
 
 .page-header h2,
 .profile-hero__title h2,
-.skill-title,
-.profile-row__title {
+.skill-title {
   text-wrap: balance;
 }
 
@@ -4485,10 +4422,6 @@ button svg,
   min-height: 0;
 }
 
-.profile-row__title {
-  justify-content: space-between;
-}
-
 .profile-row__title > :first-child,
 .profile-row__content > small {
   overflow: hidden;
@@ -4586,13 +4519,6 @@ button svg,
 
 .profile-composer-section__disclosure:focus-visible {
   outline-offset: -4px;
-}
-
-.profile-composer-section__icon {
-  align-items: center;
-  align-self: center;
-  display: inline-flex;
-  justify-content: center;
 }
 
 .profile-composer-section__heading {

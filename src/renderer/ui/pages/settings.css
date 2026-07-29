@@ -542,7 +542,11 @@
 }
 
 .github-settings-actions {
+  align-items: center;
+  display: flex;
   flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: flex-end;
 }
 
@@ -644,12 +648,37 @@
 }
 
 .github-device-actions {
+  align-items: center;
+  display: flex;
   flex-wrap: nowrap;
+  gap: 8px;
   justify-content: flex-end;
 }
 
 .github-device-actions button {
   gap: 6px;
+}
+
+@media (max-width: 980px) {
+  .github-settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .github-settings-actions,
+  .github-device-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 1080px) {
+  .github-device-card {
+    grid-template-columns: minmax(160px, 190px) minmax(150px, 1fr);
+  }
+
+  .github-device-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
 }
 
 .github-connected-row,

@@ -1,4 +1,28 @@
 /* Skills owns table density and responds to its actual content width. */
+.primary-inline-action {
+  align-items: center;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  display: inline-flex;
+  gap: 8px;
+  height: var(--profile-control-height, 40px);
+  justify-content: center;
+  min-height: var(--profile-control-height, 40px);
+  min-width: 118px;
+  white-space: nowrap;
+}
+
+.primary-inline-action:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+.primary-inline-action svg {
+  height: 16px;
+  width: 16px;
+}
+
 .skill-library-panel {
   border-radius: var(--radius-surface);
   box-shadow: none;

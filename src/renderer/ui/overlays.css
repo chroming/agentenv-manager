@@ -25,17 +25,6 @@
   }
 }
 
-@media (max-width: 1080px) {
-  .github-device-card {
-    grid-template-columns: minmax(160px, 190px) minmax(150px, 1fr);
-  }
-
-  .github-device-actions {
-    grid-column: 1 / -1;
-    justify-content: flex-end;
-  }
-}
-
 .ui-hover-detail {
   background: var(--surface);
   border: 1px solid var(--border-strong);

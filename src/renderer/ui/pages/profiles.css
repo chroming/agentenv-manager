@@ -278,7 +278,14 @@
 .profile-page-actions,
 .profile-commit-actions {
   align-items: center;
+  display: flex;
   gap: 8px;
+}
+
+.profile-commit-actions {
+  min-width: 0;
+  position: relative;
+  z-index: var(--z-dropdown);
 }
 
 .profile-page-actions button,
@@ -326,7 +333,6 @@
   min-height: 64px;
 }
 
-.primary-inline-action,
 .workspace-page-header > .secondary-action {
   height: var(--profile-control-height, 40px);
   min-height: var(--profile-control-height, 40px);
@@ -440,12 +446,19 @@
 
 .profile-row__title {
   align-items: center;
+  color: var(--text);
   display: flex;
   font-size: 13px;
   font-weight: var(--font-weight-medium);
   gap: 6px;
+  justify-content: space-between;
   line-height: 17px;
+  max-width: 100%;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-wrap: balance;
+  white-space: nowrap;
   width: 100%;
   grid-area: title;
 }
@@ -459,6 +472,10 @@
 }
 
 .profile-row__title strong {
+  background: #eafaf1;
+  border-radius: var(--radius-pill);
+  color: #168455;
+  flex: 0 0 auto;
   font-size: 9px;
   font-weight: var(--font-weight-regular);
   line-height: 16px;
@@ -725,9 +742,13 @@
 }
 
 .profile-composer-section__icon {
+  align-items: center;
+  align-self: center;
   background: transparent;
   color: var(--muted);
+  display: inline-flex;
   height: 30px;
+  justify-content: center;
   width: 30px;
 }
 
@@ -1037,6 +1058,8 @@
 }
 
 .preview-resource-plan__kind {
+  color: var(--muted);
+  font-size: 11px;
   text-transform: capitalize;
 }
 
