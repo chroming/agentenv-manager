@@ -3,7 +3,10 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { assertCurrentBuild } from "./build-fingerprint.mjs";
-import { computeVerificationSourceFingerprint } from "./verification-fingerprint.mjs";
+import {
+  computeVerificationSourceFingerprint,
+  hasVerificationSourceChanges
+} from "./verification-fingerprint.mjs";
 import {
   electronE2eExcludeGlob,
   electronE2eTestFiles
@@ -133,16 +136,14 @@ const countTests = (files) => files.reduce(
 const { stdout: head } = await execFileAsync("git", ["rev-parse", "HEAD"], {
   cwd: projectRoot
 });
-const { stdout: worktree } = await execFileAsync("git", ["status", "--porcelain"], {
-  cwd: projectRoot
-});
 const sourceFingerprint = await computeVerificationSourceFingerprint(projectRoot);
+const sourceDirty = await hasVerificationSourceChanges(projectRoot);
 
 const snapshot = {
   generatedAt: new Date().toISOString(),
   source: {
     commit: head.trim(),
-    dirty: worktree.trim().length > 0,
+    dirty: sourceDirty,
     fingerprint: sourceFingerprint.sha256,
     files: sourceFingerprint.files
   },

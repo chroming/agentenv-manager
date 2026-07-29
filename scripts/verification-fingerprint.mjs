@@ -36,3 +36,19 @@ export const computeVerificationSourceFingerprint = async (projectRoot) => {
     files: files.length
   };
 };
+
+export const hasVerificationSourceChanges = async (projectRoot) => {
+  const { stdout } = await execFileAsync(
+    "git",
+    [
+      "status",
+      "--porcelain",
+      "--untracked-files=all",
+      "--",
+      ".",
+      ":(exclude)docs/verification-snapshot.json"
+    ],
+    { cwd: projectRoot, maxBuffer: 40 * 1024 * 1024 }
+  );
+  return stdout.trim().length > 0;
+};
