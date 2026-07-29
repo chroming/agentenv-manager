@@ -115,6 +115,7 @@ import {
   type ParsedGitHubSkillSource
 } from "./githubSkillClient";
 import { mergeInventoryLocation } from "./skillInventoryLocation";
+import { createSkillPathPolicyStore } from "./skillPathPolicyStore";
 
 interface SkillCleanupBackupManifest {
   id: string;
@@ -240,16 +241,6 @@ interface PendingSkillUpdate {
   nextMetadata: SkillMetadataFile;
 }
 
-interface LegacySkillCleanupIgnoreRule {
-  id: string;
-  scope: "group" | "location";
-  skillKey?: string;
-  path?: string;
-  reason?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 const SKILL_UPDATE_PREVIEW_TTL_MS = 30 * 60 * 1000;
 const RECENT_UPDATE_CHECK_TTL_MS = 2 * 60 * 1000;
 
@@ -320,8 +311,6 @@ export const createSkillLibraryStore = (
 ): SkillLibraryStore => {
   const readSettings = () => settingsStore?.readSettings() ?? Promise.resolve(DEFAULT_SETTINGS);
   const libraryDir = async () => resolveSkillsLibraryDir(paths, await readSettings());
-  const pathPoliciesPath = join(paths.appDataRoot, "skill-path-policies.json");
-  const legacyIgnoreRulesPath = join(paths.appDataRoot, "skill-cleanup-ignore-rules.json");
   const fetchImpl = options.fetch ?? fetch;
   const authTokenProvider = options.authTokenProvider;
   const profileStore = options.profileStore;
@@ -354,6 +343,7 @@ export const createSkillLibraryStore = (
     paths.skillSourceObservationsDir,
     repositorySource
   );
+  const skillPathPolicyStore = createSkillPathPolicyStore(paths);
 
   const metadataHash = (metadata: SkillMetadataFile) =>
     createHash("sha256").update(JSON.stringify(metadata)).digest("hex");
@@ -382,146 +372,11 @@ export const createSkillLibraryStore = (
     );
   };
 
-  const normalizePolicyInput = (input: SkillPathPolicyInput): SkillPathPolicyInput => {
-    const skillKey = normalizeSkillKey(input.skillKey);
-    if (!skillKey) {
-      throw new Error("Skill key is required");
-    }
-    if (!input.path.trim()) {
-      throw new Error("Skill path is required");
-    }
-    return {
-      path: resolve(input.path),
-      skillKey,
-      targetId: input.targetId?.trim() || undefined
-    };
-  };
-
-  const readPathPolicies = async (): Promise<SkillPathPolicy[]> =>
-    ((await readJsonIfExists<SkillPathPolicy[]>(pathPoliciesPath)) ?? []).filter(
-      (policy) =>
-        policy &&
-        typeof policy.id === "string" &&
-        typeof policy.path === "string" &&
-        typeof policy.skillKey === "string" &&
-        (
-          policy.mode === "keep-outside" ||
-          policy.mode === "keep-shared" ||
-          policy.mode === "use-library"
-        )
-    );
-
-  const migrateLegacyPathPolicies = async (
-    snapshots: Array<{ target: TargetPaths; snapshot: SkillRuntimeSnapshot }>
-  ): Promise<SkillPathPolicy[]> => {
-    const current = await readPathPolicies();
-    if ((await pathExists(pathPoliciesPath)) || !(await pathExists(legacyIgnoreRulesPath))) {
-      return current;
-    }
-    const legacyRules =
-      (await readJsonIfExists<LegacySkillCleanupIgnoreRule[]>(legacyIgnoreRulesPath)) ?? [];
-    const migrated = new Map<string, SkillPathPolicy>();
-    const now = new Date().toISOString();
-    for (const { target, snapshot } of snapshots) {
-      for (const observation of snapshot.observations) {
-        const skillKey = normalizeSkillKey(observation.runtimeName || observation.deploymentName);
-        const matched = legacyRules.find((rule) =>
-          rule.scope === "location"
-            ? resolve(rule.path ?? "") === resolve(observation.path)
-            : [skillKey, normalizeSkillKey(observation.deploymentName)].includes(
-                normalizeSkillKey(rule.skillKey ?? "")
-              )
-        );
-        if (!matched) continue;
-        const path = resolve(observation.path);
-        const mode = matched.reason === "keep-shared" ? "keep-shared" : "keep-outside";
-        const targetId = observation.shared ? undefined : target.targetId;
-        const key = `${targetId ?? "*"}:${skillKey}:${path}`;
-        migrated.set(key, {
-          id: `skill-policy-${createHash("sha256").update(key).digest("hex").slice(0, 16)}`,
-          path,
-          skillKey,
-          targetId,
-          mode,
-          createdAt: matched.createdAt || now,
-          updatedAt: now
-        });
-      }
-    }
-    const policies = [...migrated.values()];
-    await writePathPolicies(policies);
-    await rename(
-      legacyIgnoreRulesPath,
-      `${legacyIgnoreRulesPath}.migrated-${now.replaceAll(":", "-")}`
-    );
-    return policies;
-  };
-
-  const writePathPolicies = async (policies: SkillPathPolicy[]) => {
-    await writeAtomic(pathPoliciesPath, `${JSON.stringify(policies, null, 2)}\n`);
-  };
-
-  const findPathPolicy = (
-    policies: SkillPathPolicy[],
-    input: SkillPathPolicyInput
-  ) => {
-    const normalized = normalizePolicyInput(input);
-    return policies.find(
-      (policy) =>
-        resolve(policy.path) === normalized.path &&
-        (!policy.targetId || !normalized.targetId || policy.targetId === normalized.targetId)
-    );
-  };
-
-  const setSkillPathPolicies = async ({
-    items,
-    mode
-  }: SkillPathPolicyUpdate): Promise<SkillPathPolicy[]> => {
-    const normalizedItems = items.map(normalizePolicyInput);
-    if (normalizedItems.length === 0) {
-      return readPathPolicies();
-    }
-    const now = new Date().toISOString();
-    const policies = await readPathPolicies();
-    const itemKeys = new Set(
-      normalizedItems.map((item) => `${item.targetId ?? "*"}:${item.path}`)
-    );
-    const remaining = policies.filter(
-      (policy) =>
-        !itemKeys.has(`${policy.targetId ?? "*"}:${resolve(policy.path)}`)
-    );
-    if (mode) {
-      for (const item of normalizedItems) {
-        const existing = findPathPolicy(policies, item);
-        remaining.push({
-          id:
-            existing?.id ??
-            `skill-policy-${createHash("sha256")
-              .update(`${item.targetId ?? "*"}:${item.path}`)
-              .digest("hex")
-              .slice(0, 16)}`,
-          ...item,
-          mode,
-          createdAt: existing?.createdAt ?? now,
-          updatedAt: now
-        });
-      }
-    }
-    await writePathPolicies(remaining);
-    return remaining;
-  };
-
-  const setSharedSkillRetention = async ({
-    skillKey,
-    paths: retainedPaths,
-    retained
-  }: SharedSkillRetentionInput): Promise<void> => {
-    const normalized = normalizeSkillKey(skillKey);
-    await setSkillPathPolicies({
-      items: retainedPaths.map((path) => ({ path, skillKey: normalized })),
-      mode: retained ? "keep-shared" : undefined
-    });
-  };
+  const readPathPolicies = skillPathPolicyStore.read;
+  const migrateLegacyPathPolicies = skillPathPolicyStore.migrateLegacy;
+  const findPathPolicy = skillPathPolicyStore.find;
+  const setSkillPathPolicies = skillPathPolicyStore.set;
+  const setSharedSkillRetention = skillPathPolicyStore.setSharedRetention;
 
   const entryFor = (id: string, skillDir: string) =>
     readSkillLibraryEntry(id, skillDir, skillSourceRegistry);
