@@ -941,11 +941,18 @@ export const createSkillLibraryStore = (
         );
         const unreadable = observation.issues.some((issue) => issue.code === "unreadable-skill");
         if (unreadable) {
-          const pathPolicy = findPathPolicy(pathPolicies, {
-            skillKey,
-            path: skillDir,
-            targetId: target.targetId
-          });
+          const pathPolicy =
+            findPathPolicy(pathPolicies, {
+              skillKey,
+              path: skillDir,
+              targetId: target.targetId
+            }) ??
+            (observation.collectionLink
+              ? findPathPolicy(pathPolicies, {
+                  skillKey: "_collection",
+                  path: observation.collectionLink.path
+                })
+              : undefined);
           const externalEvidence = evidence
             ? { ...evidence, confidence: "confirmed" as const, state: "broken-link" as const }
             : observation.externalEvidence;
@@ -967,6 +974,7 @@ export const createSkillLibraryStore = (
             skillKey,
             runtimeName: observation.runtimeName,
             deploymentName,
+            version: observation.version,
             runtimeScope: observation.scope,
             runtimeOwner: externalEvidence ? "external" : observation.owner,
             managedByTarget: false,
@@ -987,7 +995,8 @@ export const createSkillLibraryStore = (
             sharedLocation: observation.shared,
             sharedLocationId: observation.sharedLocationId,
             legacyLocation: observation.legacy,
-            externalEvidence
+            externalEvidence,
+            collectionLink: observation.collectionLink
           });
           continue;
         }
@@ -1012,6 +1021,12 @@ export const createSkillLibraryStore = (
                 skillKey: deploymentKey,
                 path: skillDir,
                 targetId: target.targetId
+              })
+            : undefined) ??
+          (observation.collectionLink
+            ? findPathPolicy(pathPolicies, {
+                skillKey: "_collection",
+                path: observation.collectionLink.path
               })
             : undefined);
         let externalEvidence = managedByAgentEnv
@@ -1070,6 +1085,7 @@ export const createSkillLibraryStore = (
           skillKey,
           runtimeName: observation.runtimeName,
           deploymentName,
+          version: observation.version,
           runtimeScope: observation.scope,
           runtimeOwner: managedByAgentEnv
             ? "agentenv"
@@ -1105,7 +1121,8 @@ export const createSkillLibraryStore = (
           sharedLocation: observation.shared,
           sharedLocationId: observation.sharedLocationId,
           legacyLocation: observation.legacy,
-          locationManagement: location?.management
+          locationManagement: location?.management,
+          collectionLink: observation.collectionLink
         });
       }
     }
@@ -2293,7 +2310,7 @@ export const createSkillLibraryStore = (
       (path) => !uniqueSharedPaths.includes(path)
     );
     const affectedPaths = [...uniqueSharedPaths, ...uniqueDuplicatePaths];
-    if (!affectedPaths.includes(canonicalPath)) {
+    if (![...uniqueSharedPaths, ...uniqueDuplicatePaths].includes(canonicalPath)) {
       throw new Error("Source skill must be one of the selected cleanup locations");
     }
     if (uniqueSharedPaths.length === 0) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   automaticSkillCleanupRequest,
+  buildSkillCollectionLinkGroups,
   buildSkillCleanupGroups
 } from "../../src/shared/skillCleanup";
 import type { SkillInventoryEntry } from "../../src/shared/types";
@@ -20,6 +21,50 @@ const inventoryItem = (
 });
 
 describe("skill cleanup groups", () => {
+  it("groups nested Skills by their collection link and removes them from per-Skill cleanup", () => {
+    const collectionLink = {
+      path: "/tmp/home/.agents/skills/superpowers",
+      canonicalPath: "/tmp/home/.codex/superpowers/skills"
+    };
+    const inventory = [
+      inventoryItem({
+        id: "brainstorming",
+        name: "Brainstorming",
+        path: `${collectionLink.path}/brainstorming`,
+        skillKey: "brainstorming",
+        collectionLink,
+        libraryId: "brainstorming",
+        contentMatchesLibrary: true,
+        foundIn: ["codex", "opencode"]
+      }),
+      inventoryItem({
+        id: "debugging",
+        name: "Systematic debugging",
+        path: `${collectionLink.path}/debugging`,
+        skillKey: "systematic-debugging",
+        collectionLink,
+        foundIn: ["codex"]
+      })
+    ];
+
+    expect(buildSkillCleanupGroups(inventory)).toEqual([]);
+    expect(buildSkillCollectionLinkGroups(inventory)).toEqual([
+      expect.objectContaining({
+        path: collectionLink.path,
+        canonicalPath: collectionLink.canonicalPath,
+        name: "superpowers",
+        state: "needs-library",
+        libraryReadyCount: 1,
+        conflictCount: 0,
+        consumerTargetIds: ["codex", "opencode"],
+        items: expect.arrayContaining([
+          expect.objectContaining({ skillKey: "brainstorming" }),
+          expect.objectContaining({ skillKey: "systematic-debugging" })
+        ])
+      })
+    ]);
+  });
+
   it("makes an unowned broken Skill link ready for reversible removal", () => {
     const [group] = buildSkillCleanupGroups([
       inventoryItem({

@@ -39,6 +39,7 @@ export const externalManagerLabel = (skill: SkillInventoryEntry | undefined) =>
     : skill?.externalEvidence?.manager ?? "Detected source");
 
 export const isCleanupManageable = (item: SkillInventoryEntry) =>
+  !item.collectionLink &&
   item.status !== "kept-outside" &&
   item.locationRole !== "discovery-only" &&
   (item.locationManagement !== "observed" || item.sharedLocation === true);
@@ -142,6 +143,8 @@ export const formatSkillCleanupDetails = (
     `Install method: ${item.installMethod ?? "unknown"}`,
     `Location role: ${item.locationRole ?? "unknown"}`,
     `Location management: ${item.locationManagement ?? "unknown"}`,
+    item.collectionLink ? `Collection link: ${item.collectionLink.path}` : undefined,
+    item.collectionLink ? `Collection target: ${item.collectionLink.canonicalPath}` : undefined,
     `Runtime availability: ${item.runtimeAvailability ?? "unknown"}`,
     item.modifiedAt ? `Modified: ${item.modifiedAt}` : undefined,
     item.externalEvidence

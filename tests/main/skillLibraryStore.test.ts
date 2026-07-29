@@ -1,4 +1,4 @@
-import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readlink, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -1545,6 +1545,61 @@ description: >
     await expect(store.scanInventory([targetPaths])).resolves.toEqual(
       expect.arrayContaining([expect.objectContaining({ path: sharedCopy, status: "outside" })])
     );
+  });
+
+  it("tracks Skills reached through a shared collection link without treating child paths as writable", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const sharedRoot = paths.userSkillsDir;
+    const collectionSource = join(root, "external", "superpowers");
+    const childSource = join(collectionSource, "brainstorming");
+    const collectionLink = join(sharedRoot, "superpowers");
+    await mkdir(childSource, { recursive: true });
+    await mkdir(sharedRoot, { recursive: true });
+    await writeFile(
+      join(childSource, "SKILL.md"),
+      "---\nname: brainstorming\ndescription: Explore ideas\n---\n# Brainstorming\n",
+      "utf8"
+    );
+    await symlink(collectionSource, collectionLink);
+    const store = createSkillLibraryStore(paths);
+    const targetPaths = {
+      targetId: "opencode",
+      configDir: join(paths.homeDir, ".config", "opencode"),
+      instructionsPath: "",
+      configPath: "",
+      skillsDir: join(paths.homeDir, ".config", "opencode", "skills"),
+      skillLocations: [{
+        path: sharedRoot,
+        role: "compatibility-runtime" as const,
+        shared: true,
+        scanDepth: "recursive" as const,
+        management: "migration-only" as const
+      }]
+    };
+
+    const [entry] = await store.scanInventory([targetPaths]);
+    expect(entry).toMatchObject({
+      path: join(collectionLink, "brainstorming"),
+      skillKey: "brainstorming",
+      status: "outside",
+      collectionLink: {
+        path: collectionLink,
+        canonicalPath: await realpath(collectionSource)
+      }
+    });
+
+    await store.setSkillPathPolicies({
+      items: [{ path: collectionLink, skillKey: "_collection" }],
+      mode: "keep-shared"
+    });
+    await expect(store.scanInventory([targetPaths])).resolves.toEqual([
+      expect.objectContaining({
+        skillKey: "brainstorming",
+        status: "kept-outside",
+        pathPolicy: "keep-shared"
+      })
+    ]);
   });
 
   it("cleans every Target copy when one adapter also scans another Target's Skill directory", async () => {

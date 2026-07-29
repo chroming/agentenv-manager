@@ -125,6 +125,7 @@ export interface AgentEnvApi {
   rollbackSkillCleanup(backupId: string): Promise<void>;
   setSharedSkillRetention(input: SharedSkillRetentionInput): Promise<void>;
   retireSharedSkill(input: RetireSharedSkillInput): Promise<SkillCleanupResult>;
+  retireSkillCollection(input: RetireSkillCollectionInput): Promise<SkillCleanupResult>;
   checkSkillLibraryUpdates(ids?: string[]): Promise<SkillUpdateInfo[]>;
   setSkillUpdateSettings(input: SkillUpdateSettingsInput): Promise<SkillLibraryEntry>;
   setSkillAvailability(input: SkillAvailabilityInput): Promise<SkillLibraryEntry>;
@@ -858,6 +859,7 @@ export type SkillInventoryStatus = "managed" | "library" | "outside" | "kept-out
 
 export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   status: SkillInventoryStatus;
+  version?: string;
   libraryId?: string;
   skillKey: string;
   runtimeName?: string;
@@ -880,6 +882,7 @@ export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   sharedLocationId?: SharedSkillLocationId;
   legacyLocation?: boolean;
   locationManagement?: TargetSkillLocation["management"];
+  collectionLink?: SkillCollectionLink;
 }
 
 export type SkillScanDepth = "direct" | "recursive";
@@ -894,6 +897,7 @@ export interface SkillRuntimeIssue {
     | "invalid-runtime-name"
     | "duplicate-runtime-name"
     | "external-owner"
+    | "collection-link"
     | "unreadable-skill"
     | "unreadable-native-state";
   severity: "info" | "warning" | "error";
@@ -923,7 +927,13 @@ export interface SkillRuntimeObservation {
   sharedLocationId?: SharedSkillLocationId;
   legacy: boolean;
   externalEvidence?: SkillExternalEvidence;
+  collectionLink?: SkillCollectionLink;
   issues: SkillRuntimeIssue[];
+}
+
+export interface SkillCollectionLink {
+  path: string;
+  canonicalPath: string;
 }
 
 export interface SkillRuntimeSnapshot {
@@ -964,6 +974,10 @@ export interface RetireSharedSkillInput {
   skillKey: string;
   libraryId: string;
   paths: string[];
+}
+
+export interface RetireSkillCollectionInput {
+  path: string;
 }
 
 export interface SkillCleanupResult {

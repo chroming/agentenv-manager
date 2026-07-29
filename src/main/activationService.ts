@@ -87,6 +87,8 @@ import { redactSensitiveValues } from "./secretWarnings";
 import { defaultTargetState, parseTargetState } from "./targetState";
 import { createCaptureReceiptStore } from "./captureReceiptStore";
 import { targetPathInputFor } from "./targets/pathInput";
+import { completeSkillCollectionMigrationTransaction } from "./skillCollectionMigration";
+import { listSharedSkillMigrationBackupSummaries, rollbackSharedSkillMigrationBackup } from "./sharedSkillMigrationBackups";
 import {
   buildSkillDeploymentPlan,
   fingerprintSkillDeploymentFacts,
@@ -129,6 +131,16 @@ export interface ActivationService {
     libraryId: string;
     sharedPaths: string[];
     consumerTargetIds: string[];
+  }): Promise<SkillCleanupResult>;
+  completeSkillCollectionMigration(input: {
+    collectionPath: string;
+    canonicalPath: string;
+    members: Array<{
+      skillKey: string;
+      libraryId: string;
+      sharedPath: string;
+      consumerTargetIds: string[];
+    }>;
   }): Promise<SkillCleanupResult>;
   listSharedSkillMigrationBackups(): Promise<SkillCleanupBackupSummary[]>;
   rollbackSharedSkillMigration(backupId: string): Promise<void>;
@@ -1787,6 +1799,15 @@ export const createActivationService = ({
     }
   };
 
+  const claimTargetOperations = async (targetIds: string[]) => {
+    await Promise.all(targetIds.map((targetId) => targetScope.assertEnabled(targetId)));
+    const busy = targetIds.find((targetId) => activeTargetOperations.has(targetId));
+    if (busy) throw new Error(`Another operation is already running for ${busy}`);
+    targetIds.forEach((targetId) => activeTargetOperations.add(targetId));
+  };
+  const releaseTargetOperations = (targetIds: string[]) =>
+    targetIds.forEach((targetId) => activeTargetOperations.delete(targetId));
+
   const completeSharedSkillMigration = async ({
     skillKey,
     libraryId,
@@ -1802,12 +1823,7 @@ export const createActivationService = ({
     if (targetIds.length === 0) {
       throw new Error(`${skillKey} has no installed Agent consumers to migrate.`);
     }
-    await Promise.all(targetIds.map((targetId) => targetScope.assertEnabled(targetId)));
-    const busyTarget = targetIds.find((targetId) => activeTargetOperations.has(targetId));
-    if (busyTarget) {
-      throw new Error(`Another operation is already running for ${busyTarget}`);
-    }
-    targetIds.forEach((targetId) => activeTargetOperations.add(targetId));
+    await claimTargetOperations(targetIds);
 
     try {
       const skillLibrary = await skillLibraryStore.listSkills();
@@ -2055,44 +2071,35 @@ export const createActivationService = ({
         operation: "retire"
       };
     } finally {
-      targetIds.forEach((targetId) => activeTargetOperations.delete(targetId));
+      releaseTargetOperations(targetIds);
     }
   };
+
+  const completeSkillCollectionMigration: ActivationService["completeSkillCollectionMigration"] =
+    (input) => completeSkillCollectionMigrationTransaction(input, {
+      claimTargets: claimTargetOperations, releaseTargets: releaseTargetOperations,
+      targetName: (targetId) => targetRegistry.get(targetId).descriptor.name,
+      targetPathsFor, readTargetStateFile, writeTargetState,
+      readProfile: (profileId) => profileStore.readProfile(profileId),
+      applyLibraryAvailability: applyLibrarySkillAvailability,
+      listSkills: () => skillLibraryStore.listSkills(),
+      scanInventory: (targetPaths, library) => skillLibraryStore.scanInventory(targetPaths, library),
+      deployLibrarySkill: (deployment) => skillLibraryStore.deployLibrarySkill(deployment),
+      hashComparablePath, restoreBackup: restoreBackupSafely, snapshotManagedResources,
+      createBackup: (backupPaths, metadata) =>
+        backupStore.createBackup(backupPaths, metadata),
+      appendHistory: (entry) => appendHistory(paths, entry)
+    });
 
   const listSharedSkillMigrationBackups = async (): Promise<SkillCleanupBackupSummary[]> =>
-    (await backupStore.listBackups())
-      .filter((backup) => backup.operation === "shared-skill-migration")
-      .map((backup) => ({
-        id: backup.id,
-        libraryId: backup.profileName ?? "shared-skill",
-        createdAt: backup.createdAt,
-        locationCount: backup.fileCount,
-        operation: "retire" as const
-      }));
+    listSharedSkillMigrationBackupSummaries(backupStore);
 
-  const rollbackSharedSkillMigration = async (backupId: string): Promise<void> => {
-    const backup = await backupStore.readBackup(backupId);
-    if (backup.operation !== "shared-skill-migration") {
-      throw new Error(`Backup is not a shared Skill migration: ${backupId}`);
-    }
-    const targetIds = backup.targetIds ?? [];
-    await Promise.all(targetIds.map((targetId) => targetScope.assertEnabled(targetId)));
-    const busyTarget = targetIds.find((targetId) => activeTargetOperations.has(targetId));
-    if (busyTarget) {
-      throw new Error(`Another operation is already running for ${busyTarget}`);
-    }
-    targetIds.forEach((targetId) => activeTargetOperations.add(targetId));
-    try {
-      await restoreBackupSafely(backup);
-      await appendHistory(paths, {
-        type: "rollback-shared-skill-migration",
-        backupId,
-        targetIds
-      });
-    } finally {
-      targetIds.forEach((targetId) => activeTargetOperations.delete(targetId));
-    }
-  };
+  const rollbackSharedSkillMigration = (backupId: string): Promise<void> =>
+    rollbackSharedSkillMigrationBackup({
+      backupStore, backupId,
+      claimTargets: claimTargetOperations, releaseTargets: releaseTargetOperations,
+      restoreBackup: restoreBackupSafely, appendHistory: (entry) => appendHistory(paths, entry)
+    });
 
   const previewRollback = async (backupId: string): Promise<RollbackPreview> => {
     const backup = await backupStore.readBackup(backupId);
@@ -2434,6 +2441,7 @@ export const createActivationService = ({
     previewProfile,
     applyProfile,
     completeSharedSkillMigration,
+    completeSkillCollectionMigration,
     listSharedSkillMigrationBackups,
     rollbackSharedSkillMigration,
     previewRollback,

@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { moveSharedSkillToAgents } from "../../src/renderer/sharedSkillMigration";
+import {
+  moveSharedSkillToAgents,
+  moveSkillCollectionToAgents
+} from "../../src/renderer/sharedSkillMigration";
 import type {
   ActivationPreview,
   AgentEnvApi,
@@ -85,6 +88,12 @@ const api = () => {
         "/home/.agents/skills/as-ops",
         "/home/.pi/agent/skills/as-ops"
       ],
+      operation: "retire"
+    }),
+    retireSkillCollection: vi.fn().mockResolvedValue({
+      backupId: "collection-backup",
+      libraryId: "_collection",
+      managedLocations: ["/home/.agents/skills/superpowers"],
       operation: "retire"
     })
   };
@@ -271,5 +280,78 @@ describe("moveSharedSkillToAgents", () => {
       })
     ).rejects.toThrow("Pi could not be prepared");
     expect(mockApi.retireSharedSkill).not.toHaveBeenCalled();
+  });
+});
+
+describe("moveSkillCollectionToAgents", () => {
+  it("adds every collection member to the active Profile, applies once, then retires the link", async () => {
+    const mockApi = api();
+    mockApi.listSkillLibrary.mockResolvedValue([
+      librarySkill(),
+      {
+        ...librarySkill(),
+        id: "debugging",
+        name: "debugging",
+        path: "/data/skills-library/debugging"
+      }
+    ]);
+    mockApi.listTargetStates.mockResolvedValue([
+      {
+        targetId: "pi",
+        activeProfileId: "pi-profile",
+        status: "managed",
+        lifecycleStatus: "applied",
+        managedResourceCount: 0,
+        warningCount: 0,
+        errorCount: 0
+      } satisfies TargetManagementState
+    ]);
+    mockApi.updateProfileSkills.mockImplementation(async (input) => ({
+      profile: {
+        ...profile(),
+        resources: {
+          ...profile().resources,
+          skills: input.skills
+        },
+        contentHash: "collection-profile-hash"
+      },
+      changed: true
+    }));
+
+    await moveSkillCollectionToAgents({
+      api: mockApi as unknown as AgentEnvApi,
+      collection: {
+        path: "/home/.agents/skills/superpowers",
+        members: [
+          {
+            skillKey: "as-ops",
+            libraryId: "as-ops",
+            consumerTargetIds: ["pi"]
+          },
+          {
+            skillKey: "debugging",
+            libraryId: "debugging",
+            consumerTargetIds: ["pi"]
+          }
+        ]
+      }
+    });
+
+    expect(mockApi.updateProfileSkills).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profileId: "pi-profile",
+        targetId: "pi",
+        expectedContentHash: "profile-hash",
+        skills: [
+          { libraryId: "as-ops", targetName: "as-ops", enabled: true },
+          { libraryId: "debugging", targetName: "debugging", enabled: true }
+        ]
+      })
+    );
+    expect(mockApi.previewApply).toHaveBeenCalledTimes(1);
+    expect(mockApi.applyProfile).toHaveBeenCalledTimes(1);
+    expect(mockApi.retireSkillCollection).toHaveBeenCalledWith({
+      path: "/home/.agents/skills/superpowers"
+    });
   });
 });

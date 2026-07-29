@@ -106,10 +106,9 @@ import { acceptAppliedProfileState } from "./appliedProfileState";
 import { activationPreviewHasWork } from "./activationPreview";
 import { formatDiagnosticIssue, parseDiagnosticErrorMessage } from "./diagnostics";
 import { moveSharedSkillToAgents } from "./sharedSkillMigration";
-import {
-  collectLibraryResourceVersions,
-  libraryResourceVersionsEqual
-} from "../shared/libraryVersions";
+import { runSkillCollectionMigration } from "./skillCollectionMigrationAction";
+import type { SkillCollectionLinkGroup } from "../shared/skillCleanup";
+import { collectLibraryResourceVersions, libraryResourceVersionsEqual } from "../shared/libraryVersions";
 import { isTargetInstalled } from "../shared/targetHealth";
 import { isExternalSkillImportable } from "../shared/skillIdentity";
 import {
@@ -2408,7 +2407,7 @@ const AppContent = ({
   const importUnmanagedSkill = async (
     sourcePath: string,
     sourceHandling?: SkillImportInput["sourceHandling"],
-    errorScope: "global" | "caller" = "global",
+    errorScope: "global" | "caller" | "batch" = "global",
     sourceCollection?: SkillImportInput["sourceCollection"], upstream?: SkillUpstream
   ) => {
     setBusy(true);
@@ -2422,7 +2421,8 @@ const AppContent = ({
       const result = await window.agentEnv.importSkillToLibrary(prepared.input);
       setPendingSkillImport(undefined);
       setSelectedSkillUpdatePlan(undefined);
-      await refreshProfiles();
+      if (errorScope === "batch") replaceLibrarySkillLocally(result.skill);
+      else await refreshProfiles();
       setSkillUpdateCheckStatus({
         state: "success",
         message:
@@ -2964,9 +2964,16 @@ const AppContent = ({
     }
   };
 
+  const moveSkillCollectionToAgentDirectories = (collection: SkillCollectionLinkGroup) => runSkillCollectionMigration({
+    api: window.agentEnv, collection, targetStates,
+    dirtyProfileId: isProfileDirty ? draftProfile?.id : undefined,
+    targetNames, setBusy, setError,
+    setResult: setSkillCleanupResult,
+    setSuccess: (message) => setSkillUpdateCheckStatus({ state: "success", message }),
+    refresh: () => refreshProfiles({ checkSkillUpdates: false }).then(() => undefined)
+  });
   const scanGitHubSkills = (url: string): Promise<GitHubSkillScanResult> =>
     window.agentEnv.scanGitHubSkills(url);
-
   const scanRepositorySkills = (
     input: RepositorySkillSourceInput
   ): Promise<RepositorySkillScanResult> => window.agentEnv.scanRepositorySkills(input);
@@ -4290,7 +4297,9 @@ const AppContent = ({
                 onSelectLocalSkillSource={() => window.agentEnv.selectLocalSkillSource()}
                 onReleaseSkillArchive={(token) => window.agentEnv.releaseSkillArchive(token)}
                 onScanLocalSkillSource={(rootPath) => window.agentEnv.scanLocalSkillSource(rootPath)}
-                onImportUnmanaged={importUnmanagedSkill}
+                onImportUnmanaged={(sourcePath, sourceHandling, deferFullRefresh) =>
+                  importUnmanagedSkill(sourcePath, sourceHandling,
+                    deferFullRefresh ? "batch" : "global")}
                 onImportLocalSourceSkill={(sourcePath, sourceCollection, upstream) =>
                   importUnmanagedSkill(sourcePath, "copy-only", "caller", sourceCollection, upstream)}
                 onListSkillFiles={(id) => window.agentEnv.listSkillFiles(id)}
@@ -4365,6 +4374,7 @@ const AppContent = ({
                 onSetSharedSkillRetention={setSharedSkillRetention}
                 onRetireSharedSkill={retireSharedSkill}
                 onMoveSharedSkillToAgents={moveSharedSkillToAgentDirectories}
+                onMoveSkillCollection={moveSkillCollectionToAgentDirectories}
                 importConflictOpen={Boolean(pendingSkillImport)}
                 onRestoreCleanup={(backupId) => void undoSkillCleanup(backupId)}
                 updateActivity={skillUpdateActivity}

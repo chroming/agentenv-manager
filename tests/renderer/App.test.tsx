@@ -519,6 +519,12 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       managedLocations: ["/tmp/shared/skill"],
       operation: "retire"
     }),
+    retireSkillCollection: vi.fn().mockResolvedValue({
+      backupId: "retire-collection-backup",
+      libraryId: "_collection",
+      managedLocations: ["/tmp/shared/collection"],
+      operation: "retire"
+    }),
     rollbackSkillCleanup: vi.fn().mockResolvedValue(undefined),
     setSkillUpdateSettings: vi.fn().mockImplementation(async (input) => ({
       id: input.policy.id,

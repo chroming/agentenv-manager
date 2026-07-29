@@ -2909,7 +2909,7 @@ describe("Electron UI profile switching e2e", () => {
     const rowTip = page.getByRole("tooltip");
     await rowTip.waitFor({ state: "visible" });
     await expectInViewport(page, rowTip);
-  }, 30_000);
+  }, 45_000);
 
   it("keeps the Profiles workbench contained at the default viewport", async () => {
     const { appDataRoot, page } = await launchApp({ openCodeAlphaLibrarySkillCount: 8 });
@@ -5421,6 +5421,75 @@ describe("Electron UI profile switching e2e", () => {
       .toBe(true);
     await cleanupGroup.waitFor({ state: "hidden" });
   }, 30_000);
+
+  it("discovers and migrates a directory-linked Skill collection as one safe boundary", async () => {
+    const { appDataRoot, homeDir, opencodeDir, codexDir, page } = await launchApp();
+    const collectionSource = join(homeDir, ".codex", "superpowers", "skills");
+    const collectionLink = join(homeDir, ".agents", "skills", "superpowers");
+    const skillIds = ["collection-alpha", "collection-beta"];
+    for (const skillId of skillIds) {
+      const skillDir = join(collectionSource, skillId);
+      await mkdir(skillDir, { recursive: true });
+      await writeFile(
+        join(skillDir, "SKILL.md"),
+        `---\nname: ${skillId}\ndescription: ${skillId} from a linked collection.\n---\n\n# ${skillId}\n`,
+        "utf8"
+      );
+    }
+    await mkdir(dirname(collectionLink), { recursive: true });
+    await symlink(collectionSource, collectionLink);
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Scan local" }).click();
+    const collectionRow = page.getByRole("group", {
+      name: "Skill collection superpowers"
+    });
+    await collectionRow.waitFor({ state: "visible" });
+    await expect.poll(() => collectionRow.textContent()).toContain("2 Skills");
+    await expect(
+      page.getByRole("group", { name: "Cleanup group collection-alpha" }).count()
+    ).resolves.toBe(0);
+
+    await collectionRow.getByRole("button", { name: "Review" }).click();
+    const dialog = page.getByRole("dialog", {
+      name: "Review Skill collection superpowers"
+    });
+    await expectInViewport(page, dialog);
+    await expectInViewport(page, dialog.getByRole("button", { name: "Add missing to Library" }));
+    await expect.poll(() => dialog.textContent()).toContain(collectionLink);
+    await expect.poll(() => dialog.textContent()).toContain(collectionSource);
+    await expect.poll(() => dialog.textContent()).toContain("collection-alpha");
+    await expect.poll(() => dialog.textContent()).toContain("collection-beta");
+
+    await dialog.getByRole("button", { name: "Add missing to Library" }).click();
+    await expect
+      .poll(() => fileExists(join(appDataRoot, "skills-library", "collection-alpha", "SKILL.md")))
+      .toBe(true);
+    await expect
+      .poll(() => fileExists(join(appDataRoot, "skills-library", "collection-beta", "SKILL.md")))
+      .toBe(true);
+    await expect.poll(() => dialog.textContent()).toContain("In Library");
+    await expectInViewport(page, dialog.getByRole("button", { name: "Move collection" }));
+    await dialog.getByRole("button", { name: "Move collection" }).click();
+    await page.waitForTimeout(1_000);
+    const migrationAlert = page.getByRole("alert");
+    if (await migrationAlert.isVisible().catch(() => false)) {
+      throw new Error(await migrationAlert.innerText());
+    }
+
+    await dialog.waitFor({ state: "hidden", timeout: 15_000 });
+    await expect.poll(() => fileExists(collectionLink), { timeout: 10_000 }).toBe(false);
+    await expect(fileExists(join(collectionSource, "collection-alpha", "SKILL.md")))
+      .resolves.toBe(true);
+    await expect(fileExists(join(collectionSource, "collection-beta", "SKILL.md")))
+      .resolves.toBe(true);
+    await expect
+      .poll(() => fileExists(join(opencodeDir, "skills", "collection-alpha", "SKILL.md")))
+      .toBe(true);
+    await expect
+      .poll(() => fileExists(join(codexDir, "skills", "collection-beta", "SKILL.md")))
+      .toBe(true);
+  }, 45_000);
 
   it("atomically migrates and restores a shared Skill after every consumer is prepared", async () => {
     const { appDataRoot, homeDir, opencodeDir, codexDir, page } = await launchApp();

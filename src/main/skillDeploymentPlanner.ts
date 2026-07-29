@@ -115,7 +115,9 @@ export const fingerprintSkillInventory = (inventory: SkillInventoryEntry[]): str
       legacyLocation: entry.legacyLocation ?? null,
       pathPolicyId: entry.pathPolicyId ?? null,
       pathPolicy: entry.pathPolicy ?? null,
-      locationManagement: entry.locationManagement ?? null
+      locationManagement: entry.locationManagement ?? null,
+      collectionLinkPath: entry.collectionLink?.path ?? null,
+      collectionCanonicalPath: entry.collectionLink?.canonicalPath ?? null
     }))
     .sort((left, right) => left.path.localeCompare(right.path));
   return createHash("sha256").update(JSON.stringify(comparable)).digest("hex");
@@ -225,6 +227,41 @@ export const buildSkillDeploymentPlan = ({
     string,
     { skillKey: string; libraryId: string; paths: Set<string> }
   >();
+
+  const unresolvedCollections = new Map<string, SkillInventoryEntry[]>();
+  for (const entry of inventory) {
+    if (!entry.collectionLink || entry.pathPolicy === "keep-shared") continue;
+    if (entry.libraryId && entry.contentMatchesLibrary === true) continue;
+    unresolvedCollections.set(entry.collectionLink.path, [
+      ...(unresolvedCollections.get(entry.collectionLink.path) ?? []),
+      entry
+    ]);
+  }
+  for (const [collectionPath, entries] of unresolvedCollections) {
+    issues.push(createApplyIssue({
+      code: "shared-skill-conflict",
+      resourceKind: "skill",
+      resourceId: collectionPath,
+      path: collectionPath,
+      message:
+        `${entries.length} ${entries.length === 1 ? "Skill is" : "Skills are"} loaded through collection ${collectionPath} without exact Library copies`,
+      detail:
+        "Review this collection in Local Skills before Apply, or keep the collection outside AgentEnv."
+    }));
+    for (const entry of entries) {
+      const runtimeKeys = new Set(
+        [entry.skillKey, entry.runtimeName, entry.deploymentName, entry.id, entry.name]
+          .filter((value): value is string => Boolean(value))
+          .map(normalizeSkillKey)
+      );
+      const reference = profile.resources.skills.find(
+        (item) =>
+          runtimeKeys.has(normalizeSkillKey(item.targetName)) ||
+          runtimeKeys.has(normalizeSkillKey(libraryById.get(item.libraryId)?.name ?? ""))
+      );
+      if (reference) deferredReferences.add(referenceKey(reference));
+    }
+  }
 
   for (const entry of inventory) {
     if (!entry.sharedLocation || entry.pathPolicy !== "keep-shared") continue;

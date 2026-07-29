@@ -92,9 +92,11 @@ import {
 } from "../libraryViewState";
 import {
   automaticSkillCleanupRequest,
+  buildSkillCollectionLinkGroups,
   buildSkillCleanupGroups,
   isSkillCleanupPreparationCurrent,
-  type SkillCleanupAutomaticEffect
+  type SkillCleanupAutomaticEffect,
+  type SkillCollectionLinkGroup
 } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
 import { ActionMenu, Button, IconButton, ModalFrame, Switch } from "./ui";
@@ -107,11 +109,10 @@ import type { SkillUpdateActivity } from "../skillUpdateActivity";
 import type { SkillUpdateRun } from "../skillUpdateQueue";
 import { SkillFileBrowserDialog } from "./SkillFileBrowserDialog";
 import { SkillCleanupDetailsFooter } from "./SkillCleanupDetailsFooter";
-import {
-  SkillUpdateSettingsDialog
-} from "./SkillUpdateSettingsDialog";
+import { SkillUpdateSettingsDialog } from "./SkillUpdateSettingsDialog";
 import { CleanupBucketHeader } from "./CleanupBucketHeader";
 import { BulkSkillUpdateDialog } from "./BulkSkillUpdateDialog";
+import { SkillCollectionDialog, SkillCollectionRows, useSkillCollectionActions } from "./SkillCollectionCleanup";
 import {
   cleanupActionDisplayLabel,
   cleanupActionLabel,
@@ -126,7 +127,7 @@ import {
   externalManagerLabel,
   isCleanupManageable
 } from "../skillCleanupPresentation";
-
+import { shortSkillRevision, skillSourceLabel, skillSourceName } from "../skillLibrarySourcePresentation";
 export type SkillUpdateCheckStatus = {
   state: "checking" | "success" | "error" | "info";
   message: string;
@@ -191,7 +192,7 @@ interface SkillLibraryPanelProps {
   onSelectLocalSkillSource(): Promise<LocalSkillSourceSelection | undefined>;
   onReleaseSkillArchive(token: string): Promise<void>;
   onScanLocalSkillSource?(rootPath: string): Promise<ProjectSkillScanResult>;
-  onImportUnmanaged(sourcePath: string): Promise<boolean>;
+  onImportUnmanaged(sourcePath: string, sourceHandling?: "copy-only", deferFullRefresh?: boolean): Promise<boolean>;
   onImportLocalSourceSkill?(
     sourcePath: string,
     sourceCollection?: SkillSourceCollectionRef,
@@ -251,6 +252,7 @@ interface SkillLibraryPanelProps {
     input: RetireSharedSkillInput,
     targetIds: string[]
   ): Promise<boolean>;
+  onMoveSkillCollection?(collection: SkillCollectionLinkGroup): Promise<boolean>;
   onRestoreCleanup(backupId: string): void;
   updateActivity?: SkillUpdateActivity;
   viewState: SkillLibraryViewState;
@@ -259,51 +261,6 @@ interface SkillLibraryPanelProps {
   scrollOwnerRef?(node: HTMLDivElement | null): void;
   importConflictOpen?: boolean;
 }
-
-const sourceLabel = (skill: SkillLibraryEntry) => {
-  if (skill.sourceType === "github") {
-    return skill.source ?? "GitHub source";
-  }
-  if (skill.sourceType === "local") {
-    return skill.source ?? skill.path;
-  }
-  if (skill.sourceType === "git" && skill.source) {
-    const scope = [skill.remoteRef, skill.upstream?.subpath].filter(Boolean).join(":");
-    return scope ? `${skill.source}#${scope}` : skill.source;
-  }
-  return skill.source ?? skill.sourceType;
-};
-
-const shortRevision = (skill: SkillLibraryEntry) =>
-  (skill.remoteRevision ?? skill.contentHash ?? "local").slice(0, 7);
-
-const sourceName = (skill: SkillLibraryEntry) => {
-  if (skill.sourceType === "local" && !skill.source) {
-    return "Local import";
-  }
-  if (skill.sourceType === "local") {
-    return "Local folder";
-  }
-  const source = sourceLabel(skill);
-  if (source.startsWith("https://github.com/")) {
-    return source.replace("https://github.com/", "").replace("/tree/", "/");
-  }
-  if (skill.sourceType === "git" && skill.source) {
-    let repository = skill.source;
-    try {
-      const url = new URL(repository);
-      repository = `${url.hostname}${url.pathname}`;
-    } catch {
-      const scpLike = repository.match(/^(?:[^@]+@)?([^:]+):(.+)$/);
-      if (scpLike) {
-        repository = `${scpLike[1]}/${scpLike[2]}`;
-      }
-    }
-    repository = repository.replace(/\.git$/, "").replace(/^\/+/, "");
-    return [repository, skill.upstream?.subpath].filter(Boolean).join("/");
-  }
-  return source;
-};
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
@@ -379,6 +336,7 @@ export const SkillLibraryPanel = ({
   onSetSharedSkillRetention,
   onRetireSharedSkill,
   onMoveSharedSkillToAgents,
+  onMoveSkillCollection,
   onRestoreCleanup,
   updateActivity,
   viewState,
@@ -454,6 +412,19 @@ export const SkillLibraryPanel = ({
   const [availabilityOperation, setAvailabilityOperation] = useState<SkillAvailabilityInput>();
   const [localPreviewingSkillId, setLocalPreviewingSkillId] = useState<string>();
   const [cleanupDetailsKey, setCleanupDetailsKey] = useState<string>();
+  const [collectionDetailsPath, setCollectionDetailsPath] = useState<string>();
+  const {
+    operation: collectionOperation,
+    changeRetention: changeCollectionRetention,
+    importSkills: importCollectionSkills,
+    move: moveSkillCollection
+  } = useSkillCollectionActions({
+    onSetSkillPathPolicies,
+    onImportUnmanaged,
+    onRefreshInventory,
+    onMoveSkillCollection,
+    onClose: () => setCollectionDetailsPath(undefined)
+  });
   const [cleanupDetailsCopied, setCleanupDetailsCopied] = useState(false);
   const [sharedRetireKey, setSharedRetireKey] = useState<string>();
   const [cleanupDraft, setCleanupDraft] = useState<{
@@ -542,6 +513,8 @@ export const SkillLibraryPanel = ({
       setMergePreview(undefined);
     } else if (cleanupDetailsKey) {
       setCleanupDetailsKey(undefined);
+    } else if (collectionDetailsPath) {
+      setCollectionDetailsPath(undefined);
     } else if (sharedRetireKey) {
       setSharedRetireKey(undefined);
     } else if (autoCleanupReviewOpen) {
@@ -561,6 +534,7 @@ export const SkillLibraryPanel = ({
       browsingSkill ||
       externalImport ||
       cleanupDetailsKey ||
+      collectionDetailsPath ||
       sharedRetireKey ||
       autoCleanupReviewOpen ||
       cleanupDraft
@@ -757,7 +731,7 @@ export const SkillLibraryPanel = ({
     const query = search.trim().toLowerCase();
     const matchesSearch =
       query.length === 0 ||
-      [skill.id, skill.name, skill.description, sourceLabel(skill)]
+      [skill.id, skill.name, skill.description, skillSourceLabel(skill)]
         .filter(Boolean)
         .some((value) => value?.toLowerCase().includes(query));
     const matchesSource =
@@ -880,6 +854,13 @@ export const SkillLibraryPanel = ({
       setDeleteCandidate(skill);
     }
   };
+  const collectionGroups = useMemo(
+    () => buildSkillCollectionLinkGroups(skillInventory, { installedTargetIds }),
+    [installedTargetIds, skillInventory]
+  );
+  const selectedCollection = collectionDetailsPath
+    ? collectionGroups.find((group) => group.path === collectionDetailsPath)
+    : undefined;
   const allCleanupGroups = useMemo(
     () => buildSkillCleanupGroups(skillInventory, {
       installedTargetIds,
@@ -942,7 +923,11 @@ export const SkillLibraryPanel = ({
     }
     return requests;
   }, [automaticCleanupRequests, cleanupGroups]);
-  const manualCleanupCount = cleanupGroupsByBucket.decision.length;
+  const collectionDecisionCount = collectionGroups.filter(
+    (group) => group.state !== "kept"
+  ).length;
+  const manualCleanupCount =
+    cleanupGroupsByBucket.decision.length + collectionDecisionCount;
   const sharedPreparationCandidates = cleanupGroupsByBucket.ready.filter(
     (group) =>
       group.automaticEffect === "move-shared-to-agents" &&
@@ -1991,7 +1976,7 @@ export const SkillLibraryPanel = ({
             const hasUpdate = globallyEnabled && isTracked && Boolean(updateInfo?.updateAvailable);
             const hasError = globallyEnabled && isTracked && Boolean(updateInfo?.error);
             const usageCount = (skillUsage[skill.id] ?? []).length;
-            const revisionLabel = shortRevision(skill);
+            const revisionLabel = shortSkillRevision(skill);
             const versionLabel = skill.version ?? skill.remoteRef ?? revisionLabel;
             const installedAgentNames = Array.from(new Set(
               installs.flatMap((install) =>
@@ -2018,7 +2003,7 @@ export const SkillLibraryPanel = ({
               sourceUpdatedLabel ? t("Updated {{date}}", { date: sourceUpdatedLabel }) : undefined
             ].filter(Boolean).join(" · ");
             const sourceDetail = [
-              sourceLabel(skill),
+              skillSourceLabel(skill),
               skill.version,
               revisionLabel,
               sourceUpdatedAt
@@ -2104,8 +2089,8 @@ export const SkillLibraryPanel = ({
                       <PreviewText
                         ariaLabel={t("Full source for {{id}}", { id: skill.id })}
                         className="library-source-name"
-                        displayText={t(sourceName(skill))}
-                        text={sourceLabel(skill)}
+                        displayText={t(skillSourceName(skill))}
+                        text={skillSourceLabel(skill)}
                         tooltipClassName="library-source-tooltip"
                       />
                       <ExternalLink size={11} strokeWidth={2.2} />
@@ -2121,8 +2106,8 @@ export const SkillLibraryPanel = ({
                       <PreviewText
                         ariaLabel={t("Full source for {{id}}", { id: skill.id })}
                         className="library-source-name"
-                        displayText={t(sourceName(skill))}
-                        text={sourceLabel(skill)}
+                        displayText={t(skillSourceName(skill))}
+                        text={skillSourceLabel(skill)}
                         tooltipClassName="library-source-tooltip"
                       />
                       <Copy size={11} strokeWidth={2.2} />
@@ -2133,8 +2118,8 @@ export const SkillLibraryPanel = ({
                       <PreviewText
                         ariaLabel={t("Full source for {{id}}", { id: skill.id })}
                         className="library-source-name"
-                        displayText={t(sourceName(skill))}
-                        text={sourceLabel(skill)}
+                        displayText={t(skillSourceName(skill))}
+                        text={skillSourceLabel(skill)}
                         tooltipClassName="library-source-tooltip"
                       />
                     </span>
@@ -2810,6 +2795,23 @@ export const SkillLibraryPanel = ({
         </div>,
         document.body
       ) : null}
+
+      <SkillCollectionDialog
+        collection={selectedCollection}
+        operation={collectionOperation}
+        dialogRef={modalDialogRef}
+        initialFocusRef={modalInitialFocusRef}
+        onClose={() => setCollectionDetailsPath(undefined)}
+        onChangeRetention={(collection, retained) => {
+          void changeCollectionRetention(collection, retained);
+        }}
+        onImport={(collection) => {
+          void importCollectionSkills(collection);
+        }}
+        onMove={(collection) => {
+          void moveSkillCollection(collection);
+        }}
+      />
 
       {sharedRetireCandidate?.sharedMigration ? createPortal(
         <div
@@ -3548,11 +3550,17 @@ export const SkillLibraryPanel = ({
               </div>
             </div>
             <div className="resource-list resource-list--unmanaged">
-              {cleanupGroups.length === 0 ? (
+              {cleanupGroups.length === 0 && collectionGroups.length === 0 ? (
                 <p className="muted library-empty">
                   {cleanupEmptyCopy}
                 </p>
               ) : null}
+              <SkillCollectionRows
+                collections={collectionGroups}
+                targetNames={targetNames}
+                disabled={Boolean(automaticCleanupKey) || Boolean(collectionOperation)}
+                onReview={(collection) => setCollectionDetailsPath(collection.path)}
+              />
               {cleanupGroups.map((group, index) => {
                 const sectionStarts = index === 0 || cleanupGroups[index - 1].bucket !== group.bucket;
                 const collapsibleBucket =

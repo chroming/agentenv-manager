@@ -1,6 +1,7 @@
 import type {
   AgentEnvApi,
   ProfileDetail,
+  RetireSkillCollectionInput,
   RetireSharedSkillInput,
   SkillCleanupResult,
   TargetManagementState
@@ -17,12 +18,26 @@ type SharedSkillMigrationApi = Pick<
   | "previewApply"
   | "applyProfile"
   | "retireSharedSkill"
+  | "retireSkillCollection"
 >;
 
 export interface MoveSharedSkillToAgentsInput {
   api: SharedSkillMigrationApi;
   migration: RetireSharedSkillInput;
   targetIds: string[];
+  targetNames?: Record<string, string>;
+  onProgress?: (targetId: string) => void;
+}
+
+export interface MoveSkillCollectionToAgentsInput {
+  api: SharedSkillMigrationApi;
+  collection: RetireSkillCollectionInput & {
+    members: Array<{
+      skillKey: string;
+      libraryId: string;
+      consumerTargetIds: string[];
+    }>;
+  };
   targetNames?: Record<string, string>;
   onProgress?: (targetId: string) => void;
 }
@@ -180,4 +195,131 @@ export const moveSharedSkillToAgents = async ({
   }
 
   return api.retireSharedSkill(migration);
+};
+
+export const moveSkillCollectionToAgents = async ({
+  api,
+  collection,
+  targetNames,
+  onProgress
+}: MoveSkillCollectionToAgentsInput): Promise<SkillCleanupResult> => {
+  const targetIds = [...new Set(
+    collection.members.flatMap((member) => member.consumerTargetIds)
+  )].sort();
+  if (targetIds.length === 0) {
+    throw new Error("Skill collection has no Agent consumers to move.");
+  }
+
+  const library = await api.listSkillLibrary();
+  const libraryIds = new Set(library.map((skill) => skill.id));
+  const unavailable = collection.members.find((member) => !libraryIds.has(member.libraryId));
+  if (unavailable) {
+    throw new Error(`Library Skill is unavailable: ${unavailable.libraryId}`);
+  }
+  const states = await api.listTargetStates();
+  const statesByTarget = new Map(states.map((state) => [state.targetId, state]));
+
+  for (const targetId of targetIds) {
+    onProgress?.(targetId);
+    const state = statesByTarget.get(targetId);
+    let profile: ProfileDetail;
+    if (state?.activeProfileId) {
+      if (
+        state.lifecycleStatus !== "applied" &&
+        state.lifecycleStatus !== "applied-with-outside"
+      ) {
+        throw new Error(
+          `${targetLabel(targetId, targetNames)} has pending or changed Profile resources. Review and Apply that Profile first.`
+        );
+      }
+      profile = await api.readProfile(state.activeProfileId);
+    } else {
+      const capture = await api.previewCreateProfileFromTarget(targetId, "skills");
+      if (capture.errors.length > 0) {
+        throw new Error(
+          `${targetLabel(targetId, targetNames)} could not be captured: ${capture.errors.join("; ")}`
+        );
+      }
+      profile = (
+        await api.createProfileFromTarget({
+          previewId: capture.id,
+          name: capture.suggestedName
+        })
+      ).profile;
+    }
+
+    const mode = profile.resources.managementByTarget?.[targetId]?.skills ?? "manage";
+    if (mode !== "manage") {
+      throw new Error(
+        `${targetLabel(targetId, targetNames)}'s active Profile does not currently manage Skills.`
+      );
+    }
+    if (!profile.contentHash) {
+      throw new Error(`Profile ${profile.manifest.name} is missing its current content hash.`);
+    }
+    const members = collection.members.filter(
+      (member) => member.consumerTargetIds.includes(targetId)
+    );
+    const nextSkills = [...profile.resources.skills];
+    let profileChanged = false;
+    for (const member of members) {
+      const existingIndex = nextSkills.findIndex(
+        (reference) => reference.libraryId === member.libraryId
+      );
+      const collision = nextSkills.find(
+        (reference) =>
+          reference.libraryId !== member.libraryId &&
+          reference.targetName === member.skillKey
+      );
+      if (existingIndex < 0 && collision) {
+        throw new Error(
+          `${profile.manifest.name} already installs ${collision.libraryId} as ${member.skillKey}.`
+        );
+      }
+      if (existingIndex >= 0) {
+        if (!nextSkills[existingIndex].enabled) {
+          nextSkills[existingIndex] = { ...nextSkills[existingIndex], enabled: true };
+          profileChanged = true;
+        }
+      } else {
+        nextSkills.push({
+          libraryId: member.libraryId,
+          targetName: member.skillKey,
+          enabled: true
+        });
+        profileChanged = true;
+      }
+    }
+    if (profileChanged) {
+      profile = (
+        await api.updateProfileSkills({
+          profileId: profile.id,
+          targetId,
+          expectedContentHash: profile.contentHash,
+          skills: nextSkills,
+          managementMode: "manage"
+        })
+      ).profile;
+    }
+
+    const preview = await api.previewApply(profile.id, targetId);
+    const blockingIssues = preview.issues.filter(
+      (issue) => issue.disposition === "block"
+    );
+    if (blockingIssues.length > 0) {
+      throw new Error(
+        `${targetLabel(targetId, targetNames)} cannot be prepared: ${blockingIssues
+          .map((issue) => issue.message)
+          .join("; ")}`
+      );
+    }
+    const result = await api.applyProfile(profile.id, preview.id);
+    if (!result.ok) {
+      throw new Error(
+        `${targetLabel(targetId, targetNames)} could not be prepared: ${result.errors.join("; ")}`
+      );
+    }
+  }
+
+  return api.retireSkillCollection({ path: collection.path });
 };

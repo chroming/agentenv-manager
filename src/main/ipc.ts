@@ -694,6 +694,11 @@ export const registerIpcHandlers = ({
         mode: input.mode,
         unavailableLinkCleanup
       });
+      if (current.collectionLink) {
+        throw new Error(
+          `${skillKey} is loaded through collection link ${current.collectionLink.path}. Review the collection instead of changing a child path.`
+        );
+      }
       return { targetPaths: target.paths, targetDir };
     });
     if (input.mode === "shared-compatibility") {
@@ -774,6 +779,12 @@ export const registerIpcHandlers = ({
         item.sharedLocation === true &&
         sharedPathSet.has(resolve(item.path))
     );
+    const collectionEntry = sharedEntries.find((item) => item.collectionLink);
+    if (collectionEntry?.collectionLink) {
+      throw new Error(
+        `${skillKey} is loaded through collection link ${collectionEntry.collectionLink.path}. Migrate the collection as one unit.`
+      );
+    }
     const matchedPaths = new Set(sharedEntries.map((item) => resolve(item.path)));
     if (
       matchedPaths.size !== sharedPathSet.size ||
@@ -796,6 +807,56 @@ export const registerIpcHandlers = ({
       libraryId,
       sharedPaths,
       consumerTargetIds: [...consumerTargetIds]
+    });
+  });
+  handleMutation("skills:retire-collection", async (_event, input: { path?: unknown }) => {
+    if (typeof input?.path !== "string" || !input.path.trim()) {
+      throw new Error("Skill collection path is required");
+    }
+    const collectionPath = resolve(input.path);
+    const targets = await targetDiscoveryService.listTargets();
+    const inventory = await skillLibraryStore.scanInventory(
+      inventoryPathsFor(targets)
+    );
+    const collectionEntries = inventory.filter(
+      (item) => item.collectionLink &&
+        resolve(item.collectionLink.path) === collectionPath
+    );
+    if (collectionEntries.length === 0) {
+      throw new Error("Skill collection changed or is no longer loaded by an installed Agent");
+    }
+    const canonicalPaths = new Set(
+      collectionEntries.map((item) => resolve(item.collectionLink!.canonicalPath))
+    );
+    if (canonicalPaths.size !== 1) {
+      throw new Error("Skill collection target changed during review");
+    }
+    const unready = collectionEntries.find(
+      (item) => !item.libraryId || item.contentMatchesLibrary !== true
+    );
+    if (unready) {
+      throw new Error(
+        `${unready.name} must match an exact Library copy before this collection can move`
+      );
+    }
+    const installedTargetIds = new Set(
+      targets.filter((target) => isTargetInstalled(target.health)).map((target) => target.id)
+    );
+    const members = [...new Map(
+      collectionEntries.map((item) => [
+        `${item.skillKey}\0${item.libraryId}\0${resolve(item.path)}`,
+        {
+          skillKey: item.skillKey,
+          libraryId: item.libraryId as string,
+          sharedPath: item.path,
+          consumerTargetIds: item.foundIn.filter((id) => installedTargetIds.has(id))
+        }
+      ])
+    ).values()];
+    return activationService.completeSkillCollectionMigration({
+      collectionPath,
+      canonicalPath: [...canonicalPaths][0],
+      members
     });
   });
   handleMutation("skills:rollback-cleanup", async (_event, backupId: unknown) => {

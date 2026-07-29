@@ -940,6 +940,51 @@ describe("activation service v2", () => {
     });
   });
 
+  it("moves a collection link only after preparing every nested Skill and preserves its source", async () => {
+    const { paths, service, skillLibraryStore } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const librarySkill = (await skillLibraryStore.listSkills()).find(
+      (skill) => skill.id === "review"
+    );
+    if (!librarySkill) throw new Error("Expected review in the Skill Library");
+    const collectionSource = join(root, "external", "superpowers");
+    const collectionSkill = join(collectionSource, "review");
+    const collectionLink = join(paths.homeDir, ".agents", "skills", "superpowers");
+    await mkdir(join(paths.homeDir, ".agents", "skills"), { recursive: true });
+    await mkdir(collectionSource, { recursive: true });
+    await cp(librarySkill.path, collectionSkill, { recursive: true });
+    await symlink(collectionSource, collectionLink);
+
+    const preview = await service.previewProfile("daily-coding", "codex");
+    expect(preview.sharedSkillPreparations).toContainEqual(expect.objectContaining({
+      skillKey: "review",
+      libraryId: "review",
+      sharedPaths: [join(collectionLink, "review")],
+      disposition: "install"
+    }));
+    expect((await service.applyProfile("daily-coding", preview.id)).ok).toBe(true);
+
+    const result = await service.completeSkillCollectionMigration({
+      collectionPath: collectionLink,
+      canonicalPath: collectionSource,
+      members: [{
+        skillKey: "review",
+        libraryId: "review",
+        sharedPath: join(collectionLink, "review"),
+        consumerTargetIds: ["codex"]
+      }]
+    });
+
+    await expect(lstat(collectionLink)).rejects.toThrow();
+    await expect(readFile(join(collectionSource, "review", "SKILL.md"), "utf8"))
+      .resolves.toContain("# Review");
+    await expect(readFile(join(paths.codexHome, "skills", "review", "SKILL.md"), "utf8"))
+      .resolves.toContain("# Review");
+
+    await service.rollbackSharedSkillMigration(result.backupId);
+    await expect(readlink(collectionLink)).resolves.toBe(collectionSource);
+  });
+
   it("rejects stale previews without overwriting live files", async () => {
     const { paths, service } = await makeEnv();
     await writeCodexLiveFiles(paths);

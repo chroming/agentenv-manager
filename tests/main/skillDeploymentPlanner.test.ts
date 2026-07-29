@@ -237,6 +237,78 @@ describe("skill deployment planner", () => {
     }));
   });
 
+  it("blocks duplicate deployment for an unresolved Skill collection member", () => {
+    const collectionPath = "/home/.agents/skills/superpowers";
+    const result = plan({
+      inventory: [
+        inventoryEntry({
+          path: `${collectionPath}/reviewer`,
+          status: "outside",
+          contentHash: "external-version",
+          contentMatchesLibrary: false,
+          locationRole: "compatibility-runtime",
+          sharedLocation: true,
+          collectionLink: {
+            path: collectionPath,
+            canonicalPath: "/home/.codex/superpowers/skills"
+          }
+        }),
+        inventoryEntry({
+          id: "formatter",
+          name: "Formatter",
+          skillKey: "formatter",
+          runtimeName: "Formatter",
+          deploymentName: "formatter",
+          libraryId: undefined,
+          path: `${collectionPath}/formatter`,
+          status: "outside",
+          contentHash: "external-formatter",
+          contentMatchesLibrary: undefined,
+          locationRole: "compatibility-runtime",
+          sharedLocation: true,
+          collectionLink: {
+            path: collectionPath,
+            canonicalPath: "/home/.codex/superpowers/skills"
+          }
+        })
+      ]
+    });
+
+    expect(blockingMessages(result.issues)).toEqual([
+      expect.stringContaining("2 Skills are loaded through collection")
+    ]);
+    expect(result.effectiveSkills).toEqual([]);
+    expect(result.decisions).not.toContainEqual(
+      expect.objectContaining({ action: "install" })
+    );
+  });
+
+  it("preserves an explicitly kept collection member without blocking Apply", () => {
+    const collectionPath = "/home/.agents/skills/superpowers";
+    const result = plan({
+      inventory: [inventoryEntry({
+        path: `${collectionPath}/reviewer`,
+        status: "kept-outside",
+        pathPolicy: "keep-shared",
+        contentHash: "external-version",
+        contentMatchesLibrary: false,
+        locationRole: "compatibility-runtime",
+        sharedLocation: true,
+        collectionLink: {
+          path: collectionPath,
+          canonicalPath: "/home/.codex/superpowers/skills"
+        }
+      })]
+    });
+
+    expect(blockingMessages(result.issues)).toEqual([]);
+    expect(result.effectiveSkills).toEqual([]);
+    expect(result.decisions).toContainEqual(expect.objectContaining({
+      action: "preserve",
+      reason: "kept-outside"
+    }));
+  });
+
   it("adopts an exact dedicated copy without losing shared migration intent", () => {
     const result = plan({
       inventory: [

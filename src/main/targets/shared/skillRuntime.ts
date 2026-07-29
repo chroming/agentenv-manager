@@ -2,6 +2,7 @@ import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import type {
   SkillExternalEvidence,
+  SkillCollectionLink,
   SkillRuntimeIssue,
   SkillRuntimeObservation,
   SkillRuntimeSnapshot,
@@ -21,6 +22,7 @@ export interface DiscoveredSkillDirectory {
   path: string;
   deploymentName: string;
   brokenLink: boolean;
+  collectionLink?: SkillCollectionLink;
 }
 
 interface FilesystemSkillDriverOptions {
@@ -75,7 +77,8 @@ export const discoverSkillDirectories = async (
     candidate: string,
     deploymentName: string,
     ancestors: ReadonlySet<string>,
-    depth: number
+    depth: number,
+    collectionLink?: SkillCollectionLink
   ): Promise<void> => {
     if (depth > 12) return;
     const entryStats = await lstat(candidate).catch(() => undefined);
@@ -97,16 +100,33 @@ export const discoverSkillDirectories = async (
     nextAncestors.add(resolvedCandidate);
 
     if (await pathExists(join(candidate, "SKILL.md"))) {
-      discovered.push({ path: candidate, deploymentName, brokenLink: false });
+      discovered.push({
+        path: candidate,
+        deploymentName,
+        brokenLink: false,
+        collectionLink
+      });
       return;
     }
-    if (scanDepth !== "recursive" || entryStats.isSymbolicLink()) return;
+    if (scanDepth !== "recursive") return;
+
+    const nestedCollectionLink = collectionLink ?? (
+      entryStats.isSymbolicLink()
+        ? { path: candidate, canonicalPath: resolvedCandidate }
+        : undefined
+    );
 
     const children = await readdir(candidate, { withFileTypes: true }).catch(() => []);
     for (const child of children.sort((left, right) => left.name.localeCompare(right.name))) {
       if (child.name.startsWith(".")) continue;
       if (!child.isDirectory() && !child.isSymbolicLink()) continue;
-      await visit(join(candidate, child.name), child.name, nextAncestors, depth + 1);
+      await visit(
+        join(candidate, child.name),
+        child.name,
+        nextAncestors,
+        depth + 1,
+        nestedCollectionLink
+      );
     }
   };
 
@@ -258,6 +278,13 @@ export const createFilesystemSkillDriver = (
             message: `Runtime Skill name does not follow the portable Agent Skills format: ${frontmatter.name}`
           });
         }
+        if (candidate.collectionLink) {
+          issues.push({
+            code: "collection-link",
+            severity: "info",
+            message: `${runtimeName} is loaded through Skill collection link ${candidate.collectionLink.path}`
+          });
+        }
 
         const externalEvidence = await inspectExternalSkillEvidence(candidate.path, location);
         const agentEnvOwned = await isAgentEnvOwnedDir(candidate.path, {
@@ -299,6 +326,7 @@ export const createFilesystemSkillDriver = (
           sharedLocationId: location.sharedLocationId,
           legacy: location.management === "legacy",
           externalEvidence,
+          collectionLink: candidate.collectionLink,
           issues
         });
       }

@@ -80,6 +80,7 @@ const comparablePaths = (paths: readonly string[] = []) =>
   [...new Set(paths.map((path) => path.length > 1 ? path.replace(/[\\/]+$/, "") : path))].sort();
 
 const isObserveOnlySkill = (item: SkillInventoryEntry) =>
+  Boolean(item.collectionLink) ||
   item.locationRole === "discovery-only" ||
   (item.locationManagement === "observed" && !item.sharedLocation);
 
@@ -107,6 +108,74 @@ export interface SkillCleanupGroup {
   sharedMigration?: SharedSkillMigration;
 }
 
+export type SkillCollectionLinkState = "needs-library" | "conflict" | "ready" | "kept";
+
+export interface SkillCollectionLinkGroup {
+  path: string;
+  canonicalPath: string;
+  name: string;
+  items: SkillInventoryEntry[];
+  consumerTargetIds: string[];
+  state: SkillCollectionLinkState;
+  libraryReadyCount: number;
+  conflictCount: number;
+}
+
+const collectionName = (path: string) =>
+  path.replace(/[\\/]+$/, "").split(/[\\/]/).filter(Boolean).at(-1) ?? path;
+
+export const buildSkillCollectionLinkGroups = (
+  skillInventory: SkillInventoryEntry[],
+  options: { installedTargetIds?: readonly string[] } = {}
+): SkillCollectionLinkGroup[] => {
+  const installedTargetIds = options.installedTargetIds
+    ? new Set(options.installedTargetIds)
+    : undefined;
+  const byPath = new Map<string, SkillInventoryEntry[]>();
+  for (const item of skillInventory) {
+    if (!item.collectionLink) continue;
+    byPath.set(item.collectionLink.path, [
+      ...(byPath.get(item.collectionLink.path) ?? []),
+      item
+    ]);
+  }
+
+  return [...byPath.entries()]
+    .map(([path, items]) => {
+      const uniqueItems = [...new Map(
+        items.map((item) => [`${item.skillKey}\0${item.path}`, item])
+      ).values()].sort((left, right) => left.name.localeCompare(right.name));
+      const libraryReadyCount = uniqueItems.filter(
+        (item) => Boolean(item.libraryId) && item.contentMatchesLibrary === true
+      ).length;
+      const conflictCount = uniqueItems.filter(
+        (item) => Boolean(item.libraryId) && item.contentMatchesLibrary === false
+      ).length;
+      const kept = uniqueItems.length > 0 && uniqueItems.every(
+        (item) => item.status === "kept-outside" && item.pathPolicy === "keep-shared"
+      );
+      return {
+        path,
+        canonicalPath: uniqueItems[0].collectionLink?.canonicalPath ?? path,
+        name: collectionName(path),
+        items: uniqueItems,
+        consumerTargetIds: [...new Set(uniqueItems.flatMap((item) => item.foundIn))]
+          .filter((targetId) => !installedTargetIds || installedTargetIds.has(targetId))
+          .sort(),
+        state: kept
+          ? "kept" as const
+          : conflictCount > 0
+            ? "conflict" as const
+            : libraryReadyCount === uniqueItems.length
+              ? "ready" as const
+              : "needs-library" as const,
+        libraryReadyCount,
+        conflictCount
+      };
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
+};
+
 export const buildSkillCleanupGroups = (
   skillInventory: SkillInventoryEntry[],
   options: {
@@ -118,6 +187,7 @@ export const buildSkillCleanupGroups = (
 ): SkillCleanupGroup[] => {
   const byKey = new Map<string, SkillInventoryEntry[]>();
   for (const skill of skillInventory) {
+    if (skill.collectionLink) continue;
     const key = skill.skillKey || skill.id;
     byKey.set(key, [...(byKey.get(key) ?? []), skill]);
   }

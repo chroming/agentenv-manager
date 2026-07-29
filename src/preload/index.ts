@@ -95,6 +95,7 @@ const api: AgentEnvApi = {
   consolidateSkillGroup: (input) => ipcRenderer.invoke("skills:consolidate-group", input),
   setSharedSkillRetention: (input) => ipcRenderer.invoke("skills:set-shared-retention", input),
   retireSharedSkill: (input) => ipcRenderer.invoke("skills:retire-shared", input),
+  retireSkillCollection: (input) => ipcRenderer.invoke("skills:retire-collection", input),
   rollbackSkillCleanup: (backupId) => ipcRenderer.invoke("skills:rollback-cleanup", backupId),
   checkSkillLibraryUpdates: (ids) => ipcRenderer.invoke("skills:check-updates", ids),
   setSkillUpdateSettings: (input) => ipcRenderer.invoke("skills:set-update-settings", input),

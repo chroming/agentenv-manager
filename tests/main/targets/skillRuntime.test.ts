@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -88,6 +88,47 @@ describe("filesystem Skill runtime driver", () => {
       .resolves.toMatchObject({ observations: [] });
     const recursive = await driver.inspectRuntime(pathsFor("test", skillsDir, "recursive"));
     expect(recursive.observations.map((item) => item.runtimeName)).toEqual(["nested-skill"]);
+  });
+
+  it("discovers Skills below a collection directory symlink without losing its mutation boundary", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-runtime-"));
+    const skillsDir = join(root, "skills");
+    const collectionDir = join(root, "external", "superpowers");
+    await writeSkill(join(collectionDir, "brainstorming"), "brainstorming");
+    await writeSkill(join(collectionDir, "debugging"), "systematic-debugging");
+    await mkdir(skillsDir, { recursive: true });
+    const collectionLink = join(skillsDir, "superpowers");
+    await symlink(collectionDir, collectionLink);
+    const canonicalCollectionDir = await realpath(collectionDir);
+
+    const direct = await createFilesystemSkillDriver({ targetId: "test" })
+      .inspectRuntime(pathsFor("test", skillsDir, "direct"));
+    expect(direct.observations).toEqual([]);
+
+    const recursive = await createFilesystemSkillDriver({ targetId: "test" })
+      .inspectRuntime(pathsFor("test", skillsDir, "recursive"));
+    expect(recursive.observations).toHaveLength(2);
+    expect(recursive.observations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        runtimeName: "brainstorming",
+        path: join(collectionLink, "brainstorming"),
+        collectionLink: {
+          path: collectionLink,
+          canonicalPath: canonicalCollectionDir
+        },
+        issues: expect.arrayContaining([
+          expect.objectContaining({ code: "collection-link", severity: "info" })
+        ])
+      }),
+      expect.objectContaining({
+        runtimeName: "systematic-debugging",
+        path: join(collectionLink, "debugging"),
+        collectionLink: {
+          path: collectionLink,
+          canonicalPath: canonicalCollectionDir
+        }
+      })
+    ]));
   });
 
   it("recognizes a Skill symlink owned by a Claude Code plugin", async () => {
