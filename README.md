@@ -36,7 +36,7 @@ AgentEnv Manager 是一个本地桌面客户端，用来管理和切换本机 ag
 - 每次应用前会自动创建 backup。
 - 支持从 history 预览并回滚 backup。
 
-Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/product-contracts.md`](docs/product-contracts.md)。跨页面交互一致性、桌面布局、状态覆盖与发布证据要求见 [`docs/product-quality-checklist.md`](docs/product-quality-checklist.md)。自动化测试的证据边界、Target 通用契约和打包验证范围见 [`docs/testing-strategy.md`](docs/testing-strategy.md)。
+文档入口和现行/历史资料边界见 [`docs/README.md`](docs/README.md)。Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/product-contracts.md`](docs/product-contracts.md)。跨页面交互一致性、桌面布局、状态覆盖与发布证据要求见 [`docs/product-quality-checklist.md`](docs/product-quality-checklist.md)。自动化测试的证据边界、Target 通用契约和打包验证范围见 [`docs/testing-strategy.md`](docs/testing-strategy.md)。
 
 ### 对话查找与跨 Agent 继续
 

@@ -34,6 +34,25 @@ under `tests/main` and `tests/e2e`.
 `npm test` is the complete source-level gate. New Targets must pass the common
 contract before Target-specific tests are accepted as sufficient.
 
+## Test scheduling
+
+Most Vitest files are parallel-safe. Files that launch a real Electron process
+share operating-system resources such as application lifecycle, focus, native
+dialogs, ports, and process teardown, so they are a separate scheduling class.
+
+`scripts/vitest-groups.mjs` is the single owner of that class. `npm test`,
+`npm run test:e2e`, and the product verifier all:
+
+1. run the parallel-safe files;
+2. exclude every real-Electron file from that pass;
+3. run the real-Electron files with one worker and no file parallelism.
+
+The verification snapshot records both groups and their assertion totals.
+Adding a desktop-process test requires adding its file to the shared group
+definition; ad hoc duplicate include/exclude lists are not allowed. A launch
+helper may retry a bounded startup once to absorb a failed process spawn, but
+an assertion, product error, or persistence failure is never retried.
+
 ## Electron artifact identity
 
 `npm run build` writes `out/.agentenv-build.json` after compilation. It binds:
@@ -52,6 +71,24 @@ fingerprint, tests, audits, and capture manifest into
 check that all three identities still match. A source, E2E, screenshot, or
 packaged claim is invalid when the corresponding identity is stale.
 
+## Visual regression gate
+
+`npm run verify:visual` captures the critical states declared in
+`tests/visual/critical-captures.json` and compares them with checked-in golden
+images. The fixture clock and repository commit dates are fixed, and Chromium
+uses a fixed device scale factor so timestamps and raster scale do not create
+false changes.
+
+The pixel comparator allows a small per-channel tolerance and a one-pixel
+neighborhood match for platform antialiasing. The configured changed-pixel
+ratio remains intentionally low enough to reject a different page, missing
+content, clipping, or meaningful layout movement. A baseline may be updated
+only after a cold pixel review, a repeat capture, and a deliberate fault that
+proves the comparator still fails.
+
+The critical pixel set complements the complete capture manifest. It does not
+replace geometry, keyboard, localization, overlay, or persistence assertions.
+
 ## Desktop and packaged evidence
 
 The Electron UI E2E covers visible workflows, supported viewport geometry,
@@ -68,6 +105,10 @@ feedback, dialogs, navigation, and persisted effects.
 
 Passing source tests does not imply packaged behavior passed. Release evidence
 must state both results separately.
+
+DMG checksum and mount verification establish package-container integrity only.
+Public distribution additionally requires Developer ID signing, notarization,
+stapling, Gatekeeper assessment, and clean-Mac smoke evidence.
 
 ## Installed Agent probe
 

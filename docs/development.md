@@ -46,6 +46,18 @@ Filesystem effects belong in the main process. Renderer code requests domain
 operations through the preload contract and must not receive unrestricted
 filesystem or shell access.
 
+Large modules have executable growth budgets in
+`scripts/audit-module-budgets.mjs`. Profile draft/activation/navigation,
+Skill Library import, Target-state persistence, and Skill path-policy
+persistence have dedicated owners instead of accumulating inside workspace
+components or the main process entry point.
+
+Renderer CSS is imported through `src/renderer/ui/index.css`. Shared controls,
+overlays, accessibility behavior, and each page family have explicit owners.
+Page styles must not redefine shared primitive roots, introduce page-owned
+animation systems, or create unregistered cross-file selector ownership.
+`npm run audit:styles` and `npm run audit:modules` enforce these boundaries.
+
 Profile Apply follows this sequence:
 
 1. read fresh Target state;
@@ -109,6 +121,10 @@ snapshot:
 ```bash
 npm run verify:release
 ```
+
+See [README.md](README.md) for the authoritative document map, visual-baseline
+review procedure, and the distinction between packaged smoke and signed public
+distribution.
 
 ## Release Builds
 
