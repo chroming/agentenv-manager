@@ -258,6 +258,7 @@ try {
   application = await launchPackagedApplication();
   const page = await application.firstWindow();
   await page.setViewportSize({ width: 1180, height: 728 });
+  await page.getByRole("button", { name: "Skills", exact: true }).click();
   await page.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Agents", exact: true }).waitFor({ state: "visible" });
   assert.equal(await page.getByText("Action failed").count(), 0);
