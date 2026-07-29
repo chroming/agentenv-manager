@@ -311,6 +311,40 @@ implementation.
 Status: repeatable Environment Review, shared-location scoping, and first-run presentation are
 `Implemented`.
 
+### 4.4.4 Data Freshness
+
+AgentEnv distinguishes cached presentation, local discovery, and remote checks. Freshness is a
+shared desktop contract rather than a collection of page-specific effects.
+
+- Startup MUST render persisted Profiles, Library content, Agent state, and the Conversation index
+  before optional filesystem or network enrichment completes. Automatic enrichment preserves the
+  last-good content and selection; it MUST NOT flash an empty replacement view.
+- `Refresh` reloads local or cached product state, `Scan` inspects filesystem state, and `Check`
+  contacts an upstream source. These verbs MUST NOT be used interchangeably. A command that only
+  reads data never implies Import, Update, Apply, Cleanup, or another mutation.
+- Manual Refresh, Scan, and Check always force a new read. Automatic page-entry and focus reads
+  are skipped while their last successful result remains fresh: Agents, Library, and Local Skills
+  use 1 minute on page entry and 5 minutes on focus; Conversations uses 1 minute for both; managed
+  Backup inventory uses 1 minute on page entry.
+- One resource permits only one in-flight read. Navigation, focus, timers, and a manual command
+  MUST join the same operation rather than start duplicate filesystem scans, Agent discovery, or
+  network requests.
+- A successful mutation invalidates or refreshes every affected local projection. Unrelated
+  projections remain intact. A semantic no-op does not churn freshness timestamps.
+- Automatic reads are non-blocking and do not emit routine success toasts. Their initiating page
+  shows compact `Refreshing`, last-success time, partial, or failure state. Failure preserves the
+  last-good data and last-success time; partial multi-Agent or multi-source results identify that
+  some sources failed without discarding successful results.
+- Monitored Skill sources use their persisted per-source `checkedAt` values. Startup checks only
+  when at least one monitored source is due; while the app remains open, the next check is
+  scheduled from the oldest monitored success, and returning to the foreground checks immediately
+  only when overdue. Manual-only sources never participate. The minimum interval remains 5 minutes.
+- Automatic checks are read-only. They MUST NOT Import, Update, Apply, delete, move, link, copy, or
+  rewrite user or Agent resources.
+
+Status: shared local freshness coordination, persisted Conversation refresh time, due-time Skill
+source scheduling, non-blocking automatic refresh, and regression coverage are `Implemented`.
+
 ### 4.5 Conversations
 
 Conversations is a local, read-only index over histories owned by enabled Agents. It helps the
@@ -386,12 +420,10 @@ an archive, or a native-session database migration tool.
   the target Agent to ignore instructions embedded in transcript or tool output and to treat the
   current repository plus the user's new request as authoritative.
 - Conversation discovery MUST NOT delay startup, Profile loading, Library loading, or Agent
-  discovery. Opening Conversations reads the last-good cached index only; revisiting the page does
-  not implicitly rescan every Agent. An empty cache MAY start one first-use refresh per application
-  session after the empty cached read has completed. A persisted discovery-version mismatch MAY
-  likewise start one first-use refresh so an existing non-empty cache gains newly supported Agent
-  histories after an application upgrade. Once that version is recorded, later refreshes require
-  the explicit Refresh command.
+  discovery. Opening Conversations reads the last-good cached index first, then starts a
+  non-blocking refresh when the persisted last-success time is older than 1 minute, the cache is
+  empty, or the discovery version changed. Revisiting or refocusing within that freshness window
+  reuses the cache. Manual Refresh always starts a fresh discovery pass.
 - Index list, search, and transcript reads MUST run outside the Electron main thread. Refresh
   parsing MUST yield between records so window navigation and clean shutdown remain responsive
   during a large first index. Parser upgrades invalidate record versions without clearing the
@@ -423,10 +455,11 @@ an archive, or a native-session database migration tool.
   honest source state, not an implication that another Agent's records belong to that Agent.
   Metadata-only histories remain useful by displaying their source summary while clearly disabling
   transcript-dependent actions.
-- During explicit or first-use refresh the last-good rows, inferred Agent icons, selection, and
-  detail remain stable behind a region-scoped progress overlay. The overlay blocks only the
-  Conversation workspace, not application navigation, and MUST NOT depend on the current Target
-  discovery array to identify already indexed Agent rows.
+- During every refresh the last-good rows, inferred Agent icons, selection, and detail remain
+  stable. An automatic refresh uses compact header progress and MUST NOT make the list, search, or
+  detail inert. An explicit manual refresh MAY use the region-scoped progress overlay; that overlay
+  blocks only the Conversation workspace, not application navigation, and MUST NOT depend on the
+  current Target discovery array to identify already indexed Agent rows.
 - The detail reader presents one task header followed by a readable transcript. Consecutive
   messages from the same role are grouped without changing message order. Visible Markdown,
   tables, lists, and fenced code MAY be rendered, but raw HTML is never executed, remote images

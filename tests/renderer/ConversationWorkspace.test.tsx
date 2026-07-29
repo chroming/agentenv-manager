@@ -95,14 +95,16 @@ const installApi = (
       items: [{ ...detail, messages: undefined }],
       total: 1,
       workspacePaths: ["/work/project"],
-      agentCounts: { codex: 1, opencode: 2 }
+      agentCounts: { codex: 1, opencode: 2 },
+      lastRefreshedAt: new Date().toISOString()
     }),
     readConversation: vi.fn().mockResolvedValue(detail),
     refreshConversations: vi.fn().mockResolvedValue({
       indexed: 1,
       unchanged: 0,
       removed: 0,
-      failures: []
+      failures: [],
+      refreshedAt: new Date().toISOString()
     }),
     openOriginalConversation: vi.fn().mockResolvedValue({
       mode: "native",
@@ -318,6 +320,64 @@ describe("ConversationWorkspace", () => {
       .toBeNull();
   });
 
+  it("keeps cached conversations interactive during an automatic stale-index refresh", async () => {
+    const api = installApi();
+    let finishRefresh!: () => void;
+    api.listConversations.mockResolvedValue({
+      items: [{ ...detail, messages: undefined }],
+      total: 1,
+      lastRefreshedAt: "2026-07-29T08:00:00.000Z"
+    });
+    api.refreshConversations.mockReturnValue(new Promise((resolve) => {
+      finishRefresh = () => resolve({
+        indexed: 0,
+        unchanged: 1,
+        removed: 0,
+        failures: [],
+        refreshedAt: "2026-07-29T10:00:00.000Z"
+      });
+    }));
+
+    const { container } = render(<ConversationWorkspace targets={[
+      target("codex", "Codex"),
+      target("opencode", "OpenCode")
+    ]} />);
+
+    expect(await screen.findByText("Repair release workflow")).toBeInTheDocument();
+    await waitFor(() => expect(api.refreshConversations).toHaveBeenCalledTimes(1));
+    expect(container.querySelector(".conversation-layout")).not.toHaveAttribute("inert");
+    expect(screen.getByRole("searchbox", { name: "Search conversations" })).toBeEnabled();
+    expect(screen.queryByText("Refreshing conversations")).toBeNull();
+    expect(screen.getByText("Refreshing…")).toBeInTheDocument();
+
+    await act(async () => finishRefresh());
+    await waitFor(() => expect(screen.getByText(/Indexed/)).toBeInTheDocument());
+  });
+
+  it("refreshes on focus only after the indexed history becomes stale", async () => {
+    let now = Date.parse("2026-07-29T10:00:00.000Z");
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const api = installApi();
+    api.listConversations.mockResolvedValue({
+      items: [{ ...detail, messages: undefined }],
+      total: 1,
+      lastRefreshedAt: new Date(now).toISOString()
+    });
+    render(<ConversationWorkspace targets={[
+      target("codex", "Codex"),
+      target("opencode", "OpenCode")
+    ]} />);
+    await screen.findByText("Repair release workflow");
+
+    window.dispatchEvent(new Event("focus"));
+    await act(async () => Promise.resolve());
+    expect(api.refreshConversations).not.toHaveBeenCalled();
+
+    now += 60_001;
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(api.refreshConversations).toHaveBeenCalledTimes(1));
+  });
+
   it("requires confirmation for a warned continuation and dismisses with Escape", async () => {
     const api = installApi({
       warnings: ["Sensitive-looking values will be redacted before transfer"],
@@ -518,7 +578,8 @@ describe("ConversationWorkspace", () => {
         indexed: 1,
         unchanged: 0,
         removed: 0,
-        failures: []
+        failures: [],
+        refreshedAt: new Date().toISOString()
       });
     }));
     const { container } = render(<ConversationWorkspace targets={[]} />);

@@ -372,6 +372,31 @@
   height: var(--control-height-prominent);
 }
 
+.freshness-status {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+  gap: 5px;
+  line-height: 1;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.freshness-status--partial {
+  color: var(--warning);
+}
+
+.freshness-status--error {
+  color: var(--danger);
+}
+
+.freshness-status--refreshing {
+  color: var(--text-secondary);
+}
+
 /* Resource rows own identity, state, and action tracks; pages only choose density. */
 .ui-resource-row {
   align-items: center;

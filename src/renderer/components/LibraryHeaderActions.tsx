@@ -1,10 +1,12 @@
 import { ArrowLeft, Plus, RefreshCw, ScanLine } from "lucide-react";
+import type { ReactNode } from "react";
 import { useI18n } from "../i18n";
 import { Button, ControlGroup } from "./ui";
 
 interface LibraryHeaderActionsProps {
   mode: "skills" | "sources";
   refreshing: boolean;
+  freshness?: ReactNode;
   toolOpen?: boolean;
   returnTargetName?: string;
   onReturn?(): void;
@@ -16,6 +18,7 @@ interface LibraryHeaderActionsProps {
 export const LibraryHeaderActions = ({
   mode,
   refreshing,
+  freshness,
   toolOpen = false,
   returnTargetName,
   onReturn,
@@ -35,6 +38,7 @@ export const LibraryHeaderActions = ({
           onClick={onReturn}
         />
       ) : null}
+      {freshness}
       <Button
         className="primary-inline-action"
         size="prominent"

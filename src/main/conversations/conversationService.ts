@@ -260,7 +260,8 @@ export const createConversationService = async (options: {
     input: Parameters<ConversationIndexStore["list"]>[0]
   ): Promise<ConversationListResult> => ({
     ...await index.list(input),
-    refreshRequired: index.discoveryVersion() !== CONVERSATION_DISCOVERY_VERSION
+    refreshRequired: index.discoveryVersion() !== CONVERSATION_DISCOVERY_VERSION,
+    lastRefreshedAt: index.lastRefreshedAt()
   });
 
   return {
@@ -361,7 +362,15 @@ export const createConversationService = async (options: {
         await yieldToMainLoop();
       });
       index.setDiscoveryVersion(CONVERSATION_DISCOVERY_VERSION);
-      return { indexed, unchanged, removed, failures: compactRefreshFailures(failures) };
+      const refreshedAt = new Date(now()).toISOString();
+      index.setLastRefreshedAt(refreshedAt);
+      return {
+        indexed,
+        unchanged,
+        removed,
+        failures: compactRefreshFailures(failures),
+        refreshedAt
+      };
     },
     openOriginal: async (id) => {
       const record = index.record(id);

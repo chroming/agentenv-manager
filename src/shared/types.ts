@@ -355,6 +355,7 @@ export interface ConversationListResult {
   workspacePaths?: string[];
   agentCounts?: Record<string, number>;
   refreshRequired?: boolean;
+  lastRefreshedAt?: string;
 }
 
 export interface ConversationRefreshFailure {
@@ -367,6 +368,7 @@ export interface ConversationRefreshResult {
   unchanged: number;
   removed: number;
   failures: ConversationRefreshFailure[];
+  refreshedAt: string;
 }
 
 export interface ConversationContinueInput {

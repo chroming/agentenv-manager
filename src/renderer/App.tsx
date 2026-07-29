@@ -79,6 +79,7 @@ import type {
   SkillCleanupResult,
   SkillLibraryEntry,
   SkillSourceCandidateIgnoreInput,
+  SkillSourceCheckAllResult,
   SkillSourceGroupView,
   SkillSourceNameInput,
   SkillSourceMergePreview,
@@ -125,6 +126,7 @@ import {
 } from "./components/BackupManagerDialog";
 import { DataRootPath } from "./components/DataRootPath";
 import { DiagnosticIssueDialog } from "./components/DiagnosticIssueDialog";
+import { FreshnessStatus } from "./components/FreshnessStatus";
 import { InfoTip } from "./components/InfoTip";
 import {
   ConversationWorkspace,
@@ -170,7 +172,7 @@ import {
   updateProfileLibraryVersions
 } from "./libraryUpdateState";
 import { runSkillImportQueue } from "./skillImportQueue";
-import { useScheduledSkillUpdateChecks, useSkillUpdateActivity, type SkillUpdateActivity } from "./skillUpdateActivity";
+import { useSkillUpdateActivity, type SkillUpdateActivity } from "./skillUpdateActivity";
 import {
   runSkillUpdateQueue,
   type SkillUpdateRun,
@@ -195,6 +197,10 @@ import {
 import { useLibraryScrollRestoration } from "./hooks/useLibraryScrollRestoration";
 import { useModalDialog } from "./hooks/useModalDialog";
 import { useDesktopShortcuts } from "./hooks/useDesktopShortcuts";
+import { useFreshnessCoordinator } from "./hooks/useFreshnessCoordinator";
+import { useAutomaticSkillSourceChecks } from "./hooks/useAutomaticSkillSourceChecks";
+import { useAgentRefresh } from "./hooks/useAgentRefresh";
+import { useWorkspaceFreshness } from "./hooks/useWorkspaceFreshness";
 import {
   preferredTargetForProfile,
   reconcileProfileUsage,
@@ -208,6 +214,10 @@ import {
   updatesFromSourceGroups
 } from "./skillUpdateSummary";
 import { createTargetNameIndex } from "./targetPresentation";
+import {
+  monitoredSkillSourcesDue,
+  oldestMonitoredSkillCheckAt
+} from "./freshness";
 import {
   deriveEnvironmentReview,
   type EnvironmentScanStatus
@@ -296,7 +306,6 @@ const AppContent = ({
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [librarySkills, setLibrarySkills] = useState<SkillLibraryEntry[]>([]);
   const [skillSourceGroups, setSkillSourceGroups] = useState<SkillSourceGroupView[]>([]);
-  const [skillSourceGroupsLoading, setSkillSourceGroupsLoading] = useState(false);
   const [skillLibraryMode, setSkillLibraryMode] = useState<"skills" | "sources">("skills");
   const [skillUpdates, setSkillUpdates] = useState<SkillUpdateInfo[]>([]);
   const [skillInventory, setSkillInventory] = useState<SkillInventoryEntry[]>([]);
@@ -441,28 +450,42 @@ const AppContent = ({
   const { activity: skillUpdateActivity, activityRef: skillUpdateActivityRef,
     begin: beginSkillUpdateActivity, finish: finishSkillUpdateActivity
   } = useSkillUpdateActivity(() => setSkillRefreshStatus(undefined));
+  const {
+    states: freshnessStates,
+    markFresh,
+    run: runFreshness
+  } = useFreshnessCoordinator();
   const activeLibraryView =
     activeWorkspace === "library" && skillLibraryMode === "skills" ? "skills" : undefined;
   const refreshSkillSourceGroups = useCallback(async () => {
-    setSkillSourceGroupsLoading(true);
     try {
       setSkillSourceGroups(await window.agentEnv.listSkillSourceGroups());
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-    } finally {
-      setSkillSourceGroupsLoading(false);
     }
   }, []);
-  const refreshManagedBackups = useCallback(async () => {
-    setManagedBackupsLoading(true);
+  const refreshManagedBackups = useCallback(async (
+    reason: "page-entry" | "mutation" | "manual" = "manual"
+  ) => {
     try {
-      setManagedBackups(await window.agentEnv.listManagedBackups());
+      await runFreshness("backups", reason, async () => {
+        setManagedBackupsLoading(true);
+        try {
+          const inventory = await window.agentEnv.listManagedBackups();
+          setManagedBackups(inventory);
+          return inventory;
+        } finally {
+          setManagedBackupsLoading(false);
+        }
+      });
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-    } finally {
-      setManagedBackupsLoading(false);
+      const message = unknownError instanceof Error
+        ? unknownError.message
+        : String(unknownError);
+      if (reason === "manual") setError(message);
+      else console.warn(`[AgentEnv] Recovery storage refresh failed: ${message}`);
     }
-  }, []);
+  }, [runFreshness]);
   const refreshNativeMcpConnections = useCallback(async () => {
     try {
       const inspection = await window.agentEnv.listNativeMcpConnections();
@@ -489,14 +512,8 @@ const AppContent = ({
 
   useEffect(() => {
     if (activeWorkspace !== "settings") return;
-    void refreshManagedBackups();
+    void refreshManagedBackups("page-entry");
   }, [activeWorkspace, refreshManagedBackups]);
-
-  useEffect(() => {
-    if (activeWorkspace === "library" && skillLibraryMode === "sources") {
-      void refreshSkillSourceGroups();
-    }
-  }, [activeWorkspace, refreshSkillSourceGroups, skillLibraryMode]);
 
   useEffect(() => {
     if (rollbackPreview || busy) {
@@ -681,6 +698,8 @@ const AppContent = ({
     );
     setProfiles(profileItems);
     setSkillSettings(settings);
+    markFresh("agents");
+    markFresh("skill-library");
     onLocalePreferenceChange(settings.locale);
     setSelectedTargetId((current) =>
       current && targetItems.some((target) => target.id === current)
@@ -717,17 +736,56 @@ const AppContent = ({
     } = core;
     const [sourceChecksResult, skillInventoryResult, githubStatusResult] =
       await Promise.allSettled([
-        checkSkillUpdates && (forceSkillUpdateCheck || settings.skillAutoCheckEnabled)
-          ? window.agentEnv.checkMonitoredSkillSourceGroups()
+        checkSkillUpdates
+          ? window.agentEnv.listSkillSourceGroups().then(async (groups) => {
+              const shouldCheck =
+                settings.skillAutoCheckEnabled &&
+                (
+                  forceSkillUpdateCheck ||
+                  monitoredSkillSourcesDue({
+                    groups,
+                    intervalMinutes: settings.skillAutoCheckIntervalMinutes,
+                    now: Date.now()
+                  })
+                );
+              return {
+                checked: shouldCheck
+                  ? (
+                      await runFreshness(
+                        "skill-upstreams",
+                        "startup",
+                        () => window.agentEnv.checkMonitoredSkillSourceGroups(),
+                        {
+                          force: true,
+                          partialError: (value) => {
+                            const result = value as SkillSourceCheckAllResult;
+                            return result.failed > 0
+                              ? `${result.failed} source checks failed`
+                              : undefined;
+                          }
+                        }
+                      )
+                    ).value
+                  : undefined,
+                groups
+              };
+            })
           : Promise.resolve(undefined),
-        window.agentEnv.scanSkillInventory(),
+        runFreshness(
+          "local-skills",
+          "startup",
+          () => window.agentEnv.scanSkillInventory(),
+          { force: true }
+        ).then((outcome) => outcome.value ?? []),
         window.agentEnv.readGitHubAuthStatus()
       ]);
-    const checkedSources = sourceChecksResult.status === "fulfilled"
+    const sourceLoad = sourceChecksResult.status === "fulfilled"
       ? sourceChecksResult.value
       : undefined;
-    const skillUpdateItems = checkedSources
-      ? updatesFromSourceGroups(checkedSources.groups, skillItems)
+    const checkedSources = sourceLoad?.checked;
+    const loadedSourceGroups = checkedSources?.groups ?? sourceLoad?.groups;
+    const skillUpdateItems = loadedSourceGroups
+      ? updatesFromSourceGroups(loadedSourceGroups, skillItems)
       : skillUpdates;
     const githubStatus =
       githubStatusResult.status === "fulfilled"
@@ -763,11 +821,12 @@ const AppContent = ({
     }
     if (skillUpdateResultRevision === skillUpdateResultRevisionRef.current) {
       setSkillUpdates(skillUpdateItems);
-      if (checkedSources) setSkillSourceGroups(checkedSources.groups);
+      if (loadedSourceGroups) setSkillSourceGroups(loadedSourceGroups);
     }
     if (skillInventoryResult.status === "fulfilled") {
       setSkillInventory(skillInventoryResult.value);
       setEnvironmentScanStatus("ready");
+      markFresh("local-skills");
     } else {
       setEnvironmentScanStatus("error");
       console.warn(
@@ -779,6 +838,19 @@ const AppContent = ({
       );
     }
     setGithubAuthStatus(githubStatus);
+    if (checkedSources) {
+      markFresh("skill-upstreams", {
+        error: checkedSources.failed > 0
+          ? `${checkedSources.failed} source checks failed`
+          : undefined,
+        status: checkedSources.failed > 0 ? "partial" : "ready"
+      });
+    } else if (loadedSourceGroups) {
+      const checkedAt = oldestMonitoredSkillCheckAt(loadedSourceGroups);
+      if (checkedAt !== undefined) {
+        markFresh("skill-upstreams", { at: checkedAt });
+      }
+    }
     setSkillUsage(usage);
     setProfileLibraryVersions(nextProfileLibraryVersions);
     return { skillUpdateItems };
@@ -811,36 +883,45 @@ const AppContent = ({
     return { ...core, ...enrichment };
   };
 
-  const refreshSkills = async () => {
-    if (skillRefreshStatus === "refreshing") {
-      return;
+  const refreshSkills = async (
+    reason: "page-entry" | "focus" | "mutation" | "manual" = "manual"
+  ) => {
+    const announce = reason === "manual";
+    if (announce) {
+      setError(undefined);
+      setSkillRefreshStatus("refreshing");
     }
-    setError(undefined);
-    setSkillRefreshStatus("refreshing");
-    setEnvironmentScanStatus("checking");
-    const inventoryPromise = window.agentEnv.scanSkillInventory();
-    void inventoryPromise.then(
-      () => setEnvironmentScanStatus("ready"),
-      () => setEnvironmentScanStatus("error")
-    );
     try {
-      const [skillItems, inventoryItems, , sourceGroupItems] =
-        await Promise.all([
-          window.agentEnv.listSkillLibrary(),
-          inventoryPromise,
-          loadSkillCleanupHistory(),
-          skillLibraryMode === "sources"
-            ? window.agentEnv.listSkillSourceGroups()
-            : Promise.resolve(undefined)
-        ]);
-      setLibrarySkills(skillItems);
-      setSkillInventory(inventoryItems);
-      setEnvironmentScanStatus("ready");
-      if (sourceGroupItems) setSkillSourceGroups(sourceGroupItems);
-      setSkillRefreshStatus("refreshed");
+      await runFreshness("skill-library", reason, async () => {
+        setEnvironmentScanStatus("checking");
+        const inventoryPromise = runFreshness(
+          "local-skills",
+          reason,
+          () => window.agentEnv.scanSkillInventory()
+        ).then((outcome) => outcome.value ?? skillInventory);
+        void inventoryPromise.then(
+          () => setEnvironmentScanStatus("ready"),
+          () => setEnvironmentScanStatus("error")
+        );
+        const [skillItems, inventoryItems, , sourceGroupItems] =
+          await Promise.all([
+            window.agentEnv.listSkillLibrary(),
+            inventoryPromise,
+            loadSkillCleanupHistory(),
+            window.agentEnv.listSkillSourceGroups()
+          ]);
+        setLibrarySkills(skillItems);
+        setSkillInventory(inventoryItems);
+        setEnvironmentScanStatus("ready");
+        setSkillSourceGroups(sourceGroupItems);
+        return skillItems;
+      });
+      if (announce) setSkillRefreshStatus("refreshed");
     } catch (unknownError) {
-      setSkillRefreshStatus(undefined);
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      if (announce) {
+        setSkillRefreshStatus(undefined);
+        setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      }
     }
   };
 
@@ -999,16 +1080,17 @@ const AppContent = ({
     };
   }, []);
 
-  useScheduledSkillUpdateChecks({
+  useAutomaticSkillSourceChecks({
     activityRef: skillUpdateActivityRef,
     enabled: !isLoading && skillSettings.skillAutoCheckEnabled,
+    groups: skillSourceGroups,
     intervalMinutes: skillSettings.skillAutoCheckIntervalMinutes,
+    lastCheckAt: freshnessStates["skill-upstreams"].lastAttemptAt,
+    runFreshness,
     onResult: (result) => {
       setSkillSourceGroups(result.groups);
       syncSkillUpdatesFromSourceGroups(result.groups);
-    },
-    onError: (unknownError) =>
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError))
+    }
   });
 
   const selectProfileNow = async (
@@ -2422,8 +2504,14 @@ const AppContent = ({
       const result = await window.agentEnv.importSkillToLibrary(prepared.input);
       setPendingSkillImport(undefined);
       setSelectedSkillUpdatePlan(undefined);
-      if (errorScope === "batch") replaceLibrarySkillLocally(result.skill);
-      else await refreshProfiles();
+      if (errorScope === "batch") {
+        replaceLibrarySkillLocally(result.skill);
+      } else {
+        await Promise.all([
+          refreshProfiles(),
+          refreshSkillSourceGroups()
+        ]);
+      }
       setSkillUpdateCheckStatus({
         state: "success",
         message:
@@ -2760,38 +2848,53 @@ const AppContent = ({
     }
   };
 
-  const refreshSkillDiscoveries = async (announce = true) => {
-    setBusy(true);
-    setSkillInventoryRefreshing(true);
-    setEnvironmentScanStatus("checking");
-    setError(undefined);
-    if (announce) {
-      setSkillUpdateCheckStatus({ state: "checking", message: "Refreshing local skills..." });
-    }
+  const refreshSkillDiscoveries = async (
+    announce = true,
+    reason: "page-entry" | "focus" | "mutation" | "manual" =
+      announce ? "manual" : "mutation"
+  ) => {
+    if (announce) setError(undefined);
     try {
-      const inventory = await window.agentEnv.scanSkillInventory();
-      setSkillInventory(inventory);
-      setEnvironmentScanStatus("ready");
+      await runFreshness("local-skills", reason, async () => {
+        if (announce) {
+          setBusy(true);
+          setSkillUpdateCheckStatus({
+            state: "checking",
+            message: "Refreshing local skills..."
+          });
+        }
+        setSkillInventoryRefreshing(true);
+        setEnvironmentScanStatus("checking");
+        try {
+          const inventory = await window.agentEnv.scanSkillInventory();
+          setSkillInventory(inventory);
+          setEnvironmentScanStatus("ready");
+          return inventory;
+        } finally {
+          setSkillInventoryRefreshing(false);
+          if (announce) setBusy(false);
+        }
+      });
       if (announce) {
-        setSkillUpdateCheckStatus({ state: "success", message: "Local skills refreshed" });
+        setSkillUpdateCheckStatus({
+          state: "success",
+          message: "Local skills refreshed"
+        });
       }
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
-      setError(message);
       setEnvironmentScanStatus("error");
       if (announce) {
+        setError(message);
         setSkillUpdateCheckStatus({ state: "error", message: "Local skill refresh failed" });
       }
-    } finally {
-      setSkillInventoryRefreshing(false);
-      setBusy(false);
     }
   };
 
   const openSkillDiscoveries = async () => {
     setSkillCleanupScope("all");
     setSkillLibraryTool("discoveries");
-    await refreshSkillDiscoveries(false);
+    await refreshSkillDiscoveries(false, "manual");
   };
 
   const openEnvironmentReview = () => {
@@ -2802,7 +2905,7 @@ const AppContent = ({
       setSkillCleanupScope("shared");
       setSkillLibraryTool("discoveries");
       setActiveWorkspace("library");
-      void refreshSkillDiscoveries(false);
+      void refreshSkillDiscoveries(false, "page-entry");
     });
   };
 
@@ -2817,7 +2920,7 @@ const AppContent = ({
     setSkillCollectionFocusPath(collectionPath);
     setSkillLibraryTool("discoveries");
     setActiveWorkspace("library");
-    void refreshSkillDiscoveries(false);
+    void refreshSkillDiscoveries(false, "page-entry");
   };
 
   const setSkillPathPolicies = async (input: SkillPathPolicyUpdate) => {
@@ -3052,7 +3155,22 @@ const AppContent = ({
     setSkillUpdateFeedbackWorkspace("library");
     setSkillUpdateCheckStatus({ state: "checking", message: t("Checking monitored sources...") });
     try {
-      const result = await window.agentEnv.checkMonitoredSkillSourceGroups();
+      const outcome = await runFreshness(
+        "skill-upstreams",
+        "manual",
+        () => window.agentEnv.checkMonitoredSkillSourceGroups(),
+        {
+          force: true,
+          partialError: (value) => {
+            const result = value as SkillSourceCheckAllResult;
+            return result.failed > 0
+              ? t("{{count}} source checks failed", { count: result.failed })
+              : undefined;
+          }
+        }
+      );
+      const result = outcome.value;
+      if (!result) return;
       setSkillSourceGroups(result.groups);
       syncSkillUpdatesFromSourceGroups(result.groups);
       if (result.failed > 0) {
@@ -3533,7 +3651,7 @@ const AppContent = ({
       const nextSettings = await window.agentEnv.updateSettings(input);
       setSkillSettings(nextSettings);
       onLocalePreferenceChange(nextSettings.locale);
-      if ("backupRetentionDays" in input) await refreshManagedBackups();
+      if ("backupRetentionDays" in input) await refreshManagedBackups("mutation");
       if ("enabledTargetIds" in input || "targetConfigRoots" in input) {
         setPreview(undefined);
         setRollbackPreview(undefined);
@@ -3587,7 +3705,7 @@ const AppContent = ({
     setBackupCleanupConfirm(false);
     setBackupManagerNotice(undefined);
     setBackupManagerOpen(true);
-    void refreshManagedBackups();
+    void refreshManagedBackups("manual");
   };
 
   const closeBackupManager = () => {
@@ -3648,7 +3766,7 @@ const AppContent = ({
           size: formatBytes(result.freedBytes)
         })
       });
-      await refreshManagedBackups();
+      await refreshManagedBackups("mutation");
     } catch (unknownError) {
       setBackupManagerNotice({
         kind: "error",
@@ -3677,7 +3795,7 @@ const AppContent = ({
               size: formatBytes(result.freedBytes)
             })
       });
-      await refreshManagedBackups();
+      await refreshManagedBackups("mutation");
     } catch (unknownError) {
       setBackupManagerNotice({
         kind: "error",
@@ -3741,20 +3859,28 @@ const AppContent = ({
     }
   };
 
-  const refreshTargets = async () => {
-    setBusy(true);
-    setError(undefined);
-    setTargetRefreshStatus("refreshing");
-    try {
-      await refreshProfiles({ forceTargetRefresh: true });
-      setTargetRefreshStatus("refreshed");
-    } catch (unknownError) {
-      setTargetRefreshStatus(undefined);
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const refreshTargets = useAgentRefresh({
+    loadRecoveryHistory: loadTargetRecoveryHistory,
+    profiles,
+    runFreshness,
+    setBusy,
+    setError,
+    setMcpConnections: setNativeMcpConnections,
+    setMcpIssues: setNativeMcpIssues,
+    setSelectedTargetId,
+    setSupportedTargets,
+    setTargetRefreshStatus,
+    setTargetStates,
+    setTargets
+  });
+
+  useWorkspaceFreshness({
+    activeWorkspace,
+    isLoading,
+    refreshSkills,
+    refreshSkillDiscoveries,
+    refreshTargets
+  });
 
   const startGitHubLogin = async () => {
     setGithubLoginChecking(true);
@@ -4268,18 +4394,24 @@ const AppContent = ({
                   toolOpen={Boolean(skillLibraryTool)}
                   refreshing={
                     skillRefreshStatus === "refreshing" ||
-                    skillSourceGroupsLoading
+                    freshnessStates["skill-library"].status === "refreshing"
                   }
+                  freshness={(
+                    <FreshnessStatus
+                      state={
+                        skillLibraryMode === "sources"
+                          ? freshnessStates["skill-upstreams"]
+                          : freshnessStates["skill-library"]
+                      }
+                      verb={skillLibraryMode === "sources" ? "Checked" : "Refreshed"}
+                    />
+                  )}
                   onImport={() => setSkillLibraryTool("import")}
                   onScanLocal={() => {
                     void openSkillDiscoveries();
                   }}
                   onRefresh={() => {
-                    if (skillLibraryMode === "sources") {
-                      void refreshSkillSourceGroups();
-                    } else {
-                      void refreshSkills();
-                    }
+                    void refreshSkills();
                   }}
                 />
               }
@@ -4289,7 +4421,7 @@ const AppContent = ({
                 isBusy={busy}
                 librarySkills={librarySkills}
                 sourceGroups={skillSourceGroups}
-                sourceGroupsLoading={skillSourceGroupsLoading}
+                sourceGroupsLoading={false}
                 libraryMode={skillLibraryMode}
                 skillUpdates={skillUpdates}
                 skillInventory={skillInventory}
@@ -4996,6 +5128,7 @@ const AppContent = ({
               stopManagingPreview={stopManagingPreview}
               isLoading={isLoading}
               busy={busy}
+              freshness={freshnessStates.agents}
               onRefresh={refreshTargets}
               onConfigure={openAgentConfiguration}
               onReviewEnvironment={openEnvironmentReview}
@@ -5192,9 +5325,15 @@ const AppContent = ({
                           })}
                     </small>
                   </span>
-                  <button type="button" className="secondary-action" disabled={busy} onClick={openBackupManager}>
-                    {t("Manage")}
-                  </button>
+                  <span className="backup-settings-row-actions">
+                    <FreshnessStatus
+                      state={freshnessStates.backups}
+                      verb="Refreshed"
+                    />
+                    <button type="button" className="secondary-action" disabled={busy} onClick={openBackupManager}>
+                      {t("Manage")}
+                    </button>
+                  </span>
                 </div>
                 <label className="backup-settings-row" htmlFor="backup-retention-days">
                   <span className="backup-settings-icon" aria-hidden="true">

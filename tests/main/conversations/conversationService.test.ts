@@ -172,6 +172,8 @@ describe("conversation service", () => {
       ]
     });
     expect(second).toMatchObject({ indexed: 0, unchanged: 1 });
+    expect(first.refreshedAt).toMatch(/^2026-/);
+    expect((await service.list()).lastRefreshedAt).toBe(second.refreshedAt);
     expect(read).toHaveBeenCalledTimes(1);
     expect((await service.list()).refreshRequired).toBe(false);
     expect((await service.list({ query: "failing step" })).items).toHaveLength(1);
@@ -180,7 +182,8 @@ describe("conversation service", () => {
       total: 0,
       workspacePaths: [],
       agentCounts: { codex: 1 },
-      refreshRequired: false
+      refreshRequired: false,
+      lastRefreshedAt: expect.any(String)
     });
     expect(await readFile(history, "utf8")).toBe(before);
     service.dispose();

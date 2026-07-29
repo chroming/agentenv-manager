@@ -30,10 +30,13 @@ import type {
   ConversationSummary,
   TargetInfo
 } from "../../shared/types";
+import type { FreshnessReason } from "../freshness";
+import { useFreshnessCoordinator } from "../hooks/useFreshnessCoordinator";
 import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { AppFeedback, type AppFeedbackMessage } from "./AppFeedback";
 import { ConversationMarkdown } from "./ConversationMarkdown";
+import { FreshnessStatus } from "./FreshnessStatus";
 import { InfoTip } from "./InfoTip";
 import { targetIconFor } from "./ProfileSidebar";
 import { OverflowTooltip } from "./OverflowTooltip";
@@ -49,7 +52,6 @@ import {
 } from "./ui";
 
 let conversationRefreshOperation: Promise<ConversationRefreshResult> | undefined;
-let automaticIndexRefreshAttempted = false;
 
 const refreshConversationIndex = () => {
   if (conversationRefreshOperation) return conversationRefreshOperation;
@@ -422,6 +424,7 @@ export interface ConversationWorkspaceViewState {
   agentCounts: Record<string, number>;
   selectedId?: string;
   detail?: ConversationDetail;
+  lastRefreshedAt?: string;
   scrollTop: number;
 }
 
@@ -463,7 +466,7 @@ export const ConversationWorkspace = ({
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailReloadNonce, setDetailReloadNonce] = useState(0);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [manualRefreshing, setManualRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [conversationListAtEnd, setConversationListAtEnd] = useState(false);
   const [operation, setOperation] = useState<ConversationOperation>();
@@ -471,6 +474,15 @@ export const ConversationWorkspace = ({
   const [warning, setWarning] = useState("");
   const [error, setError] = useState("");
   const [review, setReview] = useState<ConversationContinuationPreview>();
+  const {
+    states: freshnessStates,
+    statesRef: freshnessStatesRef,
+    markFresh,
+    run: runFreshness
+  } = useFreshnessCoordinator();
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(
+    () => initialViewState?.lastRefreshedAt
+  );
   const reviewDialogRef = useRef<HTMLElement>(null);
   const reviewCancelRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -479,6 +491,10 @@ export const ConversationWorkspace = ({
   const agentFilterRef = useRef("");
   const workspaceFilterRef = useRef("");
   const listRequestRef = useRef(0);
+  const refreshRef = useRef<
+    (reason?: Extract<FreshnessReason, "page-entry" | "focus" | "manual">, force?: boolean) =>
+      Promise<void>
+  >(async () => undefined);
   const queryEffectReadyRef = useRef(false);
   const scrollTopRef = useRef(initialViewState?.scrollTop ?? 0);
   const restoredScrollRef = useRef(false);
@@ -493,6 +509,7 @@ export const ConversationWorkspace = ({
     agentCounts,
     selectedId,
     detail,
+    lastRefreshedAt,
     scrollTop: scrollTopRef.current
   });
   onViewStateChangeRef.current = onViewStateChange;
@@ -509,9 +526,12 @@ export const ConversationWorkspace = ({
     agentCounts,
     selectedId,
     detail,
+    lastRefreshedAt,
     scrollTop: scrollTopRef.current
   };
   const busy = Boolean(operation);
+  const refreshBusy =
+    manualRefreshing || freshnessStates.conversations.status === "refreshing";
   const nextConversationPageCount = Math.min(
     conversationPageSize,
     Math.max(0, total - items.length)
@@ -585,6 +605,13 @@ export const ConversationWorkspace = ({
       setTotal(result.total);
       if (result.workspacePaths) setWorkspacePaths(result.workspacePaths);
       if (result.agentCounts) setAgentCounts(result.agentCounts);
+      if (result.lastRefreshedAt) {
+        const refreshedAt = Date.parse(result.lastRefreshedAt);
+        if (Number.isFinite(refreshedAt)) {
+          setLastRefreshedAt(result.lastRefreshedAt);
+          markFresh("conversations", { at: refreshedAt });
+        }
+      }
       setSelectedId((current) =>
         current && result.items.some((item) => item.id === current)
           ? current
@@ -624,30 +651,58 @@ export const ConversationWorkspace = ({
     }
   };
 
-  const refresh = async (initial = false) => {
-    setRefreshing(true);
-    setError("");
-    setWarning("");
+  const refresh = async (
+    reason: Extract<FreshnessReason, "page-entry" | "focus" | "manual"> = "manual",
+    force = reason === "manual"
+  ) => {
+    const announce = reason === "manual";
+    if (announce) {
+      setManualRefreshing(true);
+      setError("");
+      setWarning("");
+    }
     try {
-      const result = await refreshConversationIndex();
+      const outcome = await runFreshness(
+        "conversations",
+        reason,
+        refreshConversationIndex,
+        {
+          force,
+          partialError: (value) => {
+            const result = value as ConversationRefreshResult;
+            return result.failures.length > 0
+              ? t("{{count}} Agent history refreshes failed", {
+                  count: result.failures.length
+                })
+              : undefined;
+          }
+        }
+      );
+      const result = outcome.value;
+      if (!result) return;
       await loadList();
       setError("");
       setDetailReloadNonce((current) => current + 1);
       if (result.failures.length > 0) {
-        setWarning(result.failures.map((failure) => {
-          const name = targets.find((target) => target.id === failure.agentId)?.name ??
-            failure.agentId;
-          return `${name}: ${failure.message}`;
-        }).join("\n"));
-      } else if (!initial) {
+        if (announce) {
+          setWarning(result.failures.map((failure) => {
+            const name = targets.find((target) => target.id === failure.agentId)?.name ??
+              failure.agentId;
+            return `${name}: ${failure.message}`;
+          }).join("\n"));
+        }
+      } else if (announce) {
         setMessage(t("Conversations refreshed"));
       }
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      if (announce) {
+        setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      }
     } finally {
-      setRefreshing(false);
+      if (announce) setManualRefreshing(false);
     }
   };
+  refreshRef.current = refresh;
 
   useEffect(() => {
     let active = true;
@@ -668,18 +723,24 @@ export const ConversationWorkspace = ({
       } finally {
         if (active) setLoading(false);
       }
-      if (
-        active &&
-        (result?.refreshRequired || result?.total === 0) &&
-        !automaticIndexRefreshAttempted
-      ) {
-        automaticIndexRefreshAttempted = true;
-        void refresh(true);
+      if (active && result) {
+        void refresh(
+          "page-entry",
+          Boolean(result.refreshRequired || result.total === 0)
+        );
       }
     })();
     return () => {
       active = false;
     };
+  }, []);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      void refreshRef.current("focus");
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, []);
 
   useEffect(() => {
@@ -701,7 +762,6 @@ export const ConversationWorkspace = ({
   }, [agentFilter, query, workspaceFilter]);
 
   useEffect(() => {
-    if (refreshing) return;
     if (!selectedId) {
       setDetail(undefined);
       return;
@@ -717,14 +777,24 @@ export const ConversationWorkspace = ({
       .catch((unknownError) => {
         if (active) {
           setDetail(undefined);
-          setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+          const nextError = unknownError instanceof Error
+            ? unknownError.message
+            : String(unknownError);
+          const indexIsRefreshing =
+            freshnessStatesRef.current.conversations.status === "refreshing";
+          if (
+            !indexIsRefreshing ||
+            !nextError.includes("no longer available in the local index")
+          ) {
+            setError(nextError);
+          }
         }
       })
       .finally(() => active && setDetailLoading(false));
     return () => {
       active = false;
     };
-  }, [detailReloadNonce, refreshing, selectedId]);
+  }, [detailReloadNonce, selectedId]);
 
   const loadEarlierMessages = async () => {
     if (!detail || loadingEarlier || !detail.loadedMessageOffset) return;
@@ -768,13 +838,13 @@ export const ConversationWorkspace = ({
       if (key === "f") {
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
-      } else if (!refreshing) {
+      } else if (!refreshBusy) {
         void refresh();
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [refreshing]);
+  }, [refreshBusy]);
 
   const continueTargets = useMemo(
     () => targets.filter(
@@ -958,26 +1028,32 @@ export const ConversationWorkspace = ({
             />
           }
           actions={
-            <Button
-              icon={
-                <RefreshCw
-                  className={refreshing ? "is-spinning" : undefined}
-                  size={15}
-                />
-              }
-              disabled={refreshing}
-              onClick={() => void refresh()}
-            >
-              {t("Refresh")}
-            </Button>
+            <ControlGroup className="conversation-page-actions">
+              <FreshnessStatus
+                state={freshnessStates.conversations}
+                verb="Indexed"
+              />
+              <Button
+                icon={
+                  <RefreshCw
+                    className={refreshBusy ? "is-spinning" : undefined}
+                    size={15}
+                  />
+                }
+                disabled={refreshBusy}
+                onClick={() => void refresh()}
+              >
+                {t("Refresh")}
+              </Button>
+            </ControlGroup>
           }
         />
 
         <div className="conversation-layout-shell">
           <div
             className="conversation-layout ui-surface-frame"
-            inert={refreshing}
-            aria-hidden={refreshing || undefined}
+            inert={manualRefreshing}
+            aria-hidden={manualRefreshing || undefined}
           >
           <aside className="conversation-list-pane" aria-label={t("Conversation list")}>
             <div className="conversation-list-toolbar">
@@ -1403,7 +1479,7 @@ export const ConversationWorkspace = ({
             )}
           </article>
           </div>
-          {refreshing ? (
+          {manualRefreshing ? (
             <div className="conversation-refresh-overlay" role="status" aria-live="polite">
               <LoaderCircle className="is-spinning" size={22} aria-hidden="true" />
               <strong>{t("Refreshing conversations")}</strong>

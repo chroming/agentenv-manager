@@ -26,7 +26,9 @@ import { useI18n } from "../i18n";
 import { Button, ControlGroup, ModalFrame, PageHeader } from "./ui";
 import { isTargetInstalled } from "../../shared/targetHealth";
 import type { EnvironmentReviewSummary } from "../environmentReview";
+import type { FreshnessState } from "../freshness";
 import { EnvironmentStatusStrip } from "./EnvironmentStatusStrip";
+import { FreshnessStatus } from "./FreshnessStatus";
 
 interface TargetWorkspaceProps {
   targets: TargetInfo[];
@@ -40,6 +42,7 @@ interface TargetWorkspaceProps {
   stopManagingPreview?: StopManagingPreview;
   isLoading: boolean;
   busy: boolean;
+  freshness: FreshnessState;
   onRefresh(): Promise<void>;
   onConfigure(targetId: string): void;
   onReviewEnvironment(): void;
@@ -97,6 +100,7 @@ export const TargetWorkspace = ({
   stopManagingPreview,
   isLoading,
   busy,
+  freshness,
   onRefresh,
   onConfigure,
   onReviewEnvironment,
@@ -147,6 +151,7 @@ export const TargetWorkspace = ({
         help={<InfoTip label={t("Configure each Agent through the same reusable Profile editor, then review every change before Apply.")} />}
         actions={(
           <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
+            <FreshnessStatus state={freshness} verb="Refreshed" />
             <Button
               ref={recoveryTriggerRef}
               className="secondary-action target-recovery-trigger"

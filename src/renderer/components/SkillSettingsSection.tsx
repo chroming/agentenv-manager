@@ -97,7 +97,9 @@ export const SkillSettingsSection = ({
                   })}
               />
             </span>
-            <small>{t("Checks monitored sources, then reports tracked Skills.")}</small>
+            <small>
+              {t("Checks monitored sources when the app opens, returns to the foreground, or reaches the saved interval.")}
+            </small>
           </span>
         </div>
         <label

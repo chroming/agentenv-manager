@@ -47,6 +47,8 @@ export interface ConversationIndexStore {
   sourceVersion(id: string): string | undefined;
   discoveryVersion(): string | undefined;
   setDiscoveryVersion(version: string): void;
+  lastRefreshedAt(): string | undefined;
+  setLastRefreshedAt(value: string): void;
   upsert(detail: ConversationDetail, candidate: AgentConversationCandidate): void;
   removeMissing(agentId: string, observedIds: Set<string>): number;
   list(input?: ConversationIndexListInput): Promise<ConversationListResult>;
@@ -274,6 +276,12 @@ export const createConversationIndexStore = async (
     )?.value,
     setDiscoveryVersion: (version) => {
       upsertMetadataStatement.run("discovery-version", version);
+    },
+    lastRefreshedAt: () => (
+      metadataStatement.get("last-refreshed-at") as { value?: string } | undefined
+    )?.value,
+    setLastRefreshedAt: (value) => {
+      upsertMetadataStatement.run("last-refreshed-at", value);
     },
     upsert: (detail, candidate) => {
       const searchText = [

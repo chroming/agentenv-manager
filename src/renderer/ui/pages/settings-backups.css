@@ -29,6 +29,17 @@
   min-height: var(--control-height-default);
 }
 
+.backup-settings-row-actions {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-3);
+}
+
+.backup-settings-row-actions > button {
+  height: var(--control-height-default);
+  min-height: var(--control-height-default);
+}
+
 .backup-settings-icon {
   align-items: center;
   background: #f1f1ef;

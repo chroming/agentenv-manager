@@ -1289,6 +1289,19 @@ describe("App", () => {
         }
       ]),
       scanSkillInventory: vi.fn().mockReturnValue(inventoryRequest.promise),
+      listSkillSourceGroups: vi.fn().mockResolvedValue([{
+        formatVersion: 1,
+        sourceId: "source-startup",
+        sourceKind: "repository",
+        automaticChecks: true,
+        canonicalLink: "https://github.com/acme/skills/tree/main/startup-reviewer",
+        repository: "https://github.com/acme/skills.git",
+        ref: "main",
+        directory: "startup-reviewer",
+        observationState: "ready",
+        counts: { total: 1, updates: 0, new: 0, removed: 0 },
+        candidates: []
+      }]),
       checkMonitoredSkillSourceGroups: vi.fn().mockReturnValue(updateRequest.promise)
     });
     render(<App />);
@@ -1386,6 +1399,19 @@ describe("App", () => {
     ]);
     const api = installApi({
       listSkillLibrary,
+      listSkillSourceGroups: vi.fn().mockResolvedValue([{
+        formatVersion: 1,
+        sourceId: "source-reviewer",
+        sourceKind: "repository",
+        automaticChecks: true,
+        canonicalLink: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
+        repository: "https://github.com/acme/agent-skills.git",
+        ref: "main",
+        directory: "skills/reviewer",
+        observationState: "ready",
+        counts: { total: 1, updates: 0, new: 0, removed: 0 },
+        candidates: []
+      }]),
       checkMonitoredSkillSourceGroups: vi.fn().mockResolvedValue({
         checked: 1,
         failed: 0,
@@ -1741,9 +1767,9 @@ describe("App", () => {
     unrelatedReads.forEach((read) => expect(read).not.toHaveBeenCalled());
   });
 
-  it("rescans local target skills when opening local skill discoveries", async () => {
+  it("forces a local scan both when opening Local Skills and from its toolbar", async () => {
     const api = installApi({
-      scanSkillInventory: vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([
+      scanSkillInventory: vi.fn().mockResolvedValueOnce([
         {
           id: "target-only-reviewer",
           name: "Target Only Reviewer",
@@ -1761,6 +1787,15 @@ describe("App", () => {
           foundIn: ["opencode"],
           status: "outside"
         }
+      ]).mockResolvedValueOnce([
+        {
+          id: "toolbar-reviewer",
+          name: "Toolbar Reviewer",
+          description: "Found from the toolbar refresh",
+          path: "/tmp/opencode/skills/toolbar-reviewer",
+          foundIn: ["opencode"],
+          status: "outside"
+        }
       ])
     });
     render(<App />);
@@ -1774,24 +1809,67 @@ describe("App", () => {
     expect(await screen.findByRole("region", { name: "Environment skills" })).toBeInTheDocument();
     expect(api.scanSkillInventory).toHaveBeenCalledTimes(2);
     expect(
-      await screen.findByRole("group", { name: "Cleanup group target-only-reviewer" })
-    ).toHaveTextContent("Found on disk");
+      await screen.findByRole("group", { name: "Cleanup group refreshed-reviewer" })
+    ).toHaveTextContent("Found after rescanning");
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh local skills" }));
     expect(
-      await screen.findByRole("group", { name: "Cleanup group refreshed-reviewer" })
-    ).toHaveTextContent("Found after rescanning");
+      await screen.findByRole("group", { name: "Cleanup group toolbar-reviewer" })
+    ).toHaveTextContent("Found from the toolbar refresh");
     expect(api.scanSkillInventory).toHaveBeenCalledTimes(3);
     expect(screen.getByRole("status")).toHaveTextContent("Local skills refreshed");
   });
 
-  it("checks skill updates on the configured background interval", async () => {
-    let intervalCallback: (() => void) | undefined;
-    const setIntervalSpy = vi.spyOn(window, "setInterval").mockImplementation((callback, timeout) => {
-      if (timeout === 5 * 60 * 1000) {
-        intervalCallback = callback as () => void;
+  it("automatically rescans Local Skills on entry after the freshness window", async () => {
+    let now = Date.parse("2026-07-29T10:00:00.000Z");
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const api = installApi({
+      scanSkillInventory: vi.fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{
+          id: "new-local-skill",
+          name: "New Local Skill",
+          description: "Appeared after startup",
+          path: "/tmp/opencode/skills/new-local-skill",
+          foundIn: ["opencode"],
+          status: "outside"
+        }])
+    });
+    render(<App />);
+
+    await openLibrary();
+    expect(api.scanSkillInventory).toHaveBeenCalledTimes(1);
+    now += 60_001;
+    fireEvent.click(screen.getByRole("button", { name: /^Agents$/ }));
+    await openLibrary();
+    await waitFor(() => expect(api.scanSkillInventory).toHaveBeenCalledTimes(2));
+  });
+
+  it("checks monitored Skill sources when their persisted due time arrives", async () => {
+    let now = Date.parse("2026-07-29T10:00:00.000Z");
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    let dueCallback: (() => void) | undefined;
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout").mockImplementation(
+      (callback, timeout) => {
+        if (timeout === 3 * 60 * 1000) {
+          dueCallback = callback as () => void;
+        }
+        return 1 as unknown as ReturnType<typeof window.setTimeout>;
       }
-      return 1 as unknown as ReturnType<typeof window.setInterval>;
+    );
+    const sourceGroup = (checkedAt: string) => ({
+      formatVersion: 1 as const,
+      sourceId: "source-acme",
+      sourceKind: "repository" as const,
+      automaticChecks: true,
+      canonicalLink: "https://github.com/acme/skills/tree/main",
+      repository: "https://github.com/acme/skills.git",
+      ref: "main",
+      directory: "",
+      checkedAt,
+      observationState: "ready" as const,
+      counts: { total: 0, updates: 0, new: 0, removed: 0 },
+      candidates: []
     });
     const api = installApi({
       readSettings: vi.fn().mockResolvedValue({
@@ -1801,9 +1879,12 @@ describe("App", () => {
         skillAutoCheckEnabled: true,
         skillAutoCheckIntervalMinutes: 5
       }),
+      listSkillSourceGroups: vi.fn().mockResolvedValue([
+        sourceGroup(new Date(now - 2 * 60 * 1000).toISOString())
+      ]),
       checkMonitoredSkillSourceGroups: vi.fn().mockResolvedValue({
-        groups: [],
-        checked: 0,
+        groups: [sourceGroup(new Date(now).toISOString())],
+        checked: 1,
         failed: 0
       })
     });
@@ -1814,12 +1895,21 @@ describe("App", () => {
         await Promise.resolve();
       }
     });
-    expect(api.checkMonitoredSkillSourceGroups).toHaveBeenCalledTimes(1);
-    expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 5 * 60 * 1000);
-    expect(intervalCallback).toBeDefined();
+    expect(api.checkMonitoredSkillSourceGroups).not.toHaveBeenCalled();
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 3 * 60 * 1000);
+    expect(dueCallback).toBeDefined();
 
     await act(async () => {
-      intervalCallback?.();
+      dueCallback?.();
+      for (let index = 0; index < 10; index += 1) {
+        await Promise.resolve();
+      }
+    });
+    expect(api.checkMonitoredSkillSourceGroups).toHaveBeenCalledTimes(1);
+
+    now += 5 * 60 * 1000 + 1;
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
       for (let index = 0; index < 10; index += 1) {
         await Promise.resolve();
       }
@@ -2350,7 +2440,10 @@ describe("App", () => {
       listTargets: vi
         .fn()
         .mockResolvedValueOnce([target])
-        .mockResolvedValue([refreshedTarget])
+        .mockResolvedValue([refreshedTarget]),
+      listNativeMcpConnections: vi.fn()
+        .mockResolvedValueOnce({ connections: [], issues: [] })
+        .mockRejectedValueOnce(new Error("Optional MCP diagnostics unavailable"))
     });
     render(<App />);
 
@@ -2365,7 +2458,32 @@ describe("App", () => {
       expect(screen.getByRole("article", { name: "Agent OpenCode" })).toHaveTextContent("Missing")
     );
     expect(await screen.findByRole("status")).toHaveTextContent("Agents refreshed");
+    expect(screen.getByText("Updated with issues")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Dismiss message" })).not.toBeInTheDocument();
+  });
+
+  it("rechecks Agent discovery on focus only after its freshness window", async () => {
+    let now = Date.parse("2026-07-29T10:00:00.000Z");
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const api = installApi();
+    render(<App />);
+
+    await screen.findByRole("article", { name: "Agent OpenCode" });
+    expect(api.listTargets).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      await Promise.resolve();
+    });
+    expect(api.listTargets).toHaveBeenCalledTimes(1);
+
+    now += 5 * 60 * 1000 + 1;
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(api.listTargets).toHaveBeenCalledTimes(2));
+    expect(api.listTargets).toHaveBeenLastCalledWith(true);
   });
 
   it("opens full Agent capture from its name and explains unavailable setup", async () => {
