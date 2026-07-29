@@ -684,48 +684,80 @@ const launchApp = async (
     await writeMigratedBackupFixtures(appDataRoot);
   }
 
-  app = await electron.launch({
-    executablePath: electronPath as unknown as string,
-    args: [
-      `--user-data-dir=${join(root, "electron-user-data")}`,
-      join(process.cwd(), "out", "main", "main.js")
-    ],
-    env: {
-      ...process.env,
-      AGENTENV_AUTOMATION: "1",
-      AGENTENV_TEST_CLOSE_GUARD: options.testCloseGuard ? "1" : "0",
-      AGENTENV_DATA_ROOT: appDataRoot,
-      AGENTENV_AUTOMATION_BACKGROUND_DELAY_MS: String(options.backgroundStartupDelayMs ?? 0),
-      AGENTENV_CACHE_ROOT: join(root, "cache"),
-      AGENTENV_GITHUB_FIXTURE_ROOT: githubFixtureRoot,
-      AGENTENV_FAKE_HOME: fakeHomeRoot,
-      AGENTENV_HOME: homeDir,
-      PATH: `${binDir}${delimiter}${process.env.PATH ?? ""}`
-    }
-  });
-  const page = await app.firstWindow();
-  await page.setViewportSize({ width: 1440, height: 960 });
-  await page.waitForLoadState("domcontentloaded");
-  await expect.poll(() => page.evaluate(() => window.agentEnv.readStartupStatus()), {
-    timeout: 15_000
-  }).toEqual({ state: "ready" });
-  await page.getByRole("complementary", { name: "Global navigation" }).waitFor({
-    state: "visible",
-    timeout: 15_000
-  });
   const initialWorkspace =
     options.initialWorkspace === undefined ? "library" : options.initialWorkspace;
-  if (initialWorkspace) {
-    await page.evaluate((workspace) => {
-      window.localStorage.setItem("agentenv:last-workspace", workspace);
-    }, initialWorkspace);
-    await page.reload();
-    await page.waitForLoadState("domcontentloaded");
-    await page.getByRole("complementary", { name: "Global navigation" }).waitFor({
-      state: "visible",
-      timeout: 15_000
+
+  const launchReadyApplication = async () => {
+    const launchedApp = await electron.launch({
+      executablePath: electronPath as unknown as string,
+      args: [
+        `--user-data-dir=${join(root, "electron-user-data")}`,
+        join(process.cwd(), "out", "main", "main.js")
+      ],
+      env: {
+        ...process.env,
+        AGENTENV_AUTOMATION: "1",
+        AGENTENV_TEST_CLOSE_GUARD: options.testCloseGuard ? "1" : "0",
+        AGENTENV_DATA_ROOT: appDataRoot,
+        AGENTENV_AUTOMATION_BACKGROUND_DELAY_MS: String(options.backgroundStartupDelayMs ?? 0),
+        AGENTENV_CACHE_ROOT: join(root, "cache"),
+        AGENTENV_GITHUB_FIXTURE_ROOT: githubFixtureRoot,
+        AGENTENV_FAKE_HOME: fakeHomeRoot,
+        AGENTENV_HOME: homeDir,
+        PATH: `${binDir}${delimiter}${process.env.PATH ?? ""}`
+      },
+      timeout: 10_000
     });
+
+    try {
+      const launchedPage = await launchedApp.firstWindow({ timeout: 10_000 });
+      await launchedPage.setViewportSize({ width: 1440, height: 960 });
+      await launchedPage.waitForLoadState("domcontentloaded");
+      await expect.poll(
+        () => launchedPage.evaluate(() => window.agentEnv.readStartupStatus()),
+        { timeout: 10_000 }
+      ).toEqual({ state: "ready" });
+      await launchedPage
+        .getByRole("complementary", { name: "Global navigation" })
+        .waitFor({ state: "visible", timeout: 10_000 });
+      if (initialWorkspace) {
+        await launchedPage.evaluate((workspace) => {
+          window.localStorage.setItem("agentenv:last-workspace", workspace);
+        }, initialWorkspace);
+        await launchedPage.reload();
+        await launchedPage.waitForLoadState("domcontentloaded");
+        await launchedPage
+          .getByRole("complementary", { name: "Global navigation" })
+          .waitFor({ state: "visible", timeout: 10_000 });
+      }
+      return { launchedApp, launchedPage };
+    } catch (error) {
+      await launchedApp.close().catch(() => undefined);
+      throw error;
+    }
+  };
+
+  let launchResult: Awaited<ReturnType<typeof launchReadyApplication>> | undefined;
+  let firstLaunchError: unknown;
+  for (let attempt = 0; attempt < 2 && !launchResult; attempt += 1) {
+    try {
+      launchResult = await launchReadyApplication();
+    } catch (error) {
+      if (attempt === 1) {
+        throw new AggregateError(
+          [firstLaunchError, error].filter(Boolean),
+          "Electron did not reach the ready workspace after two isolated launch attempts"
+        );
+      }
+      firstLaunchError = error;
+    }
   }
+  if (!launchResult) {
+    throw new Error("Electron launch retry finished without an application");
+  }
+
+  app = launchResult.launchedApp;
+  const page = launchResult.launchedPage;
 
   return {
     app,
