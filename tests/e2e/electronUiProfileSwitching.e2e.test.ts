@@ -1063,6 +1063,49 @@ describe("Electron UI profile switching e2e", () => {
     ]);
   }, 30_000);
 
+  it("presents applied outside resources as a stable local exception", async () => {
+    const { appDataRoot, homeDir, page } = await launchApp({
+      initialWorkspace: "targets"
+    });
+    const profile = await page.evaluate(
+      () => window.agentEnv.readProfile("ui-opencode-alpha")
+    );
+    await mkdir(join(appDataRoot, "target-states"), { recursive: true });
+    await writeJson(join(appDataRoot, "target-states", "opencode.json"), {
+      formatVersion: 2,
+      managedMcpNames: [],
+      activeProfileId: profile.id,
+      appliedProfileHash:
+        profile.targetContentHashes?.opencode ?? profile.contentHash,
+      appliedLibraryVersions: { skills: {} },
+      managedResources: [],
+      keptOutsideSkills: [{
+        path: join(homeDir, ".config", "opencode", "skills", "ui-alpha-skill"),
+        skillKey: "ui-alpha-skill",
+        libraryId: "ui-alpha-skill",
+        targetName: "ui-alpha-skill"
+      }],
+      sharedSkillPreparations: []
+    });
+
+    await page.reload();
+    await page.waitForLoadState("domcontentloaded");
+    const agents = page.getByRole("region", { name: "Agents", exact: true });
+    await agents.waitFor({ state: "visible" });
+    const status = agents.getByRole("region", { name: "Environment status" });
+    await status.getByText("Environment ready with local exceptions", {
+      exact: true
+    }).waitFor({ state: "visible" });
+    expect(await status.getByText(
+      "Resources remain outside AgentEnv for OpenCode.",
+      { exact: true }
+    ).count()).toBe(1);
+    expect(await status.getByText(/Agent needs review/).count()).toBe(0);
+    expect(await status.getByRole("button", { name: "Review Profile" }).count()).toBe(0);
+    await expectNoHorizontalOverflow(page, [".environment-status-strip"]);
+    expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
+  }, 30_000);
+
   it("opens Profiles and Skills from the global quick search", async () => {
     const { page } = await launchApp();
 

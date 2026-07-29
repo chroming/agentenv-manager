@@ -38,6 +38,7 @@
 
 .environment-status-strip--shared-review .environment-status-strip__icon,
 .environment-status-strip--agent-review .environment-status-strip__icon,
+.environment-status-strip--ready-with-outside .environment-status-strip__icon,
 .environment-status-strip--unavailable .environment-status-strip__icon {
   background: color-mix(in srgb, var(--warning) 11%, var(--surface));
   color: var(--warning);

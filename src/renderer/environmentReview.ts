@@ -16,6 +16,7 @@ export type EnvironmentReviewState =
   | "shared-review"
   | "setup"
   | "agent-review"
+  | "ready-with-outside"
   | "ready"
   | "no-agents";
 
@@ -29,6 +30,7 @@ export interface EnvironmentReviewSummary {
   sharedDecisionCount: number;
   affectedTargetIds: string[];
   attentionTargetIds: string[];
+  outsideResourceTargetIds: string[];
 }
 
 interface EnvironmentReviewInput {
@@ -42,7 +44,7 @@ interface EnvironmentReviewInput {
 
 const attentionLifecycleStatuses = new Set<
   TargetManagementState["lifecycleStatus"]
->(["pending", "drifted", "recovery-required", "applied-with-outside"]);
+>(["pending", "drifted", "recovery-required"]);
 
 export const deriveEnvironmentReview = ({
   scanStatus,
@@ -74,6 +76,14 @@ export const deriveEnvironmentReview = ({
     )
     .map((target) => target.targetId)
     .sort();
+  const outsideResourceTargetIds = targetStates
+    .filter(
+      (target) =>
+        installedTargetSet.has(target.targetId) &&
+        target.lifecycleStatus === "applied-with-outside"
+    )
+    .map((target) => target.targetId)
+    .sort();
 
   const summary: Omit<EnvironmentReviewSummary, "state"> = {
     installedTargetIds: [...installedTargetIds],
@@ -87,7 +97,8 @@ export const deriveEnvironmentReview = ({
       (group) => group.resolution === "manual"
     ).length,
     affectedTargetIds,
-    attentionTargetIds
+    attentionTargetIds,
+    outsideResourceTargetIds
   };
 
   if (scanStatus === "checking") {
@@ -107,6 +118,9 @@ export const deriveEnvironmentReview = ({
   }
   if (usableProfileCount === 0) {
     return { ...summary, state: "setup" };
+  }
+  if (outsideResourceTargetIds.length > 0) {
+    return { ...summary, state: "ready-with-outside" };
   }
   return { ...summary, state: "ready" };
 };

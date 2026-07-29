@@ -90,13 +90,30 @@ describe("environment review", () => {
     expect(derive({ profiles: [] }).state).toBe("setup");
   });
 
-  it("keeps pending and outside-resource Agents out of the ready state", () => {
+  it("separates stable outside resources from Agents that require review", () => {
     expect(
-      derive({ targetStates: [targetState("applied-with-outside")] }).state
-    ).toBe("agent-review");
+      derive({ targetStates: [targetState("applied-with-outside")] })
+    ).toMatchObject({
+      state: "ready-with-outside",
+      attentionTargetIds: [],
+      outsideResourceTargetIds: ["opencode"]
+    });
     expect(
       derive({ targetStates: [targetState("pending")] }).state
     ).toBe("agent-review");
+    expect(
+      derive({
+        installedTargetIds: ["opencode", "codex"],
+        targetStates: [
+          targetState("applied-with-outside"),
+          { ...targetState("pending"), targetId: "codex" }
+        ]
+      })
+    ).toMatchObject({
+      state: "agent-review",
+      attentionTargetIds: ["codex"],
+      outsideResourceTargetIds: ["opencode"]
+    });
   });
 
   it("reports no Agents separately from first setup", () => {

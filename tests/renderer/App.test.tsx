@@ -968,6 +968,42 @@ describe("App", () => {
     ).toBeNull();
   });
 
+  it("keeps applied local exceptions out of the Agent review count", async () => {
+    installApi({
+      listTargetStates: vi.fn().mockResolvedValue([
+        managedState({
+          lifecycleStatus: "applied-with-outside",
+          lifecycleReason: "1 Skill stays outside AgentEnv on this device"
+        })
+      ])
+    });
+
+    render(<App />);
+
+    const workspace = await screen.findByRole("region", { name: "Agents" });
+    const environmentStatus = await within(workspace).findByRole("region", {
+      name: "Environment status"
+    });
+    expect(
+      within(environmentStatus).getByText("Environment ready with local exceptions")
+    ).toBeInTheDocument();
+    expect(
+      within(environmentStatus).getByText(
+        "Resources remain outside AgentEnv for OpenCode."
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(environmentStatus).queryByText(/Agent needs review/)
+    ).toBeNull();
+    expect(
+      within(environmentStatus).queryByRole("button", { name: "Review Profile" })
+    ).toBeNull();
+    expect(
+      within(within(workspace).getByRole("article", { name: "Agent OpenCode" }))
+        .getByText("Local exceptions")
+    ).toBeInTheDocument();
+  });
+
   it("orders the primary navigation by the environment workflow", async () => {
     installApi();
     render(<App />);
@@ -1903,6 +1939,7 @@ describe("App", () => {
   });
 
   it("offers copy, export, and log-folder diagnostics from Data settings", async () => {
+    const exportRequest = deferred<string | undefined>();
     const api = installApi({
       readLatestDiagnosticIssue: vi.fn().mockResolvedValue({
         reference: "AEM-20260728-ABC123",
@@ -1916,7 +1953,7 @@ describe("App", () => {
         },
         events: []
       }),
-      exportDiagnostics: vi.fn().mockResolvedValue("/tmp/diagnostics.json")
+      exportDiagnostics: vi.fn().mockReturnValue(exportRequest.promise)
     });
     render(<App />);
 
@@ -1926,8 +1963,19 @@ describe("App", () => {
     await waitFor(() =>
       expect(api.copyText).toHaveBeenCalledWith(expect.stringContaining("Inventory failed"))
     );
-    fireEvent.click(screen.getByRole("button", { name: "Export report" }));
+    const exportButton = screen.getByRole("button", { name: "Export report" });
+    fireEvent.click(exportButton);
     await waitFor(() => expect(api.exportDiagnostics).toHaveBeenCalledWith());
+    expect(exportButton).toHaveAttribute("aria-busy", "true");
+    expect(exportButton.querySelector(".is-spinning")).not.toBeNull();
+    act(() => exportRequest.resolve("/tmp/diagnostics.json"));
+    const exported = await screen.findByRole("status");
+    expect(exportButton).toHaveAttribute("aria-busy", "false");
+    expect(exported).toHaveClass("app-feedback--success");
+    expect(exported).toHaveTextContent(
+      "Diagnostic report exported to /tmp/diagnostics.json"
+    );
+    expect(exported.querySelector(".is-spinning")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Open logs" }));
     expect(api.openDiagnosticsFolder).toHaveBeenCalledTimes(1);
   });

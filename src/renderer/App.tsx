@@ -15,9 +15,7 @@ import {
   Database,
   BookOpenText,
   ExternalLink,
-  FileDown,
   FolderKanban,
-  FolderOpen,
   GitFork,
   HardDrive,
   History,
@@ -121,6 +119,7 @@ import {
   AppFeedback,
   type AppFeedbackMessage
 } from "./components/AppFeedback";
+import { DiagnosticSettingsSection } from "./components/DiagnosticSettingsSection";
 import {
   BackupManagerDialog,
   type BackupManagerNotice
@@ -3917,6 +3916,8 @@ const AppContent = ({
     }
   };
   const exportDiagnosticReport = async () => {
+    setError(undefined);
+    setSettingsSaveStatus("");
     try {
       const path = await window.agentEnv.exportDiagnostics();
       if (path) {
@@ -4052,7 +4053,12 @@ const AppContent = ({
             }
         : settingsSaveStatus && activeWorkspace === "settings"
           ? {
-              kind: settingsSaveStatus === "Settings saved" ? "success" : "loading",
+              kind:
+                settingsSaveStatus === "Saving settings"
+                  ? "loading"
+                  : settingsSaveStatus === "No diagnostic issues recorded"
+                    ? "info"
+                    : "success",
               title: settingsSaveStatus
             }
         : undefined;
@@ -5179,50 +5185,12 @@ const AppContent = ({
                 </div>
               </div>
             </section>
-            <section
-              className="resource-section settings-section diagnostics-settings-section"
-              aria-labelledby="agentenv-diagnostics-heading"
-            >
-              <div className="settings-section-header">
-                <div className="diagnostics-settings-copy">
-                  <div className="resource-heading" id="agentenv-diagnostics-heading">
-                    {t("Diagnostics")}
-                  </div>
-                  <p className="settings-muted">
-                    {t("Copy or export redacted operation details when troubleshooting another device. Logs stay on this Mac.")}
-                  </p>
-                </div>
-              </div>
-              <div className="diagnostics-settings-actions">
-                <button
-                  className="secondary-action"
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void copyLatestDiagnosticIssue()}
-                >
-                  <Copy size={15} strokeWidth={2.2} aria-hidden="true" />
-                  {t("Copy latest issue")}
-                </button>
-                <button
-                  className="secondary-action"
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void exportDiagnosticReport()}
-                >
-                  <FileDown size={15} strokeWidth={2.2} aria-hidden="true" />
-                  {t("Export report")}
-                </button>
-                <button
-                  className="secondary-action"
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void openDiagnosticLogFolder()}
-                >
-                  <FolderOpen size={15} strokeWidth={2.2} aria-hidden="true" />
-                  {t("Open logs")}
-                </button>
-              </div>
-            </section>
+            <DiagnosticSettingsSection
+              busy={busy}
+              onCopyLatest={copyLatestDiagnosticIssue}
+              onExport={exportDiagnosticReport}
+              onOpenLogs={openDiagnosticLogFolder}
+            />
             </>
             ) : null}
             </div>

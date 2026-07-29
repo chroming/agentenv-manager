@@ -279,9 +279,11 @@ implementation.
   duplicate lifecycle state.
 - The compact status projection shows exactly one of: checking local Skills, environment
   check unavailable, shared Skills need review, first Agent setup, Agent changes need review,
-  or environment ready. It exposes at most one current action. Commands name their affected
-  object: `Review Skills`, `Review Profile`, `Configure Agent`, or `Retry check`; a bare
-  lifecycle verb such as `Review` is not an Environment Review command.
+  environment ready with local exceptions, or environment ready. `Applied with outside
+  resources` is a stable current deployment and MUST NOT be counted as an Agent that needs
+  review. It exposes at most one current action. Commands name their affected object:
+  `Review Skills`, `Review Profile`, `Configure Agent`, or `Retry check`; a bare lifecycle verb
+  such as `Review` is not an Environment Review command.
 - Status detail remains a single compact line. When it overflows, the complete selectable value
   is available through the shared enterable detail overlay; truncation MUST NOT discard affected
   Agent names or recovery context.
@@ -294,8 +296,8 @@ implementation.
 - A shared compatibility location is discovered before Capture, included in Capture's
   effective environment, and must be reviewed before a Profile can claim to disable or omit a
   Skill that the Agent still loads from that location. Deferring migration remains an explicit
-  machine-local exception and must produce `Applied with outside resources`, never a false
-  `Applied` or `Environment ready` state.
+  machine-local exception and must produce `Applied with outside resources` plus `Environment
+  ready with local exceptions`, never a false plain `Applied` or plain `Environment ready` state.
 - Refresh is idempotent. An unchanged inventory produces no canonical write, Backup, ownership
   change, or timestamp churn. A changed inventory invalidates stale review plans and exposes
   only the remaining current work.
@@ -1193,6 +1195,9 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Runtime diagnostics are always available without requiring a reproduction mode. Every IPC failure receives a stable diagnostic reference and records the action, safe object identifiers, elapsed time, original error name/message/stack/cause, and a bounded event chain in a rotated local JSONL log. Mutations and slow reads also record start and completion; diagnostic write failure MUST NOT change the result of the user operation.
 - Diagnostic context uses an explicit field allowlist. Clipboard text, Instructions, Skill contents, Conversation text, MCP definitions, environment values, credentials, authenticated URL components, and arbitrary IPC payloads MUST NOT enter logs, renderer diagnostics, or exported reports. Home paths are normalized to `~`, individual fields are size-bounded, and malformed log lines do not hide valid neighboring events.
 - Runtime errors show a concise message plus their diagnostic reference. Copy details resolves that reference to the redacted main-process error chain; View details exposes selectable original error, operation context, stack, and causes. Settings > Data and the macOS Help menu export one redacted JSON report containing build/system metadata, safe Target discovery state, recent diagnostic events, and startup diagnostics. Reports remain device-local and are never included in Workspace Sync.
+- Export report acknowledges work on the initiating button, prevents duplicate exports, and turns
+  the completed path into transient success feedback. A completed export MUST NOT retain a
+  loading spinner or require manual dismissal.
 - Switching Profiles keeps the selected Profile surface painted while the next Profile loads. The list may show the pending selection, but the editor MUST render a stable named loading surface with unchanged bounds and MUST NOT flash `No profile selected`.
 - Renderer startup MUST NOT synchronously open duplicate browser-side persistence. Locale begins from the operating system and then adopts the authoritative local Settings value during core loading.
 - Packaged macOS PNG and ICNS assets MUST preserve transparent corners around the app-icon silhouette so Finder volumes and Dock icons do not render an opaque square frame.
