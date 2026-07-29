@@ -201,6 +201,8 @@ import { useFreshnessCoordinator } from "./hooks/useFreshnessCoordinator";
 import { useAutomaticSkillSourceChecks } from "./hooks/useAutomaticSkillSourceChecks";
 import { useAgentRefresh } from "./hooks/useAgentRefresh";
 import { useWorkspaceFreshness } from "./hooks/useWorkspaceFreshness";
+import { useWorkspaceNavigation } from "./hooks/useWorkspaceNavigation";
+import { useProfileActionGuard } from "./hooks/useProfileActionGuard";
 import {
   preferredTargetForProfile,
   reconcileProfileUsage,
@@ -234,30 +236,8 @@ type ComposerSection = "instructions" | "skills" | "mcp";
 type ProfileDialogMode = "create" | "edit";
 type ProfileCreateSource = "blank" | "target";
 
-const workspacePreferenceKey = "agentenv:last-workspace";
-const workspaceValues = new Set<AppWorkspace>([
-  "library",
-  "profiles",
-  "conversations",
-  "targets",
-  "settings"
-]);
-
-const readWorkspacePreference = (): AppWorkspace | undefined => {
-  try {
-    const value = window.localStorage.getItem(workspacePreferenceKey);
-    return value && workspaceValues.has(value as AppWorkspace)
-      ? value as AppWorkspace
-      : undefined;
-  } catch {
-    return undefined;
-  }
-};
 type ProfileCaptureOrigin = "profiles" | "targets";
 type ProfileCaptureActivity = "idle" | "reviewing" | "creating";
-interface PendingProfileAction {
-  label: string;
-}
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
@@ -342,10 +322,6 @@ const AppContent = ({
   const [githubCodeCopied, setGithubCodeCopied] = useState(false);
   const githubLoginPollingRef = useRef(false);
   const githubCopyResetRef = useRef<number | undefined>(undefined);
-  const pendingProfileActionRef = useRef<(() => void | Promise<void>) | null>(null);
-  const pendingWindowCloseRef = useRef(false);
-  const isProfileDirtyRef = useRef(false);
-  const [pendingProfileAction, setPendingProfileAction] = useState<PendingProfileAction>();
   const [skillUsage, setSkillUsage] = useState<Record<string, string[]>>({});
   const [backups, setBackups] = useState<BackupSummary[]>([]);
   const [selectedTargetId, setSelectedTargetId] = useState<string>();
@@ -357,15 +333,14 @@ const AppContent = ({
   const [rollbackPreview, setRollbackPreview] = useState<RollbackPreview>();
   const [stopManagingPreview, setStopManagingPreview] = useState<StopManagingPreview>();
   const [rollbackError, setRollbackError] = useState<string>();
-  const [initialWorkspacePreference] = useState(readWorkspacePreference);
-  const [activeWorkspace, setActiveWorkspace] = useState<AppWorkspace>(
-    initialWorkspacePreference ?? "targets"
-  );
+  const {
+    activeWorkspace,
+    initialWorkspacePreference,
+    markWorkspacePreferenceReady,
+    openWorkspaceNow
+  } = useWorkspaceNavigation();
   const [conversationViewState, setConversationViewState] =
     useState<ConversationWorkspaceViewState>();
-  const [workspacePreferenceReady, setWorkspacePreferenceReady] = useState(
-    Boolean(initialWorkspacePreference)
-  );
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("general");
   const [quickOpen, setQuickOpen] = useState(false);
   const [skillLibraryViewState, setSkillLibraryViewState] = useState(
@@ -568,15 +543,6 @@ const AppContent = ({
     const timeout = window.setTimeout(() => setSkillUpdateCheckStatus(undefined), 5000);
     return () => window.clearTimeout(timeout);
   }, [skillUpdateCheckStatus]);
-
-  useEffect(() => {
-    if (!workspacePreferenceReady) return;
-    try {
-      window.localStorage.setItem(workspacePreferenceKey, activeWorkspace);
-    } catch {
-      // A blocked UI preference must never prevent the local manager from working.
-    }
-  }, [activeWorkspace, workspacePreferenceReady]);
 
   const invalidateProfileFlow = () => {
     profileFlowRequestRef.current += 1;
@@ -1023,7 +989,7 @@ const AppContent = ({
         const { profileItems, targetItems, targetStateItems } = core;
         const usableProfiles = profileItems.filter((profile) => !profile.loadError);
         if (!initialWorkspacePreference) {
-          setWorkspacePreferenceReady(true);
+          markWorkspacePreferenceReady();
         }
         if (usableProfiles.length === 0) {
           return;
@@ -1093,6 +1059,115 @@ const AppContent = ({
     }
   });
 
+  const saveDraft = async () => {
+    if (!draftProfile) {
+      return undefined;
+    }
+
+    const previousName =
+      profiles.find((profile) => profile.id === draftProfile.id)?.name ??
+      draftProfile.manifest.name;
+    const previousLibraryVersions = profileLibraryVersions[draftProfile.id];
+    setIsProfileSaving(true);
+    setProfileSaveStatus("Saving profile");
+    try {
+      const saved = await window.agentEnv.saveProfile(toSaveInput(draftProfile));
+      const summary: ProfileSummary = {
+        id: saved.id,
+        preferredTargetId: saved.manifest.preferredTargetId,
+        createdFromTargetId: saved.manifest.createdFromTargetId,
+        name: saved.manifest.name,
+        description: saved.manifest.description,
+        createdAt: saved.manifest.createdAt,
+        iconKey: saved.manifest.iconKey,
+        contentHash: saved.contentHash,
+        targetContentHashes: saved.targetContentHashes
+      };
+      setProfiles((current) =>
+        current.some((profile) => profile.id === saved.id)
+          ? current.map((profile) => profile.id === saved.id ? summary : profile)
+          : current.concat(summary)
+      );
+      const preferredTarget = targets.find(
+        (target) => target.id === saved.manifest.preferredTargetId
+      ) ?? targets[0];
+      setProfileLibraryVersions((current) => ({
+        ...current,
+        [saved.id]: collectLibraryResourceVersions(
+          saved,
+          librarySkills,
+          preferredTarget?.id
+        )
+      }));
+      setSkillUsage((current) => reconcileProfileUsage(
+        current,
+        Object.keys(previousLibraryVersions?.skills ?? {}),
+        saved.resources.skills.map((reference) => reference.libraryId),
+        previousName,
+        saved.manifest.name
+      ));
+      setTargetStates((current) =>
+        current.map((state) => {
+          if (state.activeProfileId !== saved.id) return state;
+          const expectedHash =
+            saved.targetContentHashes?.[state.targetId];
+          const contentChanged =
+            !expectedHash || expectedHash !== state.appliedProfileHash;
+          return {
+            ...state,
+            activeProfileName: saved.manifest.name,
+            ...(contentChanged &&
+            state.lifecycleStatus !== "drifted" &&
+            state.lifecycleStatus !== "recovery-required"
+              ? {
+                  lifecycleStatus: "pending" as const,
+                  lifecycleReason: "Saved Profile changed after the last Apply"
+                }
+              : {})
+          };
+        })
+      );
+      setDraftProfile(saved);
+      setIsProfileDirty(false);
+      setProfileSaveStatus("Profile saved");
+      setSkillUpdateCheckStatus(undefined);
+      return saved;
+    } catch (error) {
+      setProfileSaveStatus("");
+      throw error;
+    } finally {
+      setIsProfileSaving(false);
+    }
+  };
+
+  const discardProfileDraft = useCallback(async () => {
+    if (draftProfile) {
+      try {
+        setDraftProfile(await window.agentEnv.readProfile(draftProfile.id));
+      } catch {
+        setDraftProfile(undefined);
+        setSelectedProfileId(undefined);
+      }
+    }
+    setIsProfileDirty(false);
+    setProfileSaveStatus("");
+    setPreview(undefined);
+    setRollbackPreview(undefined);
+  }, [draftProfile]);
+
+  const {
+    cancelPendingAction: cancelPendingProfileAction,
+    continuePendingAction: continuePendingProfileAction,
+    guardAction: guardProfileAction,
+    pendingAction: pendingProfileAction
+  } = useProfileActionGuard({
+    dirty: isProfileDirty,
+    onBusyChange: setBusy,
+    onDiscard: discardProfileDraft,
+    onError: setError,
+    onSave: saveDraft
+  });
+
   const selectProfileNow = async (
     profileId: string,
     composerSection?: ComposerSection,
@@ -1110,7 +1185,7 @@ const AppContent = ({
       setProfileSaveStatus("");
     }
     setActiveComposerSection(composerSection);
-    setActiveWorkspace("profiles");
+    openWorkspaceNow("profiles");
     try {
       const profile = await window.agentEnv.readProfile(profileId);
       if (requestId !== profileFlowRequestRef.current) {
@@ -1149,19 +1224,7 @@ const AppContent = ({
     }
   };
 
-  const guardProfileAction = (
-    label: string,
-    action: () => void | Promise<void>
-  ) => {
-    if (!isProfileDirty) {
-      void action();
-      return;
-    }
-    pendingProfileActionRef.current = action;
-    setPendingProfileAction({ label });
-  };
-
-  const selectWorkspace = (workspace: AppWorkspace) => {
+  const selectWorkspace = useCallback((workspace: AppWorkspace) => {
     if (workspace === activeWorkspace) {
       return;
     }
@@ -1177,15 +1240,20 @@ const AppContent = ({
       if (workspace === "library") {
         setSkillUpdateFeedbackWorkspace("library");
       }
-      setActiveWorkspace(workspace);
+      openWorkspaceNow(workspace);
     });
-  };
+  }, [
+    activeWorkspace,
+    guardProfileAction,
+    libraryScroll.captureScroll,
+    openWorkspaceNow
+  ]);
 
   useEffect(
     () => window.agentEnv.onOpenSettingsRequested(() => {
       selectWorkspace("settings");
     }),
-    [isProfileDirty, pendingProfileAction]
+    [selectWorkspace]
   );
 
   const selectProfile = (
@@ -1209,7 +1277,7 @@ const AppContent = ({
           [profileId]: targetOverrideId
         }));
       }
-      setActiveWorkspace("profiles");
+      openWorkspaceNow("profiles");
       setActiveComposerSection(composerSection);
       return;
     }
@@ -1382,87 +1450,6 @@ const AppContent = ({
     void changeProfileIconNow(profileId, iconKey);
   };
 
-  const saveDraft = async () => {
-    if (!draftProfile) {
-      return undefined;
-    }
-
-    const previousName =
-      profiles.find((profile) => profile.id === draftProfile.id)?.name ??
-      draftProfile.manifest.name;
-    const previousLibraryVersions = profileLibraryVersions[draftProfile.id];
-    setIsProfileSaving(true);
-    setProfileSaveStatus("Saving profile");
-    try {
-      const saved = await window.agentEnv.saveProfile(toSaveInput(draftProfile));
-      const summary: ProfileSummary = {
-        id: saved.id,
-        preferredTargetId: saved.manifest.preferredTargetId,
-        createdFromTargetId: saved.manifest.createdFromTargetId,
-        name: saved.manifest.name,
-        description: saved.manifest.description,
-        createdAt: saved.manifest.createdAt,
-        iconKey: saved.manifest.iconKey,
-        contentHash: saved.contentHash,
-        targetContentHashes: saved.targetContentHashes
-      };
-      setProfiles((current) =>
-        current.some((profile) => profile.id === saved.id)
-          ? current.map((profile) => profile.id === saved.id ? summary : profile)
-          : current.concat(summary)
-      );
-      const preferredTarget = targets.find(
-        (target) => target.id === saved.manifest.preferredTargetId
-      ) ?? targets[0];
-      setProfileLibraryVersions((current) => ({
-        ...current,
-        [saved.id]: collectLibraryResourceVersions(
-          saved,
-          librarySkills,
-          preferredTarget?.id
-        )
-      }));
-      setSkillUsage((current) => reconcileProfileUsage(
-        current,
-        Object.keys(previousLibraryVersions?.skills ?? {}),
-        saved.resources.skills.map((reference) => reference.libraryId),
-        previousName,
-        saved.manifest.name
-      ));
-      setTargetStates((current) =>
-        current.map((state) => {
-          if (state.activeProfileId !== saved.id) return state;
-          const expectedHash =
-            saved.targetContentHashes?.[state.targetId];
-          const contentChanged =
-            !expectedHash || expectedHash !== state.appliedProfileHash;
-          return {
-            ...state,
-            activeProfileName: saved.manifest.name,
-            ...(contentChanged &&
-            state.lifecycleStatus !== "drifted" &&
-            state.lifecycleStatus !== "recovery-required"
-              ? {
-                  lifecycleStatus: "pending" as const,
-                  lifecycleReason: "Saved Profile changed after the last Apply"
-                }
-              : {})
-          };
-        })
-      );
-      setDraftProfile(saved);
-      setIsProfileDirty(false);
-      setProfileSaveStatus("Profile saved");
-      setSkillUpdateCheckStatus(undefined);
-      return saved;
-    } catch (error) {
-      setProfileSaveStatus("");
-      throw error;
-    } finally {
-      setIsProfileSaving(false);
-    }
-  };
-
   const saveSelectedProfile = async () => {
     if (saveInFlightRef.current) {
       return;
@@ -1503,7 +1490,7 @@ const AppContent = ({
     setProfileCaptureError("");
     setProfileFormError("");
     setProfileDialogMode("create");
-    setActiveWorkspace("profiles");
+    openWorkspaceNow("profiles");
     setIsProfileActionsOpen(false);
   };
 
@@ -1652,7 +1639,7 @@ const AppContent = ({
         acceptProfileMetadata(saved, draftProfile.manifest.name);
       }
       setActiveComposerSection(undefined);
-      setActiveWorkspace(
+      openWorkspaceNow(
         profileCaptureOrigin === "targets" && profileCaptureScope === "skills"
           ? "targets"
           : "profiles"
@@ -1767,15 +1754,6 @@ const AppContent = ({
     }
   };
 
-  const cancelPendingProfileAction = () => {
-    if (pendingWindowCloseRef.current) {
-      pendingWindowCloseRef.current = false;
-      window.agentEnv.cancelWindowClose();
-    }
-    pendingProfileActionRef.current = null;
-    setPendingProfileAction(undefined);
-  };
-
   const closeProfileDialog = () => {
     setProfileDialogMode(undefined);
     setDeleteProfileCandidateId(undefined);
@@ -1861,62 +1839,6 @@ const AppContent = ({
     const targetName = targets.find((target) => target.id === targetId)?.name ?? "Agent";
     guardProfileAction(`apply to ${targetName}`, () => selectTargetNow(targetId));
   };
-
-  const continuePendingProfileAction = async (saveFirst: boolean) => {
-    const action = pendingProfileActionRef.current;
-    if (!action) {
-      setPendingProfileAction(undefined);
-      return;
-    }
-
-    setBusy(true);
-    setError(undefined);
-    try {
-      if (saveFirst) {
-        await saveDraft();
-      } else {
-        if (draftProfile) {
-          try {
-            setDraftProfile(await window.agentEnv.readProfile(draftProfile.id));
-          } catch {
-            setDraftProfile(undefined);
-            setSelectedProfileId(undefined);
-          }
-        }
-        setIsProfileDirty(false);
-        setProfileSaveStatus("");
-        setPreview(undefined);
-        setRollbackPreview(undefined);
-      }
-      pendingProfileActionRef.current = null;
-      pendingWindowCloseRef.current = false;
-      setPendingProfileAction(undefined);
-      await action();
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  useEffect(() => {
-    isProfileDirtyRef.current = isProfileDirty;
-    window.agentEnv.setWindowCloseGuard(isProfileDirty);
-  }, [isProfileDirty]);
-
-  useEffect(
-    () =>
-      window.agentEnv.onWindowCloseRequested(() => {
-        if (!isProfileDirtyRef.current) {
-          window.agentEnv.confirmWindowClose();
-          return;
-        }
-        pendingWindowCloseRef.current = true;
-        pendingProfileActionRef.current = () => window.agentEnv.confirmWindowClose();
-        setPendingProfileAction({ label: "close AgentEnv Manager" });
-      }),
-    []
-  );
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -2259,7 +2181,7 @@ const AppContent = ({
 
   const runReadinessRemediation = () => {
     if (readiness.remediationLabel === "Open Agents") {
-      setActiveWorkspace("targets");
+      openWorkspaceNow("targets");
       return;
     }
     if (readiness.remediationLabel === "Save now") {
@@ -2268,7 +2190,7 @@ const AppContent = ({
     }
     if (readiness.remediationLabel === "Open Recovery") {
       setSettingsCategory("data");
-      setActiveWorkspace("settings");
+      openWorkspaceNow("settings");
       setBackupManagerOpen(true);
     }
   };
@@ -2703,7 +2625,7 @@ const AppContent = ({
     if (profile) {
       selectProfile(profile.id, "skills");
     } else {
-      setActiveWorkspace("profiles");
+      openWorkspaceNow("profiles");
     }
   };
 
@@ -2904,7 +2826,7 @@ const AppContent = ({
       setSkillLibraryMode("skills");
       setSkillCleanupScope("shared");
       setSkillLibraryTool("discoveries");
-      setActiveWorkspace("library");
+      openWorkspaceNow("library");
       void refreshSkillDiscoveries(false, "page-entry");
     });
   };
@@ -2919,7 +2841,7 @@ const AppContent = ({
     setSkillCleanupScope("shared");
     setSkillCollectionFocusPath(collectionPath);
     setSkillLibraryTool("discoveries");
-    setActiveWorkspace("library");
+    openWorkspaceNow("library");
     void refreshSkillDiscoveries(false, "page-entry");
   };
 
@@ -4083,7 +4005,7 @@ const AppContent = ({
     setError(undefined);
     setSkillUpdateCheckStatus(undefined);
     setSettingsCategory("connections");
-    setActiveWorkspace("settings");
+    openWorkspaceNow("settings");
     window.setTimeout(() => {
       const section = document.getElementById("github-connection-settings");
       section?.focus();
@@ -4968,7 +4890,7 @@ const AppContent = ({
                         onOpenRecovery={() => {
                           setPreview(undefined);
                           setSettingsCategory("data");
-                          setActiveWorkspace("settings");
+                          openWorkspaceNow("settings");
                           setBackupManagerOpen(true);
                         }}
                         onAdoptTargetChanges={adoptCompatibleTargetChanges}
@@ -5104,7 +5026,7 @@ const AppContent = ({
                 }}
                 onOpenAgents={() => {
                   closeProfileDialog();
-                  setActiveWorkspace("targets");
+                  openWorkspaceNow("targets");
                 }}
               />
             </section>
@@ -5176,7 +5098,7 @@ const AppContent = ({
               agentStates={targetStates}
               busy={busy}
               onSetEnabled={setAgentEnabled}
-              onOpenRecovery={() => setActiveWorkspace("targets")}
+              onOpenRecovery={() => openWorkspaceNow("targets")}
               configRoots={skillSettings.targetConfigRoots ?? {}}
               onChooseConfigRoot={chooseTargetConfigRoot}
               onResetConfigRoot={resetTargetConfigRoot}
