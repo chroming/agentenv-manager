@@ -152,6 +152,25 @@ export const buildSkillCleanupGroups = (
             issue.message.startsWith("Skill link target is unavailable")
         )
       );
+      const brokenLinkItems = activeItems.filter((item) =>
+        item.runtimeIssues?.some(
+          (issue) =>
+            issue.code === "unreadable-skill" &&
+            issue.message.startsWith("Skill link target is unavailable")
+        )
+      );
+      const removableBrokenLinkItems = brokenLinkItems.filter(
+        (item) =>
+          !isObserveOnlySkill(item) ||
+          item.externalEvidence?.state === "broken-link"
+      );
+      const hasOtherUnreadable = activeItems.some((item) =>
+        item.runtimeIssues?.some(
+          (issue) =>
+            issue.code === "unreadable-skill" &&
+            !issue.message.startsWith("Skill link target is unavailable")
+        )
+      );
       const missingTarget = activeItems.some(
         (item) => item.status !== "managed" && item.foundIn.length === 0
       );
@@ -231,14 +250,9 @@ export const buildSkillCleanupGroups = (
       const canRemoveBrokenLinks =
         state === "broken" &&
         hasBrokenLink &&
-        !hasBlockingExternal &&
-        !missingTarget &&
-        activeItems.every((item) =>
-          item.runtimeIssues?.some((issue) =>
-            issue.code === "unreadable-skill" &&
-            issue.message.startsWith("Skill link target is unavailable")
-          )
-        );
+        !hasOtherUnreadable &&
+        removableBrokenLinkItems.length === brokenLinkItems.length &&
+        removableBrokenLinkItems.every((item) => Boolean(item.foundIn[0]));
       const canImportSharedCopies =
         sharedMigration?.state === "not-imported" &&
         !hasLibraryCopy &&

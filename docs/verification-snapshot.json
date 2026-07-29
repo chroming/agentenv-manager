@@ -1,15 +1,15 @@
 {
-  "generatedAt": "2026-07-28T23:17:40.229Z",
+  "generatedAt": "2026-07-29T03:23:12.584Z",
   "source": {
-    "commit": "bdad82bdb221663326eed4abc7ca758265d0fc24",
+    "commit": "4f7b09f8ab44fecf0e20f1655a212f17f9e5ec96",
     "dirty": true,
-    "fingerprint": "25d6604777938f1e442514a621cac7d5407fb29dabd1090f4883a75ee4dbd641",
-    "files": 512
+    "fingerprint": "46a023887ce991e7fcaa7e9b807e09035eff1594b46a3ae5f6d1bc6efc02e924",
+    "files": 513
   },
   "tests": {
     "passed": true,
     "files": 140,
-    "assertions": 981,
+    "assertions": 982,
     "e2eFiles": 15,
     "e2eAssertions": 173,
     "electronUiFiles": 1,

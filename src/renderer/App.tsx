@@ -4346,6 +4346,15 @@ const AppContent = ({
                     setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
                   });
                 }}
+                onCopyCleanupDetails={async (details) => {
+                  try {
+                    await window.agentEnv.copyText(details);
+                    return true;
+                  } catch (unknownError) {
+                    setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+                    return false;
+                  }
+                }}
                 onKeepSkillGroupOutside={(skillKey) => {
                   void keepSkillGroupOutside(skillKey);
                 }}

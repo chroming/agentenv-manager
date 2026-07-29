@@ -8389,7 +8389,9 @@ describe("Electron UI profile switching e2e", () => {
       .waitFor({ state: "visible", timeout: 5_000 });
     await dialog.getByRole("status", { name: "Release Check: imported" })
       .waitFor({ state: "visible", timeout: 5_000 });
-    expect(await dialog.getByRole("button", { name: "Retry Release Check" }).count()).toBe(0);
+    await expect.poll(
+      () => dialog.getByRole("button", { name: "Retry Release Check" }).count()
+    ).toBe(0);
 
     await dialog.getByRole("button", { name: "Close", exact: true }).click();
     await dialog.waitFor({ state: "hidden" });

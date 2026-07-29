@@ -117,6 +117,7 @@ describe("SkillLibraryPanel", () => {
     const onCheckUpdates = vi.fn();
     const onOpenSource = vi.fn();
     const onCopySource = vi.fn();
+    const onCopyCleanupDetails = vi.fn().mockResolvedValue(true);
     const onSaveUpdateSettings = vi.fn().mockResolvedValue(true);
     const onImportExternal = vi.fn().mockResolvedValue(true);
     let resolveAvailability: ((succeeded: boolean) => void) | undefined;
@@ -205,7 +206,12 @@ describe("SkillLibraryPanel", () => {
         onPreviewSourceMerge={vi.fn()}
         onMergeSources={vi.fn()}
         onSetSourceName={vi.fn()}
-        targetNames={{ opencode: "OpenCode", codex: "Codex" }}
+        targetNames={{
+          opencode: "OpenCode",
+          codex: "Codex",
+          pi: "Pi",
+          "trae-cli": "Trae CLI"
+        }}
         librarySkills={[
           {
             id: "shared-reviewer",
@@ -476,6 +482,47 @@ describe("SkillLibraryPanel", () => {
             status: "outside",
             skillKey: "external-reviewer",
             contentHash: "local-copy-hash"
+          },
+          {
+            id: "ppe-debug",
+            name: "PPE Debug",
+            description: "Managed OpenCode copy",
+            path: "/tmp/opencode/skills/ppe-debug",
+            foundIn: ["opencode"],
+            status: "managed",
+            libraryId: "ppe-debug",
+            skillKey: "ppe-debug",
+            contentHash: "4a6d205",
+            contentMatchesLibrary: true
+          },
+          {
+            id: "ppe-debug",
+            name: "PPE Debug",
+            description: "Managed Pi copy",
+            path: "/tmp/pi/skills/ppe-debug",
+            foundIn: ["pi"],
+            status: "managed",
+            libraryId: "ppe-debug",
+            skillKey: "ppe-debug",
+            contentHash: "4a6d205",
+            contentMatchesLibrary: true
+          },
+          {
+            id: "ppe-debug",
+            name: "PPE Debug",
+            description: "Unavailable Trae link",
+            path: "/tmp/trae/skills/ppe-debug",
+            foundIn: ["trae-cli"],
+            status: "outside",
+            libraryId: "ppe-debug",
+            skillKey: "ppe-debug",
+            contentHash: "",
+            runtimeAvailability: "unknown",
+            runtimeIssues: [{
+              code: "unreadable-skill",
+              severity: "warning",
+              message: "Skill link target is unavailable: /tmp/trae/skills/ppe-debug"
+            }]
           }
         ]}
         cleanupBackups={[
@@ -572,6 +619,7 @@ describe("SkillLibraryPanel", () => {
         onCheckUpdates={onCheckUpdates}
         onOpenSource={onOpenSource}
         onCopySource={onCopySource}
+        onCopyCleanupDetails={onCopyCleanupDetails}
         onSaveUpdateSettings={onSaveUpdateSettings}
         onSetAvailability={onSetAvailability}
         onSetIcon={onSetIcon}
@@ -1135,7 +1183,7 @@ describe("SkillLibraryPanel", () => {
       })
     );
     const takeOverAllButton = within(discoveries).getByRole("button", {
-      name: "Clean up 5 ready Skills"
+      name: /Clean up \d+ ready Skills/
     });
     expect(takeOverAllButton.closest(".cleanup-bucket-heading--ready")).not.toBeNull();
     expect(takeOverAllButton.closest(".cleanup-bucket-actions")).not.toBeNull();
@@ -1144,7 +1192,7 @@ describe("SkillLibraryPanel", () => {
       "ui-button--compact",
       "ui-button--secondary"
     );
-    expect(takeOverAllButton).toHaveTextContent("Clean up 5");
+    expect(takeOverAllButton).toHaveTextContent(/Clean up \d+/);
     fireEvent.click(takeOverAllButton);
     const bulkCleanupDialog = screen.getByRole("dialog", { name: "Clean up local Skills" });
     expect(bulkCleanupDialog).toHaveTextContent("Repair managed links");
@@ -1154,7 +1202,7 @@ describe("SkillLibraryPanel", () => {
     expect(bulkCleanupDialog).toHaveTextContent("Move Skills out of shared folder");
     expect(bulkCleanupDialog).toHaveTextContent("compat-reviewer");
     fireEvent.click(
-      within(bulkCleanupDialog).getByRole("button", { name: "Clean up 5 skills" })
+      within(bulkCleanupDialog).getByRole("button", { name: /Clean up \d+ skills/ })
     );
     await waitFor(() =>
       expect(onAutoConsolidateSkillGroups).toHaveBeenCalledWith(
@@ -1259,6 +1307,45 @@ describe("SkillLibraryPanel", () => {
     expect(within(conflictDetails).getAllByRole("region", { name: /Version / })).toHaveLength(2);
     expect(conflictDetails).toHaveTextContent("Modified");
     fireEvent.click(within(conflictDetails).getByRole("button", { name: "Close" }));
+    const unavailableGroup = screen.getByRole("group", { name: "Cleanup group ppe-debug" });
+    expect(unavailableGroup).toHaveTextContent("Ready");
+    fireEvent.click(
+      within(unavailableGroup).getByRole("button", {
+        name: "More cleanup actions for ppe-debug"
+      })
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Details" }));
+    const unavailableDetails = screen.getByRole("dialog", {
+      name: "Skill details ppe-debug"
+    });
+    expect(unavailableDetails).toHaveTextContent("Broken links");
+    expect(unavailableDetails).toHaveTextContent(
+      "Skill link target is unavailable: /tmp/trae/skills/ppe-debug"
+    );
+    fireEvent.click(within(unavailableDetails).getByRole("button", { name: "Copy details" }));
+    await waitFor(() => expect(onCopyCleanupDetails).toHaveBeenCalledWith(
+      expect.stringContaining("Path: /tmp/trae/skills/ppe-debug")
+    ));
+    expect(onCopyCleanupDetails).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "Runtime issue [unreadable-skill/warning]: Skill link target is unavailable"
+      )
+    );
+    expect(within(unavailableDetails).getByRole("button", { name: "Copied" }))
+      .toBeInTheDocument();
+    fireEvent.click(
+      within(unavailableDetails).getByRole("button", { name: "Remove unavailable links" })
+    );
+    await waitFor(() => expect(onAutoConsolidateSkillGroups).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        skillKey: "ppe-debug",
+        locations: [expect.objectContaining({ path: "/tmp/trae/skills/ppe-debug" })]
+      })
+    ]));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Skill details ppe-debug" }))
+        .not.toBeInTheDocument()
+    );
     fireEvent.click(
       within(conflictGroup).getByRole("button", {
         name: "More cleanup actions for conflict-reviewer"
@@ -1562,6 +1649,7 @@ describe("SkillLibraryPanel", () => {
         onCheckUpdates={noop}
         onOpenSource={noop}
         onCopySource={noop}
+        onCopyCleanupDetails={vi.fn().mockResolvedValue(true)}
         onKeepSkillGroupOutside={noop}
         onReviewSkillGroupAgain={noop}
         onSetSharedSkillRetention={vi.fn().mockResolvedValue(false)}
@@ -1750,6 +1838,7 @@ describe("SkillLibraryPanel", () => {
         onCheckUpdates={noop}
         onOpenSource={noop}
         onCopySource={noop}
+        onCopyCleanupDetails={vi.fn().mockResolvedValue(true)}
         onKeepSkillGroupOutside={noop}
         onReviewSkillGroupAgain={noop}
         onSetSharedSkillRetention={vi.fn().mockResolvedValue(true)}

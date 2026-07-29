@@ -2,6 +2,7 @@ import type { SkillInventoryEntry } from "../shared/types";
 import type {
   SkillCleanupAutomaticEffect,
   SkillCleanupDisplayState,
+  SkillCleanupGroup,
   SkillCleanupRecommendedAction
 } from "../shared/skillCleanup";
 import { targetNameFor, type TargetNameIndex } from "./targetPresentation";
@@ -118,3 +119,43 @@ export const cleanupEffectLabel = (effect: SkillCleanupAutomaticEffect) => {
   if (effect === "repair-link") return "Repair managed links";
   return "Remove unavailable links";
 };
+
+export const formatSkillCleanupDetails = (
+  group: SkillCleanupGroup,
+  targetNames: TargetNameIndex
+) => [
+  "AgentEnv Local Skill details",
+  `Skill: ${group.primary?.name ?? group.skillKey}`,
+  `Skill key: ${group.skillKey}`,
+  `State: ${group.state}`,
+  `Resolution: ${group.resolution}`,
+  `Reason: ${group.resolutionReason}`,
+  group.automaticEffect ? `Planned action: ${group.automaticEffect}` : undefined,
+  "",
+  ...group.items.flatMap((item, index) => [
+    `Copy ${index + 1}:`,
+    `Agent: ${cleanupLocationLabel(item, targetNames)}`,
+    `Status: ${item.status}`,
+    `Path: ${item.path}`,
+    `Content hash: ${item.contentHash || "unavailable"}`,
+    `Library: ${item.libraryId ?? "not imported"}`,
+    `Install method: ${item.installMethod ?? "unknown"}`,
+    `Location role: ${item.locationRole ?? "unknown"}`,
+    `Location management: ${item.locationManagement ?? "unknown"}`,
+    `Runtime availability: ${item.runtimeAvailability ?? "unknown"}`,
+    item.modifiedAt ? `Modified: ${item.modifiedAt}` : undefined,
+    item.externalEvidence
+      ? `External evidence: ${item.externalEvidence.displayName ?? item.externalEvidence.manager} (${item.externalEvidence.state})`
+      : undefined,
+    ...(item.runtimeIssues ?? []).map(
+      (issue) => `Runtime issue [${issue.code}/${issue.severity}]: ${issue.message}`
+    ),
+    ...(item.runtimeStates ?? []).flatMap((state) => [
+      `Runtime ${targetNameFor(state.targetId, targetNames, state.targetId)}: ${state.availability}`,
+      ...state.issues.map(
+        (issue) => `Runtime issue [${issue.code}/${issue.severity}]: ${issue.message}`
+      )
+    ]),
+    ""
+  ])
+].filter((line): line is string => line !== undefined).join("\n");

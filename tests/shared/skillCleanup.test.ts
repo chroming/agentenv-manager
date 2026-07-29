@@ -79,6 +79,57 @@ describe("skill cleanup groups", () => {
     });
   });
 
+  it("removes only a broken Agent link when healthy managed copies share the Skill key", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        path: "/tmp/opencode/skills/ppe-debug",
+        status: "managed",
+        libraryId: "ppe-debug",
+        skillKey: "ppe-debug",
+        contentHash: "4a6d205",
+        contentMatchesLibrary: true
+      }),
+      inventoryItem({
+        path: "/tmp/pi/skills/ppe-debug",
+        foundIn: ["pi"],
+        status: "managed",
+        libraryId: "ppe-debug",
+        skillKey: "ppe-debug",
+        contentHash: "4a6d205",
+        contentMatchesLibrary: true
+      }),
+      inventoryItem({
+        path: "/tmp/trae/skills/ppe-debug",
+        foundIn: ["trae-cli"],
+        status: "outside",
+        libraryId: "ppe-debug",
+        skillKey: "ppe-debug",
+        contentHash: "",
+        runtimeAvailability: "unknown",
+        runtimeIssues: [{
+          code: "unreadable-skill",
+          severity: "warning",
+          message: "Skill link target is unavailable: /tmp/trae/skills/ppe-debug"
+        }]
+      })
+    ]);
+
+    expect(group).toMatchObject({
+      state: "broken",
+      resolution: "automatic",
+      bucket: "ready",
+      automaticEffect: "remove-broken-link"
+    });
+    expect(automaticSkillCleanupRequest(group)).toMatchObject({
+      libraryAction: "keep",
+      locations: [{
+        targetId: "trae-cli",
+        path: "/tmp/trae/skills/ppe-debug",
+        contentHash: ""
+      }]
+    });
+  });
+
   it("makes stale externally tracked broken links ready without relaxing healthy ownership", () => {
     const brokenOwnership = {
       manager: "skills-cli" as const,

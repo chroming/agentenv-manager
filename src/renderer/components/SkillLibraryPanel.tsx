@@ -106,6 +106,7 @@ import { ProjectSkillDiscoveryPanel } from "./ProjectSkillDiscoveryPanel";
 import type { SkillUpdateActivity } from "../skillUpdateActivity";
 import type { SkillUpdateRun } from "../skillUpdateQueue";
 import { SkillFileBrowserDialog } from "./SkillFileBrowserDialog";
+import { SkillCleanupDetailsFooter } from "./SkillCleanupDetailsFooter";
 import {
   SkillUpdateSettingsDialog
 } from "./SkillUpdateSettingsDialog";
@@ -115,6 +116,7 @@ import {
   cleanupActionDisplayLabel,
   cleanupActionLabel,
   cleanupEffectLabel,
+  formatSkillCleanupDetails,
   cleanupInventoryStatusClass,
   cleanupInventoryStatusLabel,
   cleanupLocationLabel,
@@ -239,6 +241,7 @@ interface SkillLibraryPanelProps {
   onCheckUpdates(): void;
   onOpenSource(url: string): void;
   onCopySource(source: string): void;
+  onCopyCleanupDetails(details: string): Promise<boolean>;
   onKeepSkillGroupOutside(skillKey: string): void;
   onReviewSkillGroupAgain(skillKey: string): void;
   onSetSkillPathPolicies?(input: SkillPathPolicyUpdate): Promise<boolean>;
@@ -369,6 +372,7 @@ export const SkillLibraryPanel = ({
   onCheckUpdates,
   onOpenSource,
   onCopySource,
+  onCopyCleanupDetails,
   onKeepSkillGroupOutside,
   onReviewSkillGroupAgain,
   onSetSkillPathPolicies,
@@ -450,6 +454,7 @@ export const SkillLibraryPanel = ({
   const [availabilityOperation, setAvailabilityOperation] = useState<SkillAvailabilityInput>();
   const [localPreviewingSkillId, setLocalPreviewingSkillId] = useState<string>();
   const [cleanupDetailsKey, setCleanupDetailsKey] = useState<string>();
+  const [cleanupDetailsCopied, setCleanupDetailsCopied] = useState(false);
   const [sharedRetireKey, setSharedRetireKey] = useState<string>();
   const [cleanupDraft, setCleanupDraft] = useState<{
     skillKey: string;
@@ -463,6 +468,9 @@ export const SkillLibraryPanel = ({
     sourcePath: string;
   }>();
   const [pathPolicyOperationPath, setPathPolicyOperationPath] = useState<string>();
+  useEffect(() => {
+    setCleanupDetailsCopied(false);
+  }, [cleanupDetailsKey]);
   const previewingSkillId =
     updateActivity?.kind === "preview-skill"
       ? updateActivity.skillId
@@ -1054,6 +1062,14 @@ export const SkillLibraryPanel = ({
           left.key === "unavailable" ? 1 : right.key === "unavailable" ? -1 : left.key.localeCompare(right.key)
         )
     : [];
+  const cleanupDetailsText = cleanupDetails
+    ? formatSkillCleanupDetails(cleanupDetails, targetNames)
+    : "";
+  const cleanupDetailsRequest = cleanupDetails
+    ? automaticSkillCleanupRequest(cleanupDetails)
+    : undefined;
+  const cleanupDetailsWorking =
+    automaticCleanupKey === `details:${cleanupDetails?.skillKey ?? ""}`;
   const sharedRetireCandidate = sharedRetireKey
     ? cleanupGroups.find((group) => group.skillKey === sharedRetireKey)
     : undefined;
@@ -1564,6 +1580,26 @@ export const SkillLibraryPanel = ({
       }
     } finally {
       setSharedOperation(undefined);
+      setAutomaticCleanupKey(undefined);
+    }
+  };
+
+  const removeUnavailableLinksFromDetails = async () => {
+    if (
+      !cleanupDetails ||
+      cleanupDetails.automaticEffect !== "remove-broken-link" ||
+      !cleanupDetailsRequest ||
+      automaticCleanupKey
+    ) {
+      return;
+    }
+    setAutomaticCleanupKey(`details:${cleanupDetails.skillKey}`);
+    try {
+      const completed = await onAutoConsolidateSkillGroups([cleanupDetailsRequest]);
+      if (completed.includes(cleanupDetails.skillKey)) {
+        setCleanupDetailsKey(undefined);
+      }
+    } finally {
       setAutomaticCleanupKey(undefined);
     }
   };
@@ -3048,7 +3084,12 @@ export const SkillLibraryPanel = ({
       ) : null}
 
       {cleanupDetails ? createPortal(
-        <div className="preview-modal-backdrop" onClick={() => setCleanupDetailsKey(undefined)}>
+        <div
+          className="preview-modal-backdrop"
+          onClick={() => {
+            if (!cleanupDetailsWorking) setCleanupDetailsKey(undefined);
+          }}
+        >
           <section
             ref={modalDialogRef}
             className="profile-form-dialog profile-form-dialog--compact cleanup-details-dialog ui-dialog-shell"
@@ -3138,6 +3179,15 @@ export const SkillLibraryPanel = ({
                         {item.libraryId ? `${t("Library")}: ${item.libraryId}` : t("Not in Library")}
                       </small>
                       {item.sharedLocation ? <small>{t("Shared compatibility location")}</small> : null}
+                      {(item.runtimeIssues ?? []).map((issue) => (
+                        <PreviewText
+                          ariaLabel={t("Full runtime issue for {{path}}", { path: item.path })}
+                          className="cleanup-option-path"
+                          key={`${issue.code}:${issue.message}`}
+                          text={issue.message}
+                          tooltipClassName="library-source-tooltip"
+                        />
+                      ))}
                       {(item.runtimeStates ?? []).map((state) =>
                         state.availability !== "enabled" || state.issues.length > 0 ? (
                           <div className="cleanup-runtime-state" key={state.targetId}>
@@ -3164,16 +3214,20 @@ export const SkillLibraryPanel = ({
                 </section>
               ))}
             </div>
-            <footer className="preview-actions ui-dialog-footer">
-              <button
-                ref={modalInitialFocusRef}
-                className="secondary-action"
-                type="button"
-                onClick={() => setCleanupDetailsKey(undefined)}
-              >
-                {t("Close")}
-              </button>
-            </footer>
+            <SkillCleanupDetailsFooter
+              busy={Boolean(automaticCleanupKey)}
+              copied={cleanupDetailsCopied}
+              initialFocusRef={modalInitialFocusRef}
+              removable={cleanupDetails.automaticEffect === "remove-broken-link"}
+              working={cleanupDetailsWorking}
+              onClose={() => setCleanupDetailsKey(undefined)}
+              onCopy={() => {
+                void onCopyCleanupDetails(cleanupDetailsText).then((copied) => {
+                  if (copied) setCleanupDetailsCopied(true);
+                });
+              }}
+              onRemove={() => void removeUnavailableLinksFromDetails()}
+            />
           </section>
         </div>,
         document.body
