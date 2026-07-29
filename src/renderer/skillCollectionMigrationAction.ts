@@ -1,4 +1,7 @@
-import type { SkillCollectionLinkGroup } from "../shared/skillCleanup";
+import {
+  isSkillCollectionItemLibraryReady,
+  type SkillCollectionLinkGroup
+} from "../shared/skillCleanup";
 import type {
   AgentEnvApi,
   SkillCleanupResult,
@@ -43,10 +46,10 @@ export const runSkillCollectionMigration = async ({
   }
   if (
     collection.items.some(
-      (item) => !item.libraryId || item.contentMatchesLibrary !== true
+      (item) => !isSkillCollectionItemLibraryReady(item)
     )
   ) {
-    setError("Every Skill in this collection must match an exact Library copy first.");
+    setError("Choose a Library version for every Skill in this collection first.");
     return false;
   }
 

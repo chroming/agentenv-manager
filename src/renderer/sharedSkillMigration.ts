@@ -263,22 +263,40 @@ export const moveSkillCollectionToAgents = async ({
     const nextSkills = [...profile.resources.skills];
     let profileChanged = false;
     for (const member of members) {
-      const existingIndex = nextSkills.findIndex(
+      let existingIndex = nextSkills.findIndex(
         (reference) => reference.libraryId === member.libraryId
       );
-      const collision = nextSkills.find(
+      const collisionIndex = nextSkills.findIndex(
         (reference) =>
           reference.libraryId !== member.libraryId &&
           reference.targetName === member.skillKey
       );
-      if (existingIndex < 0 && collision) {
-        throw new Error(
-          `${profile.manifest.name} already installs ${collision.libraryId} as ${member.skillKey}.`
-        );
+      if (collisionIndex >= 0) {
+        if (existingIndex >= 0) {
+          nextSkills.splice(collisionIndex, 1);
+          existingIndex = nextSkills.findIndex(
+            (reference) => reference.libraryId === member.libraryId
+          );
+        } else {
+          nextSkills[collisionIndex] = {
+            libraryId: member.libraryId,
+            targetName: member.skillKey,
+            enabled: true
+          };
+          existingIndex = collisionIndex;
+        }
+        profileChanged = true;
       }
       if (existingIndex >= 0) {
-        if (!nextSkills[existingIndex].enabled) {
-          nextSkills[existingIndex] = { ...nextSkills[existingIndex], enabled: true };
+        if (
+          !nextSkills[existingIndex].enabled ||
+          nextSkills[existingIndex].targetName !== member.skillKey
+        ) {
+          nextSkills[existingIndex] = {
+            ...nextSkills[existingIndex],
+            targetName: member.skillKey,
+            enabled: true
+          };
           profileChanged = true;
         }
       } else {

@@ -5542,7 +5542,7 @@ describe("Electron UI profile switching e2e", () => {
     const { appDataRoot, homeDir, opencodeDir, codexDir, page } = await launchApp();
     const collectionSource = join(homeDir, ".codex", "superpowers", "skills");
     const collectionLink = join(homeDir, ".agents", "skills", "superpowers");
-    const skillIds = ["collection-alpha", "collection-beta"];
+    const skillIds = ["collection-alpha", "collection-beta", "collection-gamma"];
     for (const skillId of skillIds) {
       const skillDir = join(collectionSource, skillId);
       await mkdir(skillDir, { recursive: true });
@@ -5552,17 +5552,19 @@ describe("Electron UI profile switching e2e", () => {
         "utf8"
       );
     }
-    const conflictingLibraryDir = join(
-      appDataRoot,
-      "skills-library",
-      "collection-alpha"
-    );
-    await mkdir(conflictingLibraryDir, { recursive: true });
-    await writeFile(
-      join(conflictingLibraryDir, "SKILL.md"),
-      "---\nname: collection-alpha\ndescription: Older Library copy.\n---\n\n# Older alpha\n",
-      "utf8"
-    );
+    for (const skillId of ["collection-alpha", "collection-beta"]) {
+      const conflictingLibraryDir = join(
+        appDataRoot,
+        "skills-library",
+        skillId
+      );
+      await mkdir(conflictingLibraryDir, { recursive: true });
+      await writeFile(
+        join(conflictingLibraryDir, "SKILL.md"),
+        `---\nname: ${skillId}\ndescription: Older Library copy.\n---\n\n# Older ${skillId}\n`,
+        "utf8"
+      );
+    }
     await mkdir(dirname(collectionLink), { recursive: true });
     await symlink(collectionSource, collectionLink);
 
@@ -5572,7 +5574,7 @@ describe("Electron UI profile switching e2e", () => {
       name: "Skill collection superpowers"
     });
     await collectionRow.waitFor({ state: "visible" });
-    await expect.poll(() => collectionRow.textContent()).toContain("2 Skills");
+    await expect.poll(() => collectionRow.textContent()).toContain("3 Skills");
     await expect(
       page.getByRole("group", { name: "Cleanup group collection-alpha" }).count()
     ).resolves.toBe(0);
@@ -5583,7 +5585,7 @@ describe("Electron UI profile switching e2e", () => {
     await applyActionButton(page, "OpenCode").click();
     const applyDialog = page.getByRole("dialog", { name: "Preview" });
     await expect.poll(() => applyDialog.textContent()).toContain(
-      "without exact Library copies"
+      "must be reviewed and moved before Apply"
     );
     await applyDialog.getByRole("button", { name: "Review collection" }).click();
     let dialog = page.getByRole("dialog", {
@@ -5605,15 +5607,57 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => dialog.textContent()).toContain(collectionSource);
     await expect.poll(() => dialog.textContent()).toContain("collection-alpha");
     await expect.poll(() => dialog.textContent()).toContain("collection-beta");
+    expect(
+      await dialog
+        .locator(".skill-collection-member__name")
+        .first()
+        .evaluate((element) => getComputedStyle(element).fontWeight)
+    ).toBe("400");
 
     await dialog.getByRole("button", { name: "Resolve differences" }).click();
     const conflictDialog = page.getByRole("dialog", { name: "Review duplicate Skill" });
     await conflictDialog.waitFor({ state: "visible" });
     await expect.poll(() => conflictDialog.textContent()).toContain("collection-alpha");
+    await conflictDialog.getByRole("radio", { name: /Keep Library copy/ }).check();
+    const keepLibraryButton = conflictDialog.getByRole("button", {
+      name: "Keep Library copy"
+    });
+    expect(await keepLibraryButton.evaluate((element) => {
+      const spinner = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      spinner.setAttribute("width", "15");
+      spinner.setAttribute("height", "15");
+      spinner.classList.add("is-spinning");
+      element.prepend(spinner);
+      const style = getComputedStyle(element);
+      const spinnerRect = spinner.getBoundingClientRect();
+      const labelRect = element.querySelector("span")!.getBoundingClientRect();
+      const result = {
+        display: style.display,
+        gap: Number.parseFloat(style.columnGap),
+        spinnerPosition: getComputedStyle(spinner).position,
+        separated: spinnerRect.right <= labelRect.left
+      };
+      spinner.remove();
+      return result;
+    })).toEqual({
+      display: "flex",
+      gap: 8,
+      spinnerPosition: "static",
+      separated: true
+    });
+    await keepLibraryButton.click();
+    await conflictDialog.waitFor({ state: "hidden" });
+    await dialog.waitFor({ state: "visible" });
+    await expect.poll(() => dialog.textContent()).toContain("Use Library version");
+    await expectInViewport(page, dialog.getByRole("button", { name: "Resolve differences" }));
+
+    await dialog.getByRole("button", { name: "Resolve differences" }).click();
+    await conflictDialog.waitFor({ state: "visible" });
+    await expect.poll(() => conflictDialog.textContent()).toContain("collection-beta");
+    await expect.poll(() => conflictDialog.textContent()).not.toContain("collection-alpha");
     await conflictDialog.getByRole("button", { name: "Replace Skill" }).click();
     await conflictDialog.waitFor({ state: "hidden" });
     await dialog.waitFor({ state: "visible" });
-    await expect.poll(() => dialog.textContent()).toContain("In Library");
     await expectInViewport(page, dialog.getByRole("button", { name: "Add missing to Library" }));
     await dialog.getByRole("button", { name: "Add missing to Library" }).click();
     await expect
@@ -5621,6 +5665,9 @@ describe("Electron UI profile switching e2e", () => {
       .toBe(true);
     await expect
       .poll(() => fileExists(join(appDataRoot, "skills-library", "collection-beta", "SKILL.md")))
+      .toBe(true);
+    await expect
+      .poll(() => fileExists(join(appDataRoot, "skills-library", "collection-gamma", "SKILL.md")))
       .toBe(true);
     await expect.poll(() => dialog.textContent()).toContain("In Library");
     await expectInViewport(page, dialog.getByRole("button", { name: "Move collection" }));
@@ -5636,6 +5683,8 @@ describe("Electron UI profile switching e2e", () => {
     await expect(fileExists(join(collectionSource, "collection-alpha", "SKILL.md")))
       .resolves.toBe(true);
     await expect(fileExists(join(collectionSource, "collection-beta", "SKILL.md")))
+      .resolves.toBe(true);
+    await expect(fileExists(join(collectionSource, "collection-gamma", "SKILL.md")))
       .resolves.toBe(true);
     await expect
       .poll(() => fileExists(join(opencodeDir, "skills", "collection-alpha", "SKILL.md")))

@@ -87,7 +87,10 @@ import { redactSensitiveValues } from "./secretWarnings";
 import { defaultTargetState, parseTargetState } from "./targetState";
 import { createCaptureReceiptStore } from "./captureReceiptStore";
 import { targetPathInputFor } from "./targets/pathInput";
-import { completeSkillCollectionMigrationTransaction } from "./skillCollectionMigration";
+import {
+  completeSkillCollectionMigrationTransaction,
+  type SkillCollectionMigrationInput
+} from "./skillCollectionMigration";
 import { listSharedSkillMigrationBackupSummaries, rollbackSharedSkillMigrationBackup } from "./sharedSkillMigrationBackups";
 import {
   buildSkillDeploymentPlan,
@@ -132,16 +135,9 @@ export interface ActivationService {
     sharedPaths: string[];
     consumerTargetIds: string[];
   }): Promise<SkillCleanupResult>;
-  completeSkillCollectionMigration(input: {
-    collectionPath: string;
-    canonicalPath: string;
-    members: Array<{
-      skillKey: string;
-      libraryId: string;
-      sharedPath: string;
-      consumerTargetIds: string[];
-    }>;
-  }): Promise<SkillCleanupResult>;
+  completeSkillCollectionMigration(
+    input: SkillCollectionMigrationInput
+  ): Promise<SkillCleanupResult>;
   listSharedSkillMigrationBackups(): Promise<SkillCleanupBackupSummary[]>;
   rollbackSharedSkillMigration(backupId: string): Promise<void>;
   previewRollback(backupId: string): Promise<RollbackPreview>;

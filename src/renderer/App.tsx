@@ -2403,7 +2403,9 @@ const AppContent = ({
         kind: "local",
         input: { sourcePath, sourceHandling, sourceCollection, upstream }
       });
-      if (!prepared || prepared.kind !== "local") return false;
+      if (!prepared || prepared.kind !== "local") {
+        return { ok: false as const };
+      }
       const result = await window.agentEnv.importSkillToLibrary(prepared.input);
       setPendingSkillImport(undefined);
       setSelectedSkillUpdatePlan(undefined);
@@ -2420,13 +2422,16 @@ const AppContent = ({
             ? `Imported ${result.skill.name} · Local copy is now managed`
             : `Imported ${result.skill.name} to Library`
       });
-      return true;
+      return {
+        ok: true as const,
+        conflictResolution: prepared.input.conflictResolution
+      };
     } catch (unknownError) {
       setPendingSkillImport(undefined);
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
       if (errorScope === "caller") throw new Error(message);
       setError(message);
-      return false;
+      return { ok: false as const };
     } finally {
       setBusy(false);
     }
@@ -4302,9 +4307,35 @@ const AppContent = ({
                 onScanLocalSkillSource={(rootPath) => window.agentEnv.scanLocalSkillSource(rootPath)}
                 onImportUnmanaged={(sourcePath, sourceHandling, deferFullRefresh) =>
                   importUnmanagedSkill(sourcePath, sourceHandling,
-                    deferFullRefresh ? "batch" : "global")}
+                    deferFullRefresh ? "batch" : "global").then((outcome) => outcome.ok)}
+                onResolveCollectionConflict={async (item) => {
+                  const outcome = await importUnmanagedSkill(
+                    item.path,
+                    "copy-only",
+                    "global"
+                  );
+                  if (!outcome.ok) return false;
+                  if (outcome.conflictResolution?.action === "keep-existing") {
+                    return setSkillPathPolicies({
+                      items: [{ path: item.path, skillKey: item.skillKey }],
+                      mode: "use-library"
+                    });
+                  }
+                  if (item.pathPolicy === "use-library") {
+                    return setSkillPathPolicies({
+                      items: [{ path: item.path, skillKey: item.skillKey }]
+                    });
+                  }
+                  return true;
+                }}
                 onImportLocalSourceSkill={(sourcePath, sourceCollection, upstream) =>
-                  importUnmanagedSkill(sourcePath, "copy-only", "caller", sourceCollection, upstream)}
+                  importUnmanagedSkill(
+                    sourcePath,
+                    "copy-only",
+                    "caller",
+                    sourceCollection,
+                    upstream
+                  ).then((outcome) => outcome.ok)}
                 onListSkillFiles={(id) => window.agentEnv.listSkillFiles(id)}
                 onReadSkillFile={(id, path) => window.agentEnv.readSkillFile({ id, path })}
                 onImportExternal={importExternalSkill}

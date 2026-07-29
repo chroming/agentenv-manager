@@ -1,8 +1,14 @@
 import { useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Folder, LoaderCircle } from "lucide-react";
-import type { SkillCollectionLinkGroup } from "../../shared/skillCleanup";
-import type { SkillPathPolicyUpdate } from "../../shared/types";
+import {
+  isSkillCollectionItemLibraryReady,
+  type SkillCollectionLinkGroup
+} from "../../shared/skillCleanup";
+import type {
+  SkillInventoryEntry,
+  SkillPathPolicyUpdate
+} from "../../shared/types";
 import { useI18n } from "../i18n";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
@@ -16,6 +22,7 @@ interface SkillCollectionActionsInput {
     sourceHandling?: "copy-only",
     deferFullRefresh?: boolean
   ): Promise<boolean>;
+  onResolveCollectionConflict?(item: SkillInventoryEntry): Promise<boolean>;
   onRefreshInventory(announce?: boolean): Promise<void>;
   onMoveSkillCollection?(collection: SkillCollectionLinkGroup): Promise<boolean>;
   onClose(): void;
@@ -24,6 +31,7 @@ interface SkillCollectionActionsInput {
 export const useSkillCollectionActions = ({
   onSetSkillPathPolicies,
   onImportUnmanaged,
+  onResolveCollectionConflict,
   onRefreshInventory,
   onMoveSkillCollection,
   onClose
@@ -51,14 +59,21 @@ export const useSkillCollectionActions = ({
     setOperation("import");
     try {
       const conflict = collection.items.find(
-        (item) => item.libraryId && item.contentMatchesLibrary === false
+        (item) =>
+          item.libraryId &&
+          item.contentMatchesLibrary === false &&
+          item.pathPolicy !== "use-library"
       );
       if (conflict) {
-        await onImportUnmanaged(conflict.path, "copy-only");
+        if (onResolveCollectionConflict) {
+          await onResolveCollectionConflict(conflict);
+        } else {
+          await onImportUnmanaged(conflict.path, "copy-only");
+        }
         return;
       }
       for (const item of collection.items) {
-        if (item.libraryId && item.contentMatchesLibrary === true) continue;
+        if (isSkillCollectionItemLibraryReady(item)) continue;
         if (!(await onImportUnmanaged(item.path, "copy-only", true))) return;
       }
       await onRefreshInventory(false);
@@ -240,7 +255,12 @@ export const SkillCollectionDialog = ({
           <div className="skill-collection-members" role="list">
             {collection.items.map((item) => {
               const exact = Boolean(item.libraryId) && item.contentMatchesLibrary === true;
-              const conflict = Boolean(item.libraryId) && item.contentMatchesLibrary === false;
+              const usesLibrary =
+                Boolean(item.libraryId) && item.pathPolicy === "use-library";
+              const conflict =
+                Boolean(item.libraryId) &&
+                item.contentMatchesLibrary === false &&
+                !usesLibrary;
               return (
                 <div
                   className="skill-collection-member"
@@ -248,7 +268,7 @@ export const SkillCollectionDialog = ({
                   role="listitem"
                 >
                   <span>
-                    <strong>{item.name}</strong>
+                    <span className="skill-collection-member__name">{item.name}</span>
                     <small>
                       {item.version ?? item.modifiedAt
                         ? [
@@ -259,10 +279,12 @@ export const SkillCollectionDialog = ({
                     </small>
                   </span>
                   <span className={`resource-chip resource-chip--${
-                    exact ? "managed" : conflict ? "conflict" : "pending"
+                    exact || usesLibrary ? "managed" : conflict ? "conflict" : "pending"
                   }`}>
                     {t(exact
                       ? "In Library"
+                      : usesLibrary
+                        ? "Use Library version"
                       : conflict
                         ? "Different Library copy"
                         : "Not in Library")}
@@ -276,7 +298,7 @@ export const SkillCollectionDialog = ({
               ? t("Moving adds these Skills to each affected Agent's active Profile, applies those Profiles, verifies every Agent copy, then removes only the collection link.")
               : collection.state === "kept"
                 ? t("This collection stays outside AgentEnv. Its source and runtime link remain unchanged.")
-                : t("Add exact Library copies before moving. Same-name differences still require an explicit version choice.")}
+                : t("Choose a Library version for every Skill before moving. Same-name differences require an explicit choice.")}
           </p>
         </div>
         <footer className="preview-actions ui-dialog-footer">

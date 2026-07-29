@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import type { ProfileSkill } from "../shared/schemas";
 import { normalizeSkillKey } from "../shared/skillIdentity";
+import { isSkillCollectionItemLibraryReady } from "../shared/skillCleanup";
 import { profileManagesResource } from "../shared/profileResources";
 import type {
   ApplyIssue,
@@ -231,7 +232,7 @@ export const buildSkillDeploymentPlan = ({
   const unresolvedCollections = new Map<string, SkillInventoryEntry[]>();
   for (const entry of inventory) {
     if (!entry.collectionLink || entry.pathPolicy === "keep-shared") continue;
-    if (entry.libraryId && entry.contentMatchesLibrary === true) continue;
+    if (isSkillCollectionItemLibraryReady(entry)) continue;
     unresolvedCollections.set(entry.collectionLink.path, [
       ...(unresolvedCollections.get(entry.collectionLink.path) ?? []),
       entry
@@ -244,9 +245,9 @@ export const buildSkillDeploymentPlan = ({
       resourceId: collectionPath,
       path: collectionPath,
       message:
-        `${entries.length} ${entries.length === 1 ? "Skill is" : "Skills are"} loaded through collection ${collectionPath} without exact Library copies`,
+        `Collection ${collectionPath} must be reviewed and moved before Apply`,
       detail:
-        "Choose the Library versions for this collection, or keep the collection outside AgentEnv."
+        "Choose a Library version for every member and move the collection, or keep it outside AgentEnv."
     }));
     for (const entry of entries) {
       const runtimeKeys = new Set(
@@ -305,7 +306,7 @@ export const buildSkillDeploymentPlan = ({
     if (
       !entry.sharedLocation ||
       !entry.libraryId ||
-      entry.contentMatchesLibrary !== true ||
+      !isSkillCollectionItemLibraryReady(entry) ||
       entry.pathPolicy === "keep-shared" ||
       canonicalLibraryPaths.has(resolve(entry.path))
     ) {

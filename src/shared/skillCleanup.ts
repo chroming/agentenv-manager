@@ -124,6 +124,15 @@ export interface SkillCollectionLinkGroup {
 const collectionName = (path: string) =>
   path.replace(/[\\/]+$/, "").split(/[\\/]/).filter(Boolean).at(-1) ?? path;
 
+export const isSkillCollectionItemLibraryReady = (
+  item: SkillInventoryEntry
+): boolean =>
+  Boolean(item.libraryId) &&
+  (
+    item.contentMatchesLibrary === true ||
+    item.pathPolicy === "use-library"
+  );
+
 export const buildSkillCollectionLinkGroups = (
   skillInventory: SkillInventoryEntry[],
   options: { installedTargetIds?: readonly string[] } = {}
@@ -146,10 +155,13 @@ export const buildSkillCollectionLinkGroups = (
         items.map((item) => [`${item.skillKey}\0${item.path}`, item])
       ).values()].sort((left, right) => left.name.localeCompare(right.name));
       const libraryReadyCount = uniqueItems.filter(
-        (item) => Boolean(item.libraryId) && item.contentMatchesLibrary === true
+        isSkillCollectionItemLibraryReady
       ).length;
       const conflictCount = uniqueItems.filter(
-        (item) => Boolean(item.libraryId) && item.contentMatchesLibrary === false
+        (item) =>
+          Boolean(item.libraryId) &&
+          item.contentMatchesLibrary === false &&
+          item.pathPolicy !== "use-library"
       ).length;
       const kept = uniqueItems.length > 0 && uniqueItems.every(
         (item) => item.status === "kept-outside" && item.pathPolicy === "keep-shared"

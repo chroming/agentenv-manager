@@ -196,11 +196,8 @@ interface SkillLibraryPanelProps {
   onReleaseSkillArchive(token: string): Promise<void>;
   onScanLocalSkillSource?(rootPath: string): Promise<ProjectSkillScanResult>;
   onImportUnmanaged(sourcePath: string, sourceHandling?: "copy-only", deferFullRefresh?: boolean): Promise<boolean>;
-  onImportLocalSourceSkill?(
-    sourcePath: string,
-    sourceCollection?: SkillSourceCollectionRef,
-    upstream?: import("../../shared/types").SkillUpstream
-  ): Promise<boolean>;
+  onResolveCollectionConflict?(item: SkillInventoryEntry): Promise<boolean>;
+  onImportLocalSourceSkill?(sourcePath: string, sourceCollection?: SkillSourceCollectionRef, upstream?: import("../../shared/types").SkillUpstream): Promise<boolean>;
   onListSkillFiles(id: string): Promise<SkillFileNode[]>;
   onReadSkillFile(id: string, path: string): Promise<SkillFileContent>;
   onImportExternal(skill: SkillInventoryEntry): Promise<boolean>;
@@ -297,6 +294,7 @@ export const SkillLibraryPanel = ({
   onReleaseSkillArchive,
   onScanLocalSkillSource,
   onImportUnmanaged,
+  onResolveCollectionConflict,
   onImportLocalSourceSkill,
   onListSkillFiles,
   onReadSkillFile,
@@ -429,9 +427,10 @@ export const SkillLibraryPanel = ({
     importSkills: importCollectionSkills,
     move: moveSkillCollection
   } = useSkillCollectionActions({
-    onSetSkillPathPolicies,
-    onImportUnmanaged,
-    onRefreshInventory,
+  onSetSkillPathPolicies,
+  onImportUnmanaged,
+  onResolveCollectionConflict,
+  onRefreshInventory,
     onMoveSkillCollection,
     onClose: () => setCollectionDetailsPath(undefined)
   });

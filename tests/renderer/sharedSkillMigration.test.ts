@@ -354,4 +354,71 @@ describe("moveSkillCollectionToAgents", () => {
       path: "/home/.agents/skills/superpowers"
     });
   });
+
+  it("replaces a captured same-name reference with the reviewed Library member", async () => {
+    const mockApi = api();
+    mockApi.listSkillLibrary.mockResolvedValue([
+      librarySkill(),
+      {
+        ...librarySkill(),
+        id: "reviewed-as-ops",
+        path: "/data/skills-library/reviewed-as-ops"
+      }
+    ]);
+    mockApi.listTargetStates.mockResolvedValue([
+      {
+        targetId: "pi",
+        activeProfileId: "pi-profile",
+        status: "managed",
+        lifecycleStatus: "applied",
+        managedResourceCount: 0,
+        warningCount: 0,
+        errorCount: 0
+      } satisfies TargetManagementState
+    ]);
+    mockApi.readProfile.mockResolvedValue({
+      ...profile(),
+      resources: {
+        ...profile().resources,
+        skills: [{
+          libraryId: "captured-as-ops",
+          targetName: "as-ops",
+          enabled: true
+        }]
+      }
+    });
+    mockApi.updateProfileSkills.mockImplementation(async (input) => ({
+      profile: {
+        ...profile(),
+        resources: {
+          ...profile().resources,
+          skills: input.skills
+        },
+        contentHash: "collection-profile-hash"
+      },
+      changed: true
+    }));
+
+    await moveSkillCollectionToAgents({
+      api: mockApi as unknown as AgentEnvApi,
+      collection: {
+        path: "/home/.agents/skills/superpowers",
+        members: [{
+          skillKey: "as-ops",
+          libraryId: "reviewed-as-ops",
+          consumerTargetIds: ["pi"]
+        }]
+      }
+    });
+
+    expect(mockApi.updateProfileSkills).toHaveBeenCalledWith(
+      expect.objectContaining({
+        skills: [{
+          libraryId: "reviewed-as-ops",
+          targetName: "as-ops",
+          enabled: true
+        }]
+      })
+    );
+  });
 });

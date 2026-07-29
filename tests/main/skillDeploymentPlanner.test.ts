@@ -275,7 +275,7 @@ describe("skill deployment planner", () => {
     });
 
     expect(blockingMessages(result.issues)).toEqual([
-      expect.stringContaining("2 Skills are loaded through collection")
+      expect.stringContaining("must be reviewed and moved before Apply")
     ]);
     expect(result.issues).toContainEqual(expect.objectContaining({
       code: "shared-skill-conflict",
@@ -286,6 +286,38 @@ describe("skill deployment planner", () => {
     expect(result.decisions).not.toContainEqual(
       expect.objectContaining({ action: "install" })
     );
+  });
+
+  it("defers a reviewed Library version while its collection remains active", () => {
+    const collectionPath = "/home/.agents/skills/superpowers";
+    const result = plan({
+      inventory: [inventoryEntry({
+        path: `${collectionPath}/reviewer`,
+        status: "library",
+        pathPolicy: "use-library",
+        contentHash: "external-version",
+        contentMatchesLibrary: false,
+        locationRole: "compatibility-runtime",
+        sharedLocation: true,
+        collectionLink: {
+          path: collectionPath,
+          canonicalPath: "/home/.codex/superpowers/skills"
+        }
+      })]
+    });
+
+    expect(blockingMessages(result.issues)).toEqual([]);
+    expect(result.sharedPreparations).toEqual([
+      expect.objectContaining({
+        libraryId: "reviewer",
+        disposition: "install",
+        sharedPaths: [`${collectionPath}/reviewer`]
+      })
+    ]);
+    expect(result.decisions).toContainEqual(expect.objectContaining({
+      action: "defer",
+      reason: "shared-compatible"
+    }));
   });
 
   it("preserves an explicitly kept collection member without blocking Apply", () => {

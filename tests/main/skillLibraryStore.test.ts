@@ -1463,6 +1463,32 @@ description: >
         }
       ])
     ).resolves.toMatchObject([{ status: "outside" }]);
+
+    await store.setSkillPathPolicies({
+      items: [{
+        path: codexCopy,
+        skillKey: "duplicate-reviewer",
+        targetId: "codex"
+      }],
+      mode: "use-library"
+    });
+    await expect(
+      store.scanInventory([
+        {
+          targetId: "codex",
+          configDir: join(root, "home", ".codex"),
+          instructionsPath: "",
+          configPath: "",
+          skillsDir: join(root, "home", ".agents", "skills")
+        }
+      ])
+    ).resolves.toMatchObject([
+      {
+        status: "outside",
+        pathPolicy: "use-library",
+        pathPolicyId: expect.any(String)
+      }
+    ]);
   });
 
   it("restores a legacy directory-key ignore rule through the runtime Skill name", async () => {

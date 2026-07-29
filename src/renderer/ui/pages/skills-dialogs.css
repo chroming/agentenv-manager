@@ -299,15 +299,18 @@
   gap: 3px;
 }
 
-.skill-collection-member strong,
+.skill-collection-member__name,
 .skill-collection-member small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.skill-collection-member strong {
-  font-weight: 600;
+.skill-collection-member__name {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--font-weight-regular);
+  line-height: 18px;
 }
 
 .skill-collection-member small,

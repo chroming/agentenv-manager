@@ -52,6 +52,7 @@ import type { AgentEnvPaths } from "./paths";
 import { createDataBackup, inspectDataBackup, restoreDataBackup } from "./dataBackupService";
 import { parseExternalUrl } from "./externalUrl";
 import { isTargetInstalled } from "../shared/targetHealth";
+import { isSkillCollectionItemLibraryReady } from "../shared/skillCleanup";
 import type { MutationCoordinator } from "./mutationCoordinator";
 import { readAllProfilesForResourceMutation } from "./profileSafety";
 import { parseDesktopContextMenuItems } from "../shared/desktopContextMenu";
@@ -413,7 +414,10 @@ export const registerIpcHandlers = ({
     if (!input || !Array.isArray(input.items)) {
       throw new Error("Skill path policy requires at least one path");
     }
-    if (input.mode !== undefined && !["keep-outside", "keep-shared"].includes(input.mode)) {
+    if (
+      input.mode !== undefined &&
+      !["keep-outside", "keep-shared", "use-library"].includes(input.mode)
+    ) {
       throw new Error("Invalid Skill path policy");
     }
     return skillLibraryStore.setSkillPathPolicies(input);
@@ -834,11 +838,11 @@ export const registerIpcHandlers = ({
       throw new Error("Skill collection target changed during review");
     }
     const unready = collectionEntries.find(
-      (item) => !item.libraryId || item.contentMatchesLibrary !== true
+      (item) => !isSkillCollectionItemLibraryReady(item)
     );
     if (unready) {
       throw new Error(
-        `${unready.name} must match an exact Library copy before this collection can move`
+        `${unready.name} needs a reviewed Library version before this collection can move`
       );
     }
     const installedTargetIds = new Set(
@@ -851,7 +855,9 @@ export const registerIpcHandlers = ({
           skillKey: item.skillKey,
           libraryId: item.libraryId as string,
           sharedPath: item.path,
-          consumerTargetIds: item.foundIn.filter((id) => installedTargetIds.has(id))
+          consumerTargetIds: item.foundIn.filter((id) => installedTargetIds.has(id)),
+          useLibraryVersion: item.pathPolicy === "use-library",
+          sourceContentHash: item.contentHash
         }
       ])
     ).values()];

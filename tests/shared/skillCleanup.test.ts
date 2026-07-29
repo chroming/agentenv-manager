@@ -65,6 +65,40 @@ describe("skill cleanup groups", () => {
     ]);
   });
 
+  it("treats an explicit Library-version decision as reviewed without claiming an exact match", () => {
+    const collectionLink = {
+      path: "/tmp/home/.agents/skills/superpowers",
+      canonicalPath: "/tmp/home/.codex/superpowers/skills"
+    };
+    const [group] = buildSkillCollectionLinkGroups([
+      inventoryItem({
+        path: `${collectionLink.path}/brainstorming`,
+        skillKey: "brainstorming",
+        collectionLink,
+        libraryId: "brainstorming",
+        contentMatchesLibrary: false,
+        pathPolicy: "use-library"
+      }),
+      inventoryItem({
+        path: `${collectionLink.path}/debugging`,
+        skillKey: "debugging",
+        collectionLink,
+        libraryId: "debugging",
+        contentMatchesLibrary: true
+      })
+    ]);
+
+    expect(group).toMatchObject({
+      state: "ready",
+      libraryReadyCount: 2,
+      conflictCount: 0
+    });
+    expect(group.items[0]).toMatchObject({
+      contentMatchesLibrary: false,
+      pathPolicy: "use-library"
+    });
+  });
+
   it("makes an unowned broken Skill link ready for reversible removal", () => {
     const [group] = buildSkillCleanupGroups([
       inventoryItem({

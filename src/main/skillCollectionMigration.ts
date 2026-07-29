@@ -15,6 +15,7 @@ import type {
 } from "../shared/types";
 import { pathEntryExists, pathExists } from "./fileUtils";
 import { markerPathForFile } from "./ownershipMarkers";
+import { hashSkillContent } from "./skillContentHash";
 import { removeSkillDeployment } from "./skillDeployment";
 
 export interface SkillCollectionMigrationInput {
@@ -25,6 +26,8 @@ export interface SkillCollectionMigrationInput {
     libraryId: string;
     sharedPath: string;
     consumerTargetIds: string[];
+    useLibraryVersion?: boolean;
+    sourceContentHash?: string;
   }>;
 }
 
@@ -136,7 +139,14 @@ export const completeSkillCollectionMigrationTransaction = async (
       if (!(await pathExists(join(member.sharedPath, "SKILL.md")))) {
         throw new Error(`Collection Skill changed before migration: ${member.sharedPath}`);
       }
-      if (
+      if (member.useLibraryVersion) {
+        const currentSourceHash = await hashSkillContent(member.sharedPath);
+        if (!member.sourceContentHash || currentSourceHash !== member.sourceContentHash) {
+          throw new Error(
+            `Collection Skill ${member.skillKey} changed after its Library version was selected. Review the collection again.`
+          );
+        }
+      } else if (
         (await dependencies.hashComparablePath(member.sharedPath)) !==
         (await dependencies.hashComparablePath(librarySkill.path))
       ) {

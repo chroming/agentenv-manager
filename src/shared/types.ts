@@ -1014,7 +1014,7 @@ export type SkillUpdatePolicy = "tracked" | "untracked";
 export type SkillSyncMethod = "symlink" | "copy" | "auto";
 export type SkillStorageLocation = "appData" | "agents";
 
-export type SkillPathPolicyMode = "keep-outside" | "keep-shared";
+export type SkillPathPolicyMode = "keep-outside" | "keep-shared" | "use-library";
 
 export interface SkillPathPolicy {
   id: string;

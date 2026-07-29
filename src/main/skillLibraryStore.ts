@@ -404,7 +404,11 @@ export const createSkillLibraryStore = (
         typeof policy.id === "string" &&
         typeof policy.path === "string" &&
         typeof policy.skillKey === "string" &&
-        (policy.mode === "keep-outside" || policy.mode === "keep-shared")
+        (
+          policy.mode === "keep-outside" ||
+          policy.mode === "keep-shared" ||
+          policy.mode === "use-library"
+        )
     );
 
   const migrateLegacyPathPolicies = async (
@@ -961,7 +965,10 @@ export const createSkillLibraryStore = (
           const externalEvidence = evidence
             ? { ...evidence, confidence: "confirmed" as const, state: "broken-link" as const }
             : observation.externalEvidence;
-          const status = pathPolicy ? "kept-outside" : "outside";
+          const retainedOutside =
+            pathPolicy?.mode === "keep-outside" ||
+            pathPolicy?.mode === "keep-shared";
+          const status = retainedOutside ? "kept-outside" : "outside";
           const key = `${status}:${deploymentName}:${skillDir}`;
           const existing = byKey.get(key);
           if (existing) {
@@ -1062,9 +1069,12 @@ export const createSkillLibraryStore = (
         const localLibraryId = libraryIds.has(deploymentName)
           ? deploymentName
           : runtimeLibraryId;
+        const retainedOutside =
+          pathPolicy?.mode === "keep-outside" ||
+          pathPolicy?.mode === "keep-shared";
         const status = managedByAgentEnv
           ? "managed"
-          : pathPolicy
+          : retainedOutside
             ? "kept-outside"
             : localLibraryId
               ? "library"

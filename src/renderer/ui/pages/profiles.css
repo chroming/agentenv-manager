@@ -299,12 +299,15 @@
 }
 
 .preview-actions .primary-action {
-  position: relative;
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-2);
+  justify-content: center;
 }
 
 .preview-actions .primary-action > .is-spinning {
-  left: 10px;
-  position: absolute;
+  flex: 0 0 auto;
+  position: static;
 }
 
 .profile-page-actions .profile-new-button {

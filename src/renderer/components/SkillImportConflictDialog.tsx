@@ -328,7 +328,7 @@ export const SkillImportConflictDialog = ({
                 aria-hidden="true"
               />
             ) : null}
-            {confirmLabel}
+            <span>{confirmLabel}</span>
           </button>
         </footer>
       </section>
