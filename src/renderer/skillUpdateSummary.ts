@@ -3,7 +3,7 @@ import type {
   SkillSourceGroupView,
   SkillUpdateInfo
 } from "../shared/types";
-import type { SkillUpdateCheckStatus } from "./components/SkillLibraryPanel";
+import type { SkillUpdateCheckStatus } from "./skillLibraryContracts";
 import type { TranslationValues } from "./i18n";
 
 type Translate = (message: string, values?: TranslationValues) => string;

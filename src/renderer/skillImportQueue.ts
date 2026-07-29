@@ -1,7 +1,7 @@
 import type {
   GitHubSkillImportProgress,
   SkillImportQueueOptions
-} from "./components/SkillLibraryPanel";
+} from "./skillLibraryContracts";
 
 interface SkillImportQueueAdapter<Input, Prepared, Imported, Failure> {
   progressKey(input: Input): string;

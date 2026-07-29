@@ -147,12 +147,14 @@ import {
   type AppWorkspace
 } from "./components/ProfileSidebar";
 import {
+  SkillLibraryPanel
+} from "./components/SkillLibraryPanel";
+import {
   repositoryImportProgressKey,
-  SkillLibraryPanel,
   type PreparedSkillTarget,
   type SkillImportQueueOptions,
   type SkillUpdateCheckStatus
-} from "./components/SkillLibraryPanel";
+} from "./skillLibraryContracts";
 import { SkillUpdateDialog } from "./components/SkillUpdateDialog";
 import {
   SkillImportConflictDialog,

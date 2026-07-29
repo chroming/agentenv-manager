@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  SkillLibraryPanel,
-  type SkillImportQueueOptions
-} from "../../src/renderer/components/SkillLibraryPanel";
+import { SkillLibraryPanel } from "../../src/renderer/components/SkillLibraryPanel";
+import type { SkillImportQueueOptions } from "../../src/renderer/skillLibraryContracts";
 import { defaultSkillLibraryViewState } from "../../src/renderer/libraryViewState";
 import type { SkillUpdateRun } from "../../src/renderer/skillUpdateQueue";
 import type {
