@@ -13,6 +13,7 @@ struct CaptureContract: Decodable {
 struct VisualContract: Decodable {
   let formatVersion: Int
   let channelTolerance: Int
+  let pixelShiftTolerance: Int?
   let maxChangedPixelRatio: Double
   let captures: [CaptureContract]
 }
@@ -34,6 +35,7 @@ struct VisualReport: Encodable {
   let baselineDirectory: String
   let currentDirectory: String
   let channelTolerance: Int
+  let pixelShiftTolerance: Int
   let passed: Bool
   let captures: [CaptureResult]
 }
@@ -143,18 +145,58 @@ func writeImage(_ image: PixelImage, to url: URL) throws {
 func compare(
   baseline: PixelImage,
   current: PixelImage,
-  tolerance: Int
+  tolerance: Int,
+  pixelShiftTolerance: Int
 ) -> (changedPixels: Int, diff: PixelImage) {
   var diffPixels = current.pixels
-  var changedPixels = 0
-  for offset in stride(from: 0, to: current.pixels.count, by: 4) {
-    let changed = (0..<4).contains { channel in
+  var changed = [Bool](repeating: false, count: current.width * current.height)
+
+  func colorsMatch(_ firstOffset: Int, _ secondOffset: Int) -> Bool {
+    !(0..<4).contains { channel in
       abs(
-        Int(baseline.pixels[offset + channel]) -
-          Int(current.pixels[offset + channel])
+        Int(baseline.pixels[firstOffset + channel]) -
+          Int(current.pixels[secondOffset + channel])
       ) > tolerance
     }
-    if changed {
+  }
+
+  func markUnmatched(sourceIsBaseline: Bool) {
+    for y in 0..<current.height {
+      for x in 0..<current.width {
+        let pixelIndex = y * current.width + x
+        let sourceOffset = pixelIndex * 4
+        var matched = false
+        let minimumY = max(0, y - pixelShiftTolerance)
+        let maximumY = min(current.height - 1, y + pixelShiftTolerance)
+        let minimumX = max(0, x - pixelShiftTolerance)
+        let maximumX = min(current.width - 1, x + pixelShiftTolerance)
+        for candidateY in minimumY...maximumY {
+          for candidateX in minimumX...maximumX {
+            let candidateOffset = (candidateY * current.width + candidateX) * 4
+            let baselineOffset = sourceIsBaseline ? sourceOffset : candidateOffset
+            let currentOffset = sourceIsBaseline ? candidateOffset : sourceOffset
+            if colorsMatch(baselineOffset, currentOffset) {
+              matched = true
+              break
+            }
+          }
+          if matched {
+            break
+          }
+        }
+        if !matched {
+          changed[pixelIndex] = true
+        }
+      }
+    }
+  }
+
+  markUnmatched(sourceIsBaseline: true)
+  markUnmatched(sourceIsBaseline: false)
+  var changedPixels = 0
+  for pixelIndex in 0..<changed.count {
+    let offset = pixelIndex * 4
+    if changed[pixelIndex] {
       changedPixels += 1
       diffPixels[offset] = 255
       diffPixels[offset + 1] = 35
@@ -194,6 +236,12 @@ do {
       "Visual channel tolerance must be between 0 and 255."
     )
   }
+  let pixelShiftTolerance = contract.pixelShiftTolerance ?? 0
+  guard (0...2).contains(pixelShiftTolerance) else {
+    throw VisualComparisonError.invalidContract(
+      "Visual pixel-shift tolerance must be between 0 and 2."
+    )
+  }
   try FileManager.default.createDirectory(
     at: outputDirectory,
     withIntermediateDirectories: true
@@ -224,7 +272,8 @@ do {
       let comparison = compare(
         baseline: baseline,
         current: current,
-        tolerance: contract.channelTolerance
+        tolerance: contract.channelTolerance,
+        pixelShiftTolerance: pixelShiftTolerance
       )
       let pixelCount = max(1, current.width * current.height)
       let ratio = Double(comparison.changedPixels) / Double(pixelCount)
@@ -270,6 +319,7 @@ do {
     baselineDirectory: baselineDirectory.path,
     currentDirectory: currentDirectory.path,
     channelTolerance: contract.channelTolerance,
+    pixelShiftTolerance: pixelShiftTolerance,
     passed: passed,
     captures: results
   )

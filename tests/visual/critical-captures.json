@@ -1,6 +1,7 @@
 {
   "formatVersion": 1,
   "channelTolerance": 12,
+  "pixelShiftTolerance": 1,
   "maxChangedPixelRatio": 0.012,
   "captures": [
     { "file": "agents-first-run-920x620.png" },

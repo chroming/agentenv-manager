@@ -9,6 +9,7 @@ import {
   readdir,
   readFile,
   rm,
+  utimes,
   writeFile
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -56,9 +57,24 @@ const { outputDir, suppliedReference } = parseArguments(process.argv.slice(2));
 const referencePath = join(outputDir, "reference.png");
 const execFile = promisify(execFileCallback);
 const capturedBuild = await assertCurrentBuild(projectRoot);
+const captureFixtureTimestamp = new Date("2026-07-15T13:40:57.000Z");
 
 const writeJson = async (path, value) => {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+};
+
+const normalizeFixtureTimes = async (path) => {
+  const entries = await readdir(path, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === ".git") continue;
+    const entryPath = join(path, entry.name);
+    if (entry.isDirectory()) {
+      await normalizeFixtureTimes(entryPath);
+    } else if (entry.isFile()) {
+      await utimes(entryPath, captureFixtureTimestamp, captureFixtureTimestamp);
+    }
+  }
+  await utimes(path, captureFixtureTimestamp, captureFixtureTimestamp);
 };
 
 const profileFixtures = [
@@ -411,9 +427,20 @@ const prepareFixture = async (root) => {
   await execFile("git", ["config", "user.name", "AgentEnv Visual Test"], { cwd: gitFixtureRepo });
   await execFile("git", ["config", "user.email", "visual-test@agentenv.local"], { cwd: gitFixtureRepo });
   await execFile("git", ["add", "."], { cwd: gitFixtureRepo });
-  await execFile("git", ["commit", "-m", "visual fixture"], { cwd: gitFixtureRepo });
+  await execFile("git", ["commit", "-m", "visual fixture"], {
+    cwd: gitFixtureRepo,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_DATE: captureFixtureTimestamp.toISOString(),
+      GIT_COMMITTER_DATE: captureFixtureTimestamp.toISOString()
+    }
+  });
   const workspaceSyncRemote = join(root, "workspace-sync.git");
   await execFile("/usr/bin/git", ["init", "--bare", workspaceSyncRemote]);
+  await normalizeFixtureTimes(appDataRoot);
+  await normalizeFixtureTimes(homeDir);
+  await normalizeFixtureTimes(projectSkillRoot);
+  await normalizeFixtureTimes(githubFixtureRoot);
 
   return {
     appDataRoot,
@@ -639,6 +666,7 @@ try {
     executablePath: electronPath,
     args: [
       "--disable-gpu",
+      "--force-device-scale-factor=1",
       `--user-data-dir=${join(fixtureRoot, "electron-user-data")}`,
       join(projectRoot, "out", "main", "main.js")
     ],
@@ -1456,6 +1484,7 @@ try {
     executablePath: electronPath,
     args: [
       "--disable-gpu",
+      "--force-device-scale-factor=1",
       `--user-data-dir=${join(fixtureRoot, "startup-failure-user-data")}`,
       join(projectRoot, "out", "main", "main.js")
     ],
