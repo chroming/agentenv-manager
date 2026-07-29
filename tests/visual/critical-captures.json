@@ -1,0 +1,20 @@
+{
+  "formatVersion": 1,
+  "channelTolerance": 12,
+  "maxChangedPixelRatio": 0.012,
+  "captures": [
+    { "file": "agents-first-run-920x620.png" },
+    { "file": "profiles-920x620.png" },
+    { "file": "profile-loading-920x620.png" },
+    { "file": "profile-skills-920x620.png" },
+    { "file": "apply-preview-920x620.png" },
+    { "file": "skills-920x620.png" },
+    { "file": "skills-import-results-920x620.png" },
+    { "file": "skills-cleanup-review-920x620.png" },
+    { "file": "conversations-continue-menu-920x620.png" },
+    { "file": "settings-connections-920x620.png" },
+    { "file": "skills-zh-cn-920x620.png" },
+    { "file": "profiles-zh-tw-920x620.png" },
+    { "file": "startup-failure-920x620.png" }
+  ]
+}

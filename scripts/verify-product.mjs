@@ -10,6 +10,18 @@ const projectRoot = resolve(import.meta.dirname, "..");
 const reportPath = join(process.env.TMPDIR ?? "/tmp", "agentenv-product-vitest.json");
 const captureRoot = join(process.env.TMPDIR ?? "/tmp", "agentenv-ui-captures", "verification");
 const snapshotPath = join(projectRoot, "docs", "verification-snapshot.json");
+const visualBaselineRoot = join(projectRoot, "tests", "visual", "golden");
+const visualContractPath = join(
+  projectRoot,
+  "tests",
+  "visual",
+  "critical-captures.json"
+);
+const visualReportRoot = join(
+  process.env.TMPDIR ?? "/tmp",
+  "agentenv-ui-captures",
+  "visual-report"
+);
 const includePackaged = process.argv.includes("--packaged");
 
 const run = async (command, args, options = {}) => {
@@ -58,10 +70,25 @@ if (
   );
 }
 await run("node", ["scripts/capture-profiles.mjs", "--output", captureRoot]);
+await rm(visualReportRoot, { recursive: true, force: true });
+await run("swift", [
+  "scripts/compare-ui-captures.swift",
+  "--config",
+  visualContractPath,
+  "--baseline",
+  visualBaselineRoot,
+  "--current",
+  captureRoot,
+  "--output",
+  visualReportRoot
+]);
 
 const testReport = JSON.parse(await readFile(reportPath, "utf8"));
 const captureManifest = JSON.parse(
   await readFile(join(captureRoot, "capture-manifest.json"), "utf8")
+);
+const visualReport = JSON.parse(
+  await readFile(join(visualReportRoot, "visual-report.json"), "utf8")
 );
 if (
   captureManifest.build?.sourceFingerprint !== finalBuild.source.sha256 ||
@@ -123,7 +150,14 @@ const snapshot = {
     viewports: captureManifest.viewports,
     includesProfileLoadingState: captureManifest.files.some(
       (file) => file.file === "profile-loading-920x620.png"
-    )
+    ),
+    visualContract: {
+      passed: visualReport.passed === true,
+      files: visualReport.captures.length,
+      maxChangedPixelRatio: Math.max(
+        ...visualReport.captures.map((capture) => capture.changedPixelRatio)
+      )
+    }
   },
   packagedSmoke: includePackaged ? "passed" : "not-run"
 };

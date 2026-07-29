@@ -31,4 +31,5 @@ jobs:
       - run: npm run test:targets
       - run: npm run test:compat:installed
       - run: npm test
+      - run: npm run verify:visual
       - run: npm run test:e2e:packaged

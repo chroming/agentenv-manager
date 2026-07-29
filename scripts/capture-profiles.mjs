@@ -5,7 +5,6 @@ import {
   chmod,
   copyFile,
   mkdir,
-  mkdtemp,
   rename,
   readdir,
   readFile,
@@ -612,7 +611,19 @@ if (suppliedReference && suppliedReference !== referencePath) {
   await copyFile(suppliedReference, referencePath);
 }
 
-const fixtureRoot = await mkdtemp(join(tmpdir(), "agentenv-profiles-capture-"));
+const fixtureRoot = resolve(
+  process.env.AGENTENV_CAPTURE_FIXTURE_ROOT ??
+    join(tmpdir(), "agentenv-profiles-capture-fixture")
+);
+const fixtureRelativePath = fixtureRoot.slice(resolve(tmpdir()).length);
+if (
+  !fixtureRelativePath.startsWith("/") ||
+  fixtureRelativePath.includes("../")
+) {
+  throw new Error("Capture fixture root must stay inside the system temporary directory.");
+}
+await rm(fixtureRoot, { recursive: true, force: true });
+await mkdir(fixtureRoot, { recursive: true });
 let app;
 try {
   const {

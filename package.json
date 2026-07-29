@@ -25,6 +25,7 @@
     "audit:targets": "node scripts/audit-target-boundaries.mjs",
     "audit:translations": "node scripts/audit-translations.mjs",
     "verify:current": "node scripts/assert-verification-current.mjs",
+    "verify:visual": "npm run build && node scripts/verify-visual.mjs",
     "verify:product": "node scripts/verify-product.mjs",
     "verify:release": "node scripts/verify-product.mjs --packaged",
     "target:new": "node scripts/create-target-integration.mjs",
