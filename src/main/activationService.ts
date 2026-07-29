@@ -84,7 +84,6 @@ import {
   type SkillRootTransition
 } from "./skillRootTopology";
 import { redactSensitiveValues } from "./secretWarnings";
-import { defaultTargetState, parseTargetState } from "./targetState";
 import { createCaptureReceiptStore } from "./captureReceiptStore";
 import { targetPathInputFor } from "./targets/pathInput";
 import {
@@ -111,6 +110,10 @@ import {
   preservedUnmanagedSkillIssues,
   validateRuntimeSkills
 } from "./applySkillIssues";
+import {
+  createTargetStateRepository,
+  InvalidTargetStateError
+} from "./targetStateRepository";
 
 export interface ActivationServiceOptions {
   paths: AgentEnvPaths;
@@ -145,15 +148,6 @@ export interface ActivationService {
   previewStopManaging(targetId: string, mode: StopManagingMode): Promise<StopManagingPreview>;
   stopManaging(previewId: string): Promise<StopManagingResult>;
   adoptTargetChanges(profileId: string, targetId: string): Promise<AdoptTargetChangesResult>;
-}
-
-const DEFAULT_TARGET_STATE: TargetState = defaultTargetState();
-
-class InvalidTargetStateError extends Error {
-  constructor(readonly statePath: string) {
-    super(`Agent management state is invalid and must be recovered before changes can continue: ${statePath}`);
-    this.name = "InvalidTargetStateError";
-  }
 }
 
 interface InternalActivationPreview extends ActivationPreview {
@@ -534,14 +528,14 @@ export const createActivationService = ({
   const stopManagingPreviews = new Map<string, StopManagingPreview>();
   const rollbackPreviewFingerprints = new Map<string, Record<string, string | undefined>>();
   const activeTargetOperations = new Set<string>();
+  const targetStateRepository = createTargetStateRepository(paths);
   const targetPathsFor = async (targetId: string) => {
     const adapter = targetRegistry.get(targetId);
     const settings = await settingsStore.readSettings();
     return adapter.createTargetPaths(targetPathInputFor(paths, settings, targetId));
   };
 
-  const statePathFor = (targetId: string) =>
-    join(paths.targetStatesDir, `${targetId}.json`);
+  const statePathFor = targetStateRepository.pathFor;
 
   const restoreBackupSafely = async (backup: BackupManifest) => {
     const exactPaths = new Set<string>();
@@ -611,22 +605,7 @@ export const createActivationService = ({
     await restoreBackupEntries(backup);
   };
 
-  const readTargetStateFile = async (targetId: string) => {
-    const path = statePathFor(targetId);
-    if (!(await pathEntryExists(path))) {
-      return { path, content: "", state: DEFAULT_TARGET_STATE };
-    }
-    const content = await readFile(path, "utf8");
-    if (content.trim().length === 0) {
-      throw new InvalidTargetStateError(path);
-    }
-
-    try {
-      return { path, content, state: parseTargetState(JSON.parse(content)) };
-    } catch {
-      throw new InvalidTargetStateError(path);
-    }
-  };
+  const readTargetStateFile = targetStateRepository.read;
 
   const listTargetStates = async (
     options: { includeDisabled?: boolean } = {}
@@ -776,13 +755,7 @@ export const createActivationService = ({
       .sort((a, b) => a.targetId.localeCompare(b.targetId));
   };
 
-  const writeTargetState = async (targetId: string, state: TargetState) => {
-    await mkdir(paths.targetStatesDir, { recursive: true, mode: 0o700 });
-    await writeAtomic(
-      statePathFor(targetId),
-      `${JSON.stringify({ ...state, formatVersion: 2 }, null, 2)}\n`
-    );
-  };
+  const writeTargetState = targetStateRepository.write;
 
   const resourceKindForPath = (
     path: string,
