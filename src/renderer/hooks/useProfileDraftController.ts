@@ -144,9 +144,9 @@ export const useProfileDraftController = ({
   ) => {
     const requestId = beginFlow();
     const isDifferentProfile = profileId !== selectedProfileId;
+    options.onBeforeLoad?.(isDifferentProfile);
     onBusyChange(true);
     onError(undefined);
-    options.onBeforeLoad?.(isDifferentProfile);
     if (isDifferentProfile) {
       setProfileLoadingId(profileId);
       setStatus("");

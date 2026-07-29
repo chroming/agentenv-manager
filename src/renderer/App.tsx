@@ -33,7 +33,6 @@ import {
 } from "lucide-react";
 import type {
   ApplyIssue,
-  ActivationPreview,
   BackupSummary,
   DataRestorePreview,
   DiagnosticIssueDetail,
@@ -203,6 +202,7 @@ import { useWorkspaceFreshness } from "./hooks/useWorkspaceFreshness";
 import { useWorkspaceNavigation } from "./hooks/useWorkspaceNavigation";
 import { useProfileActionGuard } from "./hooks/useProfileActionGuard";
 import { useProfileDraftController } from "./hooks/useProfileDraftController";
+import { useProfileActivationController } from "./hooks/useProfileActivationController";
 import {
   preferredTargetForProfile,
   summarizeProfile
@@ -319,7 +319,6 @@ const AppContent = ({
   const [backups, setBackups] = useState<BackupSummary[]>([]);
   const [selectedTargetId, setSelectedTargetId] = useState<string>();
   const [profileTargetSelections, setProfileTargetSelections] = useState<Record<string, string>>({});
-  const [preview, setPreview] = useState<ActivationPreview>();
   const [rollbackPreview, setRollbackPreview] = useState<RollbackPreview>();
   const [stopManagingPreview, setStopManagingPreview] = useState<StopManagingPreview>();
   const [rollbackError, setRollbackError] = useState<string>();
@@ -346,9 +345,6 @@ const AppContent = ({
     useState<"library" | "profiles" | "targets">("library");
   const [checkingProfileSkillUpdates, setCheckingProfileSkillUpdates] = useState(false);
   const [profileMetadataSavingId, setProfileMetadataSavingId] = useState<string>();
-  const [isProfilePreviewing, setIsProfilePreviewing] = useState(false);
-  const [isProfileApplying, setIsProfileApplying] = useState(false);
-  const [profileApplyRefreshDetail, setProfileApplyRefreshDetail] = useState<string>();
   const [settingsSaveStatus, setSettingsSaveStatus] = useState("");
   const [dataBackupStatus, setDataBackupStatus] = useState("");
   const [dataRestorePreview, setDataRestorePreview] = useState<DataRestorePreview>();
@@ -406,11 +402,11 @@ const AppContent = ({
   const appModalDialogRef = useRef<HTMLElement>(null);
   const appModalInitialFocusRef = useRef<HTMLButtonElement>(null);
   const appModalFallbackFocusRef = useRef<HTMLElement>(null);
+  const resetProfileActivationRef = useRef<() => void>(() => undefined);
   const invalidateProfilePresentation = useCallback(() => {
     setSkillUpdateCheckStatus(undefined);
-    setPreview(undefined);
     setRollbackPreview(undefined);
-    setIsProfilePreviewing(false);
+    resetProfileActivationRef.current();
   }, []);
   const {
     acceptProfile: acceptSelectedProfile,
@@ -444,6 +440,35 @@ const AppContent = ({
     onError: setError,
     onDraftInvalidated: invalidateProfilePresentation
   });
+  const {
+    applyProfile: applyProfileActivation,
+    clearPreview: clearProfilePreview,
+    clearRefreshDetail: clearProfileApplyRefreshDetail,
+    isApplying: isProfileApplying,
+    isPreviewing: isProfilePreviewing,
+    preview,
+    previewProfile: runProfilePreview,
+    refreshDetail: profileApplyRefreshDetail,
+    refreshPreview: refreshProfilePreview,
+    reset: resetProfileActivation
+  } = useProfileActivationController({
+    onApplied: (profile, appliedPreview) => {
+      acceptAppliedProfileState({
+        profile,
+        preview: appliedPreview,
+        setTargetStates,
+        setBackups,
+        setSkillInventory
+      });
+    },
+    onBusyChange: setBusy,
+    onError: setError,
+    onRollbackClear: () => setRollbackPreview(undefined),
+    onStatus: setProfileSaveStatus,
+    onTargetStatesRefresh: setTargetStates,
+    translate: t
+  });
+  resetProfileActivationRef.current = resetProfileActivation;
   const { activity: skillUpdateActivity, activityRef: skillUpdateActivityRef,
     begin: beginSkillUpdateActivity, finish: finishSkillUpdateActivity
   } = useSkillUpdateActivity(() => setSkillRefreshStatus(undefined));
@@ -1080,7 +1105,7 @@ const AppContent = ({
     openWorkspaceNow("profiles");
     await loadSelectedProfile(profileId, {
       onBeforeLoad: () => {
-        setPreview(undefined);
+        clearProfilePreview();
         setRollbackPreview(undefined);
       },
       onLoaded: (profile) => {
@@ -1452,7 +1477,7 @@ const AppContent = ({
       );
       setProfileDialogMode(undefined);
       setTargetCapturePreview(undefined);
-      setPreview(undefined);
+      clearProfilePreview();
       setRollbackPreview(undefined);
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
@@ -1488,7 +1513,7 @@ const AppContent = ({
       }));
       acceptSelectedProfile(saved);
       setActiveComposerSection(undefined);
-      setPreview(undefined);
+      clearProfilePreview();
       setRollbackPreview(undefined);
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -1534,7 +1559,7 @@ const AppContent = ({
       }
       setDeleteProfileCandidateId(undefined);
       setIsProfileActionsOpen(false);
-      setPreview(undefined);
+      clearProfilePreview();
       setRollbackPreview(undefined);
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -1560,7 +1585,7 @@ const AppContent = ({
   const closeProfileDialog = () => {
     setProfileDialogMode(undefined);
     setDeleteProfileCandidateId(undefined);
-    setPreview(undefined);
+    clearProfilePreview();
     setRollbackPreview(undefined);
     setTargetCapturePreview(undefined);
     setProfileCaptureActivity("idle");
@@ -1630,7 +1655,7 @@ const AppContent = ({
         [selectedProfileId]: targetId
       }));
     }
-    setPreview(undefined);
+    clearProfilePreview();
     setRollbackPreview(undefined);
   };
 
@@ -1911,74 +1936,17 @@ const AppContent = ({
       (selectedTarget?.health.canWrite ?? false)
   );
 
-  const previewSelectedProfile = async () => {
-    setError(undefined);
-    setRollbackPreview(undefined);
-    if (!draftProfile) {
-      return;
-    }
-    if (isProfileDirty) {
-      setProfileSaveStatus("Save this profile before previewing changes");
-      setSkillUpdateCheckStatus(undefined);
-      saveButtonRef.current?.focus();
-      return;
-    }
-
-    const requestId = beginProfileFlow();
-    setIsProfilePreviewing(true);
-    setBusy(true);
-    try {
-      const nextPreview = await window.agentEnv.previewApply(
-        draftProfile.id,
-        selectedTarget?.id
-      );
-      if (!isProfileFlowCurrent(requestId)) {
-        return;
+  const previewSelectedProfile = () =>
+    runProfilePreview({
+      profile: draftProfile,
+      target: selectedTarget,
+      dirty: isProfileDirty,
+      localValidationErrors,
+      onSaveRequired: () => {
+        setSkillUpdateCheckStatus(undefined);
+        saveButtonRef.current?.focus();
       }
-      if (!activationPreviewHasWork(nextPreview)) {
-        const refreshedStates = await window.agentEnv.listTargetStates();
-        if (!isProfileFlowCurrent(requestId)) {
-          return;
-        }
-        setTargetStates(refreshedStates);
-      }
-      const rendererBlockers: ApplyIssue[] = [
-        ...(!selectedTarget?.health.canWrite
-          ? [{
-              id: `target-unavailable:${selectedTarget?.id ?? "unknown"}`,
-              code: "target-unavailable" as const,
-              disposition: "block" as const,
-              resolution: "external-action" as const,
-              resourceKind: "target" as const,
-              resourceId: selectedTarget?.id,
-              message:
-                selectedTarget?.health.summary || `${selectedTarget?.name ?? "Agent"} is unavailable`
-            }]
-          : []),
-        ...localValidationErrors.map((message, index) => ({
-          id: `profile-validation:${index}`,
-          code: "profile-validation" as const,
-          disposition: "block" as const,
-          resolution: "edit-profile" as const,
-          resourceKind: "profile" as const,
-          message
-        }))
-      ];
-      setPreview({
-        ...nextPreview,
-        issues: [...rendererBlockers, ...nextPreview.issues]
-      });
-    } catch (unknownError) {
-      if (isProfileFlowCurrent(requestId)) {
-        setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-      }
-    } finally {
-      if (isProfileFlowCurrent(requestId)) {
-        setIsProfilePreviewing(false);
-        setBusy(false);
-      }
-    }
-  };
+    });
 
   const runReadinessRemediation = () => {
     if (readiness.remediationLabel === "Open Agents") {
@@ -2000,68 +1968,7 @@ const AppContent = ({
     setActiveComposerSection((current) => current === section ? undefined : section);
   };
 
-  const acceptAppliedProfile = (
-    appliedProfile: ProfileDetail,
-    appliedPreview: ActivationPreview
-  ) => {
-    acceptAppliedProfileState({
-      profile: appliedProfile,
-      preview: appliedPreview,
-      setTargetStates,
-      setBackups,
-      setSkillInventory
-    });
-  };
-
-  const applySelectedProfile = async () => {
-    if (!draftProfile || !preview) {
-      return;
-    }
-
-    setBusy(true);
-    setIsProfileApplying(true);
-    setError(undefined);
-    setProfileSaveStatus("");
-    setProfileApplyRefreshDetail(undefined);
-    try {
-      const result = await window.agentEnv.applyProfile(draftProfile.id, preview.id);
-      if (!result.ok) {
-        if (result.kind === "stale") {
-          setProfileSaveStatus("The Agent changed while Preview was open. Preview refreshed.");
-          setProfileApplyRefreshDetail(result.errors.join("\n") || undefined);
-          const refreshedPreview = await window.agentEnv.previewApply(
-            draftProfile.id,
-            preview.targetId
-          );
-          setPreview(refreshedPreview);
-          return;
-        }
-        if (result.kind === "busy") {
-          setProfileSaveStatus("Another AgentEnv operation is still running. Try Apply again shortly.");
-          return;
-        }
-        if (result.kind === "no-op") {
-          setPreview(undefined);
-          setProfileSaveStatus("This Agent already matches the Profile.");
-          return;
-        }
-        setError(result.errors.join("\n"));
-        return;
-      }
-      const reloadNotice = preview.issues.find(
-        (issue) => issue.code === "runtime-reload-required"
-      );
-      acceptAppliedProfile(draftProfile, preview);
-      setPreview(undefined);
-      setRollbackPreview(undefined);
-      if (reloadNotice) setProfileSaveStatus(t(reloadNotice.message));
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-    } finally {
-      setIsProfileApplying(false);
-      setBusy(false);
-    }
-  };
+  const applySelectedProfile = () => applyProfileActivation(draftProfile);
 
   const keepPreviewSkillOutside = async (
     issue: ApplyIssue,
@@ -2097,7 +2004,7 @@ const AppContent = ({
         selectedTarget.id
       );
       replaceSavedProfile(result.profile);
-      setPreview(undefined);
+      clearProfilePreview();
       const adoptedLabels = result.adopted.map((kind) =>
         t(
           kind === "instructions"
@@ -2130,7 +2037,7 @@ const AppContent = ({
     setBusy(true);
     setError(undefined);
     setRollbackError(undefined);
-    setPreview(undefined);
+    clearProfilePreview();
     try {
       const nextPreview = await window.agentEnv.previewRollback(backupId);
       setRollbackPreview(nextPreview);
@@ -2634,7 +2541,7 @@ const AppContent = ({
   const reviewPreviewSkillCollection = (issue: ApplyIssue) => {
     const collectionPath = issue.path ?? issue.resourceId;
     if (!collectionPath) return;
-    setPreview(undefined);
+    clearProfilePreview();
     libraryScroll.captureScroll();
     setSkillUpdateFeedbackWorkspace("library");
     setSkillLibraryMode("skills");
@@ -3375,7 +3282,7 @@ const AppContent = ({
       onLocalePreferenceChange(nextSettings.locale);
       if ("backupRetentionDays" in input) await refreshManagedBackups("mutation");
       if ("enabledTargetIds" in input || "targetConfigRoots" in input) {
-        setPreview(undefined);
+        clearProfilePreview();
         setRollbackPreview(undefined);
         await refreshProfiles({
           checkSkillUpdates: false,
@@ -3752,7 +3659,7 @@ const AppContent = ({
     setError(undefined);
     setSkillUpdateCheckStatus(undefined);
     setProfileSaveStatus("");
-    setProfileApplyRefreshDetail(undefined);
+    clearProfileApplyRefreshDetail();
     setSettingsSaveStatus("");
     setTargetRefreshStatus(undefined);
     setSkillRefreshStatus(undefined);
@@ -4686,7 +4593,7 @@ const AppContent = ({
                         confirmDisabled={!canApply || busy}
                         confirmBusy={isProfileApplying}
                         onOpenRecovery={() => {
-                          setPreview(undefined);
+          clearProfilePreview();
                           setSettingsCategory("data");
                           openWorkspaceNow("settings");
                           setBackupManagerOpen(true);
@@ -4695,15 +4602,13 @@ const AppContent = ({
                         onKeepSkillOutside={(issue) =>
                           keepPreviewSkillOutside(issue, preview.targetId, async () => {
                             if (!draftProfile) return;
-                            setPreview(
-                              await window.agentEnv.previewApply(
-                                draftProfile.id,
-                                preview.targetId
-                              )
+                            await refreshProfilePreview(
+                              draftProfile.id,
+                              preview.targetId
                             );
                           })}
                         onReviewSkillCollection={reviewPreviewSkillCollection}
-                        onCancel={() => setPreview(undefined)}
+                        onCancel={clearProfilePreview}
                         onConfirm={applySelectedProfile}
                       />
                     ) : null}
