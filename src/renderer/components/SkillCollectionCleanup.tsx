@@ -54,7 +54,6 @@ export const useSkillCollectionActions = ({
         (item) => item.libraryId && item.contentMatchesLibrary === false
       );
       if (conflict) {
-        onClose();
         await onImportUnmanaged(conflict.path, "copy-only");
         return;
       }

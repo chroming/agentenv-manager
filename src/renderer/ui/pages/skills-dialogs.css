@@ -216,31 +216,57 @@
 
 .skill-collection-dialog {
   width: min(680px, calc(100vw - 40px));
+  max-width: 680px;
   max-height: min(760px, calc(100vh - 40px));
+  gap: 0;
+  overflow: hidden;
 }
 
 .skill-collection-dialog__body {
   display: grid;
   min-height: 0;
-  gap: 14px;
-  overflow: hidden;
+  gap: 12px;
+  padding-block: 14px;
+  overflow-y: auto;
 }
 
 .skill-collection-paths {
   display: grid;
-  gap: 8px;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
 }
 
 .skill-collection-paths > span {
   display: grid;
+  min-height: 36px;
   min-width: 0;
-  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-columns: 88px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.skill-collection-paths > span:last-child {
+  border-bottom: 0;
 }
 
 .skill-collection-paths small {
+  color: var(--subtle);
+  font-size: 11px;
+}
+
+.skill-collection-path {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
   color: var(--muted);
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .skill-collection-members {
@@ -248,16 +274,18 @@
   min-height: 0;
   max-height: min(380px, 45vh);
   overflow-y: auto;
-  border-block: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface);
 }
 
 .skill-collection-member {
   display: grid;
-  min-height: 54px;
+  min-height: 50px;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 16px;
-  padding: 8px 2px;
+  padding: 7px 10px;
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -289,7 +317,12 @@
 
 .skill-collection-dialog__note {
   margin: 0;
+  font-size: 12px;
   line-height: 1.5;
+}
+
+.skill-collection-dialog > .preview-actions > :first-child {
+  margin-right: auto;
 }
 
 .skill-availability-dialog__header {

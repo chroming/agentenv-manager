@@ -868,6 +868,7 @@ Object.assign(zhCN, {
   "Review the versions and file changes before choosing which copy to keep.": "选择保留版本前，请先查看版本与文件差异。",
   "Review the versions, sources, and file changes before choosing which copy to keep.": "选择保留版本前，请先查看版本、来源与文件差异。",
   "Keep Library copy": "保留资源库副本",
+  "Skip this import. The current Library copy stays unchanged.": "跳过本次导入，当前资源库副本保持不变。",
   "Skip the incoming copy. Its source folder and local copies stay unchanged.": "跳过传入副本，来源文件夹和本地副本保持不变。",
   "Identical": "完全相同",
   "Different": "存在差异",
@@ -2009,6 +2010,7 @@ Object.assign(zhCN, {
 });
 
 const zhTW: Record<string, string> = {
+  "Skip this import. The current Library copy stays unchanged.": "略過本次匯入，目前的資源庫副本保持不變。",
   "Configure": "設定",
   "Configure {{name}}": "設定 {{name}}",
   "Detecting Agents": "正在偵測 Agents",

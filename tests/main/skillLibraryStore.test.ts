@@ -60,8 +60,8 @@ describe("skill library store", () => {
       kind: "local",
       input: { sourcePath: incomingDir, id: "reviewer" }
     });
-    expect(preview).not.toHaveProperty("suggestedId");
     expect(preview).toMatchObject({
+      suggestedDuplicateId: "reviewer-2",
       incoming: {
         name: "reviewer",
         version: "2.0.0",
@@ -122,6 +122,7 @@ describe("skill library store", () => {
       kind: "local",
       input: { sourcePath: incomingDir, id: "reviewer" }
     });
+    expect(duplicatePreview.suggestedDuplicateId).toBe("reviewer-3");
     const identical = duplicatePreview.conflicts.find((item) => item.existing.id === "reviewer-2");
     expect(identical?.identical).toBe(true);
     const reused = await store.importSkill({

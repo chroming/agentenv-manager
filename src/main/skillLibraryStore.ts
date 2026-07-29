@@ -558,6 +558,11 @@ export const createSkillLibraryStore = (
       (skill) =>
         normalizedSkillName(skill.name) === normalizedIncomingName || skill.id === safeRequestedId
     );
+    const occupiedIds = new Set(skills.map((skill) => skill.id));
+    let suggestedDuplicateId = safeRequestedId;
+    for (let suffix = 2; occupiedIds.has(suggestedDuplicateId); suffix += 1) {
+      suggestedDuplicateId = `${safeRequestedId}-${suffix}`;
+    }
     const conflicts: SkillImportConflict[] = await Promise.all(
       matchingSkills.map(async (skill) => {
         const existing = await snapshotForDirectory(
@@ -595,7 +600,7 @@ export const createSkillLibraryStore = (
         };
       })
     );
-    return { source, incoming, conflicts };
+    return { source, incoming, conflicts, suggestedDuplicateId };
   };
 
   const previewImport = async (source: SkillImportPreviewInput): Promise<SkillImportPreview> => {
@@ -1244,6 +1249,9 @@ export const createSkillLibraryStore = (
       return { id: selected.existing.id, replace: true, reused: false, sourceOnly: false };
     }
     const safeId = SafeIdSchema.parse(resolution.id);
+    if (safeId !== preview.suggestedDuplicateId) {
+      throw new Error("The suggested Library ID changed; review the latest import preview");
+    }
     if (preview.conflicts.some((conflict) => conflict.existing.id === safeId)) {
       throw new Error(`Library skill already exists: ${safeId}`);
     }

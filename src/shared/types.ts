@@ -496,6 +496,7 @@ export interface SkillImportPreview {
   source: SkillImportPreviewInput;
   incoming: SkillImportSnapshot;
   conflicts: SkillImportConflict[];
+  suggestedDuplicateId: string;
 }
 
 export type SkillImportConflictResolution =

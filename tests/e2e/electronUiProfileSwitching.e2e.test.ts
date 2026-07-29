@@ -5229,9 +5229,28 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => conflict.textContent()).toContain("Different");
     await expect.poll(() => conflict.textContent()).toContain("2.0.0");
     await expect.poll(() => conflict.textContent()).toContain("SKILL.md");
+    await expectInViewport(
+      page,
+      conflict.getByRole("radio", { name: /Keep Library copy/ })
+    );
+    await expectInViewport(
+      page,
+      conflict.getByRole("radio", { name: /Replace Library copy/ })
+    );
+    await expectInViewport(
+      page,
+      conflict.getByRole("radio", { name: /Keep both/ })
+    );
     await conflict.getByRole("radio", { name: /Keep both/ }).check();
-    await conflict.getByRole("textbox", { name: "Library ID", exact: true })
-      .fill("shared-reviewer-alternative");
+    await expectInViewport(page, conflict);
+    await expectInViewport(page, conflict.locator(".profile-dialog-header"));
+    await expectInViewport(page, conflict.locator(".preview-actions"));
+    await expect.poll(() => conflict.textContent()).toContain(
+      "shared-reviewer-alternative"
+    );
+    await expect(
+      conflict.getByRole("textbox", { name: "Library ID", exact: true }).count()
+    ).resolves.toBe(0);
     await conflict.getByRole("button", { name: "Save another Skill" }).click();
     await conflict.waitFor({ state: "hidden" });
     const importDialog = page.getByRole("dialog", { name: "Import skills" });
@@ -5533,6 +5552,17 @@ describe("Electron UI profile switching e2e", () => {
         "utf8"
       );
     }
+    const conflictingLibraryDir = join(
+      appDataRoot,
+      "skills-library",
+      "collection-alpha"
+    );
+    await mkdir(conflictingLibraryDir, { recursive: true });
+    await writeFile(
+      join(conflictingLibraryDir, "SKILL.md"),
+      "---\nname: collection-alpha\ndescription: Older Library copy.\n---\n\n# Older alpha\n",
+      "utf8"
+    );
     await mkdir(dirname(collectionLink), { recursive: true });
     await symlink(collectionSource, collectionLink);
 
@@ -5570,12 +5600,21 @@ describe("Electron UI profile switching e2e", () => {
     dialog = page.getByRole("dialog", {
       name: "Review Skill collection superpowers"
     });
-    await expectInViewport(page, dialog.getByRole("button", { name: "Add missing to Library" }));
+    await expectInViewport(page, dialog.getByRole("button", { name: "Resolve differences" }));
     await expect.poll(() => dialog.textContent()).toContain(collectionLink);
     await expect.poll(() => dialog.textContent()).toContain(collectionSource);
     await expect.poll(() => dialog.textContent()).toContain("collection-alpha");
     await expect.poll(() => dialog.textContent()).toContain("collection-beta");
 
+    await dialog.getByRole("button", { name: "Resolve differences" }).click();
+    const conflictDialog = page.getByRole("dialog", { name: "Review duplicate Skill" });
+    await conflictDialog.waitFor({ state: "visible" });
+    await expect.poll(() => conflictDialog.textContent()).toContain("collection-alpha");
+    await conflictDialog.getByRole("button", { name: "Replace Skill" }).click();
+    await conflictDialog.waitFor({ state: "hidden" });
+    await dialog.waitFor({ state: "visible" });
+    await expect.poll(() => dialog.textContent()).toContain("In Library");
+    await expectInViewport(page, dialog.getByRole("button", { name: "Add missing to Library" }));
     await dialog.getByRole("button", { name: "Add missing to Library" }).click();
     await expect
       .poll(() => fileExists(join(appDataRoot, "skills-library", "collection-alpha", "SKILL.md")))
@@ -6305,10 +6344,10 @@ describe("Electron UI profile switching e2e", () => {
     const duplicateDialog = page.getByRole("dialog", { name: "Review duplicate Skill" });
     await duplicateDialog.waitFor({ state: "visible" });
     await duplicateDialog.getByRole("radio", { name: /Keep both/ }).check();
-    const alternateId = duplicateDialog.getByRole("textbox", { name: "Library ID", exact: true });
-    await expect.poll(() => alternateId.inputValue()).toBe("open-browser-use");
-    expect(await alternateId.getAttribute("aria-invalid")).toBe("true");
-    await alternateId.fill("open-browser-use-2");
+    await expect.poll(() => duplicateDialog.textContent()).toContain("open-browser-use-2");
+    await expect(
+      duplicateDialog.getByRole("textbox", { name: "Library ID", exact: true }).count()
+    ).resolves.toBe(0);
     await duplicateDialog.getByRole("button", { name: "Save another Skill" }).click();
     await duplicateDialog.waitFor({ state: "hidden" });
 
