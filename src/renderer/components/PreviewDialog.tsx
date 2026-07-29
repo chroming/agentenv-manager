@@ -21,6 +21,7 @@ import { activationPreviewHasWork } from "../activationPreview";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { PreviewChangeList } from "./PreviewChangeList";
+import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
 import { Button } from "./ui";
 
 interface PreviewDialogProps {
@@ -108,8 +109,10 @@ export const PreviewDialog = ({
   const dialogRef = useRef<HTMLElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const expandPreviewRef = useRef<HTMLButtonElement>(null);
   const [hasMoreBelow, setHasMoreBelow] = useState(false);
   const [resolvingIssueId, setResolvingIssueId] = useState<string>();
+  const [diffWorkspaceOpen, setDiffWorkspaceOpen] = useState(false);
   const onCancelRef = useRef(onCancel);
   onCancelRef.current = onCancel;
 
@@ -345,7 +348,9 @@ export const PreviewDialog = ({
       className={`preview-dialog${hasActions ? " preview-dialog--modal apply-preview-dialog" : ""}`}
       role={hasActions ? "dialog" : undefined}
       aria-label={t("Preview")}
-      aria-modal={hasActions ? true : undefined}
+      aria-hidden={hasActions && diffWorkspaceOpen ? true : undefined}
+      aria-modal={hasActions && !diffWorkspaceOpen ? true : undefined}
+      inert={hasActions && diffWorkspaceOpen ? true : undefined}
       onClick={(event) => event.stopPropagation()}
     >
       <header className="preview-header ui-dialog-header">
@@ -443,7 +448,12 @@ export const PreviewDialog = ({
             </section>
           ) : null}
 
-          <PreviewChangeList preview={preview} activation={isActivationPreview} />
+          <PreviewChangeList
+            preview={preview}
+            activation={isActivationPreview}
+            expandButtonRef={expandPreviewRef}
+            onExpandPreview={() => setDiffWorkspaceOpen(true)}
+          />
 
           {noteItems.length > 0 ? (
             <details className="apply-preview-disclosure">
@@ -541,10 +551,25 @@ export const PreviewDialog = ({
     </section>
   );
 
-  if (!hasActions) return content;
+  const workspace = (
+    <DiffWorkspaceDialog
+      changes={preview.changes}
+      open={diffWorkspaceOpen}
+      returnFocusRef={expandPreviewRef}
+      title={t("Planned changes")}
+      onClose={() => setDiffWorkspaceOpen(false)}
+    />
+  );
+  if (!hasActions) return <>{content}{workspace}</>;
   return (
-    <div className="preview-modal-backdrop apply-preview-backdrop" onClick={onCancel}>
-      {content}
-    </div>
+    <>
+      <div
+        className={`preview-modal-backdrop apply-preview-backdrop${diffWorkspaceOpen ? " is-suspended" : ""}`}
+        onClick={diffWorkspaceOpen ? undefined : onCancel}
+      >
+        {content}
+      </div>
+      {workspace}
+    </>
   );
 };

@@ -1169,7 +1169,8 @@ const AppContent = ({
   };
 
   const prepareSkillImport = async (
-    source: SkillImportPreviewInput
+    source: SkillImportPreviewInput,
+    preferredResolution?: SkillImportConflictResolution
   ): Promise<SkillImportPreviewInput | undefined> => {
     const preview = await window.agentEnv.previewSkillImport(source);
     if (preview.conflicts.length === 0) {
@@ -1182,9 +1183,19 @@ const AppContent = ({
       } as SkillImportPreviewInput;
     }
 
-    const resolution = await new Promise<SkillImportConflictResolution | undefined>((resolve) => {
-      setPendingSkillImport({ preview, resolve });
-    });
+    const resolution = preferredResolution
+      ? "existingId" in preferredResolution &&
+        preview.conflicts.some(
+          (conflict) => conflict.existing.id === preferredResolution.existingId
+        )
+        ? preferredResolution
+        : undefined
+      : await new Promise<SkillImportConflictResolution | undefined>((resolve) => {
+          setPendingSkillImport({ preview, resolve });
+        });
+    if (preferredResolution && !resolution) {
+      throw new Error("The selected Library Skill is no longer a matching import conflict.");
+    }
     if (!resolution) return undefined;
     return {
       ...source,
@@ -2394,7 +2405,9 @@ const AppContent = ({
     sourcePath: string,
     sourceHandling?: SkillImportInput["sourceHandling"],
     errorScope: "global" | "caller" | "batch" = "global",
-    sourceCollection?: SkillImportInput["sourceCollection"], upstream?: SkillUpstream
+    sourceCollection?: SkillImportInput["sourceCollection"],
+    upstream?: SkillUpstream,
+    preferredResolution?: SkillImportConflictResolution
   ) => {
     setBusy(true);
     setError(undefined);
@@ -2402,7 +2415,7 @@ const AppContent = ({
       const prepared = await prepareSkillImport({
         kind: "local",
         input: { sourcePath, sourceHandling, sourceCollection, upstream }
-      });
+      }, preferredResolution);
       if (!prepared || prepared.kind !== "local") {
         return { ok: false as const };
       }
@@ -4308,11 +4321,21 @@ const AppContent = ({
                 onImportUnmanaged={(sourcePath, sourceHandling, deferFullRefresh) =>
                   importUnmanagedSkill(sourcePath, sourceHandling,
                     deferFullRefresh ? "batch" : "global").then((outcome) => outcome.ok)}
-                onResolveCollectionConflict={async (item) => {
+                onResolveCollectionConflict={async (item, strategy, deferFullRefresh) => {
+                  const preferredResolution =
+                    strategy === "use-collection" && item.libraryId
+                      ? {
+                          action: "replace" as const,
+                          existingId: item.libraryId
+                        }
+                      : undefined;
                   const outcome = await importUnmanagedSkill(
                     item.path,
                     "copy-only",
-                    "global"
+                    deferFullRefresh ? "batch" : "global",
+                    undefined,
+                    undefined,
+                    preferredResolution
                   );
                   if (!outcome.ok) return false;
                   if (outcome.conflictResolution?.action === "keep-existing") {

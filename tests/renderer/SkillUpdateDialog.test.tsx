@@ -64,6 +64,32 @@ describe("SkillUpdateDialog", () => {
     expect(document.querySelectorAll(".skill-update-dialog .diff-viewer")).toHaveLength(2);
   });
 
+  it("opens the shared diff workspace without dismissing the update preview", () => {
+    const onClose = vi.fn();
+    render(
+      <SkillUpdateDialog
+        plan={planWithChanges(2)}
+        onClose={onClose}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    const parent = screen.getByRole("dialog", { name: "Update preview for claude-api" });
+    const expand = within(parent).getByRole("button", { name: "Expand preview" });
+    fireEvent.click(expand);
+
+    expect(screen.getByRole("dialog", { name: "Expanded diff preview" }))
+      .toBeInTheDocument();
+    expect(parent).toHaveAttribute("aria-hidden", "true");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Expanded diff preview" })).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Update preview for claude-api" }))
+      .toBeInTheDocument();
+    expect(expand).toHaveFocus();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("keeps the dialog open and replaces Update with completion or retry state", () => {
     const onClose = vi.fn();
     const onConfirm = vi.fn();

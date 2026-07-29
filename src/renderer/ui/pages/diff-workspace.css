@@ -1,0 +1,212 @@
+.diff-workspace-backdrop {
+  padding: 20px;
+}
+
+.diff-workspace {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: min(720px, calc(100vh - 40px));
+  max-height: calc(100vh - 40px);
+  max-width: calc(100vw - 40px);
+  min-height: min(440px, calc(100vh - 40px));
+  min-width: min(680px, calc(100vw - 40px));
+  overflow: hidden;
+  resize: both;
+  width: min(1080px, calc(100vw - 40px));
+}
+
+.diff-workspace.is-maximized {
+  height: calc(100vh - 16px);
+  max-height: none;
+  max-width: none;
+  min-height: 0;
+  min-width: 0;
+  resize: none;
+  width: calc(100vw - 16px);
+}
+
+.diff-workspace-backdrop:has(.diff-workspace.is-maximized) {
+  padding: 8px;
+}
+
+.diff-workspace__header {
+  align-items: center;
+}
+
+.diff-workspace__window-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.diff-workspace__body {
+  display: grid;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.diff-workspace__tree {
+  background: var(--surface-muted);
+  border-right: 1px solid var(--border-soft);
+  min-width: 0;
+  overflow: auto;
+  padding: 8px 6px 12px;
+}
+
+.diff-workspace__root {
+  color: var(--subtle);
+  font: 11px/28px ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden;
+  padding: 0 8px 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-workspace__tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.diff-workspace__tree-item {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  font-size: 12px;
+  font-weight: var(--font-weight-regular);
+  gap: 6px;
+  height: 30px;
+  min-width: 100%;
+  padding-block: 0;
+  padding-inline-end: 8px;
+  text-align: left;
+}
+
+.diff-workspace__tree-item:hover {
+  background: var(--surface-pressed);
+  color: var(--text);
+}
+
+.diff-workspace__tree-item.is-selected {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.diff-workspace__tree-item > svg {
+  flex: 0 0 auto;
+}
+
+.diff-workspace__tree-chevron {
+  margin-right: -4px;
+}
+
+.diff-workspace__tree-item > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-workspace__splitter {
+  background: var(--surface);
+  cursor: col-resize;
+  outline: 0;
+  position: relative;
+  touch-action: none;
+}
+
+.diff-workspace__splitter::after {
+  background: var(--border-strong);
+  content: "";
+  inset: 36% 2px;
+  opacity: 0;
+  position: absolute;
+  transition: opacity var(--motion-fast);
+}
+
+.diff-workspace__splitter:hover::after,
+.diff-workspace__splitter:focus-visible::after {
+  opacity: 1;
+}
+
+.diff-workspace__preview {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.diff-workspace__preview > header {
+  align-items: center;
+  border-bottom: 1px solid var(--border-soft);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 7px 14px;
+}
+
+.diff-workspace__preview > header > div {
+  display: grid;
+  min-width: 0;
+}
+
+.diff-workspace__preview > header strong,
+.diff-workspace__preview > header span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-workspace__preview > header strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  line-height: 18px;
+}
+
+.diff-workspace__preview > header > div > span {
+  color: var(--subtle);
+  font: 10px/16px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.diff-workspace__diff {
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px 12px;
+}
+
+.diff-workspace__diff .diff-viewer {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  margin: 0;
+  min-height: 100%;
+}
+
+.diff-workspace__diff .diff-table-wrap {
+  flex: 0 0 auto;
+  max-height: none;
+}
+
+@media (max-width: 760px), (max-height: 520px) {
+  .diff-workspace-backdrop {
+    padding: 8px;
+  }
+
+  .diff-workspace {
+    height: calc(100vh - 16px);
+    max-height: none;
+    max-width: none;
+    min-height: 0;
+    min-width: 0;
+    resize: none;
+    width: calc(100vw - 16px);
+  }
+}

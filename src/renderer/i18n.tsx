@@ -1988,6 +1988,20 @@ Object.assign(zhCN, {
 });
 
 Object.assign(zhCN, {
+  "Expand preview": "展开预览",
+  "Expanded diff preview": "展开的差异预览",
+  "Maximize preview": "最大化预览",
+  "Restore preview size": "恢复预览大小",
+  "Diff file tree": "差异文件树",
+  "Resize file tree": "调整文件树宽度",
+  "Use one strategy": "统一使用一种策略",
+  "Apply the same version choice to {{count}} unresolved Skills.": "对 {{count}} 个未解决的 Skills 使用相同版本选择。",
+  "Collection version strategy": "Collection 版本策略",
+  "Keep Library versions": "保留 Library 版本",
+  "Use collection versions": "采用 Collection 版本",
+  "Apply to {{count}}": "应用到 {{count}} 项",
+  "Processing": "处理中",
+  "Ready to add": "可以添加",
   "Folder or ZIP": "文件夹或 ZIP",
   "Local Skill source path": "本地技能来源路径",
   "No source selected": "尚未选择来源",
@@ -2011,6 +2025,20 @@ Object.assign(zhCN, {
 });
 
 const zhTW: Record<string, string> = {
+  "Expand preview": "展開預覽",
+  "Expanded diff preview": "展開的差異預覽",
+  "Maximize preview": "最大化預覽",
+  "Restore preview size": "恢復預覽大小",
+  "Diff file tree": "差異檔案樹",
+  "Resize file tree": "調整檔案樹寬度",
+  "Use one strategy": "統一使用一種策略",
+  "Apply the same version choice to {{count}} unresolved Skills.": "對 {{count}} 個未解決的 Skills 使用相同版本選擇。",
+  "Collection version strategy": "Collection 版本策略",
+  "Keep Library versions": "保留 Library 版本",
+  "Use collection versions": "採用 Collection 版本",
+  "Apply to {{count}}": "套用到 {{count}} 項",
+  "Processing": "處理中",
+  "Ready to add": "可以加入",
   "Skip this import. The current Library copy stays unchanged.": "略過本次匯入，目前的資源庫副本保持不變。",
   "Configure": "設定",
   "Configure {{name}}": "設定 {{name}}",

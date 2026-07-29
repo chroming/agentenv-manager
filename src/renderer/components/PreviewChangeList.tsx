@@ -4,9 +4,11 @@ import {
   FileText,
   Folder,
   MapPin,
+  Maximize2,
   Network,
   Puzzle
 } from "lucide-react";
+import type { RefObject } from "react";
 import type {
   ActivationPreview,
   PlannedFileChange,
@@ -17,6 +19,7 @@ import type {
 import { useI18n } from "../i18n";
 import { DiffViewer } from "./DiffViewer";
 import { OverflowTooltip } from "./OverflowTooltip";
+import { Button } from "./ui";
 
 type Preview = ActivationPreview | RollbackPreview | StopManagingPreview;
 type GroupId = "instructions" | "skills" | "mcp" | "storage" | "configuration" | "cleanup";
@@ -67,10 +70,14 @@ const groupIcon = (id: GroupId) => {
 
 export const PreviewChangeList = ({
   preview,
-  activation
+  activation,
+  expandButtonRef,
+  onExpandPreview
 }: {
   preview: Preview;
   activation: boolean;
+  expandButtonRef?: RefObject<HTMLButtonElement | null>;
+  onExpandPreview?(): void;
 }) => {
   const { t } = useI18n();
   const resources = "resourceChanges" in preview ? preview.resourceChanges : [];
@@ -135,6 +142,17 @@ export const PreviewChangeList = ({
             {totalChanges}
           </span>
         </div>
+        {preview.changes.length > 0 && onExpandPreview ? (
+          <Button
+            ref={expandButtonRef}
+            icon={<Maximize2 size={14} />}
+            size="compact"
+            variant="ghost"
+            onClick={onExpandPreview}
+          >
+            {t("Expand preview")}
+          </Button>
+        ) : null}
       </header>
       <div className="apply-preview-change-groups">
         {visibleGroups.map((group) => {

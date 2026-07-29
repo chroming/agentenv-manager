@@ -389,7 +389,7 @@ describe("PreviewDialog", () => {
   it("wraps Tab from the last modal control to the first", () => {
     render(<PreviewDialog preview={preview} onCancel={vi.fn()} onConfirm={vi.fn()} />);
     const dialog = screen.getByRole("dialog", { name: "Preview" });
-    const firstControl = dialog.querySelector<HTMLElement>("summary")!;
+    const firstControl = within(dialog).getByRole("button", { name: "Expand preview" });
     const lastControl = within(dialog).getByRole("button", { name: "Confirm" });
     lastControl.focus();
 
@@ -401,7 +401,7 @@ describe("PreviewDialog", () => {
   it("wraps Shift+Tab from the first modal control to the last", () => {
     render(<PreviewDialog preview={preview} onCancel={vi.fn()} onConfirm={vi.fn()} />);
     const dialog = screen.getByRole("dialog", { name: "Preview" });
-    const firstControl = dialog.querySelector<HTMLElement>("summary")!;
+    const firstControl = within(dialog).getByRole("button", { name: "Expand preview" });
     const lastControl = within(dialog).getByRole("button", { name: "Confirm" });
     firstControl?.focus();
 
@@ -423,7 +423,7 @@ describe("PreviewDialog", () => {
     );
     const { rerender } = render(renderDialog(false));
     const dialog = screen.getByRole("dialog", { name: "Preview" });
-    const firstControl = dialog.querySelector<HTMLElement>("summary")!;
+    const firstControl = within(dialog).getByRole("button", { name: "Expand preview" });
     const confirm = within(dialog).getByRole("button", { name: "Confirm" });
     confirm.focus();
 
@@ -438,6 +438,24 @@ describe("PreviewDialog", () => {
     fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
 
     expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveFocus();
+  });
+
+  it("closes the expanded diff with Escape and keeps the Apply preview open", () => {
+    const onCancel = vi.fn();
+    render(<PreviewDialog preview={preview} onCancel={onCancel} onConfirm={vi.fn()} />);
+    const parent = screen.getByRole("dialog", { name: "Preview" });
+
+    const expandButton = within(parent).getByRole("button", { name: "Expand preview" });
+    fireEvent.click(expandButton);
+    const workspace = screen.getByRole("dialog", { name: "Expanded diff preview" });
+    expect(workspace).toBeInTheDocument();
+    expect(parent).toHaveAttribute("aria-hidden", "true");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Expanded diff preview" })).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Preview" })).toBeInTheDocument();
+    expect(expandButton).toHaveFocus();
+    expect(onCancel).not.toHaveBeenCalled();
   });
 
   it("closes only the topmost modal and restores focus inside the outer dialog", () => {

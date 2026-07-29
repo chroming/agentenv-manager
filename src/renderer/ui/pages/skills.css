@@ -1306,6 +1306,13 @@
   color: var(--subtle);
 }
 
+.skill-import-file-review__header > div {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
 .skill-import-file-review .diff-list,
 .skill-import-identical-preview {
   flex: 1 1 auto;
@@ -1591,6 +1598,13 @@
   min-width: 0;
   align-items: baseline;
   gap: 8px;
+}
+
+.skill-merge-diff > header .skill-merge-diff__actions {
+  align-items: center;
+  flex: 0 1 auto;
+  gap: 6px;
+  justify-content: flex-end;
 }
 
 .skill-merge-diff > header span {

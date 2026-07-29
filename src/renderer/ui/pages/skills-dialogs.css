@@ -215,8 +215,8 @@
 }
 
 .skill-collection-dialog {
-  width: min(680px, calc(100vw - 40px));
-  max-width: 680px;
+  width: min(720px, calc(100vw - 40px));
+  max-width: 720px;
   max-height: min(760px, calc(100vh - 40px));
   gap: 0;
   overflow: hidden;
@@ -279,12 +279,47 @@
   background: var(--surface);
 }
 
+.skill-collection-strategy {
+  align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 210px auto;
+  min-height: 54px;
+  padding: 8px 10px;
+}
+
+.skill-collection-strategy > span {
+  display: grid;
+  min-width: 0;
+}
+
+.skill-collection-strategy strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  line-height: 18px;
+}
+
+.skill-collection-strategy small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.skill-collection-strategy select {
+  min-width: 0;
+  width: 100%;
+}
+
 .skill-collection-member {
   display: grid;
   min-height: 50px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 18px minmax(0, 1fr) 132px 70px;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
   padding: 7px 10px;
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -293,10 +328,51 @@
   border-bottom: 0;
 }
 
-.skill-collection-member > span:first-child {
+.skill-collection-member > span:nth-child(2) {
   display: grid;
   min-width: 0;
   gap: 3px;
+}
+
+.skill-collection-member__status {
+  align-items: center;
+  color: var(--subtle);
+  display: inline-flex;
+  height: 18px;
+  justify-content: center;
+  width: 18px;
+}
+
+.skill-collection-member__failure {
+  align-items: center;
+  display: inline-flex;
+}
+
+.skill-collection-member__status--working {
+  color: var(--accent);
+}
+
+.skill-collection-member__status--done {
+  color: var(--success);
+}
+
+.skill-collection-member__status--review {
+  color: var(--warning);
+}
+
+.skill-collection-member__status--failed {
+  color: var(--danger);
+}
+
+.skill-collection-member .resource-chip {
+  justify-self: start;
+  max-width: 132px;
+}
+
+.skill-collection-member > .ui-button,
+.skill-collection-member__action-spacer {
+  justify-self: stretch;
+  width: 70px;
 }
 
 .skill-collection-member__name,
@@ -326,6 +402,21 @@
 
 .skill-collection-dialog > .preview-actions > :first-child {
   margin-right: auto;
+}
+
+@media (max-width: 700px) {
+  .skill-collection-strategy {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .skill-collection-strategy > span {
+    grid-column: 1 / -1;
+  }
+
+  .skill-collection-member {
+    grid-template-columns: 18px minmax(0, 1fr) 116px 64px;
+    gap: 8px;
+  }
 }
 
 .skill-availability-dialog__header {

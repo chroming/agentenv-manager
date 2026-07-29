@@ -82,7 +82,7 @@ import { InfoTip } from "./InfoTip";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
 import { ResourceIconPicker } from "./ResourceIconPicker";
 import { SkillUpdateDialog } from "./SkillUpdateDialog";
-import { DiffViewer } from "./DiffViewer";
+import { SkillMergeDiffSection } from "./SkillMergeDiffSection";
 import {
   matchesSkillStatusFilter,
   matchesSkillUsageFilter,
@@ -113,7 +113,12 @@ import { SkillCleanupDetailsFooter } from "./SkillCleanupDetailsFooter";
 import { SkillUpdateSettingsDialog } from "./SkillUpdateSettingsDialog";
 import { CleanupBucketHeader } from "./CleanupBucketHeader";
 import { BulkSkillUpdateDialog } from "./BulkSkillUpdateDialog";
-import { SkillCollectionDialog, SkillCollectionRows, useSkillCollectionActions } from "./SkillCollectionCleanup";
+import {
+  SkillCollectionDialog,
+  SkillCollectionRows,
+  useSkillCollectionActions,
+  type CollectionResolutionStrategy
+} from "./SkillCollectionCleanup";
 import {
   cleanupActionDisplayLabel,
   cleanupActionLabel,
@@ -196,7 +201,11 @@ interface SkillLibraryPanelProps {
   onReleaseSkillArchive(token: string): Promise<void>;
   onScanLocalSkillSource?(rootPath: string): Promise<ProjectSkillScanResult>;
   onImportUnmanaged(sourcePath: string, sourceHandling?: "copy-only", deferFullRefresh?: boolean): Promise<boolean>;
-  onResolveCollectionConflict?(item: SkillInventoryEntry): Promise<boolean>;
+  onResolveCollectionConflict?(
+    item: SkillInventoryEntry,
+    strategy?: CollectionResolutionStrategy,
+    deferFullRefresh?: boolean
+  ): Promise<boolean>;
   onImportLocalSourceSkill?(sourcePath: string, sourceCollection?: SkillSourceCollectionRef, upstream?: import("../../shared/types").SkillUpstream): Promise<boolean>;
   onListSkillFiles(id: string): Promise<SkillFileNode[]>;
   onReadSkillFile(id: string, path: string): Promise<SkillFileContent>;
@@ -412,6 +421,7 @@ export const SkillLibraryPanel = ({
   const [mergeSourceId, setMergeSourceId] = useState("");
   const [mergeCompareId, setMergeCompareId] = useState("");
   const [mergeOperation, setMergeOperation] = useState<"loading" | "merging">();
+  const [mergeDiffExpanded, setMergeDiffExpanded] = useState(false);
   const [availabilityOperation, setAvailabilityOperation] = useState<SkillAvailabilityInput>();
   const [localPreviewingSkillId, setLocalPreviewingSkillId] = useState<string>();
   const [cleanupDetailsKey, setCleanupDetailsKey] = useState<string>();
@@ -423,8 +433,10 @@ export const SkillLibraryPanel = ({
     useSkillCollectionSelection(collectionGroups, focusCollectionPath, activeTool === "discoveries", onFocusCollectionHandled);
   const {
     operation: collectionOperation,
+    itemProgress: collectionItemProgress,
     changeRetention: changeCollectionRetention,
-    importSkills: importCollectionSkills,
+    processItem: processCollectionItem,
+    applyStrategy: applyCollectionStrategy,
     move: moveSkillCollection
   } = useSkillCollectionActions({
   onSetSkillPathPolicies,
@@ -2401,13 +2413,18 @@ export const SkillLibraryPanel = ({
       ) : null}
 
       {mergePreview && mergeKeepEntry && mergeSourceEntry ? createPortal(
-        <div className="preview-modal-backdrop" onClick={() => !mergeOperation && setMergePreview(undefined)}>
+        <div
+          className={`preview-modal-backdrop${mergeDiffExpanded ? " is-suspended" : ""}`}
+          onClick={() => !mergeOperation && !mergeDiffExpanded && setMergePreview(undefined)}
+        >
           <section
             ref={modalDialogRef}
             className="profile-form-dialog skill-merge-dialog ui-dialog-shell"
             role="dialog"
-            aria-modal="true"
+            aria-hidden={mergeDiffExpanded || undefined}
+            aria-modal={mergeDiffExpanded ? undefined : "true"}
             aria-label={t("Merge same-name Skills")}
+            inert={mergeDiffExpanded || undefined}
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header ui-dialog-header">
@@ -2485,42 +2502,14 @@ export const SkillLibraryPanel = ({
                 </div>
               </fieldset>
 
-              <section className="skill-merge-diff" aria-label={t("Skill differences") }>
-                <header>
-                  <div>
-                    <strong>{t("Compare content")}</strong>
-                    <span>{mergeKeepEntry.id}</span>
-                  </div>
-                  {mergeCompareEntries.length > 1 ? (
-                    <select
-                      aria-label={t("Compare with")}
-                      value={effectiveCompareId}
-                      onChange={(event) => setMergeCompareId(event.target.value)}
-                    >
-                      {mergeCompareEntries.map((entry) => (
-                        <option key={entry.id} value={entry.id}>{entry.id}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span>{effectiveCompareId}</span>
-                  )}
-                </header>
-                {mergeComparison?.changes.length ? (
-                  <div className="diff-list">
-                    {mergeComparison.changes.map((change) => (
-                      <div className="diff-file" key={change.path}>
-                        <div className="diff-file-meta"><strong>{change.path}</strong></div>
-                        <DiffViewer path={change.path} diff={change.diff} />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="skill-merge-identical">
-                    <CheckCircle2 size={16} strokeWidth={2.2} />
-                    <span>{t("No file changes")}</span>
-                  </div>
-                )}
-              </section>
+              <SkillMergeDiffSection
+                comparison={mergeComparison}
+                compareEntries={mergeCompareEntries}
+                compareId={effectiveCompareId}
+                keepId={mergeKeepEntry.id}
+                onCompareChange={setMergeCompareId}
+                onExpandedChange={setMergeDiffExpanded}
+              />
 
               <div className="skill-merge-impact">
                 <strong>{t("Merge impact")}</strong>
@@ -2801,14 +2790,18 @@ export const SkillLibraryPanel = ({
       <SkillCollectionDialog
         collection={selectedCollection}
         operation={collectionOperation}
+        itemProgress={collectionItemProgress}
         dialogRef={modalDialogRef}
         initialFocusRef={modalInitialFocusRef}
         onClose={() => setCollectionDetailsPath(undefined)}
         onChangeRetention={(collection, retained) => {
           void changeCollectionRetention(collection, retained);
         }}
-        onImport={(collection) => {
-          void importCollectionSkills(collection);
+        onProcessItem={(item) => {
+          void processCollectionItem(item);
+        }}
+        onApplyStrategy={(collection, strategy) => {
+          void applyCollectionStrategy(collection, strategy);
         }}
         onMove={(collection) => {
           void moveSkillCollection(collection);

@@ -1,11 +1,13 @@
-import { LoaderCircle } from "lucide-react";
-import { useMemo, useState, type RefObject } from "react";
+import { LoaderCircle, Maximize2 } from "lucide-react";
+import { useMemo, useRef, useState, type RefObject } from "react";
 import type {
   SkillImportConflictResolution,
   SkillImportPreview
 } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { DiffViewer } from "./DiffViewer";
+import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
+import { Button } from "./ui";
 
 export interface PendingSkillImport {
   preview: SkillImportPreview;
@@ -31,6 +33,7 @@ export const SkillImportConflictDialog = ({
   onConfirm
 }: SkillImportConflictDialogProps) => {
   const { t, formatDate } = useI18n();
+  const expandPreviewRef = useRef<HTMLButtonElement>(null);
   const preferredConflict = useMemo(
     () =>
       pending.preview.conflicts.find((conflict) => conflict.sourceUpdateAvailable) ??
@@ -44,6 +47,7 @@ export const SkillImportConflictDialog = ({
   const [decision, setDecision] = useState<ImportDecision>(
     preferredConflict.contentIdentical ? "keep-both" : "replace"
   );
+  const [diffWorkspaceOpen, setDiffWorkspaceOpen] = useState(false);
   const selectedConflict =
     pending.preview.conflicts.find(
       (conflict) => conflict.existing.id === selectedConflictId
@@ -83,15 +87,18 @@ export const SkillImportConflictDialog = ({
             : t("Save another Skill");
 
   return (
-    <div
-      className="preview-modal-backdrop skill-import-conflict-backdrop"
-      onClick={onDismiss}
-    >
+    <>
+      <div
+        className={`preview-modal-backdrop skill-import-conflict-backdrop${diffWorkspaceOpen ? " is-suspended" : ""}`}
+        onClick={diffWorkspaceOpen ? undefined : onDismiss}
+      >
       <section
         ref={dialogRef}
         className="profile-form-dialog skill-import-conflict-dialog ui-dialog-shell"
         role="dialog"
-        aria-modal="true"
+        aria-hidden={diffWorkspaceOpen || undefined}
+        aria-modal={diffWorkspaceOpen ? undefined : "true"}
+        inert={diffWorkspaceOpen || undefined}
         aria-label={t("Review duplicate Skill")}
         aria-busy={pending.committing}
         onClick={(event) => event.stopPropagation()}
@@ -215,14 +222,27 @@ export const SkillImportConflictDialog = ({
 
           <div className="skill-import-file-review">
             <div className="skill-import-file-review__header">
-              <strong>{t("SKILL.md preview")}</strong>
-              <span>
-                {selectedConflict.changes.length === 0
-                  ? t("No file changes")
-                  : t("{{count}} changed files", {
-                      count: selectedConflict.changes.length
-                    })}
-              </span>
+              <div>
+                <strong>{t("SKILL.md preview")}</strong>
+                <span>
+                  {selectedConflict.changes.length === 0
+                    ? t("No file changes")
+                    : t("{{count}} changed files", {
+                        count: selectedConflict.changes.length
+                      })}
+                </span>
+              </div>
+              {selectedConflict.changes.length > 0 ? (
+                <Button
+                  ref={expandPreviewRef}
+                  icon={<Maximize2 size={14} />}
+                  size="compact"
+                  variant="ghost"
+                  onClick={() => setDiffWorkspaceOpen(true)}
+                >
+                  {t("Expand preview")}
+                </Button>
+              ) : null}
             </div>
             {selectedConflict.changes.length > 0 ? (
               <div className="diff-list">
@@ -332,6 +352,14 @@ export const SkillImportConflictDialog = ({
           </button>
         </footer>
       </section>
-    </div>
+      </div>
+      <DiffWorkspaceDialog
+        changes={selectedConflict.changes}
+        open={diffWorkspaceOpen}
+        returnFocusRef={expandPreviewRef}
+        title={t("SKILL.md preview")}
+        onClose={() => setDiffWorkspaceOpen(false)}
+      />
+    </>
   );
 };

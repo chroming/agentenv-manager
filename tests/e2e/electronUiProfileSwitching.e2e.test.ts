@@ -4195,6 +4195,30 @@ describe("Electron UI profile switching e2e", () => {
       await expect.poll(() => firstFileChange.getAttribute("open")).not.toBeNull();
     }
 
+    const expandPreview = previewDialog.getByRole("button", { name: "Expand preview" });
+    if (await expandPreview.count()) {
+      await expandPreview.click();
+      const workspace = page.getByRole("dialog", { name: "Expanded diff preview" });
+      await workspace.waitFor({ state: "visible" });
+      await expectInViewport(page, workspace);
+      await expectNoHorizontalOverflow(page, [
+        ".diff-workspace",
+        ".diff-workspace__tree",
+        ".diff-workspace__preview"
+      ]);
+      expect(await workspace.locator(".diff-workspace__tree-item").count()).toBeGreaterThan(0);
+      expect(await workspace.getByRole("table").count()).toBe(1);
+
+      await workspace.getByRole("button", { name: "Maximize preview" }).click();
+      const maximizedBox = await workspace.boundingBox();
+      expect(maximizedBox).not.toBeNull();
+      expect(maximizedBox!.width).toBeGreaterThan(1100);
+      expect(maximizedBox!.height).toBeGreaterThan(690);
+      await page.keyboard.press("Escape");
+      await workspace.waitFor({ state: "hidden" });
+      await previewDialog.waitFor({ state: "visible" });
+    }
+
     const expectPreviewGeometry = async () => {
       const cancelButton = previewDialog.getByRole("button", { name: "Cancel" });
       const confirmButton = previewDialog.getByRole("button", { name: "Apply", exact: true });
@@ -4283,6 +4307,21 @@ describe("Electron UI profile switching e2e", () => {
     expect(footerAfter?.y).toBe(footerBefore?.y);
     await resizeAppWindow(page, 920, 620);
     await expectPreviewGeometry();
+    const compactExpand = previewDialog.getByRole("button", { name: "Expand preview" });
+    if (await compactExpand.count()) {
+      await compactExpand.click();
+      const compactWorkspace = page.getByRole("dialog", { name: "Expanded diff preview" });
+      await compactWorkspace.waitFor({ state: "visible" });
+      await expectInViewport(page, compactWorkspace);
+      await expectNoHorizontalOverflow(page, [
+        ".diff-workspace",
+        ".diff-workspace__body",
+        ".diff-workspace__preview"
+      ]);
+      await page.keyboard.press("Escape");
+      await compactWorkspace.waitFor({ state: "hidden" });
+      await previewDialog.waitFor({ state: "visible" });
+    }
   }, 30_000);
 
   it("keeps visible control and status text inside its component contract", async () => {
@@ -5602,7 +5641,7 @@ describe("Electron UI profile switching e2e", () => {
     dialog = page.getByRole("dialog", {
       name: "Review Skill collection superpowers"
     });
-    await expectInViewport(page, dialog.getByRole("button", { name: "Resolve differences" }));
+    await expectInViewport(page, dialog.getByRole("button", { name: "Apply to 3" }));
     await expect.poll(() => dialog.textContent()).toContain(collectionLink);
     await expect.poll(() => dialog.textContent()).toContain(collectionSource);
     await expect.poll(() => dialog.textContent()).toContain("collection-alpha");
@@ -5614,7 +5653,11 @@ describe("Electron UI profile switching e2e", () => {
         .evaluate((element) => getComputedStyle(element).fontWeight)
     ).toBe("400");
 
-    await dialog.getByRole("button", { name: "Resolve differences" }).click();
+    await dialog
+      .getByRole("listitem")
+      .filter({ hasText: "collection-alpha" })
+      .getByRole("button", { name: "Review" })
+      .click();
     const conflictDialog = page.getByRole("dialog", { name: "Review duplicate Skill" });
     await conflictDialog.waitFor({ state: "visible" });
     await expect.poll(() => conflictDialog.textContent()).toContain("collection-alpha");
@@ -5649,17 +5692,30 @@ describe("Electron UI profile switching e2e", () => {
     await conflictDialog.waitFor({ state: "hidden" });
     await dialog.waitFor({ state: "visible" });
     await expect.poll(() => dialog.textContent()).toContain("Use Library version");
-    await expectInViewport(page, dialog.getByRole("button", { name: "Resolve differences" }));
+    await expectInViewport(
+      page,
+      dialog
+        .getByRole("listitem")
+        .filter({ hasText: "collection-beta" })
+        .getByRole("button", { name: "Review" })
+    );
 
-    await dialog.getByRole("button", { name: "Resolve differences" }).click();
+    await dialog
+      .getByRole("listitem")
+      .filter({ hasText: "collection-beta" })
+      .getByRole("button", { name: "Review" })
+      .click();
     await conflictDialog.waitFor({ state: "visible" });
     await expect.poll(() => conflictDialog.textContent()).toContain("collection-beta");
     await expect.poll(() => conflictDialog.textContent()).not.toContain("collection-alpha");
     await conflictDialog.getByRole("button", { name: "Replace Skill" }).click();
     await conflictDialog.waitFor({ state: "hidden" });
     await dialog.waitFor({ state: "visible" });
-    await expectInViewport(page, dialog.getByRole("button", { name: "Add missing to Library" }));
-    await dialog.getByRole("button", { name: "Add missing to Library" }).click();
+    const missingRow = dialog
+      .getByRole("listitem")
+      .filter({ hasText: "collection-gamma" });
+    await expectInViewport(page, missingRow.getByRole("button", { name: "Add" }));
+    await missingRow.getByRole("button", { name: "Add" }).click();
     await expect
       .poll(() => fileExists(join(appDataRoot, "skills-library", "collection-alpha", "SKILL.md")))
       .toBe(true);

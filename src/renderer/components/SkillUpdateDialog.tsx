@@ -1,9 +1,16 @@
 import { useRef, useState } from "react";
-import { CheckCircle2, CircleAlert, Clock3, LoaderCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  CircleAlert,
+  Clock3,
+  LoaderCircle,
+  Maximize2
+} from "lucide-react";
 import type { PlannedFileChange, SkillUpdatePlan } from "../../shared/types";
 import type { SkillUpdateRunItem } from "../skillUpdateQueue";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { DiffViewer } from "./DiffViewer";
+import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
 import { Button, ModalFrame } from "./ui";
 import { useI18n } from "../i18n";
 
@@ -47,6 +54,8 @@ export const SkillUpdateDialog = ({
   const { t } = useI18n();
   const dialogRef = useRef<HTMLElement>(null);
   const initialFocusRef = useRef<HTMLButtonElement>(null);
+  const expandPreviewRef = useRef<HTMLButtonElement>(null);
+  const [diffWorkspaceOpen, setDiffWorkspaceOpen] = useState(false);
 
   useModalDialog({
     open: Boolean(plan),
@@ -100,12 +109,14 @@ export const SkillUpdateDialog = ({
   const finished = progress?.status === "updated" || progress?.status === "failed";
 
   return (
-    <ModalFrame
+    <>
+      <ModalFrame
       ariaLabel={t("Update preview for {{id}}", { id: plan.id })}
       className="skill-update-dialog ui-dialog-shell"
       dialogRef={dialogRef}
       dismissDisabled={busy}
       onDismiss={onClose}
+      suspended={diffWorkspaceOpen}
     >
         <header className="profile-dialog-header ui-dialog-header">
           <div className="ui-dialog-header__copy">
@@ -142,6 +153,15 @@ export const SkillUpdateDialog = ({
               </div>
             ) : null}
           </div>
+          <Button
+            ref={expandPreviewRef}
+            icon={<Maximize2 size={14} />}
+            size="compact"
+            variant="ghost"
+            onClick={() => setDiffWorkspaceOpen(true)}
+          >
+            {t("Expand preview")}
+          </Button>
         </header>
         <div className="update-change-list ui-dialog-body">
           {plan.changes.map((change, index) => (
@@ -190,6 +210,14 @@ export const SkillUpdateDialog = ({
             </Button>
           ) : null}
         </footer>
-    </ModalFrame>
+      </ModalFrame>
+      <DiffWorkspaceDialog
+        changes={plan.changes}
+        open={diffWorkspaceOpen}
+        returnFocusRef={expandPreviewRef}
+        title={t("Update {{name}}", { name: plan.name })}
+        onClose={() => setDiffWorkspaceOpen(false)}
+      />
+    </>
   );
 };

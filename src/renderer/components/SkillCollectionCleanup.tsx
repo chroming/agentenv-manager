@@ -1,6 +1,13 @@
 import { useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { Folder, LoaderCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  Circle,
+  CircleAlert,
+  Folder,
+  LoaderCircle,
+  XCircle
+} from "lucide-react";
 import {
   isSkillCollectionItemLibraryReady,
   type SkillCollectionLinkGroup
@@ -12,8 +19,14 @@ import type {
 import { useI18n } from "../i18n";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
+import { Button } from "./ui";
 
 type CollectionOperation = "import" | "keep" | "review" | "move";
+export type CollectionResolutionStrategy = "keep-library" | "use-collection";
+type CollectionItemProgress = {
+  error?: string;
+  state: "working" | "done" | "failed";
+};
 
 interface SkillCollectionActionsInput {
   onSetSkillPathPolicies?(input: SkillPathPolicyUpdate): Promise<boolean>;
@@ -22,7 +35,11 @@ interface SkillCollectionActionsInput {
     sourceHandling?: "copy-only",
     deferFullRefresh?: boolean
   ): Promise<boolean>;
-  onResolveCollectionConflict?(item: SkillInventoryEntry): Promise<boolean>;
+  onResolveCollectionConflict?(
+    item: SkillInventoryEntry,
+    strategy?: CollectionResolutionStrategy,
+    deferFullRefresh?: boolean
+  ): Promise<boolean>;
   onRefreshInventory(announce?: boolean): Promise<void>;
   onMoveSkillCollection?(collection: SkillCollectionLinkGroup): Promise<boolean>;
   onClose(): void;
@@ -37,6 +54,14 @@ export const useSkillCollectionActions = ({
   onClose
 }: SkillCollectionActionsInput) => {
   const [operation, setOperation] = useState<CollectionOperation>();
+  const [itemProgress, setItemProgress] = useState<Record<string, CollectionItemProgress>>({});
+  const updateItemProgress = (
+    path: string,
+    state: CollectionItemProgress["state"],
+    error?: string
+  ) => {
+    setItemProgress((current) => ({ ...current, [path]: { state, error } }));
+  };
 
   const changeRetention = async (
     collection: SkillCollectionLinkGroup,
@@ -54,27 +79,77 @@ export const useSkillCollectionActions = ({
     }
   };
 
-  const importSkills = async (collection: SkillCollectionLinkGroup) => {
+  const processItem = async (item: SkillInventoryEntry) => {
+    if (operation) return;
+    setOperation("review");
+    updateItemProgress(item.path, "working");
+    try {
+      const conflict =
+        Boolean(item.libraryId) &&
+        item.contentMatchesLibrary === false &&
+        item.pathPolicy !== "use-library";
+      const completed = conflict && onResolveCollectionConflict
+        ? await onResolveCollectionConflict(item)
+        : await onImportUnmanaged(item.path, "copy-only");
+      if (completed) {
+        updateItemProgress(item.path, "done");
+      } else {
+        setItemProgress((current) => {
+          const next = { ...current };
+          delete next[item.path];
+          return next;
+        });
+      }
+      if (completed) await onRefreshInventory(false);
+    } catch (error) {
+      updateItemProgress(
+        item.path,
+        "failed",
+        error instanceof Error ? error.message : String(error)
+      );
+    } finally {
+      setOperation(undefined);
+    }
+  };
+
+  const applyStrategy = async (
+    collection: SkillCollectionLinkGroup,
+    strategy: CollectionResolutionStrategy
+  ) => {
     if (operation) return;
     setOperation("import");
     try {
-      const conflict = collection.items.find(
-        (item) =>
-          item.libraryId &&
-          item.contentMatchesLibrary === false &&
-          item.pathPolicy !== "use-library"
-      );
-      if (conflict) {
-        if (onResolveCollectionConflict) {
-          await onResolveCollectionConflict(conflict);
-        } else {
-          await onImportUnmanaged(conflict.path, "copy-only");
-        }
-        return;
-      }
       for (const item of collection.items) {
         if (isSkillCollectionItemLibraryReady(item)) continue;
-        if (!(await onImportUnmanaged(item.path, "copy-only", true))) return;
+        updateItemProgress(item.path, "working");
+        const conflict =
+          Boolean(item.libraryId) &&
+          item.contentMatchesLibrary === false &&
+          item.pathPolicy !== "use-library";
+        let completed = false;
+        try {
+          if (conflict && strategy === "keep-library" && onSetSkillPathPolicies) {
+            completed = await onSetSkillPathPolicies({
+              items: [{ path: item.path, skillKey: item.skillKey }],
+              mode: "use-library"
+            });
+          } else if (conflict && onResolveCollectionConflict) {
+            completed = await onResolveCollectionConflict(item, strategy, true);
+          } else {
+            completed = await onImportUnmanaged(item.path, "copy-only", true);
+          }
+          updateItemProgress(
+            item.path,
+            completed ? "done" : "failed",
+            completed ? undefined : "This Skill was not changed."
+          );
+        } catch (error) {
+          updateItemProgress(
+            item.path,
+            "failed",
+            error instanceof Error ? error.message : String(error)
+          );
+        }
       }
       await onRefreshInventory(false);
     } finally {
@@ -92,7 +167,14 @@ export const useSkillCollectionActions = ({
     }
   };
 
-  return { operation, changeRetention, importSkills, move };
+  return {
+    operation,
+    itemProgress,
+    changeRetention,
+    processItem,
+    applyStrategy,
+    move
+  };
 };
 
 interface SkillCollectionRowsProps {
@@ -190,26 +272,37 @@ export const SkillCollectionRows = ({
 interface SkillCollectionDialogProps {
   collection?: SkillCollectionLinkGroup;
   operation?: CollectionOperation;
+  itemProgress?: Record<string, CollectionItemProgress>;
   dialogRef: RefObject<HTMLElement | null>;
   initialFocusRef: RefObject<HTMLButtonElement | null>;
   onClose(): void;
   onChangeRetention(collection: SkillCollectionLinkGroup, retained: boolean): void;
-  onImport(collection: SkillCollectionLinkGroup): void;
+  onProcessItem(item: SkillInventoryEntry): void;
+  onApplyStrategy(
+    collection: SkillCollectionLinkGroup,
+    strategy: CollectionResolutionStrategy
+  ): void;
   onMove(collection: SkillCollectionLinkGroup): void;
 }
 
 export const SkillCollectionDialog = ({
   collection,
   operation,
+  itemProgress = {},
   dialogRef,
   initialFocusRef,
   onClose,
   onChangeRetention,
-  onImport,
+  onProcessItem,
+  onApplyStrategy,
   onMove
 }: SkillCollectionDialogProps) => {
   const { formatDate, t } = useI18n();
+  const [strategy, setStrategy] = useState<CollectionResolutionStrategy>("keep-library");
   if (!collection) return null;
+  const unresolvedItems = collection.items.filter(
+    (item) => !isSkillCollectionItemLibraryReady(item)
+  );
 
   return createPortal(
     <div className="preview-modal-backdrop" onClick={operation ? undefined : onClose}>
@@ -252,6 +345,38 @@ export const SkillCollectionDialog = ({
               />
             </span>
           </div>
+          {unresolvedItems.length > 0 ? (
+            <section className="skill-collection-strategy">
+              <span>
+                <strong>{t("Use one strategy")}</strong>
+                <small>
+                  {t("Apply the same version choice to {{count}} unresolved Skills.", {
+                    count: unresolvedItems.length
+                  })}
+                </small>
+              </span>
+              <select
+                aria-label={t("Collection version strategy")}
+                disabled={Boolean(operation)}
+                value={strategy}
+                onChange={(event) => {
+                  setStrategy(event.target.value as CollectionResolutionStrategy);
+                }}
+              >
+                <option value="keep-library">{t("Keep Library versions")}</option>
+                <option value="use-collection">{t("Use collection versions")}</option>
+              </select>
+              <Button
+                busy={operation === "import"}
+                disabled={Boolean(operation)}
+                size="compact"
+                variant="secondary"
+                onClick={() => onApplyStrategy(collection, strategy)}
+              >
+                {t("Apply to {{count}}", { count: unresolvedItems.length })}
+              </Button>
+            </section>
+          ) : null}
           <div className="skill-collection-members" role="list">
             {collection.items.map((item) => {
               const exact = Boolean(item.libraryId) && item.contentMatchesLibrary === true;
@@ -261,12 +386,48 @@ export const SkillCollectionDialog = ({
                 Boolean(item.libraryId) &&
                 item.contentMatchesLibrary === false &&
                 !usesLibrary;
+              const progress = itemProgress[item.path];
+              const ready = exact || usesLibrary;
+              const status = progress?.state === "working"
+                ? t("Processing")
+                : progress?.state === "failed"
+                  ? t("Failed")
+                  : ready
+                    ? t("Ready")
+                    : conflict
+                      ? t("Needs review")
+                      : t("Ready to add");
               return (
                 <div
                   className="skill-collection-member"
                   key={`${item.skillKey}:${item.path}`}
                   role="listitem"
                 >
+                  <span
+                    className={`skill-collection-member__status skill-collection-member__status--${
+                      progress?.state ?? (ready ? "done" : conflict ? "review" : "waiting")
+                    }`}
+                    role="status"
+                    aria-label={t("{{name}}: {{status}}", { name: item.name, status })}
+                  >
+                    {progress?.state === "working" ? (
+                      <LoaderCircle className="is-spinning" size={16} aria-hidden="true" />
+                    ) : progress?.state === "failed" ? (
+                      <PreviewText
+                        ariaLabel={t("Import failure for {{name}}", { name: item.name })}
+                        className="skill-collection-member__failure"
+                        displayContent={<XCircle size={16} strokeWidth={2.2} aria-hidden="true" />}
+                        text={progress.error ?? t("Import failed")}
+                        tooltipClassName="library-source-tooltip import-error-tooltip"
+                      />
+                    ) : ready || progress?.state === "done" ? (
+                      <CheckCircle2 size={16} strokeWidth={2.2} aria-hidden="true" />
+                    ) : conflict ? (
+                      <CircleAlert size={16} strokeWidth={2.1} aria-hidden="true" />
+                    ) : (
+                      <Circle size={16} strokeWidth={2} aria-hidden="true" />
+                    )}
+                  </span>
                   <span>
                     <span className="skill-collection-member__name">{item.name}</span>
                     <small>
@@ -279,7 +440,7 @@ export const SkillCollectionDialog = ({
                     </small>
                   </span>
                   <span className={`resource-chip resource-chip--${
-                    exact || usesLibrary ? "managed" : conflict ? "conflict" : "pending"
+                    ready ? "managed" : conflict ? "conflict" : "pending"
                   }`}>
                     {t(exact
                       ? "In Library"
@@ -289,6 +450,18 @@ export const SkillCollectionDialog = ({
                         ? "Different Library copy"
                         : "Not in Library")}
                   </span>
+                  {!ready ? (
+                    <Button
+                      disabled={Boolean(operation)}
+                      size="compact"
+                      variant="secondary"
+                      onClick={() => onProcessItem(item)}
+                    >
+                      {t(conflict ? "Review" : "Add")}
+                    </Button>
+                  ) : (
+                    <span className="skill-collection-member__action-spacer" />
+                  )}
                 </div>
               );
             })}
@@ -338,24 +511,18 @@ export const SkillCollectionDialog = ({
               {t("Keep external")}
             </button>
           )}
-          {collection.state !== "kept" ? (
+          {collection.state === "ready" ? (
             <button
               className="primary-action"
               type="button"
-              aria-busy={operation === "import" || operation === "move"}
+              aria-busy={operation === "move"}
               disabled={Boolean(operation)}
-              onClick={() => (
-                collection.state === "ready" ? onMove(collection) : onImport(collection)
-              )}
+              onClick={() => onMove(collection)}
             >
-              {operation === "import" || operation === "move" ? (
+              {operation === "move" ? (
                 <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
               ) : null}
-              {collection.state === "ready"
-                ? t("Move collection")
-                : collection.state === "conflict"
-                  ? t("Resolve differences")
-                  : t("Add missing to Library")}
+              {t("Move collection")}
             </button>
           ) : null}
         </footer>
