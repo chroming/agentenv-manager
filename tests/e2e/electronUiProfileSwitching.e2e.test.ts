@@ -467,6 +467,7 @@ const launchApp = async (
     omitAllProfiles?: boolean;
     projectSkillFixture?: boolean;
     sharedSkillFixture?: boolean;
+    legacyUnmanagedSkillDecision?: boolean;
     initialWorkspace?: "library" | "profiles" | "conversations" | "targets" | "settings" | null;
   } = {}
 ) => {
@@ -655,6 +656,27 @@ const launchApp = async (
   }
   await writeGitHubFixtureSkill(githubFixtureRoot, "v1");
   await writeUnmanagedTargetSkill(opencodeDir);
+  if (options.legacyUnmanagedSkillDecision) {
+    const legacySkillPath = join(
+      opencodeDir,
+      "skills",
+      "legacy-boundary-skill"
+    );
+    await writeUnmanagedTargetSkill(
+      opencodeDir,
+      "legacy-boundary-skill",
+      "Legacy device-specific content."
+    );
+    await writeJson(join(appDataRoot, "skill-path-policies.json"), [{
+      id: "legacy-boundary",
+      path: legacySkillPath,
+      skillKey: "legacy-boundary-skill",
+      targetId: "opencode",
+      mode: "keep-outside",
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z"
+    }]);
+  }
   if (options.projectSkillFixture) {
     const projectSkillDir = join(projectSkillRoot, "skills", "project-release");
     const projectDocsDir = join(projectSkillRoot, "skills", "project-docs");
@@ -1107,18 +1129,24 @@ describe("Electron UI profile switching e2e", () => {
     );
     await mkdir(join(appDataRoot, "target-states"), { recursive: true });
     await writeJson(join(appDataRoot, "target-states", "opencode.json"), {
-      formatVersion: 2,
+      formatVersion: 3,
       managedMcpNames: [],
       activeProfileId: profile.id,
       appliedProfileHash:
         profile.targetContentHashes?.opencode ?? profile.contentHash,
       appliedLibraryVersions: { skills: {} },
       managedResources: [],
-      keptOutsideSkills: [{
+      skillReceipts: [{
         path: join(homeDir, ".config", "opencode", "skills", "ui-alpha-skill"),
-        skillKey: "ui-alpha-skill",
         libraryId: "ui-alpha-skill",
-        targetName: "ui-alpha-skill"
+        targetName: "ui-alpha-skill",
+        desired: "install",
+        observed: "external",
+        authority: "leave-unmanaged",
+        action: "preserve",
+        outcome: "external-active",
+        requiresReview: false,
+        localOverride: true
       }],
       sharedSkillPreparations: []
     });
@@ -1310,7 +1338,7 @@ describe("Electron UI profile switching e2e", () => {
   }, 30_000);
 
   it("restores a missing managed OpenCode Skill from one fresh Preview", async () => {
-    const { opencodeDir, page } = await launchApp();
+    const { appDataRoot, opencodeDir, page } = await launchApp();
     await selectProfile(page, "UI OpenCode alpha");
     await previewAndApply(page, "OpenCode");
     const installedPath = join(opencodeDir, "skills", "ui-alpha-skill");
@@ -2495,8 +2523,8 @@ describe("Electron UI profile switching e2e", () => {
     ).resolves.toBe(false);
   }, 30_000);
 
-  it("keeps a concrete local Skill path outside AgentEnv without blocking Profile apply", async () => {
-    const { opencodeDir, page } = await launchApp();
+  it("leaves a concrete local Skill path unmanaged without blocking Profile apply", async () => {
+    const { appDataRoot, opencodeDir, page } = await launchApp();
     await writeUnmanagedTargetSkill(
       opencodeDir,
       "ui-alpha-skill",
@@ -2510,11 +2538,24 @@ describe("Electron UI profile switching e2e", () => {
     await cleanupGroup
       .getByRole("button", { name: "More cleanup actions for ui-alpha-skill" })
       .click();
-    await page.getByRole("menuitem", { name: "Keep outside AgentEnv" }).click();
+    await page.getByRole("menuitem", { name: "Leave unmanaged" }).click();
     await cleanupGroup.waitFor({ state: "hidden" });
-    await page.locator(".cleanup-bucket-heading--kept").click();
+    await page.locator(".cleanup-bucket-heading--unmanaged").click();
     await cleanupGroup.waitFor({ state: "visible" });
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Kept");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Unmanaged");
+    await expect
+      .poll(async () =>
+        readJson<Array<{ path: string; targetId?: string; coverage: string }>>(
+          join(appDataRoot, "unmanaged-skill-locations.json")
+        )
+      )
+      .toContainEqual(
+        expect.objectContaining({
+          path: join(opencodeDir, "skills", "ui-alpha-skill"),
+          targetId: "opencode",
+          coverage: "exact"
+        })
+      );
 
     await selectProfile(page, "UI OpenCode alpha");
     await applyActionButton(page, "OpenCode").click();
@@ -2526,7 +2567,7 @@ describe("Electron UI profile switching e2e", () => {
       "Preserved outside this Profile"
     );
     await expect.poll(() => previewDialog.textContent()).toContain(
-      "ui-alpha-skill stays outside AgentEnv"
+      "ui-alpha-skill is left unmanaged"
     );
     await expect
       .poll(() => previewDialog.getByRole("button", { name: "Apply", exact: true }).isDisabled())
@@ -2541,13 +2582,75 @@ describe("Electron UI profile switching e2e", () => {
         const states = await page.evaluate(() => window.agentEnv.listTargetStates());
         return states.find((state) => state.targetId === "opencode")?.lifecycleStatus;
       })
-      .toBe("applied-with-outside");
+      .toBe("applied-with-local-override");
     await expandComposerSection(page, "Skills");
     const keptSkillRow = page.getByRole("listitem", {
       name: "Profile skill ui-alpha-skill"
     });
-    await expect.poll(() => keptSkillRow.textContent()).toContain("Kept outside");
+    await expect.poll(() => keptSkillRow.textContent()).toContain("External active");
     await expect.poll(() => keptSkillRow.textContent()).not.toContain("Apply pending");
+    await resizeAppWindow(page, 1180, 728);
+    await expect
+      .poll(() =>
+        keptSkillRow
+          .locator(".profile-skill-state small")
+          .evaluate((element) => element.scrollWidth <= element.clientWidth)
+      )
+      .toBe(true);
+
+    await writeFile(
+      join(opencodeDir, "skills", "ui-alpha-skill", "SKILL.md"),
+      "---\nname: ui-alpha-skill\n---\n\nChanged outside AgentEnv.\n",
+      "utf8"
+    );
+    const changedOutsidePreview = await page.evaluate(() =>
+      window.agentEnv.previewApply("ui-opencode-alpha", "opencode")
+    );
+    expect(changedOutsidePreview.changes).toEqual([]);
+    expect(changedOutsidePreview.resourceChanges).toEqual([]);
+    expect(changedOutsidePreview.targetStateChanged).toBe(false);
+    expect(
+      changedOutsidePreview.issues.filter(
+        (issue) => issue.disposition === "block" || issue.disposition === "review"
+      )
+    ).toEqual([]);
+    await expect
+      .poll(async () => {
+        const states = await page.evaluate(() => window.agentEnv.listTargetStates());
+        return states.find((state) => state.targetId === "opencode")?.lifecycleStatus;
+      })
+      .toBe("applied-with-local-override");
+  }, 30_000);
+
+  it("migrates a legacy local Skill decision without changing Agent content", async () => {
+    const { appDataRoot, opencodeDir } = await launchApp({
+      legacyUnmanagedSkillDecision: true
+    });
+    const skillPath = join(opencodeDir, "skills", "legacy-boundary-skill");
+
+    await expect
+      .poll(async () =>
+        readJson<Array<{ path: string; targetId?: string; coverage: string }>>(
+          join(appDataRoot, "unmanaged-skill-locations.json")
+        )
+      )
+      .toContainEqual(
+        expect.objectContaining({
+          path: skillPath,
+          targetId: "opencode",
+          coverage: "exact"
+        })
+      );
+    await expect
+      .poll(async () =>
+        (await readdir(appDataRoot)).some((name) =>
+          name.startsWith("skill-path-policies.json.migrated-")
+        )
+      )
+      .toBe(true);
+    await expect(
+      readFile(join(skillPath, "SKILL.md"), "utf8")
+    ).resolves.toContain("Legacy device-specific content.");
   }, 30_000);
 
   it("backs up and replaces managed OpenCode drift after explicit confirmation", async () => {
@@ -2667,7 +2770,7 @@ describe("Electron UI profile switching e2e", () => {
     const targetState = await readJson<Record<string, unknown>>(
       join(appDataRoot, "target-states", "claude-code.json")
     );
-    expect(targetState).toMatchObject({ formatVersion: 2 });
+    expect(targetState).toMatchObject({ formatVersion: 3 });
     expect(targetState).not.toHaveProperty("managedConfigKeys");
   }, 30_000);
 

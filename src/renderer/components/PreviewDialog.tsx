@@ -37,7 +37,7 @@ interface PreviewDialogProps {
   targetNames?: TargetNameIndex;
   onOpenRecovery?(): void;
   onAdoptTargetChanges?(): void;
-  onKeepSkillOutside?(issue: ApplyIssue): Promise<void> | void;
+  onLeaveSkillUnmanaged?(issue: ApplyIssue): Promise<void> | void;
   onReviewSkillCollection?(issue: ApplyIssue): void;
   onCancel?(): void;
   onConfirm?(): void;
@@ -100,7 +100,7 @@ export const PreviewDialog = ({
   targetNames = {},
   onOpenRecovery,
   onAdoptTargetChanges,
-  onKeepSkillOutside,
+  onLeaveSkillUnmanaged,
   onReviewSkillCollection,
   onCancel,
   onConfirm
@@ -300,7 +300,7 @@ export const PreviewDialog = ({
           <article key={item.id}>
             <strong>{item.title}</strong>
             {kind === "review" &&
-            onKeepSkillOutside &&
+            onLeaveSkillUnmanaged &&
             (item.issue.code === "outside-skill-replacement" ||
               item.issue.code === "outside-skill-removal") ? (
               <Button
@@ -310,12 +310,12 @@ export const PreviewDialog = ({
                 size="compact"
                 onClick={() => {
                   setResolvingIssueId(item.id);
-                  void Promise.resolve(onKeepSkillOutside(item.issue)).finally(() => {
+                  void Promise.resolve(onLeaveSkillUnmanaged(item.issue)).finally(() => {
                     setResolvingIssueId(undefined);
                   });
                 }}
               >
-                {t("Keep outside")}
+                {t("Leave unmanaged")}
               </Button>
             ) : null}
             {kind === "blocked" &&

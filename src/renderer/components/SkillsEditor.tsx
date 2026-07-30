@@ -1,10 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 import { Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import type {
+  AppliedSkillReceipt,
   ProfileResources,
   SkillLibraryEntry,
-  SkillUpdateInfo,
-  TargetKeptOutsideSkill
+  SkillUpdateInfo
 } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
@@ -19,7 +19,7 @@ interface SkillsEditorProps {
   checkingSkillUpdates?: boolean;
   disabled?: boolean;
   appliedSkillVersions?: Record<string, string>;
-  keptOutsideSkills?: TargetKeptOutsideSkill[];
+  skillReceipts?: AppliedSkillReceipt[];
   selectedTargetName?: string;
   onCheckSkillUpdates?(ids: string[]): void;
   onImportNewSkill?(): void;
@@ -34,7 +34,7 @@ export const SkillsEditor = ({
   checkingSkillUpdates = false,
   disabled = false,
   appliedSkillVersions,
-  keptOutsideSkills = [],
+  skillReceipts = [],
   selectedTargetName,
   onCheckSkillUpdates,
   onImportNewSkill,
@@ -180,20 +180,23 @@ export const SkillsEditor = ({
           const globallyEnabled = skill?.globallyEnabled !== false;
           const enabled = Boolean(skill && profileEnabled && globallyEnabled);
           const appliedRevision = appliedSkillVersions?.[reference.libraryId];
-          const keptOutside = keptOutsideSkills.some(
+          const localOverride = skillReceipts.find(
             (entry) =>
+              entry.localOverride &&
               entry.libraryId === reference.libraryId &&
               entry.targetName === reference.targetName
           );
           const deploymentPending = Boolean(
-            !keptOutside && skill && appliedSkillVersions && (enabled
+            !localOverride && skill && appliedSkillVersions && (enabled
               ? appliedRevision !== skill.contentHash
               : appliedRevision)
           );
           const status = !skill
             ? "Missing"
-            : keptOutside
-              ? "Kept outside"
+            : localOverride?.outcome === "external-active"
+              ? "External active"
+              : localOverride?.outcome === "external-remains"
+                ? "External still active"
               : !globallyEnabled
               ? "Disabled in Library"
               : !profileEnabled
@@ -210,11 +213,15 @@ export const SkillsEditor = ({
             ? `v${skill.version}`
             : skill?.contentHash.slice(0, 7) ?? reference.libraryId;
           const detail = skill
-            ? `${versionLabel} · ${sourceLabel} · ${skill.path}`
+            ? `${versionLabel} · ${sourceLabel} · ${
+                localOverride?.path ?? skill.path
+              }`
             : t("Library skill {{id}} is missing", { id: reference.libraryId });
           return (
             <div
-              className={`profile-skill-row${enabled ? "" : " is-disabled"}`}
+              className={`profile-skill-row${enabled ? "" : " is-disabled"}${
+                localOverride ? " has-local-override" : ""
+              }`}
               key={`${reference.libraryId}:${reference.targetName}:${index}`}
               role="listitem"
               aria-label={t("Profile skill {{name}}", { name: reference.libraryId })}
@@ -236,12 +243,18 @@ export const SkillsEditor = ({
                 />
               </div>
               <span
-                className={`profile-skill-state${status === "Ready" || status === "Kept outside" ? " is-neutral" : ""}${status === "Update available" || status === "Apply pending" ? " is-update" : ""}${!skill || update?.error ? " is-error" : ""}`}
+                className={`profile-skill-state${
+                  status === "Ready" || localOverride ? " is-neutral" : ""
+                }${
+                  status === "Update available" || status === "Apply pending"
+                    ? " is-update"
+                    : ""
+                }${!skill || update?.error ? " is-error" : ""}`}
                 title={update?.error ?? status}
               >
                 <strong>{t(status)}</strong>
-                {keptOutside && selectedTargetName ? (
-                  <small>{selectedTargetName} · {t("Kept outside")}</small>
+                {localOverride && selectedTargetName ? (
+                  <small>{selectedTargetName} · {t("Unmanaged")}</small>
                 ) : appliedRevision && selectedTargetName ? (
                   <small>{t("{{name}} · {{revision}}", {
                     name: selectedTargetName,

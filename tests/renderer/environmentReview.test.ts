@@ -72,12 +72,13 @@ describe("environment review", () => {
     });
   });
 
-  it("does not reopen review for a shared path explicitly kept outside", () => {
+  it("does not reopen review for a shared path left unmanaged", () => {
     const result = derive({
       inventory: [
         sharedSkill({
-          status: "kept-outside",
-          pathPolicy: "keep-shared"
+          status: "left-unmanaged",
+          unmanagedLocationId: "unmanaged-shared",
+          unmanagedCoverage: "exact"
         })
       ]
     });
@@ -92,7 +93,9 @@ describe("environment review", () => {
 
   it("keeps stable outside resources out of the action-oriented review state", () => {
     expect(
-      derive({ targetStates: [targetState("applied-with-outside")] })
+      derive({
+        targetStates: [targetState("applied-with-local-override")]
+      })
     ).toMatchObject({
       state: "ready",
       attentionTargetIds: []
@@ -104,7 +107,7 @@ describe("environment review", () => {
       derive({
         installedTargetIds: ["opencode", "codex"],
         targetStates: [
-          targetState("applied-with-outside"),
+          targetState("applied-with-local-override"),
           { ...targetState("pending"), targetId: "codex" }
         ]
       })

@@ -35,7 +35,7 @@ export interface SkillDeploymentDecision {
     | "captured-exact"
     | "matching-outside"
     | "shared-compatible"
-    | "kept-outside"
+    | "left-unmanaged"
     | "occupied";
 }
 
@@ -114,8 +114,9 @@ export const fingerprintSkillInventory = (inventory: SkillInventoryEntry[]): str
       sharedLocation: entry.sharedLocation ?? null,
       sharedLocationId: entry.sharedLocationId ?? null,
       legacyLocation: entry.legacyLocation ?? null,
-      pathPolicyId: entry.pathPolicyId ?? null,
-      pathPolicy: entry.pathPolicy ?? null,
+      unmanagedLocationId: entry.unmanagedLocationId ?? null,
+      unmanagedCoverage: entry.unmanagedCoverage ?? null,
+      collectionDecision: entry.collectionDecision ?? null,
       locationManagement: entry.locationManagement ?? null,
       collectionLinkPath: entry.collectionLink?.path ?? null,
       collectionCanonicalPath: entry.collectionLink?.canonicalPath ?? null
@@ -167,7 +168,7 @@ export const deploymentRelevantSkillInventory = ({
       entry.sharedLocation &&
       entry.libraryId &&
       entry.contentMatchesLibrary === true &&
-      entry.pathPolicy !== "keep-shared"
+      entry.status !== "left-unmanaged"
     ) {
       return true;
     }
@@ -231,7 +232,13 @@ export const buildSkillDeploymentPlan = ({
 
   const unresolvedCollections = new Map<string, SkillInventoryEntry[]>();
   for (const entry of inventory) {
-    if (!entry.collectionLink || entry.pathPolicy === "keep-shared") continue;
+    if (
+      !entry.collectionLink ||
+      (entry.status === "left-unmanaged" &&
+        entry.unmanagedCoverage === "collection")
+    ) {
+      continue;
+    }
     if (isSkillCollectionItemLibraryReady(entry)) continue;
     unresolvedCollections.set(entry.collectionLink.path, [
       ...(unresolvedCollections.get(entry.collectionLink.path) ?? []),
@@ -265,7 +272,12 @@ export const buildSkillDeploymentPlan = ({
   }
 
   for (const entry of inventory) {
-    if (!entry.sharedLocation || entry.pathPolicy !== "keep-shared") continue;
+    if (
+      !entry.sharedLocation ||
+      entry.status !== "left-unmanaged"
+    ) {
+      continue;
+    }
     const runtimeKeys = new Set(
       [
         entry.skillKey,
@@ -291,10 +303,10 @@ export const buildSkillDeploymentPlan = ({
       targetName: reference?.targetName ?? entry.deploymentName ?? entry.id,
       path: entry.path,
       action: "preserve",
-      reason: "kept-outside"
+      reason: "left-unmanaged"
     });
     issues.push(createApplyIssue({
-      code: "kept-outside-skill",
+      code: "unmanaged-skill-location",
       resourceKind: "skill",
       resourceId: entry.runtimeName ?? entry.id,
       path: entry.path,
@@ -307,7 +319,7 @@ export const buildSkillDeploymentPlan = ({
       !entry.sharedLocation ||
       !entry.libraryId ||
       !isSkillCollectionItemLibraryReady(entry) ||
-      entry.pathPolicy === "keep-shared" ||
+      entry.status === "left-unmanaged" ||
       canonicalLibraryPaths.has(resolve(entry.path))
     ) {
       continue;
@@ -336,7 +348,7 @@ export const buildSkillDeploymentPlan = ({
       reference &&
       occupyingItem &&
       !isTargetOwned(occupyingItem) &&
-      occupyingItem.status !== "kept-outside" &&
+      occupyingItem.status !== "left-unmanaged" &&
       (matchesCurrentLibrary(occupyingItem, shared.libraryId, currentLibraryHash) ||
         matchingCaptureCopy(
           captureReceipt,
@@ -362,7 +374,7 @@ export const buildSkillDeploymentPlan = ({
       reference &&
       occupyingItem &&
       !isTargetOwned(occupyingItem) &&
-      occupyingItem.status !== "kept-outside" &&
+      occupyingItem.status !== "left-unmanaged" &&
       !adoptTargetCopy &&
       targetPath
     );
@@ -374,18 +386,18 @@ export const buildSkillDeploymentPlan = ({
       !replaceTargetCopy
     ) {
       issues.push(createApplyIssue({
-        code: "kept-outside-skill",
+        code: "unmanaged-skill-location",
         resourceKind: "skill",
         resourceId: shared.skillKey,
         path: targetPath,
-        message: `${shared.skillKey} stays outside AgentEnv on ${targetPaths.targetId}`
+        message: `${shared.skillKey} is left unmanaged on ${targetPaths.targetId}`
       }));
       decisions.push({
         libraryId: shared.libraryId,
         targetName,
         path: targetPath,
         action: "preserve",
-        reason: "kept-outside"
+        reason: "left-unmanaged"
       });
       if (reference) deferredReferences.add(referenceKey(reference));
       continue;
@@ -527,21 +539,21 @@ export const buildSkillDeploymentPlan = ({
       });
       continue;
     }
-    if (occupyingItem.status === "kept-outside") {
+    if (occupyingItem.status === "left-unmanaged") {
       deferredReferences.add(referenceKey(reference));
       decisions.push({
         libraryId: reference.libraryId,
         targetName: reference.targetName,
         path: targetPath,
         action: "preserve",
-        reason: "kept-outside"
+        reason: "left-unmanaged"
       });
       issues.push(createApplyIssue({
-        code: "kept-outside-skill",
+        code: "unmanaged-skill-location",
         resourceKind: "skill",
         resourceId: reference.targetName,
         path: targetPath,
-        message: `${reference.targetName} stays outside AgentEnv on ${targetPaths.targetId}`
+        message: `${reference.targetName} is left unmanaged on ${targetPaths.targetId}`
       }));
       continue;
     }
@@ -591,21 +603,21 @@ export const buildSkillDeploymentPlan = ({
       const targetPath = resolve(join(targetPaths.skillsDir, reference.targetName));
       const occupyingItem = inventoryByPath.get(targetPath);
       if (!occupyingItem) continue;
-      if (occupyingItem.status === "kept-outside") {
+      if (occupyingItem.status === "left-unmanaged") {
         deferredReferences.add(referenceKey(reference));
         decisions.push({
           libraryId: reference.libraryId,
           targetName: reference.targetName,
           path: targetPath,
           action: "preserve",
-          reason: "kept-outside"
+          reason: "left-unmanaged"
         });
         issues.push(createApplyIssue({
-          code: "kept-outside-skill",
+          code: "unmanaged-skill-location",
           resourceKind: "skill",
           resourceId: reference.targetName,
           path: targetPath,
-          message: `${reference.targetName} stays outside AgentEnv on ${targetPaths.targetId}`
+          message: `${reference.targetName} is left unmanaged on ${targetPaths.targetId}`
         }));
       } else if (!isTargetOwned(occupyingItem)) {
         issues.push(createApplyIssue({
@@ -642,20 +654,20 @@ export const buildSkillDeploymentPlan = ({
       ) {
         continue;
       }
-      if (item.status === "kept-outside") {
+      if (item.status === "left-unmanaged") {
         decisions.push({
           libraryId: item.libraryId ?? item.id,
           targetName: item.deploymentName ?? item.id,
           path: item.path,
           action: "preserve",
-          reason: "kept-outside"
+          reason: "left-unmanaged"
         });
         issues.push(createApplyIssue({
-          code: "kept-outside-skill",
+          code: "unmanaged-skill-location",
           resourceKind: "skill",
           resourceId: item.runtimeName ?? item.id,
           path: item.path,
-          message: `${item.runtimeName ?? item.id} is not in this Profile and stays outside AgentEnv`
+          message: `${item.runtimeName ?? item.id} is not in this Profile but remains active at an unmanaged location`
         }));
         continue;
       }

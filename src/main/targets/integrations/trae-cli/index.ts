@@ -30,7 +30,7 @@ import { createFilesystemSkillDriver } from "../../shared/skillRuntime";
 import { resolveTraeLayout } from "./layout";
 
 const DEFAULT_STATE: TargetState = {
-  formatVersion: 2,
+  formatVersion: 3,
   managedMcpNames: []
 };
 
@@ -594,7 +594,7 @@ export const traeCliIntegration: AgentTargetIntegration = {
         },
         targetState: {
           ...state,
-          formatVersion: 2,
+          formatVersion: 3,
           managedMcpNames
         }
       };

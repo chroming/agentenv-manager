@@ -267,16 +267,16 @@ export const preservedUnmanagedSkillIssues = (
   return inventory
     .filter(
       (skill) =>
-        skill.status === "kept-outside" &&
+        skill.status === "left-unmanaged" &&
         !desired.has(skill.id)
     )
     .map((skill) =>
       createApplyIssue({
-        code: "kept-outside-skill",
+        code: "unmanaged-skill-location",
         resourceKind: "skill",
         resourceId: skill.runtimeName ?? skill.id,
         path: skill.path,
-        message: `${skill.runtimeName ?? skill.id} stays outside AgentEnv on this Agent`
+        message: `AgentEnv leaves ${skill.runtimeName ?? skill.id} unmanaged at this location`
       })
     );
 };

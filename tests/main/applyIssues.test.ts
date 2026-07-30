@@ -34,7 +34,7 @@ describe("Apply issues", () => {
     const path = "/home/.codex/skills/reviewer";
     const issues = dedupeApplyIssues([
       createApplyIssue({
-        code: "kept-outside-skill",
+        code: "unmanaged-skill-location",
         resourceKind: "skill",
         resourceId: "reviewer",
         path,
@@ -67,7 +67,7 @@ describe("Apply issues", () => {
       disposition: "review",
       resolution: "backup-replace"
     });
-    expect(APPLY_ISSUE_POLICY["kept-outside-skill"]).toEqual({
+    expect(APPLY_ISSUE_POLICY["unmanaged-skill-location"]).toEqual({
       disposition: "notice",
       resolution: "preserve"
     });

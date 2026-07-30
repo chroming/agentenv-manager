@@ -1230,6 +1230,54 @@ try {
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "profile-skills-applied-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
+  const localOverridePath = join(
+    homeDir,
+    ".config",
+    "opencode",
+    "skills",
+    "git-workflow"
+  );
+  await rm(localOverridePath, { recursive: true, force: true });
+  await mkdir(localOverridePath, { recursive: true });
+  await writeFile(
+    join(localOverridePath, "SKILL.md"),
+    "---\nname: git-workflow\n---\n\n# Device-specific Git workflow\n",
+    "utf8"
+  );
+  const localOverrideApply = await page.evaluate(async (path) => {
+    await window.agentEnv.setUnmanagedSkillLocations({
+      items: [{ path, targetId: "opencode", coverage: "exact" }],
+      unmanaged: true
+    });
+    const preview = await window.agentEnv.previewApply("code-review", "opencode");
+    return window.agentEnv.applyProfile("code-review", preview.id);
+  }, localOverridePath);
+  if (!localOverrideApply.ok) {
+    throw new Error(
+      `Could not create the local-override capture state: ${localOverrideApply.errors.join(", ")}`
+    );
+  }
+  await page.reload();
+  await page.waitForLoadState("domcontentloaded");
+  await page.getByRole("button", { name: "Profiles", exact: true }).click();
+  await page.getByRole("button", { name: /^Code Review/ }).click();
+  await page
+    .locator('[data-profile-composer-id="skills"]')
+    .getByRole("button", { name: "Skills", exact: true })
+    .click();
+  await page
+    .getByRole("listitem", { name: "Profile skill git-workflow" })
+    .scrollIntoViewIfNeeded();
+  await capturePage(
+    page,
+    join(outputDir, "profile-skills-local-override-920x620.png")
+  );
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(
+    page,
+    join(outputDir, "profile-skills-local-override-1180x728.png")
+  );
+  await setWindowSize(page, windowHandle, 920, 620);
   const mixedSkillRegion = page.getByRole("region", { name: "Profile skills" });
   await mixedSkillRegion
     .getByRole("listitem", { name: "Profile skill testing-strategies" })

@@ -87,7 +87,7 @@
   display: grid;
   gap: 10px;
   grid-template-columns:
-    34px minmax(120px, 1fr) 112px
+    34px minmax(120px, 1fr) 128px
     72px 44px 38px;
   min-height: 62px;
   min-width: 0;
@@ -108,8 +108,12 @@
   opacity: 0.58;
 }
 
+.profile-skill-row.has-local-override .profile-skill-state {
+  opacity: 1;
+}
+
 .profile-skill-row--owned {
-  grid-template-columns: 34px minmax(120px, 1fr) 112px 72px 38px;
+  grid-template-columns: 34px minmax(120px, 1fr) 128px 72px 38px;
 }
 
 .profile-skill-row--owned > .icon-action {

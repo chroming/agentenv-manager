@@ -30,7 +30,7 @@ import {
   profileResourceMode,
   profileUsesResource
 } from "../shared/profileResources";
-import { profileWithoutLocalSkillExceptions } from "../shared/effectiveProfile";
+import { profileWithoutLocalSkillOverrides } from "../shared/effectiveProfile";
 import {
   createTargetRegistry,
   type TargetRegistry
@@ -96,6 +96,11 @@ import {
   fingerprintSkillDeploymentFacts,
   type SkillDeploymentPlan
 } from "./skillDeploymentPlanner";
+import {
+  normalizeSkillReceipts,
+  skillReceiptsEqual,
+  skillReceiptsFor
+} from "./skillReconciliationReceipts";
 import {
   blockingApplyIssues,
   createApplyIssue,
@@ -248,18 +253,6 @@ const normalizeSharedSkillPreparations = (
         left.profileHash.localeCompare(right.profileHash)
     );
 
-const normalizeKeptOutsideSkills = (
-  entries: Readonly<NonNullable<TargetState["keptOutsideSkills"]>> = []
-) =>
-  entries
-    .map((entry) => ({ ...entry, path: resolve(entry.path) }))
-    .sort(
-      (left, right) =>
-        left.path.localeCompare(right.path) ||
-        left.libraryId.localeCompare(right.libraryId) ||
-        left.targetName.localeCompare(right.targetName)
-    );
-
 const sharedSkillPreparationsEqual = (
   left: readonly SharedSkillPreparation[] = [],
   right: readonly SharedSkillPreparation[] = []
@@ -287,7 +280,7 @@ const fingerprintTargetState = (state: TargetState): string => {
     appliedLibraryVersions: { skills: appliedSkillVersions },
     managedMcpNames: [...new Set(state.managedMcpNames)].sort(),
     managedResources,
-    keptOutsideSkills: normalizeKeptOutsideSkills(state.keptOutsideSkills),
+    skillReceipts: normalizeSkillReceipts(state.skillReceipts),
     sharedSkillPreparations: normalizeSharedSkillPreparations(
       state.sharedSkillPreparations
     ),
@@ -676,9 +669,9 @@ export const createActivationService = ({
             } else if (state.activeProfileId) {
               if (activeProfile) {
                 activeProfileName = activeProfile.manifest.name;
-                const deploymentProfile = profileWithoutLocalSkillExceptions(
+                const deploymentProfile = profileWithoutLocalSkillOverrides(
                   activeProfile,
-                  state.keptOutsideSkills,
+                  state.skillReceipts,
                   state.sharedSkillPreparations
                 );
                 const expectedHash =
@@ -701,17 +694,20 @@ export const createActivationService = ({
                   Boolean(expectedHash) &&
                   expectedHash === state.appliedProfileHash &&
                   libraryResourceVersionsEqual(currentVersions, appliedLibraryVersions);
+                const localOverrideCount = (state.skillReceipts ?? []).filter(
+                  (receipt) => receipt.localOverride
+                ).length;
                 lifecycleStatus = isCurrent
-                  ? (state.keptOutsideSkills?.length ?? 0) > 0
-                    ? "applied-with-outside"
+                  ? localOverrideCount > 0
+                    ? "applied-with-local-override"
                     : "applied"
                   : "pending";
                 if (!isCurrent) {
                   lifecycleReason = "Saved Profile or Library resources changed after the last Apply";
-                } else if ((state.keptOutsideSkills?.length ?? 0) > 0) {
-                  lifecycleReason = `${state.keptOutsideSkills!.length} ${
-                    state.keptOutsideSkills!.length === 1 ? "Skill stays" : "Skills stay"
-                  } outside AgentEnv on this device`;
+                } else if (localOverrideCount > 0) {
+                  lifecycleReason = `${localOverrideCount} local ${
+                    localOverrideCount === 1 ? "management boundary is" : "management boundaries are"
+                  } active on this device`;
                 }
               } else {
                 lifecycleStatus = "pending";
@@ -729,8 +725,13 @@ export const createActivationService = ({
               lifecycleReason,
               lastAppliedAt: state.lastAppliedAt,
               managedResourceCount: activeManagedResources.length,
-              warningCount: state.keptOutsideSkills?.length ?? 0,
-              keptOutsideSkills: state.keptOutsideSkills ?? [],
+              warningCount: (state.skillReceipts ?? []).filter(
+                (receipt) => receipt.localOverride
+              ).length,
+              skillReceipts: state.skillReceipts ?? [],
+              localOverrideCount: (state.skillReceipts ?? []).filter(
+                (receipt) => receipt.localOverride
+              ).length,
               sharedSkillPreparations: state.sharedSkillPreparations ?? [],
               errorCount: driftCount
             };
@@ -1254,20 +1255,14 @@ export const createActivationService = ({
       )
     );
     const issues = dedupeApplyIssues([...preAssetIssues, ...assetIssues]);
-    const keptOutsideSkills = normalizeKeptOutsideSkills(
-      skillDeploymentPlan.decisions
-        .filter(
-          (decision) =>
-            decision.reason === "kept-outside" &&
-            Boolean(decision.path)
-        )
-        .map((decision) => ({
-          path: decision.path!,
-          skillKey: decision.targetName,
-          libraryId: decision.libraryId,
-          targetName: decision.targetName
-        }))
-    );
+    const skillReceipts = managesSkills
+      ? skillReceiptsFor({
+          profile,
+          targetPaths,
+          inventory,
+          decisions: skillDeploymentPlan.decisions
+        })
+      : normalizeSkillReceipts(stateFile.state.skillReceipts);
     const libraryVersions = collectLibraryResourceVersions(
       materializedProfile,
       skillLibrary,
@@ -1319,7 +1314,7 @@ export const createActivationService = ({
       sharedSkillPreparations: normalizeSharedSkillPreparations(
         skillDeploymentPlan.sharedPreparations
       ),
-      keptOutsideSkills,
+      skillReceipts,
       sharedSkillPreparationChanged: !sharedSkillPreparationsEqual(
         stateFile.state.sharedSkillPreparations,
         skillDeploymentPlan.sharedPreparations
@@ -1330,6 +1325,10 @@ export const createActivationService = ({
         !libraryResourceVersionsEqual(
           libraryVersions,
           appliedLibraryVersions
+        ) ||
+        !skillReceiptsEqual(
+          skillReceipts,
+          stateFile.state.skillReceipts
         ) ||
         JSON.stringify([...new Set(stateFile.state.managedMcpNames)].sort()) !==
           JSON.stringify([...new Set(targetPreview.targetState.managedMcpNames)].sort()),
@@ -1704,14 +1703,18 @@ export const createActivationService = ({
             throw new Error(`Post-apply verification failed for ${resource.path}`);
           }
         }
+        const {
+          keptOutsideSkills: _legacyKeptOutsideSkills,
+          ...currentTargetState
+        } = preview.targetState;
         await writeTargetState(preview.targetId, {
-          ...preview.targetState,
+          ...currentTargetState,
           activeProfileId: profile.id,
           appliedProfileHash: currentProfileHash,
           appliedLibraryVersions: currentLibraryVersions,
           lastAppliedAt: new Date().toISOString(),
           managedResources,
-          keptOutsideSkills: preview.keptOutsideSkills,
+          skillReceipts: preview.skillReceipts,
           sharedSkillPreparations: preview.skillDeployment.plan.sharedPreparations,
           recoveryRequired: undefined
         });

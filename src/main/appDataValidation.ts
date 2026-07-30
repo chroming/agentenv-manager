@@ -57,7 +57,27 @@ const SkillPathPoliciesSchema = z.array(
     path: z.string().min(1),
     skillKey: z.string().min(1),
     targetId: z.string().min(1).optional(),
-    mode: z.enum(["keep-outside", "keep-shared"]),
+    mode: z.enum(["keep-outside", "keep-shared", "use-library"]),
+    createdAt: z.string().min(1),
+    updatedAt: z.string().min(1)
+  })
+);
+const UnmanagedSkillLocationsSchema = z.array(
+  z.object({
+    id: z.string().min(1),
+    path: z.string().min(1),
+    targetId: z.string().min(1).optional(),
+    coverage: z.enum(["exact", "collection"]),
+    createdAt: z.string().min(1),
+    updatedAt: z.string().min(1)
+  })
+);
+const SkillCollectionDecisionsSchema = z.array(
+  z.object({
+    id: z.string().min(1),
+    path: z.string().min(1),
+    decision: z.literal("use-library"),
+    sourceContentHash: z.string().optional(),
     createdAt: z.string().min(1),
     updatedAt: z.string().min(1)
   })
@@ -111,6 +131,18 @@ export const validateAppDataRoot = async (
     join(appDataRoot, "skill-path-policies.json")
   );
   if (pathPolicies !== undefined) SkillPathPoliciesSchema.parse(pathPolicies);
+  const unmanagedLocations = await readJsonIfPresent(
+    paths.unmanagedSkillLocationsPath
+  );
+  if (unmanagedLocations !== undefined) {
+    UnmanagedSkillLocationsSchema.parse(unmanagedLocations);
+  }
+  const collectionDecisions = await readJsonIfPresent(
+    paths.skillCollectionDecisionsPath
+  );
+  if (collectionDecisions !== undefined) {
+    SkillCollectionDecisionsSchema.parse(collectionDecisions);
+  }
 
   const workspaceSync = await readJsonIfPresent(paths.workspaceSyncStatePath);
   if (workspaceSync !== undefined) parseWorkspaceSyncStateData(workspaceSync);

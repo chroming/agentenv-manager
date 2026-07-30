@@ -93,14 +93,14 @@ describe("SkillCollectionDialog", () => {
   });
 
   it("applies a batch strategy per Skill and refreshes the collection once", async () => {
-    const onSetSkillPathPolicies = vi.fn().mockResolvedValue(true);
+    const onSetSkillCollectionDecision = vi.fn().mockResolvedValue(true);
     const onImportUnmanaged = vi.fn().mockResolvedValue(true);
     const onResolveCollectionConflict = vi.fn().mockResolvedValue(true);
     const onRefreshInventory = vi.fn().mockResolvedValue(undefined);
 
     const Harness = () => {
       const { applyStrategy } = useSkillCollectionActions({
-        onSetSkillPathPolicies,
+        onSetSkillCollectionDecision,
         onImportUnmanaged,
         onResolveCollectionConflict,
         onRefreshInventory,
@@ -120,12 +120,10 @@ describe("SkillCollectionDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Resolve" }));
 
     await waitFor(() => expect(onRefreshInventory).toHaveBeenCalledTimes(1));
-    expect(onSetSkillPathPolicies).toHaveBeenCalledWith({
-      items: [{
-        path: "/tmp/source/skills/different",
-        skillKey: "different"
-      }],
-      mode: "use-library"
+    expect(onSetSkillCollectionDecision).toHaveBeenCalledWith({
+      path: "/tmp/source/skills/different",
+      useLibrary: true,
+      sourceContentHash: undefined
     });
     expect(onImportUnmanaged).toHaveBeenCalledWith(
       "/tmp/source/skills/missing",

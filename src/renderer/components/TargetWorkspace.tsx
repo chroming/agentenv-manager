@@ -82,7 +82,7 @@ const formatLastApplied = (value: string | undefined, locale: string, neverAppli
 const lifecycleLabel: Record<TargetManagementState["lifecycleStatus"], string> = {
   unmanaged: "Not managed",
   applied: "Applied",
-  "applied-with-outside": "Local exceptions",
+  "applied-with-local-override": "Local overrides",
   pending: "Changes pending",
   drifted: "Changed outside AgentEnv",
   "recovery-required": "Recovery required"

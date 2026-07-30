@@ -51,9 +51,13 @@ export const createTargetStateRepository = (
 
   const write = async (targetId: string, state: TargetState) => {
     await mkdir(paths.targetStatesDir, { recursive: true, mode: 0o700 });
+    const { keptOutsideSkills: _legacyKeptOutsideSkills, ...currentState } = state;
     await writeAtomic(
       pathFor(targetId),
-      `${JSON.stringify({ ...state, formatVersion: 2 }, null, 2)}\n`
+      `${JSON.stringify({
+        ...currentState,
+        formatVersion: 3
+      }, null, 2)}\n`
     );
   };
 

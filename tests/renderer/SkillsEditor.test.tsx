@@ -149,17 +149,23 @@ describe("SkillsEditor v2", () => {
     expect(onPreview).toHaveBeenCalledWith("review");
   });
 
-  it("shows a Target-local keep decision instead of an Apply pending state", () => {
+  it("shows a Target-local override instead of an Apply pending state", () => {
     render(
       <SkillsEditor
         value={resources}
         librarySkills={skills}
         appliedSkillVersions={{}}
-        keptOutsideSkills={[{
+        skillReceipts={[{
           path: "/target/skills/review",
-          skillKey: "review",
           libraryId: "review",
-          targetName: "review"
+          targetName: "review",
+          desired: "install",
+          observed: "external",
+          authority: "leave-unmanaged",
+          action: "preserve",
+          outcome: "external-active",
+          requiresReview: false,
+          localOverride: true
         }]}
         selectedTargetName="Codex"
         onChange={vi.fn()}
@@ -167,8 +173,40 @@ describe("SkillsEditor v2", () => {
     );
 
     const row = screen.getByRole("listitem", { name: "Profile skill review" });
-    expect(row).toHaveTextContent("Kept outside");
-    expect(row).toHaveTextContent("Codex · Kept outside");
+    expect(row).toHaveTextContent("External active");
+    expect(row).toHaveTextContent("Codex · Unmanaged");
+    expect(row).not.toHaveTextContent("Apply pending");
+  });
+
+  it("shows that a disabled Profile Skill remains active at an unmanaged path", () => {
+    render(
+      <SkillsEditor
+        value={{
+          ...resources,
+          skills: [{ libraryId: "review", targetName: "review", enabled: false }]
+        }}
+        librarySkills={skills}
+        appliedSkillVersions={{}}
+        skillReceipts={[{
+          path: "/target/skills/review",
+          libraryId: "review",
+          targetName: "review",
+          desired: "omit",
+          observed: "external",
+          authority: "leave-unmanaged",
+          action: "preserve",
+          outcome: "external-remains",
+          requiresReview: false,
+          localOverride: true
+        }]}
+        selectedTargetName="Codex"
+        onChange={vi.fn()}
+      />
+    );
+
+    const row = screen.getByRole("listitem", { name: "Profile skill review" });
+    expect(row).toHaveTextContent("External still active");
+    expect(row).toHaveTextContent("Codex · Unmanaged");
     expect(row).not.toHaveTextContent("Apply pending");
   });
 });

@@ -19,7 +19,7 @@ const bucketLabel = (bucket: SkillCleanupBucket) => {
   if (bucket === "decision") return "Needs your decision";
   if (bucket === "ready") return "Ready to clean up";
   if (bucket === "managed") return "Managed";
-  return "Kept outside AgentEnv";
+  return "Left unmanaged";
 };
 
 export const CleanupBucketHeader = ({

@@ -63,7 +63,10 @@ const api: AgentEnvApi = {
   readSkillFile: (input) => ipcRenderer.invoke("skills:read-file", input),
   scanSkillInventory: () => ipcRenderer.invoke("skills:scan-inventory"),
   listSkillCleanupBackups: () => ipcRenderer.invoke("skills:list-cleanup-backups"),
-  setSkillPathPolicies: (input) => ipcRenderer.invoke("skills:set-path-policies", input),
+  setUnmanagedSkillLocations: (input) =>
+    ipcRenderer.invoke("skills:set-unmanaged-locations", input),
+  setSkillCollectionDecision: (input) =>
+    ipcRenderer.invoke("skills:set-collection-decision", input),
   scanUnmanagedSkills: () => ipcRenderer.invoke("skills:scan-unmanaged"),
   scanLocalSkillSource: (rootPath) => ipcRenderer.invoke("skills:scan-local-source", rootPath),
   previewSkillImport: (input) => ipcRenderer.invoke("skills:preview-import", input),

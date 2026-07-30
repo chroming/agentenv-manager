@@ -19,7 +19,7 @@ import { createDirectoryAssetDriver } from "../../shared/assetDeployment";
 import { createFilesystemSkillDriver } from "../../shared/skillRuntime";
 
 const DEFAULT_STATE: TargetState = {
-  formatVersion: 2,
+  formatVersion: 3,
   managedMcpNames: []
 };
 
@@ -217,7 +217,7 @@ export const antigravityIntegration: AgentTargetIntegration = {
         },
         targetState: {
           ...state,
-          formatVersion: 2,
+          formatVersion: 3,
           managedMcpNames: []
         }
       };

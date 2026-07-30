@@ -107,7 +107,7 @@ describe("app data v2 migration", () => {
     await expect(readFile(join(paths.skillsLibraryDir, "review", "linked-note.md"), "utf8"))
       .resolves.toBe("self-contained\n");
     await expect(readJson(join(paths.targetStatesDir, "opencode.json"))).resolves.toEqual({
-      formatVersion: 2,
+      formatVersion: 3,
       managedMcpNames: ["context7"],
       activeProfileId: "daily-coding",
       appliedLibraryVersions: { skills: { review: "review-hash" } },
@@ -115,7 +115,8 @@ describe("app data v2 migration", () => {
         { kind: "instructions", id: "AGENTS.md", path: "/tmp/AGENTS.md", contentHash: "a" },
         { kind: "skill", id: "review", path: "/tmp/review", contentHash: "c" }
       ],
-      sharedSkillPreparations: []
+      sharedSkillPreparations: [],
+      skillReceipts: []
     });
   });
 

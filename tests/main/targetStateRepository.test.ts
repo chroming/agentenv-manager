@@ -55,7 +55,7 @@ describe("target state repository", () => {
     const stored = await repository.read("codex");
     expect(stored.state).toEqual(state);
     expect(JSON.parse(stored.content)).toMatchObject({
-      formatVersion: 2,
+      formatVersion: 3,
       activeProfileId: "daily-coding"
     });
   });

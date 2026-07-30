@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { profileWithoutLocalSkillExceptions } from "../../src/shared/effectiveProfile";
+import { profileWithoutLocalSkillOverrides } from "../../src/shared/effectiveProfile";
 import type { ProfileDetail } from "../../src/shared/types";
 
 const profile: ProfileDetail = {
@@ -22,14 +22,20 @@ const profile: ProfileDetail = {
 };
 
 describe("effective Profile", () => {
-  it("excludes only the concrete kept or deferred Skill references", () => {
-    const effective = profileWithoutLocalSkillExceptions(
+  it("excludes only concrete local overrides or deferred Skill references", () => {
+    const effective = profileWithoutLocalSkillOverrides(
       profile,
       [{
         path: "/target/reviewer",
-        skillKey: "reviewer",
         libraryId: "reviewer",
-        targetName: "reviewer"
+        targetName: "reviewer",
+        desired: "install",
+        observed: "external",
+        authority: "leave-unmanaged",
+        action: "preserve",
+        outcome: "external-active",
+        requiresReview: false,
+        localOverride: true
       }],
       [{
         skillKey: "tests",

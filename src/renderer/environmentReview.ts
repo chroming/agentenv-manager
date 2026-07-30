@@ -59,7 +59,8 @@ export const deriveEnvironmentReview = ({
     preparedTargetsBySkill
   }).filter(
     (group) =>
-      Boolean(group.sharedMigration) && group.sharedMigration?.state !== "kept"
+      Boolean(group.sharedMigration) &&
+      group.sharedMigration?.state !== "unmanaged"
   );
   const affectedTargetIds = [
     ...new Set(

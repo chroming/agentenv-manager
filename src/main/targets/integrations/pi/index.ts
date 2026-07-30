@@ -18,7 +18,7 @@ import { createFilesystemSkillDriver } from "../../shared/skillRuntime";
 import { resolvePiLayout } from "./layout";
 
 const DEFAULT_STATE: TargetState = {
-  formatVersion: 2,
+  formatVersion: 3,
   managedMcpNames: []
 };
 
@@ -175,7 +175,7 @@ export const piIntegration: AgentTargetIntegration = {
         },
         targetState: {
           ...state,
-          formatVersion: 2,
+          formatVersion: 3,
           managedMcpNames: []
         }
       };

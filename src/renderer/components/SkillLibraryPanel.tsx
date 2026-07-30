@@ -69,7 +69,8 @@ import type {
   SkillSourceMergeResult,
   SkillMergeInput,
   SkillMergePreview,
-  SkillPathPolicyUpdate,
+  SkillCollectionMemberDecisionUpdate,
+  UnmanagedSkillLocationUpdate,
   SkillUpdateInfo,
   SkillUpdatePlan,
   SkillUpdatePreviewBatchResult,
@@ -221,9 +222,14 @@ interface SkillLibraryPanelProps {
   onOpenSource(url: string): void;
   onCopySource(source: string): void;
   onCopyCleanupDetails(details: string): Promise<boolean>;
-  onKeepSkillGroupOutside(skillKey: string): void;
-  onReviewSkillGroupAgain(skillKey: string): void;
-  onSetSkillPathPolicies?(input: SkillPathPolicyUpdate): Promise<boolean>;
+  onLeaveSkillGroupUnmanaged(skillKey: string): void;
+  onManageSkillGroupWithAgentEnv(skillKey: string): void;
+  onSetUnmanagedSkillLocations?(
+    input: UnmanagedSkillLocationUpdate
+  ): Promise<boolean>;
+  onSetSkillCollectionDecision?(
+    input: SkillCollectionMemberDecisionUpdate
+  ): Promise<boolean>;
   onSetSharedSkillRetention(input: SharedSkillRetentionInput): Promise<boolean>;
   onRetireSharedSkill(input: RetireSharedSkillInput): Promise<boolean>;
   onMoveSharedSkillToAgents(
@@ -311,9 +317,10 @@ export const SkillLibraryPanel = ({
   onOpenSource,
   onCopySource,
   onCopyCleanupDetails,
-  onKeepSkillGroupOutside,
-  onReviewSkillGroupAgain,
-  onSetSkillPathPolicies,
+  onLeaveSkillGroupUnmanaged,
+  onManageSkillGroupWithAgentEnv,
+  onSetUnmanagedSkillLocations,
+  onSetSkillCollectionDecision,
   onSetSharedSkillRetention,
   onRetireSharedSkill,
   onMoveSharedSkillToAgents,
@@ -349,8 +356,8 @@ export const SkillLibraryPanel = ({
   const [cleanupOperationKey, setCleanupOperationKey] = useState<string>();
   const [autoCleanupReviewOpen, setAutoCleanupReviewOpen] = useState(false);
   const [expandedCleanupBuckets, setExpandedCleanupBuckets] = useState<
-    Record<"managed" | "kept", boolean>
-  >({ managed: false, kept: false });
+    Record<"managed" | "unmanaged", boolean>
+  >({ managed: false, unmanaged: false });
   const [sharedOperation, setSharedOperation] = useState<{
     skillKey: string;
     action: "keep" | "review" | "prepare" | "retire";
@@ -408,10 +415,11 @@ export const SkillLibraryPanel = ({
     applyStrategy: applyCollectionStrategy,
     move: moveSkillCollection
   } = useSkillCollectionActions({
-  onSetSkillPathPolicies,
-  onImportUnmanaged,
-  onResolveCollectionConflict,
-  onRefreshInventory,
+    onSetUnmanagedSkillLocations,
+    onSetSkillCollectionDecision,
+    onImportUnmanaged,
+    onResolveCollectionConflict,
+    onRefreshInventory,
     onMoveSkillCollection,
     onClose: () => setCollectionDetailsPath(undefined)
   });
@@ -428,7 +436,8 @@ export const SkillLibraryPanel = ({
     skillKey: string;
     sourcePath: string;
   }>();
-  const [pathPolicyOperationPath, setPathPolicyOperationPath] = useState<string>();
+  const [unmanagedLocationOperationPath, setUnmanagedLocationOperationPath] =
+    useState<string>();
   useEffect(() => {
     setCleanupDetailsCopied(false);
   }, [cleanupDetailsKey]);
@@ -626,7 +635,7 @@ export const SkillLibraryPanel = ({
       cleanupOperationKey ||
       mergeOperation ||
       collectionOperation ||
-      pathPolicyOperationPath ||
+      unmanagedLocationOperationPath ||
       automaticCleanupKey
     ),
     onDismiss: dismissModal
@@ -852,7 +861,9 @@ export const SkillLibraryPanel = ({
       decision: cleanupGroups.filter((group) => group.bucket === "decision"),
       ready: cleanupGroups.filter((group) => group.bucket === "ready"),
       managed: cleanupGroups.filter((group) => group.bucket === "managed"),
-      kept: cleanupGroups.filter((group) => group.bucket === "kept")
+      unmanaged: cleanupGroups.filter(
+        (group) => group.bucket === "unmanaged"
+      )
     }),
     [cleanupGroups]
   );
@@ -889,7 +900,7 @@ export const SkillLibraryPanel = ({
     return requests;
   }, [automaticCleanupRequests, cleanupGroups]);
   const collectionDecisionCount = collectionGroups.filter(
-    (group) => group.state !== "kept"
+    (group) => group.state !== "unmanaged"
   ).length;
   const manualCleanupCount =
     cleanupGroupsByBucket.decision.length + collectionDecisionCount;
@@ -956,8 +967,8 @@ export const SkillLibraryPanel = ({
     ? undefined
     : selectedLocalInventory.status === "managed"
       ? { message: "This Agent copy is already managed by AgentEnv and is present in Library." }
-      : selectedLocalInventory.status === "kept-outside"
-        ? { message: "This path stays outside AgentEnv. Import creates an independent Library copy and does not change that policy." }
+      : selectedLocalInventory.status === "left-unmanaged"
+        ? { message: "AgentEnv will not change this path. Import creates an independent Library copy without changing that boundary." }
         : selectedLocalInventory.status === "library" &&
             selectedLocalInventory.contentMatchesLibrary !== true
           ? {
@@ -1057,26 +1068,26 @@ export const SkillLibraryPanel = ({
     ? librarySkills.find((skill) => skill.id === cleanupDraft.libraryId)
     : undefined;
 
-  const changePathPolicy = async (
+  const changeUnmanagedLocation = async (
     item: SkillInventoryEntry,
-    mode?: "keep-outside"
+    unmanaged: boolean
   ) => {
-    if (!onSetSkillPathPolicies || pathPolicyOperationPath) return;
-    setPathPolicyOperationPath(item.path);
+    if (!onSetUnmanagedSkillLocations || unmanagedLocationOperationPath) return;
+    setUnmanagedLocationOperationPath(item.path);
     try {
-      await onSetSkillPathPolicies({
+      await onSetUnmanagedSkillLocations({
         items:
           item.sharedLocation || item.foundIn.length === 0
-            ? [{ path: item.path, skillKey: item.skillKey }]
+            ? [{ path: item.path, coverage: "exact" }]
             : item.foundIn.map((targetId) => ({
                 path: item.path,
-                skillKey: item.skillKey,
-                targetId
+                targetId,
+                coverage: "exact" as const
               })),
-        mode
+        unmanaged
       });
     } finally {
-      setPathPolicyOperationPath(undefined);
+      setUnmanagedLocationOperationPath(undefined);
     }
   };
 
@@ -1877,7 +1888,7 @@ export const SkillLibraryPanel = ({
                   <option value="managed">{t("Managed")}</option>
                   <option value="library">{t("Imported")}</option>
                   <option value="outside">{t("Unmanaged")}</option>
-                  <option value="kept-outside">{t("Kept outside")}</option>
+                  <option value="left-unmanaged">{t("Left unmanaged")}</option>
                   <option value="not-installed">{t("Not installed")}</option>
                 </select>
               </label>
@@ -3105,27 +3116,28 @@ export const SkillLibraryPanel = ({
                           >
                             {t(cleanupInventoryStatusLabel(item))}
                           </span>
-                          {onSetSkillPathPolicies &&
+                          {onSetUnmanagedSkillLocations &&
                           !item.sharedLocation &&
-                          (item.status === "outside" || item.status === "kept-outside") ? (
+                          (item.status === "outside" ||
+                            item.status === "left-unmanaged") ? (
                             <button
-                              className="secondary-action cleanup-path-policy-action"
+                              className="secondary-action cleanup-management-boundary-action"
                               type="button"
-                              disabled={Boolean(pathPolicyOperationPath)}
-                              aria-busy={pathPolicyOperationPath === item.path}
+                              disabled={Boolean(unmanagedLocationOperationPath)}
+                              aria-busy={unmanagedLocationOperationPath === item.path}
                               onClick={() =>
-                                void changePathPolicy(
+                                void changeUnmanagedLocation(
                                   item,
-                                  item.status === "kept-outside" ? undefined : "keep-outside"
+                                  item.status !== "left-unmanaged"
                                 )}
                             >
-                              {pathPolicyOperationPath === item.path ? (
+                              {unmanagedLocationOperationPath === item.path ? (
                                 <LoaderCircle className="is-spinning" size={13} aria-hidden="true" />
                               ) : null}
                               {t(
-                                item.status === "kept-outside"
-                                  ? "Review again"
-                                  : "Keep outside AgentEnv"
+                                item.status === "left-unmanaged"
+                                  ? "Manage with AgentEnv"
+                                  : "Leave unmanaged"
                               )}
                             </button>
                           ) : null}
@@ -3300,7 +3312,11 @@ export const SkillLibraryPanel = ({
                     <small>{t("Choose the copy whose contents you want to preserve.")}</small>
                   </legend>
                   {cleanupCandidate.items
-                    .filter((item) => item.status !== "managed" && item.status !== "kept-outside")
+                    .filter(
+                      (item) =>
+                        item.status !== "managed" &&
+                        item.status !== "left-unmanaged"
+                    )
                     .map((item) => (
                       <label className="cleanup-review-option" key={`canonical-${item.path}`}>
                         <input
@@ -3357,7 +3373,7 @@ export const SkillLibraryPanel = ({
                       checked={cleanupDraft.selectedPaths.includes(item.path)}
                       disabled={
                         item.status === "managed" ||
-                        item.status === "kept-outside" ||
+                        item.status === "left-unmanaged" ||
                         cleanupHasActiveSharedMigration ||
                         (cleanupDraft.libraryAction !== "keep" && cleanupDraft.canonicalPath === item.path)
                       }
@@ -3383,8 +3399,8 @@ export const SkillLibraryPanel = ({
                     <em>
                       {item.status === "managed"
                         ? t("Already managed")
-                        : item.status === "kept-outside"
-                          ? t("Kept outside")
+                        : item.status === "left-unmanaged"
+                          ? t("Left unmanaged")
                           : cleanupHasActiveSharedMigration && item.sharedLocation
                             ? t("Keep active")
                             : cleanupHasActiveSharedMigration
@@ -3525,15 +3541,17 @@ export const SkillLibraryPanel = ({
               {cleanupGroups.map((group, index) => {
                 const sectionStarts = index === 0 || cleanupGroups[index - 1].bucket !== group.bucket;
                 const collapsibleBucket =
-                  group.bucket === "managed" || group.bucket === "kept"
+                  group.bucket === "managed" || group.bucket === "unmanaged"
                     ? group.bucket
                     : undefined;
                 const sectionCanCollapse = Boolean(collapsibleBucket);
                 const sectionExpanded = collapsibleBucket
                   ? expandedCleanupBuckets[collapsibleBucket]
                   : true;
-                const hasIgnored = group.items.some((skill) => skill.status === "kept-outside");
-                const allKeptOutside = group.activeItems.length === 0;
+                const hasUnmanaged = group.items.some(
+                  (skill) => skill.status === "left-unmanaged"
+                );
+                const allLeftUnmanaged = group.activeItems.length === 0;
                 const canIgnore = group.activeItems.some((skill) => skill.status !== "managed");
                 const sharedMigration = group.sharedMigration;
                 const sharedMigrationNeedsAction =
@@ -3744,7 +3762,9 @@ export const SkillLibraryPanel = ({
                                 <Search size={14} strokeWidth={2.2} />
                                 <span><strong>{t("Details")}</strong></span>
                               </button>
-                              {sharedMigration && sharedMigration.state !== "outside" && sharedMigration.state !== "kept" ? (
+                              {sharedMigration &&
+                              sharedMigration.state !== "outside" &&
+                              sharedMigration.state !== "unmanaged" ? (
                                 <button
                                   className="row-action-item"
                                   type="button"
@@ -3755,7 +3775,7 @@ export const SkillLibraryPanel = ({
                                   }}
                                 >
                                   <Link2Off size={14} strokeWidth={2.2} />
-                                  <span><strong>{t("Keep shared copy")}</strong></span>
+                                  <span><strong>{t("Leave shared copy unmanaged")}</strong></span>
                                 </button>
                               ) : null}
                               {canIgnore && !sharedMigrationNeedsAction ? (
@@ -3764,26 +3784,34 @@ export const SkillLibraryPanel = ({
                                   type="button"
                                   role="menuitem"
                                   onClick={() => {
-                                    onKeepSkillGroupOutside(group.skillKey);
+                                    onLeaveSkillGroupUnmanaged(group.skillKey);
                                     setOpenAction(undefined);
                                   }}
                                 >
                                   <Link2Off size={14} strokeWidth={2.2} />
-                                  <span><strong>{t("Keep outside AgentEnv")}</strong></span>
+                                  <span><strong>{t("Leave unmanaged")}</strong></span>
                                 </button>
                               ) : null}
-                              {hasIgnored && !sharedMigrationNeedsAction ? (
+                              {hasUnmanaged && !sharedMigrationNeedsAction ? (
                                 <button
                                   className="row-action-item"
                                   type="button"
                                   role="menuitem"
                                   onClick={() => {
-                                    onReviewSkillGroupAgain(group.skillKey);
+                                    onManageSkillGroupWithAgentEnv(group.skillKey);
                                     setOpenAction(undefined);
                                   }}
                                 >
                                   <RotateCcw size={14} strokeWidth={2.2} />
-                                  <span><strong>{t(allKeptOutside ? "Review again" : "Review kept paths")}</strong></span>
+                                  <span>
+                                    <strong>
+                                      {t(
+                                        allLeftUnmanaged
+                                          ? "Manage with AgentEnv"
+                                          : "Review unmanaged paths"
+                                      )}
+                                    </strong>
+                                  </span>
                                 </button>
                               ) : null}
                             </ActionMenu>,

@@ -20,7 +20,7 @@ export const cleanupLocationLabel = (
 const inventoryStatusLabel = (status: SkillInventoryEntry["status"]) => {
   if (status === "library") return "Imported";
   if (status === "outside") return "Outside AgentEnv";
-  if (status === "kept-outside") return "Kept outside";
+  if (status === "left-unmanaged") return "Left unmanaged";
   return "Managed";
 };
 
@@ -40,7 +40,7 @@ export const externalManagerLabel = (skill: SkillInventoryEntry | undefined) =>
 
 export const isCleanupManageable = (item: SkillInventoryEntry) =>
   !item.collectionLink &&
-  item.status !== "kept-outside" &&
+  item.status !== "left-unmanaged" &&
   item.locationRole !== "discovery-only" &&
   (item.locationManagement !== "observed" || item.sharedLocation === true);
 
@@ -54,8 +54,8 @@ export const cleanupPresentationLabel = (state: SkillCleanupDisplayState) => {
   if (state === "outside-agentenv") return "Outside AgentEnv";
   if (state === "shared-copy-needs-decisions") return "Needs Agent choices";
   if (state === "shared-copy-ready-to-move") return "Ready to move out of shared folder";
-  if (state === "kept-shared") return "Kept shared";
-  if (state === "kept-outside") return "Kept outside";
+  if (state === "shared-left-unmanaged") return "Shared location left unmanaged";
+  if (state === "left-unmanaged") return "Left unmanaged";
   if (state === "unavailable") return "Unavailable";
   return "Managed";
 };
@@ -68,14 +68,18 @@ export const cleanupPresentationCompactLabel = (state: SkillCleanupDisplayState)
   if (state === "outside-agentenv") return "Outside";
   if (state === "shared-copy-needs-decisions") return "Needs choice";
   if (state === "shared-copy-ready-to-move") return "Ready";
-  if (state === "kept-shared" || state === "kept-outside") return "Kept";
+  if (state === "shared-left-unmanaged" || state === "left-unmanaged") {
+    return "Unmanaged";
+  }
   if (state === "managed") return "Managed";
   return "Unmanaged";
 };
 
 export const cleanupPresentationChipClass = (state: SkillCleanupDisplayState) => {
   if (state === "managed" || state === "shared-copy-ready-to-move") return "managed";
-  if (state === "kept-outside" || state === "kept-shared") return "kept-outside";
+  if (state === "left-unmanaged" || state === "shared-left-unmanaged") {
+    return "left-unmanaged";
+  }
   if (state === "outside-agentenv") return "outside";
   if (state === "multiple-versions" || state === "local-changes-found") return "conflict";
   if (state === "managed-copy-changed") return "stale";

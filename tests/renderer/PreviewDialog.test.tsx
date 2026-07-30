@@ -207,7 +207,7 @@ describe("PreviewDialog", () => {
   it("lets the user keep a reviewed Skill path outside AgentEnv with local progress", async () => {
     const path = "/Users/test/.claude/skills/internal-cli";
     let finish!: () => void;
-    const onKeepSkillOutside = vi.fn().mockImplementation(
+    const onLeaveSkillUnmanaged = vi.fn().mockImplementation(
       () => new Promise<void>((resolve) => {
         finish = resolve;
       })
@@ -225,16 +225,16 @@ describe("PreviewDialog", () => {
     render(
       <PreviewDialog
         preview={{ ...preview, issues: [issue] }}
-        onKeepSkillOutside={onKeepSkillOutside}
+        onLeaveSkillUnmanaged={onLeaveSkillUnmanaged}
         onCancel={vi.fn()}
         onConfirm={vi.fn()}
       />
     );
 
-    const keepButton = screen.getByRole("button", { name: "Keep outside" });
+    const keepButton = screen.getByRole("button", { name: "Leave unmanaged" });
     fireEvent.click(keepButton);
 
-    expect(onKeepSkillOutside).toHaveBeenCalledWith(issue);
+    expect(onLeaveSkillUnmanaged).toHaveBeenCalledWith(issue);
     expect(keepButton).toHaveAttribute("aria-busy", "true");
     expect(keepButton).toBeDisabled();
 
@@ -307,7 +307,7 @@ describe("PreviewDialog", () => {
           issues: [
             {
               id: "unmanaged-skill-preserved:/skills/local-only",
-              code: "kept-outside-skill",
+              code: "unmanaged-skill-location",
               disposition: "notice",
               resolution: "preserve",
               resourceKind: "skill",

@@ -169,7 +169,7 @@ export const ProfileList = ({
               !needsAttention &&
               (
                 application.state.lifecycleStatus === "applied" ||
-                application.state.lifecycleStatus === "applied-with-outside"
+                application.state.lifecycleStatus === "applied-with-local-override"
               );
             return {
               name: application.target?.name ?? application.state.targetId,

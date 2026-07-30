@@ -212,11 +212,12 @@ describe("skill deployment planner", () => {
     expect(result.decisions[0]).toMatchObject({ action: "defer" });
   });
 
-  it("uses a kept shared copy instead of installing a duplicate Target copy", () => {
+  it("uses an unmanaged shared copy instead of installing a duplicate Target copy", () => {
     const shared = inventoryEntry({
       path: "/home/.agents/skills/reviewer",
-      status: "kept-outside",
-      pathPolicy: "keep-shared",
+      status: "left-unmanaged",
+      unmanagedLocationId: "unmanaged-shared-reviewer",
+      unmanagedCoverage: "exact",
       locationRole: "compatibility-runtime",
       sharedLocation: true,
       contentHash: "device-version",
@@ -228,11 +229,11 @@ describe("skill deployment planner", () => {
     expect(result.sharedPreparations).toEqual([]);
     expect(result.decisions).toContainEqual(expect.objectContaining({
       action: "preserve",
-      reason: "kept-outside",
+      reason: "left-unmanaged",
       path: "/home/.agents/skills/reviewer"
     }));
     expect(result.issues).toContainEqual(expect.objectContaining({
-      code: "kept-outside-skill",
+      code: "unmanaged-skill-location",
       path: "/home/.agents/skills/reviewer"
     }));
   });
@@ -294,7 +295,7 @@ describe("skill deployment planner", () => {
       inventory: [inventoryEntry({
         path: `${collectionPath}/reviewer`,
         status: "library",
-        pathPolicy: "use-library",
+        collectionDecision: "use-library",
         contentHash: "external-version",
         contentMatchesLibrary: false,
         locationRole: "compatibility-runtime",
@@ -320,13 +321,14 @@ describe("skill deployment planner", () => {
     }));
   });
 
-  it("preserves an explicitly kept collection member without blocking Apply", () => {
+  it("preserves an unmanaged collection member without blocking Apply", () => {
     const collectionPath = "/home/.agents/skills/superpowers";
     const result = plan({
       inventory: [inventoryEntry({
         path: `${collectionPath}/reviewer`,
-        status: "kept-outside",
-        pathPolicy: "keep-shared",
+        status: "left-unmanaged",
+        unmanagedLocationId: "unmanaged-superpowers",
+        unmanagedCoverage: "collection",
         contentHash: "external-version",
         contentMatchesLibrary: false,
         locationRole: "compatibility-runtime",
@@ -342,7 +344,7 @@ describe("skill deployment planner", () => {
     expect(result.effectiveSkills).toEqual([]);
     expect(result.decisions).toContainEqual(expect.objectContaining({
       action: "preserve",
-      reason: "kept-outside"
+      reason: "left-unmanaged"
     }));
   });
 
@@ -456,14 +458,18 @@ describe("skill deployment planner", () => {
     ).toMatchObject({ action: "adopt", reason: "matching-outside" });
   });
 
-  it("records kept paths even when the Skill is disabled or absent from the Profile", () => {
+  it("records unmanaged paths even when the Skill is disabled or absent from the Profile", () => {
     const disabled = plan({
       selectedProfile: profile({ enabled: false }),
-      inventory: [inventoryEntry({ status: "kept-outside", pathPolicy: "keep-outside" })]
+      inventory: [inventoryEntry({
+        status: "left-unmanaged",
+        unmanagedLocationId: "unmanaged-reviewer",
+        unmanagedCoverage: "exact"
+      })]
     });
     expect(disabled.decisions).toContainEqual(expect.objectContaining({
       action: "preserve",
-      reason: "kept-outside",
+      reason: "left-unmanaged",
       path: "/home/.codex/skills/reviewer"
     }));
 
@@ -473,20 +479,21 @@ describe("skill deployment planner", () => {
           id: "local-only",
           name: "Local only",
           path: "/home/.codex/skills/local-only",
-          status: "kept-outside",
+          status: "left-unmanaged",
           libraryId: undefined,
           skillKey: "local-only",
           runtimeName: "local-only",
           deploymentName: "local-only",
           contentHash: "local-only-hash",
           contentMatchesLibrary: undefined,
-          pathPolicy: "keep-outside"
+          unmanagedLocationId: "unmanaged-local-only",
+          unmanagedCoverage: "exact"
         })
       ]
     });
     expect(extra.decisions).toContainEqual(expect.objectContaining({
       action: "preserve",
-      reason: "kept-outside",
+      reason: "left-unmanaged",
       targetName: "local-only",
       path: "/home/.codex/skills/local-only"
     }));

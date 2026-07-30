@@ -477,7 +477,11 @@ export const migrateAppDataToV2 = async (
       let rawState: unknown;
       try {
         rawState = await readJson(statePath);
-        if ((rawState as { formatVersion?: unknown }).formatVersion === 2) {
+        if (
+          [2, 3].includes(
+            (rawState as { formatVersion?: number }).formatVersion ?? -1
+          )
+        ) {
           parseTargetState(rawState);
           continue;
         }
@@ -489,13 +493,13 @@ export const migrateAppDataToV2 = async (
       if (!legacyResult.success) {
         retainedTargetStates.push({
           file: entry.name,
-          error: "Target state is neither valid v1 nor valid v2 data"
+          error: "Target state is not a supported AgentEnv format"
         });
         continue;
       }
       const legacy = legacyResult.data;
       await writeAtomic(statePath, `${JSON.stringify({
-        formatVersion: 2,
+        formatVersion: 3,
         managedMcpNames: legacy.managedMcpNames,
         activeProfileId: legacy.activeProfileId,
         appliedProfileHash: undefined,
@@ -506,6 +510,7 @@ export const migrateAppDataToV2 = async (
         managedResources: legacy.managedResources.filter((resource) =>
           resource.kind === "instructions" || resource.kind === "skill"
         ),
+        skillReceipts: [],
         sharedSkillPreparations: legacy.sharedSkillPreparations,
         recoveryRequired: legacy.recoveryRequired
       }, null, 2)}\n`);

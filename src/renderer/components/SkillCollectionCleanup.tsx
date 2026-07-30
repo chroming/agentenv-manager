@@ -13,8 +13,9 @@ import {
   type SkillCollectionLinkGroup
 } from "../../shared/skillCleanup";
 import type {
+  SkillCollectionMemberDecisionUpdate,
   SkillInventoryEntry,
-  SkillPathPolicyUpdate
+  UnmanagedSkillLocationUpdate
 } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
@@ -29,7 +30,12 @@ type CollectionItemProgress = {
 };
 
 interface SkillCollectionActionsInput {
-  onSetSkillPathPolicies?(input: SkillPathPolicyUpdate): Promise<boolean>;
+  onSetUnmanagedSkillLocations?(
+    input: UnmanagedSkillLocationUpdate
+  ): Promise<boolean>;
+  onSetSkillCollectionDecision?(
+    input: SkillCollectionMemberDecisionUpdate
+  ): Promise<boolean>;
   onImportUnmanaged(
     path: string,
     sourceHandling?: "copy-only",
@@ -46,7 +52,8 @@ interface SkillCollectionActionsInput {
 }
 
 export const useSkillCollectionActions = ({
-  onSetSkillPathPolicies,
+  onSetUnmanagedSkillLocations,
+  onSetSkillCollectionDecision,
   onImportUnmanaged,
   onResolveCollectionConflict,
   onRefreshInventory,
@@ -67,12 +74,12 @@ export const useSkillCollectionActions = ({
     collection: SkillCollectionLinkGroup,
     retained: boolean
   ) => {
-    if (!onSetSkillPathPolicies || operation) return;
+    if (!onSetUnmanagedSkillLocations || operation) return;
     setOperation(retained ? "keep" : "review");
     try {
-      await onSetSkillPathPolicies({
-        items: [{ path: collection.path, skillKey: "_collection" }],
-        mode: retained ? "keep-shared" : undefined
+      await onSetUnmanagedSkillLocations({
+        items: [{ path: collection.path, coverage: "collection" }],
+        unmanaged: retained
       });
     } finally {
       setOperation(undefined);
@@ -87,7 +94,7 @@ export const useSkillCollectionActions = ({
       const conflict =
         Boolean(item.libraryId) &&
         item.contentMatchesLibrary === false &&
-        item.pathPolicy !== "use-library";
+        item.collectionDecision !== "use-library";
       const completed = conflict && onResolveCollectionConflict
         ? await onResolveCollectionConflict(item)
         : await onImportUnmanaged(item.path, "copy-only");
@@ -125,13 +132,18 @@ export const useSkillCollectionActions = ({
         const conflict =
           Boolean(item.libraryId) &&
           item.contentMatchesLibrary === false &&
-          item.pathPolicy !== "use-library";
+          item.collectionDecision !== "use-library";
         let completed = false;
         try {
-          if (conflict && strategy === "keep-library" && onSetSkillPathPolicies) {
-            completed = await onSetSkillPathPolicies({
-              items: [{ path: item.path, skillKey: item.skillKey }],
-              mode: "use-library"
+          if (
+            conflict &&
+            strategy === "keep-library" &&
+            onSetSkillCollectionDecision
+          ) {
+            completed = await onSetSkillCollectionDecision({
+              path: item.path,
+              useLibrary: true,
+              sourceContentHash: item.contentHash
             });
           } else if (conflict && onResolveCollectionConflict) {
             completed = await onResolveCollectionConflict(item, strategy, true);
@@ -196,8 +208,8 @@ export const SkillCollectionRows = ({
     const stateLabel =
       collection.state === "ready"
         ? t("Ready")
-        : collection.state === "kept"
-          ? t("Kept")
+        : collection.state === "unmanaged"
+          ? t("Unmanaged")
           : collection.state === "conflict"
             ? t("Needs review")
             : t("{{count}} of {{total}} in Library", {
@@ -207,8 +219,8 @@ export const SkillCollectionRows = ({
     const stateClass =
       collection.state === "ready"
         ? "managed"
-        : collection.state === "kept"
-          ? "kept-outside"
+        : collection.state === "unmanaged"
+          ? "left-unmanaged"
           : collection.state === "conflict"
             ? "conflict"
             : "pending";
@@ -384,7 +396,8 @@ export const SkillCollectionDialog = ({
             {collection.items.map((item) => {
               const exact = Boolean(item.libraryId) && item.contentMatchesLibrary === true;
               const usesLibrary =
-                Boolean(item.libraryId) && item.pathPolicy === "use-library";
+                Boolean(item.libraryId) &&
+                item.collectionDecision === "use-library";
               const conflict =
                 Boolean(item.libraryId) &&
                 item.contentMatchesLibrary === false &&
@@ -472,8 +485,8 @@ export const SkillCollectionDialog = ({
           <p className="muted skill-collection-dialog__note">
             {collection.state === "ready"
               ? t("Moving adds these Skills to each affected Agent's active Profile. Profiles that keep Skills unchanged switch to Use Profile; Profiles set to Turn off stay off. AgentEnv applies and verifies each Profile, then removes only the collection link.")
-              : collection.state === "kept"
-                ? t("This collection stays outside AgentEnv. Its source and runtime link remain unchanged.")
+              : collection.state === "unmanaged"
+                ? t("AgentEnv observes this collection but will not change its source or runtime link.")
                 : t("Choose a Library version for every Skill before moving. Same-name differences require an explicit choice.")}
           </p>
         </div>
@@ -487,7 +500,7 @@ export const SkillCollectionDialog = ({
           >
             {t("Close")}
           </button>
-          {collection.state === "kept" ? (
+          {collection.state === "unmanaged" ? (
             <button
               className="secondary-action"
               type="button"
@@ -498,7 +511,7 @@ export const SkillCollectionDialog = ({
               {operation === "review" ? (
                 <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
               ) : null}
-              {t("Review again")}
+              {t("Manage with AgentEnv")}
             </button>
           ) : (
             <button
@@ -511,7 +524,7 @@ export const SkillCollectionDialog = ({
               {operation === "keep" ? (
                 <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
               ) : null}
-              {t("Keep external")}
+              {t("Leave unmanaged")}
             </button>
           )}
           {collection.state === "ready" ? (

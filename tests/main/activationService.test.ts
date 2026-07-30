@@ -795,19 +795,19 @@ describe("activation service v2", () => {
       disposition: "review"
     }));
 
-    await skillLibraryStore.setSkillPathPolicies({
+    await skillLibraryStore.setUnmanagedSkillLocations({
       items: [{
         path: outsidePath,
-        skillKey: "review",
-        targetId: "codex"
+        targetId: "codex",
+        coverage: "exact"
       }],
-      mode: "keep-outside"
+      unmanaged: true
     });
     const keptPreview = await service.previewProfile("daily-coding", "codex");
 
     expect(reviewMessages(keptPreview.issues)).toEqual([]);
     expect(keptPreview.issues).toContainEqual(expect.objectContaining({
-      code: "kept-outside-skill",
+      code: "unmanaged-skill-location",
       path: outsidePath,
       disposition: "notice"
     }));
@@ -820,19 +820,37 @@ describe("activation service v2", () => {
     await expect(readFile(join(outsidePath, "SKILL.md"), "utf8"))
       .resolves.toContain("# Device-specific review");
     expect((await service.listTargetStates())[0]).toMatchObject({
-      lifecycleStatus: "applied-with-outside",
+      lifecycleStatus: "applied-with-local-override",
       warningCount: 1,
-      keptOutsideSkills: [{
+      skillReceipts: [expect.objectContaining({
         path: outsidePath,
         libraryId: "review",
-        targetName: "review"
-      }],
+        targetName: "review",
+        outcome: "external-active",
+        localOverride: true
+      })],
       appliedLibraryVersions: { skills: {} }
     });
 
     const stablePreview = await service.previewProfile("daily-coding", "codex");
     expect(reviewMessages(stablePreview.issues)).toEqual([]);
     expect(stablePreview.resourceChanges).toEqual([]);
+
+    await writeFile(
+      join(outsidePath, "SKILL.md"),
+      "---\nname: review\n---\n# Changed outside AgentEnv\n"
+    );
+    const changedOutsidePreview = await service.previewProfile(
+      "daily-coding",
+      "codex"
+    );
+    expect(blockingMessages(changedOutsidePreview.issues)).toEqual([]);
+    expect(reviewMessages(changedOutsidePreview.issues)).toEqual([]);
+    expect(changedOutsidePreview.resourceChanges).toEqual([]);
+    expect((await service.listTargetStates())[0]).toMatchObject({
+      lifecycleStatus: "applied-with-local-override",
+      warningCount: 1
+    });
   });
 
   it("keeps a disabled Skill path visible as a device exception after Apply", async () => {
@@ -852,15 +870,15 @@ describe("activation service v2", () => {
         skills: [{ libraryId: "review", targetName: "review", enabled: false }]
       }
     });
-    await skillLibraryStore.setSkillPathPolicies({
-      items: [{ path: outsidePath, skillKey: "review", targetId: "codex" }],
-      mode: "keep-outside"
+    await skillLibraryStore.setUnmanagedSkillLocations({
+      items: [{ path: outsidePath, targetId: "codex", coverage: "exact" }],
+      unmanaged: true
     });
 
     const preview = await service.previewProfile(profile.id, "codex");
     expect(reviewMessages(preview.issues)).toEqual([]);
     expect(preview.issues).toContainEqual(expect.objectContaining({
-      code: "kept-outside-skill",
+      code: "unmanaged-skill-location",
       path: outsidePath
     }));
     expect((await service.applyProfile(profile.id, preview.id)).ok).toBe(true);
@@ -868,9 +886,15 @@ describe("activation service v2", () => {
     await expect(readFile(join(outsidePath, "SKILL.md"), "utf8"))
       .resolves.toContain("# Device-specific review");
     expect((await service.listTargetStates())[0]).toMatchObject({
-      lifecycleStatus: "applied-with-outside",
+      lifecycleStatus: "applied-with-local-override",
       warningCount: 1,
-      appliedLibraryVersions: { skills: {} }
+      appliedLibraryVersions: { skills: {} },
+      skillReceipts: [expect.objectContaining({
+        path: outsidePath,
+        desired: "omit",
+        outcome: "external-remains",
+        localOverride: true
+      })]
     });
   });
 
@@ -925,18 +949,19 @@ describe("activation service v2", () => {
 
     const preview = await service.previewProfile("daily-coding", "codex");
     expect(reviewMessages(preview.issues)).toEqual([]);
-    expect(preview.keptOutsideSkills).toContainEqual(expect.objectContaining({
+    expect(preview.skillReceipts).toContainEqual(expect.objectContaining({
       path: sharedSkill,
       libraryId: "review",
-      targetName: "review"
+      targetName: "review",
+      localOverride: true
     }));
     expect((await service.applyProfile("daily-coding", preview.id)).ok).toBe(true);
 
     await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8")).resolves.toContain("# Review");
     await expect(lstat(targetSkill)).rejects.toThrow();
     expect((await service.listTargetStates())[0]).toMatchObject({
-      lifecycleStatus: "applied-with-outside",
-      keptOutsideSkills: [expect.objectContaining({ path: sharedSkill })]
+      lifecycleStatus: "applied-with-local-override",
+      skillReceipts: [expect.objectContaining({ path: sharedSkill })]
     });
   });
 

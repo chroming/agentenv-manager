@@ -43,9 +43,8 @@ import type {
   SkillUpdatePreviewBatchResult,
   SkillUpdateSettingsInput,
   SkillUpdateSourceInput,
-  SkillPathPolicy,
-  SkillPathPolicyInput,
-  SkillPathPolicyUpdate,
+  SkillCollectionMemberDecision,
+  SkillCollectionMemberDecisionUpdate,
   SkillRuntimeSnapshot,
   SkillSourceCheckAllResult,
   SkillSourceCollectionRef,
@@ -56,6 +55,8 @@ import type {
   SkillSourceScope,
   TargetPaths,
   UnmanagedSkillEntry,
+  UnmanagedSkillLocation,
+  UnmanagedSkillLocationUpdate,
   SharedSkillRetentionInput
 } from "../shared/types";
 import { normalizeSkillKey } from "../shared/skillIdentity";
@@ -115,7 +116,7 @@ import {
   type ParsedGitHubSkillSource
 } from "./githubSkillClient";
 import { mergeInventoryLocation } from "./skillInventoryLocation";
-import { createSkillPathPolicyStore } from "./skillPathPolicyStore";
+import { createSkillPolicyStore } from "./skillPolicyStore";
 
 interface SkillCleanupBackupManifest {
   id: string;
@@ -173,7 +174,12 @@ export interface SkillLibraryStore {
   findManagedInstallPaths(libraryId: string, targetPaths: TargetPaths[]): Promise<string[]>;
   listCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;
   previewCleanupBackup(id: string): Promise<ManagedBackupFile[]>;
-  setSkillPathPolicies(input: SkillPathPolicyUpdate): Promise<SkillPathPolicy[]>;
+  setUnmanagedSkillLocations(
+    input: UnmanagedSkillLocationUpdate
+  ): Promise<UnmanagedSkillLocation[]>;
+  setSkillCollectionDecision(
+    input: SkillCollectionMemberDecisionUpdate
+  ): Promise<SkillCollectionMemberDecision[]>;
   scanUnmanaged(targetPaths: TargetPaths[]): Promise<UnmanagedSkillEntry[]>;
   scanLocalSkillSource(rootPath: string): Promise<ProjectSkillScanResult>;
   previewImport(input: SkillImportPreviewInput): Promise<SkillImportPreview>;
@@ -343,7 +349,7 @@ export const createSkillLibraryStore = (
     paths.skillSourceObservationsDir,
     repositorySource
   );
-  const skillPathPolicyStore = createSkillPathPolicyStore(paths);
+  const skillPolicyStore = createSkillPolicyStore(paths);
 
   const metadataHash = (metadata: SkillMetadataFile) =>
     createHash("sha256").update(JSON.stringify(metadata)).digest("hex");
@@ -372,11 +378,20 @@ export const createSkillLibraryStore = (
     );
   };
 
-  const readPathPolicies = skillPathPolicyStore.read;
-  const migrateLegacyPathPolicies = skillPathPolicyStore.migrateLegacy;
-  const findPathPolicy = skillPathPolicyStore.find;
-  const setSkillPathPolicies = skillPathPolicyStore.set;
-  const setSharedSkillRetention = skillPathPolicyStore.setSharedRetention;
+  const migrateLegacySkillPolicies = skillPolicyStore.migrateLegacy;
+  const readUnmanagedSkillLocations =
+    skillPolicyStore.readUnmanagedLocations;
+  const findUnmanagedSkillLocation =
+    skillPolicyStore.findUnmanagedLocation;
+  const setUnmanagedSkillLocations =
+    skillPolicyStore.setUnmanagedLocations;
+  const readSkillCollectionDecisions =
+    skillPolicyStore.readCollectionDecisions;
+  const findSkillCollectionDecision =
+    skillPolicyStore.findCollectionDecision;
+  const setSkillCollectionDecision =
+    skillPolicyStore.setCollectionDecision;
+  const setSharedSkillRetention = skillPolicyStore.setSharedRetention;
 
   const entryFor = (id: string, skillDir: string) =>
     readSkillLibraryEntry(id, skillDir, skillSourceRegistry);
@@ -792,7 +807,29 @@ export const createSkillLibraryStore = (
       target,
       snapshot: await runtimeSnapshotProvider(target)
     })));
-    const pathPolicies = await migrateLegacyPathPolicies(snapshots);
+    await migrateLegacySkillPolicies(snapshots);
+    const unmanagedLocations = await readUnmanagedSkillLocations();
+    const collectionDecisions = await readSkillCollectionDecisions();
+    const unmanagedLocationFor = (
+      targetId: string,
+      path: string,
+      collectionPath?: string
+    ) =>
+      findUnmanagedSkillLocation(unmanagedLocations, {
+        path,
+        targetId,
+        coverage: "exact"
+      }) ??
+      findUnmanagedSkillLocation(unmanagedLocations, {
+        path,
+        coverage: "exact"
+      }) ??
+      (collectionPath
+        ? findUnmanagedSkillLocation(unmanagedLocations, {
+            path: collectionPath,
+            coverage: "collection"
+          })
+        : undefined);
     for (const { target, snapshot } of snapshots) {
       for (const observation of snapshot.observations) {
         const deploymentName = observation.deploymentName;
@@ -805,25 +842,19 @@ export const createSkillLibraryStore = (
         );
         const unreadable = observation.issues.some((issue) => issue.code === "unreadable-skill");
         if (unreadable) {
-          const pathPolicy =
-            findPathPolicy(pathPolicies, {
-              skillKey,
-              path: skillDir,
-              targetId: target.targetId
-            }) ??
-            (observation.collectionLink
-              ? findPathPolicy(pathPolicies, {
-                  skillKey: "_collection",
-                  path: observation.collectionLink.path
-                })
-              : undefined);
+          const unmanagedLocation = unmanagedLocationFor(
+            target.targetId,
+            skillDir,
+            observation.collectionLink?.path
+          );
+          const collectionDecision = findSkillCollectionDecision(
+            collectionDecisions,
+            skillDir
+          );
           const externalEvidence = evidence
             ? { ...evidence, confidence: "confirmed" as const, state: "broken-link" as const }
             : observation.externalEvidence;
-          const retainedOutside =
-            pathPolicy?.mode === "keep-outside" ||
-            pathPolicy?.mode === "keep-shared";
-          const status = retainedOutside ? "kept-outside" : "outside";
+          const status = unmanagedLocation ? "left-unmanaged" : "outside";
           const key = `${status}:${deploymentName}:${skillDir}`;
           const existing = byKey.get(key);
           if (existing) {
@@ -855,8 +886,9 @@ export const createSkillLibraryStore = (
               issues: observation.issues
             }],
             contentHash: "",
-            pathPolicyId: pathPolicy?.id,
-            pathPolicy: pathPolicy?.mode,
+            unmanagedLocationId: unmanagedLocation?.id,
+            unmanagedCoverage: unmanagedLocation?.coverage,
+            collectionDecision: collectionDecision?.decision,
             locationManagement: location?.management,
             locationRole: observation.locationRole,
             sharedLocation: observation.shared,
@@ -877,25 +909,15 @@ export const createSkillLibraryStore = (
           kind: "skill"
         });
         const managedByAgentEnv = agentEnvOwned || Boolean(markerId);
-        const pathPolicy =
-          findPathPolicy(pathPolicies, {
-            skillKey,
-            path: skillDir,
-            targetId: target.targetId
-          }) ??
-          (skillKey !== deploymentKey
-            ? findPathPolicy(pathPolicies, {
-                skillKey: deploymentKey,
-                path: skillDir,
-                targetId: target.targetId
-              })
-            : undefined) ??
-          (observation.collectionLink
-            ? findPathPolicy(pathPolicies, {
-                skillKey: "_collection",
-                path: observation.collectionLink.path
-              })
-            : undefined);
+        const unmanagedLocation = unmanagedLocationFor(
+          target.targetId,
+          skillDir,
+          observation.collectionLink?.path
+        );
+        const collectionDecision = findSkillCollectionDecision(
+          collectionDecisions,
+          skillDir
+        );
         let externalEvidence = managedByAgentEnv
           ? undefined
           : evidence ?? observation.externalEvidence;
@@ -924,13 +946,10 @@ export const createSkillLibraryStore = (
         const localLibraryId = libraryIds.has(deploymentName)
           ? deploymentName
           : runtimeLibraryId;
-        const retainedOutside =
-          pathPolicy?.mode === "keep-outside" ||
-          pathPolicy?.mode === "keep-shared";
         const status = managedByAgentEnv
           ? "managed"
-          : retainedOutside
-            ? "kept-outside"
+          : unmanagedLocation
+            ? "left-unmanaged"
             : localLibraryId
               ? "library"
               : "outside";
@@ -974,8 +993,9 @@ export const createSkillLibraryStore = (
           }],
           contentHash,
           modifiedAt: skillFileStats.mtime.toISOString(),
-          pathPolicyId: pathPolicy?.id,
-          pathPolicy: pathPolicy?.mode,
+          unmanagedLocationId: unmanagedLocation?.id,
+          unmanagedCoverage: unmanagedLocation?.coverage,
+          collectionDecision: collectionDecision?.decision,
           installMethod: managedByAgentEnv
             ? skillDirStats.isSymbolicLink() || skillFileLinkStats.isSymbolicLink()
               ? "linked"
@@ -3062,7 +3082,8 @@ export const createSkillLibraryStore = (
     findManagedInstallPaths,
     listCleanupBackups,
     previewCleanupBackup,
-    setSkillPathPolicies,
+    setUnmanagedSkillLocations,
+    setSkillCollectionDecision,
     scanUnmanaged,
     previewImport,
     previewMerge,

@@ -132,7 +132,7 @@ export const moveSharedSkillToAgents = async ({
     if (state?.activeProfileId) {
       if (
         state.lifecycleStatus !== "applied" &&
-        state.lifecycleStatus !== "applied-with-outside"
+        state.lifecycleStatus !== "applied-with-local-override"
       ) {
         throw new Error(
           `${targetLabel(targetId, targetNames)} has pending or changed Profile resources. Review and Apply that Profile first.`
@@ -226,7 +226,7 @@ export const moveSkillCollectionToAgents = async ({
     if (state?.activeProfileId) {
       if (
         state.lifecycleStatus !== "applied" &&
-        state.lifecycleStatus !== "applied-with-outside"
+        state.lifecycleStatus !== "applied-with-local-override"
       ) {
         throw new Error(
           `${targetLabel(targetId, targetNames)} has pending or changed Profile resources. Review and Apply that Profile first.`

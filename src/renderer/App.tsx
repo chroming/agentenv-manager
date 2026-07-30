@@ -86,7 +86,7 @@ import type {
   SkillUpstream,
   SkillMergeInput,
   SkillMergePreview,
-  SkillPathPolicyUpdate,
+  SkillCollectionMemberDecisionUpdate,
   SkillUpdateInfo,
   SkillUpdatePlan,
   SkillUpdatePreviewBatchResult,
@@ -94,9 +94,10 @@ import type {
   TargetDescriptor,
   TargetInfo,
   TargetCapturePreview,
-  TargetManagementState
+  TargetManagementState,
+  UnmanagedSkillLocationUpdate
 } from "../shared/types";
-import { profileWithoutLocalSkillExceptions } from "../shared/effectiveProfile";
+import { profileWithoutLocalSkillOverrides } from "../shared/effectiveProfile";
 import { I18nProvider, useI18n } from "./i18n";
 import { acceptAppliedProfileState } from "./appliedProfileState";
 import { activationPreviewHasWork } from "./activationPreview";
@@ -1856,9 +1857,9 @@ const AppContent = ({
             selectedTargetState?.appliedLibraryVersions,
             draftProfile
               ? collectLibraryResourceVersions(
-                  profileWithoutLocalSkillExceptions(
+                  profileWithoutLocalSkillOverrides(
                     draftProfile,
-                    selectedTargetState?.keptOutsideSkills,
+                    selectedTargetState?.skillReceipts,
                     selectedTargetState?.sharedSkillPreparations
                   ),
                   librarySkills,
@@ -1974,7 +1975,7 @@ const AppContent = ({
 
   const applySelectedProfile = () => applyProfileActivation(draftProfile);
 
-  const keepPreviewSkillOutside = async (
+  const leavePreviewSkillUnmanaged = async (
     issue: ApplyIssue,
     targetId: string,
     refreshPreview: () => Promise<void>
@@ -1982,17 +1983,19 @@ const AppContent = ({
     if (!issue.path || !issue.resourceId) return;
     setError(undefined);
     try {
-      await window.agentEnv.setSkillPathPolicies({
+      await window.agentEnv.setUnmanagedSkillLocations({
         items: [{
           path: issue.path,
-          skillKey: issue.resourceId,
-          targetId
+          targetId,
+          coverage: "exact"
         }],
-        mode: "keep-outside"
+        unmanaged: true
       });
       setSkillInventory(await window.agentEnv.scanSkillInventory());
       await refreshPreview();
-      setProfileSaveStatus(`${issue.resourceId} will stay outside AgentEnv on this Mac.`);
+      setProfileSaveStatus(
+        `${issue.resourceId} is left unmanaged on this Mac.`
+      );
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     }
@@ -2556,10 +2559,10 @@ const AppContent = ({
     void refreshSkillDiscoveries(false, "page-entry");
   };
 
-  const setSkillPathPolicies = async (input: SkillPathPolicyUpdate) => {
+  const setUnmanagedSkillLocations = async (input: UnmanagedSkillLocationUpdate) => {
     setError(undefined);
     try {
-      await window.agentEnv.setSkillPathPolicies(input);
+      await window.agentEnv.setUnmanagedSkillLocations(input);
       setSkillInventory(await window.agentEnv.scanSkillInventory());
       return true;
     } catch (unknownError) {
@@ -2568,49 +2571,68 @@ const AppContent = ({
     }
   };
 
-  const keepSkillGroupOutside = async (skillKey: string) => {
+  const setSkillCollectionDecision = async (
+    input: SkillCollectionMemberDecisionUpdate
+  ) => {
+    setError(undefined);
+    try {
+      await window.agentEnv.setSkillCollectionDecision(input);
+      setSkillInventory(await window.agentEnv.scanSkillInventory());
+      return true;
+    } catch (unknownError) {
+      setError(
+        unknownError instanceof Error ? unknownError.message : String(unknownError)
+      );
+      return false;
+    }
+  };
+
+  const leaveSkillGroupUnmanaged = async (skillKey: string) => {
     setBusy(true);
     setError(undefined);
     setProfileSaveStatus("");
     setSkillUpdateCheckStatus({
       state: "checking",
-      message: `Keeping ${skillKey} outside AgentEnv...`
+      message: `Leaving ${skillKey} unmanaged...`
     });
     try {
-      await window.agentEnv.setSkillPathPolicies({
+      await window.agentEnv.setUnmanagedSkillLocations({
         items: skillInventory
           .filter(
             (item) =>
               item.skillKey === skillKey &&
               item.status !== "managed" &&
-              item.status !== "kept-outside"
+              item.status !== "left-unmanaged"
           )
           .flatMap((item) =>
             item.foundIn.length > 0
               ? item.foundIn.map((targetId) => ({
                   path: item.path,
-                  skillKey: item.skillKey,
-                  targetId: item.sharedLocation ? undefined : targetId
+                  targetId: item.sharedLocation ? undefined : targetId,
+                  coverage: "exact" as const
                 }))
-              : [{ path: item.path, skillKey: item.skillKey }]
+              : [{ path: item.path, coverage: "exact" as const }]
           ),
-        mode: "keep-outside"
+        unmanaged: true
       });
       setSkillInventory(await window.agentEnv.scanSkillInventory());
       setSkillUpdateCheckStatus({
         state: "success",
-        message: `${skillKey} will stay outside AgentEnv`
+        message: `${skillKey} is left unmanaged on this Mac`
       });
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
       setError(message);
-      setSkillUpdateCheckStatus({ state: "error", message: "Could not save path policy" });
+      setSkillUpdateCheckStatus({
+        state: "error",
+        message: "Could not save local management boundary"
+      });
     } finally {
       setBusy(false);
     }
   };
 
-  const reviewSkillGroupAgain = async (skillKey: string) => {
+  const manageSkillGroupWithAgentEnv = async (skillKey: string) => {
     setBusy(true);
     setError(undefined);
     setProfileSaveStatus("");
@@ -2619,18 +2641,23 @@ const AppContent = ({
       message: `Reviewing ${skillKey} again...`
     });
     try {
-      await window.agentEnv.setSkillPathPolicies({
+      await window.agentEnv.setUnmanagedSkillLocations({
         items: skillInventory
-          .filter((item) => item.skillKey === skillKey && item.status === "kept-outside")
+          .filter(
+            (item) =>
+              item.skillKey === skillKey &&
+              item.status === "left-unmanaged"
+          )
           .flatMap((item) =>
             item.foundIn.length > 0
               ? item.foundIn.map((targetId) => ({
                   path: item.path,
-                  skillKey: item.skillKey,
-                  targetId: item.sharedLocation ? undefined : targetId
+                  targetId: item.sharedLocation ? undefined : targetId,
+                  coverage: "exact" as const
                 }))
-              : [{ path: item.path, skillKey: item.skillKey }]
-          )
+              : [{ path: item.path, coverage: "exact" as const }]
+          ),
+        unmanaged: false
       });
       setSkillInventory(await window.agentEnv.scanSkillInventory());
       setSkillUpdateCheckStatus({
@@ -2640,7 +2667,10 @@ const AppContent = ({
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
       setError(message);
-      setSkillUpdateCheckStatus({ state: "error", message: "Could not clear path policy" });
+      setSkillUpdateCheckStatus({
+        state: "error",
+        message: "Could not clear local management boundary"
+      });
     } finally {
       setBusy(false);
     }
@@ -4107,14 +4137,16 @@ const AppContent = ({
                   );
                   if (!outcome.ok) return false;
                   if (outcome.conflictResolution?.action === "keep-existing") {
-                    return setSkillPathPolicies({
-                      items: [{ path: item.path, skillKey: item.skillKey }],
-                      mode: "use-library"
+                    return setSkillCollectionDecision({
+                      path: item.path,
+                      useLibrary: true,
+                      sourceContentHash: item.contentHash
                     });
                   }
-                  if (item.pathPolicy === "use-library") {
-                    return setSkillPathPolicies({
-                      items: [{ path: item.path, skillKey: item.skillKey }]
+                  if (item.collectionDecision === "use-library") {
+                    return setSkillCollectionDecision({
+                      path: item.path,
+                      useLibrary: false
                     });
                   }
                   return true;
@@ -4189,13 +4221,14 @@ const AppContent = ({
                     return false;
                   }
                 }}
-                onKeepSkillGroupOutside={(skillKey) => {
-                  void keepSkillGroupOutside(skillKey);
+                onLeaveSkillGroupUnmanaged={(skillKey) => {
+                  void leaveSkillGroupUnmanaged(skillKey);
                 }}
-                onReviewSkillGroupAgain={(skillKey) => {
-                  void reviewSkillGroupAgain(skillKey);
+                onManageSkillGroupWithAgentEnv={(skillKey) => {
+                  void manageSkillGroupWithAgentEnv(skillKey);
                 }}
-                onSetSkillPathPolicies={setSkillPathPolicies}
+                onSetUnmanagedSkillLocations={setUnmanagedSkillLocations}
+                onSetSkillCollectionDecision={setSkillCollectionDecision}
                 onSetSharedSkillRetention={setSharedSkillRetention}
                 onRetireSharedSkill={retireSharedSkill}
                 onMoveSharedSkillToAgents={moveSharedSkillToAgentDirectories}
@@ -4508,10 +4541,10 @@ const AppContent = ({
                                   ?.skills
                               : undefined
                           }
-                          keptOutsideSkills={
+                          skillReceipts={
                             selectedTargetState?.activeProfileId ===
                             draftProfile.id
-                              ? selectedTargetState.keptOutsideSkills
+                              ? selectedTargetState.skillReceipts
                               : undefined
                           }
                           selectedTargetName={selectedTarget?.name}
@@ -4614,8 +4647,8 @@ const AppContent = ({
                           setBackupManagerOpen(true);
                         }}
                         onAdoptTargetChanges={adoptCompatibleTargetChanges}
-                        onKeepSkillOutside={(issue) =>
-                          keepPreviewSkillOutside(issue, preview.targetId, async () => {
+                        onLeaveSkillUnmanaged={(issue) =>
+                          leavePreviewSkillUnmanaged(issue, preview.targetId, async () => {
                             if (!draftProfile) return;
                             await refreshProfilePreview(
                               draftProfile.id,

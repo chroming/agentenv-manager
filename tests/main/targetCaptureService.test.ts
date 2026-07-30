@@ -139,7 +139,7 @@ describe("target capture service v2", () => {
     });
   });
 
-  it("includes a readable kept-outside Skill without changing the device path", async () => {
+  it("includes a readable unmanaged Skill without changing the device path", async () => {
     const { homeDir, service, skillLibraryStore } = await setup("opencode");
     const targetDir = join(homeDir, ".config", "opencode");
     const skillDir = join(targetDir, "skills", "local-reviewer");
@@ -150,13 +150,13 @@ describe("target capture service v2", () => {
       join(skillDir, "SKILL.md"),
       "---\nname: local-reviewer\ndescription: Device copy.\n---\n# Local\n"
     );
-    await skillLibraryStore.setSkillPathPolicies({
+    await skillLibraryStore.setUnmanagedSkillLocations({
       items: [{
         path: skillDir,
-        skillKey: "local-reviewer",
-        targetId: "opencode"
+        targetId: "opencode",
+        coverage: "exact"
       }],
-      mode: "keep-outside"
+      unmanaged: true
     });
 
     const preview = await service.previewTarget("opencode");
@@ -165,7 +165,7 @@ describe("target capture service v2", () => {
       kind: "skill",
       id: "local-reviewer",
       action: "import",
-      detail: expect.stringContaining("keeps the current path outside AgentEnv")
+      detail: expect.stringContaining("leaves the current path unmanaged")
     }));
     const result = await service.createFromTarget({
       previewId: preview.id,

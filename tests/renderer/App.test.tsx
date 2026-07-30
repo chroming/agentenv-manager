@@ -53,7 +53,7 @@ const preview: ActivationPreview = {
   createdAt: "2026-06-30T00:00:00.000Z",
   issues: [{
     id: "unmanaged-skill-preserved:manual-reviewer",
-    code: "kept-outside-skill",
+    code: "unmanaged-skill-location",
     disposition: "notice",
     resolution: "preserve",
     resourceKind: "skill",
@@ -365,7 +365,8 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     }),
     scanSkillInventory: vi.fn().mockResolvedValue([]),
     listSkillCleanupBackups: vi.fn().mockResolvedValue([]),
-    setSkillPathPolicies: vi.fn().mockResolvedValue([]),
+    setUnmanagedSkillLocations: vi.fn().mockResolvedValue([]),
+    setSkillCollectionDecision: vi.fn().mockResolvedValue([]),
     scanUnmanagedSkills: vi.fn().mockResolvedValue([]),
     scanLocalSkillSource: vi.fn().mockResolvedValue({
       roots: [],
@@ -968,12 +969,12 @@ describe("App", () => {
     ).toBeNull();
   });
 
-  it("keeps applied local exceptions in Agent detail without promoting them globally", async () => {
+  it("keeps applied local overrides in Agent detail without promoting them globally", async () => {
     installApi({
       listTargetStates: vi.fn().mockResolvedValue([
         managedState({
-          lifecycleStatus: "applied-with-outside",
-          lifecycleReason: "1 Skill stays outside AgentEnv on this device"
+          lifecycleStatus: "applied-with-local-override",
+          lifecycleReason: "1 local management boundary is active on this device"
         })
       ])
     });
@@ -998,7 +999,7 @@ describe("App", () => {
     ).toBeNull();
     expect(
       within(within(workspace).getByRole("article", { name: "Agent OpenCode" }))
-        .getByText("Local exceptions")
+        .getByText("Local overrides")
     ).toBeInTheDocument();
   });
 

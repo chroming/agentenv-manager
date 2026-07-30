@@ -1374,7 +1374,7 @@ description: >
     expect(inventory.every((skill) => skill.contentHash.length === 64)).toBe(true);
   });
 
-  it("keeps path-policy Skill groups visible in inventory", async () => {
+  it("keeps device-local unmanaged Skill groups visible in inventory", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
     const codexCopy = join(root, "home", ".agents", "skills", "duplicate-reviewer");
@@ -1416,13 +1416,13 @@ description: >
     ]);
     expect(new Set(firstScan.map((skill) => skill.contentHash)).size).toBe(1);
 
-    await store.setSkillPathPolicies({
+    await store.setUnmanagedSkillLocations({
       items: firstScan.map((skill) => ({
         path: skill.path,
-        skillKey: skill.skillKey,
-        targetId: skill.foundIn[0]
+        targetId: skill.foundIn[0],
+        coverage: "exact" as const
       })),
-      mode: "keep-outside"
+      unmanaged: true
     });
     const keptScan = await store.scanInventory([
       {
@@ -1442,15 +1442,19 @@ description: >
     ]);
 
     expect(keptScan).toHaveLength(2);
-    expect(keptScan.map((skill) => skill.status)).toEqual(["kept-outside", "kept-outside"]);
-    expect(keptScan.every((skill) => skill.pathPolicyId)).toBe(true);
+    expect(keptScan.map((skill) => skill.status)).toEqual([
+      "left-unmanaged",
+      "left-unmanaged"
+    ]);
+    expect(keptScan.every((skill) => skill.unmanagedLocationId)).toBe(true);
 
-    await store.setSkillPathPolicies({
+    await store.setUnmanagedSkillLocations({
       items: keptScan.map((skill) => ({
         path: skill.path,
-        skillKey: skill.skillKey,
-        targetId: skill.foundIn[0]
-      }))
+        targetId: skill.foundIn[0],
+        coverage: "exact" as const
+      })),
+      unmanaged: false
     });
     await expect(
       store.scanInventory([
@@ -1464,13 +1468,9 @@ description: >
       ])
     ).resolves.toMatchObject([{ status: "outside" }]);
 
-    await store.setSkillPathPolicies({
-      items: [{
-        path: codexCopy,
-        skillKey: "duplicate-reviewer",
-        targetId: "codex"
-      }],
-      mode: "use-library"
+    await store.setSkillCollectionDecision({
+      path: codexCopy,
+      useLibrary: true
     });
     await expect(
       store.scanInventory([
@@ -1485,8 +1485,7 @@ description: >
     ).resolves.toMatchObject([
       {
         status: "outside",
-        pathPolicy: "use-library",
-        pathPolicyId: expect.any(String)
+        collectionDecision: "use-library"
       }
     ]);
   });
@@ -1510,15 +1509,19 @@ description: >
     const targetPaths = createOpenCodeTargetAdapter().createTargetPaths({ homeDir });
 
     await expect(store.scanInventory([targetPaths])).resolves.toEqual([
-      expect.objectContaining({ skillKey: "runtime-reviewer", status: "kept-outside" })
+      expect.objectContaining({
+        skillKey: "runtime-reviewer",
+        status: "left-unmanaged"
+      })
     ]);
     const kept = await store.scanInventory([targetPaths]);
-    await store.setSkillPathPolicies({
+    await store.setUnmanagedSkillLocations({
       items: kept.map((skill) => ({
         path: skill.path,
-        skillKey: skill.skillKey,
-        targetId: skill.foundIn[0]
-      }))
+        targetId: skill.foundIn[0],
+        coverage: "exact" as const
+      })),
+      unmanaged: false
     });
     await expect(store.scanInventory([targetPaths])).resolves.toEqual([
       expect.objectContaining({ skillKey: "runtime-reviewer", status: "outside" })
@@ -1569,8 +1572,8 @@ description: >
     });
     const retainedScan = await store.scanInventory([targetPaths]);
     expect(retainedScan.find((item) => item.path === sharedCopy)).toMatchObject({
-      status: "kept-outside",
-      pathPolicy: "keep-shared"
+      status: "left-unmanaged",
+      unmanagedCoverage: "exact"
     });
     expect(retainedScan.find((item) => item.path === targetCopy)?.status).toBe("outside");
 
@@ -1626,15 +1629,15 @@ description: >
       }
     });
 
-    await store.setSkillPathPolicies({
-      items: [{ path: collectionLink, skillKey: "_collection" }],
-      mode: "keep-shared"
+    await store.setUnmanagedSkillLocations({
+      items: [{ path: collectionLink, coverage: "collection" }],
+      unmanaged: true
     });
     await expect(store.scanInventory([targetPaths])).resolves.toEqual([
       expect.objectContaining({
         skillKey: "brainstorming",
-        status: "kept-outside",
-        pathPolicy: "keep-shared"
+        status: "left-unmanaged",
+        unmanagedCoverage: "collection"
       })
     ]);
   });
@@ -2524,7 +2527,7 @@ description: >
       ["claude-code", claudeInstallPath]
     ] as const) {
       await writeFile(join(paths.targetStatesDir, `${targetId}.json`), JSON.stringify({
-        formatVersion: 2,
+        formatVersion: 3,
         managedMcpNames: [],
         activeProfileId: profile.id,
         appliedProfileHash: "profile-hash",
@@ -2535,7 +2538,7 @@ description: >
           path: installPath,
           contentHash: initialLibrary.contentHash
         }],
-        keptOutsideSkills: [],
+        skillReceipts: [],
         sharedSkillPreparations: []
       }));
     }

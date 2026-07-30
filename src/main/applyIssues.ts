@@ -38,7 +38,10 @@ export const APPLY_ISSUE_POLICY: Record<ApplyIssueCode, ApplyIssuePolicy> = {
   "missing-library-skill": { disposition: "block", resolution: "edit-profile" },
   "outside-skill-replacement": { disposition: "review", resolution: "backup-replace" },
   "outside-skill-removal": { disposition: "review", resolution: "backup-replace" },
-  "kept-outside-skill": { disposition: "notice", resolution: "preserve" },
+  "unmanaged-skill-location": {
+    disposition: "notice",
+    resolution: "preserve"
+  },
   "managed-resource-drift": { disposition: "review", resolution: "backup-replace" },
   "managed-resource-missing": { disposition: "notice", resolution: "automatic" },
   "duplicate-runtime-skill": { disposition: "block", resolution: "edit-profile" },

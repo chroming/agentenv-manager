@@ -230,8 +230,8 @@ export const createTargetCaptureService = ({
           ? `Import Agent copy as ${libraryId}; existing same-name Library Skill stays unchanged`
           : sourcePaths.length > 1
             ? `${sourcePaths.length} source copies stay unchanged`
-            : preferredEntry.status === "kept-outside"
-              ? "Included in the Profile; this device keeps the current path outside AgentEnv"
+            : preferredEntry.status === "left-unmanaged"
+              ? "Included in the Profile; this device leaves the current path unmanaged"
               : preferredEntry.externalEvidence
                 ? `Included from a readable Agent path; ${preferredEntry.externalEvidence.displayName ?? preferredEntry.externalEvidence.manager} metadata was detected`
                 : undefined

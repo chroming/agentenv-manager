@@ -1,28 +1,28 @@
 {
-  "generatedAt": "2026-07-30T06:57:49.683Z",
+  "generatedAt": "2026-07-30T08:43:04.860Z",
   "source": {
-    "commit": "57457264bed34d3eefa843c8e87bdc1780aed0f2",
-    "dirty": false,
-    "fingerprint": "08a236d6b42a45bd2c9c7515311dfda60381b1f3a918be81de4dc6942392b699",
-    "files": 587
+    "commit": "bcf47e68bdc73044564fab0621e462f8a45136e4",
+    "dirty": true,
+    "fingerprint": "e0d4ecff019a1cf407954c59326105215eabaab5fb511d54ff16e8ad08568de6",
+    "files": 592
   },
   "build": {
-    "generatedAt": "2026-07-30T06:52:04.208Z",
-    "sourceFingerprint": "d843d54b112b5cdd617e1e3ed3d52efbc4519676706addbd7262d79715e9cfa1",
-    "sourceFiles": 280,
-    "artifactFingerprint": "20d31c3e09ced266f720dd8dec97f892f3ee8569523232f31aa61af1cf4e8c8a",
+    "generatedAt": "2026-07-30T08:37:17.771Z",
+    "sourceFingerprint": "8ef6a86d71e00b1f2c30ced826d50436a807a0dbeba0b93e501652d295abf35c",
+    "sourceFiles": 282,
+    "artifactFingerprint": "b5dcd2c306b3fcb56ff011ad29b22cc403c581788a40eb60a1425485d2598d4f",
     "artifactFiles": 26
   },
   "tests": {
     "passed": true,
-    "files": 158,
-    "assertions": 1053,
+    "files": 159,
+    "assertions": 1073,
     "e2eFiles": 15,
-    "e2eAssertions": 176,
+    "e2eAssertions": 177,
     "desktopElectronFiles": 6,
-    "desktopElectronAssertions": 123,
+    "desktopElectronAssertions": 124,
     "electronUiFiles": 1,
-    "electronUiAssertions": 117
+    "electronUiAssertions": 118
   },
   "audits": {
     "styles": "passed",
@@ -32,8 +32,8 @@
   },
   "captures": {
     "directory": "/var/folders/c4/vw8cxnvd7rv46sv4kq0lkg0h0000gn/T/agentenv-ui-captures/verification",
-    "artifactFingerprint": "20d31c3e09ced266f720dd8dec97f892f3ee8569523232f31aa61af1cf4e8c8a",
-    "files": 118,
+    "artifactFingerprint": "b5dcd2c306b3fcb56ff011ad29b22cc403c581788a40eb60a1425485d2598d4f",
+    "files": 120,
     "viewports": [
       "1180x728",
       "920x620"
@@ -42,7 +42,7 @@
     "visualContract": {
       "passed": true,
       "files": 15,
-      "maxChangedPixelRatio": 0.006740883590462833
+      "maxChangedPixelRatio": 0.006789971949509116
     }
   },
   "packagedSmoke": "not-run"

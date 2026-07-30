@@ -153,7 +153,7 @@ export const deriveProfileReadiness = ({
   if (
     targetState.activeProfileId === profile.id &&
     (targetState.lifecycleStatus === "applied" ||
-      targetState.lifecycleStatus === "applied-with-outside" ||
+      targetState.lifecycleStatus === "applied-with-local-override" ||
       !targetState.lifecycleStatus) &&
     Boolean(profile.contentHash) &&
     targetState.appliedProfileHash === profile.contentHash &&
@@ -162,8 +162,8 @@ export const deriveProfileReadiness = ({
     return {
       status: "applied",
       label: "Applied",
-      message: targetState.lifecycleStatus === "applied-with-outside"
-        ? targetState.lifecycleReason ?? `${target.name} uses this profile with local exceptions`
+      message: targetState.lifecycleStatus === "applied-with-local-override"
+        ? targetState.lifecycleReason ?? `${target.name} uses this profile with local management boundaries`
         : `${target.name} matches this profile`
     };
   }

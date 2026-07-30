@@ -128,8 +128,8 @@ describe("SkillLibraryPanel", () => {
     const onAutoConsolidateSkillGroups = vi.fn().mockImplementation(
       async (inputs: SkillCleanupRequest[]) => inputs.map((input) => input.skillKey)
     );
-    const onKeepSkillGroupOutside = vi.fn();
-    const onReviewSkillGroupAgain = vi.fn();
+    const onLeaveSkillGroupUnmanaged = vi.fn();
+    const onManageSkillGroupWithAgentEnv = vi.fn();
     const onSetSharedSkillRetention = vi.fn().mockResolvedValue(true);
     const onRetireSharedSkill = vi.fn().mockResolvedValue(true);
     const onMoveSharedSkillToAgents = vi.fn().mockResolvedValue(true);
@@ -380,12 +380,12 @@ describe("SkillLibraryPanel", () => {
             description: "Found on disk",
             path: "/tmp/codex/skills/target-only-reviewer",
             foundIn: ["codex"],
-            status: "kept-outside",
+            status: "left-unmanaged",
             libraryId: undefined,
             skillKey: "target-only-reviewer",
             contentHash: "target-only-hash",
-            pathPolicyId: "keep-target-only-reviewer",
-            pathPolicy: "keep-outside"
+            unmanagedLocationId: "unmanaged-target-only-reviewer",
+            unmanagedCoverage: "exact"
           },
           {
             id: "kept-reviewer",
@@ -393,11 +393,11 @@ describe("SkillLibraryPanel", () => {
             description: "Intentionally stays outside AgentEnv",
             path: "/tmp/opencode/skills/kept-reviewer",
             foundIn: ["opencode"],
-            status: "kept-outside",
+            status: "left-unmanaged",
             skillKey: "kept-reviewer",
             contentHash: "kept-hash",
-            pathPolicyId: "keep-kept-reviewer",
-            pathPolicy: "keep-outside"
+            unmanagedLocationId: "unmanaged-kept-reviewer",
+            unmanagedCoverage: "exact"
           },
           {
             id: "conflict-reviewer",
@@ -487,15 +487,15 @@ describe("SkillLibraryPanel", () => {
             description: "Retained shared compatibility copy",
             path: "/tmp/home/.agents/skills/bytedcli",
             foundIn: ["codex", "opencode", "pi", "trae-cli"],
-            status: "kept-outside",
+            status: "left-unmanaged",
             libraryId: "bytedcli",
             skillKey: "bytedcli",
             contentHash: "bytedcli-hash",
             contentMatchesLibrary: true,
             locationRole: "compatibility-runtime",
             sharedLocation: true,
-            pathPolicyId: "keep-bytedcli-shared",
-            pathPolicy: "keep-shared"
+            unmanagedLocationId: "unmanaged-bytedcli-shared",
+            unmanagedCoverage: "exact"
           },
           {
             id: "bytedcli",
@@ -654,8 +654,8 @@ describe("SkillLibraryPanel", () => {
         onManageTargetSkill={onManageTargetSkill}
         onConsolidateSkillGroup={onConsolidateSkillGroup}
         onAutoConsolidateSkillGroups={onAutoConsolidateSkillGroups}
-        onKeepSkillGroupOutside={onKeepSkillGroupOutside}
-        onReviewSkillGroupAgain={onReviewSkillGroupAgain}
+        onLeaveSkillGroupUnmanaged={onLeaveSkillGroupUnmanaged}
+        onManageSkillGroupWithAgentEnv={onManageSkillGroupWithAgentEnv}
         onSetSharedSkillRetention={onSetSharedSkillRetention}
         onRetireSharedSkill={onRetireSharedSkill}
         onMoveSharedSkillToAgents={onMoveSharedSkillToAgents}
@@ -1129,7 +1129,7 @@ describe("SkillLibraryPanel", () => {
     expect(discoveries).toHaveTextContent("Managed");
     expect(discoveries).toHaveTextContent("Needs your decision");
     expect(discoveries).toHaveTextContent("Ready to clean up");
-    expect(discoveries).toHaveTextContent("Kept outside AgentEnv");
+    expect(discoveries).toHaveTextContent("Left unmanaged");
     expect(discoveries).toHaveTextContent("External");
     expect(discoveries).toHaveTextContent("Shared: OpenCode + Codex");
     const partiallyKeptGroup = screen.getByRole("group", {
@@ -1190,7 +1190,7 @@ describe("SkillLibraryPanel", () => {
         name: "More cleanup actions for compat-reviewer"
       })
     );
-    fireEvent.click(screen.getByRole("menuitem", { name: "Keep shared copy" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Leave shared copy unmanaged" }));
     expect(onSetSharedSkillRetention).toHaveBeenCalledWith({
       skillKey: "compat-reviewer",
       paths: ["/tmp/home/.agents/skills/compat-reviewer"],
@@ -1336,8 +1336,10 @@ describe("SkillLibraryPanel", () => {
         name: "More cleanup actions for target-only-reviewer"
       })
     );
-    fireEvent.click(screen.getByRole("menuitem", { name: "Review kept paths" }));
-    expect(onReviewSkillGroupAgain).toHaveBeenCalledWith("target-only-reviewer");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Review unmanaged paths" }));
+    expect(onManageSkillGroupWithAgentEnv).toHaveBeenCalledWith(
+      "target-only-reviewer"
+    );
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Close library tool" })).toBeEnabled()
     );
@@ -1402,8 +1404,10 @@ describe("SkillLibraryPanel", () => {
         name: "More cleanup actions for conflict-reviewer"
       })
     );
-    fireEvent.click(screen.getByRole("menuitem", { name: "Keep outside AgentEnv" }));
-    expect(onKeepSkillGroupOutside).toHaveBeenCalledWith("conflict-reviewer");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Leave unmanaged" }));
+    expect(onLeaveSkillGroupUnmanaged).toHaveBeenCalledWith(
+      "conflict-reviewer"
+    );
     const conflictLocations = within(conflictGroup).getByLabelText(
       "Full cleanup locations conflict-reviewer"
     );
@@ -1701,8 +1705,8 @@ describe("SkillLibraryPanel", () => {
         onOpenSource={noop}
         onCopySource={noop}
         onCopyCleanupDetails={vi.fn().mockResolvedValue(true)}
-        onKeepSkillGroupOutside={noop}
-        onReviewSkillGroupAgain={noop}
+        onLeaveSkillGroupUnmanaged={noop}
+        onManageSkillGroupWithAgentEnv={noop}
         onSetSharedSkillRetention={vi.fn().mockResolvedValue(false)}
         onRetireSharedSkill={vi.fn().mockResolvedValue(false)}
         onMoveSharedSkillToAgents={vi.fn().mockResolvedValue(false)}
@@ -1890,8 +1894,8 @@ describe("SkillLibraryPanel", () => {
         onOpenSource={noop}
         onCopySource={noop}
         onCopyCleanupDetails={vi.fn().mockResolvedValue(true)}
-        onKeepSkillGroupOutside={noop}
-        onReviewSkillGroupAgain={noop}
+        onLeaveSkillGroupUnmanaged={noop}
+        onManageSkillGroupWithAgentEnv={noop}
         onSetSharedSkillRetention={vi.fn().mockResolvedValue(true)}
         onRetireSharedSkill={vi.fn().mockResolvedValue(true)}
         onMoveSharedSkillToAgents={vi.fn().mockResolvedValue(true)}

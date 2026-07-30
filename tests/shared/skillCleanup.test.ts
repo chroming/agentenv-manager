@@ -77,7 +77,7 @@ describe("skill cleanup groups", () => {
         collectionLink,
         libraryId: "brainstorming",
         contentMatchesLibrary: false,
-        pathPolicy: "use-library"
+        collectionDecision: "use-library"
       }),
       inventoryItem({
         path: `${collectionLink.path}/debugging`,
@@ -95,7 +95,7 @@ describe("skill cleanup groups", () => {
     });
     expect(group.items[0]).toMatchObject({
       contentMatchesLibrary: false,
-      pathPolicy: "use-library"
+      collectionDecision: "use-library"
     });
   });
 
@@ -418,8 +418,9 @@ describe("skill cleanup groups", () => {
       inventoryItem({
         id: "kept",
         skillKey: "kept",
-        status: "kept-outside",
-        pathPolicyId: "keep-kept"
+        status: "left-unmanaged",
+        unmanagedLocationId: "unmanaged-kept",
+        unmanagedCoverage: "exact"
       })
     ]);
 
@@ -566,8 +567,9 @@ describe("skill cleanup groups", () => {
         ...shared,
         id: "kept",
         skillKey: "kept",
-        status: "kept-outside",
-        pathPolicy: "keep-shared"
+        status: "left-unmanaged",
+        unmanagedLocationId: "unmanaged-kept",
+        unmanagedCoverage: "exact"
       }),
       inventoryItem({
         ...shared,
@@ -600,7 +602,7 @@ describe("skill cleanup groups", () => {
       locations: []
     });
     expect(groups.find((group) => group.skillKey === "kept")?.sharedMigration?.state)
-      .toBe("kept");
+      .toBe("unmanaged");
     expect(groups.find((group) => group.skillKey === "external")?.sharedMigration?.state)
       .toBe("not-imported");
     expect(groups.find((group) => group.skillKey === "conflict")?.sharedMigration?.state)
@@ -610,7 +612,7 @@ describe("skill cleanup groups", () => {
       action: "add-to-library"
     });
     expect(groups.find((group) => group.skillKey === "kept")?.presentation).toEqual({
-      state: "kept-shared",
+      state: "shared-left-unmanaged",
       action: "none"
     });
     expect(groups.find((group) => group.skillKey === "external")?.presentation).toEqual({
@@ -628,12 +630,13 @@ describe("skill cleanup groups", () => {
       inventoryItem({
         path: "/tmp/home/.agents/skills/bytedcli",
         foundIn: ["codex", "opencode", "pi", "trae-cli"],
-        status: "kept-outside",
+        status: "left-unmanaged",
         libraryId: "bytedcli",
         skillKey: "bytedcli",
         sharedLocation: true,
         locationRole: "compatibility-runtime",
-        pathPolicy: "keep-shared",
+        unmanagedLocationId: "unmanaged-bytedcli",
+        unmanagedCoverage: "exact",
         contentMatchesLibrary: true
       }),
       inventoryItem({
@@ -657,7 +660,7 @@ describe("skill cleanup groups", () => {
         action: "manage-copies"
       },
       sharedMigration: {
-        state: "kept"
+        state: "unmanaged"
       }
     });
     expect(automaticSkillCleanupRequest(group)).toEqual({

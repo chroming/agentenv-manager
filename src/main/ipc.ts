@@ -36,7 +36,7 @@ import type {
   SkillImportPreviewInput,
   SkillIconInput,
   SkillMergeInput,
-  SkillPathPolicyUpdate,
+  SkillCollectionMemberDecisionUpdate,
   SkillSourceMergePreviewInput,
   SaveProfileInput,
   UpdateProfileMetadataInput,
@@ -44,6 +44,7 @@ import type {
   SkillUpdateSettingsInput,
   SkillUpdateConfirmation,
   SkillAvailabilityInput,
+  UnmanagedSkillLocationUpdate,
   TargetCaptureScope,
   TargetPaths
 } from "../shared/types";
@@ -410,18 +411,39 @@ export const registerIpcHandlers = ({
       .flat()
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
   );
-  handleMutation("skills:set-path-policies", (_event, input: SkillPathPolicyUpdate) => {
-    if (!input || !Array.isArray(input.items)) {
-      throw new Error("Skill path policy requires at least one path");
+  handleMutation(
+    "skills:set-unmanaged-locations",
+    (_event, input: UnmanagedSkillLocationUpdate) => {
+      if (!input || !Array.isArray(input.items) || typeof input.unmanaged !== "boolean") {
+        throw new Error("Leave unmanaged requires at least one Skill path");
+      }
+      for (const item of input.items) {
+        if (
+          !item ||
+          typeof item.path !== "string" ||
+          (item.coverage !== undefined &&
+            item.coverage !== "exact" &&
+            item.coverage !== "collection")
+        ) {
+          throw new Error("Invalid unmanaged Skill location");
+        }
+      }
+      return skillLibraryStore.setUnmanagedSkillLocations(input);
     }
-    if (
-      input.mode !== undefined &&
-      !["keep-outside", "keep-shared", "use-library"].includes(input.mode)
-    ) {
-      throw new Error("Invalid Skill path policy");
+  );
+  handleMutation(
+    "skills:set-collection-decision",
+    (_event, input: SkillCollectionMemberDecisionUpdate) => {
+      if (
+        !input ||
+        typeof input.path !== "string" ||
+        typeof input.useLibrary !== "boolean"
+      ) {
+        throw new Error("Invalid Skill collection decision");
+      }
+      return skillLibraryStore.setSkillCollectionDecision(input);
     }
-    return skillLibraryStore.setSkillPathPolicies(input);
-  });
+  );
   diagnosticHandle("skills:scan-unmanaged", () =>
     targetDiscoveryService
       .listTargets()
@@ -658,7 +680,7 @@ export const registerIpcHandlers = ({
         const current = inventoryByPath.get(resolve(String(location.path)));
         return Boolean(
           current &&
-          current.status !== "kept-outside" &&
+          current.status !== "left-unmanaged" &&
           current.contentHash === "" &&
           current.runtimeIssues?.some(
             (issue) =>
@@ -856,7 +878,7 @@ export const registerIpcHandlers = ({
           libraryId: item.libraryId as string,
           sharedPath: item.path,
           consumerTargetIds: item.foundIn.filter((id) => installedTargetIds.has(id)),
-          useLibraryVersion: item.pathPolicy === "use-library",
+          useLibraryVersion: item.collectionDecision === "use-library",
           sourceContentHash: item.contentHash
         }
       ])

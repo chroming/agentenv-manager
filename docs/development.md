@@ -48,7 +48,7 @@ filesystem or shell access.
 
 Large modules have executable growth budgets in
 `scripts/audit-module-budgets.mjs`. Profile draft/activation/navigation,
-Skill Library import, Target-state persistence, and Skill path-policy
+Skill Library import, Target-state persistence, and device-local Skill management-boundary
 persistence have dedicated owners instead of accumulating inside workspace
 components or the main process entry point.
 

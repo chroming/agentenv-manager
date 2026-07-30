@@ -31,16 +31,19 @@ export const acceptAppliedProfileState = ({
     appliedProfileHash,
     appliedLibraryVersions: preview.libraryVersions,
     status: "managed",
-    lifecycleStatus: preview.issues.some(
-      (issue) => issue.code === "kept-outside-skill"
+    lifecycleStatus: (preview.skillReceipts ?? []).some(
+      (receipt) => receipt.localOverride
     )
-      ? "applied-with-outside"
+      ? "applied-with-local-override"
       : "applied",
     lastAppliedAt: appliedAt,
     managedResourceCount:
       preview.effectivePayload?.total ??
       preview.changes.length + preview.resourceChanges.length,
-    keptOutsideSkills: preview.keptOutsideSkills ?? [],
+    skillReceipts: preview.skillReceipts ?? [],
+    localOverrideCount: (preview.skillReceipts ?? []).filter(
+      (receipt) => receipt.localOverride
+    ).length,
     sharedSkillPreparations: preview.sharedSkillPreparations ?? [],
     warningCount: preview.issues.filter(
       (issue) => issue.disposition === "notice"

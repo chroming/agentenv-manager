@@ -26,7 +26,7 @@ import { createFilesystemSkillDriver } from "./shared/skillRuntime";
 import type { AgentTargetAdapter } from "./types";
 
 const DEFAULT_STATE: TargetState = {
-  formatVersion: 2,
+  formatVersion: 3,
   managedMcpNames: []
 };
 
@@ -311,7 +311,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       },
       targetState: {
         ...state,
-        formatVersion: 2,
+        formatVersion: 3,
         managedMcpNames
       }
     };

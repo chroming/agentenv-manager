@@ -1,16 +1,23 @@
 import type {
+  AppliedSkillReceipt,
   ProfileDetail,
-  SharedSkillPreparation,
-  TargetKeptOutsideSkill
+  SharedSkillPreparation
 } from "./types";
 
-export const profileWithoutLocalSkillExceptions = (
+export const profileWithoutLocalSkillOverrides = (
   profile: ProfileDetail,
-  keptOutsideSkills: readonly TargetKeptOutsideSkill[] = [],
+  skillReceipts: readonly AppliedSkillReceipt[] = [],
   sharedPreparations: readonly SharedSkillPreparation[] = []
 ): ProfileDetail => {
   const excluded = new Set([
-    ...keptOutsideSkills.map((entry) => `${entry.libraryId}:${entry.targetName}`),
+    ...skillReceipts
+      .filter(
+        (receipt) =>
+          receipt.localOverride &&
+          receipt.desired === "install" &&
+          receipt.outcome === "external-active"
+      )
+      .map((entry) => `${entry.libraryId}:${entry.targetName}`),
     ...sharedPreparations
       .filter((preparation) => preparation.profileId === profile.id)
       .map((preparation) => `${preparation.libraryId}:${preparation.targetName}`)

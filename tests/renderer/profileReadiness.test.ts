@@ -246,22 +246,22 @@ describe("profile readiness", () => {
     ).toBe("Review Codex issues");
   });
 
-  it("keeps a current Profile applied while naming machine-local Skill exceptions", () => {
+  it("keeps a current Profile applied while naming local management boundaries", () => {
     expect(
       deriveProfileReadiness({
         profile,
         target,
         targetState: {
           ...managedState,
-          lifecycleStatus: "applied-with-outside",
-          lifecycleReason: "1 Skill stays outside AgentEnv on this device"
+          lifecycleStatus: "applied-with-local-override",
+          lifecycleReason: "1 local management boundary is active on this device"
         },
         isDirty: false
       })
     ).toEqual({
       status: "applied",
       label: "Applied",
-      message: "1 Skill stays outside AgentEnv on this device"
+      message: "1 local management boundary is active on this device"
     });
   });
 
