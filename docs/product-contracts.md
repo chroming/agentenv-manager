@@ -626,6 +626,7 @@ The Profile editor MUST distinguish these states:
 Rules:
 
 - Save MUST persist the complete Profile, not an individual accordion section.
+- Reverting every environment edit to the persisted intent MUST immediately return the editor to `Clean`, disable Save, and avoid a filesystem write. Explicit default resource policies are equal to their omitted representation. Button, keyboard shortcut, navigation guard, and programmatic Save paths share this semantic no-op rule.
 - Save MUST expose local working feedback immediately. Once persistence succeeds, the editor becomes clean and Apply availability is recalculated from the returned saved Profile without waiting for Target discovery, inventory scanning, update checks, usage aggregation, or a full-page refresh.
 - Save, Apply, and Target selection MUST appear as one compact action group in the selected Profile context. The Profile-scoped destination selector sits immediately before Apply, with Save in the same compact group. Page creation controls MUST NOT separate these lifecycle commands.
 - Save and Apply MUST keep stable labels and positions. A dirty Profile highlights Save and disables Apply; after Save, Save is disabled and Apply becomes the primary action.

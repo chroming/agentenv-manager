@@ -166,6 +166,79 @@ describe("useProfileDraftController", () => {
     expect(result.current.onDraftInvalidated).toHaveBeenCalled();
   });
 
+  it("returns to clean when a Skill edit is reverted and skips a no-op Save", async () => {
+    const initial = {
+      ...profile("daily"),
+      resources: {
+        skills: [{
+          libraryId: "reviewer",
+          targetName: "reviewer",
+          enabled: true
+        }],
+        mcpByTarget: {}
+      }
+    };
+    const saveProfile = vi.fn();
+    installApi({ saveProfile });
+    const { result } = renderHook(() => useHarness(initial));
+
+    act(() => {
+      result.current.controller.acceptProfile(initial);
+      result.current.controller.updateDraft({
+        ...initial,
+        resources: {
+          ...initial.resources,
+          skills: [{ ...initial.resources.skills[0]!, enabled: false }]
+        }
+      });
+    });
+    expect(result.current.controller.isDirty).toBe(true);
+
+    act(() => {
+      result.current.controller.updateDraft(initial);
+    });
+    expect(result.current.controller.isDirty).toBe(false);
+
+    await act(() => result.current.controller.saveDraft());
+
+    expect(saveProfile).not.toHaveBeenCalled();
+    expect(result.current.controller.isDirty).toBe(false);
+    expect(result.current.controller.status).toBe("");
+  });
+
+  it("preserves an environment draft while saved Profile metadata changes", () => {
+    const initial = profile("daily");
+    const savedMetadata = {
+      ...initial,
+      manifest: {
+        ...initial.manifest,
+        name: "Daily review"
+      }
+    };
+    const { result } = renderHook(() => useHarness(initial));
+
+    act(() => {
+      result.current.controller.acceptProfile(initial);
+      result.current.controller.updateDraft({
+        ...initial,
+        instructions: "# Unsaved\n"
+      });
+      result.current.controller.acceptProfileMetadata(savedMetadata, "daily");
+    });
+
+    expect(result.current.controller.draftProfile?.manifest.name).toBe("Daily review");
+    expect(result.current.controller.draftProfile?.instructions).toBe("# Unsaved\n");
+    expect(result.current.controller.isDirty).toBe(true);
+
+    act(() => {
+      result.current.controller.updateDraft({
+        ...result.current.controller.draftProfile!,
+        instructions: initial.instructions
+      });
+    });
+    expect(result.current.controller.isDirty).toBe(false);
+  });
+
   it("reloads the saved Profile when a pending edit is discarded", async () => {
     const saved = profile("daily");
     installApi({ readProfile: vi.fn().mockResolvedValue(saved) });

@@ -11,19 +11,16 @@ import type {
   ProfileDetail,
   ProfileSummary,
   ResourceIconKey,
-  SaveProfileInput,
   SkillLibraryEntry,
   TargetInfo,
   TargetManagementState
 } from "../../shared/types";
 import { collectLibraryResourceVersions } from "../../shared/libraryVersions";
+import {
+  profileDraftsEqual,
+  profileSaveInput
+} from "../profileDraftState";
 import { reconcileProfileUsage } from "../profileSummary";
-
-const toSaveInput = (profile: ProfileDetail): SaveProfileInput => ({
-  manifest: profile.manifest,
-  instructions: profile.instructions,
-  resources: profile.resources
-});
 
 interface SelectProfileOptions {
   onBeforeLoad?(isDifferentProfile: boolean): void;
@@ -67,6 +64,8 @@ export const useProfileDraftController = ({
   const [status, setStatus] = useState("");
   const flowRequestRef = useRef(0);
   const saveInFlightRef = useRef(false);
+  const draftProfileRef = useRef<ProfileDetail | undefined>(undefined);
+  const savedProfileRef = useRef<ProfileDetail | undefined>(undefined);
 
   useEffect(() => {
     if (status !== "Profile saved" && status !== "Profile details saved") {
@@ -92,6 +91,8 @@ export const useProfileDraftController = ({
 
   const acceptProfile = useCallback((profile: ProfileDetail) => {
     setSelectedProfileId(profile.id);
+    draftProfileRef.current = profile;
+    savedProfileRef.current = profile;
     setDraftProfile(profile);
     setIsDirty(false);
     setStatus("");
@@ -102,6 +103,8 @@ export const useProfileDraftController = ({
     nextStatus = ""
   ) => {
     setSelectedProfileId(profile.id);
+    draftProfileRef.current = profile;
+    savedProfileRef.current = profile;
     setDraftProfile(profile);
     setIsDirty(false);
     setStatus(nextStatus);
@@ -111,6 +114,8 @@ export const useProfileDraftController = ({
     invalidateFlow();
     setSelectedProfileId(undefined);
     setProfileLoadingId(undefined);
+    draftProfileRef.current = undefined;
+    savedProfileRef.current = undefined;
     setDraftProfile(undefined);
     setIsDirty(false);
     setStatus("");
@@ -118,8 +123,9 @@ export const useProfileDraftController = ({
 
   const updateDraft = useCallback((profile: ProfileDetail) => {
     invalidateFlow();
+    draftProfileRef.current = profile;
     setDraftProfile(profile);
-    setIsDirty(true);
+    setIsDirty(!profileDraftsEqual(profile, savedProfileRef.current));
     setStatus("");
     onDraftInvalidated();
   }, [invalidateFlow, onDraftInvalidated]);
@@ -185,6 +191,14 @@ export const useProfileDraftController = ({
     if (!draftProfile) {
       return undefined;
     }
+    if (profileDraftsEqual(draftProfile, savedProfileRef.current)) {
+      const savedProfile = savedProfileRef.current ?? draftProfile;
+      draftProfileRef.current = savedProfile;
+      setDraftProfile(savedProfile);
+      setIsDirty(false);
+      setStatus("");
+      return savedProfile;
+    }
 
     const previousName =
       profiles.find((profile) => profile.id === draftProfile.id)?.name ??
@@ -193,7 +207,7 @@ export const useProfileDraftController = ({
     setIsSaving(true);
     setStatus("Saving profile");
     try {
-      const saved = await window.agentEnv.saveProfile(toSaveInput(draftProfile));
+      const saved = await window.agentEnv.saveProfile(profileSaveInput(draftProfile));
       const summary: ProfileSummary = {
         id: saved.id,
         preferredTargetId: saved.manifest.preferredTargetId,
@@ -248,6 +262,8 @@ export const useProfileDraftController = ({
           };
         })
       );
+      draftProfileRef.current = saved;
+      savedProfileRef.current = saved;
       setDraftProfile(saved);
       setIsDirty(false);
       setStatus("Profile saved");
@@ -322,21 +338,24 @@ export const useProfileDraftController = ({
           : targetState
       )
     );
-    setDraftProfile((current) =>
-      current?.id === saved.id
-        ? {
-            ...current,
-            manifest: {
-              ...current.manifest,
-              name: saved.manifest.name,
-              description: saved.manifest.description,
-              iconKey: saved.manifest.iconKey as ResourceIconKey | undefined
-            },
-            contentHash: saved.contentHash,
-            targetContentHashes: saved.targetContentHashes
-          }
-        : current
-    );
+    const current = draftProfileRef.current;
+    if (current?.id === saved.id) {
+      const next = {
+        ...current,
+        manifest: {
+          ...current.manifest,
+          name: saved.manifest.name,
+          description: saved.manifest.description,
+          iconKey: saved.manifest.iconKey as ResourceIconKey | undefined
+        },
+        contentHash: saved.contentHash,
+        targetContentHashes: saved.targetContentHashes
+      };
+      draftProfileRef.current = next;
+      savedProfileRef.current = saved;
+      setDraftProfile(next);
+      setIsDirty(!profileDraftsEqual(next, saved));
+    }
     setStatus("Profile details saved");
   }, [
     profileLibraryVersions,

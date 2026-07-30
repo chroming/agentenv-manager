@@ -2942,7 +2942,7 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
 
-  it("runs the whole-Profile save path from a clean shortcut", async () => {
+  it("ignores the whole-Profile save shortcut when the draft is clean", async () => {
     const api = installApi();
     render(<App />);
 
@@ -2951,10 +2951,8 @@ describe("App", () => {
 
     fireEvent.keyDown(document, { key: "s", ctrlKey: true });
 
-    await waitFor(() => expect(api.saveProfile).toHaveBeenCalledTimes(1));
-    expect(api.saveProfile).toHaveBeenCalledWith(
-      expect.objectContaining({ manifest: expect.objectContaining({ id: "daily-coding" }) })
-    );
+    expect(api.saveProfile).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
   it("keeps profiles available when selecting another apply target", async () => {

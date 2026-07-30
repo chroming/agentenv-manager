@@ -5360,6 +5360,48 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(instructionsPath, "utf8")).resolves.toBe(savedDraft);
   }, 30_000);
 
+  it("returns a reverted Profile Skill edit to clean without offering Save or Apply", async () => {
+    const { appDataRoot, page } = await launchApp();
+    await selectProfile(page, "UI OpenCode alpha");
+    await previewAndApply(page, "OpenCode");
+    await expandComposerSection(page, "Skills");
+
+    const saveButton = page.getByRole("button", { name: "Save", exact: true });
+    const applyButton = applyActionButton(page, "OpenCode");
+    const profileRow = page.getByRole("group", {
+      name: "Profile UI OpenCode alpha"
+    });
+    const skillManager = page.getByRole("region", { name: "Profile skills" });
+
+    expect(await saveButton.isDisabled()).toBe(true);
+    expect(await applyButton.isDisabled()).toBe(true);
+
+    await skillManager.getByRole("switch", {
+      name: "Disable ui-alpha-skill"
+    }).click();
+    await expect.poll(() => saveButton.isEnabled()).toBe(true);
+    expect(await applyButton.isDisabled()).toBe(true);
+    await expect.poll(() => profileRow.textContent()).toContain("Unsaved");
+
+    await skillManager.getByRole("switch", {
+      name: "Enable ui-alpha-skill"
+    }).click();
+    await expect.poll(() => saveButton.isDisabled()).toBe(true);
+    expect(await applyButton.isDisabled()).toBe(true);
+    await expect.poll(() => profileRow.textContent()).not.toContain("Unsaved");
+
+    const resources = await readJson<{
+      skills: Array<{ libraryId: string; targetName: string; enabled: boolean }>;
+    }>(join(appDataRoot, "profiles", "ui-opencode-alpha", "resources.json"));
+    expect(resources.skills).toEqual([
+      {
+        libraryId: "ui-alpha-skill",
+        targetName: "ui-alpha-skill",
+        enabled: true
+      }
+    ]);
+  }, 30_000);
+
   it("discards a dirty Profile without changing its saved file", async () => {
     const { appDataRoot, page } = await launchApp();
     const instructionsPath = join(
