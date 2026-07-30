@@ -623,6 +623,56 @@ describe("skill cleanup groups", () => {
     });
   });
 
+  it("keeps a retained shared copy from masking a remaining Library-backed copy", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        path: "/tmp/home/.agents/skills/bytedcli",
+        foundIn: ["codex", "opencode", "pi", "trae-cli"],
+        status: "kept-outside",
+        libraryId: "bytedcli",
+        skillKey: "bytedcli",
+        sharedLocation: true,
+        locationRole: "compatibility-runtime",
+        pathPolicy: "keep-shared",
+        contentMatchesLibrary: true
+      }),
+      inventoryItem({
+        path: "/tmp/claude/skills/bytedcli",
+        foundIn: ["claude-code", "opencode"],
+        status: "library",
+        libraryId: "bytedcli",
+        skillKey: "bytedcli",
+        sharedLocation: false,
+        locationRole: "preferred-runtime",
+        contentMatchesLibrary: true
+      })
+    ]);
+
+    expect(group).toMatchObject({
+      state: "library",
+      resolution: "automatic",
+      bucket: "ready",
+      presentation: {
+        state: "copies-not-managed",
+        action: "manage-copies"
+      },
+      sharedMigration: {
+        state: "kept"
+      }
+    });
+    expect(automaticSkillCleanupRequest(group)).toEqual({
+      skillKey: "bytedcli",
+      libraryId: "bytedcli",
+      canonicalPath: "/tmp/claude/skills/bytedcli",
+      libraryAction: "keep",
+      locations: [{
+        targetId: "claude-code",
+        path: "/tmp/claude/skills/bytedcli",
+        contentHash: "same-hash"
+      }]
+    });
+  });
+
   it("keeps version choice inside Add to Library for conflicting shared and Target copies", () => {
     const [group] = buildSkillCleanupGroups([
       inventoryItem({

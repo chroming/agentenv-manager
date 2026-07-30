@@ -70,6 +70,11 @@ export interface SharedSkillMigration {
   libraryId?: string;
 }
 
+export const sharedSkillMigrationNeedsAction = (
+  migration: SharedSkillMigration | undefined
+): migration is SharedSkillMigration =>
+  Boolean(migration && migration.state !== "kept");
+
 export interface SkillCleanupPreparedTarget {
   targetId: string;
   libraryId?: string;
@@ -346,17 +351,20 @@ export const buildSkillCleanupGroups = (
         Boolean(hasLibraryCopy) &&
         !hasBlockingExternal &&
         !hasUnreadable &&
-        !sharedMigration &&
+        !sharedSkillMigrationNeedsAction(sharedMigration) &&
         !missingTarget;
       const canImportStandalone =
         !hasLibraryCopy &&
         !hasBlockingExternal &&
         !hasUnreadable &&
-        !sharedMigration &&
+        !sharedSkillMigrationNeedsAction(sharedMigration) &&
         !missingTarget &&
         hashes.size <= 1;
       const sharedCopyWaiting = sharedMigration?.state === "waiting";
       const sharedCopyReplaceable = sharedMigration?.state === "ready";
+      const sharedMigrationNeedsAction = sharedSkillMigrationNeedsAction(
+        sharedMigration
+      );
       const resolution: SkillCleanupResolution =
         sharedCopyWaiting
           ? "automatic"
@@ -367,7 +375,7 @@ export const buildSkillCleanupGroups = (
                 canNormalizeToLibrary ||
                 canImportStandalone
                 ? "automatic"
-                : sharedMigration
+                : sharedMigrationNeedsAction
                   ? "manual"
                   : state === "outside" || state === "conflict" || state === "broken" || missingTarget
                     ? "manual"
@@ -442,11 +450,9 @@ export const buildSkillCleanupGroups = (
               ? { state: "shared-copy-ready-to-move", action: "move-from-shared" }
               : sharedMigration?.state === "waiting"
                 ? { state: "shared-copy-ready-to-move", action: "move-from-shared" }
-                : sharedMigration?.state === "kept"
-                  ? { state: "kept-shared", action: "none" }
-                  : sharedMigration?.state === "outside"
+                : sharedMigration?.state === "outside"
                     ? { state: "outside-agentenv", action: "review-paths" }
-                    : sharedMigration
+                    : sharedMigrationNeedsAction
                       ? hasLibraryCopy
                         ? { state: "local-changes-found", action: "review-differences" }
                         : hashes.size > 1
@@ -530,14 +536,15 @@ export const automaticSkillCleanupRequest = (
     };
   }
 
-  if (group.sharedMigration) {
+  const sharedMigration = group.sharedMigration;
+  if (sharedSkillMigrationNeedsAction(sharedMigration)) {
     const manageableItems = group.activeItems.filter(
       (item) => item.status !== "kept-outside" && !isObserveOnlySkill(item)
     );
     const sharedItems = manageableItems.filter((item) => item.sharedLocation);
     const targetItems = manageableItems.filter((item) => !item.sharedLocation);
     if (
-      group.sharedMigration.state !== "not-imported" ||
+      sharedMigration.state !== "not-imported" ||
       sharedItems.length === 0 ||
       targetItems.some((item) => !item.foundIn[0])
     ) {

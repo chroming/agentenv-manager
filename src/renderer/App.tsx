@@ -2577,7 +2577,12 @@ const AppContent = ({
     try {
       await window.agentEnv.setSkillPathPolicies({
         items: skillInventory
-          .filter((item) => item.skillKey === skillKey && item.status !== "managed")
+          .filter(
+            (item) =>
+              item.skillKey === skillKey &&
+              item.status !== "managed" &&
+              item.status !== "kept-outside"
+          )
           .flatMap((item) =>
             item.foundIn.length > 0
               ? item.foundIn.map((targetId) => ({

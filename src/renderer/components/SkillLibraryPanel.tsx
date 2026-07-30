@@ -93,6 +93,7 @@ import {
   buildSkillCollectionLinkGroups,
   buildSkillCleanupGroups,
   isSkillCleanupPreparationCurrent,
+  sharedSkillMigrationNeedsAction,
   type SkillCleanupAutomaticEffect,
   type SkillCollectionLinkGroup
 } from "../../shared/skillCleanup";
@@ -1045,6 +1046,9 @@ export const SkillLibraryPanel = ({
   const cleanupUsesExistingLibrary = Boolean(
     cleanupCandidate?.items.some((item) => item.status === "library" || item.status === "managed") ||
       (cleanupDraft && librarySkills.some((skill) => skill.id === cleanupDraft.libraryId))
+  );
+  const cleanupHasActiveSharedMigration = sharedSkillMigrationNeedsAction(
+    cleanupCandidate?.sharedMigration
   );
   const cleanupLibrarySkill = cleanupDraft
     ? librarySkills.find((skill) => skill.id === cleanupDraft.libraryId)
@@ -3202,7 +3206,7 @@ export const SkillLibraryPanel = ({
                 <p className="muted ui-dialog-description">
                   {cleanupUsesExistingLibrary
                     ? t("Review the differences, choose the canonical Library version, then confirm which local copies to normalize.")
-                    : cleanupCandidate.sharedMigration
+                    : cleanupHasActiveSharedMigration
                       ? t("Choose the version to keep. AgentEnv will add it to Library, keep one shared copy active, and remove redundant Agent copies after backup.")
                       : t("Choose the local copy to keep in Library, then choose which copies become managed deployments.")}
                 </p>
@@ -3324,9 +3328,9 @@ export const SkillLibraryPanel = ({
               )}
               <fieldset className="cleanup-review-group">
                 <legend>
-                  {t(cleanupCandidate.sharedMigration ? "Copies to clean up" : "Locations to manage")}
+                  {t(cleanupHasActiveSharedMigration ? "Copies to clean up" : "Locations to manage")}
                   <small>
-                    {t(cleanupCandidate.sharedMigration
+                    {t(cleanupHasActiveSharedMigration
                       ? "The shared copy stays active until Profiles are ready. Redundant Agent copies are removed."
                       : "Selected copies are backed up, then replaced by the Library version.")}
                   </small>
@@ -3339,7 +3343,7 @@ export const SkillLibraryPanel = ({
                       disabled={
                         item.status === "managed" ||
                         item.status === "kept-outside" ||
-                        Boolean(cleanupCandidate.sharedMigration) ||
+                        cleanupHasActiveSharedMigration ||
                         (cleanupDraft.libraryAction !== "keep" && cleanupDraft.canonicalPath === item.path)
                       }
                       onChange={() => setCleanupDraft({
@@ -3366,9 +3370,9 @@ export const SkillLibraryPanel = ({
                         ? t("Already managed")
                         : item.status === "kept-outside"
                           ? t("Kept outside")
-                          : cleanupCandidate.sharedMigration && item.sharedLocation
+                          : cleanupHasActiveSharedMigration && item.sharedLocation
                             ? t("Keep active")
-                            : cleanupCandidate.sharedMigration
+                            : cleanupHasActiveSharedMigration
                               ? t("Remove duplicate")
                           : !cleanupUsesExistingLibrary && cleanupDraft.canonicalPath === item.path
                             ? t("Source copy")
@@ -3403,10 +3407,10 @@ export const SkillLibraryPanel = ({
                     libraryId: cleanupDraft.libraryId,
                     canonicalPath: cleanupDraft.canonicalPath,
                     libraryAction: cleanupDraft.libraryAction,
-                    mode: cleanupCandidate.sharedMigration
+                    mode: cleanupHasActiveSharedMigration
                       ? "shared-compatibility"
                       : "target-copies",
-                    sharedLocations: cleanupCandidate.sharedMigration
+                    sharedLocations: cleanupHasActiveSharedMigration
                       ? cleanupCandidate.items
                           .filter((item) => item.sharedLocation)
                           .map((item) => ({ path: item.path, contentHash: item.contentHash }))
@@ -3517,6 +3521,8 @@ export const SkillLibraryPanel = ({
                 const allKeptOutside = group.activeItems.length === 0;
                 const canIgnore = group.activeItems.some((skill) => skill.status !== "managed");
                 const sharedMigration = group.sharedMigration;
+                const sharedMigrationNeedsAction =
+                  sharedSkillMigrationNeedsAction(sharedMigration);
                 const linkedLibraryId = group.items.find((item) => item.libraryId)?.libraryId;
                 const contentVersionCount = new Set(
                   group.activeItems.map((item) => item.contentHash).filter(Boolean)
@@ -3736,21 +3742,8 @@ export const SkillLibraryPanel = ({
                                   <Link2Off size={14} strokeWidth={2.2} />
                                   <span><strong>{t("Keep shared copy")}</strong></span>
                                 </button>
-                              ) : sharedMigration?.state === "kept" ? (
-                                <button
-                                  className="row-action-item"
-                                  type="button"
-                                  role="menuitem"
-                                  onClick={() => {
-                                    void changeSharedRetention(group, false);
-                                    setOpenAction(undefined);
-                                  }}
-                                >
-                                  <RefreshCw size={14} strokeWidth={2.2} />
-                                  <span><strong>{t("Review again")}</strong></span>
-                                </button>
                               ) : null}
-                              {!sharedMigration && canIgnore && !hasIgnored ? (
+                              {canIgnore && !sharedMigrationNeedsAction ? (
                                 <button
                                   className="row-action-item"
                                   type="button"
@@ -3764,7 +3757,7 @@ export const SkillLibraryPanel = ({
                                   <span><strong>{t("Keep outside AgentEnv")}</strong></span>
                                 </button>
                               ) : null}
-                              {!sharedMigration && hasIgnored ? (
+                              {hasIgnored && !sharedMigrationNeedsAction ? (
                                 <button
                                   className="row-action-item"
                                   type="button"

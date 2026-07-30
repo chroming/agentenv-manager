@@ -482,6 +482,36 @@ describe("SkillLibraryPanel", () => {
             contentHash: "local-copy-hash"
           },
           {
+            id: "bytedcli",
+            name: "bytedcli",
+            description: "Retained shared compatibility copy",
+            path: "/tmp/home/.agents/skills/bytedcli",
+            foundIn: ["codex", "opencode", "pi", "trae-cli"],
+            status: "kept-outside",
+            libraryId: "bytedcli",
+            skillKey: "bytedcli",
+            contentHash: "bytedcli-hash",
+            contentMatchesLibrary: true,
+            locationRole: "compatibility-runtime",
+            sharedLocation: true,
+            pathPolicyId: "keep-bytedcli-shared",
+            pathPolicy: "keep-shared"
+          },
+          {
+            id: "bytedcli",
+            name: "bytedcli",
+            description: "Library-backed Agent copy",
+            path: "/tmp/claude/skills/bytedcli",
+            foundIn: ["claude-code", "opencode"],
+            status: "library",
+            libraryId: "bytedcli",
+            skillKey: "bytedcli",
+            contentHash: "bytedcli-hash",
+            contentMatchesLibrary: true,
+            locationRole: "preferred-runtime",
+            sharedLocation: false
+          },
+          {
             id: "ppe-debug",
             name: "PPE Debug",
             description: "Managed OpenCode copy",
@@ -1088,6 +1118,15 @@ describe("SkillLibraryPanel", () => {
     expect(discoveries).toHaveTextContent("Kept outside AgentEnv");
     expect(discoveries).toHaveTextContent("External");
     expect(discoveries).toHaveTextContent("Shared: OpenCode + Codex");
+    const partiallyKeptGroup = screen.getByRole("group", {
+      name: "Cleanup group bytedcli"
+    });
+    expect(
+      within(partiallyKeptGroup).getByLabelText("Full cleanup state bytedcli")
+    ).toHaveTextContent("Ready");
+    expect(
+      within(partiallyKeptGroup).getByLabelText("Full cleanup state bytedcli")
+    ).not.toHaveTextContent("Kept");
     visiblePreparedTargets = {
       "compat-reviewer": preparedTargets["compat-reviewer"].slice(0, 1)
     };
