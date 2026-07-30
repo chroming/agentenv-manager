@@ -620,8 +620,8 @@
 }
 
 .apply-preview-dialog .preview-actions button {
-  height: 40px;
-  min-height: 40px;
+  height: var(--control-height-dialog);
+  min-height: var(--control-height-dialog);
   min-width: 92px;
   padding-inline: 14px;
 }

@@ -268,7 +268,7 @@
 }
 
 .cleanup-details-dialog .preview-actions button {
-  height: 40px;
-  min-height: 40px;
+  height: var(--control-height-dialog);
+  min-height: var(--control-height-dialog);
   width: auto;
 }

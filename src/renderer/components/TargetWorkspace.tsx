@@ -155,7 +155,6 @@ export const TargetWorkspace = ({
             <Button
               ref={recoveryTriggerRef}
               className="secondary-action target-recovery-trigger"
-              size="prominent"
               aria-haspopup="dialog"
               disabled={busy || isLoading}
               icon={<ArchiveRestore size={15} strokeWidth={2.2} />}
@@ -166,7 +165,6 @@ export const TargetWorkspace = ({
             </Button>
             <Button
               className="secondary-action"
-              size="prominent"
               busy={busy}
               disabled={busy || isLoading}
               icon={<RefreshCw size={15} strokeWidth={2.2} />}

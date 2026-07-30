@@ -77,19 +77,19 @@ export const ProfileFormDialog = ({
             <>
               {!sourceChoiceComplete ? (
                 <div
-                  className="profile-source-choice"
+                  className="profile-source-choice ui-segmented-control"
                   role="group"
                   aria-label={t("Profile source")}
                 >
                   <button
-                    className={source === "blank" ? "is-selected" : ""}
+                    className={`ui-segmented-control__option${source === "blank" ? " is-selected" : ""}`}
                     type="button"
                     onClick={() => onSourceChange("blank")}
                   >
                     {t("Blank")}
                   </button>
                   <button
-                    className={source === "target" ? "is-selected" : ""}
+                    className={`ui-segmented-control__option${source === "target" ? " is-selected" : ""}`}
                     type="button"
                     onClick={() => onSourceChange("target")}
                   >

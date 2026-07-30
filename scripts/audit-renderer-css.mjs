@@ -23,7 +23,8 @@ const files = (await listCssFiles(rendererRoot))
 
 const rendererIndex = await readFile(resolve(rendererRoot, "ui/index.css"), "utf8");
 const baseStyles = await readFile(resolve(rendererRoot, "ui/base.css"), "utf8");
-const baseButtonBlock = baseStyles.match(/(?:^|\n)button\s*\{([\s\S]*?)\}/)?.[1] ?? "";
+const controlStyles = await readFile(resolve(rendererRoot, "ui/controls.css"), "utf8");
+const controlButtonBlock = controlStyles.match(/(?:^|\n)button\s*\{([\s\S]*?)\}/)?.[1] ?? "";
 const baseStrongBlock = baseStyles.match(/(?:^|\n)strong,\s*\nb\s*\{([\s\S]*?)\}/)?.[1] ?? "";
 const primitiveRootSelectors = new Set([
   ".ui-action-menu",
@@ -35,6 +36,7 @@ const primitiveRootSelectors = new Set([
   ".ui-page-header",
   ".ui-resource-row",
   ".ui-composite-field",
+  ".ui-segmented-control",
   ".ui-surface-frame",
   ".ui-switch"
 ]);
@@ -220,6 +222,15 @@ const pagePrimitiveRedefinitions = reports.flatMap((report) => {
     .filter((selector) => primitiveRootSelectors.has(selector))
     .map((selector) => ({ file: report.file, selector }));
 });
+const legacyControlDefinitions = (() => {
+  const legacyReport = reports.find(({ file }) => file === "src/renderer/styles.css");
+  if (!legacyReport) return [];
+  return [...legacyReport.selectors.keys()].filter((selector) =>
+    /^(?:button|select|textarea)(?::|\[|$)/.test(selector) ||
+    /^input(?::|\[|$)/.test(selector) ||
+    /^\.(?:primary-action|secondary-action|danger-action|icon-action|apply-action)(?::|\s|$)/.test(selector)
+  );
+})();
 const undefinedCustomProperties = [...usedCustomProperties.entries()]
   .filter(
     ([property]) =>
@@ -273,9 +284,13 @@ const result = {
     animationOwnerViolations,
     highFrequencySpatialMotion,
     legacyCrossFileSelectors: legacySharedSelectors.length,
+    legacyControlDefinitions,
     pagePrimitiveRedefinitions,
     unapprovedCrossFileSelectors: unapprovedSharedSelectors,
     undefinedCustomProperties,
+    importsControlLayer: /@import\s+"\.\/controls\.css"\s+layer\(controls\)/.test(rendererIndex),
+    ordersControlLayerBeforeLegacy:
+      /@layer\s+[^;]*\bcontrols\b[^;]*\blegacy\b[^;]*\bprimitives\b/.test(rendererIndex),
     usesLateSystemLayer: /(?:\bsystem\b|system\.css)/.test(rendererIndex)
   },
   topCrossFileSelectors: sharedSelectors.slice(0, 25).map(([selector, locations]) => ({
@@ -302,10 +317,27 @@ if (shouldCheck) {
     result.architecture.usesLateSystemLayer
       ? "ui/index.css must not restore a late system override layer"
       : undefined,
+    !result.architecture.importsControlLayer
+      ? "ui/index.css must import the shared raw-control owner"
+      : undefined,
+    !result.architecture.ordersControlLayerBeforeLegacy
+      ? "Raw controls must load before legacy arrangements and named primitives after them"
+      : undefined,
+    !/(?:^|\n)button\s*\{/.test(controlStyles) ||
+    !/(?:^|\n)select\s*\{/.test(controlStyles) ||
+    !/(?:^|\n)textarea\s*\{/.test(controlStyles)
+      ? "controls.css must own the raw button, select, and textarea contracts"
+      : undefined,
+    /(?:height|min-height):\s*42px/.test(controlStyles)
+      ? "The retired 42px action size must not return"
+      : undefined,
     result.architecture.pagePrimitiveRedefinitions.length > 0
       ? `Page styles must not redefine primitive roots: ${result.architecture.pagePrimitiveRedefinitions
           .map(({ file, selector }) => `${file} (${selector})`)
           .join(", ")}`
+      : undefined,
+    result.architecture.legacyControlDefinitions.length > 0
+      ? `Base controls belong to controls.css, not styles.css: ${result.architecture.legacyControlDefinitions.join(", ")}`
       : undefined,
     result.architecture.animationOwnerViolations.length > 0
       ? `Animation declarations belong to shared primitives or accessibility: ${result.architecture.animationOwnerViolations
@@ -366,8 +398,8 @@ if (shouldCheck) {
     result.totals.importantDeclarations !== 4
       ? "The reduced-motion contract must remain the only four !important declarations"
       : undefined,
-    /overflow(?:-x|-y)?:\s*(?:hidden|clip)/.test(baseButtonBlock)
-      ? "Base buttons must expose sizing defects instead of clipping visible command text"
+    /overflow(?:-x|-y)?:\s*(?:hidden|clip)/.test(controlButtonBlock)
+      ? "Shared buttons must expose sizing defects instead of clipping visible command text"
       : undefined
   ].filter(Boolean);
 

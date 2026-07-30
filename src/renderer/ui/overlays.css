@@ -408,14 +408,14 @@
 .preview-actions button,
 .capture-dialog__footer button,
 .library-drawer__footer button {
-  height: 40px;
-  min-height: 40px;
+  height: var(--control-height-dialog);
+  min-height: var(--control-height-dialog);
 }
 
 .profile-form-dialog > .preview-actions button,
 .profile-form-dialog > .profile-dialog-actions button {
-  height: 40px;
-  min-height: 40px;
+  height: var(--control-height-dialog);
+  min-height: var(--control-height-dialog);
   width: auto;
 }
 

@@ -10,10 +10,7 @@
 }
 
 .skill-library-panel .library-mode-switch {
-  background: var(--surface-muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  padding: 2px;
+  gap: 2px;
 }
 
 .skill-library-panel .library-status-tabs {
@@ -23,24 +20,7 @@
 }
 
 .skill-library-panel .library-mode-tab {
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-control);
-  color: var(--muted);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-regular);
-  min-height: 26px;
   padding: 0 10px;
-}
-
-.skill-library-panel .library-mode-tab:hover:not(:disabled) {
-  color: var(--text);
-}
-
-.skill-library-panel .library-mode-tab.is-active {
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-  color: var(--text);
 }
 
 .skill-library-panel [hidden],

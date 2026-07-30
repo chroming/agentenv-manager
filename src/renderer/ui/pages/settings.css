@@ -19,38 +19,12 @@
 }
 
 .settings-categories {
-  align-items: center;
-  background: var(--surface-muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  display: inline-flex;
-  gap: 2px;
   justify-self: start;
-  min-height: var(--control-height-default);
-  padding: 2px;
 }
 
 .settings-categories > button {
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-control);
-  color: var(--muted-strong);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-regular);
-  height: 28px;
   min-width: 76px;
   padding: 0 12px;
-}
-
-.settings-categories > button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.72);
-  color: var(--text);
-}
-
-.settings-categories > button.is-active {
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
-  color: var(--text);
 }
 
 .settings-category-panel {

@@ -34,12 +34,6 @@ html[data-platform="darwin"] {
   font-weight: var(--font-weight-regular);
 }
 
-.page-header.ui-page-header .ui-page-header__actions > .ui-button,
-.page-header.ui-page-header .ui-page-header__actions > .ui-icon-button {
-  height: var(--control-height-default);
-  min-height: var(--control-height-default);
-}
-
 .global-sidebar {
   background: rgba(243, 244, 246, 0.94);
   border: 0;
@@ -257,8 +251,9 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
 
 .workspace-nav > button {
   align-items: center;
-  height: 36px;
-  min-height: 36px;
+  border-width: 0;
+  height: var(--control-height-prominent);
+  min-height: var(--control-height-prominent);
   order: initial;
   padding: 0 10px;
 }
@@ -472,7 +467,7 @@ html[data-platform="darwin"] .window-drag-strip {
   display: grid;
   gap: 8px;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  min-height: 36px;
+  min-height: var(--control-height-prominent);
   padding: 0 9px;
   text-align: left;
   width: 100%;

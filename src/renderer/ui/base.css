@@ -116,59 +116,9 @@ body {
   min-width: 920px;
 }
 
-button,
-select,
-input,
-textarea {
-  font: inherit;
-}
-
-button {
-  align-items: center;
-  appearance: none;
-  background: var(--surface-muted);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-control);
-  color: var(--text);
-  cursor: pointer;
-  display: inline-flex;
-  font-size: 13px;
-  font-weight: var(--font-weight-regular);
-  justify-content: center;
-  line-height: 1.2;
-  min-height: var(--control-height-default);
-  max-width: 100%;
-  padding: 0 12px;
-  text-align: center;
-  transition:
-    background-color var(--motion-fast),
-    border-color var(--motion-fast),
-    box-shadow var(--motion-fast),
-    color var(--motion-fast);
-  white-space: nowrap;
-}
-
-button:hover:not(:disabled) {
-  background: #eaeaed;
-  border-color: var(--border-strong);
-}
-
-button:active:not(:disabled) {
-  background: var(--surface-pressed);
-}
-
-button:focus-visible,
-select:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
 summary:focus-visible {
   outline: 3px solid rgba(0, 122, 255, 0.22);
   outline-offset: 2px;
-}
-
-button:disabled {
-  color: #99a3b3;
-  cursor: not-allowed;
 }
 .startup-screen {
   align-items: center;

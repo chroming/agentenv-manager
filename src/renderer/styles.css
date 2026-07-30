@@ -377,7 +377,7 @@ h2 {
   align-self: start;
   grid-column: 2;
   grid-row: 1;
-  height: 36px;
+  height: var(--control-height-default);
   min-width: 70px;
 }
 
@@ -723,29 +723,6 @@ h2 {
 .profile-form-grid textarea {
   font-family: inherit;
   min-height: 88px;
-}
-
-.profile-source-choice {
-  background: #f1f4f8;
-  border-radius: var(--radius-surface);
-  display: grid;
-  gap: 3px;
-  grid-template-columns: 1fr 1fr;
-  padding: 3px;
-}
-
-.profile-source-choice button {
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-control);
-  color: var(--muted);
-  min-height: 34px;
-}
-
-.profile-source-choice button.is-selected {
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
-  color: var(--text);
 }
 
 .capture-dialog {
@@ -1141,152 +1118,6 @@ h2 {
   }
 }
 
-.danger-action {
-  background: var(--danger);
-  border-color: var(--danger);
-  color: #fff;
-  min-height: 42px;
-}
-
-.danger-action:hover:not(:disabled) {
-  background: #a82922;
-  border-color: #a82922;
-}
-
-.danger-action:disabled {
-  background: var(--surface-muted);
-  border-color: var(--border);
-  color: var(--subtle);
-}
-
-textarea {
-  background: #ffffff;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-surface);
-  color: var(--text);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  min-height: 220px;
-  padding: 12px;
-  resize: vertical;
-  transition:
-    background-color var(--motion-fast),
-    border-color var(--motion-fast),
-    box-shadow var(--motion-fast),
-    color var(--motion-fast);
-  width: 100%;
-}
-
-input:not([type="checkbox"]):not([type="radio"]) {
-  appearance: none;
-  background: #ffffff;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-control);
-  box-shadow: 0 1px 0 rgba(41, 72, 120, 0.03);
-  color: var(--text);
-  height: var(--control-height-default);
-  min-height: var(--control-height-default);
-  min-width: 0;
-  padding: 0 10px;
-  transition:
-    background-color var(--motion-fast),
-    border-color var(--motion-fast),
-    box-shadow var(--motion-fast),
-    color var(--motion-fast);
-  width: 100%;
-}
-
-select {
-  appearance: none;
-  background-color: #ffffff;
-  background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4.5 6.25L8 9.75L11.5 6.25' stroke='%2356677F' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-position: right 11px center;
-  background-repeat: no-repeat;
-  background-size: 16px 16px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-control);
-  box-shadow: 0 1px 0 rgba(41, 72, 120, 0.03);
-  color: var(--text);
-  min-height: var(--control-height-default);
-  min-width: 0;
-  padding: 0 36px 0 11px;
-  transition:
-    background-color var(--motion-fast),
-    border-color var(--motion-fast),
-    box-shadow var(--motion-fast),
-    color var(--motion-fast);
-  width: 100%;
-}
-
-select:hover:not(:disabled) {
-  background-color: #fbfdff;
-  border-color: #b9c8dc;
-}
-
-input:not([type="checkbox"]):not([type="radio"]):hover:not(:disabled):not([readonly]),
-textarea:hover:not(:disabled):not([readonly]) {
-  background-color: #fbfdff;
-  border-color: #b9c8dc;
-}
-
-input:not([type="checkbox"]):not([type="radio"]):focus,
-textarea:focus,
-select:focus {
-  background-color: #ffffff;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
-  outline: 0;
-}
-
-input:not([type="checkbox"]):not([type="radio"])::placeholder,
-textarea::placeholder {
-  color: var(--subtle);
-  opacity: 1;
-}
-
-input:not([type="checkbox"]):not([type="radio"]):disabled,
-textarea:disabled,
-input:not([type="checkbox"]):not([type="radio"])[readonly] {
-  background-color: var(--surface-muted);
-  box-shadow: none;
-  color: var(--muted);
-}
-
-input:not([type="checkbox"]):not([type="radio"]):disabled,
-textarea:disabled {
-  cursor: not-allowed;
-}
-
-input:not([type="checkbox"]):not([type="radio"])[readonly] {
-  cursor: text;
-}
-
-input:not([type="checkbox"]):not([type="radio"])[aria-invalid="true"],
-textarea[aria-invalid="true"] {
-  border-color: var(--danger);
-}
-
-input:not([type="checkbox"]):not([type="radio"])[aria-invalid="true"]:focus,
-textarea[aria-invalid="true"]:focus {
-  box-shadow: 0 0 0 3px rgba(215, 0, 21, 0.12);
-}
-
-select:disabled {
-  background-color: var(--surface-muted);
-  background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4.5 6.25L8 9.75L11.5 6.25' stroke='%2398A2B3' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  color: #98a2b3;
-}
-
-textarea[aria-label="AGENTS.md"] {
-  min-height: 260px;
-}
-
-textarea[aria-label="opencode.jsonc"] {
-  min-height: 280px;
-}
-
 .status-card,
 .history-row,
 .owned-skill,
@@ -1335,46 +1166,6 @@ textarea[aria-label="opencode.jsonc"] {
 
 .status-dot.is-loading {
   background: var(--accent);
-}
-
-.primary-action,
-.apply-action {
-  min-height: 42px;
-  width: 100%;
-}
-
-.primary-action {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #ffffff;
-}
-
-.primary-action:hover:not(:disabled) {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
-}
-
-.primary-action:disabled {
-  background: var(--surface-muted);
-  border-color: var(--border);
-  color: var(--subtle);
-}
-
-.apply-action {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #ffffff;
-}
-
-.apply-action:hover:not(:disabled) {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
-}
-
-.apply-action:disabled {
-  background: var(--surface-muted);
-  border-color: var(--border);
-  color: var(--subtle);
 }
 
 .path-list,
@@ -1663,10 +1454,6 @@ summary {
   display: flex;
   flex: 0 0 auto;
   gap: 8px;
-}
-
-.secondary-action {
-  background: var(--surface-muted);
 }
 
 .resource-section {
@@ -1993,8 +1780,8 @@ summary {
 }
 
 .cleanup-group-actions .secondary-action {
-  height: 36px;
-  min-height: 36px;
+  height: var(--control-height-default);
+  min-height: var(--control-height-default);
   white-space: nowrap;
 }
 
@@ -2595,17 +2382,10 @@ summary {
 }
 
 .page-actions button,
-.secondary-action,
 .library-toolbar button,
 .library-toolbar select,
 .library-quick-tab {
   white-space: nowrap;
-}
-
-.icon-action {
-  border-color: #e5eaf2;
-  min-width: 38px;
-  padding: 0 10px;
 }
 
 .metric-strip {
@@ -2936,10 +2716,12 @@ summary {
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   display: inline-flex;
-  height: 36px;
+  height: var(--icon-box-default);
   justify-content: center;
   list-style: none;
-  width: 38px;
+  min-height: var(--icon-box-default);
+  min-width: var(--icon-box-default);
+  width: var(--icon-box-default);
 }
 
 .row-action-menu summary::-webkit-details-marker {
@@ -3053,14 +2835,14 @@ summary {
 .profile-target-menu-button {
   border: 0;
   border-radius: 0;
-  min-height: 36px;
+  min-height: var(--control-height-default);
 }
 
 .profile-apply-button {
   align-items: center;
   display: inline-flex;
   gap: 6px;
-  min-height: 38px;
+  min-height: var(--control-height-default);
   padding: 0 10px;
 }
 
@@ -3111,7 +2893,7 @@ summary {
   gap: 10px;
   grid-template-columns: 22px minmax(0, 1fr) 18px;
   justify-content: stretch;
-  min-height: 38px;
+  min-height: var(--control-height-default);
   padding: 0 8px;
   text-align: left;
   width: 100%;
@@ -3578,19 +3360,6 @@ summary {
   text-overflow: ellipsis;
 }
 
-/* Icon polish pass */
-.secondary-action,
-.icon-action {
-  align-items: center;
-  display: inline-flex;
-  justify-content: center;
-}
-
-.secondary-action {
-  gap: 8px;
-}
-
-button svg,
 .resource-chip svg,
 .resource-status svg,
 .metric-icon svg {
@@ -3672,12 +3441,6 @@ button svg,
   width: 19px;
 }
 
-.secondary-action svg {
-  height: 15px;
-  width: 15px;
-}
-
-.icon-action svg,
 .row-action-menu summary svg {
   height: 16px;
   width: 16px;
@@ -3783,8 +3546,10 @@ button svg,
 .library-actions-cell .icon-action {
   background: #fff;
   color: #475569;
-  height: 36px;
-  min-width: 38px;
+  height: var(--icon-box-default);
+  min-height: var(--icon-box-default);
+  min-width: var(--icon-box-default);
+  width: var(--icon-box-default);
 }
 
 .library-actions-cell .icon-action:hover:not(:disabled),

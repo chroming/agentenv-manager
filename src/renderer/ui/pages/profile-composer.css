@@ -31,51 +31,19 @@
 }
 
 .profile-resource-policy {
-  align-items: center;
-  background: #eef1f5;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  height: 30px;
   margin: 0 8px 0 0;
-  min-height: 30px;
-  min-width: 0;
-  padding: 2px;
   width: auto;
 }
 
 .profile-resource-policy__option {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-tight);
-  box-sizing: border-box;
-  color: var(--muted-strong);
-  display: inline-flex;
   font-size: 12px;
-  font-weight: var(--font-weight-regular);
-  height: 24px;
-  justify-content: center;
-  max-height: 24px;
-  min-width: 0;
-  min-height: 24px;
   overflow: hidden;
   padding: 0 6px;
   text-overflow: ellipsis;
   white-space: nowrap;
   width: 100%;
-}
-
-.profile-resource-policy__option:hover:not(.is-selected) {
-  background: rgba(255, 255, 255, 0.58);
-  color: var(--text);
-}
-
-.profile-resource-policy__option.is-selected {
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgba(30, 41, 59, 0.16);
-  color: var(--text);
 }
 
 .profile-resource-policy__option:focus-visible {

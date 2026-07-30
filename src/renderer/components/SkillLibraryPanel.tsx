@@ -1695,9 +1695,13 @@ export const SkillLibraryPanel = ({
     <section className="skill-library-panel ui-surface-frame" aria-label={t("Skill library")}>
       <div className="library-control-deck">
         <div className="library-quick-tabs">
-          <div className="library-mode-switch" role="tablist" aria-label={t("Skill library view")}>
+          <div
+            className="library-mode-switch ui-segmented-control ui-segmented-control--compact"
+            role="tablist"
+            aria-label={t("Skill library view")}
+          >
             <button
-              className={`library-mode-tab${libraryMode === "skills" ? " is-active" : ""}`}
+              className={`library-mode-tab ui-segmented-control__option${libraryMode === "skills" ? " is-active" : ""}`}
               type="button"
               role="tab"
               aria-selected={libraryMode === "skills"}
@@ -1706,7 +1710,7 @@ export const SkillLibraryPanel = ({
               {t("Skill list")}
             </button>
             <button
-              className={`library-mode-tab${libraryMode === "sources" ? " is-active" : ""}`}
+              className={`library-mode-tab ui-segmented-control__option${libraryMode === "sources" ? " is-active" : ""}`}
               type="button"
               role="tab"
               aria-selected={libraryMode === "sources"}

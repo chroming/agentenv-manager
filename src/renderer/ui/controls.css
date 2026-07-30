@@ -1,0 +1,231 @@
+button,
+select,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  align-items: center;
+  appearance: none;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-regular);
+  justify-content: center;
+  line-height: 1.2;
+  max-width: 100%;
+  min-height: var(--control-height-default);
+  padding: 0 12px;
+  text-align: center;
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    color var(--motion-fast);
+  white-space: nowrap;
+}
+
+button:hover:not(:disabled) {
+  background: #eaeaed;
+  border-color: var(--border-strong);
+}
+
+button:active:not(:disabled) {
+  background: var(--surface-pressed);
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(0, 122, 255, 0.22);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  color: #99a3b3;
+  cursor: not-allowed;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  appearance: none;
+  background-color: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  box-shadow: 0 1px 0 rgba(41, 72, 120, 0.03);
+  color: var(--text);
+  min-width: 0;
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    color var(--motion-fast);
+  width: 100%;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select {
+  height: var(--control-height-default);
+  min-height: var(--control-height-default);
+}
+
+input:not([type="checkbox"]):not([type="radio"]) {
+  padding: 0 10px;
+}
+
+select {
+  background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4.5 6.25L8 9.75L11.5 6.25' stroke='%2356677F' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 11px center;
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+  padding: 0 36px 0 11px;
+}
+
+textarea {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
+  line-height: 1.5;
+  min-height: 220px;
+  padding: 12px;
+  resize: vertical;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):hover:not(:disabled):not([readonly]),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled):not([readonly]) {
+  background-color: #fbfdff;
+  border-color: #b9c8dc;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+select:focus,
+textarea:focus {
+  background-color: var(--surface);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
+  outline: 0;
+}
+
+input:not([type="checkbox"]):not([type="radio"])::placeholder,
+textarea::placeholder {
+  color: var(--subtle);
+  opacity: 1;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):disabled,
+input:not([type="checkbox"]):not([type="radio"])[readonly],
+select:disabled,
+textarea:disabled {
+  background-color: var(--surface-muted);
+  box-shadow: none;
+  color: var(--muted);
+}
+
+select:disabled {
+  background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4.5 6.25L8 9.75L11.5 6.25' stroke='%2398A2B3' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+input:not([type="checkbox"]):not([type="radio"]):disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+}
+
+input:not([type="checkbox"]):not([type="radio"])[readonly] {
+  cursor: text;
+}
+
+input:not([type="checkbox"]):not([type="radio"])[aria-invalid="true"],
+select[aria-invalid="true"],
+textarea[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+input:not([type="checkbox"]):not([type="radio"])[aria-invalid="true"]:focus,
+select[aria-invalid="true"]:focus,
+textarea[aria-invalid="true"]:focus {
+  box-shadow: 0 0 0 3px rgba(215, 0, 21, 0.12);
+}
+
+textarea[aria-label="AGENTS.md"] {
+  min-height: 260px;
+}
+
+textarea[aria-label="opencode.jsonc"] {
+  min-height: 280px;
+}
+
+.primary-action,
+.secondary-action,
+.danger-action,
+.icon-action {
+  height: var(--control-height-default);
+  min-height: var(--control-height-default);
+  width: auto;
+}
+
+.primary-action {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.primary-action:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+.secondary-action {
+  background: var(--surface-muted);
+  gap: var(--space-2);
+}
+
+.danger-action {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.danger-action:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 84%, #000);
+  border-color: color-mix(in srgb, var(--danger) 84%, #000);
+}
+
+.primary-action:disabled,
+.danger-action:disabled {
+  background: var(--surface-muted);
+  border-color: var(--border);
+  color: var(--subtle);
+}
+
+.icon-action {
+  padding: 0;
+  width: var(--icon-box-default);
+}
+
+button svg {
+  flex: 0 0 auto;
+}
+
+.secondary-action svg {
+  height: 15px;
+  width: 15px;
+}
+
+.icon-action svg {
+  height: var(--icon-size-default);
+  width: var(--icon-size-default);
+}

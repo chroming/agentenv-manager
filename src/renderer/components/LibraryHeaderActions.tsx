@@ -40,8 +40,6 @@ export const LibraryHeaderActions = ({
       ) : null}
       {freshness}
       <Button
-        className="primary-inline-action"
-        size="prominent"
         variant={toolOpen ? "secondary" : "primary"}
         aria-label={t("Import skills")}
         disabled={toolOpen}
@@ -53,7 +51,6 @@ export const LibraryHeaderActions = ({
       {!returnTargetName ? (
         <Button
           className="secondary-action"
-          size="prominent"
           disabled={toolOpen}
           icon={<ScanLine size={15} strokeWidth={2.2} />}
           onClick={onScanLocal}
@@ -63,7 +60,6 @@ export const LibraryHeaderActions = ({
       ) : null}
       <Button
         className="secondary-action"
-        size="prominent"
         aria-label={t(mode === "sources" ? "Refresh sources" : "Refresh skills")}
         disabled={refreshing || toolOpen}
         icon={(
@@ -92,7 +88,6 @@ const AgentImportReturnButton = ({
   return (
     <Button
       className="secondary-action"
-      size="prominent"
       icon={<ArrowLeft size={15} strokeWidth={2.2} />}
       onClick={onClick}
     >

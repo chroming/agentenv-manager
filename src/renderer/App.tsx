@@ -4259,7 +4259,6 @@ const AppContent = ({
                 <div className="profile-page-actions" ref={profilePageActionsRef}>
                   <Button
                     className={`profile-new-button${isNewProfilePrimary ? " is-primary" : ""}`}
-                    size="prominent"
                     variant={isNewProfilePrimary ? "primary" : "secondary"}
                     icon={<Plus size={15} strokeWidth={2.3} />}
                     onClick={openCreateProfileDialog}

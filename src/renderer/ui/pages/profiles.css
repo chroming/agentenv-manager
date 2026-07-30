@@ -101,7 +101,7 @@
   font-size: 12px;
   font-weight: var(--font-weight-regular);
   gap: 7px;
-  min-height: 36px;
+  min-height: var(--control-height-default);
   max-width: 190px;
   padding: 0 10px;
 }
@@ -1165,8 +1165,8 @@
 }
 
 .preview-dialog--modal .preview-actions button {
-  height: 40px;
-  min-height: 40px;
+  height: var(--control-height-dialog);
+  min-height: var(--control-height-dialog);
   min-width: 112px;
   padding-inline: 14px;
 }
@@ -1447,4 +1447,12 @@
 .preview-summary-card {
   align-content: start;
   align-self: start;
+}
+.profile-source-choice.ui-segmented-control {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.profile-source-choice > .ui-segmented-control__option {
+  width: 100%;
 }

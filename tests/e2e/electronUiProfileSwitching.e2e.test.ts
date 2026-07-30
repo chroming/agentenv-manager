@@ -4280,6 +4280,125 @@ describe("Electron UI profile switching e2e", () => {
     expect(metrics.documentWidth).toBe(metrics.viewportWidth);
   }, 30_000);
 
+  it("keeps one control taxonomy across workspaces and decision dialogs", async () => {
+    const { page } = await launchApp();
+    await page.setViewportSize({ width: 920, height: 620 });
+    const navigation = page.getByRole("complementary", { name: "Global navigation" });
+    const readBoxes = (locator: Locator) => locator.evaluateAll((elements) =>
+      elements
+        .map((element) => {
+          const box = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          return {
+            borderRadius: style.borderRadius,
+            borderWidth: style.borderTopWidth,
+            boxShadow: style.boxShadow,
+            height: Math.round(box.height),
+            width: Math.round(box.width)
+          };
+        })
+        .filter(({ height, width }) => height > 0 && width > 0)
+    );
+
+    await navigation.getByRole("button", { name: "Skills", exact: true }).click();
+    const pageActions = await readBoxes(page.locator(".ui-page-header__actions button"));
+    expect(pageActions.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(pageActions.map(({ height }) => height))).toEqual(new Set([34]));
+    const toolbarControls = await readBoxes(
+      page.locator(".library-toolbar > .ui-composite-field, .library-toolbar > button")
+    );
+    expect(toolbarControls.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(toolbarControls.map(({ height }) => height))).toEqual(new Set([34]));
+    const compositeField = await page.locator(".library-toolbar .ui-composite-field").evaluate(
+      (field) => {
+        const input = field.querySelector("input")!;
+        const fieldStyle = getComputedStyle(field);
+        const inputStyle = getComputedStyle(input);
+        return {
+          fieldBorder: fieldStyle.borderTopWidth,
+          fieldRadius: fieldStyle.borderRadius,
+          inputBorder: inputStyle.borderTopWidth,
+          inputShadow: inputStyle.boxShadow
+        };
+      }
+    );
+    expect(compositeField).toEqual({
+      fieldBorder: "1px",
+      fieldRadius: "6px",
+      inputBorder: "0px",
+      inputShadow: "none"
+    });
+    const libraryMode = await readBoxes(page.locator(".library-mode-switch"));
+    const libraryModeOptions = await readBoxes(
+      page.locator(".library-mode-switch .ui-segmented-control__option")
+    );
+    expect(libraryMode[0]?.height).toBe(30);
+    expect(new Set(libraryModeOptions.map(({ height }) => height))).toEqual(new Set([24]));
+    const libraryRowMenus = await readBoxes(
+      page.locator(".library-actions-cell .icon-action")
+    );
+    expect(libraryRowMenus.length).toBeGreaterThan(0);
+    expect(new Set(libraryRowMenus.map(({ height, width }) => `${width}x${height}`)))
+      .toEqual(new Set(["34x34"]));
+
+    await navigation.getByRole("button", { name: "Settings", exact: true }).click();
+    const settingsTabs = await readBoxes(page.locator(".settings-categories"));
+    const settingsTabOptions = await readBoxes(
+      page.locator(".settings-categories .ui-segmented-control__option")
+    );
+    expect(settingsTabs[0]?.height).toBe(34);
+    expect(new Set(settingsTabOptions.map(({ height }) => height))).toEqual(new Set([28]));
+    await page.getByRole("tab", { name: "General", exact: true }).click();
+    const settingsSelects = await readBoxes(
+      page.locator(".settings-category-panel select")
+    );
+    expect(settingsSelects.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(settingsSelects.map(({ height }) => height))).toEqual(new Set([34]));
+    expect(new Set(settingsSelects.map(({ borderRadius }) => borderRadius)))
+      .toEqual(new Set(["6px"]));
+
+    await navigation.getByRole("button", { name: "Profiles", exact: true }).click();
+    const profileCommitControls = await readBoxes(
+      page.locator(".profile-commit-actions button, .profile-commit-actions select")
+    );
+    expect(profileCommitControls.length).toBeGreaterThanOrEqual(4);
+    expect(new Set(profileCommitControls.map(({ height }) => height))).toEqual(new Set([34]));
+    const policies = await readBoxes(page.locator(".profile-resource-policy"));
+    const policyOptions = await readBoxes(
+      page.locator(".profile-resource-policy .ui-segmented-control__option")
+    );
+    expect(policies.length).toBe(3);
+    expect(new Set(policies.map(({ height }) => height))).toEqual(new Set([30]));
+    expect(new Set(policyOptions.map(({ height }) => height))).toEqual(new Set([24]));
+
+    await page.getByRole("button", { name: "New Profile", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "New profile" });
+    const dialogFields = await readBoxes(dialog.locator("input, select"));
+    expect(dialogFields.length).toBeGreaterThanOrEqual(1);
+    expect(new Set(dialogFields.map(({ height }) => height))).toEqual(new Set([34]));
+    const dialogSegment = await readBoxes(dialog.locator(".ui-segmented-control"));
+    const dialogSegmentOptions = await readBoxes(
+      dialog.locator(".ui-segmented-control__option")
+    );
+    expect(dialogSegment[0]?.height).toBe(34);
+    expect(new Set(dialogSegmentOptions.map(({ height }) => height))).toEqual(new Set([28]));
+    const dialogActions = await readBoxes(dialog.locator(".ui-dialog-footer button"));
+    expect(dialogActions.length).toBe(2);
+    expect(new Set(dialogActions.map(({ height }) => height))).toEqual(new Set([40]));
+
+    await page.keyboard.press("Escape");
+    await navigation.getByRole("button", { name: "Conversations", exact: true }).click();
+    const conversationFilters = await readBoxes(page.locator(".conversation-filters select"));
+    expect(conversationFilters.length).toBe(2);
+    expect(new Set(conversationFilters.map(({ height }) => height))).toEqual(new Set([34]));
+    expect(new Set(conversationFilters.map(({ borderRadius }) => borderRadius)))
+      .toEqual(new Set(["6px"]));
+
+    const navigationControls = await readBoxes(page.locator(".workspace-button"));
+    expect(new Set(navigationControls.map(({ borderWidth }) => borderWidth)))
+      .toEqual(new Set(["0px"]));
+  }, 30_000);
+
   it("paints the complete desktop surface on short and long workspaces", async () => {
     const { page } = await launchApp();
     await page.setViewportSize({ width: 920, height: 620 });
@@ -9624,7 +9743,7 @@ describe("Electron UI profile switching e2e", () => {
         backgroundColor: "rgb(255, 255, 255)",
         borderWidth: "1px",
         height: 88,
-        radius: "8px"
+        radius: "6px"
       }
     });
     expect(await profileNameField.isVisible()).toBe(true);

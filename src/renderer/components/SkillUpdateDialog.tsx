@@ -176,7 +176,6 @@ export const SkillUpdateDialog = ({
           <Button
             ref={initialFocusRef}
             disabled={running || (busy && !finished)}
-            size="prominent"
             onClick={onClose}
           >
             {t(finished ? "Close" : "Cancel")}
@@ -196,7 +195,6 @@ export const SkillUpdateDialog = ({
               icon={running
                 ? <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
                 : undefined}
-              size="prominent"
               variant="primary"
               onClick={() => onConfirm(plan)}
             >

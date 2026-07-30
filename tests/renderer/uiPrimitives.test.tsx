@@ -50,6 +50,35 @@ describe("renderer UI primitives", () => {
     expect(button.querySelector(".ui-button__icon")).not.toBeNull();
   });
 
+  it("keeps the visible label structure stable while a button is busy", () => {
+    const { rerender } = render(
+      <Button>
+        Recovery
+        <span>2</span>
+      </Button>
+    );
+    const button = screen.getByRole("button", { name: "Recovery2" });
+    const content = button.querySelector(".ui-button__content");
+    const label = button.querySelector(".ui-button__label");
+
+    expect(content).not.toBeNull();
+    expect(label).toHaveTextContent("Recovery2");
+    expect(label?.children).toHaveLength(1);
+    expect(button.querySelector(".ui-button__busy")).toBeNull();
+
+    rerender(
+      <Button busy>
+        Recovery
+        <span>2</span>
+      </Button>
+    );
+
+    expect(button.querySelector(".ui-button__content")).toBe(content);
+    expect(button.querySelector(".ui-button__label")).toBe(label);
+    expect(button.querySelector(".ui-button__busy .is-spinning")).not.toBeNull();
+    expect(button).toHaveAttribute("aria-busy", "true");
+  });
+
   it("uses one keyboard menu surface for contextual actions", () => {
     render(
       <ActionMenu ariaLabel="Resource actions">

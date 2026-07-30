@@ -1,28 +1,4 @@
 /* Skills owns table density and responds to its actual content width. */
-.primary-inline-action {
-  align-items: center;
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-  display: inline-flex;
-  gap: 8px;
-  height: var(--profile-control-height, 40px);
-  justify-content: center;
-  min-height: var(--profile-control-height, 40px);
-  min-width: 118px;
-  white-space: nowrap;
-}
-
-.primary-inline-action:hover:not(:disabled) {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
-}
-
-.primary-inline-action svg {
-  height: 16px;
-  width: 16px;
-}
-
 .skill-library-panel {
   border-radius: var(--radius-surface);
   box-shadow: none;
@@ -152,11 +128,6 @@
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
-}
-
-.library-page-header .page-actions > button {
-  height: var(--control-height-default);
-  min-height: var(--control-height-default);
 }
 
 .skill-library-panel .library-table__body {
@@ -579,8 +550,8 @@
 }
 
 .cleanup-review-dialog .preview-actions button {
-  height: 40px;
-  min-height: 40px;
+  height: var(--control-height-dialog);
+  min-height: var(--control-height-dialog);
 }
 
 .cleanup-review-group {
@@ -830,8 +801,8 @@
 .skill-library-panel .cleanup-group-actions .primary-action,
 .skill-library-panel .cleanup-group-actions .secondary-action {
   flex: 0 0 auto;
-  height: 36px;
-  min-height: 36px;
+  height: var(--control-height-default);
+  min-height: var(--control-height-default);
 }
 
 .skill-library-panel .cleanup-group-actions .cleanup-current-action {
@@ -1025,8 +996,8 @@
 }
 
 .external-skill-dialog .preview-actions button {
-  height: 40px;
-  min-height: 40px;
+  height: var(--control-height-dialog);
+  min-height: var(--control-height-dialog);
   width: auto;
 }
 
@@ -1063,7 +1034,7 @@
   display: flex;
   gap: 9px;
   grid-template-columns: none;
-  min-height: 36px;
+  min-height: var(--control-height-default);
   padding: 7px 9px;
 }
 

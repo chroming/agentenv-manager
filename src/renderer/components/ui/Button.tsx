@@ -36,12 +36,19 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={props.disabled || effectiveBusy}
         type={type}
       >
-        {effectiveBusy || icon ? (
-          <span className="ui-button__icon" aria-hidden="true">
-            {effectiveBusy ? <LoaderCircle className="is-spinning" /> : icon}
+        <span className="ui-button__content">
+          {icon ? (
+            <span className="ui-button__icon" aria-hidden="true">
+              {icon}
+            </span>
+          ) : null}
+          <span className="ui-button__label">{children}</span>
+        </span>
+        {effectiveBusy ? (
+          <span className="ui-button__busy" aria-hidden="true">
+            <LoaderCircle className="is-spinning" />
           </span>
         ) : null}
-        {children}
       </button>
     );
   }

@@ -95,7 +95,7 @@ export const ProfileResourcePolicyControl = ({
 
   return (
     <div
-      className={`profile-resource-policy is-${value}`}
+      className={`profile-resource-policy ui-segmented-control ui-segmented-control--compact is-${value}`}
       role="radiogroup"
       aria-label={label}
       onKeyDown={handleKeyDown}
@@ -104,7 +104,7 @@ export const ProfileResourcePolicyControl = ({
         const selected = option.value === value;
         return (
           <button
-            className={`profile-resource-policy__option${selected ? " is-selected" : ""}`}
+            className={`profile-resource-policy__option ui-segmented-control__option${selected ? " is-selected" : ""}`}
             type="button"
             role="radio"
             aria-checked={selected}

@@ -21,7 +21,7 @@ export const SettingsCategoryTabs = ({
   const { t } = useI18n();
   return (
     <div
-      className="settings-categories"
+      className="settings-categories ui-segmented-control"
       role="tablist"
       aria-label={t("Settings")}
       onKeyDown={(event) => {
@@ -41,7 +41,7 @@ export const SettingsCategoryTabs = ({
     >
       {categories.map(([category, label]) => (
         <button
-          className={active === category ? "is-active" : ""}
+          className={`ui-segmented-control__option${active === category ? " is-active" : ""}`}
           id={`settings-tab-${category}`}
           key={category}
           role="tab"
