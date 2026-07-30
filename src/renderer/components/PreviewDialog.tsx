@@ -22,7 +22,7 @@ import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { PreviewChangeList } from "./PreviewChangeList";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
-import { Button } from "./ui";
+import { Button, type ButtonVariant } from "./ui";
 
 interface PreviewDialogProps {
   preview?: ActivationPreview | RollbackPreview | StopManagingPreview;
@@ -31,6 +31,7 @@ interface PreviewDialogProps {
   confirmBusy?: boolean;
   cancelDisabled?: boolean;
   confirmLabel?: string;
+  confirmVariant?: ButtonVariant;
   cancelLabel?: string;
   errorMessage?: string;
   targetNames?: TargetNameIndex;
@@ -93,6 +94,7 @@ export const PreviewDialog = ({
   confirmBusy = false,
   cancelDisabled = false,
   confirmLabel = "Confirm",
+  confirmVariant = "primary",
   cancelLabel = "Cancel",
   errorMessage,
   targetNames = {},
@@ -537,10 +539,9 @@ export const PreviewDialog = ({
           </Button>
           {!isNoOp ? (
             <Button
-              className="primary-action"
               disabled={confirmDisabled}
               busy={confirmBusy}
-              variant="primary"
+              variant={confirmVariant}
               onClick={onConfirm}
             >
               {t(confirmLabel)}

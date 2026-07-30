@@ -3669,12 +3669,17 @@ describe("App", () => {
 
     const choiceDialog = screen.getByRole("dialog", { name: "Stop managing Agent" });
     expect(within(choiceDialog).getByText("Keep current environment")).toBeInTheDocument();
-    fireEvent.click(within(choiceDialog).getByRole("button", { name: "Review changes" }));
+    const reviewButton = within(choiceDialog).getByRole("button", { name: "Review changes" });
+    expect(reviewButton).toHaveClass("ui-button--primary");
+    expect(reviewButton).not.toHaveClass("danger-action");
+    fireEvent.click(reviewButton);
 
     expect(api.previewStopManaging).toHaveBeenCalledWith("opencode", "keep-current");
     const previewDialog = await screen.findByRole("dialog", { name: "Preview" });
     expect(within(previewDialog).getByText(/files will stay in place/)).toBeInTheDocument();
-    fireEvent.click(within(previewDialog).getByRole("button", { name: "Keep files and detach" }));
+    const confirmButton = within(previewDialog).getByRole("button", { name: "Keep files and detach" });
+    expect(confirmButton).toHaveClass("ui-button--danger");
+    fireEvent.click(confirmButton);
 
     await waitFor(() => expect(api.stopManaging).toHaveBeenCalledWith("stop-managing-1"));
   });

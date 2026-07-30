@@ -427,19 +427,19 @@ export const TargetWorkspace = ({
                 <p className="muted ui-dialog-description">{t("Choose what should happen to the current Agent environment.")}</p>
               </div>
             </header>
-            <div className="stop-managing-options ui-dialog-body" role="radiogroup" aria-label={t("Stop managing behavior")}>
-              <label>
+            <div className="ui-choice-list ui-dialog-body" role="radiogroup" aria-label={t("Stop managing behavior")}>
+              <label className={`ui-choice-card${stopManagingMode === "keep-current" ? " is-selected" : ""}`}>
                 <input type="radio" name="stop-managing-mode" checked={stopManagingMode === "keep-current"} onChange={() => setStopManagingMode("keep-current")} />
                 <span><strong>{t("Keep current environment")}</strong><small>{t("Detach AgentEnv ownership and turn linked Skills into independent files.")}</small></span>
               </label>
-              <label>
+              <label className={`ui-choice-card${stopManagingMode === "restore-pre-takeover" ? " is-selected" : ""}`}>
                 <input type="radio" name="stop-managing-mode" checked={stopManagingMode === "restore-pre-takeover"} onChange={() => setStopManagingMode("restore-pre-takeover")} />
                 <span><strong>{t("Restore environment before takeover")}</strong><small>{t("Replace current managed files with the earliest pre-takeover backup.")}</small></span>
               </label>
             </div>
             <footer className="preview-actions ui-dialog-footer">
-              <Button ref={stopManagingCancelRef} className="secondary-action" onClick={() => setStopManagingTargetId(undefined)}>{t("Cancel")}</Button>
-              <Button variant="danger" className="danger-action" disabled={busy} onClick={() => {
+              <Button ref={stopManagingCancelRef} variant="secondary" disabled={busy} onClick={() => setStopManagingTargetId(undefined)}>{t("Cancel")}</Button>
+              <Button variant="primary" disabled={busy} onClick={() => {
                 onPreviewStopManaging(stopManagingTargetId, stopManagingMode);
                 setStopManagingTargetId(undefined);
               }}>{t("Review changes")}</Button>
@@ -451,6 +451,7 @@ export const TargetWorkspace = ({
           preview={stopManagingPreview}
           title={t("Stop managing {{name}}", { name: stopManagingPreview.targetName })}
           confirmLabel={t(stopManagingPreview.mode === "keep-current" ? "Keep files and detach" : "Restore and detach")}
+          confirmVariant="danger"
           confirmDisabled={busy || stopManagingPreview.errors.length > 0}
           cancelDisabled={busy}
           onCancel={onCancelStopManaging}

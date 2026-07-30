@@ -73,13 +73,16 @@
 
 .ui-button--danger,
 .ui-icon-button--danger {
-  color: var(--danger);
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
 }
 
 .ui-button--danger:hover:not(:disabled),
 .ui-icon-button--danger:hover:not(:disabled) {
-  background: var(--danger-bg);
-  border-color: #edc9c5;
+  background: color-mix(in srgb, var(--danger) 84%, #000);
+  border-color: color-mix(in srgb, var(--danger) 84%, #000);
+  color: #fff;
 }
 
 .ui-button:disabled,
@@ -269,6 +272,66 @@
   font-weight: var(--font-weight-regular);
   line-height: 17px;
   margin: 2px 0 0;
+}
+
+.ui-choice-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ui-choice-card {
+  align-items: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 16px minmax(0, 1fr);
+  min-width: 0;
+  padding: 11px 12px;
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    box-shadow var(--motion-fast);
+}
+
+.ui-choice-card:hover {
+  background: var(--surface-subtle);
+  border-color: var(--border-strong);
+}
+
+.ui-choice-card.is-selected {
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
+  box-shadow: inset 2px 0 var(--accent);
+}
+
+.ui-choice-card > input {
+  accent-color: var(--accent);
+  height: 16px;
+  margin: 2px 0 0;
+  width: 16px;
+}
+
+.ui-choice-card > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ui-choice-card strong {
+  color: var(--text);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  line-height: 18px;
+}
+
+.ui-choice-card small {
+  color: var(--muted);
+  font-size: var(--font-size-metadata);
+  font-weight: var(--font-weight-regular);
+  line-height: 17px;
 }
 
 /* Framed work surfaces paint one uninterrupted edge above scrolling children. */

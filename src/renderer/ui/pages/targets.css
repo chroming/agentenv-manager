@@ -451,38 +451,6 @@
   padding-top: 10px;
 }
 
-.stop-managing-options {
-  display: grid;
-  gap: 8px;
-  padding: 4px 16px 16px;
-}
-
-.stop-managing-options label {
-  align-items: flex-start;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  cursor: pointer;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: auto minmax(0, 1fr);
-  padding: 12px;
-}
-
-.stop-managing-options label:has(input:checked) {
-  background: #f6f9ff;
-  border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
-}
-
-.stop-managing-options span {
-  display: grid;
-  gap: 3px;
-}
-
-.stop-managing-options small {
-  color: var(--muted);
-  line-height: 1.4;
-}
-
 .capture-dialog__submit {
   align-items: center;
   display: inline-flex;

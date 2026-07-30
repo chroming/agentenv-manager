@@ -4628,12 +4628,43 @@ describe("Electron UI profile switching e2e", () => {
     await choiceDialog.getByText("Keep current environment", { exact: true }).waitFor({
       state: "visible"
     });
-    await choiceDialog.getByRole("button", { name: "Review changes" }).click();
+    await expectStructuredDialog(choiceDialog);
+    const reviewChangesButton = choiceDialog.getByRole("button", { name: "Review changes" });
+    await expect
+      .poll(() =>
+        reviewChangesButton.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return {
+            background: style.backgroundColor,
+            foreground: style.color
+          };
+        })
+      )
+      .toEqual({
+        background: "rgb(0, 122, 255)",
+        foreground: "rgb(255, 255, 255)"
+      });
+    await reviewChangesButton.click();
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
     await previewDialog.getByText("Stop managing OpenCode", { exact: true }).waitFor({
       state: "visible"
     });
-    await previewDialog.getByRole("button", { name: "Keep files and detach" }).click();
+    const detachButton = previewDialog.getByRole("button", { name: "Keep files and detach" });
+    await expect
+      .poll(() =>
+        detachButton.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return {
+            background: style.backgroundColor,
+            foreground: style.color
+          };
+        })
+      )
+      .toEqual({
+        background: "rgb(215, 0, 21)",
+        foreground: "rgb(255, 255, 255)"
+      });
+    await detachButton.click();
     await previewDialog.waitFor({ state: "hidden" });
 
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toBe(
