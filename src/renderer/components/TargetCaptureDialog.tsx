@@ -93,7 +93,10 @@ export const TargetCaptureDialog = ({
     .filter((group) => group.resources.length > 0);
 
   return (
-    <div className="preview-modal-backdrop" onClick={isBusy ? undefined : onCancel}>
+    <div
+      className="preview-modal-backdrop"
+      data-dismiss-policy="intentional"
+    >
       <section
         ref={dialogRef}
         className="capture-dialog"

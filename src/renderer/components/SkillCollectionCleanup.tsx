@@ -305,7 +305,10 @@ export const SkillCollectionDialog = ({
   );
 
   return createPortal(
-    <div className="preview-modal-backdrop" onClick={operation ? undefined : onClose}>
+    <div
+      className="preview-modal-backdrop"
+      data-dismiss-policy="intentional"
+    >
       <section
         ref={dialogRef}
         className="profile-form-dialog skill-collection-dialog ui-dialog-shell"

@@ -2295,7 +2295,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(ipcResult).toContain("Apply another profile before removing this active profile");
   }, 30_000);
 
-  it("dismisses modal tools with Escape and outside clicks in the rendered app", async () => {
+  it("keeps draft dialogs on outside click and dismisses safe layers deliberately", async () => {
     const { page } = await launchApp();
 
     await page.getByRole("button", { name: "Profiles" }).click();
@@ -2309,11 +2309,18 @@ describe("Electron UI profile switching e2e", () => {
     await page
       .locator(".preview-modal-backdrop")
       .click({ position: { x: 8, y: 8 }, timeout: 5_000 });
+    await createDialog.waitFor({ state: "visible", timeout: 5_000 });
+    await page.keyboard.press("Escape");
     await createDialog.waitFor({ state: "hidden", timeout: 5_000 });
 
     await selectProfile(page, "UI OpenCode alpha");
     await applyActionButton(page, "OpenCode").click({ timeout: 5_000 });
-    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    let previewDialog = page.getByRole("dialog", { name: "Preview" });
+    await previewDialog.waitFor({ state: "visible", timeout: 5_000 });
+    await previewDialog.locator("..").click({ position: { x: 8, y: 8 }, timeout: 5_000 });
+    await previewDialog.waitFor({ state: "hidden", timeout: 5_000 });
+    await applyActionButton(page, "OpenCode").click({ timeout: 5_000 });
+    previewDialog = page.getByRole("dialog", { name: "Preview" });
     await previewDialog.waitFor({ state: "visible", timeout: 5_000 });
     await page.keyboard.press("Escape");
     await previewDialog.waitFor({ state: "hidden", timeout: 5_000 });
@@ -2329,6 +2336,8 @@ describe("Electron UI profile switching e2e", () => {
     const importDialog = page.getByRole("dialog", { name: "Import skills" });
     await importDialog.waitFor({ state: "visible", timeout: 5_000 });
     await page.mouse.click(240, 120);
+    await importDialog.waitFor({ state: "visible", timeout: 5_000 });
+    await page.keyboard.press("Escape");
     await importDialog.waitFor({ state: "hidden", timeout: 5_000 });
   }, 30_000);
 

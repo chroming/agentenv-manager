@@ -50,7 +50,7 @@ export const ProfileFormDialog = ({
   return (
     <div
       className="preview-modal-backdrop"
-      onClick={busy ? undefined : onClose}
+      data-dismiss-policy="intentional"
     >
       <section
         ref={dialogRef}

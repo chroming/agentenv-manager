@@ -108,6 +108,7 @@ export const SkillUpdateSettingsDialog = ({
       ariaLabel={t("Update settings for {{id}}", { id: skill.id })}
       className="skill-update-settings-dialog ui-dialog-shell"
       dialogRef={dialogRef}
+      dismissPolicy="intentional"
       dismissDisabled={busy || saving}
       onDismiss={onDismiss}
     >

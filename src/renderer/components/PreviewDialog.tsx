@@ -565,6 +565,7 @@ export const PreviewDialog = ({
     <>
       <div
         className={`preview-modal-backdrop apply-preview-backdrop${diffWorkspaceOpen ? " is-suspended" : ""}`}
+        data-dismiss-policy="standard"
         onClick={diffWorkspaceOpen ? undefined : onCancel}
       >
         {content}

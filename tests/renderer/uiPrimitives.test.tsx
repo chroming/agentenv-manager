@@ -115,6 +115,24 @@ describe("renderer UI primitives", () => {
     expect(onDismiss).not.toHaveBeenCalled();
   });
 
+  it("keeps an intentional modal open after an outside click", () => {
+    const onDismiss = vi.fn();
+    render(
+      <ModalFrame
+        ariaLabel="Draft modal"
+        dismissPolicy="intentional"
+        onDismiss={onDismiss}
+      >
+        Draft content
+      </ModalFrame>
+    );
+
+    const backdrop = screen.getByRole("dialog", { name: "Draft modal" }).parentElement!;
+    expect(backdrop).toHaveAttribute("data-dismiss-policy", "intentional");
+    fireEvent.click(backdrop);
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
   it("lets only the topmost modal consume Escape", () => {
     const dismissParent = vi.fn();
     const dismissChild = vi.fn();

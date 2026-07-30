@@ -90,7 +90,7 @@ export const SkillImportConflictDialog = ({
     <>
       <div
         className={`preview-modal-backdrop skill-import-conflict-backdrop${diffWorkspaceOpen ? " is-suspended" : ""}`}
-        onClick={diffWorkspaceOpen ? undefined : onDismiss}
+        data-dismiss-policy="intentional"
       >
       <section
         ref={dialogRef}

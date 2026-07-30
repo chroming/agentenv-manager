@@ -32,6 +32,7 @@ export const ProfileDeleteDialog = ({
   return (
     <div
       className="preview-modal-backdrop"
+      data-dismiss-policy="standard"
       onClick={busy ? undefined : onClose}
     >
       <section

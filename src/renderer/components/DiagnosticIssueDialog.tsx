@@ -50,7 +50,11 @@ export const DiagnosticIssueDialog = ({
   };
 
   return (
-    <div className="preview-modal-backdrop" onClick={onDismiss}>
+    <div
+      className="preview-modal-backdrop"
+      data-dismiss-policy="standard"
+      onClick={onDismiss}
+    >
       <section
         ref={dialogRef}
         className="profile-form-dialog diagnostic-issue-dialog"

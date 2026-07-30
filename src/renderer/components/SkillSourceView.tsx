@@ -1173,6 +1173,7 @@ export const SkillSourceView = ({
           ariaLabel={t("Confirm source merge")}
           className="skill-source-merge-dialog ui-dialog-shell"
           dialogRef={mergeDialogRef}
+          dismissPolicy="intentional"
           dismissDisabled={mergeBusy}
           onDismiss={closeMerge}
         >
@@ -1256,6 +1257,7 @@ export const SkillSourceView = ({
           ariaLabel={t("Rename source")}
           className="skill-source-name-dialog ui-dialog-shell"
           dialogRef={renameDialogRef}
+          dismissPolicy="intentional"
           dismissDisabled={renameBusy}
           onDismiss={closeRename}
         >

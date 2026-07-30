@@ -1334,7 +1334,8 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Settings switches sit beside the setting label they control, with supporting copy on the following line; they MUST NOT float as visually detached controls at the far edge of a wide row.
 - Hover/focus tooltips are mutually exclusive and use a subtle trigger-anchored entry. The first pointer disclosure uses a short intentional delay; moving directly to an adjacent tooltip while one remains active opens the next immediately. Long-text tooltips allow pointer entry and native text selection for copying, then close after the pointer leaves both trigger and tooltip. Repeated passive overflow spans MUST NOT each add a Tab stop: an existing row command or identity action owns keyboard focus and its full accessible name, while standalone error or decision details MAY opt into focus explicitly.
 - Modal dialogs trap keyboard focus until they close.
-- Escape closes only the topmost dismissible layer; the handled event MUST NOT continue and close a parent dialog or drawer. A non-dismissible working layer consumes Escape without exposing or closing the layer beneath it. Safe outside click closes the topmost layer; focus returns to the trigger or the next logical surviving control.
+- Modal dismissal follows one explicit policy. `Standard` dialogs contain read-only detail, previews, or one-step confirmation with no staged input; safe outside click and Escape both cancel them. `Intentional` dialogs contain typed values, selections, conflict choices, or multi-step draft state; outside click MUST preserve the dialog and draft, while Escape and the explicit Cancel or Close command discard it. A working dialog is temporarily non-dismissible regardless of policy. Menus, popovers, and tooltips continue to close on safe outside click.
+- Escape closes only the topmost dismissible layer; the handled event MUST NOT continue and close a parent dialog or drawer. A non-dismissible working layer consumes Escape without exposing or closing the layer beneath it. Focus returns to the trigger or the next logical surviving control.
 - Primary workflows work with keyboard only.
 - Status is never communicated through color alone.
 - Dynamic visible copy and accessible labels use the active locale. Truncated Profile descriptions use the shared selectable overflow detail instead of native browser title tooltips.
@@ -1344,7 +1345,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - New page behavior MUST be owned by its page stylesheet or a shared primitive; the frozen legacy stylesheet MUST NOT grow and the retired product-level override file MUST NOT return.
 - Skills and Profiles respond to their actual content containers, not only the outer window width.
 
-Status: supported viewport containment, topmost overlays, modal focus trapping, Escape and outside-click dismissal, and focus restoration are `Implemented`.
+Status: supported viewport containment, topmost overlays, policy-based modal dismissal, modal focus trapping, Escape handling, and focus restoration are `Implemented`.
 
 ## 22. Security And Privacy Contract
 

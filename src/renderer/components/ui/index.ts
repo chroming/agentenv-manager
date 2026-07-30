@@ -3,7 +3,7 @@ export { Badge } from "./Badge";
 export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./Button";
 export { ControlGroup } from "./ControlGroup";
 export { IconButton } from "./IconButton";
-export { ModalFrame } from "./ModalFrame";
+export { ModalFrame, type ModalDismissPolicy } from "./ModalFrame";
 export { PageHeader } from "./PageHeader";
 export { ResourceRow } from "./ResourceRow";
 export { Switch } from "./Switch";

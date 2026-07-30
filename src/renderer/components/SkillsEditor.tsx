@@ -298,6 +298,7 @@ export const SkillsEditor = ({
           ariaLabel={t(replacingIndex === undefined ? "Add library skills" : "Relink missing skill")}
           className="resource-picker-dialog resource-picker-dialog--skills ui-dialog-shell"
           dialogRef={pickerDialogRef}
+          dismissPolicy="intentional"
           onDismiss={closePicker}
         >
             <header className="profile-dialog-header ui-dialog-header">

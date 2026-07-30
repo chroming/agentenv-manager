@@ -745,6 +745,14 @@ describe("SkillLibraryPanel", () => {
     const settingsDialog = await screen.findByRole("dialog", {
       name: "Update settings for shared-reviewer"
     });
+    expect(settingsDialog.parentElement).toHaveAttribute(
+      "data-dismiss-policy",
+      "intentional"
+    );
+    fireEvent.click(settingsDialog.parentElement!);
+    expect(
+      screen.getByRole("dialog", { name: "Update settings for shared-reviewer" })
+    ).toBeInTheDocument();
     fireEvent.click(within(settingsDialog).getByRole("button", { name: "Close" }));
     const githubRow = screen.getByRole("group", { name: "Library item github-reviewer" });
     expect(
@@ -961,6 +969,12 @@ describe("SkillLibraryPanel", () => {
     rerender(renderPanel("import"));
     const importDialog = screen.getByRole("dialog", { name: "Import skills" });
     expect(importDialog).toHaveClass("ui-modal", "library-import-dialog");
+    expect(importDialog.parentElement).toHaveAttribute(
+      "data-dismiss-policy",
+      "intentional"
+    );
+    fireEvent.click(importDialog.parentElement!);
+    expect(screen.getByRole("dialog", { name: "Import skills" })).toBeInTheDocument();
     expect(within(importDialog).getByRole("button", { name: "Close import" }))
       .toHaveClass("ui-icon-button");
     expect(within(importDialog).getByRole("button", { name: "Close" }))

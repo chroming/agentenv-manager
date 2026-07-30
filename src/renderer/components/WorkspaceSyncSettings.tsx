@@ -377,6 +377,7 @@ export const WorkspaceSyncSettings = () => {
           ariaLabel={t("Review Workspace changes")}
           className="workspace-sync-review ui-dialog-shell"
           dialogRef={dialogRef}
+          dismissPolicy="intentional"
           dismissDisabled={Boolean(working)}
           onDismiss={() => setReview(undefined)}
         >

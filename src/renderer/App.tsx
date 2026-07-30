@@ -1622,7 +1622,9 @@ const AppContent = ({
         : appModalFallbackFocusRef,
     onDismiss: dismissAppModal,
     dismissDisabled:
-      Boolean(pendingSkillImport?.committing) || (busy && !pendingSkillImport),
+      Boolean(pendingSkillImport?.committing) ||
+      profileCaptureActivity !== "idle" ||
+      (busy && !pendingSkillImport),
     focusKey:
       pendingSkillImport
         ? `skill-import:${pendingSkillImport.preview.incoming.contentHash}`
@@ -4643,7 +4645,11 @@ const AppContent = ({
                 )}
               </div>
               {pendingProfileAction ? (
-                <div className="preview-modal-backdrop" onClick={busy ? undefined : cancelPendingProfileAction}>
+                <div
+                  className="preview-modal-backdrop"
+                  data-dismiss-policy="standard"
+                  onClick={busy ? undefined : cancelPendingProfileAction}
+                >
                   <section
                     ref={appModalDialogRef}
                     className="profile-form-dialog profile-form-dialog--compact"
@@ -5043,9 +5049,13 @@ const AppContent = ({
               />
             ) : null}
             {dataRestorePreview ? (
-              <div className="preview-modal-backdrop" onClick={() => {
-                if (!busy) setDataRestorePreview(undefined);
-              }}>
+              <div
+                className="preview-modal-backdrop"
+                data-dismiss-policy="standard"
+                onClick={() => {
+                  if (!busy) setDataRestorePreview(undefined);
+                }}
+              >
                 <section ref={appModalDialogRef} className="profile-form-dialog profile-form-dialog--compact data-restore-dialog ui-dialog-shell" role="dialog" aria-modal="true" aria-label={t("Restore AgentEnv data")} onClick={(event) => event.stopPropagation()}>
                   <header className="profile-dialog-header ui-dialog-header">
                     <div className="ui-dialog-header__copy">

@@ -99,7 +99,10 @@ export const BackupManagerDialog = ({
   const { t } = useI18n();
 
   return (
-    <div className="preview-modal-backdrop" onClick={busy ? undefined : onBackOrClose}>
+    <div
+      className="preview-modal-backdrop"
+      data-dismiss-policy="intentional"
+    >
       <section
         ref={dialogRef}
         className="profile-form-dialog backup-manager-dialog"

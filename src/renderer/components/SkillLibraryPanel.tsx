@@ -624,7 +624,10 @@ export const SkillLibraryPanel = ({
       availabilityOperation ||
       sharedOperation ||
       cleanupOperationKey ||
-      mergeOperation
+      mergeOperation ||
+      collectionOperation ||
+      pathPolicyOperationPath ||
+      automaticCleanupKey
     ),
     onDismiss: dismissModal
   });
@@ -2366,7 +2369,7 @@ export const SkillLibraryPanel = ({
       {mergePreview && mergeKeepEntry && mergeSourceEntry ? createPortal(
         <div
           className={`preview-modal-backdrop${mergeDiffExpanded ? " is-suspended" : ""}`}
-          onClick={() => !mergeOperation && !mergeDiffExpanded && setMergePreview(undefined)}
+          data-dismiss-policy="intentional"
         >
           <section
             ref={modalDialogRef}
@@ -2512,7 +2515,11 @@ export const SkillLibraryPanel = ({
       />
 
       {deleteCandidate ? createPortal(
-        <div className="preview-modal-backdrop" onClick={() => setDeleteCandidate(undefined)}>
+        <div
+          className="preview-modal-backdrop"
+          data-dismiss-policy="standard"
+          onClick={() => setDeleteCandidate(undefined)}
+        >
           <section
             ref={modalDialogRef}
             className="profile-form-dialog profile-form-dialog--compact"
@@ -2615,7 +2622,11 @@ export const SkillLibraryPanel = ({
       ) : null}
 
       {autoCleanupReviewOpen ? createPortal(
-        <div className="preview-modal-backdrop" onClick={() => setAutoCleanupReviewOpen(false)}>
+        <div
+          className="preview-modal-backdrop"
+          data-dismiss-policy="standard"
+          onClick={() => setAutoCleanupReviewOpen(false)}
+        >
           <section
             ref={modalDialogRef}
             className="profile-form-dialog profile-form-dialog--compact cleanup-bulk-dialog ui-dialog-shell"
@@ -2762,6 +2773,7 @@ export const SkillLibraryPanel = ({
       {sharedRetireCandidate?.sharedMigration ? createPortal(
         <div
           className="preview-modal-backdrop"
+          data-dismiss-policy="standard"
           onClick={sharedOperation ? undefined : () => setSharedRetireKey(undefined)}
         >
           <section
@@ -2845,6 +2857,7 @@ export const SkillLibraryPanel = ({
       {disableCandidate ? createPortal(
         <div
           className="preview-modal-backdrop"
+          data-dismiss-policy="standard"
           onClick={availabilityOperation ? undefined : () => setDisableCandidate(undefined)}
         >
           <section
@@ -2932,7 +2945,10 @@ export const SkillLibraryPanel = ({
       ) : null}
 
       {externalImport && externalImportGroup ? createPortal(
-        <div className="preview-modal-backdrop" onClick={() => setExternalImport(undefined)}>
+        <div
+          className="preview-modal-backdrop"
+          data-dismiss-policy="intentional"
+        >
           <section
             ref={modalDialogRef}
             className="profile-form-dialog profile-form-dialog--compact external-skill-dialog ui-dialog-shell"
@@ -3034,6 +3050,7 @@ export const SkillLibraryPanel = ({
       {cleanupDetails ? createPortal(
         <div
           className="preview-modal-backdrop"
+          data-dismiss-policy="standard"
           onClick={() => {
             if (!cleanupDetailsWorking) setCleanupDetailsKey(undefined);
           }}
@@ -3184,9 +3201,7 @@ export const SkillLibraryPanel = ({
       {cleanupDraft && cleanupCandidate ? createPortal(
         <div
           className="preview-modal-backdrop"
-          onClick={() => {
-            if (!cleanupOperationKey) setCleanupDraft(undefined);
-          }}
+          data-dismiss-policy="intentional"
         >
           <section
             ref={modalDialogRef}

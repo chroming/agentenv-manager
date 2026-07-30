@@ -1,12 +1,15 @@
 import type { MouseEvent, ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 
+export type ModalDismissPolicy = "standard" | "intentional";
+
 interface ModalFrameProps {
   ariaLabel: string;
   backdropClassName?: string;
   children: ReactNode;
   className?: string;
   dialogRef?: RefObject<HTMLElement | null>;
+  dismissPolicy?: ModalDismissPolicy;
   dismissDisabled?: boolean;
   onDismiss(): void;
   suspended?: boolean;
@@ -18,6 +21,7 @@ export const ModalFrame = ({
   children,
   className = "",
   dialogRef,
+  dismissPolicy = "standard",
   dismissDisabled = false,
   onDismiss,
   suspended = false
@@ -27,7 +31,12 @@ export const ModalFrame = ({
   return createPortal(
     <div
       className={`preview-modal-backdrop ui-modal-backdrop${suspended ? " is-suspended" : ""} ${backdropClassName}`.trim()}
-      onClick={dismissDisabled || suspended ? undefined : onDismiss}
+      data-dismiss-policy={dismissPolicy}
+      onClick={
+        dismissDisabled || suspended || dismissPolicy === "intentional"
+          ? undefined
+          : onDismiss
+      }
     >
       <section
         ref={dialogRef}

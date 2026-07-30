@@ -76,6 +76,7 @@ export const BulkSkillUpdateDialog = ({
   return createPortal(
     <div
       className="preview-modal-backdrop"
+      data-dismiss-policy="standard"
       onClick={dismissDisabled ? undefined : onClose}
     >
       <section

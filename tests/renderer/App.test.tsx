@@ -3816,9 +3816,15 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
     const editDialog = screen.getByRole("dialog", { name: "Edit profile" });
+    expect(editDialog.parentElement).toHaveAttribute(
+      "data-dismiss-policy",
+      "intentional"
+    );
     fireEvent.change(within(editDialog).getByLabelText("Profile name"), {
       target: { value: "" }
     });
+    fireEvent.click(editDialog.parentElement!);
+    expect(screen.getByRole("dialog", { name: "Edit profile" })).toBeInTheDocument();
     expect(within(editDialog).getByRole("button", { name: "Done" })).toBeDisabled();
     expect(screen.getByRole("dialog", { name: "Edit profile" })).toBeInTheDocument();
     fireEvent.change(within(editDialog).getByLabelText("Profile name"), {

@@ -134,6 +134,7 @@ export const SkillImportDialog = ({
       backdropClassName="library-import-backdrop"
       className="library-import-dialog"
       dialogRef={dialogRef}
+      dismissPolicy="intentional"
       dismissDisabled={dismissDisabled}
       onDismiss={onClose}
       suspended={suspended}

@@ -232,7 +232,11 @@ export const AgentSettingsSection = ({
       </section>
 
       {disableCandidate ? (
-        <div className="preview-modal-backdrop" onClick={busy ? undefined : () => setDisableCandidate(undefined)}>
+        <div
+          className="preview-modal-backdrop"
+          data-dismiss-policy="standard"
+          onClick={busy ? undefined : () => setDisableCandidate(undefined)}
+        >
           <section
             ref={dialogRef}
             className="profile-form-dialog profile-form-dialog--compact"
