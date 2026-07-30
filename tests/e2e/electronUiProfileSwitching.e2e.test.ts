@@ -2412,7 +2412,7 @@ describe("Electron UI profile switching e2e", () => {
     await page
       .getByRole("group", { name: "Library item target-only-reviewer" })
       .waitFor({ state: "visible", timeout: 5_000 });
-    await page.getByRole("button", { name: "Expand Managed" }).click();
+    await page.locator(".cleanup-bucket-heading--managed").click();
     await cleanupGroup.waitFor({ state: "visible" });
     await expect.poll(() => cleanupGroup.textContent()).toContain("Managed");
     await expect.poll(() => cleanupGroup.textContent()).not.toContain("Duplicate");
@@ -2512,7 +2512,7 @@ describe("Electron UI profile switching e2e", () => {
       .click();
     await page.getByRole("menuitem", { name: "Keep outside AgentEnv" }).click();
     await cleanupGroup.waitFor({ state: "hidden" });
-    await page.getByRole("button", { name: "Expand Kept outside AgentEnv" }).click();
+    await page.locator(".cleanup-bucket-heading--kept").click();
     await cleanupGroup.waitFor({ state: "visible" });
     await expect.poll(() => cleanupGroup.textContent()).toContain("Kept");
 
@@ -2536,6 +2536,18 @@ describe("Electron UI profile switching e2e", () => {
     await expect(
       readFile(join(opencodeDir, "skills", "ui-alpha-skill", "SKILL.md"), "utf8")
     ).resolves.toContain("Local copy intentionally left unmanaged.");
+    await expect
+      .poll(async () => {
+        const states = await page.evaluate(() => window.agentEnv.listTargetStates());
+        return states.find((state) => state.targetId === "opencode")?.lifecycleStatus;
+      })
+      .toBe("applied-with-outside");
+    await expandComposerSection(page, "Skills");
+    const keptSkillRow = page.getByRole("listitem", {
+      name: "Profile skill ui-alpha-skill"
+    });
+    await expect.poll(() => keptSkillRow.textContent()).toContain("Kept outside");
+    await expect.poll(() => keptSkillRow.textContent()).not.toContain("Apply pending");
   }, 30_000);
 
   it("backs up and replaces managed OpenCode drift after explicit confirmation", async () => {

@@ -148,4 +148,27 @@ describe("SkillsEditor v2", () => {
     fireEvent.click(screen.getByRole("button", { name: "Update" }));
     expect(onPreview).toHaveBeenCalledWith("review");
   });
+
+  it("shows a Target-local keep decision instead of an Apply pending state", () => {
+    render(
+      <SkillsEditor
+        value={resources}
+        librarySkills={skills}
+        appliedSkillVersions={{}}
+        keptOutsideSkills={[{
+          path: "/target/skills/review",
+          skillKey: "review",
+          libraryId: "review",
+          targetName: "review"
+        }]}
+        selectedTargetName="Codex"
+        onChange={vi.fn()}
+      />
+    );
+
+    const row = screen.getByRole("listitem", { name: "Profile skill review" });
+    expect(row).toHaveTextContent("Kept outside");
+    expect(row).toHaveTextContent("Codex · Kept outside");
+    expect(row).not.toHaveTextContent("Apply pending");
+  });
 });

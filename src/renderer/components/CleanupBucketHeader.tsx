@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronRight, ListChecks } from "lucide-react";
 import type { SkillCleanupBucket } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
-import { Button, IconButton } from "./ui";
+import { Button } from "./ui";
 
 interface CleanupBucketHeaderProps {
   bucket: SkillCleanupBucket;
@@ -37,45 +37,52 @@ export const CleanupBucketHeader = ({
   const label = t(bucketLabel(bucket));
   const showCleanup = bucket === "ready" && readyCleanupCount > 0;
 
+  if (collapsible) {
+    return (
+      <button
+        aria-expanded={expanded}
+        aria-label={t(expanded ? "Collapse {{section}}" : "Expand {{section}}", {
+          section: label
+        })}
+        className={`cleanup-bucket-heading cleanup-bucket-heading--${bucket} cleanup-bucket-disclosure`}
+        type="button"
+        onClick={onToggle}
+      >
+        <span className="cleanup-bucket-copy">
+          <strong>{label}</strong>
+          <span>{count}</span>
+        </span>
+        <span className="cleanup-bucket-disclosure__icon" aria-hidden="true">
+          {expanded
+            ? <ChevronDown size={15} strokeWidth={2.2} />
+            : <ChevronRight size={15} strokeWidth={2.2} />}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <div className={`cleanup-bucket-heading cleanup-bucket-heading--${bucket}`}>
       <div className="cleanup-bucket-copy">
         <strong>{label}</strong>
         <span>{count}</span>
       </div>
-      {showCleanup || collapsible ? (
+      {showCleanup ? (
         <div className="cleanup-bucket-actions">
-          {showCleanup ? (
-            <Button
-              aria-label={t("Clean up {{count}} ready Skills", { count: readyCleanupCount })}
-              busy={actionWorking}
-              className="cleanup-auto-action"
-              disabled={actionDisabled}
-              icon={<ListChecks size={15} strokeWidth={2.2} />}
-              size="compact"
-              variant="secondary"
-              onClick={onReviewCleanup}
-            >
-              {t(actionWorking ? "Cleaning up..." : "Clean up {{count}}", {
-                count: readyCleanupCount
-              })}
-            </Button>
-          ) : null}
-          {collapsible ? (
-            <IconButton
-              aria-expanded={expanded}
-              label={t(expanded ? "Collapse {{section}}" : "Expand {{section}}", {
-                section: label
-              })}
-              size="compact"
-              variant="ghost"
-              onClick={onToggle}
-            >
-              {expanded
-                ? <ChevronDown size={15} strokeWidth={2.2} />
-                : <ChevronRight size={15} strokeWidth={2.2} />}
-            </IconButton>
-          ) : null}
+          <Button
+            aria-label={t("Clean up {{count}} ready Skills", { count: readyCleanupCount })}
+            busy={actionWorking}
+            className="cleanup-auto-action"
+            disabled={actionDisabled}
+            icon={<ListChecks size={15} strokeWidth={2.2} />}
+            size="compact"
+            variant="secondary"
+            onClick={onReviewCleanup}
+          >
+            {t(actionWorking ? "Cleaning up..." : "Clean up {{count}}", {
+              count: readyCleanupCount
+            })}
+          </Button>
         </div>
       ) : null}
     </div>

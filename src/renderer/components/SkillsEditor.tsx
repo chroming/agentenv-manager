@@ -3,7 +3,8 @@ import { Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import type {
   ProfileResources,
   SkillLibraryEntry,
-  SkillUpdateInfo
+  SkillUpdateInfo,
+  TargetKeptOutsideSkill
 } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
@@ -18,6 +19,7 @@ interface SkillsEditorProps {
   checkingSkillUpdates?: boolean;
   disabled?: boolean;
   appliedSkillVersions?: Record<string, string>;
+  keptOutsideSkills?: TargetKeptOutsideSkill[];
   selectedTargetName?: string;
   onCheckSkillUpdates?(ids: string[]): void;
   onImportNewSkill?(): void;
@@ -32,6 +34,7 @@ export const SkillsEditor = ({
   checkingSkillUpdates = false,
   disabled = false,
   appliedSkillVersions,
+  keptOutsideSkills = [],
   selectedTargetName,
   onCheckSkillUpdates,
   onImportNewSkill,
@@ -177,14 +180,21 @@ export const SkillsEditor = ({
           const globallyEnabled = skill?.globallyEnabled !== false;
           const enabled = Boolean(skill && profileEnabled && globallyEnabled);
           const appliedRevision = appliedSkillVersions?.[reference.libraryId];
+          const keptOutside = keptOutsideSkills.some(
+            (entry) =>
+              entry.libraryId === reference.libraryId &&
+              entry.targetName === reference.targetName
+          );
           const deploymentPending = Boolean(
-            skill && appliedSkillVersions && (enabled
+            !keptOutside && skill && appliedSkillVersions && (enabled
               ? appliedRevision !== skill.contentHash
               : appliedRevision)
           );
           const status = !skill
             ? "Missing"
-            : !globallyEnabled
+            : keptOutside
+              ? "Kept outside"
+              : !globallyEnabled
               ? "Disabled in Library"
               : !profileEnabled
                 ? deploymentPending ? "Apply pending" : "Disabled"
@@ -226,11 +236,13 @@ export const SkillsEditor = ({
                 />
               </div>
               <span
-                className={`profile-skill-state${status === "Ready" ? " is-neutral" : ""}${status === "Update available" || status === "Apply pending" ? " is-update" : ""}${!skill || update?.error ? " is-error" : ""}`}
+                className={`profile-skill-state${status === "Ready" || status === "Kept outside" ? " is-neutral" : ""}${status === "Update available" || status === "Apply pending" ? " is-update" : ""}${!skill || update?.error ? " is-error" : ""}`}
                 title={update?.error ?? status}
               >
                 <strong>{t(status)}</strong>
-                {appliedRevision && selectedTargetName ? (
+                {keptOutside && selectedTargetName ? (
+                  <small>{selectedTargetName} · {t("Kept outside")}</small>
+                ) : appliedRevision && selectedTargetName ? (
                   <small>{t("{{name}} · {{revision}}", {
                     name: selectedTargetName,
                     revision: appliedRevision.slice(0, 7)

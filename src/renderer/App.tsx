@@ -4508,6 +4508,12 @@ const AppContent = ({
                                   ?.skills
                               : undefined
                           }
+                          keptOutsideSkills={
+                            selectedTargetState?.activeProfileId ===
+                            draftProfile.id
+                              ? selectedTargetState.keptOutsideSkills
+                              : undefined
+                          }
                           selectedTargetName={selectedTarget?.name}
                           onCheckSkillUpdates={(ids) =>
                             void checkProfileSkillUpdates(ids)

@@ -123,6 +123,36 @@
   background: #f3faf7;
 }
 
+.cleanup-bucket-disclosure {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  color: inherit;
+  justify-content: space-between;
+  max-width: none;
+  text-align: left;
+  width: 100%;
+}
+
+.cleanup-bucket-disclosure:hover:not(:disabled) {
+  background: var(--surface-pressed);
+  border-color: var(--border);
+}
+
+.cleanup-bucket-disclosure:active:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-pressed) 76%, var(--surface));
+}
+
+.cleanup-bucket-disclosure__icon {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  flex: 0 0 30px;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
+}
+
 .skill-library-panel .cleanup-group-row > .cleanup-group-actions:not(:has(.cleanup-current-action)) {
   display: flex;
   justify-content: flex-end;
