@@ -5761,6 +5761,35 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() => fileExists(join(appDataRoot, "skills-library", "collection-gamma", "SKILL.md")))
       .toBe(true);
     await expect.poll(() => dialog.textContent()).toContain("In Library");
+    const keepCurrentSetup = await page.evaluate(async () => {
+      const current = await window.agentEnv.readProfile("ui-opencode-alpha");
+      const updated = await window.agentEnv.updateProfileSkills({
+        profileId: current.id,
+        targetId: "opencode",
+        expectedContentHash: current.contentHash!,
+        skills: current.resources.skills,
+        managementMode: "ignore"
+      });
+      const applyPreview = await window.agentEnv.previewApply(updated.profile.id, "opencode");
+      const blocking = applyPreview.issues
+        .filter((issue) => issue.disposition === "block")
+        .map((issue) => issue.message);
+      if (blocking.length > 0) {
+        return { ok: false, error: blocking.join("; ") };
+      }
+      const applied = await window.agentEnv.applyProfile(
+        updated.profile.id,
+        applyPreview.id
+      );
+      return {
+        ok: applied.ok,
+        error: applied.ok ? "" : applied.errors.join("; "),
+        profileId: updated.profile.id
+      };
+    });
+    expect(keepCurrentSetup).toEqual(
+      expect.objectContaining({ ok: true, profileId: expect.any(String) })
+    );
     await expectInViewport(page, dialog.getByRole("button", { name: "Move collection" }));
     await dialog.getByRole("button", { name: "Move collection" }).click();
     await page.waitForTimeout(1_000);
@@ -5783,6 +5812,20 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => fileExists(join(codexDir, "skills", "collection-beta", "SKILL.md")))
       .toBe(true);
+    const openCodeProfileAfterMove = await page.evaluate(async () => {
+      const state = (await window.agentEnv.listTargetStates()).find(
+        (item) => item.targetId === "opencode"
+      );
+      if (!state?.activeProfileId) return undefined;
+      const activeProfile = await window.agentEnv.readProfile(state.activeProfileId);
+      return {
+        mode:
+          activeProfile.resources.managementByTarget?.opencode?.skills ?? "manage",
+        skillIds: activeProfile.resources.skills.map((skill) => skill.libraryId)
+      };
+    });
+    expect(openCodeProfileAfterMove?.mode).toBe("manage");
+    expect(openCodeProfileAfterMove?.skillIds).toContain("collection-alpha");
   }, 45_000);
 
   it("atomically migrates and restores a shared Skill after every consumer is prepared", async () => {

@@ -468,7 +468,7 @@ export const SkillCollectionDialog = ({
           </div>
           <p className="muted skill-collection-dialog__note">
             {collection.state === "ready"
-              ? t("Moving adds these Skills to each affected Agent's active Profile, applies those Profiles, verifies every Agent copy, then removes only the collection link.")
+              ? t("Moving adds these Skills to each affected Agent's active Profile. Profiles that keep Skills unchanged switch to Use Profile; Profiles set to Turn off stay off. AgentEnv applies and verifies each Profile, then removes only the collection link.")
               : collection.state === "kept"
                 ? t("This collection stays outside AgentEnv. Its source and runtime link remain unchanged.")
                 : t("Choose a Library version for every Skill before moving. Same-name differences require an explicit choice.")}

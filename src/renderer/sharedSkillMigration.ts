@@ -52,15 +52,10 @@ const ensureSkillInProfile = async (
   profile: ProfileDetail,
   targetId: string,
   libraryId: string,
-  runtimeName: string,
-  agentName: string
+  runtimeName: string
 ) => {
   const mode = profile.resources.managementByTarget?.[targetId]?.skills ?? "manage";
-  if (mode !== "manage") {
-    throw new Error(
-      `${agentName}'s active Profile does not currently manage Skills.`
-    );
-  }
+  if (mode === "disable") return profile;
   if (!profile.contentHash) {
     throw new Error(`Profile ${profile.manifest.name} is missing its current content hash.`);
   }
@@ -90,6 +85,13 @@ const ensureSkillInProfile = async (
         targetName: runtimeName,
         enabled: true
       });
+  const profileChanged =
+    mode !== "manage" ||
+    !existing ||
+    existing.enabled !== true ||
+    existing.targetName !== runtimeName;
+  if (!profileChanged) return profile;
+
   return (
     await api.updateProfileSkills({
       profileId: profile.id,
@@ -141,8 +143,7 @@ export const moveSharedSkillToAgents = async ({
         await api.readProfile(state.activeProfileId),
         targetId,
         migration.libraryId,
-        migration.skillKey,
-        targetLabel(targetId, targetNames)
+        migration.skillKey
       );
     } else {
       const capture = await api.previewCreateProfileFromTarget(targetId, "skills");
@@ -169,8 +170,7 @@ export const moveSharedSkillToAgents = async ({
           profile,
           targetId,
           migration.libraryId,
-          migration.skillKey,
-          targetLabel(targetId, targetNames)
+          migration.skillKey
         );
       }
     }
@@ -249,11 +249,6 @@ export const moveSkillCollectionToAgents = async ({
     }
 
     const mode = profile.resources.managementByTarget?.[targetId]?.skills ?? "manage";
-    if (mode !== "manage") {
-      throw new Error(
-        `${targetLabel(targetId, targetNames)}'s active Profile does not currently manage Skills.`
-      );
-    }
     if (!profile.contentHash) {
       throw new Error(`Profile ${profile.manifest.name} is missing its current content hash.`);
     }
@@ -262,53 +257,55 @@ export const moveSkillCollectionToAgents = async ({
     );
     const nextSkills = [...profile.resources.skills];
     let profileChanged = false;
-    for (const member of members) {
-      let existingIndex = nextSkills.findIndex(
-        (reference) => reference.libraryId === member.libraryId
-      );
-      const collisionIndex = nextSkills.findIndex(
-        (reference) =>
-          reference.libraryId !== member.libraryId &&
-          reference.targetName === member.skillKey
-      );
-      if (collisionIndex >= 0) {
+    if (mode !== "disable") {
+      for (const member of members) {
+        let existingIndex = nextSkills.findIndex(
+          (reference) => reference.libraryId === member.libraryId
+        );
+        const collisionIndex = nextSkills.findIndex(
+          (reference) =>
+            reference.libraryId !== member.libraryId &&
+            reference.targetName === member.skillKey
+        );
+        if (collisionIndex >= 0) {
+          if (existingIndex >= 0) {
+            nextSkills.splice(collisionIndex, 1);
+            existingIndex = nextSkills.findIndex(
+              (reference) => reference.libraryId === member.libraryId
+            );
+          } else {
+            nextSkills[collisionIndex] = {
+              libraryId: member.libraryId,
+              targetName: member.skillKey,
+              enabled: true
+            };
+            existingIndex = collisionIndex;
+          }
+          profileChanged = true;
+        }
         if (existingIndex >= 0) {
-          nextSkills.splice(collisionIndex, 1);
-          existingIndex = nextSkills.findIndex(
-            (reference) => reference.libraryId === member.libraryId
-          );
+          if (
+            !nextSkills[existingIndex].enabled ||
+            nextSkills[existingIndex].targetName !== member.skillKey
+          ) {
+            nextSkills[existingIndex] = {
+              ...nextSkills[existingIndex],
+              targetName: member.skillKey,
+              enabled: true
+            };
+            profileChanged = true;
+          }
         } else {
-          nextSkills[collisionIndex] = {
+          nextSkills.push({
             libraryId: member.libraryId,
             targetName: member.skillKey,
             enabled: true
-          };
-          existingIndex = collisionIndex;
-        }
-        profileChanged = true;
-      }
-      if (existingIndex >= 0) {
-        if (
-          !nextSkills[existingIndex].enabled ||
-          nextSkills[existingIndex].targetName !== member.skillKey
-        ) {
-          nextSkills[existingIndex] = {
-            ...nextSkills[existingIndex],
-            targetName: member.skillKey,
-            enabled: true
-          };
+          });
           profileChanged = true;
         }
-      } else {
-        nextSkills.push({
-          libraryId: member.libraryId,
-          targetName: member.skillKey,
-          enabled: true
-        });
-        profileChanged = true;
       }
     }
-    if (profileChanged) {
+    if (profileChanged || mode === "ignore") {
       profile = (
         await api.updateProfileSkills({
           profileId: profile.id,

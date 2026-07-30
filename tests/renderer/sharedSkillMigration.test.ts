@@ -169,6 +169,86 @@ describe("moveSharedSkillToAgents", () => {
     expect(mockApi.retireSharedSkill).toHaveBeenCalled();
   });
 
+  it("switches Keep current to Use Profile before moving a shared Skill", async () => {
+    const mockApi = api();
+    mockApi.readProfile.mockResolvedValue({
+      ...profile(),
+      resources: {
+        ...profile().resources,
+        managementByTarget: {
+          pi: { instructions: "ignore", skills: "ignore" }
+        }
+      }
+    });
+    mockApi.listTargetStates.mockResolvedValue([
+      {
+        targetId: "pi",
+        activeProfileId: "pi-profile",
+        status: "managed",
+        lifecycleStatus: "applied",
+        managedResourceCount: 0,
+        warningCount: 0,
+        errorCount: 0
+      } satisfies TargetManagementState
+    ]);
+
+    await moveSharedSkillToAgents({
+      api: mockApi as unknown as AgentEnvApi,
+      migration: {
+        skillKey: "as-ops",
+        libraryId: "as-ops",
+        paths: ["/home/.agents/skills/as-ops"]
+      },
+      targetIds: ["pi"]
+    });
+
+    expect(mockApi.updateProfileSkills).toHaveBeenCalledWith(
+      expect.objectContaining({
+        managementMode: "manage",
+        skills: [{ libraryId: "as-ops", targetName: "as-ops", enabled: true }]
+      })
+    );
+    expect(mockApi.retireSharedSkill).toHaveBeenCalled();
+  });
+
+  it("preserves Turn off while moving a shared Skill out of its compatibility path", async () => {
+    const mockApi = api();
+    mockApi.readProfile.mockResolvedValue({
+      ...profile(),
+      resources: {
+        ...profile().resources,
+        managementByTarget: {
+          pi: { instructions: "ignore", skills: "disable" }
+        }
+      }
+    });
+    mockApi.listTargetStates.mockResolvedValue([
+      {
+        targetId: "pi",
+        activeProfileId: "pi-profile",
+        status: "managed",
+        lifecycleStatus: "applied",
+        managedResourceCount: 0,
+        warningCount: 0,
+        errorCount: 0
+      } satisfies TargetManagementState
+    ]);
+
+    await moveSharedSkillToAgents({
+      api: mockApi as unknown as AgentEnvApi,
+      migration: {
+        skillKey: "as-ops",
+        libraryId: "as-ops",
+        paths: ["/home/.agents/skills/as-ops"]
+      },
+      targetIds: ["pi"]
+    });
+
+    expect(mockApi.updateProfileSkills).not.toHaveBeenCalled();
+    expect(mockApi.previewApply).toHaveBeenCalledWith("pi-profile", "pi");
+    expect(mockApi.retireSharedSkill).toHaveBeenCalled();
+  });
+
   it("captures current Skills for an unmanaged Agent before moving the shared copy", async () => {
     const mockApi = api();
     const capturedProfile = {
@@ -420,5 +500,89 @@ describe("moveSkillCollectionToAgents", () => {
         }]
       })
     );
+  });
+
+  it("switches Keep current to Use Profile before moving a collection", async () => {
+    const mockApi = api();
+    mockApi.readProfile.mockResolvedValue({
+      ...profile(),
+      resources: {
+        ...profile().resources,
+        managementByTarget: {
+          pi: { instructions: "ignore", skills: "ignore" }
+        }
+      }
+    });
+    mockApi.listTargetStates.mockResolvedValue([
+      {
+        targetId: "pi",
+        activeProfileId: "pi-profile",
+        status: "managed",
+        lifecycleStatus: "applied",
+        managedResourceCount: 0,
+        warningCount: 0,
+        errorCount: 0
+      } satisfies TargetManagementState
+    ]);
+
+    await moveSkillCollectionToAgents({
+      api: mockApi as unknown as AgentEnvApi,
+      collection: {
+        path: "/home/.agents/skills/superpowers",
+        members: [{
+          skillKey: "as-ops",
+          libraryId: "as-ops",
+          consumerTargetIds: ["pi"]
+        }]
+      }
+    });
+
+    expect(mockApi.updateProfileSkills).toHaveBeenCalledWith(
+      expect.objectContaining({
+        managementMode: "manage",
+        skills: [{ libraryId: "as-ops", targetName: "as-ops", enabled: true }]
+      })
+    );
+    expect(mockApi.retireSkillCollection).toHaveBeenCalled();
+  });
+
+  it("preserves Turn off while moving a collection out of its compatibility path", async () => {
+    const mockApi = api();
+    mockApi.readProfile.mockResolvedValue({
+      ...profile(),
+      resources: {
+        ...profile().resources,
+        managementByTarget: {
+          pi: { instructions: "ignore", skills: "disable" }
+        }
+      }
+    });
+    mockApi.listTargetStates.mockResolvedValue([
+      {
+        targetId: "pi",
+        activeProfileId: "pi-profile",
+        status: "managed",
+        lifecycleStatus: "applied",
+        managedResourceCount: 0,
+        warningCount: 0,
+        errorCount: 0
+      } satisfies TargetManagementState
+    ]);
+
+    await moveSkillCollectionToAgents({
+      api: mockApi as unknown as AgentEnvApi,
+      collection: {
+        path: "/home/.agents/skills/superpowers",
+        members: [{
+          skillKey: "as-ops",
+          libraryId: "as-ops",
+          consumerTargetIds: ["pi"]
+        }]
+      }
+    });
+
+    expect(mockApi.updateProfileSkills).not.toHaveBeenCalled();
+    expect(mockApi.previewApply).toHaveBeenCalledWith("pi-profile", "pi");
+    expect(mockApi.retireSkillCollection).toHaveBeenCalled();
   });
 });
