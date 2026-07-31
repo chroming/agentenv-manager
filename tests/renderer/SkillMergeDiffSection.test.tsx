@@ -34,6 +34,7 @@ describe("SkillMergeDiffSection", () => {
     );
 
     const expand = screen.getByRole("button", { name: "Expand preview" });
+    expect(document.querySelector('[data-file-icon="markdown"]')).toBeInTheDocument();
     fireEvent.click(expand);
     expect(screen.getByRole("dialog", { name: "Expanded diff preview" }))
       .toBeInTheDocument();

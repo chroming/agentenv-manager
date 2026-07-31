@@ -1345,6 +1345,7 @@ summary {
 }
 
 .diff-file-meta {
+  align-items: center;
   color: #64748b;
   display: flex;
   flex-wrap: wrap;

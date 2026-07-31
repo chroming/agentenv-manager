@@ -1227,6 +1227,7 @@ export interface DeleteManagedBackupInput {
 }
 
 export interface ManagedBackupFile {
+  kind?: "directory" | "file";
   path: string;
   state: "saved" | "missing";
 }

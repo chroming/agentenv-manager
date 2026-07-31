@@ -14,6 +14,7 @@ import type {
   ManagedBackupPreview
 } from "../../shared/types";
 import { useI18n, type TranslationValues } from "../i18n";
+import { FileTypeIcon } from "./FileTypeIcon";
 
 type Translate = (message: string, values?: TranslationValues) => string;
 
@@ -133,7 +134,7 @@ export const BackupManagerDialog = ({
               ) : preview?.files.length ? (
                 preview.files.map((file, index) => (
                   <div className="backup-preview-file" key={`${file.path}:${index}`}>
-                    <FileText size={16} strokeWidth={2} aria-hidden="true" />
+                    <FileTypeIcon kind={file.kind ?? "file"} path={file.path} />
                     <code title={file.path}>{file.path}</code>
                     {file.state === "missing" ? (
                       <span>{t("Missing before change")}</span>

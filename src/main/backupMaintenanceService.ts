@@ -107,7 +107,7 @@ const readRestoredCleanupBackups = async (paths: AgentEnvPaths) => {
           ) {
             return [];
           }
-          return [{ path: item.sourcePath, state: "saved" }];
+          return [{ kind: "directory", path: item.sourcePath, state: "saved" }];
         })
       };
     } catch {
@@ -266,6 +266,10 @@ export const createBackupMaintenanceService = (
     if (item.kind === "target-recovery" || item.kind === "workspace-sync") {
       const manifest = await backupStore.readBackup(item.id);
       files = manifest.entries.map((entry) => ({
+        kind: entry.kind === "directory"
+          || (entry.kind === "symlink" && entry.linkType !== "file")
+          ? "directory" as const
+          : "file" as const,
         path: entry.sourcePath,
         state: entry.missing ? "missing" : "saved"
       }));

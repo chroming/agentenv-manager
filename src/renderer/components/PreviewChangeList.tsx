@@ -18,6 +18,7 @@ import type {
 } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { DiffViewer } from "./DiffViewer";
+import { FileTypeIcon } from "./FileTypeIcon";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { Button } from "./ui";
 
@@ -202,6 +203,7 @@ export const PreviewChangeList = ({
                   return (
                     <details className="apply-preview-file-change" key={change.path}>
                       <summary>
+                        <FileTypeIcon kind="file" path={change.path} />
                         <span className="apply-preview-change-row__identity">
                           <strong>{name}</strong>
                           <small>

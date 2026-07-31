@@ -11,8 +11,10 @@ export type SyntaxLine = SyntaxToken[];
 type SupportedLanguage =
   | "jsonc"
   | "json"
+  | "json5"
   | "toml"
   | "markdown"
+  | "mdx"
   | "yaml"
   | "javascript"
   | "typescript"
@@ -22,7 +24,16 @@ type SupportedLanguage =
   | "bash"
   | "diff"
   | "css"
+  | "scss"
+  | "sass"
+  | "less"
   | "html"
+  | "xml"
+  | "dockerfile"
+  | "dotenv"
+  | "ini"
+  | "sql"
+  | "make"
   | "text";
 
 const fallbackLine = (line: string): SyntaxLine => [{ content: line }];
@@ -67,9 +78,13 @@ const getHighlighter = () => {
 
 export const languageForPath = (path: string): SupportedLanguage => {
   const lowerPath = path.toLowerCase();
+  const fileName = lowerPath.replaceAll("\\", "/").split("/").at(-1) ?? "";
 
   if (lowerPath.endsWith(".json") || lowerPath.endsWith(".jsonc")) {
     return "jsonc";
+  }
+  if (lowerPath.endsWith(".json5")) {
+    return "json5";
   }
   if (lowerPath.endsWith(".toml")) {
     return "toml";
@@ -77,8 +92,87 @@ export const languageForPath = (path: string): SupportedLanguage => {
   if (lowerPath.endsWith(".md") || lowerPath.endsWith("agents.md")) {
     return "markdown";
   }
+  if (lowerPath.endsWith(".mdx")) {
+    return "mdx";
+  }
   if (lowerPath.endsWith(".yaml") || lowerPath.endsWith(".yml")) {
     return "yaml";
+  }
+  if (lowerPath.endsWith(".tsx")) {
+    return "tsx";
+  }
+  if (lowerPath.endsWith(".jsx")) {
+    return "jsx";
+  }
+  if (
+    lowerPath.endsWith(".ts")
+    || lowerPath.endsWith(".mts")
+    || lowerPath.endsWith(".cts")
+  ) {
+    return "typescript";
+  }
+  if (
+    lowerPath.endsWith(".js")
+    || lowerPath.endsWith(".mjs")
+    || lowerPath.endsWith(".cjs")
+  ) {
+    return "javascript";
+  }
+  if (lowerPath.endsWith(".py") || lowerPath.endsWith(".pyi")) {
+    return "python";
+  }
+  if (
+    lowerPath.endsWith(".sh")
+    || lowerPath.endsWith(".bash")
+    || lowerPath.endsWith(".zsh")
+    || lowerPath.endsWith(".fish")
+  ) {
+    return "bash";
+  }
+  if (lowerPath.endsWith(".css")) {
+    return "css";
+  }
+  if (lowerPath.endsWith(".scss")) {
+    return "scss";
+  }
+  if (lowerPath.endsWith(".sass")) {
+    return "sass";
+  }
+  if (lowerPath.endsWith(".less")) {
+    return "less";
+  }
+  if (lowerPath.endsWith(".html") || lowerPath.endsWith(".htm")) {
+    return "html";
+  }
+  if (
+    lowerPath.endsWith(".xml")
+    || lowerPath.endsWith(".plist")
+    || lowerPath.endsWith(".svg")
+  ) {
+    return "xml";
+  }
+  if (/^(dockerfile|containerfile)(?:\.|$)/.test(fileName)) {
+    return "dockerfile";
+  }
+  if (fileName === ".env" || fileName.startsWith(".env.")) {
+    return "dotenv";
+  }
+  if (
+    lowerPath.endsWith(".ini")
+    || lowerPath.endsWith(".cfg")
+    || lowerPath.endsWith(".conf")
+    || lowerPath.endsWith(".properties")
+  ) {
+    return "ini";
+  }
+  if (lowerPath.endsWith(".sql")) {
+    return "sql";
+  }
+  if (fileName === "makefile" || fileName.endsWith(".mk")) {
+    return "make";
+  }
+  if (lowerPath.endsWith(".diff") || lowerPath.endsWith(".patch")) {
+    return "diff";
   }
 
   return "text";
@@ -97,6 +191,8 @@ const additionalLanguageLoaders: Partial<Record<
   () => Promise<{ default: LanguageRegistration }>
 >> = {
   json: () => import("shiki/langs/json.mjs"),
+  json5: () => import("shiki/langs/json5.mjs"),
+  mdx: () => import("shiki/langs/mdx.mjs"),
   javascript: () => import("shiki/langs/javascript.mjs"),
   typescript: () => import("shiki/langs/typescript.mjs"),
   tsx: () => import("shiki/langs/tsx.mjs"),
@@ -105,7 +201,16 @@ const additionalLanguageLoaders: Partial<Record<
   bash: () => import("shiki/langs/bash.mjs"),
   diff: () => import("shiki/langs/diff.mjs"),
   css: () => import("shiki/langs/css.mjs"),
-  html: () => import("shiki/langs/html.mjs")
+  scss: () => import("shiki/langs/scss.mjs"),
+  sass: () => import("shiki/langs/sass.mjs"),
+  less: () => import("shiki/langs/less.mjs"),
+  html: () => import("shiki/langs/html.mjs"),
+  xml: () => import("shiki/langs/xml.mjs"),
+  dockerfile: () => import("shiki/langs/dockerfile.mjs"),
+  dotenv: () => import("shiki/langs/dotenv.mjs"),
+  ini: () => import("shiki/langs/ini.mjs"),
+  sql: () => import("shiki/langs/sql.mjs"),
+  make: () => import("shiki/langs/make.mjs")
 };
 
 const ensureLanguage = async (
@@ -134,25 +239,37 @@ const languageAliases: Record<string, SupportedLanguage> = {
   bash: "bash",
   css: "css",
   diff: "diff",
+  docker: "dockerfile",
+  dockerfile: "dockerfile",
+  dotenv: "dotenv",
   html: "html",
+  ini: "ini",
   javascript: "javascript",
   js: "javascript",
   json: "json",
+  json5: "json5",
   jsonc: "jsonc",
   jsx: "jsx",
   markdown: "markdown",
+  make: "make",
+  makefile: "make",
   md: "markdown",
+  mdx: "mdx",
   python: "python",
   py: "python",
+  sass: "sass",
+  scss: "scss",
   shell: "bash",
   sh: "bash",
+  sql: "sql",
   toml: "toml",
   ts: "typescript",
   tsx: "tsx",
   typescript: "typescript",
-  xml: "html",
+  xml: "xml",
   yaml: "yaml",
-  yml: "yaml"
+  yml: "yaml",
+  less: "less"
 };
 
 export const languageForFence = (value: string): SupportedLanguage =>

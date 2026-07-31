@@ -60,6 +60,7 @@ describe("SkillImportConflictDialog", () => {
     );
 
     const parent = screen.getByRole("dialog", { name: "Review duplicate Skill" });
+    expect(parent.querySelector('[data-file-icon="markdown"]')).toBeInTheDocument();
     const expand = within(parent).getByRole("button", { name: "Expand preview" });
     fireEvent.click(expand);
 

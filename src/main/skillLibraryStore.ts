@@ -1436,6 +1436,7 @@ export const createSkillLibraryStore = (
     return manifest.entries
       .filter((entry) => !entry.sourcePath.endsWith(".agentenv-owner.json"))
       .map((entry) => ({
+        kind: "directory" as const,
         path: entry.sourcePath,
         state: "saved" as const
       }));

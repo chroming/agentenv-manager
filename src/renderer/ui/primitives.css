@@ -158,6 +158,15 @@
   width: var(--icon-box-default);
 }
 
+.file-type-icon {
+  display: block;
+  flex: 0 0 auto;
+  height: 17px;
+  object-fit: contain;
+  pointer-events: none;
+  width: 17px;
+}
+
 .ui-badge {
   align-items: center;
   background: var(--surface-pressed);

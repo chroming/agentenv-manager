@@ -134,7 +134,7 @@ describe("backup maintenance service", () => {
       id: baseline.id,
       kind: "target-recovery"
     })).resolves.toMatchObject({
-      files: [{ path: instructionsPath, state: "saved" }]
+      files: [{ kind: "file", path: instructionsPath, state: "saved" }]
     });
     await expect(service.previewBackup({
       id: cleanupId,

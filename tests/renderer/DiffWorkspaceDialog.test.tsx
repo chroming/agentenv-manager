@@ -35,6 +35,8 @@ describe("DiffWorkspaceDialog", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Expanded diff preview" });
     expect(within(dialog).getByText("/tmp/project")).toBeInTheDocument();
+    expect(dialog.querySelector('[data-file-icon="docs"]')).toBeInTheDocument();
+    expect(dialog.querySelectorAll('[data-file-icon="markdown"]')).toHaveLength(2);
     expect(within(dialog).getByRole("table", {
       name: "Formatted diff for /tmp/project/SKILL.md"
     })).toHaveTextContent("old");

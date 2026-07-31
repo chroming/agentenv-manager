@@ -178,6 +178,22 @@ const writeLibrary = async (appDataRoot) => {
       "utf8"
     );
     if (id === "react-best-practices") {
+      await mkdir(join(skillDir, "references"), { recursive: true });
+      await mkdir(join(skillDir, "scripts"), { recursive: true });
+      await writeFile(
+        join(skillDir, "references", "checklist.md"),
+        "# Review checklist\n\n- Confirm the rendered state.\n",
+        "utf8"
+      );
+      await writeFile(
+        join(skillDir, "scripts", "inspect.ts"),
+        "export const inspect = (path: string) => path.trim();\n",
+        "utf8"
+      );
+      await writeJson(join(skillDir, "settings.json"), {
+        include: ["src/**/*.tsx"],
+        strict: true
+      });
       await writeJson(join(skillDir, ".agentenv-skill.json"), {
         sourceType: "github",
         source: "https://github.com/agentenv-community/agent-skills/tree/main/skills/react-best-practices",
@@ -398,6 +414,22 @@ const prepareFixture = async (root) => {
     "---\nname: react-best-practices\ndescription: Shared react-best-practices workflow.\n---\n\n# react-best-practices\n",
     "utf8"
   );
+  await mkdir(join(githubSkillDir, "references"), { recursive: true });
+  await mkdir(join(githubSkillDir, "scripts"), { recursive: true });
+  await writeFile(
+    join(githubSkillDir, "references", "checklist.md"),
+    "# Review checklist\n\n- Confirm the rendered state.\n",
+    "utf8"
+  );
+  await writeFile(
+    join(githubSkillDir, "scripts", "inspect.ts"),
+    "export const inspect = (path: string) => path.trim();\n",
+    "utf8"
+  );
+  await writeJson(join(githubSkillDir, "settings.json"), {
+    include: ["src/**/*.tsx"],
+    strict: true
+  });
   const gitWorkflowFixtureDir = join(
     githubFixtureRoot,
     "agentenv-community",
@@ -834,6 +866,11 @@ try {
   });
   await fileBrowserDialog.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-file-browser-920x620.png"));
+  await fileBrowserDialog.getByRole("button", { name: "inspect.ts" }).click();
+  await fileBrowserDialog.locator(".skill-file-preview > header code").getByText("typescript", {
+    exact: true
+  }).waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "skills-file-browser-typescript-920x620.png"));
   await fileBrowserDialog.getByRole("button", { name: "Close" }).click();
   await fileBrowserDialog.waitFor({ state: "hidden" });
   await page.getByRole("tab", { name: "By source" }).click();

@@ -7,6 +7,8 @@ import type {
 import { useI18n } from "../i18n";
 import { DiffViewer } from "./DiffViewer";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
+import { FileTypeIcon } from "./FileTypeIcon";
+import { SyntaxCodePreview } from "./SyntaxCodePreview";
 import { Button } from "./ui";
 
 export interface PendingSkillImport {
@@ -249,6 +251,7 @@ export const SkillImportConflictDialog = ({
                 {selectedConflict.changes.map((change) => (
                   <div className="diff-file" key={change.path}>
                     <div className="diff-file-meta">
+                      <FileTypeIcon kind="file" path={change.path} />
                       <strong>{change.path}</strong>
                     </div>
                     <DiffViewer path={change.path} diff={change.diff} />
@@ -256,9 +259,11 @@ export const SkillImportConflictDialog = ({
                 ))}
               </div>
             ) : (
-              <pre className="skill-import-identical-preview">
-                {pending.preview.incoming.skillMarkdown}
-              </pre>
+              <SyntaxCodePreview
+                className="skill-import-identical-preview"
+                code={pending.preview.incoming.skillMarkdown}
+                path="SKILL.md"
+              />
             )}
           </div>
 

@@ -1328,7 +1328,12 @@ describe("Electron UI profile switching e2e", () => {
     await skillNameButton.click();
     const filesDialog = page.getByRole("dialog", { name: "Files in ZIP Review" });
     await filesDialog.waitFor({ state: "visible" });
-    await filesDialog.getByRole("button", { name: "SKILL.md" }).waitFor({ state: "visible" });
+    const skillMarkdown = filesDialog.getByRole("button", { name: "SKILL.md" });
+    await skillMarkdown.waitFor({ state: "visible" });
+    await expect(skillMarkdown.locator('[data-file-icon="markdown"]').count()).resolves.toBe(1);
+    await expect.poll(() =>
+      filesDialog.locator(".skill-file-preview > header code").textContent()
+    ).toBe("markdown");
     await expect.poll(() =>
       filesDialog.locator(".skill-file-preview__content").textContent()
     ).toContain("ZIP Review");

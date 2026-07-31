@@ -74,6 +74,7 @@ describe("PreviewDialog", () => {
     expect(diff.querySelector(".diff-row--deletion")).toBeTruthy();
     expect(diff.querySelector(".diff-row--addition")).toBeTruthy();
     expect(diff.querySelector(".syntax-token")).toBeTruthy();
+    expect(document.querySelector('[data-file-icon="json"]')).toBeInTheDocument();
   });
 
   it("keeps each configuration diff attached to its semantic change row", () => {

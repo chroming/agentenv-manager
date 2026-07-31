@@ -361,7 +361,7 @@
 
 .apply-preview-file-change > summary {
   cursor: pointer;
-  grid-template-columns: minmax(0, 1fr) 30px 72px 18px;
+  grid-template-columns: 17px minmax(0, 1fr) 30px 72px 18px;
   list-style: none;
 }
 

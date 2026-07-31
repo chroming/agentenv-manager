@@ -1,9 +1,6 @@
 import {
   ChevronDown,
   ChevronRight,
-  FileCode2,
-  Folder,
-  FolderOpen,
   Maximize2,
   Minimize2,
   X
@@ -21,6 +18,7 @@ import type { PlannedFileChange } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { DiffViewer } from "./DiffViewer";
+import { FileTypeIcon } from "./FileTypeIcon";
 import { IconButton, ModalFrame } from "./ui";
 
 interface DiffWorkspaceDialogProps {
@@ -164,16 +162,16 @@ export const DiffWorkspaceDialog = ({
             }}
           >
             {isFile ? (
-              <FileCode2 size={15} strokeWidth={1.9} aria-hidden="true" />
+              <FileTypeIcon kind="file" path={node.name} />
             ) : isCollapsed ? (
               <>
                 <ChevronRight className="diff-workspace__tree-chevron" size={13} aria-hidden="true" />
-                <Folder size={15} strokeWidth={1.9} aria-hidden="true" />
+                <FileTypeIcon kind="directory" path={node.name} />
               </>
             ) : (
               <>
                 <ChevronDown className="diff-workspace__tree-chevron" size={13} aria-hidden="true" />
-                <FolderOpen size={15} strokeWidth={1.9} aria-hidden="true" />
+                <FileTypeIcon expanded kind="directory" path={node.name} />
               </>
             )}
             <span title={node.name}>{node.name}</span>

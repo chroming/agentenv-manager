@@ -403,7 +403,7 @@ description: >
       })
     ]);
     await expect(store.previewCleanupBackup(result.backupId)).resolves.toEqual([
-      { path: targetDir, state: "saved" }
+      { kind: "directory", path: targetDir, state: "saved" }
     ]);
 
     await store.rollbackSkillCleanup(result.backupId);

@@ -1,10 +1,8 @@
-import { type RefObject, useEffect, useMemo, useState } from "react";
+import { type RefObject, useEffect, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
-  File,
   FileWarning,
-  Folder,
   LoaderCircle,
   X
 } from "lucide-react";
@@ -13,8 +11,10 @@ import type {
   SkillFileNode,
   SkillLibraryEntry
 } from "../../shared/types";
-import { highlightCode, highlightCodeFallback, languageForPath } from "../syntaxHighlighter";
+import { languageForPath } from "../syntaxHighlighter";
 import { useI18n } from "../i18n";
+import { FileTypeIcon } from "./FileTypeIcon";
+import { SyntaxCodePreview } from "./SyntaxCodePreview";
 import { IconButton, ModalFrame } from "./ui";
 
 interface SkillFileBrowserDialogProps {
@@ -44,16 +44,6 @@ const findSkillMarkdown = (nodes: SkillFileNode[]): string | undefined => {
   return undefined;
 };
 
-const tokenStyle = (token: {
-  color?: string;
-  fontStyle?: number;
-}) => ({
-  color: token.color,
-  fontStyle: token.fontStyle === 1 || token.fontStyle === 3 ? "italic" : undefined,
-  fontWeight: token.fontStyle === 2 || token.fontStyle === 3 ? 700 : undefined,
-  textDecoration: token.fontStyle === 4 ? "underline" : undefined
-});
-
 export const SkillFileBrowserDialog = ({
   skill,
   dialogRef,
@@ -70,11 +60,6 @@ export const SkillFileBrowserDialog = ({
   const [treeLoading, setTreeLoading] = useState(true);
   const [fileLoading, setFileLoading] = useState(false);
   const [error, setError] = useState("");
-  const fallbackTokens = useMemo(
-    () => highlightCodeFallback(file?.kind === "text" ? file.content ?? "" : ""),
-    [file]
-  );
-  const [tokens, setTokens] = useState(fallbackTokens);
 
   useEffect(() => {
     let active = true;
@@ -122,18 +107,6 @@ export const SkillFileBrowserDialog = ({
     };
   }, [onReadFile, selectedPath, skill.id]);
 
-  useEffect(() => {
-    setTokens(fallbackTokens);
-    if (file?.kind !== "text") return;
-    let active = true;
-    void highlightCode(file.content ?? "", file.path).then((nextTokens) => {
-      if (active) setTokens(nextTokens);
-    });
-    return () => {
-      active = false;
-    };
-  }, [fallbackTokens, file]);
-
   const renderNodes = (nodes: SkillFileNode[], depth = 0) =>
     nodes.map((node) => {
       const isExpanded = expanded.has(node.path);
@@ -154,7 +127,7 @@ export const SkillFileBrowserDialog = ({
               {isExpanded
                 ? <ChevronDown size={13} strokeWidth={2.2} />
                 : <ChevronRight size={13} strokeWidth={2.2} />}
-              <Folder size={14} strokeWidth={2} />
+              <FileTypeIcon expanded={isExpanded} kind="directory" path={node.path} />
               <span>{node.name}</span>
             </button>
             {isExpanded && node.children?.length ? (
@@ -171,7 +144,7 @@ export const SkillFileBrowserDialog = ({
             style={{ paddingInlineStart: `${27 + depth * 14}px` }}
             onClick={() => setSelectedPath(node.path)}
           >
-            <File size={14} strokeWidth={2} />
+            <FileTypeIcon kind="file" path={node.path} />
             <span>{node.name}</span>
           </button>
         </li>
@@ -234,24 +207,7 @@ export const SkillFileBrowserDialog = ({
                 <span>{t("This file is too large to preview")}</span>
               </div>
             ) : file?.kind === "text" ? (
-              <pre>
-                <code>
-                  {tokens.map((line, lineIndex) => (
-                    <span className="skill-file-preview__line" key={`${lineIndex}:${line.length}`}>
-                      {line.length > 0
-                        ? line.map((token, tokenIndex) => (
-                            <span
-                              key={`${tokenIndex}:${token.content}`}
-                              style={tokenStyle(token)}
-                            >
-                              {token.content}
-                            </span>
-                          ))
-                        : "\u00a0"}
-                    </span>
-                  ))}
-                </code>
-              </pre>
+              <SyntaxCodePreview code={file.content ?? ""} path={file.path} />
             ) : (
               <div className="skill-file-browser__state">{t("Select a file")}</div>
             )}

@@ -54,6 +54,8 @@ describe("SkillFileBrowserDialog", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Files in Review" });
     await waitFor(() => expect(onReadFile).toHaveBeenCalledWith("review", "SKILL.md"));
+    expect(dialog.querySelector('[data-file-icon="docs"]')).toBeInTheDocument();
+    expect(dialog.querySelectorAll('[data-file-icon="markdown"]')).toHaveLength(2);
     await waitFor(() =>
       expect(dialog.querySelector(".skill-file-preview__content")).toHaveTextContent("Review Skill")
     );

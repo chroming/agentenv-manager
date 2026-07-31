@@ -8,6 +8,15 @@ ISC, Apache-2.0, BSD, BlueOak-1.0.0, and other permissive licenses.
 Electron distributions include their own Chromium and third-party license
 notices in the packaged application.
 
+## vscode-icons
+
+The read-only file trees include a curated subset of icons from
+[vscode-icons](https://github.com/vscode-icons/vscode-icons), copyright the
+vscode-icons contributors. The icon assets are licensed under
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The assets are
+redistributed without modification; AgentEnv Manager's file-name associations
+and rendering code are independent.
+
 ## Product Names and Icons
 
 AgentEnv Manager displays names and icons for compatible third-party products,

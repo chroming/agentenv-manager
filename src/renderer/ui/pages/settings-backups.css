@@ -300,8 +300,8 @@
   border-top: 1px solid var(--border);
 }
 
-.backup-preview-file > svg {
-  color: var(--muted);
+.backup-preview-file > .file-type-icon {
+  justify-self: center;
 }
 
 .backup-preview-file code {

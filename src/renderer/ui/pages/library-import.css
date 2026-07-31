@@ -231,7 +231,7 @@
   display: grid;
   font-size: var(--font-size-metadata);
   gap: 6px;
-  grid-template-columns: 14px 14px minmax(0, 1fr);
+  grid-template-columns: 14px 17px minmax(0, 1fr);
   height: 30px;
   padding-block: 0;
   padding-right: 8px;
@@ -240,7 +240,7 @@
 }
 
 .skill-file-tree__item.is-file {
-  grid-template-columns: 14px minmax(0, 1fr);
+  grid-template-columns: 17px minmax(0, 1fr);
 }
 
 .skill-file-tree__item span {
@@ -306,7 +306,7 @@
   padding: var(--space-4);
 }
 
-.skill-file-preview__line {
+.syntax-code-preview__line {
   display: block;
   min-height: 1.65em;
 }

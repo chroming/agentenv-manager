@@ -7,6 +7,7 @@ import type {
 import { useI18n } from "../i18n";
 import { DiffViewer } from "./DiffViewer";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
+import { FileTypeIcon } from "./FileTypeIcon";
 import { Button } from "./ui";
 
 interface SkillMergeDiffSectionProps {
@@ -75,7 +76,10 @@ export const SkillMergeDiffSection = ({
           <div className="diff-list">
             {changes.map((change) => (
               <div className="diff-file" key={change.path}>
-                <div className="diff-file-meta"><strong>{change.path}</strong></div>
+                <div className="diff-file-meta">
+                  <FileTypeIcon kind="file" path={change.path} />
+                  <strong>{change.path}</strong>
+                </div>
                 <DiffViewer path={change.path} diff={change.diff} />
               </div>
             ))}

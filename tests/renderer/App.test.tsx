@@ -3860,6 +3860,7 @@ describe("App", () => {
     }));
     expect(await within(manager).findByText("Backup contents")).toBeInTheDocument();
     expect(within(manager).getByText("/Users/test/.config/opencode/AGENTS.md")).toBeInTheDocument();
+    expect(manager.querySelector('[data-file-icon="markdown"]')).toBeInTheDocument();
     expect(within(manager).getByText("Missing before change")).toBeInTheDocument();
     expect(previewManagedBackup).toHaveBeenCalledWith({
       id: requiredBackup.id,
