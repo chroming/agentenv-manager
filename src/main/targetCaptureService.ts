@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { lstat, readFile, rm } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import type {
   CreateProfileFromTargetInput,
   TargetCapturePreview,
@@ -16,7 +17,11 @@ import type { SkillLibraryStore } from "./skillLibraryStore";
 import type { TargetDiscoveryService } from "./targetDiscovery";
 import type { TargetRegistry } from "./targets/registry";
 import type { TargetScope } from "./targets/targetScope";
-import { createSettingsStore, type SettingsStore } from "./settingsStore";
+import {
+  createSettingsStore,
+  resolveSkillsLibraryDir,
+  type SettingsStore
+} from "./settingsStore";
 import { targetPathInputFor } from "./targets/pathInput";
 import type { CapturedTargetProfile } from "./targets/types";
 import { isTargetInstalled } from "../shared/targetHealth";
@@ -24,6 +29,13 @@ import {
   createCaptureReceiptStore,
   type CaptureSkillCopy
 } from "./captureReceiptStore";
+import { createBackupStore, type BackupStore } from "./backupStore";
+import {
+  createBackupMutationClaimer,
+  restoreBackupWithSafety,
+  selectBackupEntries
+} from "./backupRestore";
+import { hashPathEntry } from "./filesystemIntegrity";
 
 interface CapturedSkill {
   targetName: string;
@@ -57,6 +69,7 @@ interface TargetCaptureServiceOptions {
   targetDiscoveryService: TargetDiscoveryService;
   targetScope?: TargetScope;
   settingsStore?: SettingsStore;
+  backupStore?: BackupStore;
 }
 
 const safeName = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
@@ -95,7 +108,8 @@ export const createTargetCaptureService = ({
   skillLibraryStore,
   targetDiscoveryService,
   targetScope,
-  settingsStore = createSettingsStore(paths)
+  settingsStore = createSettingsStore(paths),
+  backupStore = createBackupStore(paths)
 }: TargetCaptureServiceOptions): TargetCaptureService => {
   const previews = new Map<string, InternalCapture>();
   const captureReceiptStore = createCaptureReceiptStore(paths);
@@ -323,18 +337,59 @@ export const createTargetCaptureService = ({
       }
     }
 
-    const importedSkillPaths: string[] = [];
+    const importCandidates = capture.skills.filter((item) => !item.existing);
+    const settings = await settingsStore.readSettings();
+    const libraryRoot = resolveSkillsLibraryDir(paths, settings);
+    const affectedLibraryIds = new Set<string>();
+    for (const skill of importCandidates) {
+      affectedLibraryIds.add(skill.libraryId);
+      const resolution = skill.conflictResolution;
+      if (resolution) {
+        affectedLibraryIds.add(
+          resolution.action === "keep-both" ? resolution.id : resolution.existingId
+        );
+      }
+    }
+    const libraryBackup = affectedLibraryIds.size > 0
+      ? await backupStore.createBackup(
+          [...affectedLibraryIds].map((id) => join(libraryRoot, id)),
+          { operation: "data-import", profileName }
+        )
+      : undefined;
+    const claimLibraryPath = libraryBackup
+      ? createBackupMutationClaimer(libraryBackup, {
+          changedMessage: (path) =>
+            `Library changed while Capture was being prepared: ${path}`
+        })
+      : undefined;
+    const importedLibraryHashes = new Map<string, string | undefined>();
+    let importedSkillCount = 0;
     let profileId: string | undefined;
+    let createdProfileHash: string | undefined;
     try {
-      for (const skill of capture.skills.filter((item) => !item.existing)) {
-        const imported = await skillLibraryStore.importSkill({
+      for (const skill of importCandidates) {
+        const skillLibraryIds = new Set([skill.libraryId]);
+        if (skill.conflictResolution) {
+          skillLibraryIds.add(
+            skill.conflictResolution.action === "keep-both"
+              ? skill.conflictResolution.id
+              : skill.conflictResolution.existingId
+          );
+        }
+        const skillLibraryPaths = [...skillLibraryIds].map((id) => join(libraryRoot, id));
+        await claimLibraryPath?.(...skillLibraryPaths);
+        await skillLibraryStore.importSkill({
           sourcePath: skill.sourcePath,
           id: skill.libraryId,
           sourceType: "local",
           expectedContentHash: skill.contentHash,
           conflictResolution: skill.conflictResolution
         });
-        importedSkillPaths.push(imported.path);
+        for (const path of skillLibraryPaths) {
+          importedLibraryHashes.set(resolve(path), await hashPathEntry(path));
+        }
+        await claimLibraryPath?.recordMutation(...skillLibraryPaths);
+        importedSkillCount += 1;
       }
       const created = await profileStore.createProfile({
         preferredTargetId: capture.preview.targetId,
@@ -383,8 +438,10 @@ export const createTargetCaptureService = ({
           mcpByTarget: {
             [capture.preview.targetId]: mcpPolicy
           }
-        }
+        },
+        expectedContentHash: created.contentHash
       });
+      createdProfileHash = saved.contentHash;
       const receiptWarnings: string[] = [];
       try {
         await captureReceiptStore.write({
@@ -409,18 +466,64 @@ export const createTargetCaptureService = ({
       return {
         profile: await profileStore.readProfile(saved.id),
         targetId: capture.preview.targetId,
-        importedSkillCount: importedSkillPaths.length,
+        importedSkillCount,
         importedMcpCount: 0,
         warnings: [...capture.preview.warnings, ...receiptWarnings]
       };
     } catch (error) {
-      if (profileId) await profileStore.deleteProfile(profileId);
-      for (const path of importedSkillPaths)
-        await rm(path, { recursive: true, force: true });
+      const recoveryFailures: string[] = [];
+      if (libraryBackup) {
+        const rollbackPaths: string[] = [];
+        for (const [path, importedHash] of importedLibraryHashes) {
+          if (await hashPathEntry(path) === importedHash) {
+            rollbackPaths.push(path);
+          } else {
+            recoveryFailures.push(
+              `Library path changed after Capture wrote it and was left in place: ${path}. ` +
+              `Backup ${libraryBackup.id} preserves its pre-Capture state.`
+            );
+          }
+        }
+        try {
+          const rollbackBackup = selectBackupEntries(libraryBackup, rollbackPaths);
+          if (rollbackBackup.entries.length > 0) {
+            await restoreBackupWithSafety({
+              backup: rollbackBackup,
+              backupStore,
+              safetyProfileName: `${profileName} before Capture recovery`,
+              expectedCurrentHashes: importedLibraryHashes
+            });
+          }
+        } catch (restoreError) {
+          recoveryFailures.push(
+            `Library recovery from ${libraryBackup.id} failed: ${
+              restoreError instanceof Error ? restoreError.message : String(restoreError)
+            }`
+          );
+        }
+      }
+      if (profileId) {
+        try {
+          const currentProfile = await profileStore.readProfile(profileId);
+          if (createdProfileHash && currentProfile.contentHash !== createdProfileHash) {
+            recoveryFailures.push(
+              `Incomplete Profile ${profileId} changed after Capture and was preserved.`
+            );
+          } else {
+            await profileStore.deleteProfile(profileId);
+          }
+        } catch (deleteError) {
+          recoveryFailures.push(
+            `Incomplete Profile ${profileId} could not be moved to Trash: ${
+              deleteError instanceof Error ? deleteError.message : String(deleteError)
+            }`
+          );
+        }
+      }
       throw new Error(
         `Create from Agent failed: ${
           error instanceof Error ? error.message : String(error)
-        }`
+        }${recoveryFailures.length > 0 ? `. Recovery required: ${recoveryFailures.join("; ")}` : ""}`
       );
     }
   };

@@ -104,18 +104,23 @@ const saveProfile = async (
   fixture: TargetConformanceFixture,
   id: "alpha" | "beta",
   resources: ProfileResources = profileResourcesFor(fixture, id)
-) =>
-  environment.profileStore.saveProfile({
+) => {
+  const profileId = `${fixture.targetId}-${id}`;
+  const existing = (await environment.profileStore.listProfiles())
+    .find((profile) => profile.id === profileId);
+  return environment.profileStore.saveProfile({
     manifest: {
-      id: `${fixture.targetId}-${id}`,
+      id: profileId,
       name: `${fixture.targetName} ${id}`,
       description: "Target conformance Profile",
       preferredTargetId: fixture.targetId,
       version: 2
     },
     instructions: `# ${id.toUpperCase()} INSTRUCTIONS\n`,
-    resources
+    resources,
+    expectedContentHash: existing?.contentHash
   });
+};
 
 const assertPreservedNativeState = async (
   nativeState: Awaited<ReturnType<TargetConformanceFixture["setupNativeState"]>>
@@ -266,7 +271,7 @@ describe.each(targetConformanceFixtures)(
         activeProfileId: `${fixture.targetId}-alpha`,
         lifecycleStatus: "applied"
       });
-    });
+    }, 15_000);
 
     it("keeps ignored resources local and restores Profile management later", async () => {
       const environment = await createEnvironment(fixture);

@@ -83,7 +83,11 @@ const migrateSkillStorage = async (
   const preservedConflicts: Array<{ id: string; preservedAs: string }> = [];
   await replacePathAtomically(newDir, async (stagingDir) => {
     if (await pathEntryExists(newDir)) {
-      await cp(newDir, stagingDir, { recursive: true, dereference: false });
+      await cp(newDir, stagingDir, {
+        recursive: true,
+        dereference: false,
+        verbatimSymlinks: true
+      });
     } else {
       await mkdir(stagingDir, { recursive: true });
     }

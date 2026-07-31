@@ -35,6 +35,7 @@ describe("target state repository", () => {
     await expect(repository.read("codex")).resolves.toEqual({
       path: repository.pathFor("codex"),
       content: "",
+      pathHash: undefined,
       state: defaultTargetState()
     });
     await expect(readFile(repository.pathFor("codex"), "utf8")).rejects.toMatchObject({
@@ -71,5 +72,28 @@ describe("target state repository", () => {
     await expect(readFile(repository.pathFor("codex"), "utf8")).resolves.toBe(
       "{ invalid json"
     );
+  });
+
+  it("does not overwrite state changed after it was read", async () => {
+    const { repository } = await makeRepository();
+    await repository.write("codex", {
+      ...defaultTargetState(),
+      activeProfileId: "reviewed"
+    });
+    const reviewed = await repository.read("codex");
+    const external = `${JSON.stringify({
+      ...defaultTargetState(),
+      activeProfileId: "external"
+    }, null, 2)}\n`;
+    await writeFile(repository.pathFor("codex"), external, "utf8");
+
+    await expect(repository.write("codex", {
+      ...defaultTargetState(),
+      activeProfileId: "agentenv"
+    }, { expectedPathHash: reviewed.pathHash })).rejects.toThrow(
+      "changed after it was reviewed"
+    );
+
+    await expect(readFile(repository.pathFor("codex"), "utf8")).resolves.toBe(external);
   });
 });

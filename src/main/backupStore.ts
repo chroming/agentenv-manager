@@ -1,14 +1,13 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Dirent } from "node:fs";
 import {
   chmod,
-  cp,
-  copyFile,
   lstat,
   mkdir,
   readFile,
   readlink,
   readdir,
+  rename,
   rm,
   stat,
 } from "node:fs/promises";
@@ -19,10 +18,17 @@ import type {
   BackupSummary
 } from "../shared/types";
 import type { AgentEnvPaths } from "./paths";
-import { writeAtomic } from "./fileUtils";
+import { pathEntryExists, syncParentDirectory, writeAtomic } from "./fileUtils";
 import { SafeIdSchema } from "../shared/schemas";
+import {
+  copyPathVerified,
+  hashPathEntry,
+  hashSymlinkTarget,
+  syncPathTree
+} from "./filesystemIntegrity";
 
 export interface BackupStoreOptions {
+  copyPath?: typeof copyPathVerified;
   now?: () => Date;
   platform?: NodeJS.Platform;
 }
@@ -50,11 +56,14 @@ const toBackupId = (date: Date) => date.toISOString().replace(/[:.]/g, "-");
 const encodePath = (sourcePath: string): string =>
   Buffer.from(sourcePath).toString("base64url");
 
-const sha256 = (content: Buffer): string =>
-  createHash("sha256").update(content).digest("hex");
+const isSha256 = (value: unknown): value is string =>
+  typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
+
+const sha256 = (value: string) =>
+  createHash("sha256").update(value).digest("hex");
 
 const ensurePrivateDir = async (path: string, platform: NodeJS.Platform) => {
   await mkdir(path, { recursive: true, mode: 0o700 });
@@ -67,13 +76,49 @@ export const createBackupStore = (
 ): BackupStore => {
   const now = options.now ?? (() => new Date());
   const platform = options.platform ?? process.platform;
+  const copyPath = options.copyPath ?? copyPathVerified;
 
   const readBackup = async (id: string): Promise<BackupManifest> => {
     const safeId = SafeIdSchema.parse(id);
     const backupDir = join(paths.backupsDir, safeId);
-    const content = await readFile(join(backupDir, "manifest.json"), "utf8");
-    const manifest = JSON.parse(content) as BackupManifest;
-    if (manifest.id !== safeId || !Array.isArray(manifest.entries)) {
+    const backupStats = await lstat(backupDir);
+    if (!backupStats.isDirectory() || backupStats.isSymbolicLink()) {
+      throw new Error(`Invalid AgentEnv backup directory: ${safeId}`);
+    }
+    const filesDir = join(backupDir, "files");
+    const filesStats = await lstat(filesDir);
+    if (!filesStats.isDirectory() || filesStats.isSymbolicLink()) {
+      throw new Error(`Invalid AgentEnv backup files directory: ${safeId}`);
+    }
+    const manifestPath = join(backupDir, "manifest.json");
+    const manifestStats = await lstat(manifestPath);
+    if (!manifestStats.isFile() || manifestStats.isSymbolicLink()) {
+      throw new Error(`Invalid AgentEnv backup manifest file: ${safeId}`);
+    }
+    const content = await readFile(manifestPath, "utf8");
+    const manifest = JSON.parse(content) as Omit<BackupManifest, "formatVersion"> & {
+      formatVersion?: unknown;
+    };
+    const legacy = manifest.formatVersion === undefined || manifest.formatVersion === 1;
+    if (!legacy && manifest.formatVersion !== 2) {
+      throw new Error(`Invalid AgentEnv backup manifest: ${safeId}`);
+    }
+    if (!legacy) {
+      const receiptPath = join(backupDir, "manifest.sha256");
+      const receiptStats = await lstat(receiptPath);
+      if (!receiptStats.isFile() || receiptStats.isSymbolicLink()) {
+        throw new Error(`Invalid AgentEnv backup manifest receipt: ${safeId}`);
+      }
+      const manifestHash = (await readFile(receiptPath, "utf8")).trim();
+      if (!isSha256(manifestHash) || manifestHash !== sha256(content)) {
+        throw new Error(`AgentEnv backup manifest failed its integrity check: ${safeId}`);
+      }
+    }
+    if (
+      manifest.id !== safeId ||
+      typeof manifest.createdAt !== "string" ||
+      !Array.isArray(manifest.entries)
+    ) {
       throw new Error(`Invalid AgentEnv backup manifest: ${safeId}`);
     }
     if (manifest.targetId) SafeIdSchema.parse(manifest.targetId);
@@ -95,18 +140,21 @@ export const createBackupStore = (
         entry.kind === "symlink" &&
         typeof entry.linkTarget === "string"
       ) {
+        const linkHash = hashSymlinkTarget(entry.linkTarget);
         if (
           entry.backupPath !== undefined ||
           (entry.linkType !== undefined &&
-            !["file", "dir", "junction"].includes(entry.linkType))
+            !["file", "dir", "junction"].includes(entry.linkType)) ||
+          (!legacy && (!isSha256(entry.sha256) || entry.sha256 !== linkHash)) ||
+          (legacy && isSha256(entry.sha256) && entry.sha256 !== linkHash)
         ) {
           throw new Error(`Invalid AgentEnv backup link entry: ${safeId}`);
         }
-        normalizedEntries.push(entry);
+        normalizedEntries.push({ ...entry, sha256: linkHash });
         continue;
       }
       const encodedSourcePath = encodePath(entry.sourcePath);
-      const expectedBackupPath = resolve(backupDir, "files", encodedSourcePath);
+      const expectedBackupPath = resolve(filesDir, encodedSourcePath);
       const recordedBackupPath =
         typeof entry.backupPath === "string" && isAbsolute(entry.backupPath)
           ? resolve(entry.backupPath)
@@ -128,15 +176,28 @@ export const createBackupStore = (
       ) {
         throw new Error(`AgentEnv backup content does not match its manifest: ${safeId}`);
       }
+      const contentHash = await hashPathEntry(expectedBackupPath);
+      if (
+        !contentHash ||
+        (!legacy && (!isSha256(entry.sha256) || contentHash !== entry.sha256)) ||
+        (legacy && isSha256(entry.sha256) && contentHash !== entry.sha256)
+      ) {
+        throw new Error(`AgentEnv backup payload failed its integrity check: ${safeId}`);
+      }
       const mode =
         entry.kind === "symlink"
           ? undefined
           : typeof entry.mode === "number" && Number.isInteger(entry.mode)
             ? entry.mode & 0o777
             : backupStats.mode & 0o777;
-      normalizedEntries.push({ ...entry, backupPath: expectedBackupPath, mode });
+      normalizedEntries.push({
+        ...entry,
+        backupPath: expectedBackupPath,
+        sha256: contentHash,
+        mode
+      });
     }
-    return { ...manifest, entries: normalizedEntries };
+    return { ...manifest, formatVersion: 2, entries: normalizedEntries };
   };
 
   const createBackup = async (
@@ -144,32 +205,36 @@ export const createBackupStore = (
     context: Pick<BackupManifest, "operation" | "targetId" | "targetIds" | "profileId" | "profileName"> = {}
   ): Promise<BackupManifest> => {
     await ensurePrivateDir(paths.backupsDir, platform);
+    const uniqueSourcePaths = [...new Set(sourcePaths.map((path) => resolve(path)))];
 
     const createdAt = now().toISOString();
     const baseId = toBackupId(new Date(createdAt));
     let id = baseId;
     let backupDir = join(paths.backupsDir, id);
-    for (let suffix = 1; ; suffix += 1) {
-      try {
-        await mkdir(backupDir, { mode: 0o700 });
-        break;
-      } catch (error) {
-        if (!error || typeof error !== "object" || !("code" in error) || error.code !== "EEXIST") {
-          throw error;
-        }
+    for (let suffix = 1; await pathEntryExists(backupDir); suffix += 1) {
         id = `${baseId}-${suffix}`;
         backupDir = join(paths.backupsDir, id);
-      }
     }
-    const filesDir = join(backupDir, "files");
-    await ensurePrivateDir(filesDir, platform);
-
-    const entries: BackupEntry[] = [];
-
-    for (const sourcePath of sourcePaths) {
-      try {
-        const sourceStats = await lstat(sourcePath);
-        const backupPath = join(filesDir, encodePath(sourcePath));
+    const stagingDir = join(paths.backupsDir, `.agentenv-backup-stage-${randomUUID()}`);
+    const stagingFilesDir = join(stagingDir, "files");
+    await ensurePrivateDir(stagingFilesDir, platform);
+    let committed = false;
+    try {
+      const entries: BackupEntry[] = [];
+      for (const sourcePath of uniqueSourcePaths) {
+        let sourceStats;
+        try {
+          sourceStats = await lstat(sourcePath);
+        } catch (error) {
+          if (isMissingFileError(error)) {
+            entries.push({ sourcePath, missing: true });
+            continue;
+          }
+          throw error;
+        }
+        const encodedSourcePath = encodePath(sourcePath);
+        const stagingBackupPath = join(stagingFilesDir, encodedSourcePath);
+        const backupPath = join(backupDir, "files", encodedSourcePath);
 
         if (sourceStats.isSymbolicLink()) {
           const linkTarget = await readlink(sourcePath);
@@ -184,55 +249,56 @@ export const createBackupStore = (
             .catch(() =>
               platform === "win32" ? "junction" as const : "dir" as const
             );
+          if (await readlink(sourcePath) !== linkTarget) {
+            throw new Error(`Symbolic link changed while its backup was being created: ${sourcePath}`);
+          }
           entries.push({
             sourcePath,
             linkTarget,
             linkType,
+            sha256: hashSymlinkTarget(linkTarget),
             missing: false,
             kind: "symlink"
           });
-        } else if (sourceStats.isDirectory()) {
-          await cp(sourcePath, backupPath, { recursive: true });
+        } else if (sourceStats.isDirectory() || sourceStats.isFile()) {
+          const contentHash = await copyPath(sourcePath, stagingBackupPath, {
+            platform,
+            recursive: sourceStats.isDirectory()
+          });
           entries.push({
             sourcePath,
             backupPath,
+            sha256: contentHash,
             mode: sourceStats.mode & 0o777,
             missing: false,
-            kind: "directory"
+            kind: sourceStats.isDirectory() ? "directory" : "file"
           });
         } else {
-          const content = await readFile(sourcePath);
-          await copyFile(sourcePath, backupPath);
-          entries.push({
-            sourcePath,
-            backupPath,
-            sha256: sha256(content),
-            mode: sourceStats.mode & 0o777,
-            missing: false,
-            kind: "file"
-          });
+          throw new Error(`Unsupported filesystem entry in AgentEnv backup: ${sourcePath}`);
         }
-      } catch (error) {
-        if (isMissingFileError(error)) {
-          entries.push({ sourcePath, missing: true });
-          continue;
-        }
-        throw error;
       }
+
+      const manifest: BackupManifest = {
+        formatVersion: 2,
+        id,
+        createdAt,
+        ...context,
+        entries
+      };
+      const manifestContent = `${JSON.stringify(manifest, null, 2)}\n`;
+      await writeAtomic(join(stagingDir, "manifest.json"), manifestContent);
+      await writeAtomic(join(stagingDir, "manifest.sha256"), `${sha256(manifestContent)}\n`);
+      await syncPathTree(stagingDir, platform);
+      await rename(stagingDir, backupDir);
+      committed = true;
+      await syncParentDirectory(paths.backupsDir, { platform });
+      return await readBackup(id);
+    } catch (error) {
+      await rm(committed ? backupDir : stagingDir, { recursive: true, force: true }).catch(
+        () => undefined
+      );
+      throw error;
     }
-
-    const manifest: BackupManifest = {
-      id,
-      createdAt,
-      ...context,
-      entries
-    };
-
-    await writeAtomic(
-      join(backupDir, "manifest.json"),
-      `${JSON.stringify(manifest, null, 2)}\n`
-    );
-    return manifest;
   };
 
   const listBackups = async (): Promise<BackupSummary[]> => {
@@ -255,7 +321,10 @@ export const createBackupStore = (
             }
             return await readBackup(entry.name);
           } catch (error) {
-            if (isMissingFileError(error)) {
+            if (
+              isMissingFileError(error) &&
+              !(await pathEntryExists(join(paths.backupsDir, entry.name)))
+            ) {
               return undefined;
             }
             console.warn(

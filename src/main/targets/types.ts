@@ -20,6 +20,10 @@ export interface TargetPathInput {
   environment?: NodeJS.ProcessEnv;
 }
 
+export type TargetMutationClaimer = ((path: string) => Promise<void>) & {
+  recordMutation?: (...paths: string[]) => Promise<void>;
+};
+
 export interface TargetAssetInput {
   profile: ProfileDetail;
   targetPaths: TargetPaths;
@@ -29,6 +33,7 @@ export interface TargetAssetInput {
   replaceablePaths?: ReadonlySet<string>;
   plannedResourceRemovals?: ReadonlySet<string>;
   isolateSkillRoot?: boolean;
+  claimMutationPath?: TargetMutationClaimer;
 }
 
 export interface TargetPreviewInput extends TargetAssetInput {

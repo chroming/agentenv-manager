@@ -1,4 +1,13 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+  writeFile
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -6,6 +15,7 @@ import {
   migrateLegacyAppDataRoot,
   resolveAppDataRoot
 } from "../../src/main/appDataRoot";
+import { copyPathVerified } from "../../src/main/filesystemIntegrity";
 
 let root = "";
 
@@ -90,5 +100,52 @@ describe("app data root", () => {
     await expect(readFile(join(nextRoot, "settings.json"), "utf8")).resolves.toBe(
       "{\"new\":true}\n"
     );
+  });
+
+  it("does not replace a broken destination link during legacy migration", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-data-root-"));
+    const legacyRoot = join(root, "old", "data");
+    const nextRoot = join(root, "new", "agentenv-manager");
+    await mkdir(legacyRoot, { recursive: true });
+    await mkdir(join(root, "new"), { recursive: true });
+    await writeFile(join(legacyRoot, "settings.json"), "{\"old\":true}\n", "utf8");
+    await symlink(join(root, "missing-destination"), nextRoot, "dir");
+
+    await migrateLegacyAppDataRoot({ legacyRoot, nextRoot });
+
+    expect((await lstat(nextRoot)).isSymbolicLink()).toBe(true);
+    await expect(readFile(join(legacyRoot, "settings.json"), "utf8"))
+      .resolves.toContain("old");
+  });
+
+  it("never publishes a partial destination when fallback copying fails", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-data-root-"));
+    const legacyRoot = join(root, "old", "data");
+    const nextRoot = join(root, "new", "agentenv-manager");
+    await mkdir(legacyRoot, { recursive: true });
+    await writeFile(join(legacyRoot, "first.json"), "{\"first\":true}\n", "utf8");
+    await writeFile(join(legacyRoot, "second.json"), "{\"second\":true}\n", "utf8");
+    let copyCount = 0;
+
+    await expect(migrateLegacyAppDataRoot({
+      legacyRoot,
+      nextRoot,
+      renamePath: async () => {
+        const error = new Error("cross-device rename") as NodeJS.ErrnoException;
+        error.code = "EXDEV";
+        throw error;
+      },
+      copyPath: async (...args) => {
+        copyCount += 1;
+        if (copyCount === 2) throw new Error("injected copy failure");
+        return copyPathVerified(...args);
+      }
+    })).rejects.toThrow("injected copy failure");
+
+    await expect(readFile(join(legacyRoot, "first.json"), "utf8")).resolves.toContain("first");
+    await expect(readFile(join(legacyRoot, "second.json"), "utf8")).resolves.toContain("second");
+    await expect(readFile(join(nextRoot, "first.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await readdir(join(root, "new"))).filter((name) => name.includes("agentenv-migration")))
+      .toEqual([]);
   });
 });

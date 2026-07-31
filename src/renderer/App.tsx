@@ -1276,6 +1276,13 @@ const AppContent = ({
     if (profileMetadataSavingId === profileId) {
       return;
     }
+    const expectedContentHash =
+      (draftProfile?.id === profileId ? draftProfile.contentHash : undefined) ??
+      profiles.find((profile) => profile.id === profileId)?.contentHash;
+    if (!expectedContentHash) {
+      setError("Refresh this Profile before changing its icon.");
+      return;
+    }
     setError(undefined);
     setProfileMetadataSavingId(profileId);
     if (draftProfile?.id === profileId) {
@@ -1288,6 +1295,7 @@ const AppContent = ({
         profileId;
       const saved = await window.agentEnv.updateProfileMetadata({
         id: profileId,
+        expectedContentHash,
         iconKey
       });
       acceptProfileMetadata(saved, previousName);
@@ -1470,9 +1478,13 @@ const AppContent = ({
           );
         }
       } else if (draftProfile) {
+        if (!draftProfile.contentHash) {
+          throw new Error("Refresh this Profile before saving its details.");
+        }
         setProfileSaveStatus("Saving profile details");
         const saved = await window.agentEnv.updateProfileMetadata({
           id: draftProfile.id,
+          expectedContentHash: draftProfile.contentHash,
           name,
           description
         });

@@ -192,6 +192,7 @@ describe("activation service v2", () => {
     await profileStore.saveProfile({
       manifest: profile.manifest,
       instructions: profile.instructions,
+      expectedContentHash: (await profileStore.readProfile(profile.id)).contentHash,
       resources: {
         ...profile.resources,
         skills: []
@@ -240,6 +241,7 @@ describe("activation service v2", () => {
     await profileStore.saveProfile({
       manifest: profile.manifest,
       instructions: profile.instructions,
+      expectedContentHash: (await profileStore.readProfile(profile.id)).contentHash,
       resources: {
         ...profile.resources,
         skills: [
@@ -405,6 +407,7 @@ describe("activation service v2", () => {
     await profileStore.saveProfile({
       manifest: profile.manifest,
       instructions: profile.instructions,
+      expectedContentHash: (await profileStore.readProfile(profile.id)).contentHash,
       resources: {
         ...profile.resources,
         skills: [
@@ -563,6 +566,7 @@ describe("activation service v2", () => {
     await profileStore.saveProfile({
       manifest: profile.manifest,
       instructions: profile.instructions,
+      expectedContentHash: (await profileStore.readProfile(profile.id)).contentHash,
       resources: {
         ...profile.resources,
         mcpByTarget: { codex: { mode: "ignore", selections: [] } }
@@ -588,6 +592,7 @@ describe("activation service v2", () => {
     await profileStore.saveProfile({
       manifest: profile.manifest,
       instructions: profile.instructions,
+      expectedContentHash: (await profileStore.readProfile(profile.id)).contentHash,
       resources: {
         ...profile.resources,
         managementByTarget: {
@@ -670,6 +675,7 @@ describe("activation service v2", () => {
     await profileStore.saveProfile({
       manifest: profile.manifest,
       instructions: "",
+      expectedContentHash: (await profileStore.readProfile(profile.id)).contentHash,
       resources: {
         skills: [],
         mcpByTarget: {
@@ -702,6 +708,7 @@ describe("activation service v2", () => {
     await profileStore.saveProfile({
       manifest: profile.manifest,
       instructions: profile.instructions,
+      expectedContentHash: (await profileStore.readProfile(profile.id)).contentHash,
       resources: {
         skills: [{ libraryId: "missing", targetName: "missing", enabled: true }],
         mcpByTarget: { codex: { mode: "ignore", selections: [] } }
@@ -713,6 +720,7 @@ describe("activation service v2", () => {
     await profileStore.saveProfile({
       manifest: profile.manifest,
       instructions: profile.instructions,
+      expectedContentHash: (await profileStore.readProfile(profile.id)).contentHash,
       resources: {
         skills: [{ libraryId: "missing", targetName: "missing", enabled: false }],
         mcpByTarget: { codex: { mode: "ignore", selections: [] } }
@@ -734,6 +742,7 @@ describe("activation service v2", () => {
     await profileStore.saveProfile({
       manifest: profile.manifest,
       instructions: profile.instructions,
+      expectedContentHash: (await profileStore.readProfile(profile.id)).contentHash,
       resources: {
         ...profile.resources,
         skills: [{ libraryId: "review", targetName: "review", enabled: false }]
@@ -759,6 +768,7 @@ describe("activation service v2", () => {
     await profileStore.saveProfile({
       manifest: profile.manifest,
       instructions: profile.instructions,
+      expectedContentHash: (await profileStore.readProfile(profile.id)).contentHash,
       resources: {
         ...profile.resources,
         skills: [{ libraryId: "review", targetName: "review", enabled: false }]
@@ -864,6 +874,7 @@ describe("activation service v2", () => {
     await profileStore.saveProfile({
       manifest: profile.manifest,
       instructions: profile.instructions,
+      expectedContentHash: (await profileStore.readProfile(profile.id)).contentHash,
       resources: {
         ...profile.resources,
         skills: [{ libraryId: "review", targetName: "review", enabled: false }]
@@ -908,6 +919,7 @@ describe("activation service v2", () => {
     await profileStore.saveProfile({
       manifest: profile.manifest,
       instructions: profile.instructions,
+      expectedContentHash: (await profileStore.readProfile(profile.id)).contentHash,
       resources: {
         ...profile.resources,
         skills: [{ libraryId: "review", targetName: "review", enabled: false }]

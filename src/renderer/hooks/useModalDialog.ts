@@ -1,4 +1,4 @@
-import { type RefObject, useEffect, useRef } from "react";
+import { type RefObject, useLayoutEffect, useRef } from "react";
 
 const FOCUSABLE_SELECTOR = [
   "button:not([disabled])",
@@ -33,7 +33,7 @@ export const useModalDialog = ({
   onDismissRef.current = onDismiss;
   dismissDisabledRef.current = dismissDisabled;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) {
       return undefined;
     }

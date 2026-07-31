@@ -6,7 +6,8 @@ import { pathEntryExists, pathExists } from "../fileUtils";
 import { hashSkillContent } from "../skillContentHash";
 import {
   createOwnerMarkerContent,
-  isAgentEnvOwnedDir
+  isAgentEnvOwnedDir,
+  markerPathForFile
 } from "../ownershipMarkers";
 import { deploySkillDirectory, removeSkillDeployment } from "../skillDeployment";
 import type { TargetAssetInput } from "./types";
@@ -127,7 +128,8 @@ export const applySkillRefs = async ({
   skillLibraryDir,
   skillSyncMethod = "symlink",
   approvedUnmanagedSkillHashes,
-  replaceablePaths
+  replaceablePaths,
+  claimMutationPath
 }: TargetAssetInput) => {
   if (!profileManagesResource(profile.resources, targetPaths.targetId, "skills")) return;
   if (!targetPaths.skillsDir || !skillLibraryDir) return;
@@ -135,9 +137,15 @@ export const applySkillRefs = async ({
   for (const skillRef of profile.resources.skills.filter((skill) => !skill.enabled)) {
     const targetDir = join(targetPaths.skillsDir, skillRef.targetName);
     if (replaceablePaths?.has(resolve(targetDir))) {
+      await claimMutationPath?.(targetDir);
+      await claimMutationPath?.(markerPathForFile(targetDir));
       await removeSkillDeployment(targetDir, {
         allowedRoot: targetPaths.skillsDir
       });
+      await claimMutationPath?.recordMutation?.(
+        targetDir,
+        markerPathForFile(targetDir)
+      );
     }
   }
 
@@ -158,6 +166,8 @@ export const applySkillRefs = async ({
         `Skill target changed after preview and is not AgentEnv-owned: ${targetDir}`
       );
     }
+    await claimMutationPath?.(targetDir);
+    await claimMutationPath?.(markerPathForFile(targetDir));
     await deploySkillDirectory({
       sourceDir,
       targetDir,
@@ -169,5 +179,9 @@ export const applySkillRefs = async ({
         source: `skills-library/${skillRef.libraryId}`
       })
     });
+    await claimMutationPath?.recordMutation?.(
+      targetDir,
+      markerPathForFile(targetDir)
+    );
   }
 };

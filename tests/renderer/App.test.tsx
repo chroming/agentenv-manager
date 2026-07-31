@@ -2889,6 +2889,7 @@ describe("App", () => {
     await waitFor(() =>
       expect(api.updateProfileMetadata).toHaveBeenCalledWith({
         id: "daily-coding",
+        expectedContentHash: "profile-hash",
         iconKey: "palette"
       })
     );
@@ -3922,6 +3923,7 @@ describe("App", () => {
     await waitFor(() =>
       expect(api.updateProfileMetadata).toHaveBeenCalledWith({
         id: "daily-coding",
+        expectedContentHash: "profile-hash",
         name: "Review Focus",
         description: "Review and quality checks"
       })

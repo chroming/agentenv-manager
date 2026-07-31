@@ -10,8 +10,17 @@ import {
   shell
 } from "electron";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, readdir, readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import {
+  chmod,
+  lstat,
+  mkdir,
+  readdir,
+  readFile,
+  readlink,
+  realpath,
+  stat
+} from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { createActivationService } from "./activationService";
 import {
   legacyElectronAppDataRoot,
@@ -49,7 +58,11 @@ import {
   windowBackgroundColor,
   windowChromeOptionsFor
 } from "./windowConfig";
-import { recoverPendingReplacementsInDirectory } from "./fileUtils";
+import {
+  isMissingFileError,
+  recoverAtomicReplacement,
+  recoverPendingReplacementsInDirectory
+} from "./fileUtils";
 import { createMutationCoordinator } from "./mutationCoordinator";
 import { ensureAppDataFormat } from "./appDataFormat";
 import { migrateAppDataToV2 } from "./appDataMigration";
@@ -489,6 +502,27 @@ const resolveStartupDataRoot = () => {
   });
 };
 
+const replacementRootCandidates = async (path: string) => {
+  const roots = new Set([path]);
+  const linkedRoot = await lstat(path)
+    .then(async (stats) =>
+      stats.isSymbolicLink()
+        ? resolve(dirname(path), await readlink(path))
+        : undefined
+    )
+    .catch((error) => {
+      if (isMissingFileError(error)) return undefined;
+      throw error;
+    });
+  if (linkedRoot) roots.add(linkedRoot);
+  const physicalRoot = await realpath(path).catch((error) => {
+    if (isMissingFileError(error)) return linkedRoot;
+    throw error;
+  });
+  if (physicalRoot) roots.add(physicalRoot);
+  return [...roots];
+};
+
 const createServices = async (
   reportPhase: (phase: Extract<StartupStatus, { state: "initializing" }>["phase"]) => void
 ) => {
@@ -503,7 +537,10 @@ const createServices = async (
   const mutationCoordinator = createMutationCoordinator(appDataRoot);
   reportPhase("preparing-data");
   await mutationCoordinator.runExclusive("Initialize AgentEnv data", async () => {
-    await recoverPendingReplacementsInDirectory(join(appDataRoot, ".."));
+    for (const root of await replacementRootCandidates(appDataRoot)) {
+      await recoverAtomicReplacement(root);
+      await recoverPendingReplacementsInDirectory(dirname(root));
+    }
     if (!process.env.AGENTENV_DATA_ROOT) {
       await migrateLegacyAppDataRoot({
         legacyRoot: legacyElectronAppDataRoot(app.getPath("userData")),
@@ -603,6 +640,7 @@ const createServices = async (
   reportPhase("recovering-writes");
   await mutationCoordinator.runExclusive("Recover interrupted writes", async () => {
     for (const root of replacementRoots) {
+      await recoverAtomicReplacement(root);
       await recoverPendingReplacementsInDirectory(root);
     }
   });

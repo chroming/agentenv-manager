@@ -1,5 +1,6 @@
 import { lstat, mkdir, readlink, realpath, stat } from "node:fs/promises";
 import { isMissingFileError, replacePathAtomically } from "./fileUtils";
+import { hashSymlinkTarget } from "./filesystemIntegrity";
 
 export interface SkillRootTransition {
   path: string;
@@ -60,5 +61,5 @@ export const isolateSkillRoot = async (expected: SkillRootTransition) => {
 
   await replacePathAtomically(expected.path, async (stagingPath) => {
     await mkdir(stagingPath, { recursive: true });
-  });
+  }, { expectedTargetHash: hashSymlinkTarget(expected.linkTarget) });
 };

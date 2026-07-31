@@ -51,6 +51,7 @@ const TargetRecoverySchema = z.object({
   operation: z.enum(["apply", "rollback"]),
   error: z.string().min(1),
   backupId: z.string().optional(),
+  safetyBackupId: z.string().optional(),
   occurredAt: z.string().min(1)
 });
 

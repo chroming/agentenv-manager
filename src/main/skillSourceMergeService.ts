@@ -21,6 +21,14 @@ import type { SkillSourceRegistry } from "./skillSourceRegistry";
 import { validateSkillSourceMerge } from "./skillSourceMerge";
 import type { GitCliSkillSource } from "./skillSources/contract";
 import { scanProjectSkillRoots } from "./projectSkillDiscovery";
+import type { BackupStore } from "./backupStore";
+import {
+  BackupRecoveryError,
+  createBackupMutationClaimer,
+  restoreBackupWithSafety,
+  selectBackupEntries
+} from "./backupRestore";
+import { syncPathTree } from "./filesystemIntegrity";
 
 interface PendingSkillSourceMerge {
   preview: SkillSourceMergePreview;
@@ -33,7 +41,10 @@ interface PendingSkillSourceMerge {
 
 interface SkillSourceMergeServiceOptions {
   appDataRoot: string;
+  backupStore: BackupStore;
   repositorySource?: GitCliSkillSource;
+  sourceObservationsDir: string;
+  sourceRegistryPath: string;
   sourceRegistry: SkillSourceRegistry;
   sourceService: SkillSourceService;
   listSkills(): Promise<SkillLibraryEntry[]>;
@@ -181,6 +192,24 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
       ))) {
       throw new Error("Skill source membership changed after preview. Review the merge again.");
     }
+    const metadataPaths = affectedSkills.map((skill) =>
+      join(skill.path, ".agentenv-skill.json")
+    );
+    const transactionBackup = await options.backupStore.createBackup(
+      [
+        options.sourceRegistryPath,
+        options.sourceObservationsDir,
+        ...metadataPaths
+      ],
+      {
+        operation: "data-import",
+        profileName: "Skill source merge"
+      }
+    );
+    const claimPath = createBackupMutationClaimer(transactionBackup, {
+      changedMessage: (path) =>
+        `Skill source data changed after merge preview: ${path}`
+    });
 
     const stamp = now().toISOString().replace(/[:.]/g, "-");
     const backupPath = join(
@@ -219,26 +248,37 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
       snapshots.set(metadataPath, content);
       await writeAtomic(join(backupPath, `${skill.id}.agentenv-skill.json`), content);
     }
-    await writeAtomic(join(backupPath, "manifest.json"), `${JSON.stringify({
+    const backupManifest = {
       formatVersion: 1,
       operation: "merge-skill-sources",
       createdAt: now().toISOString(),
+      status: "prepared",
+      transactionBackupId: transactionBackup.id,
       preview: pending.preview,
       sourceRegistry: pending.sourceRegistrySnapshot
-    }, null, 2)}\n`);
+    };
+    await writeAtomic(
+      join(backupPath, "manifest.json"),
+      `${JSON.stringify(backupManifest, null, 2)}\n`
+    );
+    await syncPathTree(backupPath);
 
     try {
+      await claimPath(options.sourceRegistryPath);
       const [mergedRecord] = await options.sourceRegistry.ensure([pending.preview.mergedSource]);
+      await claimPath.recordMutation(options.sourceRegistryPath);
       await options.sourceRegistry.setAutomaticChecks(
         mergedRecord!.id,
         pending.preview.automaticChecks
       );
+      await claimPath.recordMutation(options.sourceRegistryPath);
       for (const ignoredSubpath of mergedIgnoredSubpaths) {
         await options.sourceRegistry.setIgnoredSubpath(
           mergedRecord!.id,
           ignoredSubpath,
           true
         );
+        await claimPath.recordMutation(options.sourceRegistryPath);
       }
       for (const skill of affectedSkills) {
         const collection = skill.sourceCollection!;
@@ -247,6 +287,7 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
           ? resolve(collection.repository, collection.sourceSubpath)
           : [collection.directory, collection.sourceSubpath].filter(Boolean).join("/");
         const metadataPath = join(skill.path, ".agentenv-skill.json");
+        await claimPath(metadataPath);
         const metadata = JSON.parse(snapshots.get(metadataPath)!) as SkillMetadataFile;
         metadata.sourceCollection = {
           ...pending.preview.mergedSource,
@@ -260,11 +301,14 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
         };
         metadata.updatedAt = now().toISOString();
         await writeAtomic(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
+        await claimPath.recordMutation(metadataPath);
       }
       const records = await options.sourceRegistry.list();
       await options.sourceRegistry.replace(records.filter((record) =>
         !pending.affectedSourceIds.includes(record.id) || record.id === mergedRecord!.id
       ));
+      await claimPath.recordMutation(options.sourceRegistryPath);
+      await claimPath(options.sourceObservationsDir);
       if (pending.preview.mergedSource.kind === "local") {
         await options.sourceService.recordLocalScan(
           pending.preview.mergedSource,
@@ -276,12 +320,17 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
           pending.result as RepositorySkillScanResult
         );
       }
+      await claimPath.recordMutation(options.sourceObservationsDir);
       const group = (await options.listSourceGroups()).find((candidate) =>
         candidate.sourceId === mergedRecord!.id
       );
       if (!group || group.candidates.some((candidate) => candidate.state === "conflict")) {
         throw new Error("Merged Skill source could not be verified");
       }
+      await writeAtomic(
+        join(backupPath, "manifest.json"),
+        `${JSON.stringify({ ...backupManifest, status: "complete" }, null, 2)}\n`
+      );
       pendingMerges.delete(previewId);
       return {
         source: group,
@@ -290,8 +339,57 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
         backupPath
       };
     } catch (error) {
-      await Promise.all([...snapshots].map(([path, content]) => writeAtomic(path, content)));
-      await options.sourceRegistry.replace(pending.sourceRegistrySnapshot);
+      const failures: string[] = [];
+      let recoverySafetyBackupId: string | undefined;
+      try {
+        const unrecordedChanges = await claimPath.findUnrecordedChanges();
+        if (unrecordedChanges.length > 0) {
+          throw new Error(
+            `Automatic source recovery stopped because paths changed without a completed ` +
+            `write receipt: ${unrecordedChanges.join(", ")}`
+          );
+        }
+        const rollbackBackup = selectBackupEntries(
+          transactionBackup,
+          claimPath.mutatedPaths
+        );
+        if (rollbackBackup.entries.length > 0) {
+          await restoreBackupWithSafety({
+            backup: rollbackBackup,
+            backupStore: options.backupStore,
+            continueOnError: true,
+            restoreSafetyOnFailure: false,
+            safetyProfileName: "Skill sources before merge recovery",
+            expectedCurrentHashes: claimPath.mutationHashes
+          });
+        }
+      } catch (restoreError) {
+        if (restoreError instanceof BackupRecoveryError) {
+          recoverySafetyBackupId = restoreError.safetyBackupId;
+        }
+        failures.push(
+          `Skill source recovery: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`
+        );
+      }
+      if (failures.length > 0) {
+        await writeAtomic(
+          join(backupPath, "manifest.json"),
+          `${JSON.stringify({
+            ...backupManifest,
+            status: "recovery-required",
+            safetyBackupId: recoverySafetyBackupId,
+            recoveryError: failures.join("; ")
+          }, null, 2)}\n`
+        ).catch(() => undefined);
+        throw new Error(
+          `Skill source merge failed and recovery is incomplete. Original metadata remains in ${backupPath}. ${failures.join("; ")}`,
+          { cause: error }
+        );
+      }
+      await writeAtomic(
+        join(backupPath, "manifest.json"),
+        `${JSON.stringify({ ...backupManifest, status: "rolled-back" }, null, 2)}\n`
+      );
       throw error;
     }
   };

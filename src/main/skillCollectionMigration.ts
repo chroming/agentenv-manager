@@ -18,6 +18,11 @@ import { isPathInside } from "./platformPaths";
 import { markerPathForFile } from "./ownershipMarkers";
 import { hashSkillContent } from "./skillContentHash";
 import { removeSkillDeployment } from "./skillDeployment";
+import {
+  BackupRecoveryError,
+  createBackupMutationClaimer,
+  selectBackupEntries
+} from "./backupRestore";
 
 export interface SkillCollectionMigrationInput {
   collectionPath: string;
@@ -37,8 +42,16 @@ interface SkillCollectionMigrationDependencies {
   releaseTargets(targetIds: string[]): void;
   targetName(targetId: string): string;
   targetPathsFor(targetId: string): Promise<TargetPaths>;
-  readTargetStateFile(targetId: string): Promise<{ path: string; state: TargetState }>;
-  writeTargetState(targetId: string, state: TargetState): Promise<void>;
+  readTargetStateFile(targetId: string): Promise<{
+    path: string;
+    pathHash?: string;
+    state: TargetState;
+  }>;
+  writeTargetState(
+    targetId: string,
+    state: TargetState,
+    options?: { expectedPathHash?: string }
+  ): Promise<void>;
   readProfile(profileId: string): Promise<ProfileDetail>;
   applyLibraryAvailability(
     profile: ProfileDetail,
@@ -64,7 +77,10 @@ interface SkillCollectionMigrationDependencies {
       profileName: string;
     }
   ): Promise<BackupManifest>;
-  restoreBackup(backup: BackupManifest): Promise<void>;
+  restoreBackup(
+    backup: BackupManifest,
+    options?: { expectedCurrentHashes?: ReadonlyMap<string, string | undefined> }
+  ): Promise<void>;
   snapshotManagedResources(
     paths: string[],
     targetPaths: TargetPaths
@@ -165,6 +181,7 @@ export const completeSkillCollectionMigrationTransaction = async (
       targetId: string;
       targetPaths: TargetPaths;
       statePath: string;
+      statePathHash?: string;
       state: TargetState;
       operations: CollectionTargetOperation[];
     }> = [];
@@ -241,6 +258,7 @@ export const completeSkillCollectionMigrationTransaction = async (
         targetId,
         targetPaths,
         statePath: stateFile.path,
+        statePathHash: stateFile.pathHash,
         state: stateFile.state,
         operations
       });
@@ -263,27 +281,34 @@ export const completeSkillCollectionMigrationTransaction = async (
         profileName: basename(normalizedCollectionPath)
       }
     );
+    const claimPath = createBackupMutationClaimer(backup, {
+      missingMessage: (path) => `Skill collection migration did not preserve ${path}`,
+      changedMessage: (path) => `Skill collection path changed after backup: ${path}`
+    });
     const installedPaths: string[] = [];
 
     try {
-      await Promise.all(
-        contexts.map((context) =>
-          dependencies.writeTargetState(context.targetId, {
-            ...context.state,
-            recoveryRequired: {
-              operation: "apply",
-              error: "Skill collection migration was interrupted before completion",
-              backupId: backup.id,
-              occurredAt: new Date().toISOString()
-            }
-          })
-        )
-      );
+      for (const context of contexts) {
+        await claimPath(context.statePath);
+        await dependencies.writeTargetState(context.targetId, {
+          ...context.state,
+          recoveryRequired: {
+            operation: "apply",
+            error: "Skill collection migration was interrupted before completion",
+            backupId: backup.id,
+            occurredAt: new Date().toISOString()
+          }
+        }, { expectedPathHash: context.statePathHash });
+        await claimPath.recordMutation(context.statePath);
+      }
+      await claimPath(normalizedCollectionPath);
       await rm(normalizedCollectionPath);
+      await claimPath.recordMutation(normalizedCollectionPath);
 
       for (const context of contexts) {
         let managedResources = [...(context.state.managedResources ?? [])];
         for (const operation of context.operations) {
+          await claimPath(operation.targetPath, markerPathForFile(operation.targetPath));
           managedResources = managedResources.filter(
             (resource) => resolve(resource.path) !== resolve(operation.targetPath)
           );
@@ -306,6 +331,10 @@ export const completeSkillCollectionMigrationTransaction = async (
               allowedRoot: context.targetPaths.skillsDir ?? dirname(operation.targetPath)
             });
           }
+          await claimPath.recordMutation(
+            operation.targetPath,
+            markerPathForFile(operation.targetPath)
+          );
         }
         const migratedMemberKeys = new Set(
           context.operations.map(
@@ -318,7 +347,10 @@ export const completeSkillCollectionMigrationTransaction = async (
           sharedSkillPreparations: (context.state.sharedSkillPreparations ?? []).filter(
             (item) => !migratedMemberKeys.has(`${item.skillKey}\0${item.libraryId}`)
           )
+        }, {
+          expectedPathHash: claimPath.mutationHashes.get(resolve(context.statePath))
         });
+        await claimPath.recordMutation(context.statePath);
       }
 
       if (await pathEntryExists(normalizedCollectionPath)) {
@@ -344,23 +376,38 @@ export const completeSkillCollectionMigrationTransaction = async (
       });
     } catch (error) {
       try {
-        await dependencies.restoreBackup(backup);
+        const unrecordedChanges = await claimPath.findUnrecordedChanges();
+        if (unrecordedChanges.length > 0) {
+          throw new Error(
+            `Automatic collection recovery stopped because paths changed without a completed ` +
+            `write receipt: ${unrecordedChanges.join(", ")}`
+          );
+        }
+        await dependencies.restoreBackup(
+          selectBackupEntries(backup, claimPath.mutatedPaths),
+          { expectedCurrentHashes: claimPath.mutationHashes }
+        );
       } catch (restoreError) {
         const recoveryError =
           `Skill collection migration failed: ${errorMessage(error)}; automatic restore failed: ${errorMessage(restoreError)}`;
         await Promise.all(
           contexts.map(async (context) => {
             try {
-              const currentState = (await dependencies.readTargetStateFile(context.targetId)).state;
+              const currentStateFile = await dependencies.readTargetStateFile(context.targetId);
+              const currentState = currentStateFile.state;
               await dependencies.writeTargetState(context.targetId, {
                 ...currentState,
                 recoveryRequired: {
                   operation: "rollback",
                   error: recoveryError,
                   backupId: backup.id,
+                  safetyBackupId:
+                    restoreError instanceof BackupRecoveryError
+                      ? restoreError.safetyBackupId
+                      : undefined,
                   occurredAt: new Date().toISOString()
                 }
-              });
+              }, { expectedPathHash: currentStateFile.pathHash });
             } catch {
               // The backup remains the manual recovery path.
             }

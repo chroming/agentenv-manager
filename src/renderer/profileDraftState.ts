@@ -22,7 +22,8 @@ const canonicalize = (value: unknown): unknown => {
 export const profileSaveInput = (profile: ProfileDetail): SaveProfileInput => ({
   manifest: profile.manifest,
   instructions: profile.instructions,
-  resources: profile.resources
+  resources: profile.resources,
+  expectedContentHash: profile.contentHash
 });
 
 const normalizeResources = (resources: ProfileResources): ProfileResources => {

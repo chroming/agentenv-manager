@@ -1,6 +1,12 @@
-import { cp, mkdir, readdir, rename } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readdir, rename, rm } from "node:fs/promises";
 import { dirname, join, posix, win32 } from "node:path";
-import { pathExists } from "./fileUtils";
+import { pathEntryExists, pathExists, syncParentDirectory } from "./fileUtils";
+import {
+  copyPathVerified,
+  hashRequiredPathEntry,
+  syncPathTree
+} from "./filesystemIntegrity";
 
 interface ResolveAppDataRootInput {
   env?: Partial<Pick<NodeJS.ProcessEnv, "AGENTENV_DATA_ROOT" | "XDG_CONFIG_HOME">>;
@@ -12,6 +18,8 @@ interface ResolveAppDataRootInput {
 interface MigrateLegacyAppDataRootInput {
   legacyRoot: string;
   nextRoot: string;
+  copyPath?: typeof copyPathVerified;
+  renamePath?: typeof rename;
 }
 
 export const legacyElectronAppDataRoot = (userDataDir: string) => join(userDataDir, "data");
@@ -41,23 +49,47 @@ export const resolveAppDataRoot = ({
 
 export const migrateLegacyAppDataRoot = async ({
   legacyRoot,
-  nextRoot
+  nextRoot,
+  copyPath = copyPathVerified,
+  renamePath = rename
 }: MigrateLegacyAppDataRootInput) => {
-  if (legacyRoot === nextRoot || !(await pathExists(legacyRoot)) || (await pathExists(nextRoot))) {
+  if (
+    legacyRoot === nextRoot ||
+    !(await pathExists(legacyRoot)) ||
+    await pathEntryExists(nextRoot)
+  ) {
     return;
   }
 
   await mkdir(dirname(nextRoot), { recursive: true });
   try {
-    await rename(legacyRoot, nextRoot);
+    await renamePath(legacyRoot, nextRoot);
+    await syncParentDirectory(dirname(nextRoot));
   } catch {
-    await mkdir(nextRoot, { recursive: true });
-    const entries = await readdir(legacyRoot, { withFileTypes: true });
-    for (const entry of entries) {
-      await cp(join(legacyRoot, entry.name), join(nextRoot, entry.name), {
-        dereference: false,
-        recursive: true
-      });
+    const stagingRoot = `${nextRoot}.agentenv-migration-${randomUUID()}`;
+    try {
+      await mkdir(stagingRoot, { recursive: false, mode: 0o700 });
+      const sourceHash = await hashRequiredPathEntry(legacyRoot);
+      const entries = await readdir(legacyRoot, { withFileTypes: true });
+      for (const entry of entries) {
+        await copyPath(
+          join(legacyRoot, entry.name),
+          join(stagingRoot, entry.name),
+          { dereference: false, recursive: entry.isDirectory() }
+        );
+      }
+      if (await hashRequiredPathEntry(legacyRoot) !== sourceHash) {
+        throw new Error("Legacy AgentEnv data changed during migration; retry");
+      }
+      await syncPathTree(stagingRoot);
+      if (await pathEntryExists(nextRoot)) {
+        throw new Error("AgentEnv destination appeared during migration; original data was preserved");
+      }
+      await renamePath(stagingRoot, nextRoot);
+      await syncParentDirectory(dirname(nextRoot));
+    } catch (error) {
+      await rm(stagingRoot, { recursive: true, force: true }).catch(() => undefined);
+      throw error;
     }
   }
 };

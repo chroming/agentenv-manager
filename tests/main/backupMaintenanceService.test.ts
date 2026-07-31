@@ -216,4 +216,87 @@ describe("backup maintenance service", () => {
       .rejects.toThrow("Cannot safely evaluate backup protections");
     await expect(backupStore.readBackup(backup.id)).resolves.toBeTruthy();
   });
+
+  it("protects cleanup and Workspace safety backups while recovery is pending", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-backup-maintenance-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const dates = [
+      "2025-01-01T00:00:00.000Z",
+      "2025-01-02T00:00:00.000Z",
+      "2025-01-03T00:00:00.000Z"
+    ];
+    let index = 0;
+    const backupStore = createBackupStore(paths, {
+      now: () => new Date(dates[index++] ?? dates.at(-1)!)
+    });
+    const workspaceRequested = await backupStore.createBackup([], { operation: "workspace-sync" });
+    const workspaceSafety = await backupStore.createBackup([], { operation: "rollback-safety" });
+    const cleanupSafety = await backupStore.createBackup([], { operation: "rollback-safety" });
+    const sourceMergeRequested = await backupStore.createBackup([], { operation: "data-import" });
+    const sourceMergeSafety = await backupStore.createBackup([], { operation: "rollback-safety" });
+    await mkdir(join(paths.backupsDir, "skill-cleanup", "cleanup-pending"), { recursive: true });
+    await mkdir(join(paths.workspaceSyncJournalPath, ".."), { recursive: true });
+    await writeFile(paths.workspaceSyncJournalPath, JSON.stringify({
+      formatVersion: 1,
+      backupId: workspaceRequested.id,
+      safetyBackupId: workspaceSafety.id,
+      phase: "rollback-required"
+    }));
+    const sourceMergeReport = join(
+      paths.appDataRoot,
+      "skill-source-merge-backups",
+      "skill-source-merge-pending"
+    );
+    await mkdir(sourceMergeReport, { recursive: true });
+    await writeFile(join(sourceMergeReport, "manifest.json"), JSON.stringify({
+      status: "recovery-required",
+      transactionBackupId: sourceMergeRequested.id,
+      safetyBackupId: sourceMergeSafety.id
+    }));
+    const deleteCleanupBackup = vi.fn();
+    const service = createBackupMaintenanceService(
+      paths,
+      backupStore,
+      {
+        listCleanupBackups: vi.fn().mockResolvedValue([{
+          id: "cleanup-pending",
+          libraryId: "reviewer",
+          createdAt: "2025-01-01T00:00:00.000Z",
+          locationCount: 1,
+          operation: "cleanup",
+          recoveryRequired: true,
+          safetyBackupId: cleanupSafety.id
+        }]),
+        previewCleanupBackup: vi.fn().mockResolvedValue([]),
+        deleteCleanupBackup
+      },
+      { readSettings: vi.fn().mockResolvedValue({ backupRetentionDays: 1 }) },
+      { now: () => new Date("2026-07-01T00:00:00.000Z") }
+    );
+
+    const inventory = await service.listInventory();
+    for (const id of [
+      workspaceRequested.id,
+      workspaceSafety.id,
+      cleanupSafety.id,
+      sourceMergeRequested.id,
+      sourceMergeSafety.id
+    ]) {
+      expect(inventory.items.find((item) => item.id === id)).toMatchObject({
+        cleanupStatus: "required",
+        deletable: false
+      });
+    }
+    expect(inventory.items.find((item) => item.id === "cleanup-pending")).toMatchObject({
+      cleanupStatus: "required",
+      requiredReason: "recovery-required",
+      deletable: false
+    });
+    await expect(service.cleanup()).resolves.toEqual({
+      deletedCount: 0,
+      freedBytes: 0,
+      failures: []
+    });
+    expect(deleteCleanupBackup).not.toHaveBeenCalled();
+  });
 });

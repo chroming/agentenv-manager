@@ -19,9 +19,15 @@ import type {
   UpdateProfileMetadataInput
 } from "../shared/types";
 import { setProfileResourceMode } from "../shared/profileResources";
-import { pathEntryExists, replacePathAtomically, writeAtomic } from "./fileUtils";
+import {
+  pathEntryExists,
+  replacePathAtomically,
+  syncParentDirectory,
+  writeAtomic
+} from "./fileUtils";
 import { createPaths, type PathOverrides } from "./paths";
 import { createProfileContentHash } from "./profileFingerprint";
+import { hashPathEntry } from "./filesystemIntegrity";
 import { findSecretWarnings } from "./secretWarnings";
 import { createTargetRegistry, type TargetRegistry } from "./targets/registry";
 
@@ -202,8 +208,26 @@ export const createProfileStore = (
     const parsedManifest = ProfileManifestSchema.parse(input.manifest);
     const resources = ProfileResourcesSchema.parse(input.resources);
     const profileDir = join(paths.profilesDir, parsedManifest.id);
+    const existingPathHash = await hashPathEntry(profileDir);
+    const existing = existingPathHash !== undefined;
+    if (existing && !input.expectedContentHash) {
+      throw new Error(`Profile ${parsedManifest.id} must be refreshed before it can be saved.`);
+    }
+    if (existing) {
+      const current = await readProfile(parsedManifest.id);
+      if (current.contentHash !== input.expectedContentHash) {
+        throw new Error(
+          `Profile ${parsedManifest.id} changed outside this view. Refresh it before saving.`
+        );
+      }
+      if (await hashPathEntry(profileDir) !== existingPathHash) {
+        throw new Error(
+          `Profile ${parsedManifest.id} changed while it was being read. Refresh it before saving.`
+        );
+      }
+    }
     let createdAt = parsedManifest.createdAt;
-    if (!createdAt && (await pathEntryExists(profileDir))) {
+    if (!createdAt && existing) {
       const [currentManifest, currentStats] = await Promise.all([
         readJson(join(profileDir, PROFILE_MANIFEST_FILE)).then((value) =>
           ProfileManifestSchema.parse(value)
@@ -220,7 +244,7 @@ export const createProfileStore = (
       ...parsedManifest,
       createdAt: createdAt ?? new Date().toISOString()
     });
-    if (await pathEntryExists(profileDir)) {
+    if (existing) {
       const currentStats = await lstat(profileDir);
       if (!currentStats.isDirectory() || currentStats.isSymbolicLink()) {
         throw new Error(`Profile storage must be a real directory: ${manifest.id}`);
@@ -242,7 +266,7 @@ export const createProfileStore = (
       ]);
       ProfileManifestSchema.parse(await readJson(join(stagingDir, PROFILE_MANIFEST_FILE)));
       ProfileResourcesSchema.parse(await readJson(join(stagingDir, PROFILE_RESOURCES_FILE)));
-    });
+    }, { expectedTargetHash: existingPathHash });
     return readProfile(manifest.id);
   };
 
@@ -305,7 +329,8 @@ export const createProfileStore = (
     const profile = await saveProfile({
       manifest: current.manifest,
       instructions: current.instructions,
-      resources
+      resources,
+      expectedContentHash: current.contentHash
     });
     return { profile, changed: true };
   };
@@ -343,7 +368,8 @@ export const createProfileStore = (
           preferredTargetId: targetId
         },
         instructions: duplicate.instructions,
-        resources
+        resources,
+        expectedContentHash: duplicate.contentHash
       });
       return { profile, changed: true };
     } catch (error) {
@@ -368,11 +394,12 @@ export const createProfileStore = (
           : input.description.trim(),
       iconKey: input.iconKey ?? current.manifest.iconKey
     });
-    await writeAtomic(
-      join(current.profileDir ?? join(paths.profilesDir, id), PROFILE_MANIFEST_FILE),
-      `${JSON.stringify(manifest, null, 2)}\n`
-    );
-    return readProfile(id);
+    return saveProfile({
+      manifest,
+      instructions: current.instructions,
+      resources: current.resources,
+      expectedContentHash: input.expectedContentHash
+    });
   };
 
   const duplicateProfile = async (id: string): Promise<ProfileDetail> => {
@@ -397,6 +424,10 @@ export const createProfileStore = (
     const trashDir = join(paths.appDataRoot, "trash", "profiles");
     await mkdir(trashDir, { recursive: true, mode: 0o700 });
     await rename(profileDir, join(trashDir, `${safeId}-${Date.now()}`));
+    await Promise.all([
+      syncParentDirectory(paths.profilesDir),
+      syncParentDirectory(trashDir)
+    ]);
   };
 
   return {

@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, readdir } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { cp, lstat, mkdir, readFile, readdir, realpath, rename, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { z } from "zod";
 import {
@@ -13,8 +13,10 @@ import {
   pathEntryExists,
   pathExists,
   replacePathAtomically,
+  syncParentDirectory,
   writeAtomic
 } from "./fileUtils";
+import { copyPathVerified, hashRequiredPathEntry, syncPathTree } from "./filesystemIntegrity";
 import { hashComparableResource } from "./resourceHash";
 import { APP_DATA_FORMAT_VERSION, AppDataFormatError } from "./appDataFormat";
 import { parseTargetState } from "./targetState";
@@ -387,21 +389,75 @@ const migrateProfile = async (
 
 const createMigrationBackup = async (
   paths: AgentEnvPaths,
+  sourceRoot: string,
   fromVersion: 1 | "unversioned"
 ) => {
   const createdAt = new Date().toISOString();
   const id = createdAt.replace(/[:.]/g, "-");
-  const backupRoot = join(dirname(paths.appDataRoot), "agentenv-manager-migration-backups", id);
-  await mkdir(backupRoot, { recursive: true, mode: 0o700 });
-  await cp(paths.appDataRoot, join(backupRoot, "data"), {
-    recursive: true,
-    dereference: false
-  });
-  await writeAtomic(
-    join(backupRoot, "migration-backup.json"),
-    `${JSON.stringify({ fromVersion, toVersion: 2, createdAt }, null, 2)}\n`
+  const backupParent = join(dirname(paths.appDataRoot), "agentenv-manager-migration-backups");
+  let backupRoot = join(backupParent, id);
+  if (await pathEntryExists(backupRoot)) {
+    backupRoot = join(backupParent, `${id}-${randomUUID().slice(0, 8)}`);
+  }
+  const stagingRoot = `${backupRoot}.agentenv-stage-${randomUUID()}`;
+  try {
+    await mkdir(stagingRoot, { recursive: true, mode: 0o700 });
+    const contentHash = await copyPathVerified(
+      sourceRoot,
+      join(stagingRoot, "data"),
+      { recursive: true, dereference: false }
+    );
+    await writeAtomic(
+      join(stagingRoot, "migration-backup.json"),
+      `${JSON.stringify({ fromVersion, toVersion: 2, createdAt, contentHash }, null, 2)}\n`
+    );
+    await syncPathTree(stagingRoot);
+    await mkdir(dirname(backupRoot), { recursive: true, mode: 0o700 });
+    await rename(stagingRoot, backupRoot);
+    await syncParentDirectory(dirname(backupRoot));
+    return backupRoot;
+  } catch (error) {
+    await rm(stagingRoot, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
+};
+
+const createFailedMigrationSnapshot = async (
+  paths: AgentEnvPaths,
+  sourceRoot: string,
+  migrationError: unknown
+) => {
+  const createdAt = new Date().toISOString();
+  const snapshotRoot = join(
+    dirname(paths.appDataRoot),
+    "agentenv-manager-migration-failed-states",
+    `${createdAt.replace(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}`
   );
-  return backupRoot;
+  const stagingRoot = `${snapshotRoot}.agentenv-stage-${randomUUID()}`;
+  try {
+    await mkdir(stagingRoot, { recursive: true, mode: 0o700 });
+    const contentHash = await copyPathVerified(
+      sourceRoot,
+      join(stagingRoot, "data"),
+      { recursive: true, dereference: false }
+    );
+    await writeAtomic(
+      join(stagingRoot, "migration-failed-state.json"),
+      `${JSON.stringify({
+        createdAt,
+        contentHash,
+        error: errorMessage(migrationError)
+      }, null, 2)}\n`
+    );
+    await syncPathTree(stagingRoot);
+    await mkdir(dirname(snapshotRoot), { recursive: true, mode: 0o700 });
+    await rename(stagingRoot, snapshotRoot);
+    await syncParentDirectory(dirname(snapshotRoot));
+    return { path: snapshotRoot, contentHash };
+  } catch (error) {
+    await rm(stagingRoot, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
 };
 
 export interface AppDataMigrationResult {
@@ -444,93 +500,140 @@ export const migrateAppDataToV2 = async (
     }
   }
 
+  const activeDataRoot = await realpath(paths.appDataRoot);
+  const activeDataStats = await lstat(activeDataRoot);
+  if (!activeDataStats.isDirectory() || activeDataStats.isSymbolicLink()) {
+    throw new Error("AgentEnv data root must resolve to a real directory before migration");
+  }
   const backupPath = await createMigrationBackup(
     paths,
+    activeDataRoot,
     rawManifest ? 1 : "unversioned"
   );
-  const reports = [];
-  const retainedProfiles = [];
-  if (await pathExists(paths.profilesDir)) {
-    for (const entry of await readdir(paths.profilesDir, { withFileTypes: true })) {
-      if (entry.name.startsWith(".") || entry.name.includes(".agentenv-")) continue;
-      if (!entry.isDirectory() || entry.isSymbolicLink()) {
-        throw new Error(`Profile storage must be a real directory: ${entry.name}`);
+  try {
+    const reports = [];
+    const retainedProfiles = [];
+    if (await pathExists(paths.profilesDir)) {
+      const profileEntries = await readdir(paths.profilesDir, { withFileTypes: true });
+      profileEntries.sort((left, right) => left.name.localeCompare(right.name));
+      for (const entry of profileEntries) {
+        if (entry.name.startsWith(".") || entry.name.includes(".agentenv-")) continue;
+        if (!entry.isDirectory() || entry.isSymbolicLink()) {
+          throw new Error(`Profile storage must be a real directory: ${entry.name}`);
+        }
+        SafeIdSchema.parse(entry.name);
+        const outcome = await migrateProfile(
+          paths,
+          join(paths.profilesDir, entry.name),
+          migrationCatalog
+        );
+        if (outcome.status === "migrated") reports.push(outcome.report);
+        if (outcome.status === "retained") retainedProfiles.push(outcome.report);
       }
-      SafeIdSchema.parse(entry.name);
-      const outcome = await migrateProfile(
-        paths,
-        join(paths.profilesDir, entry.name),
-        migrationCatalog
-      );
-      if (outcome.status === "migrated") reports.push(outcome.report);
-      if (outcome.status === "retained") retainedProfiles.push(outcome.report);
     }
-  }
-  const retainedTargetStates = [];
-  if (await pathExists(paths.targetStatesDir)) {
-    for (const entry of await readdir(paths.targetStatesDir, { withFileTypes: true })) {
-      if (entry.name.startsWith(".")) continue;
-      if (!entry.isFile() || entry.isSymbolicLink() || !entry.name.endsWith(".json")) {
-        throw new Error(`Invalid Target state entry: ${entry.name}`);
-      }
-      const statePath = join(paths.targetStatesDir, entry.name);
-      let rawState: unknown;
-      try {
-        rawState = await readJson(statePath);
-        if (
-          [2, 3].includes(
-            (rawState as { formatVersion?: number }).formatVersion ?? -1
-          )
-        ) {
-          parseTargetState(rawState);
+    const retainedTargetStates = [];
+    if (await pathExists(paths.targetStatesDir)) {
+      const targetEntries = await readdir(paths.targetStatesDir, { withFileTypes: true });
+      targetEntries.sort((left, right) => left.name.localeCompare(right.name));
+      for (const entry of targetEntries) {
+        if (entry.name.startsWith(".")) continue;
+        if (!entry.isFile() || entry.isSymbolicLink() || !entry.name.endsWith(".json")) {
+          throw new Error(`Invalid Target state entry: ${entry.name}`);
+        }
+        const statePath = join(paths.targetStatesDir, entry.name);
+        let rawState: unknown;
+        try {
+          rawState = await readJson(statePath);
+          if (
+            [2, 3].includes(
+              (rawState as { formatVersion?: number }).formatVersion ?? -1
+            )
+          ) {
+            parseTargetState(rawState);
+            continue;
+          }
+        } catch (error) {
+          retainedTargetStates.push({ file: entry.name, error: errorMessage(error) });
           continue;
         }
-      } catch (error) {
-        retainedTargetStates.push({ file: entry.name, error: errorMessage(error) });
-        continue;
+        const legacyResult = LegacyTargetStateSchema.safeParse(rawState);
+        if (!legacyResult.success) {
+          retainedTargetStates.push({
+            file: entry.name,
+            error: "Target state is not a supported AgentEnv format"
+          });
+          continue;
+        }
+        const legacy = legacyResult.data;
+        await writeAtomic(statePath, `${JSON.stringify({
+          formatVersion: 3,
+          managedMcpNames: legacy.managedMcpNames,
+          activeProfileId: legacy.activeProfileId,
+          appliedProfileHash: undefined,
+          appliedLibraryVersions: legacy.appliedLibraryVersions
+            ? { skills: legacy.appliedLibraryVersions.skills }
+            : undefined,
+          lastAppliedAt: legacy.lastAppliedAt,
+          managedResources: legacy.managedResources.filter((resource) =>
+            resource.kind === "instructions" || resource.kind === "skill"
+          ),
+          skillReceipts: [],
+          sharedSkillPreparations: legacy.sharedSkillPreparations,
+          recoveryRequired: legacy.recoveryRequired
+        }, null, 2)}\n`);
       }
-      const legacyResult = LegacyTargetStateSchema.safeParse(rawState);
-      if (!legacyResult.success) {
-        retainedTargetStates.push({
-          file: entry.name,
-          error: "Target state is not a supported AgentEnv format"
-        });
-        continue;
-      }
-      const legacy = legacyResult.data;
-      await writeAtomic(statePath, `${JSON.stringify({
-        formatVersion: 3,
-        managedMcpNames: legacy.managedMcpNames,
-        activeProfileId: legacy.activeProfileId,
-        appliedProfileHash: undefined,
-        appliedLibraryVersions: legacy.appliedLibraryVersions
-          ? { skills: legacy.appliedLibraryVersions.skills }
-          : undefined,
-        lastAppliedAt: legacy.lastAppliedAt,
-        managedResources: legacy.managedResources.filter((resource) =>
-          resource.kind === "instructions" || resource.kind === "skill"
-        ),
-        skillReceipts: [],
-        sharedSkillPreparations: legacy.sharedSkillPreparations,
-        recoveryRequired: legacy.recoveryRequired
-      }, null, 2)}\n`);
     }
-  }
-  await writeAtomic(
-    join(paths.appDataRoot, "migration-v2-report.json"),
-    `${JSON.stringify({
-      migratedAt: new Date().toISOString(),
+    await writeAtomic(
+      join(paths.appDataRoot, "migration-v2-report.json"),
+      `${JSON.stringify({
+        migratedAt: new Date().toISOString(),
+        backupPath,
+        profiles: reports,
+        retainedProfiles,
+        retainedTargetStates
+      }, null, 2)}\n`
+    );
+    await writeAtomic(manifestPath, `${JSON.stringify({ formatVersion: 2 }, null, 2)}\n`);
+    return {
+      migrated: true,
       backupPath,
-      profiles: reports,
-      retainedProfiles,
-      retainedTargetStates
-    }, null, 2)}\n`
-  );
-  await writeAtomic(manifestPath, `${JSON.stringify({ formatVersion: 2 }, null, 2)}\n`);
-  return {
-    migrated: true,
-    backupPath,
-    profileCount: reports.length,
-    retainedProfileCount: retainedProfiles.length
-  };
+      profileCount: reports.length,
+      retainedProfileCount: retainedProfiles.length
+    };
+  } catch (error) {
+    let failedState: { path: string; contentHash: string } | undefined;
+    try {
+      failedState = await createFailedMigrationSnapshot(paths, activeDataRoot, error);
+      const backupDataPath = join(backupPath, "data");
+      const backupManifest = JSON.parse(
+        await readFile(join(backupPath, "migration-backup.json"), "utf8")
+      ) as { contentHash?: unknown };
+      if (
+        typeof backupManifest.contentHash !== "string" ||
+        await hashRequiredPathEntry(backupDataPath) !== backupManifest.contentHash
+      ) {
+        throw new Error("Migration safety backup failed its integrity check");
+      }
+      await replacePathAtomically(activeDataRoot, async (stagingPath) => {
+        const restoredHash = await copyPathVerified(backupDataPath, stagingPath, {
+          dereference: false,
+          recursive: true
+        });
+        if (restoredHash !== backupManifest.contentHash) {
+          throw new Error("Restored migration data does not match its safety backup");
+        }
+      }, { expectedTargetHash: failedState.contentHash });
+    } catch (restoreError) {
+      throw new Error(
+        `AgentEnv data migration failed and automatic recovery also failed. ` +
+        `The original snapshot remains at ${backupPath}. ` +
+        `${failedState ? `The failed migration state remains at ${failedState.path}. ` : "The active failed state was left in place. "}` +
+        `Migration error: ${errorMessage(error)}. ` +
+        `Recovery error: ${errorMessage(restoreError)}`
+      );
+    }
+    throw new Error(
+      `AgentEnv data migration failed; the original data was restored from ${backupPath}. ${errorMessage(error)}`
+    );
+  }
 };

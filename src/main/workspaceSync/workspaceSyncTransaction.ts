@@ -1,10 +1,17 @@
-import { cp, lstat, mkdir, readFile, readlink, rm, symlink } from "node:fs/promises";
-import { join } from "node:path";
-import type { BackupManifest } from "../../shared/types";
+import { randomUUID } from "node:crypto";
+import { cp, lstat, mkdir, readFile, rm } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import type { SkillSourceRecord } from "../../shared/types";
 import type { BackupStore } from "../backupStore";
 import { isMissingFileError, pathEntryExists, replacePathAtomically, writeAtomic } from "../fileUtils";
+import {
+  BackupRecoveryError,
+  createBackupMutationClaimer,
+  restoreBackupWithSafety,
+  selectBackupEntries
+} from "../backupRestore";
 import { hashSkillContent } from "../skillContentHash";
+import { hashPathEntry } from "../filesystemIntegrity";
 import type { SkillMetadataFile } from "../skillLibraryMetadata";
 import type { AgentEnvPaths } from "../paths";
 import { createSkillSourceRegistry } from "../skillSourceRegistry";
@@ -17,10 +24,12 @@ import { isPortableOnlineLocator } from "./portableLocation";
 import { validatePortableWorkspace } from "./portableWorkspaceValidator";
 
 interface WorkspaceSyncJournal {
-  formatVersion: 1;
+  formatVersion: 1 | 2;
   backupId: string;
+  safetyBackupId?: string;
   createdAt: string;
   phase: "applying" | "verifying" | "rollback-required";
+  mutationHashes?: Record<string, string | null>;
 }
 
 export interface WorkspaceSyncTransaction {
@@ -30,45 +39,10 @@ export interface WorkspaceSyncTransaction {
   restore(backupId: string): Promise<void>;
 }
 
-const restoreEntry = async (entry: BackupManifest["entries"][number]) => {
-  if (entry.missing) {
-    await rm(entry.sourcePath, { recursive: true, force: true });
-    return;
-  }
-  if (
-    entry.kind !== "symlink" &&
-    !entry.backupPath
-  ) {
-    throw new Error(`Backup entry is missing its payload: ${entry.sourcePath}`);
-  }
-  if (
-    entry.kind === "symlink" &&
-    !entry.linkTarget &&
-    !entry.backupPath
-  ) {
-    throw new Error(`Backup link entry is missing its target: ${entry.sourcePath}`);
-  }
-  await replacePathAtomically(entry.sourcePath, async (stagingPath) => {
-    if (entry.kind === "symlink") {
-      await symlink(
-        entry.linkTarget ?? await readlink(entry.backupPath!),
-        stagingPath,
-        entry.linkType ?? "dir"
-      );
-      return;
-    }
-    await cp(entry.backupPath!, stagingPath, { recursive: entry.kind === "directory" });
-  });
-};
-
-const restoreBackup = async (manifest: BackupManifest) => {
-  for (const entry of [...manifest.entries].reverse()) await restoreEntry(entry);
-};
-
 const readJournal = async (path: string): Promise<WorkspaceSyncJournal | undefined> => {
   try {
     const value = JSON.parse(await readFile(path, "utf8")) as WorkspaceSyncJournal;
-    if (value.formatVersion !== 1 || !value.backupId || !value.phase) {
+    if (![1, 2].includes(value.formatVersion) || !value.backupId || !value.phase) {
       throw new Error("Workspace Sync recovery journal is invalid");
     }
     return value;
@@ -111,27 +85,95 @@ export const createWorkspaceSyncTransaction = (input: {
   backupStore: BackupStore;
   failureInjector?: (phase: "profiles" | "skills" | "sources" | "verify") => void | Promise<void>;
 }): WorkspaceSyncTransaction => {
-  const rollback = async (backupId: string) => {
+  const rollback = async (
+    backupId: string,
+    expectedCurrentHashes?: ReadonlyMap<string, string | undefined>
+  ) => {
     const backup = await input.backupStore.readBackup(backupId);
-    await restoreBackup(backup);
+    const selectedBackup = expectedCurrentHashes
+      ? selectBackupEntries(backup, expectedCurrentHashes.keys())
+      : backup;
+    await restoreBackupWithSafety({
+      backup: selectedBackup,
+      backupStore: input.backupStore,
+      safetyProfileName: "Workspace before recovery",
+      expectedCurrentHashes
+    });
     await rm(input.paths.workspaceSyncJournalPath, { force: true });
   };
 
   const recover = async () => {
     const journal = await readJournal(input.paths.workspaceSyncJournalPath);
     if (!journal) return;
-    await rollback(journal.backupId);
+    const originalBackup = await input.backupStore.readBackup(journal.backupId);
+    const receipts = new Map<string, string | undefined>(
+      Object.entries(journal.mutationHashes ?? {}).map(([path, hash]) => [
+        resolve(path),
+        hash ?? undefined
+      ])
+    );
+    const ambiguousPaths: string[] = [];
+    for (const entry of originalBackup.entries) {
+      const path = resolve(entry.sourcePath);
+      const currentHash = await hashPathEntry(path).catch(() => "unreadable");
+      if (receipts.has(path)) {
+        if (currentHash !== receipts.get(path)) ambiguousPaths.push(path);
+      } else if (currentHash !== (entry.missing ? undefined : entry.sha256)) {
+        ambiguousPaths.push(path);
+      }
+    }
+    if (ambiguousPaths.length > 0) {
+      throw new Error(
+        `Workspace recovery stopped because current data cannot be attributed to the interrupted ` +
+        `operation: ${ambiguousPaths.join(", ")}. Backup ${journal.backupId} was preserved.`
+      );
+    }
+    if (receipts.size === 0) {
+      await rm(input.paths.workspaceSyncJournalPath, { force: true });
+      return;
+    }
+    await rollback(journal.backupId, receipts);
   };
 
   const restore = async (backupId: string) => {
+    const safetyBackup = await input.backupStore.createBackup(
+      [input.paths.profilesDir, input.paths.skillsLibraryDir, input.paths.skillSourcesPath],
+      { operation: "rollback-safety", profileName: "Workspace before restore" }
+    );
     const journal: WorkspaceSyncJournal = {
-      formatVersion: 1,
+      formatVersion: 2,
       backupId,
+      safetyBackupId: safetyBackup.id,
       createdAt: new Date().toISOString(),
-      phase: "rollback-required"
+      phase: "rollback-required",
+      mutationHashes: {}
     };
     await writeAtomic(input.paths.workspaceSyncJournalPath, `${JSON.stringify(journal, null, 2)}\n`);
-    await rollback(backupId);
+    try {
+      const backup = await input.backupStore.readBackup(backupId);
+      await restoreBackupWithSafety({
+        backup,
+        backupStore: input.backupStore,
+        safetyBackup,
+        claimerOptions: {
+          missingMessage: (path) =>
+            `Workspace restore did not preserve the current path before mutation: ${path}`,
+          changedMessage: (path) =>
+            `Workspace path changed while Restore was being prepared: ${path}`
+        }
+      });
+      await rm(input.paths.workspaceSyncJournalPath, { force: true });
+    } catch (error) {
+      if (!(error instanceof BackupRecoveryError)) {
+        await rm(input.paths.workspaceSyncJournalPath, { force: true });
+        throw new Error(
+          `Workspace restore failed; the previous Workspace was restored from safety backup ${safetyBackup.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+      throw error;
+    }
   };
 
   const apply = async (snapshotRoot: string) => {
@@ -141,13 +183,29 @@ export const createWorkspaceSyncTransaction = (input: {
       { operation: "workspace-sync", profileName: "Workspace Sync" }
     );
     const journal: WorkspaceSyncJournal = {
-      formatVersion: 1,
+      formatVersion: 2,
       backupId: backup.id,
       createdAt: new Date().toISOString(),
-      phase: "applying"
+      phase: "applying",
+      mutationHashes: {}
     };
     await writeAtomic(input.paths.workspaceSyncJournalPath, `${JSON.stringify(journal, null, 2)}\n`);
-    const stagingRoot = join(input.paths.workspaceSyncCacheDir, "apply-stage");
+    const claimPath = createBackupMutationClaimer(backup, {
+      missingMessage: (path) =>
+        `Workspace update did not preserve the current path before mutation: ${path}`,
+      changedMessage: (path) =>
+        `Workspace path changed while Update was being prepared: ${path}`
+    });
+    const expectedHashes = new Map(
+      backup.entries.map((entry) => [
+        resolve(entry.sourcePath),
+        entry.missing ? undefined : entry.sha256
+      ])
+    );
+    const stagingRoot = join(
+      input.paths.workspaceSyncCacheDir,
+      `apply-stage-${randomUUID()}`
+    );
     try {
       await rm(stagingRoot, { recursive: true, force: true });
       const stagedProfiles = join(stagingRoot, "profiles");
@@ -187,11 +245,38 @@ export const createWorkspaceSyncTransaction = (input: {
         sources: [...mergedSources.values()].sort((left, right) => left.id.localeCompare(right.id))
       }, null, 2)}\n`);
 
-      await replacePathAtomically(input.paths.profilesDir, (path) => cp(stagedProfiles, path, { recursive: true }));
+      await claimPath(input.paths.profilesDir);
+      await replacePathAtomically(
+        input.paths.profilesDir,
+        (path) => cp(stagedProfiles, path, { recursive: true }),
+        { expectedTargetHash: expectedHashes.get(resolve(input.paths.profilesDir)) }
+      );
+      await claimPath.recordMutation(input.paths.profilesDir);
+      journal.mutationHashes![resolve(input.paths.profilesDir)] =
+        claimPath.mutationHashes.get(resolve(input.paths.profilesDir)) ?? null;
+      await writeAtomic(input.paths.workspaceSyncJournalPath, `${JSON.stringify(journal, null, 2)}\n`);
       await input.failureInjector?.("profiles");
-      await replacePathAtomically(input.paths.skillsLibraryDir, (path) => cp(stagedSkills, path, { recursive: true }));
+      await claimPath(input.paths.skillsLibraryDir);
+      await replacePathAtomically(
+        input.paths.skillsLibraryDir,
+        (path) => cp(stagedSkills, path, { recursive: true }),
+        { expectedTargetHash: expectedHashes.get(resolve(input.paths.skillsLibraryDir)) }
+      );
+      await claimPath.recordMutation(input.paths.skillsLibraryDir);
+      journal.mutationHashes![resolve(input.paths.skillsLibraryDir)] =
+        claimPath.mutationHashes.get(resolve(input.paths.skillsLibraryDir)) ?? null;
+      await writeAtomic(input.paths.workspaceSyncJournalPath, `${JSON.stringify(journal, null, 2)}\n`);
       await input.failureInjector?.("skills");
-      await replacePathAtomically(input.paths.skillSourcesPath, (path) => cp(stagedSources, path));
+      await claimPath(input.paths.skillSourcesPath);
+      await replacePathAtomically(
+        input.paths.skillSourcesPath,
+        (path) => cp(stagedSources, path),
+        { expectedTargetHash: expectedHashes.get(resolve(input.paths.skillSourcesPath)) }
+      );
+      await claimPath.recordMutation(input.paths.skillSourcesPath);
+      journal.mutationHashes![resolve(input.paths.skillSourcesPath)] =
+        claimPath.mutationHashes.get(resolve(input.paths.skillSourcesPath)) ?? null;
+      await writeAtomic(input.paths.workspaceSyncJournalPath, `${JSON.stringify(journal, null, 2)}\n`);
       await input.failureInjector?.("sources");
       journal.phase = "verifying";
       await writeAtomic(input.paths.workspaceSyncJournalPath, `${JSON.stringify(journal, null, 2)}\n`);
@@ -208,7 +293,23 @@ export const createWorkspaceSyncTransaction = (input: {
       journal.phase = "rollback-required";
       await writeAtomic(input.paths.workspaceSyncJournalPath, `${JSON.stringify(journal, null, 2)}\n`);
       try {
-        await rollback(backup.id);
+        const unrecordedChanges = await claimPath.findUnrecordedChanges();
+        if (unrecordedChanges.length > 0) {
+          throw new Error(
+            `Workspace update changed paths without a completed write receipt: ` +
+            unrecordedChanges.join(", ")
+          );
+        }
+        const touchedBackup = selectBackupEntries(backup, claimPath.mutatedPaths);
+        if (touchedBackup.entries.length > 0) {
+          await restoreBackupWithSafety({
+            backup: touchedBackup,
+            backupStore: input.backupStore,
+            safetyProfileName: "Workspace after failed update",
+            expectedCurrentHashes: claimPath.mutationHashes
+          });
+        }
+        await rm(input.paths.workspaceSyncJournalPath, { force: true });
       } catch (rollbackError) {
         throw new Error(`Workspace update failed and needs recovery: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`, { cause: error });
       }

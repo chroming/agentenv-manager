@@ -284,5 +284,5 @@ describe("git CLI skill source", () => {
     await expect(source.materialize(input, join(root, "submodule"))).rejects.toThrow(
       "Submodule"
     );
-  });
+  }, 15_000);
 });

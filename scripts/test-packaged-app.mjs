@@ -40,6 +40,7 @@ const unsafeCleanupBackupDir = join(
 );
 const unsafeCleanupBackupManifest = join(unsafeCleanupBackupDir, "manifest.json");
 let application;
+let applicationProcess;
 const commandExtension = process.platform === "win32" ? ".cmd" : "";
 const commandPath = (name) =>
   join(homeDir, ".local", "bin", `${name}${commandExtension}`);
@@ -158,17 +159,21 @@ const launchPackagedApplication = () =>
     }
   });
 
-const closePackagedApplication = async (app, page) => {
+const processHasExited = (child) =>
+  child.exitCode !== null || child.signalCode !== null;
+
+const closePackagedApplication = async (app, page, childProcess) => {
   await page.evaluate(() => window.agentEnv.setWindowCloseGuard(false));
   const windowHandle = await app.browserWindow(page);
   const closed = page.waitForEvent("close", { timeout: 5_000 });
   await windowHandle.evaluate((browserWindow) => browserWindow.close());
   await closed;
-  const childProcess = app.process();
   let timeout;
   try {
     await Promise.race([
-      app.close(),
+      app.close().catch((error) => {
+        if (!processHasExited(childProcess)) throw error;
+      }),
       new Promise((_, reject) => {
         timeout = setTimeout(() => {
           forceKill(childProcess);
@@ -281,6 +286,7 @@ try {
   await runGit(repositoryWork, ["push", "origin", "HEAD:refs/heads/main"]);
 
   application = await launchPackagedApplication();
+  applicationProcess = application.process();
   const page = await application.firstWindow();
   await page.setViewportSize({ width: 1180, height: 728 });
   await page.getByRole("button", { name: "Skills", exact: true }).click();
@@ -357,9 +363,11 @@ try {
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     true
   );
-  await closePackagedApplication(application, page);
+  await closePackagedApplication(application, page, applicationProcess);
   application = undefined;
+  applicationProcess = undefined;
   application = await launchPackagedApplication();
+  applicationProcess = application.process();
   const restartedPage = await application.firstWindow();
   await restartedPage.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });
   const restartedStates = await restartedPage.evaluate(() =>
@@ -369,19 +377,22 @@ try {
     restartedStates.map((state) => [state.targetId, state.lifecycleStatus]).sort(),
     packagedTargets.map((target) => [target.id, "applied"]).sort()
   );
-  await closePackagedApplication(application, restartedPage);
+  await closePackagedApplication(application, restartedPage, applicationProcess);
   application = undefined;
+  applicationProcess = undefined;
   process.stdout.write(
     `Packaged ${process.platform} six-Agent Apply, restart, and Repository workflows passed\n`
   );
 } finally {
   if (application) {
-    const process = application.process();
+    const childProcess = applicationProcess;
     await Promise.race([
-      application.close(),
+      application.close().catch((error) => {
+        if (!childProcess || !processHasExited(childProcess)) throw error;
+      }),
       new Promise((resolve) => {
         setTimeout(() => {
-          forceKill(process);
+          if (childProcess && !processHasExited(childProcess)) forceKill(childProcess);
           resolve();
         }, 5_000);
       })

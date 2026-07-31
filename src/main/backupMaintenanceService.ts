@@ -117,14 +117,57 @@ const readRestoredCleanupBackups = async (paths: AgentEnvPaths) => {
   return backups.filter((backup): backup is NonNullable<typeof backup> => Boolean(backup));
 };
 
-const readWorkspaceSyncRecoveryBackupId = async (paths: AgentEnvPaths) => {
+const readWorkspaceSyncRecoveryBackupIds = async (paths: AgentEnvPaths) => {
   try {
-    const journal = JSON.parse(await readFile(paths.workspaceSyncJournalPath, "utf8")) as { backupId?: unknown };
-    return typeof journal.backupId === "string" ? journal.backupId : undefined;
+    const journal = JSON.parse(await readFile(paths.workspaceSyncJournalPath, "utf8")) as {
+      backupId?: unknown;
+      safetyBackupId?: unknown;
+    };
+    return [journal.backupId, journal.safetyBackupId]
+      .filter((id): id is string => typeof id === "string");
   } catch (error) {
-    if (isMissingFileError(error)) return undefined;
+    if (isMissingFileError(error)) return [];
     throw new Error("Cannot safely evaluate Workspace Sync recovery state");
   }
+};
+
+const readSkillSourceMergeRecoveryBackupIds = async (paths: AgentEnvPaths) => {
+  const root = join(paths.appDataRoot, "skill-source-merge-backups");
+  let entries;
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch (error) {
+    if (isMissingFileError(error)) return { ids: [] as string[], ambiguous: false };
+    throw error;
+  }
+  const ids: string[] = [];
+  let ambiguous = false;
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.isSymbolicLink()) {
+      ambiguous = true;
+      continue;
+    }
+    try {
+      const manifest = JSON.parse(
+        await readFile(join(root, entry.name, "manifest.json"), "utf8")
+      ) as {
+        status?: unknown;
+        safetyBackupId?: unknown;
+        transactionBackupId?: unknown;
+      };
+      if (manifest.status !== "recovery-required") continue;
+      for (const value of [manifest.transactionBackupId, manifest.safetyBackupId]) {
+        if (typeof value !== "string" || !SafeIdSchema.safeParse(value).success) {
+          ambiguous = true;
+        } else {
+          ids.push(value);
+        }
+      }
+    } catch {
+      ambiguous = true;
+    }
+  }
+  return { ids: [...new Set(ids)], ambiguous };
 };
 
 export const createBackupMaintenanceService = (
@@ -141,36 +184,61 @@ export const createBackupMaintenanceService = (
   let activeMutation = false;
 
   const listInventory = async (): Promise<ManagedBackupInventory> => {
-    const [backups, cleanupBackups, restoredCleanupBackups, settings, targetStates, workspaceRecoveryBackupId] = await Promise.all([
+    const [
+      backups,
+      cleanupBackups,
+      restoredCleanupBackups,
+      settings,
+      targetStates,
+      workspaceRecoveryBackupIds,
+      skillSourceMergeRecovery
+    ] = await Promise.all([
       backupStore.listBackups(),
       skillLibraryStore.listCleanupBackups(),
       readRestoredCleanupBackups(paths),
       settingsStore.readSettings(),
       readTargetStates(paths),
-      readWorkspaceSyncRecoveryBackupId(paths)
+      readWorkspaceSyncRecoveryBackupIds(paths),
+      readSkillSourceMergeRecoveryBackupIds(paths)
     ]);
     const required = new Map<string, ManagedBackupRequiredReason>();
     for (const { state } of targetStates) {
       if (state.recoveryRequired?.backupId) {
         required.set(state.recoveryRequired.backupId, "recovery-required");
       }
+      if (state.recoveryRequired?.safetyBackupId) {
+        required.set(state.recoveryRequired.safetyBackupId, "recovery-required");
+      }
     }
-    if (workspaceRecoveryBackupId) required.set(workspaceRecoveryBackupId, "workspace-sync-recovery");
+    for (const backupId of workspaceRecoveryBackupIds) {
+      required.set(backupId, "workspace-sync-recovery");
+    }
+    for (const backupId of skillSourceMergeRecovery.ids) {
+      required.set(backupId, "recovery-required");
+    }
+    if (skillSourceMergeRecovery.ambiguous) {
+      for (const backup of backups) required.set(backup.id, "recovery-required");
+    }
+    for (const backup of cleanupBackups) {
+      if (backup.safetyBackupId) required.set(backup.safetyBackupId, "recovery-required");
+    }
     for (const { targetId, state } of targetStates) {
       if (!state.activeProfileId) continue;
       const baseline = backups
-        .filter((backup) => backup.targetId === targetId && backup.operation === "apply")
+        .filter((backup) =>
+          (backup.targetId === targetId || backup.targetIds?.includes(targetId)) &&
+          backup.operation === "apply"
+        )
         .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0];
       if (baseline && !required.has(baseline.id)) required.set(baseline.id, "takeover-baseline");
     }
-    const latestByTarget = new Set<string>();
+    const latestByTarget = new Map<string, string>();
     for (const backup of backups) {
-      if (backup.targetId && !latestByTarget.has(backup.targetId)) latestByTarget.add(backup.targetId);
+      for (const targetId of [backup.targetId, ...(backup.targetIds ?? [])]) {
+        if (targetId && !latestByTarget.has(targetId)) latestByTarget.set(targetId, backup.id);
+      }
     }
-    const latestIds = new Set(
-      [...latestByTarget].map((targetId) => backups.find((backup) => backup.targetId === targetId)?.id)
-        .filter((id): id is string => Boolean(id))
-    );
+    const latestIds = new Set(latestByTarget.values());
     const cutoff = settings.backupRetentionDays === null
       ? undefined
       : now().getTime() - settings.backupRetentionDays * 24 * 60 * 60 * 1000;
@@ -200,7 +268,9 @@ export const createBackupMaintenanceService = (
       };
     }));
     const cleanupItems = await Promise.all(cleanupBackups.map(async (backup): Promise<ManagedBackupItem> => {
-      const isEligible = cutoff !== undefined && new Date(backup.createdAt).getTime() < cutoff;
+      const requiredReason = backup.recoveryRequired ? "recovery-required" : undefined;
+      const isEligible = !requiredReason && cutoff !== undefined &&
+        new Date(backup.createdAt).getTime() < cutoff;
       return {
         id: backup.id,
         kind: "skill-cleanup",
@@ -209,8 +279,9 @@ export const createBackupMaintenanceService = (
         fileCount: backup.locationCount,
         operation: backup.operation,
         libraryId: backup.libraryId,
-        cleanupStatus: isEligible ? "eligible" : "kept",
-        deletable: true
+        cleanupStatus: requiredReason ? "required" : isEligible ? "eligible" : "kept",
+        requiredReason,
+        deletable: !requiredReason
       };
     }));
     const restoredCleanupItems = await Promise.all(restoredCleanupBackups.map(async (backup): Promise<ManagedBackupItem> => {

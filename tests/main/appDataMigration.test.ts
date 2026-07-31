@@ -150,6 +150,96 @@ describe("app data v2 migration", () => {
       .toHaveLength(1);
   });
 
+  it("restores all v1 data when a later Profile fails after an earlier migration", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-data-migration-"));
+    const paths = createPaths({ appDataRoot: join(root, "data") });
+    const validProfileDir = join(paths.profilesDir, "a-valid-profile");
+    const unsafeProfileDir = join(paths.profilesDir, "z-unsafe-profile");
+    await mkdir(validProfileDir, { recursive: true });
+    await mkdir(unsafeProfileDir, { recursive: true });
+    await writeJson(join(paths.appDataRoot, "agentenv-data.json"), { formatVersion: 1 });
+    await writeJson(join(validProfileDir, "profile.json"), {
+      id: "a-valid-profile",
+      targetId: "opencode",
+      name: "Valid",
+      version: 1,
+      managed: { instructions: true, config: true, assets: true }
+    });
+    await writeFile(join(validProfileDir, "AGENTS.md"), "# Original instructions\n");
+    await writeJson(join(validProfileDir, "assets.json"), { ownedDirs: [] });
+    await writeJson(join(unsafeProfileDir, "profile.json"), {
+      id: "z-unsafe-profile",
+      targetId: "codex",
+      name: "Unsafe",
+      version: 1,
+      managed: { instructions: true, config: true, assets: true }
+    });
+    await writeJson(join(unsafeProfileDir, "assets.json"), {
+      ownedDirs: [{ kind: "skill", source: "../outside", targetName: "unsafe" }]
+    });
+
+    await expect(migrateAppDataToV2(paths)).rejects.toThrow("original data was restored");
+
+    await expect(readJson(join(validProfileDir, "profile.json"))).resolves.toMatchObject({
+      id: "a-valid-profile",
+      version: 1
+    });
+    await expect(readFile(join(validProfileDir, "AGENTS.md"), "utf8"))
+      .resolves.toBe("# Original instructions\n");
+    await expect(readJson(join(validProfileDir, "assets.json"))).resolves.toEqual({
+      ownedDirs: []
+    });
+    await expect(readFile(join(validProfileDir, "INSTRUCTIONS.md"), "utf8"))
+      .rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readJson(join(paths.appDataRoot, "agentenv-data.json"))).resolves.toEqual({
+      formatVersion: 1
+    });
+  });
+
+  it("backs up and restores the physical data directory without replacing its root link", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-data-migration-link-"));
+    const physicalRoot = join(root, "physical-data");
+    const linkedRoot = join(root, "linked-data");
+    await mkdir(physicalRoot);
+    await symlink(physicalRoot, linkedRoot, "dir");
+    const paths = createPaths({ appDataRoot: linkedRoot });
+    const validProfileDir = join(paths.profilesDir, "a-valid-profile");
+    const unsafeProfileDir = join(paths.profilesDir, "z-unsafe-profile");
+    await mkdir(validProfileDir, { recursive: true });
+    await mkdir(unsafeProfileDir, { recursive: true });
+    await writeJson(join(paths.appDataRoot, "agentenv-data.json"), { formatVersion: 1 });
+    await writeJson(join(validProfileDir, "profile.json"), {
+      id: "a-valid-profile",
+      targetId: "opencode",
+      name: "Valid",
+      version: 1,
+      managed: { instructions: true, config: true, assets: true }
+    });
+    await writeJson(join(validProfileDir, "assets.json"), { ownedDirs: [] });
+    await writeJson(join(unsafeProfileDir, "profile.json"), {
+      id: "z-unsafe-profile",
+      targetId: "codex",
+      name: "Unsafe",
+      version: 1,
+      managed: { instructions: true, config: true, assets: true }
+    });
+    await writeJson(join(unsafeProfileDir, "assets.json"), {
+      ownedDirs: [{ kind: "skill", source: "../outside", targetName: "unsafe" }]
+    });
+
+    await expect(migrateAppDataToV2(paths)).rejects.toThrow("original data was restored");
+
+    expect((await lstat(linkedRoot)).isSymbolicLink()).toBe(true);
+    await expect(readJson(join(physicalRoot, "agentenv-data.json"))).resolves.toEqual({
+      formatVersion: 1
+    });
+    const [backupId] = await readdir(join(root, "agentenv-manager-migration-backups"));
+    expect((await lstat(join(root, "agentenv-manager-migration-backups", backupId!, "data")))
+      .isDirectory()).toBe(true);
+    expect(await readdir(join(root, "agentenv-manager-migration-failed-states")))
+      .toHaveLength(1);
+  });
+
   it("registers v2 while retaining a malformed Profile for repair", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-data-migration-"));
     const paths = createPaths({ appDataRoot: join(root, "data") });

@@ -4,6 +4,7 @@ import type { AgentEnvPaths } from "./paths";
 import { pathEntryExists, writeAtomic } from "./fileUtils";
 import { defaultTargetState, parseTargetState } from "./targetState";
 import type { TargetState } from "../shared/types";
+import { hashFileContent } from "./filesystemIntegrity";
 
 export class InvalidTargetStateError extends Error {
   constructor(readonly statePath: string) {
@@ -17,13 +18,18 @@ export class InvalidTargetStateError extends Error {
 export interface TargetStateFile {
   path: string;
   content: string;
+  pathHash?: string;
   state: TargetState;
 }
 
 export interface TargetStateRepository {
   pathFor(targetId: string): string;
   read(targetId: string): Promise<TargetStateFile>;
-  write(targetId: string, state: TargetState): Promise<void>;
+  write(
+    targetId: string,
+    state: TargetState,
+    options?: { expectedPathHash?: string }
+  ): Promise<void>;
 }
 
 export const createTargetStateRepository = (
@@ -35,7 +41,7 @@ export const createTargetStateRepository = (
   const read = async (targetId: string): Promise<TargetStateFile> => {
     const path = pathFor(targetId);
     if (!(await pathEntryExists(path))) {
-      return { path, content: "", state: defaultTargetState() };
+      return { path, content: "", pathHash: undefined, state: defaultTargetState() };
     }
     const content = await readFile(path, "utf8");
     if (content.trim().length === 0) {
@@ -43,21 +49,34 @@ export const createTargetStateRepository = (
     }
 
     try {
-      return { path, content, state: parseTargetState(JSON.parse(content)) };
+      return {
+        path,
+        content,
+        pathHash: hashFileContent(content),
+        state: parseTargetState(JSON.parse(content))
+      };
     } catch {
       throw new InvalidTargetStateError(path);
     }
   };
 
-  const write = async (targetId: string, state: TargetState) => {
+  const write = async (
+    targetId: string,
+    state: TargetState,
+    options: { expectedPathHash?: string } = {}
+  ) => {
     await mkdir(paths.targetStatesDir, { recursive: true, mode: 0o700 });
     const { keptOutsideSkills: _legacyKeptOutsideSkills, ...currentState } = state;
+    const writeOptions = Object.prototype.hasOwnProperty.call(options, "expectedPathHash")
+      ? { expectedTargetHash: options.expectedPathHash }
+      : {};
     await writeAtomic(
       pathFor(targetId),
       `${JSON.stringify({
         ...currentState,
         formatVersion: 3
-      }, null, 2)}\n`
+      }, null, 2)}\n`,
+      writeOptions
     );
   };
 

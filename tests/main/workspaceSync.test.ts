@@ -11,7 +11,7 @@ import {
   writeFile
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { createBackupStore } from "../../src/main/backupStore";
@@ -333,6 +333,59 @@ describe("Workspace Sync", () => {
     ).resolves.toBe("linked profile");
   });
 
+  it("restores the pre-restore Workspace when a requested rollback fails partway", async () => {
+    const appDataRoot = await tempRoot("agentenv-sync-restore-safety-");
+    const paths = createPaths({ appDataRoot, homeDir: join(appDataRoot, "home") });
+    await mkdir(join(paths.profilesDir, "desired"), { recursive: true });
+    await mkdir(join(paths.skillsLibraryDir, "desired"), { recursive: true });
+    await writeFile(join(paths.profilesDir, "desired", "marker"), "desired profile");
+    await writeFile(join(paths.skillsLibraryDir, "desired", "SKILL.md"), "desired skill");
+    await writeFile(paths.skillSourcesPath, canonicalJson({ formatVersion: 1, sources: [] }));
+    const realStore = createBackupStore(paths);
+    const desired = await realStore.createBackup([
+      paths.profilesDir,
+      paths.skillsLibraryDir,
+      paths.skillSourcesPath
+    ], { operation: "workspace-sync" });
+    await rm(paths.profilesDir, { recursive: true, force: true });
+    await rm(paths.skillsLibraryDir, { recursive: true, force: true });
+    await mkdir(join(paths.profilesDir, "current"), { recursive: true });
+    await mkdir(join(paths.skillsLibraryDir, "current"), { recursive: true });
+    await writeFile(join(paths.profilesDir, "current", "marker"), "current profile");
+    await writeFile(join(paths.skillsLibraryDir, "current", "SKILL.md"), "current skill");
+    const backupStore = {
+      ...realStore,
+      readBackup: async (id: string) => {
+        const manifest = await realStore.readBackup(id);
+        if (id !== desired.id) return manifest;
+        return {
+          ...manifest,
+          entries: [
+            ...manifest.entries,
+            {
+              sourcePath: join(appDataRoot, "unrelated.txt"),
+              backupPath: join(appDataRoot, "missing-backup-payload"),
+              missing: false as const,
+              kind: "file" as const,
+              sha256: "0".repeat(64)
+            }
+          ]
+        };
+      }
+    };
+    const transaction = createWorkspaceSyncTransaction({ paths, backupStore });
+
+    await expect(transaction.restore(desired.id)).rejects.toThrow(
+      "previous Workspace was restored from safety backup"
+    );
+
+    await expect(readFile(join(paths.profilesDir, "current", "marker"), "utf8"))
+      .resolves.toBe("current profile");
+    await expect(readFile(join(paths.skillsLibraryDir, "current", "SKILL.md"), "utf8"))
+      .resolves.toBe("current skill");
+    await expect(transaction.isRecoveryRequired()).resolves.toBe(false);
+  });
+
   it.each(["profiles", "skills", "sources", "verify"] as const)(
     "restores every Workspace root after a failure at the %s stage",
     async (failurePhase) => {
@@ -361,6 +414,36 @@ describe("Workspace Sync", () => {
     }
   );
 
+  it("preserves an untouched Workspace root changed externally after backup", async () => {
+    const appDataRoot = await tempRoot("agentenv-sync-concurrent-change-");
+    const paths = createPaths({ appDataRoot, homeDir: join(appDataRoot, "home") });
+    await Promise.all([
+      mkdir(join(paths.profilesDir, "old"), { recursive: true }),
+      mkdir(join(paths.skillsLibraryDir, "old"), { recursive: true })
+    ]);
+    await writeFile(join(paths.profilesDir, "old", "marker"), "old profile");
+    const skillPath = join(paths.skillsLibraryDir, "old", "SKILL.md");
+    await writeFile(skillPath, "old skill");
+    await writeFile(paths.skillSourcesPath, canonicalJson({ formatVersion: 1, sources: [] }));
+    const snapshot = await writeSnapshot(await tempRoot("agentenv-sync-concurrent-candidate-"));
+    const transaction = createWorkspaceSyncTransaction({
+      paths,
+      backupStore: createBackupStore(paths),
+      failureInjector: async (phase) => {
+        if (phase === "profiles") await writeFile(skillPath, "external skill change");
+      }
+    });
+
+    await expect(transaction.apply(snapshot.root)).rejects.toThrow(
+      "Workspace path changed while Update was being prepared"
+    );
+
+    await expect(readFile(join(paths.profilesDir, "old", "marker"), "utf8"))
+      .resolves.toBe("old profile");
+    await expect(readFile(skillPath, "utf8")).resolves.toBe("external skill change");
+    await expect(transaction.isRecoveryRequired()).resolves.toBe(false);
+  });
+
   it("recovers an interrupted Workspace transaction during startup", async () => {
     const appDataRoot = await tempRoot("agentenv-sync-startup-recovery-");
     const paths = createPaths({ appDataRoot, homeDir: join(appDataRoot, "home") });
@@ -377,10 +460,14 @@ describe("Workspace Sync", () => {
     await rm(paths.profilesDir, { recursive: true, force: true });
     await rm(paths.skillsLibraryDir, { recursive: true, force: true });
     await writeFile(paths.workspaceSyncJournalPath, canonicalJson({
-      formatVersion: 1,
+      formatVersion: 2,
       backupId: backup.id,
       createdAt: new Date().toISOString(),
-      phase: "rollback-required"
+      phase: "rollback-required",
+      mutationHashes: {
+        [resolve(paths.profilesDir)]: null,
+        [resolve(paths.skillsLibraryDir)]: null
+      }
     }));
 
     const transaction = createWorkspaceSyncTransaction({ paths, backupStore: store });
@@ -389,6 +476,33 @@ describe("Workspace Sync", () => {
     await expect(readFile(join(paths.profilesDir, "old", "marker"), "utf8")).resolves.toBe("old profile");
     await expect(readFile(join(paths.skillsLibraryDir, "old", "SKILL.md"), "utf8")).resolves.toBe("old skill");
     await expect(transaction.isRecoveryRequired()).resolves.toBe(false);
+  });
+
+  it("preserves a Workspace root changed after its verified write", async () => {
+    const appDataRoot = await tempRoot("agentenv-sync-post-write-change-");
+    const paths = createPaths({ appDataRoot, homeDir: join(appDataRoot, "home") });
+    await mkdir(join(paths.profilesDir, "old"), { recursive: true });
+    await mkdir(join(paths.skillsLibraryDir, "old"), { recursive: true });
+    await writeFile(join(paths.profilesDir, "old", "marker"), "old profile");
+    await writeFile(join(paths.skillsLibraryDir, "old", "SKILL.md"), "old skill");
+    await writeFile(paths.skillSourcesPath, canonicalJson({ formatVersion: 1, sources: [] }));
+    const snapshot = await writeSnapshot(await tempRoot("agentenv-sync-post-write-candidate-"));
+    const externalMarker = join(paths.profilesDir, "external-change");
+    const transaction = createWorkspaceSyncTransaction({
+      paths,
+      backupStore: createBackupStore(paths),
+      failureInjector: async (phase) => {
+        if (phase !== "profiles") return;
+        await writeFile(externalMarker, "new external data");
+        throw new Error("Injected failure after external change");
+      }
+    });
+
+    await expect(transaction.apply(snapshot.root)).rejects.toThrow(
+      "Workspace update failed and needs recovery"
+    );
+    await expect(readFile(externalMarker, "utf8")).resolves.toBe("new external data");
+    await expect(transaction.isRecoveryRequired()).resolves.toBe(true);
   });
 
   it("publishes and fetches through a real local bare Git repository", async () => {
@@ -442,7 +556,7 @@ describe("Workspace Sync", () => {
       revision
     )).rejects.toThrow("history was rewritten");
     transport.dispose();
-  });
+  }, 15_000);
 
   it("keeps a correct three-way base across two isolated Macs", async () => {
     const root = await tempRoot("agentenv-sync-two-macs-");

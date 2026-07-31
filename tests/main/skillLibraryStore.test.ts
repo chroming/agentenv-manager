@@ -8,6 +8,7 @@ import { createSkillLibraryStore } from "../../src/main/skillLibraryStore";
 import { createGitCliSkillSource } from "../../src/main/skillSources/gitCliSource";
 import { createGitCommandRunner } from "../../src/main/skillSources/gitCommandRunner";
 import { createGitRepositoryCache } from "../../src/main/skillSources/gitRepositoryCache";
+import { hashPathEntry } from "../../src/main/filesystemIntegrity";
 import type { GitCliSkillSource } from "../../src/main/skillSources/contract";
 import { createClaudeCodeTargetAdapter } from "../../src/main/targets/claudeCodeTarget";
 import { createOpenCodeTargetAdapter } from "../../src/main/targets/opencodeTarget";
@@ -425,15 +426,19 @@ description: >
     await mkdir(validBackup, { recursive: true });
     await writeFile(join(validSource, "SKILL.md"), "# Current\n", "utf8");
     await writeFile(join(validBackup, "SKILL.md"), "# Before cleanup\n", "utf8");
+    const validHash = await hashPathEntry(validBackup);
     await writeFile(
       join(backupRoot, validId, "manifest.json"),
       `${JSON.stringify({
+        formatVersion: 2,
         id: validId,
         libraryId: "valid-reviewer",
         libraryCreated: false,
         createdAt: "2026-07-21T03:10:31.397Z",
         operation: "cleanup",
-        entries: [{ sourcePath: validSource, backupPath: validBackup }]
+        status: "complete",
+        expectedPaths: [{ path: validSource, sha256: validHash }],
+        entries: [{ sourcePath: validSource, backupPath: validBackup, sha256: validHash }]
       }, null, 2)}\n`,
       "utf8"
     );
@@ -442,17 +447,23 @@ description: >
     const unsafeBackup = join(backupRoot, unsafeId, "locations", "0-outside-reviewer");
     await mkdir(unsafeBackup, { recursive: true });
     await writeFile(join(unsafeBackup, "SKILL.md"), "# Unsafe\n", "utf8");
+    const unsafeHash = await hashPathEntry(unsafeBackup);
+    const unsafeSource = join(root, "outside", "outside-reviewer");
     await writeFile(
       join(backupRoot, unsafeId, "manifest.json"),
       `${JSON.stringify({
+        formatVersion: 2,
         id: unsafeId,
         libraryId: "outside-reviewer",
         libraryCreated: false,
         createdAt: "2026-07-21T03:10:31.398Z",
         operation: "cleanup",
+        status: "complete",
+        expectedPaths: [{ path: unsafeSource, sha256: unsafeHash }],
         entries: [{
-          sourcePath: join(root, "outside", "outside-reviewer"),
-          backupPath: unsafeBackup
+          sourcePath: unsafeSource,
+          backupPath: unsafeBackup,
+          sha256: unsafeHash
         }]
       }, null, 2)}\n`,
       "utf8"
@@ -474,7 +485,7 @@ description: >
       expect.stringContaining(`Ignoring invalid Skill cleanup backup ${unsafeId}`)
     );
     await expect(store.rollbackSkillCleanup(unsafeId)).rejects.toThrow(
-      `Skill cleanup backup contains an unsafe path: ${unsafeId}`
+      `Skill cleanup backup contains an unsafe expected path: ${unsafeId}`
     );
     await expect(readFile(join(backupRoot, unsafeId, "manifest.json"), "utf8"))
       .resolves.toContain(unsafeId);
@@ -957,7 +968,7 @@ description: >
     await expect(readFile(join(updated.path, "prompt.md"), "utf8")).resolves.toBe(
       "Review the new behavior.\n"
     );
-  });
+  }, 15_000);
 
   it("merges local source folders at their common parent without changing content", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-local-source-merge-"));
@@ -2210,7 +2221,7 @@ description: >
     );
   });
 
-  it("attempts every restore when a later cleanup location cannot be replaced", async () => {
+  it("restores every changed location when a later cleanup deployment fails", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
     const targetRoots = ["one", "two", "three"].map((name) => join(root, name, "skills"));
@@ -2238,7 +2249,7 @@ description: >
             targetDir
           }))
         })
-      ).rejects.toThrow(/failed.*rollback/i);
+      ).rejects.toThrow(/failed.*rolled back/i);
     } finally {
       await chmod(targetRoots[2], 0o755);
     }

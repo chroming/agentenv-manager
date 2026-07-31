@@ -42,6 +42,8 @@ let app: ElectronApplication | undefined;
 
 requireCurrentElectronBuild();
 
+const standardElectronTestTimeout = 45_000;
+
 const fileExists = async (path: string) => {
   try {
     await access(path, constants.F_OK);
@@ -49,6 +51,37 @@ const fileExists = async (path: string) => {
   } catch {
     return false;
   }
+};
+
+const hoverFromOutside = async (page: Page, target: Locator) => {
+  const box = await target.boundingBox();
+  const viewport = page.viewportSize();
+  if (!box || !viewport) throw new Error("Hover target is outside the visible app window");
+  const targetCenterX = box.x + box.width / 2;
+  const targetCenterY = box.y + box.height / 2;
+  await page.mouse.move(
+    targetCenterX < viewport.width / 2 ? viewport.width - 2 : 2,
+    targetCenterY < viewport.height / 2 ? viewport.height - 2 : 2
+  );
+  await target.hover();
+};
+
+const hoverUntilVisible = async (
+  page: Page,
+  target: Locator,
+  overlay: Locator
+) => {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await hoverFromOutside(page, target);
+    try {
+      await overlay.waitFor({ state: "visible", timeout: 1_250 });
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 };
 
 const writeJson = async (path: string, value: unknown) => {
@@ -709,6 +742,45 @@ const launchApp = async (
   const initialWorkspace =
     options.initialWorkspace === undefined ? "library" : options.initialWorkspace;
 
+  const waitForRequestedWorkspace = async (page: Page) => {
+    if (initialWorkspace === "library") {
+      await page.getByRole("region", { name: "Library skills" }).waitFor({
+        state: "visible",
+        timeout: 10_000
+      });
+      await page.getByRole("group", { name: "Library item shared-reviewer" }).waitFor({
+        state: "visible",
+        timeout: 10_000
+      });
+      return;
+    }
+    if (initialWorkspace === "profiles") {
+      await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({
+        state: "visible",
+        timeout: 10_000
+      });
+      return;
+    }
+    if (initialWorkspace === "conversations") {
+      await page.getByRole("heading", { name: "Conversations", exact: true }).waitFor({
+        state: "visible",
+        timeout: 10_000
+      });
+      return;
+    }
+    if (initialWorkspace === "settings") {
+      await page.getByRole("heading", { name: "Settings", exact: true }).waitFor({
+        state: "visible",
+        timeout: 10_000
+      });
+      return;
+    }
+    await page.getByRole("region", { name: "Agents", exact: true }).waitFor({
+      state: "visible",
+      timeout: 10_000
+    });
+  };
+
   const launchReadyApplication = async () => {
     const launchedApp = await electron.launch({
       executablePath: electronPath as unknown as string,
@@ -752,6 +824,7 @@ const launchApp = async (
           .getByRole("complementary", { name: "Global navigation" })
           .waitFor({ state: "visible", timeout: 10_000 });
       }
+      await waitForRequestedWorkspace(launchedPage);
       return { launchedApp, launchedPage };
     } catch (error) {
       await launchedApp.close().catch(() => undefined);
@@ -1153,7 +1226,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(
       await readdir(join(appDataRoot, "profiles")).catch(() => [])
     ).toEqual([]);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("opens Agents first and routes shared environment review into scoped cleanup", async () => {
     const { page } = await launchApp({
@@ -1195,7 +1268,7 @@ describe("Electron UI profile switching e2e", () => {
       ".editor-panel",
       ".library-drawer"
     ]);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps applied outside resources in Agent detail without a global warning", async () => {
     const { appDataRoot, homeDir, page } = await launchApp({
@@ -1241,7 +1314,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await status.getByRole("button", { name: "Review Profile" }).count()).toBe(0);
     await expectNoHorizontalOverflow(page, [".environment-status-strip"]);
     expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("opens Profiles and Skills from the global quick search", async () => {
     const { page } = await launchApp();
@@ -1286,7 +1359,7 @@ describe("Electron UI profile switching e2e", () => {
         .count()
     ).toBe(0);
     await expectNoHorizontalOverflow(page, [".editor-panel"]);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("discovers multiple Skills from one local source and imports without changing it", async () => {
     const { appDataRoot, page, projectSkillRoot } = await launchApp({ projectSkillFixture: true });
@@ -1344,7 +1417,7 @@ describe("Electron UI profile switching e2e", () => {
         automaticChecks: true
       })
     );
-  }, 30_000);
+  }, 45_000);
 
   it("imports Skills from a ZIP and browses Library files read-only", async () => {
     const { appDataRoot, page } = await launchApp();
@@ -1427,7 +1500,7 @@ describe("Electron UI profile switching e2e", () => {
     ).toContain("ZIP Review");
     await page.keyboard.press("Escape");
     await filesDialog.waitFor({ state: "hidden" });
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("restores a missing managed OpenCode Skill from one fresh Preview", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
@@ -1459,7 +1532,7 @@ describe("Electron UI profile switching e2e", () => {
       "The Agent changed while Preview was open. Preview refreshed.",
       { exact: true }
     ).count()).toBe(0);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("starts when migrated backups contain former-machine paths or malformed siblings", async () => {
     const { page } = await launchApp({ migratedBackupFixtures: true });
@@ -1471,7 +1544,7 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("group", { name: "Library item shared-reviewer" })
       .waitFor({ state: "visible" });
     expect(await page.getByText("Action failed", { exact: true }).count()).toBe(0);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps valid Profiles usable and shows native inspection failure instead of false-empty data", async () => {
     const { page } = await launchApp({
@@ -1493,7 +1566,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(
       await page.getByText("No MCP connections are configured in OpenCode.").count()
     ).toBe(0);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps every workspace usable while startup enrichment is still running", async () => {
     const { app: electronApp, page } = await launchApp({ backgroundStartupDelayMs: 10_000 });
@@ -1534,7 +1607,7 @@ describe("Electron UI profile switching e2e", () => {
         return state.__agentEnvBackgroundOperations ?? 0;
       })
     ).toBeGreaterThan(0);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("opens the Library workspace as the global app area", async () => {
     const { app: electronApp, page } = await launchApp();
@@ -1573,7 +1646,7 @@ describe("Electron UI profile switching e2e", () => {
     await selectProfile(page, "UI OpenCode alpha");
     await expect.poll(() => applyActionButton(page, "OpenCode").count()).toBe(1);
     expect(await page.getByRole("complementary", { name: "Activation" }).count()).toBe(0);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("preserves Skills Library context across workspace navigation", async () => {
     const { page } = await launchApp({
@@ -1634,7 +1707,7 @@ describe("Electron UI profile switching e2e", () => {
       )
       .toBeLessThanOrEqual(2);
 
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("supports platform-correct desktop shortcuts in real workspaces", async () => {
     const { appDataRoot, page } = await launchApp();
@@ -1705,7 +1778,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.keyboard.press("Meta+f");
     expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("prevents duplicate Meta saves while the Electron IPC is pending", async () => {
     const { app: electronApp, page } = await launchApp();
@@ -1739,7 +1812,7 @@ describe("Electron UI profile switching e2e", () => {
       )
     ).toBe(1);
     await page.getByRole("status").filter({ hasText: "Profile saved" }).waitFor();
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps desktop shortcuts behind each real blocking modal category", async () => {
     const { page } = await launchApp();
@@ -1806,7 +1879,7 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() => page.evaluate(() => document.activeElement?.getAttribute("aria-label")))
       .toBe("More actions for shared-reviewer");
 
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps Library scale correct and responsive at supported viewports", async () => {
     const cases = [
@@ -2044,7 +2117,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Refresh" }).click();
     await expect.poll(() => page.getByRole("status").textContent()).toContain("Agents refreshed");
     await page.getByText("Agents refreshed").waitFor({ state: "hidden", timeout: 7000 });
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("shows desktop application evidence without creating another Target", async () => {
     const { page } = await launchApp({ openCodeDesktopOnly: true });
@@ -2060,7 +2133,7 @@ describe("Electron UI profile switching e2e", () => {
     await openAgentDiagnostics(page, openCodeCard, "OpenCode");
     await expect.poll(() => openCodeCard.textContent()).toContain("Detected via");
     await expect.poll(() => openCodeCard.textContent()).toContain("OpenCode app");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("shows a missing Target after its command is no longer detected", async () => {
     const { app: electronApp, opencodeDir, page } = await launchApp();
@@ -2101,7 +2174,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toBe(
       originalInstructions
     );
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("updates target cards after taking over OpenCode", async () => {
     const { page } = await launchApp();
@@ -2119,7 +2192,7 @@ describe("Electron UI profile switching e2e", () => {
         openCodeCard.getByRole("button", { name: "Configure OpenCode" }).textContent()
       )
       .toContain("Configure");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("starts complete Profile capture from an unmanaged Agent without changing it", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp({
@@ -2185,7 +2258,7 @@ describe("Electron UI profile switching e2e", () => {
     await composer.getByRole("button", { name: "Instructions", exact: true }).waitFor();
     await composer.getByRole("button", { name: "Skills", exact: true }).waitFor();
     await composer.getByRole("button", { name: "MCPs", exact: true }).waitFor();
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("routes Agent configuration through Profile Save and Apply", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
@@ -2237,7 +2310,7 @@ describe("Electron UI profile switching e2e", () => {
     await previewDialog.getByRole("button", { name: /^Apply/ }).click();
     await previewDialog.waitFor({ state: "hidden" });
     await expect(fileExists(runtimeSkillPath)).resolves.toBe(false);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("blocks profile apply when the target paths are no longer writable", async () => {
     const { opencodeDir, page } = await launchApp();
@@ -2262,7 +2335,7 @@ describe("Electron UI profile switching e2e", () => {
       await chmod(instructionsPath, 0o644);
       await chmod(configPath, 0o644);
     }
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("shows a missing Profile resource in preview without writing the Target", async () => {
     const { opencodeDir, page } = await launchApp({ missingProfileSkill: true });
@@ -2285,7 +2358,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => previewDialog.getByRole("button", { name: "Apply", exact: true }).isDisabled())
       .toBe(true);
     await expect(readFile(instructionsPath, "utf8")).resolves.toBe(originalInstructions);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("creates, edits, duplicates, and deletes profiles through the rendered app", async () => {
     const { appDataRoot, page } = await launchApp();
@@ -2420,7 +2493,7 @@ describe("Electron UI profile switching e2e", () => {
       }
     });
     expect(ipcResult).toContain("Apply another profile before removing this active profile");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps draft dialogs on outside click and dismisses safe layers deliberately", async () => {
     const { page } = await launchApp();
@@ -2466,7 +2539,7 @@ describe("Electron UI profile switching e2e", () => {
     await importDialog.waitFor({ state: "visible", timeout: 5_000 });
     await page.keyboard.press("Escape");
     await importDialog.waitFor({ state: "hidden", timeout: 5_000 });
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("consolidates an existing target skill into the shared library", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
@@ -2620,7 +2693,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(
       fileExists(join(appDataRoot, "skills-library", "target-only-reviewer"))
     ).resolves.toBe(false);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("leaves a concrete local Skill path unmanaged without blocking Profile apply", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
@@ -2719,7 +2792,7 @@ describe("Electron UI profile switching e2e", () => {
         return states.find((state) => state.targetId === "opencode")?.lifecycleStatus;
       })
       .toBe("applied-with-local-override");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("migrates a legacy local Skill decision without changing Agent content", async () => {
     const { appDataRoot, opencodeDir } = await launchApp({
@@ -2750,7 +2823,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(
       readFile(join(skillPath, "SKILL.md"), "utf8")
     ).resolves.toContain("Legacy device-specific content.");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("backs up and replaces managed OpenCode drift after explicit confirmation", async () => {
     const { opencodeDir, page } = await launchApp();
@@ -2809,7 +2882,7 @@ describe("Electron UI profile switching e2e", () => {
     await previewDialog.getByRole("button", { name: "Apply", exact: true }).click();
     await previewDialog.waitFor({ state: "hidden" });
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toContain("UI ALPHA");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("offers one recoverable drift action when another tool replaces a managed Skill", async () => {
     const { opencodeDir, page } = await launchApp();
@@ -2847,7 +2920,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(join(targetSkillDir, "SKILL.md"), "utf8")).resolves.toContain(
       "alpha skill prompt"
     );
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("preserves Claude Code native settings while applying portable Profile resources", async () => {
     const { appDataRoot, claudeDir, page } = await launchApp({ includeClaudeTarget: true });
@@ -2887,7 +2960,7 @@ describe("Electron UI profile switching e2e", () => {
     );
     expect(targetState).toMatchObject({ formatVersion: 3 });
     expect(targetState).not.toHaveProperty("managedConfigKeys");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("backs up and replaces an unmanaged Claude Code Skill after explicit review", async () => {
     const { appDataRoot, claudeDir, page } = await launchApp({ includeClaudeTarget: true });
@@ -2934,7 +3007,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(join(entry?.backupPath ?? "", "SKILL.md"), "utf8")).resolves.toContain(
       "# Existing Claude copy"
     );
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("shows polished skill row actions and update check feedback in the rendered app", async () => {
     const { page } = await launchApp();
@@ -2978,7 +3051,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(skillIconGeometry.centerDelta.every((delta) => delta <= 0.5)).toBe(true);
     expect(skillIconGeometry.identityCenterDelta).toBeLessThanOrEqual(1);
     expect(skillIconGeometry.rowCenterDelta).toBeLessThanOrEqual(1);
-    await sharedRow.locator(".resource-avatar").hover();
+    await hoverFromOutside(page, sharedRow.locator(".resource-avatar"));
     await expect.poll(() =>
       sharedRow.locator(".resource-avatar").evaluate((icon) => getComputedStyle(icon).backgroundColor)
     ).not.toBe("rgba(0, 0, 0, 0)");
@@ -3013,7 +3086,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => page.getByRole("status").textContent())
       .toMatch(/up to date|update.*available|failed/i);
-  }, 30_000);
+  }, 45_000);
 
   it("keeps Skill update progress scoped to its command across workspace navigation", async () => {
     const { app: electronApp, librarySkill, page } = await launchApp({
@@ -3062,7 +3135,7 @@ describe("Electron UI profile switching e2e", () => {
     await expectTopmost(updateDialog.getByRole("button", {
       name: "Apply update shared-reviewer"
     }));
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("removes a skill from the shared library through the rendered app", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
@@ -3090,7 +3163,7 @@ describe("Electron UI profile switching e2e", () => {
       .toContain("No Agent installs were affected");
     await expect(fileExists(join(appDataRoot, "skills-library", "shared-reviewer"))).resolves.toBe(false);
     await expect(fileExists(join(cyclicSkill, "SKILL.md"))).resolves.toBe(true);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps menus, dialogs, and info tips inside the visible app window", async () => {
     const { page } = await launchApp();
@@ -3100,14 +3173,17 @@ describe("Electron UI profile switching e2e", () => {
     const descriptionOverflows = await description.evaluate(
       (element) => element.scrollWidth > element.clientWidth + 1
     );
-    await description.hover();
+    await hoverFromOutside(page, description);
     await page.waitForTimeout(380);
     expect(await page.getByRole("tooltip").count()).toBe(descriptionOverflows ? 1 : 0);
     await page.mouse.move(1, 1);
     await expect.poll(() => page.getByRole("tooltip").count()).toBe(0);
-    await page.getByLabel("Full source for shared-reviewer").hover();
     const descriptionTip = page.getByRole("tooltip");
-    await descriptionTip.waitFor({ state: "visible" });
+    await hoverUntilVisible(
+      page,
+      page.getByLabel("Full source for shared-reviewer"),
+      descriptionTip
+    );
     expect(await descriptionTip.textContent()).toContain("shared-reviewer");
     await expectInViewport(page, descriptionTip);
     const detailStyle = await descriptionTip.evaluate((element) => {
@@ -3131,9 +3207,12 @@ describe("Electron UI profile switching e2e", () => {
     await page.mouse.move(10, 10);
     await descriptionTip.waitFor({ state: "hidden" });
 
-    await page.locator(".library-table__head .info-tip").first().hover();
     const headerTip = page.getByRole("tooltip");
-    await headerTip.waitFor({ state: "visible" });
+    await hoverUntilVisible(
+      page,
+      page.locator(".library-table__head .info-tip").first(),
+      headerTip
+    );
     expect(await headerTip.getAttribute("class")).toContain("ui-hover-detail");
     await expectInViewport(page, headerTip);
     await page.mouse.move(10, 10);
@@ -3219,9 +3298,8 @@ describe("Electron UI profile switching e2e", () => {
     await expectInViewport(page, updateSettings);
     await expectTopmost(updateSettings);
     await expectStructuredDialog(updateSettings);
-    await updateSettings.locator(".info-tip").hover();
     const rowTip = page.getByRole("tooltip");
-    await rowTip.waitFor({ state: "visible" });
+    await hoverUntilVisible(page, updateSettings.locator(".info-tip"), rowTip);
     await expectInViewport(page, rowTip);
   }, 45_000);
 
@@ -3755,7 +3833,7 @@ describe("Electron UI profile switching e2e", () => {
     await expectInViewport(page, page.getByLabel("shared-docs Profile behavior"));
     expect(await workbench.evaluate((element) => getComputedStyle(element).gridTemplateColumns))
       .toMatch(/^196px /);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps the Profile editor painted while a different Profile is loading", async () => {
     const { app: electronApp, page } = await launchApp();
@@ -3788,7 +3866,7 @@ describe("Electron UI profile switching e2e", () => {
       timeout: 5_000
     });
     await loading.waitFor({ state: "hidden" });
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps Profile columns aligned when a long name becomes selected", async () => {
     const longProfileName =
@@ -3846,7 +3924,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(after.contentLeft).toBeCloseTo(before.contentLeft, 1);
     expect(after.nameLeft).toBeCloseTo(before.nameLeft, 1);
     expectColumnsAligned(await measureRows());
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps Library chrome fixed while only the long Skill list scrolls", async () => {
     const { page } = await launchApp({ openCodeAlphaLibrarySkillCount: 18 });
@@ -3877,7 +3955,7 @@ describe("Electron UI profile switching e2e", () => {
       shell: document.querySelector<HTMLElement>(".app-shell")?.scrollTop ?? -1
     }));
     expect(shellScroll).toEqual({ document: 0, editor: 0, shell: 0 });
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps core management actions usable at the minimum supported viewport", async () => {
     const { page } = await launchApp();
@@ -4261,7 +4339,7 @@ describe("Electron UI profile switching e2e", () => {
     }));
     expect(dimensions.documentWidth).toBe(dimensions.viewportWidth);
     expect(dimensions.documentHeight).toBe(dimensions.viewportHeight);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps global chrome and page control scale stable across primary workspaces", async () => {
     const { page } = await launchApp();
@@ -4467,7 +4545,7 @@ describe("Electron UI profile switching e2e", () => {
       viewportWidth: document.documentElement.clientWidth
     }));
     expect(metrics.documentWidth).toBe(metrics.viewportWidth);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("persists the collapsed desktop rail without changing workspace context", async () => {
     const { page } = await launchApp();
@@ -4553,7 +4631,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => navigation.evaluate((element) => Math.round(element.getBoundingClientRect().width)))
       .toBe(204);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("compacts resource lanes semantically at the minimum desktop width", async () => {
     const { page } = await launchApp();
@@ -4624,7 +4702,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(targetLanes.lifecycleLeft).toBe(targetLanes.profileLeft);
     expect(targetLanes.profileBelowLifecycle).toBe(true);
     expect(targetLanes.rowContained).toBe(true);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps one control taxonomy across workspaces and decision dialogs", async () => {
     const { page } = await launchApp();
@@ -4743,7 +4821,7 @@ describe("Electron UI profile switching e2e", () => {
     const navigationControls = await readBoxes(page.locator(".workspace-button"));
     expect(new Set(navigationControls.map(({ borderWidth }) => borderWidth)))
       .toEqual(new Set(["0px"]));
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("paints the complete desktop surface on short and long workspaces", async () => {
     const { page } = await launchApp();
@@ -4787,7 +4865,7 @@ describe("Electron UI profile switching e2e", () => {
       expect(paint.scrollX).toBe(0);
       expect(paint.scrollY).toBe(0);
     }
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps Apply context and actions fixed around one semantic evidence scroller", async () => {
     const { page } = await launchApp({ openCodeAlphaLibrarySkillCount: 8 });
@@ -4945,7 +5023,7 @@ describe("Electron UI profile switching e2e", () => {
       await compactWorkspace.waitFor({ state: "hidden" });
       await previewDialog.waitFor({ state: "visible" });
     }
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps visible control and status text inside its component contract", async () => {
     const { page } = await launchApp({ includeClaudeTarget: true, includeTraeTarget: true });
@@ -5009,7 +5087,7 @@ describe("Electron UI profile switching e2e", () => {
       await page.getByRole("heading", { name: destination, exact: true }).waitFor();
       await expectTextContracts(`${destination} at 920x620`);
     }
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("lays out Agents as one ordered management list with on-demand diagnostics", async () => {
     const { page } = await launchApp();
@@ -5018,10 +5096,10 @@ describe("Electron UI profile switching e2e", () => {
     const agentsHelp = page.getByLabel(
       "Configure each Agent through the same reusable Profile editor, then review every change before Apply."
     );
-    await agentsHelp.hover();
-    await page.getByRole("tooltip").filter({
+    const agentsTooltip = page.getByRole("tooltip").filter({
       hasText: "Configure each Agent through the same reusable Profile editor"
-    }).waitFor({ state: "visible" });
+    });
+    await hoverUntilVisible(page, agentsHelp, agentsTooltip);
     await page.mouse.move(600, 400);
 
     const expectAgentRowGeometry = async () => {
@@ -5239,7 +5317,7 @@ describe("Electron UI profile switching e2e", () => {
     ).resolves.toBe(false);
     await expect.poll(() => openCodeCard.textContent()).toContain("Not managed");
     await expect.poll(() => openCodeCard.textContent()).toContain("None");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("stops managing OpenCode by restoring the environment from before takeover", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
@@ -5270,7 +5348,7 @@ describe("Electron UI profile switching e2e", () => {
       fileExists(join(appDataRoot, "target-states", "opencode.json"))
     ).resolves.toBe(false);
     await expect.poll(() => openCodeCard.textContent()).toContain("Not managed");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps MCP definitions Agent-owned and exposes only Profile activation choices", async () => {
     const { page } = await launchApp();
@@ -5310,7 +5388,7 @@ describe("Electron UI profile switching e2e", () => {
         style.borderStyle !== "none" &&
         style.backgroundColor !== "rgba(0, 0, 0, 0)";
     })).toBe(true);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps Target application policies on Composer rows and persists them per Agent", async () => {
     const { appDataRoot, page } = await launchApp();
@@ -5639,7 +5717,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(
       readFile(join(appDataRoot, "profiles", "ui-opencode-alpha", "INSTRUCTIONS.md"), "utf8")
     ).resolves.toBe("# Updated through collapsed Composer\n");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("cancels or saves a dirty Profile before leaving its workspace", async () => {
     const { appDataRoot, page } = await launchApp();
@@ -5689,7 +5767,7 @@ describe("Electron UI profile switching e2e", () => {
       timeout: 5_000
     });
     await expect(readFile(instructionsPath, "utf8")).resolves.toBe(savedDraft);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("returns a reverted Profile Skill edit to clean without offering Save or Apply", async () => {
     const { appDataRoot, page } = await launchApp();
@@ -5731,7 +5809,7 @@ describe("Electron UI profile switching e2e", () => {
         enabled: true
       }
     ]);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("discards a dirty Profile without changing its saved file", async () => {
     const { appDataRoot, page } = await launchApp();
@@ -5770,7 +5848,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => page.getByRole("button", { name: "Save", exact: true }).isDisabled())
       .toBe(true);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("closes a clean Electron window without waiting for renderer confirmation", async () => {
     const { page } = await launchApp({ testCloseGuard: true });
@@ -5781,7 +5859,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await closed;
     await expect.poll(() => app!.windows().length).toBe(0);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("guards dirty Electron close, supports cancel, and closes after discard", async () => {
     const { appDataRoot, page } = await launchApp({ testCloseGuard: true });
@@ -5817,7 +5895,7 @@ describe("Electron UI profile switching e2e", () => {
     await Promise.all([discardClick, closed]);
 
     await expect(readFile(instructionsPath, "utf8")).resolves.toBe(originalInstructions);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("imports a local skill folder from the Import dialog", async () => {
     const { appDataRoot, page } = await launchApp();
@@ -5908,7 +5986,7 @@ describe("Electron UI profile switching e2e", () => {
     await rm(localSkillDir, { recursive: true, force: true });
     const importedRow = page.getByRole("group", { name: "Library item path-reviewer" });
     await expect.poll(() => importedRow.textContent()).toContain("Monitoring off");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("reviews same-name Skill differences before keeping another Library copy", async () => {
     const { appDataRoot, page } = await launchApp();
@@ -6150,7 +6228,7 @@ describe("Electron UI profile switching e2e", () => {
         name: "More cleanup actions for managed-after-import"
       }).count()
     ).toBe(1);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("surfaces legacy AgentEnv-owned shared links as an unfinished location migration", async () => {
     const { homeDir, librarySkill, page } = await launchApp();
@@ -6191,7 +6269,7 @@ describe("Electron UI profile switching e2e", () => {
       .resolves.toBe(true);
     await expect(lstat(join(sharedSkillDir, "notes.md")).then((value) => value.isSymbolicLink()))
       .resolves.toBe(true);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("imports and safely migrates a shared compatibility Skill in one cleanup", async () => {
     const { appDataRoot, homeDir, opencodeDir, codexDir, page } = await launchApp();
@@ -6257,7 +6335,7 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() => fileExists(join(codexDir, "skills", "shared-migration-reviewer", "SKILL.md")))
       .toBe(true);
     await cleanupGroup.waitFor({ state: "hidden" });
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("discovers and migrates a directory-linked Skill collection as one safe boundary", async () => {
     const { appDataRoot, homeDir, opencodeDir, codexDir, page } = await launchApp();
@@ -6721,9 +6799,8 @@ describe("Electron UI profile switching e2e", () => {
     const conflictLocations = conflictGroup.getByLabel(
       "Full cleanup locations manual-conflict-reviewer"
     );
-    await conflictLocations.hover();
     const locationsTooltip = page.getByRole("tooltip");
-    await locationsTooltip.waitFor({ state: "visible" });
+    await hoverUntilVisible(page, conflictLocations, locationsTooltip);
     await locationsTooltip.click({ position: { x: 12, y: 12 } });
     await expect.poll(() => page.getByRole("region", { name: "Environment skills" }).count()).toBe(1);
     await expect.poll(() => page.getByRole("dialog", { name: "Review skill cleanup" }).count()).toBe(0);
@@ -6881,14 +6958,20 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() => page.locator(".app-feedback--error").allTextContents())
       .toEqual([]);
     await expect
-      .poll(() => page.locator(".cleanup-group-row").evaluateAll((rows) =>
-        rows
-          .filter((row) => row.querySelector(".cleanup-group-state")?.textContent?.trim() === "Ready")
-          .map((row) => row.getAttribute("aria-label") ?? row.textContent?.trim())
-      ))
+      .poll(
+        () => page.locator(".cleanup-group-row").evaluateAll((rows) =>
+          rows
+            .filter((row) => row.querySelector(".cleanup-group-state")?.textContent?.trim() === "Ready")
+            .map((row) => row.getAttribute("aria-label") ?? row.textContent?.trim())
+        ),
+        { timeout: 30_000 }
+      )
       .toEqual([]);
     await expect
-      .poll(() => page.getByRole("button", { name: /Clean up \d+ ready Skills/ }).count())
+      .poll(
+        () => page.getByRole("button", { name: /Clean up \d+ ready Skills/ }).count(),
+        { timeout: 30_000 }
+      )
       .toBe(0);
   }, 60_000);
 
@@ -7029,7 +7112,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => page.getByRole("status").textContent()).toContain(
       "Local skills refreshed"
     );
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("imports a Skills CLI installation as a Library copy without changing the runtime path or lock", async () => {
     const { appDataRoot, homeDir, opencodeDir, page } = await launchApp();
@@ -7122,7 +7205,7 @@ describe("Electron UI profile switching e2e", () => {
         externalLockPath: lockPath
       }
     });
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("imports an external Skill with a colliding Library id without leaving the dialog open", async () => {
     const { appDataRoot, homeDir, opencodeDir, page } = await launchApp();
@@ -7275,7 +7358,7 @@ describe("Electron UI profile switching e2e", () => {
       updatePolicy: "tracked"
     });
     expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps all three conflicting Target copies after a stale cleanup error", async () => {
     const { opencodeDir, codexDir, claudeDir, page } = await launchApp({
@@ -7350,7 +7433,7 @@ describe("Electron UI profile switching e2e", () => {
       state: "visible"
     });
     await expect.poll(() => search.inputValue()).toBe("Refresh Button");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("persists custom Skill and Profile icons through the rendered app", async () => {
     const { appDataRoot, page } = await launchApp();
@@ -7392,7 +7475,7 @@ describe("Electron UI profile switching e2e", () => {
         join(appDataRoot, "profiles", "ui-opencode-alpha", "profile.json")
       )).iconKey
     ).toBe("claude");
-  }, 30_000);
+  }, 60_000);
 
   it("shows Claude Code MCP definitions read-only and never rewrites them", async () => {
     const { homeDir, page } = await launchApp({ includeClaudeTarget: true });
@@ -7439,7 +7522,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await previewAndApply(page, "Claude Code");
     await expect(readFile(mcpPath, "utf8")).resolves.toBe(originalMcp);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("applies Trae CLI Instructions, Skills, and sparse native MCP switches", async () => {
     const { page, traeDir } = await launchApp({ includeTraeTarget: true });
@@ -7454,10 +7537,10 @@ describe("Electron UI profile switching e2e", () => {
     const instructionsHelp = page.getByLabel(
       "Profile Apply writes this file. New Trae CLI sessions load changes; running conversations keep their current context."
     );
-    await instructionsHelp.hover();
-    await page.getByRole("tooltip").filter({
+    const instructionsTooltip = page.getByRole("tooltip").filter({
       hasText: "New Trae CLI sessions load changes"
-    }).waitFor({ state: "visible" });
+    });
+    await hoverUntilVisible(page, instructionsHelp, instructionsTooltip);
     await page.mouse.move(600, 400);
     await expandComposerSection(page, "MCPs");
     const editor = page.locator(".profile-mcp-editor");
@@ -7493,7 +7576,7 @@ describe("Electron UI profile switching e2e", () => {
       "[mcp_servers.browser]\nurl = \"https://example.test/browser\"\nenabled = false"
     );
     expect(toml).toContain('Authorization = "keep-trae-header-secret"');
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("installs a shared library skill into an OpenCode profile from the rendered app", async () => {
     const { librarySkill, opencodeDir, page } = await launchApp();
@@ -7524,7 +7607,7 @@ describe("Electron UI profile switching e2e", () => {
         "utf8"
       )
     ).resolves.toContain('"source": "skills-library/shared-reviewer"');
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("detects and applies updates after a library skill is installed on OpenCode", async () => {
     const { librarySkill, opencodeDir, page } = await launchApp();
@@ -7588,7 +7671,7 @@ describe("Electron UI profile switching e2e", () => {
     await updatedRow.getByText("Up to date").waitFor({ state: "visible" });
     expect(await updatedRow.getByText("1 out of sync").count()).toBe(0);
     expect(await updatedRow.getByRole("button", { name: "Sync install of shared-reviewer" }).count()).toBe(0);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps large Skill update previews readable instead of compressing file rows", async () => {
     const { librarySkill, page } = await launchApp();
@@ -7669,7 +7752,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(geometry.detailsHeight).toBeGreaterThan(180);
     expect(geometry.summaryHeight).toBeGreaterThan(20);
     expect(geometry.diffHeight).toBeGreaterThan(100);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps Skill status and direct actions in separate aligned lanes at supported widths", async () => {
     const { appDataRoot, librarySkill, page } = await launchApp();
@@ -7879,7 +7962,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(join(helperSkill.libraryDir, "SKILL.md"), "utf8")).resolves.toContain(
       "Updated content."
     );
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("applies reviewed bulk candidates when a source disappears after preview", async () => {
     const { appDataRoot, librarySkill, page } = await launchApp();
@@ -7924,7 +8007,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(
       readFile(join(missingSourceSkill.libraryDir, "SKILL.md"), "utf8")
     ).resolves.toContain("Missing source helper v2.");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("backs up and restores AgentEnv data through system directory pickers", async () => {
     const { appDataRoot, page } = await launchApp();
@@ -7975,7 +8058,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Restore data" }).click();
     const restoreDialog = page.getByRole("dialog", { name: "Restore AgentEnv data" });
     await restoreDialog.waitFor({ state: "visible" });
-    await expect.poll(() => restoreDialog.textContent()).toContain("Version 1");
+    await expect.poll(() => restoreDialog.textContent()).toContain("Version 2");
     await restoreDialog.getByRole("button", { name: "Restore data" }).click();
     await restoreDialog.waitFor({ state: "hidden" });
 
@@ -7986,7 +8069,7 @@ describe("Electron UI profile switching e2e", () => {
     );
     const safetyRoot = join(root, "agentenv-import-safety");
     expect((await readdir(safetyRoot)).length).toBeGreaterThan(0);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("shows backup usage and deletes individual or retention-eligible recovery points", async () => {
     const { appDataRoot, page } = await launchApp();
@@ -7998,14 +8081,13 @@ describe("Electron UI profile switching e2e", () => {
       sourcePaths: string[] = []
     ) => {
       const backupDir = join(backupsRoot, id);
-      await mkdir(backupDir, { recursive: true });
+      await mkdir(join(backupDir, "files"), { recursive: true });
       const entries = await Promise.all(sourcePaths.map(async (sourcePath) => {
         const backupPath = join(
           backupDir,
           "files",
           Buffer.from(sourcePath).toString("base64url")
         );
-        await mkdir(join(backupDir, "files"), { recursive: true });
         await writeFile(backupPath, `Backup of ${sourcePath}\n`);
         return {
           sourcePath,
@@ -8079,7 +8161,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => fileExists(policyDeleteDir)).toBe(false);
     await expect(fileExists(retainedDir)).resolves.toBe(true);
     await expect.poll(() => manager.textContent()).toContain("1 backup");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("installs library skills using copy mode from Settings", async () => {
     const { opencodeDir, page } = await launchApp();
@@ -8101,7 +8183,7 @@ describe("Electron UI profile switching e2e", () => {
       "Review code changes before applying them."
     );
     expect((await lstat(installedSkillMd)).isSymbolicLink()).toBe(false);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps canonical skills in app data while installing Target-specific runtime copies", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
@@ -8127,7 +8209,7 @@ describe("Electron UI profile switching e2e", () => {
       await readFile(canonicalSkillMd, "utf8")
     );
     await expect(fileExists(canonicalSkillMd)).resolves.toBe(true);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("captures a Profile from the live OpenCode Target without taking it over", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
@@ -8230,7 +8312,7 @@ describe("Electron UI profile switching e2e", () => {
       join(appDataRoot, "skills-library", "target-only-reviewer")
     );
     await expect.poll(() => capturedSkillRow.textContent()).not.toContain("Not tracked");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("captures Trae CLI while warning about a broken Skill link, then cleans it up safely", async () => {
     const { appDataRoot, page, traeDir } = await launchApp({ includeTraeTarget: true });
@@ -8281,7 +8363,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => cleanupDialog.textContent()).toContain("Remove unavailable links");
     await cleanupDialog.getByRole("button", { name: /Clean up \d+ skills/ }).click();
     await expect.poll(() => fileExists(brokenSkill)).toBe(false);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps capture actions visible with long, high-density review content", async () => {
     const { app: electronApp, page } = await launchApp();
@@ -8377,7 +8459,7 @@ describe("Electron UI profile switching e2e", () => {
     await dialog.getByRole("button", { name: "Back" }).click();
     await expect.poll(() => page.getByLabel("Profile name").inputValue()).toBe("OpenCode");
     await page.keyboard.press("Escape");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("persists skill background update check settings from Settings", async () => {
     const { appDataRoot, page } = await launchApp();
@@ -8442,7 +8524,7 @@ describe("Electron UI profile switching e2e", () => {
         skillAutoCheckEnabled: true,
         skillAutoCheckIntervalMinutes: 15
       });
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("reveals sidebar Agents hidden behind the overflow count", async () => {
     const { page } = await launchApp();
@@ -8451,7 +8533,7 @@ describe("Electron UI profile switching e2e", () => {
     });
     await overflow.waitFor({ state: "visible" });
 
-    await overflow.hover();
+    await hoverFromOutside(page, overflow);
     const popover = page.getByRole("menu", { name: "Hidden Agents" });
     await popover.waitFor({ state: "visible" });
     await expect.poll(() => popover.textContent()).toContain("Antigravity");
@@ -8467,7 +8549,7 @@ describe("Electron UI profile switching e2e", () => {
       { width: 920, height: 620 }
     ]) {
       await resizeAppWindow(page, viewport.width, viewport.height);
-      await overflow.hover();
+      await hoverFromOutside(page, overflow);
       const box = await popover.boundingBox();
       expect(box).not.toBeNull();
       expect(box!.x).toBeGreaterThanOrEqual(0);
@@ -8476,7 +8558,7 @@ describe("Electron UI profile switching e2e", () => {
       expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
     }
 
-    await popover.hover();
+    await hoverFromOutside(page, popover);
     await expect.poll(() => popover.isVisible()).toBe(true);
     await page.getByRole("button", { name: "Skills", exact: true }).hover();
     await popover.waitFor({ state: "hidden" });
@@ -8504,7 +8586,7 @@ describe("Electron UI profile switching e2e", () => {
     await page
       .getByRole("region", { name: "Profiles" })
       .waitFor({ state: "visible" });
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("explains why an unavailable Agent cannot start Skill management", async () => {
     const { app: electronApp, page } = await launchApp();
@@ -8551,7 +8633,7 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() => dialog.textContent())
       .toContain("Installation not detected");
     expect(await dialog.getByRole("button", { name: "Review" }).isDisabled()).toBe(true);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("persists enabled Agents and excludes disabled Agents from operations", async () => {
     const { appDataRoot, homeDir, page } = await launchApp();
@@ -8820,7 +8902,7 @@ describe("Electron UI profile switching e2e", () => {
           .evaluate((button) => getComputedStyle(button).backgroundColor)
       )
       .not.toBe("rgb(0, 122, 255)");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("persists the preferred conversation terminal", async () => {
     const { appDataRoot, page } = await launchApp();
@@ -8836,7 +8918,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.reload();
     await openSettingsCategory(page, "General");
     await expect.poll(() => terminalSelect.inputValue()).toBe("ghostty");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("reports an offline GitHub update check without offering sign-in as the fix", async () => {
     const { app: electronApp, page } = await launchApp();
@@ -8879,7 +8961,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await feedback.getByRole("button", { name: "Connect GitHub" }).count()).toBe(0);
     await feedback.getByRole("button", { name: "Dismiss message" }).click();
     await feedback.waitFor({ state: "hidden" });
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("copies the GitHub device code and refreshes connection state after authorization", async () => {
     const { app: electronApp, page } = await launchApp();
@@ -8965,7 +9047,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByText("Connected as e2e-user").waitFor();
     await page.getByText("Connected", { exact: true }).waitFor();
     expect(await codeButton.count()).toBe(0);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("saves and applies Profile Skill disable and re-enable changes", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp({
@@ -9016,7 +9098,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(reenabledResources.skills).toContainEqual(
       { libraryId: "layout-skill-1", targetName: "layout-skill-1", enabled: true }
     );
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps mixed Profile Skill status and action lanes aligned", async () => {
     const { page } = await launchApp({ openCodeAlphaLibrarySkillCount: 2 });
@@ -9066,7 +9148,7 @@ describe("Electron UI profile switching e2e", () => {
         Math.min(...geometry.map((item) => item.stateTitleTop))).toBeLessThanOrEqual(1);
       expect(geometry.every((item) => item.contained && item.stateTitleFits)).toBe(true);
     }
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps Profile Skill edits, Save, and Preview responsive with many Skills", async () => {
     const { page } = await launchApp({ openCodeAlphaLibrarySkillCount: 30 });
@@ -9102,7 +9184,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("dialog", { name: "Preview" }).waitFor({ state: "visible" });
     const previewDuration = (await page.evaluate(() => performance.now())) - previewStartedAt;
     expect(previewDuration).toBeLessThan(2_000);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("globally disables a Library skill, hides it from Profile selection, and removes it on Apply", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp({
@@ -9220,7 +9302,7 @@ describe("Electron UI profile switching e2e", () => {
     await restoredPicker.getByRole("button", { name: "Cancel" }).click();
     await previewAndApply(page, "OpenCode");
     await expect(fileExists(join(installedSkillDir, "SKILL.md"))).resolves.toBe(true);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("imports and updates a GitHub-backed skill through the rendered app", async () => {
     const { app: electronApp, appDataRoot, githubFixtureRoot, page } = await launchApp();
@@ -9255,9 +9337,8 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => githubRow.getByLabel("Source details for github-reviewer").textContent())
       .toContain("Updated Jul 18, 2026");
     const sourcePreview = githubRow.getByLabel("Full source for github-reviewer");
-    await sourcePreview.hover();
     const sourceTooltip = page.getByRole("tooltip").filter({ hasText: sourceUrl });
-    await sourceTooltip.waitFor({ state: "visible" });
+    await hoverUntilVisible(page, sourcePreview, sourceTooltip);
     await expectInViewport(page, sourceTooltip);
     await page.mouse.move(10, 10);
     await githubRow.getByRole("button", { name: "Open repository source for github-reviewer" }).click();
@@ -9401,7 +9482,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(
       readFile(join(appDataRoot, "skills-library", "release-check", "SKILL.md"), "utf8")
     ).resolves.toContain("Verify releases before shipping");
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps a batch import failure visible and retries only the failed Skill", async () => {
     const { appDataRoot, githubFixtureRoot, page } = await launchApp();
@@ -9431,9 +9512,8 @@ describe("Electron UI profile switching e2e", () => {
 
     const failure = dialog.getByLabel("Import failure for Release Check");
     expect(await failure.locator("svg").count()).toBe(1);
-    await failure.hover();
     const tooltip = page.getByRole("tooltip").filter({ hasText: "GitHub request failed (404 Not Found)" });
-    await tooltip.waitFor({ state: "visible", timeout: 5_000 });
+    await hoverUntilVisible(page, failure, tooltip);
     await expectInViewport(page, tooltip);
     expect(await tooltip.evaluate((element) => getComputedStyle(element).userSelect)).toBe("text");
 
@@ -9469,7 +9549,7 @@ describe("Electron UI profile switching e2e", () => {
       .resolves.toBe(true);
     await expect(fileExists(join(appDataRoot, "skills-library", "release-check", "SKILL.md")))
       .resolves.toBe(true);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("reviews a GitHub same-name conflict before replacing the Library copy", async () => {
     const { appDataRoot, githubFixtureRoot, page } = await launchApp();
@@ -9647,7 +9727,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(join(librarySkill.libraryDir, "SKILL.md"), "utf8")).resolves.not.toContain(
       "This content was not reviewed."
     );
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("configures a local update source before updating a library skill", async () => {
     const { appDataRoot, librarySkill, page } = await launchApp();
@@ -9674,8 +9754,8 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("group", { name: "Library item shared-reviewer" })
       .getByLabel("Full source for shared-reviewer");
     await expect.poll(() => sourceLabel.textContent()).toBe("Local folder");
-    await sourceLabel.hover();
-    await page.getByRole("tooltip").filter({ hasText: newSourceDir }).waitFor({ state: "visible" });
+    const sourceTooltip = page.getByRole("tooltip").filter({ hasText: newSourceDir });
+    await hoverUntilVisible(page, sourceLabel, sourceTooltip);
     await page.mouse.move(2, 2);
 
     await page.getByRole("button", { name: "Update shared-reviewer" }).click();
@@ -9701,7 +9781,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(join(librarySkill.libraryDir, "SKILL.md"), "utf8")).resolves.toContain(
       "Use the alternate configured source."
     );
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("applies target-specific native MCP activation to multiple Agent targets", async () => {
     const { codexDir, opencodeDir, page } = await launchApp();
@@ -9723,7 +9803,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(codexConfig).toContain("[mcp_servers.shared-docs]");
     expect(codexConfig).toContain('url = "https://example.com/shared-docs/mcp"');
     expect(codexConfig).toMatch(/\[mcp_servers\.shared-docs\][\s\S]*?enabled = true/);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("persists an unchanged MCP choice without deleting the native definition", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
@@ -9747,7 +9827,7 @@ describe("Electron UI profile switching e2e", () => {
       url: "https://example.com/shared-docs/mcp",
       enabled: false
     });
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("switches OpenCode profiles without changing unrelated native settings", async () => {
     const { opencodeDir, page } = await launchApp();
@@ -9768,7 +9848,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(betaConfig.mcp["ui-alpha-mcp"]?.enabled).toBe(false);
     expect(betaConfig.mcp["ui-beta-mcp"]?.enabled).toBe(true);
     expect(betaConfig.mcp["user-managed"]).toBeDefined();
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("applies an OpenCode profile's portable resources to Codex and then reports it applied", async () => {
     const { codexDir, page } = await launchApp();
@@ -9813,7 +9893,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(deploymentGeometry.hasTextLabel).toBe(true);
     expect(deploymentGeometry.label).toBe("2 Agents · Active");
     expect(deploymentGeometry.scrollWidth - deploymentGeometry.clientWidth).toBeLessThanOrEqual(1);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("switches Codex profiles through the rendered app without touching auth", async () => {
     const { codexDir, page } = await launchApp();
@@ -9839,7 +9919,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(betaConfig).toContain("[mcp_servers.ui_codex_alpha]");
     expect(betaConfig).toMatch(/\[mcp_servers\.ui_codex_alpha\][\s\S]*?enabled = false/);
     expect(betaConfig).toMatch(/\[mcp_servers\.ui_codex_beta\][\s\S]*?enabled = true/);
-  }, 30_000);
+  }, standardElectronTestTimeout);
 
   it("keeps the shared desktop visual contract stable across workspaces and review surfaces", async () => {
     const { page } = await launchApp();

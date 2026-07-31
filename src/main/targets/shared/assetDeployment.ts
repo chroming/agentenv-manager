@@ -80,11 +80,19 @@ export const createDirectoryAssetDriver = (
   },
   applyAssets: async (input) => {
     if (!managesSkills(input)) return;
+    const missingDirectories = skillTargetNames(input).size > 0
+      ? await missingManagedSkillDirectories(input)
+      : [];
+    for (const directory of missingDirectories) {
+      await input.claimMutationPath?.(directory);
+    }
     const usesApprovedPreviewRemovals = Boolean(input.plannedResourceRemovals);
     const stalePaths = input.plannedResourceRemovals
       ? [...input.plannedResourceRemovals]
       : await staleOwnedSkillPaths(input);
     for (const stalePath of stalePaths) {
+      await input.claimMutationPath?.(stalePath);
+      await input.claimMutationPath?.(markerPathForFile(stalePath));
       await removeSkillDeployment(stalePath, {
         allowedRoot: input.targetPaths.skillsDir!,
         ...(!usesApprovedPreviewRemovals
@@ -96,7 +104,12 @@ export const createDirectoryAssetDriver = (
             }
           : {})
       });
+      await input.claimMutationPath?.recordMutation?.(
+        stalePath,
+        markerPathForFile(stalePath)
+      );
     }
     await applySkillRefs(input);
+    await input.claimMutationPath?.recordMutation?.(...missingDirectories);
   }
 });

@@ -1027,6 +1027,8 @@ export interface SkillCleanupBackupSummary {
   createdAt: string;
   locationCount: number;
   operation?: "cleanup" | "remove" | "retire" | "update" | "merge";
+  recoveryRequired?: boolean;
+  safetyBackupId?: string;
 }
 
 export interface UnmanagedSkillEntry {
@@ -1445,6 +1447,7 @@ export interface TargetRecoveryState {
   operation: "apply" | "rollback";
   error: string;
   backupId?: string;
+  safetyBackupId?: string;
   occurredAt: string;
 }
 
@@ -1549,6 +1552,7 @@ export interface SaveProfileInput {
   manifest: ProfileManifest;
   instructions: string;
   resources: ProfileResources;
+  expectedContentHash?: string;
 }
 
 export interface UpdateProfileSkillsInput {
@@ -1570,6 +1574,7 @@ export interface ForkProfileSkillsInput extends UpdateProfileSkillsInput {
 
 export interface UpdateProfileMetadataInput {
   id: string;
+  expectedContentHash: string;
   name?: string;
   description?: string;
   iconKey?: ResourceIconKey;
@@ -1710,9 +1715,10 @@ export interface BackupEntry {
 }
 
 export interface BackupManifest {
+  formatVersion: 2;
   id: string;
   createdAt: string;
-  operation?: "apply" | "stop-managing" | "data-import" | "adopt-drift" | "shared-skill-migration" | "workspace-sync";
+  operation?: "apply" | "stop-managing" | "data-import" | "adopt-drift" | "shared-skill-migration" | "workspace-sync" | "rollback-safety";
   targetId?: string;
   targetIds?: string[];
   profileId?: string;
@@ -1724,7 +1730,7 @@ export interface BackupSummary {
   id: string;
   createdAt: string;
   fileCount: number;
-  operation?: "apply" | "stop-managing" | "data-import" | "adopt-drift" | "shared-skill-migration" | "workspace-sync";
+  operation?: "apply" | "stop-managing" | "data-import" | "adopt-drift" | "shared-skill-migration" | "workspace-sync" | "rollback-safety";
   targetId?: string;
   targetIds?: string[];
   profileId?: string;

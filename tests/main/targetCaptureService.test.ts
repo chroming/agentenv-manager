@@ -40,7 +40,15 @@ const setup = async (targetId: string, installed = true) => {
     skillLibraryStore,
     targetDiscoveryService: discovery(targetId, installed)
   });
-  return { homeDir, paths, profileStore, skillLibraryStore, service };
+  return {
+    homeDir,
+    paths,
+    profileStore,
+    skillLibraryStore,
+    targetRegistry,
+    settingsStore,
+    service
+  };
 };
 
 describe("target capture service v2", () => {
@@ -193,6 +201,97 @@ describe("target capture service v2", () => {
       .rejects.toThrow("Agent changed after capture preview");
     await expect(profileStore.listProfiles()).resolves.toEqual([]);
     await expect(readFile(paths.skillsLibraryDir)).rejects.toThrow();
+  });
+
+  it("restores the Library when Profile creation fails after a Skill import", async () => {
+    const {
+      homeDir,
+      paths,
+      profileStore,
+      skillLibraryStore,
+      targetRegistry,
+      settingsStore
+    } = await setup("opencode");
+    const targetDir = join(homeDir, ".config", "opencode");
+    const skillDir = join(targetDir, "skills", "review-workflow");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(join(targetDir, "AGENTS.md"), "# Existing OpenCode\n");
+    await writeFile(join(targetDir, "opencode.jsonc"), "{}\n");
+    await writeFile(
+      join(skillDir, "SKILL.md"),
+      "---\nname: review-workflow\n---\n# Original Agent copy\n"
+    );
+    const failingProfileStore = {
+      ...profileStore,
+      saveProfile: async () => {
+        throw new Error("injected Profile save failure");
+      }
+    };
+    const failingService = createTargetCaptureService({
+      paths,
+      profileStore: failingProfileStore,
+      targetRegistry,
+      skillLibraryStore,
+      targetDiscoveryService: discovery("opencode"),
+      settingsStore
+    });
+    const preview = await failingService.previewTarget("opencode");
+
+    await expect(
+      failingService.createFromTarget({ previewId: preview.id, name: "Failure" })
+    ).rejects.toThrow("injected Profile save failure");
+
+    await expect(readFile(join(paths.skillsLibraryDir, "review-workflow", "SKILL.md"), "utf8"))
+      .rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(join(skillDir, "SKILL.md"), "utf8"))
+      .resolves.toContain("# Original Agent copy");
+    await expect(profileStore.listProfiles()).resolves.toEqual([]);
+  });
+
+  it("does not overwrite a Library path changed after Capture imported it", async () => {
+    const {
+      homeDir,
+      paths,
+      profileStore,
+      skillLibraryStore,
+      targetRegistry,
+      settingsStore
+    } = await setup("opencode");
+    const targetDir = join(homeDir, ".config", "opencode");
+    const skillDir = join(targetDir, "skills", "review-workflow");
+    const librarySkillPath = join(paths.skillsLibraryDir, "review-workflow", "SKILL.md");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(join(targetDir, "AGENTS.md"), "# Existing OpenCode\n");
+    await writeFile(join(targetDir, "opencode.jsonc"), "{}\n");
+    await writeFile(
+      join(skillDir, "SKILL.md"),
+      "---\nname: review-workflow\n---\n# Original Agent copy\n"
+    );
+    const failingProfileStore = {
+      ...profileStore,
+      saveProfile: async () => {
+        await writeFile(librarySkillPath, "# External Library edit\n");
+        throw new Error("injected Profile save failure");
+      }
+    };
+    const failingService = createTargetCaptureService({
+      paths,
+      profileStore: failingProfileStore,
+      targetRegistry,
+      skillLibraryStore,
+      targetDiscoveryService: discovery("opencode"),
+      settingsStore
+    });
+    const preview = await failingService.previewTarget("opencode");
+
+    await expect(
+      failingService.createFromTarget({ previewId: preview.id, name: "Failure" })
+    ).rejects.toThrow("changed after Capture wrote it and was left in place");
+
+    await expect(readFile(librarySkillPath, "utf8"))
+      .resolves.toBe("# External Library edit\n");
+    await expect(readFile(join(skillDir, "SKILL.md"), "utf8"))
+      .resolves.toContain("# Original Agent copy");
   });
 
   it("reuses identical Library Skills and preserves a different same-name version", async () => {

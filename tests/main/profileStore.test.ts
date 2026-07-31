@@ -103,7 +103,8 @@ describe("profile store v2", () => {
     const saved = await store.saveProfile({
       manifest: { ...profile.manifest, createdAt: undefined },
       instructions: "# Updated\n",
-      resources: profile.resources
+      resources: profile.resources,
+      expectedContentHash: profile.contentHash
     });
 
     expect(saved.instructions).toBe("# Updated\n");
@@ -115,13 +116,33 @@ describe("profile store v2", () => {
     ]);
   });
 
+  it("preserves canonical Profile data changed after the editor loaded it", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-stale-save-"));
+    await writeProfile(root);
+    const store = createProfileStore({ appDataRoot: root });
+    const stale = await store.readProfile("daily-coding");
+    await writeFile(join(stale.profileDir!, "INSTRUCTIONS.md"), "# External edit\n");
+
+    await expect(store.saveProfile({
+      manifest: stale.manifest,
+      instructions: "# Editor change\n",
+      resources: stale.resources,
+      expectedContentHash: stale.contentHash
+    })).rejects.toThrow("changed outside this view");
+
+    await expect(readFile(join(stale.profileDir!, "INSTRUCTIONS.md"), "utf8"))
+      .resolves.toBe("# External edit\n");
+  });
+
   it("updates metadata without changing environment content", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-profile-metadata-"));
     await writeProfile(root);
     const store = createProfileStore({ appDataRoot: root });
+    const current = await store.readProfile("daily-coding");
 
     const updated = await store.updateProfileMetadata({
       id: "daily-coding",
+      expectedContentHash: current.contentHash!,
       name: "Review Focus",
       description: "Review metadata",
       iconKey: "shield"
@@ -134,6 +155,24 @@ describe("profile store v2", () => {
     });
     expect(updated.instructions).toBe("# Agent\n");
     expect(updated.resources.skills).toHaveLength(1);
+  });
+
+  it("refuses to overwrite a Profile changed after it was loaded", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-stale-save-"));
+    await writeProfile(root);
+    const store = createProfileStore({ appDataRoot: root });
+    const profile = await store.readProfile("daily-coding");
+    await writeFile(join(profile.profileDir!, "INSTRUCTIONS.md"), "# External edit\n");
+
+    await expect(store.saveProfile({
+      manifest: profile.manifest,
+      instructions: "# Draft edit\n",
+      resources: profile.resources,
+      expectedContentHash: profile.contentHash
+    })).rejects.toThrow("changed outside this view");
+
+    await expect(readFile(join(profile.profileDir!, "INSTRUCTIONS.md"), "utf8"))
+      .resolves.toBe("# External edit\n");
   });
 
   it("updates only Profile Skills from an Agent detail and skips semantic no-ops", async () => {
@@ -178,7 +217,8 @@ describe("profile store v2", () => {
     await store.saveProfile({
       manifest: profile.manifest,
       instructions: "# Changed elsewhere\n",
-      resources: profile.resources
+      resources: profile.resources,
+      expectedContentHash: profile.contentHash
     });
 
     await expect(store.updateProfileSkills({

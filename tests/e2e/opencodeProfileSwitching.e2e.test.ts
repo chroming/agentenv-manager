@@ -49,7 +49,7 @@ describe("OpenCode Profile v2 switching e2e", () => {
         }
       }
     };
-    await profileStore.saveProfile({
+    let savedProfile = await profileStore.saveProfile({
       manifest,
       instructions: "# Profile instructions\n",
       resources: managedResources
@@ -77,6 +77,7 @@ describe("OpenCode Profile v2 switching e2e", () => {
     await profileStore.saveProfile({
       manifest,
       instructions: "# Profile instructions\n",
+      expectedContentHash: savedProfile.contentHash,
       resources: {
         ...managedResources,
         managementByTarget: {
@@ -112,10 +113,11 @@ describe("OpenCode Profile v2 switching e2e", () => {
       .resolves.toContain("# Managed v1");
     expect((await service.listTargetStates())[0]?.lifecycleStatus).toBe("applied");
 
-    await profileStore.saveProfile({
+    savedProfile = await profileStore.saveProfile({
       manifest,
       instructions: "# Profile instructions\n",
-      resources: managedResources
+      resources: managedResources,
+      expectedContentHash: (await profileStore.readProfile(manifest.id)).contentHash
     });
     const resumePreview = await service.previewProfile(manifest.id, "opencode");
     expect(reviewMessages(resumePreview.issues)).toEqual([

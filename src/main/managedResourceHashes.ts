@@ -7,11 +7,11 @@ import type {
   SkillLibraryEntry,
   TargetPaths
 } from "../shared/types";
-import { pathExists } from "./fileUtils";
+import { pathEntryExists, pathExists } from "./fileUtils";
 import { hashSkillContent } from "./skillContentHash";
 
 export const hashPath = async (path: string): Promise<string | undefined> => {
-  if (!(await pathExists(path))) return undefined;
+  if (!(await pathEntryExists(path))) return undefined;
 
   const hash = createHash("sha256");
   const walk = async (currentPath: string) => {
@@ -40,8 +40,8 @@ export const hashManagedResourcePath = async (
   kind?: ManagedResourceKind
 ): Promise<string | undefined> => {
   if (kind !== "skill") return hashPath(path);
-  if (!(await pathExists(path))) return undefined;
-  return hashSkillContent(path);
+  if (!(await pathEntryExists(path))) return undefined;
+  return await pathExists(path) ? hashSkillContent(path) : hashPath(path);
 };
 
 export const expectedManagedSkillHashes = (

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { appendFile, cp, lstat, mkdir, readFile, readdir, readlink, rm, stat } from "node:fs/promises";
+import { appendFile, cp, lstat, mkdir, readFile, readdir, rm, stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createBackupStore } from "./backupStore";
@@ -11,7 +11,16 @@ import {
   replacePathAtomically,
   writeAtomic
 } from "./fileUtils";
-import { restoreBackupEntries } from "./backupRestore";
+import {
+  BackupRecoveryError,
+  createBackupMutationClaimer
+} from "./backupRestore";
+import {
+  createManagedBackupRestorer,
+  restoreRecordedBackupMutations
+} from "./activationBackupRecovery";
+import { createRollbackChange } from "./activationRecoveryPreview";
+import { hashPathEntry } from "./filesystemIntegrity";
 import type { AgentEnvPaths } from "./paths";
 import type { ProfileStore } from "./profileStore";
 import {
@@ -320,25 +329,6 @@ const hashComparablePath = async (path: string): Promise<string | undefined> => 
   return hash.digest("hex");
 };
 
-const isDirectoryReadError = (error: unknown) =>
-  Boolean(
-    error &&
-      typeof error === "object" &&
-      "code" in error &&
-      error.code === "EISDIR"
-  );
-
-const readRollbackTextIfExists = async (path: string) => {
-  try {
-    return await readTextIfExists(path);
-  } catch (error) {
-    if (isDirectoryReadError(error)) {
-      return "[directory]\n";
-    }
-    throw error;
-  }
-};
-
 const appendHistory = async (
   paths: AgentEnvPaths,
   event: Record<string, unknown>
@@ -349,53 +339,6 @@ const appendHistory = async (
     `${JSON.stringify({ at: new Date().toISOString(), ...event })}\n`,
     "utf8"
   );
-};
-
-const createRollbackChange = async (
-  entry: BackupManifest["entries"][number]
-): Promise<PlannedFileChange> => {
-  if (entry.kind === "symlink") {
-    const currentStats = (await pathEntryExists(entry.sourcePath))
-      ? await lstat(entry.sourcePath)
-      : undefined;
-    const before = currentStats?.isSymbolicLink()
-      ? `[link] ${await readlink(entry.sourcePath)}\n`
-      : currentStats?.isDirectory()
-        ? "[directory]\n"
-        : currentStats?.isFile()
-          ? "[file]\n"
-          : "";
-    const after = entry.missing
-      ? ""
-      : `[link] ${entry.linkTarget ?? await readlink(entry.backupPath ?? "")}\n`;
-    return {
-      path: entry.sourcePath,
-      before,
-      after,
-      diff: createUnifiedDiff(entry.sourcePath, before, after)
-    };
-  }
-  if (entry.kind === "directory") {
-    const before = (await pathExists(entry.sourcePath)) ? "[directory]\n" : "";
-    const after = entry.missing ? "" : "[directory]\n";
-
-    return {
-      path: entry.sourcePath,
-      before,
-      after,
-      diff: createUnifiedDiff(entry.sourcePath, before, after)
-    };
-  }
-
-  const before = await readRollbackTextIfExists(entry.sourcePath);
-  const after = entry.missing ? "" : await readFile(entry.backupPath ?? "", "utf8");
-
-  return {
-    path: entry.sourcePath,
-    before,
-    after,
-    diff: createUnifiedDiff(entry.sourcePath, before, after)
-  };
 };
 
 const materializeManagedSkillLink = async (path: string) => {
@@ -536,69 +479,14 @@ export const createActivationService = ({
 
   const statePathFor = targetStateRepository.pathFor;
 
-  const restoreBackupSafely = async (backup: BackupManifest) => {
-    const exactPaths = new Set<string>();
-    const resourceRoots = new Set<string>();
-    const resourceContainers = new Set<string>();
-    const targetIds = [...new Set([backup.targetId, ...(backup.targetIds ?? [])])].filter(
-      (id): id is string => Boolean(id)
-    );
-    for (const targetId of targetIds) {
-      const targetPaths = await targetPathsFor(targetId);
-      exactPaths.add(resolve(targetPaths.instructionsPath));
-      exactPaths.add(resolve(targetPaths.configPath));
-      exactPaths.add(resolve(statePathFor(targetId)));
-      resourceContainers.add(resolve(targetPaths.configDir));
-      resourceContainers.add(resolve(dirname(targetPaths.instructionsPath)));
-      if (targetPaths.mcpConfigPath) exactPaths.add(resolve(targetPaths.mcpConfigPath));
-      for (const root of [
-        targetPaths.skillsDir,
-        targetPaths.agentsDir,
-        ...(targetPaths.skillScanDirs ?? []),
-        ...(targetPaths.skillLocations ?? []).map((location) => location.path)
-      ]) {
-        if (root) resourceRoots.add(resolve(root));
-      }
-    }
-    if (backup.profileId) {
-      exactPaths.add(resolve(paths.profilesDir, backup.profileId));
-    }
-
-    for (const entry of backup.entries) {
-      const sourcePath = resolve(entry.sourcePath);
-      const allowedResource = [...resourceRoots].some((root) => {
-        if (pathsEqual(sourcePath, root)) {
-          return entry.missing || entry.kind === "symlink";
-        }
-        return (
-          isPathInside(root, sourcePath) &&
-          pathsEqual(dirname(sourcePath), root)
-        );
-      });
-      const allowedMissingContainer = Boolean(
-        entry.missing &&
-        [...resourceContainers].some((container) => {
-          if (
-            !pathsEqual(container, sourcePath) &&
-            !isPathInside(container, sourcePath)
-          ) {
-            return false;
-          }
-          return [...resourceRoots].some((root) =>
-            isPathInside(sourcePath, root)
-          );
-        })
-      );
-      if (
-        !exactPaths.has(sourcePath) &&
-        !allowedResource &&
-        !allowedMissingContainer
-      ) {
-        throw new Error(`Backup contains a path outside AgentEnv-managed locations: ${entry.sourcePath}`);
-      }
-    }
-    await restoreBackupEntries(backup);
-  };
+  const restoreBackupSafely = createManagedBackupRestorer({
+    paths,
+    backupStore,
+    targetPathsFor,
+    statePathFor
+  });
+  const restoreRecordedMutations = (backup: BackupManifest, claimer: ReturnType<typeof createBackupMutationClaimer>) =>
+    restoreRecordedBackupMutations({ backup, claimer, restoreBackup: restoreBackupSafely });
 
   const readTargetStateFile = targetStateRepository.read;
 
@@ -1613,32 +1501,63 @@ export const createActivationService = ({
           profileName: profile.manifest.name
         }
       );
-
-      const preOperationState = (await readTargetStateFile(preview.targetId)).state;
-      await writeTargetState(preview.targetId, {
-        ...preOperationState,
-        recoveryRequired: {
-          operation: "apply",
-          error: "Profile Apply was interrupted before completion",
-          backupId: backup.id,
-          occurredAt: new Date().toISOString()
-        }
+      const claimMutationPath = createBackupMutationClaimer(backup, {
+        allowClaimedDescendants: true,
+        missingMessage: (path) =>
+          `Apply did not preserve the resource before mutation: ${path}`,
+        changedMessage: (path) =>
+          `Live resource changed after backup and was not modified: ${path}`
       });
 
+      await claimMutationPath(statePath);
+      const preOperationStateFile = await readTargetStateFile(preview.targetId);
+      if (
+        fingerprintTargetState(preOperationStateFile.state) !==
+        preview.targetStateFingerprint
+      ) {
+        return {
+          ok: false,
+          kind: "stale",
+          errors: ["AgentEnv management state changed while Apply was being prepared"]
+        };
+      }
+      const preOperationState = preOperationStateFile.state;
       try {
+        await writeTargetState(preview.targetId, {
+          ...preOperationState,
+          recoveryRequired: {
+            operation: "apply",
+            error: "Profile Apply was interrupted before completion",
+            backupId: backup.id,
+            occurredAt: new Date().toISOString()
+          }
+        }, { expectedPathHash: preOperationStateFile.pathHash });
+        await claimMutationPath.recordMutation(statePath);
         for (const change of preview.changes) {
+          await claimMutationPath(change.path);
+          const expectedPathHash = claimMutationPath.expectedHashes.get(resolve(change.path));
           if (change.action === "remove") {
+            if (await hashPathEntry(change.path) !== expectedPathHash) {
+              throw new Error(`Live file changed immediately before removal: ${change.path}`);
+            }
             await rm(change.path, { force: true });
           } else {
-            await writeAtomic(change.path, change.after);
+            await writeAtomic(change.path, change.after, {
+              expectedTargetHash: expectedPathHash
+            });
           }
+          await claimMutationPath.recordMutation(change.path);
         }
 
         if (preview.skillRootTransition) {
+          await claimMutationPath(preview.skillRootTransition.path);
           await isolateSkillRoot(preview.skillRootTransition);
+          await claimMutationPath.recordMutation(preview.skillRootTransition.path);
         }
         for (const path of preview.resourceManagement.pausedSkillPaths) {
+          await claimMutationPath(path);
           await materializeManagedSkillLink(path);
+          await claimMutationPath.recordMutation(path);
         }
         if (preview.resourceChanges.length > 0) {
           await adapter.applyAssets({
@@ -1653,13 +1572,23 @@ export const createActivationService = ({
                 .filter((change) => change.action === "remove")
                 .map((change) => resolve(change.path))
             ),
-            isolateSkillRoot: Boolean(preview.skillRootTransition)
+            isolateSkillRoot: Boolean(preview.skillRootTransition),
+            claimMutationPath
           });
+          await claimMutationPath.recordMutation(
+            ...assetBackupPaths.filter((path) => claimMutationPath.claimedPaths.has(resolve(path)))
+          );
         }
         for (const legacyPath of preview.legacySkillPaths ?? []) {
+          await claimMutationPath(legacyPath);
+          await claimMutationPath(markerPathForFile(legacyPath));
           await removeSkillDeployment(legacyPath, {
             allowedRoot: dirname(legacyPath)
           });
+          await claimMutationPath.recordMutation(
+            legacyPath,
+            markerPathForFile(legacyPath)
+          );
           if (await pathEntryExists(legacyPath)) {
             throw new Error(`Post-apply verification failed for legacy Skill ${legacyPath}`);
           }
@@ -1716,23 +1645,31 @@ export const createActivationService = ({
           skillReceipts: preview.skillReceipts,
           sharedSkillPreparations: preview.skillDeployment.plan.sharedPreparations,
           recoveryRequired: undefined
+        }, {
+          expectedPathHash: claimMutationPath.mutationHashes.get(resolve(statePath))
         });
+        await claimMutationPath.recordMutation(statePath);
       } catch (error) {
         try {
-          await restoreBackupSafely(backup);
+          await restoreRecordedMutations(backup, claimMutationPath);
         } catch (restoreError) {
           const recoveryError = `Apply failed: ${errorMessage(error)}; automatic restore failed: ${errorMessage(restoreError)}`;
           try {
-            const currentState = (await readTargetStateFile(preview.targetId)).state;
+            const currentStateFile = await readTargetStateFile(preview.targetId);
+            const currentState = currentStateFile.state;
             await writeTargetState(preview.targetId, {
               ...currentState,
               recoveryRequired: {
                 operation: "apply",
                 error: recoveryError,
                 backupId: backup.id,
+                safetyBackupId:
+                  restoreError instanceof BackupRecoveryError
+                    ? restoreError.safetyBackupId
+                    : undefined,
                 occurredAt: new Date().toISOString()
               }
-            });
+            }, { expectedPathHash: currentStateFile.pathHash });
           } catch {
             // The returned error still identifies the backup when state persistence also fails.
           }
@@ -1808,6 +1745,7 @@ export const createActivationService = ({
         targetPaths: TargetPaths;
         targetPath: string;
         statePath: string;
+        statePathHash?: string;
         state: TargetState;
         preparation: SharedSkillPreparation;
       }> = [];
@@ -1881,6 +1819,7 @@ export const createActivationService = ({
           targetPaths,
           targetPath,
           statePath: stateFile.path,
+          statePathHash: stateFile.pathHash,
           state: stateFile.state,
           preparation
         });
@@ -1900,7 +1839,7 @@ export const createActivationService = ({
 
       const backup = await backupStore.createBackup(
         [
-          ...normalizedSharedPaths,
+          ...normalizedSharedPaths.flatMap((path) => [path, markerPathForFile(path)]),
           ...contexts.flatMap((context) => [
             context.targetPath,
             markerPathForFile(context.targetPath),
@@ -1913,28 +1852,35 @@ export const createActivationService = ({
           profileName: libraryId
         }
       );
+      const claimPath = createBackupMutationClaimer(backup, {
+        missingMessage: (path) => `Shared Skill migration did not preserve ${path}`,
+        changedMessage: (path) => `Shared Skill path changed after backup: ${path}`
+      });
       const installedPaths: string[] = [];
 
       try {
-        await Promise.all(
-          contexts.map((context) =>
-            writeTargetState(context.targetId, {
-              ...context.state,
-              recoveryRequired: {
-                operation: "apply",
-                error: "Shared Skill migration was interrupted before completion",
-                backupId: backup.id,
-                occurredAt: new Date().toISOString()
-              }
-            })
-          )
-        );
+        for (const context of contexts) {
+          await claimPath(context.statePath);
+          await writeTargetState(context.targetId, {
+            ...context.state,
+            recoveryRequired: {
+              operation: "apply",
+              error: "Shared Skill migration was interrupted before completion",
+              backupId: backup.id,
+              occurredAt: new Date().toISOString()
+            }
+          }, { expectedPathHash: context.statePathHash });
+          await claimPath.recordMutation(context.statePath);
+        }
         for (const sharedPath of normalizedSharedPaths) {
+          await claimPath(sharedPath, markerPathForFile(sharedPath));
           await removeSkillDeployment(sharedPath, {
             allowedRoot: dirname(sharedPath)
           });
+          await claimPath.recordMutation(sharedPath, markerPathForFile(sharedPath));
         }
         for (const context of contexts) {
+          await claimPath(context.targetPath, markerPathForFile(context.targetPath));
           if (context.preparation.disposition === "install") {
             await skillLibraryStore.deployLibrarySkill({
               targetPaths: context.targetPaths,
@@ -1948,6 +1894,10 @@ export const createActivationService = ({
               allowedRoot: context.targetPaths.skillsDir ?? dirname(context.targetPath)
             });
           }
+          await claimPath.recordMutation(
+            context.targetPath,
+            markerPathForFile(context.targetPath)
+          );
 
           const retainedResources = (context.state.managedResources ?? []).filter(
             (resource) => resolve(resource.path) !== resolve(context.targetPath)
@@ -1962,7 +1912,10 @@ export const createActivationService = ({
             sharedSkillPreparations: (context.state.sharedSkillPreparations ?? []).filter(
               (item) => item.skillKey !== skillKey || item.libraryId !== libraryId
             )
+          }, {
+            expectedPathHash: claimPath.mutationHashes.get(resolve(context.statePath))
           });
+          await claimPath.recordMutation(context.statePath);
         }
 
         for (const sharedPath of normalizedSharedPaths) {
@@ -2005,22 +1958,27 @@ export const createActivationService = ({
         });
       } catch (error) {
         try {
-          await restoreBackupSafely(backup);
+          await restoreRecordedMutations(backup, claimPath);
         } catch (restoreError) {
           const recoveryError = `Shared Skill migration failed: ${errorMessage(error)}; automatic restore failed: ${errorMessage(restoreError)}`;
           await Promise.all(
             contexts.map(async (context) => {
               try {
-                const currentState = (await readTargetStateFile(context.targetId)).state;
+                const currentStateFile = await readTargetStateFile(context.targetId);
+                const currentState = currentStateFile.state;
                 await writeTargetState(context.targetId, {
                   ...currentState,
                   recoveryRequired: {
                     operation: "rollback",
                     error: recoveryError,
                     backupId: backup.id,
+                    safetyBackupId:
+                      restoreError instanceof BackupRecoveryError
+                        ? restoreError.safetyBackupId
+                        : undefined,
                     occurredAt: new Date().toISOString()
                   }
-                });
+                }, { expectedPathHash: currentStateFile.pathHash });
               } catch {
                 // The backup id in the reported error remains the manual recovery path.
               }
@@ -2130,7 +2088,8 @@ export const createActivationService = ({
 
     try {
       if (operationTargetId) {
-        const currentState = (await readTargetStateFile(operationTargetId)).state;
+        const currentStateFile = await readTargetStateFile(operationTargetId);
+        const currentState = currentStateFile.state;
         await writeTargetState(operationTargetId, {
           ...currentState,
           recoveryRequired: {
@@ -2139,7 +2098,7 @@ export const createActivationService = ({
             backupId,
             occurredAt: new Date().toISOString()
           }
-        });
+        }, { expectedPathHash: currentStateFile.pathHash });
       }
       await restoreBackupSafely(backup);
 
@@ -2154,16 +2113,19 @@ export const createActivationService = ({
     } catch (error) {
       if (operationTargetId) {
         try {
-          const currentState = (await readTargetStateFile(operationTargetId)).state;
+          const currentStateFile = await readTargetStateFile(operationTargetId);
+          const currentState = currentStateFile.state;
           await writeTargetState(operationTargetId, {
             ...currentState,
             recoveryRequired: {
               operation: "rollback",
               error: errorMessage(error),
               backupId,
+              safetyBackupId:
+                error instanceof BackupRecoveryError ? error.safetyBackupId : undefined,
               occurredAt: new Date().toISOString()
             }
-          });
+          }, { expectedPathHash: currentStateFile.pathHash });
         } catch {
           // Return the rollback failure even if recovery state cannot be persisted.
         }
@@ -2275,15 +2237,27 @@ export const createActivationService = ({
         return { ok: false, errors: ["Agent management state changed after preview"] };
       }
       const managedPaths = (stateFile.state.managedResources ?? []).map((resource) => resource.path);
+      const protectedPaths = [
+        ...managedPaths.flatMap((path) => [path, markerPathForFile(path)]),
+        stateFile.path
+      ];
       const safetyBackup = await backupStore.createBackup(
-        [...managedPaths, stateFile.path],
+        [...new Set(protectedPaths)],
         {
           operation: "stop-managing",
           targetId: preview.targetId,
           profileId: stateFile.state.activeProfileId
         }
       );
+      const claimPath = createBackupMutationClaimer(safetyBackup, {
+        allowClaimedDescendants: true,
+        missingMessage: (path) =>
+          `Stop managing did not preserve the resource before mutation: ${path}`,
+        changedMessage: (path) =>
+          `Agent resource changed while Stop Managing was being prepared: ${path}`
+      });
       try {
+        await claimPath(stateFile.path);
         await writeTargetState(preview.targetId, {
           ...stateFile.state,
           recoveryRequired: {
@@ -2292,29 +2266,40 @@ export const createActivationService = ({
             backupId: safetyBackup.id,
             occurredAt: new Date().toISOString()
           }
-        });
+        }, { expectedPathHash: stateFile.pathHash });
+        await claimPath.recordMutation(stateFile.path);
         if (preview.mode === "restore-pre-takeover" && preview.takeoverBackupId) {
           await restoreBackupSafely(await backupStore.readBackup(preview.takeoverBackupId));
         } else {
           for (const path of managedPaths) {
+            await claimPath(path);
+            await claimPath(markerPathForFile(path));
             await materializeManagedResource(path);
+            await claimPath.recordMutation(path, markerPathForFile(path));
           }
+          await claimPath(stateFile.path);
           await rm(stateFile.path, { force: true });
+          await claimPath.recordMutation(stateFile.path);
         }
       } catch (error) {
         try {
-          await restoreBackupSafely(safetyBackup);
+          await restoreRecordedMutations(safetyBackup, claimPath);
         } catch (restoreError) {
           const recoveryError = `Stop managing failed: ${errorMessage(error)}; restore failed: ${errorMessage(restoreError)}`;
+          const currentStateFile = await readTargetStateFile(preview.targetId);
           await writeTargetState(preview.targetId, {
-            ...stateFile.state,
+            ...currentStateFile.state,
             recoveryRequired: {
               operation: "rollback",
               error: recoveryError,
               backupId: safetyBackup.id,
+              safetyBackupId:
+                restoreError instanceof BackupRecoveryError
+                  ? restoreError.safetyBackupId
+                  : undefined,
               occurredAt: new Date().toISOString()
             }
-          });
+          }, { expectedPathHash: currentStateFile.pathHash });
           return { ok: false, errors: [`Recovery required: ${recoveryError}`] };
         }
         return { ok: false, errors: [`Stop managing failed; restored backup: ${errorMessage(error)}`] };
@@ -2399,7 +2384,8 @@ export const createActivationService = ({
       const saved = await profileStore.saveProfile({
         manifest: profile.manifest,
         instructions,
-        resources
+        resources,
+        expectedContentHash: profile.contentHash
       });
       return { profile: saved, adopted, skipped };
     } finally {
