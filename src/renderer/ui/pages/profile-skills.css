@@ -221,7 +221,6 @@
   grid-column: 5;
   justify-self: center;
   min-height: 32px;
-  padding-inline: 2px;
 }
 
 .profile-skill-row:not(.profile-skill-row--owned) > .icon-action {

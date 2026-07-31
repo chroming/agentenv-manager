@@ -277,8 +277,9 @@
   border: 1px solid rgba(100, 116, 139, 0.12);
   border-radius: var(--radius-pill);
   display: inline-flex;
+  flex: 0 0 38px;
   height: 22px;
-  padding: 2px;
+  padding: 2px 3px;
   transition: background-color var(--motion-fast), border-color var(--motion-fast);
   width: 38px;
 }
@@ -286,7 +287,8 @@
 .ui-switch__thumb {
   background: #fff;
   border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.22);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+  flex: 0 0 16px;
   height: 16px;
   transform: translateX(0);
   transition: transform var(--motion-fast);
@@ -299,7 +301,7 @@
 }
 
 .ui-switch.is-on .ui-switch__thumb {
-  transform: translateX(16px);
+  transform: translateX(14px);
 }
 
 .ui-switch__label {

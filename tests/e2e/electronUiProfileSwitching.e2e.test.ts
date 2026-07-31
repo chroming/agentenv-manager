@@ -3505,6 +3505,27 @@ describe("Electron UI profile switching e2e", () => {
     );
     expect(minimumSkillRows.every((row) => row.contained)).toBe(true);
     expect(minimumSkillRows.flatMap((row) => row.overlaps)).toEqual([]);
+    const minimumSwitchGeometry = await page.locator(".profile-skill-switch").evaluateAll(
+      (switches) => switches.map((switchControl) => {
+        const track = switchControl.querySelector<HTMLElement>(".ui-switch__track")!;
+        const thumb = switchControl.querySelector<HTMLElement>(".ui-switch__thumb")!;
+        const trackBox = track.getBoundingClientRect();
+        const thumbBox = thumb.getBoundingClientRect();
+        return {
+          checked: switchControl.getAttribute("aria-checked") === "true",
+          leftInset: Math.round((thumbBox.left - trackBox.left) * 10) / 10,
+          rightInset: Math.round((trackBox.right - thumbBox.right) * 10) / 10,
+          thumbWidth: Math.round(thumbBox.width),
+          trackWidth: Math.round(trackBox.width)
+        };
+      })
+    );
+    expect(minimumSwitchGeometry.length).toBeGreaterThan(0);
+    expect(minimumSwitchGeometry.every((geometry) =>
+      geometry.trackWidth === 38 &&
+      geometry.thumbWidth === 16 &&
+      (geometry.checked ? geometry.rightInset : geometry.leftInset) >= 4
+    )).toBe(true);
     const compactSkillUpdateGeometry = await page.locator(".profile-skill-update").evaluateAll(
       (buttons) => buttons.map((button) => {
         const label = button.querySelector<HTMLElement>(".ui-button__label")!;
