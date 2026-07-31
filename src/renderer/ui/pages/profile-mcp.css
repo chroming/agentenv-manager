@@ -8,8 +8,8 @@
   border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
-  min-height: 38px;
-  padding: 3px 8px 3px 12px;
+  min-height: 44px;
+  padding: 5px 9px 7px 10px;
 }
 
 .profile-mcp-toolbar > strong {
@@ -52,7 +52,7 @@
   gap: 14px;
   grid-template-columns: minmax(0, 1fr) 154px;
   min-height: 50px;
-  padding: 6px 12px;
+  padding: 6px 9px 6px 10px;
 }
 
 .profile-mcp-row.is-unmanaged {
@@ -151,7 +151,18 @@
 .profile-composer-section[data-profile-composer-id="mcp"]
   .profile-composer-section__panel {
   max-height: min(340px, 44vh);
-  padding: 6px;
+  padding: 8px;
+}
+
+@container profile-workspace (max-width: 760px) {
+  .profile-mcp-row {
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr) minmax(128px, 154px);
+  }
+
+  .profile-mcp-row.is-unmanaged {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .profile-mcp-inspection-error > span {

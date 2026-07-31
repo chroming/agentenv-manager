@@ -12,17 +12,14 @@ import {
   ChevronDown,
   Clock3,
   Copy,
-  Database,
-  BookOpenText,
   ExternalLink,
-  FolderKanban,
+  FolderOpen,
   GitFork,
   HardDrive,
   History,
   LoaderCircle,
   Monitor,
   MoreHorizontal,
-  Network,
   Pencil,
   Plus,
   RefreshCw,
@@ -129,6 +126,7 @@ import { FreshnessStatus } from "./components/FreshnessStatus";
 import { InfoTip } from "./components/InfoTip";
 import {
   ConversationWorkspace,
+  preloadConversationList,
   type ConversationWorkspaceViewState
 } from "./components/ConversationWorkspace";
 import { LibraryHeaderActions } from "./components/LibraryHeaderActions";
@@ -165,6 +163,7 @@ import { TargetCaptureDialog } from "./components/TargetCaptureDialog";
 import { TargetWorkspace } from "./components/TargetWorkspace";
 import { WorkspaceSyncSettings } from "./components/WorkspaceSyncSettings";
 import { createValidationRows } from "./profileValidationRows";
+import { defaultProfileIconKey, ProductIcon } from "./productIcons";
 import {
   updateAppliedTargetLibraryVersions,
   updateCopiedSkillInventory,
@@ -333,6 +332,7 @@ const AppContent = ({
   } = useWorkspaceNavigation();
   const { sidebarCollapsed, toggleSidebar } = useSidebarState();
   const [conversationViewState, setConversationViewState] = useState<ConversationWorkspaceViewState>();
+
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("general");
   const [quickOpen, setQuickOpen] = useState(false);
   const [skillLibraryViewState, setSkillLibraryViewState] = useState(
@@ -1000,6 +1000,7 @@ const AppContent = ({
 
   useEffect(() => {
     let isMounted = true;
+    void preloadConversationList().catch(() => undefined);
     const requestId = ++dataRefreshRequestRef.current;
     const shouldApply = () => isMounted && dataRefreshRequestRef.current === requestId;
 
@@ -4295,7 +4296,7 @@ const AppContent = ({
                   >
                     <header className="profile-hero profile-hero--loading">
                       <span className="profile-hero__icon" aria-hidden="true">
-                        <FolderKanban size={19} strokeWidth={2.1} />
+                        <ProductIcon name="profiles" size={19} strokeWidth={2.1} />
                       </span>
                       <div className="profile-hero__body">
                         <div className="profile-hero__title">
@@ -4328,7 +4329,7 @@ const AppContent = ({
                     <header className="profile-hero">
                       <ResourceIconPicker
                         className="profile-hero__icon"
-                        iconKey={draftProfile.manifest.iconKey ?? "folder"}
+                        iconKey={draftProfile.manifest.iconKey ?? defaultProfileIconKey}
                         label={draftProfile.manifest.name}
                         showAgentIcons
                         triggerLabel={t("Change icon for profile {{id}}", { id: draftProfile.id })}
@@ -4454,7 +4455,7 @@ const AppContent = ({
                     >
                       <ProfileComposerSection
                         id="instructions"
-                        icon={<BookOpenText size={18} strokeWidth={2.2} />}
+                        icon={<ProductIcon name="instructions" size={18} />}
                         title={t("Instructions")}
                         description={t("Agent instructions and rule files")}
                         count={resourceSummary?.instructions.total ?? 0}
@@ -4503,7 +4504,7 @@ const AppContent = ({
                       </ProfileComposerSection>
                       <ProfileComposerSection
                         id="skills"
-                        icon={<Database size={18} strokeWidth={2.2} />}
+                        icon={<ProductIcon name="skills" size={18} />}
                         title={t("Skills")}
                         description={t("Reusable skills and workflows")}
                         count={resourceSummary?.skills.total ?? 0}
@@ -4561,7 +4562,7 @@ const AppContent = ({
                       </ProfileComposerSection>
                       <ProfileComposerSection
                         id="mcp"
-                        icon={<Network size={18} strokeWidth={2.2} />}
+                        icon={<ProductIcon name="mcps" size={18} />}
                         title={t("MCPs")}
                         description={t(
                           "External tools and service connections"
@@ -4979,7 +4980,7 @@ const AppContent = ({
                 </div>
                 <div className="settings-data-actions">
                   <button className="secondary-action" type="button" disabled={busy} onClick={() => void window.agentEnv.openDataFolder()}>
-                    <FolderKanban size={15} strokeWidth={2.2} aria-hidden="true" />
+                    <FolderOpen size={15} strokeWidth={2.2} aria-hidden="true" />
                     {t("Open folder")}
                   </button>
                 </div>

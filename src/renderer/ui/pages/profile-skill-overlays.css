@@ -1,0 +1,26 @@
+.profile-skill-menu.row-action-menu {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  box-shadow: 0 12px 28px rgba(26, 38, 59, 0.16);
+  padding: 5px;
+  position: fixed;
+  width: 220px;
+  z-index: var(--z-popover);
+}
+
+.profile-skill-menu .row-action-item {
+  min-height: 38px;
+}
+
+.profile-skill-menu .row-action-item span {
+  overflow: visible;
+  white-space: nowrap;
+}
+
+.skill-update-impact {
+  color: #52617a;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 6px 0 0;
+}

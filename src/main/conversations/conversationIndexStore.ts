@@ -166,6 +166,11 @@ const createDatabase = (path: string) => {
         WHERE provider_resume_locator IS NULL;
       `);
     }
+    const searchIndexExists = Boolean(database.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table' AND name = 'conversation_search'
+    `).get());
     try {
       database.exec(`
         CREATE VIRTUAL TABLE IF NOT EXISTS conversation_search USING fts5(
@@ -176,22 +181,26 @@ const createDatabase = (path: string) => {
           body,
           tokenize = 'trigram'
         );
-        INSERT INTO conversation_search (
-          conversation_id, title, snippet, workspace_path, body
-        )
-        SELECT
-          conversations.id,
-          conversations.title,
-          conversations.snippet,
-          COALESCE(conversations.workspace_path, ''),
-          conversations.search_text
-        FROM conversations
-        WHERE NOT EXISTS (
-          SELECT 1
-          FROM conversation_search
-          WHERE conversation_search.conversation_id = conversations.id
-        );
       `);
+      if (!searchIndexExists || version < 3) {
+        database.exec(`
+          INSERT INTO conversation_search (
+            conversation_id, title, snippet, workspace_path, body
+          )
+          SELECT
+            conversations.id,
+            conversations.title,
+            conversations.snippet,
+            COALESCE(conversations.workspace_path, ''),
+            conversations.search_text
+          FROM conversations
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM conversation_search
+            WHERE conversation_search.conversation_id = conversations.id
+          );
+        `);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (!/no such module: fts5|no such tokenizer: trigram|tokenizer constructor/i.test(message)) {

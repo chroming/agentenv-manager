@@ -14,6 +14,7 @@ import {
 } from "../profileSummary";
 import { ResourceIcon } from "./ResourceIconPicker";
 import { ProfileActionsMenu } from "./ProfileActionsMenu";
+import { defaultProfileIconKey } from "../productIcons";
 
 const deploymentStatusLabels = {
   attention: "Attention",
@@ -159,7 +160,7 @@ export const ProfileList = ({
           const iconKey =
             (isSelected ? draftProfile?.manifest.iconKey : undefined) ??
             profile.iconKey ??
-            "folder";
+            defaultProfileIconKey;
           const applicationStates = applications.map((application) => {
             const needsAttention =
               application.state.lifecycleStatus === "drifted" ||

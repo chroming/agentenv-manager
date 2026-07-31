@@ -3,11 +3,11 @@ import {
   ArchiveRestore,
   Clock3,
   CopyPlus,
-  Monitor,
   RefreshCw,
   TerminalSquare
 } from "lucide-react";
 import { useRef, useState } from "react";
+import { ProductIcon } from "../productIcons";
 import type {
   BackupSummary,
   NativeMcpConnection,
@@ -211,7 +211,7 @@ export const TargetWorkspace = ({
           </div>
         ) : targets.length === 0 ? (
           <div className="inline-state inline-state--panel">
-            <span className="inline-state__icon" aria-hidden="true"><Monitor size={15} /></span>
+            <span className="inline-state__icon" aria-hidden="true"><ProductIcon name="agents" size={15} /></span>
             <span>{t("No enabled Agents")}</span>
           </div>
         ) : null}

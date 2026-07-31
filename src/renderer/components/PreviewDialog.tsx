@@ -5,9 +5,6 @@ import {
   CheckCircle2,
   ChevronDown,
   CircleAlert,
-  FileText,
-  Network,
-  Puzzle,
   ShieldCheck
 } from "lucide-react";
 import type {
@@ -18,6 +15,7 @@ import type {
 } from "../../shared/types";
 import { useI18n, type TranslationValues } from "../i18n";
 import { activationPreviewHasWork } from "../activationPreview";
+import { ProductIcon } from "../productIcons";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { PreviewChangeList } from "./PreviewChangeList";
@@ -426,21 +424,21 @@ export const PreviewDialog = ({
               </header>
               <div>
                 <article>
-                  <FileText size={18} strokeWidth={2} aria-hidden="true" />
+                  <ProductIcon name="instructions" size={18} strokeWidth={2} />
                   <span>
                     <strong>{payload.instructions}</strong>
                     <small>{t("Instruction files")}</small>
                   </span>
                 </article>
                 <article>
-                  <Puzzle size={18} strokeWidth={2} aria-hidden="true" />
+                  <ProductIcon name="skills" size={18} strokeWidth={2} />
                   <span>
                     <strong>{payload.skills}</strong>
                     <small>{t("Skills")}</small>
                   </span>
                 </article>
                 <article>
-                  <Network size={18} strokeWidth={2} aria-hidden="true" />
+                  <ProductIcon name="mcps" size={18} strokeWidth={2} />
                   <span>
                     <strong>{payload.mcpServers}</strong>
                     <small>{t("MCP overrides")}</small>

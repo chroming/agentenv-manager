@@ -5,7 +5,6 @@ import {
   ExternalLink,
   FolderOpen,
   LoaderCircle,
-  MessageSquareText,
   MoreHorizontal,
   RefreshCw,
   Search,
@@ -23,9 +22,11 @@ import {
   type CSSProperties
 } from "react";
 import { createPortal } from "react-dom";
+import { ProductIcon } from "../productIcons";
 import type {
   ConversationContinuationPreview,
   ConversationDetail,
+  ConversationListResult,
   ConversationRefreshResult,
   ConversationSummary,
   TargetInfo
@@ -52,6 +53,21 @@ import {
 } from "./ui";
 
 let conversationRefreshOperation: Promise<ConversationRefreshResult> | undefined;
+let conversationListPrefetch: Promise<ConversationListResult> | undefined;
+
+export const preloadConversationList = () => {
+  conversationListPrefetch ??= window.agentEnv.listConversations({
+    limit: conversationPageSize
+  }).catch((error) => {
+    conversationListPrefetch = undefined;
+    throw error;
+  });
+  return conversationListPrefetch;
+};
+
+export const invalidateConversationListPrefetch = () => {
+  conversationListPrefetch = undefined;
+};
 
 const refreshConversationIndex = () => {
   if (conversationRefreshOperation) return conversationRefreshOperation;
@@ -603,16 +619,23 @@ export const ConversationWorkspace = ({
     nextWorkspaceFilter = workspaceFilterRef.current,
     trackSearch = false,
     limit = conversationPageSize,
-    preferredSummary?: ConversationSummary
+    preferredSummary?: ConversationSummary,
+    preferPrefetchedList = false
   ) => {
     const requestId = ++listRequestRef.current;
     try {
-      const result = await window.agentEnv.listConversations({
-        query: nextQuery || undefined,
-        agentIds: nextAgentFilter ? [nextAgentFilter] : undefined,
-        workspacePaths: nextWorkspaceFilter ? [nextWorkspaceFilter] : undefined,
-        limit
-      });
+      const result = preferPrefetchedList &&
+        !nextQuery &&
+        !nextAgentFilter &&
+        !nextWorkspaceFilter &&
+        limit === conversationPageSize
+        ? await preloadConversationList()
+        : await window.agentEnv.listConversations({
+            query: nextQuery || undefined,
+            agentIds: nextAgentFilter ? [nextAgentFilter] : undefined,
+            workspacePaths: nextWorkspaceFilter ? [nextWorkspaceFilter] : undefined,
+            limit
+          });
       if (requestId !== listRequestRef.current) return undefined;
       const nextItems = preferredSummary &&
         !result.items.some((item) => item.id === preferredSummary.id)
@@ -699,6 +722,7 @@ export const ConversationWorkspace = ({
       );
       const result = outcome.value;
       if (!result) return;
+      invalidateConversationListPrefetch();
       await loadList();
       setError("");
       setDetailReloadNonce((current) => current + 1);
@@ -733,7 +757,9 @@ export const ConversationWorkspace = ({
           agentFilterRef.current,
           workspaceFilterRef.current,
           false,
-          Math.min(500, Math.max(conversationPageSize, initialViewState?.items.length ?? 0))
+          Math.min(500, Math.max(conversationPageSize, initialViewState?.items.length ?? 0)),
+          undefined,
+          !initialViewState
         );
       } catch (unknownError) {
         if (active) {
@@ -1193,7 +1219,7 @@ export const ConversationWorkspace = ({
                 </div>
               ) : items.length === 0 ? (
                 <div className="conversation-empty">
-                  <MessageSquareText size={20} aria-hidden="true" />
+                  <ProductIcon name="conversations" size={20} />
                   <strong>
                     {agentFilter && !query && !workspaceFilter
                       ? t("No conversations found for {{name}}", {
@@ -1349,7 +1375,7 @@ export const ConversationWorkspace = ({
               </div>
             ) : !detail ? (
               <div className="conversation-empty conversation-empty--detail">
-                <MessageSquareText size={22} aria-hidden="true" />
+                <ProductIcon name="conversations" size={22} />
                 <strong>{t("Select a conversation")}</strong>
               </div>
             ) : (

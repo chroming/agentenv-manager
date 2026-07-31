@@ -1,12 +1,9 @@
 import {
-  BookOpenText,
   ChevronDown,
   FileText,
   Folder,
   MapPin,
-  Maximize2,
-  Network,
-  Puzzle
+  Maximize2
 } from "lucide-react";
 import type { RefObject } from "react";
 import type {
@@ -17,6 +14,7 @@ import type {
   StopManagingPreview
 } from "../../shared/types";
 import { useI18n } from "../i18n";
+import { ProductIcon } from "../productIcons";
 import { DiffViewer } from "./DiffViewer";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { OverflowTooltip } from "./OverflowTooltip";
@@ -62,9 +60,9 @@ const groupForResource = (change: PlannedResourceChange): GroupId => {
 };
 
 const groupIcon = (id: GroupId) => {
-  if (id === "instructions") return <BookOpenText size={17} strokeWidth={2} />;
-  if (id === "skills") return <Puzzle size={17} strokeWidth={2} />;
-  if (id === "mcp") return <Network size={17} strokeWidth={2} />;
+  if (id === "instructions") return <ProductIcon name="instructions" size={17} strokeWidth={2} />;
+  if (id === "skills") return <ProductIcon name="skills" size={17} strokeWidth={2} />;
+  if (id === "mcp") return <ProductIcon name="mcps" size={17} strokeWidth={2} />;
   if (id === "storage") return <Folder size={17} strokeWidth={2} />;
   return <FileText size={17} strokeWidth={2} />;
 };

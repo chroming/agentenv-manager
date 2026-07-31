@@ -209,9 +209,11 @@
 }
 
 .profile-skill-update {
+  align-self: center;
   grid-column: 4;
-  min-height: 32px;
-  padding-inline: 10px;
+  min-height: var(--control-height-compact);
+  min-width: 0;
+  padding-inline: 8px;
   width: 100%;
 }
 
@@ -244,33 +246,6 @@
   font-size: 12px;
 }
 
-.profile-skill-menu.row-action-menu {
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  box-shadow: 0 12px 28px rgba(26, 38, 59, 0.16);
-  padding: 5px;
-  position: fixed;
-  width: 220px;
-  z-index: var(--z-popover);
-}
-
-.profile-skill-menu .row-action-item {
-  min-height: 38px;
-}
-
-.profile-skill-menu .row-action-item span {
-  overflow: visible;
-  white-space: nowrap;
-}
-
-.skill-update-impact {
-  color: #52617a;
-  font-size: 12px;
-  line-height: 1.45;
-  margin: 6px 0 0;
-}
-
 @media (max-width: 980px) {
   .profile-skill-row {
     gap: 10px;
@@ -301,8 +276,8 @@
   }
 
   .profile-skill-row {
-    column-gap: 10px;
-    grid-template-columns: 30px minmax(0, 1fr) 72px 44px 34px;
+    column-gap: 8px;
+    grid-template-columns: 30px minmax(0, 1fr) 34px 40px 32px;
     grid-template-rows: minmax(18px, auto) minmax(15px, auto);
     min-height: 62px;
     row-gap: 1px;
@@ -336,6 +311,27 @@
   .profile-skill-update {
     grid-column: 3;
     grid-row: 1 / 3;
+    height: 32px;
+    min-height: 32px;
+    min-width: 32px;
+    padding: 0;
+    width: 32px;
+  }
+
+  .profile-skill-update .ui-button__content {
+    gap: 0;
+  }
+
+  .profile-skill-update .ui-button__label {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    font-size: 0;
+    height: 1px;
+    line-height: 0;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
   }
 
   .profile-skill-switch {

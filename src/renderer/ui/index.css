@@ -19,6 +19,7 @@
 @import "./pages/skills-dialogs.css" layer(pages);
 @import "./pages/profiles.css" layer(pages);
 @import "./pages/profile-skills.css" layer(pages);
+@import "./pages/profile-skill-overlays.css" layer(pages);
 @import "./pages/conversations.css" layer(pages);
 @import "./pages/diagnostics.css" layer(pages);
 @import "./pages/profile-mcp.css" layer(pages);

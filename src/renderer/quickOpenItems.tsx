@@ -1,11 +1,4 @@
-import {
-  BookOpenText,
-  FolderKanban,
-  MessageSquareText,
-  Monitor,
-  RefreshCw,
-  Settings2
-} from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import type {
   ConversationSummary,
   ProfileSummary,
@@ -15,6 +8,7 @@ import type {
 import { targetIconFor, type AppWorkspace } from "./components/ProfileSidebar";
 import type { QuickOpenItem } from "./components/QuickOpen";
 import type { TranslationValues } from "./i18n";
+import { ProductIcon } from "./productIcons";
 
 interface QuickOpenItemOptions {
   profiles: ProfileSummary[];
@@ -61,7 +55,7 @@ export const buildQuickOpenItems = ({
     group: t("Pages"),
     label: t("Agents"),
     description: t("Local agent tools"),
-    icon: <Monitor size={16} strokeWidth={2.2} />,
+    icon: <ProductIcon name="agents" />,
     onSelect: () => onOpenWorkspace("targets")
   },
   {
@@ -69,7 +63,7 @@ export const buildQuickOpenItems = ({
     group: t("Pages"),
     label: t("Profiles"),
     description: t("Compose environments"),
-    icon: <FolderKanban size={16} strokeWidth={2.2} />,
+    icon: <ProductIcon name="profiles" />,
     onSelect: () => onOpenWorkspace("profiles")
   },
   {
@@ -77,7 +71,7 @@ export const buildQuickOpenItems = ({
     group: t("Pages"),
     label: t("Conversations"),
     description: t("Continue across Agents"),
-    icon: <MessageSquareText size={16} strokeWidth={2.2} />,
+    icon: <ProductIcon name="conversations" />,
     onSelect: () => onOpenWorkspace("conversations")
   },
   {
@@ -85,7 +79,7 @@ export const buildQuickOpenItems = ({
     group: t("Pages"),
     label: t("Skills"),
     description: t("Skill library"),
-    icon: <BookOpenText size={16} strokeWidth={2.2} />,
+    icon: <ProductIcon name="skills" />,
     onSelect: () => onOpenWorkspace("library")
   },
   {
@@ -93,7 +87,7 @@ export const buildQuickOpenItems = ({
     group: t("Pages"),
     label: t("Settings"),
     description: t("Storage and safety"),
-    icon: <Settings2 size={16} strokeWidth={2.2} />,
+    icon: <ProductIcon name="settings" />,
     onSelect: () => onOpenWorkspace("settings")
   },
   ...profiles.map((profile) => ({
@@ -102,7 +96,7 @@ export const buildQuickOpenItems = ({
     label: profile.name,
     description: profile.description || t("Profile"),
     keywords: [profile.id],
-    icon: <FolderKanban size={16} strokeWidth={2.2} />,
+    icon: <ProductIcon name="profiles" />,
     onSelect: () => onOpenProfile(profile.id)
   })),
   ...skills.map((skill) => ({
@@ -111,7 +105,7 @@ export const buildQuickOpenItems = ({
     label: skill.name,
     description: skill.description || skill.id,
     keywords: [skill.id, skill.source ?? ""],
-    icon: <BookOpenText size={16} strokeWidth={2.2} />,
+    icon: <ProductIcon name="skills" />,
     onSelect: () => onOpenSkill(skill)
   })),
   ...targets.map((target) => ({
@@ -120,7 +114,7 @@ export const buildQuickOpenItems = ({
     label: target.name,
     description: target.health.summary,
     keywords: [target.id],
-    icon: <Monitor size={16} strokeWidth={2.2} />,
+    icon: <ProductIcon name="agents" />,
     onSelect: () => onOpenTarget(target.id)
   })),
   {
@@ -177,7 +171,7 @@ export const buildConversationQuickOpenItems = ({
           alt=""
         />
       ) : (
-        <MessageSquareText size={16} strokeWidth={2.2} />
+        <ProductIcon name="conversations" />
       ),
       onSelect: () => onOpenConversation(conversation, query)
     };

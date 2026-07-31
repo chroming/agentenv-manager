@@ -3505,6 +3505,22 @@ describe("Electron UI profile switching e2e", () => {
     );
     expect(minimumSkillRows.every((row) => row.contained)).toBe(true);
     expect(minimumSkillRows.flatMap((row) => row.overlaps)).toEqual([]);
+    const compactSkillUpdateGeometry = await page.locator(".profile-skill-update").evaluateAll(
+      (buttons) => buttons.map((button) => {
+        const label = button.querySelector<HTMLElement>(".ui-button__label")!;
+        const box = button.getBoundingClientRect();
+        const labelStyle = getComputedStyle(label);
+        return {
+          height: Math.round(box.height),
+          labelClipped: labelStyle.clipPath === "inset(50%)",
+          width: Math.round(box.width)
+        };
+      })
+    );
+    expect(compactSkillUpdateGeometry.length).toBeGreaterThan(0);
+    expect(compactSkillUpdateGeometry.every((button) =>
+      button.height === 32 && button.width === 32 && button.labelClipped
+    )).toBe(true);
     expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
     const firstProfileSkill = page.getByRole("listitem", {
       name: "Profile skill layout-skill-1"
@@ -3588,6 +3604,24 @@ describe("Electron UI profile switching e2e", () => {
     expect(mcpRowGeometry.every((row) => row.contained)).toBe(true);
     expect(mcpRowGeometry.every((row) => row.height <= 58)).toBe(true);
     expect(mcpRowGeometry.every((row) => row.controlHeight === 32)).toBe(true);
+    const mcpLaneGeometry = await profileMcpEditor.evaluate((editor) => {
+      const toolbarTitle = editor.querySelector<HTMLElement>(".profile-mcp-toolbar > strong")!;
+      const identities = [...editor.querySelectorAll<HTMLElement>(".profile-mcp-row__identity")];
+      const controls = [...editor.querySelectorAll<HTMLElement>(".profile-mcp-mode")];
+      const identityLefts = identities.map((identity) => identity.getBoundingClientRect().left);
+      const controlRights = controls.map((control) => control.getBoundingClientRect().right);
+      return {
+        identityLanesAligned: Math.max(...identityLefts) - Math.min(...identityLefts) <= 1,
+        titleMatchesIdentityLane:
+          Math.abs(toolbarTitle.getBoundingClientRect().left - identityLefts[0]) <= 1,
+        controlLanesAligned: Math.max(...controlRights) - Math.min(...controlRights) <= 1
+      };
+    });
+    expect(mcpLaneGeometry).toEqual({
+      controlLanesAligned: true,
+      identityLanesAligned: true,
+      titleMatchesIdentityLane: true
+    });
     await expectInViewport(page, page.getByLabel("shared-docs Profile behavior"));
     expect(await workbench.evaluate((element) => getComputedStyle(element).gridTemplateColumns))
       .toMatch(/^196px /);

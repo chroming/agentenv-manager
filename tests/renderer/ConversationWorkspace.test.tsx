@@ -9,7 +9,11 @@ import {
   within
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ConversationWorkspace } from "../../src/renderer/components/ConversationWorkspace";
+import {
+  ConversationWorkspace,
+  invalidateConversationListPrefetch,
+  preloadConversationList
+} from "../../src/renderer/components/ConversationWorkspace";
 import type {
   AgentEnvApi,
   ConversationContinuationPreview,
@@ -86,6 +90,7 @@ const detail: ConversationDetail = {
     { id: "a1", role: "assistant", text: "I found the failing step." }
   ]
 };
+const { messages: _detailMessages, ...conversationSummary } = detail;
 
 const installApi = (
   preview: Partial<ConversationContinuationPreview> = {}
@@ -139,11 +144,43 @@ const installApi = (
 };
 
 afterEach(() => {
+  invalidateConversationListPrefetch();
   cleanup();
   vi.restoreAllMocks();
 });
 
 describe("ConversationWorkspace", () => {
+  it("reuses the startup index prefetch instead of issuing a second initial list request", async () => {
+    const api = installApi();
+    let resolveList!: (value: Awaited<ReturnType<AgentEnvApi["listConversations"]>>) => void;
+    api.listConversations.mockReturnValue(new Promise((resolve) => {
+      resolveList = resolve;
+    }));
+
+    void preloadConversationList();
+    render(
+      <ConversationWorkspace
+        targets={[target("codex", "Codex"), target("opencode", "OpenCode")]}
+      />
+    );
+
+    expect(api.listConversations).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Loading conversations")).toBeInTheDocument();
+
+    await act(async () => {
+      resolveList({
+        items: [conversationSummary],
+        total: 1,
+        workspacePaths: ["/work/project"],
+        agentCounts: { codex: 1 },
+        lastRefreshedAt: new Date().toISOString()
+      });
+    });
+
+    expect(await screen.findAllByText("Repair release workflow")).toHaveLength(2);
+    expect(api.listConversations).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the indexed transcript size without crowding the conversation title", async () => {
     installApi();
     render(

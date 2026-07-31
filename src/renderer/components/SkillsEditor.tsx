@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Download, Link2, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import type {
   AppliedSkillReceipt,
   ProfileResources,
@@ -263,18 +263,29 @@ export const SkillsEditor = ({
                 ) : null}
               </span>
               {!skill ? (
-                <button className="secondary-action profile-skill-update" type="button" disabled={disabled} onClick={() => openPicker(index)}>
-                  {t("Relink")}
-                </button>
-              ) : enabled && update?.updateAvailable ? (
-                <button
-                  className="secondary-action profile-skill-update"
-                  type="button"
+                <Button
+                  className="profile-skill-update"
+                  size="compact"
+                  variant="secondary"
                   disabled={disabled}
+                  title={t("Relink {{name}}", { name: reference.targetName })}
+                  icon={<Link2 size={14} strokeWidth={2.2} />}
+                  onClick={() => openPicker(index)}
+                >
+                  {t("Relink")}
+                </Button>
+              ) : enabled && update?.updateAvailable ? (
+                <Button
+                  className="profile-skill-update"
+                  size="compact"
+                  variant="secondary"
+                  disabled={disabled}
+                  title={t("Update {{name}}", { name: skill.name })}
+                  icon={<Download size={14} strokeWidth={2.2} />}
                   onClick={() => onPreviewSkillUpdate?.(reference.libraryId)}
                 >
                   {t("Update")}
-                </button>
+                </Button>
               ) : <span aria-hidden="true" />}
               <Switch
                 checked={enabled}

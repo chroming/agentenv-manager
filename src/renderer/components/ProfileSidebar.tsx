@@ -8,17 +8,11 @@ import {
   type CSSProperties
 } from "react";
 import {
-  BookOpen,
-  Boxes,
   LoaderCircle,
-  MessageSquareText,
   Monitor,
-  Network,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
-  Settings,
-  type LucideIcon
 } from "lucide-react";
 import type {
   ProfileSummary,
@@ -30,6 +24,7 @@ import type {
 import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { handleActionMenuKeyDown } from "./ui";
+import { ProductIcon, type ProductIconName } from "../productIcons";
 
 const appIconUrl = new URL("../assets/app-icon.png", import.meta.url).href;
 const antigravityIconUrl = new URL("../assets/target-icons/antigravity.png", import.meta.url).href;
@@ -427,15 +422,15 @@ export const ProfileSidebar = ({
     id: AppWorkspace;
     label: string;
     detail: string;
-    icon: LucideIcon;
+    icon: ProductIconName;
   }> = [
-    { id: "targets", label: t("Agents"), detail: t("Configure and inspect"), icon: Monitor },
-    { id: "profiles", label: t("Profiles"), detail: t("Compose environments"), icon: Boxes },
+    { id: "targets", label: t("Agents"), detail: t("Configure and inspect"), icon: "agents" },
+    { id: "profiles", label: t("Profiles"), detail: t("Compose environments"), icon: "profiles" },
     {
       id: "conversations",
       label: t("Conversations"),
       detail: t("Continue across Agents"),
-      icon: MessageSquareText
+      icon: "conversations"
     }
   ];
 
@@ -482,7 +477,6 @@ export const ProfileSidebar = ({
         </button>
         <div className="nav-section-label">{t("Workspace")}</div>
         {workspaceItems.map((item) => {
-          const Icon = item.icon;
           return (
             <button
               aria-label={item.label}
@@ -495,7 +489,7 @@ export const ProfileSidebar = ({
               onClick={() => onWorkspaceSelect(item.id)}
             >
               <span className="workspace-button__icon" aria-hidden="true">
-                <Icon size={16} strokeWidth={2.2} />
+                <ProductIcon name={item.icon} />
               </span>
               <span>{item.label}</span>
               <small>{item.detail}</small>
@@ -513,7 +507,7 @@ export const ProfileSidebar = ({
           onClick={() => onWorkspaceSelect("library")}
         >
           <span className="workspace-button__icon" aria-hidden="true">
-            <BookOpen size={16} strokeWidth={2.2} />
+            <ProductIcon name="skills" />
           </span>
           <span>{t("Skills")}</span>
           <small>{t("Skill library")}</small>
@@ -529,7 +523,7 @@ export const ProfileSidebar = ({
           onClick={() => onWorkspaceSelect("settings")}
         >
           <span className="workspace-button__icon" aria-hidden="true">
-            <Settings size={16} strokeWidth={2.2} />
+            <ProductIcon name="settings" />
           </span>
           <span>{t("Settings")}</span>
           <small>{t("Storage and safety")}</small>

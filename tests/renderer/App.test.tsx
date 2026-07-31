@@ -2865,7 +2865,7 @@ describe("App", () => {
     const icon = within(document.querySelector(".profile-hero") as HTMLElement).getByRole("button", {
       name: "Change icon for profile daily-coding"
     });
-    expect(icon).toHaveAttribute("data-icon", "folder");
+    expect(icon).toHaveAttribute("data-icon", "layers");
     fireEvent.click(icon);
     fireEvent.click(
       within(screen.getByRole("menu", { name: "Icons for Daily Coding" })).getByRole(

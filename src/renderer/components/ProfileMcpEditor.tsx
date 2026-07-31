@@ -1,4 +1,4 @@
-import { AlertTriangle, LoaderCircle, Network, RefreshCw } from "lucide-react";
+import { AlertTriangle, LoaderCircle, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import type {
   NativeMcpConnection,
@@ -9,6 +9,7 @@ import type {
 import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { Button, IconButton } from "./ui";
+import { ProductIcon } from "../productIcons";
 
 type McpSelectionMode = "agent" | "on" | "off";
 
@@ -144,7 +145,7 @@ export const ProfileMcpEditor = ({
         </div>
       ) : rows.length === 0 ? (
         <div className="profile-mcp-empty">
-          <Network size={17} strokeWidth={2} aria-hidden="true" />
+          <ProductIcon name="mcps" size={17} strokeWidth={2} />
           <span>{t("No MCP connections are configured in {{name}}.", { name: target.name })}</span>
         </div>
       ) : (
