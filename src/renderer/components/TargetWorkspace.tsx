@@ -193,8 +193,13 @@ export const TargetWorkspace = ({
             <span />
             <span>{t("Agent")}</span>
             <span>{t("Status")}</span>
-            <span>{t("Management")}</span>
-            <span>{t("Profile")}</span>
+            <span className="target-list__environment-headings">
+              <span>{t("Management")}</span>
+              <span>{t("Profile")}</span>
+              <span className="target-list__environment-heading--compact">
+                {t("Environment state")}
+              </span>
+            </span>
             <span>{t("Last applied")}</span>
             <span>{t("Actions")}</span>
           </div>
@@ -236,11 +241,13 @@ export const TargetWorkspace = ({
                 <span className={`target-health-status target-health-status--${target.health.status}`}>
                   {t(targetStatusLabel[target.health.status])}
                 </span>
-                <strong className="target-workflow-lifecycle">
-                  {t(state?.lifecycleStatus ? lifecycleLabel[state.lifecycleStatus] : isManaged ? "Managed by AgentEnv" : "Not managed")}
-                </strong>
-                <span className="target-workflow-profile">
-                  {state?.activeProfileName ?? t("None")}
+                <span className="target-workflow-environment">
+                  <strong className="target-workflow-lifecycle">
+                    {t(state?.lifecycleStatus ? lifecycleLabel[state.lifecycleStatus] : isManaged ? "Managed by AgentEnv" : "Not managed")}
+                  </strong>
+                  <span className="target-workflow-profile">
+                    {state?.activeProfileName ?? t("None")}
+                  </span>
                 </span>
                 <span className="target-workflow-last-applied">
                   <Clock3 size={12} />

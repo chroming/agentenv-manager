@@ -2,7 +2,7 @@
   .app-shell,
   .app-shell--library,
   .app-shell--profiles {
-    grid-template-columns: 204px minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-current-width) minmax(0, 1fr);
   }
 
   .editor-panel,

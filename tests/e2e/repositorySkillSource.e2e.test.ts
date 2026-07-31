@@ -224,29 +224,48 @@ describe("Repository Skill source", () => {
       const geometry = await page.locator(".skill-source-group-row").evaluate((row) => {
         const header = document.querySelector<HTMLElement>(".skill-source-table-head")!;
         const headerCells = Array.from(header.children) as HTMLElement[];
-        const rowCells = [
-          row.querySelector<HTMLElement>(".skill-source-counts"),
-          row.querySelector<HTMLElement>(".skill-source-last-checked"),
-          row.querySelector<HTMLElement>(".skill-source-status"),
-          row.querySelector<HTMLElement>(".skill-source-more")
-        ];
+        const identity = row.querySelector<HTMLElement>(".skill-source-identity")!;
+        const counts = row.querySelector<HTMLElement>(".skill-source-counts")!;
+        const checked = row.querySelector<HTMLElement>(".skill-source-last-checked")!;
+        const status = row.querySelector<HTMLElement>(".skill-source-status")!;
+        const more = row.querySelector<HTMLElement>(".skill-source-more")!;
         return {
+          checkedBelowIdentityTitle:
+            checked.getBoundingClientRect().top > identity.getBoundingClientRect().top,
+          checkedHeaderDisplay: getComputedStyle(headerCells[2]!).display,
+          checkedHeaderLeft: headerCells[2]!.getBoundingClientRect().left,
+          checkedLeft: checked.getBoundingClientRect().left,
+          columnCount: getComputedStyle(row).gridTemplateColumns.split(" ").length,
+          countsHeaderLeft: headerCells[1]!.getBoundingClientRect().left,
+          countsLeft: counts.getBoundingClientRect().left,
           documentWidth: document.documentElement.scrollWidth,
-          headerLefts: headerCells.slice(1).map((cell) => cell.getBoundingClientRect().left),
-          rowLefts: rowCells.map((cell) => cell!.getBoundingClientRect().left),
+          identityLeft: identity.getBoundingClientRect().left,
+          moreHeaderLeft: headerCells[4]!.getBoundingClientRect().left,
+          moreLeft: more.getBoundingClientRect().left,
+          moreRight: more.getBoundingClientRect().right,
           rowRight: row.getBoundingClientRect().right,
-          moreRight: rowCells[3]!.getBoundingClientRect().right,
+          rowScrollContained: row.scrollWidth <= row.clientWidth + 1,
+          statusHeaderLeft: headerCells[3]!.getBoundingClientRect().left,
+          statusLeft: status.getBoundingClientRect().left,
           viewportWidth: document.documentElement.clientWidth
         };
       });
       expect(geometry.documentWidth).toBe(geometry.viewportWidth);
-      geometry.rowLefts.forEach((left, index) => {
-        expect(
-          Math.abs(left - geometry.headerLefts[index]!),
-          JSON.stringify(geometry)
-        ).toBeLessThanOrEqual(1);
-      });
+      expect(geometry.rowScrollContained).toBe(true);
+      expect(Math.abs(geometry.countsLeft - geometry.countsHeaderLeft)).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.statusLeft - geometry.statusHeaderLeft)).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.moreLeft - geometry.moreHeaderLeft)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.moreRight - geometry.rowRight + 12)).toBeLessThanOrEqual(1);
+      if (width === 920) {
+        expect(geometry.columnCount).toBe(6);
+        expect(geometry.checkedHeaderDisplay).toBe("none");
+        expect(Math.abs(geometry.checkedLeft - geometry.identityLeft)).toBeLessThanOrEqual(1);
+        expect(geometry.checkedBelowIdentityTitle).toBe(true);
+      } else {
+        expect(geometry.columnCount).toBe(7);
+        expect(geometry.checkedHeaderDisplay).not.toBe("none");
+        expect(Math.abs(geometry.checkedLeft - geometry.checkedHeaderLeft)).toBeLessThanOrEqual(1);
+      }
     };
     await expectSourceLaneGeometry(1180, 760);
     await expectSourceLaneGeometry(920, 620);

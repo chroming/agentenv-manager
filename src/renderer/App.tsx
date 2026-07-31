@@ -143,9 +143,7 @@ import { ProfileComposerSection } from "./components/ProfileComposerSection";
 import { ResourceIconPicker } from "./components/ResourceIconPicker";
 import { GeneralSettingsSection, SettingsCategoryTabs, type SettingsCategory } from "./components/SettingsCategoryTabs";
 import {
-  ProfileSidebar,
-  targetIconFor,
-  type AppWorkspace
+  appShellClassName, ProfileSidebar, targetIconFor, type AppWorkspace
 } from "./components/ProfileSidebar";
 import {
   SkillLibraryPanel
@@ -203,6 +201,7 @@ import { useAutomaticSkillSourceChecks } from "./hooks/useAutomaticSkillSourceCh
 import { useAgentRefresh } from "./hooks/useAgentRefresh";
 import { useWorkspaceFreshness } from "./hooks/useWorkspaceFreshness";
 import { useWorkspaceNavigation } from "./hooks/useWorkspaceNavigation";
+import { useSidebarState } from "./hooks/useSidebarState";
 import { useConversationQuickOpen } from "./hooks/useConversationQuickOpen";
 import { useProfileActionGuard } from "./hooks/useProfileActionGuard";
 import { useProfileDraftController } from "./hooks/useProfileDraftController";
@@ -332,6 +331,7 @@ const AppContent = ({
     markWorkspacePreferenceReady,
     openWorkspaceNow
   } = useWorkspaceNavigation();
+  const { sidebarCollapsed, toggleSidebar } = useSidebarState();
   const [conversationViewState, setConversationViewState] = useState<ConversationWorkspaceViewState>();
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("general");
   const [quickOpen, setQuickOpen] = useState(false);
@@ -4003,20 +4003,19 @@ const AppContent = ({
 
   return (
     <main
-      className={`app-shell${activeWorkspace === "library" ? " app-shell--library" : ""}${
-        activeWorkspace === "profiles" ? " app-shell--profiles" : ""
-      }${activeWorkspace === "conversations" ? " app-shell--conversations" : ""
-      }${activeWorkspace === "settings" ? " app-shell--settings" : ""
-      }`}
+      className={appShellClassName(activeWorkspace, sidebarCollapsed)}
     >
       <ProfileSidebar
         targets={targets}
         profiles={profiles}
         isLoading={isLoading}
+        collapsed={sidebarCollapsed}
         activeWorkspace={activeWorkspace}
         onWorkspaceSelect={selectWorkspace}
         onAgentSelect={openAgentConfiguration}
+        onOpenAgents={() => selectWorkspace("targets")}
         onQuickOpen={() => setQuickOpen(true)}
+        onToggleCollapsed={toggleSidebar}
       />
 
       <QuickOpen items={quickOpenItems} open={quickOpen}

@@ -1,5 +1,12 @@
 import { createPortal } from "react-dom";
-import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties
+} from "react";
 import {
   BookOpen,
   Boxes,
@@ -7,6 +14,8 @@ import {
   MessageSquareText,
   Monitor,
   Network,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   Settings,
   type LucideIcon
@@ -57,14 +66,25 @@ export type AppWorkspace =
   | "targets"
   | "settings";
 
+export const appShellClassName = (
+  activeWorkspace: AppWorkspace,
+  collapsed: boolean
+) =>
+  `app-shell${activeWorkspace === "targets" ? "" : ` app-shell--${activeWorkspace}`}${
+    collapsed ? " app-shell--sidebar-collapsed" : ""
+  }`;
+
 interface ProfileSidebarProps {
   targets: TargetInfo[];
   profiles: ProfileSummary[];
   activeWorkspace: AppWorkspace;
   isLoading: boolean;
+  collapsed: boolean;
   onWorkspaceSelect(workspace: AppWorkspace): void;
   onAgentSelect(targetId: string): void;
+  onOpenAgents(): void;
   onQuickOpen(): void;
+  onToggleCollapsed(): void;
 }
 
 type TargetIconFlavor =
@@ -135,10 +155,18 @@ const targetStatusMessage = (status: TargetHealthStatus) =>
 
 const AgentOverflowPopover = ({
   targets,
-  onAgentSelect
+  onAgentSelect,
+  onOpenAgents,
+  statusSummary,
+  summaryState,
+  variant = "overflow"
 }: {
   targets: TargetInfo[];
   onAgentSelect(targetId: string): void;
+  onOpenAgents?(): void;
+  statusSummary?: string;
+  summaryState?: "attention" | "empty" | "loading" | "ready";
+  variant?: "overflow" | "summary";
 }) => {
   const { t } = useI18n();
   const popoverId = useId();
@@ -165,21 +193,43 @@ const AgentOverflowPopover = ({
     closeTimerRef.current = window.setTimeout(close, 120);
   };
 
-  const show = () => {
-    cancelClose();
+  const updatePosition = () => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
-      const popoverWidth = 190;
-      const popoverHeight = Math.min(16 + targets.length * 42, window.innerHeight - 20);
+      const isSummary = variant === "summary";
+      const measured = popoverRef.current?.getBoundingClientRect();
+      const popoverWidth = measured?.width ?? (isSummary ? 220 : 190);
+      const estimatedHeight =
+        (isSummary ? 92 : 16) + Math.max(targets.length, 1) * 42;
+      const popoverHeight = Math.min(
+        measured?.height ?? estimatedHeight,
+        window.innerHeight - 20
+      );
       setPosition({
-        left: Math.max(10, Math.min(rect.left, window.innerWidth - popoverWidth - 10)),
-        top:
-          rect.top - popoverHeight - 8 >= 10
+        left: isSummary
+          ? Math.max(10, Math.min(rect.right + 8, window.innerWidth - popoverWidth - 10))
+          : Math.max(10, Math.min(rect.left, window.innerWidth - popoverWidth - 10)),
+        top: isSummary
+          ? Math.max(10, Math.min(rect.bottom - popoverHeight, window.innerHeight - popoverHeight - 10))
+          : rect.top - popoverHeight - 8 >= 10
             ? rect.top - popoverHeight - 8
             : Math.min(window.innerHeight - popoverHeight - 10, rect.bottom + 8)
       });
     }
+  };
+
+  const show = () => {
+    cancelClose();
+    updatePosition();
     setOpen(true);
+  };
+
+  const toggle = () => {
+    if (open) {
+      close();
+      return;
+    }
+    show();
   };
 
   useEffect(() => {
@@ -211,32 +261,56 @@ const AgentOverflowPopover = ({
 
   useEffect(() => () => cancelClose(), []);
 
-  const label = t("{{count}} more Agents", { count: targets.length });
-  const triggerLabel = t(
-    targets.length === 1
-      ? "Show hidden Agent list, {{count}} item"
-      : "Show hidden Agent list, {{count}} items",
-    { count: targets.length }
-  );
+  useLayoutEffect(() => {
+    if (open) updatePosition();
+  }, [open, targets.length, variant]);
+
+  const isSummary = variant === "summary";
+  const label = isSummary
+    ? t("Local Agents")
+    : t("{{count}} more Agents", { count: targets.length });
+  const triggerLabel = isSummary
+    ? t("Show Local Agents")
+    : t(
+        targets.length === 1
+          ? "Show hidden Agent list, {{count}} item"
+          : "Show hidden Agent list, {{count}} items",
+        { count: targets.length }
+      );
 
   return (
     <>
       <button
         ref={triggerRef}
-        className="agent-chip agent-chip--more"
+        className={
+          isSummary
+            ? `sidebar-agent-summary sidebar-agent-summary--${summaryState ?? "empty"}`
+            : "agent-chip agent-chip--more"
+        }
         type="button"
         aria-label={triggerLabel}
         aria-controls={open ? popoverId : undefined}
         aria-expanded={open}
         aria-haspopup="menu"
         title={label}
-        onBlur={scheduleClose}
-        onClick={show}
-        onFocus={show}
-        onMouseEnter={show}
-        onMouseLeave={scheduleClose}
+        onBlur={isSummary ? undefined : scheduleClose}
+        onClick={isSummary ? toggle : show}
+        onFocus={isSummary ? undefined : show}
+        onMouseEnter={isSummary ? undefined : show}
+        onMouseLeave={isSummary ? undefined : scheduleClose}
       >
-        +{targets.length}
+        {isSummary ? (
+          <>
+            {summaryState === "loading" ? (
+              <LoaderCircle className="is-spinning" size={17} aria-hidden="true" />
+            ) : (
+              <Monitor size={17} strokeWidth={2.1} aria-hidden="true" />
+            )}
+            <span className="sidebar-agent-summary__state" aria-hidden="true" />
+          </>
+        ) : (
+          `+${targets.length}`
+        )}
       </button>
       {open
         ? createPortal(
@@ -245,13 +319,21 @@ const AgentOverflowPopover = ({
               className="agent-overflow-popover"
               id={popoverId}
               role="menu"
-              aria-label={t("Hidden Agents")}
+              aria-label={isSummary ? t("Local Agents") : t("Hidden Agents")}
               style={position}
               onKeyDown={handleActionMenuKeyDown}
               onMouseEnter={cancelClose}
               onMouseLeave={scheduleClose}
             >
-              {targets.map((target) => {
+              {isSummary ? (
+                <div className="agent-overflow-popover__header">
+                  <strong>{t("Local Agents")}</strong>
+                  {statusSummary ? <small>{statusSummary}</small> : null}
+                </div>
+              ) : null}
+              {targets.length === 0 ? (
+                <p className="agent-overflow-popover__empty">{t("No enabled Agents")}</p>
+              ) : targets.map((target) => {
                 const targetIcon = targetIconFor(target);
                 const status = t(targetStatusMessage(target.health.status));
                 return (
@@ -282,6 +364,20 @@ const AgentOverflowPopover = ({
                   </button>
                 );
               })}
+              {isSummary && onOpenAgents ? (
+                <button
+                  className="agent-overflow-popover__footer"
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    close();
+                    onOpenAgents();
+                  }}
+                >
+                  <Monitor size={15} strokeWidth={2.1} aria-hidden="true" />
+                  <span>{t("Open Agents")}</span>
+                </button>
+              ) : null}
             </div>,
             document.body
           )
@@ -295,9 +391,12 @@ export const ProfileSidebar = ({
   profiles,
   activeWorkspace,
   isLoading,
+  collapsed,
   onWorkspaceSelect,
   onAgentSelect,
-  onQuickOpen
+  onOpenAgents,
+  onQuickOpen,
+  onToggleCollapsed
 }: ProfileSidebarProps) => {
   const { t } = useI18n();
   const quickOpenShortcut =
@@ -316,6 +415,13 @@ export const ProfileSidebar = ({
           count: profiles.length
         })
       });
+  const summaryState = isLoading
+    ? "loading"
+    : targets.length === 0
+      ? "empty"
+      : readyTargets === targets.length
+        ? "ready"
+        : "attention";
 
   const workspaceItems: Array<{
     id: AppWorkspace;
@@ -334,7 +440,10 @@ export const ProfileSidebar = ({
   ];
 
   return (
-    <aside className="sidebar global-sidebar" aria-label={t("Global navigation")}>
+    <aside
+      className={`sidebar global-sidebar${collapsed ? " global-sidebar--collapsed" : ""}`}
+      aria-label={t("Global navigation")}
+    >
       <div className="sidebar__header">
         <div className="brand-lockup">
           <div className="brand-mark" aria-hidden="true">
@@ -345,9 +454,28 @@ export const ProfileSidebar = ({
             <p className="muted">v0.1.0</p>
           </div>
         </div>
+        <button
+          className="sidebar-collapse-button"
+          type="button"
+          aria-label={t(collapsed ? "Expand sidebar" : "Collapse sidebar")}
+          title={t(collapsed ? "Expand sidebar" : "Collapse sidebar")}
+          onClick={onToggleCollapsed}
+        >
+          {collapsed ? (
+            <PanelLeftOpen size={17} strokeWidth={2.1} aria-hidden="true" />
+          ) : (
+            <PanelLeftClose size={17} strokeWidth={2.1} aria-hidden="true" />
+          )}
+        </button>
       </div>
       <nav className="workspace-nav" aria-label={t("Workspace")}>
-        <button className="workspace-search-button" type="button" onClick={onQuickOpen}>
+        <button
+          className="workspace-search-button"
+          type="button"
+          aria-label={t("Quick open")}
+          title={collapsed ? t("Quick open") : undefined}
+          onClick={onQuickOpen}
+        >
           <Search size={15} strokeWidth={2.2} aria-hidden="true" />
           <span>{t("Quick open")}</span>
           <kbd>{quickOpenShortcut}</kbd>
@@ -362,6 +490,7 @@ export const ProfileSidebar = ({
               className={`workspace-button${activeWorkspace === item.id ? " is-active" : ""}`}
               data-workspace={item.id}
               type="button"
+              title={collapsed ? item.label : undefined}
               key={item.id}
               onClick={() => onWorkspaceSelect(item.id)}
             >
@@ -380,6 +509,7 @@ export const ProfileSidebar = ({
           className={`workspace-button${activeWorkspace === "library" ? " is-active" : ""}`}
           data-workspace="library"
           type="button"
+          title={collapsed ? t("Skills") : undefined}
           onClick={() => onWorkspaceSelect("library")}
         >
           <span className="workspace-button__icon" aria-hidden="true">
@@ -395,6 +525,7 @@ export const ProfileSidebar = ({
           className={`workspace-button${activeWorkspace === "settings" ? " is-active" : ""}`}
           data-workspace="settings"
           type="button"
+          title={collapsed ? t("Settings") : undefined}
           onClick={() => onWorkspaceSelect("settings")}
         >
           <span className="workspace-button__icon" aria-hidden="true">
@@ -405,44 +536,59 @@ export const ProfileSidebar = ({
         </button>
       </nav>
       <section className="system-status-card" aria-label={t("System status")}>
-        <div>
-          <span className={`status-dot${isLoading ? " is-loading" : " is-ready"}`} />
-          <strong>{t("Local Agents")}</strong>
-        </div>
-        <OverflowTooltip className="system-status-summary" text={statusSummary} />
-        <div className="agent-chip-row" aria-label={t("Enabled Agents")}>
-          {isLoading ? (
-            <span className="agent-chip-row__loading" aria-hidden="true">
-              <LoaderCircle className="is-spinning" size={16} />
-            </span>
-          ) : null}
-          {statusTargets.map((target) => {
-            const targetIcon = targetIconFor(target);
+        {collapsed ? (
+          <AgentOverflowPopover
+            key="collapsed-agent-summary"
+            targets={orderedTargets}
+            statusSummary={statusSummary}
+            summaryState={summaryState}
+            variant="summary"
+            onAgentSelect={onAgentSelect}
+            onOpenAgents={onOpenAgents}
+          />
+        ) : (
+          <>
+            <div>
+              <span className={`status-dot${isLoading ? " is-loading" : " is-ready"}`} />
+              <strong>{t("Local Agents")}</strong>
+            </div>
+            <OverflowTooltip className="system-status-summary" text={statusSummary} />
+            <div className="agent-chip-row" aria-label={t("Enabled Agents")}>
+              {isLoading ? (
+                <span className="agent-chip-row__loading" aria-hidden="true">
+                  <LoaderCircle className="is-spinning" size={16} />
+                </span>
+              ) : null}
+              {statusTargets.map((target) => {
+                const targetIcon = targetIconFor(target);
 
-            return (
-              <button
-                className={`agent-chip agent-chip--${target.health.status} agent-chip--${targetIcon.flavor}`}
-                title={`${target.name} · ${t(targetStatusMessage(target.health.status))}`}
-                key={target.id}
-                type="button"
-                aria-label={t("Configure {{name}}", { name: target.name })}
-                onClick={() => onAgentSelect(target.id)}
-              >
-                {targetIcon.assetUrl ? (
-                  <img className="agent-chip__logo" src={targetIcon.assetUrl} alt="" />
-                ) : (
-                  targetInitials(target)
-                )}
-              </button>
-            );
-          })}
-          {hiddenTargets.length > 0 ? (
-            <AgentOverflowPopover
-              targets={hiddenTargets}
-              onAgentSelect={onAgentSelect}
-            />
-          ) : null}
-        </div>
+                return (
+                  <button
+                    className={`agent-chip agent-chip--${target.health.status} agent-chip--${targetIcon.flavor}`}
+                    title={`${target.name} · ${t(targetStatusMessage(target.health.status))}`}
+                    key={target.id}
+                    type="button"
+                    aria-label={t("Configure {{name}}", { name: target.name })}
+                    onClick={() => onAgentSelect(target.id)}
+                  >
+                    {targetIcon.assetUrl ? (
+                      <img className="agent-chip__logo" src={targetIcon.assetUrl} alt="" />
+                    ) : (
+                      targetInitials(target)
+                    )}
+                  </button>
+                );
+              })}
+              {hiddenTargets.length > 0 ? (
+                <AgentOverflowPopover
+                  key="expanded-agent-overflow"
+                  targets={hiddenTargets}
+                  onAgentSelect={onAgentSelect}
+                />
+              ) : null}
+            </div>
+          </>
+        )}
       </section>
     </aside>
   );

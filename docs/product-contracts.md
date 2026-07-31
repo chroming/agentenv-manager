@@ -1315,6 +1315,24 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Sidebar navigation icons and labels MUST share the vertical center of their fixed selection surface. Padding, icon slots, and text line boxes MUST fit inside that height rather than enlarging or overflowing it.
 - The sidebar Agent summary shows at most three Agent icons inline. Additional Agents collapse into a `+N` disclosure whose hover and keyboard-focus popover shows every hidden Agent's icon, name, and current status without becoming a second navigation entry.
 - Agent summary icons and the `+N` disclosure use the shared `28px` square geometry and render as optical circles. Flex pressure, localized text, focus, hover, and an open popover MUST NOT change either axis or the circular silhouette.
+- The sidebar defaults to the expanded `204px` rail and supports an explicit collapsed
+  `64px` rail at every supported viewport. Collapse is a device-local presentation
+  preference, persists without entering Workspace Sync, and MUST NOT change the active
+  workspace, selected resource, filters, owned scroll positions, or an unsaved Profile draft.
+  Window width MUST NOT silently toggle this preference; the expanded rail remains a
+  supported layout at `920 x 620`.
+- Expanded and collapsed rails share the same fixed navigation hit targets and active-state
+  geometry. The collapsed rail shows only familiar icons with accessible names and delayed
+  tooltips; its header exposes an explicit Expand command rather than turning the product
+  mark into an unlabeled control. Quick Open remains available as an icon command.
+- In the collapsed rail, Local Agents becomes one fixed square aggregate command whose state
+  distinguishes loading, all ready, attention, and no enabled Agents. Its popover lists every
+  enabled Agent with the same status and complete-configuration destination used by the
+  expanded rail, plus one Open Agents command. It MUST NOT stack miniature Agent icons into a
+  second navigation column.
+- Shell-owned fixed anchors, including global feedback, derive their horizontal position from
+  the current sidebar-width token. Workspace overlays and dialogs remain centered to the
+  window rather than the content column.
 - Workspace-specific content MAY use its own density only inside the stable page content region.
 - Page-level creation and import commands remain in the page header. A resource list MUST NOT repeat the page title and primary command inside a nested header.
 - First-level pages use the shared page-header anatomy: one title, optional concise context or help, then one right-aligned command group. Page titles use the same type scale and left origin across workspaces.
@@ -1328,7 +1346,15 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Accent fill identifies only the current page-level primary command or the next commit action. Lists MUST NOT contain repeated primary-filled actions unless each row is an independent queued workflow.
 - A populated Profiles workspace keeps `New Profile` neutral because Save or Apply owns the commit emphasis; an empty Profiles workspace MAY promote `New Profile` to the primary action. Available Skill updates use a neutral compact `Update` action, while the update confirmation dialog owns the filled commit action.
 - The Library page uses `Skills` as its interactive page title; `Library` is neutral scope text and MUST NOT resemble a clickable breadcrumb.
-- Skills Library uses one stable six-lane reading order at every supported width: `Skill -> Source -> Usage -> Status -> Action -> More`. Source includes version metadata, Usage combines Profile references with Agent installs, Status is a non-interactive fact, Action exposes at most one current direct command, and More owns the overflow menu. A row without a current direct command retains the empty Action lane so sibling columns never shift.
+- Skills Library uses one stable semantic reading order: `Skill -> Source -> Usage -> Status -> Action -> More`. Source includes version metadata, Usage combines Profile references with Agent installs, Status is a non-interactive fact, Action exposes at most one current direct command, and More owns the overflow menu. At comfortable widths these are six comparison lanes. At the supported minimum width they compact into three semantic lanes, `Skill | Source + Usage | Status + Action`, plus the fixed overflow command; a missing value still reserves its position inside the combined lane so sibling rows never shift.
+- By Source preserves the same compact-table rule. At comfortable widths Last checked may use a
+  comparison column; at the supported minimum it moves under source identity while Changes and
+  Status + Action retain stable lanes. Disclosure, source artwork, and overflow controls keep
+  fixed hit targets and do not become text-sized tracks.
+- The Agents table may combine Management and Profile into one Environment lane at the supported
+  minimum width. Agent identity, health, environment ownership, and the primary Configure
+  destination remain visible; lower-frequency timestamps and commands may move into metadata or
+  overflow without creating horizontal scrolling.
 - Skill-list quick tabs are limited to `Enabled`, `Updates`, and `Disabled`. `Enabled` is the default and excludes globally disabled Skills; Source, Usage, and Agent-install filters live in one on-demand filter region, while `Update all` is rendered only when one or more updates can actually be prepared. Source-view quick tabs are limited to `Monitored`, `Manual only`, and `All`, with `Monitored` as the default. Skill List and By Source use the same verbs and status/action ownership: `Update available` is a status fact, `Update` is its adjacent command, and `Update all` handles a visible eligible set. `Check failed / Retry check` and `Needs sync / Sync installs` use the same separation. By Source MUST NOT repeat a status with a second competing review command; source checking, monitoring, rename, and other infrequent commands remain in the trailing menu. Update still opens a safety preview, and the dialog's filled `Update` command performs the mutation.
 - A newly discovered source candidate MAY be ignored without importing or hiding it. Ignore identity is the normalized source record plus its source-relative path, never the Skill name, so an identically named Skill in another source is unaffected. Ignored candidates remain visible as `Ignored`, are excluded from source change counts and bulk actions, and expose an explicit `Unignore` action that returns them to `New` without importing files. `Add` is available only after that state transition. Source merges preserve and remap ignored relative paths into the merged scope.
 - Update previews render the changed-file index immediately. A multi-file preview mounts only the initially open diff and lazily renders other files when expanded; it MUST NOT synchronously syntax-highlight every changed file before the dialog becomes usable.

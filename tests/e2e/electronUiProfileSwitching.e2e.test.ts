@@ -1839,13 +1839,18 @@ describe("Electron UI profile switching e2e", () => {
         const detailRect = statusDetail.getBoundingClientRect();
         const detailVisible = getComputedStyle(statusDetail).display !== "none";
         const moreRect = moreCell.getBoundingClientRect();
+        const doNotOverlap = (left: DOMRect, right: DOMRect) =>
+          left.right <= right.left ||
+          right.right <= left.left ||
+          left.bottom <= right.top ||
+          right.bottom <= left.top;
         return {
           background: getComputedStyle(updateButton).backgroundColor,
           buttonFitsText: updateButton.scrollWidth <= updateButton.clientWidth,
           buttonInsideActionColumn:
             buttonRect.left >= actionRect.left - 1 && buttonRect.right <= actionRect.right + 1,
           columnsDoNotOverlap:
-            statusRect.right <= actionRect.left && actionRect.right <= moreRect.left,
+            doNotOverlap(statusRect, actionRect) && doNotOverlap(actionRect, moreRect),
           detailClearance: detailVisible ? detailRect.top - buttonRect.bottom : undefined,
           foreground: getComputedStyle(updateButton).color
         };
@@ -4284,6 +4289,162 @@ describe("Electron UI profile switching e2e", () => {
       viewportWidth: document.documentElement.clientWidth
     }));
     expect(metrics.documentWidth).toBe(metrics.viewportWidth);
+  }, 30_000);
+
+  it("persists the collapsed desktop rail without changing workspace context", async () => {
+    const { page } = await launchApp();
+    await resizeAppWindow(page, 920, 620);
+    const navigation = page.getByRole("complementary", { name: "Global navigation" });
+    const skillSearch = page.getByRole("textbox", { name: "Search skills" });
+    await skillSearch.fill("shared");
+
+    await navigation.getByRole("button", { name: "Collapse sidebar" }).click();
+    await expect
+      .poll(() => navigation.evaluate((element) => Math.round(element.getBoundingClientRect().width)))
+      .toBe(64);
+    await expect.poll(() => skillSearch.inputValue()).toBe("shared");
+    await page.getByRole("heading", { name: "Skills", exact: true }).waitFor();
+
+    const collapsedGeometry = await page.evaluate(() => {
+      const sidebar = document.querySelector<HTMLElement>(".global-sidebar")!;
+      const editor = document.querySelector<HTMLElement>(".editor-panel")!;
+      const navButtons = Array.from(
+        sidebar.querySelectorAll<HTMLElement>(".workspace-button, .workspace-search-button")
+      );
+      const feedback = document.createElement("div");
+      feedback.className = "app-feedback app-feedback--dismissible";
+      feedback.textContent = "Persistent diagnostic";
+      editor.append(feedback);
+      const feedbackBox = feedback.getBoundingClientRect();
+      const sidebarBox = sidebar.getBoundingClientRect();
+      const result = {
+        documentContained:
+          document.documentElement.scrollWidth === document.documentElement.clientWidth &&
+          document.documentElement.scrollHeight === document.documentElement.clientHeight,
+        editorLeft: Math.round(editor.getBoundingClientRect().left),
+        feedbackInset: Math.round(feedbackBox.left - sidebarBox.right),
+        navButtons: navButtons.map((button) => {
+          const box = button.getBoundingClientRect();
+          return {
+            height: Math.round(box.height),
+            width: Math.round(box.width)
+          };
+        }),
+        sidebarWidth: Math.round(sidebarBox.width)
+      };
+      feedback.remove();
+      return result;
+    });
+    expect(collapsedGeometry).toMatchObject({
+      documentContained: true,
+      editorLeft: 64,
+      feedbackInset: 18,
+      sidebarWidth: 64
+    });
+    expect(collapsedGeometry.navButtons.every(({ height, width }) => height === 36 && width === 40))
+      .toBe(true);
+
+    await navigation.getByRole("button", { name: "Quick open" }).click();
+    const quickOpen = page.getByRole("dialog", { name: "Quick open" });
+    const quickOpenBox = await quickOpen.boundingBox();
+    expect(quickOpenBox).not.toBeNull();
+    expect(Math.abs(quickOpenBox!.x + quickOpenBox!.width / 2 - 460)).toBeLessThanOrEqual(1);
+    await page.keyboard.press("Escape");
+
+    await navigation.getByRole("button", { name: "Show Local Agents" }).click();
+    const agentsMenu = page.getByRole("menu", { name: "Local Agents" });
+    await agentsMenu.waitFor({ state: "visible" });
+    expect(await agentsMenu.locator(".agent-overflow-popover__item").count()).toBeGreaterThanOrEqual(2);
+    await expectTopmost(agentsMenu);
+    await agentsMenu.getByRole("menuitem", { name: "Open Agents" }).click();
+    await page.getByRole("heading", { name: "Agents", exact: true }).waitFor();
+
+    await navigation.getByRole("button", { name: "Skills", exact: true }).click();
+    await expect.poll(() => skillSearch.inputValue()).toBe("shared");
+    await expect
+      .poll(() => page.evaluate(() => window.localStorage.getItem("agentenv:sidebar-collapsed")))
+      .toBe("true");
+    await page.reload();
+    await navigation.waitFor({ state: "visible" });
+    await expect
+      .poll(() => navigation.evaluate((element) => Math.round(element.getBoundingClientRect().width)))
+      .toBe(64);
+    await page.getByRole("heading", { name: "Skills", exact: true }).waitFor();
+
+    await navigation.getByRole("button", { name: "Expand sidebar" }).click();
+    await expect
+      .poll(() => navigation.evaluate((element) => Math.round(element.getBoundingClientRect().width)))
+      .toBe(204);
+  }, 30_000);
+
+  it("compacts resource lanes semantically at the minimum desktop width", async () => {
+    const { page } = await launchApp();
+    await resizeAppWindow(page, 920, 620);
+    const navigation = page.getByRole("complementary", { name: "Global navigation" });
+
+    const skillRow = page.locator(".library-table-row").first();
+    await skillRow.waitFor({ state: "visible" });
+    const skillLanes = await skillRow.evaluate((row) => {
+      const box = (selector: string) => {
+        const bounds = row.querySelector<HTMLElement>(selector)!.getBoundingClientRect();
+        return {
+          bottom: Math.round(bounds.bottom),
+          left: Math.round(bounds.left),
+          right: Math.round(bounds.right),
+          top: Math.round(bounds.top)
+        };
+      };
+      const rowBox = row.getBoundingClientRect();
+      return {
+        action: box(".library-current-action-cell"),
+        contained: row.scrollWidth <= row.clientWidth + 1,
+        more: box(".library-actions-cell"),
+        resource: box(".library-resource-cell"),
+        row: {
+          bottom: Math.round(rowBox.bottom),
+          left: Math.round(rowBox.left),
+          right: Math.round(rowBox.right),
+          top: Math.round(rowBox.top)
+        },
+        source: box(".library-source-cell"),
+        status: box(".library-status-cell"),
+        usage: box(".library-usage-cell"),
+        visibleHeadings: Array.from(
+          row.parentElement?.previousElementSibling?.children ?? []
+        ).filter((element) => getComputedStyle(element).display !== "none").length
+      };
+    });
+    expect(skillLanes.contained).toBe(true);
+    expect(skillLanes.visibleHeadings).toBe(4);
+    expect(skillLanes.source.left).toBe(skillLanes.usage.left);
+    expect(skillLanes.source.top).toBeLessThan(skillLanes.usage.top);
+    expect(skillLanes.status.left).toBe(skillLanes.action.left);
+    expect(skillLanes.status.top).toBeLessThan(skillLanes.action.top);
+    expect(skillLanes.more.right).toBeLessThanOrEqual(skillLanes.row.right);
+
+    await navigation.getByRole("button", { name: "Agents", exact: true }).click();
+    const targetRow = page.locator(".target-workflow-header").first();
+    await targetRow.waitFor({ state: "visible" });
+    const targetLanes = await targetRow.evaluate((row) => {
+      const lifecycle = row.querySelector<HTMLElement>(".target-workflow-lifecycle")!.getBoundingClientRect();
+      const profile = row.querySelector<HTMLElement>(".target-workflow-profile")!.getBoundingClientRect();
+      const environment = row.querySelector<HTMLElement>(".target-workflow-environment")!.getBoundingClientRect();
+      const rowBox = row.getBoundingClientRect();
+      return {
+        columnCount: getComputedStyle(row).gridTemplateColumns.split(" ").length,
+        environmentContained:
+          environment.left >= rowBox.left && environment.right <= rowBox.right + 1,
+        lifecycleLeft: Math.round(lifecycle.left),
+        profileBelowLifecycle: profile.top > lifecycle.top,
+        profileLeft: Math.round(profile.left),
+        rowContained: row.scrollWidth <= row.clientWidth + 1
+      };
+    });
+    expect(targetLanes.columnCount).toBe(5);
+    expect(targetLanes.environmentContained).toBe(true);
+    expect(targetLanes.lifecycleLeft).toBe(targetLanes.profileLeft);
+    expect(targetLanes.profileBelowLifecycle).toBe(true);
+    expect(targetLanes.rowContained).toBe(true);
   }, 30_000);
 
   it("keeps one control taxonomy across workspaces and decision dialogs", async () => {
@@ -7471,23 +7632,28 @@ describe("Electron UI profile switching e2e", () => {
       const statusLabel = row.querySelector<HTMLElement>(".library-primary-status > span")!;
       const actionLabel = row.querySelector<HTMLElement>(".library-row-action > span")!;
       return {
-        statusToActionGap: currentAction.left - status.right,
+        statusActionLeftDelta: Math.abs(currentAction.left - status.left),
+        statusToActionVerticalGap: currentAction.top - status.bottom,
         actionToMoreGap: actions.left - currentAction.right,
         actionOverflow: actionLabel.scrollWidth - actionLabel.clientWidth,
         documentWidth: document.documentElement.scrollWidth,
-        headerColumns: head.children.length,
+        gridColumnCount: getComputedStyle(row).gridTemplateColumns.split(" ").length,
         headerDisplay: getComputedStyle(head).display,
+        visibleHeaderColumns: Array.from(head.children)
+          .filter((element) => getComputedStyle(element).display !== "none").length,
         rowHeight: row.getBoundingClientRect().height,
         statusOverflow: statusLabel.scrollWidth - statusLabel.clientWidth,
         viewportWidth: document.documentElement.clientWidth,
       };
     });
     expect(compactGeometry.documentWidth).toBe(compactGeometry.viewportWidth);
-    expect(compactGeometry.statusToActionGap).toBeGreaterThanOrEqual(9);
+    expect(compactGeometry.statusActionLeftDelta).toBeLessThanOrEqual(1);
+    expect(compactGeometry.statusToActionVerticalGap).toBeGreaterThanOrEqual(0);
     expect(compactGeometry.actionToMoreGap).toBeGreaterThanOrEqual(9);
     expect(compactGeometry.actionOverflow).toBeLessThanOrEqual(1);
+    expect(compactGeometry.gridColumnCount).toBe(4);
     expect(compactGeometry.headerDisplay).toBe("grid");
-    expect(compactGeometry.headerColumns).toBe(6);
+    expect(compactGeometry.visibleHeaderColumns).toBe(4);
     expect(compactGeometry.rowHeight).toBeLessThanOrEqual(68);
     expect(compactGeometry.statusOverflow).toBeLessThanOrEqual(1);
   }, 45_000);
@@ -8403,6 +8569,13 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.locator("html").getAttribute("lang")).toBe("zh-TW");
 
     await resizeAppWindow(page, 920, 620);
+    const localizedSidebar = page.getByRole("complementary", { name: "全域導覽" });
+    const localizedSidebarToggle = localizedSidebar.locator(".sidebar-collapse-button");
+    await expect.poll(() => localizedSidebarToggle.getAttribute("aria-label")).toBe("收起側欄");
+    await localizedSidebarToggle.click();
+    await expect
+      .poll(() => localizedSidebar.evaluate((element) => Math.round(element.getBoundingClientRect().width)))
+      .toBe(64);
     const localizedWorkspaces: Record<string, string> = {
       library: "技能",
       profiles: "設定檔",
@@ -8434,6 +8607,8 @@ describe("Electron UI profile switching e2e", () => {
       expect(sidebarScroll).toEqual({ sidebar: 0, navigation: 0 });
     }
 
+    await expect.poll(() => localizedSidebarToggle.getAttribute("aria-label")).toBe("展開側欄");
+    await localizedSidebarToggle.click();
     await page.getByTestId("locale-select").selectOption("en");
     await page.getByRole("heading", { name: "Settings", exact: true }).waitFor();
     await expect

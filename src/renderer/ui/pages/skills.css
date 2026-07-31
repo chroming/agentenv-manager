@@ -503,18 +503,92 @@
   .skill-library-panel .library-table-row {
     column-gap: 10px;
     grid-template-columns:
-      minmax(136px, 1.25fr)
-      minmax(92px, 0.8fr)
-      68px
-      120px
-      96px
+      minmax(170px, 1.2fr)
+      minmax(150px, 1fr)
+      minmax(128px, 0.82fr)
       32px;
+  }
+
+  .skill-library-panel .library-table__head > span:nth-child(3),
+  .skill-library-panel .library-table__head > span:nth-child(5) {
+    display: none;
   }
 
   .skill-library-panel .library-table-row {
     box-sizing: border-box;
+    grid-template-rows: 28px 28px;
     height: 68px;
     min-height: 68px;
+  }
+
+  .skill-library-panel .library-resource-cell {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .skill-library-panel .library-source-cell {
+    align-items: center;
+    display: flex;
+    gap: 7px;
+    grid-column: 2;
+    grid-row: 1;
+    overflow: hidden;
+  }
+
+  .skill-library-panel .library-source-primary {
+    flex: 0 1 auto;
+    max-width: 58%;
+  }
+
+  .skill-library-panel .library-source-meta {
+    flex: 1 1 auto;
+    height: 22px;
+    min-height: 22px;
+  }
+
+  .skill-library-panel .library-usage-cell {
+    align-items: center;
+    display: flex;
+    gap: 9px;
+    grid-column: 2;
+    grid-row: 2;
+    overflow: hidden;
+  }
+
+  .skill-library-panel .library-usage-line,
+  .skill-library-panel .library-usage-line:nth-child(2) {
+    display: inline-flex;
+    flex: 0 1 auto;
+    gap: 4px;
+    height: 22px;
+    line-height: 22px;
+    min-width: 0;
+  }
+
+  .skill-library-panel .library-usage-line + .library-usage-line::before {
+    color: var(--subtle);
+    content: "·";
+    margin-right: 4px;
+  }
+
+  .skill-library-panel .library-status-cell {
+    display: flex;
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .skill-library-panel .library-status-detail {
+    display: none;
+  }
+
+  .skill-library-panel .library-current-action-cell {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  .skill-library-panel .library-actions-cell {
+    grid-column: 4;
+    grid-row: 1 / span 2;
   }
 
   .skill-library-panel .library-toolbar {

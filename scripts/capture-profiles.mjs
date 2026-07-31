@@ -1518,6 +1518,28 @@ try {
   await page.getByLabel("介面語言").selectOption("en");
   await page.getByRole("heading", { name: "Settings" }).waitFor({ state: "visible" });
 
+  await setWindowSize(page, windowHandle, 920, 620);
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  const collapsedWorkspaces = [
+    ["Skills", "Skills", "sidebar-collapsed-skills-920x620.png"],
+    ["Profiles", "Profiles", "sidebar-collapsed-profiles-920x620.png"],
+    ["Conversations", "Conversations", "sidebar-collapsed-conversations-920x620.png"],
+    ["Agents", "Agents", "sidebar-collapsed-agents-920x620.png"],
+    ["Settings", "Settings", "sidebar-collapsed-settings-920x620.png"]
+  ];
+  for (const [buttonName, headingName, fileName] of collapsedWorkspaces) {
+    await page.getByRole("button", { name: buttonName, exact: true }).click();
+    await page.getByRole("heading", { name: headingName, exact: true }).waitFor({
+      state: "visible"
+    });
+    await capturePage(page, join(outputDir, fileName));
+  }
+  await page.getByRole("button", { name: "Show Local Agents" }).click();
+  await page.getByRole("menu", { name: "Local Agents" }).waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "sidebar-collapsed-agents-menu-920x620.png"));
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Expand sidebar" }).click();
+
   await setWindowSize(page, windowHandle, 1536, 1024);
   await page.getByRole("button", { name: "Profiles" }).click();
   await page.getByRole("button", { name: /Daily Coding/ }).click();

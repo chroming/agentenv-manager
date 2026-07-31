@@ -137,6 +137,15 @@
   text-align: right;
 }
 
+.target-list__environment-headings,
+.target-workflow-environment {
+  display: contents;
+}
+
+.target-list__environment-heading--compact {
+  display: none;
+}
+
 .target-card--workflow {
   align-content: start;
   align-self: start;
@@ -323,21 +332,38 @@
   color: var(--text);
 }
 
-@container (max-width: 780px) {
+@container (max-width: 900px) {
   .target-list__header,
   .target-workflow-header {
     grid-template-columns:
-      32px minmax(100px, 1fr) 58px 80px minmax(74px, 0.8fr) 258px;
+      32px minmax(110px, 1fr) 70px minmax(126px, 0.92fr) 160px;
   }
 
-  .target-list__header > span:nth-child(6),
+  .target-list__environment-headings,
+  .target-workflow-environment {
+    align-content: center;
+    display: grid;
+    gap: 2px;
+    grid-template-rows: 18px 18px;
+    min-width: 0;
+  }
+
+  .target-list__environment-headings > span:not(.target-list__environment-heading--compact) {
+    display: none;
+  }
+
+  .target-list__environment-heading--compact {
+    display: block;
+  }
+
+  .target-list__header > span:nth-last-child(2),
   .target-workflow-last-applied {
     display: none;
   }
 
   .target-list__header > span:last-child,
   .target-workflow-actions {
-    grid-column: 6;
+    grid-column: 5;
   }
 }
 
