@@ -234,17 +234,15 @@ export const SkillImportConflictDialog = ({
                       })}
                 </span>
               </div>
-              {selectedConflict.changes.length > 0 ? (
-                <Button
-                  ref={expandPreviewRef}
-                  icon={<Maximize2 size={14} />}
-                  size="compact"
-                  variant="ghost"
-                  onClick={() => setDiffWorkspaceOpen(true)}
-                >
-                  {t("Expand preview")}
-                </Button>
-              ) : null}
+              <Button
+                ref={expandPreviewRef}
+                icon={<Maximize2 size={14} />}
+                size="compact"
+                variant="ghost"
+                onClick={() => setDiffWorkspaceOpen(true)}
+              >
+                {t("Maximize preview")}
+              </Button>
             </div>
             {selectedConflict.changes.length > 0 ? (
               <div className="diff-list">
@@ -361,6 +359,9 @@ export const SkillImportConflictDialog = ({
       <DiffWorkspaceDialog
         changes={selectedConflict.changes}
         open={diffWorkspaceOpen}
+        readonlyFiles={selectedConflict.changes.length === 0
+          ? [{ path: "SKILL.md", content: pending.preview.incoming.skillMarkdown }]
+          : undefined}
         returnFocusRef={expandPreviewRef}
         title={t("SKILL.md preview")}
         onClose={() => setDiffWorkspaceOpen(false)}

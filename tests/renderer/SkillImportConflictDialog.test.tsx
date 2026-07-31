@@ -61,18 +61,50 @@ describe("SkillImportConflictDialog", () => {
 
     const parent = screen.getByRole("dialog", { name: "Review duplicate Skill" });
     expect(parent.querySelector('[data-file-icon="markdown"]')).toBeInTheDocument();
-    const expand = within(parent).getByRole("button", { name: "Expand preview" });
+    const expand = within(parent).getByRole("button", { name: "Maximize preview" });
     fireEvent.click(expand);
 
-    expect(screen.getByRole("dialog", { name: "Expanded diff preview" }))
+    expect(screen.getByRole("dialog", { name: "Full-screen preview" }))
       .toBeInTheDocument();
     expect(parent).toHaveAttribute("aria-hidden", "true");
 
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Expanded diff preview" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Full-screen preview" })).toBeNull();
     expect(screen.getByRole("dialog", { name: "Review duplicate Skill" }))
       .toBeInTheDocument();
     expect(expand).toHaveFocus();
     expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("maximizes an identical read-only SKILL.md preview through the same workspace", () => {
+    const identicalPending: PendingSkillImport = {
+      ...pending,
+      preview: {
+        ...pending.preview,
+        conflicts: [{
+          ...pending.preview.conflicts[0]!,
+          contentIdentical: true,
+          identical: true,
+          changes: []
+        }]
+      }
+    };
+    render(
+      <SkillImportConflictDialog
+        pending={identicalPending}
+        dialogRef={{ current: null }}
+        initialFocusRef={{ current: null }}
+        onDismiss={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    const parent = screen.getByRole("dialog", { name: "Review duplicate Skill" });
+    fireEvent.click(within(parent).getByRole("button", { name: "Maximize preview" }));
+
+    const workspace = screen.getByRole("dialog", { name: "Full-screen preview" });
+    expect(workspace).toHaveClass("is-maximized");
+    expect(within(workspace).getByRole("button", { name: "SKILL.md" })).toBeEnabled();
+    expect(workspace).toHaveTextContent("Incoming");
   });
 });

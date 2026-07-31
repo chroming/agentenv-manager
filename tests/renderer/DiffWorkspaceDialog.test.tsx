@@ -23,20 +23,30 @@ const changes: PlannedFileChange[] = [
 ];
 
 describe("DiffWorkspaceDialog", () => {
-  it("provides a selectable file tree and maximizable read-only diff surface", () => {
+  it("opens maximized with a complete aligned tree that marks changed context", () => {
     render(
       <DiffWorkspaceDialog
         changes={changes}
+        filePaths={[
+          "/tmp/project/SKILL.md",
+          "/tmp/project/references/guide.md",
+          "/tmp/project/references/unchanged.md"
+        ]}
         open
         title="Skill update"
         onClose={vi.fn()}
       />
     );
 
-    const dialog = screen.getByRole("dialog", { name: "Expanded diff preview" });
+    const dialog = screen.getByRole("dialog", { name: "Full-screen preview" });
+    expect(dialog).toHaveClass("is-maximized");
     expect(within(dialog).getByText("/tmp/project")).toBeInTheDocument();
     expect(dialog.querySelector('[data-file-icon="docs"]')).toBeInTheDocument();
-    expect(dialog.querySelectorAll('[data-file-icon="markdown"]')).toHaveLength(2);
+    expect(dialog.querySelectorAll('[data-file-icon="markdown"]')).toHaveLength(3);
+    expect(within(dialog).getByRole("button", { name: "unchanged.md" }))
+      .toHaveAttribute("aria-disabled", "true");
+    expect(within(dialog).getByRole("button", { name: "references" }))
+      .toHaveClass("has-changes");
     expect(within(dialog).getByRole("table", {
       name: "Formatted diff for /tmp/project/SKILL.md"
     })).toHaveTextContent("old");
@@ -46,10 +56,7 @@ describe("DiffWorkspaceDialog", () => {
       name: "Formatted diff for /tmp/project/references/guide.md"
     })).toHaveTextContent("after");
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Maximize preview" }));
-    expect(dialog).toHaveClass("is-maximized");
-    expect(within(dialog).getByRole("button", { name: "Restore preview size" }))
-      .toBeEnabled();
+    expect(within(dialog).queryByRole("button", { name: "Maximize preview" })).toBeNull();
   });
 
   it("resizes the file tree by keyboard and closes with Escape", () => {

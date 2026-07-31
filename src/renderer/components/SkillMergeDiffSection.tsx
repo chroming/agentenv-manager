@@ -67,7 +67,7 @@ export const SkillMergeDiffSection = ({
                 variant="ghost"
                 onClick={() => setExpanded(true)}
               >
-                {t("Expand preview")}
+                {t("Maximize preview")}
               </Button>
             ) : null}
           </div>

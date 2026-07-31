@@ -857,6 +857,7 @@ export interface SkillUpdatePlan {
   currentRevision?: string;
   latestRevision?: string;
   updateAvailable: boolean;
+  filePaths?: string[];
   changes: PlannedFileChange[];
   errors: string[];
   impact: SkillUpdateImpact;

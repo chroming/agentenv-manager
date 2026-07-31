@@ -4,6 +4,8 @@ import {
   ChevronRight,
   FileWarning,
   LoaderCircle,
+  Maximize2,
+  Minimize2,
   X
 } from "lucide-react";
 import type {
@@ -60,6 +62,11 @@ export const SkillFileBrowserDialog = ({
   const [treeLoading, setTreeLoading] = useState(true);
   const [fileLoading, setFileLoading] = useState(false);
   const [error, setError] = useState("");
+  const [maximized, setMaximized] = useState(false);
+
+  useEffect(() => {
+    setMaximized(false);
+  }, [skill.id]);
 
   useEffect(() => {
     let active = true;
@@ -154,7 +161,8 @@ export const SkillFileBrowserDialog = ({
   return (
     <ModalFrame
       ariaLabel={t("Files in {{name}}", { name: skill.name })}
-      className="skill-file-browser"
+      backdropClassName="skill-file-browser-backdrop"
+      className={`skill-file-browser${maximized ? " is-maximized" : ""}`}
       dialogRef={dialogRef}
       onDismiss={onClose}
     >
@@ -163,9 +171,20 @@ export const SkillFileBrowserDialog = ({
           <div className="section-title ui-dialog-title">{skill.name}</div>
           <p className="muted ui-dialog-description">{t("Read-only Library files")}</p>
         </div>
-        <IconButton ref={initialFocusRef} label={t("Close")} onClick={onClose} variant="ghost">
-          <X size={16} strokeWidth={2.2} />
-        </IconButton>
+        <div className="skill-file-browser__window-actions">
+          <IconButton
+            label={t(maximized ? "Restore preview size" : "Maximize preview")}
+            onClick={() => setMaximized((current) => !current)}
+            variant="ghost"
+          >
+            {maximized
+              ? <Minimize2 size={16} strokeWidth={2.2} />
+              : <Maximize2 size={16} strokeWidth={2.2} />}
+          </IconButton>
+          <IconButton ref={initialFocusRef} label={t("Close")} onClick={onClose} variant="ghost">
+            <X size={16} strokeWidth={2.2} />
+          </IconButton>
+        </div>
       </header>
       <div className="skill-file-browser__body">
         <aside className="skill-file-tree" aria-label={t("Skill file tree")}>

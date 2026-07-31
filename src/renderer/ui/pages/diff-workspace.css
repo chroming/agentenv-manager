@@ -76,10 +76,11 @@
   border-radius: var(--radius-control);
   color: var(--muted);
   cursor: pointer;
-  display: flex;
+  display: grid;
   font-size: 12px;
   font-weight: var(--font-weight-regular);
   gap: 6px;
+  grid-template-columns: 14px 17px minmax(0, 1fr);
   height: 30px;
   min-width: 100%;
   padding-block: 0;
@@ -97,13 +98,40 @@
   color: var(--accent-strong);
 }
 
+.diff-workspace__tree-item.has-changes:not(.is-selected) {
+  color: var(--accent-strong);
+}
+
+.diff-workspace__tree-item.is-add:not(.is-selected) {
+  color: var(--success);
+}
+
+.diff-workspace__tree-item.is-remove:not(.is-selected) {
+  color: var(--danger);
+}
+
+.diff-workspace__tree-item.is-replace:not(.is-selected) {
+  color: var(--warning-strong);
+}
+
+.diff-workspace__tree-item.is-context {
+  cursor: default;
+}
+
+.diff-workspace__tree-item.is-context:hover {
+  background: transparent;
+  color: var(--muted);
+}
+
 .diff-workspace__tree-item > svg,
 .diff-workspace__tree-item > .file-type-icon {
   flex: 0 0 auto;
 }
 
-.diff-workspace__tree-chevron {
-  margin-right: -4px;
+.diff-workspace__tree-chevron,
+.diff-workspace__tree-chevron-placeholder {
+  height: 14px;
+  width: 14px;
 }
 
 .diff-workspace__tree-item > span {

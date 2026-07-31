@@ -149,7 +149,7 @@ export const PreviewChangeList = ({
             variant="ghost"
             onClick={onExpandPreview}
           >
-            {t("Expand preview")}
+            {t("Maximize preview")}
           </Button>
         ) : null}
       </header>

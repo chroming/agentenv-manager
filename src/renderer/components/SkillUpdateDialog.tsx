@@ -160,7 +160,7 @@ export const SkillUpdateDialog = ({
             variant="ghost"
             onClick={() => setDiffWorkspaceOpen(true)}
           >
-            {t("Expand preview")}
+            {t("Maximize preview")}
           </Button>
         </header>
         <div className="update-change-list ui-dialog-body">
@@ -211,6 +211,7 @@ export const SkillUpdateDialog = ({
       </ModalFrame>
       <DiffWorkspaceDialog
         changes={plan.changes}
+        filePaths={plan.filePaths}
         open={diffWorkspaceOpen}
         returnFocusRef={expandPreviewRef}
         title={t("Update {{name}}", { name: plan.name })}

@@ -15,6 +15,12 @@ const planWithChanges = (count: number): SkillUpdatePlan => ({
   currentRevision: "2492a1a",
   latestRevision: "adba0a5",
   updateAvailable: true,
+  filePaths: [
+    ...Array.from({ length: count }, (_, index) =>
+      index === 0 ? "SKILL.md" : `references/file-${index}.md`
+    ),
+    "references/unchanged.md"
+  ],
   changes: Array.from({ length: count }, (_, index) => ({
     path: index === 0 ? "SKILL.md" : `references/file-${index}.md`,
     before: `old ${index}\n`,
@@ -75,15 +81,17 @@ describe("SkillUpdateDialog", () => {
     );
 
     const parent = screen.getByRole("dialog", { name: "Update preview for claude-api" });
-    const expand = within(parent).getByRole("button", { name: "Expand preview" });
+    const expand = within(parent).getByRole("button", { name: "Maximize preview" });
     fireEvent.click(expand);
 
-    expect(screen.getByRole("dialog", { name: "Expanded diff preview" }))
-      .toBeInTheDocument();
+    const workspace = screen.getByRole("dialog", { name: "Full-screen preview" });
+    expect(workspace).toHaveClass("is-maximized");
+    expect(within(workspace).getByRole("button", { name: "unchanged.md" }))
+      .toHaveAttribute("aria-disabled", "true");
     expect(parent).toHaveAttribute("aria-hidden", "true");
 
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Expanded diff preview" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Full-screen preview" })).toBeNull();
     expect(screen.getByRole("dialog", { name: "Update preview for claude-api" }))
       .toBeInTheDocument();
     expect(expand).toHaveFocus();

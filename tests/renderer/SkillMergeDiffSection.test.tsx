@@ -33,15 +33,15 @@ describe("SkillMergeDiffSection", () => {
       />
     );
 
-    const expand = screen.getByRole("button", { name: "Expand preview" });
+    const expand = screen.getByRole("button", { name: "Maximize preview" });
     expect(document.querySelector('[data-file-icon="markdown"]')).toBeInTheDocument();
     fireEvent.click(expand);
-    expect(screen.getByRole("dialog", { name: "Expanded diff preview" }))
+    expect(screen.getByRole("dialog", { name: "Full-screen preview" }))
       .toBeInTheDocument();
     expect(onExpandedChange).toHaveBeenLastCalledWith(true);
 
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Expanded diff preview" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Full-screen preview" })).toBeNull();
     expect(expand).toHaveFocus();
     expect(onExpandedChange).toHaveBeenLastCalledWith(false);
   });

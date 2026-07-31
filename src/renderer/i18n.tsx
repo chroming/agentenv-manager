@@ -2014,9 +2014,9 @@ Object.assign(zhCN, {
 });
 
 Object.assign(zhCN, {
-  "Expand preview": "展开预览",
-  "Expanded diff preview": "展开的差异预览",
   "Maximize preview": "最大化预览",
+  "Full-screen preview": "全屏预览",
+  "Relink {{name}}": "重新关联 {{name}}",
   "Restore preview size": "恢复预览大小",
   "Diff file tree": "差异文件树",
   "Resize file tree": "调整文件树宽度",
@@ -2052,9 +2052,9 @@ Object.assign(zhCN, {
 
 const zhTW: Record<string, string> = {
   "Checks monitored sources when the app opens, returns to the foreground, or reaches the saved interval.": "應用程式開啟、回到前景或到達設定間隔時檢查受監控的來源。",
-  "Expand preview": "展開預覽",
-  "Expanded diff preview": "展開的差異預覽",
   "Maximize preview": "最大化預覽",
+  "Full-screen preview": "全螢幕預覽",
+  "Relink {{name}}": "重新連結 {{name}}",
   "Restore preview size": "恢復預覽大小",
   "Diff file tree": "差異檔案樹",
   "Resize file tree": "調整檔案樹寬度",

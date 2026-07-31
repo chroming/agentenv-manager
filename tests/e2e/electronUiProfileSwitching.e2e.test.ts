@@ -1338,6 +1338,16 @@ describe("Electron UI profile switching e2e", () => {
       filesDialog.locator(".skill-file-preview__content").textContent()
     ).toContain("ZIP Review");
     await expectNoHorizontalOverflow(page, [".skill-file-browser", ".skill-file-browser__body"]);
+    await filesDialog.getByRole("button", { name: "Maximize preview" }).click();
+    const maximizedFilesBox = await filesDialog.boundingBox();
+    expect(maximizedFilesBox).not.toBeNull();
+    expect(maximizedFilesBox!.width).toBeGreaterThan(900);
+    expect(maximizedFilesBox!.height).toBeGreaterThan(600);
+    await expectNoHorizontalOverflow(page, [".skill-file-browser", ".skill-file-browser__body"]);
+    await filesDialog.getByRole("button", { name: "Restore preview size" }).click();
+    await expect.poll(() =>
+      filesDialog.locator(".skill-file-preview__content").textContent()
+    ).toContain("ZIP Review");
     await page.keyboard.press("Escape");
     await filesDialog.waitFor({ state: "hidden" });
   }, 30_000);
@@ -4700,10 +4710,10 @@ describe("Electron UI profile switching e2e", () => {
       await expect.poll(() => firstFileChange.getAttribute("open")).not.toBeNull();
     }
 
-    const expandPreview = previewDialog.getByRole("button", { name: "Expand preview" });
+    const expandPreview = previewDialog.getByRole("button", { name: "Maximize preview" });
     if (await expandPreview.count()) {
       await expandPreview.click();
-      const workspace = page.getByRole("dialog", { name: "Expanded diff preview" });
+      const workspace = page.getByRole("dialog", { name: "Full-screen preview" });
       await workspace.waitFor({ state: "visible" });
       await expectInViewport(page, workspace);
       await expectNoHorizontalOverflow(page, [
@@ -4714,7 +4724,6 @@ describe("Electron UI profile switching e2e", () => {
       expect(await workspace.locator(".diff-workspace__tree-item").count()).toBeGreaterThan(0);
       expect(await workspace.getByRole("table").count()).toBe(1);
 
-      await workspace.getByRole("button", { name: "Maximize preview" }).click();
       const maximizedBox = await workspace.boundingBox();
       expect(maximizedBox).not.toBeNull();
       expect(maximizedBox!.width).toBeGreaterThan(1100);
@@ -4812,10 +4821,10 @@ describe("Electron UI profile switching e2e", () => {
     expect(footerAfter?.y).toBe(footerBefore?.y);
     await resizeAppWindow(page, 920, 620);
     await expectPreviewGeometry();
-    const compactExpand = previewDialog.getByRole("button", { name: "Expand preview" });
+    const compactExpand = previewDialog.getByRole("button", { name: "Maximize preview" });
     if (await compactExpand.count()) {
       await compactExpand.click();
-      const compactWorkspace = page.getByRole("dialog", { name: "Expanded diff preview" });
+      const compactWorkspace = page.getByRole("dialog", { name: "Full-screen preview" });
       await compactWorkspace.waitFor({ state: "visible" });
       await expectInViewport(page, compactWorkspace);
       await expectNoHorizontalOverflow(page, [

@@ -1,8 +1,6 @@
 import {
   ChevronDown,
   ChevronRight,
-  Maximize2,
-  Minimize2,
   X
 } from "lucide-react";
 import {
@@ -19,10 +17,13 @@ import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { DiffViewer } from "./DiffViewer";
 import { FileTypeIcon } from "./FileTypeIcon";
+import { SyntaxCodePreview } from "./SyntaxCodePreview";
 import { IconButton, ModalFrame } from "./ui";
 
 interface DiffWorkspaceDialogProps {
   changes: PlannedFileChange[];
+  filePaths?: string[];
+  readonlyFiles?: Array<{ content: string; path: string }>;
   open: boolean;
   returnFocusRef?: RefObject<HTMLElement | null>;
   title: string;
@@ -32,14 +33,18 @@ interface DiffWorkspaceDialogProps {
 interface DiffTreeNode {
   children: DiffTreeNode[];
   changeIndex?: number;
+  changeKind?: "add" | "remove" | "replace";
+  hasChanges: boolean;
   id: string;
+  kind: "directory" | "file";
   name: string;
+  readonlyPath?: string;
 }
 
 const normalizePath = (path: string) => path.replaceAll("\\", "/");
 
-const displayPathsFor = (changes: PlannedFileChange[]) => {
-  const paths = changes.map((change) => normalizePath(change.path));
+const displayPathsFor = (inputPaths: string[]) => {
+  const paths = inputPaths.map(normalizePath);
   if (paths.length < 2 || paths.some((path) => !path.startsWith("/"))) {
     return { paths: paths.map((path) => path.replace(/^\/+/, "")), root: "" };
   }
@@ -59,27 +64,68 @@ const displayPathsFor = (changes: PlannedFileChange[]) => {
   };
 };
 
-const treeFor = (paths: string[]): DiffTreeNode[] => {
+function changeAction(change: PlannedFileChange) {
+  if (change.action === "remove" || (change.before && !change.after)) return "Remove";
+  if (!change.before && change.after) return "Add";
+  return "Replace";
+}
+
+const treeFor = (
+  paths: string[],
+  sourcePaths: string[],
+  changedPathIndexes: Map<string, number>,
+  readonlyPaths: Set<string>,
+  changes: PlannedFileChange[]
+): DiffTreeNode[] => {
   const root: DiffTreeNode[] = [];
-  paths.forEach((path, changeIndex) => {
+  paths.forEach((path, pathIndex) => {
     const parts = path.split("/").filter(Boolean);
     let level = root;
     parts.forEach((part, index) => {
       const id = parts.slice(0, index + 1).join("/");
       let node = level.find((candidate) => candidate.id === id);
       if (!node) {
-        node = { children: [], id, name: part };
+        node = {
+          children: [],
+          hasChanges: false,
+          id,
+          kind: index === parts.length - 1 ? "file" : "directory",
+          name: part
+        };
         level.push(node);
       }
-      if (index === parts.length - 1) node.changeIndex = changeIndex;
+      if (index === parts.length - 1) {
+        const changeIndex = changedPathIndexes.get(normalizePath(sourcePaths[pathIndex] ?? path));
+        node.kind = "file";
+        node.changeIndex = changeIndex;
+        node.readonlyPath = readonlyPaths.has(normalizePath(sourcePaths[pathIndex] ?? path))
+          ? normalizePath(sourcePaths[pathIndex] ?? path)
+          : undefined;
+        if (changeIndex !== undefined) {
+          node.changeKind = changeAction(changes[changeIndex]).toLowerCase() as DiffTreeNode["changeKind"];
+          node.hasChanges = true;
+        }
+      }
       level = node.children;
     });
   });
 
+  const markChangedDirectories = (nodes: DiffTreeNode[]): boolean => {
+    let levelHasChanges = false;
+    for (const node of nodes) {
+      if (node.kind === "directory") {
+        node.hasChanges = markChangedDirectories(node.children);
+      }
+      levelHasChanges = levelHasChanges || node.hasChanges;
+    }
+    return levelHasChanges;
+  };
+  markChangedDirectories(root);
+
   const sort = (nodes: DiffTreeNode[]) => {
     nodes.sort((left, right) => {
-      const leftDirectory = left.changeIndex === undefined;
-      const rightDirectory = right.changeIndex === undefined;
+      const leftDirectory = left.kind === "directory";
+      const rightDirectory = right.kind === "directory";
       if (leftDirectory !== rightDirectory) return leftDirectory ? -1 : 1;
       return left.name.localeCompare(right.name);
     });
@@ -89,14 +135,10 @@ const treeFor = (paths: string[]): DiffTreeNode[] => {
   return root;
 };
 
-const changeAction = (change: PlannedFileChange) => {
-  if (change.action === "remove" || (change.before && !change.after)) return "Remove";
-  if (!change.before && change.after) return "Add";
-  return "Replace";
-};
-
 export const DiffWorkspaceDialog = ({
   changes,
+  filePaths,
+  readonlyFiles = [],
   open,
   returnFocusRef,
   title,
@@ -106,17 +148,57 @@ export const DiffWorkspaceDialog = ({
   const dialogRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const dragStartRef = useRef<{ pointerX: number; width: number } | undefined>(undefined);
-  const [maximized, setMaximized] = useState(false);
   const [treeWidth, setTreeWidth] = useState(248);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedReadonlyPath, setSelectedReadonlyPath] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const changeSetKey = useMemo(
-    () => changes.map((change) => `${change.action ?? "replace"}:${change.path}`).join("|"),
+    () => [
+      ...changes.map((change) => `${change.action ?? "replace"}:${change.path}`),
+      ...(filePaths ?? []).map((path) => `file:${path}`),
+      ...readonlyFiles.map((file) => `readonly:${file.path}`)
+    ].join("|"),
+    [changes, filePaths, readonlyFiles]
+  );
+  const indexedPaths = useMemo(() => {
+    const paths = [...new Set([
+      ...(filePaths ?? []),
+      ...readonlyFiles.map((file) => file.path),
+      ...changes.map((change) => change.path)
+    ].map(normalizePath))];
+    return paths.length > 0 ? paths : changes.map((change) => normalizePath(change.path));
+  }, [changes, filePaths, readonlyFiles]);
+  const display = useMemo(
+    () => displayPathsFor(indexedPaths),
+    [indexedPaths]
+  );
+  const displayPathBySource = useMemo(
+    () => new Map(indexedPaths.map((path, index) => [path, display.paths[index] ?? path])),
+    [display.paths, indexedPaths]
+  );
+  const changedPathIndexes = useMemo(
+    () => new Map(changes.map((change, index) => [normalizePath(change.path), index])),
     [changes]
   );
-  const display = useMemo(() => displayPathsFor(changes), [changes]);
-  const tree = useMemo(() => treeFor(display.paths), [display.paths]);
+  const readonlyFileByPath = useMemo(
+    () => new Map(readonlyFiles.map((file) => [normalizePath(file.path), file])),
+    [readonlyFiles]
+  );
+  const tree = useMemo(
+    () => treeFor(
+      display.paths,
+      indexedPaths,
+      changedPathIndexes,
+      new Set(readonlyFileByPath.keys()),
+      changes
+    ),
+    [changedPathIndexes, changes, display.paths, indexedPaths, readonlyFileByPath]
+  );
   const selected = changes[selectedIndex] ?? changes[0];
+  const firstReadonlyPath = normalizePath(readonlyFiles[0]?.path ?? "");
+  const selectedReadonly = selected
+    ? undefined
+    : readonlyFileByPath.get(selectedReadonlyPath) ?? readonlyFiles[0];
 
   useModalDialog({
     open,
@@ -130,11 +212,11 @@ export const DiffWorkspaceDialog = ({
   useEffect(() => {
     if (!open) return;
     setSelectedIndex(0);
+    setSelectedReadonlyPath(firstReadonlyPath);
     setCollapsed(new Set());
-    setMaximized(false);
-  }, [open, changeSetKey]);
+  }, [open, changeSetKey, firstReadonlyPath]);
 
-  if (!open || !selected) return null;
+  if (!open || (!selected && !selectedReadonly)) return null;
 
   const toggleDirectory = (id: string) => {
     setCollapsed((current) => {
@@ -147,22 +229,37 @@ export const DiffWorkspaceDialog = ({
 
   const renderNodes = (nodes: DiffTreeNode[], depth = 0) =>
     nodes.map((node) => {
-      const isFile = node.changeIndex !== undefined;
+      const isFile = node.kind === "file";
+      const isContextFile = isFile && node.changeIndex === undefined && !node.readonlyPath;
+      const isSelected = isFile && (
+        (node.changeIndex === selectedIndex && selected !== undefined) ||
+        node.readonlyPath === normalizePath(selectedReadonly?.path ?? "")
+      );
       const isCollapsed = collapsed.has(node.id);
+      const changeClass = node.changeKind ? ` is-${node.changeKind}` : "";
       return (
         <li key={node.id}>
           <button
-            className={`diff-workspace__tree-item${isFile && node.changeIndex === selectedIndex ? " is-selected" : ""}`}
+            className={`diff-workspace__tree-item${node.hasChanges ? " has-changes" : ""}${isContextFile ? " is-context" : ""}${changeClass}${isSelected ? " is-selected" : ""}`}
             style={{ paddingInlineStart: `${10 + depth * 16}px` }}
             type="button"
             aria-expanded={isFile ? undefined : !isCollapsed}
+            aria-disabled={isContextFile ? "true" : undefined}
+            tabIndex={isContextFile ? -1 : undefined}
             onClick={() => {
-              if (isFile) setSelectedIndex(node.changeIndex!);
-              else toggleDirectory(node.id);
+              if (isFile) {
+                if (node.changeIndex !== undefined) setSelectedIndex(node.changeIndex);
+                else if (node.readonlyPath) setSelectedReadonlyPath(node.readonlyPath);
+                return;
+              }
+              toggleDirectory(node.id);
             }}
           >
             {isFile ? (
-              <FileTypeIcon kind="file" path={node.name} />
+              <>
+                <span className="diff-workspace__tree-chevron-placeholder" aria-hidden="true" />
+                <FileTypeIcon kind="file" path={node.name} />
+              </>
             ) : isCollapsed ? (
               <>
                 <ChevronRight className="diff-workspace__tree-chevron" size={13} aria-hidden="true" />
@@ -204,9 +301,9 @@ export const DiffWorkspaceDialog = ({
 
   return (
     <ModalFrame
-      ariaLabel={t("Expanded diff preview")}
+      ariaLabel={t("Full-screen preview")}
       backdropClassName="diff-workspace-backdrop"
-      className={`diff-workspace${maximized ? " is-maximized" : ""}`}
+      className="diff-workspace is-maximized"
       dialogRef={dialogRef}
       onDismiss={onClose}
     >
@@ -214,16 +311,12 @@ export const DiffWorkspaceDialog = ({
         <div className="ui-dialog-header__copy">
           <div className="section-title ui-dialog-title">{title}</div>
           <p className="muted ui-dialog-description">
-            {t("{{count}} changed files", { count: changes.length })}
+            {changes.length > 0
+              ? t("{{count}} changed files", { count: changes.length })
+              : t("{{count}} files", { count: readonlyFiles.length })}
           </p>
         </div>
         <div className="diff-workspace__window-actions">
-          <IconButton
-            label={t(maximized ? "Restore preview size" : "Maximize preview")}
-            onClick={() => setMaximized((current) => !current)}
-          >
-            {maximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-          </IconButton>
           <IconButton ref={closeRef} label={t("Close")} onClick={onClose}>
             <X size={17} />
           </IconButton>
@@ -260,15 +353,29 @@ export const DiffWorkspaceDialog = ({
         <main className="diff-workspace__preview">
           <header>
             <div>
-              <strong title={selected.path}>{display.paths[selectedIndex] ?? selected.path}</strong>
-              <span title={selected.path}>{selected.path}</span>
+              <strong title={selected?.path ?? selectedReadonly!.path}>
+                {displayPathBySource.get(normalizePath(selected?.path ?? selectedReadonly!.path)) ??
+                  selected?.path ?? selectedReadonly!.path}
+              </strong>
+              <span title={selected?.path ?? selectedReadonly!.path}>
+                {selected?.path ?? selectedReadonly!.path}
+              </span>
             </div>
-            <span className={`change-kind change-kind--${changeAction(selected).toLowerCase()}`}>
-              {t(changeAction(selected))}
-            </span>
+            {selected ? (
+              <span className={`change-kind change-kind--${changeAction(selected).toLowerCase()}`}>
+                {t(changeAction(selected))}
+              </span>
+            ) : null}
           </header>
           <div className="diff-workspace__diff">
-            <DiffViewer path={selected.path} diff={selected.diff} />
+            {selected ? (
+              <DiffViewer path={selected.path} diff={selected.diff} />
+            ) : (
+              <SyntaxCodePreview
+                code={selectedReadonly!.content}
+                path={selectedReadonly!.path}
+              />
+            )}
           </div>
         </main>
       </div>

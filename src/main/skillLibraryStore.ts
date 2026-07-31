@@ -85,7 +85,7 @@ import {
   indexedSkillFiles
 } from "./skillSources/skillIndexManifest";
 import { readAllProfilesForResourceMutation } from "./profileSafety";
-import { createSkillChanges } from "./skillFileChanges";
+import { createSkillChanges, createSkillChangeSet } from "./skillFileChanges";
 import { hashSkillContent, SKILL_CONTENT_HASH_VERSION } from "./skillContentHash";
 import { removeUnavailableSkillLinksTransaction } from "./skillUnavailableCleanup";
 import {
@@ -2816,7 +2816,7 @@ export const createSkillLibraryStore = (
       await rm(join(candidateDir, ".agentenv-skill.json"), { force: true });
       await rm(join(candidateDir, ".agentenv-owner.json"), { force: true });
       const expectedLibraryContentHash = await computeContentHash(targetDir);
-      const changes = await createSkillChanges(targetDir, candidateDir);
+      const { changes, filePaths } = await createSkillChangeSet(targetDir, candidateDir);
       if (await computeContentHash(targetDir) !== expectedLibraryContentHash) {
         throw new Error("Library skill changed while preparing the update preview; retry");
       }
@@ -2871,6 +2871,7 @@ export const createSkillLibraryStore = (
         currentRevision: metadata.remoteRevision ?? metadata.contentHash,
         latestRevision,
         updateAvailable: true,
+        filePaths,
         changes,
         errors: [],
         impact

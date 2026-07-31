@@ -41,10 +41,10 @@ const displayFileContent = (content: Buffer | undefined) => {
   }
 };
 
-export const createSkillChanges = async (
+export const createSkillChangeSet = async (
   currentDir: string,
   nextDir: string
-): Promise<PlannedFileChange[]> => {
+): Promise<{ changes: PlannedFileChange[]; filePaths: string[] }> => {
   const currentFiles = await readSkillFiles(currentDir);
   const nextFiles = await readSkillFiles(nextDir);
   const filePaths = [...new Set([...currentFiles.keys(), ...nextFiles.keys()])].sort((a, b) => {
@@ -53,7 +53,7 @@ export const createSkillChanges = async (
     return a.localeCompare(b);
   });
 
-  return filePaths
+  const changes = filePaths
     .map((path) => {
       const current = currentFiles.get(path);
       const next = nextFiles.get(path);
@@ -63,4 +63,12 @@ export const createSkillChanges = async (
       return { path, before, after, diff: createUnifiedDiff(path, before, after) };
     })
     .filter((change): change is PlannedFileChange => Boolean(change));
+
+  return { changes, filePaths };
 };
+
+export const createSkillChanges = async (
+  currentDir: string,
+  nextDir: string
+): Promise<PlannedFileChange[]> =>
+  (await createSkillChangeSet(currentDir, nextDir)).changes;

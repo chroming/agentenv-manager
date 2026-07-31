@@ -866,6 +866,9 @@ try {
   });
   await fileBrowserDialog.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-file-browser-920x620.png"));
+  await fileBrowserDialog.getByRole("button", { name: "Maximize preview" }).click();
+  await capturePage(page, join(outputDir, "skills-file-browser-maximized-920x620.png"));
+  await fileBrowserDialog.getByRole("button", { name: "Restore preview size" }).click();
   await fileBrowserDialog.getByRole("button", { name: "inspect.ts" }).click();
   await fileBrowserDialog.locator(".skill-file-preview > header code").getByText("typescript", {
     exact: true
@@ -950,6 +953,12 @@ try {
   });
   await skillUpdateDialog.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-update-review-920x620.png"));
+  await skillUpdateDialog.getByRole("button", { name: "Maximize preview" }).click();
+  const skillUpdateWorkspace = page.getByRole("dialog", { name: "Full-screen preview" });
+  await skillUpdateWorkspace.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "skills-update-review-maximized-920x620.png"));
+  await page.keyboard.press("Escape");
+  await skillUpdateWorkspace.waitFor({ state: "hidden" });
   await skillUpdateDialog.getByRole("button", { name: "Cancel" }).click();
   await skillUpdateDialog.waitFor({ state: "hidden" });
   await page.locator(".app-feedback--success, .app-feedback--info").waitFor({

@@ -67,6 +67,12 @@ describe("SkillFileBrowserDialog", () => {
     await waitFor(() =>
       expect(dialog.querySelector(".skill-file-preview__content")).toHaveTextContent("Checklist")
     );
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Maximize preview" }));
+    expect(dialog).toHaveClass("is-maximized");
+    expect(within(dialog).getByRole("button", { name: "Restore preview size" })).toBeEnabled();
+    expect(dialog.querySelector(".skill-file-preview__content")).toHaveTextContent("Checklist");
+    expect(onReadFile).toHaveBeenCalledTimes(2);
   });
 
   it("shows a non-destructive state for binary files", async () => {

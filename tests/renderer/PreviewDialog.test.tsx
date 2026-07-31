@@ -390,7 +390,7 @@ describe("PreviewDialog", () => {
   it("wraps Tab from the last modal control to the first", () => {
     render(<PreviewDialog preview={preview} onCancel={vi.fn()} onConfirm={vi.fn()} />);
     const dialog = screen.getByRole("dialog", { name: "Preview" });
-    const firstControl = within(dialog).getByRole("button", { name: "Expand preview" });
+    const firstControl = within(dialog).getByRole("button", { name: "Maximize preview" });
     const lastControl = within(dialog).getByRole("button", { name: "Confirm" });
     lastControl.focus();
 
@@ -402,7 +402,7 @@ describe("PreviewDialog", () => {
   it("wraps Shift+Tab from the first modal control to the last", () => {
     render(<PreviewDialog preview={preview} onCancel={vi.fn()} onConfirm={vi.fn()} />);
     const dialog = screen.getByRole("dialog", { name: "Preview" });
-    const firstControl = within(dialog).getByRole("button", { name: "Expand preview" });
+    const firstControl = within(dialog).getByRole("button", { name: "Maximize preview" });
     const lastControl = within(dialog).getByRole("button", { name: "Confirm" });
     firstControl?.focus();
 
@@ -424,7 +424,7 @@ describe("PreviewDialog", () => {
     );
     const { rerender } = render(renderDialog(false));
     const dialog = screen.getByRole("dialog", { name: "Preview" });
-    const firstControl = within(dialog).getByRole("button", { name: "Expand preview" });
+    const firstControl = within(dialog).getByRole("button", { name: "Maximize preview" });
     const confirm = within(dialog).getByRole("button", { name: "Confirm" });
     confirm.focus();
 
@@ -446,14 +446,14 @@ describe("PreviewDialog", () => {
     render(<PreviewDialog preview={preview} onCancel={onCancel} onConfirm={vi.fn()} />);
     const parent = screen.getByRole("dialog", { name: "Preview" });
 
-    const expandButton = within(parent).getByRole("button", { name: "Expand preview" });
+    const expandButton = within(parent).getByRole("button", { name: "Maximize preview" });
     fireEvent.click(expandButton);
-    const workspace = screen.getByRole("dialog", { name: "Expanded diff preview" });
+    const workspace = screen.getByRole("dialog", { name: "Full-screen preview" });
     expect(workspace).toBeInTheDocument();
     expect(parent).toHaveAttribute("aria-hidden", "true");
 
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Expanded diff preview" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Full-screen preview" })).toBeNull();
     expect(screen.getByRole("dialog", { name: "Preview" })).toBeInTheDocument();
     expect(expandButton).toHaveFocus();
     expect(onCancel).not.toHaveBeenCalled();

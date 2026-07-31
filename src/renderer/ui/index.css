@@ -12,6 +12,7 @@
 @import "./pages/settings-sync.css" layer(pages);
 @import "./pages/settings-backups.css" layer(pages);
 @import "./pages/library-import.css" layer(pages);
+@import "./pages/skill-file-browser.css" layer(pages);
 @import "./pages/skills.css" layer(pages);
 @import "./pages/skills-merge.css" layer(pages);
 @import "./pages/skill-sources.css" layer(pages);
