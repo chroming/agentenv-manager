@@ -308,7 +308,7 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
 
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
-    runtimeVersion: 6,
+    runtimeVersion: 7,
     platform: "darwin",
     readStartupStatus: vi.fn().mockResolvedValue({ state: "ready" }),
     onStartupStatusChanged: vi.fn().mockReturnValue(() => undefined),
@@ -336,6 +336,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     listTargets: vi.fn().mockResolvedValue([target]),
     listTargetStates: vi.fn().mockResolvedValue([]),
     listConversations: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+    searchConversations: vi.fn().mockResolvedValue([]),
     readConversation: vi.fn().mockRejectedValue(new Error("Conversation not found")),
     refreshConversations: vi.fn().mockResolvedValue({
       indexed: 0,
@@ -1021,6 +1022,72 @@ describe("App", () => {
       .toBeTruthy();
     expect(conversations.compareDocumentPosition(skills) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
+  });
+
+  it("opens an indexed conversation directly from Quick Open content search", async () => {
+    const conversation = {
+      id: "codex:release-session",
+      agentId: "codex",
+      agentName: "Codex",
+      sourceId: "release-session",
+      title: "Release investigation",
+      snippet: "Investigate a failing release",
+      matchSnippet: "The release used an old token.",
+      workspacePath: "/work/project",
+      createdAt: "2026-07-24T05:00:00.000Z",
+      updatedAt: "2026-07-24T06:00:00.000Z",
+      messageCount: 2,
+      detailState: "full" as const
+    };
+    const searchConversations = vi.fn().mockResolvedValue([conversation]);
+    const listConversations = vi.fn().mockResolvedValue({
+      items: [conversation],
+      total: 1,
+      workspacePaths: ["/work/project"],
+      agentCounts: { codex: 1 }
+    });
+    const readConversation = vi.fn().mockResolvedValue({
+      ...conversation,
+      messages: [
+        { id: "user", role: "user", text: "Find the release issue." },
+        { id: "assistant", role: "assistant", text: "The release used an old token." }
+      ]
+    });
+    const api = installApi({
+      listTargets: vi.fn().mockResolvedValue([codexTarget]),
+      searchConversations,
+      listConversations,
+      readConversation
+    });
+    render(<App />);
+
+    const navigation = screen.getByRole("navigation", { name: "Workspace" });
+    fireEvent.click(within(navigation).getByRole("button", { name: /^Quick open/ }));
+    const quickOpen = screen.getByRole("dialog", { name: "Quick open" });
+    fireEvent.change(within(quickOpen).getByRole("combobox"), {
+      target: { value: "old token" }
+    });
+    const result = await within(quickOpen).findByRole("option", {
+      name: /Release investigation/
+    });
+
+    expect(searchConversations).toHaveBeenCalledWith({
+      query: "old token",
+      limit: 6
+    });
+    expect(api.refreshConversations).not.toHaveBeenCalled();
+    fireEvent.click(result);
+
+    expect(await screen.findByRole("searchbox", {
+      name: "Search conversations"
+    })).toHaveValue("old token");
+    expect(
+      await screen.findAllByText("The release used an old token.")
+    ).toHaveLength(2);
+    expect(readConversation).toHaveBeenCalledWith(
+      conversation.id,
+      { limit: 60, tail: true }
+    );
   });
 
   it("restores the last stable workspace on the next launch", async () => {

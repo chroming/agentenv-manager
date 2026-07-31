@@ -48,6 +48,7 @@ const api: AgentEnvApi = {
   listTargets: (forceRefresh) => ipcRenderer.invoke("targets:list", forceRefresh),
   listTargetStates: () => ipcRenderer.invoke("targets:list-states"),
   listConversations: (input) => ipcRenderer.invoke("conversations:list", input),
+  searchConversations: (input) => ipcRenderer.invoke("conversations:search", input),
   readConversation: (id, input) => ipcRenderer.invoke("conversations:read", id, input),
   refreshConversations: () => ipcRenderer.invoke("conversations:refresh"),
   openOriginalConversation: (id) =>

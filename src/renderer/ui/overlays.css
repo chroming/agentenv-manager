@@ -447,13 +447,22 @@
   border-bottom: 1px solid var(--border-subtle);
   display: grid;
   gap: 10px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) 18px auto;
   min-height: 54px;
   padding: 0 14px;
 }
 
 .quick-open-search > svg {
   color: var(--text-secondary);
+}
+
+.quick-open-search__status {
+  align-items: center;
+  color: var(--text-secondary);
+  display: inline-flex;
+  height: 18px;
+  justify-content: center;
+  width: 18px;
 }
 
 .quick-open-search input {
@@ -524,6 +533,12 @@
   width: 28px;
 }
 
+.quick-open-result__icon img {
+  height: 18px;
+  object-fit: contain;
+  width: 18px;
+}
+
 .quick-open-result__copy {
   display: grid;
   gap: 2px;
@@ -551,6 +566,12 @@
   color: var(--text-secondary);
   padding: 32px 12px;
   text-align: center;
+}
+
+.quick-open-async-note {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  padding: 8px 10px 5px;
 }
 
 .quick-open-footer {

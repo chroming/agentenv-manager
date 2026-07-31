@@ -6,6 +6,7 @@ import type {
   ConversationListInput,
   ConversationListResult,
   ConversationReadInput,
+  ConversationSearchInput,
   ConversationSummary
 } from "../../shared/types";
 import type { AgentConversationCandidate } from "../targets/types";
@@ -43,6 +44,10 @@ interface ConversationIndexListInput extends ConversationListInput {
   facetAgentIds?: string[];
 }
 
+interface ConversationIndexSearchInput extends ConversationSearchInput {
+  agentIds?: string[];
+}
+
 export interface ConversationIndexStore {
   sourceVersion(id: string): string | undefined;
   discoveryVersion(): string | undefined;
@@ -52,6 +57,7 @@ export interface ConversationIndexStore {
   upsert(detail: ConversationDetail, candidate: AgentConversationCandidate): void;
   removeMissing(agentId: string, observedIds: Set<string>): number;
   list(input?: ConversationIndexListInput): Promise<ConversationListResult>;
+  search(input: ConversationIndexSearchInput): Promise<ConversationSummary[]>;
   read(id: string, input?: ConversationReadInput): Promise<ConversationDetail>;
   record(id: string): IndexedConversationRecord;
   close(): void;
@@ -90,7 +96,7 @@ const createDatabase = (path: string) => {
       (database.prepare("PRAGMA user_version").get() as { user_version: number })
         .user_version
     );
-    if (version > 2) throw new Error("Conversation cache uses a newer schema");
+    if (version > 3) throw new Error("Conversation cache uses a newer schema");
     database.exec(`
       PRAGMA foreign_keys = ON;
       PRAGMA journal_mode = WAL;
@@ -160,7 +166,39 @@ const createDatabase = (path: string) => {
         WHERE provider_resume_locator IS NULL;
       `);
     }
-    database.exec("PRAGMA user_version = 2;");
+    try {
+      database.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS conversation_search USING fts5(
+          conversation_id UNINDEXED,
+          title,
+          snippet,
+          workspace_path,
+          body,
+          tokenize = 'trigram'
+        );
+        INSERT INTO conversation_search (
+          conversation_id, title, snippet, workspace_path, body
+        )
+        SELECT
+          conversations.id,
+          conversations.title,
+          conversations.snippet,
+          COALESCE(conversations.workspace_path, ''),
+          conversations.search_text
+        FROM conversations
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM conversation_search
+          WHERE conversation_search.conversation_id = conversations.id
+        );
+      `);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/no such module: fts5|no such tokenizer: trigram|tokenizer constructor/i.test(message)) {
+        throw error;
+      }
+    }
+    database.exec("PRAGMA user_version = 3;");
     database.prepare(`
       SELECT id, agent_id, record_id, source_version, source_locator, search_text
       FROM conversations
@@ -205,6 +243,11 @@ export const createConversationIndexStore = async (
     await chmod(path, 0o600).catch(() => undefined);
   }
   const reader = createConversationIndexReader(path);
+  const searchIndexAvailable = Boolean(database.prepare(`
+    SELECT name
+    FROM sqlite_master
+    WHERE type = 'table' AND name = 'conversation_search'
+  `).get());
 
   const versionStatement = database.prepare(
     "SELECT source_version FROM conversations WHERE id = ?"
@@ -261,6 +304,16 @@ export const createConversationIndexStore = async (
       conversation_id, ordinal, id, role, text, created_at
     ) VALUES (?, ?, ?, ?, ?, ?)
   `);
+  const deleteSearchStatement = searchIndexAvailable
+    ? database.prepare("DELETE FROM conversation_search WHERE conversation_id = ?")
+    : undefined;
+  const insertSearchStatement = searchIndexAvailable
+    ? database.prepare(`
+        INSERT INTO conversation_search (
+          conversation_id, title, snippet, workspace_path, body
+        ) VALUES (?, ?, ?, ?, ?)
+      `)
+    : undefined;
 
   const rowFor = (id: string) => {
     const row = recordStatement.get(id) as ConversationRow | undefined;
@@ -286,11 +339,12 @@ export const createConversationIndexStore = async (
       upsertMetadataStatement.run("last-refreshed-at", value);
     },
     upsert: (detail, candidate) => {
+      const bodyText = detail.messages.map((message) => message.text).join("\n");
       const searchText = [
         detail.title,
         detail.snippet,
         detail.workspacePath ?? "",
-        ...detail.messages.map((message) => message.text)
+        bodyText
       ].join("\n");
       database.exec("BEGIN IMMEDIATE");
       try {
@@ -314,6 +368,14 @@ export const createConversationIndexStore = async (
           detail.detailState,
           detail.archived ? 1 : 0,
           searchText
+        );
+        deleteSearchStatement?.run(detail.id);
+        insertSearchStatement?.run(
+          detail.id,
+          detail.title,
+          detail.snippet,
+          detail.workspacePath ?? "",
+          bodyText
         );
         deleteMessagesStatement.run(detail.id);
         detail.messages.forEach((message, ordinal) => {
@@ -340,7 +402,10 @@ export const createConversationIndexStore = async (
       const remove = database.prepare("DELETE FROM conversations WHERE id = ?");
       database.exec("BEGIN IMMEDIATE");
       try {
-        for (const row of stale) remove.run(row.id);
+        for (const row of stale) {
+          deleteSearchStatement?.run(row.id);
+          remove.run(row.id);
+        }
         database.exec("COMMIT");
       } catch (error) {
         database.exec("ROLLBACK");
@@ -349,6 +414,7 @@ export const createConversationIndexStore = async (
       return stale.length;
     },
     list: (input = {}) => reader.list(input),
+    search: (input) => reader.search(input),
     read: (id, input = {}) => reader.read(id, input),
     record: (id) => {
       const row = rowFor(id);

@@ -6,8 +6,13 @@ import {
   RefreshCw,
   Settings2
 } from "lucide-react";
-import type { ProfileSummary, SkillLibraryEntry, TargetInfo } from "../shared/types";
-import type { AppWorkspace } from "./components/ProfileSidebar";
+import type {
+  ConversationSummary,
+  ProfileSummary,
+  SkillLibraryEntry,
+  TargetInfo
+} from "../shared/types";
+import { targetIconFor, type AppWorkspace } from "./components/ProfileSidebar";
 import type { QuickOpenItem } from "./components/QuickOpen";
 import type { TranslationValues } from "./i18n";
 
@@ -23,6 +28,21 @@ interface QuickOpenItemOptions {
   onRefreshSkills(): void | Promise<void>;
   onRefreshTargets(): void | Promise<void>;
 }
+
+interface ConversationQuickOpenItemOptions {
+  conversations: ConversationSummary[];
+  query: string;
+  targets: TargetInfo[];
+  t(message: string, values?: TranslationValues): string;
+  formatDate(value: string | number | Date): string;
+  onOpenConversation(summary: ConversationSummary, query: string): void;
+}
+
+const compactText = (value?: string) =>
+  value?.replace(/\s+/g, " ").trim();
+
+const leafPathName = (value?: string) =>
+  value?.split(/[\\/]/).filter(Boolean).at(-1);
 
 export const buildQuickOpenItems = ({
   profiles,
@@ -118,3 +138,47 @@ export const buildQuickOpenItems = ({
     onSelect: onRefreshTargets
   }] : [])
 ];
+
+export const buildConversationQuickOpenItems = ({
+  conversations,
+  query,
+  targets,
+  t,
+  formatDate,
+  onOpenConversation
+}: ConversationQuickOpenItemOptions): QuickOpenItem[] =>
+  conversations.map((conversation) => {
+    const target = targets.find((candidate) => candidate.id === conversation.agentId);
+    const icon = target ? targetIconFor(target) : undefined;
+    const context = [
+      conversation.agentName,
+      leafPathName(conversation.workspacePath),
+      formatDate(conversation.updatedAt)
+    ].filter(Boolean).join(" · ");
+    const excerpt = compactText(conversation.matchSnippet || conversation.snippet);
+    const normalizedTitle = compactText(conversation.title)?.toLocaleLowerCase();
+    const description = excerpt && excerpt.toLocaleLowerCase() !== normalizedTitle
+      ? `${context} — ${excerpt}`
+      : context;
+    return {
+      id: `conversation:${conversation.id}`,
+      group: t("Conversations"),
+      label: conversation.title,
+      description,
+      keywords: [
+        conversation.agentName,
+        conversation.workspacePath ?? "",
+        conversation.sourceId
+      ],
+      icon: icon?.assetUrl ? (
+        <img
+          className={`quick-open-agent-logo quick-open-agent-logo--${icon.flavor}`}
+          src={icon.assetUrl}
+          alt=""
+        />
+      ) : (
+        <MessageSquareText size={16} strokeWidth={2.2} />
+      ),
+      onSelect: () => onOpenConversation(conversation, query)
+    };
+  });

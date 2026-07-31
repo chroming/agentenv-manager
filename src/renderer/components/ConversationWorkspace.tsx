@@ -428,14 +428,24 @@ export interface ConversationWorkspaceViewState {
   scrollTop: number;
 }
 
+export interface ConversationOpenRequest {
+  requestId: number;
+  query: string;
+  summary: ConversationSummary;
+}
+
 export const ConversationWorkspace = ({
   targets,
   initialViewState,
-  onViewStateChange
+  onViewStateChange,
+  openRequest,
+  onOpenRequestHandled
 }: {
   targets: TargetInfo[];
   initialViewState?: ConversationWorkspaceViewState;
   onViewStateChange?(state: ConversationWorkspaceViewState): void;
+  openRequest?: ConversationOpenRequest;
+  onOpenRequestHandled?(requestId: number): void;
 }) => {
   const { t, formatDate, localeTag } = useI18n();
   const [items, setItems] = useState<ConversationSummary[]>(
@@ -496,6 +506,8 @@ export const ConversationWorkspace = ({
       Promise<void>
   >(async () => undefined);
   const queryEffectReadyRef = useRef(false);
+  const skipNextQueryEffectRef = useRef(false);
+  const handledOpenRequestRef = useRef<number | undefined>(undefined);
   const scrollTopRef = useRef(initialViewState?.scrollTop ?? 0);
   const restoredScrollRef = useRef(false);
   const onViewStateChangeRef = useRef(onViewStateChange);
@@ -590,7 +602,8 @@ export const ConversationWorkspace = ({
     nextAgentFilter = agentFilterRef.current,
     nextWorkspaceFilter = workspaceFilterRef.current,
     trackSearch = false,
-    limit = conversationPageSize
+    limit = conversationPageSize,
+    preferredSummary?: ConversationSummary
   ) => {
     const requestId = ++listRequestRef.current;
     try {
@@ -601,8 +614,12 @@ export const ConversationWorkspace = ({
         limit
       });
       if (requestId !== listRequestRef.current) return undefined;
-      setItems(result.items);
-      setTotal(result.total);
+      const nextItems = preferredSummary &&
+        !result.items.some((item) => item.id === preferredSummary.id)
+        ? [preferredSummary, ...result.items]
+        : result.items;
+      setItems(nextItems);
+      setTotal(Math.max(result.total, nextItems.length));
       if (result.workspacePaths) setWorkspacePaths(result.workspacePaths);
       if (result.agentCounts) setAgentCounts(result.agentCounts);
       if (result.lastRefreshedAt) {
@@ -613,9 +630,11 @@ export const ConversationWorkspace = ({
         }
       }
       setSelectedId((current) =>
-        current && result.items.some((item) => item.id === current)
+        preferredSummary
+          ? preferredSummary.id
+          : current && result.items.some((item) => item.id === current)
           ? current
-          : result.items[0]?.id
+          : nextItems[0]?.id
       );
       return result;
     } finally {
@@ -736,6 +755,50 @@ export const ConversationWorkspace = ({
   }, []);
 
   useEffect(() => {
+    if (
+      !openRequest ||
+      handledOpenRequestRef.current === openRequest.requestId
+    ) {
+      return;
+    }
+    handledOpenRequestRef.current = openRequest.requestId;
+    const nextQuery = openRequest.query.trim();
+    skipNextQueryEffectRef.current =
+      queryRef.current !== nextQuery ||
+      Boolean(agentFilterRef.current) ||
+      Boolean(workspaceFilterRef.current);
+    queryRef.current = nextQuery;
+    agentFilterRef.current = "";
+    workspaceFilterRef.current = "";
+    setQuery(nextQuery);
+    setAgentFilter("");
+    setWorkspaceFilter("");
+    setError("");
+    setWarning("");
+    setDetail((current) =>
+      current?.id === openRequest.summary.id ? current : undefined
+    );
+    setSelectedId(openRequest.summary.id);
+    setItems([openRequest.summary]);
+    setTotal(1);
+    scrollTopRef.current = 0;
+    if (conversationListRef.current) conversationListRef.current.scrollTop = 0;
+    setSearching(true);
+    void loadList(
+      nextQuery,
+      "",
+      "",
+      true,
+      conversationPageSize,
+      openRequest.summary
+    ).catch((unknownError) => {
+      setSearching(false);
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    });
+    onOpenRequestHandled?.(openRequest.requestId);
+  }, [openRequest?.requestId]);
+
+  useEffect(() => {
     const handleFocus = () => {
       void refreshRef.current("focus");
     };
@@ -746,6 +809,10 @@ export const ConversationWorkspace = ({
   useEffect(() => {
     if (!queryEffectReadyRef.current) {
       queryEffectReadyRef.current = true;
+      return undefined;
+    }
+    if (skipNextQueryEffectRef.current) {
+      skipNextQueryEffectRef.current = false;
       return undefined;
     }
     listRequestRef.current += 1;
@@ -1158,9 +1225,15 @@ export const ConversationWorkspace = ({
                 const searchPreview = item.matchSnippet ||
                   item.snippet ||
                   t("No preview available");
+                const normalizedQuery = query.replace(/\s+/g, " ").trim().toLowerCase();
+                const normalizedPreview = searchPreview
+                  .replace(/\s+/g, " ")
+                  .trim()
+                  .toLowerCase();
                 const showSearchPreview = Boolean(
-                  query &&
-                  searchPreview.replace(/\s+/g, " ").trim().toLowerCase() !==
+                  normalizedQuery &&
+                  normalizedPreview.includes(normalizedQuery) &&
+                  normalizedPreview !==
                     item.title.replace(/\s+/g, " ").trim().toLowerCase()
                 );
                 return (

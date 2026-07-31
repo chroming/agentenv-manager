@@ -244,6 +244,19 @@ export const registerIpcHandlers = ({
   diagnosticHandle("conversations:list", (_event, input: unknown) =>
     conversationService.list(input && typeof input === "object" ? input : undefined)
   );
+  diagnosticHandle("conversations:search", (_event, input: unknown) => {
+    if (!input || typeof input !== "object") {
+      throw new Error("Conversation search requires a query");
+    }
+    const value = input as { query?: unknown; limit?: unknown };
+    const query = String(value.query ?? "").trim().slice(0, 500);
+    if (!query) return [];
+    const requestedLimit = Number(value.limit);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.max(1, Math.min(20, Math.trunc(requestedLimit)))
+      : 6;
+    return conversationService.search({ query, limit });
+  });
   diagnosticHandle("conversations:read", (_event, id: unknown, input: unknown) =>
     conversationService.read(
       String(id ?? ""),

@@ -195,7 +195,9 @@ Workspace Sync states are `Not connected`, `Up to date`, `Changes to publish`, `
 
 Quick Open is a navigation accelerator, not a second command model.
 
-- `Cmd/Ctrl+K` opens one global search across Profiles, Library Skills, Agents, workspaces, and safe navigation actions.
+- `Cmd/Ctrl+K` opens one global search across Profiles, Library Skills, Agents, indexed Conversations, workspaces, and safe navigation actions.
+- Profiles, Skills, Agents, workspaces, and actions remain synchronous in-memory results. A query of at least two characters MAY add a bounded asynchronous Conversations group after a short debounce. That search reads only the existing device-local index: opening Quick Open MUST NOT scan Agent histories, refresh the index, or block local navigation results.
+- Conversation results show the authoritative title, Agent, workspace when available, update time, and one bounded matching excerpt. Title matches rank ahead of body-only matches. Results from an older query MUST be discarded without moving the active local result; choosing a Conversation closes Quick Open and opens that exact indexed task in Conversations.
 - Results inherit the same visibility and availability rules as their owning workspace. Quick Open MUST NOT bypass dirty-Profile confirmation, destructive confirmation, disabled-resource rules, or Target ownership checks.
 - Search, active selection, and result list use the standard combobox/listbox accessibility model. Arrow keys move one result, Home and End move to the first and last result, Enter opens the active result, and Escape restores focus to the invoking surface.
 - The active result MUST remain visible while keyboard navigation moves through a longer result list. Opening an item closes Quick Open before navigation so focus and feedback belong to the destination workspace.
@@ -507,6 +509,11 @@ an archive, or a native-session database migration tool.
   query or filters change. The command stays out of the reading surface until the user reaches the
   end of the currently loaded list, remains visible with local progress while loading, and after
   appending records appears again only when the user reaches the new end.
+- Indexed search uses a disposable full-text index when the bundled SQLite runtime supports it,
+  with a literal bounded fallback for short queries or an unavailable tokenizer. Quick Open uses
+  the same indexed ranking through a summary-only query that does not compute list facets or
+  trigger source discovery. Matching excerpts are derived inside the read worker and remain
+  bounded before crossing IPC.
 - Agent filters show indexed counts for every enabled history-capable Agent. A zero count is an
   honest source state, not an implication that another Agent's records belong to that Agent.
   Metadata-only histories remain useful by displaying their source summary while clearly disabling
@@ -1697,7 +1704,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Local and GitHub per-Skill update policies, legacy defaults, disabled-source isolation, and persistence.
 - Library global disable persistence, update-check exclusion, Add Skill picker filtering, existing-reference visibility, and Apply-time managed-copy removal.
 - In-place toolbar and `Cmd/Ctrl+R` Refresh preserve current Skill view state and do not contact update sources.
-- Global Quick Open searches and opens Profiles, Skills, Agents, workspaces, and safe navigation actions; Arrow/Home/End selection remains visible and respects ordinary dirty-state and confirmation boundaries.
+- Global Quick Open searches and opens Profiles, Skills, Agents, indexed Conversations, workspaces, and safe navigation actions; Arrow/Home/End selection remains visible and respects ordinary dirty-state and confirmation boundaries.
 - Skill source-default and custom icons persist across refresh and content update; Profile icon changes auto-save independently without clearing or committing a dirty environment draft.
 - Skills CLI v3 lock detection, corrupt and unsupported lock fallback, directory and broken symlink discovery, independent import, evidence preservation, and path-capability Apply review.
 - Update marks affected deployments pending without deploying.

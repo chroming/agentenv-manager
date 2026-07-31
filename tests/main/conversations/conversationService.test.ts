@@ -151,11 +151,18 @@ describe("conversation service", () => {
       makeTarget(codex, paths.homeDir),
       makeTarget(opencode, paths.homeDir)
     ];
+    let enabledTargetIds = ["codex", "opencode"];
     const service = await createConversationService({
       paths,
       targetRegistry: registry,
       targetDiscoveryService: { listTargets: async () => targets },
-      settingsStore,
+      settingsStore: {
+        ...settingsStore,
+        readSettings: async () => ({
+          ...await settingsStore.readSettings(),
+          enabledTargetIds
+        })
+      },
       clipboard: { writeText: vi.fn() },
       launcher: { launch: vi.fn() }
     });
@@ -177,6 +184,14 @@ describe("conversation service", () => {
     expect(read).toHaveBeenCalledTimes(1);
     expect((await service.list()).refreshRequired).toBe(false);
     expect((await service.list({ query: "failing step" })).items).toHaveLength(1);
+    expect(await service.search({ query: "failing step", limit: 6 })).toEqual([
+      expect.objectContaining({
+        id: "codex:session-1",
+        matchSnippet: expect.stringMatching(/failing step/i)
+      })
+    ]);
+    enabledTargetIds = [];
+    expect(await service.search({ query: "failing step", limit: 6 })).toEqual([]);
     expect(await service.list({ agentIds: ["disabled-agent"] })).toEqual({
       items: [],
       total: 0,

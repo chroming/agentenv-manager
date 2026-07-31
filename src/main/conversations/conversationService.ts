@@ -9,7 +9,9 @@ import type {
   ConversationListInput,
   ConversationListResult,
   ConversationReadInput,
-  ConversationRefreshResult
+  ConversationRefreshResult,
+  ConversationSearchInput,
+  ConversationSummary
 } from "../../shared/types";
 import type { AgentEnvPaths } from "../paths";
 import { pathsEqual } from "../platformPaths";
@@ -52,6 +54,7 @@ export interface ConversationClipboard {
 
 export interface ConversationService {
   list(input?: ConversationListInput): Promise<ConversationListResult>;
+  search(input: ConversationSearchInput): Promise<ConversationSummary[]>;
   read(id: string, input?: ConversationReadInput): Promise<ConversationDetail>;
   refresh(): Promise<ConversationRefreshResult>;
   openOriginal(id: string): Promise<ConversationLaunchResult>;
@@ -290,6 +293,14 @@ export const createConversationService = async (options: {
         ...input,
         agentIds: input.agentIds ? requested : [...enabled],
         facetAgentIds: [...enabled]
+      });
+    },
+    search: async (input) => {
+      const enabled = await enabledAgentIds();
+      if (enabled.size === 0) return [];
+      return index.search({
+        ...input,
+        agentIds: [...enabled]
       });
     },
     read: async (id, input) => {

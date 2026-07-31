@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { CornerDownLeft, Search } from "lucide-react";
+import { CornerDownLeft, LoaderCircle, Search } from "lucide-react";
 import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { ModalFrame } from "./ui";
@@ -18,9 +18,12 @@ interface QuickOpenProps {
   items: QuickOpenItem[];
   open: boolean;
   onDismiss(): void;
+  searchAdditionalItems?(query: string): Promise<QuickOpenItem[]>;
 }
 
 const QUICK_OPEN_LISTBOX_ID = "quick-open-results";
+const QUICK_OPEN_ASYNC_DELAY_MS = 220;
+const QUICK_OPEN_ASYNC_MINIMUM_QUERY_LENGTH = 2;
 const quickOpenOptionId = (index: number) => `quick-open-option-${index}`;
 
 const searchableText = (item: QuickOpenItem) =>
@@ -54,19 +57,68 @@ export const findQuickOpenResults = (
     .slice(0, 40);
 };
 
-export const QuickOpen = ({ items, open, onDismiss }: QuickOpenProps) => {
+export const QuickOpen = ({
+  items,
+  open,
+  onDismiss,
+  searchAdditionalItems
+}: QuickOpenProps) => {
   const { t } = useI18n();
   const dialogRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const asyncRequestRef = useRef(0);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
-  const results = useMemo(() => findQuickOpenResults(items, query), [items, query]);
+  const [additionalResults, setAdditionalResults] = useState<QuickOpenItem[]>([]);
+  const [additionalStatus, setAdditionalStatus] = useState<
+    "idle" | "searching" | "error"
+  >("idle");
+  const localResults = useMemo(() => findQuickOpenResults(items, query), [items, query]);
+  const results = useMemo(() => {
+    const seen = new Set(localResults.map((item) => item.id));
+    return [
+      ...localResults,
+      ...additionalResults.filter((item) => !seen.has(item.id))
+    ];
+  }, [additionalResults, localResults]);
 
   useEffect(() => {
     if (!open) return;
     setQuery("");
     setActiveIndex(0);
+    setAdditionalResults([]);
+    setAdditionalStatus("idle");
   }, [open]);
+
+  useEffect(() => {
+    setActiveIndex(0);
+    const requestId = ++asyncRequestRef.current;
+    setAdditionalResults([]);
+    setAdditionalStatus("idle");
+    const normalizedQuery = query.normalize("NFKC").trim();
+    if (
+      !open ||
+      !searchAdditionalItems ||
+      Array.from(normalizedQuery).length < QUICK_OPEN_ASYNC_MINIMUM_QUERY_LENGTH
+    ) {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => {
+      setAdditionalStatus("searching");
+      void searchAdditionalItems(normalizedQuery)
+        .then((next) => {
+          if (requestId !== asyncRequestRef.current) return;
+          setAdditionalResults(next);
+          setAdditionalStatus("idle");
+        })
+        .catch(() => {
+          if (requestId !== asyncRequestRef.current) return;
+          setAdditionalResults([]);
+          setAdditionalStatus("error");
+        });
+    }, QUICK_OPEN_ASYNC_DELAY_MS);
+    return () => window.clearTimeout(timeout);
+  }, [open, query, searchAdditionalItems]);
 
   useEffect(() => {
     setActiveIndex((current) => Math.min(current, Math.max(0, results.length - 1)));
@@ -105,12 +157,12 @@ export const QuickOpen = ({ items, open, onDismiss }: QuickOpenProps) => {
         <Search size={17} strokeWidth={2.2} aria-hidden="true" />
         <input
           ref={inputRef}
-          aria-label={t("Search Profiles, Skills, Agents, and actions")}
+          aria-label={t("Search Profiles, Skills, Agents, Conversations, and actions")}
           aria-activedescendant={results.length > 0 ? quickOpenOptionId(activeIndex) : undefined}
           aria-autocomplete="list"
           aria-controls={QUICK_OPEN_LISTBOX_ID}
           aria-expanded="true"
-          placeholder={t("Search Profiles, Skills, Agents, and actions...")}
+          placeholder={t("Search Profiles, Skills, Agents, Conversations, and actions...")}
           role="combobox"
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
@@ -129,11 +181,23 @@ export const QuickOpen = ({ items, open, onDismiss }: QuickOpenProps) => {
               setActiveIndex(Math.max(0, results.length - 1));
             } else if (event.key === "Enter") {
               event.preventDefault();
-              const currentResults = findQuickOpenResults(items, event.currentTarget.value);
-              choose(currentResults[Math.min(activeIndex, currentResults.length - 1)]);
+              choose(results[Math.min(activeIndex, results.length - 1)]);
             }
           }}
         />
+        <span
+          className="quick-open-search__status"
+          role="status"
+          aria-label={
+            additionalStatus === "searching"
+              ? t("Searching conversations")
+              : undefined
+          }
+        >
+          {additionalStatus === "searching" ? (
+            <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
+          ) : null}
+        </span>
         <kbd>esc</kbd>
       </div>
       <div
@@ -141,6 +205,7 @@ export const QuickOpen = ({ items, open, onDismiss }: QuickOpenProps) => {
         id={QUICK_OPEN_LISTBOX_ID}
         role="listbox"
         aria-label={t("Quick open results")}
+        aria-busy={additionalStatus === "searching"}
       >
         {results.length > 0 ? (
           results.map((item, index) => {
@@ -171,9 +236,18 @@ export const QuickOpen = ({ items, open, onDismiss }: QuickOpenProps) => {
               </div>
             );
           })
+        ) : additionalStatus === "searching" ? (
+          <div className="quick-open-empty">{t("Searching conversations…")}</div>
+        ) : additionalStatus === "error" ? (
+          <div className="quick-open-empty">{t("Conversation search unavailable")}</div>
         ) : (
           <div className="quick-open-empty">{t("No matching items")}</div>
         )}
+        {results.length > 0 && additionalStatus === "error" ? (
+          <div className="quick-open-async-note">
+            {t("Conversation search unavailable")}
+          </div>
+        ) : null}
       </div>
       <footer className="quick-open-footer">
         <span><kbd>↑</kbd><kbd>↓</kbd> {t("Navigate")}</span>

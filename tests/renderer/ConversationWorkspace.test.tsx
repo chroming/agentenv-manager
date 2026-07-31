@@ -201,6 +201,43 @@ describe("ConversationWorkspace", () => {
     expect(api.listConversations).toHaveBeenCalled();
   });
 
+  it("keeps the next typed search active after focusing the same Quick Open query", async () => {
+    const api = installApi();
+    const summary = { ...detail, messages: undefined };
+    render(
+      <ConversationWorkspace
+        targets={[target("codex", "Codex")]}
+        initialViewState={{
+          items: [summary],
+          total: 1,
+          query: "release",
+          agentFilter: "",
+          workspaceFilter: "",
+          workspacePaths: ["/work/project"],
+          agentCounts: { codex: 1 },
+          selectedId: detail.id,
+          detail,
+          scrollTop: 0
+        }}
+        openRequest={{
+          requestId: 1,
+          query: "release",
+          summary
+        }}
+      />
+    );
+    await screen.findByText("Please repair the release workflow.");
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search conversations" }), {
+      target: { value: "next query" }
+    });
+
+    await waitFor(() => expect(api.listConversations).toHaveBeenLastCalledWith({
+      query: "next query",
+      limit: 200
+    }));
+  });
+
   it("loads, searches, copies, and continues a full conversation", async () => {
     const api = installApi();
     render(<ConversationWorkspace targets={[

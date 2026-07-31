@@ -82,11 +82,18 @@ describe("conversation index store", () => {
     });
 
     expect((await index.list({ query: "发布" })).items).toHaveLength(1);
+    expect(await index.search({ query: "发布", limit: 6 })).toEqual([
+      expect.objectContaining({
+        id: detail.id,
+        matchSnippet: expect.stringContaining("发布")
+      })
+    ]);
     expect((await index.list({ query: "%" })).items).toEqual([]);
     expect((await index.list()).agentCounts).toEqual({ codex: 1 });
     expect(await index.list({ query: "OLD TOKEN" })).toMatchObject({
       items: [{
-        id: detail.id
+        id: detail.id,
+        matchSnippet: expect.stringMatching(/old token/i)
       }],
       workspacePaths: ["/work/project"]
     });
@@ -104,6 +111,54 @@ describe("conversation index store", () => {
     });
     expect(await readFile(source, "utf8")).toBe(before);
     expect((await stat(path)).mode & 0o777).toBe(0o600);
+  });
+
+  it("ranks title matches before newer body-only matches", async () => {
+    const { store: index } = await setup();
+    index.upsert({
+      ...detail,
+      id: "codex:title-match",
+      sourceId: "title-match",
+      title: "Release token",
+      updatedAt: "2026-07-20T06:00:00.000Z",
+      messages: [{ id: "title-message", role: "user", text: "Unrelated body" }]
+    }, {
+      ...candidate,
+      recordId: "title-match",
+      providerSession: {
+        kind: "native",
+        id: "title-match",
+        resumeLocator: "title-match"
+      }
+    });
+    index.upsert({
+      ...detail,
+      id: "codex:body-match",
+      sourceId: "body-match",
+      title: "Recent discussion",
+      updatedAt: "2026-07-25T06:00:00.000Z",
+      messages: [{
+        id: "body-message",
+        role: "assistant",
+        text: "The release token needs rotation."
+      }]
+    }, {
+      ...candidate,
+      recordId: "body-match",
+      providerSession: {
+        kind: "native",
+        id: "body-match",
+        resumeLocator: "body-match"
+      }
+    });
+
+    const results = await index.search({ query: "release token", limit: 6 });
+
+    expect(results.map((item) => item.id)).toEqual([
+      "codex:title-match",
+      "codex:body-match"
+    ]);
+    expect(results[1]?.matchSnippet).toMatch(/release token/i);
   });
 
   it("exposes a transcript size only for verified file fingerprints", async () => {
@@ -186,7 +241,42 @@ describe("conversation index store", () => {
       { id: "u2", role: "user", text: "replacement" }
     ]);
     expect(index.removeMissing("codex", new Set())).toBe(1);
+    expect(await index.search({ query: "replacement" })).toEqual([]);
     expect((await index.list()).items.map((item) => item.agentId)).toEqual(["claude-code"]);
+  });
+
+  it("migrates an existing cache to the indexed search schema", async () => {
+    const { path, store: index } = await setup();
+    index.upsert(detail, candidate);
+    index.close();
+    store = undefined;
+
+    const legacy = new DatabaseSync(path);
+    legacy.exec(`
+      DROP TABLE conversation_search;
+      PRAGMA user_version = 2;
+    `);
+    legacy.close();
+
+    store = await createConversationIndexStore(path);
+
+    expect(await store.search({ query: "release job" })).toEqual([
+      expect.objectContaining({
+        id: detail.id,
+        matchSnippet: expect.stringMatching(/release job/i)
+      })
+    ]);
+    const migrated = new DatabaseSync(path, { readOnly: true });
+    expect(
+      (migrated.prepare("PRAGMA user_version").get() as { user_version: number })
+        .user_version
+    ).toBe(3);
+    expect(
+      migrated.prepare(
+        "SELECT count(*) AS count FROM conversation_search"
+      ).get()
+    ).toEqual({ count: 1 });
+    migrated.close();
   });
 
   it("rebuilds a corrupt disposable cache", async () => {

@@ -403,6 +403,32 @@ describe("Conversations desktop workflow", () => {
     });
     await page.getByRole("heading", { name: "Result" }).waitFor();
 
+    await page.keyboard.press("Meta+K");
+    const quickOpen = page.getByRole("dialog", { name: "Quick open" });
+    await quickOpen.waitFor({ state: "visible" });
+    await quickOpen.getByRole("combobox", {
+      name: "Search Profiles, Skills, Agents, Conversations, and actions"
+    }).fill("workflow is ready");
+    const indexedConversationResult = quickOpen.getByRole("option", {
+      name: /Repair the desktop release workflow/
+    });
+    await indexedConversationResult.waitFor({ state: "visible" });
+    await expectInViewport(page, quickOpen);
+    await expectTopmost(quickOpen);
+    if (process.env.AGENTENV_CAPTURE_CONVERSATIONS) {
+      await page.screenshot({
+        path: process.env.AGENTENV_CAPTURE_CONVERSATIONS.replace(
+          /(\.[^.]+)$/,
+          "-quick-open$1"
+        ),
+        fullPage: true
+      });
+    }
+    await indexedConversationResult.click();
+    await expect.poll(() => historySearch.inputValue()).toBe("workflow is ready");
+    await expect.poll(() => selectedConversation.getAttribute("aria-selected")).toBe("true");
+    await page.getByText("The release workflow is ready.").waitFor();
+
     await expectNoHorizontalOverflow(page);
     await expectInViewport(page, page.getByRole("searchbox", {
       name: "Search conversations"
@@ -495,7 +521,11 @@ describe("Conversations desktop workflow", () => {
     await expect(page.getByRole("option", {
       name: /Repair the desktop release workflow/
     }).count()).resolves.toBe(1);
-    await expect(page.locator(".conversation-list-item__snippet").count()).resolves.toBe(0);
+    await expect.poll(() =>
+      page.locator(".conversation-list-item__snippet").allTextContents()
+    ).toSatisfy((values: string[]) =>
+      values.every((value) => /desktop release/i.test(value))
+    );
 
     const longSessionPath = join(
       sessionDir,
@@ -651,6 +681,27 @@ describe("Conversations desktop workflow", () => {
         fullPage: true
       });
     }
+    await page.keyboard.press("Meta+K");
+    const compactQuickOpen = page.getByRole("dialog", { name: "Quick open" });
+    await compactQuickOpen.getByRole("combobox", {
+      name: "Search Profiles, Skills, Agents, Conversations, and actions"
+    }).fill("Trae V2 history is available");
+    await compactQuickOpen.getByRole("option", {
+      name: /Verify the Trae V2 conversation reader/
+    }).waitFor({ state: "visible" });
+    await expectInViewport(page, compactQuickOpen);
+    await expectTopmost(compactQuickOpen);
+    expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
+    if (process.env.AGENTENV_CAPTURE_CONVERSATIONS) {
+      await page.screenshot({
+        path: process.env.AGENTENV_CAPTURE_CONVERSATIONS.replace(
+          /(\.[^.]+)$/,
+          "-compact-quick-open$1"
+        ),
+        fullPage: true
+      });
+    }
+    await page.keyboard.press("Escape");
     await page
       .getByRole("option", { name: /Verify the Trae V2 conversation reader/ })
       .click();

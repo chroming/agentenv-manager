@@ -203,6 +203,7 @@ import { useAutomaticSkillSourceChecks } from "./hooks/useAutomaticSkillSourceCh
 import { useAgentRefresh } from "./hooks/useAgentRefresh";
 import { useWorkspaceFreshness } from "./hooks/useWorkspaceFreshness";
 import { useWorkspaceNavigation } from "./hooks/useWorkspaceNavigation";
+import { useConversationQuickOpen } from "./hooks/useConversationQuickOpen";
 import { useProfileActionGuard } from "./hooks/useProfileActionGuard";
 import { useProfileDraftController } from "./hooks/useProfileDraftController";
 import { useProfileActivationController } from "./hooks/useProfileActivationController";
@@ -331,8 +332,7 @@ const AppContent = ({
     markWorkspacePreferenceReady,
     openWorkspaceNow
   } = useWorkspaceNavigation();
-  const [conversationViewState, setConversationViewState] =
-    useState<ConversationWorkspaceViewState>();
+  const [conversationViewState, setConversationViewState] = useState<ConversationWorkspaceViewState>();
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("general");
   const [quickOpen, setQuickOpen] = useState(false);
   const [skillLibraryViewState, setSkillLibraryViewState] = useState(
@@ -1097,6 +1097,10 @@ const AppContent = ({
     onDiscard: discardProfileDraft,
     onError: setError,
     onSave: saveDraft
+  });
+  const conversationQuickOpen = useConversationQuickOpen({
+    targets, t, formatDate, guardAction: guardProfileAction,
+    captureScroll: libraryScroll.captureScroll, openWorkspaceNow
   });
 
   const selectProfileNow = async (
@@ -3981,21 +3985,18 @@ const AppContent = ({
     skills: librarySkills,
     targets,
     t,
-    onOpenWorkspace: (workspace) => {
+    onOpenWorkspace: workspace => {
       if (workspace === "library") setSkillLibraryMode("skills");
       selectWorkspace(workspace);
     },
     onOpenProfile: selectProfile,
-    onOpenSkill: (skill) => {
+    onOpenSkill: skill => {
       setSkillLibraryMode("skills");
-      setSkillLibraryViewState((current) =>
-        updateSkillLibraryControls(current, { search: skill.name })
-      );
+      setSkillLibraryViewState(current =>
+        updateSkillLibraryControls(current, { search: skill.name }));
       selectWorkspace("library");
     },
-    onOpenTarget: (targetId) => {
-      openAgentConfiguration(targetId);
-    },
+    onOpenTarget: openAgentConfiguration,
     onRefreshSkills: refreshSkills,
     onRefreshTargets: refreshTargets
   });
@@ -4018,11 +4019,9 @@ const AppContent = ({
         onQuickOpen={() => setQuickOpen(true)}
       />
 
-      <QuickOpen
-        items={quickOpenItems}
-        open={quickOpen}
+      <QuickOpen items={quickOpenItems} open={quickOpen}
         onDismiss={() => setQuickOpen(false)}
-      />
+        searchAdditionalItems={conversationQuickOpen.searchAdditionalItems} />
 
       <section
         className={`editor-panel${
@@ -4790,6 +4789,8 @@ const AppContent = ({
             targets={targets}
             initialViewState={conversationViewState}
             onViewStateChange={setConversationViewState}
+            openRequest={conversationQuickOpen.openRequest}
+            onOpenRequestHandled={conversationQuickOpen.handleOpenRequest}
           />
         ) : activeWorkspace === "targets" ? (
             <TargetWorkspace

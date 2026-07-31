@@ -82,6 +82,7 @@ export interface AgentEnvApi {
   listTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
   listTargetStates(): Promise<TargetManagementState[]>;
   listConversations(input?: ConversationListInput): Promise<ConversationListResult>;
+  searchConversations(input: ConversationSearchInput): Promise<ConversationSummary[]>;
   readConversation(id: string, input?: ConversationReadInput): Promise<ConversationDetail>;
   refreshConversations(): Promise<ConversationRefreshResult>;
   openOriginalConversation(id: string): Promise<ConversationLaunchResult>;
@@ -352,6 +353,11 @@ export interface ConversationListInput {
   workspacePaths?: string[];
   limit?: number;
   offset?: number;
+}
+
+export interface ConversationSearchInput {
+  query: string;
+  limit?: number;
 }
 
 export interface ConversationListResult {
