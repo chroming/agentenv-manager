@@ -11,6 +11,7 @@ interface RepositoryCacheMarker {
   formatVersion: 1;
   cacheKeyLocator: string;
   transportLocator: string;
+  historyDepthByRef?: Record<string, number>;
 }
 
 export interface GitRepositoryCacheOptions {
@@ -43,7 +44,44 @@ const markerPathFor = (cachePath: string) => join(cachePath, ".agentenv-reposito
 
 const readMarker = async (cachePath: string): Promise<RepositoryCacheMarker | undefined> => {
   try {
-    return JSON.parse(await readFile(markerPathFor(cachePath), "utf8")) as RepositoryCacheMarker;
+    const parsed = JSON.parse(await readFile(markerPathFor(cachePath), "utf8")) as unknown;
+    if (!parsed || typeof parsed !== "object") return undefined;
+    const marker = parsed as Record<string, unknown>;
+    if (
+      marker.formatVersion !== 1 ||
+      typeof marker.cacheKeyLocator !== "string" ||
+      typeof marker.transportLocator !== "string"
+    ) {
+      return undefined;
+    }
+    let historyDepthByRef: Record<string, number> | undefined;
+    if (marker.historyDepthByRef !== undefined) {
+      if (
+        !marker.historyDepthByRef ||
+        typeof marker.historyDepthByRef !== "object" ||
+        Array.isArray(marker.historyDepthByRef)
+      ) {
+        return undefined;
+      }
+      const entries = Object.entries(marker.historyDepthByRef);
+      if (entries.some(([ref, depth]) =>
+        !ref ||
+        ref.length > 1024 ||
+        /[\u0000-\u001f\u007f]/.test(ref) ||
+        typeof depth !== "number" ||
+        !Number.isSafeInteger(depth) ||
+        depth < 1
+      )) {
+        return undefined;
+      }
+      historyDepthByRef = Object.fromEntries(entries) as Record<string, number>;
+    }
+    return {
+      formatVersion: 1,
+      cacheKeyLocator: marker.cacheKeyLocator,
+      transportLocator: marker.transportLocator,
+      ...(historyDepthByRef ? { historyDepthByRef } : {})
+    };
   } catch (error) {
     if (isMissingFileError(error) || error instanceof SyntaxError) return undefined;
     throw error;
@@ -88,6 +126,77 @@ const accessFailureMessage = (attempts: Array<{ transport: string; error: unknow
     }
   );
 };
+
+const cacheRefFor = (ref: string) =>
+  `refs/agentenv/${createHash("sha256").update(ref).digest("hex")}`;
+
+const advertisedCommitFor = async (
+  runner: GitCommandRunner,
+  repository: string,
+  ref: string,
+  signal?: AbortSignal
+): Promise<string | undefined> => {
+  if (/^[a-f0-9]{40,64}$/i.test(ref)) return undefined;
+  const refs = ref.startsWith("refs/")
+    ? [ref]
+    : [`refs/heads/${ref}`, `refs/tags/${ref}^{}`, `refs/tags/${ref}`];
+  try {
+    const result = await runner.run(
+      ["ls-remote", "--exit-code", repository, ...refs],
+      {
+        signal,
+        timeoutMs: 15_000,
+        ...transportRunOptions(repository)
+      }
+    );
+    const advertised = new Map(
+      result.stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim().split(/\s+/, 2))
+        .filter((parts): parts is [string, string] =>
+          parts.length === 2 && /^[a-f0-9]{40,64}$/i.test(parts[0] ?? "")
+        )
+        .map(([commit, name]) => [name, commit] as const)
+    );
+    for (const candidate of refs) {
+      const commit = advertised.get(candidate);
+      if (commit) return commit;
+    }
+    return undefined;
+  } catch (error) {
+    if (signal?.aborted || isRepositoryAccessError(error)) throw error;
+    return undefined;
+  }
+};
+
+const cachedCommitFor = async (
+  runner: GitCommandRunner,
+  cachePath: string,
+  cacheRef: string,
+  signal?: AbortSignal
+): Promise<string | undefined> => {
+  try {
+    const result = await runner.run(
+      ["--git-dir", cachePath, "rev-parse", "--verify", `${cacheRef}^{commit}`],
+      { signal, timeoutMs: 30_000 }
+    );
+    const commit = result.stdout.trim();
+    return /^[a-f0-9]{40,64}$/i.test(commit) ? commit : undefined;
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return undefined;
+  }
+};
+
+const accessTransportFor = (
+  location: ReturnType<typeof parseRepositoryLocation>,
+  transport: string
+): ResolvedGitRepository["accessTransport"] =>
+  transport === location.transportLocator && location.kind === "file"
+    ? "file"
+    : /^(?:ssh:\/\/|[^@\s]+@[^:\s]+:)/i.test(transport)
+      ? "ssh"
+      : "https";
 
 export const createGitRepositoryCache = (
   options: GitRepositoryCacheOptions
@@ -232,6 +341,27 @@ export const createGitRepositoryCache = (
               transportLocator: transport
             };
             await ensureCache(cachePath, marker, signal);
+            const activeMarker = await readMarker(cachePath);
+            const cacheRef = cacheRefFor(ref);
+            const [cachedCommit, advertisedCommit] = await Promise.all([
+              cachedCommitFor(options.runner, cachePath, cacheRef, signal),
+              advertisedCommitFor(options.runner, transport, ref, signal)
+            ]);
+            if (
+              cachedCommit &&
+              advertisedCommit === cachedCommit &&
+              (activeMarker?.historyDepthByRef?.[ref] ?? 0) >= historyDepth
+            ) {
+              return {
+                repository: location.transportLocator,
+                location,
+                ref,
+                resolvedCommit: cachedCommit,
+                cachePath,
+                cacheRef,
+                accessTransport: accessTransportFor(location, transport)
+              };
+            }
 
             const baseFetchArgs = [
               "--git-dir",
@@ -264,17 +394,20 @@ export const createGitRepositoryCache = (
             if (!/^[a-f0-9]{40,64}$/i.test(resolvedCommit)) {
               throw new Error("Repository returned an invalid commit revision");
             }
-            const cacheRef = `refs/agentenv/${createHash("sha256").update(ref).digest("hex")}`;
             await options.runner.run(
               ["--git-dir", cachePath, "update-ref", cacheRef, resolvedCommit],
               { signal, timeoutMs: 30_000 }
             );
-            const accessTransport: ResolvedGitRepository["accessTransport"] =
-              transport === location.transportLocator && location.kind === "file"
-                ? "file"
-                : /^(?:ssh:\/\/|[^@\s]+@[^:\s]+:)/i.test(transport)
-                  ? "ssh"
-                  : "https";
+            await writeAtomic(markerPathFor(cachePath), `${JSON.stringify({
+              ...marker,
+              historyDepthByRef: {
+                ...(activeMarker?.historyDepthByRef ?? {}),
+                [ref]: Math.max(
+                  activeMarker?.historyDepthByRef?.[ref] ?? 0,
+                  historyDepth
+                )
+              }
+            }, null, 2)}\n`);
             return {
               repository: location.transportLocator,
               location,
@@ -282,7 +415,7 @@ export const createGitRepositoryCache = (
               resolvedCommit,
               cachePath,
               cacheRef,
-              accessTransport
+              accessTransport: accessTransportFor(location, transport)
             };
           } catch (error) {
             attempts.push({ transport, error });

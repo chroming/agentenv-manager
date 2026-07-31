@@ -596,6 +596,7 @@ export interface GitHubSkillScanResult {
   ref: string;
   rootPath: string;
   sourceScope: SkillSourceScope;
+  indexManifest?: SkillIndexManifestResolution;
   truncated: boolean;
   candidates: GitHubSkillCandidate[];
 }
@@ -617,6 +618,7 @@ export interface RepositorySkillSourceInput {
   repository: string;
   ref?: string;
   directory?: string;
+  indexManifestPath?: string;
   transport?: RepositorySkillTransport;
 }
 
@@ -650,8 +652,15 @@ export interface RepositorySkillScanResult {
   transport: RepositorySkillTransport;
   accessTransport?: "https" | "ssh" | "file";
   sourceScope: SkillSourceScope;
+  indexManifest?: SkillIndexManifestResolution;
   truncated: boolean;
   candidates: RepositorySkillCandidate[];
+}
+
+export interface SkillIndexManifestResolution {
+  path: string;
+  requestedDirectory: string;
+  resolvedDirectory: string;
 }
 
 export interface SkillSourceScope {
@@ -661,6 +670,7 @@ export interface SkillSourceScope {
   repository: string;
   ref: string;
   directory: string;
+  indexManifestPath?: string;
 }
 
 export interface SkillSourceCollectionRef extends SkillSourceScope {

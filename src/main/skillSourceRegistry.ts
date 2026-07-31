@@ -8,8 +8,13 @@ interface SkillSourceRegistryFile {
   sources: SkillSourceRecord[];
 }
 
-const sourceKey = (source: Pick<SkillSourceScope, "repository" | "ref" | "directory">) =>
-  `${source.repository}\0${source.ref}\0${source.directory}`;
+const sourceKey = (
+  source: Pick<
+    SkillSourceScope,
+    "repository" | "ref" | "directory" | "indexManifestPath"
+  >
+) =>
+  `${source.repository}\0${source.ref}\0${source.directory}\0${source.indexManifestPath ?? ""}`;
 
 const sourceIdFor = (scope: SkillSourceScope) =>
   `source-${createHash("sha256").update(sourceKey(scope)).digest("hex").slice(0, 20)}`;
@@ -29,6 +34,10 @@ const isSourceRecord = (value: unknown): value is SkillSourceRecord => {
     typeof source.repository === "string" &&
     typeof source.ref === "string" &&
     typeof source.directory === "string" &&
+    (source.indexManifestPath === undefined ||
+      (typeof source.indexManifestPath === "string" &&
+        isValidSourceSubpath(source.indexManifestPath) &&
+        /(?:^|\/)llms\.txt$/i.test(source.indexManifestPath))) &&
     (source.kind === undefined || source.kind === "repository" || source.kind === "local") &&
     (source.displayName === undefined || typeof source.displayName === "string") &&
     (source.automaticChecks === undefined || typeof source.automaticChecks === "boolean") &&

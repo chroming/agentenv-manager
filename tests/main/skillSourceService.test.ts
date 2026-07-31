@@ -146,6 +146,41 @@ describe("skill source service", () => {
     }));
   });
 
+  it("reuses a saved repository Skill index on later source checks", async () => {
+    const indexedScope: SkillSourceScope = {
+      ...scope,
+      indexManifestPath: "suite/llms.txt"
+    };
+    const indexedSkill: SkillLibraryEntry = {
+      ...librarySkill,
+      sourceCollection: { ...indexedScope, sourceSubpath: "review" }
+    };
+    const { store } = memoryStore({ ...previousObservation, ...indexedScope });
+    const repositorySource = {
+      resolve: vi.fn(),
+      materialize: vi.fn(),
+      scan: vi.fn().mockResolvedValue({
+        repository: indexedScope.repository,
+        ref: indexedScope.ref,
+        directory: indexedScope.directory,
+        transport: "system-git",
+        accessTransport: "https",
+        sourceScope: indexedScope,
+        truncated: false,
+        candidates: []
+      })
+    } as unknown as GitCliSkillSource;
+    const service = createSkillSourceService({ observationStore: store, repositorySource });
+
+    await service.checkGroup(indexedScope.canonicalLink, [indexedSkill]);
+
+    expect(repositorySource.scan).toHaveBeenCalledWith(
+      expect.objectContaining({ indexManifestPath: "suite/llms.txt" }),
+      undefined,
+      { refresh: true }
+    );
+  });
+
   it("checks a local source read-only and reports changed content", async () => {
     localRoot = await mkdtemp(join(tmpdir(), "agentenv-local-source-"));
     const skillPath = join(localRoot, "review");

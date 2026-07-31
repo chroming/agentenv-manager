@@ -32,6 +32,82 @@ afterEach(async () => {
 });
 
 describe("Repository Skill source", () => {
+  it("imports a Skill suite exposed through a repository llms.txt index", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-repository-suite-e2e-"));
+    const appDataRoot = join(root, "app-data");
+    const homeDir = join(root, "home");
+    const repository = await createGitTestRepository(root, {
+      "suite/llms.txt": [
+        "# Internal suite",
+        "- [API Design](api-design/SKILL.md)",
+        "- [Release Check](release-check/SKILL.md)"
+      ].join("\n"),
+      "api-design/SKILL.md":
+        "---\nname: API Design Suite\ndescription: Design APIs.\n---\n# API Design\n",
+      "release-check/SKILL.md":
+        "---\nname: Release Check Suite\ndescription: Check releases.\n---\n# Release Check\n",
+      "wip/SKILL.md":
+        "---\nname: Unlisted WIP\ndescription: Not part of the suite index.\n---\n# WIP\n"
+    });
+
+    app = await electron.launch({
+      executablePath: electronPath as unknown as string,
+      args: [
+        `--user-data-dir=${join(root, "electron-user-data")}`,
+        join(process.cwd(), "out", "main", "main.js")
+      ],
+      env: {
+        ...process.env,
+        AGENTENV_AUTOMATION: "1",
+        AGENTENV_DATA_ROOT: appDataRoot,
+        AGENTENV_HOME: homeDir,
+        AGENTENV_FAKE_HOME: join(root, "fake-home"),
+        AGENTENV_CACHE_ROOT: join(root, "cache"),
+        PATH: process.env.PATH ?? `/usr/bin${delimiter}/bin`
+      }
+    });
+    const page = await app.firstWindow();
+    await page.setViewportSize({ width: 920, height: 620 });
+    await page.getByRole("button", { name: "Skills", exact: true }).click();
+    await page.getByRole("button", { name: "Import skills" }).click();
+    const dialog = page.getByRole("dialog", { name: "Import skills" });
+    await dialog.getByRole("tab", { name: "Repository" }).click();
+    await dialog.getByLabel("Repository address").fill(repository.remoteDir);
+    await dialog.getByText("Advanced", { exact: true }).click();
+    await dialog.getByLabel("Repository directory").fill("suite");
+    await dialog.getByRole("button", { name: "Scan", exact: true }).click();
+
+    await dialog.getByText(
+      "suite/llms.txt indexes Skill paths elsewhere in this repository. Review the paths before importing.",
+      { exact: true }
+    ).waitFor({ state: "visible" });
+    await dialog.getByRole("checkbox", { name: "Select API Design Suite" })
+      .waitFor({ state: "visible" });
+    await dialog.getByRole("checkbox", { name: "Select Release Check Suite" })
+      .waitFor({ state: "visible" });
+    await dialog.getByRole("button", { name: "Import 2" }).click();
+    await dialog.getByText("All 2 skills imported", { exact: true })
+      .waitFor({ state: "visible" });
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+
+    await expect(readFile(
+      join(appDataRoot, "skills-library", "api-design-suite", "SKILL.md"),
+      "utf8"
+    )).resolves.toContain("# API Design");
+    await expect(readFile(
+      join(appDataRoot, "skills-library", "release-check-suite", "SKILL.md"),
+      "utf8"
+    )).resolves.toContain("# Release Check");
+    await page.getByRole("tab", { name: "By source" }).click();
+    const sourceGroup = page.locator(".skill-source-group");
+    await expect.poll(() => sourceGroup.count()).toBe(1);
+    expect(await sourceGroup.getByText("Unlisted WIP", { exact: true }).count()).toBe(0);
+    await sourceGroup.getByRole("button", { name: /Source actions for/ }).click();
+    await page.getByRole("menuitem", { name: "Check source" }).click();
+    await expect.poll(() => sourceGroup.getByText("Unlisted WIP", { exact: true }).count())
+      .toBe(0);
+  }, 30_000);
+
   it("imports selected skills and updates only when the selected subtree changes", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-repository-e2e-"));
     const appDataRoot = join(root, "app-data");

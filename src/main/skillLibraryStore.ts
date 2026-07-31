@@ -79,6 +79,11 @@ import { createFilesystemSkillDriver } from "./targets/shared/skillRuntime";
 import { applyLibraryUpdatePropagation, prepareLibraryUpdatePropagation } from "./skillLibraryUpdatePropagation";
 import type { GitCliSkillSource } from "./skillSources/contract";
 import { parseRepositoryLocation } from "./skillSources/repositoryLocation";
+import {
+  boundedSkillFiles,
+  commonSkillDirectory,
+  indexedSkillFiles
+} from "./skillSources/skillIndexManifest";
 import { readAllProfilesForResourceMutation } from "./profileSafety";
 import { createSkillChanges } from "./skillFileChanges";
 import { hashSkillContent, SKILL_CONTENT_HASH_VERSION } from "./skillContentHash";
@@ -682,7 +687,6 @@ export const createSkillLibraryStore = (
 
   const scanGitHubSkills = async (rawUrl: string): Promise<GitHubSkillScanResult> => {
     const source = await resolveGitHubLocation(rawUrl, { refresh: true });
-    const sourceScope = createGitHubSourceScope(rawUrl, source);
     const treeUrl = `https://api.github.com/repos/${source.owner}/${source.repo}/git/trees/${encodeURIComponent(source.treeSha)}?recursive=1`;
     const treeResponse = await fetchGitHubJson(treeUrl, { refresh: true }) as GitHubTreeResponse;
     const treeItems = (treeResponse.tree ?? []).filter(
@@ -691,32 +695,64 @@ export const createSkillLibraryStore = (
         typeof item.type === "string" &&
         typeof item.sha === "string"
     );
-    const skillFiles = treeItems
+    const allSkillFiles = treeItems
       .filter(
         (item) =>
           item.type === "blob" &&
-          (item.path === "SKILL.md" || item.path.endsWith("/SKILL.md")) &&
-          (!source.rootPath ||
-            item.path === `${source.rootPath}/SKILL.md` ||
-            item.path.startsWith(`${source.rootPath}/`))
+          (item.path === "SKILL.md" || item.path.endsWith("/SKILL.md"))
       )
       .sort((a, b) => a.path.localeCompare(b.path));
-    const directSkillPath = source.rootPath ? `${source.rootPath}/SKILL.md` : "SKILL.md";
-    const boundedSkillFiles = skillFiles.some((item) => item.path === directSkillPath)
-      ? skillFiles.filter((item) => item.path === directSkillPath)
-      : skillFiles.filter((item, index, items) => {
-          const candidateDir = dirname(item.path) === "." ? "" : dirname(item.path);
-          return !items.slice(0, index).some((parent) => {
-            const parentDir = dirname(parent.path) === "." ? "" : dirname(parent.path);
-            return parentDir && candidateDir.startsWith(`${parentDir}/`);
-          });
-        });
+    const scopedSkillFiles = allSkillFiles.filter(
+      (item) =>
+        !source.rootPath ||
+        item.path === `${source.rootPath}/SKILL.md` ||
+        item.path.startsWith(`${source.rootPath}/`)
+    );
+    const manifestPath = source.rootPath ? `${source.rootPath}/llms.txt` : "llms.txt";
+    const manifestEntry = treeItems.find(
+      (item) => item.type === "blob" && item.path === manifestPath
+    );
+    let indexedPaths: string[] = [];
+    if (manifestEntry) {
+      const manifestUrl = `https://raw.githubusercontent.com/${source.owner}/${source.repo}/${encodeURIComponent(source.ref)}/${encodeGitHubPath(manifestPath)}`;
+      indexedPaths = indexedSkillFiles(
+        await fetchGitHubText(manifestUrl, { refresh: true }),
+        source.rootPath,
+        new Set(allSkillFiles.map((item) => item.path))
+      );
+    }
+    const usesManifest = Boolean(manifestEntry && indexedPaths.length > 0);
+    const discoveredPaths = usesManifest
+      ? indexedPaths
+      : scopedSkillFiles.map((item) => item.path);
+    const effectiveRootPath = usesManifest
+      ? commonSkillDirectory(discoveredPaths, source.rootPath)
+      : source.rootPath;
+    const selectedSkillPaths = boundedSkillFiles(
+      discoveredPaths,
+      effectiveRootPath,
+      !usesManifest
+    );
+    const selectedSkillPathSet = new Set(selectedSkillPaths);
+    const discoveredSkillFiles = allSkillFiles.filter((item) =>
+      selectedSkillPathSet.has(item.path)
+    );
+    const effectiveSource = { ...source, rootPath: effectiveRootPath };
+    const sourceScope = {
+      ...createGitHubSourceScope(rawUrl, effectiveSource),
+      ...(usesManifest
+        ? {
+            canonicalLink: rawUrl.trim().replace(/\/+$/, ""),
+            indexManifestPath: manifestPath
+          }
+        : {})
+    };
     const existingSkills = await listSkills();
     const revisionEntries = treeItems
       .filter((item): item is { path: string; type: "blob" | "tree"; sha: string; mode?: string } =>
         (item.type === "blob" || item.type === "tree") && item.mode !== "120000");
     const candidates = await mapWithConcurrency(
-      boundedSkillFiles.slice(0, 500),
+      discoveredSkillFiles.slice(0, 500),
       8,
       async (skillFile): Promise<GitHubSkillCandidate> => {
       const remotePath = dirname(skillFile.path) === "." ? "" : dirname(skillFile.path);
@@ -767,9 +803,18 @@ export const createSkillLibraryStore = (
       owner: source.owner,
       repo: source.repo,
       ref: source.ref,
-      rootPath: source.rootPath,
+      rootPath: effectiveRootPath,
       sourceScope,
-      truncated: Boolean(treeResponse.truncated) || boundedSkillFiles.length > 500,
+      ...(usesManifest
+        ? {
+            indexManifest: {
+              path: manifestPath,
+              requestedDirectory: source.rootPath,
+              resolvedDirectory: effectiveRootPath
+            }
+          }
+        : {}),
+      truncated: Boolean(treeResponse.truncated) || discoveredSkillFiles.length > 500,
       candidates
     };
     await skillSourceService.recordGitHubScan(sourceScope, result);

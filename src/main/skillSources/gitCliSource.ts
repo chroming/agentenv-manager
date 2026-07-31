@@ -19,6 +19,12 @@ import type { GitCommandRunner } from "./gitCommandRunner";
 import type { GitRepositoryCache } from "./gitRepositoryCache";
 import { createSkillSourceScope } from "../skillSourceScope";
 import { githubContentsRevision } from "./revisionCompatibility";
+import {
+  boundedSkillFiles,
+  commonSkillDirectory,
+  indexedSkillFiles,
+  safeRepositoryRelativePath
+} from "./skillIndexManifest";
 
 export interface GitCliSkillSourceOptions {
   cache: GitRepositoryCache;
@@ -44,6 +50,15 @@ const normalizeDirectory = (value: string | undefined): string => {
 
 const normalizeSkillId = (value: string) =>
   value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+
+const normalizeIndexManifestPath = (value: string | undefined): string | undefined => {
+  if (value === undefined) return undefined;
+  const path = safeRepositoryRelativePath(value);
+  if (!path || posix.basename(path).toLowerCase() !== "llms.txt") {
+    throw new Error("Repository Skill index path is unsafe");
+  }
+  return path;
+};
 
 const treeishFor = (repository: ResolvedGitRepository, directory: string) =>
   directory ? `${repository.resolvedCommit}:${directory}` : `${repository.resolvedCommit}^{tree}`;
@@ -148,6 +163,74 @@ const parseTreeEntries = (stdout: string): TreeEntry[] =>
       return { mode: match[1], type: match[2], sha: match[3], path: match[4] };
     });
 
+const readUpdatedAtByDirectory = async (
+  runner: GitCommandRunner,
+  repository: ResolvedGitRepository,
+  directories: readonly string[],
+  shallowBoundary: ReadonlySet<string>,
+  signal?: AbortSignal
+): Promise<Map<string, string>> => {
+  if (directories.length === 0) return new Map();
+  const pathspecs = directories.includes("") ? [] : directories;
+  try {
+    const result = await runner.run(
+      [
+        "--git-dir",
+        repository.cachePath,
+        "log",
+        `-${SOURCE_HISTORY_DEPTH}`,
+        "--format=%x1e%H%x00%cI%x00",
+        "--name-only",
+        "-z",
+        repository.resolvedCommit,
+        "--",
+        ...pathspecs
+      ],
+      { signal, timeoutMs: 30_000 }
+    );
+    const pending = new Set(directories);
+    const sortedDirectories = [...directories].sort((left, right) =>
+      right.length - left.length || left.localeCompare(right)
+    );
+    const updatedAtByDirectory = new Map<string, string>();
+    for (const record of result.stdout.split("\x1e").slice(1)) {
+      const commitEnd = record.indexOf("\0");
+      const dateEnd = commitEnd < 0 ? -1 : record.indexOf("\0", commitEnd + 1);
+      if (commitEnd < 0 || dateEnd < 0) continue;
+      const commit = record.slice(0, commitEnd).trim();
+      const rawDate = record.slice(commitEnd + 1, dateEnd).trim();
+      if (
+        !/^[a-f0-9]{40,64}$/i.test(commit) ||
+        shallowBoundary.has(commit) ||
+        Number.isNaN(Date.parse(rawDate))
+      ) {
+        continue;
+      }
+      const paths = record
+        .slice(dateEnd + 1)
+        .split("\0")
+        .map((path) => path.replace(/^[\r\n]+|[\r\n]+$/g, ""))
+        .filter(Boolean);
+      for (const path of paths) {
+        for (const directory of sortedDirectories) {
+          if (
+            pending.has(directory) &&
+            (!directory || path === directory || path.startsWith(`${directory}/`))
+          ) {
+            updatedAtByDirectory.set(directory, new Date(rawDate).toISOString());
+            pending.delete(directory);
+          }
+        }
+        if (pending.size === 0) return updatedAtByDirectory;
+      }
+    }
+    return updatedAtByDirectory;
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return new Map();
+  }
+};
+
 const assertSafeTree = async (
   runner: GitCommandRunner,
   source: ResolvedGitSkillSource,
@@ -233,39 +316,99 @@ export const createGitCliSkillSource = (
       historyDepth: SOURCE_HISTORY_DEPTH
     });
     const directory = normalizeDirectory(input.directory ?? repository.location.inferredDirectory);
+    const explicitManifestPath = normalizeIndexManifestPath(input.indexManifestPath);
     if (directory) await readTreeOid(options.runner, repository, directory, signal);
-    const args = [
-      "--git-dir",
-      repository.cachePath,
-      "ls-tree",
-      "-r",
-      "-t",
-      "-z",
-      repository.resolvedCommit,
-      "--",
-      ...(directory ? [directory] : [])
-    ];
-    const listed = await options.runner.run(args, { signal, timeoutMs: 30_000 });
-    const treeEntries = parseTreeEntries(listed.stdout);
-    const roots = treeEntries
-      .filter((entry) => entry.type === "blob" &&
-        (entry.path === "SKILL.md" || entry.path.endsWith("/SKILL.md")))
-      .map((entry) => posix.dirname(entry.path) === "." ? "" : posix.dirname(entry.path))
+    const listTree = async (scope?: string) => {
+      const args = [
+        "--git-dir",
+        repository.cachePath,
+        "ls-tree",
+        "-r",
+        "-t",
+        "-z",
+        repository.resolvedCommit,
+        "--",
+        ...(scope ? [scope] : [])
+      ];
+      const listed = await options.runner.run(args, { signal, timeoutMs: 30_000 });
+      return parseTreeEntries(listed.stdout);
+    };
+    const scopedTreeEntries = await listTree(explicitManifestPath ? undefined : directory);
+    const manifestPath =
+      explicitManifestPath ?? (directory ? `${directory}/llms.txt` : "llms.txt");
+    const manifestEntry = scopedTreeEntries.find(
+      (entry) => entry.type === "blob" && entry.path === manifestPath
+    );
+    if (explicitManifestPath && !manifestEntry) {
+      throw new Error(`Repository Skill index is missing: ${explicitManifestPath}`);
+    }
+    const repositoryTreeEntries = manifestEntry && !explicitManifestPath
+      ? await listTree()
+      : scopedTreeEntries;
+    const allSkillFiles = repositoryTreeEntries
+      .filter((entry) =>
+        entry.type === "blob" &&
+        (entry.path === "SKILL.md" || entry.path.endsWith("/SKILL.md"))
+      )
+      .map((entry) => entry.path);
+    const scopedSkillFiles = allSkillFiles.filter((path) =>
+      !directory || path === `${directory}/SKILL.md` || path.startsWith(`${directory}/`)
+    );
+    let indexedPaths: string[] = [];
+    if (manifestEntry) {
+      const manifest = await options.runner.run(
+        [
+          "--git-dir",
+          repository.cachePath,
+          "show",
+          `${repository.resolvedCommit}:${manifestPath}`
+        ],
+        { signal, timeoutMs: 30_000 }
+      );
+      const manifestDirectory = posix.dirname(manifestPath) === "."
+        ? ""
+        : posix.dirname(manifestPath);
+      indexedPaths = indexedSkillFiles(
+        manifest.stdout,
+        manifestDirectory,
+        new Set(allSkillFiles)
+      );
+    }
+    const usesManifest = Boolean(
+      manifestEntry && (explicitManifestPath || indexedPaths.length > 0)
+    );
+    const discoveredSkillFiles = usesManifest
+      ? indexedPaths
+      : scopedSkillFiles;
+    const effectiveDirectory = usesManifest
+      ? commonSkillDirectory(discoveredSkillFiles, directory)
+      : directory;
+    const selectedSkillFiles = boundedSkillFiles(
+      discoveredSkillFiles,
+      effectiveDirectory,
+      !usesManifest
+    );
+    const roots = selectedSkillFiles
+      .map((path) => posix.dirname(path) === "." ? "" : posix.dirname(path))
       .sort((left, right) => {
         const depth = left.split("/").length - right.split("/").length;
         return depth || left.localeCompare(right);
-      })
-      .filter((root, index, values) =>
-        !values.slice(0, index).some((parent) => !parent || root.startsWith(`${parent}/`))
-      );
+      });
     const maxCandidates = options.maxCandidates ?? 500;
     const selectedRoots = roots.slice(0, maxCandidates);
     const treeOidByPath = new Map(
-      treeEntries
+      repositoryTreeEntries
         .filter((entry) => entry.type === "tree")
         .map((entry) => [entry.path, entry.sha] as const)
     );
     const shallowBoundary = await readShallowBoundary(repository);
+    const updatedAtByRoot = await readUpdatedAtByDirectory(
+      options.runner,
+      repository,
+      selectedRoots,
+      shallowBoundary,
+      signal
+    );
     const readCandidate = async (root: string): Promise<RepositorySkillCandidate> => {
       const skillPath = root ? `${root}/SKILL.md` : "SKILL.md";
       const markdown = await options.runner.run(
@@ -276,13 +419,26 @@ export const createGitCliSkillSource = (
       const fallbackName = root ? basename(root) : "skill";
       const name = frontmatter.name || fallbackName;
       const id = normalizeSkillId(name) || normalizeSkillId(fallbackName);
-      const source = await resolvedSkill(options.runner, repository, root, signal, {
-        contentRevision: root ? treeOidByPath.get(root) : undefined,
-        shallowBoundary
-      });
+      const contentRevision = root
+        ? treeOidByPath.get(root) ?? await readTreeOid(options.runner, repository, root, signal)
+        : await readTreeOid(options.runner, repository, root, signal);
+      const updatedAt = updatedAtByRoot.get(root);
+      const source: ResolvedGitSkillSource = {
+        ...repository,
+        directory: root,
+        contentRevision,
+        upstream: {
+          kind: "git",
+          locator: repository.repository,
+          ref: repository.ref,
+          subpath: root || undefined,
+          revision: repository.resolvedCommit,
+          ...(updatedAt ? { updatedAt } : {})
+        }
+      };
       const compatibleRevision = githubContentsRevision(
         root,
-        treeEntries
+        repositoryTreeEntries
           .filter((entry): entry is TreeEntry & { type: "blob" | "tree" } =>
             (entry.type === "blob" || entry.type === "tree") && entry.mode !== "120000")
           .map((entry) => ({
@@ -324,13 +480,35 @@ export const createGitCliSkillSource = (
     const result = {
       repository: repository.repository,
       ref: repository.ref,
-      directory,
+      directory: effectiveDirectory,
       transport: "system-git",
       accessTransport: repository.accessTransport,
+      ...(usesManifest
+        ? {
+            indexManifest: {
+              path: manifestPath,
+              requestedDirectory: directory,
+              resolvedDirectory: effectiveDirectory
+            }
+          }
+        : {}),
       truncated: roots.length > maxCandidates,
       candidates
     } satisfies Omit<RepositorySkillScanResult, "sourceScope">;
-    return { ...result, sourceScope: createSkillSourceScope(input, result) };
+    const sourceScope = createSkillSourceScope(input, result);
+    if (!usesManifest) return { ...result, sourceScope };
+    const requestedScope = createSkillSourceScope(input, {
+      ...result,
+      directory
+    });
+    return {
+      ...result,
+      sourceScope: {
+        ...sourceScope,
+        canonicalLink: requestedScope.canonicalLink,
+        indexManifestPath: manifestPath
+      }
+    };
   };
 
   const materialize = async (

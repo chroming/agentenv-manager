@@ -43,8 +43,13 @@ interface SkillSourceMergeServiceOptions {
 
 const PREVIEW_TTL_MS = 30 * 60 * 1000;
 
-const scopeKey = (source: Pick<SkillSourceScope, "repository" | "ref" | "directory">) =>
-  `${source.repository}\0${source.ref}\0${source.directory}`;
+const scopeKey = (
+  source: Pick<
+    SkillSourceScope,
+    "repository" | "ref" | "directory" | "indexManifestPath"
+  >
+) =>
+  `${source.repository}\0${source.ref}\0${source.directory}\0${source.indexManifestPath ?? ""}`;
 
 export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOptions) => {
   const pendingMerges = new Map<string, PendingSkillSourceMerge>();

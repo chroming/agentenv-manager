@@ -22,6 +22,17 @@ const isObservation = (value: unknown): value is SkillSourceObservation => {
     typeof record.repository !== "string" ||
     typeof record.ref !== "string" ||
     typeof record.directory !== "string" ||
+    (record.indexManifestPath !== undefined &&
+      (
+        typeof record.indexManifestPath !== "string" ||
+        record.indexManifestPath.startsWith("/") ||
+        record.indexManifestPath.includes("\\") ||
+        record.indexManifestPath
+          .split("/")
+          .some((segment) => !segment || segment === "." || segment === "..") ||
+        /[\u0000-\u001f\u007f]/.test(record.indexManifestPath) ||
+        !/(?:^|\/)llms\.txt$/i.test(record.indexManifestPath)
+      )) ||
     typeof record.checkedAt !== "string" ||
     !["github-api", "https", "ssh", "file"].includes(String(record.accessTransport)) ||
     record.complete !== true ||

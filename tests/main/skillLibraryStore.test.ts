@@ -2740,6 +2740,124 @@ description: >
     ).resolves.toContain("Research primary sources");
   });
 
+  it("discovers a GitHub Skill suite referenced by a safe llms.txt index", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-suite-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const files = new Map([
+      [
+        "gstack/llms.txt",
+        [
+          "# Suite",
+          "- [Autoplan](autoplan/SKILL.md)",
+          "- [Review](review/SKILL.md)",
+          "- [External](https://example.com/unsafe/SKILL.md)"
+        ].join("\n")
+      ],
+      ["autoplan/SKILL.md", "---\nname: Autoplan\n---\n# Autoplan\n"],
+      ["review/SKILL.md", "---\nname: Review\n---\n# Review\n"],
+      ["unlisted/SKILL.md", "---\nname: Unlisted\n---\n# Unlisted\n"]
+    ]);
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith("/commits/main")) {
+        return new Response(JSON.stringify({ commit: { tree: { sha: "tree-main" } } }));
+      }
+      if (url.includes("/commits/")) {
+        return new Response("Not found", { status: 404, statusText: "Not Found" });
+      }
+      if (url.includes("/git/trees/tree-main")) {
+        return new Response(JSON.stringify({
+          truncated: false,
+          tree: [...files.keys()].map((path, index) => ({
+            path,
+            type: "blob",
+            sha: `blob-${index}`
+          }))
+        }));
+      }
+      if (url.startsWith("https://raw.githubusercontent.com/acme/suite/main/")) {
+        const path = url.slice("https://raw.githubusercontent.com/acme/suite/main/".length);
+        const content = files.get(path);
+        return new Response(content ?? "Not found", {
+          status: content === undefined ? 404 : 200,
+          statusText: content === undefined ? "Not Found" : "OK"
+        });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    const store = createSkillLibraryStore(paths, undefined, { fetch: fetchImpl });
+
+    const scan = await store.scanGitHubSkills(
+      "https://github.com/acme/suite/tree/main/gstack"
+    );
+
+    expect(scan).toMatchObject({
+      owner: "acme",
+      repo: "suite",
+      ref: "main",
+      rootPath: "",
+      sourceScope: { directory: "" },
+      indexManifest: {
+        path: "gstack/llms.txt",
+        requestedDirectory: "gstack",
+        resolvedDirectory: ""
+      },
+      truncated: false
+    });
+    expect(scan.candidates.map((candidate) => candidate.name)).toEqual([
+      "Autoplan",
+      "Review"
+    ]);
+  });
+
+  it("ignores an llms.txt that does not index any Skills", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-unrelated-llms-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const files = new Map([
+      ["skills/llms.txt", "# Documentation only\n"],
+      ["skills/design/SKILL.md", "---\nname: Design\n---\n# Design\n"],
+      ["skills/review/SKILL.md", "---\nname: Review\n---\n# Review\n"]
+    ]);
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith("/commits/main")) {
+        return new Response(JSON.stringify({ commit: { tree: { sha: "tree-main" } } }));
+      }
+      if (url.includes("/commits/")) {
+        return new Response("Not found", { status: 404, statusText: "Not Found" });
+      }
+      if (url.includes("/git/trees/tree-main")) {
+        return new Response(JSON.stringify({
+          truncated: false,
+          tree: [...files.keys()].map((path, index) => ({
+            path,
+            type: "blob",
+            sha: `blob-${index}`
+          }))
+        }));
+      }
+      if (url.startsWith("https://raw.githubusercontent.com/acme/suite/main/")) {
+        const path = url.slice("https://raw.githubusercontent.com/acme/suite/main/".length);
+        const content = files.get(path);
+        return new Response(content ?? "Not found", {
+          status: content === undefined ? 404 : 200,
+          statusText: content === undefined ? "Not Found" : "OK"
+        });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    const store = createSkillLibraryStore(paths, undefined, { fetch: fetchImpl });
+
+    const scan = await store.scanGitHubSkills(
+      "https://github.com/acme/suite/tree/main/skills"
+    );
+
+    expect(scan.indexManifest).toBeUndefined();
+    expect(scan.sourceScope.indexManifestPath).toBeUndefined();
+    expect(scan.candidates.map((candidate) => candidate.name)).toEqual([
+      "Design",
+      "Review"
+    ]);
+  });
+
   it("imports a skill from a GitHub repository directory URL", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

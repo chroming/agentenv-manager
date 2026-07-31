@@ -1165,6 +1165,7 @@ export const SkillLibraryPanel = ({
           ref: repositoryResult.ref,
           rootPath: repositoryResult.directory,
           sourceScope: repositoryResult.sourceScope,
+          indexManifest: repositoryResult.indexManifest,
           truncated: repositoryResult.truncated,
           candidates: repositoryResult.candidates.map((candidate) => ({
             id: candidate.id,
@@ -1686,6 +1687,7 @@ export const SkillLibraryPanel = ({
         repository: group.repository,
         ref: group.ref,
         directory: group.directory,
+        indexManifestPath: group.indexManifestPath,
         sourceSubpath: candidate.sourceSubpath
       }
     }]);

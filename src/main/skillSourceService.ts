@@ -153,6 +153,7 @@ export const createSkillSourceService = (
           repository: group.repository,
           ref: group.ref,
           directory: group.directory,
+          indexManifestPath: group.indexManifestPath,
           transport: "system-git"
         }, undefined, { refresh: true });
         if (result.truncated) {

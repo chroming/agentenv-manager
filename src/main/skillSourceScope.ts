@@ -48,7 +48,10 @@ export const createSkillSourceScope = (
   canonicalLink: canonicalLinkFor(input, result.ref, result.directory),
   repository: result.repository,
   ref: result.ref,
-  directory: result.directory
+  directory: result.directory,
+  ...(input.indexManifestPath
+    ? { indexManifestPath: input.indexManifestPath }
+    : {})
 });
 
 export const createLocalSkillSourceScope = (rootPath: string): SkillSourceScope => {
@@ -104,6 +107,20 @@ export const validateSkillSourceCollection = (
   candidate: { repository: string; ref: string; directory: string }
 ): SkillSourceCollectionRef | undefined => {
   if (!collection) return undefined;
+  if (
+    collection.indexManifestPath !== undefined &&
+    (
+      collection.indexManifestPath.startsWith("/") ||
+      collection.indexManifestPath.includes("\\") ||
+      collection.indexManifestPath
+        .split("/")
+        .some((segment) => !segment || segment === "." || segment === "..") ||
+      /[\u0000-\u001f\u007f]/.test(collection.indexManifestPath) ||
+      !/(?:^|\/)llms\.txt$/i.test(collection.indexManifestPath)
+    )
+  ) {
+    throw new Error("Skill source index path is invalid");
+  }
   if (
     collection.formatVersion !== 1 ||
     !collection.canonicalLink ||

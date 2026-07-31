@@ -58,6 +58,7 @@ const writeSnapshot = async (root: string, input: {
     repository: string;
     ref: string;
     directory: string;
+    indexManifestPath?: string;
   }>;
 } = {}): Promise<WorkspaceSnapshotDescriptor> => {
   const profileRoot = join(root, "workspace", "profiles", "daily");
@@ -270,7 +271,8 @@ describe("Workspace Sync", () => {
         canonicalLink: "https://github.com/example/skills/tree/main/skills",
         repository: "https://github.com/example/skills.git",
         ref: "main",
-        directory: "skills"
+        directory: "skills",
+        indexManifestPath: "suite/llms.txt"
       }]
     });
     const transaction = createWorkspaceSyncTransaction({ paths, backupStore: createBackupStore(paths) });
@@ -283,7 +285,11 @@ describe("Workspace Sync", () => {
     const sources = JSON.parse(await readFile(paths.skillSourcesPath, "utf8")).sources;
     expect(sources).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "source-local", repository: "/Users/me/private-skills" }),
-      expect.objectContaining({ id: "source-remote", formatVersion: 1 })
+      expect.objectContaining({
+        id: "source-remote",
+        formatVersion: 1,
+        indexManifestPath: "suite/llms.txt"
+      })
     ]));
     await expect(transaction.isRecoveryRequired()).resolves.toBe(false);
 

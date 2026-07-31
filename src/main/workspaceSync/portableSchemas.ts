@@ -6,6 +6,14 @@ import {
   SafeIdSchema
 } from "../../shared/schemas";
 
+const RepositoryIndexManifestPathSchema = z.string().max(4096).refine((value) =>
+  !value.startsWith("/") &&
+  !value.includes("\\") &&
+  !value.split("/").some((segment) => !segment || segment === "." || segment === "..") &&
+  !/[\u0000-\u001f\u007f]/.test(value) &&
+  /(?:^|\/)llms\.txt$/i.test(value)
+);
+
 export const PortableSkillMetadataSchema = z.object({
   formatVersion: z.literal(1),
   id: SafeIdSchema,
@@ -30,6 +38,7 @@ export const PortableSkillMetadataSchema = z.object({
     repository: z.string(),
     ref: z.string(),
     directory: z.string(),
+    indexManifestPath: RepositoryIndexManifestPathSchema.optional(),
     sourceSubpath: z.string()
   }).optional()
 });
@@ -41,6 +50,7 @@ export const PortableSkillSourceSchema = z.object({
   repository: z.string(),
   ref: z.string(),
   directory: z.string(),
+  indexManifestPath: RepositoryIndexManifestPathSchema.optional(),
   displayName: z.string().max(80).optional(),
   ignoredSubpaths: z.array(
     z.string().refine((value) =>

@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { findExecutable } from "../../../src/main/executableDiscovery";
 import { createGitCliSkillSource } from "../../../src/main/skillSources/gitCliSource";
 import { createGitCommandRunner } from "../../../src/main/skillSources/gitCommandRunner";
@@ -75,6 +75,99 @@ describe("git CLI skill source", () => {
     ]);
   });
 
+  it("discovers a root router Skill alongside sibling Skills", async () => {
+    const { repository, source } = await setup();
+    await repository.write(
+      "SKILL.md",
+      "---\nname: skill-suite\ndescription: Route to the suite.\n---\n# Suite\n"
+    );
+    await repository.commit("add suite router");
+
+    const result = await source.scan({ repository: repository.remoteDir });
+
+    expect(result.candidates.map((candidate) => candidate.name)).toEqual([
+      "skill-suite",
+      "design",
+      "debugging",
+      "code-review"
+    ]);
+  });
+
+  it("follows a safe llms.txt Skill index inside the same repository", async () => {
+    const { repository, source } = await setup();
+    await repository.write(
+      "gstack/llms.txt",
+      [
+        "# Skill suite",
+        "",
+        "- [Review](skills/engineering/review/SKILL.md)",
+        "- [Design](skills/design/SKILL.md)",
+        "- [External](https://example.com/unsafe/SKILL.md)",
+        "- [Escape](../outside/SKILL.md)"
+      ].join("\n")
+    );
+    await repository.commit("add skill index");
+
+    const result = await source.scan({
+      repository: repository.remoteDir,
+      directory: "gstack"
+    });
+
+    expect(result).toMatchObject({
+      directory: "skills",
+      sourceScope: { directory: "skills" },
+      indexManifest: {
+        path: "gstack/llms.txt",
+        requestedDirectory: "gstack",
+        resolvedDirectory: "skills"
+      }
+    });
+    expect(result.candidates.map((candidate) => candidate.name)).toEqual([
+      "design",
+      "code-review"
+    ]);
+    const checkedAgain = await source.scan({
+      repository: repository.remoteDir,
+      ref: result.ref,
+      directory: result.directory,
+      indexManifestPath: result.sourceScope.indexManifestPath
+    });
+    expect(checkedAgain.candidates.map((candidate) => candidate.name)).toEqual([
+      "design",
+      "code-review"
+    ]);
+    await runGit(repository.workDir, ["rm", "gstack/llms.txt"]);
+    await repository.commit("remove skill index");
+    await expect(source.scan({
+      repository: repository.remoteDir,
+      ref: result.ref,
+      directory: result.directory,
+      indexManifestPath: result.sourceScope.indexManifestPath
+    })).rejects.toThrow("Repository Skill index is missing");
+  });
+
+  it("ignores an unrelated llms.txt that does not index any Skills", async () => {
+    const { repository, source } = await setup();
+    await repository.write(
+      "skills/llms.txt",
+      "# Documentation\n\nThis file contains no Skill index.\n"
+    );
+    await repository.commit("add unrelated llms file");
+
+    const result = await source.scan({
+      repository: repository.remoteDir,
+      directory: "skills"
+    });
+
+    expect(result.indexManifest).toBeUndefined();
+    expect(result.sourceScope.indexManifestPath).toBeUndefined();
+    expect(result.candidates.map((candidate) => candidate.name)).toEqual([
+      "design",
+      "debugging",
+      "code-review"
+    ]);
+  });
+
   it("materializes a self-contained Skill without creating a worktree", async () => {
     const { repository, source } = await setup();
     const destination = join(root, "materialized-review");
@@ -121,7 +214,20 @@ describe("git CLI skill source", () => {
   });
 
   it("reports each Skill subtree's verified last commit time instead of the repository HEAD time", async () => {
-    const { repository, source } = await setup();
+    const { repository } = await setup();
+    const executablePath = await findExecutable("git", { homeDir: root });
+    if (!executablePath) throw new Error("Git is required for repository source tests");
+    const baseRunner = createGitCommandRunner({ executablePath });
+    const run = vi.fn(baseRunner.run.bind(baseRunner));
+    const runner = {
+      run,
+      cancelActive: baseRunner.cancelActive.bind(baseRunner),
+      dispose: baseRunner.dispose.bind(baseRunner)
+    };
+    const source = createGitCliSkillSource({
+      runner,
+      cache: createGitRepositoryCache({ cacheRoot: join(root, "timestamp-cache"), runner })
+    });
     await repository.write(
       "skills/engineering/debug/SKILL.md",
       "---\nname: debugging\ndescription: Diagnose failures quickly.\n---\n# Debug\n"
@@ -141,6 +247,7 @@ describe("git CLI skill source", () => {
 
     expect(byName.get("debugging")?.upstreamUpdatedAt).toBe("2030-01-02T03:04:05.000Z");
     expect(byName.get("code-review")?.upstreamUpdatedAt).toBe("2031-02-03T04:05:06.000Z");
+    expect(run.mock.calls.filter(([args]) => args.includes("log"))).toHaveLength(1);
   });
 
   it("blocks LFS pointers, submodules, and escaping symlinks", async () => {

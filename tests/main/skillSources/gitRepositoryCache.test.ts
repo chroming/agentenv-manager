@@ -200,6 +200,48 @@ describe("git repository cache", () => {
     expect(run.mock.calls.filter(([args]) => args.includes("fetch"))).toHaveLength(2);
   });
 
+  it("checks the advertised revision without fetching an unchanged internal repository again", async () => {
+    const { repository, runner, cacheRoot } = await setup();
+    const run = vi.fn(runner.run.bind(runner));
+    const cache = createGitRepositoryCache({
+      cacheRoot,
+      runner: {
+        run,
+        cancelActive: runner.cancelActive.bind(runner),
+        dispose: runner.dispose.bind(runner)
+      }
+    });
+    const input = { repository: repository.remoteDir, ref: "main" };
+
+    const initial = await cache.fetch(input, undefined, { refresh: true, historyDepth: 128 });
+    const checked = await cache.fetch(input, undefined, { refresh: true, historyDepth: 128 });
+
+    expect(checked.resolvedCommit).toBe(initial.resolvedCommit);
+    expect(run.mock.calls.filter(([args]) => args.includes("fetch"))).toHaveLength(1);
+    expect(
+      run.mock.calls.filter(([args]) => args[0] === "ls-remote" && args.includes("--exit-code"))
+    ).toHaveLength(2);
+  });
+
+  it("deepens an unchanged cache when a later operation needs more path history", async () => {
+    const { repository, runner, cacheRoot } = await setup();
+    const run = vi.fn(runner.run.bind(runner));
+    const cache = createGitRepositoryCache({
+      cacheRoot,
+      runner: {
+        run,
+        cancelActive: runner.cancelActive.bind(runner),
+        dispose: runner.dispose.bind(runner)
+      }
+    });
+    const input = { repository: repository.remoteDir, ref: "main" };
+
+    await cache.fetch(input, undefined, { refresh: true, historyDepth: 1 });
+    await cache.fetch(input, undefined, { refresh: true, historyDepth: 128 });
+
+    expect(run.mock.calls.filter(([args]) => args.includes("fetch"))).toHaveLength(2);
+  });
+
   it("rebuilds a corrupt disposable cache without touching the source repository", async () => {
     const { repository, runner, cacheRoot } = await setup();
     const cache = createGitRepositoryCache({ cacheRoot, runner });

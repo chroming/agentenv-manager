@@ -50,7 +50,7 @@ AgentEnv Manager 是一个本地桌面客户端，用来管理和切换本机 ag
 ### Skill Library
 
 - 将本地已有 skill 导入统一 skill library。
-- 从 GitHub 单个 Skill、任意目录或整个仓库扫描并批量选择导入。
+- 从 GitHub 单个 Skill、任意目录或整个仓库扫描并批量选择导入；支持仓库内 `llms.txt` 明确索引的 Skill 套件。
 - 从公司内网或私有 Git 仓库通过 HTTPS / SSH Clone 地址导入；可指定分支、标签和子目录。
 - 通用仓库操作复用系统 Git、SSH Agent 与 credential helper，应用不保存仓库密码、Token 或 SSH 私钥。
 - 为 library skill 配置独立的 Tracked / Untracked 更新策略。

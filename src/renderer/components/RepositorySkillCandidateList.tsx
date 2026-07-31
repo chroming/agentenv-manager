@@ -4,6 +4,7 @@ import {
   CircleSlash2,
   Download,
   GitBranch,
+  Info,
   LoaderCircle,
   RotateCcw,
   TriangleAlert,
@@ -93,6 +94,14 @@ export const RepositorySkillCandidateList = ({
         <div className="inline-state inline-state--warning" role="status">
           <TriangleAlert size={15} aria-hidden="true" />
           {t("Results are incomplete. Narrow the repository directory and scan again.")}
+        </div>
+      ) : null}
+      {scanResult.indexManifest ? (
+        <div className="inline-state" role="status">
+          <Info size={15} aria-hidden="true" />
+          {t("{{path}} indexes Skill paths elsewhere in this repository. Review the paths before importing.", {
+            path: scanResult.indexManifest.path
+          })}
         </div>
       ) : null}
       <div className="github-selection-bar">

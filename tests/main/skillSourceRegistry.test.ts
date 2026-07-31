@@ -70,6 +70,27 @@ describe("Skill source registry", () => {
       .toBe(true);
   });
 
+  it("keeps an indexed suite distinct from a full-directory source", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-source-registry-"));
+    const registry = createSkillSourceRegistry(join(root, "skill-sources.json"));
+    const fullDirectory = scope("");
+    const indexedSuite: SkillSourceScope = {
+      ...fullDirectory,
+      canonicalLink: "https://github.com/acme/skills/tree/main/suite",
+      indexManifestPath: "suite/llms.txt"
+    };
+
+    const [fullRecord] = await registry.ensure([fullDirectory]);
+    const [indexedRecord] = await registry.ensure([indexedSuite]);
+
+    expect(indexedRecord?.id).not.toBe(fullRecord?.id);
+    const records = await registry.list();
+    expect(records.find((record) => record.id === fullRecord?.id))
+      .not.toHaveProperty("indexManifestPath");
+    expect(records.find((record) => record.id === indexedRecord?.id))
+      .toMatchObject({ indexManifestPath: "suite/llms.txt" });
+  });
+
   it("stores ignored candidates by source-relative path", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-source-registry-"));
     const registry = createSkillSourceRegistry(join(root, "skill-sources.json"));

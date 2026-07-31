@@ -1750,6 +1750,7 @@ Object.assign(zhCN, {
   "System Git": "系统 Git",
   "Repository scan source": "代码仓库扫描来源",
   "Results are incomplete. Narrow the repository directory and scan again.": "结果不完整，请缩小代码仓库目录范围后重新扫描。",
+  "{{path}} indexes Skill paths elsewhere in this repository. Review the paths before importing.": "{{path}} 索引了此仓库其他目录中的 Skill。导入前请检查这些路径。",
   "Full repository path {{id}}": "{{id}} 的完整代码仓库路径",
   "Try with System Git": "改用系统 Git",
   "Open repository source for {{id}}": "打开 {{id}} 的代码仓库来源",
@@ -2591,6 +2592,7 @@ const zhTW: Record<string, string> = {
 };
 
 Object.assign(zhTW, {
+  "{{path}} indexes Skill paths elsewhere in this repository. Review the paths before importing.": "{{path}} 索引了此儲存庫其他目錄中的 Skill。匯入前請檢查這些路徑。",
   "Left unmanaged": "不由 AgentEnv 管理",
   "left-unmanaged": "不由 AgentEnv 管理",
   "Leave unmanaged": "不由 AgentEnv 管理",

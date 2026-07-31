@@ -100,7 +100,8 @@ export const deriveSkillSourceGroups = (
         const source = skill.sourceCollection!;
         return source.repository !== firstScope.repository ||
           source.ref !== firstScope.ref ||
-          source.directory !== firstScope.directory;
+          source.directory !== firstScope.directory ||
+          source.indexManifestPath !== firstScope.indexManifestPath;
       });
       const observation = observations.get(canonicalLink);
       const localByPath = new Map<string, SkillLibraryEntry[]>();
@@ -185,6 +186,7 @@ export const deriveSkillSourceGroups = (
         repository: firstScope.repository,
         ref: firstScope.ref,
         directory: firstScope.directory,
+        indexManifestPath: firstScope.indexManifestPath,
         checkedAt: observation?.checkedAt,
         observationState: errors.has(canonicalLink)
           ? "error"
