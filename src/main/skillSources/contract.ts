@@ -26,6 +26,8 @@ export interface MaterializedGitSkillSource extends ResolvedGitSkillSource {
 }
 
 export interface GitSourceReadOptions {
+  historyDepth?: number;
+  includeBlobs?: boolean;
   refresh?: boolean;
 }
 

@@ -12,6 +12,7 @@ interface RepositoryCacheMarker {
   cacheKeyLocator: string;
   transportLocator: string;
   historyDepthByRef?: Record<string, number>;
+  materializedCommitByRef?: Record<string, string>;
 }
 
 export interface GitRepositoryCacheOptions {
@@ -24,7 +25,7 @@ export interface GitRepositoryCache {
   fetch(
     input: RepositorySkillSourceInput,
     signal?: AbortSignal,
-    options?: { refresh?: boolean; historyDepth?: number }
+    options?: { refresh?: boolean; historyDepth?: number; includeBlobs?: boolean }
   ): Promise<ResolvedGitRepository>;
 }
 
@@ -76,11 +77,33 @@ const readMarker = async (cachePath: string): Promise<RepositoryCacheMarker | un
       }
       historyDepthByRef = Object.fromEntries(entries) as Record<string, number>;
     }
+    let materializedCommitByRef: Record<string, string> | undefined;
+    if (marker.materializedCommitByRef !== undefined) {
+      if (
+        !marker.materializedCommitByRef ||
+        typeof marker.materializedCommitByRef !== "object" ||
+        Array.isArray(marker.materializedCommitByRef)
+      ) {
+        return undefined;
+      }
+      const entries = Object.entries(marker.materializedCommitByRef);
+      if (entries.some(([ref, commit]) =>
+        !ref ||
+        ref.length > 1024 ||
+        /[\u0000-\u001f\u007f]/.test(ref) ||
+        typeof commit !== "string" ||
+        !/^[a-f0-9]{40,64}$/i.test(commit)
+      )) {
+        return undefined;
+      }
+      materializedCommitByRef = Object.fromEntries(entries) as Record<string, string>;
+    }
     return {
       formatVersion: 1,
       cacheKeyLocator: marker.cacheKeyLocator,
       transportLocator: marker.transportLocator,
-      ...(historyDepthByRef ? { historyDepthByRef } : {})
+      ...(historyDepthByRef ? { historyDepthByRef } : {}),
+      ...(materializedCommitByRef ? { materializedCommitByRef } : {})
     };
   } catch (error) {
     if (isMissingFileError(error) || error instanceof SyntaxError) return undefined;
@@ -298,12 +321,14 @@ export const createGitRepositoryCache = (
   const fetch = (
     input: RepositorySkillSourceInput,
     signal?: AbortSignal,
-    fetchOptions: { refresh?: boolean; historyDepth?: number } = {}
+    fetchOptions: { refresh?: boolean; historyDepth?: number; includeBlobs?: boolean } = {}
   ): Promise<ResolvedGitRepository> => {
     const location = parseRepositoryLocation(input.repository, { allowLocal: true });
     const requestedRef = safeRef(input.ref ?? location.inferredRef);
     const historyDepth = Math.max(1, Math.floor(fetchOptions.historyDepth ?? 1));
-    const requestKey = `${location.cacheKeyLocator}\0${requestedRef ?? "<default>"}\0${historyDepth}`;
+    const includeBlobs = fetchOptions.includeBlobs ?? false;
+    const requestKey =
+      `${location.cacheKeyLocator}\0${requestedRef ?? "<default>"}\0${historyDepth}\0${includeBlobs}`;
     const existing = inflight.get(requestKey);
     if (existing) return existing;
     const cached = recent.get(requestKey);
@@ -350,7 +375,8 @@ export const createGitRepositoryCache = (
             if (
               cachedCommit &&
               advertisedCommit === cachedCommit &&
-              (activeMarker?.historyDepthByRef?.[ref] ?? 0) >= historyDepth
+              (activeMarker?.historyDepthByRef?.[ref] ?? 0) >= historyDepth &&
+              (!includeBlobs || activeMarker?.materializedCommitByRef?.[ref] === cachedCommit)
             ) {
               return {
                 repository: location.transportLocator,
@@ -377,14 +403,26 @@ export const createGitRepositoryCache = (
               timeoutMs: 120_000,
               ...transportRunOptions(transport)
             };
-            try {
+            if (includeBlobs) {
               await options.runner.run(
-                [...baseFetchArgs.slice(0, 4), "--filter=blob:none", ...baseFetchArgs.slice(4)],
+                [
+                  ...baseFetchArgs.slice(0, 4),
+                  "--no-filter",
+                  ...(cachedCommit ? ["--refetch"] : []),
+                  ...baseFetchArgs.slice(4)
+                ],
                 remoteOptions
               );
-            } catch (error) {
-              if (!isFilterUnsupported(error)) throw error;
-              await options.runner.run(baseFetchArgs, remoteOptions);
+            } else {
+              try {
+                await options.runner.run(
+                  [...baseFetchArgs.slice(0, 4), "--filter=blob:none", ...baseFetchArgs.slice(4)],
+                  remoteOptions
+                );
+              } catch (error) {
+                if (!isFilterUnsupported(error)) throw error;
+                await options.runner.run(baseFetchArgs, remoteOptions);
+              }
             }
             const resolved = await options.runner.run(
               ["--git-dir", cachePath, "rev-parse", "FETCH_HEAD^{commit}"],
@@ -406,6 +444,10 @@ export const createGitRepositoryCache = (
                   activeMarker?.historyDepthByRef?.[ref] ?? 0,
                   historyDepth
                 )
+              },
+              materializedCommitByRef: {
+                ...(activeMarker?.materializedCommitByRef ?? {}),
+                ...(includeBlobs ? { [ref]: resolvedCommit } : {})
               }
             }, null, 2)}\n`);
             return {
@@ -433,8 +475,16 @@ export const createGitRepositoryCache = (
     });
     const trackedOperation = operation.then((resolved) => {
       const fetchedAt = Date.now();
+      const requestScope =
+        `${location.cacheKeyLocator}\0${requestedRef ?? "<default>"}\0`;
       for (const [cachedKey, cached] of recent) {
-        if (fetchedAt - cached.fetchedAt > RECENT_REPOSITORY_TTL_MS) {
+        if (
+          fetchedAt - cached.fetchedAt > RECENT_REPOSITORY_TTL_MS ||
+          (
+            cachedKey.startsWith(requestScope) &&
+            cached.resolved.resolvedCommit !== resolved.resolvedCommit
+          )
+        ) {
           recent.delete(cachedKey);
         }
       }

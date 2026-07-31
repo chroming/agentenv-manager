@@ -1161,6 +1161,9 @@ Management-boundary and evidence contract:
 - Path capability is authoritative: writable Target-owned slots may be reviewed and taken over; a Target root symlink may be replaced only at the root boundary; shared compatibility paths use Local Cleanup; observe-only plugin or alternate containers are never mutated.
 - Missing, unreadable, or malformed native inventory produces a warning and skips only that evidence source. It MUST NOT suppress ordinary user Skill roots or block unrelated Capture, Save, or Apply.
 - Directory symlinks and broken tracked symlinks remain visible. Import copies readable content to Library and leaves the source path and evidence unchanged.
+- A GitHub Skill MAY contain a symbolic link only when System Git proves that the complete link chain resolves inside the selected Skill directory. Preview, Import, and Update Preview use the same validation path. Absolute links, escaping links, broken links, cycles, submodules, and unavailable Git validation remain blocking.
+- A validated repository-internal link is materialized as ordinary file or directory content before it reaches Library or a pending update candidate. Canonical Library data and update diffs MUST NOT retain or depend on the source checkout's symbolic-link topology.
+- GitHub source revisions include symbolic-link Git objects even though canonical Library content is dereferenced. A newly imported Skill MUST NOT immediately report an update solely because Scan, Import, and Check encoded the same repository tree differently.
 - Import is idempotent. Matching Library content is reused; same-name different content uses the duplicate-import review. Import never changes a Target path or records deployment ownership.
 
 ### 16.3 Update

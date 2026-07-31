@@ -8,6 +8,7 @@ import { createSkillLibraryStore } from "../../src/main/skillLibraryStore";
 import { createGitCliSkillSource } from "../../src/main/skillSources/gitCliSource";
 import { createGitCommandRunner } from "../../src/main/skillSources/gitCommandRunner";
 import { createGitRepositoryCache } from "../../src/main/skillSources/gitRepositoryCache";
+import type { GitCliSkillSource } from "../../src/main/skillSources/contract";
 import { createClaudeCodeTargetAdapter } from "../../src/main/targets/claudeCodeTarget";
 import { createOpenCodeTargetAdapter } from "../../src/main/targets/opencodeTarget";
 import { buildSkillCleanupGroups } from "../../src/shared/skillCleanup";
@@ -1237,6 +1238,113 @@ description: >
           Authorization: "Bearer token-xyz"
         })
       })
+    );
+  });
+
+  it("safely dereferences repository-internal links for GitHub preview, import, and update", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-github-link-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const skillMarkdown =
+      "---\nname: shuorenhua\ndescription: Rewrite text clearly.\n---\n# Shuorenhua\n";
+    const agentsMarkdown = "# Repository instructions\n";
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("/commits?")) return new Response("[]");
+      if (url.endsWith("/commits/main")) {
+        return new Response(JSON.stringify({ commit: { tree: { sha: "root-tree" } } }));
+      }
+      if (url.endsWith("/git/trees/root-tree?recursive=1")) {
+        return new Response(JSON.stringify({
+          tree: [
+            { path: "SKILL.md", type: "blob", sha: "skill-blob", mode: "100644" },
+            { path: "AGENTS.md", type: "blob", sha: "agents-blob", mode: "100644" },
+            { path: "CLAUDE.md", type: "blob", sha: "link-blob", mode: "120000" }
+          ]
+        }));
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+    const materialize = vi.fn(async (
+      input: Parameters<GitCliSkillSource["materialize"]>[0],
+      destination: string
+    ) => {
+      await mkdir(destination, { recursive: true });
+      await writeFile(join(destination, "SKILL.md"), skillMarkdown);
+      await writeFile(join(destination, "AGENTS.md"), agentsMarkdown);
+      await symlink("AGENTS.md", join(destination, "CLAUDE.md"));
+      return {
+        repository: input.repository,
+        location: {
+          kind: "https" as const,
+          transportLocator: input.repository,
+          displayLocator: input.repository,
+          cacheKeyLocator: input.repository
+        },
+        ref: input.ref ?? "main",
+        resolvedCommit: "0123456789012345678901234567890123456789",
+        cachePath: join(root, "repository.git"),
+        cacheRef: "refs/agentenv/main",
+        accessTransport: "https" as const,
+        directory: input.directory ?? "",
+        contentRevision: "root-tree",
+        upstream: {
+          kind: "git" as const,
+          locator: input.repository,
+          ref: input.ref,
+          subpath: input.directory
+        },
+        destination
+      };
+    });
+    const repositorySource: GitCliSkillSource = {
+      resolve: vi.fn(async () => {
+        throw new Error("resolve is not expected");
+      }),
+      scan: vi.fn(async () => {
+        throw new Error("scan is not expected");
+      }),
+      materialize
+    };
+    const store = createSkillLibraryStore(paths, undefined, {
+      fetch: fetchImpl,
+      repositorySource
+    });
+    const input = {
+      url: "https://github.com/acme/shuorenhua/tree/main",
+      id: "shuorenhua"
+    };
+
+    const preview = await store.previewImport({ kind: "github", input });
+    expect(preview.incoming).toMatchObject({ id: "shuorenhua", name: "shuorenhua" });
+
+    const imported = await store.importGitHubSkill(input);
+    expect(imported).toMatchObject({
+      id: "shuorenhua",
+      sourceType: "github",
+      remoteRevision: expect.stringMatching(/^[a-f0-9]{40}$/)
+    });
+    expect((await lstat(join(imported.path, "CLAUDE.md"))).isFile()).toBe(true);
+    expect((await lstat(join(imported.path, "CLAUDE.md"))).isSymbolicLink()).toBe(false);
+    await expect(readFile(join(imported.path, "CLAUDE.md"), "utf8")).resolves.toBe(agentsMarkdown);
+
+    await expect(store.checkUpdates(["shuorenhua"])).resolves.toEqual([
+      expect.objectContaining({ id: "shuorenhua", updateAvailable: false })
+    ]);
+    await expect(store.previewUpdate("shuorenhua")).resolves.toMatchObject({
+      id: "shuorenhua",
+      updateAvailable: false,
+      changes: [],
+      errors: []
+    });
+    expect(materialize).toHaveBeenCalledTimes(3);
+    expect(materialize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repository: "https://github.com/acme/shuorenhua.git",
+        ref: "main",
+        transport: "system-git"
+      }),
+      expect.any(String),
+      undefined,
+      expect.objectContaining({ historyDepth: 1 })
     );
   });
 

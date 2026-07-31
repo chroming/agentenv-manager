@@ -583,10 +583,12 @@ const createServices = async (
     return repositorySourcePromise;
   };
   const repositorySource: GitCliSkillSource = {
-    resolve: async (input, signal) => (await loadRepositorySource()).resolve(input, signal),
-    scan: async (input, signal) => (await loadRepositorySource()).scan(input, signal),
-    materialize: async (input, destination, signal) =>
-      (await loadRepositorySource()).materialize(input, destination, signal)
+    resolve: async (input, signal, options) =>
+      (await loadRepositorySource()).resolve(input, signal, options),
+    scan: async (input, signal, options) =>
+      (await loadRepositorySource()).scan(input, signal, options),
+    materialize: async (input, destination, signal, options) =>
+      (await loadRepositorySource()).materialize(input, destination, signal, options)
   };
   const replacementRoots = new Set([paths.profilesDir, paths.skillsLibraryDir]);
   for (const adapter of targetRegistry.listAdapters()) {

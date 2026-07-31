@@ -114,4 +114,36 @@ describe("github skill client caching", () => {
     await expect(readFile(join(root, "SKILL.md"), "utf8")).resolves.toBe("# Review\n");
     await expect(readFile(join(root, "reference.md"), "utf8")).resolves.toBe("Reference\n");
   });
+
+  it("includes repository links in revision checks but requires safe materialization", async () => {
+    const root = await mkdtemp(join(tmpdir(), "agentenv-github-client-link-"));
+    temporaryDirectories.push(root);
+    const commitUrl = "https://api.github.com/repos/example/skills/commits/main";
+    const treeUrl = "https://api.github.com/repos/example/skills/git/trees/root-tree?recursive=1";
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url === commitUrl) {
+        return responseFor({ commit: { tree: { sha: "root-tree" } } });
+      }
+      if (url === treeUrl) {
+        return responseFor({
+          tree: [
+            { path: "SKILL.md", type: "blob", sha: "skill-blob", mode: "100644" },
+            { path: "AGENTS.md", type: "blob", sha: "agents-blob", mode: "100644" },
+            { path: "CLAUDE.md", type: "blob", sha: "link-blob", mode: "120000" }
+          ]
+        });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+    const client = createGitHubSkillClient({ fetchImpl });
+    const source = parseGitHubSkillUrl("https://github.com/example/skills/tree/main");
+
+    await expect(client.readTree(source)).resolves.toMatchObject({
+      hasSkillMd: true,
+      revision: expect.stringMatching(/^[a-f0-9]{40}$/)
+    });
+    await expect(client.readTree(source, root)).rejects.toThrow(
+      "GitHub Skill contains a symbolic link: CLAUDE.md"
+    );
+  });
 });

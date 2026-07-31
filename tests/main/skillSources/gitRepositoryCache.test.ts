@@ -242,6 +242,65 @@ describe("git repository cache", () => {
     expect(run.mock.calls.filter(([args]) => args.includes("fetch"))).toHaveLength(2);
   });
 
+  it("fetches complete file objects once when materialization follows a tree-only scan", async () => {
+    const { repository, runner, cacheRoot } = await setup();
+    const run = vi.fn(runner.run.bind(runner));
+    const cache = createGitRepositoryCache({
+      cacheRoot,
+      runner: {
+        run,
+        cancelActive: runner.cancelActive.bind(runner),
+        dispose: runner.dispose.bind(runner)
+      }
+    });
+    const input = { repository: repository.remoteDir, ref: "main" };
+
+    await cache.fetch(input, undefined, { refresh: true, historyDepth: 1 });
+    await cache.fetch(input, undefined, {
+      refresh: true,
+      historyDepth: 1,
+      includeBlobs: true
+    });
+    await cache.fetch(input, undefined, {
+      historyDepth: 1,
+      includeBlobs: true
+    });
+
+    const fetches = run.mock.calls.filter(([args]) => args.includes("fetch"));
+    expect(fetches).toHaveLength(2);
+    expect(fetches[0][0]).toContain("--filter=blob:none");
+    expect(fetches[1][0]).toContain("--no-filter");
+    expect(fetches[1][0]).toContain("--refetch");
+  });
+
+  it("invalidates a complete-object snapshot when a tree refresh discovers a new commit", async () => {
+    const { repository, runner, cacheRoot } = await setup();
+    const run = vi.fn(runner.run.bind(runner));
+    const cache = createGitRepositoryCache({
+      cacheRoot,
+      runner: {
+        run,
+        cancelActive: runner.cancelActive.bind(runner),
+        dispose: runner.dispose.bind(runner)
+      }
+    });
+    const input = { repository: repository.remoteDir, ref: "main" };
+
+    const initial = await cache.fetch(input, undefined, {
+      refresh: true,
+      includeBlobs: true
+    });
+    await repository.write("skills/review/SKILL.md", "---\nname: review\n---\n# Updated\n");
+    const nextCommit = await repository.commit("update after complete fetch");
+    const checked = await cache.fetch(input, undefined, { refresh: true });
+    const materialized = await cache.fetch(input, undefined, { includeBlobs: true });
+
+    expect(initial.resolvedCommit).not.toBe(nextCommit);
+    expect(checked.resolvedCommit).toBe(nextCommit);
+    expect(materialized.resolvedCommit).toBe(nextCommit);
+    expect(run.mock.calls.filter(([args]) => args.includes("fetch"))).toHaveLength(3);
+  });
+
   it("rebuilds a corrupt disposable cache without touching the source repository", async () => {
     const { repository, runner, cacheRoot } = await setup();
     const cache = createGitRepositoryCache({ cacheRoot, runner });

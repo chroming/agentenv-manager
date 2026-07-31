@@ -300,7 +300,8 @@ export const createGitCliSkillSource = (
   ): Promise<ResolvedGitSkillSource> => {
     const repository = await options.cache.fetch(input, signal, {
       refresh: readOptions?.refresh ?? true,
-      historyDepth: SOURCE_HISTORY_DEPTH
+      historyDepth: readOptions?.historyDepth ?? SOURCE_HISTORY_DEPTH,
+      includeBlobs: readOptions?.includeBlobs
     });
     const directory = normalizeDirectory(input.directory ?? repository.location.inferredDirectory);
     return resolvedSkill(options.runner, repository, directory, signal);
@@ -440,7 +441,7 @@ export const createGitCliSkillSource = (
         root,
         repositoryTreeEntries
           .filter((entry): entry is TreeEntry & { type: "blob" | "tree" } =>
-            (entry.type === "blob" || entry.type === "tree") && entry.mode !== "120000")
+            entry.type === "blob" || entry.type === "tree")
           .map((entry) => ({
             path: entry.path,
             type: entry.type,
@@ -521,7 +522,10 @@ export const createGitCliSkillSource = (
       const entries = await readdir(destination);
       if (entries.length > 0) throw new Error("Skill materialization destination must be empty");
     }
-    const source = await resolve(input, signal, readOptions);
+    const source = await resolve(input, signal, {
+      ...readOptions,
+      includeBlobs: true
+    });
     await assertSafeTree(options.runner, source, signal);
     const indexPath = join(dirname(destination), `.agentenv-git-index-${randomUUID()}`);
     const treeish = treeishFor(source, source.directory);
@@ -541,7 +545,7 @@ export const createGitCliSkillSource = (
           "--all",
           "--force"
         ],
-        { signal, timeoutMs: 30_000, env: { GIT_INDEX_FILE: indexPath } }
+        { signal, timeoutMs: 120_000, env: { GIT_INDEX_FILE: indexPath } }
       );
       if (!(await pathEntryExists(join(destination, "SKILL.md")))) {
         throw new Error("Repository directory does not contain SKILL.md");

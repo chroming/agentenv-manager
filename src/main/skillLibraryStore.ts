@@ -111,6 +111,7 @@ import { scanProjectSkillRoots } from "./projectSkillDiscovery";
 import {
   createGitHubSkillClient,
   encodeGitHubPath,
+  GitHubSkillSymbolicLinkError,
   githubSkillSourceUrl,
   mapWithConcurrency,
   parseGitHubSkillUrl,
@@ -354,6 +355,46 @@ export const createSkillLibraryStore = (
     readTree: readGitHubTree,
     readSkillUpdatedAt: readGitHubSkillUpdatedAt
   } = createGitHubSkillClient({ fetchImpl, authTokenProvider });
+  const materializeGitHubSkillTree = async (
+    source: ParsedGitHubSkillSource,
+    destination: string,
+    readOptions: { refresh?: boolean; refreshFiles?: boolean } = {}
+  ) => {
+    try {
+      return await readGitHubTree(source, destination, readOptions);
+    } catch (error) {
+      if (!(error instanceof GitHubSkillSymbolicLinkError)) throw error;
+      if (!repositorySource) {
+        throw new Error(
+          `${error.message}. System Git is required to validate and import repository-internal symbolic links safely.`
+        );
+      }
+
+      const manifest = await readGitHubTree(source, undefined, readOptions);
+      const checkoutDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-link-"));
+      try {
+        await repositorySource.materialize(
+          {
+            repository: `https://github.com/${source.owner}/${source.repo}.git`,
+            ref: source.ref,
+            directory: source.remotePath || undefined,
+            transport: "system-git"
+          },
+          checkoutDir,
+          undefined,
+          { historyDepth: 1, refresh: readOptions.refresh ?? true }
+        );
+        await computeContentHash(checkoutDir);
+        await removeAndCopy(checkoutDir, destination);
+        return {
+          ...manifest,
+          hasSkillMd: await pathExists(join(destination, "SKILL.md"))
+        };
+      } finally {
+        await rm(checkoutDir, { recursive: true, force: true });
+      }
+    }
+  };
   const skillSourceRegistry = createSkillSourceRegistry(paths.skillSourcesPath);
   const skillSourceService = createLibrarySkillSourceService(
     paths.skillSourceObservationsDir,
@@ -549,7 +590,7 @@ export const createSkillLibraryStore = (
     const tempDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-preview-"));
     try {
       const [{ hasSkillMd, revision }, sourceUpdatedAt] = await Promise.all([
-        readGitHubTree(parsedSource, tempDir, { refreshFiles: true }),
+        materializeGitHubSkillTree(parsedSource, tempDir, { refreshFiles: true }),
         readGitHubSkillUpdatedAt(parsedSource)
       ]);
       if (!hasSkillMd) {
@@ -750,7 +791,7 @@ export const createSkillLibraryStore = (
     const existingSkills = await listSkills();
     const revisionEntries = treeItems
       .filter((item): item is { path: string; type: "blob" | "tree"; sha: string; mode?: string } =>
-        (item.type === "blob" || item.type === "tree") && item.mode !== "120000");
+        item.type === "blob" || item.type === "tree");
     const candidates = await mapWithConcurrency(
       discoveredSkillFiles.slice(0, 500),
       8,
@@ -1546,7 +1587,7 @@ export const createSkillLibraryStore = (
     const tempDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-"));
     try {
       const [{ hasSkillMd, revision }, sourceUpdatedAt] = await Promise.all([
-        readGitHubTree(source, tempDir, { refreshFiles: true }),
+        materializeGitHubSkillTree(source, tempDir, { refreshFiles: true }),
         readGitHubSkillUpdatedAt(source)
       ]);
       if (!hasSkillMd) {
@@ -2404,7 +2445,6 @@ export const createSkillLibraryStore = (
             sha: string;
           } =>
             (entry.type === "blob" || entry.type === "tree") &&
-            entry.mode !== "120000" &&
             typeof entry.path === "string" &&
             typeof entry.sha === "string"
           );
@@ -2844,7 +2884,7 @@ export const createSkillLibraryStore = (
       const candidateDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-update-"));
       try {
         const [{ hasSkillMd, revision }, sourceUpdatedAt] = await Promise.all([
-          readGitHubTree(source, candidateDir, {
+          materializeGitHubSkillTree(source, candidateDir, {
             refresh: shouldRefreshSource,
             refreshFiles: true
           }),

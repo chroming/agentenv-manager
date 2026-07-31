@@ -47,6 +47,13 @@ export interface GitHubTreeResponse {
   tree?: Array<{ path?: string; type?: string; sha?: string; mode?: string }>;
 }
 
+export class GitHubSkillSymbolicLinkError extends Error {
+  constructor(readonly path: string) {
+    super(`GitHub Skill contains a symbolic link: ${path}`);
+    this.name = "GitHubSkillSymbolicLinkError";
+  }
+}
+
 interface GitHubContentBase {
   type: string;
   name: string;
@@ -359,14 +366,14 @@ export const createGitHubSkillClient = ({
         (!prefix || entry.path.startsWith(prefix))
       );
       const unsupportedEntry = scopedEntries.find(
-        (entry) => entry.mode === "120000" || entry.mode === "160000" || entry.type === "commit"
+        (entry) => entry.mode === "160000" || entry.type === "commit"
       );
       if (unsupportedEntry?.path) {
-        throw new Error(
-          unsupportedEntry.mode === "120000"
-            ? `GitHub Skill contains a symbolic link: ${unsupportedEntry.path}`
-            : `GitHub Skill contains a submodule: ${unsupportedEntry.path}`
-        );
+        throw new Error(`GitHub Skill contains a submodule: ${unsupportedEntry.path}`);
+      }
+      const symbolicLink = scopedEntries.find((entry) => entry.mode === "120000");
+      if (writeRoot && symbolicLink?.path) {
+        throw new GitHubSkillSymbolicLinkError(symbolicLink.path);
       }
       const entries = scopedEntries.filter((entry): entry is {
         path: string;
@@ -378,12 +385,14 @@ export const createGitHubSkillClient = ({
         typeof entry.path === "string" &&
         typeof entry.sha === "string"
       );
-      const files = entries.filter((entry) => entry.type === "blob");
-      const hasSkillMd = files.some(
+      const hasSkillMd = entries.some(
         (entry) => relativeGitHubPath(root, entry.path) === "SKILL.md"
       );
 
       if (writeRoot) {
+        const files = entries.filter(
+          (entry) => entry.type === "blob" && entry.mode !== "120000"
+        );
         await mapWithConcurrency(files, 8, async (item) => {
           const relativePath = relativeGitHubPath(root, item.path);
           const rawUrl = `https://raw.githubusercontent.com/${source.owner}/${source.repo}/${encodeURIComponent(source.ref)}/${encodeGitHubPath(item.path)}`;
