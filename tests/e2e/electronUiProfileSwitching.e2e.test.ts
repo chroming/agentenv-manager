@@ -3580,7 +3580,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(mcpRowGeometry.every((row) => row.controlHeight === 32)).toBe(true);
     await expectInViewport(page, page.getByLabel("shared-docs Profile behavior"));
     expect(await workbench.evaluate((element) => getComputedStyle(element).gridTemplateColumns))
-      .toMatch(/^204px /);
+      .toMatch(/^196px /);
   }, 30_000);
 
   it("keeps the Profile editor painted while a different Profile is loading", async () => {
@@ -3853,12 +3853,18 @@ describe("Electron UI profile switching e2e", () => {
         description: getComputedStyle(
           hero.querySelector<HTMLElement>(".profile-description")!
         ).display,
+        height: Math.round(hero.getBoundingClientRect().height),
         readiness: getComputedStyle(
           hero.querySelector<HTMLElement>(".profile-action-status")!
         ).display,
         duplicateAgentMeta: hero.querySelectorAll(".profile-hero__meta").length
       }));
-      expect(heroContent.description).not.toBe("none");
+      if (page.viewportSize()?.width === 920) {
+        expect(heroContent.description).toBe("none");
+        expect(heroContent.height).toBeLessThanOrEqual(120);
+      } else {
+        expect(heroContent.description).not.toBe("none");
+      }
       expect(heroContent.readiness).not.toBe("none");
       expect(heroContent.duplicateAgentMeta).toBe(0);
 

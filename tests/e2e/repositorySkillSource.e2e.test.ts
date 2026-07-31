@@ -85,6 +85,30 @@ describe("Repository Skill source", () => {
       .waitFor({ state: "visible" });
     await dialog.getByRole("checkbox", { name: "Select Release Check Suite" })
       .waitFor({ state: "visible" });
+    const candidateLayout = await dialog.locator(".github-scan-results").evaluate((results) => {
+      const header = results.querySelector<HTMLElement>(".github-scan-results__header")!;
+      const selection = results.querySelector<HTMLElement>(".github-selection-bar")!;
+      const list = results.querySelector<HTMLElement>(".github-candidate-list")!;
+      const first = list.querySelector<HTMLElement>(".github-candidate-row")!;
+      const headerBox = header.getBoundingClientRect();
+      const selectionBox = selection.getBoundingClientRect();
+      const listBox = list.getBoundingClientRect();
+      const firstBox = first.getBoundingClientRect();
+      return {
+        firstStartsInsideList: firstBox.top >= listBox.top - 1,
+        headerPrecedesList: headerBox.bottom <= listBox.top + 1,
+        listScrolls: ["auto", "scroll"].includes(getComputedStyle(list).overflowY),
+        selectionBackground: getComputedStyle(selection).backgroundColor,
+        selectionPrecedesFirst: selectionBox.bottom <= firstBox.top + 1
+      };
+    });
+    expect(candidateLayout).toEqual({
+      firstStartsInsideList: true,
+      headerPrecedesList: true,
+      listScrolls: true,
+      selectionBackground: "rgb(255, 255, 255)",
+      selectionPrecedesFirst: true
+    });
     await dialog.getByRole("button", { name: "Import 2" }).click();
     await dialog.getByText("All 2 skills imported", { exact: true })
       .waitFor({ state: "visible" });

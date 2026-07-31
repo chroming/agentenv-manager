@@ -73,91 +73,93 @@ export const RepositorySkillCandidateList = ({
 
   return (
     <div className="github-scan-results">
-      <div className="github-scan-summary">
-        <div>
-          <strong>{t("{{count}} found", { count: scanResult.candidates.length })}</strong>
-          <PreviewText
-            ariaLabel={t("Repository scan source")}
-            className="repository-scan-summary-path"
-            text={scanSummary || `${scanResult.owner}/${scanResult.repo} · ${scanResult.ref}`}
-            tooltipClassName="library-source-tooltip"
-          />
+      <div className="github-scan-results__header">
+        <div className="github-scan-summary">
+          <div>
+            <strong>{t("{{count}} found", { count: scanResult.candidates.length })}</strong>
+            <PreviewText
+              ariaLabel={t("Repository scan source")}
+              className="repository-scan-summary-path"
+              text={scanSummary || `${scanResult.owner}/${scanResult.repo} · ${scanResult.ref}`}
+              tooltipClassName="library-source-tooltip"
+            />
+          </div>
+          <Button
+            disabled={Boolean(operation) || Boolean(importResult)}
+            onClick={onChangeSource}
+          >
+            {t("Change source")}
+          </Button>
         </div>
-        <Button
-          disabled={Boolean(operation) || Boolean(importResult)}
-          onClick={onChangeSource}
-        >
-          {t("Change source")}
-        </Button>
-      </div>
-      {scanResult.truncated ? (
-        <div className="inline-state inline-state--warning" role="status">
-          <TriangleAlert size={15} aria-hidden="true" />
-          {t("Results are incomplete. Narrow the repository directory and scan again.")}
+        {scanResult.truncated ? (
+          <div className="inline-state inline-state--warning" role="status">
+            <TriangleAlert size={15} aria-hidden="true" />
+            {t("Results are incomplete. Narrow the repository directory and scan again.")}
+          </div>
+        ) : null}
+        {scanResult.indexManifest ? (
+          <div className="inline-state" role="status">
+            <Info size={15} aria-hidden="true" />
+            {t("{{path}} indexes Skill paths elsewhere in this repository. Review the paths before importing.", {
+              path: scanResult.indexManifest.path
+            })}
+          </div>
+        ) : null}
+        <div className="github-selection-bar">
+          <label className="github-select-all">
+            <input
+              type="checkbox"
+              aria-label={t("Select all discovered skills")}
+              checked={allReadySelected}
+              disabled={
+                readySources.length === 0 ||
+                Boolean(operation) ||
+                Boolean(importResult)
+              }
+              ref={(checkbox) => {
+                if (checkbox) checkbox.indeterminate = someReadySelected;
+              }}
+              onChange={(event) => onSelectAll(event.currentTarget.checked)}
+            />
+            <span>{t("Select all")}</span>
+          </label>
+          <span
+            className={`github-selection-count${
+              importResult
+                ? failedCount > 0 || skippedCount > 0
+                  ? " is-partial"
+                  : " is-complete"
+                : ""
+            }`}
+            role="status"
+          >
+            {importResult ? (
+              <>
+                {failedCount > 0 || skippedCount > 0 ? (
+                  <TriangleAlert size={14} strokeWidth={2.2} aria-hidden="true" />
+                ) : (
+                  <CheckCircle2 size={14} strokeWidth={2.2} aria-hidden="true" />
+                )}
+                {t(
+                  failedCount > 0 && skippedCount > 0
+                    ? "{{imported}} imported · {{failed}} failed · {{skipped}} skipped"
+                    : failedCount > 0
+                      ? "{{imported}} imported · {{failed}} failed"
+                      : skippedCount > 0
+                        ? "{{imported}} imported · {{skipped}} skipped"
+                        : "All {{count}} skills imported",
+                  {
+                    count: importedCount,
+                    imported: importedCount,
+                    failed: failedCount,
+                    skipped: skippedCount
+                  }
+                )}
+              </>
+            ) : t("{{count}} selected", { count: selectedSources.length })}
+          </span>
+          <span className="github-selection-id-heading">{t("Library ID")}</span>
         </div>
-      ) : null}
-      {scanResult.indexManifest ? (
-        <div className="inline-state" role="status">
-          <Info size={15} aria-hidden="true" />
-          {t("{{path}} indexes Skill paths elsewhere in this repository. Review the paths before importing.", {
-            path: scanResult.indexManifest.path
-          })}
-        </div>
-      ) : null}
-      <div className="github-selection-bar">
-        <label className="github-select-all">
-          <input
-            type="checkbox"
-            aria-label={t("Select all discovered skills")}
-            checked={allReadySelected}
-            disabled={
-              readySources.length === 0 ||
-              Boolean(operation) ||
-              Boolean(importResult)
-            }
-            ref={(checkbox) => {
-              if (checkbox) checkbox.indeterminate = someReadySelected;
-            }}
-            onChange={(event) => onSelectAll(event.currentTarget.checked)}
-          />
-          <span>{t("Select all")}</span>
-        </label>
-        <span
-          className={`github-selection-count${
-            importResult
-              ? failedCount > 0 || skippedCount > 0
-                ? " is-partial"
-                : " is-complete"
-              : ""
-          }`}
-          role="status"
-        >
-          {importResult ? (
-            <>
-              {failedCount > 0 || skippedCount > 0 ? (
-                <TriangleAlert size={14} strokeWidth={2.2} aria-hidden="true" />
-              ) : (
-                <CheckCircle2 size={14} strokeWidth={2.2} aria-hidden="true" />
-              )}
-              {t(
-                failedCount > 0 && skippedCount > 0
-                  ? "{{imported}} imported · {{failed}} failed · {{skipped}} skipped"
-                  : failedCount > 0
-                    ? "{{imported}} imported · {{failed}} failed"
-                    : skippedCount > 0
-                      ? "{{imported}} imported · {{skipped}} skipped"
-                      : "All {{count}} skills imported",
-                {
-                  count: importedCount,
-                  imported: importedCount,
-                  failed: failedCount,
-                  skipped: skippedCount
-                }
-              )}
-            </>
-          ) : t("{{count}} selected", { count: selectedSources.length })}
-        </span>
-        <span className="github-selection-id-heading">{t("Library ID")}</span>
       </div>
       <div className="github-candidate-list">
         {scanResult.candidates.length === 0 ? (

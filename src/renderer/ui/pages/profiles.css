@@ -257,7 +257,7 @@
 .app-shell--profiles {
   --profile-control-height: 34px;
   --profile-hero-height: 104px;
-  --profile-hero-height-compact: 151px;
+  --profile-hero-height-compact: 120px;
   --profile-icon-slot: 24px;
   --profile-policy-column-width: clamp(228px, 55%, 264px);
 }
@@ -1176,7 +1176,7 @@
     --profile-icon-slot: 28px;
     --profile-policy-column-width: clamp(236px, 56%, 264px);
     gap: 0;
-    grid-template-columns: 204px minmax(0, 1fr);
+    grid-template-columns: 196px minmax(0, 1fr);
   }
 
   .profile-index {
@@ -1200,8 +1200,10 @@
   .profile-hero {
     grid-template-columns: 32px minmax(0, 1fr);
     grid-template-rows: auto auto;
+    height: var(--profile-hero-height-compact);
     min-height: var(--profile-hero-height-compact);
-    padding: 12px;
+    padding: 10px 12px;
+    row-gap: 8px;
   }
 
   .profile-editor-surface {
@@ -1221,7 +1223,11 @@
   }
 
   .profile-hero .profile-description {
-    display: -webkit-box;
+    display: none;
+  }
+
+  .profile-hero--loading .profile-description {
+    display: block;
   }
 
   .profile-action-stack {

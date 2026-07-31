@@ -999,6 +999,10 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 - The original local path is retained as provenance, but local imports default to the `Untracked` update policy.
 - A user MAY explicitly track a stable local folder as an update source.
 - Repository import MUST store the sanitized repository locator, explicit ref, directory, resolved commit, and Skill-subtree revision. GitHub API imports remain `sourceType: github`; System Git imports use `sourceType: git`.
+- Repository scan results keep summary, optional guidance, and selection controls in one opaque,
+  content-sized header. Only the candidate list scrolls. Adding or removing truncation or index
+  guidance MUST NOT change the list's grid ownership, paint candidates beneath the selection row,
+  or cover the first candidate at any supported viewport.
 - Persisted update-source types remain `local`, `github`, and `git`. ZIP is represented only as local import provenance and MUST NOT become a hidden continuously checked source type.
 - Selecting a Library Skill name opens a read-only file browser. The name is the only file-browser trigger in the row and exposes pointer, hover, and keyboard-focus affordances; clicking the description, source, version, usage, status, install data, or row background MUST NOT open it. The browser lists only regular files contained by the canonical Library Skill, hides AgentEnv metadata, skips links, rejects escaped or resolved-outside paths, previews text with syntax highlighting, and reports binary or oversized files without decoding them. Browsing never changes the Skill, its source, a Profile, or an Agent install.
 - Repository imports default to the `Tracked` update policy. The canonical HTTPS source locator is durable metadata. For a System Git import on any host, an HTTPS authentication, authorization, or repository-access failure MAY retry the equivalent `git@host:path.git` locator through the user's existing SSH setup. Timeout, DNS, malformed URL, parse, cancellation, and ordinary network failures MUST NOT trigger a transport fallback. The scan summary discloses `SSH fallback`, while persisted provenance keeps the canonical HTTPS source and records the access transport separately.
@@ -1364,6 +1368,11 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Target recovery history is a low-frequency safety workflow. Targets exposes it through a page-level Recovery command and a focused modal, rather than permanently consuming the primary Target list viewport.
 - Profile Save and Apply remain visible while the selected Profile's Composer owns internal scrolling.
 - The selected Profile header separates object identity from commit controls at widths where they cannot coexist without truncation. Save, Apply, Agent selection, and overflow remain one unbroken command group; readiness text receives its own line instead of shrinking into an unreadable fragment.
+- At the minimum supported width, the selected Profile header preserves name, edit affordance,
+  readiness, Target selection, Save, Apply, and overflow while omitting the secondary description
+  from the painted surface. Loading and loaded headers keep the same compact height. The full
+  description remains available through Profile editing; it MUST NOT displace readiness or commit
+  controls in the minimum-width workbench.
 - Local Skill Cleanup is a review list, not a secondary resource library. Its rows show Skill identity, one compact state, the current safe next action, and overflow. Full paths, duplicate details, and alternate versions belong in Details or Review; History is an integrated list section rather than a visually unrelated card.
 - Buttons do not wrap at supported desktop widths.
 - Visible command, tab, status, badge, and count labels MUST fit their owning control in every supported locale. They MUST NOT use clipped overflow or ellipsis to conceal a sizing defect; shorten the visible label or change the owning layout while preserving the full accessible command name.

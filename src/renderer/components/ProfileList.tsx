@@ -131,7 +131,7 @@ export const ProfileList = ({
             <input
               ref={searchInputRef}
               aria-label={t("Search profiles")}
-              placeholder={t("Search Profile name...")}
+              placeholder={t("Search profiles")}
               value={search}
               onChange={(event) => onSearchChange(event.currentTarget.value)}
             />

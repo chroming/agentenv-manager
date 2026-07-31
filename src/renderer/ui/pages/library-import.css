@@ -536,8 +536,15 @@
 
 .github-scan-results {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
+}
+
+.github-scan-results__header {
+  background: var(--surface);
+  min-width: 0;
+  position: relative;
+  z-index: var(--z-raised);
 }
 
 .github-scan-summary {
@@ -579,6 +586,7 @@
 
 .github-selection-bar {
   align-items: center;
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
   column-gap: 10px;
   display: grid;
