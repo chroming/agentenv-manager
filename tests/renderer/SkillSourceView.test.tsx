@@ -757,6 +757,33 @@ describe("SkillSourceView", () => {
     expect(document.querySelector(".skill-source-counts .is-removed")).toBeNull();
   });
 
+  it("keeps source facts and commands in separate columns", () => {
+    render(
+      <SkillSourceView
+        active
+        groups={[{ ...group, checkedAt: undefined, counts: { total: 1, updates: 1, new: 0, removed: 0 } }]}
+        loading={false}
+        onCheckGroup={vi.fn().mockResolvedValue(undefined)}
+        onCheckMonitored={vi.fn().mockResolvedValue(undefined)}
+        onRename={vi.fn().mockResolvedValue(undefined)}
+        onPreviewMerge={vi.fn()}
+        onMerge={vi.fn()}
+        onAdd={vi.fn().mockResolvedValue(true)}
+        onUpdate={vi.fn()}
+        onReviewUpdates={vi.fn().mockResolvedValue(undefined)}
+        onDelete={vi.fn()}
+        onOpenSource={vi.fn()}
+        onCopySource={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Action", { selector: ".skill-source-table-head span" })).toBeInTheDocument();
+    expect(screen.getByText("Update available", { selector: ".skill-source-status-label" })).toBeInTheDocument();
+    expect(screen.getByText("—", { selector: ".skill-source-last-checked" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Update available" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Update all skills" })).toHaveTextContent("Update");
+  });
+
   it("summarizes repository merge failures while retaining the full error", async () => {
     const secondGroup: SkillSourceGroupView = {
       ...group,

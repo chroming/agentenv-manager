@@ -3,10 +3,12 @@ import {
   ArchiveRestore,
   Clock3,
   CopyPlus,
+  MoreHorizontal,
   RefreshCw,
   TerminalSquare
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { ProductIcon } from "../productIcons";
 import type {
   BackupSummary,
@@ -23,12 +25,21 @@ import { PreviewDialog } from "./PreviewDialog";
 import { targetIconFor } from "./ProfileSidebar";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
-import { Button, ControlGroup, ModalFrame, PageHeader } from "./ui";
+import {
+  ActionMenu,
+  Button,
+  ControlGroup,
+  focusInitialActionMenuItem,
+  IconButton,
+  ModalFrame,
+  PageHeader
+} from "./ui";
 import { isTargetInstalled } from "../../shared/targetHealth";
 import type { EnvironmentReviewSummary } from "../environmentReview";
 import type { FreshnessState } from "../freshness";
 import { EnvironmentStatusStrip } from "./EnvironmentStatusStrip";
 import { FreshnessStatus } from "./FreshnessStatus";
+import { OverflowTooltip } from "./OverflowTooltip";
 
 interface TargetWorkspaceProps {
   targets: TargetInfo[];
@@ -46,7 +57,7 @@ interface TargetWorkspaceProps {
   onRefresh(): Promise<void>;
   onConfigure(targetId: string): void;
   onReviewEnvironment(): void;
-  onCreateProfileFromTarget(targetId: string): void;
+  onCreateProfileFromTarget(targetId: string, returnFocus?: HTMLElement | null): void;
   onPreviewRollback(backupId: string): void;
   onCancelRollback(): void;
   onRestoreRollback(): void;
@@ -86,6 +97,139 @@ const lifecycleLabel: Record<TargetManagementState["lifecycleStatus"], string> =
   pending: "Changes pending",
   drifted: "Changed outside AgentEnv",
   "recovery-required": "Recovery required"
+};
+
+const TargetRowActions = ({
+  target,
+  busy,
+  expanded,
+  onCapture,
+  onConfigure,
+  onToggleDiagnostics
+}: {
+  target: TargetInfo;
+  busy: boolean;
+  expanded: boolean;
+  onCapture(returnFocus?: HTMLElement | null): void;
+  onConfigure(): void;
+  onToggleDiagnostics(): void;
+}) => {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const [style, setStyle] = useState<CSSProperties>();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const installed = isTargetInstalled(target.health);
+
+  const show = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = 200;
+    const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+    const spaceBelow = window.innerHeight - rect.bottom;
+    setStyle({
+      left,
+      position: "fixed",
+      top: spaceBelow >= 110 ? rect.bottom + 5 : Math.max(8, rect.top - 92),
+      width
+    });
+    setOpen(true);
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    focusInitialActionMenuItem(menuRef.current);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const dismiss = (event: MouseEvent) => {
+      if (
+        event.target instanceof Node &&
+        !menuRef.current?.contains(event.target) &&
+        !triggerRef.current?.contains(event.target)
+      ) setOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      triggerRef.current?.focus({ preventScroll: true });
+    };
+    const dismissForViewportChange = () => setOpen(false);
+    document.addEventListener("mousedown", dismiss);
+    document.addEventListener("keydown", escape);
+    window.addEventListener("resize", dismissForViewportChange);
+    window.addEventListener("scroll", dismissForViewportChange, true);
+    return () => {
+      document.removeEventListener("mousedown", dismiss);
+      document.removeEventListener("keydown", escape);
+      window.removeEventListener("resize", dismissForViewportChange);
+      window.removeEventListener("scroll", dismissForViewportChange, true);
+    };
+  }, [open]);
+
+  const run = (action: () => void, restoreFocus = false) => {
+    setOpen(false);
+    action();
+    if (restoreFocus) {
+      window.requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
+    }
+  };
+
+  return (
+    <ControlGroup className="target-workflow-actions" aria-label={t("Agent actions")}>
+      <Button
+        className="target-profile-action"
+        size="compact"
+        aria-label={t("Configure {{name}}", { name: target.name })}
+        onClick={onConfigure}
+      >
+        {t("Configure")}
+      </Button>
+      <IconButton
+        ref={triggerRef}
+        className="target-more-action"
+        label={t("More actions for {{name}}", { name: target.name })}
+        size="compact"
+        variant="ghost"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        disabled={busy}
+        onClick={() => open ? setOpen(false) : show()}
+      >
+        <MoreHorizontal aria-hidden="true" />
+      </IconButton>
+      {open && style ? createPortal(
+        <ActionMenu
+          ariaLabel={t("Agent actions")}
+          className="target-row-action-menu"
+          menuRef={menuRef}
+          style={style}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!installed}
+            title={installed ? undefined : t("{{name}} is not detected", { name: target.name })}
+            onClick={() => run(() => onCapture(triggerRef.current))}
+          >
+            <CopyPlus size={15} strokeWidth={2.2} aria-hidden="true" />
+            <span>{t("Capture")}</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            aria-expanded={expanded}
+            onClick={() => run(onToggleDiagnostics, true)}
+          >
+            <Activity size={15} strokeWidth={2.2} aria-hidden="true" />
+            <span>{t(expanded ? "Hide diagnostics" : "Diagnostics")}</span>
+          </button>
+        </ActionMenu>,
+        document.body
+      ) : null}
+    </ControlGroup>
+  );
 };
 
 export const TargetWorkspace = ({
@@ -156,17 +300,20 @@ export const TargetWorkspace = ({
               ref={recoveryTriggerRef}
               className="secondary-action target-recovery-trigger"
               aria-haspopup="dialog"
-              disabled={busy || isLoading}
+              disabled={busy || isLoading || backups.length === 0}
+              title={backups.length === 0 ? t("No backups") : undefined}
               icon={<ArchiveRestore size={15} strokeWidth={2.2} />}
               onClick={() => setIsRecoveryOpen(true)}
             >
               {t("Recovery")}
-              <span aria-label={t(backups.length === 1 ? "{{count}} backup" : "{{count}} backups", { count: backups.length })}>{backups.length}</span>
+              {backups.length > 0 ? (
+                <span aria-label={t(backups.length === 1 ? "{{count}} backup" : "{{count}} backups", { count: backups.length })}>{backups.length}</span>
+              ) : null}
             </Button>
             <Button
               className="secondary-action"
-              busy={busy}
-              disabled={busy || isLoading}
+              busy={freshness.status === "refreshing"}
+              disabled={busy || isLoading || freshness.status === "refreshing"}
               icon={<RefreshCw size={15} strokeWidth={2.2} />}
               onClick={() => { void onRefresh(); }}
             >
@@ -253,36 +400,15 @@ export const TargetWorkspace = ({
                   <Clock3 size={12} />
                   {formatLastApplied(state?.lastAppliedAt, localeTag, t("Never applied"))}
                 </span>
-                <ControlGroup className="target-workflow-actions" aria-label={t("Agent actions")}>
-                  <Button
-                    className="target-capture-action"
-                    size="compact"
-                    variant="ghost"
-                    aria-label={t("Create profile from {{name}}", { name: target.name })}
-                    disabled={busy || !isTargetInstalled(target.health)}
-                    title={isTargetInstalled(target.health) ? t("Capture") : t("{{name}} is not detected", { name: target.name })}
-                    icon={<CopyPlus size={15} strokeWidth={2.2} />}
-                    onClick={() => onCreateProfileFromTarget(target.id)}
-                  />
-                  <Button
-                    className="target-profile-action"
-                    size="compact"
-                    aria-label={t("Configure {{name}}", { name: target.name })}
-                    onClick={() => onConfigure(target.id)}
-                  >
-                    <span>{t("Configure")}</span>
-                  </Button>
-                  <Button
-                    className="target-diagnostics-toggle"
-                    size="compact"
-                    variant="ghost"
-                    aria-expanded={isExpanded}
-                    aria-label={t(isExpanded ? "Hide {{name}} diagnostics" : "Show {{name}} diagnostics", { name: target.name })}
-                    title={t("Diagnostics")}
-                    icon={<Activity size={15} strokeWidth={2.2} />}
-                    onClick={() => setExpandedTargetId(isExpanded ? undefined : target.id)}
-                  />
-                </ControlGroup>
+                <TargetRowActions
+                  target={target}
+                  busy={busy}
+                  expanded={isExpanded}
+                  onCapture={(returnFocus) =>
+                    onCreateProfileFromTarget(target.id, returnFocus)}
+                  onConfigure={() => onConfigure(target.id)}
+                  onToggleDiagnostics={() => setExpandedTargetId(isExpanded ? undefined : target.id)}
+                />
               </header>
               {isExpanded ? (
                 <section className="target-diagnostics" role="region" aria-label={t("{{name}} diagnostics", { name: target.name })}>
@@ -290,19 +416,24 @@ export const TargetWorkspace = ({
                     <div className="target-check">
                       <div>
                         <span>{t("Detected via")}</span>
-                        <code title={target.health.installationEvidence.map((item) => item.path).join("\n")}>
-                          {target.health.installationEvidence.length > 0
+                        <OverflowTooltip
+                          className="target-check-path"
+                          displayText={target.health.installationEvidence.length > 0
                             ? target.health.installationEvidence
                                 .map((item) => installationEvidenceName(item, t))
                                 .join(" · ")
                             : t("None")}
-                        </code>
+                          text={target.health.installationEvidence.map((item) => item.path).join("\n") || t("None")}
+                        />
                       </div>
                       <strong>{t(target.health.installationFound ? "Detected" : "Not detected")}</strong>
                     </div>
                     {target.health.checks.map((check) => (
                       <div className="target-check" key={check.id}>
-                        <div><span>{check.label}</span><code title={check.path}>{check.path}</code></div>
+                        <div>
+                          <span>{check.label}</span>
+                          <OverflowTooltip className="target-check-path" text={check.path} />
+                        </div>
                         <strong>{t(check.exists ? (check.writable ? "Writable" : "Read-only") : "Missing")}</strong>
                       </div>
                     ))}
@@ -330,9 +461,10 @@ export const TargetWorkspace = ({
                             >
                               <span>
                                 <strong>{connection.name}</strong>
-                                <small title={connection.sourcePath}>
-                                  {connection.sourcePath}
-                                </small>
+                                <OverflowTooltip
+                                  className="target-native-mcp-path"
+                                  text={connection.sourcePath}
+                                />
                               </span>
                               <span>
                                 {t(connection.enabled ? "On" : "Off")}
@@ -344,9 +476,10 @@ export const TargetWorkspace = ({
                   </div>
                   {isManaged ? (
                     <footer className="target-diagnostics-actions">
-                      <button
+                      <Button
                         className="secondary-action"
-                        type="button"
+                        size="compact"
+                        variant="secondary"
                         onClick={() => {
                           stopManagingReturnFocusRef.current =
                             document.activeElement instanceof HTMLElement
@@ -357,7 +490,7 @@ export const TargetWorkspace = ({
                         }}
                       >
                         {t("Stop managing {{name}}", { name: target.name })}
-                      </button>
+                      </Button>
                     </footer>
                   ) : null}
                 </section>

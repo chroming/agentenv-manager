@@ -400,18 +400,24 @@ export const PreviewDialog = ({
             >
               <div className="preview-drift-actions">
                 {onAdoptTargetChanges ? (
-                  <button
+                  <Button
                     className="secondary-action"
-                    type="button"
+                    size="compact"
+                    variant="secondary"
                     onClick={onAdoptTargetChanges}
                   >
                     {t("Adopt compatible changes")}
-                  </button>
+                  </Button>
                 ) : null}
                 {onOpenRecovery ? (
-                  <button className="secondary-action" type="button" onClick={onOpenRecovery}>
+                  <Button
+                    className="secondary-action"
+                    size="compact"
+                    variant="secondary"
+                    onClick={onOpenRecovery}
+                  >
                     {t("Open recovery history")}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             </section>

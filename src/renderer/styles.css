@@ -848,14 +848,11 @@ h2 {
 
 .capture-safety-note {
   align-items: flex-start;
-  background: #f0faf5;
-  border: 1px solid #d9eee4;
-  border-radius: var(--radius-surface);
   color: #167451;
   display: grid;
   gap: 10px;
   grid-template-columns: 20px minmax(0, 1fr);
-  padding: 10px 12px;
+  padding: 2px 1px;
 }
 
 .capture-safety-note > span {
@@ -889,11 +886,10 @@ h2 {
 }
 
 .capture-review__summary {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--border-subtle);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  overflow: hidden;
 }
 
 .capture-review__summary > span {

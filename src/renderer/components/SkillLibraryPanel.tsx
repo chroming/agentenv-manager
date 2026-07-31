@@ -1820,7 +1820,7 @@ export const SkillLibraryPanel = ({
           <button
             className="secondary-action library-toolbar-action"
             type="button"
-            aria-label={t("Check updates")}
+            aria-label={t("Check for updates")}
             title={t("Check skill updates")}
             aria-busy={checkingAllUpdates}
             disabled={updateActivityBusy}
@@ -1831,7 +1831,7 @@ export const SkillLibraryPanel = ({
             ) : (
               <SearchCheck size={15} strokeWidth={2.2} />
             )}
-            <span>{t(checkingAllUpdates ? "Checking..." : "Check updates")}</span>
+            <span>{t(checkingAllUpdates ? "Checking..." : "Check for updates")}</span>
           </button>
           {updateableSkillIds.length > 0 ? (
             <button

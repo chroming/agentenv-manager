@@ -10,7 +10,7 @@ export const focusInitialActionMenuItem = (
     ? menu?.querySelector<HTMLElement>(preferredSelector)
     : undefined;
   const fallback = menu?.querySelector<HTMLElement>(actionMenuItemSelector);
-  (preferred ?? fallback)?.focus();
+  (preferred ?? fallback)?.focus({ preventScroll: true });
 };
 
 export const handleActionMenuKeyDown = (event: KeyboardEvent<HTMLElement>) => {

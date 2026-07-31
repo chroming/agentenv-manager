@@ -849,7 +849,7 @@ describe("SkillLibraryPanel", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
     expect(onCheckUpdates).toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Update all skills" }));
     expect(onPreviewAllLibrarySkillUpdates).toHaveBeenCalledWith([

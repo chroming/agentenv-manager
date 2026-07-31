@@ -48,21 +48,16 @@
 }
 
 .profile-skill-summary {
-  align-items: baseline;
+  align-items: center;
   display: flex;
   gap: 8px;
   min-width: 0;
 }
 
-.profile-skill-summary strong {
-  color: var(--text);
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-}
-
 .profile-skill-summary span {
   color: var(--muted);
   font-size: 11px;
+  line-height: 18px;
   white-space: nowrap;
 }
 

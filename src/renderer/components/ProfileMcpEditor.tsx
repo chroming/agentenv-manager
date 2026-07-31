@@ -1,5 +1,5 @@
 import { AlertTriangle, LoaderCircle, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import type {
   NativeMcpConnection,
   NativeMcpInspectionIssue,
@@ -12,6 +12,16 @@ import { Button, IconButton } from "./ui";
 import { ProductIcon } from "../productIcons";
 
 type McpSelectionMode = "agent" | "on" | "off";
+
+const mcpModeOptions: Array<{
+  label: "Agent" | "On" | "Off";
+  title: "Use Agent setting" | "Turn on in this Profile" | "Turn off in this Profile";
+  value: McpSelectionMode;
+}> = [
+  { label: "Agent", title: "Use Agent setting", value: "agent" },
+  { label: "On", title: "Turn on in this Profile", value: "on" },
+  { label: "Off", title: "Turn off in this Profile", value: "off" }
+];
 
 interface ProfileMcpEditorProps {
   target?: TargetInfo;
@@ -94,19 +104,46 @@ export const ProfileMcpEditor = ({
     });
   };
 
+  const handleModeKeyDown = (
+    event: KeyboardEvent<HTMLDivElement>,
+    name: string,
+    mode: McpSelectionMode
+  ) => {
+    const currentIndex = mcpModeOptions.findIndex((option) => option.value === mode);
+    let nextIndex: number | undefined;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = mcpModeOptions.length - 1;
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex = (currentIndex - 1 + mcpModeOptions.length) % mcpModeOptions.length;
+    }
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = (currentIndex + 1) % mcpModeOptions.length;
+    }
+    if (nextIndex === undefined) return;
+    event.preventDefault();
+    const nextMode = mcpModeOptions[nextIndex]!.value;
+    event.currentTarget
+      .querySelector<HTMLButtonElement>(`[data-mcp-mode="${nextMode}"]`)
+      ?.focus();
+    if (nextMode !== mode) updateMode(name, nextMode);
+  };
+
   return (
     <div className="profile-mcp-editor">
       <div className="profile-mcp-toolbar">
-        <strong>{t("MCP connections")}</strong>
+        <span className="profile-mcp-toolbar__scope">
+          {t("Configured in {{name}}", { name: target.name })}
+        </span>
         <span className="profile-mcp-toolbar__actions">
           {!canManage && policy.mode !== "ignore" ? (
-            <button
+            <Button
               className="secondary-action"
-              type="button"
+              size="compact"
+              variant="secondary"
               onClick={() => updatePolicy({ mode: "ignore", selections: policy.selections })}
             >
               {t("Remove override")}
-            </button>
+            </Button>
           ) : null}
           <IconButton
             label={t("Refresh MCP connections")}
@@ -175,25 +212,42 @@ export const ProfileMcpEditor = ({
                   </small>
                 </span>
                 {!managing ? null : canManage && connection.controllable ? (
-                  <select
-                    className={`profile-mcp-mode${mode === "agent" ? "" : " is-profile-override"}`}
+                  <div
+                    className={`profile-mcp-mode ui-segmented-control ui-segmented-control--compact${mode === "agent" ? "" : " is-profile-override"}`}
+                    role="radiogroup"
                     aria-label={t("{{name}} Profile behavior", { name: connection.name })}
-                    value={mode}
-                    disabled={!managing}
-                    onChange={(event) => updateMode(connection.name, event.target.value as McpSelectionMode)}
+                    onKeyDown={(event) => handleModeKeyDown(event, connection.name, mode)}
                   >
-                    <option value="agent">{t("Use Agent setting")}</option>
-                    <option value="on">{t("On")}</option>
-                    <option value="off">{t("Off")}</option>
-                  </select>
+                    {mcpModeOptions.map((option) => {
+                      const selected = option.value === mode;
+                      return (
+                        <button
+                          className={`profile-mcp-mode__option ui-segmented-control__option${selected ? " is-selected" : ""}`}
+                          data-mcp-mode={option.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          tabIndex={selected ? 0 : -1}
+                          title={t(option.title)}
+                          key={option.value}
+                          onClick={() => {
+                            if (!selected) updateMode(connection.name, option.value);
+                          }}
+                        >
+                          {t(option.label)}
+                        </button>
+                      );
+                    })}
+                  </div>
                 ) : mode !== "agent" ? (
-                  <button
+                  <Button
                     className="secondary-action profile-mcp-reset"
-                    type="button"
+                    size="compact"
+                    variant="secondary"
                     onClick={() => updateMode(connection.name, "agent")}
                   >
                     {t("Remove override")}
-                  </button>
+                  </Button>
                 ) : (
                   <span className="profile-mcp-agent-state">
                     {t(!connection.controllable && canManage

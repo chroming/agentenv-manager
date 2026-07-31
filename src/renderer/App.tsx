@@ -11,10 +11,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock3,
-  Copy,
-  ExternalLink,
   FolderOpen,
-  GitFork,
   HardDrive,
   History,
   LoaderCircle,
@@ -123,6 +120,7 @@ import {
 import { DataRootPath } from "./components/DataRootPath";
 import { DiagnosticIssueDialog } from "./components/DiagnosticIssueDialog";
 import { FreshnessStatus } from "./components/FreshnessStatus";
+import { GitHubConnectionSettings } from "./components/GitHubConnectionSettings";
 import { InfoTip } from "./components/InfoTip";
 import {
   ConversationWorkspace,
@@ -264,7 +262,7 @@ const AppContent = ({
 }: {
   onLocalePreferenceChange(locale: AppLocale): void;
 }) => {
-  const { t, formatDate, formatNumber } = useI18n();
+  const { t, formatDate } = useI18n();
   const [supportedTargets, setSupportedTargets] = useState<TargetDescriptor[]>([]);
   const [targets, setTargets] = useState<TargetInfo[]>([]);
   const targetNames = useMemo(
@@ -1340,8 +1338,10 @@ const AppContent = ({
 
   const openCreateFromTargetDialogNow = (
     targetId: string,
-    scope: "all" | "skills" = "all"
+    scope: "all" | "skills" = "all",
+    returnFocus?: HTMLElement | null
   ) => {
+    appModalFallbackFocusRef.current = returnFocus ?? null;
     const target = targets.find((item) => item.id === targetId);
     setProfileForm({
       targetId,
@@ -1360,14 +1360,15 @@ const AppContent = ({
 
   const openCreateFromTargetDialog = (
     targetId: string,
-    scope: "all" | "skills" = "all"
+    scope: "all" | "skills" = "all",
+    returnFocus?: HTMLElement | null
   ) => {
     const targetName = targets.find((item) => item.id === targetId)?.name ?? "Agent";
     guardProfileAction(
       scope === "skills"
         ? `manage ${targetName} Skills`
         : `create a profile from ${targetName}`,
-      () => openCreateFromTargetDialogNow(targetId, scope)
+      () => openCreateFromTargetDialogNow(targetId, scope, returnFocus)
     );
   };
 
@@ -4809,8 +4810,8 @@ const AppContent = ({
               onRefresh={refreshTargets}
               onConfigure={openAgentConfiguration}
               onReviewEnvironment={openEnvironmentReview}
-              onCreateProfileFromTarget={(targetId) =>
-                openCreateFromTargetDialog(targetId, "all")}
+              onCreateProfileFromTarget={(targetId, returnFocus) =>
+                openCreateFromTargetDialog(targetId, "all", returnFocus)}
               onPreviewRollback={previewSelectedRollback}
               onCancelRollback={() => {
                 setRollbackPreview(undefined);
@@ -4869,105 +4870,19 @@ const AppContent = ({
             {settingsCategory === "connections" ? (
               <>
                 <WorkspaceSyncSettings />
-                <section
-                  className="resource-section github-settings-section"
-                  id="github-connection-settings"
-                  tabIndex={-1}
-                  aria-label={t("GitHub OAuth settings")}
-                >
-                  <div className="settings-section-header github-account-header">
-                    <div className="github-account-identity">
-                      <span className="settings-service-icon" aria-hidden="true">
-                        <GitFork size={20} strokeWidth={2} />
-                      </span>
-                      <div>
-                        <div className="resource-heading">GitHub</div>
-                        <p className="settings-muted">
-                          {githubAuthStatus.state === "signed-in"
-                            ? githubAuthStatus.user
-                              ? t("Connected as {{login}}", { login: githubAuthStatus.user.login })
-                              : t("Connected; GitHub status is temporarily unavailable")
-                            : githubDeviceLogin ? t("Authorize AgentEnv Manager in your browser")
-                            : t("Connect for reliable GitHub imports and update checks")}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="github-settings-actions">
-                      {githubAuthStatus.state === "signed-in" ? (
-                        <button disabled={busy || githubLoginChecking} onClick={signOutGitHub} type="button">
-                          {t("Sign out")}
-                        </button>
-                      ) : !githubDeviceLogin ? (
-                        <button
-                          className="secondary-action"
-                          disabled={busy || githubLoginChecking}
-                          onClick={startGitHubLogin}
-                          type="button"
-                        >
-                          <GitFork size={15} strokeWidth={2.2} aria-hidden="true" />
-                          {githubLoginChecking ? t("Connecting...") : t("Sign in with GitHub")}
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                  {githubDeviceLogin ? (
-                    <div className="github-device-card">
-                      <button
-                        className={`github-device-code${githubCodeCopied ? " is-copied" : ""}`}
-                        type="button"
-                        aria-label={t("Copy GitHub device code {{code}}", { code: githubDeviceLogin.userCode })}
-                        onClick={copyGitHubDeviceCode}
-                      >
-                        <span>{t("Device code")}</span>
-                        <strong>{githubDeviceLogin.userCode}</strong>
-                        <span className="github-device-copy-state">
-                          {githubCodeCopied ? <CheckCircle2 size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-                          {githubCodeCopied ? t("Copied") : t("Copy")}
-                        </span>
-                      </button>
-                      <div className="github-device-status" role="status" aria-live="polite">
-                        <RefreshCw className={githubLoginChecking ? "is-spinning" : ""} size={15} aria-hidden="true" />
-                        <span>{githubLoginMessage || t("Waiting for authorization. This page updates automatically.")}</span>
-                      </div>
-                      <div className="github-device-actions">
-                        <button
-                          className="primary-button"
-                          onClick={() => window.agentEnv.openGitHubDevicePage(githubDeviceLogin.verificationUri)}
-                          type="button"
-                        >
-                          <ExternalLink size={15} aria-hidden="true" />
-                          {t("Open GitHub")}
-                        </button>
-                        <button disabled={githubLoginChecking} onClick={() => void pollGitHubLogin()} type="button">
-                          {t("Check now")}
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                  {githubAuthStatus.state === "signed-in" ? (
-                    <div className="github-connected-row" role="status">
-                      <span className="github-connected-indicator" aria-hidden="true" />
-                      <strong>{t("Connected")}</strong>
-                      {githubAuthStatus.rateLimit ? (
-                        <span>
-                          {t("{{remaining}} of {{limit}} API requests remaining · resets {{time}}", {
-                            remaining: formatNumber(githubAuthStatus.rateLimit.remaining),
-                            limit: formatNumber(githubAuthStatus.rateLimit.limit),
-                            time: formatDate(githubAuthStatus.rateLimit.resetAt)
-                          })}
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : githubLoginMessage && !githubDeviceLogin ? (
-                    <div className="github-login-result" role="status">{githubLoginMessage}</div>
-                  ) : null}
-                  {githubAuthStatus.error ? (
-                    <div className={`github-login-result${githubAuthStatus.verification === "unavailable" ? "" : " github-login-result--error"}`}
-                      role={githubAuthStatus.verification === "unavailable" ? "status" : "alert"}>
-                      {githubAuthStatus.error}
-                    </div>
-                  ) : null}
-                </section>
+                <GitHubConnectionSettings
+                  authStatus={githubAuthStatus}
+                  busy={busy}
+                  codeCopied={githubCodeCopied}
+                  deviceLogin={githubDeviceLogin}
+                  loginChecking={githubLoginChecking}
+                  loginMessage={githubLoginMessage}
+                  onCheckLogin={() => void pollGitHubLogin()}
+                  onCopyCode={() => void copyGitHubDeviceCode()}
+                  onOpenDevicePage={(url) => void window.agentEnv.openGitHubDevicePage(url)}
+                  onSignIn={() => void startGitHubLogin()}
+                  onSignOut={() => void signOutGitHub()}
+                />
               </>
             ) : null}
             {settingsCategory === "data" ? (
@@ -4979,10 +4894,14 @@ const AppContent = ({
                   <p className="settings-muted">{t("AgentEnv data and the recovery points created before local changes.")}</p>
                 </div>
                 <div className="settings-data-actions">
-                  <button className="secondary-action" type="button" disabled={busy} onClick={() => void window.agentEnv.openDataFolder()}>
-                    <FolderOpen size={15} strokeWidth={2.2} aria-hidden="true" />
+                  <Button
+                    className="secondary-action"
+                    disabled={busy}
+                    icon={<FolderOpen size={15} strokeWidth={2.2} aria-hidden="true" />}
+                    onClick={() => void window.agentEnv.openDataFolder()}
+                  >
                     {t("Open folder")}
-                  </button>
+                  </Button>
                 </div>
               </div>
               <DataRootPath />
@@ -5007,9 +4926,9 @@ const AppContent = ({
                       state={freshnessStates.backups}
                       verb="Refreshed"
                     />
-                    <button type="button" className="secondary-action" disabled={busy} onClick={openBackupManager}>
+                    <Button className="secondary-action" disabled={busy} onClick={openBackupManager}>
                       {t("Manage")}
-                    </button>
+                    </Button>
                   </span>
                 </div>
                 <label className="backup-settings-row" htmlFor="backup-retention-days">
@@ -5042,14 +4961,22 @@ const AppContent = ({
               <div className="settings-data-footer">
                 <span className="settings-field-note">{t("Data exports are stored outside AgentEnv and are never cleaned automatically.")}</span>
                 <div className="settings-data-actions">
-                  <button className="secondary-action" type="button" disabled={busy} onClick={() => void createAgentEnvDataBackup()}>
-                    <HardDrive size={15} strokeWidth={2.2} aria-hidden="true" />
+                  <Button
+                    className="secondary-action"
+                    disabled={busy}
+                    icon={<HardDrive size={15} strokeWidth={2.2} aria-hidden="true" />}
+                    onClick={() => void createAgentEnvDataBackup()}
+                  >
                     {t("Export data")}
-                  </button>
-                  <button className="secondary-action" type="button" disabled={busy} onClick={() => void selectAgentEnvDataRestore()}>
-                    <RefreshCw size={15} strokeWidth={2.2} aria-hidden="true" />
+                  </Button>
+                  <Button
+                    className="secondary-action"
+                    disabled={busy}
+                    icon={<RefreshCw size={15} strokeWidth={2.2} aria-hidden="true" />}
+                    onClick={() => void selectAgentEnvDataRestore()}
+                  >
                     {t("Restore data")}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </section>

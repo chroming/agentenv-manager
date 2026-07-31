@@ -33,12 +33,12 @@
 .profile-resource-policy {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin: 0 8px 0 0;
+  margin: 0 10px 0 0;
   width: auto;
 }
 
 .profile-resource-policy__option {
-  font-size: 12px;
+  font-size: 11px;
   overflow: hidden;
   padding: 0 6px;
   text-overflow: ellipsis;
@@ -82,14 +82,13 @@
 }
 
 .profile-composer-section__policy-note {
-  background: var(--surface-muted);
-  border-radius: var(--radius-control);
+  border-bottom: 1px solid var(--border-soft);
   color: var(--muted-strong);
   flex: 0 0 auto;
   font-size: 11px;
   line-height: 17px;
-  margin: 0 0 6px;
-  padding: 7px 9px;
+  margin: 0;
+  padding: 5px 7px 9px;
 }
 
 .profile-composer-section__policy-note + * {

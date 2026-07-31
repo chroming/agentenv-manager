@@ -259,7 +259,7 @@
   --profile-hero-height: 104px;
   --profile-hero-height-compact: 120px;
   --profile-icon-slot: 24px;
-  --profile-policy-column-width: clamp(228px, 55%, 264px);
+  --profile-policy-column-width: clamp(236px, 42%, 252px);
 }
 
 .app-shell--profiles .editor-panel {

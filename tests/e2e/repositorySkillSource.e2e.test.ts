@@ -228,8 +228,11 @@ describe("Repository Skill source", () => {
         const counts = row.querySelector<HTMLElement>(".skill-source-counts")!;
         const checked = row.querySelector<HTMLElement>(".skill-source-last-checked")!;
         const status = row.querySelector<HTMLElement>(".skill-source-status")!;
+        const action = row.querySelector<HTMLElement>(".skill-source-current-action")!;
         const more = row.querySelector<HTMLElement>(".skill-source-more")!;
         return {
+          actionHeaderLeft: headerCells[4]!.getBoundingClientRect().left,
+          actionLeft: action.getBoundingClientRect().left,
           checkedBelowIdentityTitle:
             checked.getBoundingClientRect().top > identity.getBoundingClientRect().top,
           checkedHeaderDisplay: getComputedStyle(headerCells[2]!).display,
@@ -240,7 +243,7 @@ describe("Repository Skill source", () => {
           countsLeft: counts.getBoundingClientRect().left,
           documentWidth: document.documentElement.scrollWidth,
           identityLeft: identity.getBoundingClientRect().left,
-          moreHeaderLeft: headerCells[4]!.getBoundingClientRect().left,
+          moreHeaderLeft: headerCells[5]!.getBoundingClientRect().left,
           moreLeft: more.getBoundingClientRect().left,
           moreRight: more.getBoundingClientRect().right,
           rowRight: row.getBoundingClientRect().right,
@@ -254,15 +257,16 @@ describe("Repository Skill source", () => {
       expect(geometry.rowScrollContained).toBe(true);
       expect(Math.abs(geometry.countsLeft - geometry.countsHeaderLeft)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.statusLeft - geometry.statusHeaderLeft)).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.actionLeft - geometry.actionHeaderLeft)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.moreLeft - geometry.moreHeaderLeft)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.moreRight - geometry.rowRight + 12)).toBeLessThanOrEqual(1);
       if (width === 920) {
-        expect(geometry.columnCount).toBe(6);
+        expect(geometry.columnCount).toBe(7);
         expect(geometry.checkedHeaderDisplay).toBe("none");
         expect(Math.abs(geometry.checkedLeft - geometry.identityLeft)).toBeLessThanOrEqual(1);
         expect(geometry.checkedBelowIdentityTitle).toBe(true);
       } else {
-        expect(geometry.columnCount).toBe(7);
+        expect(geometry.columnCount).toBe(8);
         expect(geometry.checkedHeaderDisplay).not.toBe("none");
         expect(Math.abs(geometry.checkedLeft - geometry.checkedHeaderLeft)).toBeLessThanOrEqual(1);
       }
@@ -349,7 +353,7 @@ describe("Repository Skill source", () => {
     const row = page.getByRole("group", { name: "Library item api-design-internal" });
     await repository.write("README.md", "Unrelated repository notes changed.\n");
     await repository.commit("unrelated change");
-    await page.getByRole("button", { name: "Check updates" }).click();
+    await page.getByRole("button", { name: "Check for updates" }).click();
     await page.getByText("All tracked skills are up to date", { exact: true })
       .waitFor({ state: "visible" });
     expect(await row.getByRole("button", { name: "Update api-design-internal" }).count())

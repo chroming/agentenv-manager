@@ -72,12 +72,20 @@
 
 .cleanup-bucket-heading {
   align-items: center;
-  background: var(--surface-muted);
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
   display: flex;
   gap: var(--space-2);
   min-height: 36px;
   padding: 6px 10px 6px 52px;
+}
+
+.cleanup-bucket-marker {
+  background: var(--muted);
+  border-radius: 50%;
+  flex: 0 0 6px;
+  height: 6px;
+  width: 6px;
 }
 
 .cleanup-bucket-copy {
@@ -116,15 +124,23 @@
 }
 
 .cleanup-bucket-heading--decision {
-  background: #fffaf1;
+  background: var(--surface);
 }
 
 .cleanup-bucket-heading--ready {
-  background: #f3faf7;
+  background: var(--surface);
 }
 
-.cleanup-bucket-heading--unmanaged {
-  background: var(--surface-muted);
+.cleanup-bucket-heading--decision .cleanup-bucket-marker {
+  background: var(--warning);
+}
+
+.cleanup-bucket-heading--ready .cleanup-bucket-marker {
+  background: var(--success);
+}
+
+.cleanup-bucket-heading--managed .cleanup-bucket-marker {
+  background: var(--accent);
 }
 
 .cleanup-bucket-disclosure {

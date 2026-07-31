@@ -48,6 +48,7 @@ export const CleanupBucketHeader = ({
         type="button"
         onClick={onToggle}
       >
+        <span className="cleanup-bucket-marker" aria-hidden="true" />
         <span className="cleanup-bucket-copy">
           <strong>{label}</strong>
           <span>{count}</span>
@@ -63,6 +64,7 @@ export const CleanupBucketHeader = ({
 
   return (
     <div className={`cleanup-bucket-heading cleanup-bucket-heading--${bucket}`}>
+      <span className="cleanup-bucket-marker" aria-hidden="true" />
       <div className="cleanup-bucket-copy">
         <strong>{label}</strong>
         <span>{count}</span>

@@ -5,7 +5,8 @@
   gap: 10px;
   grid-template-rows: auto auto minmax(0, 1fr);
   height: 100%;
-  max-width: 900px;
+  margin-inline: 0;
+  max-width: 780px;
   min-height: 0;
   width: 100%;
 }
@@ -280,7 +281,7 @@
   align-items: center;
   display: grid;
   gap: 20px;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 320px);
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
   min-height: 64px;
   padding: 9px 2px;
 }
@@ -324,7 +325,7 @@
   height: var(--control-height-default);
   min-height: var(--control-height-default);
   justify-self: end;
-  max-width: 320px;
+  max-width: 240px;
   width: 100%;
 }
 

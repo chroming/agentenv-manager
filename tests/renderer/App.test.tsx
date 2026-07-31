@@ -824,6 +824,17 @@ describe("App", () => {
     expect(
       within(workspace).getByRole("button", { name: "Configure OpenCode" })
     ).toBeInTheDocument();
+    expect(within(workspace).queryByRole("button", { name: "Capture" })).not.toBeInTheDocument();
+    const moreActions = within(workspace).getByRole("button", {
+      name: "More actions for OpenCode"
+    });
+    fireEvent.click(moreActions);
+    const agentMenu = screen.getByRole("menu", { name: "Agent actions" });
+    expect(within(agentMenu).getByRole("menuitem", { name: "Capture" })).toBeEnabled();
+    expect(within(agentMenu).getByRole("menuitem", { name: "Diagnostics" })).toBeEnabled();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menu", { name: "Agent actions" })).not.toBeInTheDocument();
+    expect(moreActions).toHaveFocus();
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(await within(workspace).findByText("Set up your first Agent")).toBeInTheDocument();
     expect(
@@ -1530,7 +1541,7 @@ describe("App", () => {
     expect(screen.queryByRole("complementary", { name: "Activation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Profile sections" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("1 update available"));
 
     const unrelatedReads = [
@@ -1579,7 +1590,7 @@ describe("App", () => {
 
     await openLibrary();
     await screen.findByRole("group", { name: "Library item github-reviewer" });
-    fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("GitHub request limited");
@@ -2336,8 +2347,9 @@ describe("App", () => {
       ).getByRole("radio", { name: "Use Profile" })
     );
     const behavior = await screen.findByLabelText("context7 Profile behavior");
-    expect(behavior).toHaveValue("agent");
-    expect(within(behavior).getByRole("option", { name: "Use Agent setting" })).toBeInTheDocument();
+    expect(within(behavior).getByRole("radio", { name: "Agent" })).toBeChecked();
+    expect(within(behavior).getByRole("radio", { name: "On" })).toBeInTheDocument();
+    expect(within(behavior).getByRole("radio", { name: "Off" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(api.saveProfile).toHaveBeenCalled());
     expect(
@@ -2345,7 +2357,7 @@ describe("App", () => {
     ).toEqual({ mode: "manage", selections: [] });
     vi.mocked(api.saveProfile).mockClear();
 
-    fireEvent.change(behavior, { target: { value: "off" } });
+    fireEvent.click(within(behavior).getByRole("radio", { name: "Off" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(api.saveProfile).toHaveBeenCalled());
@@ -3728,7 +3740,8 @@ describe("App", () => {
     render(<App />);
 
     await screen.findByRole("region", { name: "Agents" });
-    fireEvent.click(await screen.findByRole("button", { name: "Show OpenCode diagnostics" }));
+    fireEvent.click(await screen.findByRole("button", { name: "More actions for OpenCode" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Diagnostics" }));
     expect(screen.getByText("Detected via")).toBeInTheDocument();
     expect(screen.getByText("opencode command")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Stop managing OpenCode" }));

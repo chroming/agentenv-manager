@@ -934,7 +934,7 @@ try {
     "---\nname: react-best-practices\ndescription: Updated React review guidance.\n---\n\n# react-best-practices\n\nReview the available update before applying it.\n",
     "utf8"
   );
-  await page.getByRole("button", { name: "Check updates" }).click();
+  await page.getByRole("button", { name: "Check for updates" }).click();
   await page
     .getByRole("group", { name: "Library item react-best-practices" })
     .getByRole("button", { name: "Update react-best-practices" })
@@ -1381,7 +1381,8 @@ try {
   await page.getByRole("region", { name: "Agents", exact: true }).waitFor({
     state: "visible"
   });
-  await openCodeAgent.getByRole("button", { name: "Show OpenCode diagnostics" }).click();
+  await openCodeAgent.getByRole("button", { name: "More actions for OpenCode" }).click();
+  await page.getByRole("menuitem", { name: "Diagnostics" }).click();
   await openCodeAgent.getByRole("region", { name: "OpenCode diagnostics" }).waitFor({
     state: "visible"
   });
@@ -1403,7 +1404,12 @@ try {
   await capturePage(page, join(outputDir, "target-stop-managing-preview-920x620.png"));
   await page.keyboard.press("Escape");
   await stopManagingPreview.waitFor({ state: "hidden" });
-  await openCodeAgent.getByRole("button", { name: "Hide OpenCode diagnostics" }).click();
+  const openCodeMoreActions = openCodeAgent.getByRole("button", {
+    name: "More actions for OpenCode"
+  });
+  await openCodeMoreActions.scrollIntoViewIfNeeded();
+  await openCodeMoreActions.click();
+  await page.getByRole("menuitem", { name: "Hide diagnostics" }).click();
   await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("button", { name: /Recovery/ }).click();
   const recoveryDialog = page.getByRole("dialog", { name: "Recovery" });
@@ -1416,8 +1422,9 @@ try {
   await setWindowSize(page, windowHandle, 920, 620);
   await page
     .getByRole("article", { name: "Agent OpenCode" })
-    .getByRole("button", { name: "Create profile from OpenCode" })
+    .getByRole("button", { name: "More actions for OpenCode" })
     .click();
+  await page.getByRole("menuitem", { name: "Capture" }).click();
   const targetCaptureDialog = page.getByRole("dialog", { name: "Create profile from OpenCode" });
   await targetCaptureDialog.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "target-capture-setup-920x620.png"));

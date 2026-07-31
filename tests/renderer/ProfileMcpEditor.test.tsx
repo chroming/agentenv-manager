@@ -5,6 +5,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
   waitFor
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -83,7 +84,8 @@ describe("ProfileMcpEditor", () => {
       />
     );
 
-    expect(screen.getByText("MCP connections")).toBeInTheDocument();
+    expect(screen.getByText("Configured in OpenCode")).toBeInTheDocument();
+    expect(screen.getByText("No MCP connections are configured in OpenCode.")).toBeInTheDocument();
     const refresh = screen.getByRole("button", { name: "Refresh MCP connections" });
     fireEvent.click(refresh);
 
@@ -100,5 +102,49 @@ describe("ProfileMcpEditor", () => {
     });
     await waitFor(() => expect(refresh).toHaveAttribute("aria-busy", "false"));
     expect(refresh).toBeEnabled();
+  });
+
+  it("uses one keyboard-operable three-state control for each manageable connection", () => {
+    const onChange = vi.fn();
+    render(
+      <ProfileMcpEditor
+        target={target}
+        connections={[{
+          targetId: "opencode",
+          name: "docs",
+          scope: "user",
+          transport: "stdio",
+          enabled: true,
+          controllable: true,
+          sourcePath: "/tmp/home/.config/opencode/opencode.jsonc"
+        }]}
+        value={{
+          ...resources,
+          mcpByTarget: {
+            opencode: { mode: "manage", selections: [] }
+          }
+        }}
+        onChange={onChange}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    const modes = screen.getByRole("radiogroup", { name: "docs Profile behavior" });
+    expect(within(modes).getByRole("radio", { name: "Agent" })).toBeChecked();
+    fireEvent.click(within(modes).getByRole("radio", { name: "On" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...resources,
+      mcpByTarget: {
+        opencode: { mode: "manage", selections: [{ name: "docs", enabled: true }] }
+      }
+    });
+
+    fireEvent.keyDown(modes, { key: "ArrowLeft" });
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...resources,
+      mcpByTarget: {
+        opencode: { mode: "manage", selections: [{ name: "docs", enabled: false }] }
+      }
+    });
   });
 });

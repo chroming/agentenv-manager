@@ -503,14 +503,14 @@
   .skill-library-panel .library-table-row {
     column-gap: 10px;
     grid-template-columns:
-      minmax(170px, 1.2fr)
-      minmax(150px, 1fr)
-      minmax(128px, 0.82fr)
+      minmax(160px, 1.2fr)
+      minmax(136px, 1fr)
+      minmax(108px, 0.82fr)
+      78px
       32px;
   }
 
-  .skill-library-panel .library-table__head > span:nth-child(3),
-  .skill-library-panel .library-table__head > span:nth-child(5) {
+  .skill-library-panel .library-table__head > span:nth-child(3) {
     display: none;
   }
 
@@ -572,9 +572,9 @@
   }
 
   .skill-library-panel .library-status-cell {
-    display: flex;
+    display: grid;
     grid-column: 3;
-    grid-row: 1;
+    grid-row: 1 / span 2;
   }
 
   .skill-library-panel .library-status-detail {
@@ -582,12 +582,12 @@
   }
 
   .skill-library-panel .library-current-action-cell {
-    grid-column: 3;
-    grid-row: 2;
+    grid-column: 4;
+    grid-row: 1 / span 2;
   }
 
   .skill-library-panel .library-actions-cell {
-    grid-column: 4;
+    grid-column: 5;
     grid-row: 1 / span 2;
   }
 

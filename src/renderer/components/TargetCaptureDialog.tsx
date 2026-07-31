@@ -1,7 +1,6 @@
 import {
   ArrowLeft,
   CheckCircle2,
-  LoaderCircle,
   Monitor,
   ShieldCheck,
   TriangleAlert
@@ -15,6 +14,7 @@ import type {
 import { targetIconFor } from "./ProfileSidebar";
 import { useI18n } from "../i18n";
 import { isTargetInstalled } from "../../shared/targetHealth";
+import { Button } from "./ui";
 
 type CaptureActivity = "idle" | "reviewing" | "creating";
 
@@ -281,7 +281,9 @@ export const TargetCaptureDialog = ({
             <div className="capture-flow-error" role="alert">
               <TriangleAlert size={16} aria-hidden="true" />
               <span><strong>{t("Could not complete this step")}</strong><small>{flowError}</small></span>
-              <button type="button" disabled={isBusy} onClick={onRefreshReview}>{t("Refresh review")}</button>
+              <Button size="compact" variant="ghost" disabled={isBusy} onClick={onRefreshReview}>
+                {t("Refresh review")}
+              </Button>
             </div>
           ) : null}
         </div>
@@ -289,36 +291,37 @@ export const TargetCaptureDialog = ({
         <footer className="capture-dialog__footer ui-dialog-footer">
           <div>
             {isReview ? (
-              <button className="secondary-action" type="button" disabled={isBusy} onClick={onBack}>
-                <ArrowLeft size={15} aria-hidden="true" />
+              <Button
+                className="secondary-action"
+                disabled={isBusy}
+                icon={<ArrowLeft size={15} aria-hidden="true" />}
+                onClick={onBack}
+              >
                 {t("Back")}
-              </button>
+              </Button>
             ) : null}
           </div>
           <div>
-            <button ref={initialFocusRef} className="secondary-action" type="button" disabled={isBusy} onClick={onCancel}>{t("Cancel")}</button>
-            <button
-              className={`primary-action capture-dialog__submit${isBusy ? " is-working" : ""}`}
-              type="button"
-              aria-busy={isBusy}
+            <Button ref={initialFocusRef} className="secondary-action" disabled={isBusy} onClick={onCancel}>
+              {t("Cancel")}
+            </Button>
+            <Button
+              className="primary-action capture-dialog__submit"
+              busy={isBusy}
               disabled={isBusy || !target || !isTargetInstalled(target.health) || !name.trim() || Boolean(preview?.errors.length)}
+              variant="primary"
               onClick={isReview ? onCreate : onReview}
             >
-              <span className="capture-dialog__submit-icon" aria-hidden="true">
-                {isBusy ? <LoaderCircle className="is-spinning" size={15} /> : null}
-              </span>
-              <span aria-live="polite">
-                {t(
-                  activity === "reviewing"
-                    ? "Reviewing..."
-                    : activity === "creating"
-                      ? "Creating..."
-                      : isReview
-                        ? isSkillsOnly ? "Save setup" : "Save Profile"
-                        : "Review"
-                )}
-              </span>
-            </button>
+              {t(
+                activity === "reviewing"
+                  ? "Reviewing..."
+                  : activity === "creating"
+                    ? "Creating..."
+                    : isReview
+                      ? isSkillsOnly ? "Save setup" : "Save Profile"
+                      : "Review"
+              )}
+            </Button>
           </div>
         </footer>
       </section>

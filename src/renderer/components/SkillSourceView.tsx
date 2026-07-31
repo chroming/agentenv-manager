@@ -741,6 +741,7 @@ export const SkillSourceView = ({
             <span>{t("Skills")}</span>
             <span>{t("Last checked")}</span>
             <span>{t("Status")}</span>
+            <span>{t("Action")}</span>
             <span aria-label={t("More")} />
           </div>
         ) : null}
@@ -892,14 +893,36 @@ export const SkillSourceView = ({
                     ? t("Last check failed")
                     : group.checkedAt
                       ? formatDate(group.checkedAt)
-                      : t("Not checked")}
+                      : "—"}
                 </span>
                 <div className={`skill-source-status${group.error ? " is-error" : ""}${hasAttention ? " has-attention" : ""}`}>
+                  {isChecking ? (
+                    <LoaderCircle className="is-spinning" size={13} strokeWidth={2.2} />
+                  ) : group.error ? (
+                    <CircleAlert size={13} strokeWidth={2.2} />
+                  ) : hasAttention ? (
+                    <CircleAlert size={13} strokeWidth={2.2} />
+                  ) : group.checkedAt ? (
+                    <CheckCircle2 size={13} strokeWidth={2.2} />
+                  ) : (
+                    <RefreshCw size={13} strokeWidth={2.2} />
+                  )}
+                  {group.error ? (
+                    <OverflowTooltip
+                      className="skill-source-status-label"
+                      text={group.error}
+                      displayText={t(sourceStatus)}
+                    />
+                  ) : (
+                    <span className="skill-source-status-label">{t(sourceStatus)}</span>
+                  )}
+                </div>
+                <div className="skill-source-current-action">
                   {!isChecking && !group.error && reviewableUpdateIds.length > 0 ? (
                     <button
                       aria-label={t("Update all skills")}
                       aria-busy={reviewingGroup}
-                      className="skill-source-status-action"
+                      className="library-row-action"
                       type="button"
                       disabled={isChecking || activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
                       onClick={(event) => {
@@ -912,13 +935,11 @@ export const SkillSourceView = ({
                       ) : (
                         <RefreshCw size={13} strokeWidth={2.2} />
                       )}
-                      <span className="skill-source-status-label">
-                        {t(reviewingGroup ? "Preparing..." : "Update available")}
-                      </span>
+                      <span>{t(reviewingGroup ? "Preparing..." : "Update")}</span>
                     </button>
                   ) : !isChecking && !group.error && hasAttention ? (
                     <button
-                      className="skill-source-status-action"
+                      className="library-row-action"
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
@@ -926,12 +947,12 @@ export const SkillSourceView = ({
                       }}
                     >
                       <ChevronDown size={13} strokeWidth={2.2} />
-                      <span className="skill-source-status-label">{t("Changes available")}</span>
+                      <span>{t("Review changes")}</span>
                     </button>
                   ) : group.error ? (
                     <button
                       aria-busy={isChecking}
-                      className="skill-source-status-action"
+                      className="library-row-action"
                       type="button"
                       disabled={isChecking || activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
                       onClick={(event) => {
@@ -944,24 +965,9 @@ export const SkillSourceView = ({
                       ) : (
                         <CircleAlert size={13} strokeWidth={2.2} />
                       )}
-                      <OverflowTooltip
-                        className="skill-source-status-label"
-                        text={group.error}
-                        displayText={t(sourceStatus)}
-                      />
+                      <span>{t("Retry check")}</span>
                     </button>
-                  ) : (
-                    <>
-                      {isChecking ? (
-                        <LoaderCircle className="is-spinning" size={13} strokeWidth={2.2} />
-                      ) : group.checkedAt ? (
-                        <CheckCircle2 size={13} strokeWidth={2.2} />
-                      ) : (
-                        <RefreshCw size={13} strokeWidth={2.2} />
-                      )}
-                      <span className="skill-source-status-label">{t(sourceStatus)}</span>
-                    </>
-                  )}
+                  ) : null}
                 </div>
                 <div className="skill-source-more">
                   <IconButton

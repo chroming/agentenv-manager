@@ -131,7 +131,6 @@ export const SkillsEditor = ({
     >
       <header className="profile-skill-toolbar">
         <div className="profile-skill-summary">
-          <strong>{t("Skills")}</strong>
           <span>
             {t("{{count}} enabled", { count: enabledCount })}
             {value.skills.length > enabledCount
@@ -156,7 +155,7 @@ export const SkillsEditor = ({
               />
             )}
           >
-            {t(checkingSkillUpdates ? "Checking" : "Check updates")}
+            {t(checkingSkillUpdates ? "Checking" : "Check for updates")}
           </Button>
           <Button
             className="secondary-action"

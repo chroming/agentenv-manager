@@ -8,15 +8,18 @@
   border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
-  min-height: 44px;
-  padding: 5px 9px 7px 10px;
+  min-height: 38px;
+  padding: 3px 5px 5px 10px;
 }
 
-.profile-mcp-toolbar > strong {
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: var(--font-weight-medium);
-  line-height: 18px;
+.profile-mcp-toolbar__scope {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .profile-mcp-toolbar__actions {
@@ -50,7 +53,7 @@
   border-bottom: 1px solid var(--border-subtle, var(--border));
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(0, 1fr) 154px;
+  grid-template-columns: minmax(0, 1fr) 168px;
   min-height: 50px;
   padding: 6px 9px 6px 10px;
 }
@@ -90,23 +93,19 @@
 }
 
 .profile-mcp-mode {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  color: var(--text);
-  font: inherit;
-  font-size: 12px;
-  height: 32px;
-  min-height: 32px;
-  min-width: 0;
-  padding: 0 28px 0 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   width: 100%;
 }
 
 .profile-mcp-mode.is-profile-override {
-  border-color: #b9cff3;
-  color: var(--text);
-  font-weight: var(--font-weight-regular);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+
+.profile-mcp-mode__option {
+  font-size: 11px;
+  padding: 0 5px;
+  width: 100%;
 }
 
 .profile-mcp-readonly,
@@ -115,9 +114,18 @@
 }
 
 .profile-mcp-agent-state {
+  align-items: center;
+  display: inline-flex;
+  height: var(--control-height-compact);
+  justify-content: center;
   color: var(--muted);
   font-size: 11px;
   justify-self: end;
+  max-width: 168px;
+  overflow: hidden;
+  padding-inline: 8px;
+  text-overflow: ellipsis;
+  width: 168px;
 }
 
 .profile-mcp-reset {
@@ -157,11 +165,16 @@
 @container profile-workspace (max-width: 760px) {
   .profile-mcp-row {
     gap: 10px;
-    grid-template-columns: minmax(0, 1fr) minmax(128px, 154px);
+    grid-template-columns: minmax(0, 1fr) 150px;
   }
 
   .profile-mcp-row.is-unmanaged {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .profile-mcp-agent-state {
+    max-width: 150px;
+    width: 150px;
   }
 }
 
