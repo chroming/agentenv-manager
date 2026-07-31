@@ -41,6 +41,18 @@ describe("git command runner", () => {
     });
   });
 
+  it("prepends portable repository settings to every Git command", async () => {
+    const executable = await fakeGit('printf "%s\\n" "$@"');
+    const runner = createGitCommandRunner({
+      executablePath: executable,
+      argsPrefix: ["-c", "core.autocrlf=false"]
+    });
+
+    await expect(runner.run(["status"])).resolves.toMatchObject({
+      stdout: "-c\ncore.autocrlf=false\nstatus\n"
+    });
+  });
+
   it("redacts embedded URL credentials from command failures", async () => {
     const executable = await fakeGit(
       'printf "%s\\n" "fatal: https://token:secret@example.test/team/skills.git" >&2; exit 7'

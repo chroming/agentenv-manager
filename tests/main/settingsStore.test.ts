@@ -33,7 +33,7 @@ describe("settings store", () => {
     expect(await store.readSettings()).toEqual({
       locale: "system",
       conversationTerminal: "default",
-      skillSyncMethod: "symlink",
+      skillSyncMethod: "auto",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
       skillAutoCheckIntervalMinutes: 60,
@@ -88,6 +88,28 @@ describe("settings store", () => {
     await expect(upgradedStore.readSettings()).resolves.toEqual(
       expect.objectContaining({ enabledTargetIds: ["opencode"] })
     );
+  });
+
+  it("normalizes unsupported Windows terminal preferences", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-settings-windows-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "app-data"),
+      homeDir: join(root, "home")
+    });
+    await mkdir(paths.appDataRoot, { recursive: true });
+    await writeFile(
+      join(paths.appDataRoot, "settings.json"),
+      JSON.stringify({ conversationTerminal: "ghostty" }),
+      "utf8"
+    );
+    const store = createSettingsStore(paths, { platform: "win32" });
+
+    await expect(store.readSettings()).resolves.toMatchObject({
+      conversationTerminal: "default"
+    });
+    await expect(
+      store.updateSettings({ conversationTerminal: "ghostty" })
+    ).rejects.toThrow("not available");
   });
 
   it("normalizes per-Agent configuration roots and rejects relative paths", async () => {

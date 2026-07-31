@@ -1,5 +1,5 @@
 import { lstat, realpath, rm } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { materializeTargetResourcePolicy, profileResourceMode } from "../shared/profileResources";
 import { normalizeSkillKey } from "../shared/skillIdentity";
 import type {
@@ -14,6 +14,7 @@ import type {
   TargetState
 } from "../shared/types";
 import { pathEntryExists, pathExists } from "./fileUtils";
+import { isPathInside } from "./platformPaths";
 import { markerPathForFile } from "./ownershipMarkers";
 import { hashSkillContent } from "./skillContentHash";
 import { removeSkillDeployment } from "./skillDeployment";
@@ -103,10 +104,9 @@ export const completeSkillCollectionMigrationTransaction = async (
     throw new Error("Skill collection has no discovered Skills to migrate.");
   }
   if (
-    uniqueMembers.some((member) => {
-      const childPath = relative(normalizedCollectionPath, member.sharedPath);
-      return childPath === "" || childPath.startsWith("..");
-    })
+    uniqueMembers.some((member) =>
+      !isPathInside(normalizedCollectionPath, member.sharedPath)
+    )
   ) {
     throw new Error("Skill collection contains a path outside its reviewed link.");
   }

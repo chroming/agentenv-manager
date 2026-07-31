@@ -14,6 +14,7 @@ describe("application menu", () => {
     const exportDiagnostics = vi.fn();
     const items = allItems(createApplicationMenuTemplate({
       isDevelopment: false,
+      platform: "darwin",
       openSettings,
       exportDiagnostics
     }));
@@ -35,6 +36,7 @@ describe("application menu", () => {
   it("retains reload and developer tools only for the development server", () => {
     const items = allItems(createApplicationMenuTemplate({
       isDevelopment: true,
+      platform: "darwin",
       openSettings: vi.fn(),
       exportDiagnostics: vi.fn()
     }));
@@ -43,5 +45,21 @@ describe("application menu", () => {
       "forceReload",
       "toggleDevTools"
     ]));
+  });
+
+  it("uses conventional File and Help placement outside macOS", () => {
+    const template = createApplicationMenuTemplate({
+      isDevelopment: false,
+      platform: "win32",
+      openSettings: vi.fn(),
+      exportDiagnostics: vi.fn()
+    });
+    const items = allItems(template);
+
+    expect(template[0]?.label).toBe("File");
+    expect(template[0]?.role).not.toBe("appMenu");
+    expect(items.map((item) => item.role)).toContain("about");
+    expect(items.find((item) => item.accelerator === "CmdOrCtrl+,")?.label)
+      .toBe("Settings…");
   });
 });

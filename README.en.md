@@ -2,7 +2,7 @@
 
 [English](README.en.md) | [简体中文](README.md)
 
-AgentEnv Manager is a local-first macOS desktop application for organizing,
+AgentEnv Manager is a local-first desktop application for organizing,
 previewing, and switching reusable environments across local coding agents.
 
 An environment can include instruction files, Skills from a shared Library,
@@ -23,7 +23,7 @@ before first taking over an important Agent environment.
 | --- | --- |
 | macOS arm64 | Development, packaging, and packaged E2E verified |
 | macOS x64 | Source build expected; continuous release verification pending |
-| Windows / Linux | Not supported |
+| Windows x64 / Linux x64 | Platform support and native packaged CI are implemented; first hosted runner evidence is pending |
 | Signed public DMG | Not published yet |
 
 ## Highlights
@@ -47,7 +47,7 @@ before first taking over an important Agent environment.
 
 Requirements:
 
-- macOS;
+- macOS, Windows, or Linux;
 - Node.js 22.12 or newer;
 - npm 10 or newer;
 - Git.
@@ -80,6 +80,14 @@ Create an unsigned local application:
 npm run pack
 ```
 
+Create platform installers:
+
+```bash
+npm run dist:mac
+npm run dist:win
+npm run dist:linux
+```
+
 Create a signed and notarized release after configuring Apple credentials:
 
 ```bash
@@ -100,11 +108,16 @@ AGENTENV_GITHUB_OAUTH_CLIENT_ID=your_client_id npm run dist:mac
 ```
 
 This is a source/build override, not a setting end users need to manage.
-OAuth tokens are encrypted with macOS secure storage.
+OAuth tokens use Electron's operating-system secure storage and are never
+persisted as plaintext when secure storage is unavailable. Linux requires a
+Secret Service or KWallet backend; AgentEnv refuses Electron's `basic_text`
+fallback.
 
 ## Data and Security
 
-Application data is stored under `~/.config/agentenv-manager` by default.
+Application data defaults to `~/.config/agentenv-manager` on macOS,
+`${XDG_CONFIG_HOME:-~/.config}/agentenv-manager` on Linux, and `data/` under
+Electron userData on Windows.
 AgentEnv Manager does not include telemetry, advertising, or an
 application-operated cloud service.
 
@@ -117,8 +130,8 @@ Report vulnerabilities according to [SECURITY.md](SECURITY.md).
   `AEM-20260728-ABC123`. The error surface can copy or display selectable,
   redacted error details, the action, duration, and stack trace.
 - Use `Settings > Data > Diagnostics` to copy the latest issue, export a JSON
-  report, or open the local log folder. On macOS,
-  `Help > Export Diagnostics…` provides the same export.
+  report, or open the local log folder. `Help > Export Diagnostics…` provides
+  the same export.
 - Diagnostic logs stay on the device and rotate automatically. Reports exclude
   Instructions, Skill files, Conversations, MCP definitions, environment
   values, credentials, and clipboard content, and are never included in

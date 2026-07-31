@@ -17,7 +17,7 @@ body:
   - type: dropdown
     id: architecture
     attributes:
-      label: macOS architecture
+      label: Operating system and architecture
       options:
         - Apple silicon
         - Intel

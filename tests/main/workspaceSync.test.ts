@@ -1,5 +1,15 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readlink,
+  rm,
+  symlink,
+  writeFile
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -113,6 +123,10 @@ describe("Workspace Sync", () => {
       repository: "--upload-pack=malicious",
       branch: "main"
     })).toThrow();
+    expect(() => parseWorkspaceSyncConnection({
+      repository: "ftp://example.com/team/workspace.git",
+      branch: "main"
+    })).toThrow("not supported");
   });
 
   it("combines changes to different Profile sections without a conflict", async () => {
@@ -165,6 +179,17 @@ describe("Workspace Sync", () => {
     );
 
     await expect(validatePortableWorkspace(snapshot.root)).rejects.toThrow("reserved AgentEnv data");
+  });
+
+  it("hashes portable content independently of host executable bits", async () => {
+    const root = await tempRoot("agentenv-sync-mode-");
+    const script = join(root, "script.sh");
+    await writeFile(script, "#!/bin/sh\nexit 0\n", "utf8");
+    await chmod(script, 0o644);
+    const regularHash = await hashPortableTree(root);
+    await chmod(script, 0o755);
+
+    await expect(hashPortableTree(root)).resolves.toBe(regularHash);
   });
 
   it("rejects machine-local repository locators in an incoming portable snapshot", async () => {
@@ -267,6 +292,39 @@ describe("Workspace Sync", () => {
     expect(JSON.parse(await readFile(paths.skillSourcesPath, "utf8")).sources).toEqual([
       expect.objectContaining({ id: "source-local" })
     ]);
+  });
+
+  it("restores a Workspace root that was a directory link", async () => {
+    const appDataRoot = await tempRoot("agentenv-sync-link-");
+    const paths = createPaths({ appDataRoot, homeDir: join(appDataRoot, "home") });
+    const linkedProfiles = join(appDataRoot, "linked-profiles");
+    await Promise.all([
+      mkdir(join(linkedProfiles, "old"), { recursive: true }),
+      mkdir(join(paths.skillsLibraryDir, "old"), { recursive: true })
+    ]);
+    await writeFile(join(linkedProfiles, "old", "marker"), "linked profile");
+    await symlink(linkedProfiles, paths.profilesDir, "dir");
+    await writeFile(join(paths.skillsLibraryDir, "old", "SKILL.md"), "old skill");
+    await writeFile(
+      paths.skillSourcesPath,
+      canonicalJson({ formatVersion: 1, sources: [] })
+    );
+    const snapshot = await writeSnapshot(
+      await tempRoot("agentenv-sync-link-candidate-")
+    );
+    const transaction = createWorkspaceSyncTransaction({
+      paths,
+      backupStore: createBackupStore(paths)
+    });
+
+    const result = await transaction.apply(snapshot.root);
+    await transaction.restore(result.backupId);
+
+    expect((await lstat(paths.profilesDir)).isSymbolicLink()).toBe(true);
+    await expect(readlink(paths.profilesDir)).resolves.toBe(linkedProfiles);
+    await expect(
+      readFile(join(paths.profilesDir, "old", "marker"), "utf8")
+    ).resolves.toBe("linked profile");
   });
 
   it.each(["profiles", "skills", "sources", "verify"] as const)(

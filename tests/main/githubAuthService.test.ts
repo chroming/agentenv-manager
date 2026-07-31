@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createFileGitHubTokenStore,
-  createGitHubAuthService
+  createGitHubAuthService,
+  isSecureTokenStorageAvailable
 } from "../../src/main/githubAuthService";
 import { createPaths } from "../../src/main/paths";
 
@@ -29,6 +30,48 @@ const jsonResponse = (body: unknown, init?: ResponseInit) =>
   });
 
 describe("GitHub auth service", () => {
+  it("rejects Electron's unprotected Linux safeStorage fallback", () => {
+    expect(isSecureTokenStorageAvailable({
+      backend: "basic_text",
+      encryptionAvailable: true,
+      platform: "linux"
+    })).toBe(false);
+    expect(isSecureTokenStorageAvailable({
+      backend: "unknown",
+      encryptionAvailable: true,
+      platform: "linux"
+    })).toBe(false);
+    expect(isSecureTokenStorageAvailable({
+      backend: "gnome_libsecret",
+      encryptionAvailable: true,
+      platform: "linux"
+    })).toBe(true);
+    expect(isSecureTokenStorageAvailable({
+      encryptionAvailable: true,
+      platform: "win32"
+    })).toBe(true);
+  });
+
+  it("does not read a saved token after secure storage becomes unavailable", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-github-auth-"));
+    const paths = createPaths({ appDataRoot: root });
+    const cipher = {
+      decryptString: (buffer: Buffer) => buffer.toString("utf8"),
+      encryptString: (value: string) => Buffer.from(value, "utf8"),
+      isEncryptionAvailable: () => true
+    };
+    await createFileGitHubTokenStore(paths, cipher).writeToken("token-xyz");
+
+    const unavailableStore = createFileGitHubTokenStore(paths, {
+      ...cipher,
+      isEncryptionAvailable: () => false
+    });
+
+    await expect(unavailableStore.readToken()).rejects.toThrow(
+      "Secure storage is unavailable"
+    );
+  });
+
   it("clears an unreadable saved token without blocking local app startup", async () => {
     const clearToken = vi.fn(async () => undefined);
     const service = createGitHubAuthService({

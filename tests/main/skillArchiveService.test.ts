@@ -75,4 +75,25 @@ describe("skill archive service", () => {
     await expect(service.prepare(traversalPath)).rejects.toThrow("unsafe path");
     await expect(service.prepare(symlinkPath)).rejects.toThrow("symbolic links are not allowed");
   });
+
+  it("rejects names and case collisions that are unsafe on Windows", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-archive-test-"));
+    const reservedPath = join(root, "reserved.zip");
+    const collisionPath = join(root, "collision.zip");
+    await writeFile(reservedPath, createStoredZip([
+      { path: "review/CON.md", content: "# Reserved\n" }
+    ]));
+    await writeFile(collisionPath, createStoredZip([
+      { path: "review/SKILL.md", content: "# First\n" },
+      { path: "Review/skill.md", content: "# Second\n" }
+    ]));
+    const service = createSkillArchiveService();
+
+    await expect(service.prepare(reservedPath)).rejects.toThrow(
+      "unsupported on a target platform"
+    );
+    await expect(service.prepare(collisionPath)).rejects.toThrow(
+      "collide across platforms"
+    );
+  });
 });

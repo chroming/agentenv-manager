@@ -64,7 +64,12 @@ const isRepositoryAccessError = (error: unknown) => {
 
 const transportRunOptions = (transportLocator: string) =>
   /^(?:ssh:\/\/|[^@\s]+@[^:\s]+:)/i.test(transportLocator)
-    ? { env: { GIT_SSH_COMMAND: "ssh -o BatchMode=yes -o ConnectTimeout=10" } }
+    ? {
+        env: {
+          GIT_SSH_COMMAND: "ssh -o BatchMode=yes -o ConnectTimeout=10",
+          GIT_SSH_VARIANT: "ssh"
+        }
+      }
     : {};
 
 const accessFailureMessage = (attempts: Array<{ transport: string; error: unknown }>) => {

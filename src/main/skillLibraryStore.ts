@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Dirent } from "node:fs";
 import { cp, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { SafeIdSchema } from "../shared/schemas";
 import type {
   AgentEnvSettings,
@@ -115,6 +115,11 @@ import {
   type GitHubTreeResponse,
   type ParsedGitHubSkillSource
 } from "./githubSkillClient";
+import {
+  canonicalPathKey,
+  isPathInside,
+  pathsEqual
+} from "./platformPaths";
 import { mergeInventoryLocation } from "./skillInventoryLocation";
 import { createSkillPolicyStore } from "./skillPolicyStore";
 
@@ -253,7 +258,7 @@ const RECENT_UPDATE_CHECK_TTL_MS = 2 * 60 * 1000;
 const DEFAULT_SETTINGS: AgentEnvSettings = {
   locale: "system",
   conversationTerminal: "default",
-  skillSyncMethod: "symlink",
+  skillSyncMethod: "auto",
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,
   skillAutoCheckIntervalMinutes: 60,
@@ -1071,11 +1076,10 @@ export const createSkillLibraryStore = (
     ].filter((path): path is string => Boolean(path));
     for (const protectedRoot of protectedRoots) {
       const canonicalProtectedRoot = await realpath(protectedRoot).catch(() => resolve(protectedRoot));
-      const rootToProtected = relative(canonicalRoot, canonicalProtectedRoot);
-      const protectedToRoot = relative(canonicalProtectedRoot, canonicalRoot);
-      const overlaps = [rootToProtected, protectedToRoot].some(
-        (path) => path === "" || (path !== ".." && !path.startsWith("../") && !path.startsWith("..\\"))
-      );
+      const overlaps =
+        pathsEqual(canonicalRoot, canonicalProtectedRoot) ||
+        isPathInside(canonicalRoot, canonicalProtectedRoot) ||
+        isPathInside(canonicalProtectedRoot, canonicalRoot);
       if (overlaps) {
         throw new Error(
           "Choose a source folder outside Agent Skill locations and the AgentEnv Library"
@@ -1266,25 +1270,26 @@ export const createSkillLibraryStore = (
       const sourcePath = resolve(entry.sourcePath);
       const backupPath = resolve(entry.backupPath);
       const sourceAllowed = allowedRoots.some(
-        (root) => dirname(sourcePath) === root && relative(root, sourcePath).length > 0
+        (root) =>
+          pathsEqual(dirname(sourcePath), root) &&
+          isPathInside(root, sourcePath)
       );
-      const backupAllowed = relative(backupLocationsRoot, backupPath);
+      const backupPathKey = canonicalPathKey(backupPath);
       const backupNameMatch = basename(backupPath).match(/^\d+-(.+)$/);
       if (
         !sourceAllowed ||
-        dirname(backupPath) !== backupLocationsRoot ||
+        !pathsEqual(dirname(backupPath), backupLocationsRoot) ||
         backupNameMatch?.[1] !== basename(sourcePath) ||
-        seenBackupPaths.has(backupPath) ||
-        backupAllowed.startsWith("..") ||
-        backupAllowed.includes("/../")
+        seenBackupPaths.has(backupPathKey) ||
+        !isPathInside(backupLocationsRoot, backupPath)
       ) {
         throw new Error(`Skill cleanup backup contains an unsafe path: ${safeId}`);
       }
-      seenBackupPaths.add(backupPath);
+      seenBackupPaths.add(backupPathKey);
     }
     if (manifest.libraryBackupPath) {
       const expected = resolve(backupDir, "library", safeLibraryId);
-      if (resolve(manifest.libraryBackupPath) !== expected) {
+      if (!pathsEqual(manifest.libraryBackupPath, expected)) {
         throw new Error(`Skill cleanup backup contains an unsafe Library path: ${safeId}`);
       }
     }

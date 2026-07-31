@@ -75,11 +75,18 @@ export const parseOpenCodeExportMessages = (value: any): ConversationMessage[] =
   });
 };
 
-const opencodeDataDirs = (homeDir: string) => {
+const opencodeDataDirs = (
+  homeDir: string,
+  platform: NodeJS.Platform = process.platform,
+  environment?: NodeJS.ProcessEnv
+) => {
   const dirs = [
     join(homeDir, ".local", "share", "opencode"),
-    ...(process.env.XDG_DATA_HOME && homeDir === process.env.HOME
-      ? [join(process.env.XDG_DATA_HOME, "opencode")]
+    ...(environment?.XDG_DATA_HOME
+      ? [join(environment.XDG_DATA_HOME, "opencode")]
+      : []),
+    ...(platform === "win32" && environment?.LOCALAPPDATA
+      ? [join(environment.LOCALAPPDATA, "opencode")]
       : [])
   ];
   return [...new Set(dirs)];
@@ -101,11 +108,11 @@ const listDatabases = async (dataDir: string) => {
 };
 
 const discoverSqlite = async (
-  homeDir: string
+  dataDirs: string[]
 ): Promise<AgentConversationCandidate[]> => {
   const candidates: AgentConversationCandidate[] = [];
   const failures: string[] = [];
-  for (const dataDir of opencodeDataDirs(homeDir)) {
+  for (const dataDir of dataDirs) {
     for (const dbPath of await listDatabases(dataDir)) {
       try {
         for (const session of await listOpenCodeSqliteSessions(dbPath)) {
@@ -143,14 +150,11 @@ const discoverSqlite = async (
   return candidates;
 };
 
-const legacyStorageRoots = (homeDir: string) =>
-  opencodeDataDirs(homeDir).map((dataDir) => join(dataDir, "storage"));
-
 const discoverLegacy = async (
-  homeDir: string
+  dataDirs: string[]
 ): Promise<AgentConversationCandidate[]> => {
   const candidates: AgentConversationCandidate[] = [];
-  for (const storageRoot of legacyStorageRoots(homeDir)) {
+  for (const storageRoot of dataDirs.map((dataDir) => join(dataDir, "storage"))) {
     const sessionRoot = join(storageRoot, "session");
     for (const path of await listFilesRecursively(
       sessionRoot,
@@ -290,12 +294,13 @@ const readLegacyMessages = async (
 
 export const createOpenCodeConversationCapability = (): AgentConversationCapability => ({
   historyDetail: "full",
-  discover: async ({ homeDir, executablePath }) => {
+  discover: async ({ homeDir, executablePath, platform, environment }) => {
+    const dataDirs = opencodeDataDirs(homeDir, platform, environment);
     const localCandidates: AgentConversationCandidate[] = [];
     const localErrors: string[] = [];
     for (const discover of [discoverSqlite, discoverLegacy]) {
       try {
-        localCandidates.push(...await discover(homeDir));
+        localCandidates.push(...await discover(dataDirs));
       } catch (error) {
         localErrors.push(error instanceof Error ? error.message : String(error));
       }
@@ -310,7 +315,7 @@ export const createOpenCodeConversationCapability = (): AgentConversationCapabil
       throw new Error(localErrors.join("; "));
     }
     const localRootObserved = (await Promise.all(
-      opencodeDataDirs(homeDir).map(async (path) => {
+      dataDirs.map(async (path) => {
         try {
           return (await stat(path)).isDirectory();
         } catch (error) {

@@ -19,7 +19,7 @@ The evidence layers and Target conformance gate are defined in
 
 ## 1. Product Read
 
-AgentEnv Manager is a local-first macOS desktop tool for technical users who
+AgentEnv Manager is a local-first macOS, Windows, and Linux desktop tool for technical users who
 need to understand, organize, and safely apply reusable Agent environments.
 
 The core job is:
@@ -483,7 +483,8 @@ Rules:
 
 - [ ] Installed detection distinguishes command availability from directory
   existence.
-- [ ] GUI process discovery works for packaged macOS installations.
+- [ ] Command discovery works from packaged desktop-process environments on every supported platform.
+- [ ] Compatible GUI installation evidence remains platform-specific and never blocks command discovery elsewhere.
 - [ ] Agent rows use one list geometry and diagnostics expand independently.
 - [ ] Capture, Profile, diagnostics, recovery, and More have distinct hierarchy.
 - [ ] Capture preview shows ignored, imported, externally retained, broken, and

@@ -941,7 +941,7 @@ export const SkillLibraryPanel = ({
       ? t("Review shared compatibility copies before Profiles can control them.")
       : t("Review local Skill copies, add a canonical version to Library, and remove redundant copies with a restorable backup.");
   const cleanupListTitle =
-    cleanupScope === "shared" ? t("Shared Skills on this Mac") : t("Skills on this Mac");
+    cleanupScope === "shared" ? t("Shared Skills on this device") : t("Skills on this device");
   const cleanupEmptyCopy =
     cleanupScope === "shared"
       ? t("No shared Skills need review.")

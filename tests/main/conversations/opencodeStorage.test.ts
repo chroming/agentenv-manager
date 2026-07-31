@@ -24,8 +24,10 @@ const contextFor = (homeDir: string): AgentConversationContext => ({
   }
 });
 
-const createTestDatabase = async (homeDir: string) => {
-  const dataDir = join(homeDir, ".local", "share", "opencode");
+const createTestDatabase = async (
+  homeDir: string,
+  dataDir = join(homeDir, ".local", "share", "opencode")
+) => {
   const dbPath = join(dataDir, "opencode.db");
   await mkdir(dataDir, { recursive: true });
   const database = new DatabaseSync(dbPath);
@@ -74,6 +76,24 @@ const createTestDatabase = async (homeDir: string) => {
 };
 
 describe("OpenCode local conversation storage", () => {
+  it("discovers the native Windows LocalAppData database location", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-windows-storage-"));
+    const localAppData = join(root, "AppData", "Local");
+    await createTestDatabase(root, join(localAppData, "opencode"));
+    const capability = createOpenCodeConversationCapability();
+    const context = {
+      ...contextFor(root),
+      platform: "win32" as const,
+      environment: { LOCALAPPDATA: localAppData }
+    };
+
+    const discovery = await capability.discover(context);
+
+    expect(discovery.candidates).toEqual([
+      expect.objectContaining({ recordId: "session-1" })
+    ]);
+  });
+
   it("reads top-level SQLite sessions off the main thread and ignores child sessions", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-opencode-storage-"));
     const dataDir = join(root, ".local", "share", "opencode");

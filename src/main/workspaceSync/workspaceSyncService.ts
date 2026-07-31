@@ -270,9 +270,9 @@ export const createWorkspaceSyncService = (input: {
     let checked: CheckedWorkspace | undefined;
     try {
       checked = await performCheck();
-      if (!checked.remote) throw new Error("The remote Workspace is empty. Publish this Mac first.");
+      if (!checked.remote) throw new Error("The remote Workspace is empty. Publish this device first.");
       if (updateInput.expectedRemoteRevision !== undefined && updateInput.expectedRemoteRevision !== checked.remoteRevision) {
-        throw new Error("The remote Workspace changed. Review it again before updating this Mac.");
+        throw new Error("The remote Workspace changed. Review it again before updating this device.");
       }
       if (checked.plan.review.liveSkillIds.length && !updateInput.acceptLiveSkillUpdates) {
         throw new Error("This update changes linked Skills immediately. Confirm the live Agent impact first.");
@@ -333,7 +333,7 @@ export const createWorkspaceSyncService = (input: {
     try {
       checked = await performCheck();
       const blockers = checked.plan.review.changes.filter((change) => change.direction === "remote" || change.direction === "conflict");
-      if (blockers.length) throw new Error("Review and update this Mac before publishing over remote changes.");
+      if (blockers.length) throw new Error("Review and update this device before publishing over remote changes.");
       const revision = await (await loadTransport()).publish({
         connection: { repository: checked.state.repository, branch: checked.state.branch },
         snapshotRoot: checked.local.root,

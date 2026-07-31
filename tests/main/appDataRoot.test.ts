@@ -21,10 +21,35 @@ describe("app data root", () => {
     const resolved = resolveAppDataRoot({
       env: {},
       homeDir: "/Users/tester",
+      platform: "darwin",
       userDataDir: "/Users/tester/Library/Application Support/AgentEnv Manager"
     });
 
     expect(resolved).toBe("/Users/tester/.config/agentenv-manager");
+  });
+
+  it("uses XDG_CONFIG_HOME on Linux", () => {
+    const resolved = resolveAppDataRoot({
+      env: { XDG_CONFIG_HOME: "/home/tester/.xdg-config" },
+      homeDir: "/home/tester",
+      platform: "linux",
+      userDataDir: "/home/tester/.config/AgentEnv Manager"
+    });
+
+    expect(resolved).toBe("/home/tester/.xdg-config/agentenv-manager");
+  });
+
+  it("keeps Windows data under Electron userData", () => {
+    const resolved = resolveAppDataRoot({
+      env: {},
+      homeDir: String.raw`C:\Users\tester`,
+      platform: "win32",
+      userDataDir: String.raw`C:\Users\tester\AppData\Roaming\AgentEnv Manager`
+    });
+
+    expect(resolved).toBe(
+      String.raw`C:\Users\tester\AppData\Roaming\AgentEnv Manager\data`
+    );
   });
 
   it("keeps AGENTENV_DATA_ROOT as an explicit override", () => {

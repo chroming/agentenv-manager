@@ -97,6 +97,8 @@ describe("package metadata", () => {
     const packageJson = JSON.parse(
       await readFile(join(process.cwd(), "package.json"), "utf8")
     ) as {
+      author?: { name?: string; email?: string };
+      homepage?: string;
       scripts?: Record<string, string>;
       devDependencies?: Record<string, string>;
       build?: {
@@ -110,21 +112,41 @@ describe("package metadata", () => {
           hardenedRuntime?: boolean;
           notarize?: boolean;
         };
+        win?: { icon?: string; target?: string[] };
+        nsis?: {
+          oneClick?: boolean;
+          perMachine?: boolean;
+          allowToChangeInstallationDirectory?: boolean;
+        };
+        linux?: {
+          icon?: string;
+          target?: string[];
+          executableName?: string;
+        };
       };
     };
 
     expect(packageJson.devDependencies).toHaveProperty("electron-builder");
+    expect(packageJson.author).toMatchObject({
+      name: "AgentEnv Manager Contributors",
+      email: expect.stringMatching(/@/)
+    });
+    expect(packageJson.homepage).toMatch(/^https:\/\//);
     expect(packageJson.scripts?.["icons:mac"]).toBe(
       "swift scripts/generate-mac-icon.swift"
     );
     expect(packageJson.scripts?.pack).toBe(
-      "npm run icons:mac && npm run build && electron-builder --dir --config.electronDist=node_modules/electron/dist"
+      "npm run build && electron-builder --dir --config.electronDist=node_modules/electron/dist"
     );
     expect(packageJson.scripts?.dist).toBe(
-      "npm run icons:mac && npm run build && electron-builder --config.electronDist=node_modules/electron/dist"
+      "npm run build && electron-builder --config.electronDist=node_modules/electron/dist"
     );
     expect(packageJson.scripts?.["dist:mac"]).toBe(
       "npm run icons:mac && npm run build && electron-builder --mac --config.electronDist=node_modules/electron/dist"
+    );
+    expect(packageJson.scripts?.["dist:win"]).toContain("electron-builder --win nsis");
+    expect(packageJson.scripts?.["dist:linux"]).toContain(
+      "electron-builder --linux AppImage deb"
     );
     expect(packageJson.scripts?.["dist:mac:signed"]).toBe(
       "node scripts/build-signed-mac.mjs"
@@ -141,6 +163,20 @@ describe("package metadata", () => {
         target: ["dmg", "zip"],
         hardenedRuntime: true,
         notarize: true
+      },
+      win: {
+        icon: "build/icon.png",
+        target: ["nsis"]
+      },
+      nsis: {
+        oneClick: false,
+        perMachine: false,
+        allowToChangeInstallationDirectory: true
+      },
+      linux: {
+        icon: "build/icon.png",
+        target: ["AppImage", "deb"],
+        executableName: "agentenv-manager"
       }
     });
     expect(packageJson.build?.mac?.identity).toBeUndefined();

@@ -2,12 +2,14 @@ import type { BrowserWindow, MenuItemConstructorOptions } from "electron";
 
 export interface ApplicationMenuDependencies {
   isDevelopment: boolean;
+  platform?: NodeJS.Platform;
   openSettings(): void;
   exportDiagnostics(): void;
 }
 
 export const createApplicationMenuTemplate = ({
   isDevelopment,
+  platform = process.platform,
   openSettings,
   exportDiagnostics
 }: ApplicationMenuDependencies): MenuItemConstructorOptions[] => {
@@ -21,6 +23,54 @@ export const createApplicationMenuTemplate = ({
     );
   }
   viewSubmenu.push({ role: "resetZoom" }, { role: "zoomIn" }, { role: "zoomOut" });
+
+  const editMenu: MenuItemConstructorOptions = {
+    role: "editMenu",
+    submenu: [
+      { role: "undo" },
+      { role: "redo" },
+      { type: "separator" },
+      { role: "cut" },
+      { role: "copy" },
+      { role: "paste" },
+      { role: "selectAll" }
+    ]
+  };
+  const viewMenu: MenuItemConstructorOptions = {
+    role: "viewMenu",
+    submenu: viewSubmenu
+  };
+  if (platform !== "darwin") {
+    return [
+      {
+        label: "File",
+        submenu: [
+          {
+            label: "Settings…",
+            accelerator: "CmdOrCtrl+,",
+            click: openSettings
+          },
+          { type: "separator" },
+          { role: "close" },
+          { role: "quit" }
+        ]
+      },
+      editMenu,
+      viewMenu,
+      { role: "windowMenu" },
+      {
+        role: "help",
+        submenu: [
+          { role: "about" },
+          { type: "separator" },
+          {
+            label: "Export Diagnostics…",
+            click: exportDiagnostics
+          }
+        ]
+      }
+    ];
+  }
 
   return [
     {
@@ -47,22 +97,8 @@ export const createApplicationMenuTemplate = ({
       role: "fileMenu",
       submenu: [{ role: "close" }]
     },
-    {
-      role: "editMenu",
-      submenu: [
-        { role: "undo" },
-        { role: "redo" },
-        { type: "separator" },
-        { role: "cut" },
-        { role: "copy" },
-        { role: "paste" },
-        { role: "selectAll" }
-      ]
-    },
-    {
-      role: "viewMenu",
-      submenu: viewSubmenu
-    },
+    editMenu,
+    viewMenu,
     {
       role: "windowMenu",
       submenu: [

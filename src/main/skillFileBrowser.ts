@@ -1,5 +1,5 @@
 import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
-import { basename, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, isAbsolute, join, resolve } from "node:path";
 import { SafeIdSchema } from "../shared/schemas";
 import type {
   SkillFileContent,
@@ -7,15 +7,14 @@ import type {
 } from "../shared/types";
 import type { AgentEnvPaths } from "./paths";
 import { resolveSkillsLibraryDir, type SettingsStore } from "./settingsStore";
+import { isPathInside } from "./platformPaths";
 
 const MAX_TREE_ENTRIES = 2_000;
 const MAX_PREVIEW_BYTES = 1024 * 1024;
 const HIDDEN_LIBRARY_FILES = new Set([".agentenv-skill.json", ".agentenv-owner.json"]);
 
-const isContained = (root: string, path: string) => {
-  const child = relative(root, path);
-  return child.length > 0 && !child.startsWith("..") && !isAbsolute(child);
-};
+const isContained = (root: string, path: string) =>
+  isPathInside(root, path);
 
 const skillRootFor = async (
   paths: AgentEnvPaths,

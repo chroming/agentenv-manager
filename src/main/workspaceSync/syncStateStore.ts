@@ -4,21 +4,16 @@ import { z } from "zod";
 import type { WorkspaceSyncConnectInput } from "../../shared/workspaceSync";
 import type { AgentEnvPaths } from "../paths";
 import { isMissingFileError, writeAtomic } from "../fileUtils";
+import { parseRepositoryLocation } from "../skillSources/repositoryLocation";
 
 const RepositorySchema = z.string().trim().min(1).max(2_048).superRefine((value, context) => {
-  if (value.startsWith("-")) {
-    context.addIssue({ code: "custom", message: "Repository URL cannot begin with a command option" });
-    return;
-  }
   try {
-    const url = new URL(value);
-    if (url.password || ((url.protocol === "http:" || url.protocol === "https:") && url.username)) {
-      context.addIssue({ code: "custom", message: "Repository URL cannot contain credentials" });
-    }
-  } catch {
-    if (!value.startsWith("/") && !/^[\w.-]+@[\w.-]+:.+/.test(value)) {
-      context.addIssue({ code: "custom", message: "Repository must be an HTTPS, SSH, file, or absolute local Git URL" });
-    }
+    parseRepositoryLocation(value, { allowLocal: true });
+  } catch (error) {
+    context.addIssue({
+      code: "custom",
+      message: error instanceof Error ? error.message : String(error)
+    });
   }
 });
 

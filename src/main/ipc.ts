@@ -8,7 +8,7 @@ import {
   type MenuItemConstructorOptions
 } from "electron";
 import { stat } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type { ActivationService } from "./activationService";
 import type { BackupMaintenanceService } from "./backupMaintenanceService";
 import type { BackupStore } from "./backupStore";
@@ -67,6 +67,7 @@ import {
   resolveSharedSkillLocation
 } from "./targets/sharedSkillLocations";
 import type { RuntimeDiagnostics } from "./runtimeDiagnostics";
+import { isPathInside, pathsEqual } from "./platformPaths";
 
 export interface IpcServices {
   profileStore: ProfileStore;
@@ -700,8 +701,10 @@ export const registerIpcHandlers = ({
         .filter((path): path is string => Boolean(path))
         .map((path) => resolve(path));
       const isAllowed = allowedRoots.some((root) => {
-        const child = relative(root, targetDir);
-        return child.length > 0 && !child.startsWith("..") && !child.includes("/../") && dirname(targetDir) === root;
+        return (
+          isPathInside(root, targetDir) &&
+          pathsEqual(dirname(targetDir), root)
+        );
       });
       if (!isAllowed || !basename(targetDir)) {
         throw new Error(`Skill cleanup path is outside ${target.name}: ${targetDir}`);

@@ -18,7 +18,7 @@ AgentEnv Manager 是一个本地桌面客户端，用来管理和切换本机 ag
 
 - macOS arm64：开发、打包和 packaged e2e 已验证。
 - macOS x64：源码支持构建，但尚未进入持续发布验证。
-- Windows / Linux：当前不支持。
+- Windows x64 / Linux x64：已实现平台路径、命令发现、链接策略、原生菜单、终端启动和安装包目标，并配置原生 runner 的 packaged e2e；首次 CI 结果产生前仍视为待验证。
 - 正式签名和 notarization 的公开安装包尚未发布。
 
 ## 功能
@@ -97,13 +97,13 @@ Pi 使用 `~/.pi/agent`，并兼容 `PI_CODING_AGENT_DIR`、`PI_CODING_AGENT_SES
 ### 界面语言
 
 - 支持 English、简体中文和繁體中文。
-- 首次运行默认跟随 macOS 系统语言；不支持的系统语言回退为 English。
+- 首次运行默认跟随操作系统语言；不支持的系统语言回退为 English。
 - 可在 Settings > Appearance > Language 中即时切换，选择会持久化，无需重启应用。
 
 ### 故障排查
 
 - 运行时操作失败会显示一个形如 `AEM-20260728-ABC123` 的诊断编号。错误消息上的复制和详情入口会提供可选择的脱敏错误、动作、耗时与调用栈。
-- 在 `Settings > Data > Diagnostics` 可以复制最近一次问题、导出 JSON 报告或打开本机日志目录；macOS 的 `Help > Export Diagnostics…` 也可以直接导出。
+- 在 `Settings > Data > Diagnostics` 可以复制最近一次问题、导出 JSON 报告或打开本机日志目录；原生 `Help > Export Diagnostics…` 也可以直接导出。
 - 诊断日志保存在本机并自动轮转。报告不会包含指令、Skill 文件、对话、MCP 定义、环境变量、凭据或剪贴板内容，Workspace Sync 也不会同步它。
 - 反馈另一台设备的问题时，请同时提供诊断编号和导出的 JSON 报告；不需要手工寻找或修改 Agent 配置文件。
 
@@ -126,10 +126,10 @@ Pi 使用 `~/.pi/agent`，并兼容 `PI_CODING_AGENT_DIR`、`PI_CODING_AGENT_SES
 
 要求：
 
-- macOS
+- macOS、Windows 或 Linux
 - Node.js 22.12 或更高版本
 - npm 10 或更高版本
-- Git；打包图标还需要系统自带的 Swift 与 `iconutil`
+- Git；重新生成 macOS 图标时还需要系统自带的 Swift 与 `iconutil`
 
 安装依赖：
 
@@ -206,19 +206,15 @@ npx electron .
 
 项目使用 `electron-builder` 打包。常用入口：
 
-以下打包命令会先通过 macOS 自带的 Swift 与 `iconutil` 重新生成透明圆角的 PNG/ICNS 图标，不需要额外安装图标工具。
-
 ```bash
 npm run pack
 ```
 
-生成未压缩的本地 app，适合快速验证。输出在：
+生成当前平台未压缩的本地应用，适合快速验证。输出分别位于
+`release/mac[-arm64]/`、`release/win-unpacked/` 或
+`release/linux-unpacked/`。
 
-```text
-release/mac-arm64/AgentEnv Manager.app
-```
-
-生成可分发安装包：
+生成当前平台的可分发安装包：
 
 ```bash
 npm run dist
@@ -230,13 +226,22 @@ npm run dist
 npm run dist:mac
 ```
 
+生成 Windows NSIS 安装包或 Linux AppImage / deb：
+
+```bash
+npm run dist:win
+npm run dist:linux
+```
+
 默认输出目录：
 
 ```text
 release/
 ```
 
-当前 macOS 目标包含 `.dmg` 和 `.zip`，并使用项目内的应用图标。本地自用可以先直接运行 `.app`。
+macOS 目标包含 `.dmg` 和 `.zip`，Windows 目标为 NSIS，Linux
+目标包含 AppImage 和 deb。`npm run dist:mac` 会先重新生成 PNG/ICNS
+图标；其他平台直接使用已提交的 PNG 资源。
 
 正式发布需要先在 Keychain 安装 `Developer ID Application` 证书，并配置 electron-builder 支持的 Apple notarization 凭据，然后运行：
 
@@ -246,7 +251,8 @@ npm run dist:mac:signed
 
 该命令会在打包后校验应用签名、Gatekeeper 评估和 DMG stapling；任一项失败都会终止发布。
 
-验证实际打包后的 `.app` 能在 Finder 风格的精简 `PATH` 下发现 OpenCode、Claude Code、Codex、Antigravity CLI、Trae CLI 和系统 Git，导入 Repository Skill，并完成一次 OpenCode Profile 接管：
+验证当前平台实际打包后的应用能在精简 `PATH` 下发现所有内置 Agent
+与系统 Git、导入 Repository Skill，并完成六个 Agent 的 Profile Apply：
 
 ```bash
 npm run test:e2e:packaged
@@ -256,7 +262,9 @@ npm run test:e2e:packaged
 
 ## 运行数据
 
-默认情况下，应用会把 profile、library、backup、target state 等数据放在 `~/.config/agentenv-manager`。
+默认数据目录为：macOS 的 `~/.config/agentenv-manager`，Linux 的
+`${XDG_CONFIG_HOME:-~/.config}/agentenv-manager`，以及 Windows 的
+Electron userData 下 `data/`。`AGENTENV_DATA_ROOT` 在三种平台都可覆盖该位置。
 
 开发时可以指定一个固定数据目录：
 
@@ -277,7 +285,8 @@ AGENTENV_GITHUB_OAUTH_CLIENT_ID 源码构建使用自己的 GitHub OAuth App
 
 官方构建使用项目维护者注册的 GitHub OAuth App。Fork 维护者应注册并启用
 GitHub Device Flow，然后通过 `AGENTENV_GITHUB_OAUTH_CLIENT_ID` 使用自己的
-Client ID；普通用户无需手动填写 Client ID。
+Client ID；普通用户无需手动填写 Client ID。OAuth token 仅写入操作系统安全
+存储；Linux 没有 Secret Service 或 KWallet 时会拒绝 `basic_text` 降级保存。
 
 ## 安全模型
 

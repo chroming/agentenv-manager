@@ -1,5 +1,5 @@
 import { readdir } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { profileManagesResource } from "../../../shared/profileResources";
 import { pathEntryExists, pathExists } from "../../fileUtils";
 import { isAgentEnvOwnedDir, markerPathForFile } from "../../ownershipMarkers";
@@ -12,6 +12,7 @@ import {
 } from "../skillRefs";
 import type { TargetAssetDriver } from "../contract";
 import type { TargetAssetInput } from "../types";
+import { isPathInside, pathsEqual } from "../../platformPaths";
 
 const isOwnedTargetSkill = (path: string, input: TargetAssetInput) =>
   isAgentEnvOwnedDir(path, {
@@ -22,13 +23,8 @@ const isOwnedTargetSkill = (path: string, input: TargetAssetInput) =>
 const managesSkills = (input: TargetAssetInput) =>
   profileManagesResource(input.profile.resources, input.targetPaths.targetId, "skills");
 
-const isWithin = (parent: string, child: string) => {
-  const relativePath = relative(resolve(parent), resolve(child));
-  return (
-    relativePath === "" ||
-    (!relativePath.startsWith("..") && !relativePath.includes("/../"))
-  );
-};
+const isWithin = (parent: string, child: string) =>
+  pathsEqual(parent, child) || isPathInside(parent, child);
 
 const missingManagedSkillDirectories = async (input: TargetAssetInput) => {
   const skillsDir = input.targetPaths.skillsDir;

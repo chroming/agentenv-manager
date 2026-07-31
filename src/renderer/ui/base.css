@@ -2,8 +2,8 @@
   color: var(--text);
   background: var(--page);
   font-family:
-    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial,
-    sans-serif;
+    system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    Ubuntu, Cantarell, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }

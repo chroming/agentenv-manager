@@ -62,6 +62,24 @@ export interface GitHubTokenCipher {
   isEncryptionAvailable(): boolean;
 }
 
+type SafeStorageBackend =
+  | "basic_text"
+  | "gnome_libsecret"
+  | "kwallet"
+  | "kwallet5"
+  | "kwallet6"
+  | "unknown";
+
+export const isSecureTokenStorageAvailable = (input: {
+  backend?: SafeStorageBackend;
+  encryptionAvailable: boolean;
+  platform?: NodeJS.Platform;
+}) => {
+  if (!input.encryptionAvailable) return false;
+  if ((input.platform ?? process.platform) !== "linux") return true;
+  return input.backend !== "basic_text" && input.backend !== "unknown";
+};
+
 export interface GitHubTokenStore {
   readToken(): Promise<string | undefined>;
   writeToken(token: string): Promise<void>;
@@ -162,6 +180,9 @@ export const createFileGitHubTokenStore = (
       if (!file.token) {
         return undefined;
       }
+      if (!cipher.isEncryptionAvailable()) {
+        throw new Error("Secure storage is unavailable on this device");
+      }
       return cipher.decryptString(Buffer.from(file.token, "base64"));
     } catch (error) {
       if (isMissingFileError(error)) {
@@ -173,7 +194,7 @@ export const createFileGitHubTokenStore = (
 
   const writeToken = async (token: string) => {
     if (!cipher.isEncryptionAvailable()) {
-      throw new Error("Secure storage is unavailable on this Mac");
+      throw new Error("Secure storage is unavailable on this device");
     }
     const encrypted = cipher.encryptString(token).toString("base64");
     await writeAtomic(path, `${JSON.stringify({ token: encrypted }, null, 2)}\n`);

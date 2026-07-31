@@ -828,7 +828,7 @@ export const ConversationWorkspace = ({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform);
+      const isMac = window.agentEnv.platform === "darwin";
       const command = isMac ? event.metaKey : event.ctrlKey;
       if (!command || event.altKey) return;
       const key = event.key.toLowerCase();

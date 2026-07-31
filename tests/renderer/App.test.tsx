@@ -2887,8 +2887,8 @@ describe("App", () => {
       target: { value: "# Pending shortcut save\n" }
     });
 
-    fireEvent.keyDown(document, { key: "s", ctrlKey: true });
-    fireEvent.keyDown(document, { key: "s", ctrlKey: true });
+    fireEvent.keyDown(document, { key: "s", metaKey: true });
+    fireEvent.keyDown(document, { key: "s", metaKey: true });
 
     expect(api.saveProfile).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Saving..." })).toBeDisabled();
@@ -2934,7 +2934,7 @@ describe("App", () => {
     const instructions = screen.getByLabelText("AGENTS.md");
     fireEvent.change(instructions, { target: { value: "# Shortcut draft\n" } });
 
-    fireEvent.keyDown(document, { key: "s", ctrlKey: true });
+    fireEvent.keyDown(document, { key: "s", metaKey: true });
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Profile storage is read-only");
     expect(api.saveProfile).toHaveBeenCalledTimes(1);
@@ -2949,7 +2949,7 @@ describe("App", () => {
     await openProfiles();
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
 
-    fireEvent.keyDown(document, { key: "s", ctrlKey: true });
+    fireEvent.keyDown(document, { key: "s", metaKey: true });
 
     expect(api.saveProfile).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();

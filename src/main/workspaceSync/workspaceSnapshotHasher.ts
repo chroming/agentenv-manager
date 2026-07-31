@@ -2,6 +2,10 @@ import { createHash } from "node:crypto";
 import { lstat, readFile, readdir } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import type { PortableWorkspaceManifest } from "./portableSchemas";
+import {
+  isPortableFileName,
+  portableIdentityKey
+} from "../../shared/portableNames";
 
 export const sha256 = (value: string | Buffer): string =>
   createHash("sha256").update(value).digest("hex");
@@ -35,11 +39,30 @@ export const inspectPortableTree = async (
   const entries: PortableTreeEntry[] = [];
   let totalBytes = 0;
   const visit = async (directory: string) => {
-    for (const entry of (await readdir(directory, { withFileTypes: true }))
-      .sort((left, right) => left.name.localeCompare(right.name))) {
-      if (entry.name === ".git" || entry.name === ".agentenv-owner.json" || entry.name === ".agentenv-skill.json") {
-        throw new Error(`Portable Workspace contains reserved AgentEnv data: ${relative(root, join(directory, entry.name))}`);
+    const directoryEntries = (await readdir(directory, { withFileTypes: true }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+    const portableNames = new Set<string>();
+    for (const entry of directoryEntries) {
+      if (
+        entry.name === ".git" ||
+        entry.name === ".agentenv-owner.json" ||
+        entry.name === ".agentenv-skill.json"
+      ) {
+        throw new Error(
+          `Portable Workspace contains reserved AgentEnv data: ${relative(
+            root,
+            join(directory, entry.name)
+          )}`
+        );
       }
+      if (!isPortableFileName(entry.name)) {
+        throw new Error(`Portable Workspace contains an unsupported file name: ${entry.name}`);
+      }
+      const portableName = portableIdentityKey(entry.name);
+      if (portableNames.has(portableName)) {
+        throw new Error(`Portable Workspace contains names that collide across platforms: ${entry.name}`);
+      }
+      portableNames.add(portableName);
       const path = join(directory, entry.name);
       const stats = await lstat(path);
       if (stats.isSymbolicLink()) {
@@ -56,7 +79,9 @@ export const inspectPortableTree = async (
       totalBytes += content.byteLength;
       entries.push({
         path: relative(root, path).split(sep).join("/"),
-        mode: stats.mode & 0o111 ? 0o755 : 0o644,
+        // Executable bits are not observable consistently after a Windows
+        // checkout. Paths and bytes define the portable content identity.
+        mode: 0o644,
         size: content.byteLength,
         hash: sha256(content)
       });

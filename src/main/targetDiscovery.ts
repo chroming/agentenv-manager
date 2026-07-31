@@ -197,17 +197,19 @@ const conversationCapabilitiesFor = (
 export const createTargetDiscoveryService = (
   options: TargetDiscoveryOptions
 ): TargetDiscoveryService => {
+  const platform = options.platform ?? process.platform;
+  const settingsStore =
+    options.settingsStore ?? createSettingsStore(options.paths, { platform });
+  const targetScope =
+    options.targetScope ?? createTargetScope(options.targetRegistry, settingsStore);
   const {
     paths,
     targetRegistry,
-    targetScope = createTargetScope(targetRegistry, createSettingsStore(paths)),
     pathEnv = process.env.PATH ?? "",
     systemPathLookup = options.pathEnv === undefined,
     shellPathLookup = options.pathEnv === undefined,
-    platform = process.platform,
     allowSystemApplicationLookup = options.pathEnv === undefined
   } = options;
-  const settingsStore = options.settingsStore ?? createSettingsStore(paths);
   const executableCache = new Map<
     string,
     { path?: string; checkedAt: number }
@@ -216,13 +218,21 @@ export const createTargetDiscoveryService = (
   const executableResolver = createExecutableResolver({
     pathEnv,
     homeDir: paths.homeDir,
+    platform,
+    environment: process.env,
     systemPathLookup,
     shellPathLookup
   });
   const discoverExecutable = async (name: string, forceRefresh: boolean) => {
     const cached = executableCache.get(name);
     if (!forceRefresh && cached && Date.now() - cached.checkedAt < executableCacheTtlMs) {
-      if (!cached.path || await canAccess(cached.path, constants.X_OK)) {
+      if (
+        !cached.path ||
+        await canAccess(
+          cached.path,
+          platform === "win32" ? constants.F_OK : constants.X_OK
+        )
+      ) {
         return cached.path;
       }
     }

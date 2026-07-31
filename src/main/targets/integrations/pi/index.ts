@@ -65,8 +65,8 @@ export const piIntegration: AgentTargetIntegration = {
   },
   discovery: createCommandInstallationDriver("pi"),
   paths: {
-    createTargetPaths: ({ homeDir, rootDirOverride }) => {
-      const layout = resolvePiLayout({ homeDir, rootDirOverride });
+    createTargetPaths: ({ homeDir, rootDirOverride, environment }) => {
+      const layout = resolvePiLayout({ homeDir, rootDirOverride, environment });
       return {
         targetId: "pi",
         configDir: layout.agentRoot,

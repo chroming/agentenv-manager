@@ -204,7 +204,7 @@ export const WorkspaceSyncSettings = () => {
     delete: t("Remove")
   })[value] ?? value;
   const directionLabel = (value: string) => ({
-    local: t("This Mac"),
+    local: t("This device"),
     remote: t("Remote"),
     both: t("Both"),
     conflict: t("Conflict")
@@ -271,7 +271,7 @@ export const WorkspaceSyncSettings = () => {
       <div className="settings-section-header">
         <div>
           <div className="resource-heading" id="workspace-sync-heading">{t("Workspace Sync")}</div>
-          <p className="settings-muted">{t("Reuse Profiles and Library Skills across your Macs through a private Git repository.")}</p>
+          <p className="settings-muted">{t("Reuse Profiles and Library Skills across your devices through a private Git repository.")}</p>
         </div>
         {connected ? (
           <span className={`workspace-sync-status is-${status.kind}`} role="status">
@@ -310,7 +310,7 @@ export const WorkspaceSyncSettings = () => {
             </span>
             <span>
               <strong>{t("Not configured")}</strong>
-              <small>{t("Connect a private Git repository when you want to reuse this Workspace on another Mac.")}</small>
+              <small>{t("Connect a private Git repository when you want to reuse this Workspace on another device.")}</small>
             </span>
             <Button variant="secondary" onClick={() => setIsSetupOpen((current) => !current)}>
               {t(isSetupOpen ? "Cancel" : "Set up")}
@@ -401,7 +401,7 @@ export const WorkspaceSyncSettings = () => {
                     {row.direction === "conflict" ? (
                       <select aria-label={t("Resolve {{name}}", { name: row.title })} value={choices[row.changes[0]!.key] ?? ""} onChange={(event) => setChoices((current) => ({ ...current, [row.changes[0]!.key]: event.currentTarget.value as WorkspaceSyncConflictChoice }))}>
                         <option value="">{t("Choose version")}</option>
-                        <option value="local">{t("Keep this Mac")}</option>
+                        <option value="local">{t("Keep local version")}</option>
                         <option value="remote">{t("Use remote")}</option>
                       </select>
                     ) : null}
@@ -419,7 +419,7 @@ export const WorkspaceSyncSettings = () => {
             <footer className="preview-actions workspace-sync-review-actions ui-dialog-footer">
               <Button variant="secondary" disabled={Boolean(working)} onClick={() => setReview(undefined)}>{t("Cancel")}</Button>
               {review.canPublish && !review.canUpdate ? <Button variant="primary" busy={working === "publish"} disabled={Boolean(working)} onClick={() => void publish()}>{t("Publish")}</Button> : null}
-              {review.canUpdate ? <Button variant="primary" busy={working === "update"} disabled={Boolean(working) || !choicesComplete || (review.liveSkillIds.length > 0 && !acceptLive)} onClick={() => void update()}>{t("Update this Mac")}</Button> : null}
+              {review.canUpdate ? <Button variant="primary" busy={working === "update"} disabled={Boolean(working) || !choicesComplete || (review.liveSkillIds.length > 0 && !acceptLive)} onClick={() => void update()}>{t("Update this device")}</Button> : null}
             </footer>
         </ModalFrame>
       ) : null}

@@ -1,5 +1,6 @@
 import { access, readFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import type { ConversationMessage } from "../../../shared/types";
 import type {
@@ -103,7 +104,11 @@ export const createAntigravityConversationCapability = (): AgentConversationCapa
           try {
             const uris = JSON.parse(String(row.workspace_uris ?? "[]"));
             const first = Array.isArray(uris) ? uris[0] : undefined;
-            if (typeof first === "string") workspacePath = first.replace(/^file:\/\//, "");
+            if (typeof first === "string") {
+              workspacePath = first.startsWith("file:")
+                ? fileURLToPath(first)
+                : first;
+            }
           } catch {
             // A malformed optional workspace field does not invalidate the summary.
           }

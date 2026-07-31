@@ -54,21 +54,135 @@ const syncPath = async (path: string) => {
   }
 };
 
+const windowsTransientCodes = new Set(["EBUSY", "ENOTEMPTY", "EPERM"]);
+
+const retryTransientFilesystemOperation = async <T>(
+  operation: () => Promise<T>,
+  options: {
+    platform?: NodeJS.Platform;
+    attempts?: number;
+    delayMs?: number;
+  } = {}
+): Promise<T> => {
+  const platform = options.platform ?? process.platform;
+  const attempts = platform === "win32" ? options.attempts ?? 5 : 1;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      const code =
+        error && typeof error === "object" && "code" in error
+          ? String(error.code)
+          : undefined;
+      if (
+        attempt >= attempts ||
+        platform !== "win32" ||
+        !code ||
+        !windowsTransientCodes.has(code)
+      ) {
+        throw error;
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, (options.delayMs ?? 20) * attempt)
+      );
+    }
+  }
+};
+
+const removePath = (
+  path: string,
+  options: {
+    force?: boolean;
+    platform?: NodeJS.Platform;
+    recursive?: boolean;
+  } = {}
+) => {
+  const platform = options.platform ?? process.platform;
+  return retryTransientFilesystemOperation(
+    () =>
+      rm(path, {
+        ...(options.force !== undefined ? { force: options.force } : {}),
+        ...(options.recursive !== undefined
+          ? { recursive: options.recursive }
+          : {}),
+        ...(platform === "win32"
+          ? { maxRetries: 5, retryDelay: 40 }
+          : {})
+      }),
+    { platform, attempts: 5, delayMs: 40 }
+  );
+};
+
+export const syncParentDirectory = async (
+  path: string,
+  options: {
+    platform?: NodeJS.Platform;
+    sync?: (path: string) => Promise<void>;
+  } = {}
+) => {
+  if ((options.platform ?? process.platform) === "win32") return;
+  await (options.sync ?? syncPath)(path);
+};
+
 export const writeAtomic = async (
   targetPath: string,
   content: string,
-  options: { mode?: number } = {}
+  options: {
+    mode?: number;
+    platform?: NodeJS.Platform;
+    sync?: (path: string) => Promise<void>;
+  } = {}
 ) => {
   const mode = options.mode ?? 0o600;
   await mkdir(dirname(targetPath), { recursive: true, mode: 0o700 });
   const tempPath = `${targetPath}.agentenv-tmp-${process.pid}-${randomUUID()}`;
   try {
-    await writeFile(tempPath, content, { encoding: "utf8", mode });
-    await syncPath(tempPath);
-    await rename(tempPath, targetPath);
-    await syncPath(dirname(targetPath));
+    await writeFile(tempPath, content, {
+      encoding: "utf8",
+      flag: "wx",
+      mode
+    });
+    await (options.sync ?? syncPath)(tempPath);
+    await retryTransientFilesystemOperation(
+      () => rename(tempPath, targetPath),
+      { platform: options.platform }
+    );
+    await syncParentDirectory(dirname(targetPath), options);
   } finally {
-    await rm(tempPath, { force: true });
+    await removePath(tempPath, {
+      force: true,
+      platform: options.platform
+    });
+  }
+};
+
+const writeFreshAtomicFile = async (
+  targetPath: string,
+  content: string,
+  options: {
+    mode?: number;
+    platform?: NodeJS.Platform;
+    sync?: (path: string) => Promise<void>;
+  } = {}
+) => {
+  const tempPath = `${targetPath}.agentenv-tmp-${process.pid}-${randomUUID()}`;
+  try {
+    await writeFile(tempPath, content, {
+      encoding: "utf8",
+      flag: "wx",
+      mode: options.mode ?? 0o600
+    });
+    await (options.sync ?? syncPath)(tempPath);
+    await retryTransientFilesystemOperation(
+      () => rename(tempPath, targetPath),
+      { platform: options.platform }
+    );
+    await syncParentDirectory(dirname(targetPath), options);
+  } finally {
+    await removePath(tempPath, {
+      force: true,
+      platform: options.platform
+    });
   }
 };
 
@@ -83,7 +197,10 @@ interface ReplacementJournal {
   hadTarget: boolean;
 }
 
-export const recoverAtomicReplacement = async (targetPath: string) => {
+export const recoverAtomicReplacement = async (
+  targetPath: string,
+  options: { platform?: NodeJS.Platform } = {}
+) => {
   const { journalPath, previousPath, stagingPath } = replacementPaths(targetPath);
   if (!(await pathEntryExists(journalPath))) {
     return;
@@ -104,16 +221,33 @@ export const recoverAtomicReplacement = async (targetPath: string) => {
   const stagingExists = await pathEntryExists(stagingPath);
 
   if (!targetExists && previousExists) {
-    await rename(previousPath, targetPath);
+    await retryTransientFilesystemOperation(
+      () => rename(previousPath, targetPath),
+      options
+    );
   } else if (!targetExists && !journal.hadTarget && stagingExists) {
-    await rename(stagingPath, targetPath);
+    await retryTransientFilesystemOperation(
+      () => rename(stagingPath, targetPath),
+      options
+    );
   }
 
   if (await pathEntryExists(targetPath)) {
-    await rm(previousPath, { recursive: true, force: true });
-    await rm(stagingPath, { recursive: true, force: true });
-    await rm(journalPath, { force: true });
-    await syncPath(dirname(targetPath));
+    await removePath(previousPath, {
+      recursive: true,
+      force: true,
+      platform: options.platform
+    });
+    await removePath(stagingPath, {
+      recursive: true,
+      force: true,
+      platform: options.platform
+    });
+    await removePath(journalPath, {
+      force: true,
+      platform: options.platform
+    });
+    await syncParentDirectory(dirname(targetPath), options);
   }
 };
 
@@ -136,13 +270,22 @@ export const recoverPendingReplacementsInDirectory = async (directory: string) =
 
 export const replacePathAtomically = async (
   targetPath: string,
-  prepare: (stagingPath: string) => Promise<void>
+  prepare: (stagingPath: string) => Promise<void>,
+  options: { platform?: NodeJS.Platform } = {}
 ) => {
   await mkdir(dirname(targetPath), { recursive: true });
-  await recoverAtomicReplacement(targetPath);
+  await recoverAtomicReplacement(targetPath, options);
   const { journalPath, previousPath, stagingPath } = replacementPaths(targetPath);
-  await rm(stagingPath, { recursive: true, force: true });
-  await rm(previousPath, { recursive: true, force: true });
+  await removePath(stagingPath, {
+    recursive: true,
+    force: true,
+    platform: options.platform
+  });
+  await removePath(previousPath, {
+    recursive: true,
+    force: true,
+    platform: options.platform
+  });
 
   const hadTarget = await pathEntryExists(targetPath);
   try {
@@ -150,32 +293,62 @@ export const replacePathAtomically = async (
     if (!(await pathEntryExists(stagingPath))) {
       throw new Error(`Replacement did not create its staging path: ${stagingPath}`);
     }
-    await writeAtomic(journalPath, `${JSON.stringify({ targetPath, hadTarget }, null, 2)}\n`);
+    await writeFreshAtomicFile(
+      journalPath,
+      `${JSON.stringify({ targetPath, hadTarget }, null, 2)}\n`,
+      options
+    );
     if (hadTarget) {
-      await rename(targetPath, previousPath);
+      await retryTransientFilesystemOperation(
+        () => rename(targetPath, previousPath),
+        options
+      );
     }
     try {
-      await rename(stagingPath, targetPath);
+      await retryTransientFilesystemOperation(
+        () => rename(stagingPath, targetPath),
+        options
+      );
     } catch (error) {
       if (hadTarget && (await pathEntryExists(previousPath))) {
-        await rename(previousPath, targetPath);
+        await retryTransientFilesystemOperation(
+          () => rename(previousPath, targetPath),
+          options
+        );
       }
       throw error;
     }
-    await syncPath(dirname(targetPath));
+    await syncParentDirectory(dirname(targetPath), options);
   } catch (error) {
-    await rm(stagingPath, { recursive: true, force: true });
+    await removePath(stagingPath, {
+      recursive: true,
+      force: true,
+      platform: options.platform
+    });
     if (!(await pathEntryExists(targetPath)) && (await pathEntryExists(previousPath))) {
-      await rename(previousPath, targetPath);
+      await retryTransientFilesystemOperation(
+        () => rename(previousPath, targetPath),
+        options
+      );
     }
-    await rm(journalPath, { force: true });
+    await removePath(journalPath, {
+      force: true,
+      platform: options.platform
+    });
     throw error;
   }
 
   try {
-    await rm(previousPath, { recursive: true, force: true });
-    await rm(journalPath, { force: true });
-    await syncPath(dirname(targetPath));
+    await removePath(previousPath, {
+      recursive: true,
+      force: true,
+      platform: options.platform
+    });
+    await removePath(journalPath, {
+      force: true,
+      platform: options.platform
+    });
+    await syncParentDirectory(dirname(targetPath), options);
   } catch {
     // A completed target plus its journal is safe; startup recovery finishes cleanup.
   }

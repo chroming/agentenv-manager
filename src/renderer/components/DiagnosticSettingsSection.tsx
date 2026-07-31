@@ -36,7 +36,7 @@ export const DiagnosticSettingsSection = ({
             {t("Diagnostics")}
           </div>
           <p className="settings-muted">
-            {t("Copy or export redacted operation details when troubleshooting another device. Logs stay on this Mac.")}
+            {t("Copy or export redacted operation details when troubleshooting another device. Logs stay on this device.")}
           </p>
         </div>
       </div>

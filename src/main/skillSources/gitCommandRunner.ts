@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { isAbsolute } from "node:path";
+import { posix, win32 } from "node:path";
 
 export interface GitCommandResult {
   stdout: string;
@@ -21,6 +21,8 @@ export interface GitCommandRunnerOptions {
   defaultTimeoutMs?: number;
   maxOutputBytes?: number;
   terminateGraceMs?: number;
+  platform?: NodeJS.Platform;
+  argsPrefix?: string[];
 }
 
 export interface GitCommandRunner {
@@ -52,17 +54,39 @@ export const redactGitError = (value: string): string =>
 
 const terminateProcess = (
   child: ChildProcess,
-  signal: NodeJS.Signals
+  signal: NodeJS.Signals,
+  platform: NodeJS.Platform
 ): void => {
   if (!child.pid || child.killed) {
     return;
   }
-  if (process.platform !== "win32") {
+  if (platform !== "win32") {
     try {
       process.kill(-child.pid, signal);
       return;
     } catch {
       // Fall through when the child did not establish a process group.
+    }
+  }
+  if (platform === "win32") {
+    try {
+      spawn(
+        "taskkill.exe",
+        [
+          "/PID",
+          String(child.pid),
+          "/T",
+          ...(signal === "SIGKILL" ? ["/F"] : [])
+        ],
+        {
+          shell: false,
+          stdio: "ignore",
+          windowsHide: true
+        }
+      ).unref();
+      return;
+    } catch {
+      // Fall through to the direct child when taskkill is unavailable.
     }
   }
   try {
@@ -75,7 +99,9 @@ const terminateProcess = (
 export const createGitCommandRunner = (
   runnerOptions: GitCommandRunnerOptions
 ): GitCommandRunner => {
-  if (!isAbsolute(runnerOptions.executablePath)) {
+  const platform = runnerOptions.platform ?? process.platform;
+  const pathApi = platform === "win32" ? win32 : posix;
+  if (!pathApi.isAbsolute(runnerOptions.executablePath)) {
     throw new Error("Git executable path must be absolute");
   }
   const active = new Set<(reason: "cancelled") => void>();
@@ -115,8 +141,11 @@ export const createGitCommandRunner = (
       const stop = (reason: typeof stopReason) => {
         if (stopReason || settled) return;
         stopReason = reason;
-        terminateProcess(child, "SIGTERM");
-        killTimer = setTimeout(() => terminateProcess(child, "SIGKILL"), terminateGraceMs);
+        terminateProcess(child, "SIGTERM", platform);
+        killTimer = setTimeout(
+          () => terminateProcess(child, "SIGKILL", platform),
+          terminateGraceMs
+        );
         killTimer.unref();
       };
 
@@ -124,7 +153,10 @@ export const createGitCommandRunner = (
       const abort = () => stop("cancelled");
 
       try {
-        child = spawn(runnerOptions.executablePath, args, {
+        child = spawn(
+          runnerOptions.executablePath,
+          [...(runnerOptions.argsPrefix ?? []), ...args],
+          {
           cwd: options.cwd,
           env: {
             ...process.env,
@@ -133,9 +165,10 @@ export const createGitCommandRunner = (
             GIT_TERMINAL_PROMPT: "0"
           },
           shell: false,
-          detached: process.platform !== "win32",
+          detached: platform !== "win32",
           stdio: ["ignore", "pipe", "pipe"]
-        });
+          }
+        );
       } catch (error) {
         reject(
           new GitCommandError(

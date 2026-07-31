@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import {
   applyEdits,
   modify,
@@ -133,8 +133,16 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     commands: ["opencode"],
     macApplications: [{ bundleName: "OpenCode.app", label: "OpenCode app" }]
   }).detectInstallation,
-  createTargetPaths: ({ homeDir, rootDirOverride }) => {
-    const configDir = rootDirOverride ?? join(homeDir, ".config", "opencode");
+  createTargetPaths: ({ homeDir, rootDirOverride, environment }) => {
+    const environmentConfigDir =
+      environment?.OPENCODE_CONFIG_DIR?.trim() &&
+      isAbsolute(environment.OPENCODE_CONFIG_DIR.trim())
+        ? resolve(environment.OPENCODE_CONFIG_DIR.trim())
+        : undefined;
+    const configDir =
+      rootDirOverride ??
+      environmentConfigDir ??
+      join(homeDir, ".config", "opencode");
     const privateSkillsDir = join(configDir, "skills");
     return materializeSharedSkillLocations({
       targetId: "opencode",

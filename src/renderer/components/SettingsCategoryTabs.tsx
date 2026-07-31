@@ -109,7 +109,9 @@ export const GeneralSettingsSection = ({
             )}
           >
             <option value="default">{t("Default terminal")}</option>
-            <option value="ghostty">{t("Ghostty")}</option>
+            {window.agentEnv.platform !== "win32" ? (
+              <option value="ghostty">{t("Ghostty")}</option>
+            ) : null}
           </select>
         </label>
       </div>

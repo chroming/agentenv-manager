@@ -352,8 +352,8 @@ export const traeCliIntegration: AgentTargetIntegration = {
     }
   },
   paths: {
-    createTargetPaths: ({ homeDir, rootDirOverride }) => {
-      const layout = resolveTraeLayout({ homeDir, rootDirOverride });
+    createTargetPaths: ({ homeDir, rootDirOverride, environment }) => {
+      const layout = resolveTraeLayout({ homeDir, rootDirOverride, environment });
       return {
         targetId: "trae-cli",
         configDir: layout.configRoot,

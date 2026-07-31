@@ -59,6 +59,30 @@ describe("backup store", () => {
     expect(manifest.entries[0]?.backupPath).toBeUndefined();
   });
 
+  it("stores symbolic-link metadata without creating a privileged backup link", async () => {
+    const paths = await makePaths();
+    const destination = join(root, "shared-skills");
+    const source = join(root, "skills-link");
+    await mkdir(destination, { recursive: true });
+    await symlink(destination, source, "dir");
+    const store = createBackupStore(paths);
+
+    const manifest = await store.createBackup([source]);
+    const entry = manifest.entries[0];
+
+    expect(entry).toMatchObject({
+      sourcePath: source,
+      linkTarget: destination,
+      linkType: "dir",
+      kind: "symlink",
+      missing: false
+    });
+    expect(entry?.backupPath).toBeUndefined();
+    await expect(store.readBackup(manifest.id)).resolves.toMatchObject({
+      entries: [{ linkTarget: destination, linkType: "dir" }]
+    });
+  });
+
   it("records file permissions needed for an exact rollback", async () => {
     const paths = await makePaths();
     await writeFile(paths.globalAgentsPath, "# Agent\n");

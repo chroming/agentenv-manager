@@ -81,9 +81,11 @@ layout movement.
 
 ## Release Meaning
 
-The packaged smoke proves the `.app` can start and complete supported workflows
-inside an isolated macOS environment. A valid DMG checksum and mount prove
-container integrity. Neither proves public distribution trust.
+The packaged smoke proves the current platform binary can start and complete
+supported workflows inside an isolated environment. It must run natively on
+macOS, Windows, and Linux before those platforms are claimed as verified. A
+valid DMG checksum and mount prove macOS container integrity only. Neither
+proves public distribution trust.
 
 A public macOS release additionally requires a Developer ID Application
 identity, hardened-runtime signing, Apple notarization, stapling, Gatekeeper

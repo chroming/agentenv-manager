@@ -93,8 +93,11 @@ replace geometry, keyboard, localization, overlay, or persistence assertions.
 
 The Electron UI E2E covers visible workflows, supported viewport geometry,
 feedback, dialogs, navigation, and persisted effects.
+Each Electron E2E file runs in a fresh Vitest process so Electron, Playwright,
+timers, and native handles cannot leak into a later file.
 
-`npm run test:e2e:packaged` rebuilds the macOS application and then verifies:
+`npm run test:e2e:packaged` rebuilds the application for the current operating
+system and then verifies:
 
 - all built-in Agent commands are discovered from Finder-like launch paths;
 - all six built-in Targets can Apply Instructions and a Skill through the
@@ -104,7 +107,9 @@ feedback, dialogs, navigation, and persisted effects.
 - the default viewport has no page-level horizontal overflow.
 
 Passing source tests does not imply packaged behavior passed. Release evidence
-must state both results separately.
+must state both results separately and must come from a native runner for each
+claimed operating system. Linux uses Xvfb only as a display host; Windows,
+Linux, and macOS all execute the packaged Electron binary.
 
 DMG checksum and mount verification establish package-container integrity only.
 Public distribution additionally requires Developer ID signing, notarization,

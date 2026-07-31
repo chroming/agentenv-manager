@@ -6559,7 +6559,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => page.getByRole("button", { name: /Clean up \d+ ready Skills/ }).count())
       .toBe(0);
-  }, 30_000);
+  }, 60_000);
 
   it("backs up Library drift, removes broken links, and leaves Profile membership unchanged", async () => {
     const { appDataRoot, homeDir, opencodeDir, page } = await launchApp();

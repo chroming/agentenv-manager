@@ -6,10 +6,11 @@ import {
 } from "./vitest-groups.mjs";
 
 const projectRoot = resolve(import.meta.dirname, "..");
+const vitestEntry = resolve(projectRoot, "node_modules", "vitest", "vitest.mjs");
 const e2eOnly = process.argv.includes("--e2e");
 
 const run = (args) => new Promise((resolveRun, rejectRun) => {
-  const child = spawn("npx", ["vitest", "run", ...args], {
+  const child = spawn(process.execPath, [vitestEntry, "run", ...args], {
     cwd: projectRoot,
     env: process.env,
     stdio: "inherit"
@@ -33,9 +34,10 @@ await run([
   "--exclude",
   electronE2eExcludeGlob
 ]);
-await run([
-  ...electronE2eTestFiles,
-  "--maxWorkers=1",
-  "--no-file-parallelism"
-]);
-
+for (const testFile of electronE2eTestFiles) {
+  await run([
+    testFile,
+    "--maxWorkers=1",
+    "--no-file-parallelism"
+  ]);
+}

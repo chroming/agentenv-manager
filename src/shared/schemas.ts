@@ -1,8 +1,13 @@
 import { z } from "zod";
+import {
+  isPortableFileName,
+  portableIdentityKey
+} from "./portableNames";
 
 export const SafeIdSchema = z
   .string()
-  .regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/);
+  .regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/)
+  .refine(isPortableFileName, "ID is not portable across supported filesystems");
 
 export const ResourceIconKeySchema = z.enum([
   "opencode",
@@ -62,7 +67,11 @@ export const ProfileManifestSchema = z.object({
 const TargetResourceNameSchema = z
   .string()
   .trim()
-  .regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/);
+  .regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/)
+  .refine(
+    isPortableFileName,
+    "Resource name is not portable across supported filesystems"
+  );
 
 export const ProfileSkillSchema = z.object({
   libraryId: SafeIdSchema,
@@ -104,7 +113,8 @@ export const ProfileResourcesSchema = z.object({
         message: `Library Skill ${skill.libraryId} is referenced more than once`
       });
     }
-    if (targetNames.has(skill.targetName)) {
+    const targetNameKey = portableIdentityKey(skill.targetName);
+    if (targetNames.has(targetNameKey)) {
       context.addIssue({
         code: "custom",
         path: ["skills", index, "targetName"],
@@ -112,7 +122,7 @@ export const ProfileResourcesSchema = z.object({
       });
     }
     libraryIds.add(skill.libraryId);
-    targetNames.add(skill.targetName);
+    targetNames.add(targetNameKey);
   });
   for (const [targetId, policy] of Object.entries(resources.mcpByTarget)) {
     const names = new Set<string>();

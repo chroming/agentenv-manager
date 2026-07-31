@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   recoverAtomicReplacement,
   replacePathAtomically,
+  syncParentDirectory,
   writeAtomic
 } from "../../src/main/fileUtils";
 
@@ -22,8 +23,24 @@ describe("durable file utilities", () => {
 
     await writeAtomic(target, "{}\n");
 
-    expect((await stat(join(root, "private", "nested"))).mode & 0o777).toBe(0o700);
-    expect((await stat(target)).mode & 0o777).toBe(0o600);
+    if (process.platform !== "win32") {
+      expect((await stat(join(root, "private", "nested"))).mode & 0o777).toBe(0o700);
+      expect((await stat(target)).mode & 0o777).toBe(0o600);
+    }
+    await expect(readFile(target, "utf8")).resolves.toBe("{}\n");
+  });
+
+  it("atomically replaces an existing file without a replacement journal", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-file-utils-"));
+    const target = join(root, "state.json");
+    await writeFile(target, "before\n", "utf8");
+
+    await writeAtomic(target, "after\n");
+
+    await expect(readFile(target, "utf8")).resolves.toBe("after\n");
+    await expect(
+      readFile(`${target}.agentenv-replace.json`, "utf8")
+    ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("keeps the original path when preparing a replacement fails", async () => {
@@ -60,5 +77,30 @@ describe("durable file utilities", () => {
     await expect(readFile(`${target}.agentenv-replace.json`, "utf8")).rejects.toMatchObject({
       code: "ENOENT"
     });
+  });
+
+  it("skips unsupported directory fsync on Windows", async () => {
+    let syncCalls = 0;
+    await syncParentDirectory("C:\\AgentEnv", {
+      platform: "win32",
+      sync: async () => {
+        syncCalls += 1;
+        throw new Error("directory handles are unsupported");
+      }
+    });
+
+    expect(syncCalls).toBe(0);
+  });
+
+  it("still fsyncs parent directories on POSIX systems", async () => {
+    let syncedPath = "";
+    await syncParentDirectory("/tmp/agentenv", {
+      platform: "linux",
+      sync: async (path) => {
+        syncedPath = path;
+      }
+    });
+
+    expect(syncedPath).toBe("/tmp/agentenv");
   });
 });

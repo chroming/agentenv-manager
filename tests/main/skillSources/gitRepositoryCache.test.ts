@@ -53,6 +53,7 @@ describe("git repository cache", () => {
       }
       if (args.includes("fetch")) {
         expect(commandOptions?.env?.GIT_SSH_COMMAND).toContain("BatchMode=yes");
+        expect(commandOptions?.env?.GIT_SSH_VARIANT).toBe("ssh");
       }
       if (args.includes("rev-parse")) {
         return { stdout: `${"a".repeat(40)}\n`, stderr: "", exitCode: 0 };

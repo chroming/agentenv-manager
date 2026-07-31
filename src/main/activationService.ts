@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { appendFile, cp, lstat, mkdir, readFile, readdir, readlink, rm, stat } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createBackupStore } from "./backupStore";
 import { createUnifiedDiff } from "./diff";
@@ -107,6 +107,10 @@ import {
   dedupeApplyIssues,
   replaceableApplyPaths
 } from "./applyIssues";
+import {
+  isPathInside,
+  pathsEqual
+} from "./platformPaths";
 import {
   desiredRuntimeSkills,
   desiredSkillTargets,
@@ -361,7 +365,9 @@ const createRollbackChange = async (
         : currentStats?.isFile()
           ? "[file]\n"
           : "";
-    const after = entry.missing ? "" : `[link] ${await readlink(entry.backupPath ?? "")}\n`;
+    const after = entry.missing
+      ? ""
+      : `[link] ${entry.linkTarget ?? await readlink(entry.backupPath ?? "")}\n`;
     return {
       path: entry.sourcePath,
       before,
@@ -561,30 +567,26 @@ export const createActivationService = ({
     for (const entry of backup.entries) {
       const sourcePath = resolve(entry.sourcePath);
       const allowedResource = [...resourceRoots].some((root) => {
-        if (sourcePath === root) {
+        if (pathsEqual(sourcePath, root)) {
           return entry.missing || entry.kind === "symlink";
         }
-        const child = relative(root, sourcePath);
-        return child.length > 0 && !child.startsWith("..") && !child.includes("/../") && dirname(sourcePath) === root;
+        return (
+          isPathInside(root, sourcePath) &&
+          pathsEqual(dirname(sourcePath), root)
+        );
       });
       const allowedMissingContainer = Boolean(
         entry.missing &&
         [...resourceContainers].some((container) => {
-          const fromContainer = relative(container, sourcePath);
           if (
-            fromContainer.startsWith("..") ||
-            fromContainer.includes("/../")
+            !pathsEqual(container, sourcePath) &&
+            !isPathInside(container, sourcePath)
           ) {
             return false;
           }
-          return [...resourceRoots].some((root) => {
-            const toResource = relative(sourcePath, root);
-            return (
-              toResource.length > 0 &&
-              !toResource.startsWith("..") &&
-              !toResource.includes("/../")
-            );
-          });
+          return [...resourceRoots].some((root) =>
+            isPathInside(sourcePath, root)
+          );
         })
       );
       if (
@@ -773,12 +775,12 @@ export const createActivationService = ({
     }
     if (
       [targetPaths.skillsDir, ...(targetPaths.skillLocations ?? []).map((location) => location.path)]
-        .filter(Boolean)
-        .some((skillsRoot) => path.startsWith(`${skillsRoot}/`))
+        .filter((skillsRoot): skillsRoot is string => Boolean(skillsRoot))
+        .some((skillsRoot) => isPathInside(skillsRoot, path))
     ) {
       return { kind: "skill", id: basename(path) };
     }
-    if (targetPaths.agentsDir && path.startsWith(`${targetPaths.agentsDir}/`)) {
+    if (targetPaths.agentsDir && isPathInside(targetPaths.agentsDir, path)) {
       return { kind: "agent", id: basename(path) };
     }
     return { kind: "file", id: basename(path) || path };
@@ -1229,12 +1231,9 @@ export const createActivationService = ({
         [...new Set(assetBackupPaths)].map(async (path) => {
           if (!resolvedSkillsDir || await pathEntryExists(path)) return undefined;
           const candidate = resolve(path);
-          const relativeToCandidate = relative(candidate, resolvedSkillsDir);
           return (
-            (candidate === resolvedSkillsDir ||
-              (relativeToCandidate.length > 0 &&
-                !relativeToCandidate.startsWith("..") &&
-                !relativeToCandidate.includes("/../")))
+            (pathsEqual(candidate, resolvedSkillsDir) ||
+              isPathInside(candidate, resolvedSkillsDir))
               ? candidate
               : undefined
           );

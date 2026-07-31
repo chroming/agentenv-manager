@@ -10,7 +10,7 @@ import {
   readlink,
   readdir,
   rm,
-  symlink,
+  stat,
 } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type {
@@ -24,6 +24,7 @@ import { SafeIdSchema } from "../shared/schemas";
 
 export interface BackupStoreOptions {
   now?: () => Date;
+  platform?: NodeJS.Platform;
 }
 
 export interface BackupStore {
@@ -55,9 +56,9 @@ const sha256 = (content: Buffer): string =>
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
-const ensurePrivateDir = async (path: string) => {
+const ensurePrivateDir = async (path: string, platform: NodeJS.Platform) => {
   await mkdir(path, { recursive: true, mode: 0o700 });
-  await chmod(path, 0o700);
+  if (platform !== "win32") await chmod(path, 0o700);
 };
 
 export const createBackupStore = (
@@ -65,6 +66,7 @@ export const createBackupStore = (
   options: BackupStoreOptions = {}
 ): BackupStore => {
   const now = options.now ?? (() => new Date());
+  const platform = options.platform ?? process.platform;
 
   const readBackup = async (id: string): Promise<BackupManifest> => {
     const safeId = SafeIdSchema.parse(id);
@@ -85,6 +87,20 @@ export const createBackupStore = (
       if (entry.missing) {
         if (entry.backupPath !== undefined) {
           throw new Error(`Invalid missing-file backup entry: ${safeId}`);
+        }
+        normalizedEntries.push(entry);
+        continue;
+      }
+      if (
+        entry.kind === "symlink" &&
+        typeof entry.linkTarget === "string"
+      ) {
+        if (
+          entry.backupPath !== undefined ||
+          (entry.linkType !== undefined &&
+            !["file", "dir", "junction"].includes(entry.linkType))
+        ) {
+          throw new Error(`Invalid AgentEnv backup link entry: ${safeId}`);
         }
         normalizedEntries.push(entry);
         continue;
@@ -127,7 +143,7 @@ export const createBackupStore = (
     sourcePaths: string[],
     context: Pick<BackupManifest, "operation" | "targetId" | "targetIds" | "profileId" | "profileName"> = {}
   ): Promise<BackupManifest> => {
-    await ensurePrivateDir(paths.backupsDir);
+    await ensurePrivateDir(paths.backupsDir, platform);
 
     const createdAt = now().toISOString();
     const baseId = toBackupId(new Date(createdAt));
@@ -146,7 +162,7 @@ export const createBackupStore = (
       }
     }
     const filesDir = join(backupDir, "files");
-    await ensurePrivateDir(filesDir);
+    await ensurePrivateDir(filesDir, platform);
 
     const entries: BackupEntry[] = [];
 
@@ -156,10 +172,22 @@ export const createBackupStore = (
         const backupPath = join(filesDir, encodePath(sourcePath));
 
         if (sourceStats.isSymbolicLink()) {
-          await symlink(await readlink(sourcePath), backupPath);
+          const linkTarget = await readlink(sourcePath);
+          const linkType = await stat(sourcePath)
+            .then((targetStats) =>
+              targetStats.isDirectory()
+                ? platform === "win32"
+                  ? "junction" as const
+                  : "dir" as const
+                : "file" as const
+            )
+            .catch(() =>
+              platform === "win32" ? "junction" as const : "dir" as const
+            );
           entries.push({
             sourcePath,
-            backupPath,
+            linkTarget,
+            linkType,
             missing: false,
             kind: "symlink"
           });

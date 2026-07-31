@@ -8,20 +8,20 @@ import { _electron as electron } from "playwright-core";
 
 const execFileAsync = promisify(execFile);
 
-if (process.platform !== "darwin") {
-  throw new Error("The packaged application E2E currently supports macOS only");
-}
-
-const packagedDirectory = process.arch === "arm64" ? "mac-arm64" : "mac";
-const executablePath = join(
-  process.cwd(),
-  "release",
-  packagedDirectory,
-  "AgentEnv Manager.app",
-  "Contents",
-  "MacOS",
-  "AgentEnv Manager"
-);
+const executablePath =
+  process.platform === "darwin"
+    ? join(
+        process.cwd(),
+        "release",
+        process.arch === "arm64" ? "mac-arm64" : "mac",
+        "AgentEnv Manager.app",
+        "Contents",
+        "MacOS",
+        "AgentEnv Manager"
+      )
+    : process.platform === "win32"
+      ? join(process.cwd(), "release", "win-unpacked", "AgentEnv Manager.exe")
+      : join(process.cwd(), "release", "linux-unpacked", "agentenv-manager");
 const root = await mkdtemp(join(tmpdir(), "agentenv-packaged-e2e-"));
 const appDataRoot = join(root, "app-data");
 const homeDir = join(root, "home");
@@ -40,47 +40,54 @@ const unsafeCleanupBackupDir = join(
 );
 const unsafeCleanupBackupManifest = join(unsafeCleanupBackupDir, "manifest.json");
 let application;
+const commandExtension = process.platform === "win32" ? ".cmd" : "";
+const commandPath = (name) =>
+  join(homeDir, ".local", "bin", `${name}${commandExtension}`);
+const forceKill = (child) => {
+  if (process.platform === "win32") child.kill();
+  else child.kill("SIGKILL");
+};
 
 const packagedTargets = [
   {
     id: "opencode",
     name: "OpenCode",
-    executable: [join(homeDir, ".local", "bin", "opencode"), "opencode"],
+    executablePath: commandPath("opencode"),
     instructionsPath: join(homeDir, ".config", "opencode", "AGENTS.md"),
     skillsDir: join(homeDir, ".config", "opencode", "skills")
   },
   {
     id: "claude-code",
     name: "Claude Code",
-    executable: [join(homeDir, ".bun", "bin", "claude"), "claude"],
+    executablePath: commandPath("claude"),
     instructionsPath: join(homeDir, ".claude", "CLAUDE.md"),
     skillsDir: join(homeDir, ".claude", "skills")
   },
   {
     id: "codex",
     name: "Codex",
-    executable: [join(homeDir, ".cargo", "bin", "codex"), "codex"],
+    executablePath: commandPath("codex"),
     instructionsPath: join(homeDir, ".codex", "AGENTS.md"),
     skillsDir: join(homeDir, ".codex", "skills")
   },
   {
     id: "antigravity",
     name: "Antigravity CLI",
-    executable: [join(homeDir, "Library", "pnpm", "agy"), "agy"],
+    executablePath: commandPath("agy"),
     instructionsPath: join(homeDir, ".gemini", "GEMINI.md"),
     skillsDir: join(homeDir, ".gemini", "antigravity-cli", "skills")
   },
   {
     id: "trae-cli",
     name: "Trae CLI",
-    executable: [join(homeDir, ".local", "bin", "traecli"), "traecli"],
+    executablePath: commandPath("traecli"),
     instructionsPath: join(homeDir, ".trae", "rules", "agentenv-manager.md"),
     skillsDir: join(homeDir, ".trae", "skills")
   },
   {
     id: "pi",
     name: "Pi",
-    executable: [join(homeDir, ".local", "bin", "pi"), "pi"],
+    executablePath: commandPath("pi"),
     instructionsPath: join(homeDir, ".pi", "agent", "AGENTS.md"),
     skillsDir: join(homeDir, ".pi", "agent", "skills")
   }
@@ -142,7 +149,12 @@ const launchPackagedApplication = () =>
       AGENTENV_CACHE_ROOT: join(root, "cache"),
       AGENTENV_FAKE_HOME: fakeHomeRoot,
       AGENTENV_HOME: homeDir,
-      PATH: "/usr/bin:/bin:/usr/sbin:/sbin"
+      PATH: process.platform === "win32"
+        ? [
+            process.env.SystemRoot ? join(process.env.SystemRoot, "System32") : "",
+            process.env.SystemRoot ?? ""
+          ].filter(Boolean).join(";")
+        : "/usr/bin:/bin:/usr/sbin:/sbin"
     }
   });
 
@@ -159,7 +171,7 @@ const closePackagedApplication = async (app, page) => {
       app.close(),
       new Promise((_, reject) => {
         timeout = setTimeout(() => {
-          childProcess.kill("SIGKILL");
+          forceKill(childProcess);
           reject(new Error("Packaged application did not terminate within 5 seconds"));
         }, 5_000);
       })
@@ -173,11 +185,18 @@ try {
   await mkdir(opencodeDir, { recursive: true });
   await mkdir(repositoryRemote, { recursive: true });
   await mkdir(repositoryWork, { recursive: true });
-  const packagedAgentCommands = packagedTargets.map((target) => target.executable);
-  for (const [executablePath, name] of packagedAgentCommands) {
-    await mkdir(dirname(executablePath), { recursive: true });
-    await writeFile(executablePath, `#!/bin/sh\necho packaged-e2e-${name}\n`, "utf8");
-    await chmod(executablePath, 0o755);
+  for (const target of packagedTargets) {
+    await mkdir(dirname(target.executablePath), { recursive: true });
+    await writeFile(
+      target.executablePath,
+      process.platform === "win32"
+        ? `@echo off\r\necho packaged-e2e-${target.id}\r\n`
+        : `#!/bin/sh\necho packaged-e2e-${target.id}\n`,
+      "utf8"
+    );
+    if (process.platform !== "win32") {
+      await chmod(target.executablePath, 0o755);
+    }
   }
   await writeFile(join(opencodeDir, "AGENTS.md"), "# Before packaged takeover\n", "utf8");
   await writeFile(join(opencodeDir, "opencode.jsonc"), "{}\n", "utf8");
@@ -235,7 +254,13 @@ try {
     packagedProfileIds.set(target.id, await writePackagedTargetProfile(target));
   }
 
-  const runGit = (cwd, args) => execFileAsync("/usr/bin/git", args, {
+  const gitLookup = await execFileAsync(
+    process.platform === "win32" ? "where.exe" : "which",
+    ["git"]
+  );
+  const gitExecutable = gitLookup.stdout.trim().split(/\r?\n/).find(Boolean);
+  if (!gitExecutable) throw new Error("Packaged E2E requires system Git");
+  const runGit = (cwd, args) => execFileAsync(gitExecutable, args, {
     cwd,
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }
   });
@@ -347,7 +372,7 @@ try {
   await closePackagedApplication(application, restartedPage);
   application = undefined;
   process.stdout.write(
-    "Packaged macOS six-Agent Apply, restart, and Repository workflows passed\n"
+    `Packaged ${process.platform} six-Agent Apply, restart, and Repository workflows passed\n`
   );
 } finally {
   if (application) {
@@ -356,7 +381,7 @@ try {
       application.close(),
       new Promise((resolve) => {
         setTimeout(() => {
-          process.kill("SIGKILL");
+          forceKill(process);
           resolve();
         }, 5_000);
       })

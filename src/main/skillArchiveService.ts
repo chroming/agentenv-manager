@@ -2,11 +2,16 @@ import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, extname, isAbsolute, join, posix, relative, resolve } from "node:path";
+import { dirname, extname, join, posix, resolve } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { Open, type ZipEntry } from "unzipper";
 import type { LocalSkillSourceSelection } from "../shared/types";
+import {
+  isPortableFileName,
+  portableIdentityKey
+} from "../shared/portableNames";
+import { isPathInside } from "./platformPaths";
 
 const MAX_ARCHIVE_BYTES = 100 * 1024 * 1024;
 const MAX_EXPANDED_BYTES = 128 * 1024 * 1024;
@@ -24,7 +29,7 @@ const safeArchivePath = (entry: ZipEntry) => {
     throw new Error("ZIP contains an invalid empty file name");
   }
   const slashPath = entry.path.replace(/\\/g, "/");
-  if (isAbsolute(slashPath) || /^[a-zA-Z]:\//.test(slashPath)) {
+  if (posix.isAbsolute(slashPath) || /^[a-zA-Z]:\//.test(slashPath)) {
     throw new Error(`ZIP contains an absolute path: ${entry.path}`);
   }
   const normalized = posix.normalize(slashPath).replace(/^\.\/+/, "");
@@ -78,9 +83,18 @@ export const createSkillArchiveService = (): SkillArchiveService => {
     const seenPaths = new Set<string>();
     const entries = directory.files.map((entry) => {
       const path = safeArchivePath(entry);
-      const canonicalKey = path.normalize("NFC");
+      const segments = path.split("/");
+      const unsupportedName = segments.find((segment) => !isPortableFileName(segment));
+      if (unsupportedName) {
+        throw new Error(
+          `ZIP contains a file name unsupported on a target platform: ${unsupportedName}`
+        );
+      }
+      const canonicalKey = segments.map(portableIdentityKey).join("/");
       if (seenPaths.has(canonicalKey)) {
-        throw new Error(`ZIP contains a duplicate path: ${entry.path}`);
+        throw new Error(
+          `ZIP contains paths that collide across platforms: ${entry.path}`
+        );
       }
       seenPaths.add(canonicalKey);
       if ((entry.flags & 0x1) !== 0) {
@@ -108,8 +122,7 @@ export const createSkillArchiveService = (): SkillArchiveService => {
     try {
       for (const { entry, path } of entries) {
         const targetPath = resolve(rootPath, path);
-        const child = relative(rootPath, targetPath);
-        if (!child || child.startsWith("..") || isAbsolute(child)) {
+        if (!isPathInside(rootPath, targetPath)) {
           throw new Error(`ZIP contains an unsafe path: ${entry.path}`);
         }
         if (entry.type === "Directory") {

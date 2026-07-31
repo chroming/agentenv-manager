@@ -28,7 +28,7 @@ This document defines the behavior those answers require. Existing code and test
 
 - Primary user: a developer who uses multiple local coding agents and wants reliable, reusable environments.
 - Core job: clean local resources, compose an environment once, and safely deploy or switch it across supported Targets.
-- Platform: local macOS desktop application, with filesystem and CLI integration.
+- Platform: local macOS, Windows, and Linux desktop application, with filesystem and CLI integration.
 - Primary constraint: operations modify files used by other tools, so ownership, preview, atomicity, drift detection, and recovery matter more than visual novelty.
 
 Product ratings:
@@ -40,6 +40,25 @@ Product ratings:
 | Information density | 7/10 | Lists must scan well without hiding lifecycle state. |
 | Visual expression | 3/10 | Use a restrained operational desktop language. |
 | Motion intensity | 2/10 | Motion is limited to feedback and spatial continuity. |
+
+### 2.1 Platform Contract
+
+- Product semantics, Profile data, Library identity, Preview, Apply, Backup, and recovery MUST remain platform-neutral. Operating-system branching belongs in main-process platform owners, never in Renderer workflows or Target-specific business rules.
+- macOS preserves the established `~/.config/agentenv-manager` data root. Linux follows `XDG_CONFIG_HOME` with the standard `~/.config` fallback. Windows stores product data under Electron userData. `AGENTENV_DATA_ROOT` remains the explicit development and recovery override everywhere.
+- Executable discovery MUST understand each platform's path delimiter and executable rules. Windows discovery includes `PATHEXT` plus common npm, pnpm, Scoop, Chocolatey, Volta, Bun, WindowsApps, and system locations; POSIX desktop launches may use a bounded login-shell fallback.
+- `auto` is the default Skill deployment strategy. It uses directory links on POSIX, directory junctions on Windows, and falls back to an owned copy only when link creation is unsupported. Explicit copy and explicit live-link choices retain their meaning.
+- Ordinary file writes use a same-directory temporary file, file sync, atomic
+  rename, and bounded Windows lock retry; the previous file remains intact if
+  replacement fails. Directory and whole-resource replacements use a
+  recoverable replacement journal. Windows directory handles are not fsynced,
+  and no whole-resource replacement may delete the previous path before a
+  staged replacement and recovery record exist.
+- Backup manifests store symbolic-link targets and link types as data. Creating a Backup MUST NOT require permission to create another symbolic link, and Restore MUST recreate the recorded file, directory link, or junction type.
+- Portable Profile IDs, Skill IDs, Target names, and synced Skill trees MUST reject Windows reserved names, unsupported filename characters, trailing dots/spaces, and case-insensitive sibling collisions before publication or import.
+- System Git runs without a shell, with terminal prompts disabled, credentials redacted, `core.autocrlf=false`, and `core.filemode=false`. Cancellation terminates the complete child process tree using the platform-native mechanism.
+- Conversation launch uses a private temporary POSIX shell script on macOS/Linux and a private PowerShell script on Windows. Terminal preference MUST expose only choices supported by the current platform.
+- macOS uses its integrated hidden title bar. Windows and Linux retain native title bars and conventional File/Edit/View/Window/Help menu placement.
+- A platform is release-verified only after its native runner builds the installer target and passes the packaged six-Agent Apply, restart, sparse-PATH discovery, Repository import, persistence, and viewport smoke. Pure policy tests and a package built on another operating system are insufficient.
 
 Avoid:
 
@@ -138,17 +157,21 @@ content hash.
 
 ### 4.2.2 Workspace Sync
 
-Workspace Sync reuses portable environment intent across the user's Macs through a user-owned private Git repository. It is not Target deployment and MUST NOT automatically Apply a Profile.
+Workspace Sync reuses portable environment intent across the user's devices through a user-owned private Git repository. It is not Target deployment and MUST NOT automatically Apply a Profile.
 
-- The portable snapshot includes complete Profile v2 data, canonical Skill content and executable bits, portable Skill update metadata, global Skill availability, and the Skill source registry.
+- The portable snapshot includes complete Profile v2 data, canonical Skill
+  paths and bytes, portable Skill update metadata, global Skill availability,
+  and the Skill source registry. Executable bits are device-local because
+  Windows checkouts cannot represent them consistently; they MUST NOT affect
+  snapshot identity.
 - Target states, credentials, GitHub tokens, settings, backups, trash, history, observations, caches, absolute local paths, and manager-evidence lock paths MUST NOT enter a snapshot.
-- Device-local Skill source records excluded from the portable snapshot remain untouched when this Mac receives remote source-registry changes. Exclusion from Sync MUST NOT delete local-only source intent.
+- Device-local Skill source records excluded from the portable snapshot remain untouched when this device receives remote source-registry changes. Exclusion from Sync MUST NOT delete local-only source intent.
 - Snapshot output MUST be deterministic. A workspace with unchanged portable content produces the same content hash and no Git commit.
-- The application MAY check the remote repository in the background, but MUST NOT automatically update this Mac, publish, merge, or Apply.
+- The application MAY check the remote repository in the background, but MUST NOT automatically update this device, publish, merge, or Apply.
 - Background Check MUST use Sync-local serialization and MUST NOT hold the application-wide mutation lock while waiting on Git or the network. Update, Publish, recovery, connection changes, and disconnection remain globally serialized mutations.
 - Update and Publish require a fresh remote revision. Non-fast-forward changes and rewritten history MUST stop the operation; AgentEnv MUST NOT force-push.
 - Comparison is three-way against the last accepted base. Changes to different Profile or Skill sections MAY combine automatically. Concurrent changes to the same section, and delete-versus-modify, require an explicit local or remote choice.
-- Updating this Mac validates the complete candidate, creates one Workspace recovery backup, writes Profile, Library, and source registry data under the global mutation lock, verifies the result, and automatically restores all three on failure.
+- Updating this device validates the complete candidate, creates one Workspace recovery backup, writes Profile, Library, and source registry data under the global mutation lock, verifies the result, and automatically restores all three on failure.
 - If portable content is written but the accepted base or Sync state cannot be committed, AgentEnv MUST restore the Workspace recovery backup before reporting failure. A failed restore remains `Recovery required`.
 - An interrupted or failed restore enters `Recovery required`. The referenced recovery backup MUST NOT be removed by retention or manual backup cleanup.
 - Remote symlinks, path traversal, duplicate ids, broken references, unsupported future formats, embedded URL credentials, private keys, high-confidence tokens, and resource or total size-limit violations MUST be rejected before local mutation.
@@ -1268,7 +1291,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Startup diagnostics are size-bounded and rotated. Home paths and credential-shaped values are redacted, and Skill contents, MCP payloads, and secrets MUST NOT be logged.
 - Runtime diagnostics are always available without requiring a reproduction mode. Every IPC failure receives a stable diagnostic reference and records the action, safe object identifiers, elapsed time, original error name/message/stack/cause, and a bounded event chain in a rotated local JSONL log. Mutations and slow reads also record start and completion; diagnostic write failure MUST NOT change the result of the user operation.
 - Diagnostic context uses an explicit field allowlist. Clipboard text, Instructions, Skill contents, Conversation text, MCP definitions, environment values, credentials, authenticated URL components, and arbitrary IPC payloads MUST NOT enter logs, renderer diagnostics, or exported reports. Home paths are normalized to `~`, individual fields are size-bounded, and malformed log lines do not hide valid neighboring events.
-- Runtime errors show a concise message plus their diagnostic reference. Copy details resolves that reference to the redacted main-process error chain; View details exposes selectable original error, operation context, stack, and causes. Settings > Data and the macOS Help menu export one redacted JSON report containing build/system metadata, safe Target discovery state, recent diagnostic events, and startup diagnostics. Reports remain device-local and are never included in Workspace Sync.
+- Runtime errors show a concise message plus their diagnostic reference. Copy details resolves that reference to the redacted main-process error chain; View details exposes selectable original error, operation context, stack, and causes. Settings > Data and the native Help menu export one redacted JSON report containing build/system metadata, safe Target discovery state, recent diagnostic events, and startup diagnostics. Reports remain device-local and are never included in Workspace Sync.
 - Export report acknowledges work on the initiating button, prevents duplicate exports, and turns
   the completed path into transient success feedback. A completed export MUST NOT retain a
   loading spinner or require manual dismissal.
@@ -1388,6 +1411,7 @@ Status: supported viewport containment, topmost overlays, policy-based modal dis
 - Renderer-requested external links MUST be validated by the main process and limited to `http` and `https` URLs.
 - GitHub OAuth tokens are stored using the operating system's secure credential facility when available.
 - A saved GitHub token has separate credential and verification state. Local decryption failure or an explicit GitHub `401` invalid-credential response clears it. Offline state, timeout, rate limiting, malformed non-auth responses, and GitHub service failure retain the token and report `Signed in, verification unavailable`. Sign out removes only the token and pending Device Flow state; it MUST NOT alter Library content, source metadata, repository cache, or system Git credentials.
+- On Linux, `safeStorage` is acceptable only with a real Secret Service or KWallet backend. The `basic_text` and pre-ready `unknown` backends are treated as unavailable, and AgentEnv MUST refuse to persist a GitHub token.
 - Secrets MUST NOT appear in renderer logs, main-process logs, Preview diff, screenshots, or global feedback.
 - Profile Save MUST reject literal credentials detected in Instructions and direct the user to environment references. Legacy native content is excluded during v2 migration, and every Preview is redacted before crossing the preload boundary.
 - Preview redaction MUST replace sensitive before/after values and regenerate the rendered diff from those redacted values while the main process retains the original internal plan only for the guarded Apply operation.
@@ -1741,6 +1765,7 @@ This matrix is the release-facing index. A capability may be `Implemented` only 
 | Legacy shared-Library storage migration | `Partial` | Atomic destination replacement, source preservation, conflict retention, report | Unit complete; production-shaped packaged startup required |
 | Data Export and Restore | `Implemented` | Validated export, recovery copy, atomic app-data replacement | Domain and packaged restart smoke |
 | Desktop geometry and interaction | `Implemented` | No persisted effect; native window, focus, overlay, scroll, and viewport contracts | Renderer geometry and Electron screenshots |
+| Windows and Linux native packages | `Required` | Platform data roots, links, Git, terminal, menu, and installer lifecycle | Native CI packaged smoke on each operating system |
 | Signed and notarized macOS release | `Required` | Distribution trust only; no product-data mutation | Clean-Mac packaged smoke after credentials exist |
 
 ## 25. Production Release Gate
@@ -1757,7 +1782,7 @@ AgentEnv Manager is production-ready only when all of these are true:
 - All supported Targets pass native and cross-Target contract tests.
 - Default and minimum desktop viewports pass containment and overlay checks.
 - Packaged Electron application passes a real startup and primary-workflow smoke test.
-- The packaged Agent discovery smoke runs with a Finder-style minimal `PATH` and proves fallback discovery for OpenCode, Claude Code, Codex, Antigravity CLI, Trae CLI, and Pi.
+- The packaged Agent discovery smoke runs with a desktop-process minimal `PATH` and proves fallback discovery for OpenCode, Claude Code, Codex, Antigravity CLI, Trae CLI, and Pi on each claimed platform.
 
 Current verdict: **Needs refinement**. Core Skill Library, v2 Profile, Preview, transactional Apply, backup, retention, rollback, stale rollback protection, no-op, cross-Target Instructions and Skills, Create from Target, Target-specific Skill deployment, compatibility-copy consolidation, canonical Target lifecycle, data backup and restore, active-Profile deletion recovery, Stop Managing workflows, and sparse native MCP activation are functional. Broader Skill identity edge coverage and signed/notarized distribution remain release work.
 
@@ -1806,3 +1831,4 @@ The current machine-readable totals, source commit, deterministic tracked-and-un
 1. Validate both the one-time v1-to-v2 migration and legacy shared-Library storage migration against an anonymized production-shaped data export and a packaged startup.
 2. Extend the conditional duplicate review with more uncommon intentionally distinct same-name Skill fixtures.
 3. Sign and notarize macOS distribution, then repeat packaged primary-workflow verification on a clean Mac.
+4. Run the configured Windows and Linux native package jobs and record their first successful packaged evidence before describing either platform as verified.

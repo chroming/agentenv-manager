@@ -8,6 +8,10 @@ import {
   PortableWorkspaceManifestSchema,
   type PortableWorkspaceManifest
 } from "./portableSchemas";
+import {
+  isPortableFileName,
+  portableIdentityKey
+} from "../../shared/portableNames";
 import { toPortableOnlineLocator } from "./portableLocation";
 import { hashJson, hashPortableTree, inspectPortableTree, snapshotHashFor } from "./workspaceSnapshotHasher";
 
@@ -40,12 +44,25 @@ const listRealDirectories = async (root: string): Promise<string[]> => {
     throw error;
   }
   const names: string[] = [];
+  const portableNames = new Set<string>();
   for (const entry of entries) {
     const path = join(root, entry.name);
     const stats = await lstat(path);
     if (!entry.isDirectory() || stats.isSymbolicLink()) {
       throw new Error(`Portable Workspace entries must be real directories: ${path}`);
     }
+    if (!isPortableFileName(entry.name)) {
+      throw new Error(
+        `Portable Workspace contains an unsupported resource name: ${entry.name}`
+      );
+    }
+    const identity = portableIdentityKey(entry.name);
+    if (portableNames.has(identity)) {
+      throw new Error(
+        `Portable Workspace contains resource names that collide across platforms: ${entry.name}`
+      );
+    }
+    portableNames.add(identity);
     names.push(entry.name);
   }
   return names.sort();

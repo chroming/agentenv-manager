@@ -35,10 +35,26 @@ const restoreEntry = async (entry: BackupManifest["entries"][number]) => {
     await rm(entry.sourcePath, { recursive: true, force: true });
     return;
   }
-  if (!entry.backupPath) throw new Error(`Backup entry is missing its payload: ${entry.sourcePath}`);
+  if (
+    entry.kind !== "symlink" &&
+    !entry.backupPath
+  ) {
+    throw new Error(`Backup entry is missing its payload: ${entry.sourcePath}`);
+  }
+  if (
+    entry.kind === "symlink" &&
+    !entry.linkTarget &&
+    !entry.backupPath
+  ) {
+    throw new Error(`Backup link entry is missing its target: ${entry.sourcePath}`);
+  }
   await replacePathAtomically(entry.sourcePath, async (stagingPath) => {
     if (entry.kind === "symlink") {
-      await symlink(await readlink(entry.backupPath!), stagingPath);
+      await symlink(
+        entry.linkTarget ?? await readlink(entry.backupPath!),
+        stagingPath,
+        entry.linkType ?? "dir"
+      );
       return;
     }
     await cp(entry.backupPath!, stagingPath, { recursive: entry.kind === "directory" });

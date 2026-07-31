@@ -1,5 +1,5 @@
 import { cp, mkdir, rm } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type {
   WorkspaceSyncChange,
   WorkspaceSyncConflictChoice,
@@ -165,7 +165,16 @@ export const materializeMergedWorkspace = async (input: {
       }
       return join(input.local.root, "workspace", "skill-sources.json");
     })();
-    const destination = localPath.replace(input.local.root, input.destination);
+    const relativePath = relative(resolve(input.local.root), resolve(localPath));
+    if (
+      !relativePath ||
+      relativePath === ".." ||
+      relativePath.startsWith(`..${sep}`) ||
+      isAbsolute(relativePath)
+    ) {
+      throw new Error(`Portable Workspace path is outside its snapshot root: ${localPath}`);
+    }
+    const destination = join(input.destination, relativePath);
     await copySection(record?.path, destination);
   }
 

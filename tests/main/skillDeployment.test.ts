@@ -56,6 +56,24 @@ describe("Skill deployment", () => {
       .resolves.toBe("# Review\n");
   });
 
+  it("uses a junction for live directory links on Windows", async () => {
+    const fixture = await createFixture();
+    let requestedType: string | null | undefined;
+
+    await deploySkillDirectory({
+      ...fixture,
+      platform: "win32",
+      syncMethod: "auto",
+      markerContent: "{}",
+      createSymlink: async (_source, _target, type) => {
+        requestedType = type;
+        throw codedError("ENOTSUP");
+      }
+    });
+
+    expect(requestedType).toBe("junction");
+  });
+
   it("does not hide permission or filesystem failures behind Auto copy mode", async () => {
     const fixture = await createFixture();
 
@@ -83,6 +101,7 @@ describe("Skill deployment", () => {
   });
 
   it("removes only an owned deployment and never follows nested symbolic links", async () => {
+    if (process.platform === "win32") return;
     const fixture = await createFixture();
     const outside = join(root, "outside");
     await mkdir(fixture.targetDir, { recursive: true });

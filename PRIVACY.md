@@ -18,20 +18,22 @@ local, deletable index and bounded handoff context.
 
 ## Data Written Locally
 
-Application data is stored under `~/.config/agentenv-manager` by default. It
-contains Profiles, the Skill Library, backups, recovery state, settings, and
-rebuildable caches. Target files are changed only by confirmed operations
-described in the Preview.
+Application data uses the platform location documented in the README by
+default. It contains Profiles, the Skill Library, backups, recovery state,
+settings, and rebuildable caches. Target files are changed only by confirmed
+operations described in the Preview.
 
-Bounded, rotating runtime diagnostics are stored in the application's macOS log
+Bounded, rotating runtime diagnostics are stored in the application's local log
 directory. They contain operation names, allowlisted identifiers, timings, and
 redacted error chains. They do not contain instruction text, Skill contents,
 Conversation text, MCP definitions, environment values, credentials, or
 clipboard contents. Diagnostic reports are written only to a location selected
 by the user and are not included in Workspace Sync.
 
-GitHub OAuth tokens are encrypted with macOS secure storage before being written
-to the application data directory. Repository passwords, personal access
+GitHub OAuth tokens are encrypted with the operating system's secure storage
+before being written to the application data directory. AgentEnv refuses to
+persist them as plaintext when secure storage is unavailable, including
+Electron's unprotected `basic_text` fallback on Linux. Repository passwords, personal access
 tokens, SSH private keys, and credential-helper secrets are not copied into the
 application data directory.
 

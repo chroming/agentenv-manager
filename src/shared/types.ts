@@ -1683,6 +1683,8 @@ export interface LibraryResourceVersions {
 export interface BackupEntry {
   sourcePath: string;
   backupPath?: string;
+  linkTarget?: string;
+  linkType?: "file" | "dir" | "junction";
   sha256?: string;
   mode?: number;
   missing: boolean;

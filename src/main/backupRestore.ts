@@ -21,9 +21,10 @@ export const restoreBackupEntries = async (backup: BackupManifest) => {
     }
 
     if (entry.kind === "symlink") {
-      const linkTarget = await readlink(entry.backupPath ?? "");
+      const linkTarget =
+        entry.linkTarget ?? await readlink(entry.backupPath ?? "");
       await replacePathAtomically(entry.sourcePath, (stagingPath) =>
-        symlink(linkTarget, stagingPath, "dir")
+        symlink(linkTarget, stagingPath, entry.linkType ?? "dir")
       );
       continue;
     }

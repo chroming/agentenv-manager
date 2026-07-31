@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createConversationLauncher,
+  powerShellScriptFor,
   terminalOpenArgumentsFor,
   terminalScriptFor
 } from "../../../src/main/conversations/conversationLauncher";
@@ -88,15 +89,16 @@ describe("conversation launcher", () => {
   });
 
   it("executes the JSON bootstrap and then opens the captured interactive session", async () => {
+    if (process.platform === "win32") return;
     root = await mkdtemp(join(tmpdir(), "agentenv-conversation-resume-"));
     const executablePath = join(root, "fake-opencode");
     const invocationLog = join(root, "invocations.log");
     const scriptPath = join(root, "launch.command");
     await writeFile(executablePath, [
-      "#!/bin/zsh",
-      `print -r -- \"$*\" >> ${shellPath(invocationLog)}`,
-      "if [[ \"$1\" == \"run\" ]]; then",
-      "  print -r -- '{\"type\":\"text\",\"sessionID\":\"ses_test_123\"}'",
+      "#!/bin/sh",
+      `printf '%s\\n' \"$*\" >> ${shellPath(invocationLog)}`,
+      "if [ \"$1\" = \"run\" ]; then",
+      "  printf '%s\\n' '{\"type\":\"text\",\"sessionID\":\"ses_test_123\"}'",
       "fi"
     ].join("\n") + "\n", "utf8");
     await chmod(executablePath, 0o755);
@@ -112,7 +114,7 @@ describe("conversation launcher", () => {
     }), "utf8");
     await chmod(scriptPath, 0o755);
 
-    await execFileAsync("/bin/zsh", [scriptPath]);
+    await execFileAsync("/bin/sh", [scriptPath]);
 
     expect((await readFile(invocationLog, "utf8")).trim().split("\n")).toEqual([
       `run --file ${join(root, "handoff.md")} --format json`,
@@ -129,6 +131,7 @@ describe("conversation launcher", () => {
     let openedTerminal = "";
     const launcher = createConversationLauncher({
       artifactDir: root,
+      platform: "darwin",
       terminalPreference: async () => "ghostty",
       openTerminal: async (path, terminal) => {
         openedPath = path;
@@ -157,5 +160,47 @@ describe("conversation launcher", () => {
       "Ghostty",
       "/tmp/launch.command"
     ]);
+  });
+
+  it("writes a Linux shell launcher and a Windows PowerShell launcher", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-conversation-platforms-"));
+    const opened: string[] = [];
+    const spec = {
+      executablePath: String.raw`C:\Tools\codex.exe`,
+      args: ["resume", "session one"],
+      cwd: String.raw`C:\Work\project`,
+      env: { AGENTENV_TEST: "it's safe" }
+    };
+    const windows = createConversationLauncher({
+      artifactDir: root,
+      platform: "win32",
+      openTerminal: async (path) => {
+        opened.push(path);
+      }
+    });
+
+    await windows.launch(spec);
+
+    expect(opened[0]).toMatch(/\.ps1$/);
+    expect(await readFile(opened[0]!, "utf8")).toContain(
+      "& 'C:\\Tools\\codex.exe' 'resume' 'session one'"
+    );
+    expect(powerShellScriptFor("launch.ps1", spec)).toContain(
+      "$env:AGENTENV_TEST = 'it''s safe'"
+    );
+
+    const linux = createConversationLauncher({
+      artifactDir: root,
+      platform: "linux",
+      openTerminal: async (path) => {
+        opened.push(path);
+      }
+    });
+    await linux.launch({
+      executablePath: "/usr/bin/codex",
+      args: ["resume"]
+    });
+    expect(opened[1]).toMatch(/\.sh$/);
+    expect(await readFile(opened[1]!, "utf8")).toContain("#!/bin/sh");
   });
 });

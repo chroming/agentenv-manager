@@ -490,7 +490,7 @@ export const generatedZhCN: Record<string, string> = {
   "Skill usage filter": "Skill 使用情况筛选器",
   "Skill {{name}}": "Skill {{name}}",
   "Skills library": "Skills Library",
-  "Skills on this Mac": "此 Mac 上的 Skills",
+  "Skills on this device": "此设备上的 Skills",
   "Source": "来源",
   "Source available": "来源可用",
   "Source changes": "来源更改",

@@ -1,6 +1,6 @@
 # Development
 
-AgentEnv Manager is an Electron application for macOS. Development and CI use
+AgentEnv Manager is an Electron application for macOS, Windows, and Linux. Development and CI use
 the npm lockfile and Node.js 22.12 or newer.
 
 ## Setup
@@ -133,6 +133,19 @@ Unsigned local application:
 ```bash
 npm run pack
 ```
+
+Platform installers:
+
+```bash
+npm run dist:mac
+npm run dist:win
+npm run dist:linux
+```
+
+`npm run test:platform` owns pure platform-policy tests. Native Windows and
+Linux CI then build their installer targets and run the same packaged
+six-Agent workflow against an isolated home. A macOS-only local pass is not
+evidence that either native package works.
 
 Signed and notarized release:
 

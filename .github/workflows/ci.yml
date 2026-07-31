@@ -33,3 +33,32 @@ jobs:
       - run: npm test
       - run: npm run verify:visual
       - run: npm run test:e2e:packaged
+
+  cross-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run audit:targets
+      - run: npm run audit:translations
+      - run: npm run test:platform
+      - if: runner.os == 'Linux'
+        run: npm run dist:linux
+      - if: runner.os == 'Linux'
+        run: xvfb-run -a node scripts/test-packaged-app.mjs
+      - if: runner.os == 'Windows'
+        run: npm run dist:win
+      - if: runner.os == 'Windows'
+        run: node scripts/test-packaged-app.mjs

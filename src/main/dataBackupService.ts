@@ -4,6 +4,7 @@ import type { AgentEnvPaths } from "./paths";
 import { replacePathWithCopy, writeAtomic } from "./fileUtils";
 import { ensureAppDataFormat } from "./appDataFormat";
 import { validateAppDataRoot } from "./appDataValidation";
+import { isPathInside, pathsEqual } from "./platformPaths";
 
 export interface DataBackupResult {
   path: string;
@@ -27,8 +28,8 @@ export const createDataBackup = async (
   const activeData = resolve(paths.appDataRoot);
   const destinationRootPath = resolve(destinationRoot);
   if (
-    destinationRootPath === activeData ||
-    destinationRootPath.startsWith(`${activeData}/`)
+    pathsEqual(destinationRootPath, activeData) ||
+    isPathInside(activeData, destinationRootPath)
   ) {
     throw new Error("Store AgentEnv backups outside the active data directory");
   }
@@ -48,7 +49,7 @@ export const createDataBackup = async (
       2
     )}\n`,
   );
-  await chmod(destination, 0o700);
+  if (process.platform !== "win32") await chmod(destination, 0o700);
   return { path: destination, createdAt };
 };
 
@@ -106,8 +107,8 @@ export const restoreDataBackup = async (
   const validate = options.validate ?? validateAppDataRoot;
   await inspectDataBackup(backupPath, { validate });
   if (
-    resolve(backupPath) === resolve(paths.appDataRoot) ||
-    resolve(backupPath).startsWith(`${resolve(paths.appDataRoot)}/`)
+    pathsEqual(backupPath, paths.appDataRoot) ||
+    isPathInside(paths.appDataRoot, backupPath)
   ) {
     throw new Error("Choose a backup stored outside the active AgentEnv data directory");
   }
@@ -118,7 +119,7 @@ export const restoreDataBackup = async (
     await replacePathWithCopy(join(backupPath, "data"), paths.appDataRoot, {
       dereference: false
     });
-    await chmod(paths.appDataRoot, 0o700);
+    if (process.platform !== "win32") await chmod(paths.appDataRoot, 0o700);
     await ensureAppDataFormat(paths);
     await validate(paths.appDataRoot);
   } catch (error) {
@@ -128,7 +129,7 @@ export const restoreDataBackup = async (
         paths.appDataRoot,
         { dereference: false }
       );
-      await chmod(paths.appDataRoot, 0o700);
+      if (process.platform !== "win32") await chmod(paths.appDataRoot, 0o700);
       await ensureAppDataFormat(paths);
       await validate(paths.appDataRoot);
     } catch (rollbackError) {

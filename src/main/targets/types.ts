@@ -16,6 +16,8 @@ export interface TargetPathInput {
   homeDir: string;
   fakeHomeRoot?: string;
   rootDirOverride?: string;
+  platform?: NodeJS.Platform;
+  environment?: NodeJS.ProcessEnv;
 }
 
 export interface TargetAssetInput {
@@ -79,6 +81,8 @@ export interface AgentConversationCandidate {
 
 export interface AgentConversationContext {
   homeDir: string;
+  platform?: NodeJS.Platform;
+  environment?: NodeJS.ProcessEnv;
   executablePath?: string;
   targetPaths: TargetPaths;
 }

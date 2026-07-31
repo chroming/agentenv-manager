@@ -300,6 +300,8 @@ export const ProfileSidebar = ({
   onQuickOpen
 }: ProfileSidebarProps) => {
   const { t } = useI18n();
+  const quickOpenShortcut =
+    window.agentEnv.platform === "darwin" ? "⌘K" : "Ctrl+K";
   const readyTargets = targets.filter((target) => target.health.status === "ready").length;
   const orderedTargets = [...targets]
     .sort((left, right) => targetDisplayRank(left) - targetDisplayRank(right));
@@ -348,7 +350,7 @@ export const ProfileSidebar = ({
         <button className="workspace-search-button" type="button" onClick={onQuickOpen}>
           <Search size={15} strokeWidth={2.2} aria-hidden="true" />
           <span>{t("Quick open")}</span>
-          <kbd>⌘K</kbd>
+          <kbd>{quickOpenShortcut}</kbd>
         </button>
         <div className="nav-section-label">{t("Workspace")}</div>
         {workspaceItems.map((item) => {

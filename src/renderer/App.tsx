@@ -303,7 +303,7 @@ const AppContent = ({
   const [skillSettings, setSkillSettings] = useState<AgentEnvSettings>({
     locale: "system",
     conversationTerminal: "default",
-    skillSyncMethod: "symlink",
+    skillSyncMethod: "auto",
     skillStorageLocation: "appData",
     skillAutoCheckEnabled: true,
     skillAutoCheckIntervalMinutes: 60,
@@ -1994,7 +1994,7 @@ const AppContent = ({
       setSkillInventory(await window.agentEnv.scanSkillInventory());
       await refreshPreview();
       setProfileSaveStatus(
-        `${issue.resourceId} is left unmanaged on this Mac.`
+        `${issue.resourceId} is left unmanaged on this device.`
       );
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -2618,7 +2618,7 @@ const AppContent = ({
       setSkillInventory(await window.agentEnv.scanSkillInventory());
       setSkillUpdateCheckStatus({
         state: "success",
-        message: `${skillKey} is left unmanaged on this Mac`
+        message: `${skillKey} is left unmanaged on this device`
       });
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);

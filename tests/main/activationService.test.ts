@@ -553,8 +553,7 @@ describe("activation service v2", () => {
     const backup = await createBackupStore(paths).readBackup(applied.backupId);
     const rootEntry = backup.entries.find((entry) => entry.sourcePath === skillsRoot);
     expect(rootEntry?.kind).toBe("symlink");
-    if (!rootEntry?.backupPath) throw new Error("Expected Skills root backup path");
-    expect(await readlink(rootEntry.backupPath)).toBe(missingDestination);
+    expect(rootEntry?.linkTarget).toBe(missingDestination);
   });
 
   it("does not inspect or write MCP config in ignore mode", async () => {

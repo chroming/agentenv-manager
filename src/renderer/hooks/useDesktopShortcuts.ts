@@ -31,14 +31,16 @@ export const useDesktopShortcuts = ({
   onOpenQuickSearch,
   profileSearchRef,
   skillSearchRef,
-  platform = navigator.platform
+  platform = window.agentEnv.platform
 }: DesktopShortcutOptions) => {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.altKey) {
         return;
       }
-      const isMac = /Mac|iPhone|iPad|iPod/i.test(platform);
+      const isMac =
+        platform === "darwin" ||
+        /Mac|iPhone|iPad|iPod/i.test(platform);
       const hasCommandModifier = isMac ? event.metaKey : event.ctrlKey;
       if (!hasCommandModifier) {
         return;

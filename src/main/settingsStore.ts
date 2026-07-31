@@ -9,7 +9,7 @@ import { pathEntryExists, replacePathAtomically, writeAtomic } from "./fileUtils
 export const SettingsSchema = z.object({
   locale: z.enum(["system", "en", "zh_CN", "zh_TW"]).default("system"),
   conversationTerminal: z.enum(["default", "ghostty"]).default("default"),
-  skillSyncMethod: z.enum(["symlink", "copy", "auto"]).default("symlink"),
+  skillSyncMethod: z.enum(["symlink", "copy", "auto"]).default("auto"),
   skillStorageLocation: z.enum(["appData", "agents"]).default("appData"),
   skillAutoCheckEnabled: z.boolean().default(true),
   skillAutoCheckIntervalMinutes: z.number().int().min(5).max(1440).default(60),
@@ -24,7 +24,7 @@ export const parseSettingsData = (value: unknown): AgentEnvSettings =>
 const DEFAULT_SETTINGS: AgentEnvSettings = {
   locale: "system",
   conversationTerminal: "default",
-  skillSyncMethod: "symlink",
+  skillSyncMethod: "auto",
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,
   skillAutoCheckIntervalMinutes: 60,
@@ -33,6 +33,7 @@ const DEFAULT_SETTINGS: AgentEnvSettings = {
 
 export interface SettingsStoreOptions {
   supportedTargetIds?: string[];
+  platform?: NodeJS.Platform;
 }
 
 export interface SettingsStore {
@@ -132,6 +133,7 @@ export const createSettingsStore = (
   paths: AgentEnvPaths,
   options: SettingsStoreOptions = {}
 ): SettingsStore => {
+  const platform = options.platform ?? process.platform;
   const normalizeEnabledTargets = (settings: AgentEnvSettings): AgentEnvSettings => {
     const enabledTargetIds =
       settings.enabledTargetIds ??
@@ -146,6 +148,9 @@ export const createSettingsStore = (
     );
     const normalized: AgentEnvSettings = {
       ...settings,
+      ...(platform === "win32" && settings.conversationTerminal === "ghostty"
+        ? { conversationTerminal: "default" as const }
+        : {}),
       ...(enabledTargetIds ? { enabledTargetIds } : {})
     };
     if (Object.keys(targetConfigRoots).length > 0) normalized.targetConfigRoots = targetConfigRoots;
@@ -162,7 +167,7 @@ export const createSettingsStore = (
         : current;
       if (
         next.skillStorageLocation !== parsed.skillStorageLocation ||
-        JSON.stringify(next.enabledTargetIds) !== JSON.stringify(parsed.enabledTargetIds)
+        JSON.stringify(next) !== JSON.stringify(parsed)
       ) {
         await migrateSkillStorage(paths, parsed, next);
         await writeAtomic(settingsPathFor(paths), `${JSON.stringify(next, null, 2)}\n`);
@@ -186,6 +191,9 @@ export const createSettingsStore = (
     const current = await readSettings();
     if (input.skillStorageLocation === "agents") {
       throw new Error("~/.agents/skills is reserved for shared runtime installs");
+    }
+    if (platform === "win32" && input.conversationTerminal === "ghostty") {
+      throw new Error("Ghostty is not available as a Windows conversation terminal");
     }
     for (const path of Object.values(input.targetConfigRoots ?? {})) {
       if (!isAbsolute(path)) throw new Error("Agent configuration roots must use absolute paths");

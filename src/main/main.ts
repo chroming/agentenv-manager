@@ -20,7 +20,11 @@ import {
 } from "./appDataRoot";
 import { createBackupStore } from "./backupStore";
 import { createBackupMaintenanceService } from "./backupMaintenanceService";
-import { createFileGitHubTokenStore, createGitHubAuthService } from "./githubAuthService";
+import {
+  createFileGitHubTokenStore,
+  createGitHubAuthService,
+  isSecureTokenStorageAvailable
+} from "./githubAuthService";
 import { registerIpcHandlers } from "./ipc";
 import { createPaths } from "./paths";
 import { createProfileStore } from "./profileStore";
@@ -477,7 +481,12 @@ const createWindow = () => {
 
 const resolveStartupDataRoot = () => {
   const homeDir = process.env.AGENTENV_HOME ?? app.getPath("home");
-  return resolveAppDataRoot({ homeDir, userDataDir: app.getPath("userData") });
+  return resolveAppDataRoot({
+    env: process.env,
+    homeDir,
+    platform: process.platform,
+    userDataDir: app.getPath("userData")
+  });
 };
 
 const createServices = async (
@@ -502,7 +511,9 @@ const createServices = async (
       });
     }
     await mkdir(appDataRoot, { recursive: true, mode: 0o700 });
-    await chmod(appDataRoot, 0o700);
+    if (process.platform !== "win32") {
+      await chmod(appDataRoot, 0o700);
+    }
   });
   const paths = createPaths({
     appDataRoot,
@@ -524,7 +535,8 @@ const createServices = async (
     await ensureAppDataFormat(paths);
   });
   const settingsStore = createSettingsStore(paths, {
-    supportedTargetIds: targetRegistry.list().map((target) => target.id)
+    supportedTargetIds: targetRegistry.list().map((target) => target.id),
+    platform: process.platform
   });
   const settings = await mutationCoordinator.runExclusive("Initialize Settings", () =>
     settingsStore.readSettings()
@@ -542,17 +554,25 @@ const createServices = async (
     if (repositoryServicesDisposed) {
       return Promise.reject(new Error("Repository service is shutting down"));
     }
-    repositorySourcePromise ??= findExecutable("git", { homeDir: paths.homeDir }).then(
+    repositorySourcePromise ??= findExecutable("git", {
+      environment: process.env,
+      homeDir: paths.homeDir,
+      platform: process.platform
+    }).then(
       (executablePath) => {
         if (repositoryServicesDisposed) {
           throw new Error("Repository service is shutting down");
         }
         if (!executablePath) {
           throw new Error(
-            "System Git is unavailable. Install Xcode Command Line Tools or Git, then retry."
+            "System Git is unavailable. Install Git, then retry."
           );
         }
-        gitRunner = createGitCommandRunner({ executablePath });
+        gitRunner = createGitCommandRunner({
+          argsPrefix: ["-c", "core.autocrlf=false", "-c", "core.filemode=false"],
+          executablePath,
+          platform: process.platform
+        });
         const cache = createGitRepositoryCache({
           cacheRoot: paths.repositoryCacheDir,
           runner: gitRunner
@@ -589,14 +609,21 @@ const createServices = async (
     tokenStore: createFileGitHubTokenStore(paths, {
       decryptString: (value) => safeStorage.decryptString(value),
       encryptString: (value) => safeStorage.encryptString(value),
-      isEncryptionAvailable: () => safeStorage.isEncryptionAvailable()
+      isEncryptionAvailable: () =>
+        isSecureTokenStorageAvailable({
+          encryptionAvailable: safeStorage.isEncryptionAvailable(),
+          platform: process.platform,
+          ...(process.platform === "linux"
+            ? { backend: safeStorage.getSelectedStorageBackend() }
+            : {})
+        })
     })
   });
   const profileStore = createProfileStore({
     appDataRoot: paths.appDataRoot,
     fakeHomeRoot: paths.fakeHomeRoot
   }, targetRegistry);
-  const backupStore = createBackupStore(paths);
+  const backupStore = createBackupStore(paths, { platform: process.platform });
   const workspaceSyncTransaction = createWorkspaceSyncTransaction({ paths, backupStore });
   reportPhase("recovering-sync");
   await mutationCoordinator.runExclusive("Recover Workspace Sync", async () => {
@@ -702,11 +729,22 @@ const createServices = async (
   const loadSyncTransport = async () => {
     if (syncTransportDisposed) throw new Error("Workspace Sync is shutting down");
     if (syncTransport) return syncTransport;
-    const executablePath = await findExecutable("git", { homeDir: paths.homeDir });
+    const executablePath = await findExecutable("git", {
+      environment: process.env,
+      homeDir: paths.homeDir,
+      platform: process.platform
+    });
     if (!executablePath) {
-      throw new Error("System Git is unavailable. Install Xcode Command Line Tools or Git, then retry.");
+      throw new Error("System Git is unavailable. Install Git, then retry.");
     }
-    syncTransport = createGitSyncTransport(createGitCommandRunner({ executablePath }));
+    syncTransport = createGitSyncTransport(
+      createGitCommandRunner({
+        argsPrefix: ["-c", "core.autocrlf=false", "-c", "core.filemode=false"],
+        executablePath,
+        platform: process.platform
+      }),
+      { platform: process.platform }
+    );
     return syncTransport;
   };
   const workspaceSyncService = createWorkspaceSyncService({
@@ -912,6 +950,7 @@ if (ownsSingleInstance) void app.whenReady().then(() => {
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate(createApplicationMenuTemplate({
     isDevelopment: Boolean(process.env.ELECTRON_RENDERER_URL),
+    platform: process.platform,
     openSettings: () => requestSettingsForWindow(
       BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
     ),

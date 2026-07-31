@@ -12,6 +12,7 @@ import type {
   ConversationRefreshResult
 } from "../../shared/types";
 import type { AgentEnvPaths } from "../paths";
+import { pathsEqual } from "../platformPaths";
 import type { SettingsStore } from "../settingsStore";
 import { findSecretWarnings, redactSensitiveValues } from "../secretWarnings";
 import type { TargetDiscoveryService } from "../targetDiscovery";
@@ -159,11 +160,21 @@ const formatContinuation = (
 const contextFor = (
   target: Awaited<ReturnType<TargetDiscoveryService["listTargets"]>>[number],
   homeDir: string
-): AgentConversationContext => ({
-  homeDir,
-  executablePath: target.health.executablePath,
-  targetPaths: target.paths
-});
+): AgentConversationContext => {
+  const processHome =
+    process.platform === "win32"
+      ? process.env.USERPROFILE ?? process.env.HOME
+      : process.env.HOME ?? process.env.USERPROFILE;
+  return {
+    homeDir,
+    platform: process.platform,
+    ...(processHome && pathsEqual(processHome, homeDir)
+      ? { environment: process.env }
+      : {}),
+    executablePath: target.health.executablePath,
+    targetPaths: target.paths
+  };
+};
 
 const fallbackLaunchSpec = (
   target: Awaited<ReturnType<TargetDiscoveryService["listTargets"]>>[number],
@@ -179,7 +190,7 @@ const fallbackLaunchSpec = (
   const application = target.health.installationEvidence.find(
     (evidence) => evidence.kind === "desktop-app"
   );
-  return application
+  return application && process.platform === "darwin"
     ? {
         executablePath: "/usr/bin/open",
         args: [application.path],
@@ -492,7 +503,9 @@ export const createConversationService = async (options: {
           encoding: "utf8",
           mode: 0o600
         });
-        await chmod(entry.contextPath, 0o600);
+        if (process.platform !== "win32") {
+          await chmod(entry.contextPath, 0o600);
+        }
         try {
           await launcher.launch(entry.launchSpec);
         } catch (error) {

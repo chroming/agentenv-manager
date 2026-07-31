@@ -20,6 +20,17 @@ const setup = async () => {
 };
 
 describe("OpenCode Profile v2 adapter", () => {
+  it("honors an absolute OpenCode configuration directory", () => {
+    const configDir = join(root || tmpdir(), "custom-opencode");
+    const paths = createOpenCodeTargetAdapter().createTargetPaths({
+      homeDir: join(root || tmpdir(), "home"),
+      environment: { OPENCODE_CONFIG_DIR: configDir }
+    });
+
+    expect(paths.configDir).toBe(configDir);
+    expect(paths.skillsDir).toBe(join(configDir, "skills"));
+  });
+
   it("creates a portable v2 Profile", () => {
     const profile = createOpenCodeTargetAdapter().createDefaultProfile("daily");
     expect(profile.manifest).toMatchObject({ version: 2, preferredTargetId: "opencode" });

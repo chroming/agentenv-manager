@@ -8,9 +8,10 @@ import {
   symlink,
   unlink
 } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { join } from "node:path";
 import type { AgentEnvSettings } from "../shared/types";
 import { isMissingFileError, replacePathAtomically, writeAtomic } from "./fileUtils";
+import { isPathInside } from "./platformPaths";
 import {
   isAgentEnvOwnedDir,
   markerPathFor,
@@ -47,13 +48,19 @@ export const deploySkillDirectory = async (input: {
   targetDir: string;
   syncMethod: AgentEnvSettings["skillSyncMethod"];
   markerContent: string;
+  platform?: NodeJS.Platform;
   createSymlink?: typeof symlink;
 }) => {
+  const platform = input.platform ?? process.platform;
   let deployedAs: "copy" | "symlink" = input.syncMethod === "copy" ? "copy" : "symlink";
   await replacePathAtomically(input.targetDir, async (stagingPath) => {
     if (input.syncMethod !== "copy") {
       try {
-        await (input.createSymlink ?? symlink)(input.sourceDir, stagingPath, "dir");
+        await (input.createSymlink ?? symlink)(
+          input.sourceDir,
+          stagingPath,
+          platform === "win32" ? "junction" : "dir"
+        );
         return;
       } catch (error) {
         if (input.syncMethod === "symlink" || !isUnsupportedSkillLinkError(error)) {
@@ -64,7 +71,7 @@ export const deploySkillDirectory = async (input: {
     }
     await copySkillEntries(input.sourceDir, stagingPath);
     await writeAtomic(markerPathFor(stagingPath), input.markerContent);
-  });
+  }, { platform });
 
   if (deployedAs === "symlink") {
     await writeAtomic(markerPathForFile(input.targetDir), input.markerContent);
@@ -75,10 +82,7 @@ export const deploySkillDirectory = async (input: {
 };
 
 const assertContainedChild = (targetPath: string, allowedRoot: string) => {
-  const root = resolve(allowedRoot);
-  const target = resolve(targetPath);
-  const child = relative(root, target);
-  if (!child || child.startsWith("..") || isAbsolute(child)) {
+  if (!isPathInside(allowedRoot, targetPath)) {
     throw new Error(`Refusing to remove a Skill outside its allowed root: ${targetPath}`);
   }
 };

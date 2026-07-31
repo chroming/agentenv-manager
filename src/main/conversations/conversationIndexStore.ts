@@ -201,7 +201,9 @@ export const createConversationIndexStore = async (
   path: string
 ): Promise<ConversationIndexStore> => {
   const database = await openRecoverableDatabase(path);
-  await chmod(path, 0o600).catch(() => undefined);
+  if (process.platform !== "win32") {
+    await chmod(path, 0o600).catch(() => undefined);
+  }
   const reader = createConversationIndexReader(path);
 
   const versionStatement = database.prepare(

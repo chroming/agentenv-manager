@@ -2,6 +2,7 @@ import { cp, mkdir, rm, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { WorkspaceSyncConnection } from "../../shared/workspaceSync";
 import type { GitCommandRunner } from "../skillSources/gitCommandRunner";
+import { platformNullDevice } from "../platformPaths";
 import { parseWorkspaceSyncConnection } from "./syncStateStore";
 
 export interface RemoteWorkspaceRevision {
@@ -29,15 +30,29 @@ const gitEnv = {
   GIT_COMMITTER_EMAIL: "agentenv-manager@localhost"
 };
 
-const run = async (runner: GitCommandRunner, args: string[], cwd?: string) =>
-  runner.run(["-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", ...args], {
+const run = async (
+  runner: GitCommandRunner,
+  args: string[],
+  cwd: string | undefined,
+  platform: NodeJS.Platform
+) =>
+  runner.run(["-c", `core.hooksPath=${platformNullDevice(platform)}`, "-c", "commit.gpgsign=false", ...args], {
     cwd,
     env: gitEnv,
     timeoutMs: 90_000
   });
 
-const remoteHead = async (runner: GitCommandRunner, connection: WorkspaceSyncConnection) => {
-  const result = await run(runner, ["ls-remote", "--heads", connection.repository, `refs/heads/${connection.branch}`]);
+const remoteHead = async (
+  runner: GitCommandRunner,
+  connection: WorkspaceSyncConnection,
+  platform: NodeJS.Platform
+) => {
+  const result = await run(
+    runner,
+    ["ls-remote", "--heads", connection.repository, `refs/heads/${connection.branch}`],
+    undefined,
+    platform
+  );
   const line = result.stdout.trim().split("\n").find(Boolean);
   return line?.split(/\s+/)[0];
 };
@@ -50,22 +65,28 @@ const assertSyncManifest = async (root: string) => {
   }
 };
 
-export const createGitSyncTransport = (runner: GitCommandRunner): GitSyncTransport => ({
+export const createGitSyncTransport = (
+  runner: GitCommandRunner,
+  options: { platform?: NodeJS.Platform } = {}
+): GitSyncTransport => {
+  const platform = options.platform ?? process.platform;
+  const execute = (args: string[], cwd?: string) => run(runner, args, cwd, platform);
+  return {
   fetch: async (rawConnection, destination, expectedAncestor) => {
     const connection = parseWorkspaceSyncConnection(rawConnection);
-    const revision = await remoteHead(runner, connection);
+    const revision = await remoteHead(runner, connection, platform);
     await rm(destination, { recursive: true, force: true });
     if (!revision) return {};
     await mkdir(dirname(destination), { recursive: true });
-    await run(runner, ["clone", "--depth", "1", "--no-tags", "--branch", connection.branch, "--single-branch", connection.repository, destination]);
+    await execute(["clone", "--depth", "1", "--no-tags", "--branch", connection.branch, "--single-branch", connection.repository, destination]);
     if (expectedAncestor && expectedAncestor !== revision) {
       try {
-        await run(runner, ["fetch", "--unshallow", "--no-tags", "origin", connection.branch], destination);
+        await execute(["fetch", "--unshallow", "--no-tags", "origin", connection.branch], destination);
       } catch {
         // Local and already-complete clones do not have a shallow boundary.
       }
       try {
-        await run(runner, ["merge-base", "--is-ancestor", expectedAncestor, revision], destination);
+        await execute(["merge-base", "--is-ancestor", expectedAncestor, revision], destination);
       } catch {
         throw new Error("The remote Workspace history was rewritten. Reconnect and review it as a new source.");
       }
@@ -76,35 +97,36 @@ export const createGitSyncTransport = (runner: GitCommandRunner): GitSyncTranspo
   },
   publish: async ({ connection: rawConnection, snapshotRoot, expectedRevision, workDir }) => {
     const connection = parseWorkspaceSyncConnection(rawConnection);
-    const currentRevision = await remoteHead(runner, connection);
+    const currentRevision = await remoteHead(runner, connection, platform);
     if (currentRevision !== expectedRevision) {
       throw new Error("The remote Workspace changed. Check again before publishing.");
     }
     await rm(workDir, { recursive: true, force: true });
     await mkdir(dirname(workDir), { recursive: true });
     if (currentRevision) {
-      await run(runner, ["clone", "--depth", "1", "--no-tags", "--branch", connection.branch, "--single-branch", connection.repository, workDir]);
+      await execute(["clone", "--depth", "1", "--no-tags", "--branch", connection.branch, "--single-branch", connection.repository, workDir]);
     } else {
       await mkdir(workDir, { recursive: true });
-      await run(runner, ["init"], workDir);
-      await run(runner, ["remote", "add", "origin", connection.repository], workDir);
-      await run(runner, ["checkout", "--orphan", connection.branch], workDir);
+      await execute(["init"], workDir);
+      await execute(["remote", "add", "origin", connection.repository], workDir);
+      await execute(["checkout", "--orphan", connection.branch], workDir);
     }
     await rm(join(workDir, "agentenv-sync.json"), { force: true });
     await rm(join(workDir, "workspace"), { recursive: true, force: true });
     await cp(join(snapshotRoot, "agentenv-sync.json"), join(workDir, "agentenv-sync.json"));
     await cp(join(snapshotRoot, "workspace"), join(workDir, "workspace"), { recursive: true });
-    await run(runner, ["add", "--", "agentenv-sync.json", "workspace"], workDir);
-    const status = await run(runner, ["status", "--porcelain", "--", "agentenv-sync.json", "workspace"], workDir);
+    await execute(["add", "--", "agentenv-sync.json", "workspace"], workDir);
+    const status = await execute(["status", "--porcelain", "--", "agentenv-sync.json", "workspace"], workDir);
     if (!status.stdout.trim()) {
-      const revision = currentRevision ?? (await run(runner, ["rev-parse", "HEAD"], workDir)).stdout.trim();
+      const revision = currentRevision ?? (await execute(["rev-parse", "HEAD"], workDir)).stdout.trim();
       return revision;
     }
-    await run(runner, ["commit", "--no-verify", "-m", "Update AgentEnv workspace"], workDir);
-    const revision = (await run(runner, ["rev-parse", "HEAD"], workDir)).stdout.trim();
-    await run(runner, ["push", "origin", `HEAD:refs/heads/${connection.branch}`], workDir);
+    await execute(["commit", "--no-verify", "-m", "Update AgentEnv workspace"], workDir);
+    const revision = (await execute(["rev-parse", "HEAD"], workDir)).stdout.trim();
+    await execute(["push", "origin", `HEAD:refs/heads/${connection.branch}`], workDir);
     return revision;
   },
   cancel: () => runner.cancelActive(),
   dispose: () => runner.dispose()
-});
+  };
+};
