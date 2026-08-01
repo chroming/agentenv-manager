@@ -63,9 +63,22 @@ const statusLabel = (status: OneShotEvaluationRun["status"]) => ({
 
 const formatDuration = (milliseconds: number) => {
   if (milliseconds > 0 && milliseconds < 1_000) return "<1s";
-  const seconds = Math.max(0, Math.round(milliseconds / 1_000));
+  const preciseSeconds = Math.max(0, Math.round(milliseconds / 100) / 10);
+  if (preciseSeconds < 10) return `${preciseSeconds}s`;
+  const seconds = Math.round(preciseSeconds);
   if (seconds < 60) return `${seconds}s`;
   return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+};
+
+const formatDelta = (
+  current: number | undefined,
+  proposed: number | undefined,
+  format: (value: number) => string
+) => {
+  if (current === undefined || proposed === undefined) return undefined;
+  const delta = proposed - current;
+  if (delta === 0) return "0";
+  return `${delta > 0 ? "+" : "-"}${format(Math.abs(delta))}`;
 };
 
 const formatBytes = (bytes: number) => {
@@ -268,11 +281,15 @@ export const ProfileEvaluationDialog = ({
           count: scope.includedCount
         });
 
-  const sideSummary = (side: OneShotEvaluationSideResult) => ({
-    tokens: totalTokens(side),
-    changes: side.changedFiles.length,
-    duration: formatDuration(side.durationMs)
-  });
+  const resultEnvironmentValue = (
+    current: string | undefined,
+    proposed: string | undefined
+  ) => current === proposed
+    ? current ?? t("Unavailable")
+    : t("Agent now: {{current}} · With Profile: {{proposed}}", {
+        current: current ?? t("Unavailable"),
+        proposed: proposed ?? t("Unavailable")
+      });
 
   return (
     <>
@@ -402,8 +419,8 @@ export const ProfileEvaluationDialog = ({
                 <section className="profile-comparison-environments" aria-label={t("Environment comparison") }>
                   <div className="profile-comparison-environments__header">
                     <span />
-                    <strong>{t("Current setup")}</strong>
-                    <strong>{t("Proposed Profile")}</strong>
+                    <strong>{t("Agent now")}</strong>
+                    <strong>{t("With Profile")}</strong>
                   </div>
                   {(["instructions", "skills", "mcp"] as const).map((kind) => (
                     <div className="profile-comparison-resource-row" key={kind}>
@@ -451,12 +468,12 @@ export const ProfileEvaluationDialog = ({
                 <span className={currentStageActive
                   ? "is-active"
                   : proposedStageActive || resultsStageActive ? "is-complete" : ""}>
-                  {t("Current setup")}
+                  {t("Agent now")}
                 </span>
                 <span className={proposedStageActive
                   ? "is-active"
                   : resultsStageActive ? "is-complete" : ""}>
-                  {t("Proposed Profile")}
+                  {t("With Profile")}
                 </span>
               </div>
               <dl>
@@ -494,14 +511,18 @@ export const ProfileEvaluationDialog = ({
                 </div>
               ) : null}
 
-              <div className="profile-comparison-tabs" role="tablist" aria-label={t("Comparison result views") }>
+              <div
+                className="profile-comparison-tabs ui-segmented-control ui-segmented-control--compact"
+                role="tablist"
+                aria-label={t("Comparison result views") }
+              >
                 {(["overview", "responses", "changes", "details"] as const).map((tab) => (
                   <button
                     key={tab}
                     type="button"
                     role="tab"
                     aria-selected={resultTab === tab}
-                    className={resultTab === tab ? "is-active" : ""}
+                    className={`ui-segmented-control__option${resultTab === tab ? " is-selected" : ""}`}
                     onClick={() => setResultTab(tab)}
                   >
                     {t(tab === "overview" ? "Overview" : tab === "responses" ? "Responses" : tab === "changes" ? "Changes" : "Run details")}
@@ -511,32 +532,83 @@ export const ProfileEvaluationDialog = ({
 
               <div className="profile-comparison-result__panel" role="tabpanel">
                 {resultTab === "overview" && result ? (
-                  <div className="profile-comparison-side-grid">
-                    {([result.current, result.proposed] as const).map((side) => {
-                      const summary = sideSummary(side);
-                      return (
-                        <section className="profile-comparison-side" key={side.environment}>
-                          <header>
-                            <strong>{t(side.environment === "current" ? "Current setup" : "Proposed Profile")}</strong>
-                            {side.error ? <span className="is-error">{t("Incomplete")}</span> : <span>{t("Completed")}</span>}
-                          </header>
-                          <dl>
-                            <div><dt>{t("Duration")}</dt><dd>{summary.duration}</dd></div>
-                            <div><dt>{t("Tokens")}</dt><dd>{summary.tokens === undefined ? t("Unavailable") : formatNumber(summary.tokens)}</dd></div>
-                            <div><dt>{t("Files changed")}</dt><dd>{formatNumber(summary.changes)}</dd></div>
-                            <div><dt>{t("CLI exit")}</dt><dd>{side.exitCode ?? t("Unavailable")}</dd></div>
-                          </dl>
-                          {side.error ? <p className="profile-comparison-side__error">{side.error}</p> : null}
-                        </section>
-                      );
-                    })}
+                  <div className="profile-comparison-overview">
+                    <div className={`profile-comparison-outcome${result.current.error || result.proposed.error ? " is-incomplete" : ""}`}>
+                      {result.current.error || result.proposed.error
+                        ? <AlertTriangle size={17} aria-hidden="true" />
+                        : <CheckCircle2 size={17} aria-hidden="true" />}
+                      <div>
+                        <strong>{t(result.current.error || result.proposed.error
+                          ? "One or both runs were incomplete"
+                          : "Both runs completed")}</strong>
+                        <span>{result.delta.changedFiles.length === 0
+                          ? t("Both runs produced the same Workspace files")
+                          : result.delta.changedFiles.length === 1
+                            ? t("1 output file differs")
+                            : t("{{count}} output files differ", { count: result.delta.changedFiles.length })}</span>
+                      </div>
+                    </div>
+                    <table className="profile-comparison-metrics">
+                      <thead>
+                        <tr>
+                          <th scope="col"><span className="sr-only">{t("Metric")}</span></th>
+                          <th scope="col">{t("Agent now")}</th>
+                          <th scope="col">{t("With Profile")}</th>
+                          <th scope="col">{t("Difference")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {([
+                          {
+                            label: t("Duration"),
+                            current: formatDuration(result.current.durationMs),
+                            proposed: formatDuration(result.proposed.durationMs),
+                            delta: formatDelta(result.current.durationMs, result.proposed.durationMs, formatDuration)
+                          },
+                          {
+                            label: t("Tokens"),
+                            current: totalTokens(result.current) === undefined ? t("Unavailable") : formatNumber(totalTokens(result.current)!),
+                            proposed: totalTokens(result.proposed) === undefined ? t("Unavailable") : formatNumber(totalTokens(result.proposed)!),
+                            delta: formatDelta(totalTokens(result.current), totalTokens(result.proposed), formatNumber)
+                          },
+                          {
+                            label: t("Files changed"),
+                            current: formatNumber(result.current.changedFiles.length),
+                            proposed: formatNumber(result.proposed.changedFiles.length),
+                            delta: formatDelta(result.current.changedFiles.length, result.proposed.changedFiles.length, formatNumber)
+                          },
+                          {
+                            label: t("CLI exit"),
+                            current: String(result.current.exitCode ?? t("Unavailable")),
+                            proposed: String(result.proposed.exitCode ?? t("Unavailable")),
+                            delta: result.current.exitCode === result.proposed.exitCode ? t("Same") : t("Different")
+                          }
+                        ] as const).map((metric) => {
+                          const differs = metric.current !== metric.proposed;
+                          return (
+                            <tr key={metric.label}>
+                              <th scope="row">{metric.label}</th>
+                              <td>{metric.current}</td>
+                              <td><span className={differs ? "is-different" : ""}>{metric.proposed}</span></td>
+                              <td className={differs ? "is-different" : ""}>{metric.delta ?? t("Unavailable")}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {result.current.error || result.proposed.error ? (
+                      <div className="profile-comparison-side-errors">
+                        {result.current.error ? <p><strong>{t("Agent now")}</strong>{result.current.error}</p> : null}
+                        {result.proposed.error ? <p><strong>{t("With Profile")}</strong>{result.proposed.error}</p> : null}
+                      </div>
+                    ) : null}
                   </div>
                 ) : resultTab === "responses" && result ? (
                   <div className="profile-comparison-response-grid">
                     {([result.current, result.proposed] as const).map((side) => (
                       <section className="profile-comparison-response" key={side.environment}>
                         <header>
-                          <strong>{t(side.environment === "current" ? "Current setup" : "Proposed Profile")}</strong>
+                          <strong>{t(side.environment === "current" ? "Agent now" : "With Profile")}</strong>
                           {side.finalResponse ? (
                             <IconButton
                               label={t(copiedSide === side.environment ? "Response copied" : "Copy response")}
@@ -568,7 +640,7 @@ export const ProfileEvaluationDialog = ({
                             aria-selected={changeScope === scope}
                             onClick={() => setChangeScope(scope)}
                           >
-                            {t(scope === "delta" ? "Proposed vs Current" : scope === "current" ? "Current changes" : "Proposed changes")}
+                            {t(scope === "delta" ? "Profile vs Agent" : scope === "current" ? "Agent changes" : "Profile changes")}
                           </button>
                         ))}
                       </div>
@@ -578,6 +650,12 @@ export const ProfileEvaluationDialog = ({
                         </Button>
                       ) : null}
                     </div>
+                    {changeScope === "delta" && changes.length > 0 ? (
+                      <div className="profile-comparison-diff-legend" aria-label={t("Diff legend") }>
+                        <span className="is-profile">{t("Only with Profile")}</span>
+                        <span className="is-agent">{t("Only with Agent now")}</span>
+                      </div>
+                    ) : null}
                     {changes.length > 0 ? (
                       <>
                         <select
@@ -597,10 +675,8 @@ export const ProfileEvaluationDialog = ({
                     <div><dt>{t("Workspace hash")}</dt><dd><code>{result.workspace.contentHash}</code></dd></div>
                     <div><dt>{t("Comparison signature")}</dt><dd><code>{result.comparisonSignature}</code></dd></div>
                     <div><dt>{t("Completed at")}</dt><dd>{formatDate(result.completedAt)}</dd></div>
-                    <div><dt>{t("Current CLI")}</dt><dd>{result.current.cliVersion ?? t("Unavailable")}</dd></div>
-                    <div><dt>{t("Proposed CLI")}</dt><dd>{result.proposed.cliVersion ?? t("Unavailable")}</dd></div>
-                    <div><dt>{t("Current model")}</dt><dd>{result.current.model ?? t("Unavailable")}</dd></div>
-                    <div><dt>{t("Proposed model")}</dt><dd>{result.proposed.model ?? t("Unavailable")}</dd></div>
+                    <div><dt>{t("CLI version")}</dt><dd>{resultEnvironmentValue(result.current.cliVersion, result.proposed.cliVersion)}</dd></div>
+                    <div><dt>{t("Model")}</dt><dd>{resultEnvironmentValue(result.current.model, result.proposed.model)}</dd></div>
                   </dl>
                 ) : null}
               </div>

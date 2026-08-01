@@ -239,8 +239,14 @@ describe("ProfileEvaluationDialog", () => {
 
     await screen.findByText("Comparison completed");
     const overview = screen.getByRole("tabpanel");
+    expect(screen.getByRole("tablist", { name: "Comparison result views" }))
+      .toHaveClass("ui-segmented-control");
+    expect(within(overview).getByText("Agent now")).toBeInTheDocument();
+    expect(within(overview).getByText("With Profile")).toBeInTheDocument();
+    expect(within(overview).getByText("1 output file differs")).toBeInTheDocument();
     expect(within(overview).getByText("20")).toBeInTheDocument();
     expect(within(overview).getByText("28")).toBeInTheDocument();
+    expect(within(overview).getByText("+8")).toHaveClass("is-different");
 
     fireEvent.click(screen.getByRole("tab", { name: "Responses" }));
     expect(screen.getByText("Current response.")).toBeInTheDocument();
@@ -249,8 +255,22 @@ describe("ProfileEvaluationDialog", () => {
     await waitFor(() => expect(api.copyText).toHaveBeenCalledWith("Proposed response."));
 
     fireEvent.click(screen.getByRole("tab", { name: "Changes" }));
+    expect(screen.getByRole("tab", { name: "Profile vs Agent" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    expect(screen.getByText("Only with Profile")).toBeInTheDocument();
+    expect(screen.getByText("Only with Agent now")).toBeInTheDocument();
     expect(await screen.findByRole("table", { name: "Formatted diff for test.ts" }))
       .toHaveTextContent("new test");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Run details" }));
+    expect(screen.getByText("CLI version")).toBeInTheDocument();
+    expect(screen.getByText("Model")).toBeInTheDocument();
+    expect(screen.getAllByText("1.18.0")).toHaveLength(1);
+    expect(screen.getAllByText("openai/test")).toHaveLength(1);
+    expect(screen.queryByText("Current CLI")).not.toBeInTheDocument();
+    expect(screen.queryByText("Proposed CLI")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Review Apply" }));
     expect(onReviewApply).toHaveBeenCalledTimes(1);
   });

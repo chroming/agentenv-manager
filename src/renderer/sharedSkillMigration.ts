@@ -6,6 +6,7 @@ import type {
   SkillCleanupResult,
   TargetManagementState
 } from "../shared/types";
+import { activationPreviewHasWork } from "./activationPreview";
 
 type SharedSkillMigrationApi = Pick<
   AgentEnvApi,
@@ -46,6 +47,33 @@ const targetLabel = (
   targetId: string,
   targetNames: Record<string, string> | undefined
 ) => targetNames?.[targetId] ?? targetId;
+
+const prepareProfileIfNeeded = async (
+  api: SharedSkillMigrationApi,
+  profile: ProfileDetail,
+  targetId: string,
+  targetNames?: Record<string, string>
+) => {
+  const preview = await api.previewApply(profile.id, targetId);
+  const blockingIssues = preview.issues.filter(
+    (issue) => issue.disposition === "block"
+  );
+  if (blockingIssues.length > 0) {
+    throw new Error(
+      `${targetLabel(targetId, targetNames)} cannot be prepared: ${blockingIssues
+        .map((issue) => issue.message)
+        .join("; ")}`
+    );
+  }
+  if (!activationPreviewHasWork(preview)) return;
+
+  const result = await api.applyProfile(profile.id, preview.id);
+  if (!result.ok) {
+    throw new Error(
+      `${targetLabel(targetId, targetNames)} could not be prepared: ${result.errors.join("; ")}`
+    );
+  }
+};
 
 const ensureSkillInProfile = async (
   api: SharedSkillMigrationApi,
@@ -175,23 +203,7 @@ export const moveSharedSkillToAgents = async ({
       }
     }
 
-    const preview = await api.previewApply(profile.id, targetId);
-    const blockingIssues = preview.issues.filter(
-      (issue) => issue.disposition === "block"
-    );
-    if (blockingIssues.length > 0) {
-      throw new Error(
-        `${targetLabel(targetId, targetNames)} cannot be prepared: ${blockingIssues
-          .map((issue) => issue.message)
-          .join("; ")}`
-      );
-    }
-    const result = await api.applyProfile(profile.id, preview.id);
-    if (!result.ok) {
-      throw new Error(
-        `${targetLabel(targetId, targetNames)} could not be prepared: ${result.errors.join("; ")}`
-      );
-    }
+    await prepareProfileIfNeeded(api, profile, targetId, targetNames);
   }
 
   return api.retireSharedSkill(migration);
@@ -317,23 +329,7 @@ export const moveSkillCollectionToAgents = async ({
       ).profile;
     }
 
-    const preview = await api.previewApply(profile.id, targetId);
-    const blockingIssues = preview.issues.filter(
-      (issue) => issue.disposition === "block"
-    );
-    if (blockingIssues.length > 0) {
-      throw new Error(
-        `${targetLabel(targetId, targetNames)} cannot be prepared: ${blockingIssues
-          .map((issue) => issue.message)
-          .join("; ")}`
-      );
-    }
-    const result = await api.applyProfile(profile.id, preview.id);
-    if (!result.ok) {
-      throw new Error(
-        `${targetLabel(targetId, targetNames)} could not be prepared: ${result.errors.join("; ")}`
-      );
-    }
+    await prepareProfileIfNeeded(api, profile, targetId, targetNames);
   }
 
   return api.retireSkillCollection({ path: collection.path });

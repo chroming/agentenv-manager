@@ -237,7 +237,9 @@ suite, a correctness score, or a generic Agent launcher.
   redundant comparison run.
 - Compare MUST use the selected Apply Agent. It MUST NOT silently fall through to OpenCode, another
   installed Agent, or a generic shell command. An Agent is available only when its adapter exposes
-  and verifies an isolated comparison capability. P0 implements that capability for OpenCode.
+  and verifies an isolated comparison capability. P0 implements that capability for OpenCode and
+  Codex; adding another Agent requires an equally isolated target adapter rather than a generic
+  fallback.
 - Preview freezes the Workspace into two independent private snapshots, creates two random `0700`
   Homes, and records immutable copies of every included Library Skill. Empty Workspace creates no
   project files. A folder snapshot includes its current readable content, including uncommitted Git
@@ -270,9 +272,14 @@ suite, a correctness score, or a generic Agent launcher.
   output limit, and process-tree cancellation. User-visible states are `Preparing`, `Running`,
   `Cancelling`, `Completed`, `Incomplete`, `Failed to run`, and `Cancelled`. `Completed` means both
   CLI runs ended normally and evidence was captured; it does not mean either result is correct.
-- Results present Current and Proposed responses, file changes, duration, exit code, and only usage
-  values explicitly reported by each CLI. A Delta view compares Proposed output files with Current
-  output files. Missing token or cost fields display `Unavailable` and MUST NOT be inferred as zero.
+- Results name the two runs by user meaning: `Agent now` is the selected Agent's live effective
+  environment snapshot and `With Profile` is the saved candidate. They present responses, file
+  changes, duration, exit code, and only usage values explicitly reported by each CLI. Overview is
+  one aligned comparison table and highlights factual differences without declaring a winner. A
+  Delta view compares Profile output files with Agent output files and identifies which removed
+  lines belong only to the Agent run and which added lines belong only to the Profile run. CLI and
+  model are common run metadata when equal; the UI splits them only if the CLI reports different
+  values. Missing token or cost fields display `Unavailable` and MUST NOT be inferred as zero.
 - Temporary Workspace, Home, authentication copy, and runtime state are deleted after every
   terminal outcome. A preparation failure or cancellation MUST also clean every already-created
   sibling environment. Cleanup failure is a visible failed state.
@@ -1193,6 +1200,7 @@ Shared compatibility migration contract:
 - A Skill collection link is one physical migration boundary. `Leave unmanaged` records one collection-coverage management boundary on the outer link and applies it to every current descendant; `Manage with AgentEnv` removes only that boundary. Newly discovered descendants inherit it because the decision is attached to the outer link, not to a list of child paths.
 - Until every readable member has a reviewed Library version or the collection has an explicit unmanaged boundary, a Skills-managing Profile MUST NOT install a same-runtime-name Target copy or claim an external member is absent. Apply blocks with the outer collection path and directs the user to review the remaining members or leave the collection unmanaged. Once every member is reviewed, Apply may record install-or-omit preparations but MUST defer physical Target copies while the collection remains active; `Move collection` completes the recoverable migration. An unmanaged collection boundary preserves the external runtime without creating a duplicate.
 - Moving a Skill collection first requires a reviewed Library version for every readable descendant. Missing Skills may be copied into Library without changing the source; same-name content differences use the ordinary explicit import conflict review. Choosing `Keep Library copy` records a path-scoped `use-library` decision for that collection member: it does not claim the source content matches, does not retain the member outside AgentEnv, and makes the existing Library copy canonical for the later collection migration. The reviewed source hash is revalidated before migration so a later source edit returns to review instead of silently applying an obsolete choice. Resolving one descendant conflict MUST return to the same refreshed collection review and advance to the next unresolved member; a child decision MUST NOT dismiss the parent collection task or reopen the completed member. The migration applies each affected Profile once and refuses pending, drifted, disabled-Agent, or recovery-required states. For an active Profile whose Skills policy is `Use Profile`, it adds or enables every selected Library member. For `Keep current`, the explicit `Move collection` confirmation changes that Profile to `Use Profile` and adds the members so the currently loaded collection remains available after its shared link is removed. For `Turn off`, it preserves the off policy, prepares omission for every member, and MUST NOT reactivate a Skill merely to complete cleanup.
+- Shared-Skill and collection migration treat a fresh semantic no-op Profile Preview as already prepared. Renderer orchestration MUST NOT call Apply or turn `No changes to apply` into an error; it proceeds to the main-process migration boundary, which still revalidates the exact current preparation receipts and refuses missing, changed, or stale Skill intent.
 - Collection review supports both per-Skill decisions and one explicit version strategy for the unresolved set. `Keep Library versions` keeps existing canonical copies for differences and imports missing members; `Use collection versions` replaces canonical copies with the reviewed collection members and imports missing members. Batch handling proceeds per Skill, exposes waiting, working, complete, and failure status icons in the list, preserves completed work if a later item fails, and never maps `Keep both` into the collection because every runtime member requires one unambiguous canonical Library identity.
 - When Apply is blocked by an unresolved Skill collection, the blocking issue exposes `Review collection` and opens the matching Local Skills collection review directly. It MUST NOT require the user to locate the collection manually, and it MUST NOT auto-replace conflicting Library content.
 - Collection migration is one recoverable transaction: verify the outer entry is still a symbolic link to the reviewed canonical folder; back up the link, every affected Agent destination, ownership sidecar, and Target state; remove only the outer link; replace any captured same-runtime-name Profile reference with the explicitly reviewed Library member; deploy and verify Target-specific Library copies; then clear every member preparation. It MUST never write, rename, or delete the canonical source folder or a descendant through the link. Failure restores the original link topology and all Agent state before reporting completion.

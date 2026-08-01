@@ -100,6 +100,23 @@ const verifyProfileComparisonActionLayout = async (page: Page, width: number, he
   expect(Math.abs(compareBox!.width - applyBox!.width)).toBeLessThanOrEqual(1);
 };
 
+const verifyComparisonResultNavigation = async (dialog: ReturnType<Page["getByRole"]>) => {
+  const tabs = dialog.getByRole("tablist", { name: "Comparison result views" });
+  const selected = tabs.getByRole("tab", { selected: true });
+  const appearance = await selected.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      background: style.backgroundColor,
+      borderBottomWidth: style.borderBottomWidth,
+      height: Math.round(element.getBoundingClientRect().height)
+    };
+  });
+  expect(appearance.background).not.toBe("rgba(0, 0, 0, 0)");
+  expect(appearance.borderBottomWidth).toBe("0px");
+  expect(appearance.height).toBeGreaterThanOrEqual(24);
+  expect(await tabs.getByRole("tab").count()).toBe(4);
+};
+
 describe.skipIf(process.platform !== "darwin" || !gitExecutable)(
   "isolated Profile comparison desktop workflow",
   () => {
@@ -350,6 +367,15 @@ printf '{"type":"step_finish","part":{"modelID":"fake/e2e","cost":0.01,"tokens":
       await verifyDialogLayout(page, ".profile-comparison-dialog", 920, 620);
       await verifyDialogLayout(page, ".profile-comparison-dialog", 1180, 728);
       await verifyDialogLayout(page, ".profile-comparison-dialog", 1440, 900);
+      await verifyComparisonResultNavigation(dialog);
+      await dialog.getByRole("columnheader", { name: "Agent now" }).waitFor();
+      await dialog.getByRole("columnheader", { name: "With Profile" }).waitFor();
+      if (process.env.AGENTENV_EVALUATION_CAPTURE_DIR) {
+        await page.setViewportSize({ width: 920, height: 620 });
+        await page.screenshot({
+          path: join(process.env.AGENTENV_EVALUATION_CAPTURE_DIR, "comparison-overview-920x620.png")
+        });
+      }
 
       await dialog.getByRole("tab", { name: "Responses" }).click();
       await dialog.getByText(
@@ -364,9 +390,9 @@ printf '{"type":"step_finish","part":{"modelID":"fake/e2e","cost":0.01,"tokens":
       const changedFile = dialog.getByLabel("Changed file");
       expect(await changedFile.locator("option").allTextContents())
         .toEqual(["current-output.txt", "proposed-output.txt"]);
-      await dialog.getByRole("tab", { name: "Current changes" }).click();
+      await dialog.getByRole("tab", { name: "Agent changes" }).click();
       await expect(changedFile.inputValue()).resolves.toBe("current-output.txt");
-      await dialog.getByRole("tab", { name: "Proposed changes" }).click();
+      await dialog.getByRole("tab", { name: "Profile changes" }).click();
       await expect(changedFile.inputValue()).resolves.toBe("proposed-output.txt");
       await dialog.getByRole("table", {
         name: "Formatted diff for proposed-output.txt"
@@ -407,5 +433,178 @@ printf '{"type":"step_finish","part":{"modelID":"fake/e2e","cost":0.01,"tokens":
       expect(stored.workspace.path).toBeUndefined();
       expect(reportText).not.toContain(root);
     }, 50_000);
+
+    it("enables an apply-pending Codex Profile and compares it with the current Codex setup", async () => {
+      root = await mkdtemp(join(tmpdir(), "agentenv-codex-comparison-e2e-"));
+      const home = join(root, "home");
+      const dataRoot = join(root, "data");
+      const cacheRoot = join(root, "cache");
+      const binDir = join(root, "bin");
+      const profileDir = join(dataRoot, "profiles", "codex-evaluation-profile");
+      const librarySkill = join(dataRoot, "skills-library", "codex-evaluation-skill");
+      const realCodexDir = join(home, ".codex");
+      const realInstructions = join(realCodexDir, "AGENTS.md");
+      const fakeCodex = join(binDir, "codex");
+      await Promise.all([
+        mkdir(profileDir, { recursive: true }),
+        mkdir(librarySkill, { recursive: true }),
+        mkdir(realCodexDir, { recursive: true }),
+        mkdir(join(dataRoot, "target-states"), { recursive: true }),
+        mkdir(binDir, { recursive: true })
+      ]);
+      await writeJson(join(dataRoot, "agentenv-data.json"), { formatVersion: 2 });
+      await writeJson(join(dataRoot, "settings.json"), {
+        locale: "en",
+        conversationTerminal: "default",
+        skillSyncMethod: "symlink",
+        skillStorageLocation: "appData",
+        skillAutoCheckEnabled: false,
+        skillAutoCheckIntervalMinutes: 60,
+        backupRetentionDays: null,
+        enabledTargetIds: ["codex"]
+      });
+      await writeJson(join(profileDir, "profile.json"), {
+        id: "codex-evaluation-profile",
+        name: "Codex Evaluation Profile",
+        description: "Codex isolated comparison proof",
+        preferredTargetId: "codex",
+        version: 2
+      });
+      await writeFile(join(profileDir, "INSTRUCTIONS.md"), "# Proposed Codex instructions\n", "utf8");
+      await writeJson(join(profileDir, "resources.json"), {
+        skills: [{
+          libraryId: "codex-evaluation-skill",
+          targetName: "codex-evaluation-skill",
+          enabled: true
+        }],
+        managementByTarget: {
+          codex: { instructions: "manage", skills: "manage" }
+        },
+        mcpByTarget: {
+          codex: { mode: "disable", selections: [] }
+        }
+      });
+      await writeFile(
+        join(librarySkill, "SKILL.md"),
+        "---\nname: codex-evaluation-skill\ndescription: Codex comparison proof.\n---\n\n# Codex Skill\n",
+        "utf8"
+      );
+      await writeJson(join(librarySkill, ".agentenv-skill.json"), {
+        sourceType: "local",
+        updateCheckEnabled: false,
+        globallyEnabled: true,
+        contentHash: "seed-codex-evaluation-skill",
+        updatedAt: "2026-08-01T00:00:00.000Z"
+      });
+      await writeJson(join(dataRoot, "target-states", "codex.json"), {
+        formatVersion: 3,
+        managedMcpNames: [],
+        activeProfileId: "codex-evaluation-profile",
+        appliedProfileHash: "previous-profile-hash",
+        appliedLibraryVersions: { skills: {} },
+        managedResources: [],
+        sharedSkillPreparations: []
+      });
+      await writeFile(realInstructions, "# Current Codex instructions\n", "utf8");
+      await writeFile(fakeCodex, `#!/bin/sh
+if [ "$1" = "--version" ]; then
+  printf 'codex-cli 0.145.0\\n'
+  exit 0
+fi
+project=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--cd" ]; then
+    project="$2"
+    shift 2
+  else
+    shift
+  fi
+done
+environment=current
+profile_loaded=false
+skill_loaded=false
+grep -q 'Proposed Codex instructions' "$CODEX_HOME/AGENTS.md" && environment=proposed && profile_loaded=true
+[ -f "$CODEX_HOME/skills/codex-evaluation-skill/SKILL.md" ] && skill_loaded=true
+printf '%s output\\n' "$environment" > "$project/$environment-output.txt"
+printf '{"type":"item.completed","item":{"type":"agent_message","text":"environment=%s profile=%s skill=%s"}}\\n' "$environment" "$profile_loaded" "$skill_loaded"
+printf '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":4,"output_tokens":6,"reasoning_output_tokens":2}}\\n'
+`, "utf8");
+      await chmod(fakeCodex, 0o755);
+
+      app = await electron.launch({
+        executablePath: electronPath as unknown as string,
+        args: [
+          `--user-data-dir=${join(root, "electron-user-data")}`,
+          join(process.cwd(), "out", "main", "main.js")
+        ],
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          AGENTENV_AUTOMATION: "1",
+          AGENTENV_AUTOMATION_BACKGROUND_DELAY_MS: "0",
+          AGENTENV_DATA_ROOT: dataRoot,
+          AGENTENV_CACHE_ROOT: cacheRoot,
+          AGENTENV_HOME: home,
+          PATH: `${binDir}${delimiter}${process.env.PATH ?? ""}`
+        }
+      });
+      const page = await app.firstWindow();
+      await page.setViewportSize({ width: 920, height: 620 });
+      await expect.poll(() => page.evaluate(() => window.agentEnv.readStartupStatus()), {
+        timeout: 15_000
+      }).toEqual({ state: "ready" });
+
+      await page.getByRole("button", { name: "Profiles" }).click();
+      await page.getByRole("group", { name: "Profile Codex Evaluation Profile" }).click();
+      const compareButton = page.getByRole("button", { name: "Compare" });
+      await expect.poll(() => compareButton.isEnabled()).toBe(true);
+      await compareButton.click();
+      const dialog = page.getByRole("dialog", {
+        name: "Compare Codex Evaluation Profile on Codex"
+      });
+      await dialog.getByRole("textbox", { name: "Task" }).fill("Compare Codex environments");
+      await dialog.getByRole("button", { name: "Run comparison" }).click();
+      const readDiagnostics = () => page.evaluate(async () => {
+        const value = await window.agentEnv.readProfileComparison({});
+        return {
+          status: value?.status,
+          error: value?.error,
+          currentError: value?.result?.current.error,
+          proposedError: value?.result?.proposed.error
+        };
+      });
+      await expect.poll(async () => (await readDiagnostics()).status, {
+        timeout: 20_000
+      }).toMatch(/completed|incomplete|failed-to-run/);
+      const diagnostics = await readDiagnostics();
+      if (diagnostics.status !== "completed") {
+        throw new Error(`Codex comparison did not complete: ${JSON.stringify(diagnostics)}`);
+      }
+      await dialog.getByText("Comparison completed").waitFor();
+      await dialog.getByRole("tab", { name: "Responses" }).click();
+      await dialog.getByText("environment=current profile=false skill=false").waitFor();
+      await dialog.getByText("environment=proposed profile=true skill=true").waitFor();
+
+      expect(await readFile(realInstructions, "utf8")).toBe("# Current Codex instructions\n");
+      expect(await readdir(join(cacheRoot, "evaluations"))).toEqual([]);
+      const reportText = await readFile(join(dataRoot, "evaluations", "latest.json"), "utf8");
+      const stored = JSON.parse(reportText);
+      expect(stored).toMatchObject({
+        targetId: "codex",
+        current: {
+          finalResponse: "environment=current profile=false skill=false",
+          usage: {
+            inputTokens: 20,
+            cachedInputTokens: 4,
+            outputTokens: 6,
+            reasoningTokens: 2
+          }
+        },
+        proposed: {
+          finalResponse: "environment=proposed profile=true skill=true"
+        }
+      });
+      expect(reportText).not.toContain(root);
+    }, 40_000);
   }
 );

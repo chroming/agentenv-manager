@@ -9,6 +9,7 @@ import type {
 import { profileManagesResource } from "../../shared/profileResources";
 import { createApplyIssue } from "../applyIssues";
 import { createCodexConversationCapability } from "./conversations/codexConversations";
+import { createCodexEvaluationCapability } from "./evaluations/codexEvaluation";
 import { createUnifiedDiff } from "../diff";
 import { pathExists, readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
@@ -64,7 +65,8 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       mcpTransports: ["stdio", "http", "sse"],
       agentFormat: "codex",
       disabledSkillPaths: false,
-      mcpActivation: true
+      mcpActivation: true,
+      evaluation: true
     }
   },
   detectInstallation: createInstallationDriver({
@@ -97,6 +99,7 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
   },
   skills,
   conversations: createCodexConversationCapability(),
+  evaluations: createCodexEvaluationCapability(),
   createDefaultProfile: (id) => ({
     id,
     manifest: {

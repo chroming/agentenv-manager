@@ -63,6 +63,12 @@ const preview = (): ActivationPreview => ({
   operation: "apply"
 });
 
+const noOpPreview = (): ActivationPreview => ({
+  ...preview(),
+  sharedSkillPreparationChanged: false,
+  targetStateChanged: false
+});
+
 const api = () => {
   const saved = {
     ...profile(),
@@ -361,6 +367,45 @@ describe("moveSharedSkillToAgents", () => {
     ).rejects.toThrow("Pi could not be prepared");
     expect(mockApi.retireSharedSkill).not.toHaveBeenCalled();
   });
+
+  it("treats an already-applied no-op preview as prepared", async () => {
+    const mockApi = api();
+    mockApi.readProfile.mockResolvedValue({
+      ...profile(),
+      resources: {
+        ...profile().resources,
+        skills: [{ libraryId: "as-ops", targetName: "as-ops", enabled: true }]
+      }
+    });
+    mockApi.listTargetStates.mockResolvedValue([{
+      targetId: "pi",
+      activeProfileId: "pi-profile",
+      status: "managed",
+      lifecycleStatus: "applied",
+      managedResourceCount: 1,
+      warningCount: 0,
+      errorCount: 0
+    } satisfies TargetManagementState]);
+    mockApi.previewApply.mockResolvedValue(noOpPreview());
+    mockApi.applyProfile.mockResolvedValue({
+      ok: false,
+      kind: "no-op",
+      errors: ["No changes to apply"]
+    });
+
+    await moveSharedSkillToAgents({
+      api: mockApi as unknown as AgentEnvApi,
+      migration: {
+        skillKey: "as-ops",
+        libraryId: "as-ops",
+        paths: ["/home/.agents/skills/as-ops"]
+      },
+      targetIds: ["pi"]
+    });
+
+    expect(mockApi.applyProfile).not.toHaveBeenCalled();
+    expect(mockApi.retireSharedSkill).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("moveSkillCollectionToAgents", () => {
@@ -430,6 +475,50 @@ describe("moveSkillCollectionToAgents", () => {
     );
     expect(mockApi.previewApply).toHaveBeenCalledTimes(1);
     expect(mockApi.applyProfile).toHaveBeenCalledTimes(1);
+    expect(mockApi.retireSkillCollection).toHaveBeenCalledWith({
+      path: "/home/.agents/skills/superpowers"
+    });
+  });
+
+  it("moves a collection after its active Profile was already applied", async () => {
+    const mockApi = api();
+    mockApi.readProfile.mockResolvedValue({
+      ...profile(),
+      resources: {
+        ...profile().resources,
+        skills: [{ libraryId: "as-ops", targetName: "as-ops", enabled: true }]
+      }
+    });
+    mockApi.listTargetStates.mockResolvedValue([{
+      targetId: "pi",
+      activeProfileId: "pi-profile",
+      status: "managed",
+      lifecycleStatus: "applied",
+      managedResourceCount: 1,
+      warningCount: 0,
+      errorCount: 0
+    } satisfies TargetManagementState]);
+    mockApi.previewApply.mockResolvedValue(noOpPreview());
+    mockApi.applyProfile.mockResolvedValue({
+      ok: false,
+      kind: "no-op",
+      errors: ["No changes to apply"]
+    });
+
+    await moveSkillCollectionToAgents({
+      api: mockApi as unknown as AgentEnvApi,
+      collection: {
+        path: "/home/.agents/skills/superpowers",
+        members: [{
+          skillKey: "as-ops",
+          libraryId: "as-ops",
+          consumerTargetIds: ["pi"]
+        }]
+      }
+    });
+
+    expect(mockApi.updateProfileSkills).not.toHaveBeenCalled();
+    expect(mockApi.applyProfile).not.toHaveBeenCalled();
     expect(mockApi.retireSkillCollection).toHaveBeenCalledWith({
       path: "/home/.agents/skills/superpowers"
     });
