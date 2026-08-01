@@ -44,6 +44,11 @@ await run("node", [
   "--output",
   captureRoot
 ]);
+await run("node", [
+  "scripts/capture-critical-comparison.mjs",
+  "--output",
+  captureRoot
+]);
 await run("swift", [
   "scripts/compare-ui-captures.swift",
   "--config",

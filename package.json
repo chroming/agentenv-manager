@@ -30,6 +30,7 @@
     "audit:modules": "node scripts/audit-module-budgets.mjs",
     "audit:targets": "node scripts/audit-target-boundaries.mjs",
     "audit:translations": "node scripts/audit-translations.mjs",
+    "audit:features": "node scripts/audit-feature-evidence.mjs",
     "verify:current": "node scripts/assert-verification-current.mjs",
     "verify:visual": "npm run build && node scripts/verify-visual.mjs",
     "verify:product": "node scripts/verify-product.mjs",

@@ -1,0 +1,104 @@
+{
+  "formatVersion": 1,
+  "features": [
+    {
+      "id": "profile-comparison",
+      "summary": "Compare the active Agent setup with a saved Profile in two isolated runs before Apply.",
+      "contract": {
+        "path": "docs/product-contracts.md",
+        "anchor": "### 4.3.1 Isolated Profile Comparison"
+      },
+      "support": {
+        "opencode": "supported",
+        "claude-code": "unsupported",
+        "codex": "supported",
+        "antigravity": "unsupported",
+        "trae-cli": "unsupported",
+        "pi": "unsupported"
+      },
+      "states": {
+        "idle": "Compare is available only for a saved Profile with an implemented Agent capability.",
+        "working": "The initiating command and dialog report preparation and both isolated runs.",
+        "success": "The result distinguishes Agent now from With Profile and persists one bounded report.",
+        "error": "Failure identifies the affected run and preserves the real Agent and selected Workspace.",
+        "cancelled": "Cancellation stops the child process and removes temporary homes and workspaces.",
+        "noOp": "A Profile that matches the active Agent does not offer a redundant comparison run.",
+        "stale": "A changed Agent or selected folder invalidates the result without writing either source.",
+        "partial": "Excluded resources are visible and the result is labelled incomplete.",
+        "persisted": "Only the latest redacted bounded report is stored in device-local data.",
+        "rollback": "Temporary resources are removed and no real Agent or Workspace mutation requires recovery."
+      },
+      "evidence": {
+        "domain": [
+          "tests/main/evaluations/evaluationService.test.ts",
+          "tests/main/evaluations/evaluationWorkspace.test.ts",
+          "tests/main/evaluations/opencodeEvaluation.test.ts",
+          "tests/main/evaluations/codexEvaluation.test.ts"
+        ],
+        "renderer": [
+          "tests/renderer/ProfileEvaluationDialog.test.tsx"
+        ],
+        "desktop": [
+          "tests/e2e/profileEvaluation.e2e.test.ts"
+        ],
+        "persistence": [
+          "tests/main/evaluations/evaluationResultStore.test.ts",
+          "tests/e2e/profileEvaluation.e2e.test.ts"
+        ],
+        "visual": [
+          "comparison-setup-1180x728.png",
+          "comparison-overview-920x620.png",
+          "comparison-result-920x620.png"
+        ]
+      }
+    },
+    {
+      "id": "shared-skill-collection-migration",
+      "summary": "Review a linked Skill collection, prepare every affected Agent, and move only the outer shared link.",
+      "contract": {
+        "path": "docs/product-contracts.md",
+        "anchor": "A Skill collection link is one physical migration boundary."
+      },
+      "support": {
+        "opencode": "supported",
+        "claude-code": "supported",
+        "codex": "supported",
+        "antigravity": "supported",
+        "trae-cli": "supported",
+        "pi": "supported"
+      },
+      "states": {
+        "idle": "The outer collection is summarized as one review boundary with member progress.",
+        "working": "Per-member or batch decisions expose local progress without dismissing the parent review.",
+        "success": "Affected Profiles are prepared and only the reviewed outer link is moved.",
+        "error": "The failing member or Agent remains visible and completed review decisions are retained safely.",
+        "cancelled": "Closing review before migration performs no filesystem mutation.",
+        "noOp": "An already prepared Profile with no semantic changes is accepted without an Apply call.",
+        "stale": "Changed collection content or preparation receipts require a fresh review before mutation.",
+        "partial": "Incomplete member decisions keep the collection in review and never imply migration completion.",
+        "persisted": "Member version decisions and path ownership boundaries are stored independently.",
+        "rollback": "A verified backup restores the outer link and every affected Agent destination after failure."
+      },
+      "evidence": {
+        "domain": [
+          "tests/main/activationService.test.ts",
+          "tests/main/skillPolicyStore.test.ts",
+          "tests/main/targets/skillRuntime.test.ts"
+        ],
+        "renderer": [
+          "tests/renderer/SkillCollectionCleanup.test.tsx"
+        ],
+        "desktop": [
+          "tests/e2e/electronUiProfileSwitching.e2e.test.ts"
+        ],
+        "persistence": [
+          "tests/main/skillPolicyStore.test.ts",
+          "tests/main/activationService.test.ts"
+        ],
+        "visual": [
+          "skills-cleanup-review-920x620.png"
+        ]
+      }
+    }
+  ]
+}

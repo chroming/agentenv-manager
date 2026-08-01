@@ -68,6 +68,18 @@ Profile Apply follows this sequence:
 6. verify the result;
 7. recover or roll back after failure.
 
+## Substantial Features
+
+Before implementing a new workflow, persistent object, external effect, or
+user-visible surface, complete the admission gate in
+[development/feature-delivery.md](development/feature-delivery.md). Register
+the capability in `docs/feature-evidence.json` before relying on the existing
+suite: an old passing suite cannot prove a state it does not know exists.
+
+`npm run audit:features` verifies Target coverage, state semantics, evidence
+paths, and critical visual artifacts. A partially supported capability must be
+presented and registered as partial; shared interfaces do not imply support.
+
 ## Target Integrations
 
 Built-in integrations currently cover OpenCode, Claude Code, Codex,

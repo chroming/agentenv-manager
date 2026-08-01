@@ -18,7 +18,9 @@ Read these documents in order:
    layer proves and how the desktop test suite is scheduled.
 5. [`development.md`](development.md) describes the current architecture and
    contribution workflow.
-6. [`verification-snapshot.json`](verification-snapshot.json) is generated
+6. [`development/feature-delivery.md`](development/feature-delivery.md) is the
+   admission gate for substantial new capabilities and their executable evidence.
+7. [`verification-snapshot.json`](verification-snapshot.json) is generated
    evidence for the exact source and Electron artifact last exercised by the
    product gate.
 
@@ -62,6 +64,8 @@ npm run verify:current
 - `npm run verify:release` adds the isolated packaged-application smoke.
 - `npm run verify:current` proves that the recorded source, build, captures, and
   snapshot still refer to the current checkout.
+- `npm run audit:features` rejects registered capabilities with missing Target
+  coverage, state semantics, executable evidence, or critical visual baselines.
 
 ## Visual Baseline Changes
 

@@ -75,7 +75,13 @@ await run("npx", [
   "--reporter=json",
   `--outputFile=${electronReportPath}`
 ]);
-for (const script of ["audit:styles", "audit:modules", "audit:targets", "audit:translations"]) {
+for (const script of [
+  "audit:styles",
+  "audit:modules",
+  "audit:targets",
+  "audit:translations",
+  "audit:features"
+]) {
   await run("npm", ["run", script]);
 }
 if (includePackaged) {
@@ -91,6 +97,7 @@ if (
   );
 }
 await run("node", ["scripts/capture-profiles.mjs", "--output", captureRoot]);
+await run("node", ["scripts/capture-critical-comparison.mjs", "--output", captureRoot]);
 await rm(visualReportRoot, { recursive: true, force: true });
 await run("swift", [
   "scripts/compare-ui-captures.swift",
@@ -172,7 +179,8 @@ const snapshot = {
     styles: "passed",
     modules: "passed",
     targets: "passed",
-    translations: "passed"
+    translations: "passed",
+    features: "passed"
   },
   captures: {
     directory: captureRoot,
