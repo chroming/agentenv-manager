@@ -35,7 +35,7 @@ AgentEnv Manager 是一个本地桌面客户端，用来管理和切换本机 ag
 - 确认 preview 后才会写入目标 agent 目录。
 - 每次应用前会自动创建 backup。
 - 支持从 history 预览并回滚 backup。
-- macOS 上可用 OpenCode 对已保存 Profile 执行一次隔离评测：选择本地 Git 项目与任务后，查看最终回复、Git Diff、耗时和 CLI 明确上报的 token。评测只使用项目 `HEAD`，临时排除 clone 内的项目级 Agent 资源，不会 Apply、修改原项目或真实 Agent；会调用模型并消耗对应账号额度。
+- macOS 上可用 OpenCode 对已保存 Profile 执行一次隔离评测：选择本地 Git 项目与任务后，查看最终回复、Git Diff、耗时和 CLI 明确上报的 token。评测只使用项目 `HEAD`，临时排除 clone 内的项目级 Agent 资源，并禁用 shell、网络工具、子 Agent 与 MCP；不会 Apply、修改原项目或真实 Agent。调用模型仍会使用网络并消耗对应账号额度。
 
 文档入口和现行/历史资料边界见 [`docs/README.md`](docs/README.md)。Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/product-contracts.md`](docs/product-contracts.md)。跨页面交互一致性、桌面布局、状态覆盖与发布证据要求见 [`docs/product-quality-checklist.md`](docs/product-quality-checklist.md)。自动化测试的证据边界、Target 通用契约和打包验证范围见 [`docs/testing-strategy.md`](docs/testing-strategy.md)。
 

@@ -234,7 +234,7 @@ one committed local Git project. It is not Apply, a Benchmark suite, or a correc
   before opening the run flow. Uncommitted project changes are excluded and visibly disclosed.
 - P0 supports OpenCode only. Unsupported Agents remain unavailable choices rather than falling
   through to a generic shell command.
-- Evaluation creates a private local clone without network access, a random `0700` Eval Home, and
+- Evaluation creates a private local clone from the existing repository without fetching, a random `0700` Eval Home, and
   immutable copies of every included Library Skill. It MUST NOT Apply, write the original project,
   or write the real Agent's Instructions, Skills, MCP settings, state, or credentials.
 - On macOS, the child process is constrained to the Eval root by the operating-system process
@@ -246,10 +246,13 @@ one committed local Git project. It is not Apply, a Benchmark suite, or a correc
   project-local Agent configuration, Instructions, and Skills are masked only inside the temporary
   clone, disclosed in Preview, and restored before Diff collection so they cannot silently alter
   the Profile under evaluation or appear as task changes.
-- MCP definitions remain Agent-owned. Evaluation may copy only the selected effective definition
-  into Eval Home. Literal credentials, invalid native configuration, or missing requested MCP
-  definitions require the user to exclude MCP for that run. Such a run is labeled `Partial
-  Profile`; it MUST NOT be presented as full-fidelity.
+- P0 is a local-project evaluation. OpenCode receives an explicit default-deny tool policy that
+  allows only local file inspection and editing tools. Shell commands, web tools, sub-Agents,
+  questions, external-directory access, and all other undeclared tools remain denied. MCP
+  definitions and credentials remain Agent-owned and are never copied into Eval Home. The Preview
+  reports how many MCPs were omitted, and every P0 OpenCode result is labeled `Restricted Profile`
+  rather than full-fidelity. This restriction is fixed by the capability and is not an extra user
+  decision.
 - Before launch, Preview binds the saved target-specific Profile hash, selected Library hashes,
   project revision, index state, dirty and untracked content fingerprints, and real Agent resource
   fingerprints. Any stale input requires a fresh Preview.
@@ -257,9 +260,10 @@ one committed local Git project. It is not Apply, a Benchmark suite, or a correc
   bounded timeout and output limit, supports process-tree cancellation, and reports only
   `Preparing`, `Running`, `Cancelling`, `Completed`, `Failed to run`, or `Cancelled`. `Completed`
   means the CLI exited normally and output was captured; it does not mean the task is correct.
-- OpenCode tool approval is automatic only inside the operating-system write sandbox so the task
-  can produce a meaningful Diff. The setup surface states that the run invokes the configured
-  Agent account and may consume model quota before the user confirms it.
+- OpenCode approval is automatic only for the explicitly allowed local file tools and only inside
+  the operating-system write sandbox so the task can produce a meaningful Diff. The setup surface
+  states that the run invokes the configured Agent account, uses network access for the model
+  provider, and may consume model quota before the user confirms it.
 - Completion records the final response, Git diff, changed files, duration, exit code, and only
   usage values explicitly reported by the CLI. Missing token or cost fields display `Unavailable`
   and MUST NOT be inferred as zero.

@@ -1,7 +1,9 @@
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
   Clock3,
+  Copy,
   Expand,
   FileDiff,
   FlaskConical,
@@ -26,12 +28,15 @@ import type {
   ProfileDetail,
   TargetInfo
 } from "../../shared/types";
-import { oneShotEvaluationIsActive } from "../../shared/evaluations";
+import {
+  oneShotEvaluationIsActive,
+  type OneShotEvaluationResourceScope
+} from "../../shared/evaluations";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { DiffViewer } from "./DiffViewer";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
-import { SyntaxCodePreview } from "./SyntaxCodePreview";
+import { ConversationMarkdown } from "./ConversationMarkdown";
 import { Button, IconButton, ModalFrame } from "./ui";
 
 interface ProfileEvaluationDialogProps {
@@ -86,7 +91,7 @@ export const ProfileEvaluationDialog = ({
   returnFocusRef,
   onClose
 }: ProfileEvaluationDialogProps) => {
-  const { formatNumber, t } = useI18n();
+  const { formatDate, formatNumber, t } = useI18n();
   const dialogRef = useRef<HTMLElement>(null);
   const initialFocusRef = useRef<HTMLButtonElement>(null);
   const [targetId, setTargetId] = useState("");
@@ -94,9 +99,11 @@ export const ProfileEvaluationDialog = ({
   const [prompt, setPrompt] = useState("");
   const [preview, setPreview] = useState<OneShotEvaluationPreview>();
   const [previewing, setPreviewing] = useState(false);
+  const [reviewingSource, setReviewingSource] = useState<"project" | "environment">("project");
   const [starting, setStarting] = useState(false);
-  const [excludeMcp, setExcludeMcp] = useState(false);
   const [run, setRun] = useState<OneShotEvaluationRun>();
+  const [restoredRun, setRestoredRun] = useState(false);
+  const [responseCopied, setResponseCopied] = useState(false);
   const [error, setError] = useState("");
   const [resultTab, setResultTab] = useState<ResultTab>("response");
   const [selectedDiffPath, setSelectedDiffPath] = useState("");
@@ -136,9 +143,11 @@ export const ProfileEvaluationDialog = ({
     setPrompt("");
     setPreview(undefined);
     setPreviewing(false);
+    setReviewingSource("project");
     setStarting(false);
-    setExcludeMcp(false);
     setRun(undefined);
+    setRestoredRun(false);
+    setResponseCopied(false);
     setError("");
     setResultTab("response");
     setSelectedDiffPath("");
@@ -147,6 +156,7 @@ export const ProfileEvaluationDialog = ({
     void window.agentEnv.readEvaluation().then((current) => {
       if (cancelled || !current || current.profileId !== profile.id) return;
       setRun(current);
+      setRestoredRun(true);
       setProjectPath(current.projectPath);
       if (current.result) {
         setPrompt(current.result.prompt);
@@ -157,6 +167,12 @@ export const ProfileEvaluationDialog = ({
       cancelled = true;
     };
   }, [openSessionKey]);
+
+  useEffect(() => {
+    if (!responseCopied) return undefined;
+    const timer = window.setTimeout(() => setResponseCopied(false), 2_000);
+    return () => window.clearTimeout(timer);
+  }, [responseCopied]);
 
   useEffect(() => {
     if (!run || !oneShotEvaluationIsActive(run.status)) return undefined;
@@ -177,9 +193,10 @@ export const ProfileEvaluationDialog = ({
   const reviewProject = async (
     path: string,
     nextTargetId = targetId,
-    nextExcludeMcp = excludeMcp
+    source: "project" | "environment" = "environment"
   ) => {
     if (!path || !nextTargetId) return;
+    setReviewingSource(source);
     setPreviewing(true);
     setError("");
     try {
@@ -187,7 +204,7 @@ export const ProfileEvaluationDialog = ({
         profileId: profile.id,
         targetId: nextTargetId,
         projectPath: path,
-        excludeMcp: nextExcludeMcp
+        excludeMcp: true
       });
       setPreview(next);
     } catch (unknownError) {
@@ -204,7 +221,7 @@ export const ProfileEvaluationDialog = ({
       const selected = await window.agentEnv.selectEvaluationProject();
       if (!selected) return;
       setProjectPath(selected);
-      await reviewProject(selected);
+      await reviewProject(selected, targetId, "project");
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     }
@@ -214,14 +231,7 @@ export const ProfileEvaluationDialog = ({
     setTargetId(nextTargetId);
     setPreview(undefined);
     setError("");
-    if (projectPath) void reviewProject(projectPath, nextTargetId);
-  };
-
-  const updateMcpExclusion = (next: boolean) => {
-    setExcludeMcp(next);
-    setPreview(undefined);
-    setError("");
-    if (projectPath) void reviewProject(projectPath, targetId, next);
+    if (projectPath) void reviewProject(projectPath, nextTargetId, "environment");
   };
 
   const start = async () => {
@@ -233,6 +243,7 @@ export const ProfileEvaluationDialog = ({
         previewId: preview.previewId,
         prompt
       });
+      setRestoredRun(false);
       setRun(next);
     } catch (unknownError) {
       setPreview(undefined);
@@ -264,12 +275,14 @@ export const ProfileEvaluationDialog = ({
 
   const result = run?.result;
   const terminal = Boolean(run && !oneShotEvaluationIsActive(run.status));
-  const mcpBlocked = Boolean(preview?.requiresMcpExclusion);
   const dialogTitle = terminal
-    ? run?.status === "completed" ? "Evaluation completed" : statusLabel(run!.status)
+    ? run?.status === "completed"
+      ? restoredRun ? "Latest evaluation" : "Evaluation completed"
+      : statusLabel(run!.status)
     : "";
-  const fidelityLabel = preview?.fidelity === "full" ? "Full Profile" : "Partial Profile";
   const cancelLabel = run?.status === "cancelling" ? "Cancelling" : "Cancel evaluation";
+  const projectName = (result?.projectPath ?? run?.projectPath ?? projectPath)
+    .split(/[\\/]/).filter(Boolean).at(-1) ?? "";
   const changedFilesLabel = result?.changedFiles.length === 1
     ? "1 file changed"
     : "{{count}} files changed";
@@ -285,6 +298,13 @@ export const ProfileEvaluationDialog = ({
             : formatNumber(result.usage.outputTokens)
         })
       : t("Tokens unavailable");
+  const scopeSummary = (scope: OneShotEvaluationResourceScope) =>
+    scope.mode === "disable"
+      ? t("Turn off")
+      : t("{{mode}} · {{count}}", {
+          mode: t(modeLabel(scope.mode)),
+          count: scope.includedCount
+        });
 
   return (
     <>
@@ -317,7 +337,7 @@ export const ProfileEvaluationDialog = ({
                 ? t("Review the response, workspace changes, and reported usage.")
                 : active
                   ? t("The Agent is running only inside a temporary project and Home.")
-                  : t("Uses the Agent account and model quota. Project Agent files are excluded; the real Agent and project stay unchanged.")}
+                  : t("Uses the Agent account and model quota. External tools, MCPs, and project Agent files are excluded; the real Agent and project stay unchanged.")}
             </p>
           </div>
           {!locked ? (
@@ -331,26 +351,30 @@ export const ProfileEvaluationDialog = ({
           {!run ? (
             <div className="profile-evaluation-setup">
               <div className="profile-evaluation-fields">
-                <label className="field-block">
-                  <span>{t("Agent")}</span>
-                  <select
-                    value={targetId}
-                    disabled={previewing || starting}
-                    onChange={(event) => updateTarget(event.target.value)}
-                  >
-                    {supportedTargets.length === 0 ? (
-                      <option value="">{t("No supported Agent available")}</option>
-                    ) : supportedTargets.map((target) => (
-                      <option key={target.id} value={target.id}>{target.name}</option>
-                    ))}
-                  </select>
+                <label className="profile-evaluation-field">
+                  <span className="profile-evaluation-field__label">{t("Agent")}</span>
+                  {supportedTargets.length <= 1 ? (
+                    <span className="profile-evaluation-static-value">
+                      {supportedTargets[0]?.name ?? t("No supported Agent available")}
+                    </span>
+                  ) : (
+                    <select
+                      value={targetId}
+                      disabled={previewing || starting}
+                      onChange={(event) => updateTarget(event.target.value)}
+                    >
+                      {supportedTargets.map((target) => (
+                        <option key={target.id} value={target.id}>{target.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </label>
-                <div className="field-block">
-                  <span>{t("Project")}</span>
+                <div className="profile-evaluation-field">
+                  <span className="profile-evaluation-field__label">{t("Project")}</span>
                   <Button
                     ref={initialFocusRef}
                     className="profile-evaluation-project-button"
-                    busy={previewing}
+                    busy={previewing && reviewingSource === "project"}
                     disabled={!targetId || starting}
                     icon={<FolderOpen size={15} />}
                     onClick={() => void chooseProject()}
@@ -366,8 +390,8 @@ export const ProfileEvaluationDialog = ({
                 </div>
               </div>
 
-              <label className="field-block profile-evaluation-task">
-                <span>{t("Task")}</span>
+              <label className="profile-evaluation-field profile-evaluation-task">
+                <span className="profile-evaluation-field__label">{t("Task")}</span>
                 <textarea
                   rows={4}
                   value={prompt}
@@ -384,44 +408,44 @@ export const ProfileEvaluationDialog = ({
                       <strong>{t("Profile environment")}</strong>
                       <small>{preview.targetName} · {preview.cliVersion ?? t("Version unavailable")}</small>
                     </div>
-                    <span className={`profile-evaluation-fidelity is-${preview.fidelity}`}>
-                      {t(fidelityLabel)}
+                    <span className="profile-evaluation-fidelity is-partial">
+                      {t("Restricted Profile")}
                     </span>
                   </header>
                   <div className="profile-evaluation-resource-grid">
                     <span>
                       <small>{t("Instructions")}</small>
-                      <strong>{t(modeLabel(preview.resources.instructions.mode))}</strong>
+                      <strong>{scopeSummary(preview.resources.instructions)}</strong>
                     </span>
                     <span>
                       <small>{t("Skills")}</small>
-                      <strong>{t("{{count}} included", { count: preview.resources.skills.includedCount })}</strong>
+                      <strong>{scopeSummary(preview.resources.skills)}</strong>
                     </span>
                     <span>
                       <small>{t("MCP")}</small>
-                      <strong>{excludeMcp
-                        ? t("Excluded")
-                        : t("{{count}} included", { count: preview.resources.mcp.includedCount })}</strong>
+                      <strong>{preview.resources.mcp.mode === "disable"
+                        ? t("Turn off")
+                        : t("Excluded for safe evaluation · {{count}}", {
+                            count: preview.resources.mcp.omittedCount ?? 0
+                          })}</strong>
                     </span>
                   </div>
                 </section>
               ) : null}
 
+              {previewing && reviewingSource === "environment" ? (
+                <div className="profile-evaluation-reviewing" role="status">
+                  <LoaderCircle className="is-spinning" size={15} />
+                  <span>{t("Reviewing Profile environment…")}</span>
+                </div>
+              ) : null}
+
               {preview?.warnings.length ? (
-                <div className={`profile-evaluation-notice${mcpBlocked ? " is-warning" : ""}`}>
+                <div className="profile-evaluation-notice">
                   <AlertTriangle size={16} aria-hidden="true" />
                   <div>
                     {preview.warnings.map((warning) => <p key={warning}>{t(warning)}</p>)}
                   </div>
-                  {mcpBlocked ? (
-                    <Button size="compact" onClick={() => updateMcpExclusion(true)}>
-                      {t("Exclude MCP for this run")}
-                    </Button>
-                  ) : excludeMcp ? (
-                    <Button size="compact" onClick={() => updateMcpExclusion(false)}>
-                      {t("Include MCP")}
-                    </Button>
-                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -440,6 +464,20 @@ export const ProfileEvaluationDialog = ({
             </div>
           ) : (
             <div className="profile-evaluation-result">
+              {result ? (
+                <div className="profile-evaluation-result__context">
+                  <div>
+                    <span>{result.profileName} · {result.targetName}</span>
+                    <span title={result.projectPath}>
+                      {projectName} · {result.projectRevision.slice(0, 7)} · {formatDate(result.completedAt)}
+                    </span>
+                  </div>
+                  <div>
+                    <span>{t("Task")}</span>
+                    <p>{result.prompt}</p>
+                  </div>
+                </div>
+              ) : null}
               <div className="profile-evaluation-result__summary">
                 <span><Clock3 size={14} />{result ? formatDuration(result.durationMs) : t("Unavailable")}</span>
                 <span><FileDiff size={14} />{t(changedFilesLabel, { count: result?.changedFiles.length ?? 0 })}</span>
@@ -455,7 +493,7 @@ export const ProfileEvaluationDialog = ({
               {result?.fidelity === "partial" ? (
                 <div className="profile-evaluation-notice is-warning">
                   <AlertTriangle size={16} />
-                  <p>{t("This result used a Partial Profile because MCP was excluded.")}</p>
+                  <p>{t("External tools and MCPs were disabled for this local-only evaluation.")}</p>
                 </div>
               ) : null}
               <div className="profile-evaluation-tabs" role="tablist" aria-label={t("Evaluation result views")}>
@@ -475,7 +513,31 @@ export const ProfileEvaluationDialog = ({
               <div className="profile-evaluation-result__panel" role="tabpanel">
                 {resultTab === "response" ? (
                   result?.finalResponse ? (
-                    <SyntaxCodePreview code={result.finalResponse} path="response.md" />
+                    <div className="profile-evaluation-response">
+                      <div className="profile-evaluation-response__toolbar">
+                        <Button
+                          size="compact"
+                          icon={responseCopied ? <Check size={14} /> : <Copy size={14} />}
+                          onClick={() => {
+                            void window.agentEnv.copyText(result.finalResponse).then(() => {
+                              setResponseCopied(true);
+                            }).catch((unknownError) => {
+                              setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+                            });
+                          }}
+                        >
+                          {t(responseCopied ? "Response copied" : "Copy response")}
+                        </Button>
+                      </div>
+                      <ConversationMarkdown
+                        text={result.finalResponse}
+                        onOpenExternal={(href) => {
+                          void window.agentEnv.openExternalUrl(href).catch((unknownError) => {
+                            setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+                          });
+                        }}
+                      />
+                    </div>
                   ) : <p className="profile-evaluation-empty">{t("No final response was reported.")}</p>
                 ) : resultTab === "changes" ? (
                   changes.length > 0 ? (
@@ -507,6 +569,8 @@ export const ProfileEvaluationDialog = ({
                   <dl className="profile-evaluation-details">
                     <div><dt>{t("Profile hash")}</dt><dd><code>{result.profileContentHash}</code></dd></div>
                     <div><dt>{t("Project revision")}</dt><dd><code>{result.projectRevision}</code></dd></div>
+                    <div><dt>{t("Project")}</dt><dd>{result.projectPath}</dd></div>
+                    <div><dt>{t("Completed at")}</dt><dd>{formatDate(result.completedAt)}</dd></div>
                     <div><dt>{t("CLI version")}</dt><dd>{result.cliVersion ?? t("Unavailable")}</dd></div>
                     <div><dt>{t("Model")}</dt><dd>{result.model ?? t("Unavailable")}</dd></div>
                     <div><dt>{t("Input tokens")}</dt><dd>{result.usage?.inputTokens !== undefined ? formatNumber(result.usage.inputTokens) : t("Unavailable")}</dd></div>
@@ -543,8 +607,8 @@ export const ProfileEvaluationDialog = ({
               <Button disabled={starting} onClick={onClose}>{t("Cancel")}</Button>
               <Button
                 variant="primary"
-                busy={previewing || starting}
-                disabled={starting || !preview || !prompt.trim() || mcpBlocked || supportedTargets.length === 0}
+                busy={starting}
+                disabled={previewing || starting || !preview || !prompt.trim() || supportedTargets.length === 0}
                 icon={<FlaskConical size={15} />}
                 onClick={() => void start()}
               >

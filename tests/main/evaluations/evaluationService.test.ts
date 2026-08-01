@@ -204,7 +204,7 @@ describe.skipIf(!gitPath)("evaluation service", () => {
       changedFiles: ["generated.txt"],
       model: "test/model",
       usage: { inputTokens: 8, outputTokens: 3 },
-      fidelity: "full"
+      fidelity: "partial"
     });
     expect(terminal.result?.usage?.totalTokens).toBeUndefined();
     expect(isolatedInstructions).toBe("# Evaluation instructions\n");
@@ -270,6 +270,38 @@ describe.skipIf(!gitPath)("evaluation service", () => {
       projectPath: project
     });
     expect(preview.resources.instructions.includedCount).toBe(0);
+  });
+
+  it("reports resource modes consistently and excludes MCPs without a second decision", async () => {
+    const processRunner: EvaluationProcessRunner = {
+      isolationAvailability: () => ({ available: true }),
+      run: vi.fn(),
+      cancelActive: vi.fn(),
+      dispose: vi.fn()
+    };
+    const { project, profile } = await setup(processRunner);
+    profile.resources.mcpByTarget.opencode = {
+      mode: "manage",
+      selections: [
+        { name: "docs", enabled: true },
+        { name: "browser", enabled: false }
+      ]
+    };
+
+    const preview = await service!.preview({
+      profileId: "daily-coding",
+      targetId: "opencode",
+      projectPath: project,
+      excludeMcp: false
+    });
+
+    expect(preview.resources).toMatchObject({
+      instructions: { mode: "manage", includedCount: 1 },
+      skills: { mode: "manage", includedCount: 1 },
+      mcp: { mode: "manage", includedCount: 0, omittedCount: 1 }
+    });
+    expect(preview.fidelity).toBe("partial");
+    expect(preview.requiresMcpExclusion).toBe(false);
   });
 
   it("does not expose an unsanitized result when report persistence fails", async () => {

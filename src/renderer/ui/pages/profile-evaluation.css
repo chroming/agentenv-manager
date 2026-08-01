@@ -1,6 +1,7 @@
 .profile-evaluation-dialog {
   max-height: min(720px, calc(100vh - 36px));
-  width: min(760px, calc(100vw - 36px));
+  max-width: min(720px, calc(100vw - 36px));
+  width: min(720px, calc(100vw - 36px));
 }
 
 .profile-evaluation-dialog__header {
@@ -26,7 +27,7 @@
 .profile-evaluation-setup,
 .profile-evaluation-result {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   padding: 18px;
 }
 
@@ -36,12 +37,15 @@
   grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
 }
 
-.profile-evaluation-dialog .field-block {
+.profile-evaluation-field {
+  align-content: start;
+  display: grid;
   gap: 6px;
   margin: 0;
+  min-width: 0;
 }
 
-.profile-evaluation-dialog .field-block > span:first-child {
+.profile-evaluation-field__label {
   color: var(--text-secondary);
   font-size: var(--font-size-metadata);
   font-weight: var(--font-weight-medium);
@@ -56,6 +60,18 @@
 .profile-evaluation-project-button {
   justify-content: flex-start;
   width: 100%;
+}
+
+.profile-evaluation-static-value {
+  align-items: center;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  display: flex;
+  font-size: var(--font-size-body);
+  height: var(--control-height-default);
+  padding: 0 10px;
 }
 
 .profile-evaluation-project-meta {
@@ -78,6 +94,7 @@
 }
 
 .profile-evaluation-task textarea {
+  font-family: inherit;
   height: 88px;
   min-height: 88px;
   resize: vertical;
@@ -117,16 +134,12 @@
 
 .profile-evaluation-fidelity {
   border-radius: var(--radius-pill);
-  color: var(--success);
+  color: var(--warning-strong, #8a5900);
   flex: 0 0 auto;
   font-size: 10px;
   font-weight: var(--font-weight-medium);
   line-height: 20px;
   padding: 0 8px;
-}
-
-.profile-evaluation-fidelity.is-full {
-  background: var(--success-bg);
 }
 
 .profile-evaluation-fidelity.is-partial {
@@ -168,6 +181,15 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.profile-evaluation-reviewing {
+  align-items: center;
+  color: var(--text-secondary);
+  display: flex;
+  font-size: 11px;
+  gap: 7px;
+  line-height: 17px;
 }
 
 .profile-evaluation-notice {
@@ -286,6 +308,53 @@
   line-height: 17px;
 }
 
+.profile-evaluation-result__context {
+  border-bottom: 1px solid var(--border-subtle);
+  display: grid;
+  gap: 11px;
+  padding-bottom: 13px;
+}
+
+.profile-evaluation-result__context > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  justify-content: space-between;
+}
+
+.profile-evaluation-result__context > div:first-child span {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.profile-evaluation-result__context > div:first-child span:first-child {
+  color: var(--text);
+  font-weight: var(--font-weight-medium);
+}
+
+.profile-evaluation-result__context > div:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+.profile-evaluation-result__context > div:last-child > span {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.profile-evaluation-result__context p {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 18px;
+  margin: 0;
+  max-height: 54px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
 .profile-evaluation-result__summary span {
   align-items: center;
   display: inline-flex;
@@ -315,14 +384,36 @@
   color: var(--accent);
 }
 
+.profile-evaluation-tabs button:not(.is-active):hover {
+  color: var(--text);
+}
+
 .profile-evaluation-result__panel {
   min-height: 230px;
 }
 
-.profile-evaluation-result__panel > .syntax-code-preview,
 .profile-evaluation-changes > .diff-viewer {
   max-height: min(360px, 42vh);
   overflow: auto;
+}
+
+.profile-evaluation-response {
+  display: grid;
+  gap: 8px;
+  max-height: min(360px, 42vh);
+  overflow: auto;
+}
+
+.profile-evaluation-response__toolbar {
+  display: flex;
+  justify-content: flex-end;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-raised);
+}
+
+.profile-evaluation-response > .conversation-markdown {
+  padding: 2px 1px 12px;
 }
 
 .profile-evaluation-changes {

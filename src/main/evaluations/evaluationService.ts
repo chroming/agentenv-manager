@@ -189,7 +189,7 @@ export const createEvaluationService = (
     if (!target?.health.executablePath) {
       throw new Error(`${adapter.descriptor.name} command was not found`);
     }
-    const excludeMcp = input.excludeMcp === true;
+    const excludeMcp = true;
     const availability = await adapter.evaluations.checkAvailability({
       profile,
       targetPaths: target.paths,
@@ -266,10 +266,7 @@ export const createEvaluationService = (
         mcp: {
           mode: mcpMode,
           includedCount: availability.mcpIncludedCount,
-          omittedCount: excludeMcp
-            ? profile.resources.mcpByTarget[input.targetId]?.selections
-                .filter((selection) => selection.enabled).length ?? 0
-            : 0
+          omittedCount: availability.mcpOmittedCount
         }
       },
       fidelity: availability.fidelity,

@@ -70,9 +70,9 @@ const preview = (overrides: Partial<OneShotEvaluationPreview> = {}): OneShotEval
   resources: {
     instructions: { mode: "manage", includedCount: 1 },
     skills: { mode: "manage", includedCount: 8 },
-    mcp: { mode: "manage", includedCount: 2 }
+    mcp: { mode: "manage", includedCount: 0, omittedCount: 2 }
   },
-  fidelity: "full",
+  fidelity: "partial",
   requiresMcpExclusion: false,
   warnings: [],
   createdAt: "2026-08-01T00:00:00.000Z",
@@ -117,7 +117,7 @@ const completedRun = (): OneShotEvaluationRun => ({
     }],
     changedFiles: ["test.ts"],
     usage: { inputTokens: 20, outputTokens: 8 },
-    fidelity: "full",
+    fidelity: "partial",
     warnings: []
   }
 });
@@ -128,7 +128,9 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     selectEvaluationProject: vi.fn(async () => "/Users/test/project"),
     previewEvaluation: vi.fn(async () => preview()),
     startEvaluation: vi.fn(async () => completedRun()),
-    cancelEvaluation: vi.fn()
+    cancelEvaluation: vi.fn(),
+    copyText: vi.fn(async () => undefined),
+    openExternalUrl: vi.fn(async () => undefined)
   } as unknown as AgentEnvApi;
   Object.assign(api, overrides);
   window.agentEnv = api;
@@ -153,16 +155,19 @@ describe("ProfileEvaluationDialog", () => {
     );
 
     expect(screen.getByText(/Uses the Agent account and model quota/))
-      .toHaveTextContent("Project Agent files are excluded");
+      .toHaveTextContent("External tools, MCPs, and project Agent files are excluded");
     fireEvent.click(screen.getByRole("button", { name: "Choose Git project" }));
     await screen.findByText("Revision 91ad3e2");
     expect(api.previewEvaluation).toHaveBeenCalledWith({
       profileId: "daily-coding",
       targetId: "opencode",
       projectPath: "/Users/test/project",
-      excludeMcp: false
+      excludeMcp: true
     });
-    expect(screen.getByText("8 included")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Agent" })).not.toBeInTheDocument();
+    expect(screen.getByText("Use Profile · 8")).toBeInTheDocument();
+    expect(screen.getByText("Excluded for safe evaluation · 2")).toBeInTheDocument();
+    expect(screen.getByText("Restricted Profile")).toBeInTheDocument();
     const runButton = screen.getByRole("button", { name: "Run evaluation" });
     expect(runButton).toBeDisabled();
     fireEvent.change(screen.getByRole("textbox", { name: "Task" }), {
@@ -173,6 +178,10 @@ describe("ProfileEvaluationDialog", () => {
 
     await screen.findByText("Evaluation completed");
     expect(screen.getByText("Implemented the requested test.")).toBeInTheDocument();
+    expect(screen.getByText("Add a test")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Copy response" }));
+    await waitFor(() => expect(api.copyText).toHaveBeenCalledWith("Implemented the requested test."));
+    expect(screen.getByRole("button", { name: "Response copied" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Changes" }));
     expect(await screen.findByRole("table", { name: "Formatted diff for test.ts" }))
       .toHaveTextContent("new test");
@@ -195,15 +204,16 @@ describe("ProfileEvaluationDialog", () => {
       />
     );
 
-    await screen.findByText("Evaluation completed");
+    await screen.findByText("Latest evaluation");
     expect(screen.getByText("Implemented the requested test.")).toBeInTheDocument();
+    expect(screen.getByText(/project · 91ad3e2/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Run again" }));
 
     await waitFor(() => expect(api.previewEvaluation).toHaveBeenCalledWith({
       profileId: "daily-coding",
       targetId: "opencode",
       projectPath: "/Users/test/project",
-      excludeMcp: false
+      excludeMcp: true
     }));
     expect(screen.getByRole("textbox", { name: "Task" })).toHaveValue("Add a test");
   });
@@ -277,22 +287,7 @@ describe("ProfileEvaluationDialog", () => {
     expect(screen.getByRole("button", { name: "Run evaluation" })).toBeEnabled();
   });
 
-  it("requires explicit MCP exclusion and blocks dismissal while a run is active", async () => {
-    const risky = preview({
-      requiresMcpExclusion: true,
-      warnings: ["OpenCode MCP settings contain literal credentials"],
-      fidelity: "full"
-    });
-    const partial = preview({
-      previewId: "preview-2",
-      requiresMcpExclusion: false,
-      warnings: ["OpenCode MCP settings contain literal credentials"],
-      fidelity: "partial",
-      resources: {
-        ...risky.resources,
-        mcp: { mode: "manage", includedCount: 0, omittedCount: 2 }
-      }
-    });
+  it("presents the fixed restricted environment and blocks dismissal while a run is active", async () => {
     const activeRun: OneShotEvaluationRun = {
       runId: "run-active",
       profileId: profile.id,
@@ -313,9 +308,7 @@ describe("ProfileEvaluationDialog", () => {
       stage: "Cancelling evaluation",
       canCancel: false
     };
-    const previewEvaluation = vi.fn()
-      .mockResolvedValueOnce(risky)
-      .mockResolvedValueOnce(partial);
+    const previewEvaluation = vi.fn().mockResolvedValue(preview());
     const api = installApi({
       previewEvaluation,
       startEvaluation: vi.fn(async () => activeRun),
@@ -334,9 +327,7 @@ describe("ProfileEvaluationDialog", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Choose Git project" }));
-    await screen.findByRole("button", { name: "Exclude MCP for this run" });
-    fireEvent.click(screen.getByRole("button", { name: "Exclude MCP for this run" }));
-    await screen.findByText("Partial Profile");
+    await screen.findByText("Restricted Profile");
     expect(previewEvaluation).toHaveBeenLastCalledWith(expect.objectContaining({ excludeMcp: true }));
     fireEvent.change(screen.getByRole("textbox", { name: "Task" }), {
       target: { value: "Review code" }
@@ -348,5 +339,31 @@ describe("ProfileEvaluationDialog", () => {
     expect(onClose).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Cancel evaluation" }));
     await waitFor(() => expect(api.cancelEvaluation).toHaveBeenCalledWith("run-active"));
+  });
+
+  it("keeps review progress with the initiating control instead of spinning Run", async () => {
+    let finishPreview!: (value: OneShotEvaluationPreview) => void;
+    installApi({
+      previewEvaluation: vi.fn(() => new Promise<OneShotEvaluationPreview>((resolve) => {
+        finishPreview = resolve;
+      }))
+    });
+    render(
+      <ProfileEvaluationDialog
+        open
+        profile={profile}
+        targets={[target]}
+        onClose={vi.fn()}
+      />
+    );
+
+    const choose = screen.getByRole("button", { name: "Choose Git project" });
+    fireEvent.click(choose);
+    await waitFor(() => expect(choose).toHaveAttribute("aria-busy", "true"));
+    expect(screen.getByRole("button", { name: "Run evaluation" }))
+      .toHaveAttribute("aria-busy", "false");
+
+    await act(async () => finishPreview(preview()));
+    await screen.findByText("Restricted Profile");
   });
 });

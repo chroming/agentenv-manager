@@ -156,6 +156,7 @@ export interface EvaluationAvailability {
   cliVersion?: string;
   fidelity: OneShotEvaluationFidelity;
   mcpIncludedCount: number;
+  mcpOmittedCount: number;
   requiresMcpExclusion: boolean;
   warnings: string[];
 }

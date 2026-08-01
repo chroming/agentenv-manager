@@ -63,7 +63,7 @@ describe("OpenCode evaluation capability", () => {
     expect(capability.parseEvent("ordinary stdout")).toBeUndefined();
   });
 
-  it("requires MCP exclusion when a selected definition contains a literal credential", async () => {
+  it("keeps MCP definitions outside the local-only evaluation without blocking it", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-opencode-eval-"));
     const homeDir = join(root, "home");
     const adapter = createOpenCodeTargetAdapter();
@@ -94,11 +94,16 @@ describe("OpenCode evaluation capability", () => {
     });
 
     expect(availability.available).toBe(true);
-    expect(availability.requiresMcpExclusion).toBe(true);
-    expect(availability.warnings.join(" ")).toContain("literal credentials");
+    expect(availability).toMatchObject({
+      fidelity: "partial",
+      mcpIncludedCount: 0,
+      mcpOmittedCount: 1,
+      requiresMcpExclusion: false
+    });
+    expect(availability.warnings.join(" ")).not.toContain("literal credentials");
   });
 
-  it("writes only the selected safe MCP definition into the isolated OpenCode config", async () => {
+  it("writes an explicit local-only permission policy and never copies MCP definitions", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-opencode-eval-"));
     const sourceHome = join(root, "source-home");
     const evaluationHome = join(root, "run", "home");
@@ -148,13 +153,14 @@ describe("OpenCode evaluation capability", () => {
 
     const written = JSON.parse(await readFile(evaluationPaths.configPath, "utf8"));
     expect(written).toEqual({
-      mcp: {
-        docs: {
-          type: "local",
-          command: ["docs"],
-          environment: { token_env_var: "DOCS_TOKEN" },
-          enabled: true
-        }
+      permission: {
+        "*": "deny",
+        read: "allow",
+        edit: "allow",
+        glob: "allow",
+        grep: "allow",
+        skill: "allow",
+        todowrite: "allow"
       }
     });
     expect(written).not.toHaveProperty("theme");
@@ -170,6 +176,7 @@ describe("OpenCode evaluation capability", () => {
     ]);
     expect(spec.env.HOME).toBe(evaluationHome);
     expect(spec.env.DOCS_TOKEN).toBe("runtime-secret");
+    expect(spec.fidelity).toBe("partial");
   });
 
   it.skipIf(process.platform !== "darwin")("probes the CLI version without allowing it to write", async () => {

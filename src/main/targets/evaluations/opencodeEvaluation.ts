@@ -3,11 +3,8 @@ import { existsSync } from "node:fs";
 import { chmod, copyFile, mkdir, readFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { parse, printParseErrorCode, type ParseError } from "jsonc-parser";
-import { profileResourceMode } from "../../../shared/profileResources";
-import type { ProfileMcpPolicy } from "../../../shared/schemas";
 import { hashPathEntry } from "../../filesystemIntegrity";
 import { isMissingFileError, writeAtomic } from "../../fileUtils";
-import { findSecretWarnings } from "../../secretWarnings";
 import type {
   AgentEvaluationCapability,
   EvaluationAvailability,
@@ -27,6 +24,15 @@ const PROJECT_AGENT_RESOURCES = [
   ".claude/skills",
   ".agents/skills"
 ] as const;
+const EVALUATION_PERMISSION = {
+  "*": "deny",
+  read: "allow",
+  edit: "allow",
+  glob: "allow",
+  grep: "allow",
+  skill: "allow",
+  todowrite: "allow"
+} as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -59,49 +65,23 @@ const parseConfig = (
     : { ok: false, message: "OpenCode configuration must be an object" };
 };
 
-const mcpLayout = (config: Record<string, unknown>) => {
+const mcpServers = (config: Record<string, unknown>) => {
   const mcp = isRecord(config.mcp) ? config.mcp : {};
   if (isRecord(mcp.servers)) {
-    return { kind: "legacy" as const, servers: mcp.servers };
+    return mcp.servers;
   }
-  return { kind: "direct" as const, servers: mcp };
+  return mcp;
 };
 
-const selectedMcp = (
+const omittedMcpCount = (
   config: Record<string, unknown>,
-  policy: ProfileMcpPolicy
-): { config?: Record<string, unknown>; count: number } => {
-  if (policy.mode === "disable") return { count: 0 };
-  const layout = mcpLayout(config);
-  const names = policy.mode === "ignore"
-    ? Object.keys(layout.servers)
-    : policy.selections.filter((selection) => selection.enabled).map((selection) => selection.name);
-  const selected: Record<string, unknown> = {};
-  for (const name of names) {
-    const value = layout.servers[name];
-    if (!isRecord(value)) continue;
-    selected[name] = layout.kind === "legacy"
-      ? { ...value, disabled: false }
-      : { ...value, enabled: true };
-  }
-  if (Object.keys(selected).length === 0) return { count: 0 };
-  return {
-    count: Object.keys(selected).length,
-    config: layout.kind === "legacy"
-      ? { mcp: { servers: selected } }
-      : { mcp: selected }
-  };
-};
-
-const missingEnabledMcpNames = (
-  config: Record<string, unknown>,
-  policy: ProfileMcpPolicy
+  policy: EvaluationProbeInput["profile"]["resources"]["mcpByTarget"][string]
 ) => {
-  if (policy.mode !== "manage") return [];
-  const servers = mcpLayout(config).servers;
-  return policy.selections
-    .filter((selection) => selection.enabled && !isRecord(servers[selection.name]))
-    .map((selection) => selection.name);
+  if (policy.mode === "disable") return { count: 0 };
+  if (policy.mode === "manage") {
+    return { count: policy.selections.filter((selection) => selection.enabled).length };
+  }
+  return { count: Object.keys(mcpServers(config)).length };
 };
 
 const probeVersion = async (
@@ -157,6 +137,7 @@ const inspect = async (input: EvaluationProbeInput): Promise<{
         reason: "OpenCode command was not found",
         fidelity: "partial",
         mcpIncludedCount: 0,
+        mcpOmittedCount: 0,
         requiresMcpExclusion: false,
         warnings: []
       }
@@ -168,55 +149,34 @@ const inspect = async (input: EvaluationProbeInput): Promise<{
     selections: []
   };
   const needsNativeConfig =
-    policy.mode === "ignore" ||
-    (policy.mode === "manage" && policy.selections.some((selection) => selection.enabled));
+    policy.mode === "ignore";
   const content = needsNativeConfig ? await readTextIfPresent(input.targetPaths.configPath) : "";
   const parsed = parseConfig(content);
   const warnings: string[] = [];
-  let requiresMcpExclusion = false;
-  let evalConfig: Record<string, unknown> | undefined;
-  let mcpIncludedCount = 0;
+  let mcpOmittedCount = policy.mode === "manage"
+    ? policy.selections.filter((selection) => selection.enabled).length
+    : 0;
 
   if (!parsed.ok) {
-    if (needsNativeConfig) {
-      warnings.push(parsed.message);
-      requiresMcpExclusion = true;
-    }
+    // MCPs are always excluded in P0. An unreadable native config only makes
+    // the omitted count unavailable and must not block a local evaluation.
   } else {
-    const missing = missingEnabledMcpNames(parsed.value, policy);
-    if (missing.length > 0) {
-      warnings.push(`OpenCode MCP ${missing.join(", ")} is not configured on this device`);
-      requiresMcpExclusion = true;
-    }
-    const selected = selectedMcp(parsed.value, policy);
-    evalConfig = selected.config;
-    mcpIncludedCount = selected.count;
-    if (evalConfig && findSecretWarnings(JSON.stringify(evalConfig)).length > 0) {
-      warnings.push("OpenCode MCP settings contain literal credentials and cannot be copied into the isolated evaluation");
-      requiresMcpExclusion = true;
-    }
+    mcpOmittedCount = omittedMcpCount(parsed.value, policy).count;
   }
 
-  if (input.excludeMcp) {
-    evalConfig = undefined;
-    mcpIncludedCount = 0;
-  }
   const cliVersion = input.knownCliVersion ?? await probeVersion(input.executablePath, input.platform);
   if (!cliVersion) warnings.push("OpenCode version could not be read");
   return {
     availability: {
       available: true,
       cliVersion,
-      fidelity: input.excludeMcp && profileResourceMode(
-        input.profile.resources,
-        "opencode",
-        "mcp"
-      ) !== "disable" ? "partial" : "full",
-      mcpIncludedCount,
-      requiresMcpExclusion: requiresMcpExclusion && !input.excludeMcp,
+      fidelity: "partial",
+      mcpIncludedCount: 0,
+      mcpOmittedCount,
+      requiresMcpExclusion: false,
       warnings
     },
-    evalConfig
+    evalConfig: { permission: EVALUATION_PERMISSION }
   };
 };
 
@@ -297,10 +257,6 @@ export const createOpenCodeEvaluationCapability = (): AgentEvaluationCapability 
     if (!inspected.availability.available || !input.executablePath) {
       throw new Error(inspected.availability.reason ?? "OpenCode evaluation is unavailable");
     }
-    if (inspected.availability.requiresMcpExclusion) {
-      throw new Error("Exclude unsafe or unavailable MCP settings before running this evaluation");
-    }
-
     await Promise.all([
       mkdir(input.evaluationTargetPaths.configDir, { recursive: true, mode: 0o700 }),
       mkdir(input.evaluationTempDir, { recursive: true, mode: 0o700 }),
@@ -308,13 +264,11 @@ export const createOpenCodeEvaluationCapability = (): AgentEvaluationCapability 
       mkdir(join(input.evaluationHome, ".cache"), { recursive: true, mode: 0o700 }),
       mkdir(join(input.evaluationHome, ".local", "state"), { recursive: true, mode: 0o700 })
     ]);
-    if (inspected.evalConfig) {
-      await writeAtomic(
-        input.evaluationTargetPaths.configPath,
-        `${JSON.stringify(inspected.evalConfig, null, 2)}\n`,
-        { mode: 0o600, platform: input.platform }
-      );
-    }
+    await writeAtomic(
+      input.evaluationTargetPaths.configPath,
+      `${JSON.stringify(inspected.evalConfig, null, 2)}\n`,
+      { mode: 0o600, platform: input.platform }
+    );
     await copyOpenCodeAuth(input, input.evaluationHome);
 
     const env: NodeJS.ProcessEnv = {
