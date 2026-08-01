@@ -224,6 +224,56 @@ A Profile MAY record a preferred Target for default UI context and the Target it
 
 Create from Target MAY record a machine-local Capture receipt containing source paths, location roles, and content hashes. The receipt is optional takeover evidence, lives outside portable AgentEnv data, is never part of the Profile or data backup, cannot authorize content that differs from the current Library hash, and is consumed after the first successful Apply to that Target. Missing or malformed receipt data falls back to current content and path-capability validation.
 
+### 4.3.1 One-shot Profile Evaluation
+
+One-shot Evaluation answers one bounded question: how one saved Profile behaves for one task in
+one committed local Git project. It is not Apply, a Benchmark suite, or a correctness score.
+
+- Evaluation input is one saved Profile, one Agent with an explicit evaluation capability, one
+  local Git repository at its current `HEAD`, and one task prompt. A dirty Profile MUST be saved
+  before opening the run flow. Uncommitted project changes are excluded and visibly disclosed.
+- P0 supports OpenCode only. Unsupported Agents remain unavailable choices rather than falling
+  through to a generic shell command.
+- Evaluation creates a private local clone without network access, a random `0700` Eval Home, and
+  immutable copies of every included Library Skill. It MUST NOT Apply, write the original project,
+  or write the real Agent's Instructions, Skills, MCP settings, state, or credentials.
+- On macOS, the child process is constrained to the Eval root by the operating-system process
+  sandbox. A platform without an implemented write sandbox reports Evaluation unavailable; it
+  MUST NOT silently downgrade the no-write guarantee.
+- `Use Profile`, `Turn off`, and `Keep current` retain their ordinary Profile meanings. `Keep
+  current` creates a read-only snapshot inside Eval Home; it never points the child process at the
+  live Agent path. Globally disabled or Profile-disabled Skills are omitted. Target-recognized
+  project-local Agent configuration, Instructions, and Skills are masked only inside the temporary
+  clone, disclosed in Preview, and restored before Diff collection so they cannot silently alter
+  the Profile under evaluation or appear as task changes.
+- MCP definitions remain Agent-owned. Evaluation may copy only the selected effective definition
+  into Eval Home. Literal credentials, invalid native configuration, or missing requested MCP
+  definitions require the user to exclude MCP for that run. Such a run is labeled `Partial
+  Profile`; it MUST NOT be presented as full-fidelity.
+- Before launch, Preview binds the saved target-specific Profile hash, selected Library hashes,
+  project revision, index state, dirty and untracked content fingerprints, and real Agent resource
+  fingerprints. Any stale input requires a fresh Preview.
+- The child command uses an absolute executable and argument array without a shell. It has a
+  bounded timeout and output limit, supports process-tree cancellation, and reports only
+  `Preparing`, `Running`, `Cancelling`, `Completed`, `Failed to run`, or `Cancelled`. `Completed`
+  means the CLI exited normally and output was captured; it does not mean the task is correct.
+- OpenCode tool approval is automatic only inside the operating-system write sandbox so the task
+  can produce a meaningful Diff. The setup surface states that the run invokes the configured
+  Agent account and may consume model quota before the user confirms it.
+- Completion records the final response, Git diff, changed files, duration, exit code, and only
+  usage values explicitly reported by the CLI. Missing token or cost fields display `Unavailable`
+  and MUST NOT be inferred as zero.
+- The original project revision, index, dirty and untracked content, plus real Agent paths are
+  verified again before accepting a result. Temporary project, Home, authentication copy, and
+  runtime state are deleted after every terminal outcome. Cleanup failure is a visible failed
+  state.
+- AgentEnv persists only the latest redacted and bounded report under device-local application
+  data. Evaluation reports and temporary workspaces are excluded from Workspace Sync. A report may
+  be included in an explicit whole-data backup but never contains the temporary Home or raw literal
+  credentials.
+- P0 has no suites, assertions, pass/fail label, ranking, repeated runs, scheduler, LLM judge,
+  concurrent runs, result sync, automatic write-back, or top-level Evaluation navigation.
+
 Source of truth: the saved Profile directory in AgentEnv data.
 
 A v2 Profile directory contains exactly `profile.json`, `INSTRUCTIONS.md`, and `resources.json`. It MUST NOT store arbitrary native configuration, credentials, private Skill copies, Agent definitions, hooks, environment variables, or disabled-path lists.
@@ -1487,6 +1537,8 @@ A new Target adapter MUST define:
 - Skill capability and install methods.
 - A read-only Skill runtime driver declaring roots, scan depth, scope, runtime identity, native disable facts, and manager-related evidence markers.
 - Native MCP discovery scope and safe activation capability.
+- Optional one-shot Evaluation capability, including project Agent-resource masks, availability
+  checks, an isolated launch specification, and structured event parsing.
 - An exact allowlist for any MCP activation field the adapter may patch; no generic native-config payload is accepted.
 - Preview generation.
 - Managed-resource ownership markers.

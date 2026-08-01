@@ -29,6 +29,11 @@ before first taking over an important Agent environment.
 ## Highlights
 
 - Create, edit, duplicate, capture, preview, and apply reusable Profiles.
+- Evaluate one saved Profile with OpenCode on macOS in a sandboxed clone, then
+  review the response, Git Diff, duration, and explicitly reported usage without
+  applying the Profile or changing the original project or Agent. The run invokes
+  the configured model account and may consume quota. Project-local Agent resources
+  are temporarily excluded from the clone so the result measures the selected Profile.
 - Keep Skills in one Library instead of duplicating full files across Agents.
 - Import one Skill, a repository directory, or a repository through GitHub,
   generic HTTPS Git, or SSH Git.

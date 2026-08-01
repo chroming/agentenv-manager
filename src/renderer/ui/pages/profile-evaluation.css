@@ -1,0 +1,415 @@
+.profile-evaluation-dialog {
+  max-height: min(720px, calc(100vh - 36px));
+  width: min(760px, calc(100vw - 36px));
+}
+
+.profile-evaluation-dialog__header {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+}
+
+.profile-evaluation-dialog__heading-icon {
+  align-items: center;
+  background: var(--accent-soft);
+  border-radius: var(--radius-control);
+  color: var(--accent);
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.profile-evaluation-dialog__body {
+  padding: 0;
+}
+
+.profile-evaluation-setup,
+.profile-evaluation-result {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.profile-evaluation-fields {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+}
+
+.profile-evaluation-dialog .field-block {
+  gap: 6px;
+  margin: 0;
+}
+
+.profile-evaluation-dialog .field-block > span:first-child {
+  color: var(--text-secondary);
+  font-size: var(--font-size-metadata);
+  font-weight: var(--font-weight-medium);
+  line-height: 17px;
+}
+
+.profile-evaluation-dialog select,
+.profile-evaluation-dialog textarea {
+  width: 100%;
+}
+
+.profile-evaluation-project-button {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.profile-evaluation-project-meta {
+  align-items: center;
+  color: var(--text-tertiary);
+  display: grid;
+  font-size: 10px;
+  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  line-height: 15px;
+  min-width: 0;
+}
+
+.profile-evaluation-project-meta code {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-evaluation-task textarea {
+  height: 88px;
+  min-height: 88px;
+  resize: vertical;
+}
+
+.profile-evaluation-environment {
+  border-block: 1px solid var(--border-subtle);
+  display: grid;
+  gap: 12px;
+  padding: 13px 0;
+}
+
+.profile-evaluation-environment > header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.profile-evaluation-environment > header > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.profile-evaluation-environment > header strong {
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  line-height: 18px;
+}
+
+.profile-evaluation-environment > header small {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.profile-evaluation-fidelity {
+  border-radius: var(--radius-pill);
+  color: var(--success);
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: var(--font-weight-medium);
+  line-height: 20px;
+  padding: 0 8px;
+}
+
+.profile-evaluation-fidelity.is-full {
+  background: var(--success-bg);
+}
+
+.profile-evaluation-fidelity.is-partial {
+  background: var(--warning-bg);
+  color: var(--warning-strong, #8a5900);
+}
+
+.profile-evaluation-resource-grid {
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.profile-evaluation-resource-grid > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.profile-evaluation-resource-grid > span:first-child {
+  padding-left: 0;
+}
+
+.profile-evaluation-resource-grid > span + span {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.profile-evaluation-resource-grid small {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.profile-evaluation-resource-grid strong {
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  line-height: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-evaluation-notice {
+  align-items: start;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  color: var(--text-secondary);
+  display: grid;
+  font-size: 11px;
+  gap: 8px;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  line-height: 17px;
+  padding: 10px 11px;
+}
+
+.profile-evaluation-notice > svg {
+  margin-top: 1px;
+}
+
+.profile-evaluation-notice p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.profile-evaluation-notice p + p {
+  margin-top: 3px;
+}
+
+.profile-evaluation-notice.is-warning {
+  background: var(--warning-bg);
+  border-color: color-mix(in srgb, var(--warning) 28%, var(--border));
+  color: var(--warning-strong, #805500);
+}
+
+.profile-evaluation-notice.is-error {
+  background: var(--danger-bg);
+  border-color: color-mix(in srgb, var(--danger) 25%, var(--border));
+  color: var(--danger);
+}
+
+.profile-evaluation-running {
+  align-content: center;
+  display: grid;
+  justify-items: center;
+  min-height: 330px;
+  padding: 30px;
+  text-align: center;
+}
+
+.profile-evaluation-running__visual {
+  align-items: center;
+  background: var(--accent-soft);
+  border-radius: 50%;
+  color: var(--accent);
+  display: inline-flex;
+  height: 54px;
+  justify-content: center;
+  margin-bottom: 12px;
+  width: 54px;
+}
+
+.profile-evaluation-running > strong {
+  font-size: 15px;
+  font-weight: var(--font-weight-medium);
+  line-height: 21px;
+}
+
+.profile-evaluation-running > p {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  margin: 4px 0 18px;
+}
+
+.profile-evaluation-running dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  max-width: 460px;
+  width: 100%;
+}
+
+.profile-evaluation-running dl > div {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 74px minmax(0, 1fr);
+  text-align: left;
+}
+
+.profile-evaluation-running dt,
+.profile-evaluation-running dd {
+  font-size: 11px;
+  line-height: 17px;
+  margin: 0;
+}
+
+.profile-evaluation-running dt {
+  color: var(--text-tertiary);
+}
+
+.profile-evaluation-running dd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-evaluation-result__summary {
+  align-items: center;
+  color: var(--text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 11px;
+  gap: 7px 14px;
+  line-height: 17px;
+}
+
+.profile-evaluation-result__summary span {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+}
+
+.profile-evaluation-tabs {
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 18px;
+}
+
+.profile-evaluation-tabs button {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  height: 34px;
+  margin-bottom: -1px;
+  padding: 0 2px;
+}
+
+.profile-evaluation-tabs button.is-active {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+}
+
+.profile-evaluation-result__panel {
+  min-height: 230px;
+}
+
+.profile-evaluation-result__panel > .syntax-code-preview,
+.profile-evaluation-changes > .diff-viewer {
+  max-height: min(360px, 42vh);
+  overflow: auto;
+}
+
+.profile-evaluation-changes {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-evaluation-change-toolbar {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.profile-evaluation-change-toolbar select {
+  min-width: 0;
+}
+
+.profile-evaluation-details {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.profile-evaluation-details > div {
+  align-items: baseline;
+  border-bottom: 1px solid var(--border-subtle);
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 132px minmax(0, 1fr);
+  min-height: 34px;
+  padding: 7px 0;
+}
+
+.profile-evaluation-details dt,
+.profile-evaluation-details dd {
+  font-size: 11px;
+  line-height: 17px;
+  margin: 0;
+}
+
+.profile-evaluation-details dt {
+  color: var(--text-secondary);
+}
+
+.profile-evaluation-details dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.profile-evaluation-empty {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin: 0;
+  padding: 56px 16px;
+  text-align: center;
+}
+
+@media (max-width: 620px) {
+  .profile-evaluation-dialog {
+    width: calc(100vw - 24px);
+  }
+
+  .profile-evaluation-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-evaluation-resource-grid {
+    gap: 8px;
+    grid-template-columns: 1fr;
+  }
+
+  .profile-evaluation-resource-grid > span {
+    padding: 0;
+  }
+
+  .profile-evaluation-resource-grid > span + span {
+    border-left: 0;
+  }
+
+  .profile-evaluation-notice {
+    grid-template-columns: 16px minmax(0, 1fr);
+  }
+
+  .profile-evaluation-notice .ui-button {
+    grid-column: 2;
+    justify-self: start;
+  }
+}

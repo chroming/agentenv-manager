@@ -291,7 +291,8 @@
 .profile-page-actions button,
 .profile-target-workspace-button,
 .profile-commit-actions .save-button,
-.profile-commit-actions .profile-apply-button {
+.profile-commit-actions .profile-apply-button,
+.profile-action-stack > .profile-evaluate-button {
   height: var(--profile-control-height);
   min-height: var(--profile-control-height);
 }
@@ -623,6 +624,13 @@
   min-width: 104px;
   padding-inline: 12px;
   width: 104px;
+}
+
+.profile-action-stack > .profile-evaluate-button {
+  flex: 0 0 88px;
+  min-width: 88px;
+  padding-inline: 9px;
+  width: 88px;
 }
 
 .profile-commit-actions .profile-apply-control {
@@ -1265,10 +1273,16 @@
     width: 92px;
   }
 
+  .profile-action-stack > .profile-evaluate-button {
+    flex-basis: 92px;
+    min-width: 92px;
+    width: 92px;
+  }
+
   .profile-commit-actions .profile-target-workspace-control,
   .profile-commit-actions > .profile-target-workspace-button {
-    flex-basis: 128px;
-    width: 128px;
+    flex-basis: 112px;
+    width: 112px;
   }
 
   .profile-commit-actions .profile-target-workspace-button {

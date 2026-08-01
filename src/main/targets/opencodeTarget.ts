@@ -15,6 +15,7 @@ import type {
 import { profileManagesResource } from "../../shared/profileResources";
 import { createApplyIssue } from "../applyIssues";
 import { createOpenCodeConversationCapability } from "./conversations/opencodeConversations";
+import { createOpenCodeEvaluationCapability } from "./evaluations/opencodeEvaluation";
 import { createUnifiedDiff } from "../diff";
 import { readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
@@ -126,7 +127,8 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       mcpTransports: ["stdio", "http", "sse"],
       agentFormat: "opencode",
       disabledSkillPaths: false,
-      mcpActivation: true
+      mcpActivation: true,
+      evaluation: true
     }
   },
   detectInstallation: createInstallationDriver({
@@ -192,6 +194,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
   },
   skills,
   conversations: createOpenCodeConversationCapability(),
+  evaluations: createOpenCodeEvaluationCapability(),
   createDefaultProfile: (id) => ({
     id,
     manifest: {

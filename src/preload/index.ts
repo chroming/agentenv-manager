@@ -44,6 +44,7 @@ const api: AgentEnvApi = {
   selectLocalSkillSource: () => ipcRenderer.invoke("dialog:select-local-skill-source"),
   releaseSkillArchive: (token) => ipcRenderer.invoke("skills:release-archive", token),
   selectTargetConfigRoot: (targetId) => ipcRenderer.invoke("dialog:select-target-config-root", targetId),
+  selectEvaluationProject: () => ipcRenderer.invoke("dialog:select-evaluation-project"),
   listSupportedTargets: () => ipcRenderer.invoke("targets:list-supported"),
   listTargets: (forceRefresh) => ipcRenderer.invoke("targets:list", forceRefresh),
   listTargetStates: () => ipcRenderer.invoke("targets:list-states"),
@@ -141,6 +142,10 @@ const api: AgentEnvApi = {
     ipcRenderer.invoke("activation:preview", profileId, targetId),
   applyProfile: (profileId, previewId) =>
     ipcRenderer.invoke("activation:apply", profileId, previewId),
+  previewEvaluation: (input) => ipcRenderer.invoke("evaluations:preview", input),
+  startEvaluation: (input) => ipcRenderer.invoke("evaluations:start", input),
+  readEvaluation: (input) => ipcRenderer.invoke("evaluations:read", input),
+  cancelEvaluation: (runId) => ipcRenderer.invoke("evaluations:cancel", runId),
   listBackups: () => ipcRenderer.invoke("backups:list"),
   listManagedBackups: () => ipcRenderer.invoke("backups:list-managed"),
   previewManagedBackup: (input) => ipcRenderer.invoke("backups:preview-managed", input),

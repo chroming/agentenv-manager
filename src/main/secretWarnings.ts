@@ -113,6 +113,11 @@ export const redactSensitiveValues = (content: string): string => {
     (match, prefix: string, key: string, value: string, suffix: string) =>
       looksSensitive(key, value) ? `${prefix}${redactedValue}${suffix}` : match
   );
+  redacted = redacted.replace(
+    /(\b([A-Za-z_][\w.-]*)\s*[:=]\s*)([^\s,;}\]]+)/g,
+    (match, prefix: string, key: string, value: string) =>
+      looksSensitive(key, value) ? `${prefix}${redactedValue}` : match
+  );
   redacted = redacted.replace(/Bearer\s+[A-Za-z0-9._~+/-]{12,}/gi, `Bearer ${redactedValue}`);
   redacted = redacted.replace(
     /\b(?:sk-[A-Za-z0-9_-]{12,}|gh[oprsu]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{16,}|xox[baprs]-[A-Za-z0-9-]{16,}|AKIA[A-Z0-9]{16})\b/gi,

@@ -19,6 +19,7 @@ import type { WorkspaceSyncService } from "./workspaceSync/workspaceSyncService"
 import type { SkillLibraryStore } from "./skillLibraryStore";
 import type { TargetDiscoveryService } from "./targetDiscovery";
 import type { TargetCaptureService } from "./targetCaptureService";
+import type { EvaluationService } from "./evaluations/evaluationService";
 import { ResourceIconKeySchema, SafeIdSchema } from "../shared/schemas";
 import type {
   CreateProfileInput,
@@ -46,7 +47,9 @@ import type {
   SkillAvailabilityInput,
   UnmanagedSkillLocationUpdate,
   TargetCaptureScope,
-  TargetPaths
+  TargetPaths,
+  OneShotEvaluationPreviewInput,
+  OneShotEvaluationStartInput
 } from "../shared/types";
 import type { TargetRegistry } from "./targets/registry";
 import type { AgentEnvPaths } from "./paths";
@@ -81,6 +84,7 @@ export interface IpcServices {
   targetDiscoveryService: TargetDiscoveryService;
   conversationService: ConversationService;
   targetCaptureService: TargetCaptureService;
+  evaluationService: EvaluationService;
   mutationCoordinator: MutationCoordinator;
   paths: AgentEnvPaths;
   workspaceSyncService: WorkspaceSyncService;
@@ -117,6 +121,7 @@ export const registerIpcHandlers = ({
   targetDiscoveryService,
   conversationService,
   targetCaptureService,
+  evaluationService,
   mutationCoordinator,
   paths,
   workspaceSyncService,
@@ -348,6 +353,17 @@ export const registerIpcHandlers = ({
     const options = {
       title: `Select ${target.name} configuration folder`,
       properties: ["openDirectory", "createDirectory"] as Array<"openDirectory" | "createDirectory">
+    };
+    const result = window
+      ? await dialog.showOpenDialog(window, options)
+      : await dialog.showOpenDialog(options);
+    return result.canceled ? undefined : result.filePaths[0];
+  });
+  diagnosticHandle("dialog:select-evaluation-project", async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const options = {
+      title: "Select Git project for evaluation",
+      properties: ["openDirectory"] as Array<"openDirectory">
     };
     const result = window
       ? await dialog.showOpenDialog(window, options)
@@ -1096,6 +1112,43 @@ export const registerIpcHandlers = ({
       parseId(profileId, "profile id"),
       targetId === undefined ? undefined : parseId(targetId, "target id")
     )
+  );
+  diagnosticHandle("evaluations:preview", (_event, input: unknown) => {
+    if (!input || typeof input !== "object") {
+      throw new Error("Evaluation preview requires a Profile, Agent, and project");
+    }
+    const value = input as Partial<OneShotEvaluationPreviewInput>;
+    if (typeof value.projectPath !== "string" || !value.projectPath.trim()) {
+      throw new Error("Evaluation project is required");
+    }
+    return evaluationService.preview({
+      profileId: parseId(value.profileId, "profile id"),
+      targetId: parseId(value.targetId, "target id"),
+      projectPath: value.projectPath,
+      excludeMcp: value.excludeMcp === true
+    });
+  });
+  diagnosticHandle("evaluations:start", (_event, input: unknown) => {
+    if (!input || typeof input !== "object") {
+      throw new Error("Evaluation run requires a reviewed preview and task");
+    }
+    const value = input as Partial<OneShotEvaluationStartInput>;
+    if (typeof value.prompt !== "string") throw new Error("Evaluation task is required");
+    return evaluationService.start({
+      previewId: String(value.previewId ?? ""),
+      prompt: value.prompt
+    });
+  });
+  diagnosticHandle("evaluations:read", (_event, input: unknown) => {
+    const value = input && typeof input === "object"
+      ? input as { runId?: unknown }
+      : undefined;
+    return evaluationService.read({
+      runId: typeof value?.runId === "string" ? value.runId : undefined
+    });
+  });
+  diagnosticHandle("evaluations:cancel", (_event, runId: unknown) =>
+    evaluationService.cancel(String(runId ?? ""))
   );
   handleMutation(
     "activation:apply",

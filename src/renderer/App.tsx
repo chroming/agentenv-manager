@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Clock3,
   FolderOpen,
+  FlaskConical,
   HardDrive,
   History,
   LoaderCircle,
@@ -132,6 +133,7 @@ import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileMcpEditor } from "./components/ProfileMcpEditor";
 import { ProfileDeleteDialog } from "./components/ProfileDeleteDialog";
 import { ProfileFormDialog } from "./components/ProfileFormDialog";
+import { ProfileEvaluationDialog } from "./components/ProfileEvaluationDialog";
 import { QuickOpen } from "./components/QuickOpen";
 import { ProfileList } from "./components/ProfileList";
 import { ProfileActionsMenu } from "./components/ProfileActionsMenu";
@@ -366,6 +368,7 @@ const AppContent = ({
   const [isTargetMenuOpen, setIsTargetMenuOpen] = useState(false);
   const [isProfileActionsOpen, setIsProfileActionsOpen] = useState(false);
   const [profileDialogMode, setProfileDialogMode] = useState<ProfileDialogMode>();
+  const [profileEvaluationOpen, setProfileEvaluationOpen] = useState(false);
   const [profileCreateSource, setProfileCreateSource] = useState<ProfileCreateSource>("blank");
   const [profileCaptureOrigin, setProfileCaptureOrigin] = useState<ProfileCaptureOrigin>("profiles");
   const [profileCaptureScope, setProfileCaptureScope] =
@@ -388,6 +391,7 @@ const AppContent = ({
   const profilePageActionsRef = useRef<HTMLDivElement>(null);
   const profileObjectActionsRef = useRef<HTMLDivElement>(null);
   const profileApplyControlRef = useRef<HTMLDivElement>(null);
+  const profileEvaluationButtonRef = useRef<HTMLButtonElement>(null);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const targetMenuButtonRef = useRef<HTMLButtonElement>(null);
   const targetMenuRef = useRef<HTMLDivElement>(null);
@@ -3921,6 +3925,20 @@ const AppContent = ({
       <span id="profile-apply-description" hidden>{applyDescription}</span>
     </div>
   ) : null;
+  const evaluationAvailable = window.agentEnv.platform === "darwin" && targets.some(
+    (target) => target.capabilities.evaluation && Boolean(target.health.executablePath)
+  );
+  const openProfileEvaluation = () => {
+    if (!draftProfile) return;
+    if (isProfileDirty) {
+      setProfileSaveStatus("Save this Profile before evaluating it");
+      window.requestAnimationFrame(() => saveButtonRef.current?.focus());
+      return;
+    }
+    setIsTargetMenuOpen(false);
+    setIsProfileActionsOpen(false);
+    setProfileEvaluationOpen(true);
+  };
   const targetWorkspaceControl = targets.length === 0 ? null : installedTargets.length === 1 && selectedTarget ? (
     <div
       className="profile-target-workspace-button is-static"
@@ -4381,7 +4399,12 @@ const AppContent = ({
                             title={t(readiness.message)}
                           >
                             <ReadinessIcon size={13} strokeWidth={2.3} aria-hidden="true" />
-                            <span>{t(readinessActionText)}</span>
+                            <span
+                              data-ui-overflow-detail="true"
+                              title={t(readinessActionText)}
+                            >
+                              {t(readinessActionText)}
+                            </span>
                           </span>
                           {readiness.remediationLabel && readiness.remediationLabel !== "Save now" ? (
                             <button
@@ -4399,6 +4422,25 @@ const AppContent = ({
                         </div>
                       </div>
                       <div className="profile-action-stack">
+                        <Button
+                          ref={profileEvaluationButtonRef}
+                          className="profile-evaluate-button"
+                          disabled={
+                            busy ||
+                            isProfileSaving ||
+                            profileMetadataSavingId === draftProfile.id ||
+                            !evaluationAvailable
+                          }
+                          icon={<FlaskConical size={15} strokeWidth={2.2} />}
+                          title={t(
+                            evaluationAvailable
+                              ? "Evaluate this saved Profile"
+                              : "No supported evaluation Agent is available"
+                          )}
+                          onClick={openProfileEvaluation}
+                        >
+                          {t("Evaluate")}
+                        </Button>
                         <div
                           className="profile-commit-actions"
                           ref={profileObjectActionsRef}
@@ -4795,6 +4837,15 @@ const AppContent = ({
                   openWorkspaceNow("targets");
                 }}
               />
+              {profileEvaluationOpen && draftProfile ? (
+                <ProfileEvaluationDialog
+                  open
+                  profile={draftProfile}
+                  targets={targets}
+                  returnFocusRef={profileEvaluationButtonRef}
+                  onClose={() => setProfileEvaluationOpen(false)}
+                />
+              ) : null}
             </section>
           </>
         ) : activeWorkspace === "conversations" ? (

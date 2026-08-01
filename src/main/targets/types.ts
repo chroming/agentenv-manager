@@ -11,6 +11,10 @@ import type {
   SkillRuntimeNativeState,
   SkillRuntimeSnapshot
 } from "../../shared/types";
+import type {
+  OneShotEvaluationFidelity,
+  OneShotEvaluationUsage
+} from "../../shared/evaluations";
 
 export interface TargetPathInput {
   homeDir: string;
@@ -135,6 +139,60 @@ export interface AgentConversationCapability {
   ): ConversationLaunchSpec | undefined;
 }
 
+export interface EvaluationProbeInput {
+  profile: ProfileDetail;
+  targetPaths: TargetPaths;
+  sourceHomeDir: string;
+  executablePath?: string;
+  knownCliVersion?: string;
+  excludeMcp: boolean;
+  platform: NodeJS.Platform;
+  environment: NodeJS.ProcessEnv;
+}
+
+export interface EvaluationAvailability {
+  available: boolean;
+  reason?: string;
+  cliVersion?: string;
+  fidelity: OneShotEvaluationFidelity;
+  mcpIncludedCount: number;
+  requiresMcpExclusion: boolean;
+  warnings: string[];
+}
+
+export interface EvaluationLaunchInput extends EvaluationProbeInput {
+  evaluationHome: string;
+  evaluationProject: string;
+  evaluationTargetPaths: TargetPaths;
+  evaluationTempDir: string;
+  prompt: string;
+}
+
+export interface EvaluationLaunchSpec {
+  executablePath: string;
+  args: string[];
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  envToDelete?: string[];
+  writableRoot: string;
+  cliVersion?: string;
+  model?: string;
+  fidelity: OneShotEvaluationFidelity;
+  warnings: string[];
+}
+
+export type EvaluationEvent =
+  | { type: "response"; text: string }
+  | { type: "usage"; usage: OneShotEvaluationUsage; model?: string }
+  | { type: "error"; message: string };
+
+export interface AgentEvaluationCapability {
+  projectResourcePaths?: readonly string[];
+  checkAvailability(input: EvaluationProbeInput): Promise<EvaluationAvailability>;
+  createLaunchSpec(input: EvaluationLaunchInput): Promise<EvaluationLaunchSpec>;
+  parseEvent(line: string): EvaluationEvent | undefined;
+}
+
 export interface AgentTargetAdapter {
   descriptor: TargetDescriptor;
   detectInstallation(input: TargetInstallationInput): Promise<TargetInstallationResult>;
@@ -144,6 +202,7 @@ export interface AgentTargetAdapter {
     inspectRuntime(targetPaths: TargetPaths): Promise<SkillRuntimeSnapshot>;
   };
   conversations?: AgentConversationCapability;
+  evaluations?: AgentEvaluationCapability;
   createDefaultProfile(id: string): Omit<ProfileDetail, "profileDir">;
   captureProfile(targetPaths: TargetPaths): Promise<CapturedTargetProfile>;
   createPreview(input: TargetPreviewInput): Promise<TargetActivationPreview>;

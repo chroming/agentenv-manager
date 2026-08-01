@@ -24,6 +24,7 @@ const composeBuiltInIntegration = (
   },
   skills: adapter.skills,
   conversations: adapter.conversations,
+  evaluations: adapter.evaluations,
   assets: {
     validateAssets: adapter.validateAssets,
     getAssetBackupPaths: adapter.getAssetBackupPaths,

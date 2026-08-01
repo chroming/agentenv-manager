@@ -64,6 +64,9 @@ import {
   recoverPendingReplacementsInDirectory
 } from "./fileUtils";
 import { createMutationCoordinator } from "./mutationCoordinator";
+import { createEvaluationProcessRunner } from "./evaluations/evaluationProcessRunner";
+import { createEvaluationResultStore } from "./evaluations/evaluationResultStore";
+import { createEvaluationService } from "./evaluations/evaluationService";
 import { ensureAppDataFormat } from "./appDataFormat";
 import { migrateAppDataToV2 } from "./appDataMigration";
 import { migrateSkillContentHashes } from "./skillContentHashMigration";
@@ -731,6 +734,58 @@ const createServices = async (
     targetScope,
     settingsStore
   });
+  let evaluationGitRunner: GitCommandRunner | undefined;
+  let evaluationGitRunnerPromise: Promise<GitCommandRunner> | undefined;
+  let evaluationServicesDisposed = false;
+  const loadEvaluationGitRunner = () => {
+    if (evaluationServicesDisposed) {
+      return Promise.reject(new Error("Evaluation service is shutting down"));
+    }
+    evaluationGitRunnerPromise ??= findExecutable("git", {
+      environment: process.env,
+      homeDir: paths.homeDir,
+      platform: process.platform
+    })
+      .then((executablePath) => {
+        if (!executablePath) {
+          throw new Error("System Git is unavailable. Install Git, then retry.");
+        }
+        evaluationGitRunner = createGitCommandRunner({
+          argsPrefix: ["-c", "core.autocrlf=false", "-c", "core.filemode=true"],
+          executablePath,
+          platform: process.platform,
+          env: {
+            GIT_ATTR_NOSYSTEM: "1",
+            GIT_CONFIG_NOSYSTEM: "1",
+            GIT_CONFIG_GLOBAL: process.platform === "win32" ? "NUL" : "/dev/null"
+          },
+          defaultTimeoutMs: 5 * 60 * 1_000,
+          maxOutputBytes: 8 * 1024 * 1024
+        });
+        return evaluationGitRunner;
+      })
+      .catch((error) => {
+        evaluationGitRunnerPromise = undefined;
+        throw error;
+      });
+    return evaluationGitRunnerPromise;
+  };
+  const evaluationService = createEvaluationService({
+    cacheRoot: paths.evaluationCacheDir,
+    homeDir: paths.homeDir,
+    platform: process.platform,
+    environment: process.env,
+    profileStore,
+    skillLibraryStore,
+    targetRegistry,
+    targetDiscoveryService,
+    processRunner: createEvaluationProcessRunner({ platform: process.platform }),
+    resultStore: createEvaluationResultStore({
+      path: paths.evaluationResultPath,
+      platform: process.platform
+    }),
+    loadGitRunner: loadEvaluationGitRunner
+  });
   let loadedConversationService: Promise<ConversationService> | undefined;
   let conversationServiceDisposed = false;
   const loadConversationService = () => {
@@ -816,6 +871,7 @@ const createServices = async (
     skillLibraryStore,
     activationService,
     targetCaptureService,
+    evaluationService,
     targetRegistry,
     targetDiscoveryService,
     conversationService,
@@ -824,7 +880,10 @@ const createServices = async (
     cancelRepositoryOperations: () => gitRunner?.cancelActive(),
     dispose: () => {
       repositoryServicesDisposed = true;
+      evaluationServicesDisposed = true;
       syncTransportDisposed = true;
+      evaluationService.dispose();
+      evaluationGitRunner?.dispose();
       workspaceSyncService.dispose();
       conversationService.dispose();
       gitRunner?.dispose();

@@ -7,6 +7,7 @@ import type {
 } from "../../shared/types";
 import type {
   AgentConversationCapability,
+  AgentEvaluationCapability,
   AgentTargetAdapter,
   CapturedTargetProfile,
   TargetAssetInput,
@@ -63,5 +64,6 @@ export interface AgentTargetIntegration {
   preview: TargetPreviewDriver;
   skills: TargetSkillDriver;
   conversations?: AgentConversationCapability;
+  evaluations?: AgentEvaluationCapability;
   assets: TargetAssetDriver;
 }
