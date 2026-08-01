@@ -516,6 +516,8 @@ describe("Repository Skill source", () => {
     await page.getByRole("menuitem", { name: "Check source" }).click();
     await page.getByText("Engineering Skills", { exact: true }).waitFor({ state: "visible" });
     await page.reload();
+    await page.getByRole("heading", { name: "Agents", exact: true }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Skills", exact: true }).click();
     await page.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });
     await page.getByRole("tab", { name: "By source" }).click();
     await page.getByText("Engineering Skills", { exact: true }).waitFor({ state: "visible" });

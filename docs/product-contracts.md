@@ -366,7 +366,9 @@ Preview/Apply transaction, never a second editor or a reduced resource model.
   Configure action. It does not open a modal or begin Capture without user intent.
 - An empty workspace MUST remain empty until the user explicitly creates or captures a
   Profile. Startup MUST NOT seed a sample, adapter-default, or otherwise invented Profile.
-- Later launches restore the last stable top-level workspace.
+- Every launch opens Agents as the stable top-level workspace. Navigation chosen by the user
+  remains stable for the rest of that application session; startup or background work MUST NOT
+  restore, replace, or otherwise override it.
 
 Status: one Agent-to-Profile configuration entry, complete Capture, canonical Profile
 composition, and shared Preview/Apply orchestration are `Implemented`.
@@ -379,9 +381,10 @@ implementation.
 
 - Agents is the first top-level Workspace destination. Profiles and Conversations follow it;
   Skills remains the sole global Library destination, and Settings remains separate.
-- With no saved Workspace preference, the stable shell opens Agents immediately. A new
-  workspace stays on Agents after local core discovery; later launches restore the last stable
-  destination.
+- The stable shell opens Agents immediately on every launch. Local core discovery, a legacy
+  saved Workspace preference, and background enrichment MUST NOT replace that destination.
+  After the user chooses another workspace in the current session, asynchronous completion
+  MUST preserve that explicit destination.
 - Agent discovery and local Skill inventory run as independent readiness stages. Agents and
   canonical local data render before optional inventory and remote enrichment complete. A
   Skill scan failure reports that Environment Review is unavailable without hiding Agents,
@@ -532,10 +535,13 @@ an archive, or a native-session database migration tool.
   the target Agent to ignore instructions embedded in transcript or tool output and to treat the
   current repository plus the user's new request as authoritative.
 - Conversation discovery MUST NOT delay startup, Profile loading, Library loading, or Agent
-  discovery. Opening Conversations reads the last-good cached index first, then starts a
-  non-blocking refresh when the persisted last-success time is older than 1 minute, the cache is
-  empty, or the discovery version changed. Revisiting or refocusing within that freshness window
-  reuses the cache. Manual Refresh always starts a fresh discovery pass.
+  discovery. Once local startup core data is usable, the application starts one deduplicated
+  background refresh when the persisted last-success time is older than 1 minute, the cache is
+  empty, or the discovery version changed. That refresh updates only the device-local index and
+  MUST NOT navigate to Conversations or change the active workspace. Opening Conversations reads
+  the last-good cached index first and joins an in-flight refresh instead of starting a duplicate.
+  Revisiting or refocusing within the freshness window reuses the cache. Manual Refresh always
+  starts a fresh discovery pass.
 - Index list, search, and transcript reads MUST run outside the Electron main thread. Refresh
   parsing MUST yield between records so window navigation and clean shutdown remain responsive
   during a large first index. Parser upgrades invalidate record versions without clearing the
@@ -945,6 +951,9 @@ Apply is a single transactional user operation even when it writes multiple reso
   Asynchronous Agent discovery may update the Agents page and Local Agents summary, but MUST NOT
   insert, remove, or move the Agents navigation destination or show a false empty state while the
   initial discovery is pending.
+- Every cold renderer start selects Agents before optional enrichment begins. Conversation
+  indexing and every other background completion MUST preserve both that initial destination and
+  any later workspace explicitly chosen by the user.
 - Listing recovery history MUST isolate malformed, missing, or path-unsafe neighboring Backups. A
   rejected Backup remains byte-for-byte unchanged and unavailable for Restore; valid Backups remain
   visible. Restore continues to perform the complete strict path and manifest validation before any
@@ -1661,8 +1670,9 @@ Review and canonical Agent/Profile workflows:
    copy into canonical Library and Agent-specific deployment locations.
 6. Review and Apply the saved Profile through the standard Preview, ownership, Backup,
    verification, and rollback transaction.
-7. Later launches restore the last stable top-level workspace. Environment Review remains
-   manually refreshable and automatically reflects newly discovered shared Skills.
+7. Later launches open Agents again. Environment Review remains manually refreshable and
+   automatically reflects newly discovered shared Skills; background work never changes the
+   user's current workspace.
 
 Local Skill Cleanup, By source maintenance, and full Profile composition remain available for advanced migration and reuse, but a user with one Agent MUST NOT be required to understand all three before preserving and managing that Agent's Skills. The product MAY use contextual empty states for this journey; it MUST NOT require a marketing-style onboarding page.
 
@@ -1732,7 +1742,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 ### Profile and Agent
 
 - First launch enables every currently supported Agent and persists the explicit scope.
-- First launch with no usable Profile opens Agents; exactly one installed Agent opens its Skill detail directly, while later launches restore the last stable top-level workspace.
+- Every launch opens Agents; with no usable Profile, exactly one installed Agent opens its Skill detail directly. Background discovery and a legacy saved workspace never replace the active destination.
 - Turning one Agent off removes only that Agent from navigation, Profile destinations, discovery, Capture, Apply, lifecycle state, and Agent-specific Skill scans; its files and saved state remain byte-for-byte unchanged.
 - Turning every Agent off leaves Library and Profiles usable while hiding Agent-only navigation and deployment commands.
 - A disabled Agent rejects direct IPC Preview, Apply, Capture, rollback, and stop-management requests.

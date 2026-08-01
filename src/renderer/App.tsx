@@ -125,7 +125,6 @@ import { GitHubConnectionSettings } from "./components/GitHubConnectionSettings"
 import { InfoTip } from "./components/InfoTip";
 import {
   ConversationWorkspace,
-  preloadConversationList,
   type ConversationWorkspaceViewState
 } from "./components/ConversationWorkspace";
 import { LibraryHeaderActions } from "./components/LibraryHeaderActions";
@@ -202,6 +201,7 @@ import { useWorkspaceFreshness } from "./hooks/useWorkspaceFreshness";
 import { useWorkspaceNavigation } from "./hooks/useWorkspaceNavigation";
 import { useSidebarState } from "./hooks/useSidebarState";
 import { useConversationQuickOpen } from "./hooks/useConversationQuickOpen";
+import { useConversationIndexWarmup } from "./hooks/useConversationIndexWarmup";
 import { useProfileActionGuard } from "./hooks/useProfileActionGuard";
 import { useProfileDraftController } from "./hooks/useProfileDraftController";
 import { useProfileActivationController } from "./hooks/useProfileActivationController";
@@ -326,8 +326,6 @@ const AppContent = ({
   const [rollbackError, setRollbackError] = useState<string>();
   const {
     activeWorkspace,
-    initialWorkspacePreference,
-    markWorkspacePreferenceReady,
     openWorkspaceNow
   } = useWorkspaceNavigation();
   const { sidebarCollapsed, toggleSidebar } = useSidebarState();
@@ -388,6 +386,7 @@ const AppContent = ({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [diagnosticIssue, setDiagnosticIssue] = useState<DiagnosticIssueDetail>();
+  useConversationIndexWarmup(!isLoading);
   const profilePageActionsRef = useRef<HTMLDivElement>(null);
   const profileObjectActionsRef = useRef<HTMLDivElement>(null);
   const profileApplyControlRef = useRef<HTMLDivElement>(null);
@@ -1002,7 +1001,6 @@ const AppContent = ({
 
   useEffect(() => {
     let isMounted = true;
-    void preloadConversationList().catch(() => undefined);
     const requestId = ++dataRefreshRequestRef.current;
     const shouldApply = () => isMounted && dataRefreshRequestRef.current === requestId;
 
@@ -1021,9 +1019,6 @@ const AppContent = ({
 
         const { profileItems, targetItems, targetStateItems } = core;
         const usableProfiles = profileItems.filter((profile) => !profile.loadError);
-        if (!initialWorkspacePreference) {
-          markWorkspacePreferenceReady();
-        }
         if (usableProfiles.length === 0) {
           return;
         }

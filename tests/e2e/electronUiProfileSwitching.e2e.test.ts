@@ -815,14 +815,17 @@ const launchApp = async (
         .getByRole("complementary", { name: "Global navigation" })
         .waitFor({ state: "visible", timeout: 10_000 });
       if (initialWorkspace) {
-        await launchedPage.evaluate((workspace) => {
-          window.localStorage.setItem("agentenv:last-workspace", workspace);
-        }, initialWorkspace);
-        await launchedPage.reload();
-        await launchedPage.waitForLoadState("domcontentloaded");
+        const labels: Record<NonNullable<typeof initialWorkspace>, string> = {
+          library: "Skills",
+          profiles: "Profiles",
+          conversations: "Conversations",
+          targets: "Agents",
+          settings: "Settings"
+        };
         await launchedPage
           .getByRole("complementary", { name: "Global navigation" })
-          .waitFor({ state: "visible", timeout: 10_000 });
+          .getByRole("button", { name: labels[initialWorkspace] })
+          .click();
       }
       await waitForRequestedWorkspace(launchedPage);
       return { launchedApp, launchedPage };
@@ -4547,7 +4550,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(metrics.documentWidth).toBe(metrics.viewportWidth);
   }, standardElectronTestTimeout);
 
-  it("persists the collapsed desktop rail without changing workspace context", async () => {
+  it("persists the collapsed desktop rail while restarting on Agents", async () => {
     const { page } = await launchApp();
     await resizeAppWindow(page, 920, 620);
     const navigation = page.getByRole("complementary", { name: "Global navigation" });
@@ -4625,6 +4628,8 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => navigation.evaluate((element) => Math.round(element.getBoundingClientRect().width)))
       .toBe(64);
+    await page.getByRole("heading", { name: "Agents", exact: true }).waitFor();
+    await navigation.getByRole("button", { name: "Skills", exact: true }).click();
     await page.getByRole("heading", { name: "Skills", exact: true }).waitFor();
 
     await navigation.getByRole("button", { name: "Expand sidebar" }).click();
@@ -5643,9 +5648,11 @@ describe("Electron UI profile switching e2e", () => {
       .toContain("Up to date on OpenCode");
 
     await page.reload();
-    await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({
+    await page.getByRole("region", { name: "Agents", exact: true }).waitFor({
       state: "visible"
     });
+    await page.getByRole("button", { name: "Profiles" }).click();
+    await page.getByRole("region", { name: "Profiles", exact: true }).waitFor();
     await selectProfile(page, "UI OpenCode alpha");
     await expect.poll(() => profileRow.textContent()).toContain("Active");
   }, 45_000);

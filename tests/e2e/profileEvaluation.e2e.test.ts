@@ -139,6 +139,10 @@ if [ "$1" = "--version" ]; then
   printf '1.18.0\\n'
   exit 0
 fi
+if [ "$1" = "session" ]; then
+  printf '[]\\n'
+  exit 0
+fi
 project_dir=""
 while [ "$#" -gt 0 ]; do
   if [ "$1" = "--dir" ]; then

@@ -1,10 +1,7 @@
 // @vitest-environment jsdom
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  useWorkspaceNavigation,
-  workspacePreferenceKey
-} from "../../src/renderer/hooks/useWorkspaceNavigation";
+import { useWorkspaceNavigation } from "../../src/renderer/hooks/useWorkspaceNavigation";
 
 const localStorageValues = new Map<string, string>();
 const localStorageMock: Storage = {
@@ -31,36 +28,19 @@ describe("useWorkspaceNavigation", () => {
     window.localStorage.clear();
   });
 
-  it("restores and persists a valid stable workspace", async () => {
-    window.localStorage.setItem(workspacePreferenceKey, "settings");
+  it("always starts in Agents even when the previous session ended elsewhere", () => {
+    window.localStorage.setItem("agentenv:last-workspace", "conversations");
 
     const { result } = renderHook(() => useWorkspaceNavigation());
 
-    expect(result.current.activeWorkspace).toBe("settings");
+    expect(result.current.activeWorkspace).toBe("targets");
+  });
+
+  it("keeps explicit navigation stable for the current session", async () => {
+    const { result } = renderHook(() => useWorkspaceNavigation());
+
+    expect(result.current.activeWorkspace).toBe("targets");
     act(() => result.current.openWorkspaceNow("library"));
-    await waitFor(() =>
-      expect(window.localStorage.getItem(workspacePreferenceKey)).toBe("library")
-    );
-  });
-
-  it("does not persist the default until startup resolves the initial route", async () => {
-    const { result } = renderHook(() => useWorkspaceNavigation());
-
-    expect(result.current.activeWorkspace).toBe("targets");
-    expect(window.localStorage.getItem(workspacePreferenceKey)).toBeNull();
-
-    act(() => result.current.markWorkspacePreferenceReady());
-    await waitFor(() =>
-      expect(window.localStorage.getItem(workspacePreferenceKey)).toBe("targets")
-    );
-  });
-
-  it("ignores an unsupported stored destination", () => {
-    window.localStorage.setItem(workspacePreferenceKey, "unknown");
-
-    const { result } = renderHook(() => useWorkspaceNavigation());
-
-    expect(result.current.activeWorkspace).toBe("targets");
-    expect(result.current.initialWorkspacePreference).toBeUndefined();
+    await waitFor(() => expect(result.current.activeWorkspace).toBe("library"));
   });
 });

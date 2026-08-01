@@ -848,9 +848,7 @@ describe("App", () => {
         within(workspace).getByRole("region", { name: "Environment status" })
       ).getByRole("button", { name: "Configure Agent" })
     ).toBeEnabled();
-    await waitFor(() =>
-      expect(window.localStorage.getItem("agentenv:last-workspace")).toBe("targets")
-    );
+    expect(window.localStorage.getItem("agentenv:last-workspace")).toBeNull();
   });
 
   it("keeps Agent configuration available while the environment scan is pending", async () => {
@@ -1092,7 +1090,7 @@ describe("App", () => {
       query: "old token",
       limit: 6
     });
-    expect(api.refreshConversations).not.toHaveBeenCalled();
+    await waitFor(() => expect(api.refreshConversations).toHaveBeenCalledTimes(1));
     fireEvent.click(result);
 
     expect(await screen.findByRole("searchbox", {
@@ -1107,21 +1105,20 @@ describe("App", () => {
     );
   });
 
-  it("restores the last stable workspace on the next launch", async () => {
+  it("starts in Agents instead of restoring the last workspace", async () => {
     installApi();
     const firstLaunch = render(<App />);
     await screen.findByRole("region", { name: "Agents" });
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     await screen.findByRole("region", { name: "Settings" });
-    await waitFor(() =>
-      expect(window.localStorage.getItem("agentenv:last-workspace")).toBe("settings")
-    );
     firstLaunch.unmount();
 
+    window.localStorage.setItem("agentenv:last-workspace", "conversations");
     installApi();
     render(<App />);
 
-    expect(await screen.findByRole("region", { name: "Settings" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Agents" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Conversations" })).not.toBeInTheDocument();
   });
 
   it("replaces stale same-id update results with the revision that was just imported", () => {
@@ -1352,6 +1349,36 @@ describe("App", () => {
       await within(agentsWorkspace).findByRole("article", { name: "Agent OpenCode" })
     ).toBeInTheDocument();
     expect(within(agentsWorkspace).queryByText("Detecting Agents")).not.toBeInTheDocument();
+  });
+
+  it("refreshes Conversations in the background without changing the active workspace", async () => {
+    const refreshRequest = deferred<
+      Awaited<ReturnType<AgentEnvApi["refreshConversations"]>>
+    >();
+    const refreshConversations = vi.fn().mockReturnValue(refreshRequest.promise);
+    installApi({ refreshConversations });
+
+    render(<App />);
+
+    expect(await screen.findByRole("region", { name: "Agents" })).toBeInTheDocument();
+    await waitFor(() => expect(refreshConversations).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(await screen.findByRole("region", { name: "Settings" })).toBeInTheDocument();
+
+    await act(async () => {
+      refreshRequest.resolve({
+        indexed: 3,
+        unchanged: 1,
+        removed: 0,
+        refreshedAt: "2026-08-01T06:00:00.000Z",
+        failures: []
+      });
+      await refreshRequest.promise;
+    });
+
+    expect(screen.getByRole("region", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Conversations" })).not.toBeInTheDocument();
   });
 
   it("renders Library Skills before startup discovery and update checks finish", async () => {

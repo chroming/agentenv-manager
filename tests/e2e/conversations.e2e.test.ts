@@ -312,8 +312,30 @@ describe("Conversations desktop workflow", () => {
       timeout: 15_000
     }).toEqual({ state: "ready" });
 
-    await page
-      .getByRole("complementary", { name: "Global navigation" })
+    await page.evaluate(() => {
+      window.localStorage.setItem("agentenv:last-workspace", "conversations");
+    });
+    await page.reload();
+    const navigation = page.getByRole("complementary", { name: "Global navigation" });
+    await page.getByRole("region", { name: "Agents", exact: true }).waitFor({
+      state: "visible",
+      timeout: 15_000
+    });
+    await expect.poll(() => navigation.getByRole("button", {
+      name: "Agents"
+    }).getAttribute("aria-current")).toBe("page");
+    await expect.poll(() => page.evaluate(async () => {
+      const result = await window.agentEnv.listConversations({
+        query: "Repair the desktop release workflow",
+        limit: 1
+      });
+      return result.total;
+    }), { timeout: 15_000 }).toBeGreaterThan(0);
+    expect(await navigation.getByRole("button", {
+      name: "Agents"
+    }).getAttribute("aria-current")).toBe("page");
+
+    await navigation
       .getByRole("button", { name: "Conversations" })
       .click();
     const conversationHelp = page.getByLabel(

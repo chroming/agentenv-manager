@@ -69,13 +69,19 @@ export const invalidateConversationListPrefetch = () => {
   conversationListPrefetch = undefined;
 };
 
-const refreshConversationIndex = () => {
+export const refreshConversationIndex = () => {
   if (conversationRefreshOperation) return conversationRefreshOperation;
   conversationRefreshOperation = window.agentEnv.refreshConversations()
     .finally(() => {
       conversationRefreshOperation = undefined;
     });
   return conversationRefreshOperation;
+};
+
+export const refreshConversationIndexInBackground = async () => {
+  const result = await refreshConversationIndex();
+  invalidateConversationListPrefetch();
+  return result;
 };
 
 const continuationText = (detail: ConversationDetail) => [
