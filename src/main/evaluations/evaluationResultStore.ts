@@ -11,7 +11,10 @@ export interface EvaluationResultStore {
   readLatest(): Promise<OneShotEvaluationResult | undefined>;
   saveLatest(
     result: OneShotEvaluationResult,
-    options?: { privatePaths?: string[] }
+    options?: {
+      privatePaths?: string[];
+      pathRedactions?: Array<{ path: string; replacement: string }>;
+    }
   ): Promise<OneShotEvaluationResult>;
 }
 
@@ -35,14 +38,27 @@ const truncateUtf8 = (value: string, maxBytes: number) => {
   };
 };
 
-const replacePrivatePaths = (value: string, paths: string[]) =>
-  paths
-    .filter(Boolean)
-    .sort((left, right) => right.length - left.length)
-    .reduce((content, path) => content.replaceAll(path, "<comparison-workspace>"), value);
+const stripTerminalControlSequences = (value: string) => value
+  .replace(/\u001B\][^\u0007]*(?:\u0007|\u001B\\)?/g, "")
+  .replace(/(?:\u001B\[|\u009B)[0-?]*[ -/]*[@-~]/g, "")
+  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, "");
 
-const sanitizeText = (value: string, paths: string[], maxBytes: number) =>
-  truncateUtf8(redactSensitiveValues(replacePrivatePaths(value, paths)), maxBytes);
+const replacePrivatePaths = (
+  value: string,
+  redactions: Array<{ path: string; replacement: string }>
+) => redactions
+  .filter(({ path }) => Boolean(path))
+  .sort((left, right) => right.path.length - left.path.length)
+  .reduce((content, { path, replacement }) => content.replaceAll(path, replacement), value);
+
+const sanitizeText = (
+  value: string,
+  redactions: Array<{ path: string; replacement: string }>,
+  maxBytes: number
+) => truncateUtf8(
+  redactSensitiveValues(replacePrivatePaths(stripTerminalControlSequences(value), redactions)),
+  maxBytes
+);
 
 const isStringRecord = (value: unknown): value is Record<string, string> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value) &&
@@ -143,10 +159,10 @@ const isResult = (value: unknown): value is OneShotEvaluationResult => {
 
 const sanitizeFileChanges = (
   value: Pick<OneShotEvaluationDelta, "diff" | "fileDiffs" | "changedFiles">,
-  paths: string[],
+  redactions: Array<{ path: string; replacement: string }>,
   maxDiffBytes: number
 ) => {
-  const diff = sanitizeText(value.diff, paths, maxDiffBytes);
+  const diff = sanitizeText(value.diff, redactions, maxDiffBytes);
   let remainingBytes = maxDiffBytes;
   let truncated = diff.truncated;
   const fileDiffs = [] as OneShotEvaluationDelta["fileDiffs"];
@@ -155,7 +171,7 @@ const sanitizeFileChanges = (
       truncated = true;
       break;
     }
-    const safe = sanitizeText(change.diff, paths, remainingBytes);
+    const safe = sanitizeText(change.diff, redactions, remainingBytes);
     fileDiffs.push({ ...change, diff: safe.value });
     remainingBytes -= Buffer.byteLength(safe.value, "utf8");
     truncated ||= safe.truncated;
@@ -166,17 +182,17 @@ const sanitizeFileChanges = (
 
 const sanitizeSide = (
   side: OneShotEvaluationSideResult,
-  paths: string[],
+  redactions: Array<{ path: string; replacement: string }>,
   options: EvaluationResultStoreOptions
 ) => {
   const response = sanitizeText(
     side.finalResponse,
-    paths,
+    redactions,
     options.maxResponseBytes ?? 512 * 1024
   );
-  const changes = sanitizeFileChanges(side, paths, options.maxDiffBytes ?? 2 * 1024 * 1024);
+  const changes = sanitizeFileChanges(side, redactions, options.maxDiffBytes ?? 2 * 1024 * 1024);
   const error = side.error
-    ? sanitizeText(side.error, paths, options.maxErrorBytes ?? 32 * 1024)
+    ? sanitizeText(side.error, redactions, options.maxErrorBytes ?? 32 * 1024)
     : undefined;
   return {
     value: {
@@ -184,7 +200,7 @@ const sanitizeSide = (
       finalResponse: response.value,
       diff: changes.diff,
       fileDiffs: changes.fileDiffs,
-      warnings: side.warnings.map((warning) => sanitizeText(warning, paths, 16 * 1024).value),
+      warnings: side.warnings.map((warning) => sanitizeText(warning, redactions, 16 * 1024).value),
       ...(error ? { error: error.value } : {})
     },
     truncated: response.truncated || changes.truncated || error?.truncated === true
@@ -204,16 +220,23 @@ export const createEvaluationResultStore = (
     }
   },
   saveLatest: async (result, saveOptions = {}) => {
-    const paths = [
-      ...(saveOptions.privatePaths ?? []),
-      ...(result.workspace.path ? [result.workspace.path] : [])
+    const redactions = [
+      ...(saveOptions.privatePaths ?? []).map((path) => ({
+        path,
+        replacement: "<comparison-workspace>"
+      })),
+      ...(result.workspace.path ? [{
+        path: result.workspace.path,
+        replacement: "<selected-workspace>"
+      }] : []),
+      ...(saveOptions.pathRedactions ?? [])
     ];
-    const prompt = sanitizeText(result.prompt, paths, options.maxPromptBytes ?? 64 * 1024);
-    const current = sanitizeSide(result.current, paths, options);
-    const proposed = sanitizeSide(result.proposed, paths, options);
-    const delta = sanitizeFileChanges(result.delta, paths, options.maxDiffBytes ?? 2 * 1024 * 1024);
+    const prompt = sanitizeText(result.prompt, redactions, options.maxPromptBytes ?? 64 * 1024);
+    const current = sanitizeSide(result.current, redactions, options);
+    const proposed = sanitizeSide(result.proposed, redactions, options);
+    const delta = sanitizeFileChanges(result.delta, redactions, options.maxDiffBytes ?? 2 * 1024 * 1024);
     const error = result.error
-      ? sanitizeText(result.error, paths, options.maxErrorBytes ?? 32 * 1024)
+      ? sanitizeText(result.error, redactions, options.maxErrorBytes ?? 32 * 1024)
       : undefined;
     const truncated = prompt.truncated || current.truncated || proposed.truncated ||
       delta.truncated || error?.truncated === true;
@@ -230,7 +253,7 @@ export const createEvaluationResultStore = (
         changedFiles: delta.changedFiles
       },
       warnings: [
-        ...result.warnings.map((warning) => sanitizeText(warning, paths, 16 * 1024).value),
+        ...result.warnings.map((warning) => sanitizeText(warning, redactions, 16 * 1024).value),
         ...(truncated ? ["Stored comparison output was truncated to protect local storage"] : [])
       ],
       ...(error ? { error: error.value } : {})

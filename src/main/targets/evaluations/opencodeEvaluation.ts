@@ -166,11 +166,14 @@ const inspect = async (input: EvaluationProbeInput): Promise<{
 
   const cliVersion = input.knownCliVersion ?? await probeVersion(input.executablePath, input.platform);
   if (!cliVersion) warnings.push("OpenCode version could not be read");
+  if (mcpOmittedCount > 0) {
+    warnings.push("MCP configurations are excluded from isolated Profile comparison");
+  }
   return {
     availability: {
       available: true,
       cliVersion,
-      fidelity: "partial",
+      fidelity: mcpOmittedCount > 0 ? "partial" : "full",
       mcpIncludedCount: 0,
       mcpOmittedCount,
       requiresMcpExclusion: false,

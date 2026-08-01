@@ -113,6 +113,18 @@ const isolatedEnvironmentPaths = [
   "OPENCODE_CONFIG_DIR"
 ] as const;
 
+const inheritedWorkingDirectoryKeys = [
+  "OLDPWD",
+  "INIT_CWD",
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_INDEX_FILE",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "npm_config_local_prefix",
+  "NPM_CONFIG_LOCAL_PREFIX"
+] as const;
+
 export const createEvaluationProcessRunner = (
   options: EvaluationProcessRunnerOptions = {}
 ): EvaluationProcessRunner => {
@@ -166,6 +178,8 @@ export const createEvaluationProcessRunner = (
     }
     const childEnvironment = { ...spec.env };
     for (const key of spec.envToDelete ?? []) delete childEnvironment[key];
+    for (const key of inheritedWorkingDirectoryKeys) delete childEnvironment[key];
+    childEnvironment.PWD = cwd;
     for (const key of isolatedEnvironmentPaths) {
       const value = childEnvironment[key]?.trim();
       if (!value) continue;

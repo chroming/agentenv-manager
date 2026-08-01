@@ -218,6 +218,13 @@ describe("ProfileEvaluationDialog", () => {
       excludeMcp: true
     });
     expect(screen.queryByRole("combobox", { name: "Agent" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Agent", { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Empty" })).toHaveClass(
+      "ui-segmented-control__option"
+    );
+    expect(screen.getByRole("radio", { name: "Local folder" })).toHaveClass(
+      "ui-segmented-control__option"
+    );
     expect(screen.getByText("Runs both setups separately and may consume two model calls."))
       .toBeInTheDocument();
     expect(screen.getByText("Keep current · 5")).toBeInTheDocument();

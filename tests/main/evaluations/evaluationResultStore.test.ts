@@ -124,6 +124,22 @@ describe("evaluation result store", () => {
     expect(stored.proposed.fileDiffs).toHaveLength(1);
   });
 
+  it("removes terminal control sequences from comparison errors", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-evaluation-result-"));
+    const path = join(root, "latest.json");
+    const store = createEvaluationResultStore({ path });
+    const stored = await store.saveLatest({
+      ...result(),
+      current: {
+        ...result().current,
+        error: "\u001b[91m\u001b[1mError:\u001b[0m operation not permitted"
+      }
+    });
+
+    expect(stored.current.error).toBe("Error: operation not permitted");
+    expect(await readFile(path, "utf8")).not.toContain("\u001b");
+  });
+
   it("ignores malformed reports instead of exposing partial data to the renderer", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-evaluation-result-"));
     const path = join(root, "latest.json");

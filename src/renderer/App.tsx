@@ -4426,16 +4426,6 @@ const AppContent = ({
                         </div>
                       </div>
                       <div className="profile-action-stack">
-                        <Button
-                          ref={profileEvaluationButtonRef}
-                          className="profile-evaluate-button"
-                          disabled={evaluationControl.disabled}
-                          icon={<Columns2 size={15} strokeWidth={2.2} />}
-                          title={evaluationDescription}
-                          onClick={openProfileEvaluation}
-                        >
-                          {t("Compare")}
-                        </Button>
                         <div
                           className="profile-commit-actions"
                           ref={profileObjectActionsRef}
@@ -4468,6 +4458,16 @@ const AppContent = ({
                             </button>
                           </div>
                           {targetWorkspaceControl}
+                          <Button
+                            ref={profileEvaluationButtonRef}
+                            className="profile-evaluate-button"
+                            disabled={evaluationControl.disabled}
+                            icon={<Columns2 size={15} strokeWidth={2.2} />}
+                            title={evaluationDescription}
+                            onClick={openProfileEvaluation}
+                          >
+                            {t("Compare")}
+                          </Button>
                           {profileApplyControl}
                           <button
                             ref={profileActionsButtonRef}

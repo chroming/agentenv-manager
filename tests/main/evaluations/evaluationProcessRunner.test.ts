@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -183,6 +183,44 @@ describe("evaluation process runner", () => {
       }, () => undefined);
 
       expect(result.exitCode).toBe(0);
+      runner.dispose();
+    }
+  );
+
+  it.skipIf(process.platform !== "darwin" || !existsSync("/usr/bin/sandbox-exec"))(
+    "replaces inherited working-directory variables with the isolated workspace",
+    async () => {
+      root = await mkdtemp(join(tmpdir(), "agentenv-evaluation-working-directory-"));
+      const writable = join(root, "writable");
+      const originalWorkspace = join(root, "original-workspace");
+      await Promise.all([mkdir(writable), mkdir(originalWorkspace)]);
+      const runner = createEvaluationProcessRunner();
+      const lines: string[] = [];
+      const env = isolatedEnv(writable);
+      env.PWD = originalWorkspace;
+      env.OLDPWD = originalWorkspace;
+      env.INIT_CWD = originalWorkspace;
+
+      const result = await runner.run({
+        executablePath: "/usr/bin/env",
+        args: [],
+        cwd: writable,
+        env,
+        writableRoot: writable,
+        readDeniedRoots: [originalWorkspace],
+        fidelity: "full",
+        warnings: []
+      }, (line) => ({ type: "response", text: line }), {
+        onEvent: (event) => {
+          if (event.type === "response") lines.push(event.text);
+        }
+      });
+
+      expect(result.exitCode).toBe(0);
+      expect(lines).toContain(`PWD=${await realpath(writable)}`);
+      expect(lines.some((line) => line.startsWith("OLDPWD="))).toBe(false);
+      expect(lines.some((line) => line.startsWith("INIT_CWD="))).toBe(false);
+      expect(lines.join("\n")).not.toContain(originalWorkspace);
       runner.dispose();
     }
   );

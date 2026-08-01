@@ -34,8 +34,7 @@
 
 .profile-comparison-fields {
   display: grid;
-  gap: 14px;
-  grid-template-columns: minmax(0, 0.72fr) minmax(260px, 1.28fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .profile-comparison-field {
@@ -58,24 +57,12 @@
   width: 100%;
 }
 
-.profile-comparison-static-value {
-  align-items: center;
-  background: var(--surface-subtle);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  color: var(--text);
-  display: flex;
-  font-size: var(--font-size-body);
-  height: var(--control-height-default);
-  padding: 0 10px;
-}
-
 .profile-comparison-workspace-choice {
-  grid-template-columns: minmax(88px, 0.72fr) minmax(132px, 1.28fr);
   width: 100%;
 }
 
 .profile-comparison-workspace-choice .ui-segmented-control__option {
+  flex: 1 1 0;
   gap: 6px;
   min-width: 0;
   overflow: hidden;

@@ -2869,7 +2869,7 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
   });
 
-  it("keeps whole-profile Save beside Apply in their workflow order", async () => {
+  it("keeps Compare with Apply in the selected Profile action group", async () => {
     installApi();
     render(<App />);
 
@@ -2879,11 +2879,15 @@ describe("App", () => {
     const actions = within(hero as HTMLElement).getByRole("group", {
       name: "Selected profile actions"
     });
-    const buttons = within(actions).getAllByRole("button").slice(0, 2);
+    const actionLabels = within(actions)
+      .getAllByRole("button")
+      .map((button) => button.textContent?.trim());
 
-    expect(buttons.map((button) => button.textContent?.trim())).toEqual(["Save", "Apply"]);
+    expect(actionLabels.slice(0, 3)).toEqual(["Save", "Compare", "Apply"]);
     const saveButton = within(actions).getByRole("button", { name: "Save" });
+    const compareButton = within(actions).getByRole("button", { name: "Compare" });
     const applyButton = within(actions).getByRole("button", { name: "Apply" });
+    expect(compareButton.nextElementSibling?.contains(applyButton)).toBe(true);
     expect(saveButton).toBeDisabled();
     expect(saveButton).not.toHaveClass("is-primary");
     expect(applyButton).toBeEnabled();
@@ -2970,6 +2974,10 @@ describe("App", () => {
 
     await openProfiles();
     const compareButton = screen.getByRole("button", { name: "Compare" });
+    const applyButton = screen.getByRole("button", { name: "Apply" });
+    const profileActions = screen.getByRole("group", { name: "Selected profile actions" });
+    expect(profileActions).toContainElement(compareButton);
+    expect(compareButton.nextElementSibling).toContainElement(applyButton);
     expect(compareButton).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
     fireEvent.change(screen.getByLabelText("AGENTS.md"), {

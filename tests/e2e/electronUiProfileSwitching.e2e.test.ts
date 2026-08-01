@@ -29,6 +29,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   expectInViewport,
   expectNoHorizontalOverflow,
+  expectNoOverlap,
   expectStructuredDialog,
   expectTextFits,
   expectTopmost,
@@ -3969,6 +3970,7 @@ describe("Electron UI profile switching e2e", () => {
     const commitActions = page.getByRole("group", { name: "Selected profile actions" });
     const editProfileButton = page.getByRole("button", { name: "Edit profile" });
     const saveButton = commitActions.getByRole("button", { name: "Save" });
+    const compareButton = commitActions.getByRole("button", { name: "Compare" });
     const moreButton = commitActions.getByRole("button", { name: "More profile actions" });
     const applyControl = page.locator(".profile-apply-control");
     const actionStatus = page.getByRole("status", { name: "Profile readiness" });
@@ -3978,6 +3980,7 @@ describe("Electron UI profile switching e2e", () => {
         editProfileButton,
         commitActions,
         saveButton,
+        compareButton,
         applyControl,
         moreButton,
         actionStatus
@@ -3993,6 +3996,7 @@ describe("Electron UI profile switching e2e", () => {
         applyBox,
         saveBox,
         targetSelectorBox,
+        compareButtonBox,
         applyButtonBox
       ] = await Promise.all([
         profileTitle.boundingBox(),
@@ -4000,6 +4004,7 @@ describe("Electron UI profile switching e2e", () => {
         applyControl.boundingBox(),
         saveButton.boundingBox(),
         targetSelector.boundingBox(),
+        compareButton.boundingBox(),
         commitActions.locator(".profile-apply-button").boundingBox()
       ]);
       expect(titleBox).not.toBeNull();
@@ -4007,6 +4012,7 @@ describe("Electron UI profile switching e2e", () => {
       expect(applyBox).not.toBeNull();
       expect(saveBox).not.toBeNull();
       expect(targetSelectorBox).not.toBeNull();
+      expect(compareButtonBox).not.toBeNull();
       expect(applyButtonBox).not.toBeNull();
       const titleOverlapsApply = !(
         titleBox!.x + titleBox!.width <= applyBox!.x ||
@@ -4021,18 +4027,27 @@ describe("Electron UI profile switching e2e", () => {
         editProfileBox!.y + editProfileBox!.height <= saveBox!.y ||
         saveBox!.y + saveBox!.height <= editProfileBox!.y
       );
-      expect(editOverlapsSave).toBe(false);
+      expect(editOverlapsSave, JSON.stringify({ editProfileBox, saveBox, titleBox, applyBox }))
+        .toBe(false);
       expect(targetSelectorBox!.x).toBeGreaterThanOrEqual(saveBox!.x + saveBox!.width);
       expect(targetSelectorBox!.x - (saveBox!.x + saveBox!.width)).toBeLessThanOrEqual(10);
-      expect(applyButtonBox!.x).toBeGreaterThanOrEqual(
+      expect(compareButtonBox!.x).toBeGreaterThanOrEqual(
         targetSelectorBox!.x + targetSelectorBox!.width
       );
       expect(
-        applyButtonBox!.x - (targetSelectorBox!.x + targetSelectorBox!.width)
+        compareButtonBox!.x - (targetSelectorBox!.x + targetSelectorBox!.width)
+      ).toBeLessThanOrEqual(10);
+      expect(applyButtonBox!.x).toBeGreaterThanOrEqual(
+        compareButtonBox!.x + compareButtonBox!.width
+      );
+      expect(
+        applyButtonBox!.x - (compareButtonBox!.x + compareButtonBox!.width)
       ).toBeLessThanOrEqual(10);
       expect(Math.abs(saveBox!.y - applyButtonBox!.y)).toBeLessThanOrEqual(1);
       expect(Math.abs(saveBox!.height - applyButtonBox!.height)).toBeLessThanOrEqual(1);
       expect(Math.abs(saveBox!.width - applyButtonBox!.width)).toBeLessThanOrEqual(1);
+      expect(Math.abs(compareButtonBox!.height - applyButtonBox!.height)).toBeLessThanOrEqual(1);
+      expect(Math.abs(compareButtonBox!.width - applyButtonBox!.width)).toBeLessThanOrEqual(1);
       expect(Math.round(saveBox!.height)).toBe(34);
       expect(Math.round(saveBox!.width)).toBe(
         page.viewportSize()?.width === 920 ? 92 : 104
@@ -4109,12 +4124,13 @@ describe("Electron UI profile switching e2e", () => {
           hero.querySelector<HTMLElement>(".profile-description")!
         ).display,
         height: Math.round(hero.getBoundingClientRect().height),
+        width: Math.round(hero.getBoundingClientRect().width),
         readiness: getComputedStyle(
           hero.querySelector<HTMLElement>(".profile-action-status")!
         ).display,
         duplicateAgentMeta: hero.querySelectorAll(".profile-hero__meta").length
       }));
-      if (page.viewportSize()?.width === 920) {
+      if (heroContent.width <= 760) {
         expect(heroContent.description).toBe("none");
         expect(heroContent.height).toBeLessThanOrEqual(120);
       } else {
@@ -6342,6 +6358,38 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() => fileExists(join(codexDir, "skills", "shared-migration-reviewer", "SKILL.md")))
       .toBe(true);
     await cleanupGroup.waitFor({ state: "hidden" });
+  }, standardElectronTestTimeout);
+
+  it("keeps a long collection state separate from its Review action at minimum size", async () => {
+    const { homeDir, page } = await launchApp();
+    const collectionSource = join(homeDir, ".codex", "superpowers", "skills");
+    const collectionLink = join(homeDir, ".agents", "skills", "superpowers");
+    for (let index = 1; index <= 14; index += 1) {
+      const skillId = `collection-${String(index).padStart(2, "0")}`;
+      const skillDir = join(collectionSource, skillId);
+      await mkdir(skillDir, { recursive: true });
+      await writeFile(
+        join(skillDir, "SKILL.md"),
+        `---\nname: ${skillId}\ndescription: Collection layout proof.\n---\n\n# ${skillId}\n`,
+        "utf8"
+      );
+    }
+    await mkdir(dirname(collectionLink), { recursive: true });
+    await symlink(collectionSource, collectionLink);
+
+    await page.setViewportSize({ width: 920, height: 620 });
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Scan local" }).click();
+    const collectionRow = page.getByRole("group", {
+      name: "Skill collection superpowers"
+    });
+    await collectionRow.waitFor({ state: "visible" });
+    const state = collectionRow.getByText("0 of 14 in Library", { exact: true });
+    const review = collectionRow.getByRole("button", { name: "Review" });
+    await expectNoOverlap(state, review);
+    await expectTextFits(state);
+    await expectTextFits(review);
+    await expectNoHorizontalOverflow(page, [".cleanup-collection-row"]);
   }, standardElectronTestTimeout);
 
   it("discovers and migrates a directory-linked Skill collection as one safe boundary", async () => {

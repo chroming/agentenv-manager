@@ -17,6 +17,7 @@ import { createGitCommandRunner, type GitCommandRunner } from "../../src/main/sk
 import {
   expectInViewport,
   expectNoHorizontalOverflow,
+  expectNoOverlap,
   findVisibleTextLayoutDefects
 } from "./layoutAssertions";
 import { requireCurrentElectronBuild } from "./currentBuild";
@@ -69,6 +70,34 @@ const verifyDialogLayout = async (
   expect(geometry.width).toBeLessThanOrEqual(width - 24);
   expect(geometry.height).toBeLessThanOrEqual(height - 24);
   expect(geometry.footerInside).toBe(true);
+};
+
+const verifyWorkspaceChoiceLayout = async (dialog: ReturnType<Page["getByRole"]>) => {
+  const options = dialog.getByRole("radio");
+  expect(await options.count()).toBe(2);
+  const [first, second] = await Promise.all([
+    options.nth(0).boundingBox(),
+    options.nth(1).boundingBox()
+  ]);
+  expect(first).not.toBeNull();
+  expect(second).not.toBeNull();
+  expect(Math.abs(first!.width - second!.width)).toBeLessThanOrEqual(1);
+};
+
+const verifyProfileComparisonActionLayout = async (page: Page, width: number, height: number) => {
+  await page.setViewportSize({ width, height });
+  const actions = page.getByRole("group", { name: "Selected profile actions" });
+  const compare = actions.getByRole("button", { name: "Compare" });
+  const apply = actions.getByRole("button", { name: "Apply" });
+  await expectInViewport(page, actions);
+  await expectNoOverlap(compare, apply);
+  const [compareBox, applyBox] = await Promise.all([compare.boundingBox(), apply.boundingBox()]);
+  expect(compareBox).not.toBeNull();
+  expect(applyBox).not.toBeNull();
+  expect(compareBox!.x).toBeLessThan(applyBox!.x);
+  expect(applyBox!.x - (compareBox!.x + compareBox!.width)).toBeLessThanOrEqual(10);
+  expect(Math.abs(compareBox!.height - applyBox!.height)).toBeLessThanOrEqual(1);
+  expect(Math.abs(compareBox!.width - applyBox!.width)).toBeLessThanOrEqual(1);
 };
 
 describe.skipIf(process.platform !== "darwin" || !gitExecutable)(
@@ -261,21 +290,41 @@ printf '{"type":"step_finish","part":{"modelID":"fake/e2e","cost":0.01,"tokens":
 
       await page.getByRole("button", { name: "Profiles" }).click();
       await page.getByRole("group", { name: "Profile Evaluation Profile" }).click();
+      await verifyProfileComparisonActionLayout(page, 920, 620);
+      if (process.env.AGENTENV_EVALUATION_CAPTURE_DIR) {
+        await mkdir(process.env.AGENTENV_EVALUATION_CAPTURE_DIR, { recursive: true });
+        await page.screenshot({
+          path: join(process.env.AGENTENV_EVALUATION_CAPTURE_DIR, "comparison-profile-actions-920x620.png")
+        });
+      }
+      await verifyProfileComparisonActionLayout(page, 1180, 728);
+      if (process.env.AGENTENV_EVALUATION_CAPTURE_DIR) {
+        await page.screenshot({
+          path: join(process.env.AGENTENV_EVALUATION_CAPTURE_DIR, "comparison-profile-actions-1180x728.png")
+        });
+      }
+      await verifyProfileComparisonActionLayout(page, 1440, 900);
       await page.getByRole("button", { name: "Compare" }).click();
       const dialog = page.getByRole("dialog", {
         name: "Compare Evaluation Profile on OpenCode"
       });
       await dialog.waitFor({ state: "visible" });
       await dialog.getByText("Temporary empty Workspace").waitFor();
+      expect(await dialog.getByText("Agent", { exact: true }).count()).toBe(0);
       await verifyDialogLayout(page, ".profile-comparison-dialog", 920, 620);
+      await verifyWorkspaceChoiceLayout(dialog);
       await verifyDialogLayout(page, ".profile-comparison-dialog", 1180, 728);
+      await verifyWorkspaceChoiceLayout(dialog);
 
       await dialog.getByRole("radio", { name: "Local folder" }).click();
       await dialog.getByText(workspace).waitFor();
       await dialog.getByText(/files ·/).waitFor();
       await verifyDialogLayout(page, ".profile-comparison-dialog", 920, 620);
+      await verifyWorkspaceChoiceLayout(dialog);
       await verifyDialogLayout(page, ".profile-comparison-dialog", 1180, 728);
+      await verifyWorkspaceChoiceLayout(dialog);
       await verifyDialogLayout(page, ".profile-comparison-dialog", 1440, 900);
+      await verifyWorkspaceChoiceLayout(dialog);
       await dialog.getByRole("textbox", { name: "Task" }).fill("Create isolated comparison files");
       const runButton = dialog.getByRole("button", { name: "Run comparison" });
       await expect.poll(() => runButton.isEnabled()).toBe(true);

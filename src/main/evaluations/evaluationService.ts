@@ -645,11 +645,16 @@ export const createEvaluationService = (
         prepared.project,
         prepared.temp
       ]);
-      privatePaths.push(
-        options.homeDir,
-        ...protectedTargetPaths(storedPreview.sourceTargetPaths)
-      );
-      const stored = await options.resultStore.saveLatest(result, { privatePaths });
+      const stored = await options.resultStore.saveLatest(result, {
+        privatePaths,
+        pathRedactions: [
+          ...protectedTargetPaths(storedPreview.sourceTargetPaths).map((path) => ({
+            path,
+            replacement: "<agent-resources>"
+          })),
+          { path: options.homeDir, replacement: "<home>" }
+        ]
+      });
       setRun({
         status: terminalStatus,
         stage: terminalStatus === "completed"

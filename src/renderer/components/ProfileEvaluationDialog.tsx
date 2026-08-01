@@ -326,10 +326,6 @@ export const ProfileEvaluationDialog = ({
             <div className="profile-comparison-setup">
               <div className="profile-comparison-fields">
                 <div className="profile-comparison-field">
-                  <span className="profile-comparison-field__label">{t("Agent")}</span>
-                  <span className="profile-comparison-static-value">{target.name}</span>
-                </div>
-                <div className="profile-comparison-field">
                   <span className="profile-comparison-field__label">{t("Workspace")}</span>
                   <div
                     className="profile-comparison-workspace-choice ui-segmented-control"
@@ -494,7 +490,7 @@ export const ProfileEvaluationDialog = ({
               {result?.fidelity === "partial" ? (
                 <div className="profile-comparison-notice is-warning">
                   <AlertTriangle size={16} />
-                  <p>{t("Some Agent resources were excluded from both isolated environments.")}</p>
+                  <p>{t("Partial comparison: MCP configurations were excluded from one or both runs.")}</p>
                 </div>
               ) : null}
 

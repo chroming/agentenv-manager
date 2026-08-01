@@ -292,7 +292,7 @@
 .profile-target-workspace-button,
 .profile-commit-actions .save-button,
 .profile-commit-actions .profile-apply-button,
-.profile-action-stack > .profile-evaluate-button {
+.profile-commit-actions .profile-evaluate-button {
   height: var(--profile-control-height);
   min-height: var(--profile-control-height);
 }
@@ -492,6 +492,8 @@
   background: var(--surface);
   border: 0;
   border-radius: 0;
+  container-name: profile-detail;
+  container-type: inline-size;
   gap: 0;
   grid-template-rows: auto minmax(0, 1fr);
   overflow-x: hidden;
@@ -626,11 +628,11 @@
   width: 104px;
 }
 
-.profile-action-stack > .profile-evaluate-button {
-  flex: 0 0 100px;
-  min-width: 100px;
+.profile-commit-actions .profile-evaluate-button {
+  flex: 0 0 104px;
+  min-width: 104px;
   padding-inline: 9px;
-  width: 100px;
+  width: 104px;
 }
 
 .profile-commit-actions .profile-apply-control {
@@ -1273,10 +1275,10 @@
     width: 92px;
   }
 
-  .profile-action-stack > .profile-evaluate-button {
-    flex-basis: 100px;
-    min-width: 100px;
-    width: 100px;
+  .profile-commit-actions .profile-evaluate-button {
+    flex-basis: 92px;
+    min-width: 92px;
+    width: 92px;
   }
 
   .profile-commit-actions .profile-target-workspace-control,
@@ -1475,4 +1477,46 @@
 
 .profile-source-choice > .ui-segmented-control__option {
   width: 100%;
+}
+
+@container profile-detail (max-width: 760px) {
+  .profile-hero {
+    align-items: start;
+    grid-template-columns: 32px minmax(0, 1fr);
+    grid-template-rows: minmax(42px, auto) auto;
+    height: var(--profile-hero-height-compact);
+    min-height: var(--profile-hero-height-compact);
+    padding: 10px 12px;
+    row-gap: 8px;
+  }
+
+  .profile-hero__icon {
+    height: 32px;
+    width: 32px;
+  }
+
+  .profile-hero__title h2 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .profile-hero .profile-description {
+    display: none;
+  }
+
+  .profile-hero--loading .profile-description {
+    display: block;
+  }
+
+  .profile-action-stack {
+    align-items: stretch;
+    display: flex;
+    gap: 8px;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-end;
+    justify-self: stretch;
+    width: 100%;
+  }
 }
