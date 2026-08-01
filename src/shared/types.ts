@@ -99,7 +99,7 @@ export interface AgentEnvApi {
   selectLocalSkillSource(): Promise<LocalSkillSourceSelection | undefined>;
   releaseSkillArchive(token: string): Promise<void>;
   selectTargetConfigRoot(targetId: string): Promise<string | undefined>;
-  selectEvaluationProject(): Promise<string | undefined>;
+  selectComparisonWorkspace(): Promise<string | undefined>;
   listSupportedTargets(): Promise<TargetDescriptor[]>;
   listTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
   listTargetStates(): Promise<TargetManagementState[]>;
@@ -196,12 +196,12 @@ export interface AgentEnvApi {
     profileId: string,
     previewId: string
   ): Promise<ApplyResult>;
-  previewEvaluation(
+  previewProfileComparison(
     input: OneShotEvaluationPreviewInput
   ): Promise<OneShotEvaluationPreview>;
-  startEvaluation(input: OneShotEvaluationStartInput): Promise<OneShotEvaluationRun>;
-  readEvaluation(input?: OneShotEvaluationReadInput): Promise<OneShotEvaluationRun | undefined>;
-  cancelEvaluation(runId: string): Promise<OneShotEvaluationRun>;
+  startProfileComparison(input: OneShotEvaluationStartInput): Promise<OneShotEvaluationRun>;
+  readProfileComparison(input?: OneShotEvaluationReadInput): Promise<OneShotEvaluationRun | undefined>;
+  cancelProfileComparison(runId: string): Promise<OneShotEvaluationRun>;
   listBackups(): Promise<BackupSummary[]>;
   listManagedBackups(): Promise<ManagedBackupInventory>;
   previewManagedBackup(input: DeleteManagedBackupInput): Promise<ManagedBackupPreview>;

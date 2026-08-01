@@ -1,5 +1,9 @@
 import { readFile } from "node:fs/promises";
-import type { OneShotEvaluationResult } from "../../shared/evaluations";
+import type {
+  OneShotEvaluationDelta,
+  OneShotEvaluationResult,
+  OneShotEvaluationSideResult
+} from "../../shared/evaluations";
 import { isMissingFileError, writeAtomic } from "../fileUtils";
 import { redactSensitiveValues } from "../secretWarnings";
 
@@ -35,10 +39,7 @@ const replacePrivatePaths = (value: string, paths: string[]) =>
   paths
     .filter(Boolean)
     .sort((left, right) => right.length - left.length)
-    .reduce(
-      (content, path) => content.replaceAll(path, "<evaluation-workspace>"),
-      value
-    );
+    .reduce((content, path) => content.replaceAll(path, "<comparison-workspace>"), value);
 
 const sanitizeText = (value: string, paths: string[], maxBytes: number) =>
   truncateUtf8(redactSensitiveValues(replacePrivatePaths(value, paths)), maxBytes);
@@ -64,6 +65,53 @@ const isUsage = (value: unknown) => {
   ].every((key) => isOptionalFiniteNumber(usage[key]));
 };
 
+const isFileDiffs = (value: unknown) => Array.isArray(value) && value.every((change) =>
+  Boolean(change && typeof change.path === "string" && typeof change.diff === "string" &&
+    (change.action === undefined || ["add", "remove", "replace"].includes(change.action))));
+
+const isSideResult = (value: unknown): value is OneShotEvaluationSideResult => {
+  if (!value || typeof value !== "object") return false;
+  const side = value as Partial<OneShotEvaluationSideResult>;
+  return Boolean(
+    (side.environment === "current" || side.environment === "proposed") &&
+    typeof side.environmentContentHash === "string" &&
+    isStringRecord(side.skillContentHashes) &&
+    (side.cliVersion === undefined || typeof side.cliVersion === "string") &&
+    (side.model === undefined || typeof side.model === "string") &&
+    typeof side.startedAt === "string" &&
+    typeof side.completedAt === "string" &&
+    typeof side.durationMs === "number" && Number.isFinite(side.durationMs) &&
+    isOptionalFiniteNumber(side.exitCode) &&
+    typeof side.finalResponse === "string" &&
+    typeof side.diff === "string" &&
+    isFileDiffs(side.fileDiffs) &&
+    Array.isArray(side.changedFiles) && side.changedFiles.every((path) => typeof path === "string") &&
+    isUsage(side.usage) &&
+    (side.fidelity === "full" || side.fidelity === "partial") &&
+    Array.isArray(side.warnings) && side.warnings.every((warning) => typeof warning === "string") &&
+    (side.error === undefined || typeof side.error === "string")
+  );
+};
+
+const isDelta = (value: unknown): value is OneShotEvaluationDelta => {
+  if (!value || typeof value !== "object") return false;
+  const delta = value as Partial<OneShotEvaluationDelta>;
+  return typeof delta.diff === "string" && isFileDiffs(delta.fileDiffs) &&
+    Array.isArray(delta.changedFiles) && delta.changedFiles.every((path) => typeof path === "string");
+};
+
+const isWorkspace = (value: unknown) => {
+  if (!value || typeof value !== "object") return false;
+  const workspace = value as Record<string, unknown>;
+  return (workspace.kind === "empty" || workspace.kind === "folder") &&
+    (workspace.path === undefined || typeof workspace.path === "string") &&
+    typeof workspace.name === "string" &&
+    typeof workspace.contentHash === "string" &&
+    typeof workspace.fileCount === "number" && Number.isFinite(workspace.fileCount) &&
+    typeof workspace.totalBytes === "number" && Number.isFinite(workspace.totalBytes) &&
+    typeof workspace.omittedCount === "number" && Number.isFinite(workspace.omittedCount);
+};
+
 const isResult = (value: unknown): value is OneShotEvaluationResult => {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<OneShotEvaluationResult>;
@@ -75,30 +123,72 @@ const isResult = (value: unknown): value is OneShotEvaluationResult => {
     isStringRecord(candidate.skillContentHashes) &&
     typeof candidate.targetId === "string" &&
     typeof candidate.targetName === "string" &&
-    (candidate.cliVersion === undefined || typeof candidate.cliVersion === "string") &&
-    (candidate.model === undefined || typeof candidate.model === "string") &&
-    typeof candidate.projectPath === "string" &&
-    typeof candidate.projectRevision === "string" &&
+    isWorkspace(candidate.workspace) &&
     typeof candidate.prompt === "string" &&
     typeof candidate.startedAt === "string" &&
     typeof candidate.completedAt === "string" &&
     typeof candidate.durationMs === "number" && Number.isFinite(candidate.durationMs) &&
-    isOptionalFiniteNumber(candidate.exitCode) &&
-    typeof candidate.finalResponse === "string" &&
-    typeof candidate.diff === "string" &&
-    Array.isArray(candidate.fileDiffs) && candidate.fileDiffs.every((change) =>
-      Boolean(change && typeof change.path === "string" && typeof change.diff === "string" &&
-        (change.action === undefined || ["add", "remove", "replace"].includes(change.action)))) &&
-    Array.isArray(candidate.changedFiles) && candidate.changedFiles.every(
-      (path) => typeof path === "string"
-    ) &&
+    isSideResult(candidate.current) &&
+    isSideResult(candidate.proposed) &&
+    isDelta(candidate.delta) &&
+    (candidate.baselineSource === "fresh-run" || candidate.baselineSource === "verified-previous-run") &&
+    typeof candidate.comparisonSignature === "string" &&
+    (candidate.fidelity === "full" || candidate.fidelity === "partial") &&
     Array.isArray(candidate.warnings) && candidate.warnings.every(
       (warning) => typeof warning === "string"
     ) &&
-    isUsage(candidate.usage) &&
-    (candidate.error === undefined || typeof candidate.error === "string") &&
-    (candidate.fidelity === "full" || candidate.fidelity === "partial")
+    (candidate.error === undefined || typeof candidate.error === "string")
   );
+};
+
+const sanitizeFileChanges = (
+  value: Pick<OneShotEvaluationDelta, "diff" | "fileDiffs" | "changedFiles">,
+  paths: string[],
+  maxDiffBytes: number
+) => {
+  const diff = sanitizeText(value.diff, paths, maxDiffBytes);
+  let remainingBytes = maxDiffBytes;
+  let truncated = diff.truncated;
+  const fileDiffs = [] as OneShotEvaluationDelta["fileDiffs"];
+  for (const change of value.fileDiffs) {
+    if (remainingBytes <= 0) {
+      truncated = true;
+      break;
+    }
+    const safe = sanitizeText(change.diff, paths, remainingBytes);
+    fileDiffs.push({ ...change, diff: safe.value });
+    remainingBytes -= Buffer.byteLength(safe.value, "utf8");
+    truncated ||= safe.truncated;
+  }
+  truncated ||= fileDiffs.length < value.fileDiffs.length;
+  return { diff: diff.value, fileDiffs, changedFiles: value.changedFiles, truncated };
+};
+
+const sanitizeSide = (
+  side: OneShotEvaluationSideResult,
+  paths: string[],
+  options: EvaluationResultStoreOptions
+) => {
+  const response = sanitizeText(
+    side.finalResponse,
+    paths,
+    options.maxResponseBytes ?? 512 * 1024
+  );
+  const changes = sanitizeFileChanges(side, paths, options.maxDiffBytes ?? 2 * 1024 * 1024);
+  const error = side.error
+    ? sanitizeText(side.error, paths, options.maxErrorBytes ?? 32 * 1024)
+    : undefined;
+  return {
+    value: {
+      ...side,
+      finalResponse: response.value,
+      diff: changes.diff,
+      fileDiffs: changes.fileDiffs,
+      warnings: side.warnings.map((warning) => sanitizeText(warning, paths, 16 * 1024).value),
+      ...(error ? { error: error.value } : {})
+    },
+    truncated: response.truncated || changes.truncated || error?.truncated === true
+  };
 };
 
 export const createEvaluationResultStore = (
@@ -114,46 +204,34 @@ export const createEvaluationResultStore = (
     }
   },
   saveLatest: async (result, saveOptions = {}) => {
-    const paths = saveOptions.privatePaths ?? [];
+    const paths = [
+      ...(saveOptions.privatePaths ?? []),
+      ...(result.workspace.path ? [result.workspace.path] : [])
+    ];
     const prompt = sanitizeText(result.prompt, paths, options.maxPromptBytes ?? 64 * 1024);
-    const response = sanitizeText(
-      result.finalResponse,
-      paths,
-      options.maxResponseBytes ?? 512 * 1024
-    );
-    const maxDiffBytes = options.maxDiffBytes ?? 2 * 1024 * 1024;
-    const diff = sanitizeText(result.diff, paths, maxDiffBytes);
+    const current = sanitizeSide(result.current, paths, options);
+    const proposed = sanitizeSide(result.proposed, paths, options);
+    const delta = sanitizeFileChanges(result.delta, paths, options.maxDiffBytes ?? 2 * 1024 * 1024);
     const error = result.error
       ? sanitizeText(result.error, paths, options.maxErrorBytes ?? 32 * 1024)
       : undefined;
-    let remainingFileDiffBytes = maxDiffBytes;
-    let fileDiffsTruncated = false;
-    const fileDiffs = [] as OneShotEvaluationResult["fileDiffs"];
-    for (const change of result.fileDiffs) {
-      if (remainingFileDiffBytes <= 0) {
-        fileDiffsTruncated = true;
-        break;
-      }
-      const sanitized = sanitizeText(change.diff, paths, remainingFileDiffBytes);
-      fileDiffs.push({ ...change, diff: sanitized.value });
-      remainingFileDiffBytes = Math.max(
-        0,
-        remainingFileDiffBytes - Buffer.byteLength(sanitized.value, "utf8")
-      );
-      fileDiffsTruncated ||= sanitized.truncated;
-    }
-    fileDiffsTruncated ||= fileDiffs.length < result.fileDiffs.length;
-    const truncated = prompt.truncated || response.truncated || diff.truncated ||
-      fileDiffsTruncated || error?.truncated;
+    const truncated = prompt.truncated || current.truncated || proposed.truncated ||
+      delta.truncated || error?.truncated === true;
+    const { path: _workspacePath, ...storedWorkspace } = result.workspace;
     const safeResult: OneShotEvaluationResult = {
       ...result,
+      workspace: storedWorkspace,
       prompt: prompt.value,
-      finalResponse: response.value,
-      diff: diff.value,
-      fileDiffs,
+      current: current.value,
+      proposed: proposed.value,
+      delta: {
+        diff: delta.diff,
+        fileDiffs: delta.fileDiffs,
+        changedFiles: delta.changedFiles
+      },
       warnings: [
         ...result.warnings.map((warning) => sanitizeText(warning, paths, 16 * 1024).value),
-        ...(truncated ? ["Stored evaluation output was truncated to protect local storage"] : [])
+        ...(truncated ? ["Stored comparison output was truncated to protect local storage"] : [])
       ],
       ...(error ? { error: error.value } : {})
     };

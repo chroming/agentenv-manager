@@ -224,59 +224,64 @@ A Profile MAY record a preferred Target for default UI context and the Target it
 
 Create from Target MAY record a machine-local Capture receipt containing source paths, location roles, and content hashes. The receipt is optional takeover evidence, lives outside portable AgentEnv data, is never part of the Profile or data backup, cannot authorize content that differs from the current Library hash, and is consumed after the first successful Apply to that Target. Missing or malformed receipt data falls back to current content and path-capability validation.
 
-### 4.3.1 One-shot Profile Evaluation
+### 4.3.1 Isolated Profile Comparison
 
-One-shot Evaluation answers one bounded question: how one saved Profile behaves for one task in
-one committed local Git project. It is not Apply, a Benchmark suite, or a correctness score.
+Profile Comparison answers one bounded pre-Apply question: how the selected Agent's current
+environment and one saved proposed Profile behave on the same task. It is not Apply, a Benchmark
+suite, a correctness score, or a generic Agent launcher.
 
-- Evaluation input is one saved Profile, one Agent with an explicit evaluation capability, one
-  local Git repository at its current `HEAD`, and one task prompt. A dirty Profile MUST be saved
-  before opening the run flow. Uncommitted project changes are excluded and visibly disclosed.
-- P0 supports OpenCode only. Unsupported Agents remain unavailable choices rather than falling
-  through to a generic shell command.
-- Evaluation creates a private local clone from the existing repository without fetching, a random `0700` Eval Home, and
-  immutable copies of every included Library Skill. It MUST NOT Apply, write the original project,
-  or write the real Agent's Instructions, Skills, MCP settings, state, or credentials.
-- On macOS, the child process is constrained to the Eval root by the operating-system process
-  sandbox. A platform without an implemented write sandbox reports Evaluation unavailable; it
-  MUST NOT silently downgrade the no-write guarantee.
-- `Use Profile`, `Turn off`, and `Keep current` retain their ordinary Profile meanings. `Keep
-  current` creates a read-only snapshot inside Eval Home; it never points the child process at the
-  live Agent path. Globally disabled or Profile-disabled Skills are omitted. Target-recognized
-  project-local Agent configuration, Instructions, and Skills are masked only inside the temporary
-  clone, disclosed in Preview, and restored before Diff collection so they cannot silently alter
-  the Profile under evaluation or appear as task changes.
-- P0 is a local-project evaluation. OpenCode receives an explicit default-deny tool policy that
-  allows only local file inspection and editing tools. Shell commands, web tools, sub-Agents,
-  questions, external-directory access, and all other undeclared tools remain denied. MCP
-  definitions and credentials remain Agent-owned and are never copied into Eval Home. The Preview
-  reports how many MCPs were omitted, and every P0 OpenCode result is labeled `Restricted Profile`
-  rather than full-fidelity. This restriction is fixed by the capability and is not an extra user
-  decision.
-- Before launch, Preview binds the saved target-specific Profile hash, selected Library hashes,
-  project revision, index state, dirty and untracked content fingerprints, and real Agent resource
-  fingerprints. Any stale input requires a fresh Preview.
-- The child command uses an absolute executable and argument array without a shell. It has a
-  bounded timeout and output limit, supports process-tree cancellation, and reports only
-  `Preparing`, `Running`, `Cancelling`, `Completed`, `Failed to run`, or `Cancelled`. `Completed`
-  means the CLI exited normally and output was captured; it does not mean the task is correct.
-- OpenCode approval is automatic only for the explicitly allowed local file tools and only inside
-  the operating-system write sandbox so the task can produce a meaningful Diff. The setup surface
-  states that the run invokes the configured Agent account, uses network access for the model
-  provider, and may consume model quota before the user confirms it.
-- Completion records the final response, Git diff, changed files, duration, exit code, and only
-  usage values explicitly reported by the CLI. Missing token or cost fields display `Unavailable`
-  and MUST NOT be inferred as zero.
-- The original project revision, index, dirty and untracked content, plus real Agent paths are
-  verified again before accepting a result. Temporary project, Home, authentication copy, and
-  runtime state are deleted after every terminal outcome. Cleanup failure is a visible failed
-  state.
-- AgentEnv persists only the latest redacted and bounded report under device-local application
-  data. Evaluation reports and temporary workspaces are excluded from Workspace Sync. A report may
-  be included in an explicit whole-data backup but never contains the temporary Home or raw literal
-  credentials.
-- P0 has no suites, assertions, pass/fail label, ranking, repeated runs, scheduler, LLM judge,
-  concurrent runs, result sync, automatic write-back, or top-level Evaluation navigation.
+- Input is one saved Profile, the Agent currently selected beside Apply, one task prompt, and an
+  optional Workspace. The Workspace may be empty or any local folder; Git is optional metadata,
+  not an eligibility requirement. A dirty Profile MUST be saved before Compare becomes available.
+  A Profile already matching the selected Agent has no pending candidate and MUST NOT offer a
+  redundant comparison run.
+- Compare MUST use the selected Apply Agent. It MUST NOT silently fall through to OpenCode, another
+  installed Agent, or a generic shell command. An Agent is available only when its adapter exposes
+  and verifies an isolated comparison capability. P0 implements that capability for OpenCode.
+- Preview freezes the Workspace into two independent private snapshots, creates two random `0700`
+  Homes, and records immutable copies of every included Library Skill. Empty Workspace creates no
+  project files. A folder snapshot includes its current readable content, including uncommitted Git
+  changes, while excluding disclosed generated, oversized, sensitive, or escaping-link entries.
+  Routine generated-directory exclusions are summarized as a count; sensitive files and unsafe
+  links remain explicit warnings.
+- The first run materializes a snapshot of the selected Agent's current effective Instructions,
+  Skills, and supported resource state. The second materializes the saved proposed Profile. `Use
+  Profile`, `Turn off`, and `Keep current` retain their ordinary Profile meanings; no run points at
+  a live Agent resource path. Both runs receive the same task and the same frozen Workspace bytes.
+- P0 performs two fresh model calls in sequence. The UI MUST disclose this before confirmation.
+  Previous results are not reused unless a future implementation can prove an exact match for
+  Agent, executable, CLI version, model, task, Workspace hash, current environment hash, and
+  isolation policy. Similar-looking prior runs are not valid baselines.
+- Compare MUST NOT Apply, write the selected folder, or write the real Agent's Instructions, Skills,
+  MCP settings, state, authentication, or credentials. On macOS, each child process is constrained
+  to its own comparison root by the operating-system write sandbox. After inputs are frozen, the
+  child is also denied reads from the real user Home and original selected folder, except for the
+  narrowly declared executable runtime required to launch the selected Agent. A platform without
+  an implemented sandbox reports comparison unavailable and MUST NOT downgrade this guarantee.
+- Target-recognized project-local Agent resources are masked only inside each temporary snapshot
+  and are restored before collecting task changes. MCP definitions and literal credentials remain
+  Agent-owned and are never copied into P0 comparison Homes. Exclusions are displayed and make the
+  result `Partial`, never silently `Full`.
+- Before launch and between both runs, Preview binds the target-specific saved Profile hash,
+  selected Library hashes, complete included Workspace fingerprint, executable identity, and real
+  Agent resource fingerprints. Stale input invalidates Preview. After both runs, the original
+  Workspace and real Agent fingerprints are verified again before a result is accepted.
+- Each child uses an absolute executable and argument array without a shell, a bounded timeout and
+  output limit, and process-tree cancellation. User-visible states are `Preparing`, `Running`,
+  `Cancelling`, `Completed`, `Incomplete`, `Failed to run`, and `Cancelled`. `Completed` means both
+  CLI runs ended normally and evidence was captured; it does not mean either result is correct.
+- Results present Current and Proposed responses, file changes, duration, exit code, and only usage
+  values explicitly reported by each CLI. A Delta view compares Proposed output files with Current
+  output files. Missing token or cost fields display `Unavailable` and MUST NOT be inferred as zero.
+- Temporary Workspace, Home, authentication copy, and runtime state are deleted after every
+  terminal outcome. A preparation failure or cancellation MUST also clean every already-created
+  sibling environment. Cleanup failure is a visible failed state.
+- AgentEnv persists only the latest redacted and bounded comparison report in device-local
+  application data. Reports and temporary workspaces are excluded from Workspace Sync. A report may
+  be included in an explicit whole-data backup but never contains a temporary Home, selected-folder
+  absolute paths, or raw literal credentials.
+- P0 has no suites, assertions, pass/fail label, ranking, scheduler, LLM judge, concurrent runs,
+  result sync, automatic write-back, or top-level Comparison navigation.
 
 Source of truth: the saved Profile directory in AgentEnv data.
 
@@ -1550,8 +1555,8 @@ A new Target adapter MUST define:
 - Skill capability and install methods.
 - A read-only Skill runtime driver declaring roots, scan depth, scope, runtime identity, native disable facts, and manager-related evidence markers.
 - Native MCP discovery scope and safe activation capability.
-- Optional one-shot Evaluation capability, including project Agent-resource masks, availability
-  checks, an isolated launch specification, and structured event parsing.
+- Optional isolated Profile Comparison capability, including project Agent-resource masks,
+  availability checks, an isolated launch specification, and structured event parsing.
 - An exact allowlist for any MCP activation field the adapter may patch; no generic native-config payload is accepted.
 - Preview generation.
 - Managed-resource ownership markers.

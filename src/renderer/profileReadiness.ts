@@ -36,6 +36,20 @@ export interface ProfileReadinessInput {
   dependenciesCurrent?: boolean;
 }
 
+export interface ProfileComparisonControlInput {
+  platform: string;
+  target?: Pick<TargetInfo, "capabilities" | "health">;
+  readinessStatus: ProfileReadinessStatus;
+  isDirty: boolean;
+  isBusy: boolean;
+  isSaving: boolean;
+}
+
+export interface ProfileComparisonControl {
+  disabled: boolean;
+  description: string;
+}
+
 export const hasManagedTargetDrift = (
   issues: readonly Pick<ApplyIssue, "code">[]
 ): boolean => issues.some((issue) => issue.code === "managed-resource-drift");
@@ -200,4 +214,37 @@ export const deriveApplyActionLabel = (input: ProfileReadinessInput): string => 
   return targetState?.status === "managed"
     ? `Preview & apply to ${target.name}`
     : `Take over ${target.name}`;
+};
+
+export const deriveProfileComparisonControl = ({
+  platform,
+  target,
+  readinessStatus,
+  isDirty,
+  isBusy,
+  isSaving
+}: ProfileComparisonControlInput): ProfileComparisonControl => {
+  if (!target) {
+    return { disabled: true, description: "Select an Agent before comparing this Profile" };
+  }
+  if (isDirty) {
+    return { disabled: true, description: "Save this Profile before comparing it" };
+  }
+  if (readinessStatus === "applied") {
+    return { disabled: true, description: "This Profile already matches {{target}}" };
+  }
+  if (
+    platform !== "darwin" ||
+    !target.capabilities.evaluation ||
+    !target.health.executablePath
+  ) {
+    return {
+      disabled: true,
+      description: "{{target}} does not support isolated comparison yet"
+    };
+  }
+  return {
+    disabled: isBusy || isSaving,
+    description: "Compare the current {{target}} setup with this saved Profile"
+  };
 };

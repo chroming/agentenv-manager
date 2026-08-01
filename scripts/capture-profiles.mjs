@@ -1525,6 +1525,10 @@ try {
     state: "visible"
   });
   await page.reload();
+  await page.getByRole("heading", { name: "Agents", exact: true }).waitFor({
+    state: "visible"
+  });
+  await page.getByRole("button", { name: "设置", exact: true }).click();
   await page.getByRole("heading", { name: "设置" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "settings-zh-cn-920x620.png"));
   await page.getByRole("button", { name: "技能", exact: true }).click();
@@ -1551,6 +1555,10 @@ try {
     state: "visible"
   });
   await page.reload();
+  await page.getByRole("heading", { name: "Agents", exact: true }).waitFor({
+    state: "visible"
+  });
+  await page.getByRole("button", { name: "設定", exact: true }).click();
   await page.getByRole("heading", { name: "設定" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "settings-zh-tw-920x620.png"));
   await page.getByRole("button", { name: "技能", exact: true }).click();

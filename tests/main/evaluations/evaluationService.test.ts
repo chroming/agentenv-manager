@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -156,23 +156,68 @@ describe.skipIf(!gitPath)("evaluation service", () => {
       resultStore: resultStore ?? createEvaluationResultStore({ path: reportPath }),
       loadGitRunner: async () => git!
     });
-    return { project, paths, cacheRoot, reportPath, profile, listSkills };
+    return { project, paths, cacheRoot, reportPath, profile, listSkills, skillPath };
   };
 
-  it("runs a saved Profile in an isolated clone and persists proof only after cleanup", async () => {
-    let isolatedInstructions = "";
-    let isolatedSkill = "";
+  it("compares the current Agent environment with the proposed Profile in an empty workspace", async () => {
+    const isolatedInstructions: string[] = [];
     const processRunner: EvaluationProcessRunner = {
       isolationAvailability: () => ({ available: true }),
       run: async (spec, parseEvent, options) => {
-        isolatedInstructions = await readFile(
+        const side = isolatedInstructions.length === 0 ? "Current" : "Proposed";
+        isolatedInstructions.push(await readFile(
           join(spec.env.OPENCODE_CONFIG_DIR!, "AGENTS.md"),
           "utf8"
-        );
-        isolatedSkill = await readFile(
+        ));
+        await writeFile(join(spec.cwd, `${side.toLowerCase()}.txt`), `${side} output\n`);
+        const event = parseEvent(JSON.stringify({ type: "text", part: { text: side } }));
+        if (event) options?.onEvent?.(event);
+        return { exitCode: 0, stderr: "" };
+      },
+      cancelActive: vi.fn(),
+      dispose: vi.fn()
+    };
+    await setup(processRunner);
+    const preview = await service!.preview({
+      profileId: "daily-coding",
+      targetId: "opencode",
+      workspace: { kind: "empty" }
+    });
+    expect(preview.workspace).toMatchObject({ kind: "empty", fileCount: 0, totalBytes: 0 });
+    expect(preview.runsRequired).toBe(2);
+
+    const started = await service!.start({
+      previewId: preview.previewId,
+      prompt: "Compare the setup"
+    });
+    const terminal = await waitForTerminal(started.runId);
+
+    expect(terminal.status).toBe("completed");
+    expect(isolatedInstructions).toEqual([
+      "# Real OpenCode instructions\n",
+      "# Evaluation instructions\n"
+    ]);
+    expect(terminal.result?.current.finalResponse).toBe("Current");
+    expect(terminal.result?.proposed.finalResponse).toBe("Proposed");
+    expect(terminal.result?.delta.changedFiles).toEqual(["current.txt", "proposed.txt"]);
+  });
+
+  it("runs both sides, persists their evidence, and cleans every isolated Workspace", async () => {
+    const isolatedInstructions: string[] = [];
+    const isolatedSkills: Array<string | undefined> = [];
+    const readDeniedRoots: string[][] = [];
+    const processRunner: EvaluationProcessRunner = {
+      isolationAvailability: () => ({ available: true }),
+      run: async (spec, parseEvent, options) => {
+        readDeniedRoots.push(spec.readDeniedRoots ?? []);
+        isolatedInstructions.push(await readFile(
+          join(spec.env.OPENCODE_CONFIG_DIR!, "AGENTS.md"),
+          "utf8"
+        ));
+        isolatedSkills.push(await readFile(
           join(spec.env.OPENCODE_CONFIG_DIR!, "skills", "review-skill", "SKILL.md"),
           "utf8"
-        );
+        ).catch(() => undefined));
         await writeFile(join(spec.cwd, "generated.txt"), "created by evaluation\n");
         for (const line of [
           JSON.stringify({ type: "text", part: { text: "Finished" } }),
@@ -193,22 +238,32 @@ describe.skipIf(!gitPath)("evaluation service", () => {
     const preview = await service!.preview({
       profileId: "daily-coding",
       targetId: "opencode",
-      projectPath: project
+      workspace: { kind: "folder", path: project }
     });
     const started = await service!.start({ previewId: preview.previewId, prompt: "Add a file" });
     const terminal = await waitForTerminal(started.runId);
 
-    expect(terminal.status).toBe("completed");
-    expect(terminal.result).toMatchObject({
+    expect({
+      status: terminal.status,
+      currentError: terminal.result?.current.error,
+      proposedError: terminal.result?.proposed.error
+    }).toEqual({ status: "completed", currentError: undefined, proposedError: undefined });
+    expect(terminal.result?.proposed).toMatchObject({
       finalResponse: "Finished",
       changedFiles: ["generated.txt"],
       model: "test/model",
-      usage: { inputTokens: 8, outputTokens: 3 },
-      fidelity: "partial"
+      usage: { inputTokens: 8, outputTokens: 3 }
     });
-    expect(terminal.result?.usage?.totalTokens).toBeUndefined();
-    expect(isolatedInstructions).toBe("# Evaluation instructions\n");
-    expect(isolatedSkill).toBe("# Review Skill\n");
+    expect(terminal.result?.proposed.usage?.totalTokens).toBeUndefined();
+    expect(isolatedInstructions).toEqual([
+      "# Real OpenCode instructions\n",
+      "# Evaluation instructions\n"
+    ]);
+    expect(isolatedSkills).toEqual([undefined, "# Review Skill\n"]);
+    expect(readDeniedRoots).toHaveLength(2);
+    const canonicalProject = await realpath(project);
+    expect(readDeniedRoots.every((paths) => paths.includes(canonicalProject))).toBe(true);
+    expect(readDeniedRoots.every((paths) => paths.includes(join(root, "home")))).toBe(true);
     expect(existsSync(join(project, "generated.txt"))).toBe(false);
     expect(await readFile(paths.instructionsPath, "utf8")).toBe("# Real OpenCode instructions\n");
     expect(await readdir(cacheRoot)).toEqual([]);
@@ -227,12 +282,12 @@ describe.skipIf(!gitPath)("evaluation service", () => {
     const preview = await service!.preview({
       profileId: "daily-coding",
       targetId: "opencode",
-      projectPath: project
+      workspace: { kind: "folder", path: project }
     });
     await writeFile(join(project, "uncommitted.txt"), "changed after preview\n");
 
     await expect(service!.start({ previewId: preview.previewId, prompt: "Do work" }))
-      .rejects.toThrow("Project changed after evaluation preview");
+      .rejects.toThrow("Workspace changed after comparison Preview");
     expect(run).not.toHaveBeenCalled();
   });
 
@@ -249,9 +304,35 @@ describe.skipIf(!gitPath)("evaluation service", () => {
     await expect(service!.preview({
       profileId: "daily-coding",
       targetId: "opencode",
-      projectPath: project
+      workspace: { kind: "folder", path: project }
     })).rejects.toThrow("Profile Skill review-skill is missing from Library");
     expect(processRunner.run).not.toHaveBeenCalled();
+  });
+
+  it("cleans the first isolated environment when preparing the proposed environment fails", async () => {
+    const processRunner: EvaluationProcessRunner = {
+      isolationAvailability: () => ({ available: true }),
+      run: vi.fn(),
+      cancelActive: vi.fn(),
+      dispose: vi.fn()
+    };
+    const { cacheRoot, skillPath } = await setup(processRunner);
+    const preview = await service!.preview({
+      profileId: "daily-coding",
+      targetId: "opencode",
+      workspace: { kind: "empty" }
+    });
+    await rm(skillPath, { recursive: true, force: true });
+
+    const started = await service!.start({
+      previewId: preview.previewId,
+      prompt: "Do work"
+    });
+    const terminal = await waitForTerminal(started.runId);
+
+    expect(terminal.status).toBe("failed-to-run");
+    expect(processRunner.run).not.toHaveBeenCalled();
+    expect(await readdir(cacheRoot)).toEqual([]);
   });
 
   it("reports an empty managed Instructions file as not included", async () => {
@@ -267,9 +348,9 @@ describe.skipIf(!gitPath)("evaluation service", () => {
     const preview = await service!.preview({
       profileId: "daily-coding",
       targetId: "opencode",
-      projectPath: project
+      workspace: { kind: "folder", path: project }
     });
-    expect(preview.resources.instructions.includedCount).toBe(0);
+    expect(preview.proposedResources.instructions.includedCount).toBe(0);
   });
 
   it("reports resource modes consistently and excludes MCPs without a second decision", async () => {
@@ -291,11 +372,11 @@ describe.skipIf(!gitPath)("evaluation service", () => {
     const preview = await service!.preview({
       profileId: "daily-coding",
       targetId: "opencode",
-      projectPath: project,
+      workspace: { kind: "folder", path: project },
       excludeMcp: false
     });
 
-    expect(preview.resources).toMatchObject({
+    expect(preview.proposedResources).toMatchObject({
       instructions: { mode: "manage", includedCount: 1 },
       skills: { mode: "manage", includedCount: 1 },
       mcp: { mode: "manage", includedCount: 0, omittedCount: 1 }
@@ -328,7 +409,7 @@ describe.skipIf(!gitPath)("evaluation service", () => {
     const preview = await service!.preview({
       profileId: "daily-coding",
       targetId: "opencode",
-      projectPath: project
+      workspace: { kind: "folder", path: project }
     });
     const started = await service!.start({
       previewId: preview.previewId,
@@ -357,11 +438,11 @@ describe.skipIf(!gitPath)("evaluation service", () => {
     const preview = await service!.preview({
       profileId: "daily-coding",
       targetId: "opencode",
-      projectPath: project
+      workspace: { kind: "folder", path: project }
     });
     const firstStart = service!.start({ previewId: preview.previewId, prompt: "Wait" });
     await expect(service!.start({ previewId: preview.previewId, prompt: "Duplicate" }))
-      .rejects.toThrow("Another evaluation is already running");
+      .rejects.toThrow("Another comparison is already running");
     const started = await firstStart;
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const current = await service!.read({ runId: started.runId });
@@ -372,49 +453,7 @@ describe.skipIf(!gitPath)("evaluation service", () => {
     const terminal = await waitForTerminal(started.runId);
 
     expect(terminal.status).toBe("cancelled");
-    expect(terminal.result?.error).toBe("Evaluation was cancelled");
-    expect(await readdir(cacheRoot)).toEqual([]);
-  });
-
-  it("cancels the local clone while an evaluation is still preparing", async () => {
-    const processRunner: EvaluationProcessRunner = {
-      isolationAvailability: () => ({ available: true }),
-      run: vi.fn(),
-      cancelActive: vi.fn(),
-      dispose: vi.fn()
-    };
-    const { project, cacheRoot } = await setup(processRunner);
-    const delegate = git!;
-    let announceCloneStarted: (() => void) | undefined;
-    const cloneStarted = new Promise<void>((resolve) => {
-      announceCloneStarted = resolve;
-    });
-    git = {
-      run: (args, options) => {
-        if (!args.includes("clone")) return delegate.run(args, options);
-        announceCloneStarted?.();
-        return new Promise((_, reject) => {
-          const abort = () => reject(new Error("Git command was cancelled"));
-          options?.signal?.addEventListener("abort", abort, { once: true });
-          if (options?.signal?.aborted) abort();
-        });
-      },
-      cancelActive: () => delegate.cancelActive(),
-      dispose: () => delegate.dispose()
-    };
-    const preview = await service!.preview({
-      profileId: "daily-coding",
-      targetId: "opencode",
-      projectPath: project
-    });
-    const started = await service!.start({ previewId: preview.previewId, prompt: "Wait" });
-    await cloneStarted;
-
-    await service!.cancel(started.runId);
-    const terminal = await waitForTerminal(started.runId);
-
-    expect(terminal.status).toBe("cancelled");
-    expect(processRunner.run).not.toHaveBeenCalled();
+    expect(terminal.result?.error).toBe("Comparison was cancelled");
     expect(await readdir(cacheRoot)).toEqual([]);
   });
 });

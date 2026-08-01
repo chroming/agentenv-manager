@@ -333,7 +333,11 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     selectLocalSkillSource: vi.fn().mockResolvedValue(undefined),
     releaseSkillArchive: vi.fn().mockResolvedValue(undefined),
     selectTargetConfigRoot: vi.fn().mockResolvedValue(undefined),
-    selectEvaluationProject: vi.fn().mockResolvedValue(undefined),
+    selectComparisonWorkspace: vi.fn().mockResolvedValue(undefined),
+    previewProfileComparison: vi.fn().mockRejectedValue(new Error("Comparison unavailable")),
+    startProfileComparison: vi.fn().mockRejectedValue(new Error("Comparison unavailable")),
+    readProfileComparison: vi.fn().mockResolvedValue(undefined),
+    cancelProfileComparison: vi.fn().mockRejectedValue(new Error("Comparison unavailable")),
     listSupportedTargets: vi.fn().mockResolvedValue([target, codexTarget]),
     listTargets: vi.fn().mockResolvedValue([target]),
     listTargetStates: vi.fn().mockResolvedValue([]),
@@ -726,10 +730,6 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     deleteProfile: vi.fn().mockResolvedValue(undefined),
     previewApply: vi.fn().mockResolvedValue(preview),
     applyProfile: vi.fn().mockResolvedValue({ ok: true, backupId: "backup-1" }),
-    previewEvaluation: vi.fn().mockRejectedValue(new Error("Evaluation is unavailable in this test")),
-    startEvaluation: vi.fn().mockRejectedValue(new Error("Evaluation is unavailable in this test")),
-    readEvaluation: vi.fn().mockResolvedValue(undefined),
-    cancelEvaluation: vi.fn().mockRejectedValue(new Error("Evaluation run was not found")),
     listBackups: vi.fn().mockResolvedValue([]),
     listManagedBackups: vi.fn().mockResolvedValue({
       items: [],
@@ -2964,36 +2964,37 @@ describe("App", () => {
     expect(applyButton).toBeEnabled();
   });
 
-  it("opens Evaluate only for a saved Profile and directs dirty drafts back to Save", async () => {
+  it("opens Compare only for a saved Profile and disables it while the draft is dirty", async () => {
     installApi();
     render(<App />);
 
     await openProfiles();
-    const evaluateButton = screen.getByRole("button", { name: "Evaluate" });
-    expect(evaluateButton).toBeEnabled();
+    const compareButton = screen.getByRole("button", { name: "Compare" });
+    expect(compareButton).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
     fireEvent.change(screen.getByLabelText("AGENTS.md"), {
       target: { value: "# Unsaved evaluation draft\n" }
     });
 
-    fireEvent.click(evaluateButton);
-    expect(screen.queryByRole("dialog", { name: "Evaluate Daily Coding" }))
+    expect(compareButton).toBeDisabled();
+    expect(compareButton).toHaveAttribute(
+      "title",
+      "Save this Profile before comparing it"
+    );
+    expect(screen.queryByRole("dialog", { name: /Compare Daily Coding/ }))
       .not.toBeInTheDocument();
-    expect(await screen.findByText("Save this Profile before evaluating it"))
-      .toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toHaveFocus());
   });
 
-  it("keeps one-shot evaluation unavailable when the platform write sandbox is unsupported", async () => {
+  it("keeps isolated comparison unavailable when the platform write sandbox is unsupported", async () => {
     installApi({ platform: "win32" });
     render(<App />);
 
     await openProfiles();
-    const evaluateButton = screen.getByRole("button", { name: "Evaluate" });
-    expect(evaluateButton).toBeDisabled();
-    expect(evaluateButton).toHaveAttribute(
+    const compareButton = screen.getByRole("button", { name: "Compare" });
+    expect(compareButton).toBeDisabled();
+    expect(compareButton).toHaveAttribute(
       "title",
-      "No supported evaluation Agent is available"
+      "OpenCode does not support isolated comparison yet"
     );
   });
 

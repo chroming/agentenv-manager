@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, copyFile, mkdir, readFile } from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
+import { chmod, copyFile, mkdir, readFile, realpath } from "node:fs/promises";
+import { dirname, isAbsolute, join, parse as parsePath, sep } from "node:path";
 import { parse, printParseErrorCode, type ParseError } from "jsonc-parser";
 import { hashPathEntry } from "../../filesystemIntegrity";
 import { isMissingFileError, writeAtomic } from "../../fileUtils";
@@ -249,13 +249,23 @@ const parseEvent = (line: string): EvaluationEvent | undefined => {
   return undefined;
 };
 
+const packageRuntimeRoot = (path: string) => {
+  const parts = path.split(sep);
+  const nodeModulesIndex = parts.lastIndexOf("node_modules");
+  if (nodeModulesIndex < 0 || nodeModulesIndex + 1 >= parts.length) return dirname(path);
+  const packageEnd = parts[nodeModulesIndex + 1]?.startsWith("@")
+    ? nodeModulesIndex + 3
+    : nodeModulesIndex + 2;
+  return `${parsePath(path).root}${parts.slice(1, packageEnd).join(sep)}`;
+};
+
 export const createOpenCodeEvaluationCapability = (): AgentEvaluationCapability => ({
   projectResourcePaths: PROJECT_AGENT_RESOURCES,
   checkAvailability: async (input) => (await inspect(input)).availability,
   createLaunchSpec: async (input) => {
     const inspected = await inspect(input);
     if (!inspected.availability.available || !input.executablePath) {
-      throw new Error(inspected.availability.reason ?? "OpenCode evaluation is unavailable");
+      throw new Error(inspected.availability.reason ?? "OpenCode comparison is unavailable");
     }
     await Promise.all([
       mkdir(input.evaluationTargetPaths.configDir, { recursive: true, mode: 0o700 }),
@@ -270,6 +280,7 @@ export const createOpenCodeEvaluationCapability = (): AgentEvaluationCapability 
       { mode: 0o600, platform: input.platform }
     );
     await copyOpenCodeAuth(input, input.evaluationHome);
+    const resolvedExecutable = await realpath(input.executablePath);
 
     const env: NodeJS.ProcessEnv = {
       ...input.environment,
@@ -303,6 +314,10 @@ export const createOpenCodeEvaluationCapability = (): AgentEvaluationCapability 
       cwd: input.evaluationProject,
       env,
       writableRoot: join(input.evaluationHome, ".."),
+      runtimeReadRoots: [...new Set([
+        dirname(input.executablePath),
+        packageRuntimeRoot(resolvedExecutable)
+      ])],
       cliVersion: inspected.availability.cliVersion,
       fidelity: inspected.availability.fidelity,
       warnings: inspected.availability.warnings

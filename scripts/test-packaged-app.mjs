@@ -369,6 +369,9 @@ try {
   application = await launchPackagedApplication();
   applicationProcess = application.process();
   const restartedPage = await application.firstWindow();
+  await restartedPage.getByRole("button", { name: "Skills", exact: true })
+    .waitFor({ state: "visible" });
+  await restartedPage.getByRole("button", { name: "Skills", exact: true }).click();
   await restartedPage.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });
   const restartedStates = await restartedPage.evaluate(() =>
     window.agentEnv.listTargetStates()

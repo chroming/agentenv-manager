@@ -1,12 +1,17 @@
 import { createHash, randomUUID } from "node:crypto";
 import type {
+  OneShotEvaluationDelta,
+  OneShotEvaluationFidelity,
   OneShotEvaluationPreview,
   OneShotEvaluationPreviewInput,
   OneShotEvaluationReadInput,
+  OneShotEvaluationResourceScope,
   OneShotEvaluationResult,
   OneShotEvaluationRun,
+  OneShotEvaluationSideResult,
   OneShotEvaluationStartInput,
-  OneShotEvaluationUsage
+  OneShotEvaluationUsage,
+  OneShotEvaluationWorkspaceInput
 } from "../../shared/evaluations";
 import { oneShotEvaluationIsActive } from "../../shared/evaluations";
 import { profileResourceMode } from "../../shared/profileResources";
@@ -17,6 +22,7 @@ import type { SkillLibraryStore } from "../skillLibraryStore";
 import type { GitCommandRunner } from "../skillSources/gitCommandRunner";
 import type { TargetDiscoveryService } from "../targetDiscovery";
 import type { TargetRegistry } from "../targets/registry";
+import type { AgentTargetAdapter, EvaluationAvailability } from "../targets/types";
 import { hashPathEntry } from "../filesystemIntegrity";
 import { redactSensitiveValues } from "../secretWarnings";
 import {
@@ -26,8 +32,9 @@ import {
 import type { EvaluationResultStore } from "./evaluationResultStore";
 import {
   createEvaluationWorkspace,
-  type EvaluationProjectSnapshot,
   type EvaluationWorkspace,
+  type EvaluationWorkspaceChanges,
+  type EvaluationWorkspaceSnapshot,
   type PreparedEvaluationWorkspace
 } from "./evaluationWorkspace";
 
@@ -36,7 +43,7 @@ interface StoredPreview {
   profileHash: string;
   skillFingerprint: string;
   targetFingerprint: string;
-  project: EvaluationProjectSnapshot;
+  workspace: EvaluationWorkspaceSnapshot;
   sourceTargetPaths: TargetPaths;
   executablePath: string;
   excludeMcp: boolean;
@@ -46,7 +53,7 @@ interface StoredPreview {
 interface ActiveRun {
   value: OneShotEvaluationRun;
   controller: AbortController;
-  workspace?: PreparedEvaluationWorkspace;
+  workspaces: PreparedEvaluationWorkspace[];
 }
 
 export interface EvaluationService {
@@ -68,7 +75,7 @@ export interface EvaluationServiceOptions {
   targetDiscoveryService: TargetDiscoveryService;
   processRunner: EvaluationProcessRunner;
   resultStore: EvaluationResultStore;
-  loadGitRunner(): Promise<GitCommandRunner>;
+  loadGitRunner?(): Promise<GitCommandRunner | undefined>;
 }
 
 const PREVIEW_TTL_MS = 10 * 60 * 1_000;
@@ -122,12 +129,58 @@ const addUsage = (
   };
 };
 
-const inferredStoredStatus = (result: OneShotEvaluationResult): OneShotEvaluationRun["status"] =>
-  result.error === "Evaluation was cancelled"
-    ? "cancelled"
-    : result.error
-      ? "failed-to-run"
-      : "completed";
+const currentEnvironmentProfile = (profile: ProfileDetail, targetId: string): ProfileDetail => ({
+  ...profile,
+  resources: {
+    ...profile.resources,
+    managementByTarget: {
+      ...(profile.resources.managementByTarget ?? {}),
+      [targetId]: { instructions: "ignore", skills: "ignore" }
+    },
+    mcpByTarget: {
+      ...profile.resources.mcpByTarget,
+      [targetId]: { mode: "ignore", selections: [] }
+    }
+  }
+});
+
+const emptyChanges = (): EvaluationWorkspaceChanges => ({
+  diff: "",
+  fileDiffs: [],
+  changedFiles: []
+});
+
+const emptySideResult = (
+  environment: "current" | "proposed",
+  startedAt: string,
+  error: string,
+  fidelity: OneShotEvaluationFidelity
+): OneShotEvaluationSideResult => ({
+  environment,
+  environmentContentHash: "",
+  skillContentHashes: {},
+  startedAt,
+  completedAt: new Date().toISOString(),
+  durationMs: 0,
+  finalResponse: "",
+  diff: "",
+  fileDiffs: [],
+  changedFiles: [],
+  fidelity,
+  warnings: [],
+  error: redactSensitiveValues(error)
+});
+
+const inferredStoredStatus = (result: OneShotEvaluationResult): OneShotEvaluationRun["status"] => {
+  if (result.error === "Comparison was cancelled") return "cancelled";
+  if (result.error) return "failed-to-run";
+  if (result.current.error || result.proposed.error) return "incomplete";
+  return "completed";
+};
+
+const worstFidelity = (
+  ...values: OneShotEvaluationFidelity[]
+): OneShotEvaluationFidelity => values.every((value) => value === "full") ? "full" : "partial";
 
 export const createEvaluationService = (
   options: EvaluationServiceOptions
@@ -136,29 +189,21 @@ export const createEvaluationService = (
   const environment = options.environment ?? process.env;
   const previews = new Map<string, StoredPreview>();
   let activeRun: ActiveRun | undefined;
-  let workspace: EvaluationWorkspace | undefined;
-  let workspacePromise: Promise<EvaluationWorkspace> | undefined;
   let startInProgress = false;
   let disposed = false;
+  const workspace = createEvaluationWorkspace({
+    cacheRoot: options.cacheRoot,
+    loadGitRunner: options.loadGitRunner,
+    platform
+  });
+  let workspaceReady = false;
 
   const getWorkspace = async () => {
-    if (workspace) return workspace;
-    workspacePromise ??= options.loadGitRunner()
-      .then(async (git) => {
-        const created = createEvaluationWorkspace({
-          cacheRoot: options.cacheRoot,
-          git,
-          platform
-        });
-        await created.cleanupStale();
-        workspace = created;
-        return created;
-      })
-      .catch((error) => {
-        workspacePromise = undefined;
-        throw error;
-      });
-    return workspacePromise;
+    if (!workspaceReady) {
+      await workspace.cleanupStale();
+      workspaceReady = true;
+    }
+    return workspace;
   };
 
   const cleanupPreviews = () => {
@@ -168,48 +213,21 @@ export const createEvaluationService = (
     }
   };
 
-  const preview = async (
-    input: OneShotEvaluationPreviewInput
-  ): Promise<OneShotEvaluationPreview> => {
-    if (disposed) throw new Error("Evaluation service is shutting down");
-    cleanupPreviews();
-    const isolation = options.processRunner.isolationAvailability();
-    if (!isolation.available) throw new Error(isolation.reason ?? "Evaluation isolation is unavailable");
-    const adapter = options.targetRegistry.get(input.targetId);
-    if (!adapter.evaluations || !adapter.descriptor.capabilities.evaluation) {
-      throw new Error(`${adapter.descriptor.name} does not support one-shot evaluation yet`);
-    }
-    const [profile, librarySkills, targets, project] = await Promise.all([
-      options.profileStore.readProfile(input.profileId),
-      options.skillLibraryStore.listSkills(),
-      options.targetDiscoveryService.listTargets(),
-      getWorkspace().then((service) => service.inspectProject(input.projectPath))
-    ]);
-    const target = targets.find((candidate) => candidate.id === input.targetId);
-    if (!target?.health.executablePath) {
-      throw new Error(`${adapter.descriptor.name} command was not found`);
-    }
-    const excludeMcp = true;
-    const availability = await adapter.evaluations.checkAvailability({
-      profile,
-      targetPaths: target.paths,
-      sourceHomeDir: options.homeDir,
-      executablePath: target.health.executablePath,
-      excludeMcp,
-      platform,
-      environment
-    });
-    if (!availability.available) {
-      throw new Error(availability.reason ?? `${adapter.descriptor.name} evaluation is unavailable`);
-    }
-
-    const instructionsMode = profileResourceMode(profile.resources, input.targetId, "instructions");
-    const skillsMode = profileResourceMode(profile.resources, input.targetId, "skills");
-    const mcpMode = profileResourceMode(profile.resources, input.targetId, "mcp");
+  const summarizeResources = async (
+    profile: ProfileDetail,
+    adapter: AgentTargetAdapter,
+    targetPaths: TargetPaths,
+    librarySkills: SkillLibraryEntry[],
+    availability: EvaluationAvailability
+  ) => {
+    const targetId = adapter.descriptor.id;
+    const instructionsMode = profileResourceMode(profile.resources, targetId, "instructions");
+    const skillsMode = profileResourceMode(profile.resources, targetId, "skills");
+    const mcpMode = profileResourceMode(profile.resources, targetId, "mcp");
     const instructionsIncluded = instructionsMode === "manage"
       ? Number(Boolean(profile.instructions))
       : instructionsMode === "ignore"
-        ? Number(Boolean(await hashPathEntry(target.paths.instructionsPath)))
+        ? Number(Boolean(await hashPathEntry(targetPaths.instructionsPath)))
         : 0;
     let skillsIncluded = 0;
     let skillsOmitted = 0;
@@ -220,14 +238,11 @@ export const createEvaluationService = (
         if (reference.enabled && !skill) {
           throw new Error(`Profile Skill ${reference.targetName} is missing from Library`);
         }
-        if (reference.enabled && skill?.globallyEnabled) {
-          skillsIncluded += 1;
-        } else {
-          skillsOmitted += 1;
-        }
+        if (reference.enabled && skill?.globallyEnabled) skillsIncluded += 1;
+        else skillsOmitted += 1;
       }
     } else if (skillsMode === "ignore") {
-      const runtime = await adapter.skills.inspectRuntime(target.paths);
+      const runtime = await adapter.skills.inspectRuntime(targetPaths);
       skillsIncluded = runtime.observations.filter(
         (observation) => observation.availability === "enabled"
       ).length;
@@ -235,13 +250,83 @@ export const createEvaluationService = (
     } else {
       skillsOmitted = profile.resources.skills.length;
     }
+    return {
+      instructions: { mode: instructionsMode, includedCount: instructionsIncluded },
+      skills: {
+        mode: skillsMode,
+        includedCount: skillsIncluded,
+        omittedCount: skillsOmitted
+      },
+      mcp: {
+        mode: mcpMode,
+        includedCount: availability.mcpIncludedCount,
+        omittedCount: availability.mcpOmittedCount
+      }
+    } satisfies {
+      instructions: OneShotEvaluationResourceScope;
+      skills: OneShotEvaluationResourceScope;
+      mcp: OneShotEvaluationResourceScope;
+    };
+  };
 
-    const warnings = [
-      ...(project.hasUncommittedChanges
-        ? ["Uncommitted project changes are excluded; evaluation uses the current HEAD commit"]
-        : []),
-      ...availability.warnings
-    ];
+  const preview = async (
+    input: OneShotEvaluationPreviewInput
+  ): Promise<OneShotEvaluationPreview> => {
+    if (disposed) throw new Error("Comparison service is shutting down");
+    cleanupPreviews();
+    const isolation = options.processRunner.isolationAvailability();
+    if (!isolation.available) throw new Error(isolation.reason ?? "Comparison isolation is unavailable");
+    const adapter = options.targetRegistry.get(input.targetId);
+    if (!adapter.evaluations || !adapter.descriptor.capabilities.evaluation) {
+      throw new Error(`${adapter.descriptor.name} does not support Profile comparison yet`);
+    }
+    const [profile, librarySkills, targets, workspaceSnapshot] = await Promise.all([
+      options.profileStore.readProfile(input.profileId),
+      options.skillLibraryStore.listSkills(),
+      options.targetDiscoveryService.listTargets(),
+      getWorkspace().then((service) => service.inspectWorkspace(input.workspace ?? { kind: "empty" }))
+    ]);
+    const target = targets.find((candidate) => candidate.id === input.targetId);
+    if (!target?.health.executablePath) {
+      throw new Error(`${adapter.descriptor.name} command was not found`);
+    }
+    const excludeMcp = true;
+    const currentProfile = currentEnvironmentProfile(profile, input.targetId);
+    const [currentAvailability, proposedAvailability] = await Promise.all([
+      adapter.evaluations.checkAvailability({
+        profile: currentProfile,
+        targetPaths: target.paths,
+        sourceHomeDir: options.homeDir,
+        executablePath: target.health.executablePath,
+        excludeMcp,
+        platform,
+        environment
+      }),
+      adapter.evaluations.checkAvailability({
+        profile,
+        targetPaths: target.paths,
+        sourceHomeDir: options.homeDir,
+        executablePath: target.health.executablePath,
+        excludeMcp,
+        platform,
+        environment
+      })
+    ]);
+    for (const availability of [currentAvailability, proposedAvailability]) {
+      if (!availability.available) {
+        throw new Error(availability.reason ?? `${adapter.descriptor.name} comparison is unavailable`);
+      }
+    }
+    const [currentResources, proposedResources] = await Promise.all([
+      summarizeResources(currentProfile, adapter, target.paths, librarySkills, currentAvailability),
+      summarizeResources(profile, adapter, target.paths, librarySkills, proposedAvailability)
+    ]);
+    const fidelity = worstFidelity(currentAvailability.fidelity, proposedAvailability.fidelity);
+    const warnings = [...new Set([
+      ...workspaceSnapshot.warnings,
+      ...currentAvailability.warnings,
+      ...proposedAvailability.warnings
+    ])];
     const value: OneShotEvaluationPreview = {
       previewId: randomUUID(),
       profileId: profile.id,
@@ -249,29 +334,16 @@ export const createEvaluationService = (
       profileContentHash: targetHashFor(profile, input.targetId),
       targetId: input.targetId,
       targetName: adapter.descriptor.name,
-      cliVersion: availability.cliVersion,
-      projectPath: project.projectPath,
-      projectRevision: project.revision,
-      projectHasUncommittedChanges: project.hasUncommittedChanges,
-      resources: {
-        instructions: {
-          mode: instructionsMode,
-          includedCount: instructionsIncluded
-        },
-        skills: {
-          mode: skillsMode,
-          includedCount: skillsIncluded,
-          omittedCount: skillsOmitted
-        },
-        mcp: {
-          mode: mcpMode,
-          includedCount: availability.mcpIncludedCount,
-          omittedCount: availability.mcpOmittedCount
-        }
-      },
-      fidelity: availability.fidelity,
-      requiresMcpExclusion: availability.requiresMcpExclusion,
-      warnings: [...new Set(warnings)],
+      cliVersion: proposedAvailability.cliVersion ?? currentAvailability.cliVersion,
+      workspace: workspaceSnapshot.summary,
+      runsRequired: 2,
+      baselineSource: "fresh-run",
+      currentResources,
+      proposedResources,
+      fidelity,
+      requiresMcpExclusion:
+        currentAvailability.requiresMcpExclusion || proposedAvailability.requiresMcpExclusion,
+      warnings,
       createdAt: new Date().toISOString()
     };
     previews.set(value.previewId, {
@@ -279,7 +351,7 @@ export const createEvaluationService = (
       profileHash: value.profileContentHash,
       skillFingerprint: skillFingerprint(profile, librarySkills),
       targetFingerprint: await targetFingerprint(target.paths),
-      project,
+      workspace: workspaceSnapshot,
       sourceTargetPaths: target.paths,
       executablePath: target.health.executablePath,
       excludeMcp,
@@ -293,53 +365,52 @@ export const createEvaluationService = (
     activeRun.value = { ...activeRun.value, ...patch };
   };
 
-  const execute = async (
+  const verifyInputs = async (
+    storedPreview: StoredPreview,
+    profile: ProfileDetail,
+    librarySkills: SkillLibraryEntry[]
+  ) => {
+    const [latestWorkspace, latestTargetFingerprint] = await Promise.all([
+      (await getWorkspace()).inspectWorkspace(storedPreview.workspace.input),
+      targetFingerprint(storedPreview.sourceTargetPaths)
+    ]);
+    if (targetHashFor(profile, storedPreview.value.targetId) !== storedPreview.profileHash) {
+      throw new Error("Profile changed after comparison Preview. Review it again.");
+    }
+    if (skillFingerprint(profile, librarySkills) !== storedPreview.skillFingerprint) {
+      throw new Error("Profile Skills changed after comparison Preview. Review it again.");
+    }
+    if (latestWorkspace.summary.contentHash !== storedPreview.workspace.summary.contentHash) {
+      throw new Error("Workspace changed after comparison Preview. Review it again.");
+    }
+    if (latestTargetFingerprint !== storedPreview.targetFingerprint) {
+      throw new Error("Agent resources changed after comparison Preview. Review it again.");
+    }
+  };
+
+  const runSide = async (
+    environment: "current" | "proposed",
     run: ActiveRun,
     storedPreview: StoredPreview,
+    profile: ProfileDetail,
+    prepared: PreparedEvaluationWorkspace,
     prompt: string
-  ) => {
+  ): Promise<OneShotEvaluationSideResult> => {
     const adapter = options.targetRegistry.get(storedPreview.value.targetId);
-    const evaluationCapability = adapter.evaluations!;
-    const started = Date.parse(run.value.startedAt);
+    const capability = adapter.evaluations!;
+    const startedAt = new Date().toISOString();
     const responses: string[] = [];
     const eventErrors: string[] = [];
     let usage: OneShotEvaluationUsage = {};
     let model: string | undefined;
-    let processExitCode: number | undefined;
-    let terminalError: string | undefined;
-    let terminalStatus: OneShotEvaluationRun["status"] = "failed-to-run";
-    let changes = { diff: "", fileDiffs: [], changedFiles: [] } as Awaited<ReturnType<EvaluationWorkspace["readChanges"]>>;
+    let exitCode: number | undefined;
+    let changes = emptyChanges();
     let launchWarnings: string[] = [];
     let cliVersion = storedPreview.value.cliVersion;
     let fidelity = storedPreview.value.fidelity;
-
+    let error: string | undefined;
     try {
-      setRun({ stage: "Creating isolated project snapshot" });
-      const [profile, librarySkills] = await Promise.all([
-        options.profileStore.readProfile(storedPreview.value.profileId),
-        options.skillLibraryStore.listSkills()
-      ]);
-      if (targetHashFor(profile, storedPreview.value.targetId) !== storedPreview.profileHash) {
-        throw new Error("Profile changed after evaluation preview. Review it again.");
-      }
-      if (skillFingerprint(profile, librarySkills) !== storedPreview.skillFingerprint) {
-        throw new Error("Profile Skills changed after evaluation preview. Review it again.");
-      }
-      const prepared = await (await getWorkspace()).prepare({
-        adapter,
-        profile,
-        librarySkills,
-        project: storedPreview.project,
-        sourceTargetPaths: storedPreview.sourceTargetPaths,
-        platform,
-        signal: run.controller.signal
-      });
-      run.workspace = prepared;
-      if (run.controller.signal.aborted) {
-        throw new EvaluationProcessError("cancelled", "Evaluation was cancelled");
-      }
-      setRun({ stage: "Materializing Profile resources" });
-      const launchSpec = await evaluationCapability.createLaunchSpec({
+      const launchSpec = await capability.createLaunchSpec({
         profile,
         targetPaths: storedPreview.sourceTargetPaths,
         sourceHomeDir: options.homeDir,
@@ -347,7 +418,7 @@ export const createEvaluationService = (
         knownCliVersion: storedPreview.value.cliVersion,
         excludeMcp: storedPreview.excludeMcp,
         platform,
-        environment,
+        environment: options.environment ?? process.env,
         evaluationHome: prepared.home,
         evaluationProject: prepared.project,
         evaluationTargetPaths: prepared.resources.targetPaths,
@@ -357,32 +428,27 @@ export const createEvaluationService = (
       launchWarnings = launchSpec.warnings;
       cliVersion = launchSpec.cliVersion ?? cliVersion;
       fidelity = launchSpec.fidelity;
-      setRun({ stage: "Verifying immutable inputs" });
-      const [latestProfile, latestSkills, latestProject, latestTargetFingerprint] = await Promise.all([
-        options.profileStore.readProfile(storedPreview.value.profileId),
-        options.skillLibraryStore.listSkills(),
-        (await getWorkspace()).inspectProject(storedPreview.value.projectPath),
-        targetFingerprint(storedPreview.sourceTargetPaths)
-      ]);
-      if (targetHashFor(latestProfile, storedPreview.value.targetId) !== storedPreview.profileHash) {
-        throw new Error("Profile changed while the evaluation was prepared. Review it again.");
+      if (run.controller.signal.aborted) {
+        throw new EvaluationProcessError("cancelled", "Comparison was cancelled");
       }
-      if (skillFingerprint(latestProfile, latestSkills) !== storedPreview.skillFingerprint) {
-        throw new Error("Profile Skills changed while the evaluation was prepared. Review it again.");
-      }
-      if (
-        latestProject.revision !== storedPreview.project.revision ||
-        latestProject.worktreeFingerprint !== storedPreview.project.worktreeFingerprint
-      ) {
-        throw new Error("Project changed while the evaluation was prepared. Review it again.");
-      }
-      if (latestTargetFingerprint !== storedPreview.targetFingerprint) {
-        throw new Error("Agent resources changed while the evaluation was prepared. Review it again.");
-      }
-      setRun({ status: "running", stage: "Running", canCancel: true });
+      setRun({
+        status: "running",
+        stage: environment === "current" ? "Running current setup" : "Running proposed Profile",
+        canCancel: true
+      });
       const processResult = await options.processRunner.run(
-        launchSpec,
-        evaluationCapability.parseEvent,
+        {
+          ...launchSpec,
+          readDeniedRoots: [...new Set([
+            ...(launchSpec.readDeniedRoots ?? []),
+            options.homeDir,
+            ...protectedTargetPaths(storedPreview.sourceTargetPaths),
+            ...(storedPreview.workspace.input.kind === "folder"
+              ? [storedPreview.workspace.input.path]
+              : [])
+          ])]
+        },
+        capability.parseEvent,
         {
           signal: run.controller.signal,
           onEvent: (event) => {
@@ -390,103 +456,209 @@ export const createEvaluationService = (
             else if (event.type === "usage") {
               usage = addUsage(usage, event.usage);
               model = event.model ?? model;
-            } else if (event.type === "error") {
-              eventErrors.push(event.message);
-            }
+            } else if (event.type === "error") eventErrors.push(event.message);
           }
         }
       );
-      processExitCode = processResult.exitCode;
-      setRun({ stage: "Collecting response and file changes", canCancel: false });
+      exitCode = processResult.exitCode;
       changes = await (await getWorkspace()).readChanges(prepared);
       await (await getWorkspace()).verifyOriginals(prepared);
       if (processResult.exitCode !== 0 || eventErrors.length > 0) {
-        terminalError = eventErrors[0] || processResult.stderr ||
+        error = eventErrors[0] || processResult.stderr ||
           `${adapter.descriptor.name} exited with code ${processResult.exitCode}`;
-        terminalStatus = "failed-to-run";
-      } else {
-        terminalStatus = "completed";
       }
+    } catch (runError) {
+      if (
+        run.controller.signal.aborted ||
+        (runError instanceof EvaluationProcessError && runError.reason === "cancelled")
+      ) {
+        throw new EvaluationProcessError("cancelled", "Comparison was cancelled");
+      }
+      error = runError instanceof Error ? runError.message : String(runError);
+      try {
+        changes = await (await getWorkspace()).readChanges(prepared);
+        await (await getWorkspace()).verifyOriginals(prepared);
+      } catch (verificationError) {
+        error = `${error}. ${verificationError instanceof Error
+          ? verificationError.message
+          : String(verificationError)}`;
+      }
+    }
+    const completedAt = new Date().toISOString();
+    return {
+      environment,
+      environmentContentHash: prepared.resources.environmentContentHash,
+      skillContentHashes: prepared.resources.skillContentHashes,
+      cliVersion,
+      model,
+      startedAt,
+      completedAt,
+      durationMs: Math.max(0, Date.parse(completedAt) - Date.parse(startedAt)),
+      exitCode,
+      finalResponse: responses.join(""),
+      ...changes,
+      usage: Object.values(usage).some((value) => value !== undefined) ? usage : undefined,
+      fidelity,
+      warnings: [...new Set([
+        ...prepared.resources.warnings,
+        ...launchWarnings
+      ])],
+      ...(error ? { error: redactSensitiveValues(error) } : {})
+    };
+  };
+
+  const execute = async (
+    run: ActiveRun,
+    storedPreview: StoredPreview,
+    prompt: string
+  ) => {
+    const started = Date.parse(run.value.startedAt);
+    let current = emptySideResult("current", run.value.startedAt, "Current setup was not run", storedPreview.value.fidelity);
+    let proposed = emptySideResult("proposed", run.value.startedAt, "Proposed Profile was not run", storedPreview.value.fidelity);
+    let delta: OneShotEvaluationDelta = emptyChanges();
+    let terminalStatus: OneShotEvaluationRun["status"] = "failed-to-run";
+    let terminalError: string | undefined;
+    try {
+      setRun({ stage: "Creating isolated Workspace snapshots" });
+      const [profile, librarySkills] = await Promise.all([
+        options.profileStore.readProfile(storedPreview.value.profileId),
+        options.skillLibraryStore.listSkills()
+      ]);
+      await verifyInputs(storedPreview, profile, librarySkills);
+      const currentProfile = currentEnvironmentProfile(profile, storedPreview.value.targetId);
+      const currentWorkspace = await (await getWorkspace()).prepare({
+        adapter: options.targetRegistry.get(storedPreview.value.targetId),
+        profile: currentProfile,
+        librarySkills,
+        workspace: storedPreview.workspace,
+        sourceTargetPaths: storedPreview.sourceTargetPaths,
+        platform,
+        signal: run.controller.signal
+      });
+      run.workspaces.push(currentWorkspace);
+      const proposedWorkspace = await (await getWorkspace()).prepare({
+        adapter: options.targetRegistry.get(storedPreview.value.targetId),
+        profile,
+        librarySkills,
+        workspace: storedPreview.workspace,
+        sourceTargetPaths: storedPreview.sourceTargetPaths,
+        platform,
+        signal: run.controller.signal
+      });
+      run.workspaces.push(proposedWorkspace);
+      await verifyInputs(storedPreview, profile, librarySkills);
+      current = await runSide(
+        "current",
+        run,
+        storedPreview,
+        currentProfile,
+        currentWorkspace,
+        prompt
+      );
+      await verifyInputs(storedPreview, profile, librarySkills);
+      proposed = await runSide(
+        "proposed",
+        run,
+        storedPreview,
+        profile,
+        proposedWorkspace,
+        prompt
+      );
+      setRun({ stage: "Comparing results", canCancel: false });
+      delta = await (await getWorkspace()).compareOutputs(currentWorkspace, proposedWorkspace);
+      await Promise.all([
+        (await getWorkspace()).verifyOriginals(currentWorkspace),
+        (await getWorkspace()).verifyOriginals(proposedWorkspace)
+      ]);
+      terminalStatus = current.error || proposed.error ? "incomplete" : "completed";
     } catch (error) {
       if (
         run.controller.signal.aborted ||
         (error instanceof EvaluationProcessError && error.reason === "cancelled")
       ) {
         terminalStatus = "cancelled";
-        terminalError = "Evaluation was cancelled";
+        terminalError = "Comparison was cancelled";
       } else {
         terminalStatus = "failed-to-run";
         terminalError = error instanceof Error ? error.message : String(error);
       }
-      if (run.workspace) {
-        try {
-          changes = await (await getWorkspace()).readChanges(run.workspace);
-          await (await getWorkspace()).verifyOriginals(run.workspace);
-        } catch (verificationError) {
-          terminalError = `${terminalError ?? "Evaluation failed"}. ${
-            verificationError instanceof Error ? verificationError.message : String(verificationError)
-          }`;
-        }
-      }
     }
 
-    if (run.workspace) {
-      setRun({ stage: "Removing temporary evaluation workspace", canCancel: false });
+    setRun({ stage: "Removing temporary comparison workspaces", canCancel: false });
+    const cleanupErrors: string[] = [];
+    for (const prepared of run.workspaces) {
       try {
-        await (await getWorkspace()).cleanup(run.workspace);
+        await (await getWorkspace()).cleanup(prepared);
       } catch (cleanupError) {
-        terminalStatus = "failed-to-run";
-        const message = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
-        terminalError = terminalError
-          ? `${terminalError}. Temporary workspace cleanup failed: ${message}`
-          : `Temporary workspace cleanup failed: ${message}`;
+        cleanupErrors.push(cleanupError instanceof Error ? cleanupError.message : String(cleanupError));
       }
+    }
+    if (cleanupErrors.length > 0) {
+      terminalStatus = "failed-to-run";
+      terminalError = [terminalError, `Temporary workspace cleanup failed: ${cleanupErrors.join("; ")}`]
+        .filter(Boolean)
+        .join(". ");
     }
 
     const completedAt = new Date().toISOString();
+    const comparisonSignature = createHash("sha256").update(JSON.stringify({
+      profileHash: storedPreview.profileHash,
+      targetFingerprint: storedPreview.targetFingerprint,
+      workspaceHash: storedPreview.workspace.summary.contentHash,
+      prompt,
+      currentEnvironment: current.environmentContentHash,
+      proposedEnvironment: proposed.environmentContentHash,
+      currentCli: current.cliVersion ?? null,
+      proposedCli: proposed.cliVersion ?? null
+    })).digest("hex");
     const result: OneShotEvaluationResult = {
       runId: run.value.runId,
       profileId: storedPreview.value.profileId,
       profileName: storedPreview.value.profileName,
       profileContentHash: storedPreview.value.profileContentHash,
-      skillContentHashes: run.workspace?.resources.skillContentHashes ?? {},
+      skillContentHashes: proposed.skillContentHashes,
       targetId: storedPreview.value.targetId,
       targetName: storedPreview.value.targetName,
-      projectPath: storedPreview.value.projectPath,
-      projectRevision: storedPreview.value.projectRevision,
-      cliVersion,
-      model,
+      workspace: storedPreview.value.workspace,
       prompt,
       startedAt: run.value.startedAt,
       completedAt,
       durationMs: Math.max(0, Date.parse(completedAt) - started),
-      exitCode: processExitCode,
-      finalResponse: responses.join(""),
-      diff: changes.diff,
-      fileDiffs: changes.fileDiffs,
-      changedFiles: changes.changedFiles,
-      usage: Object.values(usage).some((value) => value !== undefined) ? usage : undefined,
-      fidelity,
+      current,
+      proposed,
+      delta,
+      baselineSource: "fresh-run",
+      comparisonSignature,
+      fidelity: worstFidelity(current.fidelity, proposed.fidelity),
       warnings: [...new Set([
         ...storedPreview.value.warnings,
-        ...(run.workspace?.resources.warnings ?? []),
-        ...launchWarnings
+        ...current.warnings,
+        ...proposed.warnings
       ])],
       ...(terminalError ? { error: redactSensitiveValues(terminalError) } : {})
     };
     try {
-      const stored = await options.resultStore.saveLatest(result, {
-        privatePaths: run.workspace
-          ? [run.workspace.root, run.workspace.home, run.workspace.project, run.workspace.temp]
-          : []
-      });
+      const privatePaths = run.workspaces.flatMap((prepared) => [
+        prepared.root,
+        prepared.home,
+        prepared.baseline,
+        prepared.project,
+        prepared.temp
+      ]);
+      privatePaths.push(
+        options.homeDir,
+        ...protectedTargetPaths(storedPreview.sourceTargetPaths)
+      );
+      const stored = await options.resultStore.saveLatest(result, { privatePaths });
       setRun({
         status: terminalStatus,
         stage: terminalStatus === "completed"
-          ? "Evaluation completed"
-          : terminalStatus === "cancelled"
-            ? "Evaluation cancelled"
-            : "Evaluation failed to run",
+          ? "Comparison completed"
+          : terminalStatus === "incomplete"
+            ? "Comparison incomplete"
+            : terminalStatus === "cancelled"
+              ? "Comparison cancelled"
+              : "Comparison failed to run",
         canCancel: false,
         result: stored,
         error: stored.error
@@ -494,7 +666,7 @@ export const createEvaluationService = (
     } catch (storeError) {
       setRun({
         status: "failed-to-run",
-        stage: "Evaluation report could not be saved",
+        stage: "Comparison report could not be saved",
         canCancel: false,
         error: storeError instanceof Error ? storeError.message : String(storeError)
       });
@@ -502,59 +674,40 @@ export const createEvaluationService = (
   };
 
   const start = async (input: OneShotEvaluationStartInput): Promise<OneShotEvaluationRun> => {
-    if (disposed) throw new Error("Evaluation service is shutting down");
+    if (disposed) throw new Error("Comparison service is shutting down");
     if (startInProgress || (activeRun && oneShotEvaluationIsActive(activeRun.value.status))) {
-      throw new Error("Another evaluation is already running");
+      throw new Error("Another comparison is already running");
     }
     startInProgress = true;
     try {
       const storedPreview = previews.get(input.previewId);
       if (!storedPreview || Date.now() - storedPreview.createdAtMs > PREVIEW_TTL_MS) {
-        throw new Error("Evaluation preview expired. Review the project and Profile again.");
+        throw new Error("Comparison Preview expired. Review the Workspace and Profile again.");
       }
       if (storedPreview.value.requiresMcpExclusion) {
-        throw new Error("Exclude unsafe or unavailable MCP settings before running this evaluation");
+        throw new Error("Exclude unsafe or unavailable MCP settings before running this comparison");
       }
       const prompt = input.prompt.trim();
-      if (!prompt) throw new Error("Enter a task for this evaluation");
-      if (prompt.length > MAX_PROMPT_LENGTH) throw new Error("Evaluation task is too long");
-      const [profile, librarySkills, currentProject, currentTargetFingerprint] = await Promise.all([
+      if (!prompt) throw new Error("Enter a task for this comparison");
+      if (prompt.length > MAX_PROMPT_LENGTH) throw new Error("Comparison task is too long");
+      const [profile, librarySkills] = await Promise.all([
         options.profileStore.readProfile(storedPreview.value.profileId),
-        options.skillLibraryStore.listSkills(),
-        (await getWorkspace()).inspectProject(storedPreview.value.projectPath),
-        targetFingerprint(storedPreview.sourceTargetPaths)
+        options.skillLibraryStore.listSkills()
       ]);
-      if (targetHashFor(profile, storedPreview.value.targetId) !== storedPreview.profileHash) {
-        throw new Error("Profile changed after evaluation preview. Review it again.");
-      }
-      if (skillFingerprint(profile, librarySkills) !== storedPreview.skillFingerprint) {
-        throw new Error("Profile Skills changed after evaluation preview. Review it again.");
-      }
-      if (
-        currentProject.revision !== storedPreview.project.revision ||
-        currentProject.worktreeFingerprint !== storedPreview.project.worktreeFingerprint
-      ) {
-        throw new Error("Project changed after evaluation preview. Review it again.");
-      }
-      if (currentTargetFingerprint !== storedPreview.targetFingerprint) {
-        throw new Error("Agent resources changed after evaluation preview. Review it again.");
-      }
-      if (disposed) throw new Error("Evaluation service is shutting down");
-
+      await verifyInputs(storedPreview, profile, librarySkills);
       const value: OneShotEvaluationRun = {
         runId: randomUUID(),
         profileId: storedPreview.value.profileId,
         profileName: storedPreview.value.profileName,
         targetId: storedPreview.value.targetId,
         targetName: storedPreview.value.targetName,
-        projectPath: storedPreview.value.projectPath,
-        projectRevision: storedPreview.value.projectRevision,
+        workspace: storedPreview.value.workspace,
         status: "preparing",
-        stage: "Preparing isolated evaluation",
+        stage: "Preparing isolated comparison",
         startedAt: new Date().toISOString(),
         canCancel: true
       };
-      activeRun = { value, controller: new AbortController() };
+      activeRun = { value, controller: new AbortController(), workspaces: [] };
       void execute(activeRun, storedPreview, prompt);
       return { ...value };
     } finally {
@@ -577,14 +730,15 @@ export const createEvaluationService = (
       profileName: result.profileName,
       targetId: result.targetId,
       targetName: result.targetName,
-      projectPath: result.projectPath,
-      projectRevision: result.projectRevision,
+      workspace: result.workspace,
       status,
       stage: status === "completed"
-        ? "Evaluation completed"
-        : status === "cancelled"
-          ? "Evaluation cancelled"
-          : "Evaluation failed to run",
+        ? "Comparison completed"
+        : status === "incomplete"
+          ? "Comparison incomplete"
+          : status === "cancelled"
+            ? "Comparison cancelled"
+            : "Comparison failed to run",
       startedAt: result.startedAt,
       canCancel: false,
       result,
@@ -594,10 +748,19 @@ export const createEvaluationService = (
 
   const cancel = async (runId: string): Promise<OneShotEvaluationRun> => {
     if (!activeRun || activeRun.value.runId !== runId) {
-      throw new Error("Evaluation run was not found");
+      throw new Error("Comparison run was not found");
     }
     if (!oneShotEvaluationIsActive(activeRun.value.status)) return { ...activeRun.value };
-    setRun({ status: "cancelling", stage: "Cancelling evaluation", canCancel: false });
+    const activeStage = activeRun.value.stage.toLowerCase();
+    setRun({
+      status: "cancelling",
+      stage: activeStage.includes("current")
+        ? "Cancelling current setup"
+        : activeStage.includes("proposed")
+          ? "Cancelling proposed Profile"
+          : "Cancelling comparison",
+      canCancel: false
+    });
     activeRun.controller.abort();
     options.processRunner.cancelActive();
     return { ...activeRun.value };

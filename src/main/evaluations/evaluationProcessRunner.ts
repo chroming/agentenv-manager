@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { realpath } from "node:fs/promises";
-import { isAbsolute, relative, sep } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { EvaluationEvent, EvaluationLaunchSpec } from "../targets/types";
 
 export type EvaluationProcessStopReason =
@@ -78,11 +78,22 @@ const terminateProcess = (
   child.kill(signal);
 };
 
-const seatbeltProfile = (writableRoot: string) => [
-  "(version 1)",
-  "(allow default)",
-  `(deny file-write* (require-not (subpath ${JSON.stringify(writableRoot)})))`
-].join(" ");
+const seatbeltProfile = (
+  writableRoot: string,
+  readDeniedRoots: readonly string[],
+  runtimeReadRoots: readonly string[]
+) => {
+  const readExceptions = [writableRoot, ...runtimeReadRoots]
+    .map((path) => `(require-not (subpath ${JSON.stringify(path)}))`)
+    .join(" ");
+  return [
+    "(version 1)",
+    "(allow default)",
+    `(deny file-write* (require-not (subpath ${JSON.stringify(writableRoot)})))`,
+    ...readDeniedRoots.map((path) =>
+      `(deny file-read* (require-all (subpath ${JSON.stringify(path)}) ${readExceptions}))`)
+  ].join(" ");
+};
 
 const isWithin = (root: string, candidate: string) => {
   const path = relative(root, candidate);
@@ -114,7 +125,7 @@ export const createEvaluationProcessRunner = (
     if (platform !== "darwin") {
       return {
         available: false,
-        reason: "One-shot evaluation currently requires the macOS process sandbox"
+        reason: "Isolated Profile comparison currently requires the macOS process sandbox"
       };
     }
     if (!sandboxExecutablePath.startsWith("/") || !existsSync(sandboxExecutablePath)) {
@@ -132,25 +143,26 @@ export const createEvaluationProcessRunner = (
     runOptions = {}
   ) => {
     if (disposed) {
-      throw new EvaluationProcessError("launch-failed", "Evaluation runner is shutting down");
+      throw new EvaluationProcessError("launch-failed", "Comparison runner is shutting down");
     }
     const isolation = isolationAvailability();
     if (!isolation.available) {
-      throw new EvaluationProcessError("launch-failed", isolation.reason ?? "Evaluation isolation is unavailable");
+      throw new EvaluationProcessError("launch-failed", isolation.reason ?? "Comparison isolation is unavailable");
     }
     if (runOptions.signal?.aborted) {
-      throw new EvaluationProcessError("cancelled", "Evaluation was cancelled");
+      throw new EvaluationProcessError("cancelled", "Comparison was cancelled");
     }
 
     if (!isAbsolute(spec.executablePath)) {
-      throw new EvaluationProcessError("launch-failed", "Evaluation command must use an absolute path");
+      throw new EvaluationProcessError("launch-failed", "Comparison command must use an absolute path");
     }
-    const [writableRoot, cwd] = await Promise.all([
+    const [writableRoot, cwd, executablePath] = await Promise.all([
       realpath(spec.writableRoot),
-      realpath(spec.cwd)
+      realpath(spec.cwd),
+      realpath(spec.executablePath)
     ]);
     if (!isWithin(writableRoot, cwd)) {
-      throw new EvaluationProcessError("launch-failed", "Evaluation working directory is outside its isolated workspace");
+      throw new EvaluationProcessError("launch-failed", "Comparison working directory is outside its isolated workspace");
     }
     const childEnvironment = { ...spec.env };
     for (const key of spec.envToDelete ?? []) delete childEnvironment[key];
@@ -161,10 +173,23 @@ export const createEvaluationProcessRunner = (
       if (!canonicalValue || !isWithin(writableRoot, canonicalValue)) {
         throw new EvaluationProcessError(
           "launch-failed",
-          `Evaluation ${key} is outside its isolated workspace`
+          `Comparison ${key} is outside its isolated workspace`
         );
       }
     }
+    const canonicalizeRoots = async (paths: readonly string[]) => [...new Set(await Promise.all(
+      paths.map(async (path) => {
+        if (!isAbsolute(path)) {
+          throw new EvaluationProcessError("launch-failed", "Comparison isolation paths must be absolute");
+        }
+        return realpath(path).catch(() => resolve(path));
+      })
+    ))];
+    const readDeniedRoots = await canonicalizeRoots(spec.readDeniedRoots ?? []);
+    const runtimeReadRoots = await canonicalizeRoots([
+      executablePath,
+      ...(spec.runtimeReadRoots ?? [])
+    ]);
     return new Promise<EvaluationProcessResult>((resolve, reject) => {
       const timeoutMs = runOptions.timeoutMs ?? options.defaultTimeoutMs ?? 30 * 60 * 1_000;
       const maxOutputBytes = options.maxOutputBytes ?? 16 * 1024 * 1024;
@@ -202,7 +227,12 @@ export const createEvaluationProcessRunner = (
       try {
         child = spawn(
           sandboxExecutablePath,
-          ["-p", seatbeltProfile(writableRoot), spec.executablePath, ...spec.args],
+          [
+            "-p",
+            seatbeltProfile(writableRoot, readDeniedRoots, runtimeReadRoots),
+            spec.executablePath,
+            ...spec.args
+          ],
           {
             cwd,
             env: childEnvironment,
@@ -265,15 +295,15 @@ export const createEvaluationProcessRunner = (
         emitLines(true);
         cleanup();
         if (stopReason === "cancelled") {
-          reject(new EvaluationProcessError("cancelled", "Evaluation was cancelled"));
+          reject(new EvaluationProcessError("cancelled", "Comparison was cancelled"));
           return;
         }
         if (stopReason === "timed-out") {
-          reject(new EvaluationProcessError("timed-out", `Evaluation timed out after ${timeoutMs} ms`));
+          reject(new EvaluationProcessError("timed-out", `Comparison timed out after ${timeoutMs} ms`));
           return;
         }
         if (stopReason === "output-limit") {
-          reject(new EvaluationProcessError("output-limit", "Evaluation produced too much output"));
+          reject(new EvaluationProcessError("output-limit", "Comparison produced too much output"));
           return;
         }
         if (spawnError) {

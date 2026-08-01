@@ -2,11 +2,10 @@ import {
   AlertTriangle,
   Check,
   CheckCircle2,
-  Clock3,
+  Columns2,
   Copy,
   Expand,
   FileDiff,
-  FlaskConical,
   FolderOpen,
   LoaderCircle,
   RotateCcw,
@@ -22,32 +21,32 @@ import {
   type RefObject
 } from "react";
 import type {
+  OneShotEvaluationFileDiff,
   OneShotEvaluationPreview,
   OneShotEvaluationRun,
-  PlannedFileChange,
-  ProfileDetail,
-  TargetInfo
-} from "../../shared/types";
-import {
-  oneShotEvaluationIsActive,
-  type OneShotEvaluationResourceScope
+  OneShotEvaluationSideResult,
+  OneShotEvaluationWorkspaceInput
 } from "../../shared/evaluations";
+import { oneShotEvaluationIsActive } from "../../shared/evaluations";
+import type { PlannedFileChange, ProfileDetail, TargetInfo } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
+import { ConversationMarkdown } from "./ConversationMarkdown";
 import { DiffViewer } from "./DiffViewer";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
-import { ConversationMarkdown } from "./ConversationMarkdown";
 import { Button, IconButton, ModalFrame } from "./ui";
 
 interface ProfileEvaluationDialogProps {
   open: boolean;
   profile: ProfileDetail;
-  targets: TargetInfo[];
+  target: TargetInfo;
   returnFocusRef?: RefObject<HTMLElement | null>;
   onClose(): void;
+  onReviewApply?(): void;
 }
 
-type ResultTab = "response" | "changes" | "details";
+type ResultTab = "overview" | "responses" | "changes" | "details";
+type ChangeScope = "delta" | "current" | "proposed";
 
 const modeLabel = (mode: string) =>
   mode === "manage" ? "Use Profile" : mode === "disable" ? "Turn off" : "Keep current";
@@ -56,27 +55,28 @@ const statusLabel = (status: OneShotEvaluationRun["status"]) => ({
   preparing: "Preparing",
   running: "Running",
   cancelling: "Cancelling",
-  completed: "Completed",
+  completed: "Comparison completed",
+  incomplete: "Comparison incomplete",
   "failed-to-run": "Failed to run",
   cancelled: "Cancelled"
 })[status];
-
-const resultTabLabel = (tab: ResultTab) => ({
-  response: "Response",
-  changes: "Changes",
-  details: "Run details"
-})[tab];
 
 const formatDuration = (milliseconds: number) => {
   if (milliseconds > 0 && milliseconds < 1_000) return "<1s";
   const seconds = Math.max(0, Math.round(milliseconds / 1_000));
   if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  return `${minutes}m ${seconds % 60}s`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 };
 
-const resultChanges = (run: OneShotEvaluationRun | undefined): PlannedFileChange[] =>
-  (run?.result?.fileDiffs ?? []).map((change) => ({
+const formatBytes = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+};
+
+const toPlannedChanges = (changes: OneShotEvaluationFileDiff[]): PlannedFileChange[] =>
+  changes.map((change) => ({
     path: change.path,
     before: "",
     after: "",
@@ -84,39 +84,45 @@ const resultChanges = (run: OneShotEvaluationRun | undefined): PlannedFileChange
     action: change.action === "remove" ? "remove" : "write"
   }));
 
+const totalTokens = (side: OneShotEvaluationSideResult) => {
+  if (side.usage?.totalTokens !== undefined) return side.usage.totalTokens;
+  if (side.usage?.inputTokens === undefined && side.usage?.outputTokens === undefined) return undefined;
+  return (side.usage.inputTokens ?? 0) + (side.usage.outputTokens ?? 0);
+};
+
 export const ProfileEvaluationDialog = ({
   open,
   profile,
-  targets,
+  target,
   returnFocusRef,
-  onClose
+  onClose,
+  onReviewApply
 }: ProfileEvaluationDialogProps) => {
   const { formatDate, formatNumber, t } = useI18n();
   const dialogRef = useRef<HTMLElement>(null);
   const initialFocusRef = useRef<HTMLButtonElement>(null);
-  const [targetId, setTargetId] = useState("");
-  const [projectPath, setProjectPath] = useState("");
+  const [workspaceInput, setWorkspaceInput] = useState<OneShotEvaluationWorkspaceInput>({
+    kind: "empty"
+  });
   const [prompt, setPrompt] = useState("");
   const [preview, setPreview] = useState<OneShotEvaluationPreview>();
   const [previewing, setPreviewing] = useState(false);
-  const [reviewingSource, setReviewingSource] = useState<"project" | "environment">("project");
   const [starting, setStarting] = useState(false);
   const [run, setRun] = useState<OneShotEvaluationRun>();
-  const [restoredRun, setRestoredRun] = useState(false);
-  const [responseCopied, setResponseCopied] = useState(false);
   const [error, setError] = useState("");
-  const [resultTab, setResultTab] = useState<ResultTab>("response");
+  const [resultTab, setResultTab] = useState<ResultTab>("overview");
+  const [changeScope, setChangeScope] = useState<ChangeScope>("delta");
   const [selectedDiffPath, setSelectedDiffPath] = useState("");
   const [diffWorkspaceOpen, setDiffWorkspaceOpen] = useState(false);
-  const supportedTargets = useMemo(
-    () => targets.filter((target) => target.capabilities.evaluation && target.health.executablePath),
-    [targets]
-  );
+  const [copiedSide, setCopiedSide] = useState<"current" | "proposed">();
   const active = Boolean(run && oneShotEvaluationIsActive(run.status));
   const locked = active || starting;
-  const changes = useMemo(() => resultChanges(run), [run]);
-  const selectedChange = changes.find((change) => change.path === selectedDiffPath) ?? changes[0];
-  const openSessionKey = open ? profile.id : "";
+  const result = run?.result;
+  const terminal = Boolean(run && !oneShotEvaluationIsActive(run.status));
+  const activeStage = run?.stage.toLowerCase() ?? "";
+  const currentStageActive = activeStage.includes("current");
+  const proposedStageActive = activeStage.includes("proposed");
+  const resultsStageActive = activeStage === "comparing results" || activeStage.includes("removing");
 
   const dismiss = () => {
     if (!locked) onClose();
@@ -128,125 +134,87 @@ export const ProfileEvaluationDialog = ({
     initialFocusRef,
     fallbackFocusRef: returnFocusRef,
     onDismiss: dismiss,
-    dismissDisabled: locked || diffWorkspaceOpen,
-    focusKey: `${profile.id}:${run?.runId ?? "setup"}`
+    dismissDisabled: locked || diffWorkspaceOpen
   });
 
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    const preferred = supportedTargets.find(
-      (target) => target.id === profile.manifest.preferredTargetId
-    ) ?? supportedTargets[0];
-    setTargetId(preferred?.id ?? "");
-    setProjectPath("");
-    setPrompt("");
-    setPreview(undefined);
-    setPreviewing(false);
-    setReviewingSource("project");
-    setStarting(false);
-    setRun(undefined);
-    setRestoredRun(false);
-    setResponseCopied(false);
-    setError("");
-    setResultTab("response");
-    setSelectedDiffPath("");
-    setDiffWorkspaceOpen(false);
-
-    void window.agentEnv.readEvaluation().then((current) => {
-      if (cancelled || !current || current.profileId !== profile.id) return;
-      setRun(current);
-      setRestoredRun(true);
-      setProjectPath(current.projectPath);
-      if (current.result) {
-        setPrompt(current.result.prompt);
-        setSelectedDiffPath(current.result.fileDiffs[0]?.path ?? "");
-      }
-    }).catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [openSessionKey]);
-
-  useEffect(() => {
-    if (!responseCopied) return undefined;
-    const timer = window.setTimeout(() => setResponseCopied(false), 2_000);
-    return () => window.clearTimeout(timer);
-  }, [responseCopied]);
-
-  useEffect(() => {
-    if (!run || !oneShotEvaluationIsActive(run.status)) return undefined;
-    const timer = window.setInterval(() => {
-      void window.agentEnv.readEvaluation({ runId: run.runId }).then((next) => {
-        if (!next) return;
-        setRun(next);
-        if (next.result?.fileDiffs[0]?.path) {
-          setSelectedDiffPath((current) => current || next.result!.fileDiffs[0]!.path);
-        }
-      }).catch((unknownError) => {
-        setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-      });
-    }, 350);
-    return () => window.clearInterval(timer);
-  }, [run?.runId, run?.status]);
-
-  const reviewProject = async (
-    path: string,
-    nextTargetId = targetId,
-    source: "project" | "environment" = "environment"
-  ) => {
-    if (!path || !nextTargetId) return;
-    setReviewingSource(source);
+  const reviewWorkspace = async (input: OneShotEvaluationWorkspaceInput) => {
     setPreviewing(true);
     setError("");
+    setPreview(undefined);
     try {
-      const next = await window.agentEnv.previewEvaluation({
+      const next = await window.agentEnv.previewProfileComparison({
         profileId: profile.id,
-        targetId: nextTargetId,
-        projectPath: path,
+        targetId: target.id,
+        workspace: input,
         excludeMcp: true
       });
+      setWorkspaceInput(input);
       setPreview(next);
     } catch (unknownError) {
-      setPreview(undefined);
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
       setPreviewing(false);
     }
   };
 
-  const chooseProject = async () => {
+  useEffect(() => {
+    if (!open) return;
+    setWorkspaceInput({ kind: "empty" });
+    setPrompt("");
+    setPreview(undefined);
+    setRun(undefined);
+    setError("");
+    setResultTab("overview");
+    setChangeScope("delta");
+    setSelectedDiffPath("");
+    setCopiedSide(undefined);
+    void reviewWorkspace({ kind: "empty" });
+  }, [open, profile.id, target.id]);
+
+  useEffect(() => {
+    if (!run || !oneShotEvaluationIsActive(run.status)) return undefined;
+    const timer = window.setInterval(() => {
+      void window.agentEnv.readProfileComparison({ runId: run.runId }).then((next) => {
+        if (next) setRun(next);
+      }).catch((unknownError) => {
+        setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      });
+    }, 300);
+    return () => window.clearInterval(timer);
+  }, [run?.runId, run?.status]);
+
+  useEffect(() => {
+    if (!result) return;
+    const selected = changeScope === "current"
+      ? result.current.fileDiffs
+      : changeScope === "proposed"
+        ? result.proposed.fileDiffs
+        : result.delta.fileDiffs;
+    if (!selected.some((change) => change.path === selectedDiffPath)) {
+      setSelectedDiffPath(selected[0]?.path ?? "");
+    }
+  }, [changeScope, result, selectedDiffPath]);
+
+  const chooseFolder = async () => {
     setError("");
     try {
-      const selected = await window.agentEnv.selectEvaluationProject();
-      if (!selected) return;
-      setProjectPath(selected);
-      await reviewProject(selected, targetId, "project");
+      const path = await window.agentEnv.selectComparisonWorkspace();
+      if (path) await reviewWorkspace({ kind: "folder", path });
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     }
   };
 
-  const updateTarget = (nextTargetId: string) => {
-    setTargetId(nextTargetId);
-    setPreview(undefined);
-    setError("");
-    if (projectPath) void reviewProject(projectPath, nextTargetId, "environment");
-  };
-
   const start = async () => {
-    if (!preview) return;
-    setError("");
+    if (!preview || !prompt.trim() || starting) return;
     setStarting(true);
+    setError("");
     try {
-      const next = await window.agentEnv.startEvaluation({
+      setRun(await window.agentEnv.startProfileComparison({
         previewId: preview.previewId,
         prompt
-      });
-      setRestoredRun(false);
-      setRun(next);
+      }));
     } catch (unknownError) {
-      setPreview(undefined);
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
       setStarting(false);
@@ -254,10 +222,9 @@ export const ProfileEvaluationDialog = ({
   };
 
   const cancel = async () => {
-    if (!run) return;
-    setError("");
+    if (!run?.canCancel) return;
     try {
-      setRun(await window.agentEnv.cancelEvaluation(run.runId));
+      setRun(await window.agentEnv.cancelProfileComparison(run.runId));
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     }
@@ -265,40 +232,35 @@ export const ProfileEvaluationDialog = ({
 
   const runAgain = () => {
     setRun(undefined);
-    setResultTab("response");
-    setSelectedDiffPath("");
     setError("");
-    if (projectPath) void reviewProject(projectPath);
+    setResultTab("overview");
+    setChangeScope("delta");
+    setSelectedDiffPath("");
+    void reviewWorkspace(workspaceInput);
   };
 
-  if (!open) return null;
+  const copyResponse = async (side: OneShotEvaluationSideResult) => {
+    try {
+      await window.agentEnv.copyText(side.finalResponse);
+      setCopiedSide(side.environment);
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    }
+  };
 
-  const result = run?.result;
-  const terminal = Boolean(run && !oneShotEvaluationIsActive(run.status));
-  const dialogTitle = terminal
-    ? run?.status === "completed"
-      ? restoredRun ? "Latest evaluation" : "Evaluation completed"
-      : statusLabel(run!.status)
-    : "";
-  const cancelLabel = run?.status === "cancelling" ? "Cancelling" : "Cancel evaluation";
-  const projectName = (result?.projectPath ?? run?.projectPath ?? projectPath)
-    .split(/[\\/]/).filter(Boolean).at(-1) ?? "";
-  const changedFilesLabel = result?.changedFiles.length === 1
-    ? "1 file changed"
-    : "{{count}} files changed";
-  const tokenSummary = result?.usage?.totalTokens !== undefined
-    ? t("{{count}} tokens", { count: formatNumber(result.usage.totalTokens) })
-    : result?.usage?.inputTokens !== undefined || result?.usage?.outputTokens !== undefined
-      ? t("{{input}} in · {{output}} out", {
-          input: result.usage.inputTokens === undefined
-            ? t("Unavailable")
-            : formatNumber(result.usage.inputTokens),
-          output: result.usage.outputTokens === undefined
-            ? t("Unavailable")
-            : formatNumber(result.usage.outputTokens)
-        })
-      : t("Tokens unavailable");
-  const scopeSummary = (scope: OneShotEvaluationResourceScope) =>
+  const changes = useMemo(() => {
+    if (!result) return [];
+    return toPlannedChanges(
+      changeScope === "current"
+        ? result.current.fileDiffs
+        : changeScope === "proposed"
+          ? result.proposed.fileDiffs
+          : result.delta.fileDiffs
+    );
+  }, [changeScope, result]);
+  const selectedChange = changes.find((change) => change.path === selectedDiffPath) ?? changes[0];
+
+  const resourceSummary = (scope: OneShotEvaluationPreview["proposedResources"]["skills"]) =>
     scope.mode === "disable"
       ? t("Turn off")
       : t("{{mode}} · {{count}}", {
@@ -306,38 +268,50 @@ export const ProfileEvaluationDialog = ({
           count: scope.includedCount
         });
 
+  const sideSummary = (side: OneShotEvaluationSideResult) => ({
+    tokens: totalTokens(side),
+    changes: side.changedFiles.length,
+    duration: formatDuration(side.durationMs)
+  });
+
   return (
     <>
       <ModalFrame
-        ariaLabel={t("Evaluate {{name}}", { name: profile.manifest.name })}
-        className="profile-evaluation-dialog ui-dialog-shell"
+        ariaLabel={t("Compare {{name}} on {{target}}", {
+          name: profile.manifest.name,
+          target: target.name
+        })}
+        className="profile-comparison-dialog ui-dialog-shell"
         dialogRef={dialogRef}
         dismissDisabled={locked}
         onDismiss={dismiss}
         suspended={diffWorkspaceOpen}
       >
-        <header className="ui-dialog-header profile-evaluation-dialog__header">
-          <div className="profile-evaluation-dialog__heading-icon" aria-hidden="true">
+        <header className="ui-dialog-header profile-comparison-dialog__header">
+          <div className="profile-comparison-dialog__heading-icon" aria-hidden="true">
             {run?.status === "completed" ? (
               <CheckCircle2 size={19} />
-            ) : run?.status === "failed-to-run" ? (
+            ) : run?.status === "failed-to-run" || run?.status === "incomplete" ? (
               <XCircle size={19} />
             ) : (
-              <FlaskConical size={19} />
+              <Columns2 size={19} />
             )}
           </div>
           <div className="ui-dialog-header__copy">
             <h2 className="ui-dialog-title">
-              {terminal
-                ? t(dialogTitle)
-                : t("Evaluate {{name}}", { name: profile.manifest.name })}
+              {terminal && run
+                ? t(statusLabel(run.status))
+                : t("Compare {{name}} on {{target}}", {
+                    name: profile.manifest.name,
+                    target: target.name
+                  })}
             </h2>
             <p className="ui-dialog-description">
-              {terminal
-                ? t("Review the response, workspace changes, and reported usage.")
-                : active
-                  ? t("The Agent is running only inside a temporary project and Home.")
-                  : t("Uses the Agent account and model quota. External tools, MCPs, and project Agent files are excluded; the real Agent and project stay unchanged.")}
+              {active
+                ? t("Current and proposed setups run only inside separate temporary environments.")
+                : terminal
+                  ? t("Compare the responses and Workspace changes before applying this Profile.")
+                  : t("Runs the current Agent setup and proposed Profile against the same task and Workspace snapshot.")}
             </p>
           </div>
           {!locked ? (
@@ -347,157 +321,185 @@ export const ProfileEvaluationDialog = ({
           ) : null}
         </header>
 
-        <div className="ui-dialog-body profile-evaluation-dialog__body">
+        <div className="ui-dialog-body profile-comparison-dialog__body">
           {!run ? (
-            <div className="profile-evaluation-setup">
-              <div className="profile-evaluation-fields">
-                <label className="profile-evaluation-field">
-                  <span className="profile-evaluation-field__label">{t("Agent")}</span>
-                  {supportedTargets.length <= 1 ? (
-                    <span className="profile-evaluation-static-value">
-                      {supportedTargets[0]?.name ?? t("No supported Agent available")}
-                    </span>
-                  ) : (
-                    <select
-                      value={targetId}
-                      disabled={previewing || starting}
-                      onChange={(event) => updateTarget(event.target.value)}
-                    >
-                      {supportedTargets.map((target) => (
-                        <option key={target.id} value={target.id}>{target.name}</option>
-                      ))}
-                    </select>
-                  )}
-                </label>
-                <div className="profile-evaluation-field">
-                  <span className="profile-evaluation-field__label">{t("Project")}</span>
-                  <Button
-                    ref={initialFocusRef}
-                    className="profile-evaluation-project-button"
-                    busy={previewing && reviewingSource === "project"}
-                    disabled={!targetId || starting}
-                    icon={<FolderOpen size={15} />}
-                    onClick={() => void chooseProject()}
+            <div className="profile-comparison-setup">
+              <div className="profile-comparison-fields">
+                <div className="profile-comparison-field">
+                  <span className="profile-comparison-field__label">{t("Agent")}</span>
+                  <span className="profile-comparison-static-value">{target.name}</span>
+                </div>
+                <div className="profile-comparison-field">
+                  <span className="profile-comparison-field__label">{t("Workspace")}</span>
+                  <div
+                    className="profile-comparison-workspace-choice ui-segmented-control"
+                    role="radiogroup"
+                    aria-label={t("Workspace")}
                   >
-                    {projectPath ? t("Change project") : t("Choose Git project")}
-                  </Button>
-                  {preview ? (
-                    <div className="profile-evaluation-project-meta">
-                      <code title={preview.projectPath}>{preview.projectPath}</code>
-                      <span>{t("Revision {{revision}}", { revision: preview.projectRevision.slice(0, 7) })}</span>
-                    </div>
-                  ) : null}
+                    <button
+                      ref={initialFocusRef}
+                      className={`ui-segmented-control__option${workspaceInput.kind === "empty" ? " is-selected" : ""}`}
+                      type="button"
+                      role="radio"
+                      aria-checked={workspaceInput.kind === "empty"}
+                      disabled={previewing || starting}
+                      onClick={() => void reviewWorkspace({ kind: "empty" })}
+                    >
+                      {t("Empty")}
+                    </button>
+                    <button
+                      className={`ui-segmented-control__option${workspaceInput.kind === "folder" ? " is-selected" : ""}`}
+                      type="button"
+                      role="radio"
+                      aria-checked={workspaceInput.kind === "folder"}
+                      disabled={previewing || starting}
+                      onClick={() => void chooseFolder()}
+                    >
+                      <FolderOpen size={14} />
+                      {workspaceInput.kind === "folder" ? t("Change folder") : t("Local folder")}
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <label className="profile-evaluation-field profile-evaluation-task">
-                <span className="profile-evaluation-field__label">{t("Task")}</span>
+              {preview ? (
+                <div className="profile-comparison-workspace-summary">
+                  <code
+                    data-ui-overflow-detail="true"
+                    title={preview.workspace.path}
+                  >
+                    {preview.workspace.path ?? t("Temporary empty Workspace")}
+                  </code>
+                  <span>
+                    {preview.workspace.kind === "empty"
+                      ? t("No project files")
+                      : t("{{count}} files · {{size}}", {
+                          count: preview.workspace.fileCount,
+                          size: formatBytes(preview.workspace.totalBytes)
+                        })}
+                    {preview.workspace.omittedCount > 0
+                      ? ` · ${t("{{count}} excluded", { count: preview.workspace.omittedCount })}`
+                      : ""}
+                  </span>
+                  {preview.workspace.git ? (
+                    <span>
+                      {preview.workspace.git.branch ?? t("Detached")}
+                      {" · "}{preview.workspace.git.revision.slice(0, 7)}
+                      {preview.workspace.git.hasUncommittedChanges ? ` · ${t("Local changes included")}` : ""}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <label className="profile-comparison-field profile-comparison-task">
+                <span className="profile-comparison-field__label">{t("Task")}</span>
                 <textarea
                   rows={4}
                   value={prompt}
                   disabled={starting}
-                  placeholder={t("Describe the one task this Agent should perform…")}
+                  placeholder={t("Describe the task both setups should perform…")}
                   onChange={(event) => setPrompt(event.target.value)}
                 />
               </label>
 
               {preview ? (
-                <section className="profile-evaluation-environment" aria-label={t("Profile environment")}>
-                  <header>
-                    <div>
-                      <strong>{t("Profile environment")}</strong>
-                      <small>{preview.targetName} · {preview.cliVersion ?? t("Version unavailable")}</small>
-                    </div>
-                    <span className="profile-evaluation-fidelity is-partial">
-                      {t("Restricted Profile")}
-                    </span>
-                  </header>
-                  <div className="profile-evaluation-resource-grid">
-                    <span>
-                      <small>{t("Instructions")}</small>
-                      <strong>{scopeSummary(preview.resources.instructions)}</strong>
-                    </span>
-                    <span>
-                      <small>{t("Skills")}</small>
-                      <strong>{scopeSummary(preview.resources.skills)}</strong>
-                    </span>
-                    <span>
-                      <small>{t("MCP")}</small>
-                      <strong>{preview.resources.mcp.mode === "disable"
-                        ? t("Turn off")
-                        : t("Excluded for safe evaluation · {{count}}", {
-                            count: preview.resources.mcp.omittedCount ?? 0
-                          })}</strong>
-                    </span>
+                <section className="profile-comparison-environments" aria-label={t("Environment comparison") }>
+                  <div className="profile-comparison-environments__header">
+                    <span />
+                    <strong>{t("Current setup")}</strong>
+                    <strong>{t("Proposed Profile")}</strong>
                   </div>
+                  {(["instructions", "skills", "mcp"] as const).map((kind) => (
+                    <div className="profile-comparison-resource-row" key={kind}>
+                      <span>{t(kind === "mcp" ? "MCP" : kind[0].toUpperCase() + kind.slice(1))}</span>
+                      <span>{resourceSummary(preview.currentResources[kind])}</span>
+                      <span>{kind === "mcp" && (preview.proposedResources.mcp.omittedCount ?? 0) > 0
+                        ? t("Excluded · {{count}}", { count: preview.proposedResources.mcp.omittedCount ?? 0 })
+                        : resourceSummary(preview.proposedResources[kind])}</span>
+                    </div>
+                  ))}
                 </section>
               ) : null}
 
-              {previewing && reviewingSource === "environment" ? (
-                <div className="profile-evaluation-reviewing" role="status">
+              {previewing ? (
+                <div className="profile-comparison-reviewing" role="status">
                   <LoaderCircle className="is-spinning" size={15} />
-                  <span>{t("Reviewing Profile environment…")}</span>
+                  <span>{t("Preparing comparison Preview…")}</span>
                 </div>
               ) : null}
 
               {preview?.warnings.length ? (
-                <div className="profile-evaluation-notice">
+                <div className="profile-comparison-notice is-warning">
                   <AlertTriangle size={16} aria-hidden="true" />
-                  <div>
-                    {preview.warnings.map((warning) => <p key={warning}>{t(warning)}</p>)}
-                  </div>
+                  <div>{preview.warnings.map((warning) => <p key={warning}>{t(warning)}</p>)}</div>
+                </div>
+              ) : null}
+
+              {preview ? (
+                <div className="profile-comparison-notice">
+                  <Columns2 size={16} aria-hidden="true" />
+                  <p>{preview.runsRequired === 2
+                    ? t("Runs both setups separately and may consume two model calls.")
+                    : t("Uses the verified current result and runs only the proposed Profile.")}</p>
                 </div>
               ) : null}
             </div>
           ) : active ? (
-            <div className="profile-evaluation-running" role="status" aria-live="polite">
-              <div className="profile-evaluation-running__visual" aria-hidden="true">
-                <LoaderCircle className="is-spinning" size={28} />
+            <div className="profile-comparison-running" role="status" aria-live="polite">
+              <div className="profile-comparison-running__visual" aria-hidden="true">
+                <LoaderCircle className="is-spinning" size={27} />
               </div>
               <strong>{t(statusLabel(run.status))}</strong>
               <p>{t(run.stage)}</p>
+              <div className="profile-comparison-progress">
+                <span className={currentStageActive
+                  ? "is-active"
+                  : proposedStageActive || resultsStageActive ? "is-complete" : ""}>
+                  {t("Current setup")}
+                </span>
+                <span className={proposedStageActive
+                  ? "is-active"
+                  : resultsStageActive ? "is-complete" : ""}>
+                  {t("Proposed Profile")}
+                </span>
+              </div>
               <dl>
-                <div><dt>{t("Profile")}</dt><dd>{run.profileName}</dd></div>
                 <div><dt>{t("Agent")}</dt><dd>{run.targetName}</dd></div>
-                <div><dt>{t("Project")}</dt><dd title={run.projectPath}>{run.projectPath}</dd></div>
+                <div>
+                  <dt>{t("Workspace")}</dt>
+                  <dd data-ui-overflow-detail="true" title={run.workspace.path}>
+                    {run.workspace.path ?? t("Empty Workspace")}
+                  </dd>
+                </div>
               </dl>
             </div>
           ) : (
-            <div className="profile-evaluation-result">
+            <div className="profile-comparison-result">
               {result ? (
-                <div className="profile-evaluation-result__context">
+                <div className="profile-comparison-result__context">
                   <div>
                     <span>{result.profileName} · {result.targetName}</span>
-                    <span title={result.projectPath}>
-                      {projectName} · {result.projectRevision.slice(0, 7)} · {formatDate(result.completedAt)}
-                    </span>
+                    <span>{result.workspace.name} · {formatDate(result.completedAt)}</span>
                   </div>
-                  <div>
-                    <span>{t("Task")}</span>
-                    <p>{result.prompt}</p>
-                  </div>
+                  <p>{result.prompt}</p>
                 </div>
               ) : null}
-              <div className="profile-evaluation-result__summary">
-                <span><Clock3 size={14} />{result ? formatDuration(result.durationMs) : t("Unavailable")}</span>
-                <span><FileDiff size={14} />{t(changedFilesLabel, { count: result?.changedFiles.length ?? 0 })}</span>
-                <span>{t("CLI exit {{code}}", { code: result?.exitCode ?? t("Unavailable") })}</span>
-                <span>{tokenSummary}</span>
-              </div>
+
               {run.error ? (
-                <div className="profile-evaluation-notice is-error">
+                <div className="profile-comparison-notice is-error">
                   <XCircle size={16} />
                   <p>{run.error}</p>
                 </div>
               ) : null}
               {result?.fidelity === "partial" ? (
-                <div className="profile-evaluation-notice is-warning">
+                <div className="profile-comparison-notice is-warning">
                   <AlertTriangle size={16} />
-                  <p>{t("External tools and MCPs were disabled for this local-only evaluation.")}</p>
+                  <p>{t("Some Agent resources were excluded from both isolated environments.")}</p>
                 </div>
               ) : null}
-              <div className="profile-evaluation-tabs" role="tablist" aria-label={t("Evaluation result views")}>
-                {(["response", "changes", "details"] as const).map((tab) => (
+
+              <div className="profile-comparison-tabs" role="tablist" aria-label={t("Comparison result views") }>
+                {(["overview", "responses", "changes", "details"] as const).map((tab) => (
                   <button
                     key={tab}
                     type="button"
@@ -506,78 +508,103 @@ export const ProfileEvaluationDialog = ({
                     className={resultTab === tab ? "is-active" : ""}
                     onClick={() => setResultTab(tab)}
                   >
-                    {t(resultTabLabel(tab))}
+                    {t(tab === "overview" ? "Overview" : tab === "responses" ? "Responses" : tab === "changes" ? "Changes" : "Run details")}
                   </button>
                 ))}
               </div>
-              <div className="profile-evaluation-result__panel" role="tabpanel">
-                {resultTab === "response" ? (
-                  result?.finalResponse ? (
-                    <div className="profile-evaluation-response">
-                      <div className="profile-evaluation-response__toolbar">
-                        <Button
-                          size="compact"
-                          icon={responseCopied ? <Check size={14} /> : <Copy size={14} />}
-                          onClick={() => {
-                            void window.agentEnv.copyText(result.finalResponse).then(() => {
-                              setResponseCopied(true);
-                            }).catch((unknownError) => {
-                              setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-                            });
-                          }}
-                        >
-                          {t(responseCopied ? "Response copied" : "Copy response")}
-                        </Button>
+
+              <div className="profile-comparison-result__panel" role="tabpanel">
+                {resultTab === "overview" && result ? (
+                  <div className="profile-comparison-side-grid">
+                    {([result.current, result.proposed] as const).map((side) => {
+                      const summary = sideSummary(side);
+                      return (
+                        <section className="profile-comparison-side" key={side.environment}>
+                          <header>
+                            <strong>{t(side.environment === "current" ? "Current setup" : "Proposed Profile")}</strong>
+                            {side.error ? <span className="is-error">{t("Incomplete")}</span> : <span>{t("Completed")}</span>}
+                          </header>
+                          <dl>
+                            <div><dt>{t("Duration")}</dt><dd>{summary.duration}</dd></div>
+                            <div><dt>{t("Tokens")}</dt><dd>{summary.tokens === undefined ? t("Unavailable") : formatNumber(summary.tokens)}</dd></div>
+                            <div><dt>{t("Files changed")}</dt><dd>{formatNumber(summary.changes)}</dd></div>
+                            <div><dt>{t("CLI exit")}</dt><dd>{side.exitCode ?? t("Unavailable")}</dd></div>
+                          </dl>
+                          {side.error ? <p className="profile-comparison-side__error">{side.error}</p> : null}
+                        </section>
+                      );
+                    })}
+                  </div>
+                ) : resultTab === "responses" && result ? (
+                  <div className="profile-comparison-response-grid">
+                    {([result.current, result.proposed] as const).map((side) => (
+                      <section className="profile-comparison-response" key={side.environment}>
+                        <header>
+                          <strong>{t(side.environment === "current" ? "Current setup" : "Proposed Profile")}</strong>
+                          {side.finalResponse ? (
+                            <IconButton
+                              label={t(copiedSide === side.environment ? "Response copied" : "Copy response")}
+                              onClick={() => void copyResponse(side)}
+                            >
+                              {copiedSide === side.environment ? <Check size={14} /> : <Copy size={14} />}
+                            </IconButton>
+                          ) : null}
+                        </header>
+                        {side.finalResponse ? (
+                          <ConversationMarkdown
+                            text={side.finalResponse}
+                            onOpenExternal={(href) => void window.agentEnv.openExternalUrl(href)}
+                          />
+                        ) : <p className="profile-comparison-empty">{t("No final response was reported.")}</p>}
+                      </section>
+                    ))}
+                  </div>
+                ) : resultTab === "changes" && result ? (
+                  <div className="profile-comparison-changes">
+                    <div className="profile-comparison-change-toolbar">
+                      <div className="ui-segmented-control ui-segmented-control--compact" role="tablist">
+                        {(["delta", "current", "proposed"] as const).map((scope) => (
+                          <button
+                            key={scope}
+                            className={`ui-segmented-control__option${changeScope === scope ? " is-selected" : ""}`}
+                            type="button"
+                            role="tab"
+                            aria-selected={changeScope === scope}
+                            onClick={() => setChangeScope(scope)}
+                          >
+                            {t(scope === "delta" ? "Proposed vs Current" : scope === "current" ? "Current changes" : "Proposed changes")}
+                          </button>
+                        ))}
                       </div>
-                      <ConversationMarkdown
-                        text={result.finalResponse}
-                        onOpenExternal={(href) => {
-                          void window.agentEnv.openExternalUrl(href).catch((unknownError) => {
-                            setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-                          });
-                        }}
-                      />
+                      {changes.length > 0 ? (
+                        <Button size="compact" icon={<Expand size={14} />} onClick={() => setDiffWorkspaceOpen(true)}>
+                          {t("Expand")}
+                        </Button>
+                      ) : null}
                     </div>
-                  ) : <p className="profile-evaluation-empty">{t("No final response was reported.")}</p>
-                ) : resultTab === "changes" ? (
-                  changes.length > 0 ? (
-                    <div className="profile-evaluation-changes">
-                      <div className="profile-evaluation-change-toolbar">
+                    {changes.length > 0 ? (
+                      <>
                         <select
                           aria-label={t("Changed file")}
                           value={selectedChange?.path ?? ""}
                           onChange={(event) => setSelectedDiffPath(event.target.value)}
                         >
-                          {changes.map((change) => (
-                            <option key={change.path} value={change.path}>{change.path}</option>
-                          ))}
+                          {changes.map((change) => <option key={change.path}>{change.path}</option>)}
                         </select>
-                        <Button
-                          size="compact"
-                          icon={<Expand size={14} />}
-                          onClick={() => setDiffWorkspaceOpen(true)}
-                        >
-                          {t("Expand")}
-                        </Button>
-                      </div>
-                      {selectedChange ? (
-                        <DiffViewer path={selectedChange.path} diff={selectedChange.diff} />
-                      ) : null}
-                    </div>
-                  ) : <p className="profile-evaluation-empty">{t("No file changes.")}</p>
-                ) : result ? (
-                  <dl className="profile-evaluation-details">
+                        {selectedChange ? <DiffViewer path={selectedChange.path} diff={selectedChange.diff} /> : null}
+                      </>
+                    ) : <p className="profile-comparison-empty">{t("No file changes.")}</p>}
+                  </div>
+                ) : resultTab === "details" && result ? (
+                  <dl className="profile-comparison-details">
                     <div><dt>{t("Profile hash")}</dt><dd><code>{result.profileContentHash}</code></dd></div>
-                    <div><dt>{t("Project revision")}</dt><dd><code>{result.projectRevision}</code></dd></div>
-                    <div><dt>{t("Project")}</dt><dd>{result.projectPath}</dd></div>
+                    <div><dt>{t("Workspace hash")}</dt><dd><code>{result.workspace.contentHash}</code></dd></div>
+                    <div><dt>{t("Comparison signature")}</dt><dd><code>{result.comparisonSignature}</code></dd></div>
                     <div><dt>{t("Completed at")}</dt><dd>{formatDate(result.completedAt)}</dd></div>
-                    <div><dt>{t("CLI version")}</dt><dd>{result.cliVersion ?? t("Unavailable")}</dd></div>
-                    <div><dt>{t("Model")}</dt><dd>{result.model ?? t("Unavailable")}</dd></div>
-                    <div><dt>{t("Input tokens")}</dt><dd>{result.usage?.inputTokens !== undefined ? formatNumber(result.usage.inputTokens) : t("Unavailable")}</dd></div>
-                    <div><dt>{t("Cached input")}</dt><dd>{result.usage?.cachedInputTokens !== undefined ? formatNumber(result.usage.cachedInputTokens) : t("Unavailable")}</dd></div>
-                    <div><dt>{t("Output tokens")}</dt><dd>{result.usage?.outputTokens !== undefined ? formatNumber(result.usage.outputTokens) : t("Unavailable")}</dd></div>
-                    <div><dt>{t("Reasoning tokens")}</dt><dd>{result.usage?.reasoningTokens !== undefined ? formatNumber(result.usage.reasoningTokens) : t("Unavailable")}</dd></div>
-                    <div><dt>{t("Reported cost")}</dt><dd>{result.usage?.reportedCostUsd !== undefined ? `$${result.usage.reportedCostUsd.toFixed(4)}` : t("Unavailable")}</dd></div>
+                    <div><dt>{t("Current CLI")}</dt><dd>{result.current.cliVersion ?? t("Unavailable")}</dd></div>
+                    <div><dt>{t("Proposed CLI")}</dt><dd>{result.proposed.cliVersion ?? t("Unavailable")}</dd></div>
+                    <div><dt>{t("Current model")}</dt><dd>{result.current.model ?? t("Unavailable")}</dd></div>
+                    <div><dt>{t("Proposed model")}</dt><dd>{result.proposed.model ?? t("Unavailable")}</dd></div>
                   </dl>
                 ) : null}
               </div>
@@ -585,15 +612,11 @@ export const ProfileEvaluationDialog = ({
           )}
 
           {error ? (
-            <div className="profile-evaluation-notice is-error" role="alert">
+            <div className="profile-comparison-notice is-error" role="alert">
               <XCircle size={16} />
               <p>{error}</p>
-              {!run && projectPath && !preview ? (
-                <Button
-                  size="compact"
-                  busy={previewing}
-                  onClick={() => void reviewProject(projectPath)}
-                >
+              {!run ? (
+                <Button size="compact" busy={previewing} onClick={() => void reviewWorkspace(workspaceInput)}>
                   {t("Review again")}
                 </Button>
               ) : null}
@@ -608,11 +631,11 @@ export const ProfileEvaluationDialog = ({
               <Button
                 variant="primary"
                 busy={starting}
-                disabled={previewing || starting || !preview || !prompt.trim() || supportedTargets.length === 0}
-                icon={<FlaskConical size={15} />}
+                disabled={previewing || starting || !preview || !prompt.trim()}
+                icon={<Columns2 size={15} />}
                 onClick={() => void start()}
               >
-                {t("Run evaluation")}
+                {t("Run comparison")}
               </Button>
             </>
           ) : active ? (
@@ -622,14 +645,24 @@ export const ProfileEvaluationDialog = ({
               icon={<Square size={13} fill="currentColor" />}
               onClick={() => void cancel()}
             >
-              {t(cancelLabel)}
+              {t(run.status === "cancelling" ? "Cancelling" : "Cancel comparison")}
             </Button>
           ) : (
             <>
               <Button onClick={onClose}>{t("Close")}</Button>
-              <Button icon={<RotateCcw size={15} />} onClick={runAgain}>
-                {t("Run again")}
-              </Button>
+              <Button icon={<RotateCcw size={15} />} onClick={runAgain}>{t("Run again")}</Button>
+              {onReviewApply && run.status === "completed" ? (
+                <Button
+                  variant="primary"
+                  icon={<FileDiff size={15} />}
+                  onClick={() => {
+                    onClose();
+                    onReviewApply();
+                  }}
+                >
+                  {t("Review Apply")}
+                </Button>
+              ) : null}
             </>
           )}
         </footer>
@@ -638,7 +671,7 @@ export const ProfileEvaluationDialog = ({
         changes={changes}
         open={diffWorkspaceOpen}
         returnFocusRef={dialogRef}
-        title={t("Evaluation changes")}
+        title={t("Comparison changes")}
         onClose={() => setDiffWorkspaceOpen(false)}
       />
     </>

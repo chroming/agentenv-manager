@@ -4,12 +4,12 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProfileEvaluationDialog } from "../../src/renderer/components/ProfileEvaluationDialog";
 import type {
-  AgentEnvApi,
   OneShotEvaluationPreview,
   OneShotEvaluationRun,
-  ProfileDetail,
-  TargetInfo
-} from "../../src/shared/types";
+  OneShotEvaluationSideResult,
+  OneShotEvaluationWorkspaceSummary
+} from "../../src/shared/evaluations";
+import type { AgentEnvApi, ProfileDetail, TargetInfo } from "../../src/shared/types";
 
 const profile: ProfileDetail = {
   id: "daily-coding",
@@ -56,6 +56,25 @@ const target = {
   conversationCapabilities: {}
 } as unknown as TargetInfo;
 
+const emptyWorkspace: OneShotEvaluationWorkspaceSummary = {
+  kind: "empty",
+  name: "Empty Workspace",
+  contentHash: "empty-workspace-hash",
+  fileCount: 0,
+  totalBytes: 0,
+  omittedCount: 0
+};
+
+const folderWorkspace: OneShotEvaluationWorkspaceSummary = {
+  kind: "folder",
+  path: "/Users/test/notes",
+  name: "notes",
+  contentHash: "folder-workspace-hash",
+  fileCount: 12,
+  totalBytes: 4_096,
+  omittedCount: 1
+};
+
 const preview = (overrides: Partial<OneShotEvaluationPreview> = {}): OneShotEvaluationPreview => ({
   previewId: "preview-1",
   profileId: profile.id,
@@ -64,10 +83,15 @@ const preview = (overrides: Partial<OneShotEvaluationPreview> = {}): OneShotEval
   targetId: target.id,
   targetName: target.name,
   cliVersion: "1.18.0",
-  projectPath: "/Users/test/project",
-  projectRevision: "91ad3e2f00",
-  projectHasUncommittedChanges: false,
-  resources: {
+  workspace: emptyWorkspace,
+  runsRequired: 2,
+  baselineSource: "fresh-run",
+  currentResources: {
+    instructions: { mode: "ignore", includedCount: 1 },
+    skills: { mode: "ignore", includedCount: 5 },
+    mcp: { mode: "ignore", includedCount: 0 }
+  },
+  proposedResources: {
     instructions: { mode: "manage", includedCount: 1 },
     skills: { mode: "manage", includedCount: 8 },
     mcp: { mode: "manage", includedCount: 0, omittedCount: 2 }
@@ -79,16 +103,44 @@ const preview = (overrides: Partial<OneShotEvaluationPreview> = {}): OneShotEval
   ...overrides
 });
 
+const side = (
+  environment: "current" | "proposed",
+  overrides: Partial<OneShotEvaluationSideResult> = {}
+): OneShotEvaluationSideResult => ({
+  environment,
+  environmentContentHash: `${environment}-environment-hash`,
+  skillContentHashes: environment === "proposed" ? { reviewer: "skill-hash" } : {},
+  cliVersion: "1.18.0",
+  model: "openai/test",
+  startedAt: "2026-08-01T00:00:00.000Z",
+  completedAt: "2026-08-01T00:00:02.000Z",
+  durationMs: environment === "current" ? 1_500 : 2_000,
+  exitCode: 0,
+  finalResponse: environment === "current" ? "Current response." : "Proposed response.",
+  diff: environment === "current" ? "" : "diff --git a/test.ts b/test.ts\n+new test\n",
+  fileDiffs: environment === "current" ? [] : [{
+    path: "test.ts",
+    action: "add",
+    diff: "diff --git a/test.ts b/test.ts\nnew file mode 100644\n+new test\n"
+  }],
+  changedFiles: environment === "current" ? [] : ["test.ts"],
+  usage: environment === "current"
+    ? { totalTokens: 20 }
+    : { inputTokens: 20, outputTokens: 8, totalTokens: 28 },
+  fidelity: "partial",
+  warnings: [],
+  ...overrides
+});
+
 const completedRun = (): OneShotEvaluationRun => ({
   runId: "run-1",
   profileId: profile.id,
   profileName: profile.manifest.name,
   targetId: target.id,
   targetName: target.name,
-  projectPath: "/Users/test/project",
-  projectRevision: "91ad3e2f00",
+  workspace: emptyWorkspace,
   status: "completed",
-  stage: "Evaluation completed",
+  stage: "Comparison completed",
   startedAt: "2026-08-01T00:00:00.000Z",
   canCancel: false,
   result: {
@@ -99,24 +151,24 @@ const completedRun = (): OneShotEvaluationRun => ({
     skillContentHashes: { reviewer: "skill-hash" },
     targetId: target.id,
     targetName: target.name,
-    cliVersion: "1.18.0",
-    model: "openai/test",
-    projectPath: "/Users/test/project",
-    projectRevision: "91ad3e2f00",
+    workspace: emptyWorkspace,
     prompt: "Add a test",
     startedAt: "2026-08-01T00:00:00.000Z",
     completedAt: "2026-08-01T00:00:02.000Z",
-    durationMs: 2_000,
-    exitCode: 0,
-    finalResponse: "Implemented the requested test.",
-    diff: "diff --git a/test.ts b/test.ts\n+new test\n",
-    fileDiffs: [{
-      path: "test.ts",
-      action: "add",
-      diff: "diff --git a/test.ts b/test.ts\nnew file mode 100644\n+new test\n"
-    }],
-    changedFiles: ["test.ts"],
-    usage: { inputTokens: 20, outputTokens: 8 },
+    durationMs: 3_500,
+    current: side("current"),
+    proposed: side("proposed"),
+    delta: {
+      diff: "diff --git a/test.ts b/test.ts\n+new test\n",
+      fileDiffs: [{
+        path: "test.ts",
+        action: "add",
+        diff: "diff --git a/test.ts b/test.ts\nnew file mode 100644\n+new test\n"
+      }],
+      changedFiles: ["test.ts"]
+    },
+    baselineSource: "fresh-run",
+    comparisonSignature: "comparison-hash",
     fidelity: "partial",
     warnings: []
   }
@@ -124,11 +176,13 @@ const completedRun = (): OneShotEvaluationRun => ({
 
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api = {
-    readEvaluation: vi.fn(async () => undefined),
-    selectEvaluationProject: vi.fn(async () => "/Users/test/project"),
-    previewEvaluation: vi.fn(async () => preview()),
-    startEvaluation: vi.fn(async () => completedRun()),
-    cancelEvaluation: vi.fn(),
+    selectComparisonWorkspace: vi.fn(async () => "/Users/test/notes"),
+    previewProfileComparison: vi.fn(async (input) => preview({
+      workspace: input.workspace?.kind === "folder" ? folderWorkspace : emptyWorkspace
+    })),
+    startProfileComparison: vi.fn(async () => completedRun()),
+    readProfileComparison: vi.fn(async () => undefined),
+    cancelProfileComparison: vi.fn(),
     copyText: vi.fn(async () => undefined),
     openExternalUrl: vi.fn(async () => undefined)
   } as unknown as AgentEnvApi;
@@ -143,227 +197,168 @@ afterEach(() => {
 });
 
 describe("ProfileEvaluationDialog", () => {
-  it("reviews the saved environment, runs once, and presents response, changes, and usage", async () => {
+  it("compares Current and Proposed in an empty Workspace and exposes the result evidence", async () => {
     const api = installApi();
+    const onReviewApply = vi.fn();
     render(
       <ProfileEvaluationDialog
         open
         profile={profile}
-        targets={[target]}
+        target={target}
         onClose={vi.fn()}
+        onReviewApply={onReviewApply}
       />
     );
 
-    expect(screen.getByText(/Uses the Agent account and model quota/))
-      .toHaveTextContent("External tools, MCPs, and project Agent files are excluded");
-    fireEvent.click(screen.getByRole("button", { name: "Choose Git project" }));
-    await screen.findByText("Revision 91ad3e2");
-    expect(api.previewEvaluation).toHaveBeenCalledWith({
+    await screen.findByText("Temporary empty Workspace");
+    expect(api.previewProfileComparison).toHaveBeenCalledWith({
       profileId: "daily-coding",
       targetId: "opencode",
-      projectPath: "/Users/test/project",
+      workspace: { kind: "empty" },
       excludeMcp: true
     });
     expect(screen.queryByRole("combobox", { name: "Agent" })).not.toBeInTheDocument();
+    expect(screen.getByText("Runs both setups separately and may consume two model calls."))
+      .toBeInTheDocument();
+    expect(screen.getByText("Keep current · 5")).toBeInTheDocument();
     expect(screen.getByText("Use Profile · 8")).toBeInTheDocument();
-    expect(screen.getByText("Excluded for safe evaluation · 2")).toBeInTheDocument();
-    expect(screen.getByText("Restricted Profile")).toBeInTheDocument();
-    const runButton = screen.getByRole("button", { name: "Run evaluation" });
+
+    const runButton = screen.getByRole("button", { name: "Run comparison" });
     expect(runButton).toBeDisabled();
     fireEvent.change(screen.getByRole("textbox", { name: "Task" }), {
       target: { value: "Add a test" }
     });
-    expect(runButton).toBeEnabled();
     fireEvent.click(runButton);
 
-    await screen.findByText("Evaluation completed");
-    expect(screen.getByText("Implemented the requested test.")).toBeInTheDocument();
-    expect(screen.getByText("Add a test")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Copy response" }));
-    await waitFor(() => expect(api.copyText).toHaveBeenCalledWith("Implemented the requested test."));
-    expect(screen.getByRole("button", { name: "Response copied" })).toBeInTheDocument();
+    await screen.findByText("Comparison completed");
+    const overview = screen.getByRole("tabpanel");
+    expect(within(overview).getByText("20")).toBeInTheDocument();
+    expect(within(overview).getByText("28")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Responses" }));
+    expect(screen.getByText("Current response.")).toBeInTheDocument();
+    expect(screen.getByText("Proposed response.")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Copy response" })[1]);
+    await waitFor(() => expect(api.copyText).toHaveBeenCalledWith("Proposed response."));
+
     fireEvent.click(screen.getByRole("tab", { name: "Changes" }));
     expect(await screen.findByRole("table", { name: "Formatted diff for test.ts" }))
       .toHaveTextContent("new test");
-    fireEvent.click(screen.getByRole("tab", { name: "Run details" }));
-    const details = screen.getByRole("tabpanel");
-    expect(within(details).getByText("20")).toBeInTheDocument();
-    expect(within(details).getByText("8")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Review Apply" }));
+    expect(onReviewApply).toHaveBeenCalledTimes(1);
   });
 
-  it("restores the latest result for this Profile and keeps its inputs for another run", async () => {
-    const api = installApi({
-      readEvaluation: vi.fn(async () => completedRun())
-    });
+  it("accepts a normal local folder without requiring Git", async () => {
+    const api = installApi();
     render(
-      <ProfileEvaluationDialog
-        open
-        profile={profile}
-        targets={[target]}
-        onClose={vi.fn()}
-      />
+      <ProfileEvaluationDialog open profile={profile} target={target} onClose={vi.fn()} />
     );
 
-    await screen.findByText("Latest evaluation");
-    expect(screen.getByText("Implemented the requested test.")).toBeInTheDocument();
-    expect(screen.getByText(/project · 91ad3e2/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Run again" }));
-
-    await waitFor(() => expect(api.previewEvaluation).toHaveBeenCalledWith({
+    await screen.findByText("Temporary empty Workspace");
+    fireEvent.click(screen.getByRole("radio", { name: "Local folder" }));
+    await screen.findByText("/Users/test/notes");
+    expect(screen.getByText("12 files · 4.0 KB · 1 excluded")).toBeInTheDocument();
+    expect(screen.queryByText(/Revision/)).not.toBeInTheDocument();
+    expect(api.previewProfileComparison).toHaveBeenLastCalledWith({
       profileId: "daily-coding",
       targetId: "opencode",
-      projectPath: "/Users/test/project",
+      workspace: { kind: "folder", path: "/Users/test/notes" },
       excludeMcp: true
-    }));
-    expect(screen.getByRole("textbox", { name: "Task" })).toHaveValue("Add a test");
+    });
   });
 
-  it("keeps launch progress local, blocks duplicate runs, and prevents orphaned dismissal", async () => {
+  it("keeps start progress local and cannot be dismissed while a comparison starts", async () => {
     let finishStart!: (run: OneShotEvaluationRun) => void;
-    const startEvaluation = vi.fn(() => new Promise<OneShotEvaluationRun>((resolve) => {
+    const startProfileComparison = vi.fn(() => new Promise<OneShotEvaluationRun>((resolve) => {
       finishStart = resolve;
     }));
     const onClose = vi.fn();
-    installApi({ startEvaluation });
+    installApi({ startProfileComparison });
     render(
-      <ProfileEvaluationDialog
-        open
-        profile={profile}
-        targets={[target]}
-        onClose={onClose}
-      />
+      <ProfileEvaluationDialog open profile={profile} target={target} onClose={onClose} />
     );
-    fireEvent.click(screen.getByRole("button", { name: "Choose Git project" }));
-    await screen.findByText("Revision 91ad3e2");
+    await screen.findByText("Temporary empty Workspace");
     fireEvent.change(screen.getByRole("textbox", { name: "Task" }), {
       target: { value: "Add a test" }
     });
-    const runButton = screen.getByRole("button", { name: "Run evaluation" });
+    const runButton = screen.getByRole("button", { name: "Run comparison" });
     fireEvent.click(runButton);
 
     expect(runButton).toHaveAttribute("aria-busy", "true");
     expect(runButton).toBeDisabled();
-    expect(startEvaluation).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("dialog").parentElement!);
+    expect(startProfileComparison).toHaveBeenCalledTimes(1);
     fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.click(screen.getByRole("dialog").parentElement!);
     expect(onClose).not.toHaveBeenCalled();
 
     await act(async () => finishStart(completedRun()));
-    await screen.findByText("Evaluation completed");
+    await screen.findByText("Comparison completed");
   });
 
-  it("turns a stale start failure into an explicit re-review action", async () => {
-    const previewEvaluation = vi.fn()
-      .mockResolvedValueOnce(preview())
-      .mockResolvedValueOnce(preview({ previewId: "preview-refreshed" }));
-    installApi({
-      previewEvaluation,
-      startEvaluation: vi.fn().mockRejectedValue(
-        new Error("Project changed after evaluation preview. Review it again.")
-      )
-    });
-    render(
-      <ProfileEvaluationDialog
-        open
-        profile={profile}
-        targets={[target]}
-        onClose={vi.fn()}
-      />
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Choose Git project" }));
-    await screen.findByText("Revision 91ad3e2");
-    fireEvent.change(screen.getByRole("textbox", { name: "Task" }), {
-      target: { value: "Add a test" }
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Run evaluation" }));
-
-    expect(await screen.findByRole("alert"))
-      .toHaveTextContent("Project changed after evaluation preview");
-    const reviewAgain = screen.getByRole("button", { name: "Review again" });
-    fireEvent.click(reviewAgain);
-    await waitFor(() => expect(previewEvaluation).toHaveBeenCalledTimes(2));
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Run evaluation" })).toBeEnabled();
-  });
-
-  it("presents the fixed restricted environment and blocks dismissal while a run is active", async () => {
+  it("polls the active run and supports cancellation without closing the dialog", async () => {
     const activeRun: OneShotEvaluationRun = {
       runId: "run-active",
       profileId: profile.id,
       profileName: profile.manifest.name,
       targetId: target.id,
       targetName: target.name,
-      projectPath: "/Users/test/project",
-      projectRevision: "91ad3e2f00",
+      workspace: emptyWorkspace,
       status: "running",
-      stage: "Running",
+      stage: "Running current setup",
       startedAt: "2026-08-01T00:00:00.000Z",
       canCancel: true
     };
-    const onClose = vi.fn();
-    const cancellingRun: OneShotEvaluationRun = {
+    const cancellingRun = {
       ...activeRun,
-      status: "cancelling",
-      stage: "Cancelling evaluation",
+      status: "cancelling" as const,
+      stage: "Cancelling comparison",
       canCancel: false
     };
-    const previewEvaluation = vi.fn().mockResolvedValue(preview());
     const api = installApi({
-      previewEvaluation,
-      startEvaluation: vi.fn(async () => activeRun),
-      readEvaluation: vi.fn()
-        .mockResolvedValueOnce(undefined)
-        .mockResolvedValue(activeRun),
-      cancelEvaluation: vi.fn(async () => cancellingRun)
+      startProfileComparison: vi.fn(async () => activeRun),
+      readProfileComparison: vi.fn(async () => activeRun),
+      cancelProfileComparison: vi.fn(async () => cancellingRun)
     });
+    const onClose = vi.fn();
     render(
-      <ProfileEvaluationDialog
-        open
-        profile={profile}
-        targets={[target]}
-        onClose={onClose}
-      />
+      <ProfileEvaluationDialog open profile={profile} target={target} onClose={onClose} />
     );
-
-    fireEvent.click(screen.getByRole("button", { name: "Choose Git project" }));
-    await screen.findByText("Restricted Profile");
-    expect(previewEvaluation).toHaveBeenLastCalledWith(expect.objectContaining({ excludeMcp: true }));
+    await screen.findByText("Temporary empty Workspace");
     fireEvent.change(screen.getByRole("textbox", { name: "Task" }), {
       target: { value: "Review code" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "Run evaluation" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("Running");
+    fireEvent.click(screen.getByRole("button", { name: "Run comparison" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Running current setup");
     fireEvent.keyDown(document, { key: "Escape" });
-    fireEvent.click(screen.getByRole("dialog").parentElement!);
     expect(onClose).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Cancel evaluation" }));
-    await waitFor(() => expect(api.cancelEvaluation).toHaveBeenCalledWith("run-active"));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel comparison" }));
+    await waitFor(() => expect(api.cancelProfileComparison).toHaveBeenCalledWith("run-active"));
   });
 
-  it("keeps review progress with the initiating control instead of spinning Run", async () => {
-    let finishPreview!: (value: OneShotEvaluationPreview) => void;
+  it("turns a stale Preview failure into an explicit review action", async () => {
+    const previewProfileComparison = vi.fn()
+      .mockResolvedValueOnce(preview())
+      .mockResolvedValueOnce(preview({ previewId: "preview-refreshed" }));
     installApi({
-      previewEvaluation: vi.fn(() => new Promise<OneShotEvaluationPreview>((resolve) => {
-        finishPreview = resolve;
-      }))
+      previewProfileComparison,
+      startProfileComparison: vi.fn().mockRejectedValue(
+        new Error("Workspace changed after comparison Preview. Review it again.")
+      )
     });
     render(
-      <ProfileEvaluationDialog
-        open
-        profile={profile}
-        targets={[target]}
-        onClose={vi.fn()}
-      />
+      <ProfileEvaluationDialog open profile={profile} target={target} onClose={vi.fn()} />
     );
+    await screen.findByText("Temporary empty Workspace");
+    fireEvent.change(screen.getByRole("textbox", { name: "Task" }), {
+      target: { value: "Add a test" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Run comparison" }));
 
-    const choose = screen.getByRole("button", { name: "Choose Git project" });
-    fireEvent.click(choose);
-    await waitFor(() => expect(choose).toHaveAttribute("aria-busy", "true"));
-    expect(screen.getByRole("button", { name: "Run evaluation" }))
-      .toHaveAttribute("aria-busy", "false");
-
-    await act(async () => finishPreview(preview()));
-    await screen.findByText("Restricted Profile");
+    expect(await screen.findByRole("alert"))
+      .toHaveTextContent("Workspace changed after comparison Preview");
+    fireEvent.click(screen.getByRole("button", { name: "Review again" }));
+    await waitFor(() => expect(previewProfileComparison).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

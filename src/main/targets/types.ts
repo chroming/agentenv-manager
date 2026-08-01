@@ -176,6 +176,8 @@ export interface EvaluationLaunchSpec {
   env: NodeJS.ProcessEnv;
   envToDelete?: string[];
   writableRoot: string;
+  readDeniedRoots?: string[];
+  runtimeReadRoots?: string[];
   cliVersion?: string;
   model?: string;
   fidelity: OneShotEvaluationFidelity;

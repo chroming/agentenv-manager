@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -151,6 +151,68 @@ describe("evaluation process runner", () => {
 
       expect(result.exitCode).toBe(0);
       expect(existsSync(join(forbidden, "escaped.txt"))).toBe(false);
+      runner.dispose();
+    }
+  );
+
+  it.skipIf(process.platform !== "darwin" || !existsSync("/usr/bin/sandbox-exec"))(
+    "prevents the comparison process from reading protected source folders",
+    async () => {
+      root = await mkdtemp(join(tmpdir(), "agentenv-evaluation-read-sandbox-"));
+      const writable = join(root, "writable");
+      const protectedRoot = join(root, "real-home");
+      await Promise.all([mkdir(writable), mkdir(protectedRoot)]);
+      await writeFile(join(writable, "visible.txt"), "isolated\n");
+      await writeFile(join(protectedRoot, "secret.txt"), "private\n");
+      const runner = createEvaluationProcessRunner();
+      const result = await runner.run({
+        executablePath: "/bin/sh",
+        args: [
+          "-c",
+          "if cat \"$2/secret.txt\"; then exit 9; fi; cat \"$1/visible.txt\"",
+          "agentenv-eval",
+          writable,
+          protectedRoot
+        ],
+        cwd: writable,
+        env: isolatedEnv(writable),
+        writableRoot: writable,
+        readDeniedRoots: [protectedRoot],
+        fidelity: "full",
+        warnings: []
+      }, () => undefined);
+
+      expect(result.exitCode).toBe(0);
+      runner.dispose();
+    }
+  );
+
+  it.skipIf(process.platform !== "darwin" || !existsSync("/usr/bin/sandbox-exec"))(
+    "allows only the declared Agent runtime inside an otherwise protected Home",
+    async () => {
+      root = await mkdtemp(join(tmpdir(), "agentenv-evaluation-runtime-exception-"));
+      const writable = join(root, "writable");
+      const protectedHome = join(root, "real-home");
+      const runtimeRoot = join(protectedHome, "tools", "opencode");
+      const executable = join(runtimeRoot, "opencode");
+      await Promise.all([mkdir(writable), mkdir(runtimeRoot, { recursive: true })]);
+      await writeFile(join(writable, "visible.txt"), "isolated\n");
+      await writeFile(executable, "#!/bin/sh\ncat \"$1/visible.txt\"\n");
+      await chmod(executable, 0o700);
+      const runner = createEvaluationProcessRunner();
+      const result = await runner.run({
+        executablePath: executable,
+        args: [writable],
+        cwd: writable,
+        env: isolatedEnv(writable),
+        writableRoot: writable,
+        readDeniedRoots: [protectedHome],
+        runtimeReadRoots: [runtimeRoot],
+        fidelity: "full",
+        warnings: []
+      }, () => undefined);
+
+      expect(result.exitCode).toBe(0);
       runner.dispose();
     }
   );

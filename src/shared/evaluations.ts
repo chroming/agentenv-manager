@@ -5,6 +5,7 @@ export type OneShotEvaluationStatus =
   | "running"
   | "cancelling"
   | "completed"
+  | "incomplete"
   | "failed-to-run"
   | "cancelled";
 
@@ -19,8 +20,27 @@ export interface OneShotEvaluationResourceScope {
 export interface OneShotEvaluationPreviewInput {
   profileId: string;
   targetId: string;
-  projectPath: string;
+  workspace?: OneShotEvaluationWorkspaceInput;
   excludeMcp?: boolean;
+}
+
+export type OneShotEvaluationWorkspaceInput =
+  | { kind: "empty" }
+  | { kind: "folder"; path: string };
+
+export interface OneShotEvaluationWorkspaceSummary {
+  kind: "empty" | "folder";
+  path?: string;
+  name: string;
+  contentHash: string;
+  fileCount: number;
+  totalBytes: number;
+  git?: {
+    revision: string;
+    branch?: string;
+    hasUncommittedChanges: boolean;
+  };
+  omittedCount: number;
 }
 
 export interface OneShotEvaluationPreview {
@@ -31,10 +51,15 @@ export interface OneShotEvaluationPreview {
   targetId: string;
   targetName: string;
   cliVersion?: string;
-  projectPath: string;
-  projectRevision: string;
-  projectHasUncommittedChanges: boolean;
-  resources: {
+  workspace: OneShotEvaluationWorkspaceSummary;
+  runsRequired: 1 | 2;
+  baselineSource: "fresh-run" | "verified-previous-run";
+  currentResources: {
+    instructions: OneShotEvaluationResourceScope;
+    skills: OneShotEvaluationResourceScope;
+    mcp: OneShotEvaluationResourceScope;
+  };
+  proposedResources: {
     instructions: OneShotEvaluationResourceScope;
     skills: OneShotEvaluationResourceScope;
     mcp: OneShotEvaluationResourceScope;
@@ -65,19 +90,12 @@ export interface OneShotEvaluationFileDiff {
   action?: "add" | "remove" | "replace";
 }
 
-export interface OneShotEvaluationResult {
-  runId: string;
-  profileId: string;
-  profileName: string;
-  profileContentHash: string;
+export interface OneShotEvaluationSideResult {
+  environment: "current" | "proposed";
+  environmentContentHash: string;
   skillContentHashes: Record<string, string>;
-  targetId: string;
-  targetName: string;
   cliVersion?: string;
   model?: string;
-  projectPath: string;
-  projectRevision: string;
-  prompt: string;
   startedAt: string;
   completedAt: string;
   durationMs: number;
@@ -92,14 +110,42 @@ export interface OneShotEvaluationResult {
   error?: string;
 }
 
+export interface OneShotEvaluationDelta {
+  diff: string;
+  fileDiffs: OneShotEvaluationFileDiff[];
+  changedFiles: string[];
+}
+
+export interface OneShotEvaluationResult {
+  runId: string;
+  profileId: string;
+  profileName: string;
+  profileContentHash: string;
+  skillContentHashes: Record<string, string>;
+  targetId: string;
+  targetName: string;
+  workspace: OneShotEvaluationWorkspaceSummary;
+  prompt: string;
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  current: OneShotEvaluationSideResult;
+  proposed: OneShotEvaluationSideResult;
+  delta: OneShotEvaluationDelta;
+  baselineSource: "fresh-run" | "verified-previous-run";
+  comparisonSignature: string;
+  fidelity: OneShotEvaluationFidelity;
+  warnings: string[];
+  error?: string;
+}
+
 export interface OneShotEvaluationRun {
   runId: string;
   profileId: string;
   profileName: string;
   targetId: string;
   targetName: string;
-  projectPath: string;
-  projectRevision: string;
+  workspace: OneShotEvaluationWorkspaceSummary;
   status: OneShotEvaluationStatus;
   stage: string;
   startedAt: string;

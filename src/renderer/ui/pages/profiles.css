@@ -627,10 +627,10 @@
 }
 
 .profile-action-stack > .profile-evaluate-button {
-  flex: 0 0 88px;
-  min-width: 88px;
+  flex: 0 0 100px;
+  min-width: 100px;
   padding-inline: 9px;
-  width: 88px;
+  width: 100px;
 }
 
 .profile-commit-actions .profile-apply-control {
@@ -1274,9 +1274,9 @@
   }
 
   .profile-action-stack > .profile-evaluate-button {
-    flex-basis: 92px;
-    min-width: 92px;
-    width: 92px;
+    flex-basis: 100px;
+    min-width: 100px;
+    width: 100px;
   }
 
   .profile-commit-actions .profile-target-workspace-control,

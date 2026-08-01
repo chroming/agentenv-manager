@@ -11,8 +11,8 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock3,
+  Columns2,
   FolderOpen,
-  FlaskConical,
   HardDrive,
   History,
   LoaderCircle,
@@ -184,6 +184,7 @@ import {
 } from "./components/ui";
 import {
   deriveApplyActionLabel,
+  deriveProfileComparisonControl,
   deriveProfileReadiness
 } from "./profileReadiness";
 import {
@@ -3920,13 +3921,21 @@ const AppContent = ({
       <span id="profile-apply-description" hidden>{applyDescription}</span>
     </div>
   ) : null;
-  const evaluationAvailable = window.agentEnv.platform === "darwin" && targets.some(
-    (target) => target.capabilities.evaluation && Boolean(target.health.executablePath)
-  );
+  const evaluationControl = deriveProfileComparisonControl({
+    platform: window.agentEnv.platform,
+    target: selectedTarget,
+    readinessStatus: readiness.status,
+    isDirty: isProfileDirty,
+    isBusy: busy,
+    isSaving: isProfileSaving || profileMetadataSavingId === draftProfile?.id
+  });
+  const evaluationDescription = t(evaluationControl.description, {
+    target: selectedTarget?.name ?? t("the selected Agent")
+  });
   const openProfileEvaluation = () => {
-    if (!draftProfile) return;
+    if (!draftProfile || !selectedTarget || evaluationControl.disabled) return;
     if (isProfileDirty) {
-      setProfileSaveStatus("Save this Profile before evaluating it");
+      setProfileSaveStatus("Save this Profile before comparing it");
       window.requestAnimationFrame(() => saveButtonRef.current?.focus());
       return;
     }
@@ -4420,21 +4429,12 @@ const AppContent = ({
                         <Button
                           ref={profileEvaluationButtonRef}
                           className="profile-evaluate-button"
-                          disabled={
-                            busy ||
-                            isProfileSaving ||
-                            profileMetadataSavingId === draftProfile.id ||
-                            !evaluationAvailable
-                          }
-                          icon={<FlaskConical size={15} strokeWidth={2.2} />}
-                          title={t(
-                            evaluationAvailable
-                              ? "Evaluate this saved Profile"
-                              : "No supported evaluation Agent is available"
-                          )}
+                          disabled={evaluationControl.disabled}
+                          icon={<Columns2 size={15} strokeWidth={2.2} />}
+                          title={evaluationDescription}
                           onClick={openProfileEvaluation}
                         >
-                          {t("Evaluate")}
+                          {t("Compare")}
                         </Button>
                         <div
                           className="profile-commit-actions"
@@ -4832,13 +4832,17 @@ const AppContent = ({
                   openWorkspaceNow("targets");
                 }}
               />
-              {profileEvaluationOpen && draftProfile ? (
+              {profileEvaluationOpen && draftProfile && selectedTarget ? (
                 <ProfileEvaluationDialog
                   open
                   profile={draftProfile}
-                  targets={targets}
+                  target={selectedTarget}
                   returnFocusRef={profileEvaluationButtonRef}
                   onClose={() => setProfileEvaluationOpen(false)}
+                  onReviewApply={() => {
+                    setProfileEvaluationOpen(false);
+                    window.requestAnimationFrame(previewSelectedProfile);
+                  }}
                 />
               ) : null}
             </section>

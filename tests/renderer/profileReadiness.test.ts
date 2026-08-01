@@ -8,6 +8,7 @@ import type {
 } from "../../src/shared/types";
 import {
   deriveApplyActionLabel,
+  deriveProfileComparisonControl,
   deriveProfileReadiness,
   hasManagedTargetDrift
 } from "../../src/renderer/profileReadiness";
@@ -51,6 +52,65 @@ const previewWith = (...issues: ApplyIssue[]) => ({ issues }) as ActivationPrevi
 const blockedPreview = (message: string) => previewWith(issue(message));
 
 describe("profile readiness", () => {
+  it("binds Compare to the selected Agent without falling back to another Agent", () => {
+    const supportedTarget = {
+      ...target,
+      capabilities: { ...target.capabilities, evaluation: true },
+      health: { ...target.health, executablePath: "/usr/local/bin/codex" }
+    };
+    const unsupportedTarget = {
+      ...target,
+      capabilities: { ...target.capabilities, evaluation: false },
+      health: { ...target.health, executablePath: "/usr/local/bin/codex" }
+    };
+    expect(deriveProfileComparisonControl({
+      platform: "darwin",
+      target: supportedTarget,
+      readinessStatus: "apply-pending",
+      isDirty: false,
+      isBusy: false,
+      isSaving: false
+    })).toEqual({
+      disabled: false,
+      description: "Compare the current {{target}} setup with this saved Profile"
+    });
+    expect(deriveProfileComparisonControl({
+      platform: "darwin",
+      target: unsupportedTarget,
+      readinessStatus: "apply-pending",
+      isDirty: false,
+      isBusy: false,
+      isSaving: false
+    })).toEqual({
+      disabled: true,
+      description: "{{target}} does not support isolated comparison yet"
+    });
+  });
+
+  it("does not spend model calls for unsaved or already-applied Profiles", () => {
+    const supportedTarget = {
+      ...target,
+      capabilities: { ...target.capabilities, evaluation: true },
+      health: { ...target.health, executablePath: "/usr/local/bin/codex" }
+    };
+    expect(deriveProfileComparisonControl({
+      platform: "darwin",
+      target: supportedTarget,
+      readinessStatus: "dirty",
+      isDirty: true,
+      isBusy: false,
+      isSaving: false
+    }).description).toBe("Save this Profile before comparing it");
+    expect(deriveProfileComparisonControl({
+      platform: "darwin",
+      target: supportedTarget,
+      readinessStatus: "applied",
+      isDirty: false,
+      isBusy: false,
+      isSaving: false
+    }).description).toBe("This Profile already matches {{target}}");
+  });
+
   it("prioritizes missing profile and target before draft and validation states", () => {
     expect(
       deriveProfileReadiness({
