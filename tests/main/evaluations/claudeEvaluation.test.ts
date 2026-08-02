@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createClaudeCodeTargetAdapter } from "../../../src/main/targets/claudeCodeTarget";
-import { createClaudeEvaluationCapability } from "../../../src/main/targets/evaluations/claudeEvaluation";
+import {
+  claudeAuthUnavailableReason,
+  createClaudeEvaluationCapability
+} from "../../../src/main/targets/evaluations/claudeEvaluation";
 import type { ProfileDetail } from "../../../src/shared/types";
 
 let root = "";
@@ -74,6 +77,9 @@ describe("Claude Code evaluation capability", () => {
       "Update docs"
     ]);
     expect(spec.env.CLAUDE_CONFIG_DIR).toBe(evaluationPaths.configDir);
+    expect(spec.env.CLAUDE_CODE_TMPDIR).toBe(temp);
+    expect(spec.env.CLAUDE_TMPDIR).toBe(temp);
+    expect(spec.env.BUN_TMPDIR).toBe(temp);
     expect(await readFile(join(evaluationPaths.configDir, ".credentials.json"), "utf8"))
       .toBe('{"oauth":"secret"}\n');
     await expect(readFile(evaluationPaths.configPath, "utf8")).rejects.toThrow();
@@ -94,5 +100,16 @@ describe("Claude Code evaluation capability", () => {
       model: "claude-test",
       usage: { inputTokens: 20, cachedInputTokens: 8, outputTokens: 4 }
     });
+  });
+
+  it("turns an explicit signed-out status into an actionable Compare reason", () => {
+    expect(claudeAuthUnavailableReason(JSON.stringify({
+      loggedIn: false,
+      authMethod: "none",
+      apiProvider: "firstParty"
+    }))).toBe(
+      "Claude Code is not signed in. Run Claude Code and use /login before using Compare."
+    );
+    expect(claudeAuthUnavailableReason(JSON.stringify({ loggedIn: true }))).toBeUndefined();
   });
 });

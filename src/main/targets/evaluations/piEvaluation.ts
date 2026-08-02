@@ -26,9 +26,45 @@ const PROJECT_AGENT_RESOURCES = [
   ".agents"
 ] as const;
 
+const readJsonObject = async (path: string) => {
+  try {
+    const value = JSON.parse(await readFile(path, "utf8"));
+    return isRecord(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const unresolvedCredentialReason = async (input: EvaluationProbeInput) => {
+  const settings = await readJsonObject(input.targetPaths.configPath);
+  const provider = typeof settings?.defaultProvider === "string"
+    ? settings.defaultProvider.trim()
+    : "";
+  if (!provider) return undefined;
+  const auth = await readJsonObject(join(input.targetPaths.configDir, "auth.json"));
+  const credential = isRecord(auth?.[provider]) ? auth[provider] : undefined;
+  const key = typeof credential?.key === "string" ? credential.key.trim() : "";
+  if (!key.startsWith("$") || key.length < 2) return undefined;
+  const variable = key.slice(1);
+  if (input.environment[variable]?.trim()) return undefined;
+  return `Pi's selected ${provider} model requires $${variable}. Configure it before using Compare.`;
+};
+
 const inspect = async (input: EvaluationProbeInput): Promise<EvaluationAvailability> => {
   const unavailable = unavailableEvaluation("Pi", input);
   if (unavailable) return unavailable;
+  const credentialReason = await unresolvedCredentialReason(input);
+  if (credentialReason) {
+    return {
+      available: false,
+      reason: credentialReason,
+      fidelity: "partial",
+      mcpIncludedCount: 0,
+      mcpOmittedCount: 0,
+      requiresMcpExclusion: false,
+      warnings: []
+    };
+  }
   const cliVersion = input.knownCliVersion ??
     await probeCliVersion(input.executablePath!, input.platform);
   return {

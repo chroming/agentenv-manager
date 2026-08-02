@@ -99,4 +99,34 @@ describe("Pi evaluation capability", () => {
       }
     });
   });
+
+  it("explains an unresolved environment-backed credential before launching", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-pi-eval-auth-"));
+    const sourceHome = join(root, "source");
+    const adapter = createPiTargetAdapter();
+    const sourcePaths = adapter.createTargetPaths({ homeDir: sourceHome, environment: {} });
+    await mkdir(sourcePaths.configDir, { recursive: true });
+    await writeFile(sourcePaths.configPath, JSON.stringify({
+      defaultProvider: "deepseek",
+      defaultModel: "deepseek-v4-flash"
+    }));
+    await writeFile(join(sourcePaths.configDir, "auth.json"), JSON.stringify({
+      deepseek: { type: "api_key", key: "$DEEPSEEK_API_KEY" }
+    }));
+
+    const availability = await createPiEvaluationCapability().checkAvailability({
+      profile,
+      targetPaths: sourcePaths,
+      sourceHomeDir: sourceHome,
+      executablePath: process.execPath,
+      excludeMcp: true,
+      platform: process.platform,
+      environment: {}
+    });
+
+    expect(availability).toMatchObject({
+      available: false,
+      reason: "Pi's selected deepseek model requires $DEEPSEEK_API_KEY. Configure it before using Compare."
+    });
+  });
 });

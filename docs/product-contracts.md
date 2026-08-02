@@ -242,7 +242,9 @@ suite, a correctness score, or a generic Agent launcher.
   target adapter rather than a generic fallback. An installed Agent without that capability keeps a
   visible disabled Compare command whose explanation names the missing technical prerequisite; it
   MUST NOT collapse an absent command, unsupported platform, and missing one-shot Agent interface
-  into one generic unsupported state.
+  into one generic unsupported state. Runtime readiness is a separate condition: an installed and
+  supported Agent that is signed out or references a missing credential MUST fail during Preview
+  with the exact login or environment-variable action required, before either comparison side runs.
 - Preview freezes the Workspace into two independent private snapshots, creates two random `0700`
   Homes, and records immutable copies of every included Library Skill. Empty Workspace creates no
   project files. A folder snapshot includes its current readable content, including uncommitted Git

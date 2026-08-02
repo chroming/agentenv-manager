@@ -1,3 +1,7 @@
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parse } from "jsonc-parser";
 import { readTextIfExists } from "../../fileUtils";
@@ -25,6 +29,90 @@ const PROJECT_AGENT_RESOURCES = [
   ".agents",
   "AGENTS.md"
 ] as const;
+const AUTH_TIMEOUT_MS = 5_000;
+const AUTH_OUTPUT_LIMIT = 8 * 1024;
+const MACOS_SANDBOX_EXECUTABLE = "/usr/bin/sandbox-exec";
+
+export const claudeAuthUnavailableReason = (output: string) => {
+  try {
+    const value = JSON.parse(output);
+    if (isRecord(value) && value.loggedIn === false) {
+      return "Claude Code is not signed in. Run Claude Code and use /login before using Compare.";
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+};
+
+const probeClaudeAuth = async (input: EvaluationProbeInput): Promise<string | undefined> => {
+  if (
+    input.environment.ANTHROPIC_API_KEY?.trim() ||
+    input.environment.CLAUDE_CODE_OAUTH_TOKEN?.trim() ||
+    (await readTextIfExists(join(input.targetPaths.configDir, ".credentials.json"))).trim()
+  ) {
+    return undefined;
+  }
+  if (
+    input.platform !== "darwin" ||
+    !input.executablePath ||
+    !existsSync(MACOS_SANDBOX_EXECUTABLE)
+  ) {
+    return undefined;
+  }
+  const probeRoot = await mkdtemp(join(tmpdir(), "agentenv-claude-auth-"));
+  try {
+    return await new Promise((resolve) => {
+      const policy = [
+        "(version 1)",
+        "(allow default)",
+        `(deny file-write* (require-not (subpath ${JSON.stringify(probeRoot)})))`
+      ].join(" ");
+      const child = spawn(MACOS_SANDBOX_EXECUTABLE, [
+        "-p",
+        policy,
+        input.executablePath!,
+        "auth",
+        "status"
+      ], {
+        env: {
+          ...input.environment,
+          CLAUDE_CODE_TMPDIR: probeRoot,
+          CLAUDE_TMPDIR: probeRoot,
+          BUN_TMPDIR: probeRoot,
+          TMPDIR: probeRoot,
+          TMP: probeRoot,
+          TEMP: probeRoot
+        },
+        shell: false,
+        stdio: ["ignore", "pipe", "ignore"],
+        windowsHide: true
+      });
+      const chunks: Buffer[] = [];
+      let bytes = 0;
+      let settled = false;
+      const finish = (value?: string) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value ? claudeAuthUnavailableReason(value) : undefined);
+      };
+      child.stdout?.on("data", (chunk: Buffer) => {
+        bytes += chunk.byteLength;
+        if (bytes <= AUTH_OUTPUT_LIMIT) chunks.push(chunk);
+      });
+      child.once("error", () => finish());
+      child.once("close", () => finish(Buffer.concat(chunks).toString("utf8")));
+      const timer = setTimeout(() => {
+        child.kill("SIGKILL");
+        finish();
+      }, AUTH_TIMEOUT_MS);
+      timer.unref();
+    });
+  } finally {
+    await rm(probeRoot, { recursive: true, force: true });
+  }
+};
 
 const objectAt = (content: string, key: string) => {
   try {
@@ -61,12 +149,24 @@ const inspectMcp = async (input: EvaluationProbeInput) => {
 const inspect = async (input: EvaluationProbeInput): Promise<EvaluationAvailability> => {
   const unavailable = unavailableEvaluation("Claude Code", input);
   if (unavailable) return unavailable;
-  const [{ count: mcpOmittedCount, unreadable }, cliVersion] = await Promise.all([
+  const [{ count: mcpOmittedCount, unreadable }, cliVersion, authReason] = await Promise.all([
     inspectMcp(input),
     input.knownCliVersion
       ? Promise.resolve(input.knownCliVersion)
-      : probeCliVersion(input.executablePath!, input.platform)
+      : probeCliVersion(input.executablePath!, input.platform),
+    probeClaudeAuth(input)
   ]);
+  if (authReason) {
+    return {
+      available: false,
+      reason: authReason,
+      fidelity: "partial",
+      mcpIncludedCount: 0,
+      mcpOmittedCount,
+      requiresMcpExclusion: false,
+      warnings: []
+    };
+  }
   const warnings: string[] = [];
   if (!cliVersion) warnings.push("Claude Code version could not be read");
   if (mcpOmittedCount > 0) {
@@ -131,7 +231,10 @@ export const createClaudeEvaluationCapability = (): AgentEvaluationCapability =>
       input.platform
     );
     const env = createIsolatedEnvironment(input, xdg, {
-      CLAUDE_CONFIG_DIR: input.evaluationTargetPaths.configDir
+      CLAUDE_CONFIG_DIR: input.evaluationTargetPaths.configDir,
+      CLAUDE_CODE_TMPDIR: input.evaluationTempDir,
+      CLAUDE_TMPDIR: input.evaluationTempDir,
+      BUN_TMPDIR: input.evaluationTempDir
     });
     delete env.CODEX_HOME;
     delete env.OPENCODE_CONFIG;
