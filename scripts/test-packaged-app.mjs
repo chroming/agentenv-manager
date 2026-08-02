@@ -319,7 +319,7 @@ try {
   await runGit(repositoryWork, ["config", "user.name", "AgentEnv Packaged Test"]);
   await runGit(repositoryWork, ["config", "user.email", "agentenv@example.test"]);
   await runGit(repositoryWork, ["remote", "add", "origin", repositoryRemote]);
-  const repositorySkill = join(repositoryWork, "skills", "packaged-review", "SKILL.md");
+  const repositorySkill = join(repositoryWork, "SKILL.md");
   await mkdir(dirname(repositorySkill), { recursive: true });
   await writeFile(
     repositorySkill,
@@ -370,13 +370,13 @@ try {
       .waitFor({ state: "visible" });
   }, 45_000);
   const importDialog = page.getByRole("dialog", { name: "Import skills" });
-  await runPackagedStep("configure repository import", async () => {
+  await runPackagedStep("select repository import", async () => {
     const repositoryTab = importDialog.getByRole("tab", { name: "Repository" });
     await repositoryTab.evaluate((element) => element.click());
     await importDialog.getByLabel("Repository address").waitFor({ state: "visible" });
+  }, 45_000);
+  await runPackagedStep("configure repository import", async () => {
     await importDialog.getByLabel("Repository address").fill(repositoryRemote);
-    await importDialog.getByText("Advanced", { exact: true }).click();
-    await importDialog.getByLabel("Repository directory").fill("skills/packaged-review");
   }, 45_000);
   await runPackagedStep("scan repository Skill", async () => {
     await importDialog.getByRole("button", { name: "Scan", exact: true }).click();
