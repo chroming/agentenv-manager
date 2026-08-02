@@ -111,7 +111,12 @@ const isolatedEnvironmentPaths = [
   "TMP",
   "TEMP",
   "CODEX_HOME",
-  "OPENCODE_CONFIG_DIR"
+  "OPENCODE_CONFIG_DIR",
+  "CLAUDE_CONFIG_DIR",
+  "PI_CODING_AGENT_DIR",
+  "PI_CODING_AGENT_SESSION_DIR",
+  "TRAE_HOME",
+  "TRAECLI_HOME"
 ] as const;
 
 const inheritedWorkingDirectoryKeys = [

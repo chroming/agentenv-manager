@@ -636,5 +636,187 @@ printf '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens
       });
       expect(reportText).not.toContain(root);
     }, 40_000);
+
+    it("runs every verified Agent adapter and explains why Trae CLI comparison is unavailable", async () => {
+      root = await mkdtemp(join(tmpdir(), "agentenv-multi-agent-comparison-e2e-"));
+      const home = join(root, "home");
+      const dataRoot = join(root, "data");
+      const cacheRoot = join(root, "cache");
+      const binDir = join(root, "bin");
+      await Promise.all([
+        mkdir(join(dataRoot, "profiles"), { recursive: true }),
+        mkdir(binDir, { recursive: true }),
+        mkdir(join(home, ".claude"), { recursive: true }),
+        mkdir(join(home, ".gemini", "config"), { recursive: true }),
+        mkdir(join(home, ".pi", "agent"), { recursive: true }),
+        mkdir(join(home, ".trae", "rules"), { recursive: true })
+      ]);
+      await writeJson(join(dataRoot, "agentenv-data.json"), { formatVersion: 2 });
+      await writeJson(join(dataRoot, "settings.json"), {
+        locale: "en",
+        conversationTerminal: "default",
+        skillSyncMethod: "symlink",
+        skillStorageLocation: "appData",
+        skillAutoCheckEnabled: false,
+        skillAutoCheckIntervalMinutes: 60,
+        backupRetentionDays: null,
+        enabledTargetIds: ["claude-code", "antigravity", "pi", "trae-cli"]
+      });
+
+      const agents = [
+        {
+          id: "claude-code",
+          name: "Claude Verified",
+          instructionsPath: join(home, ".claude", "CLAUDE.md"),
+          proposed: "# Proposed Claude\n"
+        },
+        {
+          id: "antigravity",
+          name: "Antigravity Verified",
+          instructionsPath: join(home, ".gemini", "GEMINI.md"),
+          proposed: "# Proposed Antigravity\n"
+        },
+        {
+          id: "pi",
+          name: "Pi Verified",
+          instructionsPath: join(home, ".pi", "agent", "AGENTS.md"),
+          proposed: "# Proposed Pi\n"
+        },
+        {
+          id: "trae-cli",
+          name: "Trae Unsupported",
+          instructionsPath: join(home, ".trae", "rules", "agentenv-manager.md"),
+          proposed: "# Proposed Trae\n"
+        }
+      ] as const;
+      for (const agent of agents) {
+        const profileDir = join(dataRoot, "profiles", `${agent.id}-comparison`);
+        await mkdir(profileDir, { recursive: true });
+        await writeJson(join(profileDir, "profile.json"), {
+          id: `${agent.id}-comparison`,
+          name: agent.name,
+          description: "Adapter comparison proof",
+          preferredTargetId: agent.id,
+          version: 2
+        });
+        await writeFile(join(profileDir, "INSTRUCTIONS.md"), agent.proposed, "utf8");
+        await writeJson(join(profileDir, "resources.json"), {
+          skills: [],
+          managementByTarget: {
+            [agent.id]: { instructions: "manage", skills: "disable" }
+          },
+          mcpByTarget: {
+            [agent.id]: { mode: "disable", selections: [] }
+          }
+        });
+        await mkdir(join(agent.instructionsPath, ".."), { recursive: true });
+        await writeFile(agent.instructionsPath, `# Current ${agent.id}\n`, "utf8");
+      }
+      await writeFile(join(home, ".trae", "traecli.toml"), "", "utf8");
+
+      await writeFile(join(binDir, "claude"), `#!/bin/sh
+if [ "$1" = "--version" ]; then printf '2.1.214\n'; exit 0; fi
+environment=current
+grep -q 'Proposed Claude' "$CLAUDE_CONFIG_DIR/CLAUDE.md" && environment=proposed
+printf '{"type":"assistant","message":{"model":"fake-claude","content":[{"type":"text","text":"claude-%s"}],"usage":{"input_tokens":10,"output_tokens":2}}}\n' "$environment"
+`, "utf8");
+      await writeFile(join(binDir, "agy"), `#!/bin/sh
+if [ "$1" = "--version" ]; then printf '1.1.4\n'; exit 0; fi
+environment=current
+grep -q 'Proposed Antigravity' "$HOME/.gemini/GEMINI.md" && environment=proposed
+printf 'antigravity-%s\n' "$environment"
+`, "utf8");
+      await writeFile(join(binDir, "pi"), `#!/bin/sh
+if [ "$1" = "--version" ]; then printf '0.83.0\n'; exit 0; fi
+environment=current
+grep -q 'Proposed Pi' "$PI_CODING_AGENT_DIR/AGENTS.md" && environment=proposed
+printf '{"type":"message_end","message":{"role":"assistant","model":"fake-pi","content":[{"type":"text","text":"pi-%s"}],"usage":{"input":10,"output":2,"totalTokens":12,"cost":{"total":0.001}}}}\n' "$environment"
+`, "utf8");
+      await writeFile(join(binDir, "traecli"), "#!/bin/sh\nprintf 'fake-trae\\n'\n", "utf8");
+      await Promise.all(["claude", "agy", "pi", "traecli"].map((name) =>
+        chmod(join(binDir, name), 0o755)));
+
+      app = await electron.launch({
+        executablePath: electronPath as unknown as string,
+        args: [
+          `--user-data-dir=${join(root, "electron-user-data")}`,
+          join(process.cwd(), "out", "main", "main.js")
+        ],
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          AGENTENV_AUTOMATION: "1",
+          AGENTENV_AUTOMATION_BACKGROUND_DELAY_MS: "0",
+          AGENTENV_DATA_ROOT: dataRoot,
+          AGENTENV_CACHE_ROOT: cacheRoot,
+          AGENTENV_HOME: home,
+          PATH: `${binDir}${delimiter}${process.env.PATH ?? ""}`
+        }
+      });
+      const page = await app.firstWindow();
+      await page.setViewportSize({ width: 920, height: 620 });
+      await expect.poll(() => page.evaluate(() => window.agentEnv.readStartupStatus()), {
+        timeout: 15_000
+      }).toEqual({ state: "ready" });
+      await page.getByRole("button", { name: "Profiles" }).click();
+
+      for (const agent of agents.slice(0, 3)) {
+        await page.getByRole("group", { name: `Profile ${agent.name}` }).click();
+        const compare = page.getByRole("button", { name: "Compare" });
+        await expect.poll(() => compare.isEnabled()).toBe(true);
+        await compare.click();
+        const dialog = page.getByRole("dialog", { name: new RegExp(`Compare ${agent.name}`) });
+        await dialog.getByRole("textbox", { name: "Task" }).fill("Verify adapter");
+        await dialog.getByRole("button", { name: "Run comparison" }).click();
+        const readRun = () => page.evaluate(async () => {
+          const value = await window.agentEnv.readProfileComparison({});
+          return {
+            status: value?.status,
+            error: value?.error,
+            currentError: value?.result?.current.error,
+            proposedError: value?.result?.proposed.error
+          };
+        });
+        await expect.poll(async () => (await readRun()).status, { timeout: 20_000 })
+          .toMatch(/completed|incomplete|failed-to-run/);
+        const run = await readRun();
+        if (run.status !== "completed") {
+          throw new Error(`${agent.name} comparison did not complete: ${JSON.stringify(run)}`);
+        }
+        await dialog.getByText("Comparison completed").waitFor();
+        await dialog.getByRole("tab", { name: "Responses" }).click();
+        const responsePrefix = agent.id === "claude-code"
+          ? "claude"
+          : agent.id === "antigravity"
+            ? "antigravity"
+            : "pi";
+        await dialog.getByText(`${responsePrefix}-current`).waitFor();
+        await dialog.getByText(`${responsePrefix}-proposed`).waitFor();
+        await dialog.getByRole("contentinfo").getByRole("button", { name: "Close" }).click();
+        expect(await readFile(agent.instructionsPath, "utf8")).toBe(`# Current ${agent.id}\n`);
+      }
+
+      const trae = agents[3];
+      await page.getByRole("group", { name: `Profile ${trae.name}` }).click();
+      const compare = page.getByRole("button", { name: "Compare" });
+      await expect.poll(() => compare.isDisabled()).toBe(true);
+      await expect(compare.getAttribute("title")).resolves.toBe(
+        "Trae CLI does not expose a verified one-shot command, so isolated comparison is unavailable."
+      );
+      await expect(compare.getAttribute("aria-describedby")).resolves
+        .toBe("profile-comparison-unavailable");
+      expect(await readdir(join(cacheRoot, "evaluations"))).toEqual([]);
+      const latestReport = await readFile(join(dataRoot, "evaluations", "latest.json"), "utf8");
+      expect(latestReport).not.toContain(root);
+      if (process.env.AGENTENV_EVALUATION_CAPTURE_DIR) {
+        await mkdir(process.env.AGENTENV_EVALUATION_CAPTURE_DIR, { recursive: true });
+        await page.screenshot({
+          path: join(
+            process.env.AGENTENV_EVALUATION_CAPTURE_DIR,
+            "comparison-unavailable-trae-920x620.png"
+          )
+        });
+      }
+    }, 60_000);
   }
 );

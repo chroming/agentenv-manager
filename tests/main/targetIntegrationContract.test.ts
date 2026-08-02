@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { defineTargetIntegration } from "../../src/main/targets/defineTargetIntegration";
+import { createBuiltInTargetAdapters } from "../../src/main/targets/integrations";
 import { createTargetRegistry } from "../../src/main/targets/registry";
 import {
   createFixtureAgentAdapter,
@@ -110,6 +111,44 @@ describe("target integration contract", () => {
     expect(() => adapter.createTargetPaths({ homeDir: "/tmp" })).toThrow(
       "Target fixture-agent returned paths for another-agent."
     );
+  });
+
+  it("keeps built-in comparison declarations aligned with their adapters", () => {
+    const adapters = createBuiltInTargetAdapters();
+    const support = Object.fromEntries(adapters.map((adapter) => [
+      adapter.descriptor.id,
+      {
+        declared: adapter.descriptor.capabilities.evaluation === true,
+        implemented: Boolean(adapter.evaluations),
+        reason: adapter.descriptor.capabilities.evaluationUnavailableReason
+      }
+    ]));
+
+    expect(support).toEqual({
+      opencode: { declared: true, implemented: true, reason: undefined },
+      "claude-code": { declared: true, implemented: true, reason: undefined },
+      codex: { declared: true, implemented: true, reason: undefined },
+      antigravity: { declared: true, implemented: true, reason: undefined },
+      "trae-cli": {
+        declared: false,
+        implemented: false,
+        reason: "Trae CLI does not expose a verified one-shot command, so isolated comparison is unavailable."
+      },
+      pi: { declared: true, implemented: true, reason: undefined }
+    });
+  });
+
+  it("rejects a comparison declaration without an adapter implementation", () => {
+    expect(() => defineTargetIntegration({
+      ...fixtureAgentIntegration,
+      descriptor: {
+        ...fixtureAgentIntegration.descriptor,
+        capabilities: {
+          ...fixtureAgentIntegration.descriptor.capabilities,
+          evaluation: true
+        }
+      }
+    })).toThrow("must declare and implement Profile comparison together");
   });
 
   it("keeps fixture target knowledge outside shared production code", async () => {

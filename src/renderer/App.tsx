@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock3,
-  Columns2,
   FolderOpen,
   HardDrive,
   History,
@@ -133,6 +132,7 @@ import { ProfileMcpEditor } from "./components/ProfileMcpEditor";
 import { ProfileDeleteDialog } from "./components/ProfileDeleteDialog";
 import { ProfileFormDialog } from "./components/ProfileFormDialog";
 import { ProfileEvaluationDialog } from "./components/ProfileEvaluationDialog";
+import { ProfileComparisonButton } from "./components/ProfileComparisonButton";
 import { QuickOpen } from "./components/QuickOpen";
 import { ProfileList } from "./components/ProfileList";
 import { ProfileActionsMenu } from "./components/ProfileActionsMenu";
@@ -4468,16 +4468,13 @@ const AppContent = ({
                             </button>
                           </div>
                           {targetWorkspaceControl}
-                          <Button
-                            ref={profileEvaluationButtonRef}
-                            className="profile-evaluate-button"
-                            disabled={evaluationControl.disabled}
-                            icon={<Columns2 size={15} strokeWidth={2.2} />}
-                            title={evaluationDescription}
+                          <ProfileComparisonButton
+                            buttonRef={profileEvaluationButtonRef}
+                            control={evaluationControl}
+                            description={evaluationDescription}
+                            label={t("Compare")}
                             onClick={openProfileEvaluation}
-                          >
-                            {t("Compare")}
-                          </Button>
+                          />
                           {profileApplyControl}
                           <button
                             ref={profileActionsButtonRef}

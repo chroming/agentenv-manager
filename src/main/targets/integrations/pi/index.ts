@@ -10,6 +10,7 @@ import { createUnifiedDiff } from "../../../diff";
 import { readTextIfExists } from "../../../fileUtils";
 import { findSecretWarnings } from "../../../secretWarnings";
 import { createPiConversationCapability } from "../../conversations/piConversations";
+import { createPiEvaluationCapability } from "../../evaluations/piEvaluation";
 import type { AgentTargetIntegration } from "../../contract";
 import { defineTargetIntegration } from "../../defineTargetIntegration";
 import { createCommandInstallationDriver } from "../../installationDiscovery";
@@ -60,7 +61,8 @@ export const piIntegration: AgentTargetIntegration = {
       skills: true,
       mcpTransports: [],
       disabledSkillPaths: false,
-      mcpActivation: false
+      mcpActivation: false,
+      evaluation: true
     }
   },
   discovery: createCommandInstallationDriver("pi"),
@@ -89,6 +91,7 @@ export const piIntegration: AgentTargetIntegration = {
   },
   skills,
   conversations: createPiConversationCapability(),
+  evaluations: createPiEvaluationCapability(),
   profile: {
     createDefaultProfile: (id) => ({
       id,

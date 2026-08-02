@@ -8,6 +8,7 @@ import type {
 import { profileManagesResource } from "../../../../shared/profileResources";
 import { createApplyIssue } from "../../../applyIssues";
 import { createAntigravityConversationCapability } from "../../conversations/antigravityConversations";
+import { createAntigravityEvaluationCapability } from "../../evaluations/antigravityEvaluation";
 import { createUnifiedDiff } from "../../../diff";
 import { readTextIfExists } from "../../../fileUtils";
 import { findSecretWarnings } from "../../../secretWarnings";
@@ -77,7 +78,8 @@ export const antigravityIntegration: AgentTargetIntegration = {
       skills: true,
       mcpTransports: ["stdio", "http", "sse"],
       disabledSkillPaths: false,
-      mcpActivation: false
+      mcpActivation: false,
+      evaluation: true
     }
   },
   discovery: createAntigravityInstallationDriver(),
@@ -224,6 +226,7 @@ export const antigravityIntegration: AgentTargetIntegration = {
     }
   },
   conversations: createAntigravityConversationCapability(),
+  evaluations: createAntigravityEvaluationCapability(),
   assets
 };
 

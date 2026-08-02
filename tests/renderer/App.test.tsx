@@ -3037,7 +3037,7 @@ describe("App", () => {
     expect(compareButton).toBeDisabled();
     expect(compareButton).toHaveAttribute(
       "title",
-      "OpenCode does not support isolated comparison yet"
+      "Isolated comparison currently requires macOS"
     );
   });
 

@@ -35,7 +35,7 @@ AgentEnv Manager 是一个本地桌面客户端，用来管理和切换本机 ag
 - 确认 preview 后才会写入目标 agent 目录。
 - 每次应用前会自动创建 backup。
 - 支持从 history 预览并回滚 backup。
-- macOS 上可在 Apply 前，用当前选中的受支持 Agent 对比“Agent 当前环境”和“候选 Profile”：输入同一任务，可选择空白 Workspace 或任意本地目录，然后并排查看回复、文件差异、耗时和 CLI 明确上报的 token。两边会在独立临时 Home 与 Workspace 快照中依次运行；冻结完成后，子进程不能读写真实 Home、原目录或真实 Agent，也不会触发 Apply。模型调用仍会联网并消耗账号额度。P0 已验证 OpenCode 隔离适配，其他 Agent 不会被静默替换为 OpenCode。
+- macOS 上可在 Apply 前，用当前选中的受支持 Agent 对比“Agent 当前环境”和“候选 Profile”：输入同一任务，可选择空白 Workspace 或任意本地目录，然后并排查看回复、文件差异、耗时和 CLI 明确上报的 token。两边会在独立临时 Home 与 Workspace 快照中依次运行；冻结完成后，子进程不能读写真实 Home、原目录或真实 Agent，也不会触发 Apply。模型调用仍会联网并消耗账号额度。当前已验证 OpenCode、Codex、Claude Code、Antigravity CLI 与 Pi 的隔离适配；不具备可靠单次运行接口的 Agent 会明确说明原因，绝不会静默替换为其他 Agent。
 
 文档入口和现行/历史资料边界见 [`docs/README.md`](docs/README.md)。Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/product-contracts.md`](docs/product-contracts.md)。跨页面交互一致性、桌面布局、状态覆盖与发布证据要求见 [`docs/product-quality-checklist.md`](docs/product-quality-checklist.md)。自动化测试的证据边界、Target 通用契约和打包验证范围见 [`docs/testing-strategy.md`](docs/testing-strategy.md)。
 

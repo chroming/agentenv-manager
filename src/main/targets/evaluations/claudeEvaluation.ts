@@ -1,0 +1,161 @@
+import { dirname, join } from "node:path";
+import { parse } from "jsonc-parser";
+import { readTextIfExists } from "../../fileUtils";
+import type {
+  AgentEvaluationCapability,
+  EvaluationAvailability,
+  EvaluationEvent,
+  EvaluationProbeInput
+} from "../types";
+import {
+  copyVerifiedCredential,
+  createIsolatedEnvironment,
+  evaluationRuntimeReadRoots,
+  isRecord,
+  numberValue,
+  prepareEvaluationDirectories,
+  probeCliVersion,
+  textContent,
+  unavailableEvaluation
+} from "./sharedEvaluation";
+
+const PROJECT_AGENT_RESOURCES = [
+  "CLAUDE.md",
+  ".claude",
+  ".agents",
+  "AGENTS.md"
+] as const;
+
+const objectAt = (content: string, key: string) => {
+  try {
+    const value = parse(content || "{}");
+    return isRecord(value) && isRecord(value[key]) ? value[key] : {};
+  } catch {
+    return undefined;
+  }
+};
+
+const inspectMcp = async (input: EvaluationProbeInput) => {
+  const policy = input.profile.resources.mcpByTarget["claude-code"] ?? {
+    mode: "ignore" as const,
+    selections: []
+  };
+  if (policy.mode === "disable") return { count: 0, unreadable: false };
+  if (policy.mode === "manage") {
+    return {
+      count: policy.selections.filter((selection) => selection.enabled).length,
+      unreadable: false
+    };
+  }
+  const paths = [input.targetPaths.configPath, input.targetPaths.mcpConfigPath]
+    .filter((path): path is string => Boolean(path));
+  let count = 0;
+  for (const path of paths) {
+    const servers = objectAt(await readTextIfExists(path), "mcpServers");
+    if (!servers) return { count, unreadable: true };
+    count += Object.keys(servers).length;
+  }
+  return { count, unreadable: false };
+};
+
+const inspect = async (input: EvaluationProbeInput): Promise<EvaluationAvailability> => {
+  const unavailable = unavailableEvaluation("Claude Code", input);
+  if (unavailable) return unavailable;
+  const [{ count: mcpOmittedCount, unreadable }, cliVersion] = await Promise.all([
+    inspectMcp(input),
+    input.knownCliVersion
+      ? Promise.resolve(input.knownCliVersion)
+      : probeCliVersion(input.executablePath!, input.platform)
+  ]);
+  const warnings: string[] = [];
+  if (!cliVersion) warnings.push("Claude Code version could not be read");
+  if (mcpOmittedCount > 0) {
+    warnings.push("MCP configurations are excluded from isolated Profile comparison");
+  } else if (unreadable) {
+    warnings.push("Claude Code MCP configuration could not be read and was excluded");
+  }
+  return {
+    available: true,
+    cliVersion,
+    fidelity: mcpOmittedCount > 0 || unreadable ? "partial" : "full",
+    mcpIncludedCount: 0,
+    mcpOmittedCount,
+    requiresMcpExclusion: false,
+    warnings
+  };
+};
+
+const parseEvent = (line: string): EvaluationEvent | undefined => {
+  let event: unknown;
+  try {
+    event = JSON.parse(line);
+  } catch {
+    return undefined;
+  }
+  if (!isRecord(event)) return undefined;
+  if (event.type === "assistant" && isRecord(event.message)) {
+    const text = textContent(event.message.content);
+    const usage = isRecord(event.message.usage) ? event.message.usage : {};
+    if (!text) return undefined;
+    return {
+      type: "response",
+      text,
+      model: typeof event.message.model === "string" ? event.message.model : undefined,
+      usage: {
+        inputTokens: numberValue(usage.input_tokens),
+        cachedInputTokens: numberValue(usage.cache_read_input_tokens),
+        outputTokens: numberValue(usage.output_tokens)
+      }
+    };
+  }
+  if (event.type === "result" && event.is_error === true) {
+    const message = typeof event.result === "string" ? event.result : "Claude Code comparison failed";
+    return { type: "error", message };
+  }
+  return undefined;
+};
+
+export const createClaudeEvaluationCapability = (): AgentEvaluationCapability => ({
+  projectResourcePaths: PROJECT_AGENT_RESOURCES,
+  checkAvailability: inspect,
+  createLaunchSpec: async (input) => {
+    const availability = await inspect(input);
+    if (!availability.available || !input.executablePath) {
+      throw new Error(availability.reason ?? "Claude Code comparison is unavailable");
+    }
+    const xdg = await prepareEvaluationDirectories(input);
+    await copyVerifiedCredential(
+      join(input.targetPaths.configDir, ".credentials.json"),
+      join(input.evaluationTargetPaths.configDir, ".credentials.json"),
+      "Claude Code credentials",
+      input.platform
+    );
+    const env = createIsolatedEnvironment(input, xdg, {
+      CLAUDE_CONFIG_DIR: input.evaluationTargetPaths.configDir
+    });
+    delete env.CODEX_HOME;
+    delete env.OPENCODE_CONFIG;
+    delete env.OPENCODE_CONFIG_CONTENT;
+    return {
+      executablePath: input.executablePath,
+      args: [
+        "--print",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--dangerously-skip-permissions",
+        "--no-session-persistence",
+        "--no-chrome",
+        input.prompt
+      ],
+      cwd: input.evaluationProject,
+      env,
+      writableRoot: join(input.evaluationHome, ".."),
+      runtimeReadRoots: await evaluationRuntimeReadRoots(input.executablePath),
+      cliVersion: availability.cliVersion,
+      fidelity: availability.fidelity,
+      warnings: availability.warnings
+    };
+  },
+  parseEvent
+});

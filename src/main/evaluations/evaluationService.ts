@@ -452,8 +452,11 @@ export const createEvaluationService = (
         {
           signal: run.controller.signal,
           onEvent: (event) => {
-            if (event.type === "response") responses.push(event.text);
-            else if (event.type === "usage") {
+            if (event.type === "response") {
+              responses.push(event.text);
+              if (event.usage) usage = addUsage(usage, event.usage);
+              model = event.model ?? model;
+            } else if (event.type === "usage") {
               usage = addUsage(usage, event.usage);
               model = event.model ?? model;
             } else if (event.type === "error") eventErrors.push(event.message);

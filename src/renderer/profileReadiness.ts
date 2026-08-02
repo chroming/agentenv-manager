@@ -38,7 +38,7 @@ export interface ProfileReadinessInput {
 
 export interface ProfileComparisonControlInput {
   platform: string;
-  target?: Pick<TargetInfo, "capabilities" | "health">;
+  target?: Pick<TargetInfo, "name" | "executableName" | "capabilities" | "health">;
   readinessStatus: ProfileReadinessStatus;
   isDirty: boolean;
   isBusy: boolean;
@@ -48,6 +48,7 @@ export interface ProfileComparisonControlInput {
 export interface ProfileComparisonControl {
   disabled: boolean;
   description: string;
+  unavailableReason?: string;
 }
 
 export const hasManagedTargetDrift = (
@@ -233,14 +234,27 @@ export const deriveProfileComparisonControl = ({
   if (readinessStatus === "applied") {
     return { disabled: true, description: "This Profile already matches {{target}}" };
   }
-  if (
-    platform !== "darwin" ||
-    !target.capabilities.evaluation ||
-    !target.health.executablePath
-  ) {
+  if (platform !== "darwin") {
     return {
       disabled: true,
-      description: "{{target}} does not support isolated comparison yet"
+      description: "Isolated comparison currently requires macOS",
+      unavailableReason: "Isolated comparison currently requires macOS"
+    };
+  }
+  if (!target.capabilities.evaluation) {
+    const reason = target.capabilities.evaluationUnavailableReason ??
+      "{{target}} does not expose a verified isolated comparison capability";
+    return {
+      disabled: true,
+      description: reason,
+      unavailableReason: reason
+    };
+  }
+  if (!target.health.executablePath) {
+    return {
+      disabled: true,
+      description: "Install the {{target}} command to compare this Profile",
+      unavailableReason: "Install the {{target}} command to compare this Profile"
     };
   }
   return {

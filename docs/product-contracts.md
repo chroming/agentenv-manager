@@ -237,9 +237,12 @@ suite, a correctness score, or a generic Agent launcher.
   redundant comparison run.
 - Compare MUST use the selected Apply Agent. It MUST NOT silently fall through to OpenCode, another
   installed Agent, or a generic shell command. An Agent is available only when its adapter exposes
-  and verifies an isolated comparison capability. P0 implements that capability for OpenCode and
-  Codex; adding another Agent requires an equally isolated target adapter rather than a generic
-  fallback.
+  and verifies an isolated comparison capability. AgentEnv implements that capability for OpenCode,
+  Codex, Claude Code, Antigravity CLI, and Pi. Adding another Agent requires an equally isolated
+  target adapter rather than a generic fallback. An installed Agent without that capability keeps a
+  visible disabled Compare command whose explanation names the missing technical prerequisite; it
+  MUST NOT collapse an absent command, unsupported platform, and missing one-shot Agent interface
+  into one generic unsupported state.
 - Preview freezes the Workspace into two independent private snapshots, creates two random `0700`
   Homes, and records immutable copies of every included Library Skill. Empty Workspace creates no
   project files. A folder snapshot includes its current readable content, including uncommitted Git
@@ -1569,8 +1572,10 @@ A new Target adapter MUST define:
 - Skill capability and install methods.
 - A read-only Skill runtime driver declaring roots, scan depth, scope, runtime identity, native disable facts, and manager-related evidence markers.
 - Native MCP discovery scope and safe activation capability.
-- Optional isolated Profile Comparison capability, including project Agent-resource masks,
-  availability checks, an isolated launch specification, and structured event parsing.
+- An explicit isolated Profile Comparison declaration. Supported adapters define project
+  Agent-resource masks, availability checks, an isolated launch specification, and structured event
+  parsing. Unsupported adapters define a user-facing technical reason and keep Comparison visibly
+  unavailable; capability declarations and adapter implementations MUST agree.
 - An exact allowlist for any MCP activation field the adapter may patch; no generic native-config payload is accepted.
 - Preview generation.
 - Managed-resource ownership markers.

@@ -16,6 +16,7 @@ import type {
 import { profileManagesResource } from "../../shared/profileResources";
 import { createApplyIssue } from "../applyIssues";
 import { createClaudeConversationCapability } from "./conversations/claudeConversations";
+import { createClaudeEvaluationCapability } from "./evaluations/claudeEvaluation";
 import { createUnifiedDiff } from "../diff";
 import { pathExists, readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
@@ -205,7 +206,8 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       mcpTransports: ["stdio", "http", "sse"],
       agentFormat: "claude-code",
       disabledSkillPaths: false,
-      mcpActivation: false
+      mcpActivation: false,
+      evaluation: true
     }
   },
   detectInstallation: createInstallationDriver({
@@ -241,6 +243,7 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
   },
   skills,
   conversations: createClaudeConversationCapability(),
+  evaluations: createClaudeEvaluationCapability(),
   createDefaultProfile: (id) => ({
     id,
     manifest: {

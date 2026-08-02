@@ -1392,6 +1392,7 @@ export interface TargetCapabilities {
   mcpEnvironmentReferences?: boolean;
   mcpActivation?: boolean;
   evaluation?: boolean;
+  evaluationUnavailableReason?: string;
 }
 
 export interface TargetPaths {

@@ -334,7 +334,9 @@ export const traeCliIntegration: AgentTargetIntegration = {
       mcpTransports: ["stdio", "http", "sse"],
       agentFormat: "trae-cli",
       disabledSkillPaths: false,
-      mcpActivation: true
+      mcpActivation: true,
+      evaluation: false,
+      evaluationUnavailableReason: "Trae CLI does not expose a verified one-shot command, so isolated comparison is unavailable."
     }
   },
   discovery: {

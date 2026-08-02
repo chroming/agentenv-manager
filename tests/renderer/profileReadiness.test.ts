@@ -60,7 +60,12 @@ describe("profile readiness", () => {
     };
     const unsupportedTarget = {
       ...target,
-      capabilities: { ...target.capabilities, evaluation: false },
+      name: "Trae CLI",
+      capabilities: {
+        ...target.capabilities,
+        evaluation: false,
+        evaluationUnavailableReason: "Trae CLI has no verified one-shot command"
+      },
       health: { ...target.health, executablePath: "/usr/local/bin/codex" }
     };
     expect(deriveProfileComparisonControl({
@@ -83,7 +88,30 @@ describe("profile readiness", () => {
       isSaving: false
     })).toEqual({
       disabled: true,
-      description: "{{target}} does not support isolated comparison yet"
+      description: "Trae CLI has no verified one-shot command",
+      unavailableReason: "Trae CLI has no verified one-shot command"
+    });
+  });
+
+  it("distinguishes a missing command from an unsupported comparison adapter", () => {
+    const missingCommandTarget = {
+      ...target,
+      name: "Pi",
+      executableName: "pi",
+      capabilities: { ...target.capabilities, evaluation: true },
+      health: { ...target.health, executablePath: undefined }
+    };
+    expect(deriveProfileComparisonControl({
+      platform: "darwin",
+      target: missingCommandTarget,
+      readinessStatus: "apply-pending",
+      isDirty: false,
+      isBusy: false,
+      isSaving: false
+    })).toEqual({
+      disabled: true,
+      description: "Install the {{target}} command to compare this Profile",
+      unavailableReason: "Install the {{target}} command to compare this Profile"
     });
   });
 

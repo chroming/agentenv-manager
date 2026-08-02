@@ -185,7 +185,12 @@ export interface EvaluationLaunchSpec {
 }
 
 export type EvaluationEvent =
-  | { type: "response"; text: string }
+  | {
+      type: "response";
+      text: string;
+      usage?: OneShotEvaluationUsage;
+      model?: string;
+    }
   | { type: "usage"; usage: OneShotEvaluationUsage; model?: string }
   | { type: "error"; message: string };
 

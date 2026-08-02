@@ -10,11 +10,11 @@
       },
       "support": {
         "opencode": "supported",
-        "claude-code": "unsupported",
+        "claude-code": "supported",
         "codex": "supported",
-        "antigravity": "unsupported",
+        "antigravity": "supported",
         "trae-cli": "unsupported",
-        "pi": "unsupported"
+        "pi": "supported"
       },
       "states": {
         "idle": "Compare is available only for a saved Profile with an implemented Agent capability.",
@@ -33,7 +33,10 @@
           "tests/main/evaluations/evaluationService.test.ts",
           "tests/main/evaluations/evaluationWorkspace.test.ts",
           "tests/main/evaluations/opencodeEvaluation.test.ts",
-          "tests/main/evaluations/codexEvaluation.test.ts"
+          "tests/main/evaluations/codexEvaluation.test.ts",
+          "tests/main/evaluations/claudeEvaluation.test.ts",
+          "tests/main/evaluations/antigravityEvaluation.test.ts",
+          "tests/main/evaluations/piEvaluation.test.ts"
         ],
         "renderer": [
           "tests/renderer/ProfileEvaluationDialog.test.tsx"

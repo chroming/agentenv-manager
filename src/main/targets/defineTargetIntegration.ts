@@ -16,6 +16,16 @@ const validateDescriptor = (descriptor: TargetDescriptor): void => {
   }
 };
 
+const validateCapabilities = (integration: AgentTargetIntegration): void => {
+  const declared = integration.descriptor.capabilities.evaluation === true;
+  const implemented = Boolean(integration.evaluations);
+  if (declared !== implemented) {
+    throw new Error(
+      `Target ${integration.descriptor.id} must declare and implement Profile comparison together.`
+    );
+  }
+};
+
 const validatePaths = (descriptor: TargetDescriptor, paths: TargetPaths): TargetPaths => {
   if (paths.targetId !== descriptor.id) {
     throw new Error(
@@ -32,6 +42,7 @@ export const defineTargetIntegration = (
   integration: AgentTargetIntegration
 ): AgentTargetAdapter => {
   validateDescriptor(integration.descriptor);
+  validateCapabilities(integration);
 
   return {
     descriptor: integration.descriptor,
