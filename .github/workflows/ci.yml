@@ -48,6 +48,10 @@ jobs:
       - run: npm run test:compat:installed
       - run: npm test
       - run: npm run verify:visual
+        env:
+          # Golden captures come from the release Mac; hosted macOS runners use
+          # different system fonts and antialiasing. Geometry remains strict in E2E.
+          AGENTENV_VISUAL_HOST_DRIFT_LIMIT: "0.05"
       - run: npm run test:e2e:packaged
 
   cross-platform:

@@ -242,6 +242,18 @@ describe("package metadata", () => {
     expect(workflow).toContain("--log-opts=--all");
   });
 
+  it("keeps strict local pixels while bounding hosted macOS drift", async () => {
+    const [workflow, contract, comparator] = await Promise.all([
+      readFile(join(process.cwd(), ".github", "workflows", "ci.yml"), "utf8"),
+      readFile(join(process.cwd(), "tests", "visual", "critical-captures.json"), "utf8"),
+      readFile(join(process.cwd(), "scripts", "compare-ui-captures.swift"), "utf8")
+    ]);
+
+    expect(workflow).toContain('AGENTENV_VISUAL_HOST_DRIFT_LIMIT: "0.05"');
+    expect(JSON.parse(contract)).toMatchObject({ maxChangedPixelRatio: 0.012 });
+    expect(comparator).toContain('(0...0.05).contains(parsed)');
+  });
+
   it("keeps the macOS icon corners transparent", async () => {
     const icon = await readPngRgba(join(process.cwd(), "build", "icon.png"));
     const cornerPixels = [

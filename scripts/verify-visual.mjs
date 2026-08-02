@@ -49,7 +49,7 @@ await run("node", [
   "--output",
   captureRoot
 ]);
-await run("swift", [
+const comparisonArguments = [
   "scripts/compare-ui-captures.swift",
   "--config",
   contractPath,
@@ -59,4 +59,9 @@ await run("swift", [
   captureRoot,
   "--output",
   reportRoot
-]);
+];
+const hostDriftLimit = process.env.AGENTENV_VISUAL_HOST_DRIFT_LIMIT?.trim();
+if (hostDriftLimit) {
+  comparisonArguments.push("--max-changed-pixel-ratio", hostDriftLimit);
+}
+await run("swift", comparisonArguments);

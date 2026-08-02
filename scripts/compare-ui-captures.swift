@@ -68,7 +68,13 @@ func parseArguments(_ arguments: [String]) throws -> [String: String] {
   var index = 0
   while index < arguments.count {
     let key = arguments[index]
-    guard ["--baseline", "--config", "--current", "--output"].contains(key) else {
+    guard [
+      "--baseline",
+      "--config",
+      "--current",
+      "--max-changed-pixel-ratio",
+      "--output"
+    ].contains(key) else {
       throw VisualComparisonError.invalidArguments("Unknown argument: \(key)")
     }
     guard index + 1 < arguments.count else {
@@ -242,6 +248,14 @@ do {
       "Visual pixel-shift tolerance must be between 0 and 2."
     )
   }
+  let hostDriftLimit = try arguments["--max-changed-pixel-ratio"].map { value in
+    guard let parsed = Double(value), (0...0.05).contains(parsed) else {
+      throw VisualComparisonError.invalidArguments(
+        "Host visual drift limit must be between 0 and 0.05."
+      )
+    }
+    return parsed
+  }
   try FileManager.default.createDirectory(
     at: outputDirectory,
     withIntermediateDirectories: true
@@ -251,7 +265,8 @@ do {
   for capture in contract.captures {
     let baselineURL = baselineDirectory.appendingPathComponent(capture.file)
     let currentURL = currentDirectory.appendingPathComponent(capture.file)
-    let limit = capture.maxChangedPixelRatio ?? contract.maxChangedPixelRatio
+    let contractLimit = capture.maxChangedPixelRatio ?? contract.maxChangedPixelRatio
+    let limit = max(contractLimit, hostDriftLimit ?? 0)
     do {
       let baseline = try loadImage(baselineURL)
       let current = try loadImage(currentURL)
