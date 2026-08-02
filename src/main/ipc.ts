@@ -869,11 +869,41 @@ export const registerIpcHandlers = ({
       consumerTargetIds: [...consumerTargetIds]
     });
   });
-  handleMutation("skills:retire-collection", async (_event, input: { path?: unknown }) => {
+  handleMutation("skills:retire-collection", async (_event, input: {
+    path?: unknown;
+    profileReceipts?: unknown;
+  }) => {
     if (typeof input?.path !== "string" || !input.path.trim()) {
       throw new Error("Skill collection path is required");
     }
     const collectionPath = resolve(input.path);
+    if (
+      !input.profileReceipts ||
+      typeof input.profileReceipts !== "object" ||
+      Array.isArray(input.profileReceipts)
+    ) {
+      throw new Error("Skill collection Profile review is required");
+    }
+    const profileReceipts = Object.fromEntries(
+      Object.entries(input.profileReceipts).map(([targetId, receipt]) => {
+        if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) {
+          throw new Error(`Invalid Profile review for ${targetId}`);
+        }
+        const candidate = receipt as { profileId?: unknown; contentHash?: unknown };
+        if (
+          typeof candidate.profileId !== "string" ||
+          !candidate.profileId ||
+          typeof candidate.contentHash !== "string" ||
+          !candidate.contentHash
+        ) {
+          throw new Error(`Invalid Profile review for ${targetId}`);
+        }
+        return [parseId(targetId, "target id"), {
+          profileId: parseId(candidate.profileId, "profile id"),
+          contentHash: candidate.contentHash
+        }];
+      })
+    );
     const targets = await targetDiscoveryService.listTargets();
     const inventory = await skillLibraryStore.scanInventory(
       inventoryPathsFor(targets)
@@ -918,6 +948,7 @@ export const registerIpcHandlers = ({
     return activationService.completeSkillCollectionMigration({
       collectionPath,
       canonicalPath: [...canonicalPaths][0],
+      profileReceipts,
       members
     });
   });

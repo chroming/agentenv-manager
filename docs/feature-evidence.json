@@ -70,12 +70,12 @@
       "states": {
         "idle": "The outer collection is summarized as one review boundary with member progress.",
         "working": "Per-member or batch decisions expose local progress without dismissing the parent review.",
-        "success": "Affected Profiles are prepared and only the reviewed outer link is moved.",
-        "error": "The failing member or Agent remains visible and completed review decisions are retained safely.",
+        "success": "Exact collection intent is saved and deployed without applying unrelated Profile changes, then only the reviewed outer link is moved.",
+        "error": "The failing member or Agent remains visible in the collection dialog and completed review decisions are retained safely.",
         "cancelled": "Closing review before migration performs no filesystem mutation.",
-        "noOp": "An already prepared Profile with no semantic changes is accepted without an Apply call.",
-        "stale": "Changed collection content or preparation receipts require a fresh review before mutation.",
-        "partial": "Incomplete member decisions keep the collection in review and never imply migration completion.",
+        "noOp": "A saved active Profile may remain globally pending; unrelated changes are neither required nor applied.",
+        "stale": "Changed collection content, active Profile identity, or Profile content receipts require a fresh in-dialog review before mutation.",
+        "partial": "Incomplete member decisions or an unsaved affected Profile stay in the parent dialog with the next executable action.",
         "persisted": "Member version decisions and path ownership boundaries are stored independently.",
         "rollback": "A verified backup restores the outer link and every affected Agent destination after failure."
       },

@@ -6394,6 +6394,21 @@ describe("Electron UI profile switching e2e", () => {
 
   it("discovers and migrates a directory-linked Skill collection as one safe boundary", async () => {
     const { appDataRoot, homeDir, opencodeDir, codexDir, page } = await launchApp();
+    const activeOpenCodeProfile = await page.evaluate(() =>
+      window.agentEnv.readProfile("ui-opencode-alpha")
+    );
+    await mkdir(join(appDataRoot, "target-states"), { recursive: true });
+    await writeJson(join(appDataRoot, "target-states", "opencode.json"), {
+      formatVersion: 3,
+      managedMcpNames: [],
+      activeProfileId: activeOpenCodeProfile.id,
+      appliedProfileHash:
+        activeOpenCodeProfile.targetContentHashes?.opencode ?? activeOpenCodeProfile.contentHash,
+      appliedLibraryVersions: { skills: {} },
+      managedResources: [],
+      skillReceipts: [],
+      sharedSkillPreparations: []
+    });
     const collectionSource = join(homeDir, ".codex", "superpowers", "skills");
     const collectionLink = join(homeDir, ".agents", "skills", "superpowers");
     const skillIds = ["collection-alpha", "collection-beta", "collection-gamma"];
@@ -6541,7 +6556,7 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() => fileExists(join(appDataRoot, "skills-library", "collection-gamma", "SKILL.md")))
       .toBe(true);
     await expect.poll(() => dialog.textContent()).toContain("In Library");
-    const keepCurrentSetup = await page.evaluate(async () => {
+    const pendingSetup = await page.evaluate(async () => {
       const current = await window.agentEnv.readProfile("ui-opencode-alpha");
       const updated = await window.agentEnv.updateProfileSkills({
         profileId: current.id,
@@ -6550,25 +6565,19 @@ describe("Electron UI profile switching e2e", () => {
         skills: current.resources.skills,
         managementMode: "ignore"
       });
-      const applyPreview = await window.agentEnv.previewApply(updated.profile.id, "opencode");
-      const blocking = applyPreview.issues
-        .filter((issue) => issue.disposition === "block")
-        .map((issue) => issue.message);
-      if (blocking.length > 0) {
-        return { ok: false, error: blocking.join("; ") };
-      }
-      const applied = await window.agentEnv.applyProfile(
-        updated.profile.id,
-        applyPreview.id
+      const state = (await window.agentEnv.listTargetStates()).find(
+        (item) => item.targetId === "opencode"
       );
       return {
-        ok: applied.ok,
-        error: applied.ok ? "" : applied.errors.join("; "),
-        profileId: updated.profile.id
+        profileId: updated.profile.id,
+        lifecycleStatus: state?.lifecycleStatus
       };
     });
-    expect(keepCurrentSetup).toEqual(
-      expect.objectContaining({ ok: true, profileId: expect.any(String) })
+    expect(pendingSetup).toEqual(
+      expect.objectContaining({
+        profileId: expect.any(String),
+        lifecycleStatus: "pending"
+      })
     );
     await expectInViewport(page, dialog.getByRole("button", { name: "Move collection" }));
     await dialog.getByRole("button", { name: "Move collection" }).click();
@@ -6601,12 +6610,86 @@ describe("Electron UI profile switching e2e", () => {
       return {
         mode:
           activeProfile.resources.managementByTarget?.opencode?.skills ?? "manage",
-        skillIds: activeProfile.resources.skills.map((skill) => skill.libraryId)
+        skillIds: activeProfile.resources.skills.map((skill) => skill.libraryId),
+        lifecycleStatus: state.lifecycleStatus
       };
     });
     expect(openCodeProfileAfterMove?.mode).toBe("manage");
     expect(openCodeProfileAfterMove?.skillIds).toContain("collection-alpha");
+    expect(openCodeProfileAfterMove?.lifecycleStatus).toBe("pending");
   }, 45_000);
+
+  it("keeps a collection migration safety stop inside its review dialog", async () => {
+    const { appDataRoot, homeDir, opencodeDir, page } = await launchApp();
+    const profile = await page.evaluate(() =>
+      window.agentEnv.readProfile("ui-opencode-alpha")
+    );
+    await mkdir(join(appDataRoot, "target-states"), { recursive: true });
+    await writeJson(join(appDataRoot, "target-states", "opencode.json"), {
+      formatVersion: 3,
+      managedMcpNames: [],
+      activeProfileId: profile.id,
+      appliedProfileHash: profile.targetContentHashes?.opencode ?? profile.contentHash,
+      appliedLibraryVersions: { skills: {} },
+      managedResources: [],
+      skillReceipts: [],
+      sharedSkillPreparations: []
+    });
+
+    const skillId = "collection-local-error";
+    const skillContent = `---\nname: ${skillId}\n---\n\n# Collection local error\n`;
+    const libraryPath = join(appDataRoot, "skills-library", skillId);
+    const collectionSource = join(homeDir, ".codex", "collection-error", "skills");
+    const collectionMember = join(collectionSource, skillId);
+    const collectionLink = join(homeDir, ".agents", "skills", "collection-error");
+    await mkdir(libraryPath, { recursive: true });
+    await mkdir(collectionMember, { recursive: true });
+    await writeFile(join(libraryPath, "SKILL.md"), skillContent, "utf8");
+    await writeFile(join(collectionMember, "SKILL.md"), skillContent, "utf8");
+    await mkdir(dirname(collectionLink), { recursive: true });
+    await symlink(collectionSource, collectionLink);
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Scan local" }).click();
+    const row = page.getByRole("group", { name: "Skill collection collection-error" });
+    await row.getByRole("button", { name: "Review" }).click();
+    const dialog = page.getByRole("dialog", {
+      name: "Review Skill collection collection-error"
+    });
+    await dialog.getByRole("button", { name: "Move collection" }).waitFor({
+      state: "visible"
+    });
+
+    const occupiedPath = join(opencodeDir, "skills", skillId);
+    await mkdir(occupiedPath, { recursive: true });
+    await writeFile(join(occupiedPath, "SKILL.md"), "# External copy\n", "utf8");
+    await dialog.getByRole("button", { name: "Move collection" }).click();
+
+    const localError = dialog.getByRole("alert");
+    await localError.waitFor({ state: "visible" });
+    await expect.poll(() => localError.textContent()).toContain("Could not move collection");
+    await expect.poll(() => localError.textContent()).toContain("is not the prepared AgentEnv copy");
+    expect(await page.locator(".app-feedback--error").count()).toBe(0);
+    await expect(fileExists(collectionLink)).resolves.toBe(true);
+
+    const captureDir = process.env.AGENTENV_COLLECTION_CAPTURE_DIR;
+    if (captureDir) {
+      await mkdir(captureDir, { recursive: true });
+      await page.screenshot({
+        path: join(captureDir, "collection-move-local-error-1180x728.png")
+      });
+    }
+    await resizeAppWindow(page, 920, 620);
+    await expectInViewport(page, dialog);
+    await expectInViewport(page, localError);
+    await expectInViewport(page, dialog.getByRole("button", { name: "Retry move" }));
+    await expectNoHorizontalOverflow(page, [".skill-collection-dialog"]);
+    if (captureDir) {
+      await page.screenshot({
+        path: join(captureDir, "collection-move-local-error-920x620.png")
+      });
+    }
+  }, 30_000);
 
   it("atomically migrates and restores a shared Skill after every consumer is prepared", async () => {
     const { appDataRoot, homeDir, opencodeDir, codexDir, page } = await launchApp();

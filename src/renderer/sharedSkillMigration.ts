@@ -32,7 +32,7 @@ export interface MoveSharedSkillToAgentsInput {
 
 export interface MoveSkillCollectionToAgentsInput {
   api: SharedSkillMigrationApi;
-  collection: RetireSkillCollectionInput & {
+  collection: Omit<RetireSkillCollectionInput, "profileReceipts"> & {
     members: Array<{
       skillKey: string;
       libraryId: string;
@@ -230,20 +230,14 @@ export const moveSkillCollectionToAgents = async ({
   }
   const states = await api.listTargetStates();
   const statesByTarget = new Map(states.map((state) => [state.targetId, state]));
+  const profileReceipts: RetireSkillCollectionInput["profileReceipts"] = {};
 
   for (const targetId of targetIds) {
     onProgress?.(targetId);
     const state = statesByTarget.get(targetId);
     let profile: ProfileDetail;
+    let needsActivation = false;
     if (state?.activeProfileId) {
-      if (
-        state.lifecycleStatus !== "applied" &&
-        state.lifecycleStatus !== "applied-with-local-override"
-      ) {
-        throw new Error(
-          `${targetLabel(targetId, targetNames)} has pending or changed Profile resources. Review and Apply that Profile first.`
-        );
-      }
       profile = await api.readProfile(state.activeProfileId);
     } else {
       const capture = await api.previewCreateProfileFromTarget(targetId, "skills");
@@ -258,6 +252,7 @@ export const moveSkillCollectionToAgents = async ({
           name: capture.suggestedName
         })
       ).profile;
+      needsActivation = true;
     }
 
     const mode = profile.resources.managementByTarget?.[targetId]?.skills ?? "manage";
@@ -329,8 +324,17 @@ export const moveSkillCollectionToAgents = async ({
       ).profile;
     }
 
-    await prepareProfileIfNeeded(api, profile, targetId, targetNames);
+    if (!profile.contentHash) {
+      throw new Error(`Profile ${profile.manifest.name} is missing its current content hash.`);
+    }
+    if (needsActivation) {
+      await prepareProfileIfNeeded(api, profile, targetId, targetNames);
+    }
+    profileReceipts[targetId] = {
+      profileId: profile.id,
+      contentHash: profile.contentHash
+    };
   }
 
-  return api.retireSkillCollection({ path: collection.path });
+  return api.retireSkillCollection({ path: collection.path, profileReceipts });
 };

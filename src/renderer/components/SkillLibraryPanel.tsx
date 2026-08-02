@@ -118,6 +118,10 @@ import {
   useSkillCollectionActions,
   type CollectionResolutionStrategy
 } from "./SkillCollectionCleanup";
+import type {
+  MoveSkillCollectionOptions,
+  MoveSkillCollectionOutcome
+} from "../skillCollectionMigrationAction";
 import {
   cleanupActionDisplayLabel,
   cleanupActionLabel,
@@ -236,7 +240,10 @@ interface SkillLibraryPanelProps {
     input: RetireSharedSkillInput,
     targetIds: string[]
   ): Promise<boolean>;
-  onMoveSkillCollection?(collection: SkillCollectionLinkGroup): Promise<boolean>;
+  onMoveSkillCollection?(
+    collection: SkillCollectionLinkGroup,
+    options?: MoveSkillCollectionOptions
+  ): Promise<MoveSkillCollectionOutcome>;
   onRestoreCleanup(backupId: string): void;
   updateActivity?: SkillUpdateActivity;
   viewState: SkillLibraryViewState;
@@ -410,6 +417,8 @@ export const SkillLibraryPanel = ({
   const {
     operation: collectionOperation,
     itemProgress: collectionItemProgress,
+    moveIssue: collectionMoveIssue,
+    clearMoveIssue: clearCollectionMoveIssue,
     changeRetention: changeCollectionRetention,
     processItem: processCollectionItem,
     applyStrategy: applyCollectionStrategy,
@@ -423,6 +432,9 @@ export const SkillLibraryPanel = ({
     onMoveSkillCollection,
     onClose: () => setCollectionDetailsPath(undefined)
   });
+  useEffect(() => {
+    clearCollectionMoveIssue();
+  }, [clearCollectionMoveIssue, collectionDetailsPath]);
   const [cleanupDetailsCopied, setCleanupDetailsCopied] = useState(false);
   const [sharedRetireKey, setSharedRetireKey] = useState<string>();
   const [cleanupDraft, setCleanupDraft] = useState<{
@@ -2770,6 +2782,7 @@ export const SkillLibraryPanel = ({
         collection={selectedCollection}
         operation={collectionOperation}
         itemProgress={collectionItemProgress}
+        moveIssue={collectionMoveIssue}
         dialogRef={modalDialogRef}
         initialFocusRef={modalInitialFocusRef}
         onClose={() => setCollectionDetailsPath(undefined)}

@@ -1,4 +1,4 @@
-import { useState, type RefObject } from "react";
+import { useCallback, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import {
   CheckCircle2,
@@ -6,6 +6,7 @@ import {
   CircleAlert,
   Folder,
   LoaderCircle,
+  TriangleAlert,
   XCircle
 } from "lucide-react";
 import {
@@ -21,6 +22,10 @@ import { useI18n } from "../i18n";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
 import { Button } from "./ui";
+import type {
+  MoveSkillCollectionOptions,
+  MoveSkillCollectionOutcome
+} from "../skillCollectionMigrationAction";
 
 type CollectionOperation = "import" | "keep" | "review" | "move";
 export type CollectionResolutionStrategy = "keep-library" | "use-collection";
@@ -47,7 +52,10 @@ interface SkillCollectionActionsInput {
     deferFullRefresh?: boolean
   ): Promise<boolean>;
   onRefreshInventory(announce?: boolean): Promise<void>;
-  onMoveSkillCollection?(collection: SkillCollectionLinkGroup): Promise<boolean>;
+  onMoveSkillCollection?(
+    collection: SkillCollectionLinkGroup,
+    options?: MoveSkillCollectionOptions
+  ): Promise<MoveSkillCollectionOutcome>;
   onClose(): void;
 }
 
@@ -61,7 +69,9 @@ export const useSkillCollectionActions = ({
   onClose
 }: SkillCollectionActionsInput) => {
   const [operation, setOperation] = useState<CollectionOperation>();
+  const [moveIssue, setMoveIssue] = useState<Exclude<MoveSkillCollectionOutcome, { status: "moved" }>>();
   const [itemProgress, setItemProgress] = useState<Record<string, CollectionItemProgress>>({});
+  const clearMoveIssue = useCallback(() => setMoveIssue(undefined), []);
   const updateItemProgress = (
     path: string,
     state: CollectionItemProgress["state"],
@@ -172,8 +182,16 @@ export const useSkillCollectionActions = ({
   const move = async (collection: SkillCollectionLinkGroup) => {
     if (!onMoveSkillCollection || operation || collection.state !== "ready") return;
     setOperation("move");
+    setMoveIssue(undefined);
     try {
-      if (await onMoveSkillCollection(collection)) onClose();
+      const outcome = await onMoveSkillCollection(collection, {
+        saveDirtyProfile: moveIssue?.status === "needs-save"
+      });
+      if (outcome.status === "moved") {
+        onClose();
+      } else {
+        setMoveIssue(outcome);
+      }
     } finally {
       setOperation(undefined);
     }
@@ -182,6 +200,8 @@ export const useSkillCollectionActions = ({
   return {
     operation,
     itemProgress,
+    moveIssue,
+    clearMoveIssue,
     changeRetention,
     processItem,
     applyStrategy,
@@ -285,6 +305,7 @@ interface SkillCollectionDialogProps {
   collection?: SkillCollectionLinkGroup;
   operation?: CollectionOperation;
   itemProgress?: Record<string, CollectionItemProgress>;
+  moveIssue?: Exclude<MoveSkillCollectionOutcome, { status: "moved" }>;
   dialogRef: RefObject<HTMLElement | null>;
   initialFocusRef: RefObject<HTMLButtonElement | null>;
   onClose(): void;
@@ -301,6 +322,7 @@ export const SkillCollectionDialog = ({
   collection,
   operation,
   itemProgress = {},
+  moveIssue,
   dialogRef,
   initialFocusRef,
   onClose,
@@ -484,11 +506,24 @@ export const SkillCollectionDialog = ({
           </div>
           <p className="muted skill-collection-dialog__note">
             {collection.state === "ready"
-              ? t("Moving adds these Skills to each affected Agent's active Profile. Profiles that keep Skills unchanged switch to Use Profile; Profiles set to Turn off stay off. AgentEnv applies and verifies each Profile, then removes only the collection link.")
+                ? t("Moving saves these Skills in each affected Agent's active Profile and updates only their Agent Skill copies. Other saved Profile changes remain pending. Profiles set to Turn off stay off.")
               : collection.state === "unmanaged"
                 ? t("AgentEnv observes this collection but will not change its source or runtime link.")
                 : t("Choose a Library version for every Skill before moving. Same-name differences require an explicit choice.")}
           </p>
+          {moveIssue ? (
+            <div className="inline-state inline-state--error skill-collection-dialog__issue" role="alert">
+              <TriangleAlert size={16} strokeWidth={2.1} aria-hidden="true" />
+              <span className="inline-state__content">
+                <strong>
+                  {moveIssue.status === "needs-save"
+                    ? t("Save Profile before moving")
+                    : t("Could not move collection")}
+                </strong>
+                <small>{t(moveIssue.message)}</small>
+              </span>
+            </div>
+          ) : null}
         </div>
         <footer className="preview-actions ui-dialog-footer">
           <button
@@ -538,7 +573,11 @@ export const SkillCollectionDialog = ({
               {operation === "move" ? (
                 <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
               ) : null}
-              {t("Move collection")}
+              {moveIssue?.status === "needs-save"
+                ? t("Save Profile and move")
+                : moveIssue
+                  ? t("Retry move")
+                  : t("Move collection")}
             </button>
           ) : null}
         </footer>

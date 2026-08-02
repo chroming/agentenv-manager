@@ -2771,14 +2771,23 @@ const AppContent = ({
     }
   };
 
-  const moveSkillCollectionToAgentDirectories = (collection: SkillCollectionLinkGroup) => runSkillCollectionMigration({
-    api: window.agentEnv, collection, targetStates,
-    dirtyProfileId: isProfileDirty ? draftProfile?.id : undefined,
-    targetNames, setBusy, setError,
-    setResult: setSkillCleanupResult,
-    setSuccess: (message) => setSkillUpdateCheckStatus({ state: "success", message }),
-    refresh: () => refreshProfiles({ checkSkillUpdates: false }).then(() => undefined)
-  });
+  const moveSkillCollectionToAgentDirectories = (
+    collection: SkillCollectionLinkGroup,
+    options?: Parameters<typeof runSkillCollectionMigration>[1]
+  ) => {
+    return runSkillCollectionMigration({
+      api: window.agentEnv,
+      collection,
+      targetStates,
+      dirtyProfileId: isProfileDirty ? draftProfile?.id : undefined,
+      saveDirtyProfile: async () => void await saveDraft(),
+      targetNames,
+      setBusy,
+      setResult: setSkillCleanupResult,
+      setSuccess: (message) => setSkillUpdateCheckStatus({ state: "success", message }),
+      refresh: () => refreshProfiles({ checkSkillUpdates: false }).then(() => undefined)
+    }, options);
+  };
   const scanGitHubSkills = (url: string): Promise<GitHubSkillScanResult> =>
     window.agentEnv.scanGitHubSkills(url);
   const scanRepositorySkills = (

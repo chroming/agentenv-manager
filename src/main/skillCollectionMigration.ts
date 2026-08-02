@@ -1,12 +1,12 @@
 import { lstat, realpath, rm } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { materializeTargetResourcePolicy, profileResourceMode } from "../shared/profileResources";
+import { reconcileSkill, toAppliedSkillReceipt } from "../shared/skillReconciliation";
 import { normalizeSkillKey } from "../shared/skillIdentity";
 import type {
   BackupManifest,
   ManagedResourceSnapshot,
   ProfileDetail,
-  SharedSkillPreparation,
   SkillCleanupResult,
   SkillInventoryEntry,
   SkillLibraryEntry,
@@ -18,6 +18,7 @@ import { isPathInside } from "./platformPaths";
 import { markerPathForFile } from "./ownershipMarkers";
 import { hashSkillContent } from "./skillContentHash";
 import { removeSkillDeployment } from "./skillDeployment";
+import { normalizeSkillReceipts } from "./skillReconciliationReceipts";
 import {
   BackupRecoveryError,
   createBackupMutationClaimer,
@@ -27,6 +28,10 @@ import {
 export interface SkillCollectionMigrationInput {
   collectionPath: string;
   canonicalPath: string;
+  profileReceipts: Record<string, {
+    profileId: string;
+    contentHash: string;
+  }>;
   members: Array<{
     skillKey: string;
     libraryId: string;
@@ -98,7 +103,7 @@ const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
 export const completeSkillCollectionMigrationTransaction = async (
-  { collectionPath, canonicalPath, members }: SkillCollectionMigrationInput,
+  { collectionPath, canonicalPath, profileReceipts, members }: SkillCollectionMigrationInput,
   dependencies: SkillCollectionMigrationDependencies
 ): Promise<SkillCleanupResult> => {
   const normalizedCollectionPath = resolve(collectionPath);
@@ -132,6 +137,12 @@ export const completeSkillCollectionMigrationTransaction = async (
   )].sort();
   if (targetIds.length === 0) {
     throw new Error("Skill collection has no installed Agent consumers to migrate.");
+  }
+  if (
+    Object.keys(profileReceipts).length !== targetIds.length ||
+    targetIds.some((targetId) => !profileReceipts[targetId])
+  ) {
+    throw new Error("Skill collection Profile review is incomplete. Review the collection again.");
   }
   await dependencies.claimTargets(targetIds);
 
@@ -174,7 +185,11 @@ export const completeSkillCollectionMigrationTransaction = async (
 
     type CollectionTargetOperation = {
       member: (typeof uniqueMembers)[number];
-      preparation: SharedSkillPreparation;
+      intent: {
+        disposition: "install" | "omit";
+        profileId: string;
+        targetName: string;
+      };
       targetPath: string;
     };
     const contexts: Array<{
@@ -201,7 +216,14 @@ export const completeSkillCollectionMigrationTransaction = async (
       if (stateFile.state.recoveryRequired) {
         throw new Error(`${targetName} requires recovery before migration.`);
       }
+      const profileReceipt = profileReceipts[targetId];
+      if (stateFile.state.activeProfileId !== profileReceipt.profileId) {
+        throw new Error(`${targetName}'s active Profile changed during collection review.`);
+      }
       const sourceProfile = await dependencies.readProfile(stateFile.state.activeProfileId);
+      if (sourceProfile.contentHash !== profileReceipt.contentHash) {
+        throw new Error(`${targetName}'s saved Profile changed during collection review.`);
+      }
       if (profileResourceMode(sourceProfile.resources, targetId, "skills") === "ignore") {
         throw new Error(
           `${targetName} leaves Skills unchanged. Choose Use Profile or Turn off for Skills, save, then retry cleanup.`
@@ -216,30 +238,15 @@ export const completeSkillCollectionMigrationTransaction = async (
       for (const member of uniqueMembers.filter(
         (item) => item.consumerTargetIds.includes(targetId)
       )) {
-        const preparation = (stateFile.state.sharedSkillPreparations ?? []).find(
-          (item) =>
-            item.skillKey === member.skillKey &&
-            item.libraryId === member.libraryId &&
-            item.sharedPaths.some((path) => resolve(path) === member.sharedPath)
+        const profileReference = effectiveProfile.resources.skills.find(
+          (reference) => reference.libraryId === member.libraryId
         );
-        if (!preparation) {
-          throw new Error(
-            `${targetName} is not prepared for ${member.skillKey}. Apply its current Profile, then retry the collection migration.`
-          );
-        }
-        const expectedReference = effectiveProfile.resources.skills.find(
-          (reference) => reference.libraryId === member.libraryId && reference.enabled
-        );
-        if (
-          preparation.profileId !== sourceProfile.id ||
-          preparation.disposition !== (expectedReference ? "install" : "omit") ||
-          preparation.targetName !== (expectedReference?.targetName ?? member.libraryId)
-        ) {
-          throw new Error(
-            `${targetName} Skill intent changed for ${member.skillKey}. Apply the saved Profile, then retry cleanup.`
-          );
-        }
-        const targetPath = join(targetPaths.skillsDir, preparation.targetName);
+        const intent = {
+          disposition: profileReference?.enabled ? "install" as const : "omit" as const,
+          profileId: sourceProfile.id,
+          targetName: profileReference?.targetName ?? member.libraryId
+        };
+        const targetPath = join(targetPaths.skillsDir, intent.targetName);
         const occupyingItem = inventory.find(
           (item) => !item.sharedLocation && resolve(item.path) === resolve(targetPath)
         );
@@ -252,7 +259,7 @@ export const completeSkillCollectionMigrationTransaction = async (
             `${targetName} cannot switch ${member.skillKey}: ${targetPath} is not the prepared AgentEnv copy.`
           );
         }
-        operations.push({ member, preparation, targetPath });
+        operations.push({ member, intent, targetPath });
       }
       contexts.push({
         targetId,
@@ -312,12 +319,12 @@ export const completeSkillCollectionMigrationTransaction = async (
           managedResources = managedResources.filter(
             (resource) => resolve(resource.path) !== resolve(operation.targetPath)
           );
-          if (operation.preparation.disposition === "install") {
+          if (operation.intent.disposition === "install") {
             await dependencies.deployLibrarySkill({
               targetPaths: context.targetPaths,
-              targetName: operation.preparation.targetName,
+              targetName: operation.intent.targetName,
               libraryId: operation.member.libraryId,
-              profileId: operation.preparation.profileId
+              profileId: operation.intent.profileId
             });
             installedPaths.push(operation.targetPath);
             managedResources.push(
@@ -336,6 +343,50 @@ export const completeSkillCollectionMigrationTransaction = async (
             markerPathForFile(operation.targetPath)
           );
         }
+        const currentInventory = await dependencies.scanInventory(
+          [context.targetPaths],
+          skillLibrary
+        );
+        const migratedPaths = new Set(
+          context.operations.map((operation) => resolve(operation.targetPath))
+        );
+        const migratedReferences = new Set(
+          context.operations.map(
+            (operation) => `${operation.member.libraryId}\0${operation.intent.targetName}`
+          )
+        );
+        const migratedReceipts = context.operations.map((operation) => {
+          const observation = currentInventory.find(
+            (item) => resolve(item.path) === resolve(operation.targetPath)
+          );
+          return toAppliedSkillReceipt(reconcileSkill({
+            libraryId: operation.member.libraryId,
+            targetName: operation.intent.targetName,
+            targetPath: operation.targetPath,
+            desired: operation.intent.disposition,
+            observation
+          }));
+        });
+        const skillReceipts = normalizeSkillReceipts([
+          ...(context.state.skillReceipts ?? []).filter((receipt) =>
+            !(receipt.path && migratedPaths.has(resolve(receipt.path))) &&
+            !migratedReferences.has(`${receipt.libraryId}\0${receipt.targetName}`)
+          ),
+          ...migratedReceipts
+        ]);
+        const appliedSkillVersions = {
+          ...(context.state.appliedLibraryVersions?.skills ?? {})
+        };
+        for (const operation of context.operations) {
+          if (operation.intent.disposition === "install") {
+            const contentHash = libraryById.get(operation.member.libraryId)?.contentHash;
+            if (contentHash) {
+              appliedSkillVersions[operation.member.libraryId] = contentHash;
+            }
+          } else {
+            delete appliedSkillVersions[operation.member.libraryId];
+          }
+        }
         const migratedMemberKeys = new Set(
           context.operations.map(
             (operation) => `${operation.member.skillKey}\0${operation.member.libraryId}`
@@ -344,6 +395,11 @@ export const completeSkillCollectionMigrationTransaction = async (
         await dependencies.writeTargetState(context.targetId, {
           ...context.state,
           managedResources,
+          appliedLibraryVersions: {
+            ...context.state.appliedLibraryVersions,
+            skills: appliedSkillVersions
+          },
+          skillReceipts,
           sharedSkillPreparations: (context.state.sharedSkillPreparations ?? []).filter(
             (item) => !migratedMemberKeys.has(`${item.skillKey}\0${item.libraryId}`)
           )
@@ -361,7 +417,7 @@ export const completeSkillCollectionMigrationTransaction = async (
       }
       for (const context of contexts) {
         for (const operation of context.operations) {
-          const shouldExist = operation.preparation.disposition === "install";
+          const shouldExist = operation.intent.disposition === "install";
           if ((await pathExists(join(operation.targetPath, "SKILL.md"))) !== shouldExist) {
             throw new Error(`Agent Skill verification failed: ${operation.targetPath}`);
           }

@@ -450,7 +450,7 @@ describe("activation service v2", () => {
   });
 
   it("automatically re-adopts an exact unmanaged Skill copy on a later Apply", async () => {
-    const { paths, service, skillLibraryStore } = await makeEnv();
+    const { paths, profile, service, skillLibraryStore } = await makeEnv();
     await writeCodexLiveFiles(paths);
     const first = await service.previewProfile("daily-coding", "codex");
     expect((await service.applyProfile("daily-coding", first.id)).ok).toBe(true);
@@ -976,8 +976,8 @@ describe("activation service v2", () => {
     });
   });
 
-  it("moves a collection link only after preparing every nested Skill and preserves its source", async () => {
-    const { paths, service, skillLibraryStore } = await makeEnv();
+  it("moves a collection link without applying unrelated pending Profile changes", async () => {
+    const { paths, profile, profileStore, service, skillLibraryStore } = await makeEnv();
     await writeCodexLiveFiles(paths);
     const librarySkill = (await skillLibraryStore.listSkills()).find(
       (skill) => skill.id === "review"
@@ -999,10 +999,25 @@ describe("activation service v2", () => {
       disposition: "install"
     }));
     expect((await service.applyProfile("daily-coding", preview.id)).ok).toBe(true);
+    const pendingProfile = await profileStore.saveProfile({
+      manifest: profile.manifest,
+      instructions: "# Pending guidance\n",
+      expectedContentHash: profile.contentHash,
+      resources: profile.resources
+    });
+    expect((await service.listTargetStates())[0]).toMatchObject({
+      lifecycleStatus: "pending"
+    });
 
     const result = await service.completeSkillCollectionMigration({
       collectionPath: collectionLink,
       canonicalPath: collectionSource,
+      profileReceipts: {
+        codex: {
+          profileId: pendingProfile.id,
+          contentHash: pendingProfile.contentHash!
+        }
+      },
       members: [{
         skillKey: "review",
         libraryId: "review",
@@ -1016,8 +1031,48 @@ describe("activation service v2", () => {
       .resolves.toContain("# Review");
     await expect(readFile(join(paths.codexHome, "skills", "review", "SKILL.md"), "utf8"))
       .resolves.toContain("# Review");
+    await expect(readFile(paths.globalAgentsPath, "utf8")).resolves.toBe("# New guidance\n");
+    expect((await service.listTargetStates())[0]).toMatchObject({
+      lifecycleStatus: "pending",
+      appliedLibraryVersions: {
+        skills: {
+          review: librarySkill.contentHash
+        }
+      },
+      skillReceipts: [expect.objectContaining({
+        libraryId: "review",
+        targetName: "review",
+        desired: "install",
+        outcome: "managed-active",
+        localOverride: false
+      })]
+    });
 
     await service.rollbackSharedSkillMigration(result.backupId);
+    await expect(readlink(collectionLink)).resolves.toBe(collectionSource);
+
+    await profileStore.saveProfile({
+      manifest: pendingProfile.manifest,
+      instructions: "# Changed after collection review\n",
+      expectedContentHash: pendingProfile.contentHash,
+      resources: pendingProfile.resources
+    });
+    await expect(service.completeSkillCollectionMigration({
+      collectionPath: collectionLink,
+      canonicalPath: collectionSource,
+      profileReceipts: {
+        codex: {
+          profileId: pendingProfile.id,
+          contentHash: pendingProfile.contentHash!
+        }
+      },
+      members: [{
+        skillKey: "review",
+        libraryId: "review",
+        sharedPath: join(collectionLink, "review"),
+        consumerTargetIds: ["codex"]
+      }]
+    })).rejects.toThrow("saved Profile changed during collection review");
     await expect(readlink(collectionLink)).resolves.toBe(collectionSource);
   });
 

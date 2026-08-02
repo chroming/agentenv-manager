@@ -52,6 +52,13 @@ const collection = {
   ]
 } as SkillCollectionLinkGroup;
 
+const readyCollection = {
+  ...collection,
+  state: "ready",
+  conflictCount: 0,
+  items: [collection.items[2]]
+} as SkillCollectionLinkGroup;
+
 describe("SkillCollectionDialog", () => {
   it("supports per-Skill review and one strategy for every unresolved Skill", () => {
     const onProcessItem = vi.fn();
@@ -162,5 +169,55 @@ describe("SkillCollectionDialog", () => {
       "use-collection",
       true
     );
+  });
+
+  it("keeps an unsaved-Profile prerequisite inside the dialog and continues after save", async () => {
+    const onClose = vi.fn();
+    const onMoveSkillCollection = vi.fn()
+      .mockResolvedValueOnce({
+        status: "needs-save",
+        message: "The active Profile has unsaved edits. Save them before moving this collection."
+      })
+      .mockResolvedValueOnce({ status: "moved" });
+
+    const Harness = () => {
+      const actions = useSkillCollectionActions({
+        onImportUnmanaged: vi.fn().mockResolvedValue(true),
+        onRefreshInventory: vi.fn().mockResolvedValue(undefined),
+        onMoveSkillCollection,
+        onClose
+      });
+      return (
+        <SkillCollectionDialog
+          collection={readyCollection}
+          operation={actions.operation}
+          moveIssue={actions.moveIssue}
+          dialogRef={{ current: null }}
+          initialFocusRef={{ current: null }}
+          onClose={onClose}
+          onChangeRetention={vi.fn()}
+          onProcessItem={vi.fn()}
+          onApplyStrategy={vi.fn()}
+          onMove={() => void actions.move(readyCollection)}
+        />
+      );
+    };
+
+    render(<Harness />);
+    const dialog = screen.getByRole("dialog", { name: "Review Skill collection suite" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Move collection" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "Save Profile before moving"
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save Profile and move" }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(onMoveSkillCollection).toHaveBeenNthCalledWith(1, readyCollection, {
+      saveDirtyProfile: false
+    });
+    expect(onMoveSkillCollection).toHaveBeenNthCalledWith(2, readyCollection, {
+      saveDirtyProfile: true
+    });
   });
 });

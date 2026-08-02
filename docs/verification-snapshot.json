@@ -1,28 +1,28 @@
 {
-  "generatedAt": "2026-08-01T16:36:39.252Z",
+  "generatedAt": "2026-08-02T02:57:30.564Z",
   "source": {
-    "commit": "e529b50f146d94a10f37b494c329a82bcb893e0e",
+    "commit": "6dfb3717c462ee45461a37583605171dc6abbdfb",
     "dirty": true,
-    "fingerprint": "7d035ca5fc5d6ee202521e93422efc84de51b76876b7b18d6b3fe28afac867a4",
-    "files": 687
+    "fingerprint": "57acf63764181c7e212ed12d39440163bad6212d4901bf0e4f1ba0f3a82d5553",
+    "files": 688
   },
   "build": {
-    "generatedAt": "2026-08-01T16:29:21.383Z",
-    "sourceFingerprint": "5ea93bd610db8af703f6ad0cf3019fff0859566e5c52a9f6e92e6431930763eb",
+    "generatedAt": "2026-08-02T02:50:15.509Z",
+    "sourceFingerprint": "5779898828072fb18c2cfdad14b0586554992882d8f69f0fa0e02cd4571bfdfe",
     "sourceFiles": 351,
-    "artifactFingerprint": "147469c345bcf6d67c5ae7575cf0bfdf3e3155a3631d2b8e0ea3f5f71c315c93",
+    "artifactFingerprint": "4ec71f2e939d729a10b085b9544cf36c0006ce7578f909427af704c7fb4f1cec",
     "artifactFiles": 41
   },
   "tests": {
     "passed": true,
-    "files": 174,
-    "assertions": 1255,
+    "files": 175,
+    "assertions": 1259,
     "e2eFiles": 16,
-    "e2eAssertions": 185,
+    "e2eAssertions": 186,
     "desktopElectronFiles": 6,
-    "desktopElectronAssertions": 130,
+    "desktopElectronAssertions": 131,
     "electronUiFiles": 1,
-    "electronUiAssertions": 123
+    "electronUiAssertions": 124
   },
   "audits": {
     "styles": "passed",
@@ -33,7 +33,7 @@
   },
   "captures": {
     "directory": "/var/folders/c4/vw8cxnvd7rv46sv4kq0lkg0h0000gn/T/agentenv-ui-captures/verification",
-    "artifactFingerprint": "147469c345bcf6d67c5ae7575cf0bfdf3e3155a3631d2b8e0ea3f5f71c315c93",
+    "artifactFingerprint": "4ec71f2e939d729a10b085b9544cf36c0006ce7578f909427af704c7fb4f1cec",
     "files": 135,
     "viewports": [
       "1180x728",
@@ -43,7 +43,7 @@
     "visualContract": {
       "passed": true,
       "files": 24,
-      "maxChangedPixelRatio": 0.010785413744740534
+      "maxChangedPixelRatio": 0.010787166900420758
     }
   },
   "packagedSmoke": "not-run"

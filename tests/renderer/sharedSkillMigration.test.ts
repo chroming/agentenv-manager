@@ -409,7 +409,7 @@ describe("moveSharedSkillToAgents", () => {
 });
 
 describe("moveSkillCollectionToAgents", () => {
-  it("adds every collection member to the active Profile, applies once, then retires the link", async () => {
+  it("saves exact collection intent without applying unrelated pending Profile changes", async () => {
     const mockApi = api();
     mockApi.listSkillLibrary.mockResolvedValue([
       librarySkill(),
@@ -425,7 +425,7 @@ describe("moveSkillCollectionToAgents", () => {
         targetId: "pi",
         activeProfileId: "pi-profile",
         status: "managed",
-        lifecycleStatus: "applied",
+        lifecycleStatus: "pending",
         managedResourceCount: 0,
         warningCount: 0,
         errorCount: 0
@@ -473,10 +473,16 @@ describe("moveSkillCollectionToAgents", () => {
         ]
       })
     );
-    expect(mockApi.previewApply).toHaveBeenCalledTimes(1);
-    expect(mockApi.applyProfile).toHaveBeenCalledTimes(1);
+    expect(mockApi.previewApply).not.toHaveBeenCalled();
+    expect(mockApi.applyProfile).not.toHaveBeenCalled();
     expect(mockApi.retireSkillCollection).toHaveBeenCalledWith({
-      path: "/home/.agents/skills/superpowers"
+      path: "/home/.agents/skills/superpowers",
+      profileReceipts: {
+        pi: {
+          profileId: "pi-profile",
+          contentHash: "collection-profile-hash"
+        }
+      }
     });
   });
 
@@ -520,7 +526,13 @@ describe("moveSkillCollectionToAgents", () => {
     expect(mockApi.updateProfileSkills).not.toHaveBeenCalled();
     expect(mockApi.applyProfile).not.toHaveBeenCalled();
     expect(mockApi.retireSkillCollection).toHaveBeenCalledWith({
-      path: "/home/.agents/skills/superpowers"
+      path: "/home/.agents/skills/superpowers",
+      profileReceipts: {
+        pi: {
+          profileId: "pi-profile",
+          contentHash: "profile-hash"
+        }
+      }
     });
   });
 
@@ -671,7 +683,8 @@ describe("moveSkillCollectionToAgents", () => {
     });
 
     expect(mockApi.updateProfileSkills).not.toHaveBeenCalled();
-    expect(mockApi.previewApply).toHaveBeenCalledWith("pi-profile", "pi");
+    expect(mockApi.previewApply).not.toHaveBeenCalled();
+    expect(mockApi.applyProfile).not.toHaveBeenCalled();
     expect(mockApi.retireSkillCollection).toHaveBeenCalled();
   });
 });

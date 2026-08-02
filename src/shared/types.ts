@@ -1037,6 +1037,10 @@ export interface RetireSharedSkillInput {
 
 export interface RetireSkillCollectionInput {
   path: string;
+  profileReceipts: Record<string, {
+    profileId: string;
+    contentHash: string;
+  }>;
 }
 
 export interface SkillCleanupResult {

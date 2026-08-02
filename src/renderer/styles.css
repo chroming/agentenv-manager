@@ -3900,6 +3900,31 @@ summary {
   grid-column: 1 / -1;
 }
 
+.inline-state--error {
+  background: var(--danger-bg);
+  border-color: #ffd4cf;
+  color: var(--danger);
+}
+
+.inline-state__content {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.inline-state__content strong {
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  line-height: 18px;
+}
+
+.inline-state__content small {
+  color: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+
 .inline-state__icon {
   align-items: center;
   background: #eef4ff;

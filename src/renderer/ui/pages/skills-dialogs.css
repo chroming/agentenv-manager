@@ -400,6 +400,10 @@
   line-height: 1.5;
 }
 
+.skill-collection-dialog__issue {
+  align-items: flex-start;
+}
+
 .skill-collection-dialog > .preview-actions > :first-child {
   margin-right: auto;
 }
