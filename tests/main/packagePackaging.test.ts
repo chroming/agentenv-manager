@@ -230,6 +230,19 @@ describe("package metadata", () => {
     expect(groupedTests).toContain('"--maxWorkers=4"');
   });
 
+  it("bounds and identifies packaged desktop workflow stages", async () => {
+    const script = await readFile(
+      join(process.cwd(), "scripts", "test-packaged-app.mjs"),
+      "utf8"
+    );
+
+    expect(script).toContain("const packagedStepTimeoutMs = 90_000");
+    expect(script).toContain("[packaged-e2e] START");
+    expect(script).toContain("[packaged-e2e] PASS");
+    expect(script).toContain("[packaged-e2e] FAIL");
+    expect(script).toContain("apply ${target.name}");
+  });
+
   it("scans complete public history for secrets", async () => {
     const workflow = await readFile(
       join(process.cwd(), ".github", "workflows", "ci.yml"),

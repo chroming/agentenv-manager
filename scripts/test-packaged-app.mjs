@@ -44,9 +44,33 @@ let applicationProcess;
 const commandExtension = process.platform === "win32" ? ".cmd" : "";
 const commandPath = (name) =>
   join(homeDir, ".local", "bin", `${name}${commandExtension}`);
+const packagedStepTimeoutMs = 90_000;
 const forceKill = (child) => {
   if (process.platform === "win32") child.kill();
   else child.kill("SIGKILL");
+};
+
+const runPackagedStep = async (label, action, timeoutMs = packagedStepTimeoutMs) => {
+  const startedAt = Date.now();
+  process.stdout.write(`[packaged-e2e] START ${label}\n`);
+  let timeout;
+  try {
+    const result = await Promise.race([
+      action(),
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => {
+          reject(new Error(`${label} did not complete within ${timeoutMs} ms`));
+        }, timeoutMs);
+      })
+    ]);
+    process.stdout.write(`[packaged-e2e] PASS ${label} (${Date.now() - startedAt} ms)\n`);
+    return result;
+  } catch (error) {
+    process.stderr.write(`[packaged-e2e] FAIL ${label} (${Date.now() - startedAt} ms)\n`);
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 };
 
 const packagedTargets = [
@@ -285,9 +309,15 @@ try {
   await runGit(repositoryWork, ["commit", "-m", "add packaged repository skill"]);
   await runGit(repositoryWork, ["push", "origin", "HEAD:refs/heads/main"]);
 
-  application = await launchPackagedApplication();
+  application = await runPackagedStep(
+    "launch initial application",
+    launchPackagedApplication
+  );
   applicationProcess = application.process();
-  const page = await application.firstWindow();
+  const page = await runPackagedStep(
+    "open initial window",
+    () => application.firstWindow()
+  );
   await page.setViewportSize({ width: 1180, height: 728 });
   await page.getByRole("button", { name: "Skills", exact: true }).click();
   await page.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });
@@ -328,19 +358,22 @@ try {
   );
   for (const target of packagedTargets) {
     const profileId = packagedProfileIds.get(target.id);
-    const outcome = await page.evaluate(
-      async ({ profileId, targetId }) => {
-        const preview = await window.agentEnv.previewApply(profileId, targetId);
-        const blocking = preview.issues.filter((issue) => issue.severity === "blocking");
-        if (blocking.length > 0) {
-          return {
-            ok: false,
-            errors: blocking.map((issue) => issue.message)
-          };
-        }
-        return window.agentEnv.applyProfile(profileId, preview.id);
-      },
-      { profileId, targetId: target.id }
+    const outcome = await runPackagedStep(
+      `apply ${target.name}`,
+      () => page.evaluate(
+        async ({ profileId, targetId }) => {
+          const preview = await window.agentEnv.previewApply(profileId, targetId);
+          const blocking = preview.issues.filter((issue) => issue.severity === "blocking");
+          if (blocking.length > 0) {
+            return {
+              ok: false,
+              errors: blocking.map((issue) => issue.message)
+            };
+          }
+          return window.agentEnv.applyProfile(profileId, preview.id);
+        },
+        { profileId, targetId: target.id }
+      )
     );
     assert.equal(
       outcome.ok,
@@ -356,7 +389,10 @@ try {
       /Packaged contract/
     );
   }
-  const appliedStates = await page.evaluate(() => window.agentEnv.listTargetStates());
+  const appliedStates = await runPackagedStep(
+    "read applied Target states",
+    () => page.evaluate(() => window.agentEnv.listTargetStates())
+  );
   assert.deepEqual(
     appliedStates.map((state) => state.targetId).sort(),
     packagedTargets.map((target) => target.id).sort()
@@ -365,24 +401,39 @@ try {
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     true
   );
-  await closePackagedApplication(application, page, applicationProcess);
+  await runPackagedStep(
+    "close initial application",
+    () => closePackagedApplication(application, page, applicationProcess),
+    15_000
+  );
   application = undefined;
   applicationProcess = undefined;
-  application = await launchPackagedApplication();
+  application = await runPackagedStep(
+    "launch restarted application",
+    launchPackagedApplication
+  );
   applicationProcess = application.process();
-  const restartedPage = await application.firstWindow();
+  const restartedPage = await runPackagedStep(
+    "open restarted window",
+    () => application.firstWindow()
+  );
   await restartedPage.getByRole("button", { name: "Skills", exact: true })
     .waitFor({ state: "visible" });
   await restartedPage.getByRole("button", { name: "Skills", exact: true }).click();
   await restartedPage.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });
-  const restartedStates = await restartedPage.evaluate(() =>
-    window.agentEnv.listTargetStates()
+  const restartedStates = await runPackagedStep(
+    "read restarted Target states",
+    () => restartedPage.evaluate(() => window.agentEnv.listTargetStates())
   );
   assert.deepEqual(
     restartedStates.map((state) => [state.targetId, state.lifecycleStatus]).sort(),
     packagedTargets.map((target) => [target.id, "applied"]).sort()
   );
-  await closePackagedApplication(application, restartedPage, applicationProcess);
+  await runPackagedStep(
+    "close restarted application",
+    () => closePackagedApplication(application, restartedPage, applicationProcess),
+    15_000
+  );
   application = undefined;
   applicationProcess = undefined;
   process.stdout.write(
