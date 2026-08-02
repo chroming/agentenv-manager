@@ -32,7 +32,8 @@ const run = (args) => new Promise((resolveRun, rejectRun) => {
 await run([
   ...(e2eOnly ? ["tests/e2e"] : []),
   "--exclude",
-  electronE2eExcludeGlob
+  electronE2eExcludeGlob,
+  "--maxWorkers=4"
 ]);
 for (const testFile of electronE2eTestFiles) {
   await run([

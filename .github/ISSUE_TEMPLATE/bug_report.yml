@@ -19,8 +19,10 @@ body:
     attributes:
       label: Operating system and architecture
       options:
-        - Apple silicon
-        - Intel
+        - macOS Apple silicon
+        - macOS Intel
+        - Windows x64
+        - Linux x64
         - Other or unknown
     validations:
       required: true

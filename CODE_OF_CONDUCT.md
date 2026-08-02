@@ -15,6 +15,6 @@ Participants are expected to:
 Project maintainers may edit or remove contributions and restrict participation
 when behavior makes the community unsafe or persistently disruptive.
 
-Report conduct concerns privately through the same channel described in
-[SECURITY.md](SECURITY.md). Reports will be handled with discretion and without
-retaliation.
+Report conduct concerns privately to `chroming@live.com`. Do not use a public
+issue or GitHub's vulnerability-reporting channel for conduct reports. Reports
+will be handled with discretion and without retaliation.

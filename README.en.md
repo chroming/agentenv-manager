@@ -29,11 +29,13 @@ before first taking over an important Agent environment.
 ## Highlights
 
 - Create, edit, duplicate, capture, preview, and apply reusable Profiles.
-- Evaluate one saved Profile with OpenCode on macOS in a sandboxed clone, then
-  review the response, Git Diff, duration, and explicitly reported usage without
-  applying the Profile or changing the original project or Agent. The run invokes
-  the configured model account and may consume quota. Project-local Agent resources
-  are temporarily excluded from the clone so the result measures the selected Profile.
+- Before Apply on macOS, compare the current Agent environment with one saved
+  Profile by running the same task in two isolated temporary homes and Workspace
+  snapshots. Review both responses, file changes, duration, and explicitly
+  reported usage without changing the original folder or real Agent. OpenCode,
+  Codex, Claude Code, Antigravity CLI, and Pi have isolated adapters; unsupported
+  Agents explain why Compare is unavailable. Runs invoke the configured model
+  account, may send selected context to that provider, and may consume quota.
 - Keep Skills in one Library instead of duplicating full files across Agents.
 - Import one Skill, a repository directory, or a repository through GitHub,
   generic HTTPS Git, or SSH Git.
@@ -98,6 +100,13 @@ Create a signed and notarized release after configuring Apple credentials:
 ```bash
 npm run dist:mac:signed
 ```
+
+Maintainer tag releases use `.github/workflows/release.yml`. Configure the
+repository secrets `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PASSWORD`,
+`KEYCHAIN_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and
+`APPLE_TEAM_ID` before pushing a `v*` tag. The workflow verifies the product,
+builds a fresh signed artifact, notarizes and staples it, generates a CycloneDX
+SBOM and SHA-256 checksums, and then creates the GitHub Release.
 
 See [docs/development.md](docs/development.md) for architecture, safe test
 homes, Target integrations, and release verification.

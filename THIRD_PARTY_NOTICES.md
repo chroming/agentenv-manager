@@ -28,5 +28,20 @@ All product names, logos, and trademarks belong to their respective owners.
 AgentEnv Manager is an independent project and is not affiliated with,
 endorsed by, or sponsored by those owners.
 
+The product-identification assets under
+`src/renderer/assets/target-icons/` are excluded from AgentEnv Manager's
+Apache-2.0 grant. They may be used only as permitted by their respective owners
+and applicable trademark law. Downstream redistributors who cannot rely on that
+permission should replace these assets while preserving the adapter identifiers.
+
+Official product references:
+
+- [OpenAI Codex](https://openai.com/codex/)
+- [Anthropic Claude Code](https://www.anthropic.com/claude-code)
+- [OpenCode](https://opencode.ai/)
+- [Google Antigravity](https://antigravity.google/)
+- [TRAE](https://www.trae.ai/)
+- [Pi Coding Agent](https://github.com/earendil-works/pi/tree/main/packages/coding-agent)
+
 The Apache-2.0 license for AgentEnv Manager does not grant rights to third-party
-trademarks.
+trademarks, product names, or logos.

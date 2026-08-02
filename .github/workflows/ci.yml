@@ -22,7 +22,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run audit:dependencies
       - run: npm run audit:targets
       - run: npm run audit:styles
       - run: npm run audit:modules
@@ -50,7 +50,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run audit:dependencies
       - run: npm run audit:targets
       - run: npm run audit:translations
       - run: npm run test:platform

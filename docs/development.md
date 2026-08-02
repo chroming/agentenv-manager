@@ -168,3 +168,9 @@ npm run dist:mac:signed
 Signing credentials belong in Keychain or environment-backed CI secrets. Never
 commit `.env` files, certificates, API keys, app-specific passwords, or private
 repository credentials.
+
+The tag workflow in `.github/workflows/release.yml` is the public release owner.
+It accepts `v*` tags only after the repository signing and notarization secrets
+listed in the README are configured. It verifies a freshly cleaned `release/`
+directory, emits an SBOM and checksums, and publishes only after signing,
+notarization, stapling, and the release gate succeed.

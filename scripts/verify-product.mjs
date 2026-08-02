@@ -63,6 +63,7 @@ await run("npx", [
   "run",
   "--exclude",
   electronE2eExcludeGlob,
+  "--maxWorkers=4",
   "--reporter=json",
   `--outputFile=${parallelReportPath}`
 ]);

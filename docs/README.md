@@ -1,8 +1,8 @@
 # Documentation Guide
 
-The documentation is split into current product authority, engineering
-verification, and dated historical evidence. This index is the starting point
-for deciding which document governs a change.
+The documentation is split into current product authority and engineering
+verification. This index is the starting point for deciding which document
+governs a change.
 
 ## Current Authority
 
@@ -28,20 +28,10 @@ When documents disagree, `product-contracts.md` governs product behavior.
 Executable tests and audits must be updated with the contract; passing an old
 test does not override a newer contract.
 
-## Historical Material
-
-The following directories are retained as design and implementation history:
-
-- `design-briefs/`
-- `product-audit/`
-- `superpowers/plans/`
-- `superpowers/specs/`
-- dated files under `verification/`
-
-They are useful for understanding decisions and comparing prior interfaces,
-but they are not current requirements or open-work trackers. An unchecked item
-inside a dated plan or audit does not become current work unless it is also
-present in the product contract or current quality checklist.
+Historical product audits, generated screenshots, and private planning notes
+are intentionally excluded from the public source tree. Public decisions must
+be represented by current contracts, tests, changelog entries, issues, or pull
+requests rather than an obsolete internal plan.
 
 ## Verification Commands
 

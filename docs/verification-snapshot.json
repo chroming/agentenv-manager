@@ -1,14 +1,14 @@
 {
-  "generatedAt": "2026-08-02T11:53:30.287Z",
+  "generatedAt": "2026-08-02T14:57:58.265Z",
   "source": {
-    "commit": "397c79166df07e2132a024d0dc19fc2e836d47fa",
+    "commit": "3c0a101b57b4b681ab85f5218e4e8f53d8899841",
     "dirty": true,
-    "fingerprint": "fe84d85e7a11b51dca585f86335ea28adf01d91d6293476c4d409c9f30bbfc17",
-    "files": 697
+    "fingerprint": "f7244439a463ae79de8c8817e92de2653b62a998833202ebd0c87692fd709fa2",
+    "files": 623
   },
   "build": {
-    "generatedAt": "2026-08-02T11:46:10.647Z",
-    "sourceFingerprint": "3161fe923c1503d601c9782df7d9419908dd5863b4e4ac6d51ee109ad4f696d9",
+    "generatedAt": "2026-08-02T14:55:19.223Z",
+    "sourceFingerprint": "6b6db878952a943d7aa118d22b4240bb9359c344a3597e6bcdd3ce517a9460b3",
     "sourceFiles": 356,
     "artifactFingerprint": "b43780dd66829bd13d9bc4e825339e28245d306a074dc63f818c157ab3a645ed",
     "artifactFiles": 41
@@ -16,7 +16,7 @@
   "tests": {
     "passed": true,
     "files": 178,
-    "assertions": 1277,
+    "assertions": 1280,
     "e2eFiles": 16,
     "e2eAssertions": 188,
     "desktopElectronFiles": 6,
@@ -46,5 +46,5 @@
       "maxChangedPixelRatio": 0.011213183730715287
     }
   },
-  "packagedSmoke": "not-run"
+  "packagedSmoke": "passed"
 }

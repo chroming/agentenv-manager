@@ -13,8 +13,10 @@ Thank you for helping improve AgentEnv Manager.
 
 ## Development Setup
 
-AgentEnv Manager currently targets macOS. Install Node.js 22.12 or newer and
-use the repository lockfile:
+AgentEnv Manager targets macOS, Windows, and Linux. Install Node.js 22.12 or
+newer and use the repository lockfile. macOS arm64 currently has the strongest
+local packaged evidence; platform-specific behavior still requires its native
+CI runner before release:
 
 ```bash
 npm ci
@@ -33,6 +35,7 @@ a pull request, run:
 npm run build
 npm test
 npm run test:e2e
+npm run audit:dependencies
 ```
 
 Changes to filesystem ownership, Profile Apply, backup, recovery, or packaged

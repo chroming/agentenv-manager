@@ -7,8 +7,16 @@
     "email": "chroming@live.com"
   },
   "homepage": "https://github.com/chroming/agentenv-manager",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chroming/agentenv-manager.git"
+  },
+  "bugs": {
+    "url": "https://github.com/chroming/agentenv-manager/issues"
+  },
   "license": "Apache-2.0",
   "private": true,
+  "packageManager": "npm@11.17.0",
   "type": "module",
   "main": "out/main/main.js",
   "engines": {
@@ -31,10 +39,11 @@
     "audit:targets": "node scripts/audit-target-boundaries.mjs",
     "audit:translations": "node scripts/audit-translations.mjs",
     "audit:features": "node scripts/audit-feature-evidence.mjs",
+    "audit:dependencies": "npm audit --audit-level=high",
     "verify:current": "node scripts/assert-verification-current.mjs",
     "verify:visual": "npm run build && node scripts/verify-visual.mjs",
     "verify:product": "node scripts/verify-product.mjs",
-    "verify:release": "node scripts/verify-product.mjs --packaged",
+    "verify:release": "npm run audit:dependencies && node scripts/verify-product.mjs --packaged",
     "target:new": "node scripts/create-target-integration.mjs",
     "capture:ui": "npm run build && node scripts/capture-profiles.mjs --output /tmp/agentenv-ui-captures/current",
     "capture:profiles": "npm run build && node scripts/capture-profiles.mjs",
@@ -77,7 +86,7 @@
     "vitest": "^4.1.9"
   },
   "build": {
-    "appId": "com.agentenv.manager",
+    "appId": "io.github.chroming.agentenvmanager",
     "productName": "AgentEnv Manager",
     "directories": {
       "output": "release"

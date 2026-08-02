@@ -29,6 +29,16 @@ Apply uses backups and recovery journals. Reports should treat bypasses of
 Preview, ownership checks, backup, atomic replacement, or rollback as security
 issues.
 
-The application does not need Agent API keys. GitHub OAuth tokens are encrypted
-with Electron `safeStorage`. System Git credentials and SSH keys remain owned
-by the operating system and Git tooling.
+GitHub OAuth tokens are encrypted with Electron `safeStorage`. System Git
+credentials and SSH keys remain owned by the operating system and Git tooling.
+
+Profile Compare invokes the selected Agent CLI and therefore needs that
+Agent's existing authentication context. It copies only the minimum supported
+credential material into a temporary owner-only home, or passes already-set
+credential environment variables to the child process. Temporary credentials
+must never be written to comparison reports, diagnostics, Workspace Sync, or
+the source repository. Failures to isolate or remove them are security issues.
+
+Compare may send the entered task and included Workspace/Profile context to the
+model provider configured by the selected Agent. It must not Apply a Profile,
+write to the real Agent home, or modify the selected source folder.

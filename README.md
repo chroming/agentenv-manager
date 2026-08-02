@@ -252,6 +252,19 @@ npm run dist:mac:signed
 
 该命令会在打包后校验应用签名、Gatekeeper 评估和 DMG stapling；任一项失败都会终止发布。
 
+维护者推送 `v*` tag 时，`.github/workflows/release.yml` 会执行完整产品门禁、
+从 GitHub Actions Secrets 导入 Developer ID 证书、重新构建并 notarize/staple，
+生成 CycloneDX SBOM 与 `SHA256SUMS`，最后创建 GitHub Release。发布前需配置：
+
+```text
+MACOS_CERTIFICATE
+MACOS_CERTIFICATE_PASSWORD
+KEYCHAIN_PASSWORD
+APPLE_ID
+APPLE_APP_SPECIFIC_PASSWORD
+APPLE_TEAM_ID
+```
+
 验证当前平台实际打包后的应用能在精简 `PATH` 下发现所有内置 Agent
 与系统 Git、导入 Repository Skill，并完成六个 Agent 的 Profile Apply：
 

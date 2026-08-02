@@ -155,7 +155,7 @@ describe("package metadata", () => {
       "npm run pack && node scripts/test-packaged-app.mjs"
     );
     expect(packageJson.build).toMatchObject({
-      appId: "com.agentenv.manager",
+      appId: "io.github.chroming.agentenvmanager",
       productName: "AgentEnv Manager",
       directories: { output: "release" },
       mac: {
@@ -188,6 +188,41 @@ describe("package metadata", () => {
     ).resolves.toMatchObject({
       size: expect.any(Number)
     });
+  });
+
+  it("publishes tagged releases only after verification and signing", async () => {
+    const workflow = await readFile(
+      join(process.cwd(), ".github", "workflows", "release.yml"),
+      "utf8"
+    );
+
+    expect(workflow).toContain('tags:');
+    expect(workflow).toContain('npm run verify:release');
+    expect(workflow).toContain('npm run dist:mac:signed');
+    expect(workflow).toContain('npm sbom --sbom-format cyclonedx');
+    expect(workflow).toContain('release/SHA256SUMS');
+    expect(workflow).toContain('gh release create');
+  });
+
+  it("rejects stale files in signed macOS release output", async () => {
+    const script = await readFile(
+      join(process.cwd(), "scripts", "build-signed-mac.mjs"),
+      "utf8"
+    );
+
+    expect(script).toContain('await rm(releaseDir, { recursive: true, force: true })');
+    expect(script).toContain('dmgs.length !== 1 || zips.length !== 1');
+    expect(script).toContain('mtimeMs < releaseStartedAt');
+  });
+
+  it("bounds filesystem-heavy test concurrency on high-core hosts", async () => {
+    const [productGate, groupedTests] = await Promise.all([
+      readFile(join(process.cwd(), "scripts", "verify-product.mjs"), "utf8"),
+      readFile(join(process.cwd(), "scripts", "run-vitest-groups.mjs"), "utf8")
+    ]);
+
+    expect(productGate).toContain('"--maxWorkers=4"');
+    expect(groupedTests).toContain('"--maxWorkers=4"');
   });
 
   it("keeps the macOS icon corners transparent", async () => {
