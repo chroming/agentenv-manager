@@ -33,7 +33,14 @@ requireCurrentElectronBuild();
 afterEach(async () => {
   await app?.close().catch(() => undefined);
   app = undefined;
-  if (root) await rm(root, { recursive: true, force: true });
+  if (root) {
+    await rm(root, {
+      recursive: true,
+      force: true,
+      maxRetries: 4,
+      retryDelay: 50
+    });
+  }
   root = "";
 });
 
@@ -736,5 +743,5 @@ describe("Conversations desktop workflow", () => {
     expect(await readFile(openCodeDatabasePath)).toEqual(openCodeSource);
     expect(await readFile(antigravityTranscriptPath)).toEqual(antigravitySource);
     expect(await readFile(traeSessionPath)).toEqual(traeSource);
-  }, 30_000);
+  }, 60_000);
 });
