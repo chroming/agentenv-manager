@@ -29,6 +29,17 @@ const PROJECT_AGENT_RESOURCES = [
   ".agents",
   "AGENTS.md"
 ] as const;
+const CLAUDE_EVALUATION_ENV_KEYS = [
+  "ANTHROPIC_BASE_URL",
+  "ANTHROPIC_AUTH_TOKEN",
+  "ANTHROPIC_API_KEY",
+  "ANTHROPIC_MODEL",
+  "ANTHROPIC_DEFAULT_OPUS_MODEL",
+  "ANTHROPIC_DEFAULT_SONNET_MODEL",
+  "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+  "CLAUDE_CODE_SUBAGENT_MODEL",
+  "CLAUDE_CODE_EFFORT_LEVEL"
+] as const;
 const AUTH_TIMEOUT_MS = 5_000;
 const AUTH_OUTPUT_LIMIT = 8 * 1024;
 const MACOS_SANDBOX_EXECUTABLE = "/usr/bin/sandbox-exec";
@@ -120,6 +131,21 @@ const objectAt = (content: string, key: string) => {
     return isRecord(value) && isRecord(value[key]) ? value[key] : {};
   } catch {
     return undefined;
+  }
+};
+
+const readClaudeEvaluationEnvironment = async (input: EvaluationProbeInput) => {
+  try {
+    const value = parse(await readTextIfExists(input.targetPaths.configPath) || "{}");
+    const env = isRecord(value) && isRecord(value.env) ? value.env : {};
+    return Object.fromEntries(
+      CLAUDE_EVALUATION_ENV_KEYS.flatMap((key) =>
+        typeof env[key] === "string" && env[key].trim()
+          ? [[key, env[key]]]
+          : [])
+    );
+  } catch {
+    return {};
   }
 };
 
@@ -230,7 +256,9 @@ export const createClaudeEvaluationCapability = (): AgentEvaluationCapability =>
       "Claude Code credentials",
       input.platform
     );
+    const configuredEnvironment = await readClaudeEvaluationEnvironment(input);
     const env = createIsolatedEnvironment(input, xdg, {
+      ...configuredEnvironment,
       CLAUDE_CONFIG_DIR: input.evaluationTargetPaths.configDir,
       CLAUDE_CODE_TMPDIR: input.evaluationTempDir,
       CLAUDE_TMPDIR: input.evaluationTempDir,

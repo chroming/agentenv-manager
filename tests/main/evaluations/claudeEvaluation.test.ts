@@ -46,7 +46,15 @@ describe("Claude Code evaluation capability", () => {
       mkdir(project, { recursive: true })
     ]);
     await writeFile(join(sourcePaths.configDir, ".credentials.json"), "{\"oauth\":\"secret\"}\n");
-    await writeFile(sourcePaths.configPath, "{\"theme\":\"dark\"}\n");
+    await writeFile(sourcePaths.configPath, JSON.stringify({
+      theme: "dark",
+      env: {
+        ANTHROPIC_BASE_URL: "https://api.deepseek.com/anthropic",
+        ANTHROPIC_AUTH_TOKEN: "deepseek-secret",
+        ANTHROPIC_MODEL: "deepseek-v4-pro[1m]",
+        UNRELATED_SECRET: "must-not-be-copied"
+      }
+    }));
 
     const capability = createClaudeEvaluationCapability();
     const spec = await capability.createLaunchSpec({
@@ -80,6 +88,10 @@ describe("Claude Code evaluation capability", () => {
     expect(spec.env.CLAUDE_CODE_TMPDIR).toBe(temp);
     expect(spec.env.CLAUDE_TMPDIR).toBe(temp);
     expect(spec.env.BUN_TMPDIR).toBe(temp);
+    expect(spec.env.ANTHROPIC_BASE_URL).toBe("https://api.deepseek.com/anthropic");
+    expect(spec.env.ANTHROPIC_AUTH_TOKEN).toBe("deepseek-secret");
+    expect(spec.env.ANTHROPIC_MODEL).toBe("deepseek-v4-pro[1m]");
+    expect(spec.env.UNRELATED_SECRET).toBeUndefined();
     expect(await readFile(join(evaluationPaths.configDir, ".credentials.json"), "utf8"))
       .toBe('{"oauth":"secret"}\n');
     await expect(readFile(evaluationPaths.configPath, "utf8")).rejects.toThrow();

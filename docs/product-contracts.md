@@ -265,6 +265,9 @@ suite, a correctness score, or a generic Agent launcher.
   child is also denied reads from the real user Home and original selected folder, except for the
   narrowly declared executable runtime required to launch the selected Agent. A platform without
   an implemented sandbox reports comparison unavailable and MUST NOT downgrade this guarantee.
+- Claude Code custom-provider comparison may project only documented Anthropic endpoint,
+  credential, model, and effort environment fields from `settings.json` into the isolated process.
+  It MUST NOT copy the full settings file or pass unrelated `env` entries through.
 - Disposable comparison roots MUST live outside the protected real Home and every Home, Target,
   Workspace, and temporary path passed to the child MUST use its canonical filesystem form. macOS
   path aliases such as `/var` to `/private/var` MUST NOT make the sandbox reject its own isolated
