@@ -22,6 +22,7 @@ interface UseProfileActivationControllerOptions {
   onError(error: string | undefined): void;
   onRollbackClear(): void;
   onStatus(message: string): void;
+  onTargetsRefresh(targets: TargetInfo[]): void;
   onTargetStatesRefresh(states: TargetManagementState[]): void;
   translate(message: string): string;
 }
@@ -32,6 +33,7 @@ export const useProfileActivationController = ({
   onError,
   onRollbackClear,
   onStatus,
+  onTargetsRefresh,
   onTargetStatesRefresh,
   translate
 }: UseProfileActivationControllerOptions) => {
@@ -93,7 +95,17 @@ export const useProfileActivationController = ({
     setIsPreviewing(true);
     onBusyChange(true);
     try {
-      const nextPreview = await window.agentEnv.previewApply(profile.id, target?.id);
+      let currentTarget = target;
+      if (target && !target.health.canWrite) {
+        try {
+          const refreshedTargets = await window.agentEnv.listTargets(true);
+          onTargetsRefresh(refreshedTargets);
+          currentTarget = refreshedTargets.find((candidate) => candidate.id === target.id) ?? target;
+        } catch {
+          // Keep the cached health evidence in the Preview when discovery cannot refresh.
+        }
+      }
+      const nextPreview = await window.agentEnv.previewApply(profile.id, currentTarget?.id);
       if (requestId !== previewRequestRef.current) {
         return;
       }
@@ -105,16 +117,16 @@ export const useProfileActivationController = ({
         onTargetStatesRefresh(refreshedStates);
       }
       const rendererBlockers: ApplyIssue[] = [
-        ...(!target?.health.canWrite
+        ...(!currentTarget?.health.canWrite
           ? [{
-              id: `target-unavailable:${target?.id ?? "unknown"}`,
+              id: `target-unavailable:${currentTarget?.id ?? "unknown"}`,
               code: "target-unavailable" as const,
               disposition: "block" as const,
               resolution: "external-action" as const,
               resourceKind: "target" as const,
-              resourceId: target?.id,
+              resourceId: currentTarget?.id,
               message:
-                target?.health.summary || `${target?.name ?? "Agent"} is unavailable`
+                currentTarget?.health.summary || `${currentTarget?.name ?? "Agent"} is unavailable`
             }]
           : []),
         ...localValidationErrors.map((message, index) => ({
@@ -148,6 +160,7 @@ export const useProfileActivationController = ({
     onError,
     onRollbackClear,
     onStatus,
+    onTargetsRefresh,
     onTargetStatesRefresh
   ]);
 

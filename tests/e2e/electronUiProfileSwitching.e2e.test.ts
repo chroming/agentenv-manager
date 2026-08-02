@@ -255,6 +255,34 @@ const writeTraeProfile = async (appDataRoot: string) => {
   });
 };
 
+const writeAntigravityProfile = async (appDataRoot: string) => {
+  const profileId = "ui-antigravity-daily";
+  const profileDir = join(appDataRoot, "profiles", profileId);
+  await mkdir(profileDir, { recursive: true });
+  await writeJson(join(profileDir, "profile.json"), {
+    id: profileId,
+    name: "UI Antigravity daily",
+    description: "UI Antigravity portable profile",
+    preferredTargetId: "antigravity",
+    createdFromTargetId: "antigravity",
+    version: 2
+  });
+  await writeFile(
+    join(profileDir, "INSTRUCTIONS.md"),
+    "# UI Antigravity\n\n- Use the managed Antigravity CLI environment.\n",
+    "utf8"
+  );
+  await writeJson(join(profileDir, "resources.json"), {
+    skills: [{ libraryId: "shared-reviewer", targetName: "shared-reviewer", enabled: true }],
+    managementByTarget: {
+      antigravity: { instructions: "manage", skills: "manage" }
+    },
+    mcpByTarget: {
+      antigravity: { mode: "ignore", selections: [] }
+    }
+  });
+};
+
 const writeLibrarySkill = async (appDataRoot: string) => {
   const sourceDir = join(appDataRoot, "source-skills", "shared-reviewer");
   const libraryDir = join(appDataRoot, "skills-library", "shared-reviewer");
@@ -489,6 +517,7 @@ const launchApp = async (
     testCloseGuard?: boolean;
     migratedBackupFixtures?: boolean;
     includeClaudeTarget?: boolean;
+    includeAntigravityTarget?: boolean;
     includeTraeTarget?: boolean;
     includePiTarget?: boolean;
     enabledTargetIds?: string[];
@@ -514,6 +543,7 @@ const launchApp = async (
   const opencodeDir = join(homeDir, ".config", "opencode");
   const codexDir = join(homeDir, ".codex");
   const claudeDir = join(homeDir, ".claude");
+  const geminiDir = join(homeDir, ".gemini");
   const traeDir = join(homeDir, ".trae");
   const piDir = join(homeDir, ".pi", "agent");
   const projectSkillRoot = join(root, "project-skills");
@@ -550,11 +580,28 @@ const launchApp = async (
     await chmod(claudeExecutable, 0o755);
     await mkdir(claudeDir, { recursive: true });
   }
+  if (options.includeAntigravityTarget) {
+    const antigravityExecutable = join(binDir, "agy");
+    await writeFile(antigravityExecutable, "#!/bin/sh\necho fake-agy\n", "utf8");
+    await chmod(antigravityExecutable, 0o755);
+    await mkdir(join(geminiDir, "config"), { recursive: true });
+  }
   if (options.includeTraeTarget) {
     const traeExecutable = join(binDir, "traecli");
     await writeFile(traeExecutable, "#!/bin/sh\necho fake-traecli\n", "utf8");
     await chmod(traeExecutable, 0o755);
     await mkdir(traeDir, { recursive: true });
+  }
+  if (options.includeAntigravityTarget) {
+    if (!options.omitAllProfiles) {
+      await writeAntigravityProfile(appDataRoot);
+    }
+    await writeFile(join(geminiDir, "GEMINI.md"), "# Existing UI Antigravity\n", "utf8");
+    await writeJson(join(geminiDir, "config", "mcp_config.json"), {
+      mcpServers: {
+        native: { command: "native-antigravity" }
+      }
+    });
   }
   if (options.includePiTarget) {
     const piExecutable = join(binDir, "pi");
@@ -866,6 +913,7 @@ const launchApp = async (
     opencodeDir,
     codexDir,
     claudeDir,
+    geminiDir,
     traeDir,
     piDir,
     librarySkill,
@@ -1068,7 +1116,7 @@ const openSettingsCategory = async (page: Page, category: SettingsCategoryName) 
   await expect.poll(() => tab.getAttribute("aria-selected")).toBe("true");
 };
 
-type ApplyTargetName = "OpenCode" | "Codex" | "Claude Code" | "Trae CLI";
+type ApplyTargetName = "OpenCode" | "Codex" | "Claude Code" | "Antigravity CLI" | "Trae CLI";
 
 const applyActionButton = (page: Page, _targetName: ApplyTargetName) =>
   page.getByRole("button", { name: "Apply", exact: true }).first();
@@ -9282,6 +9330,48 @@ describe("Electron UI profile switching e2e", () => {
     expect(reenabledResources.skills).toContainEqual(
       { libraryId: "layout-skill-1", targetName: "layout-skill-1", enabled: true }
     );
+  }, standardElectronTestTimeout);
+
+  it("enables Antigravity Apply immediately after saving resource policy changes", async () => {
+    const { geminiDir, page } = await launchApp({
+      includeAntigravityTarget: true,
+      initialWorkspace: "profiles"
+    });
+    await selectProfile(page, "UI Antigravity daily");
+    await previewAndApply(page, "Antigravity CLI");
+
+    const instructionsPath = join(geminiDir, "GEMINI.md");
+    const skillPath = join(
+      geminiDir,
+      "antigravity-cli",
+      "skills",
+      "shared-reviewer",
+      "SKILL.md"
+    );
+    await expect(readFile(instructionsPath, "utf8")).resolves.toContain("UI Antigravity");
+    await expect(readFile(skillPath, "utf8")).resolves.toContain("Shared Reviewer");
+
+    await setComposerResourcePolicy(
+      page,
+      "Instructions",
+      "Antigravity CLI",
+      "Turn off"
+    );
+    await setComposerResourcePolicy(page, "Skills", "Antigravity CLI", "Turn off");
+    const saveButton = page.getByRole("button", { name: "Save", exact: true });
+    const applyButton = applyActionButton(page, "Antigravity CLI");
+    await expect.poll(() => saveButton.isEnabled()).toBe(true);
+    expect(await applyButton.isDisabled()).toBe(true);
+
+    await saveProfile(page);
+
+    await expect.poll(() => applyButton.isEnabled()).toBe(true);
+    await expect
+      .poll(() => page.getByRole("status", { name: "Profile readiness" }).textContent())
+      .toContain("Apply pending on Antigravity CLI");
+    await previewAndApply(page, "Antigravity CLI");
+    await expect(fileExists(instructionsPath)).resolves.toBe(false);
+    await expect(fileExists(skillPath)).resolves.toBe(false);
   }, standardElectronTestTimeout);
 
   it("keeps mixed Profile Skill status and action lanes aligned", async () => {

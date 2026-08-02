@@ -2968,6 +2968,41 @@ describe("App", () => {
     expect(applyButton).toBeEnabled();
   });
 
+  it("rechecks a cached unavailable Agent before blocking Apply", async () => {
+    const unavailableTarget: TargetInfo = {
+      ...target,
+      health: {
+        ...target.health,
+        status: "missing",
+        installationFound: false,
+        installationEvidence: [],
+        executablePath: undefined,
+        executableFound: false,
+        canWrite: false,
+        summary: "opencode CLI not found"
+      }
+    };
+    const listTargets = vi
+      .fn()
+      .mockResolvedValueOnce([unavailableTarget])
+      .mockResolvedValue([target]);
+    const api = installApi({ listTargets });
+    render(<App />);
+
+    await openProfiles();
+    const applyButton = screen.getByRole("button", { name: "Apply" });
+    expect(screen.getByRole("status", { name: "Profile readiness" }))
+      .toHaveTextContent("OpenCode unavailable");
+
+    fireEvent.click(applyButton);
+
+    await waitFor(() => expect(listTargets).toHaveBeenLastCalledWith(true));
+    await waitFor(() => expect(api.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
+    const dialog = await screen.findByRole("dialog", { name: "Preview" });
+    expect(dialog).not.toHaveTextContent("opencode CLI not found");
+    expect(within(dialog).getByRole("button", { name: /^Apply$/ })).toBeEnabled();
+  });
+
   it("opens Compare only for a saved Profile and disables it while the draft is dirty", async () => {
     installApi();
     render(<App />);

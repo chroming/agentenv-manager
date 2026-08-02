@@ -74,6 +74,7 @@ const renderController = () => {
     onError: vi.fn(),
     onRollbackClear: vi.fn(),
     onStatus: vi.fn(),
+    onTargetsRefresh: vi.fn(),
     onTargetStatesRefresh: vi.fn(),
     translate: vi.fn((message: string) => message)
   };

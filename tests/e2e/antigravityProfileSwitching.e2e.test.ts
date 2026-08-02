@@ -64,5 +64,54 @@ describe("Antigravity Profile v2 switching e2e", () => {
       .rejects.toThrow();
     await expect(readFile(join(geminiDir, "antigravity-cli", "skills", "beta", "SKILL.md"), "utf8"))
       .resolves.toContain("# beta");
+
+    const saved = await profileStore.readProfile("antigravity-beta");
+    await profileStore.saveProfile({
+      manifest: saved.manifest,
+      instructions: saved.instructions,
+      resources: {
+        ...saved.resources,
+        managementByTarget: {
+          antigravity: { instructions: "disable", skills: "disable" }
+        }
+      },
+      expectedContentHash: saved.contentHash
+    });
+
+    const disabledPreview = await service.previewProfile("antigravity-beta", "antigravity");
+    expect(blockingMessages(disabledPreview.issues)).toEqual([]);
+    expect(disabledPreview.changes).toContainEqual(expect.objectContaining({
+      path: join(geminiDir, "GEMINI.md"),
+      action: "remove"
+    }));
+    expect(disabledPreview.resourceChanges).toContainEqual(expect.objectContaining({
+      kind: "skill",
+      action: "remove",
+      name: "beta"
+    }));
+    expect((await service.applyProfile("antigravity-beta", disabledPreview.id)).ok).toBe(true);
+    await expect(readFile(join(geminiDir, "GEMINI.md"), "utf8")).rejects.toThrow();
+    await expect(readFile(join(geminiDir, "antigravity-cli", "skills", "beta", "SKILL.md"), "utf8"))
+      .rejects.toThrow();
+    expect(await readFile(join(configDir, "mcp_config.json"), "utf8")).toBe(mcpConfig);
+
+    const disabled = await profileStore.readProfile("antigravity-beta");
+    await profileStore.saveProfile({
+      manifest: disabled.manifest,
+      instructions: disabled.instructions,
+      resources: {
+        ...disabled.resources,
+        managementByTarget: {
+          antigravity: { instructions: "manage", skills: "manage" }
+        }
+      },
+      expectedContentHash: disabled.contentHash
+    });
+    const restoredPreview = await service.previewProfile("antigravity-beta", "antigravity");
+    expect(blockingMessages(restoredPreview.issues)).toEqual([]);
+    expect((await service.applyProfile("antigravity-beta", restoredPreview.id)).ok).toBe(true);
+    expect(await readFile(join(geminiDir, "GEMINI.md"), "utf8")).toBe("# BETA\n");
+    await expect(readFile(join(geminiDir, "antigravity-cli", "skills", "beta", "SKILL.md"), "utf8"))
+      .resolves.toContain("# beta");
   });
 });

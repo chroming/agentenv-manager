@@ -470,6 +470,7 @@ const AppContent = ({
     onError: setError,
     onRollbackClear: () => setRollbackPreview(undefined),
     onStatus: setProfileSaveStatus,
+    onTargetsRefresh: setTargets,
     onTargetStatesRefresh: setTargetStates,
     translate: t
   });
