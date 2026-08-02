@@ -634,7 +634,7 @@ export const createEvaluationWorkspace = (
   const prepare: EvaluationWorkspace["prepare"] = async (input) => {
     if (input.signal?.aborted) throw new Error("Comparison was cancelled");
     await mkdir(options.cacheRoot, { recursive: true, mode: 0o700 });
-    const root = await mkdtemp(join(options.cacheRoot, "run-"));
+    const root = await realpath(await mkdtemp(join(options.cacheRoot, "run-")));
     if (platform !== "win32") await chmod(root, 0o700);
     const home = join(root, "home");
     const baseline = join(root, "baseline");

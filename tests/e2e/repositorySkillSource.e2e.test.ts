@@ -212,7 +212,7 @@ describe("Repository Skill source", () => {
     expect(await page.getByRole("tab", { name: /^Manual only 0$/ }).count()).toBe(1);
     expect(await page.getByRole("button", { name: "Refresh skills" }).count()).toBe(0);
     expect(await page.getByRole("button", { name: "Refresh sources" }).count()).toBe(1);
-    expect(await page.getByRole("button", { name: "Check for updates" }).count()).toBe(1);
+    expect(await page.getByRole("button", { name: "Check updates" }).count()).toBe(1);
     const sourceGroup = page.locator(".skill-source-group");
     await expect.poll(() => sourceGroup.count()).toBe(1);
     const checkSource = async () => {
@@ -353,7 +353,7 @@ describe("Repository Skill source", () => {
     const row = page.getByRole("group", { name: "Library item api-design-internal" });
     await repository.write("README.md", "Unrelated repository notes changed.\n");
     await repository.commit("unrelated change");
-    await page.getByRole("button", { name: "Check for updates" }).click();
+    await page.getByRole("button", { name: "Check updates" }).click();
     await page.getByText("All tracked skills are up to date", { exact: true })
       .waitFor({ state: "visible" });
     expect(await row.getByRole("button", { name: "Update api-design-internal" }).count())

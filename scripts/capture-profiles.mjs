@@ -934,7 +934,7 @@ try {
     "---\nname: react-best-practices\ndescription: Updated React review guidance.\n---\n\n# react-best-practices\n\nReview the available update before applying it.\n",
     "utf8"
   );
-  await page.getByRole("button", { name: "Check for updates" }).click();
+  await page.getByRole("button", { name: "Check updates" }).click();
   await page
     .getByRole("group", { name: "Library item react-best-practices" })
     .getByRole("button", { name: "Update react-best-practices" })

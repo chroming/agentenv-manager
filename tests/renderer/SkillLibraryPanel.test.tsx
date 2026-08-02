@@ -849,7 +849,7 @@ describe("SkillLibraryPanel", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
     expect(onCheckUpdates).toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Update all skills" }));
     expect(onPreviewAllLibrarySkillUpdates).toHaveBeenCalledWith([
@@ -1241,7 +1241,7 @@ describe("SkillLibraryPanel", () => {
     expect(takeOverAllButton).toHaveClass(
       "ui-button",
       "ui-button--compact",
-      "ui-button--secondary"
+      "ui-button--primary"
     );
     expect(takeOverAllButton).toHaveTextContent(/Clean up \d+/);
     fireEvent.click(takeOverAllButton);

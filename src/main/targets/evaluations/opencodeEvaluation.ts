@@ -301,6 +301,7 @@ export const createOpenCodeEvaluationCapability = (): AgentEvaluationCapability 
     };
     delete env.OPENCODE_CONFIG;
     delete env.OPENCODE_CONFIG_CONTENT;
+    delete env.CODEX_HOME;
 
     return {
       executablePath: input.executablePath,

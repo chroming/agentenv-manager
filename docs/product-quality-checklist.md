@@ -174,7 +174,7 @@ Rules:
 
 - [ ] `Review` alone is never used.
 - [ ] `Check monitored` is not a user-facing command.
-- [ ] Both projections use `Check for updates`.
+- [ ] Both projections use `Check updates`.
 - [ ] The current tab or filter explains scope; the command name does not change
   with scope.
 - [ ] Working state replaces or disables the triggering command without moving
@@ -185,7 +185,7 @@ Rules:
 ### 4.5 Filters
 
 - [ ] Both projections use one FilterBar and one filter-panel primitive.
-- [ ] Search, Filters, Refresh, and Check for updates retain the same order.
+- [ ] Search, Filters, Refresh, and Check updates retain the same order.
 - [ ] Input, select, and button heights match.
 - [ ] Field labels use the same typography and spacing.
 - [ ] Reset occupies the same location and is disabled when nothing can reset.

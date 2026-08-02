@@ -21,6 +21,7 @@ const isolatedEnv = (path: string): NodeJS.ProcessEnv => ({
   TMPDIR: path,
   TMP: path,
   TEMP: path,
+  CODEX_HOME: path,
   OPENCODE_CONFIG_DIR: path
 });
 
@@ -221,6 +222,42 @@ describe("evaluation process runner", () => {
       expect(lines.some((line) => line.startsWith("OLDPWD="))).toBe(false);
       expect(lines.some((line) => line.startsWith("INIT_CWD="))).toBe(false);
       expect(lines.join("\n")).not.toContain(originalWorkspace);
+      runner.dispose();
+    }
+  );
+
+  it.skipIf(process.platform !== "darwin" || !existsSync("/usr/bin/sandbox-exec"))(
+    "canonicalizes aliased isolated paths before launching the Agent",
+    async () => {
+      root = await mkdtemp(join(tmpdir(), "agentenv-evaluation-path-alias-"));
+      const physical = join(root, "physical");
+      const alias = join(root, "alias");
+      await mkdir(join(physical, ".codex"), { recursive: true });
+      await symlink(physical, alias, "dir");
+      const runner = createEvaluationProcessRunner();
+      const lines: string[] = [];
+      const env = isolatedEnv(alias);
+      env.CODEX_HOME = join(alias, ".codex");
+
+      const result = await runner.run({
+        executablePath: "/bin/sh",
+        args: ["-c", "printf '%s\\n%s\\n' \"$HOME\" \"$CODEX_HOME\""],
+        cwd: alias,
+        env,
+        writableRoot: alias,
+        fidelity: "full",
+        warnings: []
+      }, (line) => ({ type: "response", text: line }), {
+        onEvent: (event) => {
+          if (event.type === "response") lines.push(event.text);
+        }
+      });
+
+      expect(result.exitCode).toBe(0);
+      expect(lines).toEqual([
+        await realpath(physical),
+        await realpath(join(physical, ".codex"))
+      ]);
       runner.dispose();
     }
   );

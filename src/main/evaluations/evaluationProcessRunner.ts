@@ -110,6 +110,7 @@ const isolatedEnvironmentPaths = [
   "TMPDIR",
   "TMP",
   "TEMP",
+  "CODEX_HOME",
   "OPENCODE_CONFIG_DIR"
 ] as const;
 
@@ -190,6 +191,7 @@ export const createEvaluationProcessRunner = (
           `Comparison ${key} is outside its isolated workspace`
         );
       }
+      childEnvironment[key] = canonicalValue;
     }
     const canonicalizeRoots = async (paths: readonly string[]) => [...new Set(await Promise.all(
       paths.map(async (path) => {

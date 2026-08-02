@@ -799,6 +799,7 @@ const launchApp = async (
         AGENTENV_GITHUB_FIXTURE_ROOT: githubFixtureRoot,
         AGENTENV_FAKE_HOME: fakeHomeRoot,
         AGENTENV_HOME: homeDir,
+        AGENTENV_AUTOMATION_TARGET_PATH: binDir,
         PATH: `${binDir}${delimiter}${process.env.PATH ?? ""}`
       },
       timeout: 10_000
@@ -3020,7 +3021,7 @@ describe("Electron UI profile switching e2e", () => {
     await sharedRow.waitFor({ state: "visible" });
     const [refreshIconClass, checkIconClass] = await Promise.all([
       page.getByRole("button", { name: "Refresh skills" }).locator("svg").getAttribute("class"),
-      page.getByRole("button", { name: "Check for updates" }).locator("svg").getAttribute("class")
+      page.getByRole("button", { name: "Check updates" }).locator("svg").getAttribute("class")
     ]);
     expect(refreshIconClass).toContain("lucide-refresh-cw");
     expect(checkIconClass).toContain("lucide-search-check");
@@ -3086,7 +3087,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(
       await page.getByRole("dialog", { name: "Update preview for shared-reviewer" }).count()
     ).toBe(0);
-    await page.getByRole("button", { name: "Check for updates" }).click();
+    await page.getByRole("button", { name: "Check updates" }).click();
     await expect
       .poll(() => page.getByRole("status").textContent())
       .toMatch(/up to date|update.*available|failed/i);
@@ -3110,7 +3111,7 @@ describe("Electron UI profile switching e2e", () => {
       "utf8"
     );
 
-    const checkAll = page.getByRole("button", { name: "Check for updates" });
+    const checkAll = page.getByRole("button", { name: "Check updates" });
     await checkAll.click();
     await expect.poll(() => checkAll.getAttribute("aria-busy")).toBe("true");
     await expect.poll(() => checkAll.locator("svg").getAttribute("class")).toContain("is-spinning");
@@ -6878,7 +6879,17 @@ describe("Electron UI profile switching e2e", () => {
   }, 60_000);
 
   it("auto-manages safe cleanup groups while leaving content conflicts for review", async () => {
-    const { appDataRoot, opencodeDir, homeDir, page } = await launchApp();
+    const { appDataRoot, opencodeDir, homeDir, librarySkill, page } = await launchApp();
+    const managedSkill = join(opencodeDir, "skills", "shared-reviewer");
+    await mkdir(dirname(managedSkill), { recursive: true });
+    await symlink(librarySkill.libraryDir, managedSkill, "dir");
+    await writeJson(`${managedSkill}.agentenv-owner.json`, {
+      owner: "agentenv-manager",
+      profileId: "ui-opencode-alpha",
+      targetId: "opencode",
+      kind: "skill",
+      source: "skills-library/shared-reviewer"
+    });
     await writeUnmanagedTargetSkill(
       opencodeDir,
       "auto-local-reviewer",
@@ -6964,11 +6975,26 @@ describe("Electron UI profile switching e2e", () => {
       const geometry = await page.getByRole("region", { name: "Environment skills" }).evaluate((drawer) => {
         const heading = drawer.querySelector<HTMLElement>(".cleanup-bucket-heading--ready")!;
         const headingBox = heading.getBoundingClientRect();
-        const headingCopy = heading.firstElementChild!.getBoundingClientRect();
-        const autoAction = heading.querySelector<HTMLElement>(".cleanup-auto-action")!.getBoundingClientRect();
+        const headingCopy = heading.querySelector<HTMLElement>(".cleanup-bucket-copy")!.getBoundingClientRect();
+        const autoActionElement = heading.querySelector<HTMLElement>(".cleanup-auto-action")!;
+        const autoAction = autoActionElement.getBoundingClientRect();
+        const autoActionStyle = getComputedStyle(autoActionElement);
+        const autoActionLabelStyle = getComputedStyle(
+          autoActionElement.querySelector<HTMLElement>(".ui-button__label")!
+        );
+        const colorProbe = document.createElement("span");
+        colorProbe.style.background = "var(--accent)";
+        colorProbe.style.color = "#fff";
+        drawer.append(colorProbe);
+        const accentBackground = getComputedStyle(colorProbe).backgroundColor;
+        const primaryForeground = getComputedStyle(colorProbe).color;
+        colorProbe.remove();
         const compactControlHeight = Number.parseFloat(
           getComputedStyle(document.documentElement)
             .getPropertyValue("--control-height-compact")
+        );
+        const managedMarker = drawer.querySelector<HTMLElement>(
+          ".cleanup-bucket-heading--managed .cleanup-bucket-marker"
         );
         const rows = Array.from(drawer.querySelectorAll<HTMLElement>(".cleanup-group-row")).map((row) => {
           const rowBox = row.getBoundingClientRect();
@@ -7004,10 +7030,24 @@ describe("Electron UI profile switching e2e", () => {
           actionBelowCopy: autoAction.top >= headingCopy.bottom - 1,
           actionAfterCopy: autoAction.left >= headingCopy.right - 1,
           actionContained: autoAction.right <= headingBox.right + 1,
+          actionForeground: autoActionStyle.color,
           actionHeight: Math.round(autoAction.height),
+          actionLabelForeground: autoActionLabelStyle.color,
+          actionRightAligned: Math.abs(autoAction.right - (headingBox.right - 10)) <= 1,
+          actionVerticallyCentered:
+            Math.abs(
+              autoAction.top + autoAction.height / 2 -
+              (headingBox.top + headingBox.height / 2)
+            ) <= 1,
           actionIsCompact: autoAction.width < headingBox.width / 3,
           actionWidth: Math.round(autoAction.width),
+          accentBackground,
+          actionBackground: autoActionStyle.backgroundColor,
           compactControlHeight,
+          managedMarkerVisibility: managedMarker
+            ? getComputedStyle(managedMarker).visibility
+            : "missing",
+          primaryForeground,
           actionWidths: Array.from(
             drawer.querySelectorAll<HTMLElement>(".cleanup-current-action")
           ).map((button) => Math.round(button.getBoundingClientRect().width)),
@@ -7017,6 +7057,12 @@ describe("Electron UI profile switching e2e", () => {
       expect(geometry.actionContained).toBe(true);
       expect(geometry.actionHeight).toBe(geometry.compactControlHeight);
       expect(geometry.actionIsCompact).toBe(true);
+      expect(geometry.actionBackground).toBe(geometry.accentBackground);
+      expect(geometry.actionForeground).toBe(geometry.primaryForeground);
+      expect(geometry.actionLabelForeground).toBe(geometry.primaryForeground);
+      expect(geometry.actionRightAligned).toBe(true);
+      expect(geometry.actionVerticallyCentered).toBe(true);
+      expect(geometry.managedMarkerVisibility).toBe("hidden");
       expect(stacked ? geometry.actionBelowCopy : geometry.actionAfterCopy).toBe(true);
       expect(
         geometry.rows.every(
@@ -7776,7 +7822,7 @@ describe("Electron UI profile switching e2e", () => {
       "utf8"
     );
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Check for updates" }).click();
+    await page.getByRole("button", { name: "Check updates" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
       .getByRole("button", { name: "Update shared-reviewer" })
@@ -7847,7 +7893,7 @@ describe("Electron UI profile switching e2e", () => {
     );
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Check for updates" }).click();
+    await page.getByRole("button", { name: "Check updates" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
       .getByRole("button", { name: "Update shared-reviewer" })
@@ -7909,7 +7955,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await openSkillLibrary(page);
     await page.getByRole("button", { name: "Refresh skills" }).click();
-    await page.getByRole("button", { name: "Check for updates" }).click();
+    await page.getByRole("button", { name: "Check updates" }).click();
     const updateRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     const staticRow = page.getByRole("group", { name: "Library item static-layout-reference" });
     await updateRow
@@ -8064,7 +8110,7 @@ describe("Electron UI profile switching e2e", () => {
     await page
       .getByRole("group", { name: "Library item batch-helper" })
       .waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Check for updates" }).click();
+    await page.getByRole("button", { name: "Check updates" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
       .getByRole("button", { name: "Update shared-reviewer" })
@@ -8121,7 +8167,7 @@ describe("Electron UI profile switching e2e", () => {
     await page
       .getByRole("group", { name: "Library item missing-source-helper" })
       .waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Check for updates" }).click();
+    await page.getByRole("button", { name: "Check updates" }).click();
     await page.getByRole("button", { name: "Update all skills" }).click();
     const bulkUpdateDialog = page.getByRole("dialog", { name: "Update all skills" });
     await bulkUpdateDialog.waitFor({ state: "visible" });
@@ -9020,7 +9066,7 @@ describe("Electron UI profile switching e2e", () => {
     });
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Check for updates" }).click();
+    await page.getByRole("button", { name: "Check updates" }).click();
     const feedback = page.getByRole("alert");
     await expect.poll(() => feedback.textContent()).toContain("GitHub request limited");
     await expect.poll(() => feedback.textContent()).toContain("Connect your account");
@@ -9081,7 +9127,7 @@ describe("Electron UI profile switching e2e", () => {
     });
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Check for updates" }).click();
+    await page.getByRole("button", { name: "Check updates" }).click();
     const feedback = page.getByRole("alert");
     await expect.poll(() => feedback.textContent()).toContain("1 check failed");
     await expect.poll(() => feedback.textContent()).toContain("network offline");
@@ -9515,7 +9561,7 @@ describe("Electron UI profile switching e2e", () => {
       .toBe(false);
 
     await writeGitHubFixtureSkill(githubFixtureRoot, "v2");
-    await page.getByRole("button", { name: "Check for updates" }).click();
+    await page.getByRole("button", { name: "Check updates" }).click();
     await expect
       .poll(() => githubRow.getByRole("button", { name: "Update github-reviewer" }).count())
       .toBe(0);
@@ -9530,7 +9576,7 @@ describe("Electron UI profile switching e2e", () => {
         )).updateCheckEnabled
       )
       .toBe(true);
-    await page.getByRole("button", { name: "Check for updates" }).click();
+    await page.getByRole("button", { name: "Check updates" }).click();
     await page
       .getByRole("group", { name: "Library item github-reviewer" })
       .getByRole("button", { name: "Update github-reviewer" })

@@ -472,7 +472,7 @@ describe("SkillSourceView", () => {
       />
     );
 
-    const checkMonitored = screen.getByRole("button", { name: "Check for updates" });
+    const checkMonitored = screen.getByRole("button", { name: "Check updates" });
     expect(
       screen.queryByRole("button", { name: /^Check monitored$/ })
     ).not.toBeInTheDocument();
@@ -617,11 +617,11 @@ describe("SkillSourceView", () => {
       name: "Source actions for acme/skills · /engineering"
     }));
     expect(screen.getByRole("menuitem", { name: "Check source" })).toHaveAttribute("aria-busy", "true");
-    expect(screen.getByRole("button", { name: "Check for updates" })).toHaveAttribute("aria-busy", "false");
+    expect(screen.getByRole("button", { name: "Check updates" })).toHaveAttribute("aria-busy", "false");
 
     rerender(<SkillSourceView {...props} updateActivity={{ kind: "check-sources" }} />);
     expect(screen.getByRole("menuitem", { name: "Check source" })).toHaveAttribute("aria-busy", "false");
-    expect(screen.getByRole("button", { name: "Check for updates" })).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "Check updates" })).toHaveAttribute("aria-busy", "true");
   });
 
   it("requires an explicit preview before merging selected source scopes", async () => {

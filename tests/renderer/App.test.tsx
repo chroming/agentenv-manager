@@ -1574,7 +1574,7 @@ describe("App", () => {
     expect(screen.queryByRole("complementary", { name: "Activation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Profile sections" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("1 update available"));
 
     const unrelatedReads = [
@@ -1623,7 +1623,7 @@ describe("App", () => {
 
     await openLibrary();
     await screen.findByRole("group", { name: "Library item github-reviewer" });
-    fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("GitHub request limited");
@@ -1793,7 +1793,7 @@ describe("App", () => {
 
     await openLibrary();
     fireEvent.click(await screen.findByRole("tab", { name: "By source" }));
-    const checkButton = await screen.findByRole("button", { name: "Check for updates" });
+    const checkButton = await screen.findByRole("button", { name: "Check updates" });
     fireEvent.click(checkButton);
 
     await waitFor(() => expect(checkMonitored).toHaveBeenCalledTimes(1));

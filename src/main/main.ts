@@ -565,6 +565,10 @@ const createServices = async (
       process.env.AGENTENV_CACHE_ROOT ?? join(operatingSystemCacheRoot, "agentenv-manager"),
       "skill-source-observations"
     ),
+    evaluationCacheDir: join(
+      process.env.AGENTENV_CACHE_ROOT ?? join(app.getPath("temp"), "agentenv-manager"),
+      "evaluations"
+    ),
     homeDir,
     fakeHomeRoot: process.env.AGENTENV_FAKE_HOME ?? join(appDataRoot, "fake-home")
   });
@@ -723,7 +727,10 @@ const createServices = async (
     paths,
     targetRegistry,
     targetScope,
-    settingsStore
+    settingsStore,
+    ...(process.env.AGENTENV_AUTOMATION_TARGET_PATH
+      ? { pathEnv: process.env.AGENTENV_AUTOMATION_TARGET_PATH }
+      : {})
   });
   const targetCaptureService = createTargetCaptureService({
     paths,

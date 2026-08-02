@@ -431,7 +431,16 @@ export const registerIpcHandlers = ({
       throw new Error("Simulated local Skill inventory failure");
     }
     const targets = await targetDiscoveryService.listTargets();
-    return skillLibraryStore.scanInventory(inventoryPathsFor(targets));
+    const inventory = await skillLibraryStore.scanInventory(inventoryPathsFor(targets));
+    const installedTargetIds = new Set(
+      targets.filter((target) => isTargetInstalled(target.health)).map((target) => target.id)
+    );
+    return inventory.map((item) => item.sharedLocation
+      ? {
+          ...item,
+          foundIn: item.foundIn.filter((targetId) => installedTargetIds.has(targetId))
+        }
+      : item);
   });
   diagnosticHandle("skills:list-cleanup-backups", async () =>
     (await Promise.all([

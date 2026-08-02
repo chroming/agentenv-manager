@@ -642,15 +642,15 @@ export const SkillSourceView = ({
           ) : null}
         </button>
         <Button
-          aria-label={t("Check for updates")}
+          aria-label={t("Check updates")}
           busy={activeCheckingAll}
           className="secondary-action library-toolbar-action"
-          title={t("Check for updates")}
+          title={t("Check updates")}
           disabled={activeCheckingAll || checking.size > 0 || Boolean(activeCheckingSourceId) || Boolean(operation) || monitoredSourceCount === 0}
           onClick={() => void runCheckMonitored()}
         >
           {!activeCheckingAll ? <RefreshCw size={15} strokeWidth={2.2} /> : null}
-          <span>{t("Check for updates")}</span>
+          <span>{t("Check updates")}</span>
         </Button>
         {canMergeSources ? (
           <button

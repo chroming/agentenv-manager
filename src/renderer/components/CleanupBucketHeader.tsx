@@ -78,7 +78,7 @@ export const CleanupBucketHeader = ({
             disabled={actionDisabled}
             icon={<ListChecks size={15} strokeWidth={2.2} />}
             size="compact"
-            variant="secondary"
+            variant="primary"
             onClick={onReviewCleanup}
           >
             {t(actionWorking ? "Cleaning up..." : "Clean up {{count}}", {

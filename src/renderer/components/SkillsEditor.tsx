@@ -155,7 +155,7 @@ export const SkillsEditor = ({
               />
             )}
           >
-            {t(checkingSkillUpdates ? "Checking" : "Check for updates")}
+            {t(checkingSkillUpdates ? "Checking" : "Check updates")}
           </Button>
           <Button
             className="secondary-action"
