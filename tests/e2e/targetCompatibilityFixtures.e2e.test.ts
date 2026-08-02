@@ -44,7 +44,12 @@ const scenarios = (
 const roots: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
+  await Promise.all(roots.map((root) => rm(root, {
+    recursive: true,
+    force: true,
+    maxRetries: 4,
+    retryDelay: 50
+  })));
   roots.length = 0;
 });
 
