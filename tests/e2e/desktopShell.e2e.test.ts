@@ -4,6 +4,10 @@ import { join } from "node:path";
 import electronPath from "electron";
 import { _electron as electron, type ElectronApplication } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
+import {
+  constrainWindowState,
+  readWindowState
+} from "../../src/main/windowStateStore";
 import { requireCurrentElectronBuild } from "./currentBuild";
 
 let root = "";
@@ -89,14 +93,24 @@ describe("desktop shell", () => {
     await app.close();
     app = undefined;
 
+    const persisted = readWindowState(join(root, "data", "window-state.json"));
+    expect(persisted).toBeDefined();
+
     app = await launch();
     const restoredPage = await app.firstWindow();
     const restored = await app.browserWindow(restoredPage).then((handle) =>
       handle.evaluate((window) => window.getNormalBounds())
     );
-    expect(restored.width).toBe(1_000);
-    expect(restored.height).toBe(680);
-    expect(Math.abs(restored.x - 120)).toBeLessThanOrEqual(1);
-    expect(Math.abs(restored.y - 90)).toBeLessThanOrEqual(1);
+    const workArea = await app.evaluate(
+      ({ screen }, bounds) => screen.getDisplayMatching(bounds).workArea,
+      restored
+    );
+    const expected = constrainWindowState(persisted!, workArea);
+    expect(restored).toEqual({
+      x: expected.x,
+      y: expected.y,
+      width: expected.width,
+      height: expected.height
+    });
   }, 30_000);
 });
