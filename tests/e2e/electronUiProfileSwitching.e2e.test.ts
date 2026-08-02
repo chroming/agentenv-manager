@@ -16,7 +16,7 @@ import {
   writeFile
 } from "node:fs/promises";
 import { delimiter, dirname, join } from "node:path";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import electronPath from "electron";
 import {
@@ -10751,6 +10751,8 @@ describe("Electron UI profile switching e2e", () => {
       phase: "failed"
     });
     expect(issue?.error.stack).toContain("parseId");
-    expect(issue?.error.stack).toContain("file://~/Github/agentenv-manager");
+    expect(issue?.error.stack).toContain("file://~/");
+    expect(issue?.error.stack).toContain("/out/main/main.js");
+    expect(issue?.error.stack).not.toContain(homedir());
   }, 60_000);
 });
