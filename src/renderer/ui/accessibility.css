@@ -1,0 +1,35 @@
+.ui-visually-hidden {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .ui-button:active:not(:disabled),
+  .ui-icon-button:active:not(:disabled),
+  .ui-hover-detail {
+    transform: none !important;
+  }
+
+  .is-spinning,
+  .inline-state--loading .inline-state__icon::after {
+    animation: reduced-motion-pulse 1.2s ease-in-out infinite !important;
+  }
+}
+
+@keyframes reduced-motion-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}

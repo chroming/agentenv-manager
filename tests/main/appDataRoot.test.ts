@@ -1,0 +1,151 @@
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+  writeFile
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  migrateLegacyAppDataRoot,
+  resolveAppDataRoot
+} from "../../src/main/appDataRoot";
+import { copyPathVerified } from "../../src/main/filesystemIntegrity";
+
+let root = "";
+
+afterEach(async () => {
+  if (root) {
+    await rm(root, { recursive: true, force: true });
+    root = "";
+  }
+});
+
+describe("app data root", () => {
+  it("defaults persistent app data to ~/.config/agentenv-manager", () => {
+    const resolved = resolveAppDataRoot({
+      env: {},
+      homeDir: "/Users/tester",
+      platform: "darwin",
+      userDataDir: "/Users/tester/Library/Application Support/AgentEnv Manager"
+    });
+
+    expect(resolved).toBe("/Users/tester/.config/agentenv-manager");
+  });
+
+  it("uses XDG_CONFIG_HOME on Linux", () => {
+    const resolved = resolveAppDataRoot({
+      env: { XDG_CONFIG_HOME: "/home/tester/.xdg-config" },
+      homeDir: "/home/tester",
+      platform: "linux",
+      userDataDir: "/home/tester/.config/AgentEnv Manager"
+    });
+
+    expect(resolved).toBe("/home/tester/.xdg-config/agentenv-manager");
+  });
+
+  it("keeps Windows data under Electron userData", () => {
+    const resolved = resolveAppDataRoot({
+      env: {},
+      homeDir: String.raw`C:\Users\tester`,
+      platform: "win32",
+      userDataDir: String.raw`C:\Users\tester\AppData\Roaming\AgentEnv Manager`
+    });
+
+    expect(resolved).toBe(
+      String.raw`C:\Users\tester\AppData\Roaming\AgentEnv Manager\data`
+    );
+  });
+
+  it("keeps AGENTENV_DATA_ROOT as an explicit override", () => {
+    const resolved = resolveAppDataRoot({
+      env: { AGENTENV_DATA_ROOT: "/tmp/agentenv-data" },
+      homeDir: "/Users/tester",
+      userDataDir: "/Users/tester/Library/Application Support/AgentEnv Manager"
+    });
+
+    expect(resolved).toBe("/tmp/agentenv-data");
+  });
+
+  it("migrates old Electron userData data into the new config directory once", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-data-root-"));
+    const legacyRoot = join(root, "Application Support", "AgentEnv Manager", "data");
+    const nextRoot = join(root, ".config", "agentenv-manager");
+    await mkdir(join(legacyRoot, "profiles", "daily"), { recursive: true });
+    await writeFile(join(legacyRoot, "profiles", "daily", "profile.json"), "{}\n", "utf8");
+
+    await migrateLegacyAppDataRoot({ legacyRoot, nextRoot });
+
+    await expect(readFile(join(nextRoot, "profiles", "daily", "profile.json"), "utf8")).resolves.toBe(
+      "{}\n"
+    );
+  });
+
+  it("does not merge old data into an existing new config directory", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-data-root-"));
+    const legacyRoot = join(root, "old", "data");
+    const nextRoot = join(root, "new");
+    await mkdir(legacyRoot, { recursive: true });
+    await mkdir(nextRoot, { recursive: true });
+    await writeFile(join(legacyRoot, "settings.json"), "{\"old\":true}\n", "utf8");
+    await writeFile(join(nextRoot, "settings.json"), "{\"new\":true}\n", "utf8");
+
+    await migrateLegacyAppDataRoot({ legacyRoot, nextRoot });
+
+    await expect(readFile(join(nextRoot, "settings.json"), "utf8")).resolves.toBe(
+      "{\"new\":true}\n"
+    );
+  });
+
+  it("does not replace a broken destination link during legacy migration", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-data-root-"));
+    const legacyRoot = join(root, "old", "data");
+    const nextRoot = join(root, "new", "agentenv-manager");
+    await mkdir(legacyRoot, { recursive: true });
+    await mkdir(join(root, "new"), { recursive: true });
+    await writeFile(join(legacyRoot, "settings.json"), "{\"old\":true}\n", "utf8");
+    await symlink(join(root, "missing-destination"), nextRoot, "dir");
+
+    await migrateLegacyAppDataRoot({ legacyRoot, nextRoot });
+
+    expect((await lstat(nextRoot)).isSymbolicLink()).toBe(true);
+    await expect(readFile(join(legacyRoot, "settings.json"), "utf8"))
+      .resolves.toContain("old");
+  });
+
+  it("never publishes a partial destination when fallback copying fails", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-data-root-"));
+    const legacyRoot = join(root, "old", "data");
+    const nextRoot = join(root, "new", "agentenv-manager");
+    await mkdir(legacyRoot, { recursive: true });
+    await writeFile(join(legacyRoot, "first.json"), "{\"first\":true}\n", "utf8");
+    await writeFile(join(legacyRoot, "second.json"), "{\"second\":true}\n", "utf8");
+    let copyCount = 0;
+
+    await expect(migrateLegacyAppDataRoot({
+      legacyRoot,
+      nextRoot,
+      renamePath: async () => {
+        const error = new Error("cross-device rename") as NodeJS.ErrnoException;
+        error.code = "EXDEV";
+        throw error;
+      },
+      copyPath: async (...args) => {
+        copyCount += 1;
+        if (copyCount === 2) throw new Error("injected copy failure");
+        return copyPathVerified(...args);
+      }
+    })).rejects.toThrow("injected copy failure");
+
+    await expect(readFile(join(legacyRoot, "first.json"), "utf8")).resolves.toContain("first");
+    await expect(readFile(join(legacyRoot, "second.json"), "utf8")).resolves.toContain("second");
+    await expect(readFile(join(nextRoot, "first.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await readdir(join(root, "new"))).filter((name) => name.includes("agentenv-migration")))
+      .toEqual([]);
+  });
+});

@@ -1,0 +1,93 @@
+:root {
+  --text: #1d1d1f;
+  --muted: #6e6e73;
+  --muted-strong: #5c5c61;
+  --subtle: #98989d;
+  --text-secondary: var(--muted);
+  --text-tertiary: var(--subtle);
+  --border: rgba(60, 60, 67, 0.12);
+  --border-soft: rgba(60, 60, 67, 0.09);
+  --border-subtle: var(--border);
+  --border-strong: rgba(60, 60, 67, 0.2);
+  --page: #f5f5f7;
+  --surface: #ffffff;
+  --surface-muted: #f5f5f7;
+  --surface-subtle: #fafbfc;
+  --surface-pressed: #e9e9eb;
+  --accent: #007aff;
+  --accent-soft: rgba(0, 122, 255, 0.1);
+  --accent-strong: #0068db;
+  --success: #248a3d;
+  --success-bg: #eef8f0;
+  --warning: #9a6700;
+  --warning-strong: #8a4b08;
+  --warning-text: var(--warning-strong);
+  --warning-bg: #fff7e5;
+  --info-bg: #f3f7ff;
+  --danger: #d70015;
+  --danger-bg: #fff0f1;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --mono: var(--font-mono);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  --font-size-page-title: 23px;
+  --font-size-section-title: 14px;
+  --font-size-body: 13px;
+  --font-size-metadata: 12px;
+  --font-size-caption: 11px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-heading: 650;
+  --line-height-tight: 1.2;
+  --line-height-body: 1.45;
+
+  --control-height-compact: 30px;
+  --control-height-default: 34px;
+  --control-height-prominent: 36px;
+  --control-height-dialog: 40px;
+  --icon-size-default: 16px;
+  --icon-box-compact: 30px;
+  --icon-box-default: 34px;
+  /* Standalone controls, surfaces, and dialogs own radii; connected rows stay square inside them. */
+  --radius-tight: 4px;
+  --radius-control: 6px;
+  --radius-surface: 8px;
+  --radius-dialog: 10px;
+  --radius-pill: 999px;
+  --resource-row-compact: 50px;
+  --resource-row-default: 58px;
+  --resource-row-comfortable: 64px;
+  --resource-icon-box: 30px;
+  --page-header-height: 44px;
+  --agent-chip-size: 28px;
+  --profile-composer-row-height: 52px;
+  --profile-expanded-trigger: #f6f9fe;
+  --profile-expanded-surface: #f3f6fa;
+  --profile-expanded-border: #dbe3ed;
+  --profile-expanded-accent: #6f9ee8;
+  --sidebar-width-expanded: 204px;
+  --sidebar-width-collapsed: 64px;
+
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.1);
+  --shadow-popover: 0 10px 28px rgba(15, 15, 15, 0.16);
+  --motion-fast: 140ms ease-out;
+  --motion-standard: 180ms ease-out;
+  --motion-spinner: 900ms;
+
+  --z-base: 0;
+  --z-raised: 1;
+  --z-actions: 3;
+  --z-sticky: 20;
+  --z-dropdown: 80;
+  --z-drawer: 90;
+  --z-popover: 120;
+  --z-modal: 200;
+  --z-tooltip: 260;
+}

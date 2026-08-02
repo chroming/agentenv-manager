@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Scan complete history for secrets
+        run: >-
+          docker run --rm -v "$PWD:/repo"
+          zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          detect --source=/repo --redact --config=/repo/.gitleaks.toml
+          --log-opts=--all
+
+  verify:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run audit:dependencies
+      - run: npm run audit:targets
+      - run: npm run audit:styles
+      - run: npm run audit:modules
+      - run: npm run audit:translations
+      - run: npm run build
+      - run: npm run test:targets
+      - run: npm run test:compat:installed
+      - run: npm test
+      - run: npm run verify:visual
+        env:
+          # Golden captures come from the release Mac; hosted macOS runners use
+          # different system fonts and antialiasing. Geometry remains strict in E2E.
+          AGENTENV_VISUAL_HOST_DRIFT_LIMIT: "0.05"
+      - run: npm run test:e2e:packaged
+
+  cross-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run audit:dependencies
+      - run: npm run audit:targets
+      - run: npm run audit:translations
+      - run: npm run test:platform
+      - if: runner.os == 'Linux'
+        run: npm run dist:linux
+      - if: runner.os == 'Linux'
+        run: xvfb-run -a node scripts/test-packaged-app.mjs
+      - if: runner.os == 'Windows'
+        run: npm run dist:win
+      - if: runner.os == 'Windows'
+        run: node scripts/test-packaged-app.mjs

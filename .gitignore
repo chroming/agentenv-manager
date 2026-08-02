@@ -1,0 +1,15 @@
+.worktrees/
+node_modules/
+out/
+dist/
+release/
+.DS_Store
+coverage/
+.agentenv-runtime/
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+*.mobileprovision
+AuthKey_*.p8

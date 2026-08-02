@@ -1,0 +1,42 @@
+@media (max-width: 1050px) {
+  .app-shell,
+  .app-shell--library,
+  .app-shell--profiles {
+    grid-template-columns: var(--sidebar-current-width) minmax(0, 1fr);
+  }
+
+  .editor-panel,
+  .app-shell--library .editor-panel,
+  .app-shell--profiles .editor-panel,
+  .app-shell--settings .editor-panel {
+    gap: var(--window-content-gap, 12px);
+    padding:
+      var(--window-chrome-inset-top, 12px) 14px
+      var(--window-content-inset-bottom, 14px);
+  }
+
+  .profile-target-workspace-button {
+    max-width: 166px;
+  }
+
+  .profile-apply-button {
+    min-width: 0;
+  }
+
+  .target-workflow-icon {
+    height: 32px;
+    width: 32px;
+  }
+
+  .target-workflow-description {
+    display: none;
+  }
+
+  .target-card--workflow {
+    padding: 0 12px;
+  }
+
+  .target-diagnostics-toggle {
+    min-height: var(--control-height-compact);
+  }
+}

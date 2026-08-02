@@ -1,0 +1,189 @@
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  createRuntimeDiagnostics,
+  diagnosticReferenceFromMessage
+} from "../../src/main/runtimeDiagnostics";
+
+let root = "";
+
+afterEach(async () => {
+  if (root) await rm(root, { recursive: true, force: true });
+  root = "";
+});
+
+const createDiagnostics = async (options: { maxLogBytes?: number } = {}) => {
+  root = await mkdtemp(join(tmpdir(), "agentenv-runtime-diagnostics-"));
+  return createRuntimeDiagnostics({
+    directory: root,
+    homeDir: "/Users/example",
+    appVersion: "0.1.0",
+    buildCommit: "abc123",
+    packaged: true,
+    platform: "darwin",
+    arch: "arm64",
+    osVersion: "26.0",
+    locale: "en-US",
+    ...options
+  });
+};
+
+describe("runtime diagnostics", () => {
+  it("records a failed operation with a copyable reference and redacted cause chain", async () => {
+    const diagnostics = await createDiagnostics();
+    const cause = Object.assign(
+      new Error("/Users/example/.claude/skills/demo token=ghp_abcdefghijklmnopqrstuvwxyz123456"),
+      { code: "EEXIST" }
+    );
+
+    let thrown: Error | undefined;
+    try {
+      await diagnostics.runIpcOperation(
+        "activation:apply",
+        ["daily-coding", "preview-1"],
+        async () => {
+          throw new Error("Apply failed", { cause });
+        }
+      );
+    } catch (error) {
+      thrown = error as Error;
+    }
+
+    const reference = diagnosticReferenceFromMessage(thrown?.message ?? "");
+    expect(reference).toMatch(/^AEM-\d{8}-[A-F0-9]{6}$/);
+    const issue = await diagnostics.readIssue(reference!);
+    expect(issue).toMatchObject({
+      reference,
+      action: "activation:apply",
+      error: {
+        message: "Apply failed",
+        causes: [{ code: "EEXIST" }]
+      }
+    });
+    expect(JSON.stringify(issue)).toContain("~/.claude/skills/demo");
+    expect(JSON.stringify(issue)).not.toContain("/Users/example");
+    expect(JSON.stringify(issue)).not.toContain("ghp_abcdefghijklmnopqrstuvwxyz123456");
+  });
+
+  it("uses an allowlisted argument summary instead of logging Profile or credential contents", async () => {
+    const diagnostics = await createDiagnostics();
+    await expect(diagnostics.runIpcOperation(
+      "profiles:save",
+      [{
+        manifest: { id: "daily-coding", name: "Daily Coding" },
+        instructions: "private instructions",
+        resources: { secret: "should-not-be-recorded" }
+      }],
+      async () => {
+        throw new Error("Save failed");
+      }
+    )).rejects.toThrow("Diagnostic reference");
+
+    const content = await readFile(diagnostics.logPath, "utf8");
+    expect(content).toContain("daily-coding");
+    expect(content).not.toContain("private instructions");
+    expect(content).not.toContain("should-not-be-recorded");
+  });
+
+  it("never records clipboard content", async () => {
+    const diagnostics = await createDiagnostics();
+    await expect(diagnostics.runIpcOperation(
+      "clipboard:write-text",
+      ["private copied conversation content"],
+      async () => {
+        throw new Error("Clipboard failed");
+      }
+    )).rejects.toThrow();
+
+    const content = await readFile(diagnostics.logPath, "utf8");
+    expect(content).not.toContain("private copied conversation content");
+  });
+
+  it("keeps valid neighboring events readable when a log line is malformed", async () => {
+    const diagnostics = await createDiagnostics();
+    await expect(diagnostics.runIpcOperation(
+      "skills:scan-inventory",
+      [],
+      async () => {
+        throw new Error("Inventory failed");
+      }
+    )).rejects.toThrow();
+    await writeFile(
+      diagnostics.logPath,
+      `${await readFile(diagnostics.logPath, "utf8")}{broken\n${JSON.stringify({
+        schemaVersion: 1,
+        at: "2026-07-28T00:00:00.000Z",
+        reference: "AEM-20260728-BROKEN",
+        action: "skills:scan-inventory",
+        category: "skills",
+        phase: "failed",
+        error: { message: "Missing required error fields" }
+      })}\n`
+    );
+
+    await expect(diagnostics.readLatestIssue()).resolves.toMatchObject({
+      action: "skills:scan-inventory",
+      error: { message: "Inventory failed" }
+    });
+  });
+
+  it("exports a single redacted report with app and recent-operation context", async () => {
+    const diagnostics = await createDiagnostics();
+    await expect(diagnostics.runIpcOperation(
+      "skills:import-repository",
+      [{ source: "https://user:password@code.example/repo.git", sourcePath: "/Users/example/src" }],
+      async () => {
+        throw new Error("Repository failed");
+      }
+    )).rejects.toThrow();
+    const destination = join(root, "report.json");
+
+    await diagnostics.exportReport(destination, {
+      context: {
+        settings: { locale: "en", token: "never-log-this" },
+        targets: [{ id: "codex", configPath: "/Users/example/.codex" }]
+      }
+    });
+
+    const report = await readFile(destination, "utf8");
+    expect(report).toContain('"buildCommit": "abc123"');
+    expect(report).toContain("code.example/repo.git");
+    expect(report).toContain("~/.codex");
+    expect(report).not.toContain("user:password");
+    expect(report).not.toContain("never-log-this");
+  });
+
+  it("rotates bounded logs and does not fail a user operation when logging is unavailable", async () => {
+    const diagnostics = await createDiagnostics({ maxLogBytes: 1 });
+    for (let index = 0; index < 3; index += 1) {
+      await diagnostics.runIpcOperation(
+        "profiles:save",
+        [{ manifest: { id: `profile-${index}` } }],
+        async () => ({ saved: true })
+      );
+    }
+    await expect(readFile(`${diagnostics.logPath}.1`, "utf8")).resolves.toContain(
+      "profiles:save"
+    );
+
+    const blockedPath = join(root, "not-a-directory");
+    await writeFile(blockedPath, "file");
+    const unavailable = createRuntimeDiagnostics({
+      directory: blockedPath,
+      homeDir: "/Users/example",
+      appVersion: "0.1.0",
+      packaged: false,
+      platform: "darwin",
+      arch: "arm64",
+      osVersion: "26.0",
+      locale: "en-US"
+    });
+    await expect(unavailable.runIpcOperation(
+      "profiles:save",
+      [{ manifest: { id: "safe" } }],
+      async () => "saved"
+    )).resolves.toBe("saved");
+  });
+});

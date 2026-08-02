@@ -1,0 +1,45 @@
+name: Bug report
+description: Report reproducible incorrect behavior.
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Do not include credentials, private repository URLs, or sensitive conversation content.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: 0.1.0 or commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: architecture
+    attributes:
+      label: Operating system and architecture
+      options:
+        - macOS Apple silicon
+        - macOS Intel
+        - Windows x64
+        - Linux x64
+        - Other or unknown
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Include the expected result, actual result, and the smallest reproducible sequence.
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Filesystem impact
+      description: State whether files changed, whether a backup exists, and whether recovery was attempted.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Remove usernames, tokens, private URLs, and conversation content before attaching logs.

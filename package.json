@@ -1,0 +1,143 @@
+{
+  "name": "agentenv-manager",
+  "version": "0.1.0",
+  "description": "Local desktop manager for switching agent environments.",
+  "author": {
+    "name": "AgentEnv Manager Contributors",
+    "email": "chroming@live.com"
+  },
+  "homepage": "https://github.com/chroming/agentenv-manager",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chroming/agentenv-manager.git"
+  },
+  "bugs": {
+    "url": "https://github.com/chroming/agentenv-manager/issues"
+  },
+  "license": "Apache-2.0",
+  "private": true,
+  "desktopName": "AgentEnv Manager",
+  "packageManager": "npm@11.17.0",
+  "type": "module",
+  "main": "out/main/main.js",
+  "engines": {
+    "node": ">=22.12.0",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "tsc --noEmit && electron-vite build && node scripts/write-build-fingerprint.mjs",
+    "icons:mac": "swift scripts/generate-mac-icon.swift",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder --publish never",
+    "dist:mac": "npm run icons:mac && npm run build && electron-builder --mac --publish never",
+    "dist:win": "npm run build && electron-builder --win nsis --publish never",
+    "dist:linux": "npm run build && electron-builder --linux AppImage deb --publish never",
+    "dist:mac:signed": "node scripts/build-signed-mac.mjs",
+    "audit:styles": "node scripts/audit-renderer-css.mjs --check",
+    "audit:styles:report": "node scripts/audit-renderer-css.mjs",
+    "audit:modules": "node scripts/audit-module-budgets.mjs",
+    "audit:targets": "node scripts/audit-target-boundaries.mjs",
+    "audit:translations": "node scripts/audit-translations.mjs",
+    "audit:features": "node scripts/audit-feature-evidence.mjs",
+    "audit:dependencies": "npm audit --audit-level=high",
+    "verify:current": "node scripts/assert-verification-current.mjs",
+    "verify:visual": "npm run build && node scripts/verify-visual.mjs",
+    "verify:product": "node scripts/verify-product.mjs",
+    "verify:release": "npm run audit:dependencies && node scripts/verify-product.mjs --packaged",
+    "target:new": "node scripts/create-target-integration.mjs",
+    "capture:ui": "npm run build && node scripts/capture-profiles.mjs --output /tmp/agentenv-ui-captures/current",
+    "capture:profiles": "npm run build && node scripts/capture-profiles.mjs",
+    "test": "npm run build && node scripts/run-vitest-groups.mjs",
+    "test:targets": "vitest run tests/e2e/targetConformance.e2e.test.ts tests/e2e/targetCompatibilityFixtures.e2e.test.ts",
+    "test:compat:installed": "node scripts/probe-installed-agents.mjs",
+    "test:e2e": "npm run build && node scripts/run-vitest-groups.mjs --e2e",
+    "test:e2e:packaged": "npm run pack && node scripts/test-packaged-app.mjs",
+    "test:platform": "vitest run tests/main/platformPaths.test.ts tests/main/appDataRoot.test.ts tests/main/executableDiscovery.test.ts tests/main/fileUtils.test.ts tests/main/skillDeployment.test.ts tests/main/skillArchiveService.test.ts tests/main/conversations/conversationLauncher.test.ts tests/main/conversations/opencodeStorage.test.ts tests/main/targets/opencodeTarget.test.ts tests/main/githubAuthService.test.ts tests/main/applicationMenu.test.ts tests/main/packagePackaging.test.ts",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@iarna/toml": "^2.2.5",
+    "diff": "^9.0.0",
+    "jsonc-parser": "^3.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "unzipper": "0.12.5",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^26.0.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^42.5.1",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "jsdom": "^29.1.1",
+    "lucide-react": "^1.23.0",
+    "playwright-core": "^1.61.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "shiki": "^4.3.0",
+    "typescript": "^6.0.3",
+    "vite": "^7.3.6",
+    "vitest": "^4.1.9"
+  },
+  "build": {
+    "appId": "io.github.chroming.agentenvmanager",
+    "productName": "AgentEnv Manager",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json",
+      "LICENSE",
+      "PRIVACY.md",
+      "THIRD_PARTY_NOTICES.md"
+    ],
+    "electronLanguages": [
+      "en",
+      "zh_CN",
+      "zh_TW"
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": true,
+      "notarize": true,
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Development",
+      "executableName": "agentenv-manager",
+      "syncDesktopName": true,
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
+  }
+}

@@ -1,0 +1,26 @@
+name: Feature request
+description: Propose a user outcome or compatibility improvement.
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Describe the workflow and the outcome that is difficult today.
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current workaround
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Ownership and safety boundary
+      description: Which files or Agent-owned settings would this need to read or modify?
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior

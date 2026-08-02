@@ -1,0 +1,68 @@
+import type { TargetDescriptor, TargetPaths } from "../../shared/types";
+import type { AgentTargetIntegration } from "./contract";
+import type { AgentTargetAdapter } from "./types";
+import { materializeSharedSkillLocations } from "./sharedSkillLocations";
+
+const TARGET_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+const validateDescriptor = (descriptor: TargetDescriptor): void => {
+  if (!TARGET_ID_PATTERN.test(descriptor.id)) {
+    throw new Error(
+      `Invalid target id: ${descriptor.id}. Use lowercase letters, numbers, and hyphens.`
+    );
+  }
+  if (!descriptor.name.trim()) {
+    throw new Error(`Target ${descriptor.id} must have a name.`);
+  }
+};
+
+const validateCapabilities = (integration: AgentTargetIntegration): void => {
+  const declared = integration.descriptor.capabilities.evaluation === true;
+  const implemented = Boolean(integration.evaluations);
+  if (declared !== implemented) {
+    throw new Error(
+      `Target ${integration.descriptor.id} must declare and implement Profile comparison together.`
+    );
+  }
+};
+
+const validatePaths = (descriptor: TargetDescriptor, paths: TargetPaths): TargetPaths => {
+  if (paths.targetId !== descriptor.id) {
+    throw new Error(
+      `Target ${descriptor.id} returned paths for ${paths.targetId || "an empty target id"}.`
+    );
+  }
+  if (!paths.configDir || !paths.instructionsPath || !paths.configPath) {
+    throw new Error(`Target ${descriptor.id} returned incomplete required paths.`);
+  }
+  return paths;
+};
+
+export const defineTargetIntegration = (
+  integration: AgentTargetIntegration
+): AgentTargetAdapter => {
+  validateDescriptor(integration.descriptor);
+  validateCapabilities(integration);
+
+  return {
+    descriptor: integration.descriptor,
+    detectInstallation: (input) => integration.discovery.detectInstallation(input),
+    createTargetPaths: (input) =>
+      validatePaths(
+        integration.descriptor,
+        materializeSharedSkillLocations(
+          integration.paths.createTargetPaths(input),
+          { homeDir: input.homeDir }
+        )
+      ),
+    skills: integration.skills,
+    conversations: integration.conversations,
+    evaluations: integration.evaluations,
+    createDefaultProfile: (id) => integration.profile.createDefaultProfile(id),
+    captureProfile: (targetPaths) => integration.profile.captureProfile(targetPaths),
+    createPreview: (input) => integration.preview.createPreview(input),
+    validateAssets: (input) => integration.assets.validateAssets(input),
+    getAssetBackupPaths: (input) => integration.assets.getAssetBackupPaths(input),
+    applyAssets: (input) => integration.assets.applyAssets(input)
+  };
+};

@@ -1,0 +1,50 @@
+{
+  "generatedAt": "2026-08-03T01:44:31.982Z",
+  "source": {
+    "commit": "d06b49e89dd785a4d1dd3dac928a093e1fedd832",
+    "dirty": true,
+    "fingerprint": "693e4ff94f67cb916045ef4eb0578ccaa40de858e9bd6b58c49660d894f64e28",
+    "files": 627
+  },
+  "build": {
+    "generatedAt": "2026-08-03T01:41:53.540Z",
+    "sourceFingerprint": "aa8019cd1313788828e31840a1a897c87e1dafbb813cde99429e515c4a6f4d72",
+    "sourceFiles": 356,
+    "artifactFingerprint": "a704630c8d7daf8a0563f101b2daff688beddc38e6f546ec0175db5c2d03e7c4",
+    "artifactFiles": 40
+  },
+  "tests": {
+    "passed": true,
+    "files": 178,
+    "assertions": 1284,
+    "e2eFiles": 16,
+    "e2eAssertions": 188,
+    "desktopElectronFiles": 6,
+    "desktopElectronAssertions": 132,
+    "electronUiFiles": 1,
+    "electronUiAssertions": 125
+  },
+  "audits": {
+    "styles": "passed",
+    "modules": "passed",
+    "targets": "passed",
+    "translations": "passed",
+    "features": "passed"
+  },
+  "captures": {
+    "directory": "/var/folders/c4/vw8cxnvd7rv46sv4kq0lkg0h0000gn/T/agentenv-ui-captures/verification",
+    "artifactFingerprint": "a704630c8d7daf8a0563f101b2daff688beddc38e6f546ec0175db5c2d03e7c4",
+    "files": 137,
+    "viewports": [
+      "1180x728",
+      "920x620"
+    ],
+    "includesProfileLoadingState": true,
+    "visualContract": {
+      "passed": true,
+      "files": 25,
+      "maxChangedPixelRatio": 0.011213183730715287
+    }
+  },
+  "packagedSmoke": "passed"
+}
