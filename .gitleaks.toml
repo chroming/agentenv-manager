@@ -1,0 +1,10 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Intentional test fixture and public GitHub OAuth Client ID"
+regexTarget = "secret"
+regexes = [
+  '''sk-1234567890abcdefghijklmnop''',
+  '''Ov23liOAxChYXPhAjVh8'''
+]

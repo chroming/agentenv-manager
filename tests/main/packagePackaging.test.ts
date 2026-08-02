@@ -225,6 +225,18 @@ describe("package metadata", () => {
     expect(groupedTests).toContain('"--maxWorkers=4"');
   });
 
+  it("scans complete public history for secrets", async () => {
+    const workflow = await readFile(
+      join(process.cwd(), ".github", "workflows", "ci.yml"),
+      "utf8"
+    );
+
+    expect(workflow).toContain("secret-scan:");
+    expect(workflow).toContain("fetch-depth: 0");
+    expect(workflow).toContain("--config=/repo/.gitleaks.toml");
+    expect(workflow).toContain("--log-opts=--all");
+  });
+
   it("keeps the macOS icon corners transparent", async () => {
     const icon = await readPngRgba(join(process.cwd(), "build", "icon.png"));
     const cornerPixels = [
