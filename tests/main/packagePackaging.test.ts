@@ -135,19 +135,18 @@ describe("package metadata", () => {
     expect(packageJson.scripts?.["icons:mac"]).toBe(
       "swift scripts/generate-mac-icon.swift"
     );
-    expect(packageJson.scripts?.pack).toBe(
-      "npm run build && electron-builder --dir --config.electronDist=node_modules/electron/dist"
-    );
-    expect(packageJson.scripts?.dist).toBe(
-      "npm run build && electron-builder --config.electronDist=node_modules/electron/dist"
-    );
+    expect(packageJson.scripts?.pack).toBe("npm run build && electron-builder --dir");
+    expect(packageJson.scripts?.dist).toBe("npm run build && electron-builder");
     expect(packageJson.scripts?.["dist:mac"]).toBe(
-      "npm run icons:mac && npm run build && electron-builder --mac --config.electronDist=node_modules/electron/dist"
+      "npm run icons:mac && npm run build && electron-builder --mac"
     );
     expect(packageJson.scripts?.["dist:win"]).toContain("electron-builder --win nsis");
     expect(packageJson.scripts?.["dist:linux"]).toContain(
       "electron-builder --linux AppImage deb"
     );
+    for (const script of ["pack", "dist", "dist:mac", "dist:win", "dist:linux"]) {
+      expect(packageJson.scripts?.[script]).not.toContain("electronDist");
+    }
     expect(packageJson.scripts?.["dist:mac:signed"]).toBe(
       "node scripts/build-signed-mac.mjs"
     );

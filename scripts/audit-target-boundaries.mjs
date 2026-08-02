@@ -1,5 +1,5 @@
 import { readFile, readdir } from "node:fs/promises";
-import { extname, join, relative } from "node:path";
+import { extname, join, relative, sep } from "node:path";
 
 const root = process.cwd();
 const sourceRoot = join(root, "src");
@@ -40,8 +40,8 @@ const sourceFiles = (await walk(sourceRoot)).filter((path) =>
 const failures = [];
 
 for (const path of sourceFiles) {
-  const projectPath = relative(root, path);
-  if (path.startsWith(`${targetRoot}/`) || allowedFiles.has(projectPath)) continue;
+  const projectPath = relative(root, path).split(sep).join("/");
+  if (path.startsWith(`${targetRoot}${sep}`) || allowedFiles.has(projectPath)) continue;
   const content = await readFile(path, "utf8");
   const lines = content.split("\n");
   for (const targetId of targetIds) {
