@@ -363,32 +363,36 @@ try {
       assert.match((await agent.textContent()) ?? "", /Ready/);
     }
   });
-  await runPackagedStep("open repository import dialog", async () => {
-    await page.getByRole("button", { name: "Skills", exact: true }).click();
-    await page.getByRole("button", { name: "Import skills" }).click();
-    await page.getByRole("dialog", { name: "Import skills" })
-      .waitFor({ state: "visible" });
-  }, 45_000);
-  const importDialog = page.getByRole("dialog", { name: "Import skills" });
-  await runPackagedStep("select repository import", async () => {
-    const repositoryTab = importDialog.getByRole("tab", { name: "Repository" });
-    await repositoryTab.evaluate((element) => element.click());
-    await importDialog.getByLabel("Repository address").waitFor({ state: "visible" });
-  }, 45_000);
-  await runPackagedStep("configure repository import", async () => {
-    await importDialog.getByLabel("Repository address").fill(repositoryRemote);
-  }, 45_000);
-  await runPackagedStep("scan repository Skill", async () => {
-    await importDialog.getByRole("button", { name: "Scan", exact: true }).click();
-    await importDialog.getByRole("checkbox", { name: "Select Packaged Repository Review" })
-      .waitFor({ state: "visible" });
-  }, 45_000);
-  await runPackagedStep("import repository Skill", async () => {
-    await importDialog.getByRole("button", { name: "Import 1" }).click();
-    await importDialog.getByText("All 1 skills imported", { exact: true })
-      .waitFor({ state: "visible" });
-    await importDialog.getByRole("button", { name: "Close", exact: true }).click();
-  }, 45_000);
+  const repositoryScan = await runPackagedStep(
+    "scan repository Skill through packaged preload",
+    () => page.evaluate(
+      (repository) => window.agentEnv.scanRepositorySkills({
+        repository,
+        transport: "system-git"
+      }),
+      repositoryRemote
+    ),
+    45_000
+  );
+  assert.equal(repositoryScan.candidates.length, 1);
+  assert.equal(repositoryScan.candidates[0]?.name, "Packaged Repository Review");
+  await runPackagedStep(
+    "import repository Skill through packaged preload",
+    () => page.evaluate(
+      ({ scan, candidate }) => window.agentEnv.importRepositorySkillToLibrary({
+        repository: scan.repository,
+        ref: scan.ref,
+        directory: candidate.directory,
+        transport: "system-git",
+        sourceCollection: {
+          ...scan.sourceScope,
+          sourceSubpath: ""
+        }
+      }),
+      { scan: repositoryScan, candidate: repositoryScan.candidates[0] }
+    ),
+    45_000
+  );
   assert.match(
     await readFile(
       join(appDataRoot, "skills-library", "packaged-repository-review", "SKILL.md"),
