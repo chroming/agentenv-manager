@@ -1329,12 +1329,11 @@ export const ConversationWorkspace = ({
                           {item.workspacePath ? (
                             <>
                               <span aria-hidden="true">·</span>
-                              <span
+                              <OverflowTooltip
                                 className="conversation-list-item__workspace"
-                                title={item.workspacePath}
-                              >
-                                {workspaceName(item.workspacePath)}
-                              </span>
+                                displayText={workspaceName(item.workspacePath)}
+                                text={item.workspacePath}
+                              />
                             </>
                           ) : null}
                           <span aria-hidden="true">·</span>
