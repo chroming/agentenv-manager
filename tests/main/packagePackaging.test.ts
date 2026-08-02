@@ -243,6 +243,10 @@ describe("package metadata", () => {
     expect(script).toContain("workflow exceeded 240000 ms");
     expect(script).toContain('process.platform === "win32"');
     expect(script).toContain("process.exit(0)");
+    expect(script).toContain("page.setDefaultTimeout(30_000)");
+    expect(script).toContain('process.platform !== "win32"');
+    expect(script).toContain('"open Skills workspace"');
+    expect(script).toContain('"import repository Skill"');
     expect(script).toContain("apply ${target.name}");
   });
 
