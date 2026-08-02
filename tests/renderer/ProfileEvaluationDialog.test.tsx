@@ -229,6 +229,11 @@ describe("ProfileEvaluationDialog", () => {
       .toBeInTheDocument();
     expect(screen.getByText("Keep current · 5")).toBeInTheDocument();
     expect(screen.getByText("Use Profile · 8")).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "Compare Daily Coding on OpenCode" });
+    fireEvent.click(screen.getByRole("button", { name: "Maximize preview" }));
+    expect(dialog).toHaveClass("is-maximized");
+    fireEvent.click(screen.getByRole("button", { name: "Restore preview size" }));
+    expect(dialog).not.toHaveClass("is-maximized");
 
     const runButton = screen.getByRole("button", { name: "Run comparison" });
     expect(runButton).toBeDisabled();

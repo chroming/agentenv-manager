@@ -8,6 +8,8 @@ import {
   FileDiff,
   FolderOpen,
   LoaderCircle,
+  Maximize2,
+  Minimize2,
   RotateCcw,
   Square,
   X,
@@ -127,6 +129,7 @@ export const ProfileEvaluationDialog = ({
   const [changeScope, setChangeScope] = useState<ChangeScope>("delta");
   const [selectedDiffPath, setSelectedDiffPath] = useState("");
   const [diffWorkspaceOpen, setDiffWorkspaceOpen] = useState(false);
+  const [maximized, setMaximized] = useState(false);
   const [copiedSide, setCopiedSide] = useState<"current" | "proposed">();
   const active = Boolean(run && oneShotEvaluationIsActive(run.status));
   const locked = active || starting;
@@ -181,6 +184,7 @@ export const ProfileEvaluationDialog = ({
     setChangeScope("delta");
     setSelectedDiffPath("");
     setCopiedSide(undefined);
+    setMaximized(false);
     void reviewWorkspace({ kind: "empty" });
   }, [open, profile.id, target.id]);
 
@@ -298,7 +302,8 @@ export const ProfileEvaluationDialog = ({
           name: profile.manifest.name,
           target: target.name
         })}
-        className="profile-comparison-dialog ui-dialog-shell"
+        backdropClassName="profile-comparison-backdrop"
+        className={`profile-comparison-dialog ui-dialog-shell${maximized ? " is-maximized" : ""}`}
         dialogRef={dialogRef}
         dismissDisabled={locked}
         onDismiss={dismiss}
@@ -331,11 +336,22 @@ export const ProfileEvaluationDialog = ({
                   : t("Runs the current Agent setup and proposed Profile against the same task and Workspace snapshot.")}
             </p>
           </div>
-          {!locked ? (
-            <IconButton label={t("Close")} onClick={onClose}>
-              <X size={17} />
+          <div className="profile-comparison-dialog__window-actions">
+            <IconButton
+              label={t(maximized ? "Restore preview size" : "Maximize preview")}
+              onClick={() => setMaximized((current) => !current)}
+              variant="ghost"
+            >
+              {maximized
+                ? <Minimize2 size={16} strokeWidth={2.2} />
+                : <Maximize2 size={16} strokeWidth={2.2} />}
             </IconButton>
-          ) : null}
+            {!locked ? (
+              <IconButton label={t("Close")} onClick={onClose}>
+                <X size={17} />
+              </IconButton>
+            ) : null}
+          </div>
         </header>
 
         <div className="ui-dialog-body profile-comparison-dialog__body">

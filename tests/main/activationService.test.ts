@@ -943,6 +943,147 @@ describe("activation service v2", () => {
     await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8")).resolves.toContain("# Review");
   });
 
+  it("uses the current saved Turn off intent when moving a previously prepared shared Skill", async () => {
+    const { paths, service, profileStore, profile, skillLibraryStore } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const librarySkill = (await skillLibraryStore.listSkills()).find((skill) => skill.id === "review");
+    if (!librarySkill) throw new Error("Expected review in the Skill Library");
+    const sharedSkill = join(paths.homeDir, ".agents", "skills", "review");
+    const targetSkill = join(paths.codexHome, "skills", "review");
+    await mkdir(join(paths.homeDir, ".agents", "skills"), { recursive: true });
+    await cp(librarySkill.path, sharedSkill, { recursive: true });
+
+    const prepared = await service.previewProfile(profile.id, "codex");
+    expect(prepared.sharedSkillPreparations).toContainEqual(expect.objectContaining({
+      libraryId: "review",
+      disposition: "install"
+    }));
+    expect((await service.applyProfile(profile.id, prepared.id)).ok).toBe(true);
+
+    const savedProfile = await profileStore.readProfile(profile.id);
+    await profileStore.saveProfile({
+      manifest: savedProfile.manifest,
+      instructions: savedProfile.instructions,
+      expectedContentHash: savedProfile.contentHash,
+      resources: {
+        ...savedProfile.resources,
+        managementByTarget: {
+          ...savedProfile.resources.managementByTarget,
+          codex: { instructions: "manage", skills: "disable" }
+        }
+      }
+    });
+
+    const result = await service.completeSharedSkillMigration({
+      skillKey: "review",
+      libraryId: "review",
+      sharedPaths: [sharedSkill],
+      consumerTargetIds: ["codex"]
+    });
+
+    expect(result.operation).toBe("retire");
+    await expect(lstat(sharedSkill)).rejects.toThrow();
+    await expect(lstat(targetSkill)).rejects.toThrow();
+    expect((await service.listTargetStates())[0]).toMatchObject({
+      lifecycleStatus: "pending",
+      appliedLibraryVersions: { skills: {} },
+      sharedSkillPreparations: [],
+      skillReceipts: [expect.objectContaining({
+        libraryId: "review",
+        targetName: "review",
+        desired: "omit",
+        outcome: "absent"
+      })]
+    });
+
+    await service.rollbackSharedSkillMigration(result.backupId);
+    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8")).resolves.toContain("# Review");
+  });
+
+  it("uses the current saved install intent when moving a previously omitted shared Skill", async () => {
+    const { paths, service, profileStore, profile, skillLibraryStore } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const librarySkill = (await skillLibraryStore.listSkills()).find((skill) => skill.id === "review");
+    if (!librarySkill) throw new Error("Expected review in the Skill Library");
+    const sharedSkill = join(paths.homeDir, ".agents", "skills", "review");
+    const targetSkill = join(paths.codexHome, "skills", "review");
+    await mkdir(join(paths.homeDir, ".agents", "skills"), { recursive: true });
+    await cp(librarySkill.path, sharedSkill, { recursive: true });
+    const initialProfile = await profileStore.readProfile(profile.id);
+    const disabledProfile = await profileStore.saveProfile({
+      manifest: initialProfile.manifest,
+      instructions: initialProfile.instructions,
+      expectedContentHash: initialProfile.contentHash,
+      resources: {
+        ...initialProfile.resources,
+        skills: [{ libraryId: "review", targetName: "review", enabled: false }]
+      }
+    });
+    const prepared = await service.previewProfile(disabledProfile.id, "codex");
+    expect(prepared.sharedSkillPreparations).toContainEqual(expect.objectContaining({
+      libraryId: "review",
+      disposition: "omit"
+    }));
+    expect((await service.applyProfile(disabledProfile.id, prepared.id)).ok).toBe(true);
+
+    const savedProfile = await profileStore.readProfile(profile.id);
+    await profileStore.saveProfile({
+      manifest: savedProfile.manifest,
+      instructions: savedProfile.instructions,
+      expectedContentHash: savedProfile.contentHash,
+      resources: {
+        ...savedProfile.resources,
+        skills: [{ libraryId: "review", targetName: "review", enabled: true }]
+      }
+    });
+
+    await service.completeSharedSkillMigration({
+      skillKey: "review",
+      libraryId: "review",
+      sharedPaths: [sharedSkill],
+      consumerTargetIds: ["codex"]
+    });
+
+    await expect(lstat(sharedSkill)).rejects.toThrow();
+    await expect(readFile(join(targetSkill, "SKILL.md"), "utf8")).resolves.toContain("# Review");
+    expect((await service.listTargetStates())[0]).toMatchObject({
+      appliedLibraryVersions: { skills: { review: librarySkill.contentHash } },
+      sharedSkillPreparations: [],
+      skillReceipts: [expect.objectContaining({
+        libraryId: "review",
+        targetName: "review",
+        desired: "install",
+        outcome: "managed-active"
+      })]
+    });
+  });
+
+  it("keeps the shared Skill when its current Agent destination is not AgentEnv-owned", async () => {
+    const { paths, service, profile, skillLibraryStore } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const librarySkill = (await skillLibraryStore.listSkills()).find((skill) => skill.id === "review");
+    if (!librarySkill) throw new Error("Expected review in the Skill Library");
+    const sharedSkill = join(paths.homeDir, ".agents", "skills", "review");
+    const targetSkill = join(paths.codexHome, "skills", "review");
+    await mkdir(join(paths.homeDir, ".agents", "skills"), { recursive: true });
+    await cp(librarySkill.path, sharedSkill, { recursive: true });
+    const prepared = await service.previewProfile(profile.id, "codex");
+    expect((await service.applyProfile(profile.id, prepared.id)).ok).toBe(true);
+    await mkdir(targetSkill, { recursive: true });
+    await writeFile(join(targetSkill, "SKILL.md"), "---\nname: review\n---\n# External review\n");
+
+    await expect(service.completeSharedSkillMigration({
+      skillKey: "review",
+      libraryId: "review",
+      sharedPaths: [sharedSkill],
+      consumerTargetIds: ["codex"]
+    })).rejects.toThrow("is not the prepared AgentEnv copy");
+
+    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8")).resolves.toContain("# Review");
+    await expect(readFile(join(targetSkill, "SKILL.md"), "utf8"))
+      .resolves.toContain("# External review");
+  });
+
   it("keeps a reviewed shared compatibility copy without installing a duplicate", async () => {
     const { paths, service, skillLibraryStore } = await makeEnv();
     await writeCodexLiveFiles(paths);

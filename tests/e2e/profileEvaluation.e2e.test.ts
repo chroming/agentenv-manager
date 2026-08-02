@@ -84,6 +84,35 @@ const verifyWorkspaceChoiceLayout = async (dialog: ReturnType<Page["getByRole"]>
   expect(Math.abs(first!.width - second!.width)).toBeLessThanOrEqual(1);
 };
 
+const verifyMaximizedDialogLayout = async (
+  page: Page,
+  dialog: ReturnType<Page["getByRole"]>,
+  width: number,
+  height: number
+) => {
+  await page.setViewportSize({ width, height });
+  await dialog.getByRole("button", { name: "Maximize preview" }).click();
+  await expect.poll(() => dialog.getAttribute("class")).toContain("is-maximized");
+  const bounds = await dialog.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(Math.abs(bounds!.width - (width - 16))).toBeLessThanOrEqual(1);
+  expect(Math.abs(bounds!.height - (height - 16))).toBeLessThanOrEqual(1);
+  expect(bounds!.x).toBeGreaterThanOrEqual(7);
+  expect(bounds!.y).toBeGreaterThanOrEqual(7);
+  expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
+  if (process.env.AGENTENV_EVALUATION_CAPTURE_DIR) {
+    await mkdir(process.env.AGENTENV_EVALUATION_CAPTURE_DIR, { recursive: true });
+    await page.screenshot({
+      path: join(
+        process.env.AGENTENV_EVALUATION_CAPTURE_DIR,
+        `comparison-maximized-${width}x${height}.png`
+      )
+    });
+  }
+  await dialog.getByRole("button", { name: "Restore preview size" }).click();
+  await expect.poll(() => dialog.getAttribute("class")).not.toContain("is-maximized");
+};
+
 const verifyProfileComparisonActionLayout = async (page: Page, width: number, height: number) => {
   await page.setViewportSize({ width, height });
   const actions = page.getByRole("group", { name: "Selected profile actions" });
@@ -330,6 +359,7 @@ printf '{"type":"step_finish","part":{"modelID":"fake/e2e","cost":0.01,"tokens":
       expect(await dialog.getByText("Agent", { exact: true }).count()).toBe(0);
       await verifyDialogLayout(page, ".profile-comparison-dialog", 920, 620);
       await verifyWorkspaceChoiceLayout(dialog);
+      await verifyMaximizedDialogLayout(page, dialog, 920, 620);
       await verifyDialogLayout(page, ".profile-comparison-dialog", 1180, 728);
       await verifyWorkspaceChoiceLayout(dialog);
 

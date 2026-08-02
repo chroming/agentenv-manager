@@ -110,6 +110,7 @@ import {
   skillReceiptsEqual,
   skillReceiptsFor
 } from "./skillReconciliationReceipts";
+import { reconcileSkill, toAppliedSkillReceipt } from "../shared/skillReconciliation";
 import {
   blockingApplyIssues,
   createApplyIssue,
@@ -1747,7 +1748,7 @@ export const createActivationService = ({
         statePath: string;
         statePathHash?: string;
         state: TargetState;
-        preparation: SharedSkillPreparation;
+        intent: SharedSkillPreparation;
       }> = [];
       const normalizedSharedPaths = [...new Set(sharedPaths.map((path) => resolve(path)))].sort();
 
@@ -1791,17 +1792,23 @@ export const createActivationService = ({
         const expectedReference = effectiveProfile.resources.skills.find(
           (reference) => reference.libraryId === libraryId && reference.enabled
         );
-        if (
-          preparation.profileId !== sourceProfile.id ||
-          preparation.disposition !== (expectedReference ? "install" : "omit") ||
-          preparation.targetName !== (expectedReference?.targetName ?? libraryId)
-        ) {
-          throw new Error(
-            `${adapter.descriptor.name} Skill intent changed after preparation. Apply the saved Profile, then retry cleanup.`
-          );
-        }
+        const storedReference = sourceProfile.resources.skills.find(
+          (reference) => reference.libraryId === libraryId
+        );
+        const intent: SharedSkillPreparation = {
+          ...preparation,
+          targetName:
+            expectedReference?.targetName ??
+            storedReference?.targetName ??
+            preparation.targetName,
+          disposition: expectedReference ? "install" : "omit",
+          profileId: sourceProfile.id,
+          profileHash:
+            sourceProfile.targetContentHashes?.[targetId] ??
+            createProfileContentHash(sourceProfile, targetId)
+        };
 
-        const targetPath = join(targetPaths.skillsDir, preparation.targetName);
+        const targetPath = join(targetPaths.skillsDir, intent.targetName);
         const inventory = await skillLibraryStore.scanInventory([targetPaths]);
         const occupyingItem = inventory.find(
           (item) => !item.sharedLocation && resolve(item.path) === resolve(targetPath)
@@ -1821,7 +1828,7 @@ export const createActivationService = ({
           statePath: stateFile.path,
           statePathHash: stateFile.pathHash,
           state: stateFile.state,
-          preparation
+          intent
         });
       }
 
@@ -1881,12 +1888,12 @@ export const createActivationService = ({
         }
         for (const context of contexts) {
           await claimPath(context.targetPath, markerPathForFile(context.targetPath));
-          if (context.preparation.disposition === "install") {
+          if (context.intent.disposition === "install") {
             await skillLibraryStore.deployLibrarySkill({
               targetPaths: context.targetPaths,
-              targetName: context.preparation.targetName,
+              targetName: context.intent.targetName,
               libraryId,
-              profileId: context.preparation.profileId
+              profileId: context.intent.profileId
             });
             installedPaths.push(context.targetPath);
           } else {
@@ -1903,12 +1910,48 @@ export const createActivationService = ({
             (resource) => resolve(resource.path) !== resolve(context.targetPath)
           );
           const migratedResources =
-            context.preparation.disposition === "install"
+            context.intent.disposition === "install"
               ? await snapshotManagedResources([context.targetPath], context.targetPaths)
               : [];
+          const currentInventory = await skillLibraryStore.scanInventory(
+            [context.targetPaths],
+            skillLibrary
+          );
+          const observation = currentInventory.find(
+            (item) => resolve(item.path) === resolve(context.targetPath)
+          );
+          const migratedReceipt = toAppliedSkillReceipt(reconcileSkill({
+            libraryId,
+            targetName: context.intent.targetName,
+            targetPath: context.targetPath,
+            desired: context.intent.disposition,
+            observation
+          }));
+          const sharedPathSet = new Set(normalizedSharedPaths);
+          const skillReceipts = normalizeSkillReceipts([
+            ...(context.state.skillReceipts ?? []).filter(
+              (receipt) =>
+                receipt.libraryId !== libraryId &&
+                !(receipt.path && sharedPathSet.has(resolve(receipt.path)))
+            ),
+            migratedReceipt
+          ]);
+          const appliedSkillVersions = {
+            ...(context.state.appliedLibraryVersions?.skills ?? {})
+          };
+          if (context.intent.disposition === "install") {
+            appliedSkillVersions[libraryId] = librarySkill.contentHash;
+          } else {
+            delete appliedSkillVersions[libraryId];
+          }
           await writeTargetState(context.targetId, {
             ...context.state,
             managedResources: retainedResources.concat(migratedResources),
+            appliedLibraryVersions: {
+              ...context.state.appliedLibraryVersions,
+              skills: appliedSkillVersions
+            },
+            skillReceipts,
             sharedSkillPreparations: (context.state.sharedSkillPreparations ?? []).filter(
               (item) => item.skillKey !== skillKey || item.libraryId !== libraryId
             )
@@ -1924,7 +1967,7 @@ export const createActivationService = ({
           }
         }
         for (const context of contexts) {
-          const shouldExist = context.preparation.disposition === "install";
+          const shouldExist = context.intent.disposition === "install";
           if ((await pathExists(join(context.targetPath, "SKILL.md"))) !== shouldExist) {
             throw new Error(`Agent Skill verification failed: ${context.targetPath}`);
           }
@@ -1940,7 +1983,7 @@ export const createActivationService = ({
               (await hashComparablePath(librarySkill.path)) ||
               (await readTextIfExists(ownershipMarkerPath)) !==
                 createOwnerMarkerContent({
-                  profileId: context.preparation.profileId,
+                  profileId: context.intent.profileId,
                   targetId: context.targetId,
                   kind: "skill",
                   source: `skills-library/${libraryId}`
