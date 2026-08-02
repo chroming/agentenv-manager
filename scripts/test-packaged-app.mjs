@@ -41,6 +41,8 @@ const unsafeCleanupBackupDir = join(
 const unsafeCleanupBackupManifest = join(unsafeCleanupBackupDir, "manifest.json");
 let application;
 let applicationProcess;
+let packagedWorkflowCompleted = false;
+let packagedWorkflowStage = "initializing fixtures";
 const commandExtension = process.platform === "win32" ? ".cmd" : "";
 const commandPath = (name) =>
   join(homeDir, ".local", "bin", `${name}${commandExtension}`);
@@ -51,6 +53,7 @@ const forceKill = (child) => {
 };
 
 const runPackagedStep = async (label, action, timeoutMs = packagedStepTimeoutMs) => {
+  packagedWorkflowStage = label;
   const startedAt = Date.now();
   process.stdout.write(`[packaged-e2e] START ${label}\n`);
   let timeout;
@@ -72,6 +75,21 @@ const runPackagedStep = async (label, action, timeoutMs = packagedStepTimeoutMs)
     clearTimeout(timeout);
   }
 };
+
+const reportPackagedStage = (label) => {
+  packagedWorkflowStage = label;
+  process.stdout.write(`[packaged-e2e] STAGE ${label}\n`);
+};
+
+const packagedWorkflowWatchdog = setTimeout(() => {
+  process.stderr.write(
+    `[packaged-e2e] FAIL ${packagedWorkflowStage} (workflow exceeded 240000 ms)\n`
+  );
+  if (applicationProcess && !processHasExited(applicationProcess)) {
+    forceKill(applicationProcess);
+  }
+  process.exit(1);
+}, 240_000);
 
 const packagedTargets = [
   {
@@ -211,6 +229,7 @@ const closePackagedApplication = async (app, page, childProcess) => {
 };
 
 try {
+  reportPackagedStage("prepare filesystem fixtures");
   await mkdir(opencodeDir, { recursive: true });
   await mkdir(repositoryRemote, { recursive: true });
   await mkdir(repositoryWork, { recursive: true });
@@ -227,6 +246,7 @@ try {
       await chmod(target.executablePath, 0o755);
     }
   }
+  reportPackagedStage("prepare migration fixtures");
   await writeFile(join(opencodeDir, "AGENTS.md"), "# Before packaged takeover\n", "utf8");
   await writeFile(join(opencodeDir, "opencode.jsonc"), "{}\n", "utf8");
   await mkdir(dirname(legacyOwnerSidecar), { recursive: true });
@@ -283,6 +303,7 @@ try {
     packagedProfileIds.set(target.id, await writePackagedTargetProfile(target));
   }
 
+  reportPackagedStage("discover system Git");
   const gitLookup = await execFileAsync(
     process.platform === "win32" ? "where.exe" : "which",
     ["git"]
@@ -308,6 +329,7 @@ try {
   await runGit(repositoryWork, ["add", "--all"]);
   await runGit(repositoryWork, ["commit", "-m", "add packaged repository skill"]);
   await runGit(repositoryWork, ["push", "origin", "HEAD:refs/heads/main"]);
+  reportPackagedStage("repository fixture ready");
 
   application = await runPackagedStep(
     "launch initial application",
@@ -439,6 +461,7 @@ try {
   process.stdout.write(
     `Packaged ${process.platform} six-Agent Apply, restart, and Repository workflows passed\n`
   );
+  packagedWorkflowCompleted = true;
 } finally {
   if (application) {
     const childProcess = applicationProcess;
@@ -455,4 +478,12 @@ try {
     ]);
   }
   await rm(root, { recursive: true, force: true });
+  clearTimeout(packagedWorkflowWatchdog);
+}
+
+// Playwright can leave a Windows pipe handle alive after Electron has closed.
+// Every assertion and cleanup has completed at this point, so terminate the
+// standalone smoke-test process instead of occupying the CI runner indefinitely.
+if (packagedWorkflowCompleted && process.platform === "win32") {
+  process.exit(0);
 }

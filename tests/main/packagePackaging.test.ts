@@ -240,6 +240,9 @@ describe("package metadata", () => {
     expect(script).toContain("[packaged-e2e] START");
     expect(script).toContain("[packaged-e2e] PASS");
     expect(script).toContain("[packaged-e2e] FAIL");
+    expect(script).toContain("workflow exceeded 240000 ms");
+    expect(script).toContain('process.platform === "win32"');
+    expect(script).toContain("process.exit(0)");
     expect(script).toContain("apply ${target.name}");
   });
 
