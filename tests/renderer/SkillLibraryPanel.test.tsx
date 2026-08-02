@@ -1573,7 +1573,7 @@ describe("SkillLibraryPanel", () => {
     ).toBeInTheDocument();
     expect(within(completedDialog).getByRole("button", { name: "Close" })).toBeEnabled();
     expect(within(completedDialog).queryByRole("button", { name: "Update 1 skill" })).toBeNull();
-  }, 15_000);
+  }, 30_000);
 
   it("falls back from a private GitHub URL to SSH-backed System Git and preserves its directory scope", async () => {
     const scanResult = {

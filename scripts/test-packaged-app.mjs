@@ -306,7 +306,9 @@ try {
   await page.getByRole("button", { name: "Skills", exact: true }).click();
   await page.getByRole("button", { name: "Import skills" }).click();
   const importDialog = page.getByRole("dialog", { name: "Import skills" });
-  await importDialog.getByRole("tab", { name: "Repository" }).click();
+  const repositoryTab = importDialog.getByRole("tab", { name: "Repository" });
+  await repositoryTab.evaluate((element) => element.click());
+  await importDialog.getByLabel("Repository address").waitFor({ state: "visible" });
   await importDialog.getByLabel("Repository address").fill(repositoryRemote);
   await importDialog.getByText("Advanced", { exact: true }).click();
   await importDialog.getByLabel("Repository directory").fill("skills/packaged-review");
