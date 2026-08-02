@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-08-02T16:27:27.249Z",
+  "generatedAt": "2026-08-02T16:54:54.455Z",
   "source": {
-    "commit": "1f6edbb0cdfeaa988adff3b8f1bfa50b2fba3cbd",
+    "commit": "b4bd5d40a1cb6d5701327e278330ec63020f6c62",
     "dirty": false,
-    "fingerprint": "9f4f17d6b569b312a67acb2aba7e204d2d7fee8ea200580089c82a04f20139e5",
+    "fingerprint": "08e2a8614f8511a5cee02f37c1d58fc16ae873f1387ca31d0f31e223d3815268",
     "files": 624
   },
   "build": {
-    "generatedAt": "2026-08-02T16:24:48.678Z",
+    "generatedAt": "2026-08-02T16:52:16.572Z",
     "sourceFingerprint": "3107f836640545ce483b8ee5eece00a554507b1b85dc247140452720473e91b1",
     "sourceFiles": 356,
     "artifactFingerprint": "55e814c26818ab18ac8db0f5cce83ce92204e815e5a95b78375e34f3cedb7f30",
@@ -16,7 +16,7 @@
   "tests": {
     "passed": true,
     "files": 178,
-    "assertions": 1282,
+    "assertions": 1283,
     "e2eFiles": 16,
     "e2eAssertions": 188,
     "desktopElectronFiles": 6,
