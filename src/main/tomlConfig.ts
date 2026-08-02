@@ -73,7 +73,7 @@ const decodeMcpTableName = (value: string): string | undefined => {
 };
 
 const mcpTableHeader =
-  /^\s*\[\s*mcp_servers\.((?:"(?:\\.|[^"])*")|(?:'[^']*')|(?:[A-Za-z0-9_-]+))\s*\]\s*(?:#.*)?$/;
+  /^\s*\[\s*mcp_servers\.("(?:\\.|[^"\\])*"|'[^']*'|[A-Za-z0-9_-]+)\s*\]\s*(?:#.*)?$/;
 
 export const setMcpServerEnabled = (
   content: string,

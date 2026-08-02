@@ -87,6 +87,20 @@ describe("toml config utilities", () => {
     expect(result.content).toContain("enabled = false");
   });
 
+  it("handles escaped characters in quoted MCP table names", () => {
+    const original = [
+      '[mcp_servers."escaped\\\\name"]',
+      'command = "node"',
+      ""
+    ].join("\n");
+
+    const result = setMcpServerEnabled(original, "escaped\\name", true);
+
+    expect(result).toMatchObject({ found: true, changed: true });
+    expect(result.content).toContain('[mcp_servers."escaped\\\\name"]');
+    expect(result.content).toContain("enabled = true");
+  });
+
   it("does not change config when the MCP definition is missing or already matches", () => {
     const original = "[mcp_servers.context7]\nenabled = true\n";
 
