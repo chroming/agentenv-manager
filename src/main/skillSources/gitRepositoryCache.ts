@@ -403,6 +403,7 @@ export const createGitRepositoryCache = (
               timeoutMs: 120_000,
               ...transportRunOptions(transport)
             };
+            let fetchedCompleteObjects = includeBlobs || location.kind === "file";
             if (includeBlobs) {
               await options.runner.run(
                 [
@@ -413,6 +414,10 @@ export const createGitRepositoryCache = (
                 ],
                 remoteOptions
               );
+            } else if (location.kind === "file") {
+              // Partial-clone filters provide no benefit for a local repository and
+              // can leave Git trying to lazily hydrate blobs through a Windows path.
+              await options.runner.run(baseFetchArgs, remoteOptions);
             } else {
               try {
                 await options.runner.run(
@@ -422,6 +427,7 @@ export const createGitRepositoryCache = (
               } catch (error) {
                 if (!isFilterUnsupported(error)) throw error;
                 await options.runner.run(baseFetchArgs, remoteOptions);
+                fetchedCompleteObjects = true;
               }
             }
             const resolved = await options.runner.run(
@@ -447,7 +453,7 @@ export const createGitRepositoryCache = (
               },
               materializedCommitByRef: {
                 ...(activeMarker?.materializedCommitByRef ?? {}),
-                ...(includeBlobs ? { [ref]: resolvedCommit } : {})
+                ...(fetchedCompleteObjects ? { [ref]: resolvedCommit } : {})
               }
             }, null, 2)}\n`);
             return {

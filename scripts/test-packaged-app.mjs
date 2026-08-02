@@ -363,24 +363,32 @@ try {
       assert.match((await agent.textContent()) ?? "", /Ready/);
     }
   });
-  await runPackagedStep("import repository Skill", async () => {
+  await runPackagedStep("open repository import dialog", async () => {
     await page.getByRole("button", { name: "Skills", exact: true }).click();
     await page.getByRole("button", { name: "Import skills" }).click();
-    const importDialog = page.getByRole("dialog", { name: "Import skills" });
+    await page.getByRole("dialog", { name: "Import skills" })
+      .waitFor({ state: "visible" });
+  }, 45_000);
+  const importDialog = page.getByRole("dialog", { name: "Import skills" });
+  await runPackagedStep("configure repository import", async () => {
     const repositoryTab = importDialog.getByRole("tab", { name: "Repository" });
     await repositoryTab.evaluate((element) => element.click());
     await importDialog.getByLabel("Repository address").waitFor({ state: "visible" });
     await importDialog.getByLabel("Repository address").fill(repositoryRemote);
     await importDialog.getByText("Advanced", { exact: true }).click();
     await importDialog.getByLabel("Repository directory").fill("skills/packaged-review");
+  }, 45_000);
+  await runPackagedStep("scan repository Skill", async () => {
     await importDialog.getByRole("button", { name: "Scan", exact: true }).click();
     await importDialog.getByRole("checkbox", { name: "Select Packaged Repository Review" })
       .waitFor({ state: "visible" });
+  }, 45_000);
+  await runPackagedStep("import repository Skill", async () => {
     await importDialog.getByRole("button", { name: "Import 1" }).click();
     await importDialog.getByText("All 1 skills imported", { exact: true })
       .waitFor({ state: "visible" });
     await importDialog.getByRole("button", { name: "Close", exact: true }).click();
-  });
+  }, 45_000);
   assert.match(
     await readFile(
       join(appDataRoot, "skills-library", "packaged-repository-review", "SKILL.md"),

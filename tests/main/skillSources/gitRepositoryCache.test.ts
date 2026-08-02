@@ -242,7 +242,7 @@ describe("git repository cache", () => {
     expect(run.mock.calls.filter(([args]) => args.includes("fetch"))).toHaveLength(2);
   });
 
-  it("fetches complete file objects once when materialization follows a tree-only scan", async () => {
+  it("fetches complete file objects once for a local repository", async () => {
     const { repository, runner, cacheRoot } = await setup();
     const run = vi.fn(runner.run.bind(runner));
     const cache = createGitRepositoryCache({
@@ -267,10 +267,10 @@ describe("git repository cache", () => {
     });
 
     const fetches = run.mock.calls.filter(([args]) => args.includes("fetch"));
-    expect(fetches).toHaveLength(2);
-    expect(fetches[0][0]).toContain("--filter=blob:none");
-    expect(fetches[1][0]).toContain("--no-filter");
-    expect(fetches[1][0]).toContain("--refetch");
+    expect(fetches).toHaveLength(1);
+    expect(fetches[0][0]).not.toContain("--filter=blob:none");
+    expect(fetches[0][0]).not.toContain("--no-filter");
+    expect(fetches[0][0]).not.toContain("--refetch");
   });
 
   it("invalidates a complete-object snapshot when a tree refresh discovers a new commit", async () => {
@@ -298,7 +298,7 @@ describe("git repository cache", () => {
     expect(initial.resolvedCommit).not.toBe(nextCommit);
     expect(checked.resolvedCommit).toBe(nextCommit);
     expect(materialized.resolvedCommit).toBe(nextCommit);
-    expect(run.mock.calls.filter(([args]) => args.includes("fetch"))).toHaveLength(3);
+    expect(run.mock.calls.filter(([args]) => args.includes("fetch"))).toHaveLength(2);
   });
 
   it("rebuilds a corrupt disposable cache without touching the source repository", async () => {
