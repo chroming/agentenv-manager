@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -205,21 +205,19 @@ describe("OpenCode local conversation storage", () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-opencode-cli-fallback-"));
     const dbPath = await createTestDatabase(root);
     const executablePath = join(root, "opencode");
-    const capability = createOpenCodeConversationCapability();
+    const capability = createOpenCodeConversationCapability({
+      runCommand: async () => ({
+        messages: [{
+          info: { id: "cli-message", role: "user", time: { created: 4000 } },
+          parts: [{ type: "text", text: "Message from CLI fallback" }]
+        }]
+      })
+    });
     const context = { ...contextFor(root), executablePath };
     const candidate = (await capability.discover(context)).candidates[0];
     const database = new DatabaseSync(dbPath);
     database.exec("DROP TABLE part");
     database.close();
-    await writeFile(
-      executablePath,
-      `#!/bin/sh
-printf '%s' '{"messages":[{"info":{"id":"cli-message","role":"user","time":{"created":4000}},"parts":[{"type":"text","text":"Message from CLI fallback"}]}]}'
-`,
-      "utf8"
-    );
-    await chmod(executablePath, 0o755);
-
     const detail = await capability.read(context, candidate);
 
     expect(detail.messages).toEqual([

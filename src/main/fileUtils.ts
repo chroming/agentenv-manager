@@ -46,8 +46,12 @@ export const pathEntryExists = async (path: string) => {
   }
 };
 
-const syncPath = async (path: string) => {
-  const handle = await open(path, "r");
+const syncPath = async (
+  path: string,
+  platform: NodeJS.Platform = process.platform
+) => {
+  // Windows requires a write-capable handle for FlushFileBuffers.
+  const handle = await open(path, platform === "win32" ? "r+" : "r");
   try {
     await handle.sync();
   } finally {
@@ -121,8 +125,9 @@ export const syncParentDirectory = async (
     sync?: (path: string) => Promise<void>;
   } = {}
 ) => {
-  if ((options.platform ?? process.platform) === "win32") return;
-  await (options.sync ?? syncPath)(path);
+  const platform = options.platform ?? process.platform;
+  if (platform === "win32") return;
+  await (options.sync ?? ((candidate) => syncPath(candidate, platform)))(path);
 };
 
 export const writeAtomic = async (
@@ -135,6 +140,8 @@ export const writeAtomic = async (
     expectedTargetHash?: string;
   } = {}
 ) => {
+  const platform = options.platform ?? process.platform;
+  const sync = options.sync ?? ((path: string) => syncPath(path, platform));
   const mode = options.mode ?? await lstat(targetPath)
     .then((stats) => stats.isFile() ? stats.mode & 0o777 : 0o600)
     .catch((error) => {
@@ -146,10 +153,10 @@ export const writeAtomic = async (
       targetPath,
       async (stagingPath) => {
         await writeFile(stagingPath, content, { flag: "wx", mode });
-        if ((options.platform ?? process.platform) !== "win32") {
+        if (platform !== "win32") {
           await chmod(stagingPath, mode);
         }
-        await (options.sync ?? syncPath)(stagingPath);
+        await sync(stagingPath);
       },
       {
         expectedTargetHash: options.expectedTargetHash,
@@ -165,10 +172,10 @@ export const writeAtomic = async (
       flag: "wx",
       mode
     });
-    if ((options.platform ?? process.platform) !== "win32") {
+    if (platform !== "win32") {
       await chmod(tempPath, mode);
     }
-    await (options.sync ?? syncPath)(tempPath);
+    await sync(tempPath);
     await retryTransientFilesystemOperation(
       () => rename(tempPath, targetPath),
       { platform: options.platform }
@@ -191,6 +198,8 @@ const writeFreshAtomicFile = async (
     sync?: (path: string) => Promise<void>;
   } = {}
 ) => {
+  const platform = options.platform ?? process.platform;
+  const sync = options.sync ?? ((path: string) => syncPath(path, platform));
   const tempPath = `${targetPath}.agentenv-tmp-${process.pid}-${randomUUID()}`;
   try {
     await writeFile(tempPath, content, {
@@ -198,7 +207,7 @@ const writeFreshAtomicFile = async (
       flag: "wx",
       mode: options.mode ?? 0o600
     });
-    await (options.sync ?? syncPath)(tempPath);
+    await sync(tempPath);
     await retryTransientFilesystemOperation(
       () => rename(tempPath, targetPath),
       { platform: options.platform }

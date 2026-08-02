@@ -24,8 +24,14 @@ interface MigrateLegacyAppDataRootInput {
 
 export const legacyElectronAppDataRoot = (userDataDir: string) => join(userDataDir, "data");
 
-export const defaultConfigAppDataRoot = (homeDir: string) =>
-  join(homeDir, ".config", "agentenv-manager");
+export const defaultConfigAppDataRoot = (
+  homeDir: string,
+  platform: NodeJS.Platform = process.platform
+) => (platform === "win32" ? win32 : posix).join(
+  homeDir,
+  ".config",
+  "agentenv-manager"
+);
 
 export const resolveAppDataRoot = ({
   env = process.env,
@@ -44,7 +50,7 @@ export const resolveAppDataRoot = ({
     );
   }
   // Keep the established macOS location stable for existing installations.
-  return defaultConfigAppDataRoot(homeDir);
+  return defaultConfigAppDataRoot(homeDir, platform);
 };
 
 export const migrateLegacyAppDataRoot = async ({

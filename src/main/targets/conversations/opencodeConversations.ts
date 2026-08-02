@@ -24,6 +24,7 @@ import {
 const agent = { id: "opencode", name: "OpenCode" };
 const SQLITE_PREFIX = "opencode-sqlite:";
 const CLI_PREFIX = "opencode-cli:";
+type JsonCommandRunner = typeof runJsonCommand;
 
 interface OpenCodeSession {
   id: string;
@@ -200,9 +201,10 @@ const discoverLegacy = async (
 };
 
 const discoverCli = async (
-  executablePath: string
+  executablePath: string,
+  runCommand: JsonCommandRunner
 ): Promise<AgentConversationCandidate[]> => {
-  const raw = await runJsonCommand(executablePath, ["session", "list", "--format", "json"]);
+  const raw = await runCommand(executablePath, ["session", "list", "--format", "json"]);
   if (!Array.isArray(raw)) throw new Error("OpenCode returned an invalid session list");
   return raw.flatMap((item: OpenCodeSession) => {
     if (!item || typeof item.id !== "string") return [];
@@ -242,8 +244,9 @@ const sqliteLocation = (locator: string) => {
 
 const readCliMessages = async (
   executablePath: string,
-  candidate: AgentConversationCandidate
-) => parseOpenCodeExportMessages(await runJsonCommand(executablePath, [
+  candidate: AgentConversationCandidate,
+  runCommand: JsonCommandRunner
+) => parseOpenCodeExportMessages(await runCommand(executablePath, [
   "export",
   candidate.providerSession?.id ?? candidate.recordId,
   "--sanitize"
@@ -292,7 +295,11 @@ const readLegacyMessages = async (
   );
 };
 
-export const createOpenCodeConversationCapability = (): AgentConversationCapability => ({
+export const createOpenCodeConversationCapability = (
+  options: { runCommand?: JsonCommandRunner } = {}
+): AgentConversationCapability => {
+  const runCommand = options.runCommand ?? runJsonCommand;
+  return {
   historyDetail: "full",
   discover: async ({ homeDir, executablePath, platform, environment }) => {
     const dataDirs = opencodeDataDirs(homeDir, platform, environment);
@@ -307,7 +314,7 @@ export const createOpenCodeConversationCapability = (): AgentConversationCapabil
     }
     if (localCandidates.length === 0 && executablePath) {
       return {
-        candidates: await discoverCli(executablePath),
+        candidates: await discoverCli(executablePath, runCommand),
         complete: true
       };
     }
@@ -363,7 +370,7 @@ export const createOpenCodeConversationCapability = (): AgentConversationCapabil
       } catch (databaseError) {
         if (!executablePath) throw databaseError;
         try {
-          messages = await readCliMessages(executablePath, candidate);
+          messages = await readCliMessages(executablePath, candidate, runCommand);
         } catch (cliError) {
           throw new Error(
             `OpenCode history database could not be read (${
@@ -380,7 +387,11 @@ export const createOpenCodeConversationCapability = (): AgentConversationCapabil
       return createConversationDetail(agent, candidate, await readLegacyMessages(candidate));
     }
     if (!executablePath) throw new Error("OpenCode command is unavailable");
-    return createConversationDetail(agent, candidate, await readCliMessages(executablePath, candidate));
+    return createConversationDetail(
+      agent,
+      candidate,
+      await readCliMessages(executablePath, candidate, runCommand)
+    );
   },
   openOriginal: ({ executablePath }, candidate) => executablePath
     ? {
@@ -420,4 +431,5 @@ export const createOpenCodeConversationCapability = (): AgentConversationCapabil
         }
       }
     : undefined
-});
+  };
+};

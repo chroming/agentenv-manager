@@ -136,9 +136,11 @@ describe("package metadata", () => {
       "swift scripts/generate-mac-icon.swift"
     );
     expect(packageJson.scripts?.pack).toBe("npm run build && electron-builder --dir");
-    expect(packageJson.scripts?.dist).toBe("npm run build && electron-builder");
+    expect(packageJson.scripts?.dist).toBe(
+      "npm run build && electron-builder --publish never"
+    );
     expect(packageJson.scripts?.["dist:mac"]).toBe(
-      "npm run icons:mac && npm run build && electron-builder --mac"
+      "npm run icons:mac && npm run build && electron-builder --mac --publish never"
     );
     expect(packageJson.scripts?.["dist:win"]).toContain("electron-builder --win nsis");
     expect(packageJson.scripts?.["dist:linux"]).toContain(
@@ -146,6 +148,9 @@ describe("package metadata", () => {
     );
     for (const script of ["pack", "dist", "dist:mac", "dist:win", "dist:linux"]) {
       expect(packageJson.scripts?.[script]).not.toContain("electronDist");
+    }
+    for (const script of ["dist", "dist:mac", "dist:win", "dist:linux"]) {
+      expect(packageJson.scripts?.[script]).toContain("--publish never");
     }
     expect(packageJson.scripts?.["dist:mac:signed"]).toBe(
       "node scripts/build-signed-mac.mjs"
@@ -175,7 +180,8 @@ describe("package metadata", () => {
       linux: {
         icon: "build/icon.png",
         target: ["AppImage", "deb"],
-        executableName: "agentenv-manager"
+        executableName: "agentenv-manager",
+        syncDesktopName: true
       }
     });
     expect(packageJson.build?.mac?.identity).toBeUndefined();

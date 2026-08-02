@@ -84,8 +84,9 @@ export const hashSymlinkTarget = (target: string): string => {
   return hash.digest("hex");
 };
 
-const syncFile = async (path: string) => {
-  const handle = await open(path, "r");
+const syncFile = async (path: string, platform: NodeJS.Platform) => {
+  // Windows requires a write-capable handle for FlushFileBuffers.
+  const handle = await open(path, platform === "win32" ? "r+" : "r");
   try {
     await handle.sync();
   } finally {
@@ -100,7 +101,7 @@ export const syncPathTree = async (
   const stats = await lstat(path);
   if (stats.isSymbolicLink()) return;
   if (stats.isFile()) {
-    await syncFile(path);
+    await syncFile(path, platform);
     return;
   }
   if (!stats.isDirectory()) {
@@ -108,7 +109,7 @@ export const syncPathTree = async (
   }
   const entries = await readdir(path);
   for (const entry of entries) await syncPathTree(`${path}${sep}${entry}`, platform);
-  if (platform !== "win32") await syncFile(path);
+  if (platform !== "win32") await syncFile(path, platform);
 };
 
 export const copyPathVerified = async (
