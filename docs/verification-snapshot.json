@@ -1,16 +1,16 @@
 {
-  "generatedAt": "2026-08-02T15:13:16.513Z",
+  "generatedAt": "2026-08-02T15:52:40.868Z",
   "source": {
-    "commit": "2ac6cb53e8bbc0000178311647767c8e1f25c8a3",
+    "commit": "e6cf1ec4a158cf0ad1be2927f5183c4db1518c47",
     "dirty": false,
-    "fingerprint": "6347540b91cb80a411e2a8f73b10c43591ace8a15723171a1b139db002b6a5cf",
+    "fingerprint": "afef5bfb57bd65a1d55c73a2a01be1714c8b73dd9ccfa5c67fab4d6865fb9c0d",
     "files": 624
   },
   "build": {
-    "generatedAt": "2026-08-02T15:10:38.394Z",
-    "sourceFingerprint": "6b6db878952a943d7aa118d22b4240bb9359c344a3597e6bcdd3ce517a9460b3",
+    "generatedAt": "2026-08-02T15:49:57.374Z",
+    "sourceFingerprint": "0db51006b5f3d6446c82dacb696000ae47cd52edd3d2489b11568e4b5b9dd699",
     "sourceFiles": 356,
-    "artifactFingerprint": "2df7e4599b1744d8501d441b8df15834fe2e5ffdd26ee0df2ec0c4bc51f8a449",
+    "artifactFingerprint": "a03847fef89a3eca884533d189a9ef45f08cac89932d1c4b847bedb8240fae5c",
     "artifactFiles": 40
   },
   "tests": {
@@ -33,7 +33,7 @@
   },
   "captures": {
     "directory": "/var/folders/c4/vw8cxnvd7rv46sv4kq0lkg0h0000gn/T/agentenv-ui-captures/verification",
-    "artifactFingerprint": "2df7e4599b1744d8501d441b8df15834fe2e5ffdd26ee0df2ec0c4bc51f8a449",
+    "artifactFingerprint": "a03847fef89a3eca884533d189a9ef45f08cac89932d1c4b847bedb8240fae5c",
     "files": 137,
     "viewports": [
       "1180x728",
