@@ -98,6 +98,7 @@ const continuationText = (detail: ConversationDetail) => [
 const conversationPageSize = 200;
 const conversationMessagePageSize = 60;
 const conversationListEndThreshold = 56;
+const manualRefreshFeedbackMinimumMs = 240;
 type ConversationOperation = "copy" | "open-original" | "continue";
 
 const workspaceName = (path?: string) => {
@@ -720,6 +721,7 @@ export const ConversationWorkspace = ({
     force = reason === "manual"
   ) => {
     const announce = reason === "manual";
+    const feedbackStartedAt = announce ? Date.now() : undefined;
     if (announce) {
       setManualRefreshing(true);
       setError("");
@@ -764,7 +766,13 @@ export const ConversationWorkspace = ({
         setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       }
     } finally {
-      if (announce) setManualRefreshing(false);
+      if (feedbackStartedAt !== undefined) {
+        const remaining = manualRefreshFeedbackMinimumMs - (Date.now() - feedbackStartedAt);
+        if (remaining > 0) {
+          await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
+        }
+        setManualRefreshing(false);
+      }
     }
   };
   refreshRef.current = refresh;
