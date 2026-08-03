@@ -32,7 +32,8 @@ import {
   focusInitialActionMenuItem,
   IconButton,
   ModalFrame,
-  PageHeader
+  PageHeader,
+  ToolbarOverflowMenu
 } from "./ui";
 import { isTargetInstalled } from "../../shared/targetHealth";
 import type { EnvironmentReviewSummary } from "../environmentReview";
@@ -296,20 +297,19 @@ export const TargetWorkspace = ({
         actions={(
           <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
             <FreshnessStatus state={freshness} verb="Refreshed" />
-            <Button
+            <ToolbarOverflowMenu
               ref={recoveryTriggerRef}
-              className="secondary-action target-recovery-trigger"
-              aria-haspopup="dialog"
-              disabled={busy || isLoading || backups.length === 0}
-              title={backups.length === 0 ? t("No backups") : undefined}
-              icon={<ArchiveRestore size={15} strokeWidth={2.2} />}
-              onClick={() => setIsRecoveryOpen(true)}
-            >
-              {t("Recovery")}
-              {backups.length > 0 ? (
-                <span aria-label={t(backups.length === 1 ? "{{count}} backup" : "{{count}} backups", { count: backups.length })}>{backups.length}</span>
-              ) : null}
-            </Button>
+              label={t("More Agent actions")}
+              disabled={busy || isLoading}
+              menuLabel={t("Agent actions")}
+              items={[{
+                id: "recovery",
+                label: t("Recovery"),
+                disabled: backups.length === 0,
+                icon: <ArchiveRestore size={15} strokeWidth={2.2} aria-hidden="true" />,
+                onSelect: () => setIsRecoveryOpen(true)
+              }]}
+            />
             <Button
               className="secondary-action"
               busy={freshness.status === "refreshing"}

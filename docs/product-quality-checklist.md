@@ -218,7 +218,17 @@ Rules:
 - [ ] Navigation labels are vertically centered inside the selected surface.
 - [ ] Switching destinations does not change content origin, base font size, or
   control scale.
-- [ ] The title bar has a complete drag region without swallowing controls.
+- [ ] The macOS title bar is quiet window chrome with one continuous full-width bottom divider; it contains no page identity, page-level command, or selected-object command.
+- [ ] The title bar has a complete drag region in every unoccupied area without swallowing controls.
+- [ ] On macOS, the collapsed sidebar starts below the title-bar strip and does
+  not extend its divider through it; the expand control is nested in title-bar
+  chrome, remains fixed after the traffic lights in both sidebar states, and is
+  geometrically disjoint from the drag region. It can be activated through a
+  real Electron window input event.
+- [ ] In native macOS full screen, traffic lights are absent and the sidebar toggle
+  moves to the leading edge without adding page controls to window chrome.
+- [ ] Collapsed navigation keeps visible, equal section separators when group
+  labels are hidden.
 - [ ] Interactive elements are marked as no-drag.
 - [ ] The app paints a stable shell immediately during startup.
 - [ ] The sidebar status card does not wrap routine labels or distort `+N`
@@ -227,8 +237,10 @@ Rules:
 
 ### 5.3 Page headers and toolbars
 
-- [ ] Comparable pages share title origin, title size, supporting-copy spacing,
+- [ ] Comparable single-pane pages share title origin, title size, supporting-copy spacing,
   toolbar height, and top inset.
+- [ ] List-and-detail pages place collection creation in the list header and
+  selected-object commands in the detail header; neither is promoted into the title bar.
 - [ ] Only one ordinary primary command receives a filled accent treatment.
 - [ ] Page-level commands remain near the page title or current object.
 - [ ] Object-level Save and Apply controls remain adjacent.

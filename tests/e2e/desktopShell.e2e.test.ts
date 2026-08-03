@@ -35,6 +35,51 @@ afterEach(async () => {
 });
 
 describe("desktop shell", () => {
+  it("keeps macOS window chrome quiet when entering full screen", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-desktop-shell-fullscreen-"));
+    app = await launch();
+    const page = await app.firstWindow();
+    const titlebar = page.locator(".shell-titlebar");
+    await page.getByRole("heading", { name: "Agents" }).waitFor({ state: "visible" });
+    await titlebar.getByRole("button", { name: "Collapse sidebar" }).waitFor({ state: "visible" });
+
+    await app.browserWindow(page).then((handle) => handle.evaluate((window) => {
+      window.setFullScreen(true);
+    }));
+    await page.locator(".app-shell--full-screen").waitFor({ state: "visible" });
+
+    const geometry = await page.evaluate(() => {
+      const titlebar = document.querySelector<HTMLElement>(".shell-titlebar")!;
+      const toggle = titlebar.querySelector<HTMLElement>(".shell-sidebar-toggle")!;
+      const titlebarBox = titlebar.getBoundingClientRect();
+      const toggleBox = toggle.getBoundingClientRect();
+      return {
+        height: Math.round(titlebarBox.height),
+        pageActions: titlebar.querySelectorAll(".ui-page-header__actions").length,
+        pageHeadings: titlebar.querySelectorAll("h1, h2, h3").length,
+        separatorHeight: getComputedStyle(titlebar, "::after").height,
+        titlebarLeft: Math.round(titlebarBox.left),
+        titlebarRight: Math.round(titlebarBox.right),
+        toggleLeft: Math.round(toggleBox.left),
+        toggleContained:
+          toggleBox.top >= titlebarBox.top && toggleBox.bottom <= titlebarBox.bottom,
+        viewportWidth: document.documentElement.clientWidth
+      };
+    });
+    expect(geometry).toMatchObject({
+      height: 36,
+      pageActions: 0,
+      pageHeadings: 0,
+      separatorHeight: "1px",
+      titlebarLeft: 0,
+      toggleLeft: 12,
+      toggleContained: true
+    });
+    expect(geometry.titlebarRight).toBe(geometry.viewportWidth);
+    expect(await titlebar.getByRole("button", { name: "Refresh" }).count()).toBe(0);
+    await page.getByRole("button", { name: "Refresh" }).waitFor({ state: "visible" });
+  }, 30_000);
+
   it("owns its production menu and restores device-local window bounds", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-desktop-shell-"));
     app = await launch();

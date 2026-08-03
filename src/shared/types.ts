@@ -93,6 +93,8 @@ export interface AgentEnvApi {
   setWindowCloseGuard(enabled: boolean): void;
   confirmWindowClose(): void;
   cancelWindowClose(): void;
+  readWindowChromeState(): Promise<WindowChromeState>;
+  onWindowChromeStateChanged(callback: (state: WindowChromeState) => void): () => void;
   openContextMenu(items: DesktopContextMenuItem[]): Promise<string | undefined>;
   copyText(text: string): Promise<void>;
   selectSkillFolder(): Promise<string | undefined>;
@@ -217,6 +219,10 @@ export interface AgentEnvApi {
   selectDataRestore(): Promise<DataRestorePreview | undefined>;
   restoreDataBackup(path: string): Promise<{ safetyBackupPath: string }>;
   adoptTargetChanges(profileId: string, targetId: string): Promise<AdoptTargetChangesResult>;
+}
+
+export interface WindowChromeState {
+  fullScreen: boolean;
 }
 
 export interface LocalSkillSourceSelection {

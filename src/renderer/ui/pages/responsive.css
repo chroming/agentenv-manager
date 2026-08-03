@@ -11,7 +11,7 @@
   .app-shell--settings .editor-panel {
     gap: var(--window-content-gap, 12px);
     padding:
-      var(--window-chrome-inset-top, 12px) 14px
+      calc(var(--window-chrome-inset-top, 12px) + 8px) 14px
       var(--window-content-inset-bottom, 14px);
   }
 

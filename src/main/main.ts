@@ -397,6 +397,10 @@ ipcMain.on("window:cancel-close", () => {
   appQuitRequested = false;
 });
 
+ipcMain.handle("window:chrome-state", (event) => ({
+  fullScreen: BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false
+}));
+
 const windowStatePath = () =>
   startupDataRoot ? join(startupDataRoot, "window-state.json") : undefined;
 
@@ -473,6 +477,15 @@ const createWindow = () => {
   win.on("resize", () => scheduleWindowStateSave(win));
   win.on("maximize", () => scheduleWindowStateSave(win));
   win.on("unmaximize", () => scheduleWindowStateSave(win));
+  const publishWindowChromeState = () => {
+    if (!win.webContents.isDestroyed()) {
+      win.webContents.send("window:chrome-state-changed", {
+        fullScreen: win.isFullScreen()
+      });
+    }
+  };
+  win.on("enter-full-screen", publishWindowChromeState);
+  win.on("leave-full-screen", publishWindowChromeState);
 
   win.webContents.on("did-start-loading", () => {
     guardedWindowCloses.delete(win);

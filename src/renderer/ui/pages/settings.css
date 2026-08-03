@@ -16,7 +16,7 @@
   gap: 12px;
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
-  padding: var(--window-chrome-inset-top, 14px) 18px 18px;
+  padding: calc(var(--window-chrome-inset-top, 14px) + 8px) 18px 18px;
 }
 
 .settings-categories {

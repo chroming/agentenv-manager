@@ -88,20 +88,6 @@
   min-height: var(--control-height-default);
 }
 
-.target-recovery-trigger > span {
-  align-items: center;
-  background: #eef2f7;
-  border-radius: var(--radius-pill);
-  color: #526176;
-  display: inline-flex;
-  font-size: 10px;
-  font-weight: var(--font-weight-regular);
-  height: 18px;
-  justify-content: center;
-  min-width: 18px;
-  padding: 0 5px;
-}
-
 .target-list {
   align-items: start;
   background: var(--surface);

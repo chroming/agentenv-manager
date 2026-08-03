@@ -10,8 +10,6 @@ import {
 import {
   LoaderCircle,
   Monitor,
-  PanelLeftClose,
-  PanelLeftOpen,
   Search,
 } from "lucide-react";
 import type {
@@ -63,11 +61,12 @@ export type AppWorkspace =
 
 export const appShellClassName = (
   activeWorkspace: AppWorkspace,
-  collapsed: boolean
+  collapsed: boolean,
+  fullScreen = false
 ) =>
   `app-shell${activeWorkspace === "targets" ? "" : ` app-shell--${activeWorkspace}`}${
     collapsed ? " app-shell--sidebar-collapsed" : ""
-  }`;
+  }${fullScreen ? " app-shell--full-screen" : ""}`;
 
 interface ProfileSidebarProps {
   targets: TargetInfo[];
@@ -79,7 +78,6 @@ interface ProfileSidebarProps {
   onAgentSelect(targetId: string): void;
   onOpenAgents(): void;
   onQuickOpen(): void;
-  onToggleCollapsed(): void;
 }
 
 type TargetIconFlavor =
@@ -390,8 +388,7 @@ export const ProfileSidebar = ({
   onWorkspaceSelect,
   onAgentSelect,
   onOpenAgents,
-  onQuickOpen,
-  onToggleCollapsed
+  onQuickOpen
 }: ProfileSidebarProps) => {
   const { t } = useI18n();
   const quickOpenShortcut =
@@ -449,85 +446,78 @@ export const ProfileSidebar = ({
             <p className="muted">v0.1.0</p>
           </div>
         </div>
-        <button
-          className="sidebar-collapse-button"
-          type="button"
-          aria-label={t(collapsed ? "Expand sidebar" : "Collapse sidebar")}
-          title={t(collapsed ? "Expand sidebar" : "Collapse sidebar")}
-          onClick={onToggleCollapsed}
-        >
-          {collapsed ? (
-            <PanelLeftOpen size={17} strokeWidth={2.1} aria-hidden="true" />
-          ) : (
-            <PanelLeftClose size={17} strokeWidth={2.1} aria-hidden="true" />
-          )}
-        </button>
       </div>
       <nav className="workspace-nav" aria-label={t("Workspace")}>
-        <button
-          className="workspace-search-button"
-          type="button"
-          aria-label={t("Quick open")}
-          title={collapsed ? t("Quick open") : undefined}
-          onClick={onQuickOpen}
-        >
-          <Search size={15} strokeWidth={2.2} aria-hidden="true" />
-          <span>{t("Quick open")}</span>
-          <kbd>{quickOpenShortcut}</kbd>
-        </button>
-        <div className="nav-section-label">{t("Workspace")}</div>
-        {workspaceItems.map((item) => {
-          return (
-            <button
-              aria-label={item.label}
-              aria-current={activeWorkspace === item.id ? "page" : undefined}
-              className={`workspace-button${activeWorkspace === item.id ? " is-active" : ""}`}
-              data-workspace={item.id}
-              type="button"
-              title={collapsed ? item.label : undefined}
-              key={item.id}
-              onClick={() => onWorkspaceSelect(item.id)}
-            >
-              <span className="workspace-button__icon" aria-hidden="true">
-                <ProductIcon name={item.icon} />
-              </span>
-              <span>{item.label}</span>
-              <small>{item.detail}</small>
-            </button>
-          );
-        })}
-        <div className="nav-section-label">{t("Library")}</div>
-        <button
-          aria-label={t("Skills")}
-          aria-current={activeWorkspace === "library" ? "page" : undefined}
-          className={`workspace-button${activeWorkspace === "library" ? " is-active" : ""}`}
-          data-workspace="library"
-          type="button"
-          title={collapsed ? t("Skills") : undefined}
-          onClick={() => onWorkspaceSelect("library")}
-        >
-          <span className="workspace-button__icon" aria-hidden="true">
-            <ProductIcon name="skills" />
-          </span>
-          <span>{t("Skills")}</span>
-          <small>{t("Skill library")}</small>
-        </button>
-        <div className="nav-section-label">{t("Settings")}</div>
-        <button
-          aria-label={t("Settings")}
-          aria-current={activeWorkspace === "settings" ? "page" : undefined}
-          className={`workspace-button${activeWorkspace === "settings" ? " is-active" : ""}`}
-          data-workspace="settings"
-          type="button"
-          title={collapsed ? t("Settings") : undefined}
-          onClick={() => onWorkspaceSelect("settings")}
-        >
-          <span className="workspace-button__icon" aria-hidden="true">
-            <ProductIcon name="settings" />
-          </span>
-          <span>{t("Settings")}</span>
-          <small>{t("Storage and safety")}</small>
-        </button>
+        <div className="workspace-nav__group">
+          <button
+            className="workspace-search-button"
+            type="button"
+            aria-label={t("Quick open")}
+            title={collapsed ? t("Quick open") : undefined}
+            onClick={onQuickOpen}
+          >
+            <Search size={15} strokeWidth={2.2} aria-hidden="true" />
+            <span>{t("Quick open")}</span>
+            <kbd>{quickOpenShortcut}</kbd>
+          </button>
+          <div className="nav-section-label">{t("Workspace")}</div>
+          {workspaceItems.map((item) => {
+            return (
+              <button
+                aria-label={item.label}
+                aria-current={activeWorkspace === item.id ? "page" : undefined}
+                className={`workspace-button${activeWorkspace === item.id ? " is-active" : ""}`}
+                data-workspace={item.id}
+                type="button"
+                title={collapsed ? item.label : undefined}
+                key={item.id}
+                onClick={() => onWorkspaceSelect(item.id)}
+              >
+                <span className="workspace-button__icon" aria-hidden="true">
+                  <ProductIcon name={item.icon} />
+                </span>
+                <span>{item.label}</span>
+                <small>{item.detail}</small>
+              </button>
+            );
+          })}
+        </div>
+        <div className="workspace-nav__group">
+          <div className="nav-section-label">{t("Library")}</div>
+          <button
+            aria-label={t("Skills")}
+            aria-current={activeWorkspace === "library" ? "page" : undefined}
+            className={`workspace-button${activeWorkspace === "library" ? " is-active" : ""}`}
+            data-workspace="library"
+            type="button"
+            title={collapsed ? t("Skills") : undefined}
+            onClick={() => onWorkspaceSelect("library")}
+          >
+            <span className="workspace-button__icon" aria-hidden="true">
+              <ProductIcon name="skills" />
+            </span>
+            <span>{t("Skills")}</span>
+            <small>{t("Skill library")}</small>
+          </button>
+        </div>
+        <div className="workspace-nav__group">
+          <div className="nav-section-label">{t("Settings")}</div>
+          <button
+            aria-label={t("Settings")}
+            aria-current={activeWorkspace === "settings" ? "page" : undefined}
+            className={`workspace-button${activeWorkspace === "settings" ? " is-active" : ""}`}
+            data-workspace="settings"
+            type="button"
+            title={collapsed ? t("Settings") : undefined}
+            onClick={() => onWorkspaceSelect("settings")}
+          >
+            <span className="workspace-button__icon" aria-hidden="true">
+              <ProductIcon name="settings" />
+            </span>
+            <span>{t("Settings")}</span>
+            <small>{t("Storage and safety")}</small>
+          </button>
+        </div>
       </nav>
       <section className="system-status-card" aria-label={t("System status")}>
         {collapsed ? (

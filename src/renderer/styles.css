@@ -2971,12 +2971,6 @@ summary {
   font-size: 11px;
 }
 
-.profile-new-button {
-  gap: 6px;
-  margin-top: 6px;
-  width: 100%;
-}
-
 .profile-hero {
   background: #fff;
   display: grid;
@@ -4073,24 +4067,6 @@ summary {
   top: 68px;
   width: max-content;
   z-index: var(--z-popover);
-}
-
-.profile-page-actions {
-  flex: 0 1 auto;
-  min-width: 0;
-}
-
-.profile-page-actions .profile-new-button {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-  margin: 0;
-  width: auto;
-}
-
-.profile-page-actions .profile-new-button:hover:not(:disabled) {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
 }
 
 .profile-apply-control {

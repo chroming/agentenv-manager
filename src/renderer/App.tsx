@@ -18,7 +18,6 @@ import {
   Monitor,
   MoreHorizontal,
   Pencil,
-  Plus,
   RefreshCw,
   ScanLine,
   Settings2,
@@ -202,6 +201,8 @@ import { useProfileActionGuard } from "./hooks/useProfileActionGuard";
 import { useProfileDraftController } from "./hooks/useProfileDraftController";
 import { useProfileActivationController } from "./hooks/useProfileActivationController";
 import { useSkillUpdateQueue } from "./hooks/useSkillUpdateQueue";
+import { useWindowChromeState } from "./hooks/useWindowChromeState";
+import { WindowTitlebar } from "./components/WindowTitlebar";
 import {
   preferredTargetForProfile,
   summarizeProfile
@@ -262,6 +263,7 @@ const AppContent = ({
   onLocalePreferenceChange(locale: AppLocale): void;
 }) => {
   const { t, formatDate } = useI18n();
+  const windowChromeFullScreen = useWindowChromeState();
   const [supportedTargets, setSupportedTargets] = useState<TargetDescriptor[]>([]);
   const [targets, setTargets] = useState<TargetInfo[]>([]);
   const targetNames = useMemo(
@@ -384,7 +386,6 @@ const AppContent = ({
   const [error, setError] = useState<string>();
   const [diagnosticIssue, setDiagnosticIssue] = useState<DiagnosticIssueDetail>();
   useConversationIndexWarmup(!isLoading);
-  const profilePageActionsRef = useRef<HTMLDivElement>(null);
   const profileObjectActionsRef = useRef<HTMLDivElement>(null);
   const profileApplyControlRef = useRef<HTMLDivElement>(null);
   const profileEvaluationButtonRef = useRef<HTMLButtonElement>(null);
@@ -1731,7 +1732,6 @@ const AppContent = ({
         return;
       }
       if (
-        profilePageActionsRef.current?.contains(target) ||
         profileObjectActionsRef.current?.contains(target) ||
         profileApplyControlRef.current?.contains(target)
       ) {
@@ -1934,8 +1934,6 @@ const AppContent = ({
     profileMetadataSavingId === draftProfile.id ||
     isProfileDirty ||
     readiness.status === "applied";
-  const isNewProfilePrimary =
-    !draftProfile || readiness.status === "applied";
   const applyDescription = !draftProfile
     ? t("Select a profile before previewing changes")
     : !selectedTarget
@@ -4028,8 +4026,16 @@ const AppContent = ({
 
   return (
     <main
-      className={appShellClassName(activeWorkspace, sidebarCollapsed)}
+      className={appShellClassName(
+        activeWorkspace,
+        sidebarCollapsed,
+        windowChromeFullScreen
+      )}
     >
+      <WindowTitlebar
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={toggleSidebar}
+      />
       <ProfileSidebar
         targets={targets}
         profiles={profiles}
@@ -4040,7 +4046,6 @@ const AppContent = ({
         onAgentSelect={openAgentConfiguration}
         onOpenAgents={() => selectWorkspace("targets")}
         onQuickOpen={() => setQuickOpen(true)}
-        onToggleCollapsed={toggleSidebar}
       />
 
       <QuickOpen items={quickOpenItems} open={quickOpen}
@@ -4061,7 +4066,6 @@ const AppContent = ({
               : t("{{name}} workspace", { name: activeWorkspace })
         }
       >
-        <div className="window-drag-strip" aria-hidden="true" />
         <AppFeedback
           feedback={appFeedback}
           onDismiss={dismissAppFeedback}
@@ -4272,29 +4276,7 @@ const AppContent = ({
             />
           </>
         ) : activeWorkspace === "profiles" ? (
-          <>
-            <PageHeader
-              className="page-header profile-page-header"
-              title={t("Profiles")}
-              help={
-                <InfoTip
-                  label={t("Compose reusable resources, then preview and apply them to an Agent.")}
-                />
-              }
-              actions={(
-                <div className="profile-page-actions" ref={profilePageActionsRef}>
-                  <Button
-                    className={`profile-new-button${isNewProfilePrimary ? " is-primary" : ""}`}
-                    variant={isNewProfilePrimary ? "primary" : "secondary"}
-                    icon={<Plus size={15} strokeWidth={2.3} />}
-                    onClick={openCreateProfileDialog}
-                  >
-                    {t("New Profile")}
-                  </Button>
-                </div>
-              )}
-            />
-            <section className="profile-workbench ui-surface-frame" aria-label={t("Profiles")}>
+          <section className="profile-workbench ui-surface-frame" aria-label={t("Profiles")}>
               <ProfileList
                 isLoading={isLoading}
                 profiles={profiles}
@@ -4308,6 +4290,7 @@ const AppContent = ({
                 actionsDisabled={busy}
                 onDelete={openDeleteProfileDialog}
                 onDuplicate={duplicateProfile}
+                onCreate={openCreateProfileDialog}
                 onSearchChange={setProfileSearch}
                 onSelect={selectProfile}
               />
@@ -4379,7 +4362,7 @@ const AppContent = ({
                             title={t("Edit profile")}
                             onClick={openEditProfileDialog}
                           >
-                            <Pencil size={15} strokeWidth={2.2} />
+                            <Pencil size={13} strokeWidth={2.1} />
                           </button>
                         </div>
                         <p className="profile-description">
@@ -4834,8 +4817,7 @@ const AppContent = ({
                   }}
                 />
               ) : null}
-            </section>
-          </>
+          </section>
         ) : activeWorkspace === "conversations" ? (
           <ConversationWorkspace
             targets={targets}

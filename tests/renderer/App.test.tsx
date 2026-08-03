@@ -327,6 +327,8 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     setWindowCloseGuard: vi.fn(),
     confirmWindowClose: vi.fn(),
     cancelWindowClose: vi.fn(),
+    readWindowChromeState: vi.fn().mockResolvedValue({ fullScreen: false }),
+    onWindowChromeStateChanged: vi.fn().mockReturnValue(() => undefined),
     openContextMenu: vi.fn().mockResolvedValue(undefined),
     copyText: vi.fn().mockResolvedValue(undefined),
     selectSkillFolder: vi.fn().mockResolvedValue(undefined),
@@ -1039,6 +1041,38 @@ describe("App", () => {
       .toBeTruthy();
   });
 
+  it("keeps macOS window chrome quiet and page actions in their content", async () => {
+    installApi();
+    render(<App />);
+
+    const titlebar = document.querySelector<HTMLElement>(".shell-titlebar")!;
+    const editor = screen.getByRole("main").querySelector<HTMLElement>(".editor-panel")!;
+    const navigation = await screen.findByRole("navigation", { name: "Workspace" });
+    expect(within(titlebar).queryByRole("heading")).not.toBeInTheDocument();
+    expect(within(titlebar).queryByRole("button", { name: "Refresh" }))
+      .not.toBeInTheDocument();
+    expect(within(editor).getByRole("heading", { name: "Agents" })).toBeInTheDocument();
+    expect(within(editor).getByRole("button", { name: "Refresh" })).toBeInTheDocument();
+
+    fireEvent.click(within(navigation).getByRole("button", { name: "Profiles" }));
+    expect(await within(editor).findByRole("heading", { name: "Profiles" }))
+      .toBeInTheDocument();
+    expect(within(editor).getByRole("button", { name: "New Profile" }))
+      .toBeInTheDocument();
+    expect(within(titlebar).queryByRole("button", { name: "New Profile" }))
+      .not.toBeInTheDocument();
+
+    fireEvent.click(within(navigation).getByRole("button", { name: "Skills" }));
+    expect(await within(editor).findByRole("heading", { name: "Skills" }))
+      .toBeInTheDocument();
+    expect(within(editor).getByRole("button", { name: "Import skills" }))
+      .toBeInTheDocument();
+    expect(within(editor).queryByRole("button", { name: "Scan local" }))
+      .not.toBeInTheDocument();
+    expect(within(editor).getByRole("button", { name: "More Skill actions" }))
+      .toBeInTheDocument();
+  });
+
   it("opens an indexed conversation directly from Quick Open content search", async () => {
     const conversation = {
       id: "codex:release-session",
@@ -1263,7 +1297,8 @@ describe("App", () => {
 
   const openRecoveryHistory = async () => {
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Recovery/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "More Agent actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Recovery" }));
     const dialog = await screen.findByRole("dialog", { name: "Recovery" });
     return within(dialog).getByRole("region", { name: "History" });
   };
@@ -2829,21 +2864,21 @@ describe("App", () => {
     expect(document.querySelector(".app-feedback")).toBeNull();
   });
 
-  it("moves the only New Profile action to the header", async () => {
+  it("keeps the only New Profile action with the Profile list", async () => {
     installApi();
     render(<App />);
 
     await openProfiles();
     const newProfileButtons = screen.getAllByRole("button", { name: "New Profile" });
     expect(newProfileButtons).toHaveLength(1);
-    expect(newProfileButtons[0].closest("header")).toHaveClass("profile-page-header");
+    expect(newProfileButtons[0].closest(".profile-index-header")).not.toBeNull();
 
     const edit = screen.getByRole("button", { name: "Edit profile" });
     const more = screen.getByRole("button", { name: "More profile actions" });
     expect(edit).toHaveAttribute("title", "Edit profile");
     expect(more).toHaveAttribute("title", "More profile actions");
     expect(more.closest(".profile-hero")).not.toBeNull();
-    expect(more.closest(".profile-page-header")).toBeNull();
+    expect(more.closest(".profile-index-header")).toBeNull();
     expect(screen.getByLabelText("Current Agent OpenCode")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Select apply Agent" })).not.toBeInTheDocument();
   });
@@ -4364,8 +4399,9 @@ describe("App", () => {
 
     await screen.findByRole("region", { name: "Agents" });
     expect(screen.queryByRole("region", { name: "History" })).not.toBeInTheDocument();
-    const recoveryTrigger = screen.getByRole("button", { name: /Recovery/ });
+    const recoveryTrigger = screen.getByRole("button", { name: "More Agent actions" });
     fireEvent.click(recoveryTrigger);
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Recovery" }));
     const recoveryDialog = await screen.findByRole("dialog", { name: "Recovery" });
     const history = within(recoveryDialog).getByRole("region", { name: "History" });
     fireEvent.click(

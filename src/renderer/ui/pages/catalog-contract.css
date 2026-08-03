@@ -1,7 +1,7 @@
 .skill-source-table-head,
 .skill-source-group-row {
   column-gap: 10px;
-  grid-template-columns: 24px 28px minmax(125px, 1fr) 70px minmax(80px, 0.7fr) 104px 88px 32px;
+  grid-template-columns: 24px 28px minmax(125px, 1fr) 72px minmax(80px, 0.7fr) 132px 32px;
 }
 
 .skill-source-table-head {
@@ -24,7 +24,7 @@
 
 .skill-source-table-head.can-merge,
 .skill-source-list.can-merge .skill-source-group-row {
-  grid-template-columns: 20px 24px 28px minmax(110px, 1fr) 64px minmax(74px, 0.65fr) 104px 88px 32px;
+  grid-template-columns: 20px 24px 28px minmax(110px, 1fr) 66px minmax(74px, 0.65fr) 128px 32px;
 }
 
 .skill-source-table-head.can-merge > span:first-child {
@@ -39,14 +39,14 @@
   align-items: center;
   cursor: pointer;
   display: grid;
-  grid-template-areas: "disclosure artwork identity counts checked status action more";
+  grid-template-areas: "disclosure artwork identity counts checked status more";
   min-height: 62px;
   padding: 9px 12px;
   transition: background-color 120ms ease;
 }
 
 .skill-source-list.can-merge .skill-source-group-row {
-  grid-template-areas: "select disclosure artwork identity counts checked status action more";
+  grid-template-areas: "select disclosure artwork identity counts checked status more";
 }
 
 .skill-source-counts {
@@ -101,25 +101,36 @@
   display: flex;
   gap: 5px;
   grid-area: status;
+  justify-content: flex-start;
   min-width: 0;
 }
+
+button.skill-source-status {
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-tight);
+  box-sizing: border-box;
+  cursor: pointer;
+  font: inherit;
+  padding: 4px 0;
+  text-align: left;
+  width: 100%;
+}
+
+button.skill-source-status:hover:not(:disabled),
+button.skill-source-status:focus-visible {
+  background: var(--surface-pressed);
+}
+
+button.skill-source-status:disabled { cursor: default; }
 
 .skill-source-status.has-attention { color: var(--warning); }
 .skill-source-status.is-error { color: var(--danger); }
 .skill-source-status > svg { flex: 0 0 auto; }
 
-.skill-source-current-action {
-  align-items: center;
-  display: flex;
-  grid-area: action;
-  min-width: 0;
-}
-
 .skill-source-status-label {
   font-size: var(--font-size-metadata);
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -179,12 +190,12 @@
 @container skill-library (min-width: 920px) {
   .skill-source-table-head,
   .skill-source-group-row {
-    grid-template-columns: 24px 28px minmax(190px, 1fr) 82px minmax(108px, 0.7fr) 104px 88px 32px;
+    grid-template-columns: 24px 28px minmax(190px, 1fr) 82px minmax(108px, 0.7fr) 132px 32px;
   }
 
   .skill-source-table-head.can-merge,
   .skill-source-list.can-merge .skill-source-group-row {
-    grid-template-columns: 20px 24px 28px minmax(166px, 1fr) 78px minmax(100px, 0.65fr) 104px 88px 32px;
+    grid-template-columns: 20px 24px 28px minmax(166px, 1fr) 78px minmax(100px, 0.65fr) 128px 32px;
   }
 }
 
@@ -192,12 +203,12 @@
   .skill-source-table-head,
   .skill-source-group-row {
     column-gap: 8px;
-    grid-template-columns: 20px 24px minmax(132px, 1fr) 60px 104px 78px 28px;
+    grid-template-columns: 20px 24px minmax(132px, 1fr) 64px 132px 28px;
   }
 
   .skill-source-table-head.can-merge,
   .skill-source-list.can-merge .skill-source-group-row {
-    grid-template-columns: 18px 20px 22px minmax(116px, 1fr) 56px 100px 74px 28px;
+    grid-template-columns: 18px 20px 22px minmax(116px, 1fr) 60px 128px 28px;
   }
 
   .skill-source-table-head:not(.can-merge) > span:nth-child(3),
@@ -207,9 +218,9 @@
 
   .skill-source-group-row {
     grid-template-areas:
-      "disclosure artwork identity counts status action more"
-      "disclosure artwork identity counts status action more"
-      "disclosure artwork checked counts status action more";
+      "disclosure artwork identity counts status more"
+      "disclosure artwork identity counts status more"
+      "disclosure artwork checked counts status more";
     grid-template-rows: 18px 16px 16px;
     min-height: 68px;
     padding-block: 7px;
@@ -217,9 +228,9 @@
 
   .skill-source-list.can-merge .skill-source-group-row {
     grid-template-areas:
-      "select disclosure artwork identity counts status action more"
-      "select disclosure artwork identity counts status action more"
-      "select disclosure artwork checked counts status action more";
+      "select disclosure artwork identity counts status more"
+      "select disclosure artwork identity counts status more"
+      "select disclosure artwork checked counts status more";
   }
 
   .skill-source-last-checked {

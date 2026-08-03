@@ -38,6 +38,15 @@ const api: AgentEnvApi = {
   setWindowCloseGuard: (enabled) => ipcRenderer.send("window:set-close-guard", enabled),
   confirmWindowClose: () => ipcRenderer.send("window:confirm-close"),
   cancelWindowClose: () => ipcRenderer.send("window:cancel-close"),
+  readWindowChromeState: () => ipcRenderer.invoke("window:chrome-state"),
+  onWindowChromeStateChanged: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      state: Parameters<typeof callback>[0]
+    ) => callback(state);
+    ipcRenderer.on("window:chrome-state-changed", listener);
+    return () => ipcRenderer.off("window:chrome-state-changed", listener);
+  },
   openContextMenu: (items) => ipcRenderer.invoke("menu:open-context", items),
   copyText: (text) => ipcRenderer.invoke("clipboard:write-text", text),
   selectSkillFolder: () => ipcRenderer.invoke("dialog:select-skill-folder"),

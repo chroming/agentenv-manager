@@ -20,6 +20,7 @@ const zhCN: Record<string, string> = {
   "Find local Agent history and continue it in another Agent.": "查找本地 Agent 对话，并在另一个 Agent 中继续。",
   "Manage reusable Skills, their sources, updates, and local copies.": "管理可复用的 Skills、来源、更新和本地副本。",
   "More Skill actions": "更多技能操作",
+  "More Agent actions": "更多 Agent 操作",
   "Review Skill collection {{name}}": "检查 Skill 集合 {{name}}",
   "This directory link exposes {{count}} Skills. AgentEnv treats the link as one migration boundary and never changes its source folder.": "此目录链接会加载 {{count}} 个 Skills。AgentEnv 将整个链接视为一个迁移边界，绝不会修改其源目录。",
   "Runtime link": "运行时链接",
@@ -2065,6 +2066,7 @@ Object.assign(zhCN, {
 
 const zhTW: Record<string, string> = {
   "More Skill actions": "更多技能操作",
+  "More Agent actions": "更多 Agent 操作",
   "Checks monitored sources when the app opens, returns to the foreground, or reaches the saved interval.": "應用程式開啟、回到前景或到達設定間隔時檢查受監控的來源。",
   "Maximize preview": "最大化預覽",
   "Full-screen preview": "全螢幕預覽",
