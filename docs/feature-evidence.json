@@ -2,6 +2,101 @@
   "formatVersion": 1,
   "features": [
     {
+      "id": "verified-unsigned-updates",
+      "summary": "Publish exact unsigned assets and update Homebrew-managed macOS installations through the official checksum-bound Cask.",
+      "contract": {
+        "path": "docs/superpowers/specs/2026-08-03-unsigned-release-distribution-design.md",
+        "anchor": "## Release Contract"
+      },
+      "support": {
+        "opencode": "supported",
+        "claude-code": "supported",
+        "codex": "supported",
+        "antigravity": "supported",
+        "trae-cli": "supported",
+        "pi": "supported"
+      },
+      "states": {
+        "idle": "Settings shows the install channel and current version without blocking startup.",
+        "working": "Check, download, and install report their own progress.",
+        "success": "The stable official Release is current or a Homebrew update is ready or installed.",
+        "error": "A copyable non-blocking failure remains in Settings with Retry.",
+        "cancelled": "No background update process starts without a verified available release.",
+        "noOp": "Equal and older versions are reported as up to date.",
+        "stale": "A release asset that does not match the exact tag, architecture, URL, and SHA-256 is rejected.",
+        "partial": "Direct installations may check but cannot install automatically.",
+        "persisted": "Update preferences persist in device-local Settings.",
+        "rollback": "Homebrew remains the installer and AgentEnv data is outside the application bundle."
+      },
+      "evidence": {
+        "domain": [
+          "tests/main/releasePackaging.test.ts",
+          "tests/main/appUpdates/releaseClient.test.ts",
+          "tests/main/appUpdates/homebrewAdapter.test.ts",
+          "tests/main/appUpdates/updateService.test.ts"
+        ],
+        "renderer": [
+          "tests/renderer/AppUpdateSettings.test.tsx"
+        ],
+        "desktop": [
+          "tests/e2e/electronAppUpdates.e2e.test.ts"
+        ],
+        "persistence": [
+          "tests/main/settingsStore.test.ts",
+          "tests/e2e/electronAppUpdates.e2e.test.ts"
+        ],
+        "visual": [
+          "settings-general-920x620.png"
+        ]
+      }
+    },
+    {
+      "id": "optional-reliability-reporting",
+      "summary": "Send at most one allowlisted daily startup event only after explicit consent.",
+      "contract": {
+        "path": "PRIVACY.md",
+        "anchor": "## Network Access"
+      },
+      "support": {
+        "opencode": "supported",
+        "claude-code": "supported",
+        "codex": "supported",
+        "antigravity": "supported",
+        "trae-cli": "supported",
+        "pi": "supported"
+      },
+      "states": {
+        "idle": "Reporting is off by default and the exact payload can be previewed.",
+        "working": "The request runs asynchronously with a short timeout.",
+        "success": "One daily allowlisted startup event is recorded locally as sent.",
+        "error": "Failures are discarded without delaying or failing the app.",
+        "cancelled": "Disabling consent prevents future requests.",
+        "noOp": "No endpoint, no consent, or an already-sent date performs no request.",
+        "stale": "The payload is rebuilt from current bounded runtime facts.",
+        "partial": "No partial payload or arbitrary extension fields are accepted.",
+        "persisted": "Only the last successful UTC date is stored locally.",
+        "rollback": "Deleting local settings and state removes consent and the daily receipt."
+      },
+      "evidence": {
+        "domain": [
+          "tests/main/telemetryService.test.ts"
+        ],
+        "renderer": [
+          "tests/renderer/TelemetrySettings.test.tsx"
+        ],
+        "desktop": [
+          "tests/e2e/electronAppUpdates.e2e.test.ts"
+        ],
+        "persistence": [
+          "tests/main/settingsStore.test.ts",
+          "tests/main/telemetryService.test.ts"
+        ],
+        "visual": [
+          "settings-privacy-920x620.png"
+        ]
+      }
+    },
+    {
       "id": "profile-comparison",
       "summary": "Compare the active Agent setup with a saved Profile in two isolated runs before Apply.",
       "contract": {
