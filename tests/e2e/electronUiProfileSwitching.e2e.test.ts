@@ -6327,6 +6327,10 @@ describe("Electron UI profile switching e2e", () => {
     expect(await conflict.getByRole("radio", { name: /Keep Library copy/ }).count()).toBe(1);
     expect(await conflict.getByRole("radio", { name: /Replace Library copy/ }).count()).toBe(1);
     expect(await conflict.getByRole("radio", { name: /Keep both/ }).count()).toBe(1);
+    const cancelConflict = conflict.getByRole("button", { name: "Cancel" });
+    await expect.poll(() => cancelConflict.evaluate(
+      (element) => element === document.activeElement
+    )).toBe(true);
     await page.keyboard.press("Escape");
     await conflict.waitFor({ state: "hidden" });
     await importDialog.waitFor({ state: "visible" });
