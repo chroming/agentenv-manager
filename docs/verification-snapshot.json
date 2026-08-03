@@ -1,22 +1,22 @@
 {
-  "generatedAt": "2026-08-03T18:55:55.749Z",
+  "generatedAt": "2026-08-03T19:20:08.791Z",
   "source": {
-    "commit": "f5dff63f21744e31b9ceb40473bee1986aca3d9b",
+    "commit": "dee09e683d6132d22f576b7dc366ddbc86672c78",
     "dirty": false,
-    "fingerprint": "92e3b222c2639d4751a53c15e6e31d1a299e619cad9eb3976cb37a2f86bedd19",
+    "fingerprint": "6ca2d04ba2d2400fd6240d438d9a27561bb5d84bd872d9b07dfab9ce2aef835f",
     "files": 660
   },
   "build": {
-    "generatedAt": "2026-08-03T18:53:12.501Z",
-    "sourceFingerprint": "90eba3dd3c8dc3e4142887070d4bf2df02cdb3eb52b1de73312e9114e9ad3b7f",
+    "generatedAt": "2026-08-03T19:17:25.083Z",
+    "sourceFingerprint": "fd4a057a5d77b8f0f989a2adfa519dc5fc1e1bd3935c933e43cf288386ca563a",
     "sourceFiles": 369,
-    "artifactFingerprint": "353169e36cb29149e53a535a719b1d891da12b0f8540136799d4e5014eb5172c",
+    "artifactFingerprint": "8981403c1d87070458f225baec2d8f7dc16e38942933bedf39962dd1cef3bfe4",
     "artifactFiles": 40
   },
   "tests": {
     "passed": true,
     "files": 187,
-    "assertions": 1319,
+    "assertions": 1320,
     "e2eFiles": 17,
     "e2eAssertions": 190,
     "desktopElectronFiles": 7,
@@ -33,7 +33,7 @@
   },
   "captures": {
     "directory": "/var/folders/c4/vw8cxnvd7rv46sv4kq0lkg0h0000gn/T/agentenv-ui-captures/verification",
-    "artifactFingerprint": "353169e36cb29149e53a535a719b1d891da12b0f8540136799d4e5014eb5172c",
+    "artifactFingerprint": "8981403c1d87070458f225baec2d8f7dc16e38942933bedf39962dd1cef3bfe4",
     "files": 140,
     "viewports": [
       "1180x728",
@@ -43,7 +43,7 @@
     "visualContract": {
       "passed": true,
       "files": 27,
-      "maxChangedPixelRatio": 0.0009309256661991585
+      "maxChangedPixelRatio": 0.0011816269284712483
     }
   },
   "packagedSmoke": "passed"
