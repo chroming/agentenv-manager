@@ -9,7 +9,7 @@ import { DiffViewer } from "./DiffViewer";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { SyntaxCodePreview } from "./SyntaxCodePreview";
-import { Button } from "./ui";
+import { IconButton } from "./ui";
 
 export interface PendingSkillImport {
   preview: SkillImportPreview;
@@ -234,15 +234,15 @@ export const SkillImportConflictDialog = ({
                       })}
                 </span>
               </div>
-              <Button
+              <IconButton
                 ref={expandPreviewRef}
-                icon={<Maximize2 size={14} />}
+                label={t("Maximize preview")}
                 size="compact"
                 variant="ghost"
                 onClick={() => setDiffWorkspaceOpen(true)}
               >
-                {t("Maximize preview")}
-              </Button>
+                <Maximize2 size={16} strokeWidth={2.2} />
+              </IconButton>
             </div>
             {selectedConflict.changes.length > 0 ? (
               <div className="diff-list">

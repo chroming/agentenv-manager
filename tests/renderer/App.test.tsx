@@ -1916,7 +1916,8 @@ describe("App", () => {
     await screen.findByRole("region", { name: "Skill library" });
     expect(api.scanSkillInventory).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Scan local" }));
+    fireEvent.click(screen.getByRole("button", { name: "More Skill actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Scan local" }));
 
     expect(await screen.findByRole("region", { name: "Environment skills" })).toBeInTheDocument();
     expect(api.scanSkillInventory).toHaveBeenCalledTimes(2);

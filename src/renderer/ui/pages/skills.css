@@ -162,8 +162,7 @@
     minmax(210px, 1.5fr)
     minmax(150px, 0.95fr)
     minmax(92px, 0.6fr)
-    minmax(118px, 0.78fr)
-    104px
+    minmax(142px, 0.9fr)
     34px;
 }
 
@@ -245,7 +244,6 @@
 .skill-library-panel .library-source-cell,
 .skill-library-panel .library-usage-cell,
 .skill-library-panel .library-status-cell,
-.skill-library-panel .library-current-action-cell,
 .skill-library-panel .library-actions-cell {
   align-content: center;
   grid-area: auto;
@@ -378,6 +376,29 @@
   margin: 0;
 }
 
+.skill-library-panel button.library-primary-status {
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-tight);
+  box-sizing: border-box;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.skill-library-panel button.library-primary-status:hover:not(:disabled),
+.skill-library-panel button.library-primary-status:focus-visible {
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.skill-library-panel button.library-primary-status:disabled {
+  cursor: wait;
+}
+
 .skill-library-panel .library-primary-status {
   color: var(--muted);
 }
@@ -410,50 +431,6 @@
 .skill-library-panel .library-actions-cell {
   gap: 0;
   overflow: visible;
-}
-
-.skill-library-panel .library-current-action-cell {
-  align-items: center;
-  display: flex;
-  min-width: 0;
-}
-
-.skill-library-panel .library-row-action {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-tight);
-  color: var(--accent);
-  cursor: pointer;
-  display: inline-flex;
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-regular);
-  gap: 5px;
-  height: 28px;
-  justify-content: flex-start;
-  max-width: 100%;
-  min-width: 0;
-  padding: 0 4px;
-  white-space: nowrap;
-}
-
-.skill-library-panel .library-row-action > svg {
-  flex: 0 0 auto;
-}
-
-.skill-library-panel .library-row-action > span {
-  min-width: 0;
-}
-
-.skill-library-panel .library-row-action:hover:not(:disabled) {
-  color: var(--accent-strong);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.skill-library-panel .library-row-action:disabled {
-  color: var(--muted);
-  cursor: wait;
 }
 
 .skill-library-panel .library-actions-cell .icon-action {
@@ -505,8 +482,7 @@
     grid-template-columns:
       minmax(160px, 1.2fr)
       minmax(136px, 1fr)
-      minmax(108px, 0.82fr)
-      78px
+      minmax(132px, 0.9fr)
       32px;
   }
 
@@ -581,13 +557,8 @@
     display: none;
   }
 
-  .skill-library-panel .library-current-action-cell {
-    grid-column: 4;
-    grid-row: 1 / span 2;
-  }
-
   .skill-library-panel .library-actions-cell {
-    grid-column: 5;
+    grid-column: 4;
     grid-row: 1 / span 2;
   }
 
@@ -1090,7 +1061,10 @@
 }
 
 .bulk-update-dialog {
-  max-width: 680px;
+  max-height: min(760px, calc(100vh - 48px));
+  max-width: min(900px, calc(100vw - 48px));
+  overflow: hidden;
+  width: 100%;
 }
 
 .row-action-popover {

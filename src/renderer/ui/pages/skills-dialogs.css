@@ -67,10 +67,14 @@
   color: var(--danger);
 }
 
+.bulk-update-progress--skipped {
+  color: var(--muted);
+}
+
 .bulk-update-list {
   display: grid;
   gap: 8px;
-  max-height: min(440px, 55vh);
+  min-height: 0;
   overflow: auto;
 }
 
@@ -90,6 +94,7 @@
 
 .bulk-update-list summary strong {
   font-size: 12px;
+  font-weight: var(--font-weight-medium);
 }
 
 .bulk-update-list summary span,

@@ -8,7 +8,7 @@ import { useI18n } from "../i18n";
 import { DiffViewer } from "./DiffViewer";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
 import { FileTypeIcon } from "./FileTypeIcon";
-import { Button } from "./ui";
+import { IconButton } from "./ui";
 
 interface SkillMergeDiffSectionProps {
   comparison?: SkillMergeComparison;
@@ -60,15 +60,15 @@ export const SkillMergeDiffSection = ({
               <span>{compareId}</span>
             )}
             {changes.length > 0 ? (
-              <Button
+              <IconButton
                 ref={expandPreviewRef}
-                icon={<Maximize2 size={14} />}
+                label={t("Maximize preview")}
                 size="compact"
                 variant="ghost"
                 onClick={() => setExpanded(true)}
               >
-                {t("Maximize preview")}
-              </Button>
+                <Maximize2 size={16} strokeWidth={2.2} />
+              </IconButton>
             ) : null}
           </div>
         </header>

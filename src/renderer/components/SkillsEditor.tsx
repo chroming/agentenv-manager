@@ -10,7 +10,7 @@ import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
-import { Button, ModalFrame, Switch } from "./ui";
+import { Button, IconButton, ModalFrame, Switch } from "./ui";
 
 interface SkillsEditorProps {
   value: ProfileResources;
@@ -262,30 +262,28 @@ export const SkillsEditor = ({
                 ) : null}
               </span>
               {!skill ? (
-                <Button
+                <IconButton
                   className="profile-skill-update"
+                  label={t("Relink {{name}}", { name: reference.targetName })}
                   size="compact"
                   variant="secondary"
                   disabled={disabled}
-                  title={t("Relink {{name}}", { name: reference.targetName })}
-                  icon={<Link2 size={14} strokeWidth={2.2} />}
                   onClick={() => openPicker(index)}
                 >
-                  {t("Relink")}
-                </Button>
+                  <Link2 size={14} strokeWidth={2.2} />
+                </IconButton>
               ) : enabled && update?.updateAvailable ? (
-                <Button
+                <IconButton
                   className="profile-skill-update"
+                  label={t("Update {{name}}", { name: skill.name })}
                   size="compact"
                   variant="secondary"
                   disabled={disabled}
-                  title={t("Update {{name}}", { name: skill.name })}
-                  icon={<Download size={14} strokeWidth={2.2} />}
                   onClick={() => onPreviewSkillUpdate?.(reference.libraryId)}
                 >
-                  {t("Update")}
-                </Button>
-              ) : <span aria-hidden="true" />}
+                  <Download size={14} strokeWidth={2.2} />
+                </IconButton>
+              ) : <span className="profile-skill-update-placeholder" aria-hidden="true" />}
               <Switch
                 checked={enabled}
                 className="profile-skill-switch"

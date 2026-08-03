@@ -62,4 +62,30 @@ describe("skill update queue", () => {
       ["third", { status: "updated" }]
     ]);
   });
+
+  it("stops between Skills and marks the remaining queue as skipped", async () => {
+    const progress = vi.fn();
+    let stopRequested = false;
+    const update = vi.fn(async (item: SkillUpdatePlan) => {
+      stopRequested = true;
+      return updatedSkill(item.id);
+    });
+
+    const result = await runSkillUpdateQueue(
+      [plan("first"), plan("second"), plan("third")],
+      update,
+      (id, item) => progress(id, item),
+      () => stopRequested
+    );
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(result.updated.map((skill) => skill.id)).toEqual(["first"]);
+    expect(result.cancelled).toBe(true);
+    expect(progress.mock.calls).toEqual([
+      ["first", { status: "updating" }],
+      ["first", { status: "updated" }],
+      ["second", { status: "skipped" }],
+      ["third", { status: "skipped" }]
+    ]);
+  });
 });

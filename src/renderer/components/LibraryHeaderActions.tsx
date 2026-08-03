@@ -1,7 +1,7 @@
 import { ArrowLeft, Plus, RefreshCw, ScanLine } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../i18n";
-import { Button, ControlGroup } from "./ui";
+import { Button, ControlGroup, ToolbarOverflowMenu } from "./ui";
 
 interface LibraryHeaderActionsProps {
   mode: "skills" | "sources";
@@ -49,14 +49,17 @@ export const LibraryHeaderActions = ({
         {t("Import")}
       </Button>
       {!returnTargetName ? (
-        <Button
-          className="secondary-action"
+        <ToolbarOverflowMenu
+          label={t("More Skill actions")}
           disabled={toolOpen}
-          icon={<ScanLine size={15} strokeWidth={2.2} />}
-          onClick={onScanLocal}
-        >
-          {t("Scan local")}
-        </Button>
+          menuLabel={t("Library actions")}
+          items={[{
+            id: "scan-local",
+            label: t("Scan local"),
+            icon: <ScanLine size={15} strokeWidth={2.2} aria-hidden="true" />,
+            onSelect: onScanLocal
+          }]}
+        />
       ) : null}
       <Button
         className="secondary-action"

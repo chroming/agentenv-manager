@@ -228,11 +228,10 @@ describe("Repository Skill source", () => {
         const counts = row.querySelector<HTMLElement>(".skill-source-counts")!;
         const checked = row.querySelector<HTMLElement>(".skill-source-last-checked")!;
         const status = row.querySelector<HTMLElement>(".skill-source-status")!;
-        const action = row.querySelector<HTMLElement>(".skill-source-current-action")!;
+        const statusContent = status.firstElementChild as HTMLElement;
+        const statusLabel = row.querySelector<HTMLElement>(".skill-source-status-label")!;
         const more = row.querySelector<HTMLElement>(".skill-source-more")!;
         return {
-          actionHeaderLeft: headerCells[4]!.getBoundingClientRect().left,
-          actionLeft: action.getBoundingClientRect().left,
           checkedBelowIdentityTitle:
             checked.getBoundingClientRect().top > identity.getBoundingClientRect().top,
           checkedHeaderDisplay: getComputedStyle(headerCells[2]!).display,
@@ -241,38 +240,47 @@ describe("Repository Skill source", () => {
           columnCount: getComputedStyle(row).gridTemplateColumns.split(" ").length,
           countsHeaderLeft: headerCells[1]!.getBoundingClientRect().left,
           countsLeft: counts.getBoundingClientRect().left,
+          countsFit: counts.scrollWidth <= counts.clientWidth + 1,
           documentWidth: document.documentElement.scrollWidth,
           identityLeft: identity.getBoundingClientRect().left,
-          moreHeaderLeft: headerCells[5]!.getBoundingClientRect().left,
+          moreHeaderLeft: headerCells[4]!.getBoundingClientRect().left,
           moreLeft: more.getBoundingClientRect().left,
           moreRight: more.getBoundingClientRect().right,
           rowRight: row.getBoundingClientRect().right,
           rowScrollContained: row.scrollWidth <= row.clientWidth + 1,
           statusHeaderLeft: headerCells[3]!.getBoundingClientRect().left,
+          statusContentLeft: statusContent.getBoundingClientRect().left,
           statusLeft: status.getBoundingClientRect().left,
+          statusFits: statusLabel.scrollWidth <= statusLabel.clientWidth + 1,
+          statusToMoreGap: more.getBoundingClientRect().left - status.getBoundingClientRect().right,
           viewportWidth: document.documentElement.clientWidth
         };
       });
       expect(geometry.documentWidth).toBe(geometry.viewportWidth);
       expect(geometry.rowScrollContained).toBe(true);
+      expect(geometry.countsFit).toBe(true);
+      expect(geometry.statusFits).toBe(true);
       expect(Math.abs(geometry.countsLeft - geometry.countsHeaderLeft)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.statusLeft - geometry.statusHeaderLeft)).toBeLessThanOrEqual(1);
-      expect(Math.abs(geometry.actionLeft - geometry.actionHeaderLeft)).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.statusContentLeft - geometry.statusLeft)).toBeLessThanOrEqual(1);
+      expect(geometry.statusToMoreGap).toBeGreaterThanOrEqual(7);
       expect(Math.abs(geometry.moreLeft - geometry.moreHeaderLeft)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.moreRight - geometry.rowRight + 12)).toBeLessThanOrEqual(1);
       if (width === 920) {
-        expect(geometry.columnCount).toBe(7);
+        expect(geometry.columnCount).toBe(6);
         expect(geometry.checkedHeaderDisplay).toBe("none");
         expect(Math.abs(geometry.checkedLeft - geometry.identityLeft)).toBeLessThanOrEqual(1);
         expect(geometry.checkedBelowIdentityTitle).toBe(true);
       } else {
-        expect(geometry.columnCount).toBe(8);
+        expect(geometry.columnCount).toBe(7);
         expect(geometry.checkedHeaderDisplay).not.toBe("none");
         expect(Math.abs(geometry.checkedLeft - geometry.checkedHeaderLeft)).toBeLessThanOrEqual(1);
       }
     };
-    await expectSourceLaneGeometry(1180, 760);
     await expectSourceLaneGeometry(920, 620);
+    await expectSourceLaneGeometry(1180, 760);
+    await expectSourceLaneGeometry(1536, 900);
+    await page.setViewportSize({ width: 920, height: 620 });
     await page.getByRole("button", { name: "Filters", exact: true }).click();
     const sourceFilterPanel = page.getByRole("group", { name: "Source filters" });
     expect(await sourceFilterPanel.evaluate((panel) => {
@@ -335,13 +343,16 @@ describe("Repository Skill source", () => {
     staleMetadata.remoteRevision = "stale-transport-revision";
     await writeFile(metadataPath, `${JSON.stringify(staleMetadata, null, 2)}\n`, "utf8");
     await checkSource();
-    await sourceGroup.getByRole("button", { name: "Update all skills", exact: true })
+    await sourceGroup.getByRole("button", { name: "Update available", exact: true })
       .waitFor({ state: "visible" });
+    await expectSourceLaneGeometry(920, 620);
+    await expectSourceLaneGeometry(1536, 900);
+    await page.setViewportSize({ width: 920, height: 620 });
     await sourceGroup.getByRole("button", { name: "Update api-design-internal" }).click();
     await page.getByText("api-design-internal source is current", { exact: true })
       .waitFor({ state: "visible" });
     await expect.poll(() =>
-      sourceGroup.getByRole("button", { name: "Update all skills" }).count()
+      sourceGroup.getByRole("button", { name: "Update available" }).count()
     ).toBe(0);
     const reconciledMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as {
       remoteRevision?: string;
@@ -367,7 +378,7 @@ describe("Repository Skill source", () => {
     await page.getByRole("tab", { name: "By source" }).click();
     await checkSource();
     const reviewSourceUpdates = sourceGroup.getByRole("button", {
-      name: "Update all skills",
+      name: "Update available",
       exact: true
     });
     await reviewSourceUpdates.waitFor({ state: "visible" });
@@ -393,7 +404,7 @@ describe("Repository Skill source", () => {
       { exact: true }
     ).waitFor({ state: "visible" });
     await expect.poll(() =>
-      sourceGroup.getByRole("button", { name: "Update all skills" }).count()
+      sourceGroup.getByRole("button", { name: "Update available" }).count()
     ).toBe(0);
     await expect(readFile(join(librarySkill, "SKILL.md"), "utf8"))
       .resolves.toContain("Review compatibility");

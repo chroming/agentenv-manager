@@ -98,7 +98,7 @@ describe("SkillsEditor v2", () => {
     );
 
     expect(screen.getByText("Missing")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Relink" }));
+    fireEvent.click(screen.getByRole("button", { name: "Relink missing" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Code Review" }));
     fireEvent.click(screen.getByRole("button", { name: "Relink skill" }));
     expect(onChange).toHaveBeenCalledWith({
@@ -145,7 +145,7 @@ describe("SkillsEditor v2", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update Code Review" }));
     expect(onPreview).toHaveBeenCalledWith("review");
   });
 

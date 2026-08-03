@@ -19,6 +19,7 @@ const zhCN: Record<string, string> = {
   "Continue across Agents": "跨 Agent 继续对话",
   "Find local Agent history and continue it in another Agent.": "查找本地 Agent 对话，并在另一个 Agent 中继续。",
   "Manage reusable Skills, their sources, updates, and local copies.": "管理可复用的 Skills、来源、更新和本地副本。",
+  "More Skill actions": "更多技能操作",
   "Review Skill collection {{name}}": "检查 Skill 集合 {{name}}",
   "This directory link exposes {{count}} Skills. AgentEnv treats the link as one migration boundary and never changes its source folder.": "此目录链接会加载 {{count}} 个 Skills。AgentEnv 将整个链接视为一个迁移边界，绝不会修改其源目录。",
   "Runtime link": "运行时链接",
@@ -868,6 +869,9 @@ Object.assign(zhCN, {
   "Review Library copy": "查看资源库副本",
   "Importing...": "正在导入...",
   "Stop import": "停止导入",
+  "Stop": "停止",
+  "Skipped": "已跳过",
+  "Continue updates": "继续更新",
   "Stopping...": "正在停止...",
   "Review duplicate Skill": "查看重名技能",
   "Merge duplicates": "合并同名项",
@@ -2060,6 +2064,7 @@ Object.assign(zhCN, {
 });
 
 const zhTW: Record<string, string> = {
+  "More Skill actions": "更多技能操作",
   "Checks monitored sources when the app opens, returns to the foreground, or reaches the saved interval.": "應用程式開啟、回到前景或到達設定間隔時檢查受監控的來源。",
   "Maximize preview": "最大化預覽",
   "Full-screen preview": "全螢幕預覽",
@@ -2710,6 +2715,9 @@ Object.assign(zhCN, {
 });
 
 Object.assign(zhTW, {
+  "Stop": "停止",
+  "Skipped": "已跳過",
+  "Continue updates": "繼續更新",
   "Evaluate": "評測",
   "Evaluate {{name}}": "評測 {{name}}",
   "Evaluate this saved Profile": "評測這個已儲存的 Profile",

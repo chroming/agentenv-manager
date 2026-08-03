@@ -128,10 +128,10 @@ describe("SkillSourceView", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Merge selected/ })).not.toBeInTheDocument();
     expect(document.querySelector(".skill-source-counts .is-change")).toHaveClass("has-value");
-    fireEvent.click(screen.getByRole("button", { name: "Update all skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update available" }));
     expect(onReviewUpdates).toHaveBeenCalledWith(["review"]);
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Update all skills" })).toBeEnabled()
+      expect(screen.getByRole("button", { name: "Update available" })).toBeEnabled()
     );
     fireEvent.click(screen.getByRole("button", { name: "Expand source" }));
 
@@ -757,7 +757,8 @@ describe("SkillSourceView", () => {
     expect(document.querySelector(".skill-source-counts .is-removed")).toBeNull();
   });
 
-  it("keeps source facts and commands in separate columns", () => {
+  it("uses an actionable status instead of a duplicate Action column", async () => {
+    const onReviewUpdates = vi.fn().mockResolvedValue(undefined);
     render(
       <SkillSourceView
         active
@@ -770,18 +771,20 @@ describe("SkillSourceView", () => {
         onMerge={vi.fn()}
         onAdd={vi.fn().mockResolvedValue(true)}
         onUpdate={vi.fn()}
-        onReviewUpdates={vi.fn().mockResolvedValue(undefined)}
+        onReviewUpdates={onReviewUpdates}
         onDelete={vi.fn()}
         onOpenSource={vi.fn()}
         onCopySource={vi.fn()}
       />
     );
 
-    expect(screen.getByText("Action", { selector: ".skill-source-table-head span" })).toBeInTheDocument();
-    expect(screen.getByText("Update available", { selector: ".skill-source-status-label" })).toBeInTheDocument();
+    expect(screen.queryByText("Action", { selector: ".skill-source-table-head span" })).not.toBeInTheDocument();
+    const statusAction = screen.getByRole("button", { name: "Update available" });
+    expect(statusAction).toHaveClass("skill-source-status");
     expect(screen.getByText("—", { selector: ".skill-source-last-checked" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Update available" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Update all skills" })).toHaveTextContent("Update");
+    expect(document.querySelector(".skill-source-current-action")).toBeNull();
+    fireEvent.click(statusAction);
+    await waitFor(() => expect(onReviewUpdates).toHaveBeenCalledWith(["review"]));
   });
 
   it("summarizes repository merge failures while retaining the full error", async () => {

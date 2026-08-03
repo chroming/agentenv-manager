@@ -18,7 +18,7 @@ import { ProductIcon } from "../productIcons";
 import { DiffViewer } from "./DiffViewer";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { OverflowTooltip } from "./OverflowTooltip";
-import { Button } from "./ui";
+import { IconButton } from "./ui";
 
 type Preview = ActivationPreview | RollbackPreview | StopManagingPreview;
 type GroupId = "instructions" | "skills" | "mcp" | "storage" | "configuration" | "cleanup";
@@ -142,15 +142,15 @@ export const PreviewChangeList = ({
           </span>
         </div>
         {preview.changes.length > 0 && onExpandPreview ? (
-          <Button
+          <IconButton
             ref={expandButtonRef}
-            icon={<Maximize2 size={14} />}
+            label={t("Maximize preview")}
             size="compact"
             variant="ghost"
             onClick={onExpandPreview}
           >
-            {t("Maximize preview")}
-          </Button>
+            <Maximize2 size={16} strokeWidth={2.2} />
+          </IconButton>
         ) : null}
       </header>
       <div className="apply-preview-change-groups">

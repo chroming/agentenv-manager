@@ -11,7 +11,7 @@ import type { SkillUpdateRunItem } from "../skillUpdateQueue";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { DiffViewer } from "./DiffViewer";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
-import { Button, ModalFrame } from "./ui";
+import { Button, IconButton, ModalFrame } from "./ui";
 import { useI18n } from "../i18n";
 
 interface SkillUpdateDialogProps {
@@ -153,15 +153,15 @@ export const SkillUpdateDialog = ({
               </div>
             ) : null}
           </div>
-          <Button
+          <IconButton
             ref={expandPreviewRef}
-            icon={<Maximize2 size={14} />}
+            label={t("Maximize preview")}
             size="compact"
             variant="ghost"
             onClick={() => setDiffWorkspaceOpen(true)}
           >
-            {t("Maximize preview")}
-          </Button>
+            <Maximize2 size={16} strokeWidth={2.2} />
+          </IconButton>
         </header>
         <div className="update-change-list ui-dialog-body">
           {plan.changes.map((change, index) => (

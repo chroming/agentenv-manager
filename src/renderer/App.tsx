@@ -171,11 +171,6 @@ import {
 import { runSkillImportQueue } from "./skillImportQueue";
 import { useSkillUpdateActivity, type SkillUpdateActivity } from "./skillUpdateActivity";
 import {
-  runSkillUpdateQueue,
-  type SkillUpdateRun,
-  type SkillUpdateRunItem
-} from "./skillUpdateQueue";
-import {
   ActionMenu,
   Button,
   ControlGroup,
@@ -206,6 +201,7 @@ import { useConversationIndexWarmup } from "./hooks/useConversationIndexWarmup";
 import { useProfileActionGuard } from "./hooks/useProfileActionGuard";
 import { useProfileDraftController } from "./hooks/useProfileDraftController";
 import { useProfileActivationController } from "./hooks/useProfileActivationController";
+import { useSkillUpdateQueue } from "./hooks/useSkillUpdateQueue";
 import {
   preferredTargetForProfile,
   summarizeProfile
@@ -296,7 +292,7 @@ const AppContent = ({
   const [bulkSkillUpdateFailures, setBulkSkillUpdateFailures] = useState<
     SkillUpdatePreviewBatchResult["failed"]
   >([]);
-  const [skillUpdateRun, setSkillUpdateRun] = useState<SkillUpdateRun>({});
+  const skillUpdateQueue = useSkillUpdateQueue();
   const [profileLibraryVersions, setProfileLibraryVersions] = useState<
     Record<string, LibraryResourceVersions>
   >({});
@@ -2239,29 +2235,6 @@ const AppContent = ({
     }
   };
 
-  const executeSkillUpdatePlans = (
-    plans: SkillUpdatePlan[],
-    preserveExistingProgress: boolean
-  ) => {
-    setSkillUpdateRun((current) => {
-      const next = preserveExistingProgress ? { ...current } : {};
-      for (const plan of plans) next[plan.id] = { status: "queued" };
-      return next;
-    });
-    const updateProgress = (id: string, item: SkillUpdateRunItem) => {
-      setSkillUpdateRun((current) => ({ ...current, [id]: item }));
-    };
-    return runSkillUpdateQueue(
-      plans,
-      (plan) =>
-        window.agentEnv.updateLibrarySkill({
-          id: plan.id,
-          previewId: plan.previewId!
-        }),
-      updateProgress
-    );
-  };
-
   const updateLibrarySkill = async (plan: SkillUpdatePlan) => {
     if (!plan.previewId) {
       setError("Skill update preview is unavailable; review the update again");
@@ -2270,7 +2243,7 @@ const AppContent = ({
     setBusy(true);
     setError(undefined);
     try {
-      const result = await executeSkillUpdatePlans([plan], false);
+      const result = await skillUpdateQueue.execute([plan], false);
       applyLibraryContentUpdatesLocally(result.updated);
       await refreshSkillSourceGroups();
       if (result.updated.length > 0) {
@@ -2368,10 +2341,11 @@ const AppContent = ({
       return;
     }
 
+    skillUpdateQueue.resetStop();
     setBusy(true);
     setError(undefined);
     try {
-      const result = await executeSkillUpdatePlans(applicablePlans, true);
+      const result = await skillUpdateQueue.execute(applicablePlans, true, true);
       const updatedSkills = result.updated;
       applyLibraryContentUpdatesLocally(updatedSkills);
       await refreshSkillSourceGroups();
@@ -2380,7 +2354,12 @@ const AppContent = ({
         (update) =>
           !updatedIds.has(update.id) && update.updateAvailable && !update.error
       ).length;
-      if (result.failed.length === 0) {
+      if (result.cancelled) {
+        setSkillUpdateCheckStatus({
+          state: "success",
+          message: `Updated ${plural(updatedSkills.length, "skill")} · Remaining updates skipped`
+        });
+      } else if (result.failed.length === 0) {
         setSkillUpdateCheckStatus({
           state: "success",
           message:
@@ -2410,7 +2389,7 @@ const AppContent = ({
     const activity: SkillUpdateActivity = { kind: "preview-skills", skillIds: ids };
     if (!beginSkillUpdateActivity(activity)) return;
     setError(undefined);
-    setSkillUpdateRun({});
+    skillUpdateQueue.resetRun();
     setSkillUpdateCheckStatus({ state: "checking", message: "Preparing updates..." });
     try {
       const result = await window.agentEnv.previewLibrarySkillUpdates(ids);
@@ -3289,7 +3268,7 @@ const AppContent = ({
     setError(undefined);
     setProfileSaveStatus("");
     setSelectedSkillUpdatePlan(undefined);
-    setSkillUpdateRun({});
+    skillUpdateQueue.resetRun();
     setSkillUpdateFeedbackWorkspace("library");
     setSkillUpdateCheckStatus({ state: "checking", message: `Checking ${id}...` });
     try {
@@ -4139,7 +4118,8 @@ const AppContent = ({
                 selectedUpdatePlan={selectedSkillUpdatePlan}
                 bulkUpdatePlans={bulkSkillUpdatePlans}
                 bulkUpdateFailures={bulkSkillUpdateFailures}
-                updateRun={skillUpdateRun}
+                updateRun={skillUpdateQueue.run}
+                bulkUpdateStopRequested={skillUpdateQueue.stopRequested}
                 skillUsage={skillUsage}
                 installedTargetIds={targets
                   .filter((target) => isTargetInstalled(target.health))
@@ -4228,15 +4208,17 @@ const AppContent = ({
                 onPreviewLibrarySkillUpdate={previewLibrarySkillUpdate}
                 onCloseUpdatePreview={() => {
                   setSelectedSkillUpdatePlan(undefined);
-                  setSkillUpdateRun({});
+                  skillUpdateQueue.resetRun();
                 }}
                 onUpdateLibrarySkill={updateLibrarySkill}
                 onUpdateAllLibrarySkills={updateAllLibrarySkills}
+                onStopBulkLibrarySkillUpdates={skillUpdateQueue.requestStop}
                 onPreviewAllLibrarySkillUpdates={previewAllLibrarySkillUpdates}
                 onCloseBulkUpdatePreview={() => {
                   setBulkSkillUpdatePlans(undefined);
                   setBulkSkillUpdateFailures([]);
-                  setSkillUpdateRun({});
+                  skillUpdateQueue.resetRun();
+                  skillUpdateQueue.resetStop();
                 }}
                 onSyncSkillInstalls={(id) => void syncSkillInstalls(id)}
                 onRemoveLibrarySkill={removeLibrarySkill}
@@ -4719,11 +4701,11 @@ const AppContent = ({
                         plan={selectedSkillUpdatePlan}
                         busy={busy}
                         progress={selectedSkillUpdatePlan
-                          ? skillUpdateRun[selectedSkillUpdatePlan.id]
+                          ? skillUpdateQueue.run[selectedSkillUpdatePlan.id]
                           : undefined}
                         onClose={() => {
                           setSelectedSkillUpdatePlan(undefined);
-                          setSkillUpdateRun({});
+                          skillUpdateQueue.resetRun();
                         }}
                         onConfirm={(plan) => void updateLibrarySkill(plan)}
                       />
