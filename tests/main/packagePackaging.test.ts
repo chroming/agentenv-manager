@@ -182,7 +182,7 @@ describe("package metadata", () => {
         target: ["AppImage", "deb"],
         executableName: "agentenv-manager",
         syncDesktopName: true,
-        artifactName: "AgentEnv-Manager-${version}-linux-${arch}.${ext}"
+        artifactName: "AgentEnv-Manager-${version}-linux-x64.${ext}"
       }
     });
     expect(packageJson.build?.mac?.identity).toBeUndefined();

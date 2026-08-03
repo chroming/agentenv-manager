@@ -55,7 +55,12 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
-      - run: npm test
+      - name: Run full macOS release regression
+        if: matrix.arch == 'arm64'
+        run: npm test
+      - name: Verify Intel platform contracts
+        if: matrix.arch == 'x64'
+        run: npm run test:platform
       - name: Build exact macOS release assets
         run: npm run dist:mac
       - name: Run packaged application workflow

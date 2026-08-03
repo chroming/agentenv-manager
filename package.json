@@ -129,7 +129,7 @@
       "category": "Development",
       "executableName": "agentenv-manager",
       "syncDesktopName": true,
-      "artifactName": "AgentEnv-Manager-${version}-linux-${arch}.${ext}",
+      "artifactName": "AgentEnv-Manager-${version}-linux-x64.${ext}",
       "target": [
         "AppImage",
         "deb"
