@@ -111,8 +111,9 @@ describe("package metadata", () => {
           identity?: string;
           hardenedRuntime?: boolean;
           notarize?: boolean;
+          artifactName?: string;
         };
-        win?: { icon?: string; target?: string[] };
+        win?: { icon?: string; target?: string[]; artifactName?: string };
         nsis?: {
           oneClick?: boolean;
           perMachine?: boolean;
@@ -122,6 +123,7 @@ describe("package metadata", () => {
           icon?: string;
           target?: string[];
           executableName?: string;
+          artifactName?: string;
         };
       };
     };
@@ -152,9 +154,7 @@ describe("package metadata", () => {
     for (const script of ["dist", "dist:mac", "dist:win", "dist:linux"]) {
       expect(packageJson.scripts?.[script]).toContain("--publish never");
     }
-    expect(packageJson.scripts?.["dist:mac:signed"]).toBe(
-      "node scripts/build-signed-mac.mjs"
-    );
+    expect(packageJson.scripts?.["dist:mac:signed"]).toBeUndefined();
     expect(packageJson.scripts?.["test:e2e:packaged"]).toBe(
       "npm run pack && node scripts/test-packaged-app.mjs"
     );
@@ -165,12 +165,12 @@ describe("package metadata", () => {
       mac: {
         icon: "build/icon.icns",
         target: ["dmg", "zip"],
-        hardenedRuntime: true,
-        notarize: true
+        artifactName: "AgentEnv-Manager-${version}-mac-${arch}.${ext}"
       },
       win: {
         icon: "build/icon.png",
-        target: ["nsis"]
+        target: ["nsis"],
+        artifactName: "AgentEnv-Manager-${version}-windows-${arch}.${ext}"
       },
       nsis: {
         oneClick: false,
@@ -181,10 +181,13 @@ describe("package metadata", () => {
         icon: "build/icon.png",
         target: ["AppImage", "deb"],
         executableName: "agentenv-manager",
-        syncDesktopName: true
+        syncDesktopName: true,
+        artifactName: "AgentEnv-Manager-${version}-linux-${arch}.${ext}"
       }
     });
     expect(packageJson.build?.mac?.identity).toBeUndefined();
+    expect(packageJson.build?.mac?.hardenedRuntime).toBeUndefined();
+    expect(packageJson.build?.mac?.notarize).toBeUndefined();
     await expect(stat(join(process.cwd(), "build", "icon.icns"))).resolves.toMatchObject({
       size: expect.any(Number)
     });
@@ -195,29 +198,36 @@ describe("package metadata", () => {
     });
   });
 
-  it("publishes tagged releases only after verification and signing", async () => {
+  it("publishes a complete unsigned release before updating the official Tap", async () => {
     const workflow = await readFile(
       join(process.cwd(), ".github", "workflows", "release.yml"),
       "utf8"
     );
 
     expect(workflow).toContain('tags:');
-    expect(workflow).toContain('npm run verify:release');
-    expect(workflow).toContain('npm run dist:mac:signed');
+    expect(workflow).toContain('macos-15-intel');
+    expect(workflow).toContain('macos-15');
+    expect(workflow).toContain('windows-2025');
+    expect(workflow).toContain('ubuntu-24.04');
+    expect(workflow).toContain('actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a');
+    expect(workflow).toContain('actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c');
+    expect(workflow).toContain('node scripts/release-manifest.mjs');
+    expect(workflow).toContain('node scripts/render-homebrew-cask.mjs');
     expect(workflow).toContain('npm sbom --sbom-format cyclonedx');
-    expect(workflow).toContain('release/SHA256SUMS');
-    expect(workflow).toContain('gh release create');
-  });
-
-  it("rejects stale files in signed macOS release output", async () => {
-    const script = await readFile(
-      join(process.cwd(), "scripts", "build-signed-mac.mjs"),
-      "utf8"
-    );
-
-    expect(script).toContain('await rm(releaseDir, { recursive: true, force: true })');
-    expect(script).toContain('dmgs.length !== 1 || zips.length !== 1');
-    expect(script).toContain('mtimeMs < releaseStartedAt');
+    expect(workflow).toContain('SHA256SUMS');
+    expect(workflow).toContain('gh release create "$RELEASE_TAG" --draft');
+    expect(workflow).toContain('gh release edit "$RELEASE_TAG" --draft=false');
+    expect(workflow).toContain('HOMEBREW_TAP_DEPLOY_KEY');
+    expect(workflow).toContain('brew tap-new --no-git agentenv-ci/release');
+    expect(workflow).toContain('brew style --cask agentenv-ci/release/agentenv-manager');
+    expect(workflow).not.toContain('HOMEBREW_TAP_TOKEN');
+    expect(workflow).toContain('github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl');
+    expect(workflow).toContain('StrictHostKeyChecking=yes');
+    expect(workflow).toContain('git@github.com:chroming/homebrew-tap.git');
+    expect(workflow).toContain('chroming/homebrew-tap');
+    expect(workflow).not.toContain('Developer ID');
+    expect(workflow).not.toContain('notar');
+    expect(workflow).not.toContain('MACOS_CERTIFICATE');
   });
 
   it("bounds filesystem-heavy test concurrency on high-core hosts", async () => {

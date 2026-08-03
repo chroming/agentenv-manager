@@ -10,65 +10,231 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+  RELEASE_TAG: ${{ github.ref_name }}
 
 jobs:
-  macos:
-    runs-on: macos-15
-    timeout-minutes: 60
+  validate:
+    name: Validate release identity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
-      - run: npm run verify:release
+      - name: Require tag and package version to match
+        run: node -e 'import("./scripts/release-manifest.mjs").then(({ validateReleaseVersion }) => validateReleaseVersion(process.env.RELEASE_TAG, require("./package.json").version))'
+      - run: npm run audit:dependencies
 
-      - name: Import Developer ID certificate
-        env:
-          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+  build-macos:
+    name: Build macOS ${{ matrix.arch }}
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 70
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      AGENTENV_TELEMETRY_ENDPOINT: ${{ vars.AGENTENV_TELEMETRY_ENDPOINT }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Build exact macOS release assets
+        run: npm run dist:mac
+      - name: Run packaged application workflow
+        run: node scripts/test-packaged-app.mjs
+      - name: Verify disk image
+        run: hdiutil verify release/AgentEnv-Manager-*-mac-${{ matrix.arch }}.dmg
+      - name: Collect macOS release assets
         run: |
-          certificate_path="$RUNNER_TEMP/agentenv-developer-id.p12"
-          keychain_path="$RUNNER_TEMP/agentenv-signing.keychain-db"
-          printf '%s' "$MACOS_CERTIFICATE" | base64 -D > "$certificate_path"
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
-          security set-keychain-settings -lut 21600 "$keychain_path"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
-          security import "$certificate_path" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
-          security list-keychain -d user -s "$keychain_path" login.keychain-db
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$keychain_path"
+          mkdir release-assets
+          cp release/AgentEnv-Manager-*-mac-${{ matrix.arch }}.dmg release-assets/
+          cp release/AgentEnv-Manager-*-mac-${{ matrix.arch }}.zip release-assets/
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-macos-${{ matrix.arch }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 7
 
-      - name: Build signed and notarized macOS release
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run dist:mac:signed
+  build-windows:
+    name: Build Windows x64
+    needs: validate
+    runs-on: windows-2025
+    timeout-minutes: 55
+    env:
+      AGENTENV_TELEMETRY_ENDPOINT: ${{ vars.AGENTENV_TELEMETRY_ENDPOINT }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run test:platform
+      - run: npm run dist:win
+      - run: node scripts/test-packaged-app.mjs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-windows-x64
+          path: release/AgentEnv-Manager-*-windows-x64.exe
+          if-no-files-found: error
+          retention-days: 7
 
-      - name: Generate release metadata
-        run: |
-          npm sbom --sbom-format cyclonedx > "release/agentenv-manager-${GITHUB_REF_NAME}.cdx.json"
-          for artifact in release/*.dmg release/*.zip; do
-            shasum -a 256 "$artifact"
-          done > release/SHA256SUMS
+  build-linux:
+    name: Build Linux x64
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      AGENTENV_TELEMETRY_ENDPOINT: ${{ vars.AGENTENV_TELEMETRY_ENDPOINT }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run test:platform
+      - run: npm run dist:linux
+      - run: xvfb-run -a node scripts/test-packaged-app.mjs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-linux-x64
+          path: |
+            release/AgentEnv-Manager-*-linux-x64.AppImage
+            release/AgentEnv-Manager-*-linux-x64.deb
+          if-no-files-found: error
+          retention-days: 7
 
-      - name: Publish GitHub release
+  publish:
+    name: Publish verified release
+    needs:
+      - build-macos
+      - build-windows
+      - build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Refuse to replace an existing Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            release/*.dmg \
-            release/*.zip \
-            release/SHA256SUMS \
-            release/*.cdx.json \
-            --generate-notes \
-            --verify-tag
-
-      - name: Remove temporary signing keychain
-        if: always()
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release $RELEASE_TAG already exists"
+            exit 1
+          fi
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify complete asset set
         run: |
-          security delete-keychain "$RUNNER_TEMP/agentenv-signing.keychain-db" || true
-          rm -f "$RUNNER_TEMP/agentenv-developer-id.p12"
+          version="${RELEASE_TAG#v}"
+          expected=(
+            "AgentEnv-Manager-${version}-mac-arm64.dmg"
+            "AgentEnv-Manager-${version}-mac-arm64.zip"
+            "AgentEnv-Manager-${version}-mac-x64.dmg"
+            "AgentEnv-Manager-${version}-mac-x64.zip"
+            "AgentEnv-Manager-${version}-windows-x64.exe"
+            "AgentEnv-Manager-${version}-linux-x64.AppImage"
+            "AgentEnv-Manager-${version}-linux-x64.deb"
+          )
+          for asset in "${expected[@]}"; do
+            test -s "release-assets/$asset" || { echo "::error::Missing $asset"; exit 1; }
+          done
+          test "$(find release-assets -maxdepth 1 -type f | wc -l | tr -d ' ')" = "${#expected[@]}"
+          printf '%s\n' "${expected[@]}" | paste -sd, - > "$RUNNER_TEMP/assets.txt"
+      - name: Generate release metadata and Homebrew Cask
+        run: |
+          npm run build
+          assets="$(cat "$RUNNER_TEMP/assets.txt")"
+          node scripts/release-manifest.mjs \
+            --tag "$RELEASE_TAG" \
+            --release-dir release-assets \
+            --assets "$assets" \
+            --output release-assets/release-manifest.json
+          node scripts/render-homebrew-cask.mjs \
+            --manifest release-assets/release-manifest.json \
+            --output release-assets/agentenv-manager.rb
+          ruby -c release-assets/agentenv-manager.rb
+          brew tap-new --no-git agentenv-ci/release
+          tap_root="$(brew --repository agentenv-ci/release)"
+          mkdir -p "$tap_root/Casks"
+          cp release-assets/agentenv-manager.rb "$tap_root/Casks/agentenv-manager.rb"
+          brew style --cask agentenv-ci/release/agentenv-manager
+          npm sbom --sbom-format cyclonedx > "release-assets/agentenv-manager-${RELEASE_TAG}.cdx.json"
+          (cd release-assets && sha256sum AgentEnv-Manager-* > SHA256SUMS)
+      - name: Create isolated draft and upload exact assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$RELEASE_TAG" --draft --verify-tag --generate-notes --title "AgentEnv Manager $RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+          gh release upload "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY"
+      - name: Verify uploaded draft assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir downloaded-assets
+          gh release download "$RELEASE_TAG" --dir downloaded-assets --repo "$GITHUB_REPOSITORY"
+          diff release-assets/SHA256SUMS downloaded-assets/SHA256SUMS
+          (cd downloaded-assets && sha256sum --check SHA256SUMS)
+          diff release-assets/release-manifest.json downloaded-assets/release-manifest.json
+          diff release-assets/agentenv-manager.rb downloaded-assets/agentenv-manager.rb
+      - name: Prepare repository-scoped Homebrew Tap access
+        env:
+          HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+        run: |
+          test -n "$HOMEBREW_TAP_DEPLOY_KEY" || { echo "::error::HOMEBREW_TAP_DEPLOY_KEY is required"; exit 1; }
+          install -d -m 700 "$RUNNER_TEMP/homebrew-tap-ssh"
+          printf '%s\n' "$HOMEBREW_TAP_DEPLOY_KEY" > "$RUNNER_TEMP/homebrew-tap-ssh/id_ed25519"
+          chmod 600 "$RUNNER_TEMP/homebrew-tap-ssh/id_ed25519"
+          printf '%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$RUNNER_TEMP/homebrew-tap-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/homebrew-tap-ssh/known_hosts"
+          GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/homebrew-tap-ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/homebrew-tap-ssh/known_hosts" \
+            git clone --depth 1 git@github.com:chroming/homebrew-tap.git "$RUNNER_TEMP/homebrew-tap"
+      - name: Publish completed release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$RELEASE_TAG" --draft=false --repo "$GITHUB_REPOSITORY"
+      - name: Update chroming/homebrew-tap
+        env:
+          GIT_SSH_COMMAND: ssh -i ${{ runner.temp }}/homebrew-tap-ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${{ runner.temp }}/homebrew-tap-ssh/known_hosts
+        run: |
+          mkdir -p "$RUNNER_TEMP/homebrew-tap/Casks"
+          cp release-assets/agentenv-manager.rb "$RUNNER_TEMP/homebrew-tap/Casks/agentenv-manager.rb"
+          cd "$RUNNER_TEMP/homebrew-tap"
+          git config user.name "AgentEnv Release Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add Casks/agentenv-manager.rb
+          git diff --cached --quiet || git commit -m "chore: update agentenv-manager to ${RELEASE_TAG}"
+          git push origin HEAD:main
+      - name: Remove temporary Homebrew Tap key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/homebrew-tap-ssh/id_ed25519"

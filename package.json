@@ -33,7 +33,6 @@
     "dist:mac": "npm run icons:mac && npm run build && electron-builder --mac --publish never",
     "dist:win": "npm run build && electron-builder --win nsis --publish never",
     "dist:linux": "npm run build && electron-builder --linux AppImage deb --publish never",
-    "dist:mac:signed": "node scripts/build-signed-mac.mjs",
     "audit:styles": "node scripts/audit-renderer-css.mjs --check",
     "audit:styles:report": "node scripts/audit-renderer-css.mjs",
     "audit:modules": "node scripts/audit-module-budgets.mjs",
@@ -107,8 +106,7 @@
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",
-      "hardenedRuntime": true,
-      "notarize": true,
+      "artifactName": "AgentEnv-Manager-${version}-mac-${arch}.${ext}",
       "target": [
         "dmg",
         "zip"
@@ -116,6 +114,7 @@
     },
     "win": {
       "icon": "build/icon.png",
+      "artifactName": "AgentEnv-Manager-${version}-windows-${arch}.${ext}",
       "target": [
         "nsis"
       ]
@@ -130,14 +129,12 @@
       "category": "Development",
       "executableName": "agentenv-manager",
       "syncDesktopName": true,
+      "artifactName": "AgentEnv-Manager-${version}-linux-${arch}.${ext}",
       "target": [
         "AppImage",
         "deb"
       ]
     },
-    "dmg": {
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
-    },
-    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
+    "dmg": {}
   }
 }

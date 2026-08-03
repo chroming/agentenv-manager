@@ -134,9 +134,8 @@ snapshot:
 npm run verify:release
 ```
 
-See [README.md](README.md) for the authoritative document map, visual-baseline
-review procedure, and the distinction between packaged smoke and signed public
-distribution.
+See [README.md](../README.md) for the authoritative document map and
+visual-baseline review procedure.
 
 ## Release Builds
 
@@ -159,18 +158,15 @@ Linux CI then build their installer targets and run the same packaged
 six-Agent workflow against an isolated home. A macOS-only local pass is not
 evidence that either native package works.
 
-Signed and notarized release:
-
-```bash
-npm run dist:mac:signed
-```
-
-Signing credentials belong in Keychain or environment-backed CI secrets. Never
-commit `.env` files, certificates, API keys, app-specific passwords, or private
-repository credentials.
-
 The tag workflow in `.github/workflows/release.yml` is the public release owner.
-It accepts `v*` tags only after the repository signing and notarization secrets
-listed in the README are configured. It verifies a freshly cleaned `release/`
-directory, emits an SBOM and checksums, and publishes only after signing,
-notarization, stapling, and the release gate succeed.
+It requires an exact `vX.Y.Z` match with `package.json`, builds macOS arm64 and
+x64 plus Windows and Linux packages on native runners, and assembles one draft
+Release. It publishes only after downloading the complete artifact set and
+verifying checksums, the release manifest, and the generated Cask. The final
+step updates `chroming/homebrew-tap` with the repository-scoped
+`HOMEBREW_TAP_DEPLOY_KEY`.
+
+The current macOS distribution is unsigned. The generated Cask binds each
+architecture to an immutable official Release URL and SHA-256, then removes
+quarantine only after Homebrew verifies the downloaded DMG. Never commit tokens,
+certificates, API keys, app-specific passwords, or private repository credentials.
