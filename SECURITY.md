@@ -2,8 +2,8 @@
 
 ## Supported Versions
 
-AgentEnv Manager is currently pre-release software. Security fixes are applied
-to the latest commit and the newest published release only.
+Security fixes are applied to the latest commit and the newest published
+release only.
 
 ## Reporting a Vulnerability
 

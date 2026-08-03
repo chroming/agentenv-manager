@@ -936,11 +936,18 @@ try {
     "---\nname: react-best-practices\ndescription: Updated React review guidance.\n---\n\n# react-best-practices\n\nReview the available update before applying it.\n",
     "utf8"
   );
-  await page.getByRole("button", { name: "Check updates" }).click();
+  const checkUpdatesButton = page.getByRole("button", { name: "Check updates" });
+  await checkUpdatesButton.click();
+  const checkUpdatesHandle = await checkUpdatesButton.elementHandle();
+  await page.waitForFunction(
+    (button) => button?.getAttribute("aria-busy") === "false",
+    checkUpdatesHandle,
+    { timeout: 15_000 }
+  );
   await page
     .getByRole("group", { name: "Library item react-best-practices" })
     .getByRole("button", { name: "Update react-best-practices" })
-    .waitFor({ state: "visible", timeout: 5_000 });
+    .waitFor({ state: "visible", timeout: 10_000 });
   await page.waitForTimeout(5_200);
   await capturePage(page, join(outputDir, "skills-update-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);

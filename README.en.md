@@ -6,7 +6,7 @@ AgentEnv Manager is a local desktop app for organizing coding-agent Skills, Prof
 
 It does not take ownership of models, accounts, or every native setting. Before writing anything, it shows the changes and creates a recovery point.
 
-> Version `0.1.0` is a pre-release. Packaged-app checks run on macOS, Windows, and Linux. The macOS package is not signed or notarized yet. The official Homebrew Cask verifies its SHA-256 before removing quarantine.
+> `0.1.0` is the first public release. Native CI builds and launches the packaged app on macOS, Windows, and Linux, then exercises core workflows with isolated fake Agents. This does not verify every real Agent version. The macOS package is unsigned and not notarized. The official Homebrew Cask verifies its SHA-256 before removing quarantine.
 
 ## Install
 

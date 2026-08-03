@@ -1943,7 +1943,7 @@ AgentEnv Manager is production-ready only when all of these are true:
 - Packaged Electron application passes a real startup and primary-workflow smoke test.
 - The packaged Agent discovery smoke runs with a desktop-process minimal `PATH` and proves fallback discovery for OpenCode, Claude Code, Codex, Antigravity CLI, Trae CLI, and Pi on each claimed platform.
 
-Current verdict: **Needs refinement**. Core Skill Library, v2 Profile, Preview, transactional Apply, backup, retention, rollback, stale rollback protection, no-op, cross-Target Instructions and Skills, Create from Target, Target-specific Skill deployment, compatibility-copy consolidation, canonical Target lifecycle, data backup and restore, active-Profile deletion recovery, Stop Managing workflows, sparse native MCP activation, and verified unsigned distribution are functional. Broader Skill identity edge coverage and first public native-runner receipts remain release work.
+Current verdict: **Needs refinement**. Core Skill Library, v2 Profile, Preview, transactional Apply, backup, retention, rollback, stale rollback protection, no-op, cross-Target Instructions and Skills, Create from Target, Target-specific Skill deployment, compatibility-copy consolidation, canonical Target lifecycle, data backup and restore, active-Profile deletion recovery, Stop Managing workflows, sparse native MCP activation, and verified unsigned distribution are functional. Broader Skill identity edge coverage remains release work.
 
 ### 25.1 Verification Snapshot
 

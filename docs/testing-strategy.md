@@ -112,8 +112,11 @@ claimed operating system. Linux uses Xvfb only as a display host; Windows,
 Linux, and macOS all execute the packaged Electron binary.
 
 DMG checksum and mount verification establish package-container integrity only.
-Public distribution additionally requires Developer ID signing, notarization,
-stapling, Gatekeeper assessment, and clean-Mac smoke evidence.
+The current macOS release is intentionally unsigned and not notarized. The
+official Homebrew Cask pins the expected Release asset and SHA-256, then removes
+quarantine only after Homebrew verifies the download. This is verified unsigned
+distribution; it must not be described as Developer ID signed, notarized, or
+approved by Gatekeeper.
 
 ## Installed Agent probe
 

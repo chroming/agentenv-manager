@@ -7,12 +7,9 @@ versioning after its first stable release.
 
 ## [Unreleased]
 
-- Open-source repository governance, dependency audit gates, and signed release
-  automation.
+## [0.1.0] - 2026-08-04
 
-## [0.1.0] - Unreleased
-
-Initial pre-release implementation.
+Initial public release.
 
 ### Added
 
@@ -29,6 +26,8 @@ Initial pre-release implementation.
 - English, Simplified Chinese, and Traditional Chinese interfaces.
 - Native packaging targets for macOS, Windows, and Linux, plus packaged runtime
   and visual verification gates.
+- Open-source repository governance, dependency audit gates, verified unsigned
+  release automation, and an official Homebrew Cask.
 
 ### Security
 

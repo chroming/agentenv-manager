@@ -83,9 +83,9 @@ presented and registered as partial; shared interfaces do not imply support.
 ## Target Integrations
 
 Built-in integrations currently cover OpenCode, Claude Code, Codex,
-Antigravity, and Trae CLI. Target-specific installation evidence, paths,
-Instructions, Skills, native MCP behavior, capture, and deployment facts live
-under `src/main/targets/integrations/`.
+Antigravity CLI, Trae CLI, and Pi Coding Agent. Target-specific installation
+evidence, paths, Instructions, Skills, native MCP behavior, capture, and
+deployment facts live under `src/main/targets/integrations/`.
 
 Shared activation, Library, Profile, and Renderer code must not branch on a
 concrete Target ID. Start a new integration with:
@@ -153,10 +153,12 @@ npm run dist:win
 npm run dist:linux
 ```
 
-`npm run test:platform` owns pure platform-policy tests. Native Windows and
-Linux CI then build their installer targets and run the same packaged
-six-Agent workflow against an isolated home. A macOS-only local pass is not
-evidence that either native package works.
+`npm run test:platform` owns pure platform-policy tests. Native macOS, Windows,
+and Linux CI build platform packages and run packaged workflows against an
+isolated home with fake Agent commands. This proves the packaged Electron
+binary starts and exercises the tested preload, IPC, persistence, Git import,
+and six-Agent Apply paths. It does not prove every real third-party CLI version
+or each graphical installer flow.
 
 The tag workflow in `.github/workflows/release.yml` is the public release owner.
 It requires an exact `vX.Y.Z` match with `package.json`, builds macOS arm64 and

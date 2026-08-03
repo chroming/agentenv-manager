@@ -28,10 +28,12 @@ When documents disagree, `product-contracts.md` governs product behavior.
 Executable tests and audits must be updated with the contract; passing an old
 test does not override a newer contract.
 
-Historical product audits, generated screenshots, and private planning notes
-are intentionally excluded from the public source tree. Public decisions must
-be represented by current contracts, tests, changelog entries, issues, or pull
-requests rather than an obsolete internal plan.
+Historical specs and implementation plans under `docs/superpowers/` record why
+a change was made; they do not override the current contracts. Public mock
+screenshots under `docs/images/` are generated from an isolated synthetic Home
+and contain no contributor Agent data. Current behavior must be represented by
+contracts, tests, changelog entries, issues, or pull requests rather than an
+obsolete plan.
 
 ## Verification Commands
 
@@ -76,12 +78,13 @@ layout movement.
 ## Release Meaning
 
 The packaged smoke proves the current platform binary can start and complete
-supported workflows inside an isolated environment. It must run natively on
-macOS, Windows, and Linux before those platforms are claimed as verified. A
-valid DMG checksum and mount prove macOS container integrity only. Neither
-proves public distribution trust.
+supported workflows inside an isolated environment. It runs natively on
+macOS, Windows, and Linux before those platforms are described as packaged-app
+verified. This evidence does not prove compatibility with every real Agent
+version or exercise each graphical installer.
 
-A public macOS release additionally requires a Developer ID Application
-identity, hardened-runtime signing, Apple notarization, stapling, Gatekeeper
-assessment, and a clean-Mac packaged smoke. An ad-hoc or unsigned package may
-be used for local testing but must not be described as signed or notarized.
+The current macOS release is intentionally unsigned and not notarized. Its
+official Homebrew Cask pins immutable Release URLs and SHA-256 values, then
+removes quarantine only after Homebrew verifies the download. DMG verification
+and checksums establish container and artifact integrity; they do not claim an
+Apple Developer ID, notarization, or Gatekeeper trust decision.

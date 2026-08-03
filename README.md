@@ -6,7 +6,7 @@ AgentEnv Manager 是一个本地桌面应用，用来整理 coding agent 的 Ski
 
 它不会接管模型、账号或所有原生配置。每次写入前都会先展示变化并创建恢复点。
 
-> 当前版本为 `0.1.0` 预发布版。macOS、Windows 和 Linux 已进入打包应用验证。macOS 包暂未签名或公证，通过官方 Homebrew Cask 安装时会先核对 SHA-256，再移除 quarantine 属性。
+> `0.1.0` 是首个公开版本。原生 CI 会在 macOS、Windows 和 Linux 上构建并启动打包应用，使用隔离的假 Agent 验证核心工作流；这不代表所有真实 Agent 版本都已验证。macOS 包未签名或公证，通过官方 Homebrew Cask 安装时会先核对 SHA-256，再移除 quarantine 属性。
 
 ## 安装
 
