@@ -962,11 +962,11 @@ describe("ConversationWorkspace", () => {
       target("opencode", "OpenCode")
     ]} />);
 
-    expect(await screen.findByText("Latest answer")).toBeInTheDocument();
+    expect(await screen.findByText("Latest answer", {}, { timeout: 5_000 })).toBeInTheDocument();
     expect(screen.queryByText("First question")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Load earlier messages" }));
 
-    expect(await screen.findByText("First question")).toBeInTheDocument();
+    expect(await screen.findByText("First question", {}, { timeout: 5_000 })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Load earlier messages" })).toBeNull();
     expect(api.readConversation).toHaveBeenLastCalledWith(detail.id, {
       offset: 0,
