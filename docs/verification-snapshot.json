@@ -1,14 +1,14 @@
 {
-  "generatedAt": "2026-08-03T19:20:08.791Z",
+  "generatedAt": "2026-08-03T20:02:17.556Z",
   "source": {
-    "commit": "dee09e683d6132d22f576b7dc366ddbc86672c78",
+    "commit": "683b6a2f6df254d7f66eac15dad41f4cadf6121c",
     "dirty": false,
-    "fingerprint": "6ca2d04ba2d2400fd6240d438d9a27561bb5d84bd872d9b07dfab9ce2aef835f",
+    "fingerprint": "2e8fa175723c8895849e2712c7cece3b9034c303c59bba1497557c38c7f118ca",
     "files": 660
   },
   "build": {
-    "generatedAt": "2026-08-03T19:17:25.083Z",
-    "sourceFingerprint": "fd4a057a5d77b8f0f989a2adfa519dc5fc1e1bd3935c933e43cf288386ca563a",
+    "generatedAt": "2026-08-03T19:59:33.969Z",
+    "sourceFingerprint": "846bb89c0c4cdd375ef4d37b99e9749ccf7aa0dc08a6ef45f1ea5faa326e07eb",
     "sourceFiles": 369,
     "artifactFingerprint": "8981403c1d87070458f225baec2d8f7dc16e38942933bedf39962dd1cef3bfe4",
     "artifactFiles": 40
@@ -43,7 +43,7 @@
     "visualContract": {
       "passed": true,
       "files": 27,
-      "maxChangedPixelRatio": 0.0011816269284712483
+      "maxChangedPixelRatio": 0.0007924263674614306
     }
   },
   "packagedSmoke": "passed"
