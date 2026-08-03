@@ -203,6 +203,7 @@ describe("package metadata", () => {
       join(process.cwd(), ".github", "workflows", "release.yml"),
       "utf8"
     );
+    const normalizedWorkflow = workflow.replaceAll("\r\n", "\n");
 
     expect(workflow).toContain('tags:');
     expect(workflow).toContain('macos-15-intel');
@@ -215,7 +216,7 @@ describe("package metadata", () => {
     expect(workflow).toContain('node scripts/render-homebrew-cask.mjs');
     expect(workflow).toContain('npm sbom --sbom-format cyclonedx');
     expect(workflow).toContain('SHA256SUMS');
-    expect(workflow).toMatch(/publish:\n[\s\S]*?runs-on: macos-15/);
+    expect(normalizedWorkflow).toMatch(/publish:\n[\s\S]*?runs-on: macos-15/);
     expect(workflow).toContain('shasum -a 256 AgentEnv-Manager-* > SHA256SUMS');
     expect(workflow).toContain('shasum -a 256 --check SHA256SUMS');
     expect(workflow).not.toContain('sha256sum');
