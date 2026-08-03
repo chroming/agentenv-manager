@@ -85,6 +85,36 @@ const hoverUntilVisible = async (
   throw lastError;
 };
 
+const clickThroughElectronWindow = async (
+  electronApp: ElectronApplication,
+  page: Page,
+  target: Locator
+) => {
+  const box = await target.boundingBox();
+  if (!box) throw new Error("Native click target is outside the visible app window");
+  const point = {
+    x: Math.round(box.x + box.width / 2),
+    y: Math.round(box.y + box.height / 2)
+  };
+  const windowHandle = await electronApp.browserWindow(page);
+  await windowHandle.evaluate((browserWindow, coordinates) => {
+    browserWindow.webContents.sendInputEvent({
+      type: "mouseDown",
+      button: "left",
+      clickCount: 1,
+      x: coordinates.x,
+      y: coordinates.y
+    });
+    browserWindow.webContents.sendInputEvent({
+      type: "mouseUp",
+      button: "left",
+      clickCount: 1,
+      x: coordinates.x,
+      y: coordinates.y
+    });
+  }, point);
+};
+
 const writeJson = async (path: string, value: unknown) => {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 };
@@ -1056,6 +1086,11 @@ const openSkillLibrary = async (page: Page) => {
     .getByRole("complementary", { name: "Global navigation" })
     .getByRole("button", { name: "Skills", exact: true })
     .click();
+};
+
+const openLocalSkills = async (page: Page) => {
+  await page.getByRole("button", { name: "More Skill actions" }).click();
+  await page.getByRole("menuitem", { name: "Scan local" }).click();
 };
 
 const openAgentActionMenu = async (
@@ -2047,12 +2082,10 @@ describe("Electron UI profile switching e2e", () => {
       });
       const updateActionGeometry = await changingRow.evaluate((row) => {
         const statusCell = row.querySelector<HTMLElement>(".library-status-cell")!;
-        const actionCell = row.querySelector<HTMLElement>(".library-current-action-cell")!;
-        const updateButton = actionCell.querySelector<HTMLButtonElement>("button")!;
+        const updateButton = statusCell.querySelector<HTMLButtonElement>("button")!;
         const statusDetail = statusCell.querySelector<HTMLElement>(".library-status-detail")!;
         const moreCell = row.querySelector<HTMLElement>(".library-actions-cell")!;
         const statusRect = statusCell.getBoundingClientRect();
-        const actionRect = actionCell.getBoundingClientRect();
         const buttonRect = updateButton.getBoundingClientRect();
         const detailRect = statusDetail.getBoundingClientRect();
         const detailVisible = getComputedStyle(statusDetail).display !== "none";
@@ -2065,20 +2098,18 @@ describe("Electron UI profile switching e2e", () => {
         return {
           background: getComputedStyle(updateButton).backgroundColor,
           buttonFitsText: updateButton.scrollWidth <= updateButton.clientWidth,
-          buttonInsideActionColumn:
-            buttonRect.left >= actionRect.left - 1 && buttonRect.right <= actionRect.right + 1,
-          columnsDoNotOverlap:
-            doNotOverlap(statusRect, actionRect) && doNotOverlap(actionRect, moreRect),
+          buttonInsideStatusColumn:
+            buttonRect.left >= statusRect.left - 1 && buttonRect.right <= statusRect.right + 1,
+          columnsDoNotOverlap: doNotOverlap(statusRect, moreRect),
           detailClearance: detailVisible ? detailRect.top - buttonRect.bottom : undefined,
           foreground: getComputedStyle(updateButton).color
         };
       });
       expect(updateActionGeometry.background).not.toBe("rgb(0, 122, 255)");
       expect(updateActionGeometry.buttonFitsText).toBe(true);
-      expect(updateActionGeometry.buttonInsideActionColumn).toBe(true);
+      expect(updateActionGeometry.buttonInsideStatusColumn).toBe(true);
       expect(updateActionGeometry.columnsDoNotOverlap).toBe(true);
       await expectTextFits(changingRow.locator(".library-status-cell .library-primary-status"));
-      await expectTextFits(changingRow.locator(".library-current-action-cell .library-row-action"));
       const beforeUpdateHeight = (await changingRow.boundingBox())?.height;
       await changingRow.getByRole("button", { name: "Update layout-skill-1" }).click();
       const updateDialog = page.getByRole("dialog", {
@@ -2604,7 +2635,7 @@ describe("Electron UI profile switching e2e", () => {
     );
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     await page
       .getByRole("group", { name: "Cleanup group target-only-reviewer" })
       .waitFor({ state: "visible", timeout: 5_000 });
@@ -2720,7 +2751,7 @@ describe("Electron UI profile switching e2e", () => {
       fileExists(join(appDataRoot, "skills-library", "target-only-reviewer", "SKILL.md"))
     ).resolves.toBe(true);
 
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     const cleanupHistory = page.getByRole("region", { name: "Cleanup history" });
     await cleanupHistory.waitFor({ state: "visible", timeout: 5_000 });
     expect(await cleanupHistory.locator(".cleanup-history-row.resource-row").count()).toBeGreaterThan(0);
@@ -2757,7 +2788,7 @@ describe("Electron UI profile switching e2e", () => {
     );
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     const cleanupGroup = page.getByRole("group", { name: "Cleanup group ui-alpha-skill" });
     await cleanupGroup.waitFor({ state: "visible" });
     await cleanupGroup
@@ -3361,7 +3392,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.setViewportSize({ width: 1180, height: 728 });
     await selectProfile(page, "UI OpenCode alpha");
 
-    const header = page.locator(".profile-page-header");
+    const header = page.locator(".profile-index-header");
     const workbench = page.locator(".profile-workbench");
     const profileIndex = page.locator(".profile-index");
     const profileList = page.locator(".profile-list");
@@ -3393,7 +3424,7 @@ describe("Electron UI profile switching e2e", () => {
         iconTextGap: contentBox.left - iconBox.right,
         iconWidth: iconBox.width,
         headerTargetControls: document.querySelectorAll(
-          ".profile-page-header .profile-target-workspace-control, .profile-page-header .profile-target-workspace-button"
+          ".profile-index-header .profile-target-workspace-control, .profile-index-header .profile-target-workspace-button"
         ).length
       };
     });
@@ -3764,19 +3795,18 @@ describe("Electron UI profile switching e2e", () => {
     )).toBe(true);
     const compactSkillUpdateGeometry = await page.locator(".profile-skill-update").evaluateAll(
       (buttons) => buttons.map((button) => {
-        const label = button.querySelector<HTMLElement>(".ui-button__label")!;
         const box = button.getBoundingClientRect();
-        const labelStyle = getComputedStyle(label);
         return {
+          accessibleName: button.getAttribute("aria-label"),
           height: Math.round(box.height),
-          labelClipped: labelStyle.clipPath === "inset(50%)",
+          contentFits: button.scrollWidth <= button.clientWidth + 1,
           width: Math.round(box.width)
         };
       })
     );
     expect(compactSkillUpdateGeometry.length).toBeGreaterThan(0);
     expect(compactSkillUpdateGeometry.every((button) =>
-      button.height === 32 && button.width === 32 && button.labelClipped
+      button.height === 32 && button.width === 32 && button.contentFits && Boolean(button.accessibleName)
     )).toBe(true);
     expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
     const firstProfileSkill = page.getByRole("listitem", {
@@ -4078,6 +4108,12 @@ describe("Electron UI profile switching e2e", () => {
       );
       expect(editOverlapsSave, JSON.stringify({ editProfileBox, saveBox, titleBox, applyBox }))
         .toBe(false);
+      expect(Math.round(editProfileBox!.height)).toBeLessThanOrEqual(24);
+      expect(Math.round(editProfileBox!.width)).toBeLessThanOrEqual(24);
+      expect(Math.abs(
+        editProfileBox!.y + editProfileBox!.height / 2 -
+        (titleBox!.y + titleBox!.height / 2)
+      )).toBeLessThanOrEqual(1);
       expect(targetSelectorBox!.x).toBeGreaterThanOrEqual(saveBox!.x + saveBox!.width);
       expect(targetSelectorBox!.x - (saveBox!.x + saveBox!.width)).toBeLessThanOrEqual(10);
       expect(compareButtonBox!.x).toBeGreaterThanOrEqual(
@@ -4232,7 +4268,7 @@ describe("Electron UI profile switching e2e", () => {
     await expectCommitActionsToFit();
     await resizeAppWindow(page, 920, 620);
     for (const locator of [
-      page.locator(".profile-page-header"),
+      page.locator(".profile-index-header"),
       page.locator(".profile-workbench")
     ]) {
       await expectInViewport(page, locator);
@@ -4396,7 +4432,7 @@ describe("Electron UI profile switching e2e", () => {
     });
     expect(targetPeerActions[1].background).not.toBe(targetPeerActions[0].background);
     expect(targetPeerActions[1].border).not.toBe(targetPeerActions[0].border);
-    await expectInViewport(page, page.getByRole("button", { name: /Recovery/ }));
+    await expectInViewport(page, page.getByRole("button", { name: "More Agent actions" }));
     expect(await page.getByRole("dialog", { name: "Recovery" }).count()).toBe(0);
 
     const dimensions = await page.evaluate(() => ({
@@ -4508,20 +4544,26 @@ describe("Electron UI profile switching e2e", () => {
           expect(chip?.width).toBe(workspaceGeometry.agentChipSizeToken);
         });
         expect(workspaceGeometry.editorPadding).toEqual(skillsGeometry.editorPadding);
-        expect({
-          fontSize: workspaceGeometry.heading.fontSize,
-          height: workspaceGeometry.heading.height,
-          lineHeight: workspaceGeometry.heading.lineHeight,
-          x: workspaceGeometry.heading.x
-        }).toEqual({
-          fontSize: skillsGeometry.heading.fontSize,
-          height: skillsGeometry.heading.height,
-          lineHeight: skillsGeometry.heading.lineHeight,
-          x: skillsGeometry.heading.x
-        });
-        if (workspace.action) {
-          expect(workspaceGeometry.action?.height).toBe(skillsGeometry.action?.height);
+        if (workspace.button === "Profiles") {
+          expect(workspaceGeometry.heading.fontSize).toBe("14px");
+          expect(workspaceGeometry.heading.height).toBe(18);
+          expect(workspaceGeometry.action).toMatchObject({ height: 30, width: 30 });
         } else {
+          expect({
+            fontSize: workspaceGeometry.heading.fontSize,
+            height: workspaceGeometry.heading.height,
+            lineHeight: workspaceGeometry.heading.lineHeight,
+            x: workspaceGeometry.heading.x
+          }).toEqual({
+            fontSize: skillsGeometry.heading.fontSize,
+            height: skillsGeometry.heading.height,
+            lineHeight: skillsGeometry.heading.lineHeight,
+            x: skillsGeometry.heading.x
+          });
+        }
+        if (workspace.action && workspace.button !== "Profiles") {
+          expect(workspaceGeometry.action?.height).toBe(skillsGeometry.action?.height);
+        } else if (!workspace.action) {
           expect(workspaceGeometry.action).toBeUndefined();
         }
         if (workspace.button === "Settings") {
@@ -4616,13 +4658,41 @@ describe("Electron UI profile switching e2e", () => {
   }, standardElectronTestTimeout);
 
   it("persists the collapsed desktop rail while restarting on Agents", async () => {
-    const { page } = await launchApp();
+    const { app: electronApp, page } = await launchApp();
     await resizeAppWindow(page, 920, 620);
     const navigation = page.getByRole("complementary", { name: "Global navigation" });
     const skillSearch = page.getByRole("textbox", { name: "Search skills" });
+    const sidebarToggle = page.getByRole("button", { name: "Collapse sidebar" });
     await skillSearch.fill("shared");
 
-    await navigation.getByRole("button", { name: "Collapse sidebar" }).click();
+    const expandedToggleGeometry = await page.evaluate(() => {
+      const titlebar = document.querySelector<HTMLElement>(".shell-titlebar")!;
+      const dragRegion = titlebar.querySelector<HTMLElement>(".shell-titlebar__drag-region")!;
+      const toggle = document.querySelector<HTMLElement>(".shell-sidebar-toggle")!;
+      const titlebarBox = titlebar.getBoundingClientRect();
+      const dragRegionBox = dragRegion.getBoundingClientRect();
+      const toggleBox = toggle.getBoundingClientRect();
+      const appRegion = (element: HTMLElement) =>
+        getComputedStyle(element).getPropertyValue("-webkit-app-region");
+      return {
+        containedByTitlebar: titlebar.contains(toggle),
+        dragRegion: appRegion(dragRegion),
+        dragRegionStartsAfterToggle: dragRegionBox.left >= toggleBox.right,
+        left: Math.round(toggleBox.left),
+        titlebarRegion: appRegion(titlebar),
+        verticallyContained:
+          toggleBox.top >= titlebarBox.top && toggleBox.bottom <= titlebarBox.bottom
+      };
+    });
+    expect(expandedToggleGeometry).toMatchObject({
+      containedByTitlebar: true,
+      dragRegion: "drag",
+      dragRegionStartsAfterToggle: true,
+      verticallyContained: true
+    });
+    expect(expandedToggleGeometry.titlebarRegion).not.toBe("drag");
+
+    await clickThroughElectronWindow(electronApp, page, sidebarToggle);
     await expect
       .poll(() => navigation.evaluate((element) => Math.round(element.getBoundingClientRect().width)))
       .toBe(64);
@@ -4632,6 +4702,11 @@ describe("Electron UI profile switching e2e", () => {
     const collapsedGeometry = await page.evaluate(() => {
       const sidebar = document.querySelector<HTMLElement>(".global-sidebar")!;
       const editor = document.querySelector<HTMLElement>(".editor-panel")!;
+      const collapseButton = document.querySelector<HTMLElement>(".shell-sidebar-toggle")!;
+      const navigation = sidebar.querySelector<HTMLElement>(".workspace-nav")!;
+      const groups = Array.from(
+        sidebar.querySelectorAll<HTMLElement>(".workspace-nav__group")
+      );
       const navButtons = Array.from(
         sidebar.querySelectorAll<HTMLElement>(".workspace-button, .workspace-search-button")
       );
@@ -4654,6 +4729,32 @@ describe("Electron UI profile switching e2e", () => {
             width: Math.round(box.width)
           };
         }),
+        collapseButtonInTitleBar: (() => {
+          const button = collapseButton.getBoundingClientRect();
+          const titlebar = document.querySelector<HTMLElement>(".shell-titlebar")!;
+          const titlebarBox = titlebar.getBoundingClientRect();
+          return (
+            titlebar.contains(collapseButton) &&
+            button.top >= titlebarBox.top &&
+            button.bottom <= titlebarBox.bottom
+          );
+        })(),
+        collapseButtonBox: (() => {
+          const button = collapseButton.getBoundingClientRect();
+          return {
+            bottom: Math.round(button.bottom),
+            left: Math.round(button.left),
+            right: Math.round(button.right),
+            top: Math.round(button.top)
+          };
+        })(),
+        groupCount: groups.length,
+        groupSeparators: groups.slice(1).map((group) => ({
+          borderTopWidth: getComputedStyle(group).borderTopWidth,
+          width: Math.round(group.getBoundingClientRect().width)
+        })),
+        navigationTop: Math.round(navigation.getBoundingClientRect().top),
+        sidebarTop: Math.round(sidebarBox.top),
         sidebarWidth: Math.round(sidebarBox.width)
       };
       feedback.remove();
@@ -4663,8 +4764,26 @@ describe("Electron UI profile switching e2e", () => {
       documentContained: true,
       editorLeft: 64,
       feedbackInset: 18,
+      groupCount: 3,
+      sidebarTop: 38,
       sidebarWidth: 64
     });
+    expect(
+      collapsedGeometry.collapseButtonInTitleBar,
+      JSON.stringify(collapsedGeometry.collapseButtonBox)
+    ).toBe(true);
+    expect(collapsedGeometry.collapseButtonBox.left).toBe(expandedToggleGeometry.left);
+    expect(collapsedGeometry.navigationTop).toBeGreaterThanOrEqual(
+      collapsedGeometry.sidebarTop + 8
+    );
+    expect(collapsedGeometry.collapseButtonBox.right - collapsedGeometry.collapseButtonBox.left)
+      .toBe(28);
+    expect(collapsedGeometry.collapseButtonBox.bottom - collapsedGeometry.collapseButtonBox.top)
+      .toBe(28);
+    expect(collapsedGeometry.groupSeparators).toEqual([
+      { borderTopWidth: "1px", width: 40 },
+      { borderTopWidth: "1px", width: 40 }
+    ]);
     expect(collapsedGeometry.navButtons.every(({ height, width }) => height === 36 && width === 40))
       .toBe(true);
 
@@ -4697,7 +4816,7 @@ describe("Electron UI profile switching e2e", () => {
     await navigation.getByRole("button", { name: "Skills", exact: true }).click();
     await page.getByRole("heading", { name: "Skills", exact: true }).waitFor();
 
-    await navigation.getByRole("button", { name: "Expand sidebar" }).click();
+    await page.getByRole("button", { name: "Expand sidebar" }).click();
     await expect
       .poll(() => navigation.evaluate((element) => Math.round(element.getBoundingClientRect().width)))
       .toBe(204);
@@ -4722,7 +4841,6 @@ describe("Electron UI profile switching e2e", () => {
       };
       const rowBox = row.getBoundingClientRect();
       return {
-        action: box(".library-current-action-cell"),
         contained: row.scrollWidth <= row.clientWidth + 1,
         more: box(".library-actions-cell"),
         resource: box(".library-resource-cell"),
@@ -4741,12 +4859,11 @@ describe("Electron UI profile switching e2e", () => {
       };
     });
     expect(skillLanes.contained).toBe(true);
-    expect(skillLanes.visibleHeadings).toBe(5);
+    expect(skillLanes.visibleHeadings).toBe(4);
     expect(skillLanes.source.left).toBe(skillLanes.usage.left);
     expect(skillLanes.source.top).toBeLessThan(skillLanes.usage.top);
-    expect(skillLanes.action.left - skillLanes.status.right).toBeGreaterThanOrEqual(8);
     expect(skillLanes.status.bottom).toBeLessThanOrEqual(skillLanes.row.bottom);
-    expect(skillLanes.action.right).toBeLessThanOrEqual(skillLanes.more.left);
+    expect(skillLanes.status.right).toBeLessThanOrEqual(skillLanes.more.left);
     expect(skillLanes.more.right).toBeLessThanOrEqual(skillLanes.row.right);
 
     await navigation.getByRole("button", { name: "Agents", exact: true }).click();
@@ -5134,7 +5251,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.keyboard.press("Escape");
     await importDialog.waitFor({ state: "hidden" });
 
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     const cleanupDrawer = page.getByRole("region", { name: "Environment skills" });
     await cleanupDrawer.waitFor({ state: "visible" });
     await expectTextContracts("Local Skill Cleanup at 920x620");
@@ -5309,10 +5426,10 @@ describe("Electron UI profile switching e2e", () => {
     expect(await openCodeCard.getByRole("region", { name: "OpenCode diagnostics" }).count()).toBe(0);
 
     expect(await page.getByRole("button", { name: "Activity", exact: true }).count()).toBe(0);
-    const recoveryTrigger = page.getByRole("button", { name: /Recovery/ });
-    expect(await recoveryTrigger.isDisabled()).toBe(true);
-    expect(await recoveryTrigger.getAttribute("title")).toBe("No backups");
-    expect(await recoveryTrigger.locator("span[aria-label]").count()).toBe(0);
+    await page.getByRole("button", { name: "More Agent actions" }).click();
+    const recoveryAction = page.getByRole("menuitem", { name: "Recovery" });
+    expect(await recoveryAction.isDisabled()).toBe(true);
+    await page.keyboard.press("Escape");
 
     await codexCard.getByRole("button", { name: "Codex", exact: true }).click();
     await page.getByRole("region", { name: "Profiles" }).waitFor({ state: "visible" });
@@ -5769,7 +5886,7 @@ describe("Electron UI profile switching e2e", () => {
       .not.toBe("rgb(0, 122, 255)");
     const commitControlGeometry = await page
       .locator(
-        ".profile-new-button, .profile-commit-actions .save-button, .profile-commit-actions .profile-apply-button, .profile-commit-actions .profile-target-workspace-button, .profile-commit-actions > .icon-action"
+        ".profile-commit-actions .save-button, .profile-commit-actions .profile-apply-button, .profile-commit-actions .profile-target-workspace-button, .profile-commit-actions > .icon-action"
       )
       .evaluateAll((controls) =>
         controls.map((control) => ({
@@ -6286,7 +6403,7 @@ describe("Electron UI profile switching e2e", () => {
     ]);
 
     await importDialog.waitFor({ state: "hidden" });
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     const cleanupGroup = page.getByRole("group", {
       name: "Cleanup group managed-after-import"
     });
@@ -6323,7 +6440,7 @@ describe("Electron UI profile switching e2e", () => {
     await symlink(libraryNotesPath, join(sharedSkillDir, "notes.md"));
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     const cleanupGroup = page.getByRole("group", {
       name: `Cleanup group ${skillId}`
     });
@@ -6353,7 +6470,7 @@ describe("Electron UI profile switching e2e", () => {
     const sharedSkillStatsBefore = await stat(join(sharedSkillDir, "SKILL.md"));
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     const cleanupGroup = page.getByRole("group", {
       name: "Cleanup group shared-migration-reviewer"
     });
@@ -6428,7 +6545,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.setViewportSize({ width: 920, height: 620 });
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     const collectionRow = page.getByRole("group", {
       name: "Skill collection superpowers"
     });
@@ -6487,7 +6604,7 @@ describe("Electron UI profile switching e2e", () => {
     await symlink(collectionSource, collectionLink);
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     const collectionRow = page.getByRole("group", {
       name: "Skill collection superpowers"
     });
@@ -6699,7 +6816,7 @@ describe("Electron UI profile switching e2e", () => {
     await symlink(collectionSource, collectionLink);
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     const row = page.getByRole("group", { name: "Skill collection collection-error" });
     await row.getByRole("button", { name: "Review" }).click();
     const dialog = page.getByRole("dialog", {
@@ -6757,7 +6874,7 @@ describe("Electron UI profile switching e2e", () => {
     await writeFile(join(codexDuplicate, "SKILL.md"), "# Codex older copy\n", "utf8");
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     let cleanupGroup = page.getByRole("group", { name: `Cleanup group ${skillId}` });
     await cleanupGroup
       .getByRole("button", { name: `Add to Library ${skillId}` })
@@ -6803,7 +6920,7 @@ describe("Electron UI profile switching e2e", () => {
     );
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     cleanupGroup = page.getByRole("group", { name: `Cleanup group ${skillId}` });
     await expect.poll(() => cleanupGroup.textContent()).toContain("Ready");
     await expect.poll(() => cleanupGroup.textContent()).toContain("All consumer Agents are ready");
@@ -6889,7 +7006,7 @@ describe("Electron UI profile switching e2e", () => {
       })
     );
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     const environmentSkills = page.getByRole("region", { name: "Environment skills" });
     await environmentSkills.getByRole("button", { name: "Refresh local skills" }).click();
     await expect.poll(() => environmentSkills.textContent()).toContain(skillId);
@@ -6970,7 +7087,7 @@ describe("Electron UI profile switching e2e", () => {
     await symlink(join(root, "missing-auto-broken-shared"), brokenSharedLink, "dir");
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     const safeGroup = page.getByRole("group", { name: "Cleanup group auto-local-reviewer" });
     const duplicateGroup = page.getByRole("group", {
       name: "Cleanup group auto-duplicate-reviewer"
@@ -7262,7 +7379,7 @@ describe("Electron UI profile switching e2e", () => {
     const resourcesBefore = await readFile(resourcesPath, "utf8");
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     const driftGroup = page.getByRole("group", { name: `Cleanup group ${skillId}` });
     const brokenGroup = page.getByRole("group", { name: "Cleanup group cleanup-broken-link" });
     await driftGroup.waitFor({ state: "visible" });
@@ -7320,7 +7437,7 @@ describe("Electron UI profile switching e2e", () => {
     const { opencodeDir, page } = await launchApp();
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     const drawer = page.getByRole("region", { name: "Environment skills" });
     await drawer.waitFor({ state: "visible" });
     expect(
@@ -7608,7 +7725,7 @@ describe("Electron UI profile switching e2e", () => {
     }
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     const group = page.getByRole("group", { name: `Cleanup group ${skillId}` });
     await group.waitFor({ state: "visible" });
     await expect.poll(() => group.textContent()).toContain("3 locations");
@@ -7986,7 +8103,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(geometry.diffHeight).toBeGreaterThan(100);
   }, standardElectronTestTimeout);
 
-  it("keeps Skill status and direct actions in separate aligned lanes at supported widths", async () => {
+  it("keeps Skill primary actions in one aligned status lane at supported widths", async () => {
     const { appDataRoot, librarySkill, page } = await launchApp();
     const staticSkillDir = join(appDataRoot, "skills-library", "static-layout-reference");
     await mkdir(staticSkillDir, { recursive: true });
@@ -8010,133 +8127,77 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("button", { name: "Update shared-reviewer" })
       .waitFor({ state: "visible" });
     await staticRow.waitFor({ state: "visible" });
-    await resizeAppWindow(page, 1180, 728);
-
-    const defaultGeometry = await page.evaluate(() => {
-      const head = document.querySelector<HTMLElement>(".skill-library-panel .library-table__head");
-      const rows = [
-        document.querySelector<HTMLElement>('[aria-label="Library item shared-reviewer"]'),
-        document.querySelector<HTMLElement>('[aria-label="Library item static-layout-reference"]')
-      ];
-      const cellSelectors = [
-        ".library-resource-cell",
-        ".library-source-cell",
-        ".library-usage-cell",
-        ".library-status-cell",
-        ".library-current-action-cell",
-        ".library-actions-cell"
-      ];
-      const headerCells = head ? Array.from(head.children) as HTMLElement[] : [];
-      const headerLefts = headerCells.map((cell) => cell.getBoundingClientRect().left);
-      const headerActionsRight = headerCells[5]?.getBoundingClientRect().right ?? -1;
-      const rowMetrics = rows.map((row) => {
-        const cells = cellSelectors.map((selector) => row?.querySelector<HTMLElement>(selector));
-        const actions = row?.querySelector<HTMLElement>(".library-actions-cell");
-        const currentAction = row?.querySelector<HTMLElement>(".library-current-action-cell");
-        const status = row?.querySelector<HTMLElement>(".library-status-cell");
-        const primary = [
-          row?.querySelector<HTMLElement>(".library-source-primary"),
-          row?.querySelector<HTMLElement>(".library-usage-line"),
-          row?.querySelector<HTMLElement>(".library-primary-status")
-        ].filter((item): item is HTMLElement => Boolean(item));
-        const secondary = [
-          row?.querySelector<HTMLElement>(".library-source-meta"),
-          row?.querySelector<HTMLElement>(".library-usage-detail"),
-          row?.querySelector<HTMLElement>(".library-status-detail")
-        ].filter((item): item is HTMLElement => Boolean(item));
-        const rowBox = row?.getBoundingClientRect();
-        const actionBox = actions?.getBoundingClientRect();
-        const currentActionBox = currentAction?.getBoundingClientRect();
-        const statusBox = status?.getBoundingClientRect();
+    const expectUnifiedStatusLane = async (width: number, height: number) => {
+      await resizeAppWindow(page, width, height);
+      const geometry = await page.evaluate(() => {
+        const head = document.querySelector<HTMLElement>(".skill-library-panel .library-table__head")!;
+        const rows = [
+          document.querySelector<HTMLElement>('[aria-label="Library item shared-reviewer"]')!,
+          document.querySelector<HTMLElement>('[aria-label="Library item static-layout-reference"]')!
+        ];
+        const headerCells = Array.from(head.children) as HTMLElement[];
+        const visibleHeaderCells = headerCells.filter((cell) => getComputedStyle(cell).display !== "none");
+        const metrics = rows.map((row) => {
+          const status = row.querySelector<HTMLElement>(".library-status-cell")!;
+          const primaryStatus = status.querySelector<HTMLElement>(".library-primary-status")!;
+          const statusIcon = primaryStatus.querySelector<SVGElement>("svg")!;
+          const statusLabel = primaryStatus.querySelector<HTMLElement>("span")!;
+          const more = row.querySelector<HTMLElement>(".library-actions-cell")!;
+          const rowRect = row.getBoundingClientRect();
+          const statusRect = status.getBoundingClientRect();
+          const moreRect = more.getBoundingClientRect();
+          return {
+            actionCellCount: row.querySelectorAll(".library-current-action-cell").length,
+            childrenFit: Array.from(row.children).every((child) => {
+              const box = child.getBoundingClientRect();
+              return box.left >= rowRect.left - 1 && box.right <= rowRect.right + 1;
+            }),
+            gridColumnCount: getComputedStyle(row).gridTemplateColumns.split(" ").length,
+            moreLeft: moreRect.left,
+            moreRight: moreRect.right,
+            primaryTag: primaryStatus.tagName,
+            rowHeight: rowRect.height,
+            statusIconLeft: statusIcon.getBoundingClientRect().left,
+            statusLabelOverflow: statusLabel.scrollWidth - statusLabel.clientWidth,
+            statusLeft: statusRect.left,
+            statusRight: statusRect.right
+          };
+        });
         return {
-          actionsRight: actionBox?.right ?? -1,
-          cellLefts: cells.map((cell) => cell?.getBoundingClientRect().left ?? -1),
-          actionsLeft: actionBox?.left ?? -1,
-          statusToActionGap: currentActionBox && statusBox
-            ? currentActionBox.left - statusBox.right
-            : -1,
-          actionToMoreGap: actionBox && currentActionBox
-            ? actionBox.left - currentActionBox.right
-            : -1,
-          childrenFit: Boolean(rowBox) && Array.from(row!.children).every((child) => {
-            const box = child.getBoundingClientRect();
-            return box.left >= rowBox!.left - 1 && box.right <= rowBox!.right + 1;
-          }),
-          primaryTops: primary.map((item) => item.getBoundingClientRect().top),
-          rowHeight: rowBox?.height ?? -1,
-          secondaryTops: secondary.map((item) => item.getBoundingClientRect().top),
-          statusOverflow: (() => {
-            const label = row?.querySelector<HTMLElement>(".library-status-cell .library-primary-status > span");
-            return label ? label.scrollWidth - label.clientWidth : 0;
-          })()
+          containerName: getComputedStyle(document.querySelector<HTMLElement>(".skill-library-panel")!).containerName,
+          documentWidth: document.documentElement.scrollWidth,
+          headerCount: headerCells.length,
+          headerDisplay: getComputedStyle(head).display,
+          metrics,
+          viewportWidth: document.documentElement.clientWidth,
+          visibleHeaderCount: visibleHeaderCells.length
         };
       });
-      return {
-        containerName: getComputedStyle(document.querySelector<HTMLElement>(".skill-library-panel")!).containerName,
-        headerDisplay: head ? getComputedStyle(head).display : "missing",
-        headerActionsRight,
-        headerLefts,
-        rowMetrics,
-        documentWidth: document.documentElement.scrollWidth,
-        viewportWidth: document.documentElement.clientWidth
-      };
-    });
 
-    expect(defaultGeometry.documentWidth).toBe(defaultGeometry.viewportWidth);
-    expect(defaultGeometry.containerName).toBe("skill-library");
-    expect(defaultGeometry.headerDisplay).toBe("grid");
-    for (const row of defaultGeometry.rowMetrics) {
-      row.cellLefts.forEach((left, index) => {
-        expect(Math.abs(left - defaultGeometry.headerLefts[index]!)).toBeLessThanOrEqual(1);
-      });
-      expect(row.childrenFit).toBe(true);
-      expect(Math.abs(row.actionsRight - defaultGeometry.headerActionsRight)).toBeLessThanOrEqual(1);
-      expect(row.statusToActionGap).toBeGreaterThanOrEqual(9);
-      expect(row.actionToMoreGap).toBeGreaterThanOrEqual(9);
-      expect(row.statusOverflow).toBeLessThanOrEqual(1);
-      expect(Math.max(...row.primaryTops) - Math.min(...row.primaryTops)).toBeLessThanOrEqual(1);
-      expect(Math.max(...row.secondaryTops) - Math.min(...row.secondaryTops)).toBeLessThanOrEqual(1);
-    }
-    expect(Math.abs(defaultGeometry.rowMetrics[0]!.rowHeight - defaultGeometry.rowMetrics[1]!.rowHeight)).toBeLessThanOrEqual(1);
-    expect(
-      Math.abs(defaultGeometry.rowMetrics[0]!.actionsLeft - defaultGeometry.rowMetrics[1]!.actionsLeft)
-    ).toBeLessThanOrEqual(1);
+      expect(geometry.documentWidth).toBe(geometry.viewportWidth);
+      expect(geometry.containerName).toBe("skill-library");
+      expect(geometry.headerDisplay).toBe("grid");
+      expect(geometry.headerCount).toBe(5);
+      expect(geometry.visibleHeaderCount).toBe(width <= 920 ? 4 : 5);
+      expect(geometry.metrics[0]!.primaryTag).toBe("BUTTON");
+      expect(geometry.metrics[1]!.primaryTag).toBe("STRONG");
+      for (const row of geometry.metrics) {
+        expect(row.actionCellCount).toBe(0);
+        expect(row.childrenFit).toBe(true);
+        expect(row.gridColumnCount).toBe(width <= 920 ? 4 : 5);
+        expect(row.moreLeft - row.statusRight).toBeGreaterThanOrEqual(9);
+        expect(row.statusLabelOverflow).toBeLessThanOrEqual(1);
+        expect(Math.abs(row.statusIconLeft - row.statusLeft)).toBeLessThanOrEqual(1);
+        expect(row.rowHeight).toBeLessThanOrEqual(70);
+      }
+      expect(Math.abs(geometry.metrics[0]!.statusLeft - geometry.metrics[1]!.statusLeft)).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.metrics[0]!.statusIconLeft - geometry.metrics[1]!.statusIconLeft)).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.metrics[0]!.moreRight - geometry.metrics[1]!.moreRight)).toBeLessThanOrEqual(1);
+    };
 
-    await resizeAppWindow(page, 920, 620);
-    const compactGeometry = await updateRow.evaluate((row) => {
-      const actions = row.querySelector<HTMLElement>(".library-actions-cell")!.getBoundingClientRect();
-      const currentAction = row.querySelector<HTMLElement>(".library-current-action-cell")!.getBoundingClientRect();
-      const status = row.querySelector<HTMLElement>(".library-status-cell")!.getBoundingClientRect();
-      const head = document.querySelector<HTMLElement>(".skill-library-panel .library-table__head")!;
-      const statusLabel = row.querySelector<HTMLElement>(".library-primary-status > span")!;
-      const actionLabel = row.querySelector<HTMLElement>(".library-row-action > span")!;
-      return {
-        statusToActionGap: currentAction.left - status.right,
-        statusActionCenterDelta: Math.abs(
-          (currentAction.top + currentAction.bottom - status.top - status.bottom) / 2
-        ),
-        actionToMoreGap: actions.left - currentAction.right,
-        actionOverflow: actionLabel.scrollWidth - actionLabel.clientWidth,
-        documentWidth: document.documentElement.scrollWidth,
-        gridColumnCount: getComputedStyle(row).gridTemplateColumns.split(" ").length,
-        headerDisplay: getComputedStyle(head).display,
-        visibleHeaderColumns: Array.from(head.children)
-          .filter((element) => getComputedStyle(element).display !== "none").length,
-        rowHeight: row.getBoundingClientRect().height,
-        statusOverflow: statusLabel.scrollWidth - statusLabel.clientWidth,
-        viewportWidth: document.documentElement.clientWidth,
-      };
-    });
-    expect(compactGeometry.documentWidth).toBe(compactGeometry.viewportWidth);
-    expect(compactGeometry.statusToActionGap).toBeGreaterThanOrEqual(9);
-    expect(compactGeometry.statusActionCenterDelta).toBeLessThanOrEqual(1);
-    expect(compactGeometry.actionToMoreGap).toBeGreaterThanOrEqual(9);
-    expect(compactGeometry.actionOverflow).toBeLessThanOrEqual(1);
-    expect(compactGeometry.gridColumnCount).toBe(5);
-    expect(compactGeometry.headerDisplay).toBe("grid");
-    expect(compactGeometry.visibleHeaderColumns).toBe(5);
-    expect(compactGeometry.rowHeight).toBeLessThanOrEqual(68);
-    expect(compactGeometry.statusOverflow).toBeLessThanOrEqual(1);
+    await expectUnifiedStatusLane(920, 620);
+    await expectUnifiedStatusLane(1180, 728);
+    await expectUnifiedStatusLane(1536, 900);
   }, 45_000);
 
   it("updates all available library skill updates from the rendered app", async () => {
@@ -8171,6 +8232,10 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Update all skills" }).click();
     const bulkUpdateDialog = page.getByRole("dialog", { name: "Update all skills" });
     await bulkUpdateDialog.waitFor({ state: "visible" });
+    await bulkUpdateDialog.getByRole("button", { name: "Maximize preview" }).click();
+    const fullPreview = page.getByRole("dialog", { name: "Full-screen preview" });
+    await fullPreview.waitFor({ state: "visible" });
+    await fullPreview.getByRole("button", { name: "Close" }).click();
     await bulkUpdateDialog.getByRole("button", { name: "Update 2 skills" }).click();
     await bulkUpdateDialog
       .getByRole("status", { name: "Shared Reviewer: Done" })
@@ -8576,7 +8641,7 @@ describe("Electron UI profile switching e2e", () => {
     expect((await lstat(brokenSkill)).isSymbolicLink()).toBe(true);
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     const brokenGroup = page.getByRole("group", { name: "Cleanup group api-mock" });
     await brokenGroup.waitFor({ state: "visible" });
     await expect.poll(() => brokenGroup.textContent()).toContain("Ready");
@@ -9051,7 +9116,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await resizeAppWindow(page, 920, 620);
     const localizedSidebar = page.getByRole("complementary", { name: "全域導覽" });
-    const localizedSidebarToggle = localizedSidebar.locator(".sidebar-collapse-button");
+    const localizedSidebarToggle = page.locator(".shell-sidebar-toggle");
     await expect.poll(() => localizedSidebarToggle.getAttribute("aria-label")).toBe("收起側欄");
     await localizedSidebarToggle.click();
     await expect
@@ -9066,7 +9131,10 @@ describe("Electron UI profile switching e2e", () => {
     };
     for (const [workspace, heading] of Object.entries(localizedWorkspaces)) {
       await page.locator(`[data-workspace="${workspace}"]`).click();
-      const workspaceHeading = page.locator(".ui-page-header h2").first();
+      const workspaceHeading =
+        workspace === "profiles"
+          ? page.locator(".profile-index-header h2")
+          : page.locator(".ui-page-header h2").first();
       await expect
         .poll(async () => (await workspaceHeading.textContent())?.trim(), {
           message: workspace
@@ -10218,6 +10286,7 @@ describe("Electron UI profile switching e2e", () => {
       });
 
     const headerMetrics: Array<{ fontSize: string; left: number; top: number }> = [];
+    let profileHeaderMetrics: { fontSize: string; contained: boolean } | undefined;
     const workspaceSurfaceSelectors: Record<string, string> = {
       Skills: ".skill-library-panel",
       Profiles: ".profile-workbench",
@@ -10227,7 +10296,8 @@ describe("Electron UI profile switching e2e", () => {
     };
     for (const workspace of ["Skills", "Profiles", "Conversations", "Agents", "Settings"]) {
       await sidebar.getByRole("button", { name: workspace, exact: true }).click();
-      const header = page.locator(".ui-page-header").first();
+      const splitHeader = workspace === "Profiles";
+      const header = page.locator(splitHeader ? ".profile-index-header" : ".ui-page-header").first();
       await header.waitFor({ state: "visible" });
       const metrics = await header.evaluate((element) => {
         const title = element.querySelector<HTMLElement>("h2")!;
@@ -10245,10 +10315,19 @@ describe("Electron UI profile switching e2e", () => {
       });
       expect(metrics.contained).toBe(true);
       expect(
-        metrics.actionHeights.every((height) => Math.abs(height - 34) <= 1),
+        metrics.actionHeights.every((height) =>
+          Math.abs(height - (splitHeader ? 30 : 34)) <= 1
+        ),
         JSON.stringify({ workspace, metrics })
       ).toBe(true);
-      headerMetrics.push({ fontSize: metrics.fontSize, left: metrics.left, top: metrics.top });
+      if (splitHeader) {
+        profileHeaderMetrics = {
+          fontSize: metrics.fontSize,
+          contained: metrics.contained
+        };
+      } else {
+        headerMetrics.push({ fontSize: metrics.fontSize, left: metrics.left, top: metrics.top });
+      }
       const surface = page.locator(workspaceSurfaceSelectors[workspace]);
       await surface.waitFor({ state: "visible" });
       const surfaceGeometry = await surface.evaluate((element) => ({
@@ -10261,6 +10340,7 @@ describe("Electron UI profile switching e2e", () => {
       expect(surfaceGeometry.contained, workspace).toBe(true);
     }
     expect(new Set(headerMetrics.map((metric) => metric.fontSize))).toEqual(new Set(["23px"]));
+    expect(profileHeaderMetrics).toEqual({ fontSize: "14px", contained: true });
     expect(Math.max(...headerMetrics.map((metric) => metric.left)) - Math.min(...headerMetrics.map((metric) => metric.left))).toBeLessThanOrEqual(1);
     expect(Math.max(...headerMetrics.map((metric) => metric.top)) - Math.min(...headerMetrics.map((metric) => metric.top))).toBeLessThanOrEqual(1);
 
@@ -10268,20 +10348,20 @@ describe("Electron UI profile switching e2e", () => {
     const windowChrome = await page.evaluate(() => {
       const sidebar = document.querySelector<HTMLElement>(".global-sidebar")!;
       const editorPanel = document.querySelector<HTMLElement>(".editor-panel")!;
-      const editorDragStrip = document.querySelector<HTMLElement>(".window-drag-strip")!;
       const brand = document.querySelector<HTMLElement>(".brand-lockup")!;
       const pageHeader = document.querySelector<HTMLElement>(".ui-page-header")!;
       const pageHeaderButton = pageHeader.querySelector<HTMLElement>("button")!;
       const navigation = document.querySelector<HTMLElement>(".workspace-nav")!;
+      const shellTitlebar = document.querySelector<HTMLElement>(".shell-titlebar")!;
+      const shellTitlebarDragRegion = shellTitlebar.querySelector<HTMLElement>(
+        ".shell-titlebar__drag-region"
+      )!;
+      const shellToggle = document.querySelector<HTMLElement>(".shell-sidebar-toggle")!;
       const appRegion = (element: HTMLElement) =>
         getComputedStyle(element).getPropertyValue("-webkit-app-region");
       return {
         brandTop: Math.round(brand.getBoundingClientRect().top),
         editorPaddingTop: getComputedStyle(editorPanel).paddingTop,
-        editorDragStripHeight: Math.round(editorDragStrip.getBoundingClientRect().height),
-        editorDragStripLeft: Math.round(editorDragStrip.getBoundingClientRect().left),
-        editorDragStripRegion: appRegion(editorDragStrip),
-        editorDragStripRight: Math.round(editorDragStrip.getBoundingClientRect().right),
         editorLeft: Math.round(editorPanel.getBoundingClientRect().left),
         editorRight: Math.round(editorPanel.getBoundingClientRect().right),
         headerButtonRegion: appRegion(pageHeaderButton),
@@ -10289,25 +10369,54 @@ describe("Electron UI profile switching e2e", () => {
         pageHeaderRegion: appRegion(pageHeader),
         platform: document.documentElement.dataset.platform,
         sidebarPaddingTop: getComputedStyle(sidebar).paddingTop,
-        sidebarRegion: appRegion(sidebar)
+        sidebarTop: Math.round(sidebar.getBoundingClientRect().top),
+        shellTitlebarBorderBottom: getComputedStyle(shellTitlebar).borderBottomWidth,
+        shellTitlebarPageActionCount:
+          shellTitlebar.querySelectorAll(".ui-page-header__actions").length,
+        shellTitlebarPageHeadingCount:
+          shellTitlebar.querySelectorAll("h1, h2, h3").length,
+        shellTitlebarSeparatorHeight: getComputedStyle(shellTitlebar, "::after").height,
+        shellTitlebarContainsToggle: shellTitlebar.contains(shellToggle),
+        shellTitlebarDragRegion: appRegion(shellTitlebarDragRegion),
+        shellTitlebarDragRegionLeft: Math.round(
+          shellTitlebarDragRegion.getBoundingClientRect().left
+        ),
+        shellTitlebarHeight: Math.round(shellTitlebar.getBoundingClientRect().height),
+        shellTitlebarLeft: Math.round(shellTitlebar.getBoundingClientRect().left),
+        shellTitlebarRegion: appRegion(shellTitlebar),
+        shellTitlebarRight: Math.round(shellTitlebar.getBoundingClientRect().right),
+        shellToggleLeft: Math.round(shellToggle.getBoundingClientRect().left),
+        shellToggleRegion: appRegion(shellToggle)
       };
     });
     expect(windowChrome.platform).toBe(process.platform);
     if (process.platform === "darwin") {
       expect(windowChrome).toMatchObject({
-        editorPaddingTop: "38px",
-        editorDragStripHeight: 38,
-        editorDragStripRegion: "drag",
+        editorPaddingTop: "46px",
         headerButtonRegion: "no-drag",
         navigationRegion: "no-drag",
-        pageHeaderRegion: "drag",
-        sidebarPaddingTop: "38px",
-        sidebarRegion: "drag"
+        sidebarPaddingTop: "0px",
+        sidebarTop: 38,
+        shellTitlebarBorderBottom: "0px",
+        shellTitlebarPageActionCount: 0,
+        shellTitlebarPageHeadingCount: 0,
+        shellTitlebarSeparatorHeight: "1px",
+        shellTitlebarContainsToggle: true,
+        shellTitlebarDragRegion: "drag",
+        shellTitlebarHeight: 38,
+        shellTitlebarLeft: 0,
+        shellToggleLeft: 76,
+        shellToggleRegion: "no-drag"
       });
-      expect(windowChrome.editorDragStripLeft).toBe(windowChrome.editorLeft);
-      expect(windowChrome.editorDragStripRight).toBe(windowChrome.editorRight);
+      expect(windowChrome.pageHeaderRegion).not.toBe("drag");
+      expect(windowChrome.shellTitlebarRegion).not.toBe("drag");
+      expect(windowChrome.shellTitlebarDragRegionLeft).toBeGreaterThanOrEqual(
+        windowChrome.shellToggleLeft + 28
+      );
+      expect(windowChrome.shellTitlebarRight).toBe(windowChrome.editorRight);
       expect(windowChrome.brandTop).toBeGreaterThanOrEqual(42);
-      expect(Math.min(...headerMetrics.map((metric) => metric.top))).toBeGreaterThanOrEqual(38);
+      expect(Math.min(...headerMetrics.map((metric) => metric.top))).toBeGreaterThanOrEqual(46);
+      expect(Math.max(...headerMetrics.map((metric) => metric.top))).toBeLessThanOrEqual(52);
     }
 
     const navigationAlignment = await sidebar.locator(".workspace-button").evaluateAll((buttons) =>
@@ -10658,7 +10767,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(settingsActionHeights.every((height) => Math.abs(height - 34) <= 1)).toBe(true);
 
     await sidebar.getByRole("button", { name: "Skills", exact: true }).click();
-    await page.getByRole("button", { name: "Scan local" }).click();
+    await openLocalSkills(page);
     expect(
       await page.locator(".library-drawer__header strong").evaluate((title) => getComputedStyle(title).fontWeight)
     ).toBe("500");

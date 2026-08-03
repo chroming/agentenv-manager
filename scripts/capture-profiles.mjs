@@ -840,7 +840,9 @@ try {
     join(outputDir, "sidebar-agent-overflow-1180x728.png"),
     { preservePointer: true }
   );
-  await page.getByRole("heading", { name: "Skills" }).hover();
+  await page
+    .getByRole("group", { name: "Library item react-best-practices" })
+    .hover();
   await hiddenAgentsPopover.waitFor({ state: "hidden" });
   await page
     .getByRole("group", { name: "Library item react-best-practices" })
@@ -1028,7 +1030,8 @@ try {
   await capturePage(page, join(outputDir, "skills-delete-confirmation-920x620.png"));
   await page.keyboard.press("Escape");
 
-  await page.getByRole("button", { name: "Scan local" }).click();
+  await page.getByRole("button", { name: "More Skill actions" }).click();
+  await page.getByRole("menuitem", { name: "Scan local" }).click();
   const cleanupGroup = page.getByRole("group", {
     name: "Cleanup group cross-agent-review-workflow-with-a-long-name"
   });
@@ -1411,7 +1414,8 @@ try {
   await openCodeMoreActions.click();
   await page.getByRole("menuitem", { name: "Hide diagnostics" }).click();
   await setWindowSize(page, windowHandle, 920, 620);
-  await page.getByRole("button", { name: /Recovery/ }).click();
+  await page.getByRole("button", { name: "More Agent actions" }).click();
+  await page.getByRole("menuitem", { name: "Recovery" }).click();
   const recoveryDialog = page.getByRole("dialog", { name: "Recovery" });
   await recoveryDialog.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "target-recovery-920x620.png"));
