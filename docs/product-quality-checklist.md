@@ -513,6 +513,8 @@ Rules:
 - [ ] Source Agent, date, title, summary, and searchable content have clear
   provenance.
 - [ ] Search and filters do not imply unavailable transcript coverage.
+- [ ] Opening a transcript search result loads a bounded window around the matching message,
+  centers and highlights it, and falls back honestly when only metadata matched.
 - [ ] Open original and Continue are distinct commands with predictable scope.
 - [ ] Handoff preview exposes included content, exclusions, size limits, and
   destination.

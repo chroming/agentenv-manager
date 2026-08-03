@@ -282,9 +282,25 @@ const read = (id, input) => {
     const requestedLimit = input.limit === undefined
       ? -1
       : Math.max(1, Math.min(500, Math.trunc(input.limit)));
-    const requestedOffset = input.tail && requestedLimit > 0
-      ? Math.max(0, messageCount - requestedLimit)
-      : Math.max(0, Math.trunc(input.offset || 0));
+    const query = String(input.query || "").trim().slice(0, 500);
+    const matchedMessage = query
+      ? database.prepare(
+          "SELECT ordinal, id FROM conversation_messages " +
+          "WHERE conversation_id = ? AND instr(lower(text), lower(?)) > 0 " +
+          "ORDER BY ordinal ASC LIMIT 1"
+        ).get(id, query)
+      : undefined;
+    const requestedOffset = matchedMessage && requestedLimit > 0
+      ? Math.max(
+          0,
+          Math.min(
+            Math.max(0, messageCount - requestedLimit),
+            Number(matchedMessage.ordinal) - Math.floor(requestedLimit / 2)
+          )
+        )
+      : input.tail && requestedLimit > 0
+        ? Math.max(0, messageCount - requestedLimit)
+        : Math.max(0, Math.trunc(input.offset || 0));
     const messages = database.prepare(
       "SELECT id, role, text, created_at FROM conversation_messages " +
       "WHERE conversation_id = ? ORDER BY ordinal ASC LIMIT ? OFFSET ?"
@@ -292,6 +308,7 @@ const read = (id, input) => {
   return {
       ...summaryFromRow(row),
       loadedMessageOffset: requestedOffset,
+      matchedMessageId: matchedMessage?.id,
       messages: messages.map((message) => ({
         id: message.id,
         role: message.role,

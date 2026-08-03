@@ -563,7 +563,20 @@
   gap: 12px;
 }
 
-.conversation-turn__messages > .conversation-markdown + .conversation-markdown {
+.conversation-message {
+  min-width: 0;
+  scroll-margin-block: 48px;
+}
+
+.conversation-message.is-search-match {
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  border-radius: var(--radius-control);
+  box-shadow: inset 3px 0 var(--accent);
+  margin: -7px -10px;
+  padding: 7px 10px;
+}
+
+.conversation-turn__messages > .conversation-message + .conversation-message {
   border-top: 1px solid var(--border);
   padding-top: 12px;
 }

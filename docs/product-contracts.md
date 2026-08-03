@@ -615,6 +615,11 @@ an archive, or a native-session database migration tool.
   cannot saturate IPC or Markdown rendering. Earlier messages load in explicit bounded pages while
   preserving chronological order. Copy and Continue remain whole-conversation commands and fetch
   the complete indexed transcript only after the user invokes them.
+- Opening a Conversation from an active search loads one bounded page centered on the first
+  matching visible message, scrolls that message to the middle of the reading surface, and marks
+  it with the shared selection accent. A title-, workspace-, or metadata-only match falls back to
+  the ordinary bounded tail rather than loading the complete transcript. Selecting the already
+  open row repeats the focus action so the match is recoverable after manual scrolling.
 - Trae CLI V2 discovery selects the first available runtime from the resolved runtime, the active
   Trae config root's `cli` directory, and the default `~/.trae/cli` runtime in that order. It never
   mixes histories from separate runtimes or probes unrelated legacy products. One missing,

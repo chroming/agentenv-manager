@@ -41,6 +41,39 @@ describe("filesystem conversation adapters", () => {
     expect(createClaudeConversationCapability().continueWithContext).toBeTypeOf("function");
   });
 
+  it("passes Claude's initial prompt before the variadic add-dir option", () => {
+    const contextFilePath = "/tmp/agentenv/handoff.md";
+    const prompt =
+      `Read the continuation context at ${contextFilePath}, then continue the user's work.`;
+    const launch = createClaudeConversationCapability().continueWithContext?.({
+      ...contextFor("/tmp/.claude"),
+      conversation: {
+        id: "codex:conversation",
+        agentId: "codex",
+        agentName: "Codex",
+        sourceId: "conversation",
+        title: "Continue the release",
+        snippet: "Continue the release",
+        workspacePath: "/work/project",
+        createdAt: "2026-07-24T05:00:00.000Z",
+        updatedAt: "2026-07-24T06:00:00.000Z",
+        messageCount: 1,
+        detailState: "full",
+        messages: [{ id: "u1", role: "user", text: "Continue the release" }]
+      },
+      contextFilePath
+    });
+
+    expect(launch).toEqual({
+      executablePath: "/usr/local/bin/claude",
+      args: [prompt, "--add-dir", "/tmp/agentenv"],
+      cwd: "/work/project"
+    });
+    expect(launch?.args.indexOf(prompt)).toBeLessThan(
+      launch?.args.indexOf("--add-dir") ?? -1
+    );
+  });
+
   it("seeds OpenCode with the private file and resumes the created session in its full TUI", () => {
     const launch = createOpenCodeConversationCapability().continueWithContext?.({
       ...contextFor("/tmp/.config/opencode"),

@@ -341,4 +341,31 @@ describe("conversation index store", () => {
     expect(earlier.messages[0]?.id).toBe("message-5");
     expect(earlier.messages.at(-1)?.id).toBe("message-64");
   });
+
+  it("centers a bounded message page around the selected search match", async () => {
+    const { store: index } = await setup();
+    const messages = Array.from({ length: 125 }, (_, messageIndex) => ({
+      id: `message-${messageIndex}`,
+      role: messageIndex % 2 === 0 ? "user" as const : "assistant" as const,
+      text: messageIndex === 18
+        ? "The uncommon rollout marker appears in this older message."
+        : `message ${messageIndex}`
+    }));
+    index.upsert({
+      ...detail,
+      messageCount: messages.length,
+      messages
+    }, candidate);
+
+    const focused = await index.read(detail.id, {
+      limit: 60,
+      tail: true,
+      query: "uncommon rollout marker"
+    });
+
+    expect(focused.matchedMessageId).toBe("message-18");
+    expect(focused.loadedMessageOffset).toBe(0);
+    expect(focused.messages).toHaveLength(60);
+    expect(focused.messages.some((message) => message.id === focused.matchedMessageId)).toBe(true);
+  });
 });

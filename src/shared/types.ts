@@ -366,6 +366,7 @@ export interface ConversationMessage {
 
 export interface ConversationDetail extends ConversationSummary {
   loadedMessageOffset?: number;
+  matchedMessageId?: string;
   messages: ConversationMessage[];
 }
 
@@ -373,6 +374,7 @@ export interface ConversationReadInput {
   limit?: number;
   offset?: number;
   tail?: boolean;
+  query?: string;
 }
 
 export interface ConversationListInput {

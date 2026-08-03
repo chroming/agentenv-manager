@@ -519,6 +519,11 @@ export const ConversationWorkspace = ({
   const reviewCancelRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const conversationListRef = useRef<HTMLDivElement>(null);
+  const conversationTranscriptRef = useRef<HTMLDivElement>(null);
+  const selectedSearchFocusRef = useRef<{
+    conversationId: string;
+    query: string;
+  } | undefined>(undefined);
   const queryRef = useRef("");
   const agentFilterRef = useRef("");
   const workspaceFilterRef = useRef("");
@@ -577,6 +582,17 @@ export const ConversationWorkspace = ({
     viewStateRef.current.scrollTop = list.scrollTop;
     const distanceFromEnd = list.scrollHeight - list.scrollTop - list.clientHeight;
     setConversationListAtEnd(distanceFromEnd <= conversationListEndThreshold);
+  };
+  const selectConversation = (conversationId: string) => {
+    const activeQuery = queryRef.current.trim();
+    selectedSearchFocusRef.current = activeQuery
+      ? { conversationId, query: activeQuery }
+      : undefined;
+    if (selectedId === conversationId) {
+      setDetailReloadNonce((current) => current + 1);
+    } else {
+      setSelectedId(conversationId);
+    }
   };
 
   useLayoutEffect(() => {
@@ -810,6 +826,12 @@ export const ConversationWorkspace = ({
     setDetail((current) =>
       current?.id === openRequest.summary.id ? current : undefined
     );
+    selectedSearchFocusRef.current = nextQuery
+      ? { conversationId: openRequest.summary.id, query: nextQuery }
+      : undefined;
+    if (selectedId === openRequest.summary.id) {
+      setDetailReloadNonce((current) => current + 1);
+    }
     setSelectedId(openRequest.summary.id);
     setItems([openRequest.summary]);
     setTotal(1);
@@ -868,9 +890,13 @@ export const ConversationWorkspace = ({
     let active = true;
     setDetailLoading(true);
     setLoadingEarlier(false);
+    const searchFocus = selectedSearchFocusRef.current?.conversationId === selectedId
+      ? selectedSearchFocusRef.current
+      : undefined;
     void window.agentEnv.readConversation(selectedId, {
       limit: conversationMessagePageSize,
-      tail: true
+      tail: true,
+      ...(searchFocus ? { query: searchFocus.query } : {})
     })
       .then((next) => active && setDetail(next))
       .catch((unknownError) => {
@@ -989,6 +1015,25 @@ export const ConversationWorkspace = ({
     () => groupMessages(detail?.messages ?? []),
     [detail?.messages]
   );
+  useLayoutEffect(() => {
+    const matchedMessageId = detail?.matchedMessageId;
+    if (!query.trim() || !matchedMessageId) return;
+    const matchedMessage = Array.from(
+      conversationTranscriptRef.current?.querySelectorAll<HTMLElement>(
+        "[data-conversation-message-id]"
+      ) ?? []
+    ).find((element) => element.dataset.conversationMessageId === matchedMessageId);
+    if (!matchedMessage) return;
+    const frame = window.requestAnimationFrame(() => {
+      matchedMessage.scrollIntoView({
+        behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+        block: "center"
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [detail?.id, detail?.matchedMessageId, query]);
   const filterTargets = useMemo(
     () => targets.filter((target) =>
       items.some((item) => item.agentId === target.id) ||
@@ -1285,7 +1330,7 @@ export const ConversationWorkspace = ({
                       role="option"
                       aria-selected={selectedId === item.id}
                       id={`conversation-option-${index}`}
-                      onClick={() => setSelectedId(item.id)}
+                      onClick={() => selectConversation(item.id)}
                       onKeyDown={(event) => {
                         let nextIndex: number | undefined;
                         if (event.key === "ArrowDown") {
@@ -1299,7 +1344,8 @@ export const ConversationWorkspace = ({
                         }
                         if (nextIndex === undefined || nextIndex === index) return;
                         event.preventDefault();
-                        setSelectedId(items[nextIndex]?.id);
+                        const nextId = items[nextIndex]?.id;
+                        if (nextId) selectConversation(nextId);
                         document.getElementById(`conversation-option-${nextIndex}`)?.focus();
                       }}
                     >
@@ -1507,7 +1553,7 @@ export const ConversationWorkspace = ({
                     ) : null}
                   </div>
                 ) : (
-                  <div className="conversation-transcript">
+                  <div className="conversation-transcript" ref={conversationTranscriptRef}>
                     <div className="conversation-transcript__inner">
                       {detail.loadedMessageOffset ? (
                         <div className="conversation-transcript__history">
@@ -1559,19 +1605,29 @@ export const ConversationWorkspace = ({
                           </header>
                           <div className="conversation-turn__messages">
                             {group.entries.map((entry) => (
-                              <ConversationMarkdown
-                                text={entry.text}
+                              <div
+                                className={`conversation-message${
+                                  query.trim() && detail.matchedMessageId === entry.id
+                                    ? " is-search-match"
+                                    : ""
+                                }`}
+                                data-conversation-message-id={entry.id}
+                                data-testid={`conversation-message-${entry.id}`}
                                 key={entry.id}
-                                onOpenExternal={(href) => {
-                                  void window.agentEnv.openExternalUrl(href).catch(
-                                    (unknownError) => setError(
-                                      unknownError instanceof Error
-                                        ? unknownError.message
-                                        : String(unknownError)
-                                    )
-                                  );
-                                }}
-                              />
+                              >
+                                <ConversationMarkdown
+                                  text={entry.text}
+                                  onOpenExternal={(href) => {
+                                    void window.agentEnv.openExternalUrl(href).catch(
+                                      (unknownError) => setError(
+                                        unknownError instanceof Error
+                                          ? unknownError.message
+                                          : String(unknownError)
+                                      )
+                                    );
+                                  }}
+                                />
+                              </div>
                             ))}
                           </div>
                         </section>

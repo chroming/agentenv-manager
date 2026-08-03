@@ -1101,7 +1101,7 @@ describe("App", () => {
     ).toHaveLength(2);
     expect(readConversation).toHaveBeenCalledWith(
       conversation.id,
-      { limit: 60, tail: true }
+      { limit: 60, tail: true, query: "old token" }
     );
   });
 

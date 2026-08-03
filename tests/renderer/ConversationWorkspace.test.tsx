@@ -275,6 +275,55 @@ describe("ConversationWorkspace", () => {
     }));
   });
 
+  it("refocuses the matching message when Quick Open selects the current conversation", async () => {
+    const api = installApi();
+    const summary = { ...detail, messages: undefined };
+    const initialViewState = {
+      items: [summary],
+      total: 1,
+      query: "",
+      agentFilter: "",
+      workspaceFilter: "",
+      workspacePaths: ["/work/project"],
+      agentCounts: { codex: 1 },
+      selectedId: detail.id,
+      detail,
+      scrollTop: 0
+    };
+    const { rerender } = render(
+      <ConversationWorkspace
+        targets={[target("codex", "Codex")]}
+        initialViewState={initialViewState}
+      />
+    );
+    await waitFor(() => expect(api.readConversation).toHaveBeenCalled());
+    api.readConversation.mockClear();
+    api.readConversation.mockResolvedValue({
+      ...detail,
+      matchedMessageId: "a1"
+    });
+
+    rerender(
+      <ConversationWorkspace
+        targets={[target("codex", "Codex")]}
+        initialViewState={initialViewState}
+        openRequest={{
+          requestId: 1,
+          query: "failing step",
+          summary
+        }}
+      />
+    );
+
+    await waitFor(() => expect(api.readConversation).toHaveBeenLastCalledWith(detail.id, {
+      limit: 60,
+      tail: true,
+      query: "failing step"
+    }));
+    expect(await screen.findByTestId("conversation-message-a1"))
+      .toHaveClass("is-search-match");
+  });
+
   it("loads, searches, copies, and continues a full conversation", async () => {
     const api = installApi();
     render(<ConversationWorkspace targets={[
@@ -318,6 +367,54 @@ describe("ConversationWorkspace", () => {
     await waitFor(() => expect(api.continueConversation).toHaveBeenCalledWith("preview-1"));
     expect(await screen.findByText("Started a new conversation in OpenCode"))
       .toBeInTheDocument();
+  });
+
+  it("opens a search result around its matching message and highlights it", async () => {
+    const api = installApi();
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView
+    });
+    try {
+      render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);
+      await screen.findByText("Please repair the release workflow.");
+      api.readConversation.mockResolvedValue({
+        ...detail,
+        matchedMessageId: "a1"
+      });
+
+      fireEvent.change(screen.getByRole("searchbox", { name: "Search conversations" }), {
+        target: { value: "failing step" }
+      });
+      await waitFor(() => expect(api.listConversations).toHaveBeenLastCalledWith({
+        query: "failing step",
+        limit: 200
+      }));
+      fireEvent.click(screen.getByRole("option", { name: /Repair release workflow/ }));
+
+      await waitFor(() => expect(api.readConversation).toHaveBeenLastCalledWith(detail.id, {
+        limit: 60,
+        tail: true,
+        query: "failing step"
+      }));
+      const match = await screen.findByTestId("conversation-message-a1");
+      expect(match).toHaveClass("is-search-match");
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({
+        behavior: "smooth",
+        block: "center"
+      }));
+    } finally {
+      if (originalScrollIntoView) {
+        Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+          configurable: true,
+          value: originalScrollIntoView
+        });
+      } else {
+        delete (HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+      }
+    }
   });
 
   it("opens the original native conversation from Continue without creating a handoff", async () => {

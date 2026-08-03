@@ -177,9 +177,9 @@ export const createClaudeConversationCapability = (): AgentConversationCapabilit
     ? {
         executablePath,
         args: [
+          `Read the continuation context at ${contextFilePath}, then continue the user's work.`,
           "--add-dir",
-          dirname(contextFilePath),
-          `Read the continuation context at ${contextFilePath}, then continue the user's work.`
+          dirname(contextFilePath)
         ],
         cwd: conversation.workspacePath
       }

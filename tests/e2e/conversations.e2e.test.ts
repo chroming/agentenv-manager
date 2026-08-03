@@ -457,6 +457,20 @@ describe("Conversations desktop workflow", () => {
     await expect.poll(() => historySearch.inputValue()).toBe("workflow is ready");
     await expect.poll(() => selectedConversation.getAttribute("aria-selected")).toBe("true");
     await page.getByText("The release workflow is ready.").waitFor();
+    const matchedMessage = page.locator(".conversation-message.is-search-match");
+    await matchedMessage.waitFor({ state: "visible" });
+    const matchedMessageGeometry = await matchedMessage.evaluate((element) => {
+      const message = element.getBoundingClientRect();
+      const transcript = element.closest(".conversation-transcript")!.getBoundingClientRect();
+      return {
+        centerDelta: Math.abs(
+          message.top + message.height / 2 - (transcript.top + transcript.height / 2)
+        ),
+        transcriptHeight: transcript.height
+      };
+    });
+    expect(matchedMessageGeometry.centerDelta)
+      .toBeLessThanOrEqual(matchedMessageGeometry.transcriptHeight * 0.3);
 
     await expectNoHorizontalOverflow(page);
     await expectInViewport(page, page.getByRole("searchbox", {
