@@ -279,6 +279,33 @@ describe("renderer UI primitives", () => {
     vi.useRealTimers();
   });
 
+  it("does not let a hover detail consume Escape from an open modal", () => {
+    const onDismiss = vi.fn();
+    const Dialog = () => {
+      const dialogRef = useRef<HTMLElement>(null);
+      useModalDialog({ open: true, dialogRef, onDismiss });
+      return (
+        <ModalFrame ariaLabel="Review changes" dialogRef={dialogRef} onDismiss={onDismiss}>
+          <OverflowTooltip
+            className="description"
+            displayText="Truncated"
+            focusable
+            text="A complete long value"
+          />
+        </ModalFrame>
+      );
+    };
+
+    render(<Dialog />);
+    fireEvent.focus(screen.getByText("Truncated"));
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(onDismiss).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
   it("opens an adjacent hover detail immediately after the first delayed detail", () => {
     vi.useFakeTimers();
     render(

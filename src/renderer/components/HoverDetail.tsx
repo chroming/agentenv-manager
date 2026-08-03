@@ -172,6 +172,13 @@ export const HoverDetail = ({
     if (!isOpen) return undefined;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        const modalDialog = document.querySelector(
+          '[role="dialog"][aria-modal="true"]'
+        );
+        if (modalDialog) {
+          close();
+          return;
+        }
         event.preventDefault();
         event.stopImmediatePropagation();
         close();
