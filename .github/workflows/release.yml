@@ -135,7 +135,7 @@ jobs:
       - build-macos
       - build-windows
       - build-linux
-    runs-on: ubuntu-24.04
+    runs-on: macos-15
     timeout-minutes: 25
     permissions:
       contents: write
@@ -195,7 +195,7 @@ jobs:
           cp release-assets/agentenv-manager.rb "$tap_root/Casks/agentenv-manager.rb"
           brew style --cask agentenv-ci/release/agentenv-manager
           npm sbom --sbom-format cyclonedx > "release-assets/agentenv-manager-${RELEASE_TAG}.cdx.json"
-          (cd release-assets && sha256sum AgentEnv-Manager-* > SHA256SUMS)
+          (cd release-assets && shasum -a 256 AgentEnv-Manager-* > SHA256SUMS)
       - name: Create isolated draft and upload exact assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -209,7 +209,7 @@ jobs:
           mkdir downloaded-assets
           gh release download "$RELEASE_TAG" --dir downloaded-assets --repo "$GITHUB_REPOSITORY"
           diff release-assets/SHA256SUMS downloaded-assets/SHA256SUMS
-          (cd downloaded-assets && sha256sum --check SHA256SUMS)
+          (cd downloaded-assets && shasum -a 256 --check SHA256SUMS)
           diff release-assets/release-manifest.json downloaded-assets/release-manifest.json
           diff release-assets/agentenv-manager.rb downloaded-assets/agentenv-manager.rb
       - name: Prepare repository-scoped Homebrew Tap access

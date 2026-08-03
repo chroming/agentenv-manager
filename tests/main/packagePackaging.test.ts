@@ -215,6 +215,10 @@ describe("package metadata", () => {
     expect(workflow).toContain('node scripts/render-homebrew-cask.mjs');
     expect(workflow).toContain('npm sbom --sbom-format cyclonedx');
     expect(workflow).toContain('SHA256SUMS');
+    expect(workflow).toMatch(/publish:\n[\s\S]*?runs-on: macos-15/);
+    expect(workflow).toContain('shasum -a 256 AgentEnv-Manager-* > SHA256SUMS');
+    expect(workflow).toContain('shasum -a 256 --check SHA256SUMS');
+    expect(workflow).not.toContain('sha256sum');
     expect(workflow).toContain('gh release create "$RELEASE_TAG" --draft');
     expect(workflow).toContain('gh release edit "$RELEASE_TAG" --draft=false');
     expect(workflow).toContain('HOMEBREW_TAP_DEPLOY_KEY');
