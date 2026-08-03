@@ -1,0 +1,137 @@
+import { describe, expect, it, vi } from "vitest";
+import { createAppUpdateService } from "../../../src/main/appUpdates/updateService";
+
+const release = {
+  version: "0.2.0",
+  tag: "v0.2.0",
+  releaseUrl: "https://github.com/chroming/agentenv-manager/releases/tag/v0.2.0",
+  publishedAt: "2026-08-03T00:00:00Z",
+  notes: "Ready",
+  asset: {
+    name: "AgentEnv-Manager-0.2.0-mac-arm64.dmg",
+    url: "https://github.com/chroming/agentenv-manager/releases/download/v0.2.0/AgentEnv-Manager-0.2.0-mac-arm64.dmg",
+    sha256: "a".repeat(64),
+    size: 123
+  }
+};
+
+const settings = {
+  appUpdateAutoCheckEnabled: true,
+  appUpdateAutoDownloadEnabled: false,
+  appUpdateInstallOnQuit: true
+};
+
+describe("app update service", () => {
+  it("coalesces checks and reports a verified update without exposing arbitrary URLs", async () => {
+    let resolveRelease!: (value: typeof release) => void;
+    const readLatest = vi.fn(() => new Promise<typeof release>((resolve) => {
+      resolveRelease = resolve;
+    }));
+    const inspect = vi.fn().mockResolvedValue({
+      available: true,
+      managed: true,
+      executablePath: "/opt/homebrew/bin/brew"
+    });
+    const changes: string[] = [];
+    const service = createAppUpdateService({
+      currentVersion: "0.1.0",
+      packaged: true,
+      platform: "darwin",
+      arch: "arm64",
+      releaseClient: { readLatest, isNewer: () => true },
+      homebrew: {
+        inspect,
+        download: vi.fn(),
+        install: vi.fn()
+      },
+      settingsStore: { readSettings: vi.fn().mockResolvedValue(settings) },
+      onStatusChanged: (status) => changes.push(status.phase)
+    });
+
+    const first = service.check({ manual: true });
+    const second = service.check({ manual: true });
+    await vi.waitFor(() => expect(readLatest).toHaveBeenCalledTimes(1));
+    resolveRelease(release);
+
+    await expect(first).resolves.toMatchObject({ phase: "available", release: { version: "0.2.0" } });
+    await expect(second).resolves.toMatchObject({ phase: "available" });
+    expect(readLatest).toHaveBeenCalledTimes(1);
+    expect(inspect).toHaveBeenCalledWith({ refresh: true });
+    expect(changes).toContain("checking");
+  });
+
+  it("keeps manual checks available when automatic checks are disabled", async () => {
+    const readLatest = vi.fn().mockResolvedValue(release);
+    const service = createAppUpdateService({
+      currentVersion: "0.1.0",
+      packaged: true,
+      platform: "darwin",
+      arch: "arm64",
+      releaseClient: { readLatest, isNewer: () => true },
+      homebrew: {
+        inspect: vi.fn().mockResolvedValue({ available: false, managed: false }),
+        download: vi.fn(),
+        install: vi.fn()
+      },
+      settingsStore: {
+        readSettings: vi.fn().mockResolvedValue({ ...settings, appUpdateAutoCheckEnabled: false })
+      }
+    });
+
+    await expect(service.check()).resolves.toMatchObject({ phase: "disabled" });
+    await expect(service.check({ manual: true })).resolves.toMatchObject({
+      phase: "available",
+      installChannel: "direct",
+      automaticInstallSupported: false
+    });
+  });
+
+  it("prefetches through Homebrew and installs only a ready update", async () => {
+    const homebrew = {
+      inspect: vi.fn().mockResolvedValue({ available: true, managed: true, executablePath: "/opt/homebrew/bin/brew" }),
+      download: vi.fn().mockResolvedValue(undefined),
+      install: vi.fn().mockResolvedValue(undefined)
+    };
+    const service = createAppUpdateService({
+      currentVersion: "0.1.0",
+      packaged: true,
+      platform: "darwin",
+      arch: "arm64",
+      releaseClient: { readLatest: vi.fn().mockResolvedValue(release), isNewer: () => true },
+      homebrew,
+      settingsStore: {
+        readSettings: vi.fn().mockResolvedValue({ ...settings, appUpdateAutoDownloadEnabled: true })
+      }
+    });
+
+    await expect(service.check({ manual: true })).resolves.toMatchObject({ phase: "ready" });
+    await expect(service.install()).resolves.toMatchObject({ phase: "up-to-date" });
+    expect(homebrew.download).toHaveBeenCalledTimes(1);
+    expect(homebrew.install).toHaveBeenCalledTimes(1);
+  });
+
+  it("turns offline failures into non-blocking copyable state", async () => {
+    const service = createAppUpdateService({
+      currentVersion: "0.1.0",
+      packaged: true,
+      platform: "darwin",
+      arch: "arm64",
+      releaseClient: {
+        readLatest: vi.fn().mockRejectedValue(new Error("network unavailable")),
+        isNewer: () => true
+      },
+      homebrew: {
+        inspect: vi.fn().mockResolvedValue({ available: false, managed: false }),
+        download: vi.fn(),
+        install: vi.fn()
+      },
+      settingsStore: { readSettings: vi.fn().mockResolvedValue(settings) }
+    });
+
+    await expect(service.check({ manual: true })).resolves.toMatchObject({
+      phase: "failed",
+      failureCode: "check-failed",
+      message: "network unavailable"
+    });
+  });
+});

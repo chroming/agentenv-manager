@@ -37,6 +37,10 @@ describe("settings store", () => {
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
       skillAutoCheckIntervalMinutes: 60,
+      appUpdateAutoCheckEnabled: true,
+      appUpdateAutoDownloadEnabled: true,
+      appUpdateInstallOnQuit: true,
+      telemetryEnabled: false,
       backupRetentionDays: null
     });
 
@@ -47,6 +51,10 @@ describe("settings store", () => {
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: false,
       skillAutoCheckIntervalMinutes: 120,
+      appUpdateAutoCheckEnabled: false,
+      appUpdateAutoDownloadEnabled: false,
+      appUpdateInstallOnQuit: false,
+      telemetryEnabled: true,
       backupRetentionDays: 30
     });
 
@@ -57,11 +65,44 @@ describe("settings store", () => {
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: false,
       skillAutoCheckIntervalMinutes: 120,
+      appUpdateAutoCheckEnabled: false,
+      appUpdateAutoDownloadEnabled: false,
+      appUpdateInstallOnQuit: false,
+      telemetryEnabled: true,
       backupRetentionDays: 30
     });
     expect(resolveSkillsLibraryDir(paths, await store.readSettings())).toBe(
       join(root, "app-data", "skills-library")
     );
+  });
+
+  it("adds release and privacy defaults to existing settings without losing choices", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-settings-upgrade-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    await mkdir(paths.appDataRoot, { recursive: true });
+    await writeFile(
+      join(paths.appDataRoot, "settings.json"),
+      JSON.stringify({ locale: "zh_CN", skillAutoCheckEnabled: false }),
+      "utf8"
+    );
+
+    const settings = await createSettingsStore(paths).readSettings();
+
+    expect(settings).toMatchObject({
+      locale: "zh_CN",
+      skillAutoCheckEnabled: false,
+      appUpdateAutoCheckEnabled: true,
+      appUpdateAutoDownloadEnabled: true,
+      appUpdateInstallOnQuit: true,
+      telemetryEnabled: false
+    });
+    expect(JSON.parse(await readFile(join(paths.appDataRoot, "settings.json"), "utf8")))
+      .toMatchObject({
+        appUpdateAutoCheckEnabled: true,
+        appUpdateAutoDownloadEnabled: true,
+        appUpdateInstallOnQuit: true,
+        telemetryEnabled: false
+      });
   });
 
   it("initializes the enabled Agent list once and preserves explicit choices", async () => {

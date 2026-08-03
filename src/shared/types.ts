@@ -43,6 +43,21 @@ import type {
   OneShotEvaluationRun,
   OneShotEvaluationStartInput
 } from "./evaluations";
+import type { AppUpdateStatus } from "./appUpdates";
+import type { TelemetryPreview } from "./telemetry";
+
+export type {
+  AppInstallChannel,
+  AppUpdatePhase,
+  AppUpdateRelease,
+  AppUpdateStatus
+} from "./appUpdates";
+export type {
+  TelemetryDailyStartupPayload,
+  TelemetryPreview,
+  TelemetrySendResult,
+  TelemetryStartupOutcome
+} from "./telemetry";
 
 export type {
   OneShotEvaluationFidelity,
@@ -86,6 +101,12 @@ export interface AgentEnvApi {
   readLatestDiagnosticIssue(): Promise<DiagnosticIssueDetail | undefined>;
   exportDiagnostics(reference?: string): Promise<string | undefined>;
   openDiagnosticsFolder(): Promise<void>;
+  readAppUpdateStatus(): Promise<AppUpdateStatus>;
+  checkAppUpdate(): Promise<AppUpdateStatus>;
+  downloadAppUpdate(): Promise<AppUpdateStatus>;
+  installAppUpdate(): Promise<AppUpdateStatus>;
+  onAppUpdateStatusChanged(callback: (status: AppUpdateStatus) => void): () => void;
+  readTelemetryPreview(): Promise<TelemetryPreview>;
   reportRendererError(input: RendererDiagnosticError): void;
   quitApp(): void;
   onOpenSettingsRequested(callback: () => void): () => void;
@@ -1203,6 +1224,10 @@ export interface AgentEnvSettings {
   skillStorageLocation: SkillStorageLocation;
   skillAutoCheckEnabled: boolean;
   skillAutoCheckIntervalMinutes: number;
+  appUpdateAutoCheckEnabled?: boolean;
+  appUpdateAutoDownloadEnabled?: boolean;
+  appUpdateInstallOnQuit?: boolean;
+  telemetryEnabled?: boolean;
   backupRetentionDays: BackupRetentionDays;
   enabledTargetIds?: string[];
   targetConfigRoots?: Record<string, string>;

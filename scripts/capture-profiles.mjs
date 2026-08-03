@@ -1471,6 +1471,15 @@ try {
     "settings",
     () => page.getByRole("region", { name: "Settings", exact: true })
   );
+  await capturePage(page, join(outputDir, "settings-general-920x620.png"));
+  await page.getByText("Anonymous reliability data", { exact: true }).scrollIntoViewIfNeeded();
+  await capturePage(page, join(outputDir, "settings-privacy-920x620.png"));
+  await page.locator(".settings-category-panel").evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "settings-general-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("tab", { name: "Agents" }).click();
   const customFolders = page.locator("details.agent-path-settings");
   await customFolders.getByText("Custom folders", { exact: true }).click();

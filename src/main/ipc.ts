@@ -70,6 +70,8 @@ import {
   resolveSharedSkillLocation
 } from "./targets/sharedSkillLocations";
 import type { RuntimeDiagnostics } from "./runtimeDiagnostics";
+import type { AppUpdateService } from "./appUpdates/updateService";
+import type { TelemetryService } from "./telemetry/telemetryService";
 import { isPathInside, pathsEqual } from "./platformPaths";
 
 export interface IpcServices {
@@ -89,6 +91,8 @@ export interface IpcServices {
   paths: AgentEnvPaths;
   workspaceSyncService: WorkspaceSyncService;
   diagnostics: RuntimeDiagnostics;
+  appUpdateService: AppUpdateService;
+  telemetryService: TelemetryService;
   cancelRepositoryOperations(): void;
 }
 
@@ -126,6 +130,8 @@ export const registerIpcHandlers = ({
   paths,
   workspaceSyncService,
   diagnostics,
+  appUpdateService,
+  telemetryService,
   cancelRepositoryOperations
 }: IpcServices) => {
   const skillArchiveService = createSkillArchiveService();
@@ -1063,6 +1069,15 @@ export const registerIpcHandlers = ({
     }
     return settingsStore.updateSettings(nextInput);
   });
+  diagnosticHandle("app-updates:status", () => appUpdateService.readStatus());
+  diagnosticHandle("app-updates:check", () => appUpdateService.check({ manual: true }));
+  diagnosticHandle("app-updates:download", () => appUpdateService.download());
+  diagnosticHandle("app-updates:install", () =>
+    mutationCoordinator.runExclusive("Install AgentEnv update", () =>
+      appUpdateService.install({ restart: true })
+    )
+  );
+  diagnosticHandle("telemetry:preview", () => telemetryService.preview());
   diagnosticHandle("workspace-sync:status", () => workspaceSyncService.readStatus());
   handleWorkspaceSyncMutation("workspace-sync:connect", (_event, input: unknown) =>
     workspaceSyncService.connect(input as import("../shared/workspaceSync").WorkspaceSyncConnectInput)

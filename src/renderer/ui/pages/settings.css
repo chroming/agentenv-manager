@@ -66,6 +66,92 @@
   min-height: var(--control-height-default);
 }
 
+.app-update-summary {
+  align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  display: grid;
+  gap: 10px 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 58px;
+  padding: 10px 12px;
+}
+
+.app-update-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.app-update-note,
+.app-update-error {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.app-update-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.app-update-error {
+  background: transparent;
+  border: 0;
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+  padding: 0;
+  user-select: text;
+  white-space: pre-wrap;
+}
+
+@container (max-width: 540px) {
+  .app-update-summary {
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-update-actions {
+    justify-content: flex-end;
+  }
+
+  .app-update-note,
+  .app-update-error {
+    grid-column: 1;
+  }
+}
+
+.telemetry-preview {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.telemetry-preview summary {
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.telemetry-preview pre {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 17px;
+  margin: 8px 0 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px 12px;
+  user-select: text;
+}
+
 .settings-page .github-settings-section .primary-button {
   height: var(--control-height-default);
   min-height: var(--control-height-default);

@@ -22,6 +22,19 @@ const api: AgentEnvApi = {
     ipcRenderer.invoke("diagnostics:export", reference),
   openDiagnosticsFolder: () =>
     ipcRenderer.invoke("diagnostics:open-folder"),
+  readAppUpdateStatus: () => ipcRenderer.invoke("app-updates:status"),
+  checkAppUpdate: () => ipcRenderer.invoke("app-updates:check"),
+  downloadAppUpdate: () => ipcRenderer.invoke("app-updates:download"),
+  installAppUpdate: () => ipcRenderer.invoke("app-updates:install"),
+  onAppUpdateStatusChanged: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      status: Parameters<typeof callback>[0]
+    ) => callback(status);
+    ipcRenderer.on("app-updates:status-changed", listener);
+    return () => ipcRenderer.off("app-updates:status-changed", listener);
+  },
+  readTelemetryPreview: () => ipcRenderer.invoke("telemetry:preview"),
   reportRendererError: (input) =>
     ipcRenderer.send("diagnostics:renderer-error", input),
   quitApp: () => ipcRenderer.send("startup:quit"),

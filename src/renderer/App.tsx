@@ -112,6 +112,8 @@ import {
   type AppFeedbackMessage
 } from "./components/AppFeedback";
 import { DiagnosticSettingsSection } from "./components/DiagnosticSettingsSection";
+import { AppUpdateSettings } from "./components/AppUpdateSettings";
+import { TelemetrySettings } from "./components/TelemetrySettings";
 import {
   BackupManagerDialog,
   type BackupManagerNotice
@@ -4869,6 +4871,7 @@ const AppContent = ({
               aria-labelledby={`settings-tab-${settingsCategory}`}
             >
             {settingsCategory === "general" ? (
+              <>
               <GeneralSettingsSection
                 locale={skillSettings.locale}
                 onLocaleChange={(locale) => updateSkillSettings({ locale })}
@@ -4876,6 +4879,17 @@ const AppContent = ({
                 onConversationTerminalChange={(conversationTerminal) =>
                   updateSkillSettings({ conversationTerminal })}
               />
+              <AppUpdateSettings
+                busy={busy}
+                settings={skillSettings}
+                onChange={(input) => void updateSkillSettings(input)}
+              />
+              <TelemetrySettings
+                busy={busy}
+                settings={skillSettings}
+                onChange={(input) => void updateSkillSettings(input)}
+              />
+              </>
             ) : null}
             {settingsCategory === "agents" ? (
             <AgentSettingsSection

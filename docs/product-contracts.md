@@ -1923,7 +1923,9 @@ This matrix is the release-facing index. A capability may be `Implemented` only 
 | Data Export and Restore | `Implemented` | Validated export, recovery copy, atomic app-data replacement | Domain and packaged restart smoke |
 | Desktop geometry and interaction | `Implemented` | No persisted effect; native window, focus, overlay, scroll, and viewport contracts | Renderer geometry and Electron screenshots |
 | Windows and Linux native packages | `Required` | Platform data roots, links, Git, terminal, menu, and installer lifecycle | Native CI packaged smoke on each operating system |
-| Signed and notarized macOS release | `Required` | Distribution trust only; no product-data mutation | Clean-Mac packaged smoke after credentials exist |
+| Verified unsigned release and Homebrew Cask | `Implemented` | Exact-tag assets, SHA-256, manifest, SBOM, draft verification, official Tap | Release generation, native package jobs, Cask and packaged Electron tests |
+| App update checks and Homebrew install | `Implemented` | Official stable Release only; Homebrew prefetch/install; settings persist locally | Domain, renderer, Electron E2E |
+| Optional reliability reporting | `Implemented` | Default-off consent; one allowlisted daily event; network failure is non-blocking | Domain and renderer tests |
 
 ## 25. Production Release Gate
 
@@ -1941,7 +1943,7 @@ AgentEnv Manager is production-ready only when all of these are true:
 - Packaged Electron application passes a real startup and primary-workflow smoke test.
 - The packaged Agent discovery smoke runs with a desktop-process minimal `PATH` and proves fallback discovery for OpenCode, Claude Code, Codex, Antigravity CLI, Trae CLI, and Pi on each claimed platform.
 
-Current verdict: **Needs refinement**. Core Skill Library, v2 Profile, Preview, transactional Apply, backup, retention, rollback, stale rollback protection, no-op, cross-Target Instructions and Skills, Create from Target, Target-specific Skill deployment, compatibility-copy consolidation, canonical Target lifecycle, data backup and restore, active-Profile deletion recovery, Stop Managing workflows, and sparse native MCP activation are functional. Broader Skill identity edge coverage and signed/notarized distribution remain release work.
+Current verdict: **Needs refinement**. Core Skill Library, v2 Profile, Preview, transactional Apply, backup, retention, rollback, stale rollback protection, no-op, cross-Target Instructions and Skills, Create from Target, Target-specific Skill deployment, compatibility-copy consolidation, canonical Target lifecycle, data backup and restore, active-Profile deletion recovery, Stop Managing workflows, sparse native MCP activation, and verified unsigned distribution are functional. Broader Skill identity edge coverage and first public native-runner receipts remain release work.
 
 ### 25.1 Verification Snapshot
 
@@ -1981,11 +1983,11 @@ The current machine-readable totals, source commit, deterministic tracked-and-un
 - Drift recovery adopts compatible Instructions and existing managed MCP activation choices into a backed-up Profile while naming excluded native configuration and unmapped items.
 - Production dependency audit reported zero known vulnerabilities.
 - The packaged arm64 macOS application completed an isolated OpenCode Profile takeover at `1180 x 728` without document overflow or writes to the real Agent environment.
-- The signed release entry point requires a Developer ID Application identity and Apple notarization credentials, then verifies `codesign`, Gatekeeper assessment, and the stapled DMG. Signed and notarized artifact verification remains outstanding until those external credentials are available; the local packaged primary-workflow smoke uses an unsigned `.app`.
+- The unsigned release workflow builds on native runners, assembles an isolated draft, verifies the downloaded artifact hashes, publishes exact release metadata, and only then updates the official checksum-bound Homebrew Cask. Quarantine removal belongs to the Cask postflight after Homebrew verification.
 
 ## 26. Current Priority Gaps
 
 1. Validate both the one-time v1-to-v2 migration and legacy shared-Library storage migration against an anonymized production-shaped data export and a packaged startup.
 2. Extend the conditional duplicate review with more uncommon intentionally distinct same-name Skill fixtures.
-3. Sign and notarize macOS distribution, then repeat packaged primary-workflow verification on a clean Mac.
-4. Run the configured Windows and Linux native package jobs and record their first successful packaged evidence before describing either platform as verified.
+3. Run the configured macOS arm64/x64, Windows, and Linux release jobs and retain their first public evidence receipt.
+4. Validate the official Cask install, upgrade, quarantine removal, and application launch on a clean Intel Mac and a clean Apple Silicon Mac.

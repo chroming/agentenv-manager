@@ -320,6 +320,36 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     readLatestDiagnosticIssue: vi.fn().mockResolvedValue(undefined),
     exportDiagnostics: vi.fn().mockResolvedValue(undefined),
     openDiagnosticsFolder: vi.fn().mockResolvedValue(undefined),
+    readAppUpdateStatus: vi.fn().mockResolvedValue({
+      phase: "idle",
+      currentVersion: "0.1.0",
+      installChannel: "development",
+      automaticInstallSupported: false
+    }),
+    checkAppUpdate: vi.fn().mockResolvedValue({
+      phase: "up-to-date",
+      currentVersion: "0.1.0",
+      installChannel: "development",
+      automaticInstallSupported: false
+    }),
+    downloadAppUpdate: vi.fn().mockRejectedValue(new Error("Updates unavailable")),
+    installAppUpdate: vi.fn().mockRejectedValue(new Error("Updates unavailable")),
+    onAppUpdateStatusChanged: vi.fn().mockReturnValue(() => undefined),
+    readTelemetryPreview: vi.fn().mockResolvedValue({
+      enabledInBuild: false,
+      payload: {
+        schemaVersion: 1,
+        event: "daily-startup",
+        date: "2026-08-03",
+        appVersion: "0.1.0",
+        platform: "darwin",
+        osMajor: "26",
+        arch: "arm64",
+        locale: "en",
+        installChannel: "development",
+        outcome: "ready"
+      }
+    }),
     reportRendererError: vi.fn(),
     quitApp: vi.fn(),
     onOpenSettingsRequested: vi.fn().mockReturnValue(() => undefined),

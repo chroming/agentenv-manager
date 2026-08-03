@@ -13,6 +13,10 @@ export const SettingsSchema = z.object({
   skillStorageLocation: z.enum(["appData", "agents"]).default("appData"),
   skillAutoCheckEnabled: z.boolean().default(true),
   skillAutoCheckIntervalMinutes: z.number().int().min(5).max(1440).default(60),
+  appUpdateAutoCheckEnabled: z.boolean().default(true),
+  appUpdateAutoDownloadEnabled: z.boolean().default(true),
+  appUpdateInstallOnQuit: z.boolean().default(true),
+  telemetryEnabled: z.boolean().default(false),
   backupRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).default(null),
   enabledTargetIds: z.array(z.string().min(1)).optional(),
   targetConfigRoots: z.record(z.string().min(1), z.string().min(1)).optional()
@@ -28,6 +32,10 @@ const DEFAULT_SETTINGS: AgentEnvSettings = {
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,
   skillAutoCheckIntervalMinutes: 60,
+  appUpdateAutoCheckEnabled: true,
+  appUpdateAutoDownloadEnabled: true,
+  appUpdateInstallOnQuit: true,
+  telemetryEnabled: false,
   backupRetentionDays: null
 };
 
@@ -164,14 +172,15 @@ export const createSettingsStore = (
 
   const readSettings = async (): Promise<AgentEnvSettings> => {
     try {
-      const parsed = SettingsSchema.parse(JSON.parse(await readFile(settingsPathFor(paths), "utf8")));
+      const stored = JSON.parse(await readFile(settingsPathFor(paths), "utf8"));
+      const parsed = SettingsSchema.parse(stored);
       const current = normalizeEnabledTargets(parsed);
       const next = current.skillStorageLocation === "agents"
         ? { ...current, skillStorageLocation: "appData" as const }
         : current;
       if (
         next.skillStorageLocation !== parsed.skillStorageLocation ||
-        JSON.stringify(next) !== JSON.stringify(parsed)
+        JSON.stringify(next) !== JSON.stringify(stored)
       ) {
         await migrateSkillStorage(paths, parsed, next);
         await writeAtomic(settingsPathFor(paths), `${JSON.stringify(next, null, 2)}\n`);

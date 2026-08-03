@@ -93,6 +93,13 @@ import {
   writeWindowState,
   type PersistedWindowState
 } from "./windowStateStore";
+import { createReleaseClient } from "./appUpdates/releaseClient";
+import { createHomebrewAdapter } from "./appUpdates/homebrewAdapter";
+import {
+  createAppUpdateService,
+  type AppUpdateService
+} from "./appUpdates/updateService";
+import { createTelemetryService } from "./telemetry/telemetryService";
 
 const createGitHubFixtureFetch = (fixtureRoot: string) => {
   const fixtureTrees = new Map<string, string>();
@@ -260,6 +267,8 @@ let runtimeDiagnosticContextProvider:
   | undefined;
 let lastWindowState: PersistedWindowState | undefined;
 let windowStateSaveTimer: ReturnType<typeof setTimeout> | undefined;
+let activeAppUpdateService: AppUpdateService | undefined;
+let updateQuitInProgress = false;
 
 process.on("uncaughtExceptionMonitor", (error) => {
   void runtimeDiagnostics?.record("main:uncaught-exception", "failed", {
@@ -598,6 +607,68 @@ const createServices = async (
   const settings = await mutationCoordinator.runExclusive("Initialize Settings", () =>
     settingsStore.readSettings()
   );
+  const appLocale = app.getLocale().toLowerCase();
+  const updateAutomationEnabled =
+    process.env.AGENTENV_AUTOMATION === "1" &&
+    process.env.AGENTENV_AUTOMATION_UPDATE_PACKAGED === "1";
+  const updateFixturePath = updateAutomationEnabled
+    ? process.env.AGENTENV_AUTOMATION_UPDATE_FIXTURE
+    : undefined;
+  const currentAppVersion = updateAutomationEnabled &&
+    process.env.AGENTENV_AUTOMATION_APP_VERSION
+    ? process.env.AGENTENV_AUTOMATION_APP_VERSION
+    : app.getVersion();
+  const updateFetch: typeof globalThis.fetch | undefined = updateFixturePath
+    ? async () => new Response(await readFile(updateFixturePath, "utf8"), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+    : undefined;
+  const telemetryService = createTelemetryService({
+    statePath: join(paths.appDataRoot, "telemetry-state.json"),
+    endpoint: __AGENTENV_TELEMETRY_ENDPOINT__,
+    settingsStore,
+    context: {
+      appVersion: app.getVersion(),
+      platform: process.platform as "darwin" | "win32" | "linux",
+      osVersion: process.getSystemVersion(),
+      arch: process.arch,
+      locale: appLocale.startsWith("zh")
+        ? /(?:tw|hk|mo|hant)/.test(appLocale) ? "zh_TW" : "zh_CN"
+        : "en",
+      installChannel: app.isPackaged ? "direct" : "development"
+    }
+  });
+  const appUpdateService = createAppUpdateService({
+    currentVersion: currentAppVersion,
+    packaged: app.isPackaged || updateAutomationEnabled,
+    platform: process.platform,
+    arch: process.arch,
+    releaseClient: createReleaseClient({ ...(updateFetch ? { fetch: updateFetch } : {}) }),
+    homebrew: createHomebrewAdapter({
+      platform: process.platform,
+      ...(updateAutomationEnabled && process.env.AGENTENV_AUTOMATION_BREW_PATH
+        ? { executableCandidates: [process.env.AGENTENV_AUTOMATION_BREW_PATH] }
+        : {})
+    }),
+    settingsStore,
+    onStatusChanged: (status) => {
+      telemetryService.setInstallChannel(status.installChannel);
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.webContents.isDestroyed()) {
+          window.webContents.send("app-updates:status-changed", status);
+        }
+      }
+    },
+    onInstalled: (restart) => {
+      if (!restart) return;
+      updateQuitInProgress = true;
+      setTimeout(() => {
+        app.relaunch();
+        app.quit();
+      }, 150).unref();
+    }
+  });
   reportPhase("upgrading-skills");
   await mutationCoordinator.runExclusive("Upgrade Skill content hashes", () =>
     migrateSkillContentHashes(paths, {
@@ -897,6 +968,8 @@ const createServices = async (
     conversationService,
     mutationCoordinator,
     workspaceSyncService,
+    appUpdateService,
+    telemetryService,
     cancelRepositoryOperations: () => gitRunner?.cancelActive(),
     dispose: () => {
       repositoryServicesDisposed = true;
@@ -923,7 +996,9 @@ const initializeServices = () => {
         startupStatus = { state: "initializing", phase };
         broadcastStartupStatus();
       });
+      activeAppUpdateService = services.appUpdateService;
       let removeWorkspaceSyncFocusListener: () => void = () => undefined;
+      let removeAppUpdateFocusListener: () => void = () => undefined;
       runtimeDiagnosticContextProvider = async () => {
         const [settingsResult, targetsResult, workspaceResult] = await Promise.allSettled([
           services.settingsStore.readSettings(),
@@ -991,6 +1066,24 @@ const initializeServices = () => {
         app.on("browser-window-focus", runWorkspaceCheck);
         removeWorkspaceSyncFocusListener = () => app.off("browser-window-focus", runWorkspaceCheck);
         runWorkspaceCheck();
+        let lastAppUpdateCheckAt = 0;
+        const runAppUpdateCheck = () => {
+          const now = Date.now();
+          if (now - lastAppUpdateCheckAt < 6 * 60 * 60 * 1000) return;
+          lastAppUpdateCheckAt = now;
+          void services.appUpdateService
+            .check()
+            .catch((error) => console.error("Automatic update check failed", error));
+        };
+        app.on("browser-window-focus", runAppUpdateCheck);
+        removeAppUpdateFocusListener = () => app.off("browser-window-focus", runAppUpdateCheck);
+        runAppUpdateCheck();
+        void services.appUpdateService.readStatus()
+          .then((status) => {
+            services.telemetryService.setInstallChannel(status.installChannel);
+            return services.telemetryService.recordDailyStartup("ready");
+          })
+          .catch(() => undefined);
         const runBackupCleanup = async () => {
           await services.mutationCoordinator.runExclusive("Clean up backups", async () => {
             const settings = await services.settingsStore.readSettings();
@@ -1007,7 +1100,9 @@ const initializeServices = () => {
       }
       disposeServices = () => {
         removeWorkspaceSyncFocusListener();
+        removeAppUpdateFocusListener();
         services.dispose();
+        activeAppUpdateService = undefined;
         runtimeDiagnosticContextProvider = undefined;
       };
       servicesInitialized = true;
@@ -1094,7 +1189,23 @@ app.on("activate", () => {
   }
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  if (!updateQuitInProgress && activeAppUpdateService?.isReadyToInstall()) {
+    event.preventDefault();
+    updateQuitInProgress = true;
+    void activeAppUpdateService.shouldInstallOnQuit()
+      .then(async (shouldInstall) => {
+        if (shouldInstall) await activeAppUpdateService?.install({ restart: false });
+      })
+      .catch((error) => console.error("Install-on-quit update failed", error))
+      .finally(() => {
+        disposeServices?.();
+        disposeServices = undefined;
+        activeAppUpdateService = undefined;
+        app.exit(0);
+      });
+    return;
+  }
   appQuitRequested = true;
   disposeServices?.();
   disposeServices = undefined;

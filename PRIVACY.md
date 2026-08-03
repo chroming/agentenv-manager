@@ -1,7 +1,8 @@
 # Privacy
 
-AgentEnv Manager is a local-first desktop application. It does not include
-telemetry, advertising, analytics, or an application-operated cloud service.
+AgentEnv Manager is a local-first desktop application. It has no advertising or
+application-operated service for user data. Optional anonymous reliability
+reporting is disabled by default.
 
 ## Data Read Locally
 
@@ -67,6 +68,21 @@ Network requests occur only for user-requested or configured features:
 
 Background checks may inspect configured sources but do not automatically
 Apply Profiles, pull Workspace changes, or push local changes.
+
+The app can check the official `chroming/agentenv-manager` GitHub Releases for
+updates. Homebrew-managed macOS installations can also prefetch and install the
+checksum-bound Cask update. Update checks are independent from reliability
+reporting consent.
+
+If you explicitly enable anonymous reliability reporting in Settings, the app
+sends at most one daily startup event. The exact payload is visible in Settings
+and contains only: schema version, event date, app version, operating-system
+family and major version, architecture, interface locale, install channel, and
+a stable startup outcome category. It contains no device or account identifier,
+paths, names, Profiles, Skills, source URLs, conversations, prompts, MCP data,
+environment values, command output, or stack traces. Builds without a compiled
+HTTPS reporting endpoint send nothing. Network failures are discarded and never
+delay startup or user actions.
 
 ## Removing Data
 

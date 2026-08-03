@@ -6,7 +6,17 @@ AgentEnv Manager 是一个本地桌面应用，用来整理 coding agent 的 Ski
 
 它不会接管模型、账号或所有原生配置。每次写入前都会先展示变化并创建恢复点。
 
-> 当前版本为 `0.1.0` 预发布版。macOS、Windows 和 Linux 已进入打包应用验证；签名并公证的 macOS 安装包尚未发布。
+> 当前版本为 `0.1.0` 预发布版。macOS、Windows 和 Linux 已进入打包应用验证。macOS 包暂未签名或公证，通过官方 Homebrew Cask 安装时会先核对 SHA-256，再移除 quarantine 属性。
+
+## 安装
+
+macOS 推荐使用官方 Cask：
+
+```bash
+brew install --cask chroming/tap/agentenv-manager
+```
+
+Homebrew 会按当前架构下载固定版本的官方 Release，并在安装前验证 SHA-256。应用内自动更新也只对这类 Homebrew 安装生效。直接下载的用户仍可检查更新，并从官方 Release 页面手动安装。
 
 ## Agents
 
@@ -66,7 +76,7 @@ Conversations 在一个只读索引中查找本机 Agent 的历史记录。你�
 - MCP 定义和凭据继续由 Agent 保存；Profile 只管理受支持的启停状态。
 - Repository 扫描使用独立缓存，不修改现有 checkout。
 - Workspace Sync 只同步可移植的 Profile 和 Library 数据，不同步凭据、Target 状态或备份。
-- 应用没有遥测、广告或自建云服务。
+- 应用没有广告或承载用户数据的云服务。匿名可靠性统计默认关闭，开启前可以在 Settings 中查看完整字段。
 
 完整语义见 [产品契约](docs/product-contracts.md)，隐私和本地数据说明见 [PRIVACY.md](PRIVACY.md)。
 
@@ -110,11 +120,7 @@ npm run dist:win
 npm run dist:linux
 ```
 
-macOS 正式发布需要 Developer ID 证书和 Apple notarization 凭据：
-
-```bash
-npm run dist:mac:signed
-```
+推送与 `package.json` 完全匹配的 `vX.Y.Z` tag 后，GitHub Actions 会构建各平台包，生成 SBOM、校验文件、发布清单和 Homebrew Cask。正式发布前需要在仓库中配置 `HOMEBREW_TAP_DEPLOY_KEY`；这把 Deploy Key 只允许写入 `chroming/homebrew-tap`，不授予发布流程访问其他仓库的权限。
 
 架构、Target integration、测试证据和发布流程见 [开发文档](docs/development.md)。
 

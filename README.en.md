@@ -6,7 +6,17 @@ AgentEnv Manager is a local desktop app for organizing coding-agent Skills, Prof
 
 It does not take ownership of models, accounts, or every native setting. Before writing anything, it shows the changes and creates a recovery point.
 
-> Version `0.1.0` is a pre-release. Packaged-app checks run on macOS, Windows, and Linux. A signed and notarized macOS installer has not been published yet.
+> Version `0.1.0` is a pre-release. Packaged-app checks run on macOS, Windows, and Linux. The macOS package is not signed or notarized yet. The official Homebrew Cask verifies its SHA-256 before removing quarantine.
+
+## Install
+
+The recommended macOS installation is the official Cask:
+
+```bash
+brew install --cask chroming/tap/agentenv-manager
+```
+
+Homebrew downloads an exact versioned asset for the current architecture and verifies its SHA-256 before installation. In-app automatic installation is available only for Homebrew-managed copies. Direct downloads can still check for updates and open the official Release page.
 
 ## Agents
 
@@ -66,7 +76,7 @@ The source Agent still owns the original history. AgentEnv does not edit convers
 - Agents keep their MCP definitions and credentials. Profiles manage only supported enablement states.
 - Repository scans use a separate cache and never modify an existing checkout.
 - Workspace Sync includes portable Profile and Library data, not credentials, Target state, or backups.
-- The app has no telemetry, advertising, or hosted cloud service.
+- The app has no advertising or hosted service for user data. Anonymous reliability reporting is off by default, and Settings shows every field before opt-in.
 
 See [Product contracts](docs/product-contracts.md) for exact behavior and [PRIVACY.md](PRIVACY.md) for local data and network access.
 
@@ -110,11 +120,7 @@ npm run dist:win
 npm run dist:linux
 ```
 
-A public macOS release requires a Developer ID certificate and Apple notarization credentials:
-
-```bash
-npm run dist:mac:signed
-```
+Pushing a `vX.Y.Z` tag that exactly matches `package.json` runs the cross-platform release workflow. It produces an SBOM, checksums, a release manifest, and the Homebrew Cask. Publishing requires `HOMEBREW_TAP_DEPLOY_KEY`, a repository-scoped Deploy Key that can write only to `chroming/homebrew-tap`.
 
 See [Development](docs/development.md) for architecture, Target integrations, test evidence, and the release workflow.
 

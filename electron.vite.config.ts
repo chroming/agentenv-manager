@@ -7,6 +7,11 @@ const rootDir = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   main: {
+    define: {
+      __AGENTENV_TELEMETRY_ENDPOINT__: JSON.stringify(
+        process.env.AGENTENV_TELEMETRY_ENDPOINT ?? ""
+      )
+    },
     build: {
       rollupOptions: {
         input: resolve(rootDir, "src/main/main.ts")
