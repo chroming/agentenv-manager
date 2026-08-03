@@ -6721,7 +6721,10 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => fileExists(join(appDataRoot, "skills-library", "collection-gamma", "SKILL.md")))
       .toBe(true);
-    await expect.poll(() => dialog.textContent()).toContain("In Library");
+    await expect.poll(() => missingRow.textContent()).toContain("In Library");
+    await dialog.getByRole("button", { name: "Move collection" }).waitFor({
+      state: "visible"
+    });
     const pendingSetup = await page.evaluate(async () => {
       const current = await window.agentEnv.readProfile("ui-opencode-alpha");
       const updated = await window.agentEnv.updateProfileSkills({
@@ -10331,13 +10334,18 @@ describe("Electron UI profile switching e2e", () => {
       const surface = page.locator(workspaceSurfaceSelectors[workspace]);
       await surface.waitFor({ state: "visible" });
       const surfaceGeometry = await surface.evaluate((element) => ({
-        contained:
-          element.scrollWidth <= element.clientWidth + 1 &&
-          element.scrollHeight <= element.clientHeight + 1,
+        horizontallyContained: element.scrollWidth <= element.clientWidth + 1,
+        verticallyContained: element.scrollHeight <= element.clientHeight + 1,
+        overflowY: getComputedStyle(element).overflowY,
         radius: getComputedStyle(element).borderRadius
       }));
       expect(surfaceGeometry.radius, workspace).toBe("8px");
-      expect(surfaceGeometry.contained, workspace).toBe(true);
+      expect(surfaceGeometry.horizontallyContained, workspace).toBe(true);
+      if (workspace === "Settings") {
+        expect(surfaceGeometry.overflowY, workspace).toBe("auto");
+      } else {
+        expect(surfaceGeometry.verticallyContained, workspace).toBe(true);
+      }
     }
     expect(new Set(headerMetrics.map((metric) => metric.fontSize))).toEqual(new Set(["23px"]));
     expect(profileHeaderMetrics).toEqual({ fontSize: "14px", contained: true });
