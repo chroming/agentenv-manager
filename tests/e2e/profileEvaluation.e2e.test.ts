@@ -774,13 +774,17 @@ printf '{"type":"message_end","message":{"role":"assistant","model":"fake-pi","c
         const readRun = () => page.evaluate(async () => {
           const value = await window.agentEnv.readProfileComparison({});
           return {
+            targetId: value?.targetId,
             status: value?.status,
             error: value?.error,
             currentError: value?.result?.current.error,
             proposedError: value?.result?.proposed.error
           };
         });
-        await expect.poll(async () => (await readRun()).status, { timeout: 20_000 })
+        await expect.poll(async () => {
+          const run = await readRun();
+          return run.targetId === agent.id ? run.status : undefined;
+        }, { timeout: 20_000 })
           .toMatch(/completed|incomplete|failed-to-run/);
         const run = await readRun();
         if (run.status !== "completed") {
