@@ -108,9 +108,31 @@ describe("repository location", () => {
     });
   });
 
+  it("infers an internal repository and directory from Git web blob URLs", () => {
+    const location = parseRepositoryLocation(
+      "https://code.example.test/team/internal-agent-skills/blob/main/skills/review"
+    );
+    expect(location).toMatchObject({
+      transportLocator: "https://code.example.test/team/internal-agent-skills.git",
+      displayLocator: "https://code.example.test/team/internal-agent-skills",
+      cacheKeyLocator: "https://code.example.test/team/internal-agent-skills",
+      sshFallbackLocator: "git@code.example.test:team/internal-agent-skills.git",
+      inferredRef: "main",
+      inferredDirectory: "skills/review"
+    });
+  });
+
   it("supports GitLab-style tree separators for nested repository namespaces", () => {
     expect(parseRepositoryLocation(
       "https://git.example.test/platform/agents/skills/-/tree/main/internal/review"
+    )).toMatchObject({
+      transportLocator: "https://git.example.test/platform/agents/skills.git",
+      sshFallbackLocator: "git@git.example.test:platform/agents/skills.git",
+      inferredRef: "main",
+      inferredDirectory: "internal/review"
+    });
+    expect(parseRepositoryLocation(
+      "https://git.example.test/platform/agents/skills/-/blob/main/internal/review"
     )).toMatchObject({
       transportLocator: "https://git.example.test/platform/agents/skills.git",
       sshFallbackLocator: "git@git.example.test:platform/agents/skills.git",

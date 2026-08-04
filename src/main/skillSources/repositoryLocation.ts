@@ -157,12 +157,19 @@ const parseUrlLocation = (value: string): RepositoryLocation => {
   }
 
   if (protocol === "https:") {
-    const treeMarkerIndex = segments.findIndex(
-      (segment, index) => segment === "tree" && index >= 2 && Boolean(segments[index + 1])
+    const webScopeMarkerIndex = segments.findIndex(
+      (segment, index) =>
+        (segment === "tree" || segment === "blob") &&
+        index >= 2 &&
+        Boolean(segments[index + 1])
     );
-    const hasGitLabSeparator = treeMarkerIndex > 0 && segments[treeMarkerIndex - 1] === "-";
-    const repositorySegments = treeMarkerIndex >= 2
-      ? segments.slice(0, hasGitLabSeparator ? treeMarkerIndex - 1 : treeMarkerIndex)
+    const hasGitLabSeparator =
+      webScopeMarkerIndex > 0 && segments[webScopeMarkerIndex - 1] === "-";
+    const repositorySegments = webScopeMarkerIndex >= 2
+      ? segments.slice(
+          0,
+          hasGitLabSeparator ? webScopeMarkerIndex - 1 : webScopeMarkerIndex
+        )
       : segments;
     const repositoryPath = repositorySegments.join("/");
     assertSafeRepositoryPath(repositoryPath);
@@ -170,9 +177,9 @@ const parseUrlLocation = (value: string): RepositoryLocation => {
     const sshFallbackLocator = url.port
       ? undefined
       : `git@${host}:${clonePath}.git`;
-    if (treeMarkerIndex >= 2) {
-      const ref = segments[treeMarkerIndex + 1];
-      const directory = segments.slice(treeMarkerIndex + 2).join("/");
+    if (webScopeMarkerIndex >= 2) {
+      const ref = segments[webScopeMarkerIndex + 1];
+      const directory = segments.slice(webScopeMarkerIndex + 2).join("/");
       return {
         kind: "https",
         transportLocator: `https://${url.host.toLowerCase()}/${clonePath}.git`,

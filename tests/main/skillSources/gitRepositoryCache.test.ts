@@ -68,11 +68,11 @@ describe("git repository cache", () => {
     const cache = createGitRepositoryCache({ cacheRoot: join(root, "cache"), runner });
 
     const snapshot = await cache.fetch({
-      repository: "https://git.example.com/ep/Skills/tree/main/internal"
+      repository: "https://git.example.com/team/internal-agent-skills/blob/main/skills/review"
     });
 
     expect(snapshot).toMatchObject({
-      repository: "https://git.example.com/ep/Skills.git",
+      repository: "https://git.example.com/team/internal-agent-skills.git",
       ref: "main",
       accessTransport: "ssh"
     });
@@ -81,8 +81,8 @@ describe("git repository cache", () => {
         .filter(([args]) => args.includes("remote") && args.includes("add"))
         .map(([args]) => args.at(-1))
     ).toEqual([
-      "https://git.example.com/ep/Skills.git",
-      "git@git.example.com:ep/Skills.git"
+      "https://git.example.com/team/internal-agent-skills.git",
+      "git@git.example.com:team/internal-agent-skills.git"
     ]);
   });
 

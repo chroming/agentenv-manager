@@ -59,6 +59,7 @@ describe("Repository Skill source", () => {
       env: {
         ...process.env,
         AGENTENV_AUTOMATION: "1",
+        AGENTENV_AUTOMATION_TARGET_PATH: join(root, "agent-bin"),
         AGENTENV_DATA_ROOT: appDataRoot,
         AGENTENV_HOME: homeDir,
         AGENTENV_FAKE_HOME: join(root, "fake-home"),
@@ -154,6 +155,7 @@ describe("Repository Skill source", () => {
       env: {
         ...process.env,
         AGENTENV_AUTOMATION: "1",
+        AGENTENV_AUTOMATION_TARGET_PATH: join(root, "agent-bin"),
         AGENTENV_DATA_ROOT: appDataRoot,
         AGENTENV_HOME: homeDir,
         AGENTENV_FAKE_HOME: join(root, "fake-home"),
@@ -449,6 +451,7 @@ describe("Repository Skill source", () => {
       env: {
         ...process.env,
         AGENTENV_AUTOMATION: "1",
+        AGENTENV_AUTOMATION_TARGET_PATH: join(root, "agent-bin"),
         AGENTENV_DATA_ROOT: appDataRoot,
         AGENTENV_HOME: homeDir,
         AGENTENV_FAKE_HOME: join(root, "fake-home"),
