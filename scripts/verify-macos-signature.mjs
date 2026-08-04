@@ -75,7 +75,7 @@ const verifyReleaseIdentity = async (appPath, certificatePath, signatureDetails)
   try {
     await execFileAsync(
       "/usr/bin/codesign",
-      ["--display", "--extract-certificates", certificatePrefix, appPath],
+      ["--display", `--extract-certificates=${certificatePrefix}`, appPath],
       { encoding: "utf8" }
     );
     const [expectedCertificate, actualCertificate] = await Promise.all([

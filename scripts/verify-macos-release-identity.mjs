@@ -41,7 +41,7 @@ const inspectArchive = async (archivePath, extractionRoot) => {
   const certificatePrefix = join(extractionRoot, "certificate-");
   await execFileAsync(
     "/usr/bin/codesign",
-    ["--display", "--extract-certificates", certificatePrefix, appPath],
+    ["--display", `--extract-certificates=${certificatePrefix}`, appPath],
     { encoding: "utf8" }
   );
   const signatureDetails = [signature.stdout, signature.stderr].filter(Boolean).join("\n");

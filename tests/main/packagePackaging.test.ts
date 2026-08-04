@@ -275,7 +275,7 @@ describe("package metadata", () => {
     expect(script).toContain('"--deep"');
     expect(script).toContain('"--strict"');
     expect(script).toContain("Signature=adhoc");
-    expect(script).toContain('"--extract-certificates"');
+    expect(script).toContain('`--extract-certificates=${certificatePrefix}`');
     expect(script).toContain('requirementDetails.includes("cdhash")');
     expect(script).toContain('identifier "io.github.chroming.agentenvmanager"');
     expect(script).toContain("expectedIdentity.fingerprint");
@@ -300,6 +300,7 @@ describe("package metadata", () => {
       "utf8"
     );
     expect(pairVerifier).toContain("arm64.cdHash === x64.cdHash");
+    expect(pairVerifier).toContain('`--extract-certificates=${certificatePrefix}`');
     expect(pairVerifier).toContain("arm64.requirement !== x64.requirement");
     expect(pairVerifier).toContain('arm64.requirement.includes("cdhash")');
   });
