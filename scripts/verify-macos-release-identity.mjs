@@ -4,6 +4,7 @@ import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { extractDesignatedRequirement } from "./macos-release-identity.mjs";
 
 const execFileAsync = promisify(execFile);
 const assetsRoot = resolve(process.argv[2] ?? "release-assets");
@@ -47,10 +48,11 @@ const inspectArchive = async (archivePath, extractionRoot) => {
   const signatureDetails = [signature.stdout, signature.stderr].filter(Boolean).join("\n");
   const cdHash = signatureDetails.match(/^CDHash=([0-9a-f]+)$/im)?.[1];
   if (!cdHash) throw new Error(`Could not read CDHash from ${archivePath}`);
+  const requirementDetails = [requirement.stdout, requirement.stderr].filter(Boolean).join("\n");
   return {
     cdHash,
     certificateFingerprint: fingerprint(await readFile(`${certificatePrefix}0`)),
-    requirement: [requirement.stdout, requirement.stderr].filter(Boolean).join("\n").trim()
+    requirement: extractDesignatedRequirement(requirementDetails, archivePath)
   };
 };
 

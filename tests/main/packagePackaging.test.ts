@@ -3,6 +3,7 @@ import { X509Certificate } from "node:crypto";
 import { join } from "node:path";
 import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
+import { extractDesignatedRequirement } from "../../scripts/macos-release-identity.mjs";
 
 const readPngRgba = async (path: string) => {
   const file = await readFile(path);
@@ -309,6 +310,22 @@ describe("package metadata", () => {
     expect(pairVerifier).toContain('`--extract-certificates=${certificatePrefix}`');
     expect(pairVerifier).toContain("arm64.requirement !== x64.requirement");
     expect(pairVerifier).toContain('arm64.requirement.includes("cdhash")');
+  });
+
+  it("compares macOS designated requirements without architecture-specific paths", () => {
+    const requirement =
+      'designated => identifier "io.github.chroming.agentenvmanager" and certificate root = H"abc123"';
+
+    expect(extractDesignatedRequirement(
+      `Executable=/tmp/release/arm64/AgentEnv Manager.app/Contents/MacOS/AgentEnv Manager\n${requirement}\n`,
+      "arm64.zip"
+    )).toBe(requirement);
+    expect(extractDesignatedRequirement(
+      `Executable=/tmp/release/x64/AgentEnv Manager.app/Contents/MacOS/AgentEnv Manager\n${requirement}\n`,
+      "x64.zip"
+    )).toBe(requirement);
+    expect(() => extractDesignatedRequirement("Executable=/tmp/app", "broken.zip"))
+      .toThrowError(/could not read designated requirement from broken\.zip/i);
   });
 
   it("bounds filesystem-heavy test concurrency on high-core hosts", async () => {
