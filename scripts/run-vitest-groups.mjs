@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import {
   electronE2eExcludeGlob,
   electronE2eTestFiles,
+  exclusiveElectronE2eTestNames,
   heavyElectronE2eTestFile
 } from "./vitest-groups.mjs";
 import { runElectronTestSuite } from "./electron-test-scheduler.mjs";
@@ -45,6 +46,7 @@ await run([
     : [])
 ]);
 await runElectronTestSuite({
+  exclusiveTestNames: exclusiveElectronE2eTestNames,
   heavyFile: heavyElectronE2eTestFile,
   outputFile: electronReport,
   projectRoot,

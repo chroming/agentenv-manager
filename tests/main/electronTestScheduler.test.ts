@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   assertExactTestCoverage,
   mergeVitestReports,
-  partitionTestNames
+  partitionTestNames,
+  splitExclusiveTestNames
 } from "../../scripts/electron-test-scheduler.mjs";
 
 describe("Electron test scheduler", () => {
@@ -21,6 +22,17 @@ describe("Electron test scheduler", () => {
       ["alpha", "beta", "gamma"],
       ["alpha", "beta", "beta", "delta"]
     )).toThrowError(/missing: gamma[\s\S]*duplicate: beta[\s\S]*unexpected: delta/i);
+  });
+
+  it("removes exclusive performance contracts from parallel Electron shards", () => {
+    const names = ["layout", "apply", "performance", "capture"];
+
+    expect(splitExclusiveTestNames(names, ["performance"])).toEqual({
+      exclusive: ["performance"],
+      parallel: ["layout", "apply", "capture"]
+    });
+    expect(() => splitExclusiveTestNames(names, ["missing performance test"]))
+      .toThrowError(/exclusive electron tests were not found/i);
   });
 
   it("merges shard reports using only the tests that actually executed", () => {

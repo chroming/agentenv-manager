@@ -18,6 +18,20 @@ export const partitionTestNames = (names, requestedShardCount) => {
   return shards;
 };
 
+export const splitExclusiveTestNames = (names, requestedExclusiveNames) => {
+  const available = new Set(names);
+  const requested = [...new Set(requestedExclusiveNames)];
+  const missing = requested.filter((name) => !available.has(name));
+  if (missing.length > 0) {
+    throw new Error(`Exclusive Electron tests were not found: ${missing.join(", ")}`);
+  }
+  const exclusive = new Set(requested);
+  return {
+    exclusive: names.filter((name) => exclusive.has(name)),
+    parallel: names.filter((name) => !exclusive.has(name))
+  };
+};
+
 export const executedAssertionsFromReport = (report) =>
   (report.testResults ?? []).flatMap((result) =>
     (result.assertionResults ?? []).filter((assertion) =>
@@ -150,6 +164,7 @@ const runJob = async ({ job, projectRoot, reportRoot, vitestEntry }) => {
 };
 
 export const runElectronTestSuite = async ({
+  exclusiveTestNames = [],
   heavyFile,
   outputFile,
   projectRoot,
@@ -164,7 +179,10 @@ export const runElectronTestSuite = async ({
       expectedByFile.set(file, await listTests({ projectRoot, vitestEntry, file }));
     }
     const heavyNames = expectedByFile.get(heavyFile) ?? [];
-    const heavyShards = partitionTestNames(heavyNames, workerCount);
+    const heavySelection = splitExclusiveTestNames(heavyNames, exclusiveTestNames);
+    const heavyShards = heavySelection.parallel.length > 0
+      ? partitionTestNames(heavySelection.parallel, workerCount)
+      : [];
     const heavyJobs = heavyShards.map((names, index) => ({
       id: `heavy-${index + 1}`,
       file: heavyFile,
@@ -192,7 +210,16 @@ export const runElectronTestSuite = async ({
       Promise.all(heavyPromises),
       smallResultsPromise
     ]);
-    const results = [...heavyResults, ...smallResults];
+    const exclusiveResults = [];
+    for (const [index, name] of heavySelection.exclusive.entries()) {
+      exclusiveResults.push(await run({
+        id: `exclusive-${index + 1}`,
+        file: heavyFile,
+        label: `${heavyFile} exclusive: ${name}`,
+        pattern: `^${escapeRegExp(name)}$`
+      }));
+    }
+    const results = [...heavyResults, ...smallResults, ...exclusiveResults];
 
     const reports = results.map((result) => result.report);
     const expectedNames = [...expectedByFile.values()].flat();

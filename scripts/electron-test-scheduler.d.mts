@@ -22,10 +22,15 @@ export interface VitestReport {
 }
 
 export function partitionTestNames(names: string[], requestedShardCount: number): string[][];
+export function splitExclusiveTestNames(names: string[], requestedExclusiveNames: string[]): {
+  exclusive: string[];
+  parallel: string[];
+};
 export function executedAssertionsFromReport(report: VitestReport): VitestAssertionResult[];
 export function assertExactTestCoverage(expectedNames: string[], executedNames: string[]): void;
 export function mergeVitestReports(reports: VitestReport[]): VitestReport;
 export function runElectronTestSuite(options: {
+  exclusiveTestNames?: string[];
   heavyFile: string;
   outputFile?: string;
   projectRoot: string;

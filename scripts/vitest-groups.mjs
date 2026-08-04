@@ -11,5 +11,9 @@ export const electronE2eTestFiles = [
 export const heavyElectronE2eTestFile =
   "tests/e2e/electronUiProfileSwitching.e2e.test.ts";
 
+export const exclusiveElectronE2eTestNames = [
+  "Electron UI profile switching e2e keeps Library scale correct and responsive at supported viewports"
+];
+
 export const electronE2eExcludeGlob =
   "**/tests/e2e/{conversations,desktopShell,electronAppUpdates,electronUiProfileSwitching,repositorySkillSource,startupRecovery,workspaceSync}.e2e.test.ts";
