@@ -36,6 +36,7 @@ const target = (
   configLanguage: "text",
   realWritesEnabled: true,
   executableName: id,
+  executableCandidates: [id],
   capabilities: {
     instructions: true,
     skills: true,
@@ -55,6 +56,9 @@ const target = (
       { kind: "command", label: name, path: `/usr/local/bin/${id}` }
     ],
     executableName: id,
+    executableCandidates: [id],
+    executableStatus: "found",
+    executableCandidate: id,
     executablePath: `/usr/local/bin/${id}`,
     executableFound: true,
     canWrite: true,

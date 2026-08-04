@@ -1,5 +1,6 @@
 import type { AgentEnvSettings, AppLocale } from "../../shared/types";
 import { useI18n } from "../i18n";
+import { SettingsPreferenceRow } from "./SettingsPreferenceRow";
 
 export type SettingsCategory = "general" | "agents" | "skills" | "connections" | "data";
 
@@ -78,12 +79,10 @@ export const GeneralSettingsSection = ({
         <div className="resource-heading" id="appearance-heading">{t("General")}</div>
       </div>
       <div className="settings-preference-list">
-        <label className="settings-preference-row">
-          <span className="settings-preference-copy">
-            <strong>{t("Language")}</strong>
-            <small>{t("Uses your system language until you choose another language.")}</small>
-          </span>
-          <select
+        <SettingsPreferenceRow
+          label={t("Language")}
+          description={t("Uses your system language until you choose another language.")}
+          control={<select
             data-testid="locale-select"
             aria-label={t("Interface language")}
             value={locale}
@@ -93,14 +92,12 @@ export const GeneralSettingsSection = ({
             <option value="en">{t("English")}</option>
             <option value="zh_CN">{t("Simplified Chinese")}</option>
             <option value="zh_TW">{t("Traditional Chinese")}</option>
-          </select>
-        </label>
-        <label className="settings-preference-row">
-          <span className="settings-preference-copy">
-            <strong>{t("Conversation terminal")}</strong>
-            <small>{t("Used when opening or continuing CLI conversations.")}</small>
-          </span>
-          <select
+          </select>}
+        />
+        <SettingsPreferenceRow
+          label={t("Conversation terminal")}
+          description={t("Used when opening or continuing CLI conversations.")}
+          control={<select
             data-testid="conversation-terminal-select"
             aria-label={t("Conversation terminal")}
             value={conversationTerminal}
@@ -112,8 +109,8 @@ export const GeneralSettingsSection = ({
             {window.agentEnv.platform !== "win32" ? (
               <option value="ghostty">{t("Ghostty")}</option>
             ) : null}
-          </select>
-        </label>
+          </select>}
+        />
       </div>
     </section>
   );

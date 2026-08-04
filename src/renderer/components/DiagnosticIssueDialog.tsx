@@ -4,6 +4,7 @@ import type { DiagnosticIssueDetail } from "../../shared/types";
 import { formatDiagnosticIssue } from "../diagnostics";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
+import { Button } from "./ui";
 
 export const DiagnosticIssueDialog = ({
   issue,
@@ -122,26 +123,22 @@ export const DiagnosticIssueDialog = ({
           ))}
         </div>
         <footer className="preview-actions">
-          <button
-            className="secondary-action"
-            type="button"
+          <Button
+            icon={copied ? <CheckCircle2 size={15} /> : <Copy size={15} />}
             onClick={() => void copyIssue()}
           >
-            {copied ? <CheckCircle2 size={15} /> : <Copy size={15} />}
             {t(copied ? "Copied" : "Copy details")}
-          </button>
-          <button
-            className="secondary-action"
-            type="button"
-            disabled={exporting}
+          </Button>
+          <Button
+            busy={exporting}
+            icon={<FileDown size={15} />}
             onClick={() => void exportIssue()}
           >
-            <FileDown size={15} />
             {t(exporting ? "Exporting..." : "Export report")}
-          </button>
-          <button ref={closeRef} className="secondary-action" type="button" onClick={onDismiss}>
+          </Button>
+          <Button ref={closeRef} onClick={onDismiss}>
             {t("Close")}
-          </button>
+          </Button>
         </footer>
       </section>
     </div>

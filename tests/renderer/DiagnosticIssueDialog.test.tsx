@@ -47,6 +47,12 @@ describe("DiagnosticIssueDialog", () => {
       "AEM-20260728-ABC123"
     );
     expect(screen.getByText(/Skill path occupied/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy details" }))
+      .toHaveClass("ui-button", "ui-button--secondary");
+    expect(screen.getByRole("button", { name: "Export report" }))
+      .toHaveClass("ui-button", "ui-button--secondary");
+    expect(screen.getByRole("button", { name: "Close" }))
+      .toHaveClass("ui-button", "ui-button--secondary");
     fireEvent.click(screen.getByRole("button", { name: "Copy details" }));
     await waitFor(() =>
       expect(copyText).toHaveBeenCalledWith(expect.stringContaining("Context:"))

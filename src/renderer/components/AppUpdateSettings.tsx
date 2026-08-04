@@ -2,12 +2,14 @@ import { Download, RefreshCw, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { AgentEnvSettings, AppUpdateStatus } from "../../shared/types";
 import { useI18n } from "../i18n";
+import { SettingsPreferenceRow } from "./SettingsPreferenceRow";
 import { Button, Switch } from "./ui";
 
 interface AppUpdateSettingsProps {
   busy: boolean;
   settings: AgentEnvSettings;
   onChange(input: Partial<AgentEnvSettings>): void;
+  onOpenConnections?: () => void;
 }
 
 const workingPhases = new Set<AppUpdateStatus["phase"]>([
@@ -19,7 +21,8 @@ const workingPhases = new Set<AppUpdateStatus["phase"]>([
 export const AppUpdateSettings = ({
   busy,
   settings,
-  onChange
+  onChange,
+  onOpenConnections
 }: AppUpdateSettingsProps) => {
   const { t } = useI18n();
   const [status, setStatus] = useState<AppUpdateStatus>();
@@ -43,6 +46,8 @@ export const AppUpdateSettings = ({
     setStatus(next);
   };
   const working = status ? workingPhases.has(status.phase) : true;
+  const connectionIssue = status?.failureCode === "rate-limited" ||
+    status?.failureCode === "authentication-required";
   const channelCopy = status?.installChannel === "homebrew"
     ? t("Installed with Homebrew")
     : status?.installChannel === "direct"
@@ -83,6 +88,9 @@ export const AppUpdateSettings = ({
           <small>{channelCopy}</small>
         </span>
         <span className="app-update-actions">
+          {connectionIssue && onOpenConnections ? (
+            <Button onClick={onOpenConnections}>{t("Connections")}</Button>
+          ) : null}
           {status && ["available", "downloading"].includes(status.phase) &&
           status.automaticInstallSupported ? (
             <Button
@@ -126,56 +134,51 @@ export const AppUpdateSettings = ({
           </p>
         ) : null}
         {status?.phase === "failed" && status.message ? (
-          <code className="app-update-error">{status.message}</code>
+          <code className="app-update-error">{t(status.message)}</code>
         ) : null}
       </div>
       <div className="settings-preference-list">
-        <div className="settings-preference-row">
-          <span className="settings-preference-copy">
-            <strong>{t("Automatic checks")}</strong>
-            <small>{t("Checks the official stable Release after startup without delaying the app.")}</small>
-          </span>
-          <Switch
+        <SettingsPreferenceRow
+          label={t("Automatic checks")}
+          description={t("Checks the official stable Release after startup without delaying the app.")}
+          control={<Switch
             checked={settings.appUpdateAutoCheckEnabled !== false}
             disabled={busy}
             label={t("Automatic update checks")}
             onClick={() => onChange({
               appUpdateAutoCheckEnabled: settings.appUpdateAutoCheckEnabled === false
             })}
-          />
-        </div>
+          />}
+        />
         {status?.automaticInstallSupported ? (
           <>
-            <div className={`settings-preference-row settings-dependent-row${
-              settings.appUpdateAutoCheckEnabled === false ? " is-disabled" : ""
-            }`}>
-              <span className="settings-preference-copy">
-                <strong>{t("Prepare updates")}</strong>
-                <small>{t("Homebrew downloads the checksum-bound package in the background.")}</small>
-              </span>
-              <Switch
+            <SettingsPreferenceRow
+              className={`settings-dependent-row${
+                settings.appUpdateAutoCheckEnabled === false ? " is-disabled" : ""
+              }`}
+              label={t("Prepare updates")}
+              description={t("Homebrew downloads the checksum-bound package in the background.")}
+              control={<Switch
                 checked={settings.appUpdateAutoDownloadEnabled !== false}
                 disabled={busy || settings.appUpdateAutoCheckEnabled === false}
                 label={t("Automatically download updates")}
                 onClick={() => onChange({
                   appUpdateAutoDownloadEnabled: settings.appUpdateAutoDownloadEnabled === false
                 })}
-              />
-            </div>
-            <div className="settings-preference-row">
-              <span className="settings-preference-copy">
-                <strong>{t("Install when quitting")}</strong>
-                <small>{t("Installs only an already downloaded Homebrew update after AgentEnv work has stopped.")}</small>
-              </span>
-              <Switch
+              />}
+            />
+            <SettingsPreferenceRow
+              label={t("Install when quitting")}
+              description={t("Installs only an already downloaded Homebrew update after AgentEnv work has stopped.")}
+              control={<Switch
                 checked={settings.appUpdateInstallOnQuit !== false}
                 disabled={busy}
                 label={t("Install ready update when quitting")}
                 onClick={() => onChange({
                   appUpdateInstallOnQuit: settings.appUpdateInstallOnQuit === false
                 })}
-              />
-            </div>
+              />}
+            />
           </>
         ) : null}
       </div>

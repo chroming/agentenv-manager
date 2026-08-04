@@ -1,20 +1,27 @@
 import {
   ArrowLeft,
   CheckCircle2,
+  Copy,
+  FileDown,
+  GitCompareArrows,
+  LoaderCircle,
   Monitor,
   ShieldCheck,
   TriangleAlert
 } from "lucide-react";
-import type { RefObject } from "react";
+import { useRef, useState, type RefObject } from "react";
 import type {
+  TargetCaptureDecision,
   TargetCapturePreview,
   TargetCaptureResource,
+  TargetCaptureSkillCandidate,
   TargetInfo
 } from "../../shared/types";
 import { targetIconFor } from "./ProfileSidebar";
 import { useI18n } from "../i18n";
 import { isTargetInstalled } from "../../shared/targetHealth";
 import { Button } from "./ui";
+import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
 
 type CaptureActivity = "idle" | "reviewing" | "creating";
 
@@ -28,6 +35,7 @@ interface TargetCaptureDialogProps {
   activity: CaptureActivity;
   nameError?: string;
   flowError?: string;
+  decisions: TargetCaptureDecision[];
   dialogRef: RefObject<HTMLElement | null>;
   initialFocusRef: RefObject<HTMLButtonElement | null>;
   onNameChange(value: string): void;
@@ -37,6 +45,7 @@ interface TargetCaptureDialogProps {
   onReview(): void;
   onCreate(): void;
   onRefreshReview(): void;
+  onDecisionChange(decision: TargetCaptureDecision): void;
 }
 
 const resourceKindOrder: TargetCaptureResource["kind"][] = [
@@ -68,6 +77,7 @@ export const TargetCaptureDialog = ({
   activity,
   nameError,
   flowError,
+  decisions,
   dialogRef,
   initialFocusRef,
   onNameChange,
@@ -76,12 +86,25 @@ export const TargetCaptureDialog = ({
   onCancel,
   onReview,
   onCreate,
-  onRefreshReview
+  onRefreshReview,
+  onDecisionChange
 }: TargetCaptureDialogProps) => {
-  const { t } = useI18n();
+  const { t, formatDate } = useI18n();
+  const [copiedIssueId, setCopiedIssueId] = useState<string>();
+  const [exportingIssueId, setExportingIssueId] = useState<string>();
+  const [diffCandidate, setDiffCandidate] = useState<TargetCaptureSkillCandidate>();
+  const diffReturnFocusRef = useRef<HTMLButtonElement>(null);
   const isReview = Boolean(preview);
   const isBusy = activity !== "idle";
   const isSkillsOnly = scope === "skills";
+  const submitLabel = isReview
+    ? isSkillsOnly ? "Save setup" : "Save Profile"
+    : "Review";
+  const submitAccessibleLabel = activity === "reviewing"
+    ? "Reviewing..."
+    : activity === "creating"
+      ? "Creating..."
+      : submitLabel;
   const targetIcon = target ? targetIconFor(target) : undefined;
   const includedResources = preview?.resources.filter((resource) => resource.action !== "exclude") ?? [];
   const importedResources = preview?.resources.filter((resource) => resource.action === "import") ?? [];
@@ -91,17 +114,72 @@ export const TargetCaptureDialog = ({
       resources: preview?.resources.filter((resource) => resource.kind === kind) ?? []
     }))
     .filter((group) => group.resources.length > 0);
+  const captureIssues = preview?.issues ?? [];
+  const selectedCandidates = captureIssues.flatMap((issue) => {
+    const decision = decisions.find((item) => item.issueId === issue.id);
+    if (decision?.action !== "use-copy") return [];
+    const candidate = issue.candidates.find((item) => item.id === decision.candidateId);
+    return candidate ? [candidate] : [];
+  });
+  const includedResourceCount = includedResources.length + selectedCandidates.length;
+  const importedResourceCount = importedResources.length + selectedCandidates.filter(
+    (candidate) => candidate.libraryMatch !== "identical"
+  ).length;
+  const unresolvedIssueCount = captureIssues.filter(
+    (issue) => !decisions.some((decision) => decision.issueId === issue.id)
+  ).length;
+  const blockingCopyLabel = copiedIssueId === "__blocking__" ? "Copied" : "Copy details";
+  const blockingExportLabel = exportingIssueId === "__blocking__"
+    ? "Exporting..."
+    : "Export report";
+  const decisionFor = (issueId: string) =>
+    decisions.find((decision) => decision.issueId === issueId);
+  const copyIssueDetails = async (issue: (typeof captureIssues)[number]) => {
+    const details = [
+      "AgentEnv Manager Capture review",
+      `Reference: ${issue.diagnosticReference ?? "Unavailable"}`,
+      `Agent: ${preview?.targetName ?? target?.name ?? "Agent"}`,
+      `Skill: ${issue.skillName}`,
+      `Reason: ${issue.message}`,
+      "",
+      ...issue.candidates.flatMap((candidate, index) => [
+        `Candidate ${index + 1}`,
+        `Path: ${candidate.path}`,
+        `Canonical path: ${candidate.canonicalPath}`,
+        `Location: ${candidate.shared ? "Shared compatibility location" : candidate.locationRole ?? "Agent location"}`,
+        `Version: ${candidate.version ?? "Not declared"}`,
+        `Hash: ${candidate.contentHash}`,
+        `Modified: ${candidate.modifiedAt ?? "Unknown"}`,
+        `Library match: ${candidate.libraryId ?? "None"}`,
+        ...(candidate.collectionPath ? [`Collection: ${candidate.collectionPath}`] : []),
+        ""
+      ])
+    ].join("\n");
+    await window.agentEnv.copyText(details);
+    setCopiedIssueId(issue.id);
+  };
+  const exportReference = async (id: string, reference?: string) => {
+    if (!reference) return;
+    setExportingIssueId(id);
+    try {
+      await window.agentEnv.exportDiagnostics(reference);
+    } finally {
+      setExportingIssueId(undefined);
+    }
+  };
 
   return (
     <div
-      className="preview-modal-backdrop"
+      className={`preview-modal-backdrop${diffCandidate ? " is-suspended" : ""}`}
       data-dismiss-policy="intentional"
     >
       <section
         ref={dialogRef}
         className="capture-dialog"
         role="dialog"
-        aria-modal="true"
+        aria-modal={diffCandidate ? undefined : "true"}
+        aria-hidden={Boolean(diffCandidate) || undefined}
+        inert={Boolean(diffCandidate) || undefined}
         aria-label={isReview
           ? t(isSkillsOnly ? "Review {{name}} Skill setup" : "Review {{name}} capture", {
               name: target?.name ?? t("Agent")
@@ -210,16 +288,184 @@ export const TargetCaptureDialog = ({
               </div>
 
               <div className="capture-review__summary" aria-label={t("Capture summary")}>
-                <span><strong>{includedResources.length}</strong><small>{t("Profile resources")}</small></span>
-                <span><strong>{importedResources.length}</strong><small>{t(importedResources.length === 1 ? "Library import" : "Library imports")}</small></span>
+                <span><strong>{includedResourceCount}</strong><small>{t("Profile resources")}</small></span>
+                <span><strong>{importedResourceCount}</strong><small>{t(importedResourceCount === 1 ? "Library import" : "Library imports")}</small></span>
                 <span><strong>0</strong><small>{t("Source changes")}</small></span>
               </div>
 
               {preview && preview.errors.length > 0 ? (
                 <div className="capture-errors" role="alert">
                   <TriangleAlert size={16} aria-hidden="true" />
-                  <span><strong>{t("Capture is blocked")}</strong>{preview.errors.map((error) => <small key={error}>{error}</small>)}</span>
+                  <span>
+                    <strong>{t("Capture is blocked")}</strong>
+                    {preview.errors.map((error) => <small key={error}>{error}</small>)}
+                  </span>
+                  <div className="capture-errors__actions">
+                    <Button
+                      size="compact"
+                      variant="ghost"
+                      icon={<Copy size={14} aria-hidden="true" />}
+                      onClick={() => {
+                        void window.agentEnv.copyText([
+                          "AgentEnv Manager Capture blocked",
+                          `Reference: ${preview.blockingDiagnosticReference ?? "Unavailable"}`,
+                          `Agent: ${preview.targetName}`,
+                          ...preview.errors.map((error) => `- ${error}`)
+                        ].join("\n"));
+                        setCopiedIssueId("__blocking__");
+                      }}
+                    >
+                      {t(blockingCopyLabel)}
+                    </Button>
+                    {preview.blockingDiagnosticReference ? (
+                      <Button
+                        size="compact"
+                        variant="ghost"
+                        busy={exportingIssueId === "__blocking__"}
+                        icon={exportingIssueId === "__blocking__"
+                          ? <LoaderCircle size={14} aria-hidden="true" />
+                          : <FileDown size={14} aria-hidden="true" />}
+                        onClick={() => void exportReference(
+                          "__blocking__",
+                          preview.blockingDiagnosticReference
+                        )}
+                      >
+                        {t(blockingExportLabel)}
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
+              ) : null}
+
+              {captureIssues.length > 0 ? (
+                <section className="capture-decisions" aria-label={t("Capture decisions")}>
+                  <header>
+                    <div>
+                      <strong>{t("Choose which copies to save")}</strong>
+                      <small>
+                        {t("The Agent can load different content under the same Skill name. Choose the Profile intent here; source files stay unchanged.")}
+                      </small>
+                    </div>
+                    <span>{unresolvedIssueCount > 0
+                      ? t("{{count}} to review", { count: unresolvedIssueCount })
+                      : t("Ready")}</span>
+                  </header>
+                  {captureIssues.map((issue) => {
+                    const decision = decisionFor(issue.id);
+                    return (
+                      <article className="capture-decision" key={issue.id}>
+                        <div className="capture-decision__heading">
+                          <div>
+                            <strong>{issue.skillName}</strong>
+                            <small>{t("{{count}} active copies have different content", {
+                              count: issue.candidates.length
+                            })}</small>
+                          </div>
+                          <div className="capture-decision__tools">
+                            <Button
+                              size="compact"
+                              variant="ghost"
+                              icon={<Copy size={14} aria-hidden="true" />}
+                              onClick={() => void copyIssueDetails(issue)}
+                            >
+                              {t(copiedIssueId === issue.id ? "Copied" : "Copy details")}
+                            </Button>
+                            {issue.diagnosticReference ? (
+                              <Button
+                                size="compact"
+                                variant="ghost"
+                                busy={exportingIssueId === issue.id}
+                                icon={exportingIssueId === issue.id
+                                  ? <LoaderCircle size={14} aria-hidden="true" />
+                                  : <FileDown size={14} aria-hidden="true" />}
+                                onClick={() => void exportReference(issue.id, issue.diagnosticReference)}
+                              >
+                                {t(exportingIssueId === issue.id ? "Exporting..." : "Export report")}
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="capture-candidates" role="radiogroup" aria-label={t("Copy to save for {{name}}", { name: issue.skillName })}>
+                          {issue.candidates.map((candidate) => {
+                            const selected = decision?.action === "use-copy" &&
+                              decision.candidateId === candidate.id;
+                            const location = candidate.shared
+                              ? t("Shared compatibility location")
+                              : candidate.locationRole === "preferred-runtime"
+                                ? t("Agent-specific location")
+                                : t("Additional Agent location");
+                            const libraryMessage = candidate.libraryMatch === "same-name"
+                              ? "Will save as Library Skill {{id}}; the existing same-name copy stays unchanged"
+                              : candidate.libraryMatch === "identical"
+                                ? "Matches Library Skill {{id}}"
+                                : "Will save as Library Skill {{id}}";
+                            return (
+                              <label className={selected ? "is-selected" : ""} key={candidate.id}>
+                                <input
+                                  type="radio"
+                                  name={`capture-${issue.id}`}
+                                  checked={selected}
+                                  disabled={isBusy}
+                                  onChange={() => onDecisionChange({
+                                    issueId: issue.id,
+                                    action: "use-copy",
+                                    candidateId: candidate.id
+                                  })}
+                                />
+                                <span className="capture-candidate__copy">
+                                  <strong>{location}</strong>
+                                  <code title={candidate.path}>{candidate.path}</code>
+                                  <small>
+                                    {candidate.version
+                                      ? t("Version {{version}}", { version: candidate.version })
+                                      : t("Version not declared")}
+                                    {` · ${candidate.contentHash.slice(0, 8)}`}
+                                    {candidate.modifiedAt
+                                      ? ` · ${t("Modified {{date}}", { date: formatDate(candidate.modifiedAt) })}`
+                                      : ""}
+                                  </small>
+                                  {candidate.libraryId ? (
+                                    <em>{t(libraryMessage, { id: candidate.libraryId })}</em>
+                                  ) : null}
+                                </span>
+                                {candidate.comparisonChanges?.length ? (
+                                  <Button
+                                    size="compact"
+                                    variant="ghost"
+                                    icon={<GitCompareArrows size={14} aria-hidden="true" />}
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      diffReturnFocusRef.current = event.currentTarget;
+                                      setDiffCandidate(candidate);
+                                    }}
+                                  >
+                                    {t("Compare")}
+                                  </Button>
+                                ) : null}
+                              </label>
+                            );
+                          })}
+                          <label className={decision?.action === "keep-outside" ? "is-selected" : ""}>
+                            <input
+                              type="radio"
+                              name={`capture-${issue.id}`}
+                              checked={decision?.action === "keep-outside"}
+                              disabled={isBusy}
+                              onChange={() => onDecisionChange({
+                                issueId: issue.id,
+                                action: "keep-outside"
+                              })}
+                            />
+                            <span className="capture-candidate__copy">
+                              <strong>{t("Leave runtime copies unchanged")}</strong>
+                              <small>{t("Do not add this Skill to the Profile. Future Apply preserves these paths on this device.")}</small>
+                            </span>
+                          </label>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </section>
               ) : null}
 
               {preview && preview.warnings.length > 0 ? (
@@ -292,7 +538,6 @@ export const TargetCaptureDialog = ({
           <div>
             {isReview ? (
               <Button
-                className="secondary-action"
                 disabled={isBusy}
                 icon={<ArrowLeft size={15} aria-hidden="true" />}
                 onClick={onBack}
@@ -300,31 +545,40 @@ export const TargetCaptureDialog = ({
                 {t("Back")}
               </Button>
             ) : null}
+            {isReview && unresolvedIssueCount > 0 ? (
+              <span className="capture-dialog__requirement">
+                {t("Resolve {{count}} items to continue", { count: unresolvedIssueCount })}
+              </span>
+            ) : null}
           </div>
           <div>
-            <Button ref={initialFocusRef} className="secondary-action" disabled={isBusy} onClick={onCancel}>
+            <Button ref={initialFocusRef} disabled={isBusy} onClick={onCancel}>
               {t("Cancel")}
             </Button>
             <Button
-              className="primary-action capture-dialog__submit"
+              aria-label={t(submitAccessibleLabel)}
+              className="capture-dialog__submit"
               busy={isBusy}
-              disabled={isBusy || !target || !isTargetInstalled(target.health) || !name.trim() || Boolean(preview?.errors.length)}
+              disabled={isBusy || !target || !isTargetInstalled(target.health) || !name.trim() || Boolean(preview?.errors.length) || unresolvedIssueCount > 0}
               variant="primary"
               onClick={isReview ? onCreate : onReview}
             >
-              {t(
-                activity === "reviewing"
-                  ? "Reviewing..."
-                  : activity === "creating"
-                    ? "Creating..."
-                    : isReview
-                      ? isSkillsOnly ? "Save setup" : "Save Profile"
-                      : "Review"
-              )}
+              {t(submitLabel)}
             </Button>
           </div>
         </footer>
       </section>
+      <DiffWorkspaceDialog
+        open={Boolean(diffCandidate)}
+        title={diffCandidate ? t("Compare copies of {{name}}", {
+          name: preview?.issues.find((issue) =>
+            issue.candidates.some((candidate) => candidate.id === diffCandidate.id)
+          )?.skillName ?? t("Skill")
+        }) : t("Skill comparison")}
+        changes={diffCandidate?.comparisonChanges ?? []}
+        returnFocusRef={diffReturnFocusRef}
+        onClose={() => setDiffCandidate(undefined)}
+      />
     </div>
   );
 };

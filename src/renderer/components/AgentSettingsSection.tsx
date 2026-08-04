@@ -16,19 +16,24 @@ interface AgentSettingsSectionProps {
   enabledAgentIds: string[];
   agents: TargetInfo[];
   agentStates: TargetManagementState[];
+  suppressedAgentIds: string[];
   busy: boolean;
   onSetEnabled(agentId: string, enabled: boolean): Promise<void>;
+  onSetSuggestionSuppressed(agentId: string, suppressed: boolean): Promise<void>;
   onOpenRecovery(): void;
   configRoots: Record<string, string>;
+  commandOverrides: Record<string, string>;
   onChooseConfigRoot(agentId: string): Promise<void>;
   onResetConfigRoot(agentId: string): Promise<void>;
+  onSetCommandOverride(agentId: string, command?: string): Promise<void>;
 }
 
 const healthLabel: Record<TargetInfo["health"]["status"], string> = {
   ready: "Ready",
   "needs-setup": "Needs setup",
   missing: "Not detected",
-  guarded: "Protected"
+  guarded: "Protected",
+  unknown: "Check failed"
 };
 
 export const AgentSettingsSection = ({
@@ -36,12 +41,16 @@ export const AgentSettingsSection = ({
   enabledAgentIds,
   agents,
   agentStates,
+  suppressedAgentIds,
   busy,
   onSetEnabled,
+  onSetSuggestionSuppressed,
   onOpenRecovery,
   configRoots,
+  commandOverrides,
   onChooseConfigRoot,
-  onResetConfigRoot
+  onResetConfigRoot,
+  onSetCommandOverride
 }: AgentSettingsSectionProps) => {
   const { t } = useI18n();
   const [disableCandidate, setDisableCandidate] = useState<TargetDescriptor>();
@@ -50,6 +59,10 @@ export const AgentSettingsSection = ({
     agentId: string;
     action: "choose" | "reset";
   }>();
+  const [commandDrafts, setCommandDrafts] = useState<Record<string, string>>(
+    commandOverrides
+  );
+  const [pendingCommandAgentId, setPendingCommandAgentId] = useState<string>();
   const dialogRef = useRef<HTMLElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -57,6 +70,11 @@ export const AgentSettingsSection = ({
   const enabledIds = new Set(enabledAgentIds);
   const agentsById = new Map(agents.map((agent) => [agent.id, agent]));
   const statesById = new Map(agentStates.map((state) => [state.targetId, state]));
+  const suppressedIds = new Set(suppressedAgentIds);
+
+  useEffect(() => {
+    setCommandDrafts(commandOverrides);
+  }, [commandOverrides]);
 
   useEffect(() => {
     const returnTarget = pendingReturnFocusRef.current;
@@ -117,6 +135,15 @@ export const AgentSettingsSection = ({
     }
   };
 
+  const commitCommandOverride = async (agentId: string, command?: string) => {
+    setPendingCommandAgentId(agentId);
+    try {
+      await onSetCommandOverride(agentId, command);
+    } finally {
+      setPendingCommandAgentId(undefined);
+    }
+  };
+
   return (
     <>
       <section className="resource-section settings-section" aria-labelledby="agent-settings-heading">
@@ -124,7 +151,7 @@ export const AgentSettingsSection = ({
           <div>
             <div className="resource-heading" id="agent-settings-heading">{t("Agents")}</div>
             <p className="settings-muted">
-              {t("Choose which local Agents AgentEnv detects, displays, and manages.")}
+              {t("Choose which local Agents AgentEnv displays and can manage. Detection remains read-only.")}
             </p>
           </div>
         </div>
@@ -161,6 +188,17 @@ export const AgentSettingsSection = ({
                   {recoveryRequired ? (
                     <button className="text-action" type="button" onClick={onOpenRecovery}>
                       {t("Open Recovery")}
+                    </button>
+                  ) : null}
+                  {!enabled && suppressedIds.has(agent.id) ? (
+                    <button
+                      className="text-action"
+                      type="button"
+                      disabled={busy || Boolean(pendingAgentId)}
+                      aria-label={t("Suggest {{name}} again", { name: agent.name })}
+                      onClick={() => void onSetSuggestionSuppressed(agent.id, false)}
+                    >
+                      {t("Suggest again")}
                     </button>
                   ) : null}
                 </div>
@@ -229,6 +267,67 @@ export const AgentSettingsSection = ({
             })}
           </div>
         </details>
+        <details className="agent-path-settings agent-command-settings">
+          <summary>{t("Custom commands")}</summary>
+          <p className="settings-muted">
+            {t("Override command detection and launch for an Agent. This never changes which files AgentEnv may manage.")}
+          </p>
+          <div className="agent-command-list">
+            {supportedAgents.map((agent) => {
+              const savedCommand = commandOverrides[agent.id] ?? "";
+              const draft = commandDrafts[agent.id] ?? "";
+              const pending = pendingCommandAgentId === agent.id;
+              return (
+                <div className="agent-command-row" key={agent.id} aria-busy={pending}>
+                  <label className="agent-command-copy" htmlFor={`agent-command-${agent.id}`}>
+                    <strong>{agent.name}</strong>
+                    <small>{t("Default: {{command}}", {
+                      command: agent.executableCandidates[0] ?? agent.executableName ?? t("Unavailable")
+                    })}</small>
+                  </label>
+                  <input
+                    id={`agent-command-${agent.id}`}
+                    aria-label={t("Command for {{name}}", { name: agent.name })}
+                    autoComplete="off"
+                    disabled={busy || Boolean(pendingCommandAgentId)}
+                    placeholder={agent.executableCandidates[0] ?? agent.executableName}
+                    spellCheck={false}
+                    value={draft}
+                    onChange={(event) => setCommandDrafts((current) => ({
+                      ...current,
+                      [agent.id]: event.target.value
+                    }))}
+                  />
+                  <Button
+                    size="compact"
+                    aria-label={t("Save {{name}} command", { name: agent.name })}
+                    disabled={
+                      busy ||
+                      Boolean(pendingCommandAgentId) ||
+                      !draft.trim() ||
+                      draft.trim() === savedCommand
+                    }
+                    icon={pending ? <LoaderCircle className="is-spinning" size={14} /> : undefined}
+                    onClick={() => void commitCommandOverride(agent.id, draft.trim())}
+                  >
+                    {pending ? t("Saving...") : t("Save")}
+                  </Button>
+                  {savedCommand ? (
+                    <button
+                      className="text-action agent-command-reset"
+                      type="button"
+                      aria-label={t("Use default {{name}} command", { name: agent.name })}
+                      disabled={busy || Boolean(pendingCommandAgentId)}
+                      onClick={() => void commitCommandOverride(agent.id)}
+                    >
+                      {t("Use default")}
+                    </button>
+                  ) : <span aria-hidden="true" />}
+                </div>
+              );
+            })}
+          </div>
+        </details>
       </section>
 
       {disableCandidate ? (
@@ -254,12 +353,11 @@ export const AgentSettingsSection = ({
               </div>
             </header>
             <footer className="preview-actions">
-              <button ref={cancelRef} type="button" disabled={busy} onClick={() => setDisableCandidate(undefined)}>
+              <Button ref={cancelRef} disabled={busy} onClick={() => setDisableCandidate(undefined)}>
                 {t("Cancel")}
-              </button>
-              <button
-                className="primary-action"
-                type="button"
+              </Button>
+              <Button
+                variant="primary"
                 disabled={busy}
                 onClick={() => {
                   const agentId = disableCandidate.id;
@@ -269,7 +367,7 @@ export const AgentSettingsSection = ({
                 }}
               >
                 {t("Turn off {{name}}", { name: disableCandidate.name })}
-              </button>
+              </Button>
             </footer>
           </section>
         </div>

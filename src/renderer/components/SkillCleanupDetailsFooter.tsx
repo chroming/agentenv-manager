@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
-import { Copy, LoaderCircle } from "lucide-react";
+import { Copy } from "lucide-react";
 import { useI18n } from "../i18n";
+import { Button } from "./ui";
 
 interface SkillCleanupDetailsFooterProps {
   busy: boolean;
@@ -27,37 +28,29 @@ export const SkillCleanupDetailsFooter = ({
 
   return (
     <footer className="preview-actions ui-dialog-footer">
-      <button
-        className="secondary-action"
-        type="button"
+      <Button
         disabled={working}
+        icon={<Copy size={15} strokeWidth={2.2} aria-hidden="true" />}
         onClick={onCopy}
       >
-        <Copy size={15} strokeWidth={2.2} aria-hidden="true" />
         {t(copied ? "Copied" : "Copy details")}
-      </button>
-      <button
+      </Button>
+      <Button
         ref={initialFocusRef}
-        className="secondary-action"
-        type="button"
         disabled={working}
         onClick={onClose}
       >
         {t("Close")}
-      </button>
+      </Button>
       {removable ? (
-        <button
-          className="primary-action"
-          type="button"
-          aria-busy={working}
+        <Button
+          variant="primary"
+          busy={working}
           disabled={busy}
           onClick={onRemove}
         >
-          {working ? (
-            <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
-          ) : null}
           {t(working ? "Cleaning up..." : "Remove unavailable links")}
-        </button>
+        </Button>
       ) : null}
     </footer>
   );

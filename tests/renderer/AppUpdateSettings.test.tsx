@@ -98,4 +98,28 @@ describe("App update settings", () => {
     );
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
+
+  it("offers the GitHub connection when release checks are rate limited", async () => {
+    installApi({
+      phase: "failed",
+      currentVersion: "0.1.0",
+      installChannel: "direct",
+      automaticInstallSupported: false,
+      failureCode: "rate-limited",
+      message: "GitHub temporarily limited update checks. Connect GitHub or try again later."
+    });
+    const onOpenConnections = vi.fn();
+    render(
+      <AppUpdateSettings
+        busy={false}
+        settings={settings}
+        onChange={vi.fn()}
+        onOpenConnections={onOpenConnections}
+      />
+    );
+
+    expect(await screen.findByText(/GitHub temporarily limited/)).toBeInTheDocument();
+    screen.getByRole("button", { name: "Connections" }).click();
+    expect(onOpenConnections).toHaveBeenCalledTimes(1);
+  });
 });

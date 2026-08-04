@@ -44,6 +44,7 @@ import { OverflowTooltip } from "./OverflowTooltip";
 
 interface TargetWorkspaceProps {
   targets: TargetInfo[];
+  detectedDisabledAgentCount: number;
   targetStates: TargetManagementState[];
   environmentReview: EnvironmentReviewSummary;
   targetNames: Record<string, string>;
@@ -56,6 +57,7 @@ interface TargetWorkspaceProps {
   busy: boolean;
   freshness: FreshnessState;
   onRefresh(): Promise<void>;
+  onChooseAgents(): void;
   onConfigure(targetId: string): void;
   onReviewEnvironment(): void;
   onCreateProfileFromTarget(targetId: string, returnFocus?: HTMLElement | null): void;
@@ -71,7 +73,14 @@ const targetStatusLabel: Record<TargetInfo["health"]["status"], string> = {
   ready: "Ready",
   "needs-setup": "Needs setup",
   missing: "Missing",
-  guarded: "Guarded"
+  guarded: "Guarded",
+  unknown: "Check failed"
+};
+
+const executableStatusLabel: Record<TargetInfo["health"]["executableStatus"], string> = {
+  found: "Detected",
+  missing: "Not detected",
+  unknown: "Check failed"
 };
 
 const installationEvidenceName = (
@@ -235,6 +244,7 @@ const TargetRowActions = ({
 
 export const TargetWorkspace = ({
   targets,
+  detectedDisabledAgentCount,
   targetStates,
   environmentReview,
   targetNames,
@@ -247,6 +257,7 @@ export const TargetWorkspace = ({
   busy,
   freshness,
   onRefresh,
+  onChooseAgents,
   onConfigure,
   onReviewEnvironment,
   onCreateProfileFromTarget,
@@ -311,7 +322,6 @@ export const TargetWorkspace = ({
               }]}
             />
             <Button
-              className="secondary-action"
               busy={freshness.status === "refreshing"}
               disabled={busy || isLoading || freshness.status === "refreshing"}
               icon={<RefreshCw size={15} strokeWidth={2.2} />}
@@ -323,16 +333,18 @@ export const TargetWorkspace = ({
         )}
       />
 
-      <EnvironmentStatusStrip
-        summary={environmentReview}
-        targetNames={targetNames}
-        busy={busy}
-        onConfigure={onConfigure}
-        onRefresh={() => {
-          void onRefresh();
-        }}
-        onReviewShared={onReviewEnvironment}
-      />
+      {environmentReview.state !== "no-agents" ? (
+        <EnvironmentStatusStrip
+          summary={environmentReview}
+          targetNames={targetNames}
+          busy={busy}
+          onConfigure={onConfigure}
+          onRefresh={() => {
+            void onRefresh();
+          }}
+          onReviewShared={onReviewEnvironment}
+        />
+      ) : null}
 
       <div className="target-list">
         {!isLoading && targets.length > 0 ? (
@@ -357,9 +369,19 @@ export const TargetWorkspace = ({
             <span>{t("Detecting Agents")}</span>
           </div>
         ) : targets.length === 0 ? (
-          <div className="inline-state inline-state--panel">
-            <span className="inline-state__icon" aria-hidden="true"><ProductIcon name="agents" size={15} /></span>
-            <span>{t("No enabled Agents")}</span>
+          <div className="target-empty-state">
+            <span className="target-empty-state__icon" aria-hidden="true"><ProductIcon name="agents" size={18} /></span>
+            <span className="target-empty-state__copy">
+              <strong>{t("No enabled Agents")}</strong>
+              <small>
+                {detectedDisabledAgentCount > 0
+                  ? t("{{count}} installed Agents are ready to enable.", {
+                      count: detectedDisabledAgentCount
+                    })
+                  : t("Install a supported Agent, then Refresh.")}
+              </small>
+            </span>
+            <Button size="compact" onClick={onChooseAgents}>{t("Choose Agents")}</Button>
           </div>
         ) : null}
         {!isLoading ? targets.map((target) => {
@@ -428,6 +450,32 @@ export const TargetWorkspace = ({
                       </div>
                       <strong>{t(target.health.installationFound ? "Detected" : "Not detected")}</strong>
                     </div>
+                    <div className="target-check">
+                      <div>
+                        <span>{t("Command")}</span>
+                        <OverflowTooltip
+                          className="target-check-path"
+                          displayText={
+                            target.health.executablePath ??
+                            target.health.executableOverride ??
+                            target.health.executableCandidates.join(" · ")
+                          }
+                          text={[
+                            target.health.executableOverride
+                              ? `Override: ${target.health.executableOverride}`
+                              : undefined,
+                            `Candidates: ${target.health.executableCandidates.join(", ")}`,
+                            target.health.executablePath
+                              ? `Resolved: ${target.health.executablePath}`
+                              : undefined,
+                            target.health.executableError
+                              ? `Error: ${target.health.executableError}`
+                              : undefined
+                          ].filter(Boolean).join("\n")}
+                        />
+                      </div>
+                      <strong>{t(executableStatusLabel[target.health.executableStatus])}</strong>
+                    </div>
                     {target.health.checks.map((check) => (
                       <div className="target-check" key={check.id}>
                         <div>
@@ -477,7 +525,6 @@ export const TargetWorkspace = ({
                   {isManaged ? (
                     <footer className="target-diagnostics-actions">
                       <Button
-                        className="secondary-action"
                         size="compact"
                         variant="secondary"
                         onClick={() => {
@@ -530,7 +577,6 @@ export const TargetWorkspace = ({
             <footer className="preview-actions ui-dialog-footer">
               <Button
                 ref={recoveryCloseRef}
-                className="secondary-action"
                 disabled={busy}
                 onClick={() => setIsRecoveryOpen(false)}
               >

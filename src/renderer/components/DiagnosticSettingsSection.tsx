@@ -1,6 +1,7 @@
-import { Copy, FileDown, FolderOpen, LoaderCircle } from "lucide-react";
+import { Copy, FileDown, FolderOpen } from "lucide-react";
 import { useState } from "react";
 import { useI18n } from "../i18n";
+import { Button, ToolbarOverflowMenu } from "./ui";
 
 export const DiagnosticSettingsSection = ({
   busy,
@@ -33,51 +34,40 @@ export const DiagnosticSettingsSection = ({
       <div className="settings-section-header">
         <div className="diagnostics-settings-copy">
           <div className="resource-heading" id="agentenv-diagnostics-heading">
-            {t("Diagnostics")}
+            {t("Logs & diagnostics")}
           </div>
           <p className="settings-muted">
-            {t("Copy or export redacted operation details when troubleshooting another device. Logs stay on this device.")}
+            {t("Normal operations, decisions, timing, and failures are recorded locally. Exported reports are redacted and never uploaded automatically.")}
           </p>
         </div>
       </div>
       <div className="diagnostics-settings-actions">
-        <button
-          className="secondary-action"
-          type="button"
-          disabled={busy}
-          onClick={() => void onCopyLatest()}
-        >
-          <Copy size={15} strokeWidth={2.2} aria-hidden="true" />
-          {t("Copy latest issue")}
-        </button>
-        <button
-          className="secondary-action"
-          type="button"
+        <Button
+          busy={exporting}
           disabled={busy || exporting}
-          aria-busy={exporting}
+          icon={<FileDown size={15} strokeWidth={2.2} aria-hidden="true" />}
           onClick={() => void exportReport()}
         >
-          {exporting ? (
-            <LoaderCircle
-              className="is-spinning"
-              size={15}
-              strokeWidth={2.2}
-              aria-hidden="true"
-            />
-          ) : (
-            <FileDown size={15} strokeWidth={2.2} aria-hidden="true" />
-          )}
           {t("Export report")}
-        </button>
-        <button
-          className="secondary-action"
-          type="button"
+        </Button>
+        <Button
           disabled={busy}
+          icon={<FolderOpen size={15} strokeWidth={2.2} aria-hidden="true" />}
           onClick={() => void onOpenLogs()}
         >
-          <FolderOpen size={15} strokeWidth={2.2} aria-hidden="true" />
           {t("Open logs")}
-        </button>
+        </Button>
+        <ToolbarOverflowMenu
+          disabled={busy || exporting}
+          label={t("More diagnostics actions")}
+          menuLabel={t("Diagnostics actions")}
+          items={[{
+            id: "copy-latest",
+            label: t("Copy latest issue"),
+            icon: <Copy size={15} strokeWidth={2.2} aria-hidden="true" />,
+            onSelect: () => void onCopyLatest()
+          }]}
+        />
       </div>
     </section>
   );

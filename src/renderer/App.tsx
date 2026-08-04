@@ -10,14 +10,12 @@ import {
   ArrowRight,
   CheckCircle2,
   ChevronDown,
-  Clock3,
-  FolderOpen,
-  HardDrive,
   History,
   LoaderCircle,
   Monitor,
   MoreHorizontal,
   Pencil,
+  Plus,
   RefreshCw,
   ScanLine,
   Settings2,
@@ -39,7 +37,6 @@ import type {
   StopManagingPreview,
   AgentEnvSettings,
   AppLocale,
-  BackupRetentionDays,
   GitHubAuthStatus,
   GitHubDeviceLogin,
   GitHubDeviceLoginResult,
@@ -86,6 +83,7 @@ import type {
   SkillUpdateSettingsInput,
   TargetDescriptor,
   TargetInfo,
+  TargetCaptureDecision,
   TargetCapturePreview,
   TargetManagementState,
   UnmanagedSkillLocationUpdate
@@ -95,6 +93,7 @@ import { I18nProvider, useI18n } from "./i18n";
 import { acceptAppliedProfileState } from "./appliedProfileState";
 import { activationPreviewHasWork } from "./activationPreview";
 import { formatDiagnosticIssue, parseDiagnosticErrorMessage } from "./diagnostics";
+import { formatBytes } from "./formatBytes";
 import { moveSharedSkillToAgents } from "./sharedSkillMigration";
 import { runSkillCollectionMigration } from "./skillCollectionMigrationAction";
 import type { SkillCollectionLinkGroup } from "../shared/skillCleanup";
@@ -106,6 +105,7 @@ import {
   type ManagedProfileResource
 } from "../shared/profileResources";
 import { AgentsEditor } from "./components/AgentsEditor";
+import { AgentDiscoveryDialog } from "./components/AgentDiscoveryDialog";
 import { AgentSettingsSection } from "./components/AgentSettingsSection";
 import {
   AppFeedback,
@@ -118,7 +118,7 @@ import {
   BackupManagerDialog,
   type BackupManagerNotice
 } from "./components/BackupManagerDialog";
-import { DataRootPath } from "./components/DataRootPath";
+import { DataSettingsSection } from "./components/DataSettingsSection";
 import { DiagnosticIssueDialog } from "./components/DiagnosticIssueDialog";
 import { FreshnessStatus } from "./components/FreshnessStatus";
 import { GitHubConnectionSettings } from "./components/GitHubConnectionSettings";
@@ -193,6 +193,7 @@ import { useModalDialog } from "./hooks/useModalDialog";
 import { useDesktopShortcuts } from "./hooks/useDesktopShortcuts";
 import { useFreshnessCoordinator } from "./hooks/useFreshnessCoordinator";
 import { useAutomaticSkillSourceChecks } from "./hooks/useAutomaticSkillSourceChecks";
+import { useAgentDiscovery } from "./hooks/useAgentDiscovery";
 import { useAgentRefresh } from "./hooks/useAgentRefresh";
 import { useWorkspaceFreshness } from "./hooks/useWorkspaceFreshness";
 import { useWorkspaceNavigation } from "./hooks/useWorkspaceNavigation";
@@ -225,6 +226,7 @@ import {
   deriveEnvironmentReview,
   type EnvironmentScanStatus
 } from "./environmentReview";
+import { deriveAgentSetupAction, deriveAgentSetupActions } from "./agentSetup";
 
 const emptyProfileResources: ProfileResources = {
   skills: [],
@@ -241,18 +243,6 @@ type ProfileCaptureOrigin = "profiles" | "targets";
 type ProfileCaptureActivity = "idle" | "reviewing" | "creating";
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
-
-const formatBytes = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = bytes / 1024;
-  let unit = units[0];
-  for (let index = 1; index < units.length && value >= 1024; index += 1) {
-    value /= 1024;
-    unit = units[index];
-  }
-  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${unit}`;
-};
 
 export { AppFeedback };
 
@@ -374,6 +364,7 @@ const AppContent = ({
     useState<"all" | "skills">("all");
   const [profileCaptureActivity, setProfileCaptureActivity] = useState<ProfileCaptureActivity>("idle");
   const [targetCapturePreview, setTargetCapturePreview] = useState<TargetCapturePreview>();
+  const [targetCaptureDecisions, setTargetCaptureDecisions] = useState<TargetCaptureDecision[]>([]);
   const [profileCaptureStatus, setProfileCaptureStatus] = useState("");
   const [profileCaptureError, setProfileCaptureError] = useState("");
   const [profileFormError, setProfileFormError] = useState("");
@@ -1012,6 +1003,7 @@ const AppContent = ({
         }
 
         setIsLoading(false);
+        void probeSupportedAgents();
         void loadProfileEnrichment(core, true, shouldApply).catch((unknownError) => {
           if (shouldApply()) {
             setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -1201,17 +1193,10 @@ const AppContent = ({
   const openAgentConfiguration = (targetId: string) => {
     const targetName =
       targets.find((target) => target.id === targetId)?.name ?? "Agent";
-    const activeProfileId = targetStates.find(
-      (state) => state.targetId === targetId
-    )?.activeProfileId;
-    const capturedProfileId = profiles.find(
-      (profile) =>
-        !profile.loadError && profile.createdFromTargetId === targetId
-    )?.id;
-    const profileId = activeProfileId ?? capturedProfileId;
+    const setupAction = deriveAgentSetupAction(targetId, profiles, targetStates);
 
-    if (profileId) {
-      selectProfile(profileId, undefined, targetId);
+    if (setupAction.kind !== "review-current") {
+      selectProfile(setupAction.profileId, undefined, targetId);
       return;
     }
     guardProfileAction(`configure ${targetName}`, () => {
@@ -1333,6 +1318,7 @@ const AppContent = ({
     setProfileCaptureScope("all");
     setProfileCaptureActivity("idle");
     setTargetCapturePreview(undefined);
+    setTargetCaptureDecisions([]);
     setProfileCaptureError("");
     setProfileFormError("");
     setProfileDialogMode("create");
@@ -1361,6 +1347,7 @@ const AppContent = ({
     setProfileCaptureScope(scope);
     setProfileCaptureActivity("idle");
     setTargetCapturePreview(undefined);
+    setTargetCaptureDecisions([]);
     setProfileCaptureError("");
     setProfileFormError("");
     setProfileDialogMode("create");
@@ -1404,6 +1391,7 @@ const AppContent = ({
     setProfileFormError("");
     setProfileCaptureError("");
     setTargetCapturePreview(undefined);
+    setTargetCaptureDecisions([]);
     setProfileCaptureActivity("reviewing");
     setBusy(true);
     try {
@@ -1412,6 +1400,7 @@ const AppContent = ({
         profileCaptureScope
       );
       setTargetCapturePreview(captured);
+      setTargetCaptureDecisions([]);
       setProfileForm((current) => ({
         ...current,
         name: current.name.trim() || captured.suggestedName
@@ -1454,7 +1443,10 @@ const AppContent = ({
         const saved = profileCreateSource === "target" && targetCapturePreview
           ? (await window.agentEnv.createProfileFromTarget({
               previewId: targetCapturePreview.id,
-              name
+              name,
+              ...(targetCaptureDecisions.length > 0
+                ? { decisions: targetCaptureDecisions }
+                : {})
             })).profile
           : await window.agentEnv.createProfile({
               preferredTargetId: profileForm.targetId,
@@ -1498,6 +1490,7 @@ const AppContent = ({
       );
       setProfileDialogMode(undefined);
       setTargetCapturePreview(undefined);
+      setTargetCaptureDecisions([]);
       clearProfilePreview();
       setRollbackPreview(undefined);
     } catch (unknownError) {
@@ -1609,6 +1602,7 @@ const AppContent = ({
     clearProfilePreview();
     setRollbackPreview(undefined);
     setTargetCapturePreview(undefined);
+    setTargetCaptureDecisions([]);
     setProfileCaptureActivity("idle");
     setProfileCaptureError("");
     setProfileFormError("");
@@ -1617,6 +1611,23 @@ const AppContent = ({
   const appModalOpen = Boolean(
     pendingSkillImport || pendingProfileAction || profileDialogMode || deleteProfileCandidateId || dataRestorePreview || backupManagerOpen
   );
+  const {
+    agentProbeComplete, detectedDisabledAgents,
+    dialogPhase: agentDiscoveryDialogPhase,
+    dialogOpen: agentDiscoveryDialogOpen,
+    discoveredTargets, enabledAgentIds, visibleAgentSuggestions,
+    chooseTargetConfigRoot, dismissAgentSuggestions, enableSuggestedAgents,
+    openAgentChooser, probeSupportedAgents, resetTargetConfigRoot,
+    restoreAgentSuggestion, setAgentEnabled, setDiscoveredTargets, setTargetCommandOverride,
+    suppressAgentSuggestion
+  } = useAgentDiscovery({
+    appModalOpen,
+    isLoading,
+    settings: skillSettings,
+    supportedTargets,
+    updateSettings: updateSkillSettings
+  });
+  const agentSetupActions = deriveAgentSetupActions(visibleAgentSuggestions, profiles, targetStates);
   const dismissAppModal = () => {
     if (pendingSkillImport) {
       dismissSkillImport();
@@ -3318,7 +3329,7 @@ const AppContent = ({
     }
   };
 
-  const updateSkillSettings = async (input: Partial<AgentEnvSettings>) => {
+  async function updateSkillSettings(input: Partial<AgentEnvSettings>) {
     setBusy(true);
     setError(undefined);
     setSettingsSaveStatus("Saving settings");
@@ -3327,7 +3338,11 @@ const AppContent = ({
       setSkillSettings(nextSettings);
       onLocalePreferenceChange(nextSettings.locale);
       if ("backupRetentionDays" in input) await refreshManagedBackups("mutation");
-      if ("enabledTargetIds" in input || "targetConfigRoots" in input) {
+      if (
+        "enabledTargetIds" in input ||
+        "targetConfigRoots" in input ||
+        "targetCommandOverrides" in input
+      ) {
         clearProfilePreview();
         setRollbackPreview(undefined);
         await refreshProfiles({
@@ -3345,30 +3360,7 @@ const AppContent = ({
     } finally {
       setBusy(false);
     }
-  };
-
-  const setAgentEnabled = async (targetId: string, enabled: boolean) => {
-    const currentIds =
-      skillSettings.enabledTargetIds ?? supportedTargets.map((target) => target.id);
-    const nextIds = enabled
-      ? [...new Set([...currentIds, targetId])]
-      : currentIds.filter((id) => id !== targetId);
-    await updateSkillSettings({ enabledTargetIds: nextIds });
-  };
-
-  const chooseTargetConfigRoot = async (targetId: string) => {
-    const selected = await window.agentEnv.selectTargetConfigRoot(targetId);
-    if (!selected) return;
-    await updateSkillSettings({
-      targetConfigRoots: { ...(skillSettings.targetConfigRoots ?? {}), [targetId]: selected }
-    });
-  };
-
-  const resetTargetConfigRoot = async (targetId: string) => {
-    const nextRoots = { ...(skillSettings.targetConfigRoots ?? {}) };
-    delete nextRoots[targetId];
-    await updateSkillSettings({ targetConfigRoots: nextRoots });
-  };
+  }
 
   const openBackupManager = () => {
     backupManagerReturnFocusRef.current =
@@ -3538,6 +3530,7 @@ const AppContent = ({
     runFreshness,
     setBusy,
     setError,
+    setDiscoveredTargets,
     setMcpConnections: setNativeMcpConnections,
     setMcpIssues: setNativeMcpIssues,
     setSelectedTargetId,
@@ -4278,7 +4271,25 @@ const AppContent = ({
             />
           </>
         ) : activeWorkspace === "profiles" ? (
-          <section className="profile-workbench ui-surface-frame" aria-label={t("Profiles")}>
+          <section className="profile-page">
+            <PageHeader
+              className="profile-page-header"
+              title={t("Profiles")}
+              help={
+                <InfoTip
+                  label={t("Compose reusable resources, then preview and apply them to an Agent.")}
+                />
+              }
+              actions={
+                <Button
+                  icon={<Plus size={16} strokeWidth={2.3} />}
+                  onClick={openCreateProfileDialog}
+                >
+                  {t("New Profile")}
+                </Button>
+              }
+            />
+            <section className="profile-workbench ui-surface-frame" aria-label={t("Profiles")}>
               <ProfileList
                 isLoading={isLoading}
                 profiles={profiles}
@@ -4292,7 +4303,6 @@ const AppContent = ({
                 actionsDisabled={busy}
                 onDelete={openDeleteProfileDialog}
                 onDuplicate={duplicateProfile}
-                onCreate={openCreateProfileDialog}
                 onSearchChange={setProfileSearch}
                 onSelect={selectProfile}
               />
@@ -4728,15 +4738,15 @@ const AppContent = ({
                       </div>
                     </header>
                     <footer className="preview-actions profile-dirty-actions">
-                      <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={cancelPendingProfileAction}>
+                      <Button ref={appModalInitialFocusRef} disabled={busy} onClick={cancelPendingProfileAction}>
                         {t("Cancel")}
-                      </button>
-                      <button className="secondary-action" type="button" disabled={busy} onClick={() => void continuePendingProfileAction(false)}>
+                      </Button>
+                      <Button disabled={busy} onClick={() => void continuePendingProfileAction(false)}>
                         {t("Discard changes")}
-                      </button>
-                      <button className="primary-action" type="button" disabled={busy} onClick={() => void continuePendingProfileAction(true)}>
+                      </Button>
+                      <Button variant="primary" disabled={busy} onClick={() => void continuePendingProfileAction(true)}>
                         {t("Save and continue")}
-                      </button>
+                      </Button>
                     </footer>
                   </section>
                 </div>
@@ -4819,6 +4829,7 @@ const AppContent = ({
                   }}
                 />
               ) : null}
+            </section>
           </section>
         ) : activeWorkspace === "conversations" ? (
           <ConversationWorkspace
@@ -4831,6 +4842,7 @@ const AppContent = ({
         ) : activeWorkspace === "targets" ? (
             <TargetWorkspace
               targets={targets}
+              detectedDisabledAgentCount={detectedDisabledAgents.length}
               targetStates={targetStates}
               environmentReview={environmentReview}
               targetNames={targetNames}
@@ -4843,6 +4855,7 @@ const AppContent = ({
               busy={busy}
               freshness={freshnessStates.agents}
               onRefresh={refreshTargets}
+              onChooseAgents={openAgentChooser}
               onConfigure={openAgentConfiguration}
               onReviewEnvironment={openEnvironmentReview}
               onCreateProfileFromTarget={(targetId, returnFocus) =>
@@ -4883,6 +4896,7 @@ const AppContent = ({
                 busy={busy}
                 settings={skillSettings}
                 onChange={(input) => void updateSkillSettings(input)}
+                onOpenConnections={openGitHubConnectionSettings}
               />
               <TelemetrySettings
                 busy={busy}
@@ -4895,16 +4909,23 @@ const AppContent = ({
             <AgentSettingsSection
               supportedAgents={supportedTargets}
               enabledAgentIds={
-                skillSettings.enabledTargetIds ?? supportedTargets.map((target) => target.id)
+                enabledAgentIds
               }
-              agents={targets}
+              agents={agentProbeComplete ? discoveredTargets : targets}
               agentStates={targetStates}
+              suppressedAgentIds={skillSettings.suppressedAgentSuggestionIds ?? []}
               busy={busy}
               onSetEnabled={setAgentEnabled}
+              onSetSuggestionSuppressed={(agentId, suppressed) =>
+                suppressed
+                  ? suppressAgentSuggestion(agentId)
+                  : restoreAgentSuggestion(agentId)}
               onOpenRecovery={() => openWorkspaceNow("targets")}
               configRoots={skillSettings.targetConfigRoots ?? {}}
+              commandOverrides={skillSettings.targetCommandOverrides ?? {}}
               onChooseConfigRoot={chooseTargetConfigRoot}
               onResetConfigRoot={resetTargetConfigRoot}
+              onSetCommandOverride={setTargetCommandOverride}
             />
             ) : null}
             {settingsCategory === "skills" ? (
@@ -4934,99 +4955,20 @@ const AppContent = ({
             ) : null}
             {settingsCategory === "data" ? (
             <>
-            <section className="resource-section settings-section" aria-labelledby="agentenv-data-heading">
-              <div className="settings-section-header settings-data-header">
-                <div>
-                  <div className="resource-heading" id="agentenv-data-heading">{t("Data & Backups")}</div>
-                  <p className="settings-muted">{t("AgentEnv data and the recovery points created before local changes.")}</p>
-                </div>
-                <div className="settings-data-actions">
-                  <Button
-                    className="secondary-action"
-                    disabled={busy}
-                    icon={<FolderOpen size={15} strokeWidth={2.2} aria-hidden="true" />}
-                    onClick={() => void window.agentEnv.openDataFolder()}
-                  >
-                    {t("Open folder")}
-                  </Button>
-                </div>
-              </div>
-              <DataRootPath />
-              <div className="backup-settings-list">
-                <div className="backup-settings-row">
-                  <span className="backup-settings-icon" aria-hidden="true">
-                    <History size={18} strokeWidth={2} />
-                  </span>
-                  <span className="backup-settings-copy">
-                    <strong>{t("Recovery storage")}</strong>
-                    <small>
-                      {managedBackupsLoading && !managedBackups
-                        ? t("Calculating storage...")
-                        : t((managedBackups?.items.length ?? 0) === 1 ? "{{count}} backup · {{size}}" : "{{count}} backups · {{size}}", {
-                            count: managedBackups?.items.length ?? 0,
-                            size: formatBytes(managedBackups?.totalBytes ?? 0)
-                          })}
-                    </small>
-                  </span>
-                  <span className="backup-settings-row-actions">
-                    <FreshnessStatus
-                      state={freshnessStates.backups}
-                      verb="Refreshed"
-                    />
-                    <Button className="secondary-action" disabled={busy} onClick={openBackupManager}>
-                      {t("Manage")}
-                    </Button>
-                  </span>
-                </div>
-                <label className="backup-settings-row" htmlFor="backup-retention-days">
-                  <span className="backup-settings-icon" aria-hidden="true">
-                    <Clock3 size={18} strokeWidth={2} />
-                  </span>
-                  <span className="backup-settings-copy">
-                    <strong>{t("Automatic cleanup")}</strong>
-                    <small>{t("Applies only to managed recovery backups.")}</small>
-                  </span>
-                  <select
-                    id="backup-retention-days"
-                    aria-label={t("Backup retention")}
-                    disabled={busy}
-                    value={skillSettings.backupRetentionDays ?? "never"}
-                    onChange={(event) => {
-                      const value = event.currentTarget.value;
-                      void updateSkillSettings({
-                        backupRetentionDays: value === "never" ? null : Number(value) as BackupRetentionDays
-                      });
-                    }}
-                  >
-                    <option value="never">{t("Never")}</option>
-                    <option value="7">{t("Keep for 7 days")}</option>
-                    <option value="30">{t("Keep for 30 days")}</option>
-                    <option value="90">{t("Keep for 90 days")}</option>
-                  </select>
-                </label>
-              </div>
-              <div className="settings-data-footer">
-                <span className="settings-field-note">{t("Data exports are stored outside AgentEnv and are never cleaned automatically.")}</span>
-                <div className="settings-data-actions">
-                  <Button
-                    className="secondary-action"
-                    disabled={busy}
-                    icon={<HardDrive size={15} strokeWidth={2.2} aria-hidden="true" />}
-                    onClick={() => void createAgentEnvDataBackup()}
-                  >
-                    {t("Export data")}
-                  </Button>
-                  <Button
-                    className="secondary-action"
-                    disabled={busy}
-                    icon={<RefreshCw size={15} strokeWidth={2.2} aria-hidden="true" />}
-                    onClick={() => void selectAgentEnvDataRestore()}
-                  >
-                    {t("Restore data")}
-                  </Button>
-                </div>
-              </div>
-            </section>
+            <DataSettingsSection
+              backupRetentionDays={skillSettings.backupRetentionDays}
+              busy={busy}
+              freshness={freshnessStates.backups}
+              inventory={managedBackups}
+              inventoryLoading={managedBackupsLoading}
+              onBackupRetentionChange={(backupRetentionDays) => {
+                void updateSkillSettings({ backupRetentionDays });
+              }}
+              onExport={() => void createAgentEnvDataBackup()}
+              onManageBackups={openBackupManager}
+              onOpenFolder={() => void window.agentEnv.openDataFolder()}
+              onRestore={() => void selectAgentEnvDataRestore()}
+            />
             <DiagnosticSettingsSection
               busy={busy}
               onCopyLatest={copyLatestDiagnosticIssue}
@@ -5084,8 +5026,8 @@ const AppContent = ({
                     <p>{t("A safety backup of the current data will be created before replacement.")}</p>
                   </div>
                   <footer className="preview-actions ui-dialog-footer">
-                    <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={() => setDataRestorePreview(undefined)}>{t("Cancel")}</button>
-                    <button className="danger-action" type="button" disabled={busy} onClick={() => void restoreAgentEnvData()}>{t("Restore data")}</button>
+                    <Button ref={appModalInitialFocusRef} disabled={busy} onClick={() => setDataRestorePreview(undefined)}>{t("Cancel")}</Button>
+                    <Button variant="danger" disabled={busy} onClick={() => void restoreAgentEnvData()}>{t("Restore data")}</Button>
                   </footer>
                 </section>
               </div>
@@ -5123,6 +5065,7 @@ const AppContent = ({
             activity={profileCaptureActivity}
             nameError={profileFormError}
             flowError={profileCaptureError}
+            decisions={targetCaptureDecisions}
             dialogRef={appModalDialogRef}
             initialFocusRef={appModalInitialFocusRef}
             onNameChange={(name) => {
@@ -5133,6 +5076,7 @@ const AppContent = ({
             onTargetChange={(targetId) => {
               const target = targets.find((candidate) => candidate.id === targetId);
               setTargetCapturePreview(undefined);
+              setTargetCaptureDecisions([]);
               setProfileCaptureError("");
               setProfileForm((current) => ({
                 ...current,
@@ -5142,17 +5086,41 @@ const AppContent = ({
             }}
             onBack={() => {
               setTargetCapturePreview(undefined);
+              setTargetCaptureDecisions([]);
               setProfileCaptureError("");
             }}
             onCancel={closeProfileDialog}
             onReview={() => void reviewTargetCapture()}
             onCreate={() => void submitProfileDialog()}
             onRefreshReview={() => void reviewTargetCapture()}
+            onDecisionChange={(decision) => {
+              setProfileCaptureError("");
+              setTargetCaptureDecisions((current) => [
+                ...current.filter((item) => item.issueId !== decision.issueId),
+                decision
+              ]);
+            }}
           />
         ) : null}
         <DiagnosticIssueDialog
           issue={diagnosticIssue}
           onDismiss={() => setDiagnosticIssue(undefined)}
+        />
+        <AgentDiscoveryDialog
+          agents={visibleAgentSuggestions}
+          busy={busy}
+          open={agentDiscoveryDialogOpen}
+          phase={agentDiscoveryDialogPhase}
+          setupActions={agentSetupActions}
+          suppressedAgentIds={skillSettings.suppressedAgentSuggestionIds ?? []}
+          onDismiss={dismissAgentSuggestions}
+          onEnable={enableSuggestedAgents}
+          onConfigure={(targetId) => {
+            dismissAgentSuggestions();
+            openAgentConfiguration(targetId);
+          }}
+          onRestore={restoreAgentSuggestion}
+          onSuppress={suppressAgentSuggestion}
         />
       </section>
 

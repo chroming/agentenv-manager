@@ -69,7 +69,6 @@ export const GitHubConnectionSettings = ({
             </Button>
           ) : !deviceLogin ? (
             <Button
-              className="secondary-action"
               busy={loginChecking}
               disabled={busy || loginChecking}
               icon={<GitFork size={15} strokeWidth={2.2} aria-hidden="true" />}
@@ -112,10 +111,8 @@ export const GitHubConnectionSettings = ({
           </div>
           <div className="github-device-actions">
             <Button
-              className="primary-button"
               icon={<ExternalLink size={15} aria-hidden="true" />}
               onClick={() => onOpenDevicePage(deviceLogin.verificationUri)}
-              variant="primary"
             >
               {t("Open GitHub")}
             </Button>

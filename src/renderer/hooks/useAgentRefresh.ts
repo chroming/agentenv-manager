@@ -18,6 +18,7 @@ export const useAgentRefresh = ({
   runFreshness,
   setBusy,
   setError,
+  setDiscoveredTargets,
   setMcpConnections,
   setMcpIssues,
   setSelectedTargetId,
@@ -31,6 +32,7 @@ export const useAgentRefresh = ({
   runFreshness: FreshnessRunner;
   setBusy: Dispatch<SetStateAction<boolean>>;
   setError: Dispatch<SetStateAction<string | undefined>>;
+  setDiscoveredTargets: Dispatch<SetStateAction<TargetInfo[]>>;
   setMcpConnections: Dispatch<SetStateAction<NativeMcpConnection[] | undefined>>;
   setMcpIssues: Dispatch<SetStateAction<NativeMcpInspectionIssue[]>>;
   setSelectedTargetId: Dispatch<SetStateAction<string | undefined>>;
@@ -53,7 +55,8 @@ export const useAgentRefresh = ({
         supportedTargets,
         targets,
         targetStates,
-        nativeMcpResult
+        nativeMcpResult,
+        discoveredTargets
       ] = await Promise.all([
         window.agentEnv.listSupportedTargets(),
         window.agentEnv.listTargets(true),
@@ -64,10 +67,12 @@ export const useAgentRefresh = ({
             error: error instanceof Error ? error.message : String(error),
             value: undefined
           })),
+        window.agentEnv.probeSupportedTargets(true),
         loadRecoveryHistory()
       ]);
       setSupportedTargets(supportedTargets);
       setTargets(targets);
+      setDiscoveredTargets(discoveredTargets);
       if (nativeMcpResult.value) {
         setMcpConnections(nativeMcpResult.value.connections);
         setMcpIssues(nativeMcpResult.value.issues);
