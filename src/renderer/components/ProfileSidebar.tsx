@@ -143,7 +143,8 @@ const targetStatusMessage = (status: TargetHealthStatus) =>
     ready: "Ready",
     "needs-setup": "Needs setup",
     missing: "Missing",
-    guarded: "Guarded"
+    guarded: "Guarded",
+    unknown: "Check failed"
   } satisfies Record<TargetHealthStatus, string>)[status];
 
 const AgentOverflowPopover = ({

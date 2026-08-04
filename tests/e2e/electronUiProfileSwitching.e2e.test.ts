@@ -551,6 +551,7 @@ const launchApp = async (
     includeTraeTarget?: boolean;
     includePiTarget?: boolean;
     enabledTargetIds?: string[];
+    suppressedAgentSuggestionIds?: string[];
     openCodeBetaProfileName?: string;
     malformedProfile?: boolean;
     malformedOpenCodeConfig?: boolean;
@@ -582,18 +583,28 @@ const launchApp = async (
   await mkdir(codexDir, { recursive: true });
   await mkdir(appDataRoot, { recursive: true });
   await writeJson(join(appDataRoot, "agentenv-data.json"), { formatVersion: 2 });
-  if (options.enabledTargetIds) {
-    await writeJson(join(appDataRoot, "settings.json"), {
-      locale: "system",
-      conversationTerminal: "default",
-      skillSyncMethod: "symlink",
-      skillStorageLocation: "appData",
-      skillAutoCheckEnabled: true,
-      skillAutoCheckIntervalMinutes: 60,
-      backupRetentionDays: null,
-      enabledTargetIds: options.enabledTargetIds
-    });
-  }
+  const supportedTargetIds = [
+    "opencode",
+    "claude-code",
+    "codex",
+    "antigravity",
+    "trae-cli",
+    "pi"
+  ];
+  const enabledTargetIds = options.enabledTargetIds ?? supportedTargetIds;
+  await writeJson(join(appDataRoot, "settings.json"), {
+    locale: "system",
+    conversationTerminal: "default",
+    skillSyncMethod: "symlink",
+    skillStorageLocation: "appData",
+    skillAutoCheckEnabled: true,
+    skillAutoCheckIntervalMinutes: 60,
+    backupRetentionDays: null,
+    enabledTargetIds,
+    suppressedAgentSuggestionIds:
+      options.suppressedAgentSuggestionIds ??
+      supportedTargetIds.filter((targetId) => !enabledTargetIds.includes(targetId))
+  });
   const opencodeExecutable = join(binDir, "opencode");
   const codexExecutable = join(binDir, "codex");
   if (options.openCodeDesktopOnly) {
@@ -2000,6 +2011,57 @@ describe("Electron UI profile switching e2e", () => {
         await navigation.getByRole("button", { name: "Profiles", exact: true }).click();
       }
       await navigation.getByRole("button", { name: "Skills", exact: true }).click();
+      const toolbarActions = [
+        page.getByRole("button", { name: "Check updates" }),
+        page.getByRole("button", { name: "Update all skills" })
+      ];
+      for (const action of toolbarActions) {
+        const geometry = await action.evaluate((button) => {
+          const content = button.querySelector<HTMLElement>(".ui-button__content")!;
+          const icon = button.querySelector<HTMLElement>(".ui-button__icon")!;
+          const label = button.querySelector<HTMLElement>(".ui-button__label")!;
+          const buttonBox = button.getBoundingClientRect();
+          const contentBox = content.getBoundingClientRect();
+          const iconBox = icon.getBoundingClientRect();
+          const labelBox = label.getBoundingClientRect();
+          return {
+            contentDisplay: getComputedStyle(content).display,
+            contentVisible: contentBox.width > 0 && contentBox.height > 0,
+            iconVisible: iconBox.width > 0 && iconBox.height > 0,
+            labelVisible: labelBox.width > 0 && labelBox.height > 0,
+            iconLabelGap: labelBox.left - iconBox.right,
+            iconLabelVerticalDelta: Math.abs(
+              iconBox.top + iconBox.height / 2 - (labelBox.top + labelBox.height / 2)
+            ),
+            iconButtonVerticalDelta: Math.abs(
+              iconBox.top + iconBox.height / 2 - (buttonBox.top + buttonBox.height / 2)
+            ),
+            contentVerticalDelta: Math.abs(
+              contentBox.top + contentBox.height / 2 - (buttonBox.top + buttonBox.height / 2)
+            )
+          };
+        });
+        expect(geometry.contentDisplay).toBe("flex");
+        expect(geometry.contentVisible).toBe(true);
+        expect(geometry.iconVisible).toBe(true);
+        if (testCase.width > 1050) {
+          expect(geometry.labelVisible).toBe(true);
+          expect(geometry.iconLabelGap).toBeGreaterThanOrEqual(6);
+          expect(geometry.iconLabelVerticalDelta).toBeLessThanOrEqual(1);
+        }
+        expect(geometry.iconButtonVerticalDelta).toBeLessThanOrEqual(1);
+        expect(geometry.contentVerticalDelta).toBeLessThanOrEqual(1);
+      }
+      const listCheckIconClass = await toolbarActions[0]
+        .locator("svg")
+        .first()
+        .getAttribute("class");
+      await page.getByRole("tab", { name: "By source" }).click();
+      const sourceCheckAction = page.getByRole("button", { name: "Check updates" });
+      await sourceCheckAction.waitFor({ state: "visible" });
+      expect(await sourceCheckAction.locator("svg").first().getAttribute("class"))
+        .toBe(listCheckIconClass);
+      await page.getByRole("tab", { name: "Skill list" }).click();
       const search = page.getByRole("textbox", { name: "Search skills" });
       for (let run = 0; run < 4; run += 1) {
         const startedAt = await page.evaluate(() => performance.now());
@@ -2097,18 +2159,25 @@ describe("Electron UI profile switching e2e", () => {
           right.bottom <= left.top;
         return {
           background: getComputedStyle(updateButton).backgroundColor,
+          bodyFontSize: getComputedStyle(document.documentElement)
+            .getPropertyValue("--font-size-body")
+            .trim(),
           buttonFitsText: updateButton.scrollWidth <= updateButton.clientWidth,
           buttonInsideStatusColumn:
             buttonRect.left >= statusRect.left - 1 && buttonRect.right <= statusRect.right + 1,
           columnsDoNotOverlap: doNotOverlap(statusRect, moreRect),
           detailClearance: detailVisible ? detailRect.top - buttonRect.bottom : undefined,
-          foreground: getComputedStyle(updateButton).color
+          foreground: getComputedStyle(updateButton).color,
+          statusFontSize: getComputedStyle(updateButton).fontSize,
+          statusLineHeight: Number.parseFloat(getComputedStyle(updateButton).lineHeight)
         };
       });
       expect(updateActionGeometry.background).not.toBe("rgb(0, 122, 255)");
       expect(updateActionGeometry.buttonFitsText).toBe(true);
       expect(updateActionGeometry.buttonInsideStatusColumn).toBe(true);
       expect(updateActionGeometry.columnsDoNotOverlap).toBe(true);
+      expect(updateActionGeometry.statusFontSize).toBe(updateActionGeometry.bodyFontSize);
+      expect(updateActionGeometry.statusLineHeight).toBeLessThanOrEqual(22);
       await expectTextFits(changingRow.locator(".library-status-cell .library-primary-status"));
       const beforeUpdateHeight = (await changingRow.boundingBox())?.height;
       await changingRow.getByRole("button", { name: "Update layout-skill-1" }).click();
@@ -3392,7 +3461,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.setViewportSize({ width: 1180, height: 728 });
     await selectProfile(page, "UI OpenCode alpha");
 
-    const header = page.locator(".profile-index-header");
+    const header = page.locator(".profile-page-header");
     const workbench = page.locator(".profile-workbench");
     const profileIndex = page.locator(".profile-index");
     const profileList = page.locator(".profile-list");
@@ -3424,7 +3493,7 @@ describe("Electron UI profile switching e2e", () => {
         iconTextGap: contentBox.left - iconBox.right,
         iconWidth: iconBox.width,
         headerTargetControls: document.querySelectorAll(
-          ".profile-index-header .profile-target-workspace-control, .profile-index-header .profile-target-workspace-button"
+          ".profile-page-header .profile-target-workspace-control, .profile-page-header .profile-target-workspace-button"
         ).length
       };
     });
@@ -3696,6 +3765,7 @@ describe("Electron UI profile switching e2e", () => {
           (box, index) => index === 0 || box.left >= controls[index - 1].right
         ),
         targetLabelDisplay: getComputedStyle(targetLabel).display,
+        targetLabelFits: targetLabel.scrollWidth <= targetLabel.clientWidth + 1,
         targetLabel: targetLabel.textContent?.trim()
       };
     });
@@ -3703,6 +3773,7 @@ describe("Electron UI profile switching e2e", () => {
       contained: true,
       separated: true,
       targetLabelDisplay: "block",
+      targetLabelFits: true,
       targetLabel: "OpenCode"
     });
     await expectInViewport(page, skillsTrigger);
@@ -4268,7 +4339,7 @@ describe("Electron UI profile switching e2e", () => {
     await expectCommitActionsToFit();
     await resizeAppWindow(page, 920, 620);
     for (const locator of [
-      page.locator(".profile-index-header"),
+      page.locator(".profile-page-header"),
       page.locator(".profile-workbench")
     ]) {
       await expectInViewport(page, locator);
@@ -4544,24 +4615,18 @@ describe("Electron UI profile switching e2e", () => {
           expect(chip?.width).toBe(workspaceGeometry.agentChipSizeToken);
         });
         expect(workspaceGeometry.editorPadding).toEqual(skillsGeometry.editorPadding);
-        if (workspace.button === "Profiles") {
-          expect(workspaceGeometry.heading.fontSize).toBe("14px");
-          expect(workspaceGeometry.heading.height).toBe(18);
-          expect(workspaceGeometry.action).toMatchObject({ height: 30, width: 30 });
-        } else {
-          expect({
-            fontSize: workspaceGeometry.heading.fontSize,
-            height: workspaceGeometry.heading.height,
-            lineHeight: workspaceGeometry.heading.lineHeight,
-            x: workspaceGeometry.heading.x
-          }).toEqual({
-            fontSize: skillsGeometry.heading.fontSize,
-            height: skillsGeometry.heading.height,
-            lineHeight: skillsGeometry.heading.lineHeight,
-            x: skillsGeometry.heading.x
-          });
-        }
-        if (workspace.action && workspace.button !== "Profiles") {
+        expect({
+          fontSize: workspaceGeometry.heading.fontSize,
+          height: workspaceGeometry.heading.height,
+          lineHeight: workspaceGeometry.heading.lineHeight,
+          x: workspaceGeometry.heading.x
+        }).toEqual({
+          fontSize: skillsGeometry.heading.fontSize,
+          height: skillsGeometry.heading.height,
+          lineHeight: skillsGeometry.heading.lineHeight,
+          x: skillsGeometry.heading.x
+        });
+        if (workspace.action) {
           expect(workspaceGeometry.action?.height).toBe(skillsGeometry.action?.height);
         } else if (!workspace.action) {
           expect(workspaceGeometry.action).toBeUndefined();
@@ -5221,11 +5286,12 @@ describe("Electron UI profile switching e2e", () => {
     };
 
     for (const viewport of [
+      { width: 1440, height: 900 },
       { width: 1180, height: 728 },
       { width: 920, height: 620 }
     ]) {
       await resizeAppWindow(page, viewport.width, viewport.height);
-      for (const destination of ["Skills", "Profiles", "Agents", "Settings"] as const) {
+      for (const destination of ["Skills", "Profiles", "Conversations", "Agents", "Settings"] as const) {
         await page
           .getByRole("complementary", { name: "Global navigation" })
           .getByRole("button", { name: destination, exact: true })
@@ -5269,7 +5335,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByTestId("locale-select").selectOption("zh_CN");
     await page.getByRole("heading", { name: "设置", exact: true }).waitFor();
-    for (const destination of ["技能", "配置方案", "Agents", "设置"] as const) {
+    for (const destination of ["技能", "配置方案", "对话", "Agents", "设置"] as const) {
       await page.getByRole("button", { name: destination, exact: true }).click();
       await page.getByRole("heading", { name: destination, exact: true }).waitFor();
       await expectTextContracts(`${destination} at 920x620`);
@@ -5929,7 +5995,7 @@ describe("Electron UI profile switching e2e", () => {
     await guard.waitFor({ state: "visible", timeout: 5_000 });
     const actionClearance = await guard.evaluate((dialog) => {
       const saveAndContinue = dialog.querySelector<HTMLButtonElement>(
-        ".profile-dirty-actions .primary-action"
+        ".profile-dirty-actions .ui-button--primary"
       );
       if (!saveAndContinue) return null;
       const dialogBox = dialog.getBoundingClientRect();
@@ -8235,6 +8301,13 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Update all skills" }).click();
     const bulkUpdateDialog = page.getByRole("dialog", { name: "Update all skills" });
     await bulkUpdateDialog.waitFor({ state: "visible" });
+    await expectStructuredDialog(bulkUpdateDialog);
+    expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
+    const bulkUpdateCaptureDir = process.env.AGENTENV_BULK_UPDATE_CAPTURE_DIR;
+    if (bulkUpdateCaptureDir) {
+      await mkdir(bulkUpdateCaptureDir, { recursive: true });
+      await page.screenshot({ path: join(bulkUpdateCaptureDir, "bulk-update-ready-920x620.png") });
+    }
     await bulkUpdateDialog.getByRole("button", { name: "Maximize preview" }).click();
     const fullPreview = page.getByRole("dialog", { name: "Full-screen preview" });
     await fullPreview.waitFor({ state: "visible" });
@@ -8246,6 +8319,11 @@ describe("Electron UI profile switching e2e", () => {
     await bulkUpdateDialog
       .getByRole("status", { name: "batch-helper: Done" })
       .waitFor({ state: "visible" });
+    await expectStructuredDialog(bulkUpdateDialog);
+    expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
+    if (bulkUpdateCaptureDir) {
+      await page.screenshot({ path: join(bulkUpdateCaptureDir, "bulk-update-complete-920x620.png") });
+    }
     await bulkUpdateDialog.getByRole("button", { name: "Close" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
@@ -8546,7 +8624,7 @@ describe("Electron UI profile switching e2e", () => {
     const captureGeometry = await dialog.evaluate((element) => {
       const rect = element.getBoundingClientRect();
       const footer = element.querySelector<HTMLElement>(".capture-dialog__footer")?.getBoundingClientRect();
-      const confirm = element.querySelector<HTMLButtonElement>(".capture-dialog__footer .primary-action")?.getBoundingClientRect();
+      const confirm = element.querySelector<HTMLButtonElement>(".capture-dialog__footer .ui-button--primary")?.getBoundingClientRect();
       const body = element.querySelector<HTMLElement>(".capture-dialog__body");
       return {
         left: rect.left,
@@ -8612,6 +8690,74 @@ describe("Electron UI profile switching e2e", () => {
       join(appDataRoot, "skills-library", "target-only-reviewer")
     );
     await expect.poll(() => capturedSkillRow.textContent()).not.toContain("Not tracked");
+  }, standardElectronTestTimeout);
+
+  it("resolves differing active Skill copies inside Capture without changing their source paths", async () => {
+    const { appDataRoot, homeDir, opencodeDir, page } = await launchApp();
+    const preferredSkill = join(opencodeDir, "skills", "review-helper");
+    const sharedSkill = join(homeDir, ".agents", "skills", "review-helper");
+    const preferredContent = "---\nname: review-helper\nversion: 2.0.0\n---\n# Preferred\n";
+    const sharedContent = "---\nname: review-helper\nversion: 1.0.0\n---\n# Shared\n";
+    await mkdir(preferredSkill, { recursive: true });
+    await mkdir(sharedSkill, { recursive: true });
+    await writeFile(join(preferredSkill, "SKILL.md"), preferredContent, "utf8");
+    await writeFile(join(sharedSkill, "SKILL.md"), sharedContent, "utf8");
+    await resizeAppWindow(page, 920, 620);
+
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
+    const targetCard = page.getByRole("article", { name: "Agent OpenCode" });
+    await captureAgent(page, targetCard, "OpenCode");
+    await page.getByRole("dialog", { name: "Create profile from OpenCode" })
+      .getByRole("button", { name: "Review" }).click();
+
+    const dialog = page.getByRole("dialog", { name: "Review OpenCode capture" });
+    await expect.poll(() => dialog.textContent()).toContain("Choose which copies to save");
+    await expect.poll(() => dialog.textContent()).toContain(preferredSkill);
+    await expect.poll(() => dialog.textContent()).toContain(sharedSkill);
+    await expect.poll(() => dialog.getByText("Capture is blocked").count()).toBe(0);
+    const save = dialog.getByRole("button", { name: "Save Profile" });
+    expect(await save.isDisabled()).toBe(true);
+
+    await dialog.getByRole("button", { name: "Copy details" }).click();
+    await expect.poll(() => dialog.getByRole("button", { name: "Copied" }).count()).toBe(1);
+    await dialog.getByRole("button", { name: "Compare" }).click();
+    const diff = page.getByRole("dialog", { name: "Full-screen preview" });
+    await expect.poll(() => diff.textContent()).toContain("Compare copies of review-helper");
+    await expect.poll(() => diff.textContent()).toContain("SKILL.md");
+    await page.keyboard.press("Escape");
+    await diff.waitFor({ state: "hidden" });
+
+    await dialog.getByRole("radio", { name: /Agent-specific location.*Version 2\.0\.0/ }).click();
+    expect(await save.isEnabled()).toBe(true);
+    const geometry = await dialog.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const footer = element.querySelector<HTMLElement>(".capture-dialog__footer")?.getBoundingClientRect();
+      return {
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+        footerBottom: footer?.bottom ?? 0,
+        bodyOverflow: getComputedStyle(
+          element.querySelector<HTMLElement>(".capture-dialog__body")!
+        ).overflowY
+      };
+    });
+    expect(geometry.left).toBeGreaterThanOrEqual(0);
+    expect(geometry.right).toBeLessThanOrEqual(920);
+    expect(geometry.top).toBeGreaterThanOrEqual(0);
+    expect(geometry.bottom).toBeLessThanOrEqual(620);
+    expect(geometry.footerBottom).toBeLessThanOrEqual(620);
+    expect(geometry.bodyOverflow).toBe("auto");
+    await save.click();
+    await dialog.waitFor({ state: "hidden" });
+
+    await expect(readFile(join(appDataRoot, "skills-library", "review-helper", "SKILL.md"), "utf8"))
+      .resolves.toBe(preferredContent);
+    await expect(readFile(join(preferredSkill, "SKILL.md"), "utf8"))
+      .resolves.toBe(preferredContent);
+    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8"))
+      .resolves.toBe(sharedContent);
   }, standardElectronTestTimeout);
 
   it("captures Trae CLI while warning about a broken Skill link, then cleans it up safely", async () => {
@@ -8729,7 +8875,7 @@ describe("Electron UI profile switching e2e", () => {
     const geometry = await dialog.evaluate((element) => {
       const rect = element.getBoundingClientRect();
       const footer = element.querySelector<HTMLElement>(".capture-dialog__footer")?.getBoundingClientRect();
-      const confirm = element.querySelector<HTMLButtonElement>(".capture-dialog__footer .primary-action")?.getBoundingClientRect();
+      const confirm = element.querySelector<HTMLButtonElement>(".capture-dialog__footer .ui-button--primary")?.getBoundingClientRect();
       const body = element.querySelector<HTMLElement>(".capture-dialog__body");
       return {
         top: rect.top,
@@ -8773,6 +8919,7 @@ describe("Electron UI profile switching e2e", () => {
         const intervalControl = document.querySelector<HTMLElement>(".settings-interval-control")!;
         const intervalRow = intervalControl.closest<HTMLElement>(".settings-preference-row")!;
         const title = autoRow.querySelector<HTMLElement>(".settings-preference-copy strong")!;
+        const copy = autoRow.querySelector<HTMLElement>(".settings-preference-copy")!;
         const autoRowRect = autoRow.getBoundingClientRect();
         const intervalRowRect = intervalRow.getBoundingClientRect();
         const intervalRect = intervalControl.getBoundingClientRect();
@@ -8783,6 +8930,7 @@ describe("Electron UI profile switching e2e", () => {
           autoRowTop: autoRowRect.top,
           autoRowBottom: autoRowRect.bottom,
           intervalRowRight: intervalRowRect.right,
+          copyRight: copy.getBoundingClientRect().right,
           titleRight: titleRect.right,
           intervalLeft: intervalRect.left,
           intervalRight: intervalRect.right,
@@ -8792,18 +8940,34 @@ describe("Electron UI profile switching e2e", () => {
           switchBottom: switchRect.bottom
         };
       });
-      expect(geometry.switchLeft).toBeGreaterThanOrEqual(geometry.titleRight + 8);
+      expect(geometry.switchLeft).toBeGreaterThanOrEqual(geometry.copyRight + 20);
       expect(geometry.switchRight).toBeLessThanOrEqual(geometry.autoRowRight);
       expect(geometry.intervalRight).toBeLessThanOrEqual(geometry.intervalRowRight);
-      expect(geometry.switchLeft - geometry.titleRight).toBeLessThanOrEqual(16);
+      expect(geometry.autoRowRight - geometry.switchRight).toBeLessThanOrEqual(3);
       expect(geometry.switchTop).toBeGreaterThanOrEqual(geometry.autoRowTop);
       expect(geometry.switchBottom).toBeLessThanOrEqual(geometry.autoRowBottom);
       expect(geometry.intervalLeft).toBeGreaterThan(geometry.titleRight);
     };
     await assertAutoCheckLayout();
-    await page.setViewportSize({ width: 920, height: 620 });
+    await resizeAppWindow(page, 920, 620);
     await assertAutoCheckLayout();
     await expectNoHorizontalOverflow(page, [".app-shell", ".editor-panel", ".settings-page"]);
+    const minimumSettingsWidth = await page.locator(".settings-page").evaluate(
+      (element) => Math.round(element.getBoundingClientRect().width)
+    );
+    await resizeAppWindow(page, 1180, 728);
+    const defaultSettingsWidth = await page.locator(".settings-page").evaluate(
+      (element) => Math.round(element.getBoundingClientRect().width)
+    );
+    expect(defaultSettingsWidth).toBeGreaterThanOrEqual(900);
+    expect(defaultSettingsWidth).toBeGreaterThan(minimumSettingsWidth);
+    await resizeAppWindow(page, 1440, 900);
+    const largeSettingsWidth = await page.locator(".settings-page").evaluate(
+      (element) => Math.round(element.getBoundingClientRect().width)
+    );
+    expect(largeSettingsWidth).toBeGreaterThanOrEqual(1020);
+    expect(largeSettingsWidth).toBeLessThanOrEqual(1040);
+    await assertAutoCheckLayout();
     await expect.poll(() => autoCheck.getAttribute("aria-checked")).toBe("true");
     await autoCheck.click();
     await expect.poll(() => autoCheck.getAttribute("aria-checked")).toBe("false");
@@ -8935,6 +9099,82 @@ describe("Electron UI profile switching e2e", () => {
     expect(await dialog.getByRole("button", { name: "Review" }).isDisabled()).toBe(true);
   }, standardElectronTestTimeout);
 
+  it("offers detected Agents without changing their files until the user enables one", async () => {
+    const { appDataRoot, opencodeDir, codexDir, page } = await launchApp({
+      enabledTargetIds: [],
+      omitAllProfiles: true,
+      suppressedAgentSuggestionIds: [],
+      initialWorkspace: null
+    });
+    const before = {
+      opencodeInstructions: await readFile(join(opencodeDir, "AGENTS.md"), "utf8"),
+      opencodeConfig: await readFile(join(opencodeDir, "opencode.jsonc"), "utf8"),
+      codexInstructions: await readFile(join(codexDir, "AGENTS.md"), "utf8"),
+      codexConfig: await readFile(join(codexDir, "config.toml"), "utf8")
+    };
+
+    const dialog = page.getByRole("dialog", { name: "Choose Agents" });
+    await dialog.waitFor({ state: "visible" });
+    await resizeAppWindow(page, 920, 620);
+    await expectNoHorizontalOverflow(page, [".agent-discovery-dialog", ".agent-discovery-list"]);
+    expect(await dialog.textContent()).toContain("does not Capture, Apply, or change Agent files");
+    expect(await dialog.getByRole("checkbox", { name: "OpenCode" }).isChecked()).toBe(true);
+    expect(await dialog.getByRole("checkbox", { name: "Codex" }).isChecked()).toBe(true);
+
+    await dialog.getByRole("button", { name: "Not now" }).click();
+    await dialog.waitFor({ state: "hidden" });
+    const agentsWorkspace = page.getByRole("region", { name: "Agents" });
+    expect(await agentsWorkspace.textContent()).toContain("No enabled Agents");
+    await agentsWorkspace.getByRole("button", { name: "Choose Agents" }).click();
+    await dialog.waitFor({ state: "visible" });
+    await dialog.getByRole("checkbox", { name: "Codex" }).uncheck();
+    await dialog.getByRole("button", { name: "Enable 1 Agent" }).click();
+
+    await expect.poll(async () => {
+      const settings = await readJson<{ enabledTargetIds?: string[] }>(
+        join(appDataRoot, "settings.json")
+      );
+      return settings.enabledTargetIds;
+    }).toEqual(["opencode"]);
+    const setupDialog = page.getByRole("dialog", { name: "Agents enabled" });
+    await setupDialog.waitFor({ state: "visible" });
+    expect(await setupDialog.textContent()).toContain("Agent files have not changed");
+    await expectNoHorizontalOverflow(page, [
+      ".agent-discovery-dialog",
+      ".agent-discovery-list",
+      ".agent-discovery-row--setup"
+    ]);
+    if (process.env.AGENTENV_AGENT_DISCOVERY_CAPTURE_DIR) {
+      await mkdir(process.env.AGENTENV_AGENT_DISCOVERY_CAPTURE_DIR, { recursive: true });
+      await page.screenshot({
+        path: join(
+          process.env.AGENTENV_AGENT_DISCOVERY_CAPTURE_DIR,
+          "agents-enabled-920x620.png"
+        )
+      });
+    }
+    await agentsWorkspace.getByRole("article", { name: "Agent OpenCode" }).waitFor({
+      state: "visible"
+    });
+    expect(await readFile(join(opencodeDir, "AGENTS.md"), "utf8"))
+      .toBe(before.opencodeInstructions);
+    expect(await readFile(join(opencodeDir, "opencode.jsonc"), "utf8"))
+      .toBe(before.opencodeConfig);
+    expect(await readFile(join(codexDir, "AGENTS.md"), "utf8"))
+      .toBe(before.codexInstructions);
+    expect(await readFile(join(codexDir, "config.toml"), "utf8"))
+      .toBe(before.codexConfig);
+
+    await setupDialog.getByRole("button", { name: "Review current setup" }).click();
+    await page.getByRole("dialog", { name: "Create profile from OpenCode" }).waitFor({
+      state: "visible"
+    });
+    expect(await readFile(join(opencodeDir, "AGENTS.md"), "utf8"))
+      .toBe(before.opencodeInstructions);
+    expect(await readFile(join(opencodeDir, "opencode.jsonc"), "utf8"))
+      .toBe(before.opencodeConfig);
+  }, standardElectronTestTimeout);
+
   it("persists enabled Agents and excludes disabled Agents from operations", async () => {
     const { appDataRoot, homeDir, page } = await launchApp();
     const sharedSkillDir = join(homeDir, ".agents", "skills", "shared-scope-skill");
@@ -9054,6 +9294,66 @@ describe("Electron UI profile switching e2e", () => {
       .toContain("opencode");
   }, 45_000);
 
+  it("persists a custom Agent command and uses it for the next probe", async () => {
+    const { appDataRoot, homeDir, page } = await launchApp();
+    const customCommandDir = join(homeDir, "custom-bin");
+    const customCommand = join(customCommandDir, "opencode-preview");
+    await mkdir(customCommandDir, { recursive: true });
+    await writeFile(customCommand, "#!/bin/sh\necho custom-opencode\n", "utf8");
+    await chmod(customCommand, 0o755);
+
+    await openSettingsCategory(page, "Agents");
+    await page.getByText("Custom commands", { exact: true }).click();
+    const commandInput = page.getByRole("textbox", { name: "Command for OpenCode" });
+    for (const viewport of [
+      { width: 1180, height: 728 },
+      { width: 920, height: 620 }
+    ]) {
+      await resizeAppWindow(page, viewport.width, viewport.height);
+      await expectNoHorizontalOverflow(page, [".app-shell", ".editor-panel", ".settings-page"]);
+      const rowsContained = await page.locator(".agent-command-row").evaluateAll((rows) =>
+        rows.every((row) => {
+          const bounds = row.getBoundingClientRect();
+          return Array.from(row.children).every((child) => {
+            const childBounds = child.getBoundingClientRect();
+            return childBounds.left >= bounds.left &&
+              childBounds.right <= bounds.right &&
+              childBounds.top >= bounds.top &&
+              childBounds.bottom <= bounds.bottom;
+          });
+        })
+      );
+      expect(rowsContained).toBe(true);
+    }
+    await commandInput.fill(customCommand);
+    await page.getByRole("button", { name: "Save OpenCode command" }).click();
+
+    await expect
+      .poll(async () => {
+        const settings = await readJson<{ targetCommandOverrides?: Record<string, string> }>(
+          join(appDataRoot, "settings.json")
+        );
+        return settings.targetCommandOverrides?.opencode;
+      })
+      .toBe(customCommand);
+    await expect
+      .poll(async () => page.evaluate(async () => {
+        const targets = await window.agentEnv.probeSupportedTargets(true);
+        return targets.find((target) => target.id === "opencode")?.health.executablePath;
+      }))
+      .toBe(customCommand);
+
+    await page.reload();
+    await page.getByRole("button", { name: "Settings", exact: true }).waitFor({
+      state: "visible"
+    });
+    await openSettingsCategory(page, "Agents");
+    await page.getByText("Custom commands", { exact: true }).click();
+    await expect
+      .poll(() => page.getByRole("textbox", { name: "Command for OpenCode" }).inputValue())
+      .toBe(customCommand);
+  }, 45_000);
+
   it("switches, persists, and contains all supported interface languages", async () => {
     const { app: electronApp, appDataRoot, page } = await launchApp();
 
@@ -9134,10 +9434,7 @@ describe("Electron UI profile switching e2e", () => {
     };
     for (const [workspace, heading] of Object.entries(localizedWorkspaces)) {
       await page.locator(`[data-workspace="${workspace}"]`).click();
-      const workspaceHeading =
-        workspace === "profiles"
-          ? page.locator(".profile-index-header h2")
-          : page.locator(".ui-page-header h2").first();
+      const workspaceHeading = page.locator(".ui-page-header h2").first();
       await expect
         .poll(async () => (await workspaceHeading.textContent())?.trim(), {
           message: workspace
@@ -9333,6 +9630,25 @@ describe("Electron UI profile switching e2e", () => {
     await openSettingsCategory(page, "Connections");
     await page.getByRole("button", { name: "Sign in with GitHub" }).click();
     const codeButton = page.getByRole("button", { name: "Copy GitHub device code E2E1-CODE" });
+    const waitingVisuals = await page.locator(".github-device-card").evaluate((card) => {
+      const openButton = card.querySelector<HTMLElement>(".github-device-actions button:first-child")!;
+      const checkButton = card.querySelector<HTMLElement>(".github-device-actions button:last-child")!;
+      const copyState = card.querySelector<HTMLElement>(".github-device-copy-state")!;
+      const statusIcon = card.querySelector<HTMLElement>(".github-device-status svg")!;
+      return {
+        openClass: openButton.className,
+        checkClass: checkButton.className,
+        openBackground: getComputedStyle(openButton).backgroundColor,
+        checkBackground: getComputedStyle(checkButton).backgroundColor,
+        copyColor: getComputedStyle(copyState).color,
+        statusIconColor: getComputedStyle(statusIcon).color
+      };
+    });
+    expect(waitingVisuals.openClass).toContain("ui-button--secondary");
+    expect(waitingVisuals.checkClass).toContain("ui-button--secondary");
+    expect(waitingVisuals.openBackground).toBe(waitingVisuals.checkBackground);
+    expect(waitingVisuals.copyColor).not.toBe("rgb(0, 122, 255)");
+    expect(waitingVisuals.statusIconColor).not.toBe("rgb(0, 122, 255)");
     await codeButton.click();
     await expect
       .poll(() =>
@@ -10289,7 +10605,6 @@ describe("Electron UI profile switching e2e", () => {
       });
 
     const headerMetrics: Array<{ fontSize: string; left: number; top: number }> = [];
-    let profileHeaderMetrics: { fontSize: string; contained: boolean } | undefined;
     const workspaceSurfaceSelectors: Record<string, string> = {
       Skills: ".skill-library-panel",
       Profiles: ".profile-workbench",
@@ -10299,8 +10614,7 @@ describe("Electron UI profile switching e2e", () => {
     };
     for (const workspace of ["Skills", "Profiles", "Conversations", "Agents", "Settings"]) {
       await sidebar.getByRole("button", { name: workspace, exact: true }).click();
-      const splitHeader = workspace === "Profiles";
-      const header = page.locator(splitHeader ? ".profile-index-header" : ".ui-page-header").first();
+      const header = page.locator(".ui-page-header").first();
       await header.waitFor({ state: "visible" });
       const metrics = await header.evaluate((element) => {
         const title = element.querySelector<HTMLElement>("h2")!;
@@ -10310,6 +10624,15 @@ describe("Electron UI profile switching e2e", () => {
         ).map((button) => button.getBoundingClientRect().height);
         return {
           actionHeights,
+          actionCenter: element.querySelector<HTMLElement>(".ui-page-header__actions button")
+            ? (() => {
+                const box = element.querySelector<HTMLElement>(
+                  ".ui-page-header__actions button"
+                )!.getBoundingClientRect();
+                return box.top + box.height / 2;
+              })()
+            : undefined,
+          titleCenter: titleBox.top + titleBox.height / 2,
           fontSize: getComputedStyle(title).fontSize,
           left: Math.round(titleBox.left),
           top: Math.round(titleBox.top),
@@ -10319,18 +10642,17 @@ describe("Electron UI profile switching e2e", () => {
       expect(metrics.contained).toBe(true);
       expect(
         metrics.actionHeights.every((height) =>
-          Math.abs(height - (splitHeader ? 30 : 34)) <= 1
+          Math.abs(height - 34) <= 1
         ),
         JSON.stringify({ workspace, metrics })
       ).toBe(true);
-      if (splitHeader) {
-        profileHeaderMetrics = {
-          fontSize: metrics.fontSize,
-          contained: metrics.contained
-        };
-      } else {
-        headerMetrics.push({ fontSize: metrics.fontSize, left: metrics.left, top: metrics.top });
+      if (metrics.actionCenter !== undefined) {
+        expect(
+          Math.abs(metrics.titleCenter - metrics.actionCenter),
+          JSON.stringify({ workspace, metrics })
+        ).toBeLessThanOrEqual(1);
       }
+      headerMetrics.push({ fontSize: metrics.fontSize, left: metrics.left, top: metrics.top });
       const surface = page.locator(workspaceSurfaceSelectors[workspace]);
       await surface.waitFor({ state: "visible" });
       const surfaceGeometry = await surface.evaluate((element) => ({
@@ -10348,9 +10670,30 @@ describe("Electron UI profile switching e2e", () => {
       }
     }
     expect(new Set(headerMetrics.map((metric) => metric.fontSize))).toEqual(new Set(["23px"]));
-    expect(profileHeaderMetrics).toEqual({ fontSize: "14px", contained: true });
     expect(Math.max(...headerMetrics.map((metric) => metric.left)) - Math.min(...headerMetrics.map((metric) => metric.left))).toBeLessThanOrEqual(1);
     expect(Math.max(...headerMetrics.map((metric) => metric.top)) - Math.min(...headerMetrics.map((metric) => metric.top))).toBeLessThanOrEqual(1);
+
+    await resizeAppWindow(page, 1180, 728);
+    const catalogHeaderMetrics = [];
+    for (const workspace of ["Agents", "Skills"]) {
+      await sidebar.getByRole("button", { name: workspace, exact: true }).click();
+      catalogHeaderMetrics.push(await page.locator(".ui-page-header").first().evaluate((element) => {
+        const titleBox = element.querySelector<HTMLElement>("h2")!.getBoundingClientRect();
+        const actionBox = element.querySelector<HTMLElement>(
+          ".ui-page-header__actions button"
+        )!.getBoundingClientRect();
+        return {
+          left: Math.round(titleBox.left),
+          top: Math.round(titleBox.top),
+          centerDelta: Math.abs(
+            titleBox.top + titleBox.height / 2 - (actionBox.top + actionBox.height / 2)
+          )
+        };
+      }));
+    }
+    expect(catalogHeaderMetrics[0]?.left).toBe(catalogHeaderMetrics[1]?.left);
+    expect(catalogHeaderMetrics[0]?.top).toBe(catalogHeaderMetrics[1]?.top);
+    expect(catalogHeaderMetrics.every((metric) => metric.centerDelta <= 1)).toBe(true);
 
     await sidebar.getByRole("button", { name: "Skills", exact: true }).click();
     const windowChrome = await page.evaluate(() => {
@@ -10546,8 +10889,8 @@ describe("Electron UI profile switching e2e", () => {
     const profileFieldContract = await profileDialog.evaluate((dialog) => {
       const input = dialog.querySelector<HTMLInputElement>('input[aria-label="Profile name"]')!;
       const textarea = dialog.querySelector<HTMLTextAreaElement>('textarea[aria-label="Description"]')!;
-      const cancel = dialog.querySelector<HTMLButtonElement>(".secondary-action")!;
-      const create = dialog.querySelector<HTMLButtonElement>(".primary-action")!;
+      const cancel = dialog.querySelector<HTMLButtonElement>(".ui-button--secondary")!;
+      const create = dialog.querySelector<HTMLButtonElement>(".ui-button--primary")!;
       const inputStyle = getComputedStyle(input);
       const textareaStyle = getComputedStyle(textarea);
       const cancelStyle = getComputedStyle(cancel);
@@ -10728,9 +11071,8 @@ describe("Electron UI profile switching e2e", () => {
       rows.map((row) => {
         const copy = row.querySelector<HTMLElement>(".settings-preference-copy")!;
         const control = row.querySelector<HTMLElement>(
-          ":scope > select, :scope > .settings-readonly-value, :scope > .settings-interval-field, .settings-preference-copy .ui-switch"
+          ":scope > select, :scope > .settings-readonly-value, :scope > .settings-interval-field, :scope > .ui-switch"
         )!;
-        const nestedSwitch = control.matches(".settings-preference-copy .ui-switch");
         const rowBox = row.getBoundingClientRect();
         const copyBox = copy.getBoundingClientRect();
         const controlBox = control.getBoundingClientRect();
@@ -10739,9 +11081,9 @@ describe("Electron UI profile switching e2e", () => {
             copyBox.left >= rowBox.left &&
             controlBox.right <= rowBox.right + 1 &&
             row.scrollWidth <= row.clientWidth + 1,
-          expectedHeight: nestedSwitch ? 30 : 34,
+          expectedHeight: 34,
           height: controlBox.height,
-          overlaps: !nestedSwitch && !(
+          overlaps: !(
             copyBox.right <= controlBox.left ||
             controlBox.right <= copyBox.left ||
             copyBox.bottom <= controlBox.top ||
@@ -10763,6 +11105,20 @@ describe("Electron UI profile switching e2e", () => {
       label: getComputedStyle(copy.querySelector<HTMLElement>("strong")!).fontWeight
     }));
     expect(preferenceTypography).toEqual({ description: "400", label: "500" });
+    const settingsFieldTypography = await page.evaluate(() => {
+      const controls = [
+        document.querySelector<HTMLSelectElement>(".settings-preference-row > select"),
+        document.querySelector<HTMLInputElement>(".settings-interval-control input")
+      ].filter((control): control is HTMLSelectElement | HTMLInputElement => Boolean(control));
+      return controls.map((control) => ({
+        fontSize: getComputedStyle(control).fontSize,
+        lineHeight: getComputedStyle(control).lineHeight
+      }));
+    });
+    expect(settingsFieldTypography).toEqual([
+      { fontSize: "13px", lineHeight: "18px" },
+      { fontSize: "13px", lineHeight: "18px" }
+    ]);
     await page.getByRole("tab", { name: "Data", exact: true }).click();
     const settingsActionHeights = await page
       .locator(
@@ -10773,6 +11129,12 @@ describe("Electron UI profile switching e2e", () => {
       );
     expect(settingsActionHeights.length).toBeGreaterThanOrEqual(7);
     expect(settingsActionHeights.every((height) => Math.abs(height - 34) <= 1)).toBe(true);
+    const settingsActionContracts = await page
+      .locator(".settings-data-actions button, .diagnostics-settings-actions button")
+      .evaluateAll((controls) => controls.map((control) =>
+        control.classList.contains("ui-button") || control.classList.contains("ui-icon-button")
+      ));
+    expect(settingsActionContracts.every(Boolean)).toBe(true);
 
     await sidebar.getByRole("button", { name: "Skills", exact: true }).click();
     await openLocalSkills(page);

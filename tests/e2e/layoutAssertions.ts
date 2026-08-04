@@ -109,14 +109,54 @@ export const findVisibleTextLayoutDefects = async (page: Page) =>
       ) {
         return [];
       }
-      const horizontalOverflow = Math.max(0, element.scrollWidth - element.clientWidth);
-      const verticalOverflow = Math.max(0, element.scrollHeight - element.clientHeight);
-      if (horizontalOverflow <= 1 && verticalOverflow <= 1) return [];
-
       const isControlContract = contractCandidates.has(element);
       const clipsContent = [style.overflow, style.overflowX, style.overflowY]
         .some((value) => value === "hidden" || value === "clip");
       const exposesFullValue = element.dataset.uiOverflowDetail === "true";
+      const contentRects: DOMRect[] = [];
+      const textNodes = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      let textNode = textNodes.nextNode();
+      while (textNode) {
+        const parent = textNode.parentElement;
+        if (
+          textNode.textContent?.trim() &&
+          parent &&
+          !parent.closest(".ui-visually-hidden") &&
+          getComputedStyle(parent).display !== "none" &&
+          getComputedStyle(parent).visibility !== "hidden"
+        ) {
+          const contentRange = document.createRange();
+          contentRange.selectNodeContents(textNode);
+          contentRects.push(...[...contentRange.getClientRects()].filter(
+            (contentRect) => contentRect.width > 0 && contentRect.height > 0
+          ));
+        }
+        textNode = textNodes.nextNode();
+      }
+      const paintedHorizontalOverflow = clipsContent
+        ? Math.max(0, ...contentRects.flatMap((contentRect) => [
+            rect.left - contentRect.left,
+            contentRect.right - rect.right
+          ]))
+        : 0;
+      const paintedVerticalOverflow = clipsContent
+        ? Math.max(0, ...contentRects.flatMap((contentRect) => [
+            rect.top - contentRect.top,
+            contentRect.bottom - rect.bottom
+          ]))
+        : 0;
+      const horizontalOverflow = Math.max(
+        0,
+        element.scrollWidth - element.clientWidth,
+        paintedHorizontalOverflow
+      );
+      const verticalOverflow = Math.max(
+        0,
+        element.scrollHeight - element.clientHeight,
+        paintedVerticalOverflow
+      );
+      if (horizontalOverflow <= 1 && verticalOverflow <= 1) return [];
+
       if (!isControlContract && (!clipsContent || exposesFullValue)) return [];
 
       return [{

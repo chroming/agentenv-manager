@@ -302,7 +302,7 @@ export const PreviewDialog = ({
             (item.issue.code === "outside-skill-replacement" ||
               item.issue.code === "outside-skill-removal") ? (
               <Button
-                className="apply-preview-issue-action secondary-action"
+                className="apply-preview-issue-action"
                 disabled={Boolean(resolvingIssueId)}
                 busy={resolvingIssueId === item.id}
                 size="compact"
@@ -320,7 +320,7 @@ export const PreviewDialog = ({
             onReviewSkillCollection &&
             item.issue.resolution === "review-local-skills" ? (
               <Button
-                className="apply-preview-issue-action secondary-action"
+                className="apply-preview-issue-action"
                 size="compact"
                 onClick={() => onReviewSkillCollection(item.issue)}
               >
@@ -401,7 +401,6 @@ export const PreviewDialog = ({
               <div className="preview-drift-actions">
                 {onAdoptTargetChanges ? (
                   <Button
-                    className="secondary-action"
                     size="compact"
                     variant="secondary"
                     onClick={onAdoptTargetChanges}
@@ -411,7 +410,6 @@ export const PreviewDialog = ({
                 ) : null}
                 {onOpenRecovery ? (
                   <Button
-                    className="secondary-action"
                     size="compact"
                     variant="secondary"
                     onClick={onOpenRecovery}
@@ -534,7 +532,6 @@ export const PreviewDialog = ({
           </p>
           <Button
             ref={cancelButtonRef}
-            className="secondary-action"
             disabled={cancelDisabled}
             variant="secondary"
             onClick={onCancel}

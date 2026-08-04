@@ -61,6 +61,8 @@ textarea {
   border-radius: var(--radius-control);
   box-shadow: 0 1px 0 rgba(41, 72, 120, 0.03);
   color: var(--text);
+  font-size: var(--font-size-body);
+  line-height: 18px;
   min-width: 0;
   transition:
     background-color var(--motion-fast),
@@ -168,47 +170,10 @@ textarea[aria-label="opencode.jsonc"] {
   min-height: 280px;
 }
 
-.primary-action,
-.secondary-action,
-.danger-action,
 .icon-action {
   height: var(--control-height-default);
   min-height: var(--control-height-default);
   width: auto;
-}
-
-.primary-action {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-.primary-action:hover:not(:disabled) {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
-}
-
-.secondary-action {
-  background: var(--surface-muted);
-  gap: var(--space-2);
-}
-
-.danger-action {
-  background: var(--danger);
-  border-color: var(--danger);
-  color: #fff;
-}
-
-.danger-action:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 84%, #000);
-  border-color: color-mix(in srgb, var(--danger) 84%, #000);
-}
-
-.primary-action:disabled,
-.danger-action:disabled {
-  background: var(--surface-muted);
-  border-color: var(--border);
-  color: var(--subtle);
 }
 
 .icon-action {
@@ -218,11 +183,6 @@ textarea[aria-label="opencode.jsonc"] {
 
 button svg {
   flex: 0 0 auto;
-}
-
-.secondary-action svg {
-  height: 15px;
-  width: 15px;
 }
 
 .icon-action svg {

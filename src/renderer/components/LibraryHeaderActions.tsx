@@ -62,7 +62,6 @@ export const LibraryHeaderActions = ({
         />
       ) : null}
       <Button
-        className="secondary-action"
         aria-label={t(mode === "sources" ? "Refresh sources" : "Refresh skills")}
         disabled={refreshing || toolOpen}
         icon={(
@@ -90,7 +89,6 @@ const AgentImportReturnButton = ({
   const { t } = useI18n();
   return (
     <Button
-      className="secondary-action"
       icon={<ArrowLeft size={15} strokeWidth={2.2} />}
       onClick={onClick}
     >

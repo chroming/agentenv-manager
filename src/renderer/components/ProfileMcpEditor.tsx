@@ -137,7 +137,6 @@ export const ProfileMcpEditor = ({
         <span className="profile-mcp-toolbar__actions">
           {!canManage && policy.mode !== "ignore" ? (
             <Button
-              className="secondary-action"
               size="compact"
               variant="secondary"
               onClick={() => updatePolicy({ mode: "ignore", selections: policy.selections })}
@@ -241,7 +240,7 @@ export const ProfileMcpEditor = ({
                   </div>
                 ) : mode !== "agent" ? (
                   <Button
-                    className="secondary-action profile-mcp-reset"
+                    className="profile-mcp-reset"
                     size="compact"
                     variant="secondary"
                     onClick={() => updateMode(connection.name, "agent")}

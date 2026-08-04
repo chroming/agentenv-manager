@@ -17,9 +17,33 @@ const listCssFiles = async (directory) => {
   return nestedFiles.flat();
 };
 
+const listTsxFiles = async (directory) => {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const nestedFiles = await Promise.all(
+    entries.map((entry) => {
+      const path = resolve(directory, entry.name);
+      if (entry.isDirectory()) return listTsxFiles(path);
+      return entry.isFile() && entry.name.endsWith(".tsx") ? [path] : [];
+    })
+  );
+  return nestedFiles.flat();
+};
+
 const files = (await listCssFiles(rendererRoot))
   .map((file) => relative(projectRoot, file))
   .sort();
+const legacyActionClassUsage = (
+  await Promise.all(
+    (await listTsxFiles(rendererRoot)).map(async (file) => {
+      const lines = (await readFile(file, "utf8")).split("\n");
+      return lines.flatMap((line, index) =>
+        /className=.*\b(?:primary-action|secondary-action|danger-action)\b/.test(line)
+          ? [{ file: relative(projectRoot, file), line: index + 1 }]
+          : []
+      );
+    })
+  )
+).flat();
 
 const rendererIndex = await readFile(resolve(rendererRoot, "ui/index.css"), "utf8");
 const baseStyles = await readFile(resolve(rendererRoot, "ui/base.css"), "utf8");
@@ -165,6 +189,7 @@ for (const file of files) {
     lines: content.split("\n").length,
     selectorBlocks: [...selectors.values()].reduce((total, count) => total + count, 0),
     repeatedSelectors: [...selectors.values()].filter((count) => count > 1).length,
+    inheritedFontShorthandDeclarations: (content.match(/\bfont\s*:\s*inherit\s*;/g) ?? []).length,
     mediaQueries: (content.match(/@media\b/g) ?? []).length,
     containerQueries: (content.match(/@container\b/g) ?? []).length,
     importantDeclarations: (content.match(/!important\b/g) ?? []).length,
@@ -253,6 +278,14 @@ const animationOwnerViolations = reports
     animationDeclarations,
     keyframes
   }));
+const inheritedFontShorthandOwnerViolations = reports
+  .filter(({ file, inheritedFontShorthandDeclarations }) =>
+    file !== "src/renderer/ui/controls.css" && inheritedFontShorthandDeclarations > 0
+  )
+  .map(({ file, inheritedFontShorthandDeclarations }) => ({
+    file,
+    inheritedFontShorthandDeclarations
+  }));
 const highFrequencySpatialMotion = reports.flatMap(({ file, highFrequencySpatialMotion }) =>
   highFrequencySpatialMotion.map((motion) => ({ file, ...motion }))
 );
@@ -282,7 +315,9 @@ const result = {
   },
   architecture: {
     animationOwnerViolations,
+    inheritedFontShorthandOwnerViolations,
     highFrequencySpatialMotion,
+    legacyActionClassUsage,
     legacyCrossFileSelectors: legacySharedSelectors.length,
     legacyControlDefinitions,
     pagePrimitiveRedefinitions,
@@ -339,8 +374,18 @@ if (shouldCheck) {
     result.architecture.legacyControlDefinitions.length > 0
       ? `Base controls belong to controls.css, not styles.css: ${result.architecture.legacyControlDefinitions.join(", ")}`
       : undefined,
+    result.architecture.legacyActionClassUsage.length > 0
+      ? `Standard commands must use the shared Button primitive: ${result.architecture.legacyActionClassUsage
+          .map(({ file, line }) => `${file}:${line}`)
+          .join(", ")}`
+      : undefined,
     result.architecture.animationOwnerViolations.length > 0
       ? `Animation declarations belong to shared primitives or accessibility: ${result.architecture.animationOwnerViolations
+          .map(({ file }) => file)
+          .join(", ")}`
+      : undefined,
+    result.architecture.inheritedFontShorthandOwnerViolations.length > 0
+      ? `Inherited font shorthand belongs to the shared raw-control owner because it resets size, weight, and line height: ${result.architecture.inheritedFontShorthandOwnerViolations
           .map(({ file }) => file)
           .join(", ")}`
       : undefined,
@@ -359,13 +404,13 @@ if (shouldCheck) {
           .map(({ selector, files }) => `${selector} (${files.join(", ")})`)
           .join("; ")}`
       : undefined,
-    result.architecture.legacyCrossFileSelectors > 98
+    result.architecture.legacyCrossFileSelectors > 87
       ? "Legacy selector ownership grew beyond the current migration baseline"
       : undefined,
-    result.totals.crossFileSelectors > 113
+    result.totals.crossFileSelectors > 102
       ? "Cross-file selector duplication grew beyond the ownership migration baseline"
       : undefined,
-    (legacyStyles?.lines ?? Number.POSITIVE_INFINITY) > 4973
+    (legacyStyles?.lines ?? Number.POSITIVE_INFINITY) > 4810
       ? "src/renderer/styles.css grew beyond its frozen migration baseline"
       : undefined,
     result.totals.containerQueries < 2

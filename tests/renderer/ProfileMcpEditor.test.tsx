@@ -22,6 +22,7 @@ const target: TargetInfo = {
   configLanguage: "jsonc",
   realWritesEnabled: true,
   executableName: "opencode",
+  executableCandidates: ["opencode"],
   capabilities: {
     instructions: true,
     skills: true,
@@ -43,6 +44,9 @@ const target: TargetInfo = {
     installationFound: true,
     installationEvidence: [],
     executableName: "opencode",
+    executableCandidates: ["opencode"],
+    executableStatus: "found",
+    executableCandidate: "opencode",
     executablePath: "/usr/local/bin/opencode",
     executableFound: true,
     canWrite: true,

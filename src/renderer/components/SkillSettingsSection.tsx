@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { AgentEnvSettings } from "../../shared/types";
 import { useI18n } from "../i18n";
+import { SettingsPreferenceRow } from "./SettingsPreferenceRow";
 import { Switch } from "./ui";
 
 interface SkillSettingsSectionProps {
@@ -58,18 +59,18 @@ export const SkillSettingsSection = ({
         </div>
       </div>
       <div className="settings-preference-list">
-        <label className="settings-preference-row">
-          <span className="settings-preference-copy">
-            <strong>{t("Skill deployment")}</strong>
-            <small>
+        <SettingsPreferenceRow
+          label={t("Skill deployment")}
+          description={
+            <>
               {settings.skillSyncMethod === "copy"
                 ? t("Library updates stay pending until installs are explicitly synchronized.")
                 : settings.skillSyncMethod === "auto"
                   ? t("Uses live links when supported and falls back to copied installs.")
                   : t("Library updates immediately change linked Agent Skills without another Apply preview.")}
-            </small>
-          </span>
-          <select
+            </>
+          }
+          control={<select
             aria-label={t("Global skill deployment method")}
             value={settings.skillSyncMethod}
             onChange={(event) =>
@@ -81,37 +82,28 @@ export const SkillSettingsSection = ({
             <option value="symlink">{t("Live link (recommended)")}</option>
             <option value="copy">{t("Copy (apply-gated updates)")}</option>
             <option value="auto">{t("Auto (live link when possible)")}</option>
-          </select>
-        </label>
-        <div className="settings-preference-row settings-preference-row--inline-control">
-          <span className="settings-preference-copy">
-            <span className="settings-preference-heading">
-              <strong>{t("Auto-check")}</strong>
-              <Switch
-                checked={settings.skillAutoCheckEnabled}
-                label={t("Skill auto update check")}
-                disabled={busy}
-                onClick={() =>
-                  onChange({
-                    skillAutoCheckEnabled: !settings.skillAutoCheckEnabled
-                  })}
-              />
-            </span>
-            <small>
-              {t("Checks monitored sources when the app opens, returns to the foreground, or reaches the saved interval.")}
-            </small>
-          </span>
-        </div>
-        <label
-          className={`settings-preference-row settings-dependent-row${
+          </select>}
+        />
+        <SettingsPreferenceRow
+          label={t("Auto-check")}
+          description={t("Checks monitored sources when the app opens, returns to the foreground, or reaches the saved interval.")}
+          control={<Switch
+            checked={settings.skillAutoCheckEnabled}
+            label={t("Skill auto update check")}
+            disabled={busy}
+            onClick={() =>
+              onChange({
+                skillAutoCheckEnabled: !settings.skillAutoCheckEnabled
+              })}
+          />}
+        />
+        <SettingsPreferenceRow
+          className={`settings-dependent-row${
             settings.skillAutoCheckEnabled ? "" : " is-disabled"
           }`}
-        >
-          <span className="settings-preference-copy">
-            <strong>{t("Check interval")}</strong>
-            <small>{t("Used only while automatic checks are enabled.")}</small>
-          </span>
-          <span className="settings-interval-field">
+          label={t("Check interval")}
+          description={t("Used only while automatic checks are enabled.")}
+          control={<span className="settings-interval-field">
             <span className="settings-interval-control">
               <input
                 aria-describedby={intervalError ? "skill-check-interval-error" : undefined}
@@ -145,8 +137,8 @@ export const SkillSettingsSection = ({
                 {t("Enter a value from 5 to 1440.")}
               </small>
             ) : null}
-          </span>
-        </label>
+          </span>}
+        />
       </div>
     </section>
   );

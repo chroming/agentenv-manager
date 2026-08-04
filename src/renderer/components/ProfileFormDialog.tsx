@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 import type { TargetInfo } from "../../shared/types";
 import { useI18n } from "../i18n";
+import { Button } from "./ui";
 
 interface ProfileFormDialogProps {
   open: boolean;
@@ -145,23 +146,20 @@ export const ProfileFormDialog = ({
           ) : null}
         </div>
         <footer className="preview-actions ui-dialog-footer">
-          <button
+          <Button
             ref={initialFocusRef}
-            className="secondary-action"
-            type="button"
             disabled={busy}
             onClick={onClose}
           >
             {t("Cancel")}
-          </button>
-          <button
-            className="primary-action"
-            type="button"
+          </Button>
+          <Button
+            variant="primary"
             disabled={busy || form.name.trim().length === 0}
             onClick={onSubmit}
           >
             {t(mode === "edit" ? "Done" : "Create")}
-          </button>
+          </Button>
         </footer>
       </section>
     </div>

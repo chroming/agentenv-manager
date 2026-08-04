@@ -140,7 +140,7 @@ export const SkillsEditor = ({
         </div>
         <div className="profile-skill-toolbar__actions">
           <Button
-            className="secondary-action profile-skill-check"
+            className="profile-skill-check"
             variant="secondary"
             size="compact"
             aria-label={t("Check profile skill updates")}
@@ -158,7 +158,6 @@ export const SkillsEditor = ({
             {t(checkingSkillUpdates ? "Checking" : "Check updates")}
           </Button>
           <Button
-            className="secondary-action"
             ref={pickerTriggerRef}
             variant="secondary"
             size="compact"
@@ -384,25 +383,24 @@ export const SkillsEditor = ({
             </div>
             <footer className="preview-actions ui-dialog-footer">
               {onImportNewSkill ? (
-                <button
-                  className="secondary-action resource-picker-import"
-                  type="button"
+                <Button
+                  className="resource-picker-import"
                   onClick={() => {
                     closePicker();
                     onImportNewSkill();
                   }}
                 >
                   {t("Import new Skill")}
-                </button>
+                </Button>
               ) : null}
-              <button ref={pickerCancelRef} className="secondary-action" type="button" onClick={closePicker}>
+              <Button ref={pickerCancelRef} onClick={closePicker}>
                 {t("Cancel")}
-              </button>
-              <button className="primary-action" type="button" disabled={disabled || selectedIds.length === 0} onClick={commitPicker}>
+              </Button>
+              <Button variant="primary" disabled={disabled || selectedIds.length === 0} onClick={commitPicker}>
                 {replacingIndex !== undefined
                   ? t("Relink skill")
                   : t("Add {{count}}", { count: selectedIds.length })}
-              </button>
+              </Button>
             </footer>
         </ModalFrame>
       ) : null}

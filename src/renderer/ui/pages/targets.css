@@ -83,11 +83,6 @@
   gap: 8px;
 }
 
-.target-page-actions .secondary-action {
-  height: var(--control-height-default);
-  min-height: var(--control-height-default);
-}
-
 .target-list {
   align-items: start;
   background: var(--surface);
@@ -100,6 +95,46 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.target-empty-state {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 88px;
+  padding: 16px;
+  width: 100%;
+}
+
+.target-empty-state__icon {
+  align-items: center;
+  background: var(--surface-muted);
+  border-radius: var(--radius-control);
+  color: var(--text-secondary);
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.target-empty-state__copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.target-empty-state__copy strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  line-height: 18px;
+}
+
+.target-empty-state__copy small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 17px;
 }
 
 .target-list__header {
@@ -216,7 +251,8 @@
 }
 
 .target-health-status--needs-setup,
-.target-health-status--guarded {
+.target-health-status--guarded,
+.target-health-status--unknown {
   color: var(--warning);
   font-weight: var(--font-weight-regular);
 }

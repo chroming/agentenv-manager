@@ -6,7 +6,7 @@
   grid-template-rows: auto auto minmax(0, 1fr);
   height: 100%;
   margin-inline: 0;
-  max-width: 780px;
+  max-width: 1040px;
   min-height: 0;
   width: 100%;
 }
@@ -59,11 +59,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.settings-data-actions button {
-  height: var(--control-height-default);
-  min-height: var(--control-height-default);
 }
 
 .app-update-summary {
@@ -150,11 +145,6 @@
   overflow: auto;
   padding: 10px 12px;
   user-select: text;
-}
-
-.settings-page .github-settings-section .primary-button {
-  height: var(--control-height-default);
-  min-height: var(--control-height-default);
 }
 
 .settings-data-footer {
@@ -339,6 +329,118 @@
   justify-self: end;
 }
 
+.agent-discovery-dialog {
+  max-width: min(520px, calc(100vw - 32px));
+  width: 100%;
+}
+
+.agent-discovery-list {
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  display: grid;
+  max-height: min(340px, 45vh);
+  overflow-y: auto;
+}
+
+.agent-discovery-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  min-height: 58px;
+  padding: 7px 2px;
+}
+
+.agent-discovery-row--setup {
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+}
+
+.agent-discovery-ready {
+  color: var(--success);
+  display: grid;
+  place-items: center;
+}
+
+.agent-discovery-row + .agent-discovery-row {
+  border-top: 1px solid var(--border);
+}
+
+.agent-discovery-row > input {
+  accent-color: var(--accent);
+  height: 15px;
+  margin: 0;
+  width: 15px;
+}
+
+.agent-discovery-choice {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  min-width: 0;
+}
+
+.agent-discovery-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agent-discovery-copy > span {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  line-height: 18px;
+}
+
+.agent-discovery-copy small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-discovery-suppress {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  min-height: 28px;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
+.agent-discovery-suppress:hover:not(:disabled) {
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+}
+
+.agent-discovery-empty {
+  min-height: 72px;
+}
+
+@container (max-width: 480px) {
+  .agent-discovery-row {
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+
+  .agent-discovery-row--setup {
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+
+  .agent-discovery-row--setup > .ui-button {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .agent-discovery-suppress {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
 @container (max-width: 560px) {
   .agent-settings-row {
     grid-template-columns: 36px minmax(0, 1fr) 40px;
@@ -367,7 +469,7 @@
   align-items: center;
   display: grid;
   gap: 20px;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
   min-height: 64px;
   padding: 9px 2px;
 }
@@ -389,10 +491,6 @@
   gap: 2px;
   min-width: 0;
 }
-
-.settings-preference-heading { align-items: center; display: flex; gap: 10px; }
-.settings-preference-heading > .ui-switch { min-height: var(--control-height-compact); }
-.settings-preference-row--inline-control { grid-template-columns: minmax(0, 1fr); }
 
 .settings-preference-copy strong {
   color: var(--text);
@@ -508,6 +606,59 @@
   white-space: nowrap;
 }
 
+.agent-command-list {
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  display: grid;
+}
+
+.agent-command-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(110px, 0.7fr) minmax(180px, 1.3fr) 72px 84px;
+  min-height: 56px;
+  padding: 7px 2px;
+}
+
+.agent-command-row + .agent-command-row {
+  border-top: 1px solid var(--border);
+}
+
+.agent-command-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agent-command-copy strong,
+.agent-command-copy small {
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.agent-command-copy small {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-command-reset {
+  justify-self: start;
+  white-space: nowrap;
+}
+
+@container (max-width: 620px) {
+  .agent-command-row {
+    grid-template-columns: minmax(0, 1fr) 72px 84px;
+  }
+
+  .agent-command-copy {
+    grid-column: 1 / -1;
+  }
+}
+
 .settings-advanced[open] summary {
   color: var(--text);
 }
@@ -611,28 +762,10 @@
   justify-content: flex-end;
 }
 
-.github-settings-actions button,
-.github-device-actions button {
-  height: var(--control-height-default);
-  min-height: var(--control-height-default);
-}
-
-.github-settings-section .primary-button {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-  gap: 7px;
-}
-
-.github-settings-section .primary-button:hover:not(:disabled) {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
-}
-
 .github-device-card {
   align-items: center;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
   border-radius: var(--radius-surface);
   display: grid;
   gap: 12px;
@@ -643,8 +776,8 @@
 
 .github-device-code {
   align-items: center;
-  background: #fff;
-  border-color: #d7dfeb;
+  background: var(--surface);
+  border-color: var(--border);
   display: grid;
   gap: 2px 10px;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -656,7 +789,7 @@
 }
 
 .github-device-code:hover:not(:disabled) {
-  background: #fff;
+  background: var(--surface);
   border-color: var(--accent);
 }
 
@@ -677,7 +810,7 @@
 
 .github-device-copy-state {
   align-items: center;
-  color: var(--accent);
+  color: var(--muted);
   display: inline-flex;
   font-size: 11px;
   gap: 4px;
@@ -704,7 +837,7 @@
 }
 
 .github-device-status svg {
-  color: var(--accent);
+  color: var(--muted);
   flex: 0 0 auto;
 }
 

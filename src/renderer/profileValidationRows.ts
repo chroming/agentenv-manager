@@ -34,8 +34,10 @@ export const createValidationRows = (
           ? "OK"
           : target?.health.status === "missing"
             ? "Blocked"
-            : target?.health.status === "guarded"
+          : target?.health.status === "guarded"
               ? "Guarded"
+              : target?.health.status === "unknown"
+                ? "Check failed"
               : target
                 ? "Needs setup"
                 : "Pending",

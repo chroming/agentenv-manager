@@ -1486,9 +1486,11 @@ try {
   });
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "settings-general-1180x728.png"));
+  await setWindowSize(page, windowHandle, 1440, 900);
+  await capturePage(page, join(outputDir, "settings-general-1440x900.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("tab", { name: "Agents" }).click();
-  const customFolders = page.locator("details.agent-path-settings");
+  const customFolders = page.locator("details.agent-path-settings:not(.agent-command-settings)");
   await customFolders.getByText("Custom folders", { exact: true }).click();
   await customFolders.scrollIntoViewIfNeeded();
   await capturePage(page, join(outputDir, "settings-custom-folders-920x620.png"));
@@ -1501,6 +1503,9 @@ try {
   await capturePage(page, join(outputDir, "settings-controls-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "settings-controls-1180x728.png"));
+  await setWindowSize(page, windowHandle, 1440, 900);
+  await capturePage(page, join(outputDir, "settings-controls-1440x900.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
   await page.getByRole("tab", { name: "Connections" }).click();
   await capturePage(page, join(outputDir, "settings-connections-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
@@ -1537,6 +1542,8 @@ try {
   await backupManager.getByRole("button", { name: "Close" }).click();
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "settings-data-1180x728.png"));
+  await setWindowSize(page, windowHandle, 1440, 900);
+  await capturePage(page, join(outputDir, "settings-data-1440x900.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("tab", { name: "General" }).click();
   await page.getByLabel("Interface language").selectOption("zh_CN");

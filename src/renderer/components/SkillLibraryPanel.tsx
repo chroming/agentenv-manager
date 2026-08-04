@@ -1818,54 +1818,43 @@ export const SkillLibraryPanel = ({
               onChange={(event) => updateControls({ search: event.currentTarget.value })}
             />
           </label>
-          <button
+          <Button
             aria-expanded={filtersOpen}
-            className={`secondary-action library-filter-trigger${advancedFilterCount > 0 ? " has-filters" : ""}`}
+            className={`library-filter-trigger${advancedFilterCount > 0 ? " has-filters" : ""}`}
+            icon={<ListFilter size={15} strokeWidth={2.2} />}
             ref={filterTriggerRef}
-            type="button"
             onClick={() => setFiltersOpen((current) => !current)}
           >
-            <ListFilter size={15} strokeWidth={2.2} />
-            <span>{t("Filters")}</span>
+            {t("Filters")}
             {advancedFilterCount > 0 ? (
               <strong aria-label={t("{{count}} active filters", { count: advancedFilterCount })}>
                 {advancedFilterCount}
               </strong>
             ) : null}
-          </button>
-          <button
-            className="secondary-action library-toolbar-action"
-            type="button"
+          </Button>
+          <Button
+            className="library-toolbar-action"
             aria-label={t("Check updates")}
             title={t("Check skill updates")}
-            aria-busy={checkingAllUpdates}
+            busy={checkingAllUpdates}
+            icon={checkingAllUpdates ? undefined : <SearchCheck size={15} strokeWidth={2.2} />}
             disabled={updateActivityBusy}
             onClick={onCheckUpdates}
           >
-            {checkingAllUpdates ? (
-              <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
-            ) : (
-              <SearchCheck size={15} strokeWidth={2.2} />
-            )}
-            <span>{t(checkingAllUpdates ? "Checking..." : "Check updates")}</span>
-          </button>
+            {t(checkingAllUpdates ? "Checking..." : "Check updates")}
+          </Button>
           {updateableSkillIds.length > 0 ? (
-            <button
-              className="secondary-action library-toolbar-action"
-              type="button"
+            <Button
+              className="library-toolbar-action"
               aria-label={t("Update all skills")}
               title={t("Update all skills")}
-              aria-busy={previewingAllUpdates}
+              busy={previewingAllUpdates}
+              icon={previewingAllUpdates ? undefined : <Sparkles size={15} strokeWidth={2.2} />}
               disabled={updateActivityBusy}
               onClick={() => onPreviewAllLibrarySkillUpdates(updateableSkillIds)}
             >
-              {previewingAllUpdates ? (
-                <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
-              ) : (
-                <Sparkles size={15} strokeWidth={2.2} />
-              )}
-              <span>{t("Update all")}</span>
-            </button>
+              {t("Update all")}
+            </Button>
           ) : null}
           {filtersOpen ? (
             <div className="library-filter-panel" role="group" aria-label={t("Skill filters")}>
@@ -1914,15 +1903,14 @@ export const SkillLibraryPanel = ({
                   <option value="not-installed">{t("Not installed")}</option>
                 </select>
               </label>
-              <button
-                className="secondary-action library-filter-reset"
-                type="button"
+              <Button
+                className="library-filter-reset"
+                icon={<RotateCcw size={15} strokeWidth={2.2} />}
                 disabled={advancedFilterCount === 0}
                 onClick={resetAdvancedFilters}
               >
-                <RotateCcw size={15} strokeWidth={2.2} />
-                <span>{t("Reset")}</span>
-              </button>
+                {t("Reset")}
+              </Button>
             </div>
           ) : null}
         </div>
@@ -2492,29 +2480,22 @@ export const SkillLibraryPanel = ({
             </div>
 
             <footer className="preview-actions ui-dialog-footer">
-              <button
+              <Button
                 ref={modalInitialFocusRef}
-                className="secondary-action"
-                type="button"
                 disabled={Boolean(mergeOperation)}
                 onClick={() => setMergePreview(undefined)}
               >
                 {t("Cancel")}
-              </button>
-              <button
-                className="primary-action"
-                type="button"
-                aria-busy={mergeOperation === "merging"}
+              </Button>
+              <Button
+                variant="primary"
+                busy={mergeOperation === "merging"}
+                icon={mergeOperation === "merging" ? undefined : <Combine size={14} strokeWidth={2.2} />}
                 disabled={Boolean(mergeOperation)}
                 onClick={() => void confirmMerge()}
               >
-                {mergeOperation === "merging" ? (
-                  <LoaderCircle className="is-spinning" size={14} strokeWidth={2.2} />
-                ) : (
-                  <Combine size={14} strokeWidth={2.2} />
-                )}
                 {t(mergeOperation === "merging" ? "Merging..." : "Merge Skills")}
-              </button>
+              </Button>
             </footer>
           </section>
         </div>,
@@ -2596,29 +2577,25 @@ export const SkillLibraryPanel = ({
                 ))}
             </div>
             <footer className="preview-actions">
-              <button
+              <Button
                 ref={modalInitialFocusRef}
-                className="secondary-action"
-                type="button"
                 onClick={() => setDeleteCandidate(undefined)}
               >
                 {t("Cancel")}
-              </button>
+              </Button>
               {(skillUsage[deleteCandidate.id] ?? []).length > 0 ? (
-                <button
-                  className="primary-action"
-                  type="button"
+                <Button
+                  variant="primary"
                   onClick={() => {
                     onReviewSkillUsage(deleteCandidate.id);
                     setDeleteCandidate(undefined);
                   }}
                 >
                   {t("Review profiles")}
-                </button>
+                </Button>
               ) : (
-                <button
-                  className="danger-action"
-                  type="button"
+                <Button
+                  variant="danger"
                   onClick={() => {
                     onRemoveLibrarySkill(deleteCandidate.id);
                     setDeleteCandidate(undefined);
@@ -2627,7 +2604,7 @@ export const SkillLibraryPanel = ({
                   {installsFor(deleteCandidate.id).some((item) => item.status === "managed")
                     ? t("Remove skill and installs")
                     : t("Remove skill")}
-                </button>
+                </Button>
               )}
             </footer>
           </section>
@@ -2742,21 +2719,18 @@ export const SkillLibraryPanel = ({
               <small>{t("Each Skill is backed up independently. A failure does not undo completed Skills.")}</small>
             </div>
             <footer className="preview-actions ui-dialog-footer">
-              <button
+              <Button
                 ref={modalInitialFocusRef}
-                className="secondary-action"
-                type="button"
                 onClick={() => setAutoCleanupReviewOpen(false)}
               >
                 {t("Cancel")}
-              </button>
-              <button
-                className="primary-action"
-                type="button"
+              </Button>
+              <Button
+                variant="primary"
                 onClick={() => void runAutomaticCleanup("all", automaticCleanupRequests)}
               >
                 {t("Clean up {{count}} skills", { count: readyCleanupCount })}
-              </button>
+              </Button>
             </footer>
           </section>
         </div>,
@@ -2842,27 +2816,21 @@ export const SkillLibraryPanel = ({
               <small>{t("The Library copy is kept. One backup covers the shared copy, Agent copies, and saved Agent decisions; any failed step restores all of them.")}</small>
             </div>
             <footer className="preview-actions ui-dialog-footer">
-              <button
+              <Button
                 ref={modalInitialFocusRef}
-                className="secondary-action"
-                type="button"
                 disabled={Boolean(sharedOperation)}
                 onClick={() => setSharedRetireKey(undefined)}
               >
                 {t("Cancel")}
-              </button>
-              <button
-                className="primary-action"
-                type="button"
-                aria-busy={sharedOperation?.action === "retire"}
+              </Button>
+              <Button
+                variant="primary"
+                busy={sharedOperation?.action === "retire"}
                 disabled={Boolean(sharedOperation)}
                 onClick={() => void retireSharedCopy()}
               >
-                  {sharedOperation?.action === "retire" ? (
-                    <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
-                  ) : null}
                   {t(sharedOperation?.action === "retire" ? "Moving..." : "Move out of shared folder")}
-              </button>
+              </Button>
             </footer>
           </section>
         </div>,
@@ -2919,26 +2887,21 @@ export const SkillLibraryPanel = ({
               </p>
             ) : null}
             <footer className="preview-actions skill-availability-dialog__actions">
-              <button
+              <Button
                 ref={modalInitialFocusRef}
-                className="secondary-action"
-                type="button"
                 disabled={Boolean(availabilityOperation)}
                 onClick={() => setDisableCandidate(undefined)}
               >
                 {t("Cancel")}
-              </button>
-              <button
-                className="primary-action"
-                type="button"
+              </Button>
+              <Button
+                variant="primary"
+                busy={Boolean(availabilityOperation)}
                 disabled={Boolean(availabilityOperation)}
                 onClick={() => void runAvailabilityChange({ id: disableCandidate.id, enabled: false })}
               >
-                {availabilityOperation ? (
-                  <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
-                ) : null}
                 {t(availabilityOperation ? "Disabling..." : "Disable globally")}
-              </button>
+              </Button>
             </footer>
           </section>
         </div>,
@@ -3027,19 +2990,16 @@ export const SkillLibraryPanel = ({
               ))}
             </fieldset>
             <footer className="preview-actions ui-dialog-footer">
-              <button
+              <Button
                 ref={modalInitialFocusRef}
-                className="secondary-action"
-                type="button"
                 disabled={localImportOperation}
                 onClick={() => setExternalImport(undefined)}
               >
                 {t("Cancel")}
-              </button>
-              <button
-                className="primary-action"
-                type="button"
-                aria-busy={localImportOperation}
+              </Button>
+              <Button
+                variant="primary"
+                busy={localImportOperation}
                 disabled={localImportOperation || !externalImportItems.some(
                   (item) =>
                     item.path === externalImport.sourcePath &&
@@ -3047,9 +3007,6 @@ export const SkillLibraryPanel = ({
                 )}
                 onClick={() => void importSelectedExternalSkill()}
               >
-                {localImportOperation ? (
-                  <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
-                ) : null}
                 {t(
                   localImportOperation
                     ? "Reviewing..."
@@ -3057,7 +3014,7 @@ export const SkillLibraryPanel = ({
                       ? "Review Library copy"
                       : "Import copy"
                 )}
-              </button>
+              </Button>
             </footer>
           </section>
         </div>,
@@ -3126,26 +3083,23 @@ export const SkillLibraryPanel = ({
                           !item.sharedLocation &&
                           (item.status === "outside" ||
                             item.status === "left-unmanaged") ? (
-                            <button
-                              className="secondary-action cleanup-management-boundary-action"
-                              type="button"
+                            <Button
+                              className="cleanup-management-boundary-action"
+                              size="compact"
+                              busy={unmanagedLocationOperationPath === item.path}
                               disabled={Boolean(unmanagedLocationOperationPath)}
-                              aria-busy={unmanagedLocationOperationPath === item.path}
                               onClick={() =>
                                 void changeUnmanagedLocation(
                                   item,
                                   item.status !== "left-unmanaged"
                                 )}
                             >
-                              {unmanagedLocationOperationPath === item.path ? (
-                                <LoaderCircle className="is-spinning" size={13} aria-hidden="true" />
-                              ) : null}
                               {t(
                                 item.status === "left-unmanaged"
                                   ? "Manage with AgentEnv"
                                   : "Leave unmanaged"
                               )}
-                            </button>
+                            </Button>
                           ) : null}
                         </div>
                       </div>
@@ -3424,19 +3378,16 @@ export const SkillLibraryPanel = ({
               </p>
             </div>
             <footer className="preview-actions ui-dialog-footer">
-              <button
+              <Button
                 ref={modalInitialFocusRef}
-                className="secondary-action"
-                type="button"
                 disabled={Boolean(cleanupOperationKey)}
                 onClick={() => setCleanupDraft(undefined)}
               >
                 {t("Cancel")}
-              </button>
-              <button
-                className="primary-action"
-                type="button"
-                aria-busy={cleanupOperationKey === cleanupDraft.skillKey}
+              </Button>
+              <Button
+                variant="primary"
+                busy={cleanupOperationKey === cleanupDraft.skillKey}
                 disabled={cleanupDraft.selectedPaths.length === 0 || Boolean(cleanupOperationKey)}
                 onClick={() => {
                   const request: SkillCleanupRequest = {
@@ -3471,9 +3422,6 @@ export const SkillLibraryPanel = ({
                   });
                 }}
               >
-                {cleanupOperationKey === cleanupDraft.skillKey ? (
-                  <LoaderCircle className="is-spinning" size={14} strokeWidth={2.2} aria-hidden="true" />
-                ) : null}
                 {t(
                   cleanupOperationKey === cleanupDraft.skillKey
                     ? "Applying..."
@@ -3481,7 +3429,7 @@ export const SkillLibraryPanel = ({
                       ? "Add to Library"
                       : "Apply cleanup"
                 )}
-              </button>
+              </Button>
             </footer>
           </section>
         </div>,
@@ -3498,20 +3446,16 @@ export const SkillLibraryPanel = ({
               </strong>
             </div>
             <div className="library-drawer__actions">
-              <button
-                className="secondary-action library-drawer__refresh"
-                type="button"
+              <Button
+                className="library-drawer__refresh"
                 aria-label={t("Refresh local skills")}
+                busy={isRefreshingInventory}
+                icon={isRefreshingInventory ? undefined : <RefreshCw size={14} strokeWidth={2.2} />}
                 disabled={Boolean(automaticCleanupKey) || isRefreshingInventory}
                 onClick={() => void onRefreshInventory()}
               >
-                <RefreshCw
-                  className={isRefreshingInventory ? "is-spinning" : undefined}
-                  size={14}
-                  strokeWidth={2.2}
-                />
-                <span>{t(isRefreshingInventory ? "Refreshing" : "Refresh")}</span>
-              </button>
+                {t(isRefreshingInventory ? "Refreshing" : "Refresh")}
+              </Button>
               <IconButton
                 label={t("Close library tool")}
                 disabled={Boolean(automaticCleanupKey) || isRefreshingInventory}
@@ -3727,15 +3671,15 @@ export const SkillLibraryPanel = ({
                     />
                     <div className="cleanup-group-actions">
                       {(group.bucket !== "ready" || !group.automaticEffect) && group.presentation.action !== "none" ? (
-                        <button
-                          className="secondary-action cleanup-current-action"
-                          type="button"
+                        <Button
+                          className="cleanup-current-action"
+                          size="compact"
                           aria-label={t("{{action}} {{id}}", { action: t(actionLabel), id: group.skillKey })}
                           disabled={Boolean(automaticCleanupKey) || Boolean(sharedOperation)}
                           onClick={runPrimaryAction}
                         >
                           {actionDisplayLabel}
-                        </button>
+                        </Button>
                       ) : null}
                       <button
                         className="icon-action"
@@ -3859,16 +3803,16 @@ export const SkillLibraryPanel = ({
                         />
                       </div>
                       <div className="cleanup-group-actions">
-                        <button
-                          className="secondary-action cleanup-current-action"
-                          type="button"
+                        <Button
+                          className="cleanup-current-action"
+                          size="compact"
+                          icon={<RotateCcw size={14} aria-hidden="true" />}
                           aria-label={t("Restore cleanup {{id}}", { id: backup.libraryId })}
                           disabled={Boolean(automaticCleanupKey)}
                           onClick={() => onRestoreCleanup(backup.id)}
                         >
-                          <RotateCcw size={14} aria-hidden="true" />
                           {t("Restore")}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ))}

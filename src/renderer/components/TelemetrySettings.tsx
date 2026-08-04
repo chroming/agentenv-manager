@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { AgentEnvSettings, TelemetryPreview } from "../../shared/types";
 import { useI18n } from "../i18n";
+import { SettingsPreferenceRow } from "./SettingsPreferenceRow";
 import { Switch } from "./ui";
 
 interface TelemetrySettingsProps {
@@ -33,24 +34,18 @@ export const TelemetrySettings = ({
         <div className="resource-heading" id="privacy-heading">{t("Privacy")}</div>
       </div>
       <div className="settings-preference-list">
-        <div className="settings-preference-row settings-preference-row--inline-control">
-          <span className="settings-preference-copy">
-            <span className="settings-preference-heading">
-              <strong>{t("Anonymous reliability data")}</strong>
-              <Switch
-                checked={settings.telemetryEnabled === true}
-                disabled={busy || preview?.enabledInBuild === false}
-                label={t("Share anonymous reliability data")}
-                onClick={() => onChange({ telemetryEnabled: settings.telemetryEnabled !== true })}
-              />
-            </span>
-            <small>
-              {preview?.enabledInBuild === false
-                ? t("This build does not send reliability data.")
-                : t("Sends one bounded daily startup event. It is off until you enable it.")}
-            </small>
-          </span>
-        </div>
+        <SettingsPreferenceRow
+          label={t("Anonymous reliability data")}
+          description={preview?.enabledInBuild === false
+            ? t("This build does not send reliability data.")
+            : t("Sends one bounded daily startup event. It is off until you enable it.")}
+          control={<Switch
+            checked={settings.telemetryEnabled === true}
+            disabled={busy || preview?.enabledInBuild === false}
+            label={t("Share anonymous reliability data")}
+            onClick={() => onChange({ telemetryEnabled: settings.telemetryEnabled !== true })}
+          />}
+        />
       </div>
       {preview ? (
         <details className="telemetry-preview">

@@ -29,11 +29,6 @@
   gap: 6px;
 }
 
-.profile-mcp-toolbar__actions .secondary-action {
-  min-height: 30px;
-  padding-inline: 9px;
-}
-
 .profile-mcp-toolbar .ui-icon-button {
   color: var(--muted);
 }

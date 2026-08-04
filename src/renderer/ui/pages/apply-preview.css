@@ -519,10 +519,6 @@
   gap: 7px;
 }
 
-.apply-preview-dialog .preview-drift-actions .secondary-action {
-  min-height: 32px;
-}
-
 .apply-preview-disclosure,
 .apply-preview-disclosure:first-child {
   background: transparent;

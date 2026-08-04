@@ -1,4 +1,4 @@
-import { LoaderCircle, Maximize2 } from "lucide-react";
+import { Maximize2 } from "lucide-react";
 import { useMemo, useRef, useState, type RefObject } from "react";
 import type {
   SkillImportConflictResolution,
@@ -9,7 +9,7 @@ import { DiffViewer } from "./DiffViewer";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { SyntaxCodePreview } from "./SyntaxCodePreview";
-import { IconButton } from "./ui";
+import { Button, IconButton } from "./ui";
 
 export interface PendingSkillImport {
   preview: SkillImportPreview;
@@ -329,30 +329,21 @@ export const SkillImportConflictDialog = ({
         </div>
 
         <footer className="preview-actions ui-dialog-footer">
-          <button
+          <Button
             ref={initialFocusRef}
-            className="secondary-action"
-            type="button"
             disabled={pending.committing}
             onClick={onDismiss}
           >
             {t("Cancel")}
-          </button>
-          <button
-            className="primary-action"
-            type="button"
+          </Button>
+          <Button
+            variant="primary"
+            busy={Boolean(pending.committing)}
             disabled={Boolean(pending.committing)}
             onClick={confirm}
           >
-            {pending.committing ? (
-              <LoaderCircle
-                className="is-spinning"
-                size={15}
-                aria-hidden="true"
-              />
-            ) : null}
-            <span>{confirmLabel}</span>
-          </button>
+            {confirmLabel}
+          </Button>
         </footer>
       </section>
       </div>

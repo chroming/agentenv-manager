@@ -1,6 +1,6 @@
 import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Info, Plus, Search, TriangleAlert } from "lucide-react";
+import { Search, TriangleAlert } from "lucide-react";
 import type {
   ProfileDetail,
   ProfileSummary,
@@ -15,8 +15,6 @@ import {
 import { ResourceIcon } from "./ResourceIconPicker";
 import { ProfileActionsMenu } from "./ProfileActionsMenu";
 import { defaultProfileIconKey } from "../productIcons";
-import { IconButton } from "./ui";
-import { HoverDetail } from "./HoverDetail";
 
 const deploymentStatusLabels = {
   attention: "Attention",
@@ -38,7 +36,6 @@ interface ProfileListProps {
   actionsDisabled?: boolean;
   onDelete(profileId: string, returnFocus: HTMLElement): void;
   onDuplicate(profileId: string): void;
-  onCreate(): void;
   onSearchChange(value: string): void;
   onSelect(profileId: string): void;
 }
@@ -56,7 +53,6 @@ export const ProfileList = ({
   actionsDisabled = false,
   onDelete,
   onDuplicate,
-  onCreate,
   onSearchChange,
   onSelect
 }: ProfileListProps) => {
@@ -130,33 +126,6 @@ export const ProfileList = ({
   return (
     <>
       <aside className="profile-index" aria-label={t("Profile list")}>
-        <div className="profile-index-header">
-          <div className="profile-index-header__title">
-            <h2>{t("Profiles")}</h2>
-            <HoverDetail
-              align="start"
-              ariaLabel={t("Compose reusable resources, then preview and apply them to an Agent.")}
-              className="profile-index-header__help"
-              content={t("Compose reusable resources, then preview and apply them to an Agent.")}
-              hoverDelay={180}
-              maxWidth={320}
-              popoverClassName="info-tip__bubble info-tip__bubble--portal"
-              preferredPlacement="bottom"
-              showArrow
-            >
-              <Info size={13} strokeWidth={2.2} aria-hidden="true" />
-            </HoverDetail>
-          </div>
-          <IconButton
-            className="profile-create-button"
-            label={t("New Profile")}
-            size="compact"
-            variant="ghost"
-            onClick={onCreate}
-          >
-            <Plus size={16} strokeWidth={2.3} aria-hidden="true" />
-          </IconButton>
-        </div>
         <div className="profile-list-toolbar">
           <label className="profile-search ui-composite-field">
             <Search size={15} strokeWidth={2.2} aria-hidden="true" />

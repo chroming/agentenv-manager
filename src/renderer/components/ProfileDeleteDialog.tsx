@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import { useI18n } from "../i18n";
+import { Button } from "./ui";
 
 interface ProfileDeleteDialogProps {
   open: boolean;
@@ -65,32 +66,28 @@ export const ProfileDeleteDialog = ({
           </div>
         </header>
         <footer className="preview-actions">
-          <button
+          <Button
             ref={initialFocusRef}
-            className="secondary-action"
-            type="button"
             disabled={busy}
             onClick={onClose}
           >
             {t("Cancel")}
-          </button>
+          </Button>
           {active ? (
-            <button
-              className="primary-action"
-              type="button"
+            <Button
+              variant="primary"
               onClick={onOpenAgents}
             >
               {t("Open Agents")}
-            </button>
+            </Button>
           ) : (
-            <button
-              className="danger-action"
-              type="button"
+            <Button
+              variant="danger"
               disabled={busy}
               onClick={onDelete}
             >
               {t("Remove profile")}
-            </button>
+            </Button>
           )}
         </footer>
       </section>

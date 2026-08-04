@@ -52,7 +52,6 @@
 
 .conversation-search input {
   color: var(--text);
-  font: inherit;
   font-size: var(--font-size-body);
 }
 

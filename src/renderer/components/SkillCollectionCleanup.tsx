@@ -287,14 +287,14 @@ export const SkillCollectionRows = ({
           {stateLabel}
         </span>
         <div className="cleanup-group-actions">
-          <button
-            className="secondary-action cleanup-current-action"
-            type="button"
+          <Button
+            className="cleanup-current-action"
+            size="compact"
             disabled={disabled}
             onClick={() => onReview(collection)}
           >
             {t("Review")}
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -526,59 +526,43 @@ export const SkillCollectionDialog = ({
           ) : null}
         </div>
         <footer className="preview-actions ui-dialog-footer">
-          <button
+          <Button
             ref={initialFocusRef}
-            className="secondary-action"
-            type="button"
             disabled={Boolean(operation)}
             onClick={onClose}
           >
             {t("Close")}
-          </button>
+          </Button>
           {collection.state === "unmanaged" ? (
-            <button
-              className="secondary-action"
-              type="button"
-              aria-busy={operation === "review"}
+            <Button
+              busy={operation === "review"}
               disabled={Boolean(operation)}
               onClick={() => onChangeRetention(collection, false)}
             >
-              {operation === "review" ? (
-                <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
-              ) : null}
               {t("Manage with AgentEnv")}
-            </button>
+            </Button>
           ) : (
-            <button
-              className="secondary-action"
-              type="button"
-              aria-busy={operation === "keep"}
+            <Button
+              busy={operation === "keep"}
               disabled={Boolean(operation)}
               onClick={() => onChangeRetention(collection, true)}
             >
-              {operation === "keep" ? (
-                <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
-              ) : null}
               {t("Leave unmanaged")}
-            </button>
+            </Button>
           )}
           {collection.state === "ready" ? (
-            <button
-              className="primary-action"
-              type="button"
-              aria-busy={operation === "move"}
+            <Button
+              variant="primary"
+              busy={operation === "move"}
               disabled={Boolean(operation)}
               onClick={() => onMove(collection)}
             >
-              {operation === "move" ? (
-                <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
-              ) : null}
               {moveIssue?.status === "needs-save"
                 ? t("Save Profile and move")
                 : moveIssue
                   ? t("Retry move")
                   : t("Move collection")}
-            </button>
+            </Button>
           ) : null}
         </footer>
       </section>

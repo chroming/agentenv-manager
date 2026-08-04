@@ -15,6 +15,7 @@ import type {
 } from "../../shared/types";
 import { useI18n, type TranslationValues } from "../i18n";
 import { FileTypeIcon } from "./FileTypeIcon";
+import { Button } from "./ui";
 
 type Translate = (message: string, values?: TranslationValues) => string;
 
@@ -153,15 +154,13 @@ export const BackupManagerDialog = ({
               <span>
                 {formatDate(previewCandidate.createdAt)} · {formatBytes(previewCandidate.sizeBytes)}
               </span>
-              <button
+              <Button
                 ref={initialFocusRef}
-                className="secondary-action"
-                type="button"
                 disabled={previewLoading}
                 onClick={onBackOrClose}
               >
                 {t("Back")}
-              </button>
+              </Button>
             </footer>
           </>
         ) : deleteCandidate ? (
@@ -181,18 +180,16 @@ export const BackupManagerDialog = ({
               </p>
             </div>
             <footer className="preview-actions">
-              <button
+              <Button
                 ref={initialFocusRef}
-                className="secondary-action"
-                type="button"
                 disabled={busy}
                 onClick={onCancelDelete}
               >
                 {t("Cancel")}
-              </button>
-              <button className="danger-action" type="button" disabled={busy} onClick={onDelete}>
+              </Button>
+              <Button variant="danger" disabled={busy} onClick={onDelete}>
                 {t("Delete backup")}
-              </button>
+              </Button>
             </footer>
           </>
         ) : cleanupConfirm ? (
@@ -219,23 +216,21 @@ export const BackupManagerDialog = ({
               </p>
             </div>
             <footer className="preview-actions">
-              <button
+              <Button
                 ref={initialFocusRef}
-                className="secondary-action"
-                type="button"
                 disabled={busy}
                 onClick={onCancelCleanup}
               >
                 {t("Cancel")}
-              </button>
-              <button className="danger-action" type="button" disabled={busy} onClick={onCleanup}>
+              </Button>
+              <Button variant="danger" disabled={busy} onClick={onCleanup}>
                 {t(
                   (inventory?.eligibleCount ?? 0) === 1
                     ? "Clean up 1 backup"
                     : "Clean up {{count}} backups",
                   { count: inventory?.eligibleCount ?? 0 }
                 )}
-              </button>
+              </Button>
             </footer>
           </>
         ) : (
@@ -353,23 +348,20 @@ export const BackupManagerDialog = ({
                     })
                   : t("Nothing to clean")}
               </span>
-              <button
+              <Button
                 ref={initialFocusRef}
-                className="secondary-action"
-                type="button"
                 disabled={busy}
                 onClick={onBackOrClose}
               >
                 {t("Close")}
-              </button>
-              <button
-                className="danger-action"
-                type="button"
+              </Button>
+              <Button
+                variant="danger"
                 disabled={busy || !inventory?.eligibleCount}
                 onClick={onOpenCleanupConfirm}
               >
                 {t("Clean up now")}
-              </button>
+              </Button>
             </footer>
           </>
         )}

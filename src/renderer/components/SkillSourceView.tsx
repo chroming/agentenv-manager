@@ -23,6 +23,7 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
+  SearchCheck,
   Trash2,
   X
 } from "lucide-react";
@@ -626,44 +627,41 @@ export const SkillSourceView = ({
             onChange={(event) => setSearch(event.currentTarget.value)}
           />
         </label>
-        <button
+        <Button
           aria-expanded={filtersOpen}
-          className={`secondary-action library-filter-trigger${activeFilterCount > 0 ? " has-filters" : ""}`}
+          className={`library-filter-trigger${activeFilterCount > 0 ? " has-filters" : ""}`}
+          icon={<ListFilter size={15} strokeWidth={2.2} />}
           ref={filterTriggerRef}
-          type="button"
           onClick={() => setFiltersOpen((current) => !current)}
         >
-          <ListFilter size={15} strokeWidth={2.2} />
-          <span>{t("Filters")}</span>
+          {t("Filters")}
           {activeFilterCount > 0 ? (
             <strong aria-label={t("{{count}} active filters", { count: activeFilterCount })}>
               {activeFilterCount}
             </strong>
           ) : null}
-        </button>
+        </Button>
         <Button
           aria-label={t("Check updates")}
           busy={activeCheckingAll}
-          className="secondary-action library-toolbar-action"
+          className="library-toolbar-action"
+          icon={!activeCheckingAll ? <SearchCheck size={15} strokeWidth={2.2} /> : undefined}
           title={t("Check updates")}
           disabled={activeCheckingAll || checking.size > 0 || Boolean(activeCheckingSourceId) || Boolean(operation) || monitoredSourceCount === 0}
           onClick={() => void runCheckMonitored()}
         >
-          {!activeCheckingAll ? <RefreshCw size={15} strokeWidth={2.2} /> : null}
-          <span>{t("Check updates")}</span>
+          {t("Check updates")}
         </Button>
         {canMergeSources ? (
-          <button
-            className="secondary-action"
-            type="button"
+          <Button
+            icon={<GitMerge size={15} strokeWidth={2.2} />}
             disabled={(mergeSelectionMode && mergeSelection.size < 2) || activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
             onClick={() => mergeSelectionMode ? openMerge() : setMergeSelectionMode(true)}
           >
-            <GitMerge size={15} strokeWidth={2.2} />
-            <span>{mergeSelectionMode
+            {mergeSelectionMode
               ? `${t("Merge selected")} (${mergeSelection.size})`
-              : t("Merge")}</span>
-          </button>
+              : t("Merge")}
+          </Button>
         ) : null}
         {mergeSelectionMode ? (
           <IconButton
@@ -714,18 +712,17 @@ export const SkillSourceView = ({
                 <option value="not-checked">{t("Not checked")}</option>
               </select>
             </label>
-            <button
-              className="secondary-action library-filter-reset"
-              type="button"
+            <Button
+              className="library-filter-reset"
+              icon={<RotateCcw size={15} strokeWidth={2.2} />}
               disabled={activeFilterCount === 0}
               onClick={() => {
                 onSourceKindFilterChange("all");
                 onResultFilterChange("all");
               }}
             >
-              <RotateCcw size={15} strokeWidth={2.2} />
-              <span>{t("Reset")}</span>
-            </button>
+              {t("Reset")}
+            </Button>
           </div>
         ) : null}
       </div>
