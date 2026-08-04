@@ -259,11 +259,15 @@ describe("package metadata", () => {
   });
 
   it("pins the macOS Release signer while requiring Gatekeeper rejection", async () => {
-    const [script, localBuildScript, trustScript, certificate] = await Promise.all([
+    const [script, localBuildScript, trustScript, cleanupScript, certificate] = await Promise.all([
       readFile(join(process.cwd(), "scripts", "verify-macos-signature.mjs"), "utf8"),
       readFile(join(process.cwd(), "scripts", "build-macos-stable.mjs"), "utf8"),
       readFile(
         join(process.cwd(), "scripts", "trust-macos-signing-certificate.mjs"),
+        "utf8"
+      ),
+      readFile(
+        join(process.cwd(), "scripts", "cleanup-macos-signing-keychain.mjs"),
         "utf8"
       ),
       readFile(join(process.cwd(), "build", "macos-signing-certificate.pem"))
@@ -290,6 +294,8 @@ describe("package metadata", () => {
     expect(localBuildScript).not.toContain("identity: null");
     expect(trustScript).toContain('"add-trusted-cert"');
     expect(trustScript).toContain('"codeSign"');
+    expect(cleanupScript).toContain('"delete-keychain"');
+    expect(cleanupScript).not.toContain("remove-trusted-cert");
     expect(releaseCertificate.subject).toContain("AgentEnv Manager Release Signing");
     expect(releaseCertificate.issuer).toBe(releaseCertificate.subject);
     expect(releaseCertificate.ca).toBe(true);

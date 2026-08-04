@@ -10,11 +10,6 @@ if (process.platform === "darwin" && process.env.RUNNER_TEMP) {
   const p12Path = join(process.env.RUNNER_TEMP, "agentenv-release-signing.p12");
   const certificatePath = join(process.env.RUNNER_TEMP, "agentenv-release-signing.pem");
 
-  await execFileAsync(
-    "/usr/bin/sudo",
-    ["-n", "/usr/bin/security", "remove-trusted-cert", "-d", certificatePath],
-    { encoding: "utf8" }
-  ).catch(() => undefined);
   await execFileAsync("/usr/bin/security", ["delete-keychain", keychainPath], {
     encoding: "utf8"
   }).catch(() => undefined);
