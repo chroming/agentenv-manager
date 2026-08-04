@@ -73,6 +73,7 @@ export const antigravityIntegration: AgentTargetIntegration = {
     mcpConfigKey: "mcpServers",
     realWritesEnabled: true,
     executableName: "agy",
+    executableCandidates: ["agy"],
     capabilities: {
       instructions: true,
       skills: true,

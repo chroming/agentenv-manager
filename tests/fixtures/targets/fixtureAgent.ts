@@ -25,6 +25,7 @@ export const fixtureAgentIntegration: AgentTargetIntegration = {
     mcpConfigKey: "mcp",
     realWritesEnabled: true,
     executableName: "fixture-agent",
+    executableCandidates: ["fixture-agent"],
     capabilities: {
       instructions: true,
       skills: true,

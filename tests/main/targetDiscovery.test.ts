@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createPaths } from "../../src/main/paths";
+import { pathExists } from "../../src/main/fileUtils";
 import { createSettingsStore } from "../../src/main/settingsStore";
 import { createClaudeCodeTargetAdapter } from "../../src/main/targets/claudeCodeTarget";
 import { createTargetDiscoveryService } from "../../src/main/targetDiscovery";
@@ -13,6 +14,7 @@ import { createTargetScope } from "../../src/main/targets/targetScope";
 import { createAntigravityTargetAdapter } from "../../src/main/targets/integrations/antigravity";
 import { createPiTargetAdapter } from "../../src/main/targets/integrations/pi";
 import { createTraeCliTargetAdapter } from "../../src/main/targets/integrations/trae-cli";
+import { createFixtureAgentAdapter } from "../fixtures/targets/fixtureAgent";
 
 let root = "";
 
@@ -35,6 +37,9 @@ const makeService = async (options: { platform?: NodeJS.Platform } = {}) => {
   const settingsStore = createSettingsStore(paths, {
     supportedTargetIds: targetRegistry.list().map((target) => target.id)
   });
+  await settingsStore.updateSettings({
+    enabledTargetIds: targetRegistry.list().map((target) => target.id)
+  });
   const targetScope = createTargetScope(targetRegistry, settingsStore);
   const service = createTargetDiscoveryService({
     paths,
@@ -55,6 +60,25 @@ afterEach(async () => {
 });
 
 describe("target discovery", () => {
+  it("probes installed supported Agents without adding them to the operational scope", async () => {
+    const { binDir, paths, service, settingsStore } = await makeService();
+    const executable = join(binDir, "opencode");
+    await writeFile(executable, "#!/bin/sh\n");
+    await chmod(executable, 0o755);
+    await settingsStore.updateSettings({ enabledTargetIds: [] });
+
+    await expect(service.listTargets()).resolves.toEqual([]);
+    await expect(service.probeSupportedTargets()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "opencode",
+          health: expect.objectContaining({ installationFound: true })
+        })
+      ])
+    );
+    await expect(pathExists(join(paths.homeDir, ".config", "opencode"))).resolves.toBe(false);
+  });
+
   it("does not detect or return Agents that are turned off", async () => {
     const { service, settingsStore, targetScope } = await makeService();
     await settingsStore.updateSettings({ enabledTargetIds: ["opencode"] });
@@ -119,11 +143,90 @@ describe("target discovery", () => {
     expect(opencode?.health.status).toBe("ready");
     expect(opencode?.health.executablePath).toBe(executable);
     expect(opencode?.health.canWrite).toBe(true);
+    expect(opencode?.health).toMatchObject({
+      executableStatus: "found",
+      executableCandidate: "opencode",
+      executableCandidates: ["opencode"]
+    });
     expect(opencode?.conversationCapabilities).toMatchObject({
       history: { state: "available" },
       openOriginal: { state: "available" },
       continue: { state: "available" }
     });
+  });
+
+  it("uses a safe per-Agent command override before declared candidates", async () => {
+    const { binDir, service, settingsStore } = await makeService();
+    const executable = join(binDir, "opencode-nightly");
+    await writeFile(executable, "#!/bin/sh\n");
+    await chmod(executable, 0o755);
+    await settingsStore.updateSettings({
+      targetCommandOverrides: { opencode: "opencode-nightly" }
+    });
+
+    const targets = await service.listTargets({ forceRefresh: true });
+    const opencode = targets.find((target) => target.id === "opencode");
+
+    expect(opencode?.health).toMatchObject({
+      status: "ready",
+      executableStatus: "found",
+      executableCandidate: "opencode-nightly",
+      executablePath: executable,
+      executableOverride: "opencode-nightly"
+    });
+  });
+
+  it("falls back through each declared executable candidate", async () => {
+    const { binDir, service } = await makeService();
+    const executable = join(binDir, "trae-agent");
+    await writeFile(executable, "#!/bin/sh\n");
+    await chmod(executable, 0o755);
+
+    const targets = await service.listTargets({ forceRefresh: true });
+    const trae = targets.find((target) => target.id === "trae-cli");
+
+    expect(trae?.health).toMatchObject({
+      status: "ready",
+      executableStatus: "found",
+      executableCandidate: "trae-agent",
+      executablePath: executable
+    });
+  });
+
+  it("keeps discovery available and reports unknown when one Agent probe fails", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-discovery-failure-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "app-data"),
+      homeDir: root,
+      fakeHomeRoot: root
+    });
+    const adapter = createFixtureAgentAdapter();
+    adapter.detectInstallation = async () => {
+      throw new Error("probe permission denied");
+    };
+    const targetRegistry = createTargetRegistry([adapter]);
+    const settingsStore = createSettingsStore(paths, {
+      supportedTargetIds: [adapter.descriptor.id]
+    });
+    await settingsStore.updateSettings({ enabledTargetIds: [adapter.descriptor.id] });
+    const service = createTargetDiscoveryService({
+      paths,
+      targetRegistry,
+      settingsStore,
+      pathEnv: join(root, "bin")
+    });
+
+    await expect(service.listTargets()).resolves.toEqual([
+      expect.objectContaining({
+        id: "fixture-agent",
+        health: expect.objectContaining({
+          status: "unknown",
+          executableStatus: "unknown",
+          executableError: "probe permission denied",
+          canWrite: false
+        })
+      })
+    ]);
   });
 
   it("marks OpenCode ready when the CLI exists and config paths can be created", async () => {

@@ -138,6 +138,45 @@ describe("target integration contract", () => {
     });
   });
 
+  it("declares ordered executable candidates for every built-in Agent", () => {
+    const candidates = Object.fromEntries(
+      createBuiltInTargetAdapters().map((adapter) => [
+        adapter.descriptor.id,
+        adapter.descriptor.executableCandidates
+      ])
+    );
+
+    expect(candidates).toEqual({
+      opencode: ["opencode"],
+      "claude-code": ["claude"],
+      codex: ["codex"],
+      antigravity: ["agy"],
+      "trae-cli": ["traecli", "trae-cli", "trae-agent"],
+      pi: ["pi"]
+    });
+  });
+
+  it("rejects runtime declarations whose primary command is not the first candidate", () => {
+    expect(() => defineTargetIntegration({
+      ...fixtureAgentIntegration,
+      descriptor: {
+        ...fixtureAgentIntegration.descriptor,
+        executableName: "fixture-agent",
+        executableCandidates: ["fixture-agent-nightly", "fixture-agent"]
+      }
+    })).toThrow("must list its primary executable first");
+  });
+
+  it("rejects unsafe executable candidate names", () => {
+    expect(() => defineTargetIntegration({
+      ...fixtureAgentIntegration,
+      descriptor: {
+        ...fixtureAgentIntegration.descriptor,
+        executableCandidates: ["fixture-agent --unsafe"]
+      }
+    })).toThrow("contains an invalid executable candidate");
+  });
+
   it("rejects a comparison declaration without an adapter implementation", () => {
     expect(() => defineTargetIntegration({
       ...fixtureAgentIntegration,

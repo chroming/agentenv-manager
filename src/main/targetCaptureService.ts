@@ -1,9 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
-import { lstat, readFile } from "node:fs/promises";
+import { lstat, readFile, realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type {
   CreateProfileFromTargetInput,
   TargetCapturePreview,
+  TargetCaptureIssue,
   TargetCaptureResource,
   TargetCaptureResult,
   TargetCaptureScope,
@@ -36,6 +37,8 @@ import {
   selectBackupEntries
 } from "./backupRestore";
 import { hashPathEntry } from "./filesystemIntegrity";
+import type { RuntimeDiagnostics } from "./runtimeDiagnostics";
+import { createSkillChanges } from "./skillFileChanges";
 
 interface CapturedSkill {
   targetName: string;
@@ -53,6 +56,10 @@ interface InternalCapture {
   scope: TargetCaptureScope;
   captured: CapturedTargetProfile;
   skills: CapturedSkill[];
+  skillDecisions: Array<{
+    issue: TargetCaptureIssue;
+    candidates: Map<string, CapturedSkill>;
+  }>;
   fingerprints: Record<string, string>;
 }
 
@@ -70,6 +77,7 @@ interface TargetCaptureServiceOptions {
   targetScope?: TargetScope;
   settingsStore?: SettingsStore;
   backupStore?: BackupStore;
+  diagnostics?: RuntimeDiagnostics;
 }
 
 const safeName = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
@@ -109,7 +117,8 @@ export const createTargetCaptureService = ({
   targetDiscoveryService,
   targetScope,
   settingsStore = createSettingsStore(paths),
-  backupStore = createBackupStore(paths)
+  backupStore = createBackupStore(paths),
+  diagnostics
 }: TargetCaptureServiceOptions): TargetCaptureService => {
   const previews = new Map<string, InternalCapture>();
   const captureReceiptStore = createCaptureReceiptStore(paths);
@@ -179,27 +188,21 @@ export const createTargetCaptureService = ({
     }
     const reservedSkillIds = new Set(librarySkills.map((skill) => skill.id));
     const skills: CapturedSkill[] = [];
-    for (const [runtimeName, entries] of groupedSkills) {
+    const skillDecisions: InternalCapture["skillDecisions"] = [];
+    const prepareSkill = async (
+      runtimeName: string,
+      entries: typeof skillInventory,
+      requestedLibraryId: string
+    ): Promise<{
+      skill: CapturedSkill;
+      resource: TargetCaptureResource;
+      hasSameNameLibraryConflict: boolean;
+    }> => {
       const preferredEntry =
         entries.find((entry) => entry.locationRole === "preferred-runtime") ??
         entries.find((entry) => entry.locationRole === "alternate-runtime") ??
         entries[0];
       const targetName = preferredEntry.deploymentName ?? preferredEntry.id;
-      if (!safeName.test(targetName)) {
-        errors.push(`Skill ${targetName} cannot be captured because its directory name is invalid`);
-        continue;
-      }
-      const hashes = new Set(entries.map((entry) => entry.contentHash));
-      if (hashes.size > 1) {
-        errors.push(
-          `Runtime Skill ${runtimeName} has different content in multiple active locations`
-        );
-        continue;
-      }
-      const requestedLibraryId = uniqueId(
-        reservedSkillIds.has(safeId(runtimeName)) ? `${targetId}-${runtimeName}` : runtimeName,
-        reservedSkillIds
-      );
       const sourcePath = preferredEntry.path;
       const sourcePaths = [...new Set(entries.map((entry) => entry.path))];
       const importPreview = await skillLibraryStore.previewImport({
@@ -216,13 +219,12 @@ export const createTargetCaptureService = ({
       const conflictResolution = !existing && importPreview.conflicts.length > 0
         ? { action: "keep-both" as const, id: libraryId }
         : undefined;
-      const contentHash = importPreview.incoming.contentHash;
-      skills.push({
+      const skill: CapturedSkill = {
         targetName,
         libraryId,
         sourcePath,
         sourcePaths,
-        contentHash,
+        contentHash: importPreview.incoming.contentHash,
         copies: entries.map((entry) => ({
           path: entry.path,
           contentHash: entry.contentHash,
@@ -232,24 +234,118 @@ export const createTargetCaptureService = ({
         })),
         existing: Boolean(existing),
         conflictResolution
-      });
-      resources.push({
-        kind: "skill",
-        id: targetName,
-        name: preferredEntry.runtimeName ?? preferredEntry.name,
-        sourcePath,
-        libraryId,
-        action: existing ? "reuse" : "import",
-        detail: conflictResolution
-          ? `Import Agent copy as ${libraryId}; existing same-name Library Skill stays unchanged`
-          : sourcePaths.length > 1
-            ? `${sourcePaths.length} source copies stay unchanged`
-            : preferredEntry.status === "left-unmanaged"
-              ? "Included in the Profile; this device leaves the current path unmanaged"
-              : preferredEntry.externalEvidence
-                ? `Included from a readable Agent path; ${preferredEntry.externalEvidence.displayName ?? preferredEntry.externalEvidence.manager} metadata was detected`
-                : undefined
-      });
+      };
+      return {
+        skill,
+        hasSameNameLibraryConflict: !existing && importPreview.conflicts.length > 0,
+        resource: {
+          kind: "skill",
+          id: targetName,
+          name: preferredEntry.runtimeName ?? preferredEntry.name,
+          sourcePath,
+          libraryId,
+          action: existing ? "reuse" : "import",
+          detail: conflictResolution
+            ? `Import Agent copy as ${libraryId}; existing same-name Library Skill stays unchanged`
+            : sourcePaths.length > 1
+              ? `${sourcePaths.length} source copies stay unchanged`
+              : preferredEntry.status === "left-unmanaged"
+                ? "Included in the Profile; this device leaves the current path unmanaged"
+                : preferredEntry.externalEvidence
+                  ? `Included from a readable Agent path; ${preferredEntry.externalEvidence.displayName ?? preferredEntry.externalEvidence.manager} metadata was detected`
+                  : undefined
+        }
+      };
+    };
+    for (const [runtimeName, entries] of groupedSkills) {
+      const preferredEntry =
+        entries.find((entry) => entry.locationRole === "preferred-runtime") ??
+        entries.find((entry) => entry.locationRole === "alternate-runtime") ??
+        entries[0];
+      const targetName = preferredEntry.deploymentName ?? preferredEntry.id;
+      if (!safeName.test(targetName)) {
+        errors.push(`Skill ${targetName} cannot be captured because its directory name is invalid`);
+        continue;
+      }
+      const hashes = new Set(entries.map((entry) => entry.contentHash));
+      const requestedLibraryId = uniqueId(
+        reservedSkillIds.has(safeId(runtimeName)) ? `${targetId}-${runtimeName}` : runtimeName,
+        reservedSkillIds
+      );
+      if (hashes.size > 1) {
+        const candidateSkills = new Map<string, CapturedSkill>();
+        const comparisonBase = entries[0];
+        const candidates = await Promise.all(entries.map(async (entry, index) => {
+          const candidateId = createHash("sha256").update(entry.path).digest("hex").slice(0, 16);
+          const prepared = await prepareSkill(runtimeName, [entry], requestedLibraryId);
+          candidateSkills.set(candidateId, prepared.skill);
+          const matchingLibrary = librarySkills.find(
+            (skill) => skill.contentHash === entry.contentHash
+          );
+          return {
+            id: candidateId,
+            path: entry.path,
+            canonicalPath: await realpath(entry.path).catch(() => resolve(entry.path)),
+            version: entry.version,
+            contentHash: entry.contentHash,
+            modifiedAt: entry.modifiedAt,
+            locationRole: entry.locationRole,
+            shared: entry.sharedLocation === true,
+            sharedLocationId: entry.sharedLocationId,
+            collectionPath: entry.collectionLink?.path,
+            libraryId: prepared.skill.libraryId,
+            libraryMatch: matchingLibrary
+              ? "identical" as const
+              : prepared.hasSameNameLibraryConflict
+                ? "same-name" as const
+                : undefined,
+            comparisonBaseId: index > 0
+              ? createHash("sha256").update(comparisonBase.path).digest("hex").slice(0, 16)
+              : undefined,
+            comparisonChanges: index > 0
+              ? await createSkillChanges(comparisonBase.path, entry.path)
+              : []
+          };
+        }));
+        const diagnosticReference = await diagnostics?.record(
+          "profiles:capture",
+          "decision-required",
+          {
+            outcome: "decision-required",
+            context: {
+              targetId,
+              scope,
+              skillName: runtimeName,
+              candidateCount: candidates.length,
+              candidates: candidates.map((candidate) => ({
+                path: candidate.path,
+                canonicalPath: candidate.canonicalPath,
+                version: candidate.version,
+                contentHash: candidate.contentHash,
+                modifiedAt: candidate.modifiedAt,
+                locationRole: candidate.locationRole,
+                sharedLocationId: candidate.sharedLocationId,
+                collectionPath: candidate.collectionPath,
+                libraryId: candidate.libraryId
+              }))
+            }
+          }
+        );
+        const issue: TargetCaptureIssue = {
+          id: `skill-conflict:${safeId(runtimeName)}`,
+          code: "conflicting-skill-copies",
+          severity: "decision",
+          skillName: runtimeName,
+          message: `${candidates.length} active copies have different content`,
+          diagnosticReference,
+          candidates
+        };
+        skillDecisions.push({ issue, candidates: candidateSkills });
+        continue;
+      }
+      const prepared = await prepareSkill(runtimeName, entries, requestedLibraryId);
+      skills.push(prepared.skill);
+      resources.push(prepared.resource);
     }
 
     if (scope === "all") {
@@ -292,11 +388,24 @@ export const createTargetCaptureService = ({
             ...(targetPaths.mcpConfigPath ? [targetPaths.mcpConfigPath] : [])
           ]
         : []),
-      ...skills.flatMap((skill) => skill.sourcePaths)
+      ...skills.flatMap((skill) => skill.sourcePaths),
+      ...skillDecisions.flatMap((decision) =>
+        decision.issue.candidates.map((candidate) => candidate.path)
+      )
     ]);
     const fingerprints = Object.fromEntries(
       await Promise.all([...fingerprintPaths].map(async (path) => [path, await fingerprintPath(path)]))
     );
+    const blockingDiagnosticReference = errors.length > 0
+      ? await diagnostics?.record("profiles:capture", "blocked", {
+          outcome: "blocked",
+          context: {
+            targetId,
+            scope,
+            errors
+          }
+        })
+      : undefined;
     const preview: TargetCapturePreview = {
       id: randomUUID(),
       targetId,
@@ -305,10 +414,24 @@ export const createTargetCaptureService = ({
       suggestedName: adapter.descriptor.name,
       createdAt: new Date().toISOString(),
       resources,
+      issues: skillDecisions.map((item) => item.issue),
       warnings,
-      errors
+      errors,
+      blockingDiagnosticReference
     };
-    return { preview, scope, captured, skills, fingerprints };
+    await diagnostics?.record("profiles:capture", "inventory-reviewed", {
+      outcome: skillDecisions.length > 0 ? "decision-required" : "completed",
+      context: {
+        targetId,
+        scope,
+        skillCount: groupedSkills.size,
+        resourceCount: resources.length,
+        decisionCount: skillDecisions.length,
+        warningCount: warnings.length,
+        errorCount: errors.length
+      }
+    });
+    return { preview, scope, captured, skills, skillDecisions, fingerprints };
   };
 
   const previewTarget = async (
@@ -329,6 +452,39 @@ export const createTargetCaptureService = ({
     if (capture.preview.errors.length > 0) {
       throw new Error(capture.preview.errors.join("; "));
     }
+    const decisions = new Map((input.decisions ?? []).map((decision) => [decision.issueId, decision]));
+    const resolvedSkills = [...capture.skills];
+    const keepOutside: Array<{ targetId: string; path: string }> = [];
+    for (const pending of capture.skillDecisions) {
+      const decision = decisions.get(pending.issue.id);
+      if (!decision) {
+        throw new Error(`Choose how to capture ${pending.issue.skillName} before saving the Profile`);
+      }
+      if (decision.action === "keep-outside") {
+        keepOutside.push(
+          ...pending.issue.candidates.map((candidate) => ({
+            targetId: capture.preview.targetId,
+            path: candidate.path
+          }))
+        );
+        continue;
+      }
+      const selected = pending.candidates.get(decision.candidateId);
+      if (!selected) {
+        throw new Error(`The selected ${pending.issue.skillName} copy is no longer available`);
+      }
+      resolvedSkills.push(selected);
+    }
+    if (capture.skillDecisions.length > 0) {
+      await diagnostics?.record("profiles:capture", "decisions-recorded", {
+        outcome: "completed",
+        context: {
+          targetId: capture.preview.targetId,
+          selectedCopyCount: input.decisions?.filter((item) => item.action === "use-copy").length ?? 0,
+          keptOutsideCount: input.decisions?.filter((item) => item.action === "keep-outside").length ?? 0
+        }
+      });
+    }
     const profileName = input.name.trim();
     if (!profileName) throw new Error("Profile name is required");
     for (const [path, fingerprint] of Object.entries(capture.fingerprints)) {
@@ -337,7 +493,7 @@ export const createTargetCaptureService = ({
       }
     }
 
-    const importCandidates = capture.skills.filter((item) => !item.existing);
+    const importCandidates = resolvedSkills.filter((item) => !item.existing);
     const settings = await settingsStore.readSettings();
     const libraryRoot = resolveSkillsLibraryDir(paths, settings);
     const affectedLibraryIds = new Set<string>();
@@ -350,16 +506,20 @@ export const createTargetCaptureService = ({
         );
       }
     }
-    const libraryBackup = affectedLibraryIds.size > 0
+    const policyPaths = keepOutside.length > 0 ? [paths.unmanagedSkillLocationsPath] : [];
+    const libraryBackup = affectedLibraryIds.size > 0 || policyPaths.length > 0
       ? await backupStore.createBackup(
-          [...affectedLibraryIds].map((id) => join(libraryRoot, id)),
+          [
+            ...[...affectedLibraryIds].map((id) => join(libraryRoot, id)),
+            ...policyPaths
+          ],
           { operation: "data-import", profileName }
         )
       : undefined;
     const claimLibraryPath = libraryBackup
       ? createBackupMutationClaimer(libraryBackup, {
           changedMessage: (path) =>
-            `Library changed while Capture was being prepared: ${path}`
+            `AgentEnv data changed while Capture was being prepared: ${path}`
         })
       : undefined;
     const importedLibraryHashes = new Map<string, string | undefined>();
@@ -390,6 +550,39 @@ export const createTargetCaptureService = ({
         }
         await claimLibraryPath?.recordMutation(...skillLibraryPaths);
         importedSkillCount += 1;
+        await diagnostics?.record("profiles:capture", "library-skill-imported", {
+          outcome: "completed",
+          context: {
+            targetId: capture.preview.targetId,
+            libraryId: skill.libraryId,
+            sourcePath: skill.sourcePath,
+            contentHash: skill.contentHash
+          }
+        });
+      }
+      if (keepOutside.length > 0) {
+        await claimLibraryPath?.(paths.unmanagedSkillLocationsPath);
+        await skillLibraryStore.setUnmanagedSkillLocations({
+          items: keepOutside.map((item) => ({
+            path: item.path,
+            targetId: item.targetId,
+            coverage: "exact" as const
+          })),
+          unmanaged: true
+        });
+        importedLibraryHashes.set(
+          resolve(paths.unmanagedSkillLocationsPath),
+          await hashPathEntry(paths.unmanagedSkillLocationsPath)
+        );
+        await claimLibraryPath?.recordMutation(paths.unmanagedSkillLocationsPath);
+        await diagnostics?.record("profiles:capture", "management-boundaries-saved", {
+          outcome: "completed",
+          context: {
+            targetId: capture.preview.targetId,
+            count: keepOutside.length,
+            paths: keepOutside.map((item) => item.path)
+          }
+        });
       }
       const created = await profileStore.createProfile({
         preferredTargetId: capture.preview.targetId,
@@ -424,7 +617,7 @@ export const createTargetCaptureService = ({
         },
         instructions: capture.scope === "all" ? capture.captured.instructions : "",
         resources: {
-          skills: capture.skills.map((skill) => ({
+          skills: resolvedSkills.map((skill) => ({
             libraryId: skill.libraryId,
             targetName: skill.targetName,
             enabled: true
@@ -449,7 +642,7 @@ export const createTargetCaptureService = ({
           profileId: saved.id,
           targetId: capture.preview.targetId,
           createdAt: capture.preview.createdAt,
-          skills: capture.skills.map((skill) => ({
+          skills: resolvedSkills.map((skill) => ({
             libraryId: skill.libraryId,
             targetName: skill.targetName,
             copies: skill.copies
@@ -463,6 +656,16 @@ export const createTargetCaptureService = ({
         );
       }
       previews.delete(input.previewId);
+      await diagnostics?.record("profiles:capture", "completed", {
+        outcome: "completed",
+        context: {
+          targetId: capture.preview.targetId,
+          profileId: saved.id,
+          importedSkillCount,
+          keptOutsideCount: keepOutside.length,
+          warningCount: capture.preview.warnings.length + receiptWarnings.length
+        }
+      });
       return {
         profile: await profileStore.readProfile(saved.id),
         targetId: capture.preview.targetId,

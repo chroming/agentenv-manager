@@ -124,6 +124,7 @@ export interface AgentEnvApi {
   selectTargetConfigRoot(targetId: string): Promise<string | undefined>;
   selectComparisonWorkspace(): Promise<string | undefined>;
   listSupportedTargets(): Promise<TargetDescriptor[]>;
+  probeSupportedTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
   listTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
   listTargetStates(): Promise<TargetManagementState[]>;
   listConversations(input?: ConversationListInput): Promise<ConversationListResult>;
@@ -299,7 +300,15 @@ export type StartupStatus =
       canRetry: boolean;
     };
 
-export type DiagnosticOutcome = "completed" | "no-op" | "cancelled" | "failed";
+export type DiagnosticOutcome =
+  | "completed"
+  | "no-op"
+  | "decision-required"
+  | "blocked"
+  | "partial"
+  | "cancelled"
+  | "failed"
+  | "rolled-back";
 
 export interface DiagnosticErrorDetail {
   name: string;
@@ -320,6 +329,8 @@ export interface DiagnosticEvent {
   schemaVersion: 1;
   at: string;
   reference: string;
+  operationId?: string;
+  parentOperationId?: string;
   action: string;
   category: string;
   phase: string;
@@ -1230,7 +1241,9 @@ export interface AgentEnvSettings {
   telemetryEnabled?: boolean;
   backupRetentionDays: BackupRetentionDays;
   enabledTargetIds?: string[];
+  suppressedAgentSuggestionIds?: string[];
   targetConfigRoots?: Record<string, string>;
+  targetCommandOverrides?: Record<string, string>;
 }
 
 export type ProjectSkillCandidateStatus = "ready" | "in-library" | "changed" | "invalid";
@@ -1366,6 +1379,7 @@ export interface CreateProfileInput {
 export interface CreateProfileFromTargetInput {
   previewId: string;
   name: string;
+  decisions?: TargetCaptureDecision[];
 }
 
 export type TargetCaptureScope = "all" | "skills";
@@ -1380,6 +1394,44 @@ export interface TargetCaptureResource {
   detail?: string;
 }
 
+export interface TargetCaptureSkillCandidate {
+  id: string;
+  path: string;
+  canonicalPath: string;
+  version?: string;
+  contentHash: string;
+  modifiedAt?: string;
+  locationRole?: TargetSkillLocationRole;
+  shared: boolean;
+  sharedLocationId?: SharedSkillLocationId;
+  collectionPath?: string;
+  libraryId?: string;
+  libraryMatch?: "identical" | "same-name";
+  comparisonBaseId?: string;
+  comparisonChanges?: PlannedFileChange[];
+}
+
+export interface TargetCaptureIssue {
+  id: string;
+  code: "conflicting-skill-copies";
+  severity: "decision";
+  skillName: string;
+  message: string;
+  diagnosticReference?: string;
+  candidates: TargetCaptureSkillCandidate[];
+}
+
+export type TargetCaptureDecision =
+  | {
+      issueId: string;
+      action: "use-copy";
+      candidateId: string;
+    }
+  | {
+      issueId: string;
+      action: "keep-outside";
+    };
+
 export interface TargetCapturePreview {
   id: string;
   targetId: string;
@@ -1388,8 +1440,10 @@ export interface TargetCapturePreview {
   suggestedName: string;
   createdAt: string;
   resources: TargetCaptureResource[];
+  issues: TargetCaptureIssue[];
   warnings: string[];
   errors: string[];
+  blockingDiagnosticReference?: string;
 }
 
 export interface TargetCaptureResult {
@@ -1412,6 +1466,7 @@ export interface TargetDescriptor {
   mcpConfigKey?: string;
   realWritesEnabled: boolean;
   executableName?: string;
+  executableCandidates: string[];
   capabilities: TargetCapabilities;
 }
 
@@ -1554,7 +1609,9 @@ export interface ManagedResourceSnapshot {
   paused?: boolean;
 }
 
-export type TargetHealthStatus = "ready" | "needs-setup" | "missing" | "guarded";
+export type TargetHealthStatus = "ready" | "needs-setup" | "missing" | "guarded" | "unknown";
+
+export type TargetExecutableStatus = "found" | "missing" | "unknown";
 
 export interface TargetPathCheck {
   id:
@@ -1577,6 +1634,11 @@ export interface TargetHealth {
   installationFound: boolean;
   installationEvidence: TargetInstallationEvidence[];
   executableName?: string;
+  executableCandidates: string[];
+  executableStatus: TargetExecutableStatus;
+  executableCandidate?: string;
+  executableOverride?: string;
+  executableError?: string;
   executablePath?: string;
   executableFound: boolean;
   canWrite: boolean;

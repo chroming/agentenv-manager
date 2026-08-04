@@ -31,6 +31,7 @@ export interface TargetDiscoveryOptions {
 
 export interface TargetDiscoveryService {
   listTargets(options?: { forceRefresh?: boolean }): Promise<TargetInfo[]>;
+  probeSupportedTargets(options?: { forceRefresh?: boolean }): Promise<TargetInfo[]>;
 }
 
 const canAccess = async (path: string, mode: number) => {
@@ -133,8 +134,14 @@ const summarizeHealth = (
   if (status === "needs-setup") {
     return "Needs setup";
   }
+  if (status === "unknown") {
+    return `${targetName} detection could not complete`;
+  }
   return `${targetName} not detected`;
 };
+
+const errorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
 
 const conversationCapabilitiesFor = (
   adapter: ReturnType<TargetRegistry["listAdapters"]>[number],
@@ -240,34 +247,96 @@ export const createTargetDiscoveryService = (
     executableCache.set(name, { path, checkedAt: Date.now() });
     return path;
   };
-  const listTargets = async (
+  const discoverAdapters = async (
+    adapters: ReturnType<TargetRegistry["listAdapters"]>,
     listOptions: { forceRefresh?: boolean } = {}
   ): Promise<TargetInfo[]> => {
     if (listOptions.forceRefresh) {
       executableResolver.invalidateShellPath();
     }
-    const enabledAdapters = await targetScope.listEnabledAdapters();
     const settings = await settingsStore.readSettings();
     return Promise.all(
-      enabledAdapters.map(async (adapter) => {
+      adapters.map(async (adapter) => {
         const targetPaths = adapter.createTargetPaths(
           targetPathInputFor(paths, settings, adapter.descriptor.id)
         );
         const executableName = adapter.descriptor.executableName;
-        const installation = await adapter.detectInstallation({
-          platform,
-          homeDir: paths.homeDir,
-          allowSystemApplicationLookup,
-          findExecutable: (name) =>
-            discoverExecutable(name, listOptions.forceRefresh === true),
-          pathExists: pathExistsByStat
-        });
+        const executableCandidates = adapter.descriptor.executableCandidates;
+        const executableOverride = settings.targetCommandOverrides?.[adapter.descriptor.id];
+        const probeCandidates = [
+          ...(executableOverride ? [executableOverride] : []),
+          ...executableCandidates.filter((candidate) => candidate !== executableOverride)
+        ];
+        let executableCandidate: string | undefined;
+        let executablePath: string | undefined;
+        let executableProbeError: string | undefined;
+        for (const candidate of probeCandidates) {
+          try {
+            const resolved = await discoverExecutable(
+              candidate,
+              listOptions.forceRefresh === true
+            );
+            if (resolved) {
+              executableCandidate = candidate;
+              executablePath = resolved;
+              break;
+            }
+          } catch (error) {
+            executableProbeError ??= errorMessage(error);
+          }
+        }
+
+        let installation: Awaited<ReturnType<typeof adapter.detectInstallation>>;
+        let installationError: string | undefined;
+        try {
+          installation = await adapter.detectInstallation({
+            platform,
+            homeDir: paths.homeDir,
+            allowSystemApplicationLookup,
+            findExecutable: async (name) => {
+              if (
+                executablePath &&
+                executableCandidate === executableOverride &&
+                executableCandidates.includes(name)
+              ) {
+                return executablePath;
+              }
+              if (executablePath && executableCandidate === name) return executablePath;
+              if (probeCandidates.includes(name)) return undefined;
+              return discoverExecutable(name, listOptions.forceRefresh === true);
+            },
+            pathExists: pathExistsByStat
+          });
+        } catch (error) {
+          installationError = errorMessage(error);
+          installation = { found: false, evidence: [] };
+        }
+        if (
+          executablePath &&
+          !installation.evidence.some((evidence) => evidence.kind === "command")
+        ) {
+          installation.evidence.unshift({
+            kind: "command",
+            label: `${executableCandidate ?? executableName ?? "Agent"} command`,
+            path: executablePath
+          });
+          installation.found = true;
+        }
         const commandEvidence = installation.evidence.find(
           (evidence) => evidence.kind === "command"
         );
-        const executablePath = commandEvidence?.path;
+        executablePath ??= commandEvidence?.path;
+        executableCandidate ??= commandEvidence
+          ? probeCandidates.find((candidate) => candidate === executableName) ?? executableName
+          : undefined;
         const executableFound = Boolean(commandEvidence);
         const installationFound = installation.found;
+        const executableError = executableProbeError ?? installationError;
+        const executableStatus = executablePath
+          ? "found" as const
+          : executableError
+            ? "unknown" as const
+            : "missing" as const;
         const checks = await createChecks(targetPaths);
         const requiredChecks = checks.filter((check) => check.required);
         const missingRequiredPaths = requiredChecks.filter((check) => !check.exists).length;
@@ -278,6 +347,8 @@ export const createTargetDiscoveryService = (
           requiredPathsWritable;
         const status: TargetHealthStatus = !adapter.descriptor.realWritesEnabled
           ? "guarded"
+          : !installationFound && executableStatus === "unknown"
+            ? "unknown"
           : !installationFound
             ? "missing"
             : requiredPathsWritable
@@ -288,6 +359,11 @@ export const createTargetDiscoveryService = (
           installationFound,
           installationEvidence: installation.evidence,
           executableName,
+          executableCandidates,
+          executableStatus,
+          executableCandidate,
+          executableOverride,
+          executableError,
           executablePath,
           executableFound,
           canWrite,
@@ -310,5 +386,16 @@ export const createTargetDiscoveryService = (
     );
   };
 
-  return { listTargets };
+  const listTargets = async (
+    listOptions: { forceRefresh?: boolean } = {}
+  ): Promise<TargetInfo[]> => discoverAdapters(
+    await targetScope.listEnabledAdapters(),
+    listOptions
+  );
+
+  const probeSupportedTargets = async (
+    listOptions: { forceRefresh?: boolean } = {}
+  ): Promise<TargetInfo[]> => discoverAdapters(targetRegistry.listAdapters(), listOptions);
+
+  return { listTargets, probeSupportedTargets };
 };

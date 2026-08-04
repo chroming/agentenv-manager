@@ -42,6 +42,7 @@ describe("OpenCode Create from Target e2e", () => {
       targetRegistry,
       skillLibraryStore,
       targetDiscoveryService: {
+        probeSupportedTargets: async () => [],
         listTargets: async () => [
           { id: "opencode", health: { executableFound: true } } as TargetInfo
         ]

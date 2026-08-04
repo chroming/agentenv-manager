@@ -121,6 +121,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     mcpConfigKey: "mcp",
     realWritesEnabled: true,
     executableName: "opencode",
+    executableCandidates: ["opencode"],
     capabilities: {
       instructions: true,
       skills: true,

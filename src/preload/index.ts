@@ -68,6 +68,8 @@ const api: AgentEnvApi = {
   selectTargetConfigRoot: (targetId) => ipcRenderer.invoke("dialog:select-target-config-root", targetId),
   selectComparisonWorkspace: () => ipcRenderer.invoke("dialog:select-comparison-workspace"),
   listSupportedTargets: () => ipcRenderer.invoke("targets:list-supported"),
+  probeSupportedTargets: (forceRefresh) =>
+    ipcRenderer.invoke("targets:probe-supported", forceRefresh),
   listTargets: (forceRefresh) => ipcRenderer.invoke("targets:list", forceRefresh),
   listTargetStates: () => ipcRenderer.invoke("targets:list-states"),
   listConversations: (input) => ipcRenderer.invoke("conversations:list", input),

@@ -123,6 +123,9 @@ describe.skipIf(!gitPath)("evaluation service", () => {
         installationFound: true,
         installationEvidence: [{ kind: "command", label: "Command", path: process.execPath }],
         executableName: "opencode",
+        executableCandidates: ["opencode"],
+        executableStatus: "found",
+        executableCandidate: "opencode",
         executablePath: process.execPath,
         executableFound: true,
         canWrite: true,
@@ -143,6 +146,7 @@ describe.skipIf(!gitPath)("evaluation service", () => {
       listSkills
     } as unknown as Pick<SkillLibraryStore, "listSkills">;
     const targetDiscoveryService = {
+      probeSupportedTargets: vi.fn(async () => [target]),
       listTargets: vi.fn(async () => [target])
     } as TargetDiscoveryService;
     service = createEvaluationService({

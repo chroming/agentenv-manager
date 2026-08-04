@@ -41,6 +41,9 @@ const makeTarget = (
       { kind: "command", label: adapter.descriptor.name, path: executablePath }
     ],
     executableName: adapter.descriptor.executableName,
+    executableCandidates: adapter.descriptor.executableCandidates,
+    executableStatus: "found",
+    executableCandidate: adapter.descriptor.executableCandidates[0],
     executablePath,
     executableFound: true,
     canWrite: true,
@@ -155,7 +158,10 @@ describe("conversation service", () => {
     const service = await createConversationService({
       paths,
       targetRegistry: registry,
-      targetDiscoveryService: { listTargets: async () => targets },
+      targetDiscoveryService: {
+        probeSupportedTargets: async () => targets,
+        listTargets: async () => targets
+      },
       settingsStore: {
         ...settingsStore,
         readSettings: async () => ({
@@ -225,6 +231,7 @@ describe("conversation service", () => {
       paths,
       targetRegistry: createTargetRegistry([codex]),
       targetDiscoveryService: {
+        probeSupportedTargets: async () => [makeTarget(codex, paths.homeDir)],
         listTargets: async () => [makeTarget(codex, paths.homeDir)]
       },
       settingsStore: {
@@ -251,6 +258,7 @@ describe("conversation service", () => {
       paths,
       targetRegistry: createTargetRegistry([codex]),
       targetDiscoveryService: {
+        probeSupportedTargets: async () => [makeTarget(codex, paths.homeDir)],
         listTargets: async () => [makeTarget(codex, paths.homeDir)]
       },
       settingsStore: {
@@ -316,6 +324,7 @@ describe("conversation service", () => {
       paths,
       targetRegistry: createTargetRegistry([opencode]),
       targetDiscoveryService: {
+        probeSupportedTargets: async () => [makeTarget(opencode, paths.homeDir)],
         listTargets: async () => [makeTarget(opencode, paths.homeDir)]
       },
       settingsStore,
@@ -372,6 +381,7 @@ describe("conversation service", () => {
       paths,
       targetRegistry: createTargetRegistry([codex]),
       targetDiscoveryService: {
+        probeSupportedTargets: async () => [makeTarget(codex, paths.homeDir)],
         listTargets: async () => [makeTarget(codex, paths.homeDir)]
       },
       settingsStore: {
@@ -442,6 +452,7 @@ describe("conversation service", () => {
       paths,
       targetRegistry: registry,
       targetDiscoveryService: {
+        probeSupportedTargets: async () => [makeTarget(codex, paths.homeDir)],
         listTargets: async () => [makeTarget(codex, paths.homeDir)]
       },
       settingsStore,
@@ -501,6 +512,7 @@ describe("conversation service", () => {
       paths,
       targetRegistry: registry,
       targetDiscoveryService: {
+        probeSupportedTargets: async () => [makeTarget(codex, paths.homeDir)],
         listTargets: async () => [makeTarget(codex, paths.homeDir)]
       },
       settingsStore,
@@ -551,7 +563,10 @@ describe("conversation service", () => {
     const service = await createConversationService({
       paths,
       targetRegistry: registry,
-      targetDiscoveryService: { listTargets: async () => targets },
+      targetDiscoveryService: {
+        probeSupportedTargets: async () => targets,
+        listTargets: async () => targets
+      },
       settingsStore,
       clipboard: { writeText: vi.fn() },
       launcher: { launch: async (spec) => { launched.push(spec); } }
@@ -623,7 +638,10 @@ describe("conversation service", () => {
     const service = await createConversationService({
       paths,
       targetRegistry: registry,
-      targetDiscoveryService: { listTargets: async () => targets },
+      targetDiscoveryService: {
+        probeSupportedTargets: async () => targets,
+        listTargets: async () => targets
+      },
       settingsStore,
       clipboard: { writeText: vi.fn() },
       launcher: { launch: async (spec) => { launchSpec = spec; } }
@@ -679,6 +697,10 @@ describe("conversation service", () => {
       paths,
       targetRegistry: createTargetRegistry([codex, opencode]),
       targetDiscoveryService: {
+        probeSupportedTargets: async () => [
+          makeTarget(codex, paths.homeDir),
+          makeTarget(opencode, paths.homeDir)
+        ],
         listTargets: async () => [
           makeTarget(codex, paths.homeDir),
           makeTarget(opencode, paths.homeDir)
@@ -753,6 +775,10 @@ describe("conversation service", () => {
       paths,
       targetRegistry: createTargetRegistry([codex, opencode]),
       targetDiscoveryService: {
+        probeSupportedTargets: async () => [
+          makeTarget(codex, paths.homeDir),
+          makeTarget(opencode, paths.homeDir)
+        ],
         listTargets: async () => [
           makeTarget(codex, paths.homeDir),
           makeTarget(opencode, paths.homeDir)
@@ -815,7 +841,10 @@ describe("conversation service", () => {
     const service = await createConversationService({
       paths,
       targetRegistry: registry,
-      targetDiscoveryService: { listTargets: async () => targets },
+      targetDiscoveryService: {
+        probeSupportedTargets: async () => targets,
+        listTargets: async () => targets
+      },
       settingsStore,
       clipboard: { writeText: vi.fn() },
       launcher: { launch: async () => { throw new Error("Terminal unavailable"); } }

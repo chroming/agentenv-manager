@@ -823,7 +823,8 @@ const createServices = async (
     skillLibraryStore,
     targetDiscoveryService,
     targetScope,
-    settingsStore
+    settingsStore,
+    diagnostics: runtimeDiagnostics
   });
   let evaluationGitRunner: GitCommandRunner | undefined;
   let evaluationGitRunnerPromise: Promise<GitCommandRunner> | undefined;
@@ -991,10 +992,17 @@ const initializeServices = () => {
   broadcastStartupStatus();
   startupAttempt = (async () => {
     await startupDiagnostics?.record("startup-begin", { dataRoot: startupDataRoot });
+    const startupOperationId = await runtimeDiagnostics?.record("app:startup", "started", {
+      context: { dataRoot: startupDataRoot }
+    });
     try {
       const services = await createServices((phase) => {
         startupStatus = { state: "initializing", phase };
         broadcastStartupStatus();
+        void runtimeDiagnostics?.record("app:startup", phase ?? "initializing", {
+          reference: startupOperationId,
+          context: { dataRoot: startupDataRoot }
+        });
       });
       activeAppUpdateService = services.appUpdateService;
       let removeWorkspaceSyncFocusListener: () => void = () => undefined;
@@ -1019,7 +1027,8 @@ const initializeServices = () => {
                 skillAutoCheckIntervalMinutes: settings.skillAutoCheckIntervalMinutes,
                 backupRetentionDays: settings.backupRetentionDays,
                 enabledTargetIds: settings.enabledTargetIds,
-                targetConfigRoots: settings.targetConfigRoots
+                targetConfigRoots: settings.targetConfigRoots,
+                targetCommandOverrides: settings.targetCommandOverrides
               }
             : {
                 error: settingsResult.status === "rejected"
@@ -1033,8 +1042,14 @@ const initializeServices = () => {
                 health: {
                   status: target.health.status,
                   installationFound: target.health.installationFound,
+                  installationEvidence: target.health.installationEvidence,
+                  executableCandidates: target.health.executableCandidates,
+                  executableCandidate: target.health.executableCandidate,
+                  executableOverride: target.health.executableOverride,
+                  executableStatus: target.health.executableStatus,
                   executablePath: target.health.executablePath,
                   executableFound: target.health.executableFound,
+                  executableError: target.health.executableError,
                   canWrite: target.health.canWrite,
                   checks: target.health.checks
                 },
@@ -1108,10 +1123,21 @@ const initializeServices = () => {
       servicesInitialized = true;
       startupStatus = { state: "ready" };
       await startupDiagnostics?.record("startup-ready");
+      await runtimeDiagnostics?.record("app:startup", "completed", {
+        reference: startupOperationId,
+        outcome: "completed",
+        context: { dataRoot: startupDataRoot }
+      });
       broadcastStartupStatus();
     } catch (error) {
       startupStatus = classifyStartupFailure(error, startupDataRoot);
       await startupDiagnostics?.record("startup-failed", error);
+      await runtimeDiagnostics?.record("app:startup", "failed", {
+        reference: startupOperationId,
+        outcome: "failed",
+        context: { dataRoot: startupDataRoot },
+        error
+      });
       broadcastStartupStatus();
     } finally {
       startupAttempt = undefined;
@@ -1199,6 +1225,10 @@ app.on("before-quit", (event) => {
       })
       .catch((error) => console.error("Install-on-quit update failed", error))
       .finally(() => {
+        void runtimeDiagnostics?.record("app:shutdown", "completed", {
+          outcome: "completed",
+          context: { reason: "install-update" }
+        });
         disposeServices?.();
         disposeServices = undefined;
         activeAppUpdateService = undefined;
@@ -1207,6 +1237,9 @@ app.on("before-quit", (event) => {
     return;
   }
   appQuitRequested = true;
+  void runtimeDiagnostics?.record("app:shutdown", "requested", {
+    context: { reason: "user" }
+  });
   disposeServices?.();
   disposeServices = undefined;
 });

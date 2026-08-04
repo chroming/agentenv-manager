@@ -105,9 +105,32 @@ describe("settings store", () => {
       });
   });
 
-  it("initializes the enabled Agent list once and preserves explicit choices", async () => {
+  it("starts new installations with every Agent off", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-settings-agents-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const store = createSettingsStore(paths, {
+      supportedTargetIds: ["opencode", "claude-code", "codex"]
+    });
+
+    await expect(store.readSettings()).resolves.toEqual(
+      expect.objectContaining({
+        enabledTargetIds: []
+      })
+    );
+    await expect(
+      JSON.parse(await readFile(join(paths.appDataRoot, "settings.json"), "utf8"))
+    ).toEqual(expect.objectContaining({ enabledTargetIds: [] }));
+  });
+
+  it("preserves the pre-selection behavior for existing settings and later explicit choices", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-settings-agents-upgrade-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    await mkdir(paths.appDataRoot, { recursive: true });
+    await writeFile(
+      join(paths.appDataRoot, "settings.json"),
+      JSON.stringify({ locale: "system", skillAutoCheckEnabled: false }),
+      "utf8"
+    );
     const store = createSettingsStore(paths, {
       supportedTargetIds: ["opencode", "claude-code", "codex"]
     });
@@ -131,6 +154,59 @@ describe("settings store", () => {
     );
   });
 
+  it("persists and normalizes disabled Agent suggestion choices", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-settings-agent-suggestions-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const store = createSettingsStore(paths, {
+      supportedTargetIds: ["opencode", "codex"]
+    });
+
+    await expect(store.updateSettings({
+      suppressedAgentSuggestionIds: ["codex", "codex", "unknown"]
+    })).resolves.toEqual(expect.objectContaining({
+      enabledTargetIds: [],
+      suppressedAgentSuggestionIds: ["codex"]
+    }));
+    await expect(store.readSettings()).resolves.toEqual(expect.objectContaining({
+      suppressedAgentSuggestionIds: ["codex"]
+    }));
+  });
+
+  it("persists safe per-Agent command overrides and expands home paths", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-settings-agent-commands-"));
+    const homeDir = join(root, "home");
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir });
+    const store = createSettingsStore(paths, {
+      supportedTargetIds: ["opencode", "codex"]
+    });
+
+    await expect(store.updateSettings({
+      targetCommandOverrides: {
+        opencode: "opencode-nightly",
+        codex: "~/bin/codex-wrapper",
+        unknown: "ignored-command"
+      }
+    })).resolves.toEqual(expect.objectContaining({
+      targetCommandOverrides: {
+        opencode: "opencode-nightly",
+        codex: join(homeDir, "bin", "codex-wrapper")
+      }
+    }));
+  });
+
+  it("rejects command overrides that contain arguments or relative paths", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-settings-agent-command-safety-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const store = createSettingsStore(paths, { supportedTargetIds: ["codex"] });
+
+    await expect(store.updateSettings({
+      targetCommandOverrides: { codex: "codex --dangerously-bypass-approvals-and-sandbox" }
+    })).rejects.toThrow("Agent command overrides must be an executable name or absolute path");
+    await expect(store.updateSettings({
+      targetCommandOverrides: { codex: "bin/codex" }
+    })).rejects.toThrow("Agent command overrides must be an executable name or absolute path");
+  });
+
   it("normalizes unsupported Windows terminal preferences", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-settings-windows-"));
     const paths = createPaths({
@@ -151,6 +227,26 @@ describe("settings store", () => {
     await expect(
       store.updateSettings({ conversationTerminal: "ghostty" })
     ).rejects.toThrow("not available");
+  });
+
+  it("normalizes Windows Agent folders and command overrides with Windows path rules", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-settings-windows-paths-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "app-data"),
+      homeDir: "C:\\Users\\agentenv"
+    });
+    const store = createSettingsStore(paths, {
+      platform: "win32",
+      supportedTargetIds: ["opencode"]
+    });
+
+    await expect(store.updateSettings({
+      targetConfigRoots: { opencode: "C:\\Users\\agentenv\\.config\\..\\opencode" },
+      targetCommandOverrides: { opencode: "~\\bin\\opencode-preview.exe" }
+    })).resolves.toMatchObject({
+      targetConfigRoots: { opencode: "C:\\Users\\agentenv\\opencode" },
+      targetCommandOverrides: { opencode: "C:\\Users\\agentenv\\bin\\opencode-preview.exe" }
+    });
   });
 
   it("normalizes per-Agent configuration roots and rejects relative paths", async () => {

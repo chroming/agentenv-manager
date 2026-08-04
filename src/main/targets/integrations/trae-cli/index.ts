@@ -328,6 +328,7 @@ export const traeCliIntegration: AgentTargetIntegration = {
     mcpConfigKey: MCP_KEY,
     realWritesEnabled: true,
     executableName: "traecli",
+    executableCandidates: [...COMMAND_ALIASES],
     capabilities: {
       instructions: true,
       skills: true,

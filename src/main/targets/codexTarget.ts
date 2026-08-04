@@ -59,6 +59,7 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     mcpConfigKey: "mcp_servers",
     realWritesEnabled: true,
     executableName: "codex",
+    executableCandidates: ["codex"],
     capabilities: {
       instructions: true,
       skills: true,

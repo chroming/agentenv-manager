@@ -1,5 +1,5 @@
 import { cp, mkdir, readdir, readFile, rename } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, resolve, win32 } from "node:path";
 import { z } from "zod";
 import type { AgentEnvSettings } from "../shared/types";
 import type { AgentEnvPaths } from "./paths";
@@ -19,7 +19,9 @@ export const SettingsSchema = z.object({
   telemetryEnabled: z.boolean().default(false),
   backupRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).default(null),
   enabledTargetIds: z.array(z.string().min(1)).optional(),
-  targetConfigRoots: z.record(z.string().min(1), z.string().min(1)).optional()
+  suppressedAgentSuggestionIds: z.array(z.string().min(1)).optional(),
+  targetConfigRoots: z.record(z.string().min(1), z.string().min(1)).optional(),
+  targetCommandOverrides: z.record(z.string().min(1), z.string().min(1)).optional()
 });
 
 export const parseSettingsData = (value: unknown): AgentEnvSettings =>
@@ -146,27 +148,63 @@ export const createSettingsStore = (
   options: SettingsStoreOptions = {}
 ): SettingsStore => {
   const platform = options.platform ?? process.platform;
+  const pathIsAbsolute = (path: string) =>
+    platform === "win32" ? win32.isAbsolute(path) : isAbsolute(path);
+  const normalizeAbsolutePath = (path: string) =>
+    platform === "win32" ? win32.normalize(path) : resolve(path);
+  const joinPath = (...segments: string[]) =>
+    platform === "win32" ? win32.join(...segments) : join(...segments);
+  const normalizeCommandOverride = (value: string): string | undefined => {
+    const command = value.trim();
+    if (!command) return undefined;
+    const expanded = command === "~"
+      ? paths.homeDir
+      : command.startsWith("~/") || (platform === "win32" && command.startsWith("~\\"))
+        ? joinPath(paths.homeDir, command.slice(2))
+        : command;
+    if (pathIsAbsolute(expanded)) return normalizeAbsolutePath(expanded);
+    return /^[A-Za-z0-9._+-]+$/.test(expanded) ? expanded : undefined;
+  };
   const normalizeEnabledTargets = (settings: AgentEnvSettings): AgentEnvSettings => {
     const enabledTargetIds =
       settings.enabledTargetIds ??
       (options.supportedTargetIds ? [...new Set(options.supportedTargetIds)] : undefined);
+    const suppressedAgentSuggestionIds = settings.suppressedAgentSuggestionIds
+      ? [...new Set(settings.suppressedAgentSuggestionIds)].filter((targetId) =>
+          !options.supportedTargetIds || options.supportedTargetIds.includes(targetId)
+        )
+      : undefined;
     const targetConfigRoots = Object.fromEntries(
       Object.entries(settings.targetConfigRoots ?? {})
         .filter(([targetId, path]) =>
           (!options.supportedTargetIds || options.supportedTargetIds.includes(targetId)) &&
-          isAbsolute(path)
+          pathIsAbsolute(path)
         )
-        .map(([targetId, path]) => [targetId, resolve(path)])
+        .map(([targetId, path]) => [targetId, normalizeAbsolutePath(path)])
+    );
+    const targetCommandOverrides = Object.fromEntries(
+      Object.entries(settings.targetCommandOverrides ?? {})
+        .filter(([targetId]) =>
+          !options.supportedTargetIds || options.supportedTargetIds.includes(targetId)
+        )
+        .map(([targetId, command]) => [targetId, normalizeCommandOverride(command)] as const)
+        .filter((entry): entry is readonly [string, string] => Boolean(entry[1]))
     );
     const normalized: AgentEnvSettings = {
       ...settings,
       ...(platform === "win32" && settings.conversationTerminal === "ghostty"
         ? { conversationTerminal: "default" as const }
         : {}),
-      ...(enabledTargetIds ? { enabledTargetIds } : {})
+      ...(enabledTargetIds ? { enabledTargetIds } : {}),
+      ...(suppressedAgentSuggestionIds ? { suppressedAgentSuggestionIds } : {})
     };
     if (Object.keys(targetConfigRoots).length > 0) normalized.targetConfigRoots = targetConfigRoots;
     else delete normalized.targetConfigRoots;
+    if (Object.keys(targetCommandOverrides).length > 0) {
+      normalized.targetCommandOverrides = targetCommandOverrides;
+    } else {
+      delete normalized.targetCommandOverrides;
+    }
     return normalized;
   };
 
@@ -188,7 +226,10 @@ export const createSettingsStore = (
       return next;
     } catch (error) {
       if (isMissingFileError(error)) {
-        const defaults = normalizeEnabledTargets(DEFAULT_SETTINGS);
+        const defaults = normalizeEnabledTargets({
+          ...DEFAULT_SETTINGS,
+          ...(options.supportedTargetIds ? { enabledTargetIds: [] } : {})
+        });
         if (options.supportedTargetIds) {
           await writeAtomic(settingsPathFor(paths), `${JSON.stringify(defaults, null, 2)}\n`);
         }
@@ -209,7 +250,12 @@ export const createSettingsStore = (
       throw new Error("Ghostty is not available as a Windows conversation terminal");
     }
     for (const path of Object.values(input.targetConfigRoots ?? {})) {
-      if (!isAbsolute(path)) throw new Error("Agent configuration roots must use absolute paths");
+      if (!pathIsAbsolute(path)) throw new Error("Agent configuration roots must use absolute paths");
+    }
+    for (const command of Object.values(input.targetCommandOverrides ?? {})) {
+      if (!normalizeCommandOverride(command)) {
+        throw new Error("Agent command overrides must be an executable name or absolute path");
+      }
     }
     const next = normalizeEnabledTargets(
       SettingsSchema.parse({ ...current, ...input, skillStorageLocation: "appData" })

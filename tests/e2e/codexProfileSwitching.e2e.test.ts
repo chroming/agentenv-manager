@@ -105,6 +105,7 @@ describe("Codex Profile v2 switching e2e", () => {
       skillLibraryStore,
       targetRegistry,
       targetDiscoveryService: {
+        probeSupportedTargets: async () => [],
         listTargets: async () => [
           { id: "codex", health: { executableFound: true } } as TargetInfo
         ]

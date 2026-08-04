@@ -379,6 +379,9 @@ export const registerIpcHandlers = ({
   diagnosticHandle("targets:list", (_event, forceRefresh: unknown) =>
     targetDiscoveryService.listTargets({ forceRefresh: forceRefresh === true })
   );
+  diagnosticHandle("targets:probe-supported", (_event, forceRefresh: unknown) =>
+    targetDiscoveryService.probeSupportedTargets({ forceRefresh: forceRefresh === true })
+  );
   diagnosticHandle("targets:list-supported", () => targetRegistry.list());
   diagnosticHandle("targets:list-states", () =>
     activationService.listTargetStates()

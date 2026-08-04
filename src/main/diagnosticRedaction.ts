@@ -19,7 +19,14 @@ export const redactDiagnosticText = (
   homeDir: string,
   maxLength = 32 * 1024
 ): string => {
-  let redacted = homeDir ? value.replaceAll(homeDir, "~") : value;
+  let redacted = value;
+  if (homeDir) {
+    for (const candidate of [`/private${homeDir}`, homeDir].sort(
+      (left, right) => right.length - left.length
+    )) {
+      redacted = redacted.replaceAll(candidate, "~");
+    }
+  }
   for (const [pattern, replacement] of credentialPatterns) {
     redacted = redacted.replace(pattern, replacement);
   }
@@ -95,7 +102,7 @@ export const sanitizeDiagnosticValue = (
   homeDir: string,
   depth = 0
 ): unknown => {
-  if (depth > 5) return "[truncated]";
+  if (depth > 10) return "[truncated]";
   if (typeof value === "string") return redactDiagnosticText(value, homeDir, 8 * 1024);
   if (typeof value === "number" || typeof value === "boolean" || value === null) return value;
   if (Array.isArray(value)) {

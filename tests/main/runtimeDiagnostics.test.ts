@@ -31,6 +31,63 @@ const createDiagnostics = async (options: { maxLogBytes?: number } = {}) => {
 };
 
 describe("runtime diagnostics", () => {
+  it("records a complete timeline for a successful fast operation", async () => {
+    const diagnostics = await createDiagnostics();
+
+    await expect(diagnostics.runIpcOperation(
+      "profiles:list",
+      [],
+      async () => {
+        await diagnostics.record("profiles:capture", "inventory-reviewed", {
+          outcome: "decision-required",
+          context: { targetId: "opencode", conflictCount: 1 }
+        });
+        return [];
+      }
+    )).resolves.toEqual([]);
+
+    const events = await diagnostics.readRecentEvents();
+    const operationEvents = events.filter((event) => event.action === "profiles:list");
+    const captureEvent = events.find(
+      (event) => event.action === "profiles:capture" && event.phase === "inventory-reviewed"
+    );
+
+    expect(operationEvents.map((event) => event.phase)).toEqual(["started", "completed"]);
+    expect(operationEvents[1]).toMatchObject({
+      outcome: "completed",
+      context: { result: { count: 0 } }
+    });
+    expect(captureEvent).toMatchObject({
+      outcome: "decision-required",
+      context: { targetId: "opencode", conflictCount: 1 }
+    });
+    expect(captureEvent?.operationId).toBe(operationEvents[0]?.operationId);
+  });
+
+  it("exports a decision-required operation even when no exception was thrown", async () => {
+    const diagnostics = await createDiagnostics();
+    const reference = await diagnostics.record("profiles:capture", "decision-required", {
+      outcome: "decision-required",
+      context: {
+        targetId: "claude-code",
+        skillName: "review-helper",
+        candidates: [
+          { path: "/Users/example/.claude/skills/review-helper", contentHash: "a".repeat(64) },
+          { path: "/Users/example/.agents/skills/review-helper", contentHash: "b".repeat(64) }
+        ]
+      }
+    });
+    const destination = join(root, "capture-report.json");
+
+    await diagnostics.exportReport(destination, { reference });
+
+    const report = await readFile(destination, "utf8");
+    expect(report).toContain('"selectedOperation"');
+    expect(report).toContain('"skillName": "review-helper"');
+    expect(report).toContain("~/.claude/skills/review-helper");
+    expect(report).not.toContain("/Users/example");
+  });
+
   it("records a failed operation with a copyable reference and redacted cause chain", async () => {
     const diagnostics = await createDiagnostics();
     const cause = Object.assign(
@@ -85,6 +142,31 @@ describe("runtime diagnostics", () => {
     expect(content).toContain("daily-coding");
     expect(content).not.toContain("private instructions");
     expect(content).not.toContain("should-not-be-recorded");
+  });
+
+  it("uses an allowlisted result summary instead of logging returned Profile contents", async () => {
+    const diagnostics = await createDiagnostics();
+
+    await diagnostics.runIpcOperation("profiles:read", ["daily-coding"], async () => ({
+      id: "daily-coding",
+      profile: {
+        id: "daily-coding",
+        instructions: "private returned instructions",
+        resources: { token: "returned-secret" }
+      }
+    }));
+    await diagnostics.runIpcOperation(
+      "skills:read-file",
+      ["daily-coding", "SKILL.md"],
+      async () => "private direct file result"
+    );
+
+    await diagnostics.readRecentEvents();
+    const content = await readFile(diagnostics.logPath, "utf8");
+    expect(content).toContain("daily-coding");
+    expect(content).not.toContain("private returned instructions");
+    expect(content).not.toContain("returned-secret");
+    expect(content).not.toContain("private direct file result");
   });
 
   it("never records clipboard content", async () => {

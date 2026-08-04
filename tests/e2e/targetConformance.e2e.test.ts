@@ -197,6 +197,7 @@ describe.each(targetConformanceFixtures)(
         skillLibraryStore: environment.skillLibraryStore,
         targetRegistry: environment.targetRegistry,
         targetDiscoveryService: {
+          probeSupportedTargets: async () => [],
           listTargets: async () => [
             {
               id: fixture.targetId,

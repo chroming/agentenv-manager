@@ -63,6 +63,21 @@ describe("Conversations desktop workflow", () => {
     );
     await mkdir(sessionDir, { recursive: true });
     await mkdir(binDir, { recursive: true });
+    await mkdir(dataRoot, { recursive: true });
+    await writeFile(
+      join(dataRoot, "settings.json"),
+      `${JSON.stringify({
+        locale: "en",
+        conversationTerminal: "default",
+        skillSyncMethod: "auto",
+        skillStorageLocation: "appData",
+        skillAutoCheckEnabled: false,
+        skillAutoCheckIntervalMinutes: 60,
+        backupRetentionDays: null,
+        enabledTargetIds: ["codex", "opencode", "antigravity", "trae-cli"]
+      }, null, 2)}\n`,
+      "utf8"
+    );
     const source = [
       JSON.stringify({
         type: "session_meta",
@@ -307,6 +322,7 @@ describe("Conversations desktop workflow", () => {
       env: {
         ...process.env,
         AGENTENV_AUTOMATION: "1",
+        AGENTENV_AUTOMATION_TARGET_PATH: binDir,
         AGENTENV_DATA_ROOT: dataRoot,
         AGENTENV_CACHE_ROOT: cacheRoot,
         AGENTENV_HOME: home,

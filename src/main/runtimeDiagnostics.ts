@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import {
   appendFile,
   mkdir,
@@ -21,7 +22,7 @@ import {
 } from "./diagnosticRedaction";
 import { isMissingFileError } from "./fileUtils";
 
-const DEFAULT_MAX_LOG_BYTES = 2 * 1024 * 1024;
+const DEFAULT_MAX_LOG_BYTES = 5 * 1024 * 1024;
 const DEFAULT_LOG_GENERATIONS = 4;
 const SLOW_READ_THRESHOLD_MS = 250;
 const DIAGNOSTIC_REFERENCE_PATTERN = /\n?Diagnostic reference:\s*(AEM-[A-Z0-9-]+)/i;
@@ -51,6 +52,38 @@ const contextKeys = new Set([
   "ids"
 ]);
 
+const resultKeys = new Set([
+  "id",
+  "profileId",
+  "targetId",
+  "previewId",
+  "sourceId",
+  "libraryId",
+  "backupId",
+  "kind",
+  "mode",
+  "scope",
+  "status",
+  "state",
+  "phase",
+  "enabled",
+  "changed",
+  "ok",
+  "profile",
+  "skill",
+  "warnings",
+  "errors",
+  "items",
+  "resources",
+  "changes",
+  "failed",
+  "importedSkillCount",
+  "importedMcpCount",
+  "managedResourceCount",
+  "warningCount",
+  "errorCount"
+]);
+
 const summarizeValue = (value: unknown, depth = 0): unknown => {
   if (depth > 3) return undefined;
   if (Array.isArray(value)) {
@@ -75,6 +108,23 @@ const summarizeArguments = (args: unknown[]): Record<string, unknown> | undefine
     .map((value, index) => [String(index), summarizeValue(value)] as const)
     .filter((entry) => entry[1] !== undefined);
   return values.length > 0 ? Object.fromEntries(values) : undefined;
+};
+
+const summarizeResult = (value: unknown, depth = 0): unknown => {
+  if (depth > 3) return undefined;
+  if (Array.isArray(value)) return { count: value.length };
+  if (typeof value === "string") {
+    return depth === 0 ? { kind: "string", length: value.length } : value;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+  if (!value || typeof value !== "object") return undefined;
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([key]) => resultKeys.has(key) || /Count$/.test(key))
+    .map(([key, item]) => [key, summarizeResult(item, depth + 1)] as const)
+    .filter((entry) => entry[1] !== undefined);
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 };
 
 const operationReference = (now: Date) => {
@@ -138,7 +188,8 @@ export interface RuntimeDiagnostics {
       context?: Record<string, unknown>;
       error?: unknown;
     }
-  ): Promise<void>;
+  ): Promise<string>;
+  readRecentEvents(): Promise<DiagnosticEvent[]>;
   readIssue(reference: string): Promise<DiagnosticIssueDetail | undefined>;
   readLatestIssue(): Promise<DiagnosticIssueDetail | undefined>;
   exportReport(
@@ -171,6 +222,10 @@ export const createRuntimeDiagnostics = (options: {
   const maxLogBytes = options.maxLogBytes ?? DEFAULT_MAX_LOG_BYTES;
   const logGenerations = options.logGenerations ?? DEFAULT_LOG_GENERATIONS;
   let writeQueue = Promise.resolve();
+  const operationContext = new AsyncLocalStorage<{
+    operationId: string;
+    parentOperationId?: string;
+  }>();
 
   const rotate = async () => {
     try {
@@ -220,6 +275,8 @@ export const createRuntimeDiagnostics = (options: {
     schemaVersion: 1,
     at: (detail.at ?? options.now?.() ?? new Date()).toISOString(),
     reference: detail.reference,
+    operationId: operationContext.getStore()?.operationId ?? detail.reference,
+    parentOperationId: operationContext.getStore()?.parentOperationId,
     action,
     category: categoryFor(action),
     phase,
@@ -277,6 +334,16 @@ export const createRuntimeDiagnostics = (options: {
     };
   };
 
+  const operationFromEvents = (
+    events: DiagnosticEvent[],
+    reference: string
+  ): { reference: string; events: DiagnosticEvent[] } | undefined => {
+    const selected = events.filter(
+      (event) => event.reference === reference || event.operationId === reference
+    );
+    return selected.length > 0 ? { reference, events: selected } : undefined;
+  };
+
   const readIssue = async (reference: string) =>
     issueFromEvents(await readEvents(), reference);
 
@@ -297,25 +364,39 @@ export const createRuntimeDiagnostics = (options: {
         ? undefined
         : summarizeArguments(args);
       const mutation = mutationChannelPattern.test(action);
+      const startedEvent = eventFor(action, "started", {
+        reference,
+        at: startedAt,
+        context
+      });
+      const startedWrite = appendEvents([startedEvent]).catch(() => undefined);
+      if (mutation) await startedWrite;
       try {
-        const result = await operation();
+        const parent = operationContext.getStore()?.operationId;
+        const result = await operationContext.run(
+          { operationId: reference, parentOperationId: parent },
+          operation
+        );
         const durationMs = Math.max(0, (options.now?.() ?? new Date()).getTime() - startedAtMs);
-        if (mutation || durationMs >= SLOW_READ_THRESHOLD_MS) {
-          await appendEvents([
-            eventFor(action, "started", { reference, at: startedAt, context }),
-            eventFor(action, "completed", {
-              reference,
-              outcome: "completed",
-              durationMs,
-              context
-            })
-          ]).catch(() => undefined);
-        }
+        const resultSummary = summarizeResult(result);
+        const completedWrite = appendEvents([
+          eventFor(action, "completed", {
+            reference,
+            outcome: "completed",
+            durationMs,
+            context: context || resultSummary
+              ? {
+                  ...(context ?? {}),
+                  ...(resultSummary === undefined ? {} : { result: resultSummary })
+                }
+              : undefined
+          })
+        ]).catch(() => undefined);
+        if (mutation || durationMs >= SLOW_READ_THRESHOLD_MS) await completedWrite;
         return result;
       } catch (error) {
         const durationMs = Math.max(0, (options.now?.() ?? new Date()).getTime() - startedAtMs);
         await appendEvents([
-          eventFor(action, "started", { reference, at: startedAt, context }),
           eventFor(action, "failed", {
             reference,
             outcome: "failed",
@@ -329,7 +410,8 @@ export const createRuntimeDiagnostics = (options: {
     },
     record: async (action, phase, detail = {}) => {
       const now = options.now?.() ?? new Date();
-      const reference = detail.reference ?? operationReference(now);
+      const reference =
+        detail.reference ?? operationContext.getStore()?.operationId ?? operationReference(now);
       await appendEvents([
         eventFor(action, phase, {
           ...detail,
@@ -337,7 +419,9 @@ export const createRuntimeDiagnostics = (options: {
           at: now
         })
       ]).catch(() => undefined);
+      return reference;
     },
+    readRecentEvents: readEvents,
     readIssue,
     readLatestIssue,
     exportReport: async (destination, reportOptions = {}) => {
@@ -348,6 +432,9 @@ export const createRuntimeDiagnostics = (options: {
             const failure = [...events].reverse().find((event) => event.error);
             return failure ? issueFromEvents(events, failure.reference) : undefined;
           })();
+      const selectedOperation = reportOptions.reference
+        ? operationFromEvents(events, reportOptions.reference)
+        : undefined;
       const report = sanitizeDiagnosticValue({
         schemaVersion: 1,
         generatedAt: (options.now?.() ?? new Date()).toISOString(),
@@ -363,6 +450,7 @@ export const createRuntimeDiagnostics = (options: {
           locale: options.locale
         },
         selectedIssue: issue,
+        selectedOperation,
         context: reportOptions.context,
         recentEvents: events.slice(-500)
       }, options.homeDir);

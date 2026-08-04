@@ -4,6 +4,7 @@ import type { AgentTargetAdapter } from "./types";
 import { materializeSharedSkillLocations } from "./sharedSkillLocations";
 
 const TARGET_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const EXECUTABLE_NAME_PATTERN = /^[A-Za-z0-9._+-]+$/;
 
 const validateDescriptor = (descriptor: TargetDescriptor): void => {
   if (!TARGET_ID_PATTERN.test(descriptor.id)) {
@@ -13,6 +14,22 @@ const validateDescriptor = (descriptor: TargetDescriptor): void => {
   }
   if (!descriptor.name.trim()) {
     throw new Error(`Target ${descriptor.id} must have a name.`);
+  }
+  if (
+    descriptor.executableCandidates.some(
+      (candidate) => !EXECUTABLE_NAME_PATTERN.test(candidate)
+    )
+  ) {
+    throw new Error(`Target ${descriptor.id} contains an invalid executable candidate.`);
+  }
+  if (
+    descriptor.executableName &&
+    descriptor.executableCandidates[0] !== descriptor.executableName
+  ) {
+    throw new Error(`Target ${descriptor.id} must list its primary executable first.`);
+  }
+  if (new Set(descriptor.executableCandidates).size !== descriptor.executableCandidates.length) {
+    throw new Error(`Target ${descriptor.id} contains duplicate executable candidates.`);
   }
 };
 

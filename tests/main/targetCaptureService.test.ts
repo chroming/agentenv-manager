@@ -7,6 +7,7 @@ import { createProfileStore } from "../../src/main/profileStore";
 import { createSettingsStore } from "../../src/main/settingsStore";
 import { createSkillLibraryStore } from "../../src/main/skillLibraryStore";
 import { createTargetCaptureService } from "../../src/main/targetCaptureService";
+import { createRuntimeDiagnostics } from "../../src/main/runtimeDiagnostics";
 import type { TargetDiscoveryService } from "../../src/main/targetDiscovery";
 import { createTargetRegistry } from "../../src/main/targets/registry";
 import type { TargetInfo } from "../../src/shared/types";
@@ -18,6 +19,7 @@ afterEach(async () => {
 });
 
 const discovery = (id: string, installed = true): TargetDiscoveryService => ({
+  probeSupportedTargets: async () => [],
   listTargets: async () => [{
     id,
     health: { executableFound: installed, installationFound: installed }
@@ -33,12 +35,23 @@ const setup = async (targetId: string, installed = true) => {
   const settingsStore = createSettingsStore(paths);
   const profileStore = createProfileStore({ appDataRoot, homeDir }, targetRegistry);
   const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
+  const diagnostics = createRuntimeDiagnostics({
+    directory: join(root, "logs"),
+    homeDir,
+    appVersion: "0.1.0",
+    packaged: false,
+    platform: "darwin",
+    arch: "arm64",
+    osVersion: "26.0",
+    locale: "en-US"
+  });
   const service = createTargetCaptureService({
     paths,
     profileStore,
     targetRegistry,
     skillLibraryStore,
-    targetDiscoveryService: discovery(targetId, installed)
+    targetDiscoveryService: discovery(targetId, installed),
+    diagnostics
   });
   return {
     homeDir,
@@ -47,7 +60,8 @@ const setup = async (targetId: string, installed = true) => {
     skillLibraryStore,
     targetRegistry,
     settingsStore,
-    service
+    service,
+    diagnostics
   };
 };
 
@@ -107,6 +121,179 @@ describe("target capture service v2", () => {
     await expect(readFile(join(paths.skillsLibraryDir, "review-workflow", "SKILL.md"), "utf8"))
       .resolves.toContain("# Review");
     await expect(readFile(join(agentDir, "agent.md"), "utf8")).resolves.toBe("# Reviewer\n");
+  });
+
+  it("returns a review decision instead of blocking when active Skill copies differ", async () => {
+    const { homeDir, service, diagnostics } = await setup("opencode");
+    const preferredSkill = join(homeDir, ".config", "opencode", "skills", "review-helper");
+    const sharedSkill = join(homeDir, ".agents", "skills", "review-helper");
+    await mkdir(preferredSkill, { recursive: true });
+    await mkdir(sharedSkill, { recursive: true });
+    await writeFile(
+      join(preferredSkill, "SKILL.md"),
+      "---\nname: review-helper\nversion: 2.0.0\n---\n# Preferred\n"
+    );
+    await writeFile(
+      join(sharedSkill, "SKILL.md"),
+      "---\nname: review-helper\nversion: 1.0.0\n---\n# Shared\n"
+    );
+
+    const preview = await service.previewTarget("opencode");
+
+    expect(preview.errors).toEqual([]);
+    expect(preview.issues).toHaveLength(1);
+    expect(preview.issues[0]).toMatchObject({
+      code: "conflicting-skill-copies",
+      severity: "decision",
+      skillName: "review-helper"
+    });
+    expect(preview.issues[0]?.candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: preferredSkill,
+        version: "2.0.0",
+        locationRole: "preferred-runtime"
+      }),
+      expect.objectContaining({
+        path: sharedSkill,
+        version: "1.0.0",
+        shared: true
+      })
+    ]));
+    expect(await diagnostics.readRecentEvents()).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        action: "profiles:capture",
+        phase: "inventory-reviewed",
+        outcome: "decision-required",
+        context: expect.objectContaining({
+          targetId: "opencode",
+          skillCount: 1,
+          decisionCount: 1
+        })
+      }),
+      expect.objectContaining({
+        action: "profiles:capture",
+        phase: "decision-required",
+        outcome: "decision-required",
+        context: expect.objectContaining({
+          targetId: "opencode",
+          skillName: "review-helper",
+          candidateCount: 2
+        })
+      })
+    ]));
+  });
+
+  it("captures the selected runtime Skill copy without modifying either active source", async () => {
+    const { homeDir, paths, service } = await setup("opencode");
+    const preferredSkill = join(homeDir, ".config", "opencode", "skills", "review-helper");
+    const sharedSkill = join(homeDir, ".agents", "skills", "review-helper");
+    await mkdir(preferredSkill, { recursive: true });
+    await mkdir(sharedSkill, { recursive: true });
+    const preferredContent = "---\nname: review-helper\nversion: 2.0.0\n---\n# Preferred\n";
+    const sharedContent = "---\nname: review-helper\nversion: 1.0.0\n---\n# Shared\n";
+    await writeFile(join(preferredSkill, "SKILL.md"), preferredContent);
+    await writeFile(join(sharedSkill, "SKILL.md"), sharedContent);
+    const preview = await service.previewTarget("opencode");
+    const issue = preview.issues[0]!;
+    const preferredCandidate = issue.candidates.find((candidate) => candidate.path === preferredSkill)!;
+
+    const result = await service.createFromTarget({
+      previewId: preview.id,
+      name: "OpenCode captured",
+      decisions: [{
+        issueId: issue.id,
+        action: "use-copy",
+        candidateId: preferredCandidate.id
+      }]
+    });
+
+    expect(result.profile.resources.skills).toContainEqual({
+      libraryId: "review-helper",
+      targetName: "review-helper",
+      enabled: true
+    });
+    await expect(readFile(join(paths.skillsLibraryDir, "review-helper", "SKILL.md"), "utf8"))
+      .resolves.toBe(preferredContent);
+    await expect(readFile(join(preferredSkill, "SKILL.md"), "utf8"))
+      .resolves.toBe(preferredContent);
+    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8"))
+      .resolves.toBe(sharedContent);
+  });
+
+  it("keeps conflicting runtime copies outside AgentEnv without treating omission as removal", async () => {
+    const { homeDir, paths, service } = await setup("opencode");
+    const preferredSkill = join(homeDir, ".config", "opencode", "skills", "review-helper");
+    const sharedSkill = join(homeDir, ".agents", "skills", "review-helper");
+    await mkdir(preferredSkill, { recursive: true });
+    await mkdir(sharedSkill, { recursive: true });
+    await writeFile(join(preferredSkill, "SKILL.md"), "---\nname: review-helper\n---\n# Preferred\n");
+    await writeFile(join(sharedSkill, "SKILL.md"), "---\nname: review-helper\n---\n# Shared\n");
+    const preview = await service.previewTarget("opencode");
+
+    const result = await service.createFromTarget({
+      previewId: preview.id,
+      name: "Keep runtime copies",
+      decisions: [{
+        issueId: preview.issues[0]!.id,
+        action: "keep-outside"
+      }]
+    });
+
+    expect(result.profile.resources.skills).toEqual([]);
+    const boundaries = JSON.parse(
+      await readFile(paths.unmanagedSkillLocationsPath, "utf8")
+    ) as Array<{ path: string; targetId?: string; coverage: string }>;
+    expect(boundaries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: preferredSkill, targetId: "opencode", coverage: "exact" }),
+      expect.objectContaining({ path: sharedSkill, targetId: "opencode", coverage: "exact" })
+    ]));
+    await expect(readFile(join(preferredSkill, "SKILL.md"), "utf8"))
+      .resolves.toContain("# Preferred");
+    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8"))
+      .resolves.toContain("# Shared");
+  });
+
+  it("rolls back Capture management boundaries when Profile persistence fails", async () => {
+    const {
+      homeDir,
+      paths,
+      profileStore,
+      skillLibraryStore,
+      targetRegistry,
+      settingsStore,
+      diagnostics
+    } = await setup("opencode");
+    const preferredSkill = join(homeDir, ".config", "opencode", "skills", "review-helper");
+    const sharedSkill = join(homeDir, ".agents", "skills", "review-helper");
+    await mkdir(preferredSkill, { recursive: true });
+    await mkdir(sharedSkill, { recursive: true });
+    await writeFile(join(preferredSkill, "SKILL.md"), "---\nname: review-helper\n---\n# Preferred\n");
+    await writeFile(join(sharedSkill, "SKILL.md"), "---\nname: review-helper\n---\n# Shared\n");
+    const failingService = createTargetCaptureService({
+      paths,
+      profileStore: {
+        ...profileStore,
+        saveProfile: async () => {
+          throw new Error("injected Profile save failure");
+        }
+      },
+      targetRegistry,
+      skillLibraryStore,
+      targetDiscoveryService: discovery("opencode"),
+      settingsStore,
+      diagnostics
+    });
+    const preview = await failingService.previewTarget("opencode");
+    const policyBeforeCreate = await readFile(paths.unmanagedSkillLocationsPath, "utf8");
+
+    await expect(failingService.createFromTarget({
+      previewId: preview.id,
+      name: "Failure",
+      decisions: [{ issueId: preview.issues[0]!.id, action: "keep-outside" }]
+    })).rejects.toThrow("injected Profile save failure");
+
+    await expect(readFile(paths.unmanagedSkillLocationsPath, "utf8"))
+      .resolves.toBe(policyBeforeCreate);
   });
 
   it("captures only Skills for the lightweight Agent management flow", async () => {

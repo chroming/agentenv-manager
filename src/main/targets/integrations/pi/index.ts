@@ -56,6 +56,7 @@ export const piIntegration: AgentTargetIntegration = {
     configLanguage: "json",
     realWritesEnabled: true,
     executableName: "pi",
+    executableCandidates: ["pi"],
     capabilities: {
       instructions: true,
       skills: true,

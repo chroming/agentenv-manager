@@ -200,6 +200,7 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
     mcpConfigKey: "mcpServers",
     realWritesEnabled: true,
     executableName: "claude",
+    executableCandidates: ["claude"],
     capabilities: {
       instructions: true,
       skills: true,
