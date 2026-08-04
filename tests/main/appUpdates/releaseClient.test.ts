@@ -64,4 +64,45 @@ describe("release client", () => {
     expect(client.isNewer("0.1.9", "0.2.0")).toBe(false);
     expect(() => client.isNewer("nightly", "0.2.0")).toThrow("stable SemVer");
   });
+
+  it("uses the saved GitHub account for release checks", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(releaseResponse()), {
+      status: 200
+    }));
+    const client = createReleaseClient({
+      fetch,
+      authTokenProvider: vi.fn().mockResolvedValue("github-token")
+    });
+
+    await client.readLatest({ platform: "darwin", arch: "arm64" });
+
+    const request = fetch.mock.calls[0]?.[1] as RequestInit;
+    expect(new Headers(request.headers).get("Authorization")).toBe("Bearer github-token");
+  });
+
+  it("keeps checking anonymously when secure token storage is unavailable", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(releaseResponse()), {
+      status: 200
+    }));
+    const client = createReleaseClient({
+      fetch,
+      authTokenProvider: vi.fn().mockRejectedValue(new Error("keychain unavailable"))
+    });
+
+    await client.readLatest({ platform: "darwin", arch: "arm64" });
+
+    const request = fetch.mock.calls[0]?.[1] as RequestInit;
+    expect(new Headers(request.headers).has("Authorization")).toBe(false);
+  });
+
+  it("turns GitHub rate limits into an actionable failure", async () => {
+    const client = createReleaseClient({
+      fetch: vi.fn().mockResolvedValue(new Response("rate limited", { status: 403 }))
+    });
+
+    await expect(client.readLatest({ platform: "darwin", arch: "arm64" })).rejects.toMatchObject({
+      code: "rate-limited",
+      message: "GitHub temporarily limited update checks. Connect GitHub or try again later."
+    });
+  });
 });

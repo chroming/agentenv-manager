@@ -23,10 +23,14 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-app-updates-"));
     const dataRoot = join(root, "data");
     const homeRoot = join(root, "home");
+    const agentBinRoot = join(root, "agent-bin");
     const brewLog = join(root, "brew.log");
     const brewPath = join(root, "brew");
     const releaseFixture = join(root, "release.json");
-    await mkdir(homeRoot, { recursive: true });
+    await Promise.all([
+      mkdir(homeRoot, { recursive: true }),
+      mkdir(agentBinRoot, { recursive: true })
+    ]);
     await writeFile(brewPath, `#!/bin/sh\necho "$@" >> "${brewLog}"\nif [ "$1" = "list" ]; then echo "agentenv-manager 0.1.0"; fi\nexit 0\n`);
     await chmod(brewPath, 0o755);
     await writeFile(releaseFixture, JSON.stringify({
@@ -57,6 +61,7 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
         AGENTENV_AUTOMATION_APP_VERSION: "0.1.0",
         AGENTENV_AUTOMATION_UPDATE_FIXTURE: releaseFixture,
         AGENTENV_AUTOMATION_BREW_PATH: brewPath,
+        AGENTENV_AUTOMATION_TARGET_PATH: agentBinRoot,
         AGENTENV_DATA_ROOT: dataRoot,
         AGENTENV_HOME: homeRoot
       }

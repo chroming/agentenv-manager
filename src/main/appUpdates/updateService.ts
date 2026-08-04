@@ -1,7 +1,7 @@
 import type { AppUpdateStatus } from "../../shared/appUpdates";
 import type { AgentEnvSettings } from "../../shared/types";
 import type { HomebrewAdapter } from "./homebrewAdapter";
-import type { ReleaseClient } from "./releaseClient";
+import { ReleaseClientError, type ReleaseClient } from "./releaseClient";
 
 export interface AppUpdateService {
   readStatus(): Promise<AppUpdateStatus>;
@@ -138,7 +138,7 @@ export const createAppUpdateService = (options: {
           installChannel: channel.installChannel,
           automaticInstallSupported: channel.supported,
           checkedAt: now().toISOString(),
-          failureCode: "check-failed",
+          failureCode: error instanceof ReleaseClientError ? error.code : "check-failed",
           message: errorMessage(error)
         });
       }

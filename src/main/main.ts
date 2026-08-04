@@ -624,6 +624,20 @@ const createServices = async (
         headers: { "content-type": "application/json" }
       })
     : undefined;
+  const githubAuthService = createGitHubAuthService({
+    tokenStore: createFileGitHubTokenStore(paths, {
+      decryptString: (value) => safeStorage.decryptString(value),
+      encryptString: (value) => safeStorage.encryptString(value),
+      isEncryptionAvailable: () =>
+        isSecureTokenStorageAvailable({
+          encryptionAvailable: safeStorage.isEncryptionAvailable(),
+          platform: process.platform,
+          ...(process.platform === "linux"
+            ? { backend: safeStorage.getSelectedStorageBackend() }
+            : {})
+        })
+    })
+  });
   const telemetryService = createTelemetryService({
     statePath: join(paths.appDataRoot, "telemetry-state.json"),
     endpoint: __AGENTENV_TELEMETRY_ENDPOINT__,
@@ -644,7 +658,10 @@ const createServices = async (
     packaged: app.isPackaged || updateAutomationEnabled,
     platform: process.platform,
     arch: process.arch,
-    releaseClient: createReleaseClient({ ...(updateFetch ? { fetch: updateFetch } : {}) }),
+    releaseClient: createReleaseClient({
+      authTokenProvider: () => githubAuthService.readAccessToken(),
+      ...(updateFetch ? { fetch: updateFetch } : {})
+    }),
     homebrew: createHomebrewAdapter({
       platform: process.platform,
       ...(updateAutomationEnabled && process.env.AGENTENV_AUTOMATION_BREW_PATH
@@ -736,20 +753,6 @@ const createServices = async (
     }
   });
   const targetScope = createTargetScope(targetRegistry, settingsStore);
-  const githubAuthService = createGitHubAuthService({
-    tokenStore: createFileGitHubTokenStore(paths, {
-      decryptString: (value) => safeStorage.decryptString(value),
-      encryptString: (value) => safeStorage.encryptString(value),
-      isEncryptionAvailable: () =>
-        isSecureTokenStorageAvailable({
-          encryptionAvailable: safeStorage.isEncryptionAvailable(),
-          platform: process.platform,
-          ...(process.platform === "linux"
-            ? { backend: safeStorage.getSelectedStorageBackend() }
-            : {})
-        })
-    })
-  });
   const profileStore = createProfileStore({
     appDataRoot: paths.appDataRoot,
     fakeHomeRoot: paths.fakeHomeRoot

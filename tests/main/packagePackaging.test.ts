@@ -1,4 +1,5 @@
 import { readFile, stat } from "node:fs/promises";
+import { X509Certificate } from "node:crypto";
 import { join } from "node:path";
 import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
@@ -144,6 +145,18 @@ describe("package metadata", () => {
     expect(packageJson.scripts?.["dist:mac"]).toBe(
       "npm run icons:mac && npm run build && electron-builder --mac --publish never"
     );
+    expect(packageJson.scripts?.["dist:mac:release"]).toContain(
+      '--config.mac.identity="$AGENTENV_MACOS_SIGNING_IDENTITY"'
+    );
+    expect(packageJson.scripts?.["dist:mac:stable"]).toBe(
+      "node scripts/build-macos-stable.mjs"
+    );
+    expect(packageJson.scripts?.["signing:mac:trust"]).toBe(
+      "node scripts/trust-macos-signing-certificate.mjs"
+    );
+    expect(packageJson.scripts?.["verify:mac-signature"]).toBe(
+      "node scripts/verify-macos-signature.mjs"
+    );
     expect(packageJson.scripts?.["dist:win"]).toContain("electron-builder --win nsis");
     expect(packageJson.scripts?.["dist:linux"]).toContain(
       "electron-builder --linux AppImage deb"
@@ -154,7 +167,6 @@ describe("package metadata", () => {
     for (const script of ["dist", "dist:mac", "dist:win", "dist:linux"]) {
       expect(packageJson.scripts?.[script]).toContain("--publish never");
     }
-    expect(packageJson.scripts?.["dist:mac:signed"]).toBeUndefined();
     expect(packageJson.scripts?.["test:e2e:packaged"]).toBe(
       "npm run pack && node scripts/test-packaged-app.mjs"
     );
@@ -164,6 +176,9 @@ describe("package metadata", () => {
       directories: { output: "release" },
       mac: {
         icon: "build/icon.icns",
+        identity: "-",
+        hardenedRuntime: false,
+        notarize: false,
         target: ["dmg", "zip"],
         artifactName: "AgentEnv-Manager-${version}-mac-${arch}.${ext}"
       },
@@ -185,9 +200,9 @@ describe("package metadata", () => {
         artifactName: "AgentEnv-Manager-${version}-linux-x64.${ext}"
       }
     });
-    expect(packageJson.build?.mac?.identity).toBeUndefined();
-    expect(packageJson.build?.mac?.hardenedRuntime).toBeUndefined();
-    expect(packageJson.build?.mac?.notarize).toBeUndefined();
+    expect(packageJson.build?.mac?.identity).toBe("-");
+    expect(packageJson.build?.mac?.hardenedRuntime).toBe(false);
+    expect(packageJson.build?.mac?.notarize).toBe(false);
     await expect(stat(join(process.cwd(), "build", "icon.icns"))).resolves.toMatchObject({
       size: expect.any(Number)
     });
@@ -198,7 +213,7 @@ describe("package metadata", () => {
     });
   });
 
-  it("publishes a complete unsigned release before updating the official Tap", async () => {
+  it("publishes a complete stable-identity release before updating the official Tap", async () => {
     const workflow = await readFile(
       join(process.cwd(), ".github", "workflows", "release.yml"),
       "utf8"
@@ -214,6 +229,14 @@ describe("package metadata", () => {
     expect(workflow).toContain('actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c');
     expect(workflow).toContain('node scripts/release-manifest.mjs');
     expect(workflow).toContain('node scripts/render-homebrew-cask.mjs');
+    expect(workflow).toContain('node scripts/verify-macos-signature.mjs');
+    expect(workflow).toContain('node scripts/prepare-macos-signing-keychain.mjs');
+    expect(workflow).toContain('node scripts/cleanup-macos-signing-keychain.mjs');
+    expect(workflow).toContain('node scripts/verify-macos-release-identity.mjs release-assets');
+    expect(workflow).toContain('MACOS_SIGNING_P12_BASE64');
+    expect(workflow).toContain('MACOS_SIGNING_P12_PASSWORD');
+    expect(workflow).toContain('npm run dist:mac:release');
+    expect(workflow).toContain('--certificate build/macos-signing-certificate.pem');
     expect(workflow).toContain('npm sbom --sbom-format cyclonedx');
     expect(workflow).toContain('SHA256SUMS');
     expect(normalizedWorkflow).toMatch(/publish:\n[\s\S]*?runs-on: macos-15/);
@@ -232,7 +255,53 @@ describe("package metadata", () => {
     expect(workflow).toContain('chroming/homebrew-tap');
     expect(workflow).not.toContain('Developer ID');
     expect(workflow).not.toContain('notar');
-    expect(workflow).not.toContain('MACOS_CERTIFICATE');
+    expect(workflow).not.toContain('Developer ID Application');
+  });
+
+  it("pins the macOS Release signer while requiring Gatekeeper rejection", async () => {
+    const [script, localBuildScript, trustScript, certificate] = await Promise.all([
+      readFile(join(process.cwd(), "scripts", "verify-macos-signature.mjs"), "utf8"),
+      readFile(join(process.cwd(), "scripts", "build-macos-stable.mjs"), "utf8"),
+      readFile(
+        join(process.cwd(), "scripts", "trust-macos-signing-certificate.mjs"),
+        "utf8"
+      ),
+      readFile(join(process.cwd(), "build", "macos-signing-certificate.pem"))
+    ]);
+    const releaseCertificate = new X509Certificate(certificate);
+
+    expect(script).toContain('"/usr/bin/codesign"');
+    expect(script).toContain('"--verify"');
+    expect(script).toContain('"--deep"');
+    expect(script).toContain('"--strict"');
+    expect(script).toContain("Signature=adhoc");
+    expect(script).toContain('"--extract-certificates"');
+    expect(script).toContain('requirementDetails.includes("cdhash")');
+    expect(script).toContain('identifier "io.github.chroming.agentenvmanager"');
+    expect(script).toContain("expectedIdentity.fingerprint");
+    expect(script).toContain('"/usr/sbin/spctl"');
+    expect(script).toContain('"--assess"');
+    expect(script).toContain("Gatekeeper unexpectedly accepted");
+    expect(localBuildScript).toContain("AGENTENV_MACOS_SIGNING_KEYCHAIN");
+    expect(localBuildScript).toContain("agentenv-release-signing.keychain-db");
+    expect(localBuildScript).toContain("agentenv-release-signing.password");
+    expect(localBuildScript).toContain("dist:mac:release");
+    expect(localBuildScript).toContain("--certificate");
+    expect(localBuildScript).not.toContain("identity: null");
+    expect(trustScript).toContain('"add-trusted-cert"');
+    expect(trustScript).toContain('"codeSign"');
+    expect(releaseCertificate.subject).toContain("AgentEnv Manager Release Signing");
+    expect(releaseCertificate.issuer).toBe(releaseCertificate.subject);
+    expect(releaseCertificate.ca).toBe(true);
+    expect(releaseCertificate.keyUsage).toContain("1.3.6.1.5.5.7.3.3");
+
+    const pairVerifier = await readFile(
+      join(process.cwd(), "scripts", "verify-macos-release-identity.mjs"),
+      "utf8"
+    );
+    expect(pairVerifier).toContain("arm64.cdHash === x64.cdHash");
+    expect(pairVerifier).toContain("arm64.requirement !== x64.requirement");
+    expect(pairVerifier).toContain('arm64.requirement.includes("cdhash")');
   });
 
   it("bounds filesystem-heavy test concurrency on high-core hosts", async () => {

@@ -1,4 +1,4 @@
-# Unsigned Release Distribution Design
+# Verified Desktop Release Distribution Design
 
 ## Goal
 
@@ -8,9 +8,14 @@ removes quarantine only after Homebrew has verified the exact package checksum,
 checks and installs updates without terminal interaction, and optionally reports a
 small allowlisted set of anonymous reliability facts.
 
-This release line does not use a Developer ID identity or Apple notarization.
-The trust boundary is the official GitHub repository, immutable versioned assets,
-the official Tap, exact SHA-256 values, and package identity checks.
+This release line uses a fixed project-created signing identity but does not use
+a Developer ID identity or Apple notarization. The signature provides a valid
+resource seal and a stable application identity across AgentEnv releases, but it
+does not provide Apple-verified publisher identity or Gatekeeper trust. The
+public certificate is pinned in the repository; its private key exists only in
+the release maintainer's protected backup and GitHub Actions secrets. The distribution trust boundary
+is the official GitHub repository, immutable versioned assets, the official Tap,
+exact SHA-256 values, and package identity checks.
 
 ## Release Contract
 
@@ -19,6 +24,12 @@ the official Tap, exact SHA-256 values, and package identity checks.
   publish public assets independently.
 - macOS produces arm64 and x64 DMG and ZIP artifacts. Windows produces NSIS and
   Linux produces AppImage and DEB artifacts.
+- Local macOS builds use `mac.identity: "-"`. Release jobs override that identity
+  with the fixed certificate in `build/macos-signing-certificate.pem`. Hardened
+  runtime and notarization remain disabled. Release jobs require `codesign
+  --verify` to pass, reject any fallback to `Signature=adhoc`, require a stable
+  certificate-based designated requirement, and require `spctl --assess` to
+  reject the App.
 - Every public asset is named with its version, platform, and architecture.
 - The release includes `SHA256SUMS`, a CycloneDX SBOM, and
   `release-manifest.json` containing repository, tag, version, asset size,
@@ -47,6 +58,8 @@ the official Tap, exact SHA-256 values, and package identity checks.
   `/Applications` path.
 - Quarantine removal happens only after Homebrew's checksum verification.
 - Uninstall removes the application but never removes AgentEnv canonical data.
+- GitHub Release downloads keep quarantine. Users approve the first launch through
+  System Settings > Privacy & Security > Open Anyway.
 
 ## Update Contract
 
@@ -98,5 +111,7 @@ the official Tap, exact SHA-256 values, and package identity checks.
 - Cask tests install into a temporary app directory, verify the checksum-bound
   artifact, assert quarantine is absent, launch the packaged app, and exercise an
   upgrade fixture.
-- Release verification binds the tag, commit, build fingerprint, packaged smoke,
-  asset hashes, manifest, and generated Cask into one evidence receipt.
+- Release verification binds the tag, commit, build fingerprint, pinned signing
+  certificate, stable designated requirement, resource seal, expected Gatekeeper
+  rejection, packaged smoke, asset hashes, manifest,
+  and generated Cask into one evidence receipt.

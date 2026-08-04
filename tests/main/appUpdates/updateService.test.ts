@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAppUpdateService } from "../../../src/main/appUpdates/updateService";
+import { ReleaseClientError } from "../../../src/main/appUpdates/releaseClient";
 
 const release = {
   version: "0.2.0",
@@ -132,6 +133,33 @@ describe("app update service", () => {
       phase: "failed",
       failureCode: "check-failed",
       message: "network unavailable"
+    });
+  });
+
+  it("preserves actionable release failure codes for the renderer", async () => {
+    const service = createAppUpdateService({
+      currentVersion: "0.1.0",
+      packaged: true,
+      platform: "darwin",
+      arch: "arm64",
+      releaseClient: {
+        readLatest: vi.fn().mockRejectedValue(new ReleaseClientError(
+          "rate-limited",
+          "GitHub temporarily limited update checks. Connect GitHub or try again later."
+        )),
+        isNewer: () => true
+      },
+      homebrew: {
+        inspect: vi.fn().mockResolvedValue({ available: false, managed: false }),
+        download: vi.fn(),
+        install: vi.fn()
+      },
+      settingsStore: { readSettings: vi.fn().mockResolvedValue(settings) }
+    });
+
+    await expect(service.check({ manual: true })).resolves.toMatchObject({
+      phase: "failed",
+      failureCode: "rate-limited"
     });
   });
 });

@@ -6,7 +6,7 @@ AgentEnv Manager is a local desktop app for organizing coding-agent Skills, Prof
 
 It does not take ownership of models, accounts, or every native setting. Before writing anything, it shows the changes and creates a recovery point.
 
-> `0.1.0` is the first public release. Native CI builds and launches the packaged app on macOS, Windows, and Linux, then exercises core workflows with isolated fake Agents. This does not verify every real Agent version. The macOS package is unsigned and not notarized. The official Homebrew Cask verifies its SHA-256 before removing quarantine.
+> `0.1.0` is the first public release. Native CI builds and launches the packaged app on macOS, Windows, and Linux, then exercises core workflows with isolated fake Agents. This does not verify every real Agent version. The macOS Release uses a fixed project-created signing identity for a valid resource seal and stable identity across releases, but it has no Developer ID and is not notarized. The official Homebrew Cask verifies its SHA-256 before removing quarantine.
 
 ## Install
 
@@ -16,7 +16,9 @@ The recommended macOS installation is the official Cask:
 brew install --cask chroming/tap/agentenv-manager
 ```
 
-Homebrew downloads an exact versioned asset for the current architecture and verifies its SHA-256 before installation. In-app automatic installation is available only for Homebrew-managed copies. Direct downloads can still check for updates and open the official Release page.
+Homebrew downloads an exact versioned asset for the current architecture, verifies its SHA-256, and removes quarantine after installation so the app can open directly. In-app automatic installation is available only for Homebrew-managed copies.
+
+GitHub Release downloads keep quarantine. After the first launch attempt, follow [Apple's instructions](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac), open System Settings > Privacy & Security, and choose Open Anyway. Direct downloads can still check for updates and open the official Release page.
 
 ## Agents
 

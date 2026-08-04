@@ -36,6 +36,21 @@ export interface ReleaseClient {
   isNewer(candidate: string, current: string): boolean;
 }
 
+export type ReleaseClientFailureCode =
+  | "authentication-required"
+  | "rate-limited"
+  | "request-failed";
+
+export class ReleaseClientError extends Error {
+  constructor(
+    readonly code: ReleaseClientFailureCode,
+    message: string
+  ) {
+    super(message);
+    this.name = "ReleaseClientError";
+  }
+}
+
 const parseVersion = (value: string) => {
   const match = SEMVER.exec(value);
   if (!match) throw new Error(`Release versions must use stable SemVer: ${value}`);
@@ -109,6 +124,7 @@ const parseRelease = (
 };
 
 export const createReleaseClient = (options: {
+  authTokenProvider?: () => Promise<string | undefined>;
   fetch?: typeof globalThis.fetch;
   timeoutMs?: number;
 } = {}): ReleaseClient => {
@@ -117,15 +133,35 @@ export const createReleaseClient = (options: {
   return {
     isNewer,
     readLatest: async ({ platform, arch }) => {
+      const token = await options.authTokenProvider?.().catch(() => undefined);
+      const headers: Record<string, string> = {
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "AgentEnv-Manager"
+      };
+      if (token?.trim()) headers.Authorization = `Bearer ${token.trim()}`;
       const response = await request(RELEASE_API, {
-        headers: {
-          Accept: "application/vnd.github+json",
-          "X-GitHub-Api-Version": "2022-11-28",
-          "User-Agent": "AgentEnv-Manager"
-        },
+        headers,
         signal: AbortSignal.timeout(timeoutMs)
       });
-      if (!response.ok) throw new Error(`Update service returned HTTP ${response.status}`);
+      if (response.status === 401) {
+        throw new ReleaseClientError(
+          "authentication-required",
+          "The GitHub connection is no longer valid. Reconnect GitHub, then try again."
+        );
+      }
+      if (response.status === 403 || response.status === 429) {
+        throw new ReleaseClientError(
+          "rate-limited",
+          "GitHub temporarily limited update checks. Connect GitHub or try again later."
+        );
+      }
+      if (!response.ok) {
+        throw new ReleaseClientError(
+          "request-failed",
+          `Could not check the official Release service (HTTP ${response.status}).`
+        );
+      }
       return parseRelease(await response.json() as GitHubRelease, platform, arch);
     }
   };

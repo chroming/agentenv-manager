@@ -31,6 +31,10 @@
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder --publish never",
     "dist:mac": "npm run icons:mac && npm run build && electron-builder --mac --publish never",
+    "dist:mac:release": "npm run icons:mac && npm run build && electron-builder --mac --publish never --config.mac.identity=\"$AGENTENV_MACOS_SIGNING_IDENTITY\"",
+    "dist:mac:stable": "node scripts/build-macos-stable.mjs",
+    "signing:mac:trust": "node scripts/trust-macos-signing-certificate.mjs",
+    "verify:mac-signature": "node scripts/verify-macos-signature.mjs",
     "dist:win": "npm run build && electron-builder --win nsis --publish never",
     "dist:linux": "npm run build && electron-builder --linux AppImage deb --publish never",
     "audit:styles": "node scripts/audit-renderer-css.mjs --check",
@@ -106,6 +110,9 @@
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "notarize": false,
       "artifactName": "AgentEnv-Manager-${version}-mac-${arch}.${ext}",
       "target": [
         "dmg",

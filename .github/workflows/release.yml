@@ -61,8 +61,15 @@ jobs:
       - name: Verify Intel platform contracts
         if: matrix.arch == 'x64'
         run: npm run test:platform
+      - name: Prepare stable macOS Release signing identity
+        env:
+          MACOS_SIGNING_P12_BASE64: ${{ secrets.MACOS_SIGNING_P12_BASE64 }}
+          MACOS_SIGNING_P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
+        run: node scripts/prepare-macos-signing-keychain.mjs
       - name: Build exact macOS release assets
-        run: npm run dist:mac
+        run: npm run dist:mac:release
+      - name: Verify stable signature and Gatekeeper boundary
+        run: node scripts/verify-macos-signature.mjs --certificate build/macos-signing-certificate.pem
       - name: Run packaged application workflow
         run: node scripts/test-packaged-app.mjs
       - name: Verify disk image
@@ -78,6 +85,9 @@ jobs:
           path: release-assets/*
           if-no-files-found: error
           retention-days: 7
+      - name: Remove temporary macOS signing identity
+        if: always()
+        run: node scripts/cleanup-macos-signing-keychain.mjs
 
   build-windows:
     name: Build Windows x64
@@ -176,6 +186,8 @@ jobs:
           done
           test "$(find release-assets -maxdepth 1 -type f | wc -l | tr -d ' ')" = "${#expected[@]}"
           printf '%s\n' "${expected[@]}" | paste -sd, - > "$RUNNER_TEMP/assets.txt"
+      - name: Verify stable macOS identity across architectures
+        run: node scripts/verify-macos-release-identity.mjs release-assets
       - name: Generate release metadata and Homebrew Cask
         run: |
           npm run build
