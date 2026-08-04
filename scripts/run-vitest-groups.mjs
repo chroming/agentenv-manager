@@ -2,12 +2,18 @@ import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import {
   electronE2eExcludeGlob,
-  electronE2eTestFiles
+  electronE2eTestFiles,
+  heavyElectronE2eTestFile
 } from "./vitest-groups.mjs";
+import { runElectronTestSuite } from "./electron-test-scheduler.mjs";
 
 const projectRoot = resolve(import.meta.dirname, "..");
 const vitestEntry = resolve(projectRoot, "node_modules", "vitest", "vitest.mjs");
 const e2eOnly = process.argv.includes("--e2e");
+const argumentValue = (prefix) =>
+  process.argv.find((argument) => argument.startsWith(`${prefix}=`))?.slice(prefix.length + 1);
+const parallelReport = argumentValue("--parallel-report");
+const electronReport = argumentValue("--electron-report");
 
 const run = (args) => new Promise((resolveRun, rejectRun) => {
   const child = spawn(process.execPath, [vitestEntry, "run", ...args], {
@@ -33,12 +39,15 @@ await run([
   ...(e2eOnly ? ["tests/e2e"] : []),
   "--exclude",
   electronE2eExcludeGlob,
-  "--maxWorkers=4"
+  "--maxWorkers=4",
+  ...(parallelReport
+    ? ["--reporter=json", `--outputFile=${parallelReport}`]
+    : [])
 ]);
-for (const testFile of electronE2eTestFiles) {
-  await run([
-    testFile,
-    "--maxWorkers=1",
-    "--no-file-parallelism"
-  ]);
-}
+await runElectronTestSuite({
+  heavyFile: heavyElectronE2eTestFile,
+  outputFile: electronReport,
+  projectRoot,
+  testFiles: electronE2eTestFiles,
+  vitestEntry
+});

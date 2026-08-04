@@ -412,6 +412,11 @@ Rules:
 - [ ] Every runtime IPC failure has a copyable diagnostic reference linked to
   the redacted original stack, cause chain, action, safe object identifiers,
   and elapsed time.
+- [ ] Every normal IPC operation records start, completion, elapsed time, safe
+  result summary, and one stable operation ID; domain review, no-op, partial,
+  cancellation, verification, and rollback phases correlate to that ID.
+- [ ] Decision-required and partial operations can be copied and exported even
+  when no exception was thrown.
 - [ ] Runtime logs are size-bounded, rotated, tolerant of malformed neighboring
   entries, and never contain clipboard, Instruction, Skill, Conversation, MCP,
   environment, credential, or arbitrary IPC content.
@@ -490,8 +495,23 @@ Rules:
 - [ ] Save and Apply follow the authoritative state machine.
 - [ ] Create from Agent captures readable resources, warns on broken links, and
   does not fail the entire Profile for safely ignorable unavailable Skills.
+- [ ] Differing active copies of one Skill are resolved inside Capture with
+  paths, versions, hashes, modification times, Library matches, and readable
+  differences; selecting or retaining copies never changes Agent files.
+- [ ] A true Capture stop names the affected resource and exposes Copy details
+  and Export report in the same dialog instead of requiring navigation elsewhere.
 
 ### 6.3 Agents
+
+- [ ] New installations start with all Agents off; legacy settings without the field preserve
+  their previous all-enabled scope, while an explicit empty list remains empty.
+- [ ] Supported, detected, enabled, and managed states are never presented as synonyms.
+- [ ] Background Agent probing is read-only, does not create configuration folders, does not
+  expand operational scope, and never changes the active workspace.
+- [ ] The detected-Agent dialog opens only after the stable shell, states that enabling does not
+  Capture or Apply, and supports Escape, close, current-launch `Not now`, persistent per-Agent
+  suppression, and a reversible Settings action.
+- [ ] The zero-enabled state offers `Choose Agents` without requiring a Settings detour.
 
 - [ ] Installed detection distinguishes command availability from directory
   existence.

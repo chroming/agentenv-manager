@@ -8,5 +8,8 @@ export const electronE2eTestFiles = [
   "tests/e2e/workspaceSync.e2e.test.ts"
 ];
 
+export const heavyElectronE2eTestFile =
+  "tests/e2e/electronUiProfileSwitching.e2e.test.ts";
+
 export const electronE2eExcludeGlob =
   "**/tests/e2e/{conversations,desktopShell,electronAppUpdates,electronUiProfileSwitching,repositorySkillSource,startupRecovery,workspaceSync}.e2e.test.ts";

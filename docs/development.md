@@ -102,8 +102,13 @@ contract and verification matrix.
 Fast development loop:
 
 ```bash
-npm run build
-npm test
+npm run test:quick
+```
+
+Registered feature checkpoint:
+
+```bash
+npm run test:feature -- agent-discovery
 ```
 
 Target, filesystem, or user-flow changes:
@@ -124,6 +129,12 @@ Complete product gate:
 npm run verify:product
 ```
 
+Before creating a commit, run the complete source and audit gate:
+
+```bash
+npm run verify:commit
+```
+
 The gate runs tests and architecture/style/translation audits and refreshes
 `docs/verification-snapshot.json`.
 
@@ -139,7 +150,7 @@ visual-baseline review procedure.
 
 ## Release Builds
 
-Unsigned local application:
+Ad-hoc signed local application:
 
 ```bash
 npm run pack
@@ -168,7 +179,28 @@ verifying checksums, the release manifest, and the generated Cask. The final
 step updates `chroming/homebrew-tap` with the repository-scoped
 `HOMEBREW_TAP_DEPLOY_KEY`.
 
-The current macOS distribution is unsigned. The generated Cask binds each
-architecture to an immutable official Release URL and SHA-256, then removes
-quarantine only after Homebrew verifies the downloaded DMG. Never commit tokens,
-certificates, API keys, app-specific passwords, or private repository credentials.
+The current macOS distribution uses the fixed project-created certificate in
+`build/macos-signing-certificate.pem` and is not notarized. Release jobs import
+the matching private identity from `MACOS_SIGNING_P12_BASE64` and
+`MACOS_SIGNING_P12_PASSWORD`, require the application resource seal and stable
+designated requirement to pass `codesign --verify`, and require Gatekeeper to
+reject it through `spctl --assess`. Local `dist:mac` builds remain ad-hoc signed.
+For a locally shared package, run `npm run signing:mac:trust` once while at the
+Mac to approve the signing certificate, then use `npm run dist:mac:stable`.
+That command uses the persistent keychain under
+`~/.config/agentenv-manager/release-signing`, pins the same certificate as CI,
+and refuses to fall back to ad-hoc signing. `dist:mac:release` is the low-level
+CI entrypoint. The generated Cask binds
+each architecture to an immutable official Release URL and SHA-256, then removes
+quarantine only after Homebrew verifies the downloaded DMG. Direct GitHub Release
+downloads keep quarantine and require the user's explicit Open Anyway approval.
+The pinned certificate SHA-256 is
+`2D7F57ABF24737A6880D98E9684ABF3B553EB95D896A4D31627B2626D6F09837`.
+Changing this certificate changes the macOS code identity and can cause Keychain
+or privacy permission prompts. Treat rotation as a deliberate migration. Users
+upgrading from the earlier ad-hoc build may see one Keychain confirmation because
+that build was identified by its changing code hash; subsequent fixed-identity
+releases should share the same designated requirement.
+Never commit tokens, private certificates or keys, API keys, app-specific
+passwords, or private repository credentials. The public signing certificate is
+intentionally committed so Release verification can pin the expected signer.

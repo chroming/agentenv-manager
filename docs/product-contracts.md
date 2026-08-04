@@ -69,6 +69,18 @@ Avoid:
 - Inferring major lifecycle states from unrelated counters or prose.
 - Adding a new Target through conditionals spread across the application.
 
+### 2.2 Agent Compatibility Contract
+
+Agent compatibility is capability-based, not one binary supported/unsupported claim.
+
+- Installation discovery, resource management, Conversation history, native resume, and Profile Compare are independent capabilities. Detecting one capability MUST NOT imply another.
+- Every built-in Agent declares an ordered executable candidate list. The first candidate is the normal display command; aliases remain Agent-owned knowledge inside its integration.
+- A device-local command override MAY be a safe executable basename or absolute path. It affects command detection and command-dependent capabilities only. It MUST NOT expand AgentEnv's file ownership, resource paths, or Apply authority, and it is not portable Workspace Sync data.
+- Command detection reports `found`, `missing`, or `unknown`. `Unknown` means the probe could not complete safely and MUST NOT be presented as proof that the Agent is absent.
+- A desktop application MAY prove that an Agent is installed while its CLI remains unavailable. Resource workflows may use the verified application installation contract; Conversation resume and Compare remain unavailable until an executable resolves.
+- Agent-specific launch and resume behavior returns structured executable, argument, working-directory, and environment data. Shared code MUST NOT infer resume syntax from the Agent name or concatenate an untrusted shell command.
+- Adding an Agent requires registry contract coverage for executable candidates and every declared optional capability. Platform-specific command behavior requires synthetic platform tests plus packaged verification on that platform.
+
 ## 3. Normative Language And Implementation Status
 
 The words MUST, MUST NOT, SHOULD, and MAY are normative.
@@ -223,6 +235,16 @@ Instructions, Skills, and MCPs each have an independent application policy for e
 A Profile MAY record a preferred Target for default UI context and the Target it was created from for provenance. Neither field binds deployment: the same Profile MAY be applied to every compatible Target, and each Target still has at most one active Profile.
 
 Create from Target MAY record a machine-local Capture receipt containing source paths, location roles, and content hashes. The receipt is optional takeover evidence, lives outside portable AgentEnv data, is never part of the Profile or data backup, cannot authorize content that differs from the current Library hash, and is consumed after the first successful Apply to that Target. Missing or malformed receipt data falls back to current content and path-capability validation.
+
+Create from Agent is observational with respect to Agent files. A readable ambiguity is a conditional Capture decision, not a workflow-wide failure.
+
+- Multiple active paths that expose the same normalized Skill name and the same content hash are one equivalent runtime Skill. Capture MAY collapse them automatically while retaining every path in its receipt.
+- Multiple active paths that expose the same Skill name with different content require an inline version choice. Capture MUST show each path, canonical path, runtime role, shared consumers, declared version, content hash, modification time when available, collection origin, and exact Library match. Version and time are evidence only and MUST NOT silently choose a winner.
+- The user MAY select one readable copy for the Profile or leave every conflicting path unchanged on this device. Selecting a copy imports or reuses that content without modifying any runtime source. Leaving copies unchanged records exact device-local management boundaries and excludes the Skill from the portable Profile; a later Apply preserves those paths and reports a local override rather than removal or perpetual pending work.
+- A same-name Library conflict remains an explicit import decision. Capture MUST NOT silently overwrite the Library or invent an unexplained duplicate identifier.
+- Capture decisions are fingerprint-bound. If one reviewed path changes, refresh only the affected decision while preserving the Profile name and unrelated choices.
+- Capture MAY fail globally only when the Agent is no longer available, AgentEnv cannot safely persist its own data, or no user decision can produce an honest Profile. Every resolvable prerequisite stays inside Capture and names the next action.
+- Capture never removes, replaces, links, or cleans Agent runtime paths. Shared and collection cleanup remains a separately reviewed Local Skills mutation.
 
 ### 4.3.1 Isolated Profile Comparison
 
@@ -386,16 +408,38 @@ Preview/Apply transaction, never a second editor or a reduced resource model.
   selected Profile and applies it to the selected Agent.
 - A missing or malformed active Profile is a recoverable Profile error, not permission to
   silently create a replacement or fall back to a partial editor.
-- On first run with no usable Profile, Agents shows the detected Agent list and a clear
-  Configure action. It does not open a modal or begin Capture without user intent.
+- A new installation persists every supported Agent as off. After the stable Agents shell is
+  visible, a background read-only probe MAY suggest installed Agents in one lightweight dialog.
+  The dialog never begins Capture, Apply, or filesystem mutation; enabling only adds the Agent
+  to AgentEnv's visible and operational scope.
+- After an explicit Enable succeeds, the same dialog MAY advance to an ephemeral next-step view
+  for only the Agents enabled by that action. It MUST state that Agent files have not changed,
+  MUST NOT persist wizard progress, and MUST NOT automatically Capture, create a Profile, or
+  Apply. Dismissal leaves the Agent enabled and Environment Review remains the repeatable entry.
+- Each next-step row derives exactly one action from canonical state: open the active Profile,
+  continue the newest valid Profile captured from that Agent, surface a malformed active Profile
+  for repair, or start the ordinary read-only Create from Target flow. Multiple enabled Agents
+  remain independent rows and MUST NOT trigger a chained sequence of Capture dialogs.
+- `Not now`, closing the dialog, and Escape skip only the current application launch. A user MAY
+  suppress one detected Agent persistently with `Don't suggest again`; Settings MUST show that
+  choice and provide a reversible `Suggest again` action. Turning an Agent off manually also
+  suppresses future automatic suggestions until the user reverses that choice.
+- Existing installations whose stored settings predate the enabled-Agent field preserve the
+  previous all-enabled scope during migration. An explicit empty enabled list MUST remain empty.
+- Supported, detected, enabled, and managed are distinct states. The all-supported detection
+  probe is read-only and MUST NOT weaken operation guards: operational Target APIs continue to
+  expose enabled Agents only.
+- When no Agent is enabled, Agents provides `Choose Agents`, which opens the same selection
+  dialog on demand, including candidates skipped for the current launch or suppressed earlier.
 - An empty workspace MUST remain empty until the user explicitly creates or captures a
   Profile. Startup MUST NOT seed a sample, adapter-default, or otherwise invented Profile.
 - Every launch opens Agents as the stable top-level workspace. Navigation chosen by the user
   remains stable for the rest of that application session; startup or background work MUST NOT
   restore, replace, or otherwise override it.
 
-Status: one Agent-to-Profile configuration entry, complete Capture, canonical Profile
-composition, and shared Preview/Apply orchestration are `Implemented`.
+Status: read-only installed-Agent suggestion, explicit Enable, ephemeral post-enable setup,
+one Agent-to-Profile configuration entry, complete Capture, canonical Profile composition,
+and shared Preview/Apply orchestration are `Implemented`.
 
 ### 4.4.3 Environment Review
 
@@ -1099,7 +1143,7 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
   or cover the first candidate at any supported viewport.
 - Persisted update-source types remain `local`, `github`, and `git`. ZIP is represented only as local import provenance and MUST NOT become a hidden continuously checked source type.
 - Selecting a Library Skill name opens a read-only file browser. The name is the only file-browser trigger in the row and exposes pointer, hover, and keyboard-focus affordances; clicking the description, source, version, usage, status, install data, or row background MUST NOT open it. The browser lists only regular files contained by the canonical Library Skill, hides AgentEnv metadata, skips links, rejects escaped or resolved-outside paths, previews text with syntax highlighting, and reports binary or oversized files without decoding them. Browsing never changes the Skill, its source, a Profile, or an Agent install.
-- Repository imports default to the `Tracked` update policy. The canonical HTTPS source locator is durable metadata. For a System Git import on any host, an HTTPS authentication, authorization, or repository-access failure MAY retry the equivalent `git@host:path.git` locator through the user's existing SSH setup. Timeout, DNS, malformed URL, parse, cancellation, and ordinary network failures MUST NOT trigger a transport fallback. The scan summary discloses `SSH fallback`, while persisted provenance keeps the canonical HTTPS source and records the access transport separately.
+- Repository imports default to the `Tracked` update policy. The canonical HTTPS source locator is durable metadata. A Git web directory URL using `/tree/<ref>/...` or `/blob/<ref>/...`, including the GitLab-style `/-/` separator, MUST be split into the clone repository, ref, and requested directory before any Git command runs. For a System Git import on any host, an HTTPS authentication, authorization, or repository-access failure MAY retry the equivalent `git@host:path.git` locator through the user's existing SSH setup. Timeout, DNS, malformed URL, parse, cancellation, and ordinary network failures MUST NOT trigger a transport fallback. The scan summary discloses `SSH fallback`, while persisted provenance keeps the canonical HTTPS source and records the access transport separately.
 - A GitHub Web URL MAY identify a Skill directory, a containing directory, or a repository. Other Git Web URLs MAY infer Ref and Directory only from the explicit and structurally unambiguous `/tree/<ref>/...` or `/-/tree/<ref>/...` forms; all other provider-specific layouts use separate Ref and Directory fields instead of guesswork. A supplied subdirectory is a hard scan boundary: no candidate outside it may appear. The only exception is a readable `llms.txt` in that exact directory that explicitly links repository-relative `SKILL.md` files: AgentEnv MAY expose only existing, traversal-free, same-repository links, MUST disclose the expanded scope before Import, and records their common repository ancestor as the reviewed source scope. External URLs, missing paths, traversal, and unindexed Skills remain excluded. When a non-root directory directly contains `SKILL.md`, it is otherwise the sole candidate. A repository-root router `SKILL.md` MUST NOT hide sibling top-level Skills. Containing-directory and repository imports MUST scan recursively for valid top-level Skill roots before any Library write.
 - `github.com` Web URLs use the GitHub API by default. SSH, SCP-like, non-`github.com`, and explicitly selected System Git locators use the packaged application's discovered system `git` executable and the user's existing SSH Agent or Git credential helper. AgentEnv MUST NOT store Git passwords, access tokens, private keys, or credential-helper output.
 - In `Automatic` connection mode, a GitHub API 401, 403, or private-repository-style 404 MAY retry through System Git and then the equivalent GitHub SSH transport under the same access-failure boundary. Rate limits, network failures, and malformed URLs MUST NOT trigger this fallback. When automatic fallback cannot proceed, the user MAY explicitly choose `Try with System Git`.
@@ -1340,7 +1384,8 @@ Create from Target gives an existing native environment a reusable Profile repre
 - Readable Skills, including paths with external provenance evidence or a device-local management boundary, MAY be imported or reused and included in the portable Profile. Capture review names the local override or evidence, while Save leaves every source path unchanged.
 - A broken or unreadable discovered Skill link is unavailable rather than capturable. Capture MUST continue for other resources, show the unavailable Skill before Save as an excluded warning with its source path and reason, omit it from both Library and Profile, and leave the source link byte-for-byte untouched. Fixing the source and capturing again is the only path that can include it.
 - An existing writable Target copy that exactly matches Library content is adopted during reviewed Apply. Different content is a reviewed backup-and-replace decision; a `Leave unmanaged` boundary preserves it as a local override.
-- Duplicate active runtime copies with identical content MAY be represented by one Library reference, but every source copy remains unchanged. Same-name copies with different content block capture because the canonical content is ambiguous.
+- Duplicate active runtime copies with identical content MAY be represented by one Library reference, but every source copy remains unchanged. Same-name copies with different content become an inline Capture decision: the user either selects the exact copy to save or leaves every listed path outside this Profile on this device. Capture shows path, canonical path, version, content hash, modification time, location role, Library match, and readable differences before Save. Neither decision changes an Agent file; a selected copy becomes the Profile's canonical Library reference, while leave-unchanged records exact Target-scoped management boundaries.
+- Capture Save is locally unavailable only while a required inline decision remains unresolved or a true global error makes a coherent Profile impossible. A global stop MUST show the concrete reason beside Copy details and Export report; it MUST NOT send the user to diagnose an unnamed conflict in another workspace.
 - When a captured Skill has identical shared-compatibility and Agent-private copies, the first takeover Apply MAY replace only the matching private copy with an AgentEnv-managed deployment. The shared copy remains untouched until the separate reviewed cleanup workflow. Changed private content requires explicit replacement review; unmanaged and observe-only paths remain unchanged.
 - Preview becomes stale when any captured source path changes before confirmation.
 - Saving a captured Profile MUST NOT invoke Apply, create a Target Backup or deployment state, add ownership markers, delete a source path, or write Target history.
@@ -1400,9 +1445,10 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Startup loads Library Skills independently from Target discovery. Local core data for Skills, Profiles, Targets, and Settings becomes usable before GitHub update checks, native MCP discovery, local inventory scans, and derived Profile usage finish; those background enrichments MUST merge into the visible UI without replacing it with an empty state.
 - The desktop window appears before service initialization completes. Initialization failure remains inside a recovery screen that classifies newer data, invalid data, permissions, interrupted recovery, and unknown failures. It offers Retry, Open data folder, Export redacted diagnostics, and Quit; it never resets or deletes local data automatically. Recovery labels follow `en`, `zh_CN`, and `zh_TW`; each support action owns visible progress and local failure feedback. A late initial status response MUST NOT overwrite a newer startup event, and Retry confirms the final status even if an event is missed.
 - Startup diagnostics are size-bounded and rotated. Home paths and credential-shaped values are redacted, and Skill contents, MCP payloads, and secrets MUST NOT be logged.
-- Runtime diagnostics are always available without requiring a reproduction mode. Every IPC failure receives a stable diagnostic reference and records the action, safe object identifiers, elapsed time, original error name/message/stack/cause, and a bounded event chain in a rotated local JSONL log. Mutations and slow reads also record start and completion; diagnostic write failure MUST NOT change the result of the user operation.
+- One structured device-local runtime event log is always available without requiring a reproduction mode. Every renderer-to-main operation records a stable operation ID, start, completion, elapsed time, and an allowlisted result summary; the channel name provides the baseline operation identity for discovery, scans, Save, Preview, Apply, Backup, refresh, authentication, Git, updates, and other user-visible work. Multi-step services append correlated domain phases where the top-level command is insufficient, beginning with startup and Capture inventory, decisions, imports, boundaries, and completion. `completed`, `no-op`, `decision-required`, `blocked`, `partial`, `cancelled`, `failed`, and `rolled-back` are the supported semantic outcomes; a service MUST emit a non-default outcome only when it can determine that state authoritatively.
+- Every IPC failure receives a stable diagnostic reference bound to its complete operation timeline and records the original redacted error name, message, stack, and cause chain. Decision-required and partial operations also remain copyable and exportable even though they are not exceptions. Informational writes are asynchronous and bounded; mutation start/final events and failures are flushed before returning when recovery evidence depends on them. Logging failure MUST NOT change the user operation, and logging MUST NOT delay clean shutdown indefinitely.
 - Diagnostic context uses an explicit field allowlist. Clipboard text, Instructions, Skill contents, Conversation text, MCP definitions, environment values, credentials, authenticated URL components, and arbitrary IPC payloads MUST NOT enter logs, renderer diagnostics, or exported reports. Home paths are normalized to `~`, individual fields are size-bounded, and malformed log lines do not hide valid neighboring events.
-- Runtime errors show a concise message plus their diagnostic reference. Copy details resolves that reference to the redacted main-process error chain; View details exposes selectable original error, operation context, stack, and causes. Settings > Data and the native Help menu export one redacted JSON report containing build/system metadata, safe Target discovery state, recent diagnostic events, and startup diagnostics. Reports remain device-local and are never included in Workspace Sync.
+- Runtime errors show a concise message plus their diagnostic reference. Conditional review surfaces expose Copy details and Export report beside the affected object. Copy details resolves the reference to a selectable operation summary; View details exposes the redacted error chain when present. Settings > Data and the native Help menu export one redacted JSON report containing build/system metadata, safe Target discovery state, the selected operation timeline, recent runtime events, and startup diagnostics. Runtime logs and reports remain device-local, are never uploaded as telemetry, and are never included in Workspace Sync.
 - Export report acknowledges work on the initiating button, prevents duplicate exports, and turns
   the completed path into transient success feedback. A completed export MUST NOT retain a
   loading spinner or require manual dismissal.
@@ -1692,20 +1738,22 @@ provider session ID, the captured working directory, and the resolved Pi environ
 The first useful journey is the empty-workspace presentation of the repeatable Environment
 Review and canonical Agent/Profile workflows:
 
-1. Render the stable shell on Agents and detect installed Agents without waiting for optional
-   local inventory or remote enrichment.
-2. Run a read-only local Skill inventory. Shared compatibility findings appear in Environment
+1. Render the stable shell on Agents. Probe every supported integration in the background while
+   operational views remain scoped to explicitly enabled Agents.
+2. If installed disabled Agents are found, offer one reversible selection dialog. Enabling an
+   Agent changes only AgentEnv settings; it does not Capture, Apply, or write Agent files.
+3. Run a read-only local Skill inventory. Shared compatibility findings appear in Environment
    Review; no modal opens and no file changes without an explicit command.
-3. Configure opens the complete Create from Target flow. Capture reads Instructions, Skills,
+4. Configure opens the complete Create from Target flow. Capture reads Instructions, Skills,
    supported MCP activation policy, and effective shared resources without changing the Agent.
-4. Save creates an ordinary reusable Profile. It does not Apply, prepare another Agent, or
+5. Save creates an ordinary reusable Profile. It does not Apply, prepare another Agent, or
    mutate a shared compatibility location.
-5. When shared Skills require normalization, Review opens Local Skill Cleanup scoped to those
+6. When shared Skills require normalization, Review opens Local Skill Cleanup scoped to those
    findings. Reviewed preparation preserves affected Agent behavior before moving a shared
    copy into canonical Library and Agent-specific deployment locations.
-6. Review and Apply the saved Profile through the standard Preview, ownership, Backup,
+7. Review and Apply the saved Profile through the standard Preview, ownership, Backup,
    verification, and rollback transaction.
-7. Later launches open Agents again. Environment Review remains manually refreshable and
+8. Later launches open Agents again. Environment Review remains manually refreshable and
    automatically reflects newly discovered shared Skills; background work never changes the
    user's current workspace.
 
@@ -1923,7 +1971,7 @@ This matrix is the release-facing index. A capability may be `Implemented` only 
 | Data Export and Restore | `Implemented` | Validated export, recovery copy, atomic app-data replacement | Domain and packaged restart smoke |
 | Desktop geometry and interaction | `Implemented` | No persisted effect; native window, focus, overlay, scroll, and viewport contracts | Renderer geometry and Electron screenshots |
 | Windows and Linux native packages | `Required` | Platform data roots, links, Git, terminal, menu, and installer lifecycle | Native CI packaged smoke on each operating system |
-| Verified unsigned release and Homebrew Cask | `Implemented` | Exact-tag assets, SHA-256, manifest, SBOM, draft verification, official Tap | Release generation, native package jobs, Cask and packaged Electron tests |
+| Verified stable-identity release and Homebrew Cask | `Implemented` | Pinned project certificate, stable designated requirement, valid App resource seal, expected Gatekeeper rejection, exact-tag assets, SHA-256, manifest, SBOM, draft verification, official Tap | Release generation, native package jobs, signature gate, Cask and packaged Electron tests |
 | App update checks and Homebrew install | `Implemented` | Official stable Release only; Homebrew prefetch/install; settings persist locally | Domain, renderer, Electron E2E |
 | Optional reliability reporting | `Implemented` | Default-off consent; one allowlisted daily event; network failure is non-blocking | Domain and renderer tests |
 
@@ -1943,7 +1991,7 @@ AgentEnv Manager is production-ready only when all of these are true:
 - Packaged Electron application passes a real startup and primary-workflow smoke test.
 - The packaged Agent discovery smoke runs with a desktop-process minimal `PATH` and proves fallback discovery for OpenCode, Claude Code, Codex, Antigravity CLI, Trae CLI, and Pi on each claimed platform.
 
-Current verdict: **Needs refinement**. Core Skill Library, v2 Profile, Preview, transactional Apply, backup, retention, rollback, stale rollback protection, no-op, cross-Target Instructions and Skills, Create from Target, Target-specific Skill deployment, compatibility-copy consolidation, canonical Target lifecycle, data backup and restore, active-Profile deletion recovery, Stop Managing workflows, sparse native MCP activation, and verified unsigned distribution are functional. Broader Skill identity edge coverage remains release work.
+Current verdict: **Needs refinement**. Core Skill Library, v2 Profile, Preview, transactional Apply, backup, retention, rollback, stale rollback protection, no-op, cross-Target Instructions and Skills, Create from Target, Target-specific Skill deployment, compatibility-copy consolidation, canonical Target lifecycle, data backup and restore, active-Profile deletion recovery, Stop Managing workflows, sparse native MCP activation, and verified stable-identity distribution are functional. Broader Skill identity edge coverage remains release work.
 
 ### 25.1 Verification Snapshot
 
@@ -1983,7 +2031,7 @@ The current machine-readable totals, source commit, deterministic tracked-and-un
 - Drift recovery adopts compatible Instructions and existing managed MCP activation choices into a backed-up Profile while naming excluded native configuration and unmapped items.
 - Production dependency audit reported zero known vulnerabilities.
 - The packaged arm64 macOS application completed an isolated OpenCode Profile takeover at `1180 x 728` without document overflow or writes to the real Agent environment.
-- The unsigned release workflow builds on native runners, assembles an isolated draft, verifies the downloaded artifact hashes, publishes exact release metadata, and only then updates the official checksum-bound Homebrew Cask. Quarantine removal belongs to the Cask postflight after Homebrew verification.
+- The macOS release workflow imports the fixed project signing identity on native runners, verifies its pinned certificate, stable designated requirement, App resource seal, and expected Gatekeeper rejection, assembles an isolated draft, verifies downloaded artifact hashes, publishes exact release metadata, and only then updates the official checksum-bound Homebrew Cask. Quarantine removal belongs to the Cask postflight after Homebrew verification; direct downloads keep quarantine.
 
 ## 26. Current Priority Gaps
 

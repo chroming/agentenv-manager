@@ -305,13 +305,20 @@ describe("package metadata", () => {
   });
 
   it("bounds filesystem-heavy test concurrency on high-core hosts", async () => {
-    const [productGate, groupedTests] = await Promise.all([
+    const [packageJsonSource, productGate, groupedTests, scheduler] = await Promise.all([
+      readFile(join(process.cwd(), "package.json"), "utf8"),
       readFile(join(process.cwd(), "scripts", "verify-product.mjs"), "utf8"),
-      readFile(join(process.cwd(), "scripts", "run-vitest-groups.mjs"), "utf8")
+      readFile(join(process.cwd(), "scripts", "run-vitest-groups.mjs"), "utf8"),
+      readFile(join(process.cwd(), "scripts", "electron-test-scheduler.mjs"), "utf8")
     ]);
 
-    expect(productGate).toContain('"--maxWorkers=4"');
+    expect(productGate).toContain("scripts/run-vitest-groups.mjs");
     expect(groupedTests).toContain('"--maxWorkers=4"');
+    expect(scheduler).toContain("AGENTENV_ELECTRON_WORKERS");
+    expect(scheduler).toContain("assertExactTestCoverage");
+    for (const script of ["test:quick", "test:feature", "test:full", "verify:commit"]) {
+      expect(packageJsonSource).toContain(`"${script}"`);
+    }
   });
 
   it("bounds and identifies packaged desktop workflow stages", async () => {
@@ -330,6 +337,7 @@ describe("package metadata", () => {
     expect(script).toContain("page.setDefaultTimeout(30_000)");
     expect(script).toContain('process.platform !== "win32"');
     expect(script).toContain('"open Skills workspace"');
+    expect(script).toContain("enabledTargetIds: packagedTargets.map");
     expect(script).toContain('"scan repository Skill through packaged preload"');
     expect(script).toContain('"import repository Skill through packaged preload"');
     expect(script).toContain("apply ${target.name}");

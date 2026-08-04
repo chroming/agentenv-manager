@@ -38,17 +38,26 @@ obsolete plan.
 ## Verification Commands
 
 ```bash
+npm run test:quick
+npm run test:feature -- agent-discovery
 npm test
 npm run test:e2e
+npm run verify:commit
 npm run verify:visual
 npm run verify:product
 npm run verify:release
 npm run verify:current
 ```
 
-- `npm test` runs the complete source suite. Tests that launch real Electron
-  processes are isolated and serialized after the parallel-safe suite.
+- `npm run test:quick` type-checks and runs worktree-related tests and audits
+  without launching Electron.
+- `npm run test:feature -- <name>` runs one registered feature's selected
+  source and desktop evidence.
+- `npm test` runs the complete source suite. The large Electron UI suite uses
+  two process-isolated shards with an exact missing/duplicate coverage check;
+  all remaining Electron files retain isolated execution.
 - `npm run test:e2e` runs the same scheduling policy for end-to-end files.
+- `npm run verify:commit` runs the complete suite and every static audit.
 - `npm run verify:visual` rebuilds, captures the critical desktop states, and
   compares them with the checked-in pixel baselines.
 - `npm run verify:product` binds source, compiled artifact, tests, audits,
@@ -83,8 +92,10 @@ macOS, Windows, and Linux before those platforms are described as packaged-app
 verified. This evidence does not prove compatibility with every real Agent
 version or exercise each graphical installer.
 
-The current macOS release is intentionally unsigned and not notarized. Its
-official Homebrew Cask pins immutable Release URLs and SHA-256 values, then
-removes quarantine only after Homebrew verifies the download. DMG verification
-and checksums establish container and artifact integrity; they do not claim an
-Apple Developer ID, notarization, or Gatekeeper trust decision.
+The current macOS release uses a fixed project-created signing identity and is not notarized. Its complete App
+resource seal must pass `codesign --verify`, while `spctl --assess` must reject it
+because it has no Developer ID or notarization. The official Homebrew Cask pins
+immutable Release URLs and SHA-256 values, then removes quarantine only after
+Homebrew verifies the download. Direct GitHub Release downloads keep quarantine
+and use the system Open Anyway flow. None of this claims an Apple Developer ID,
+notarization, or Gatekeeper trust decision.

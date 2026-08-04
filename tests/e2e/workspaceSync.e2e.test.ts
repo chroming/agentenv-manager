@@ -71,6 +71,7 @@ describe("Workspace Sync desktop flow", () => {
       env: {
         ...process.env,
         AGENTENV_AUTOMATION: "1",
+        AGENTENV_AUTOMATION_TARGET_PATH: join(root, "agent-bin"),
         AGENTENV_DATA_ROOT: dataRoot,
         AGENTENV_CACHE_ROOT: join(root, "cache"),
         AGENTENV_HOME: home
@@ -116,6 +117,7 @@ describe("Workspace Sync desktop flow", () => {
       env: {
         ...process.env,
         AGENTENV_AUTOMATION: "1",
+        AGENTENV_AUTOMATION_TARGET_PATH: join(root, "agent-bin"),
         AGENTENV_DATA_ROOT: dataRoot,
         AGENTENV_CACHE_ROOT: join(root, "cache"),
         AGENTENV_HOME: home

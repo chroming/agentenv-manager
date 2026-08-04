@@ -302,6 +302,9 @@ try {
   for (const target of packagedTargets) {
     packagedProfileIds.set(target.id, await writePackagedTargetProfile(target));
   }
+  await writeJson(join(appDataRoot, "settings.json"), {
+    enabledTargetIds: packagedTargets.map((target) => target.id)
+  });
 
   reportPackagedStage("discover system Git");
   const gitLookup = await execFileAsync(

@@ -7,10 +7,7 @@ import {
   computeVerificationSourceFingerprint,
   hasVerificationSourceChanges
 } from "./verification-fingerprint.mjs";
-import {
-  electronE2eExcludeGlob,
-  electronE2eTestFiles
-} from "./vitest-groups.mjs";
+import { electronE2eTestFiles } from "./vitest-groups.mjs";
 
 const execFileAsync = promisify(execFile);
 const projectRoot = resolve(import.meta.dirname, "..");
@@ -58,23 +55,10 @@ await rm(electronReportPath, { force: true });
 await rm(captureRoot, { recursive: true, force: true });
 await run("npm", ["run", "build"]);
 const testedBuild = await assertCurrentBuild(projectRoot);
-await run("npx", [
-  "vitest",
-  "run",
-  "--exclude",
-  electronE2eExcludeGlob,
-  "--maxWorkers=4",
-  "--reporter=json",
-  `--outputFile=${parallelReportPath}`
-]);
-await run("npx", [
-  "vitest",
-  "run",
-  ...electronE2eTestFiles,
-  "--maxWorkers=1",
-  "--no-file-parallelism",
-  "--reporter=json",
-  `--outputFile=${electronReportPath}`
+await run("node", [
+  "scripts/run-vitest-groups.mjs",
+  `--parallel-report=${parallelReportPath}`,
+  `--electron-report=${electronReportPath}`
 ]);
 for (const script of [
   "audit:styles",
