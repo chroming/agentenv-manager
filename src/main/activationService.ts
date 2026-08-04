@@ -1,7 +1,6 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { appendFile, cp, lstat, mkdir, readFile, readdir, rm, stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
-import { randomUUID } from "node:crypto";
 import { createBackupStore } from "./backupStore";
 import { createUnifiedDiff } from "./diff";
 import {
@@ -949,7 +948,8 @@ export const createActivationService = ({
           materializedProfile,
           skillLibrary,
           inventory,
-          nativeSkillState
+          nativeSkillState,
+          skillDeploymentPlan
         )
       : [];
     const settings = await settingsStore.readSettings();

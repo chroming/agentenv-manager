@@ -634,7 +634,8 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
       skillAutoCheckIntervalMinutes: 60,
-      backupRetentionDays: null
+      backupRetentionDays: null,
+      agentDiscoveryReviewedIds: ["opencode", "codex"]
     }),
     updateSettings: vi.fn().mockImplementation(async (input) => ({
       locale: input.locale ?? "system",
@@ -644,7 +645,8 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       skillAutoCheckEnabled: input.skillAutoCheckEnabled ?? true,
       skillAutoCheckIntervalMinutes: input.skillAutoCheckIntervalMinutes ?? 60,
       backupRetentionDays: input.backupRetentionDays ?? null,
-      enabledTargetIds: input.enabledTargetIds
+      enabledTargetIds: input.enabledTargetIds,
+      agentDiscoveryReviewedIds: input.agentDiscoveryReviewedIds ?? ["opencode", "codex"]
     })),
     readWorkspaceSyncStatus: vi.fn().mockResolvedValue({
       kind: "not-connected",
@@ -1479,6 +1481,7 @@ describe("App", () => {
 
     await waitFor(() => expect(updateSettings).toHaveBeenCalledWith({
       enabledTargetIds: ["opencode"],
+      agentDiscoveryReviewedIds: ["opencode"],
       suppressedAgentSuggestionIds: []
     }));
     expect(await within(agentsWorkspace).findByRole("article", { name: "Agent OpenCode" }))
@@ -1536,6 +1539,42 @@ describe("App", () => {
     expect(await screen.findByRole("dialog", { name: "Create profile from OpenCode" }))
       .toBeInTheDocument();
     expect(previewCreateProfileFromTarget).not.toHaveBeenCalled();
+  });
+
+  it("asks existing installations to review detected Agents once after discovery is introduced", async () => {
+    let settings: AgentEnvSettings = {
+      locale: "system",
+      conversationTerminal: "default",
+      skillSyncMethod: "auto",
+      skillStorageLocation: "appData",
+      skillAutoCheckEnabled: true,
+      skillAutoCheckIntervalMinutes: 60,
+      backupRetentionDays: null,
+      enabledTargetIds: ["opencode"],
+      suppressedAgentSuggestionIds: []
+    };
+    const updateSettings = vi.fn(async (input: Partial<AgentEnvSettings>) => {
+      settings = { ...settings, ...input };
+      return settings;
+    });
+    installApi({
+      listSupportedTargets: vi.fn().mockResolvedValue([target]),
+      probeSupportedTargets: vi.fn().mockResolvedValue([target]),
+      listTargets: vi.fn().mockResolvedValue([target]),
+      readSettings: vi.fn(async () => settings),
+      updateSettings
+    });
+
+    render(<App />);
+
+    const dialog = await screen.findByRole("dialog", { name: "Choose Agents" });
+    expect(within(dialog).getByRole("checkbox", { name: "OpenCode" })).toBeChecked();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Enable 1 Agent" }));
+    await waitFor(() => expect(updateSettings).toHaveBeenCalledWith({
+      enabledTargetIds: ["opencode"],
+      suppressedAgentSuggestionIds: [],
+      agentDiscoveryReviewedIds: ["opencode"]
+    }));
   });
 
   it("keeps multiple newly enabled Agents independent and lets setup wait", async () => {
@@ -1664,6 +1703,7 @@ describe("App", () => {
     const dialog = await screen.findByRole("dialog", { name: "Choose Agents" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Don't suggest OpenCode again" }));
     await waitFor(() => expect(updateSettings).toHaveBeenCalledWith({
+      agentDiscoveryReviewedIds: ["opencode"],
       suppressedAgentSuggestionIds: ["opencode"]
     }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Choose Agents" })).not.toBeInTheDocument());
@@ -1671,6 +1711,7 @@ describe("App", () => {
     await openSettingsCategory("Agents");
     fireEvent.click(screen.getByRole("button", { name: "Suggest OpenCode again" }));
     await waitFor(() => expect(updateSettings).toHaveBeenLastCalledWith({
+      agentDiscoveryReviewedIds: [],
       suppressedAgentSuggestionIds: []
     }));
   });
@@ -2527,6 +2568,7 @@ describe("App", () => {
 
   it("turns Agents off and removes their operational UI", async () => {
     let enabledTargetIds = ["opencode", "codex"];
+    let agentDiscoveryReviewedIds: string[] = [];
     let suppressedAgentSuggestionIds: string[] = [];
     const allTargets = [target, codexTarget];
     const listTargets = vi.fn(async () =>
@@ -2534,6 +2576,8 @@ describe("App", () => {
     );
     const updateSettings = vi.fn(async (input: Partial<AgentEnvSettings>) => {
       enabledTargetIds = input.enabledTargetIds ?? enabledTargetIds;
+      agentDiscoveryReviewedIds =
+        input.agentDiscoveryReviewedIds ?? agentDiscoveryReviewedIds;
       suppressedAgentSuggestionIds =
         input.suppressedAgentSuggestionIds ?? suppressedAgentSuggestionIds;
       return {
@@ -2545,6 +2589,7 @@ describe("App", () => {
         skillAutoCheckIntervalMinutes: 60,
         backupRetentionDays: null,
         enabledTargetIds,
+        agentDiscoveryReviewedIds,
         suppressedAgentSuggestionIds
       };
     });
@@ -2559,7 +2604,8 @@ describe("App", () => {
         skillAutoCheckEnabled: true,
         skillAutoCheckIntervalMinutes: 60,
         backupRetentionDays: null,
-        enabledTargetIds
+        enabledTargetIds,
+        agentDiscoveryReviewedIds
       }),
       updateSettings
     });
@@ -2571,6 +2617,7 @@ describe("App", () => {
     await waitFor(() =>
       expect(updateSettings).toHaveBeenCalledWith({
         enabledTargetIds: ["opencode"],
+        agentDiscoveryReviewedIds: ["codex"],
         suppressedAgentSuggestionIds: ["codex"]
       })
     );
@@ -2586,6 +2633,7 @@ describe("App", () => {
     await waitFor(() =>
       expect(updateSettings).toHaveBeenLastCalledWith({
         enabledTargetIds: [],
+        agentDiscoveryReviewedIds: ["codex", "opencode"],
         suppressedAgentSuggestionIds: ["codex", "opencode"]
       })
     );
@@ -2638,6 +2686,7 @@ describe("App", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Turn off OpenCode" }));
     await waitFor(() => expect(updateSettings).toHaveBeenCalledWith({
       enabledTargetIds: [],
+      agentDiscoveryReviewedIds: ["opencode"],
       suppressedAgentSuggestionIds: ["opencode"]
     }));
     expect(screen.getByText("Saving...")).toBeInTheDocument();

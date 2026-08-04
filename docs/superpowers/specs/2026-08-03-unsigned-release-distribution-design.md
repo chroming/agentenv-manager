@@ -8,12 +8,14 @@ removes quarantine only after Homebrew has verified the exact package checksum,
 checks and installs updates without terminal interaction, and optionally reports a
 small allowlisted set of anonymous reliability facts.
 
-This release line uses a fixed project-created signing identity but does not use
-a Developer ID identity or Apple notarization. The signature provides a valid
-resource seal and a stable application identity across AgentEnv releases, but it
-does not provide Apple-verified publisher identity or Gatekeeper trust. The
-public certificate is pinned in the repository; its private key exists only in
-the release maintainer's protected backup and GitHub Actions secrets. The distribution trust boundary
+This release line does not use a Developer ID identity or Apple notarization.
+Direct-download macOS assets use an ad-hoc resource seal so quarantine can enter
+the ordinary explicit Open Anyway flow. The Homebrew-only DMG uses a fixed
+project-created identity so Keychain and privacy identity remain stable after
+the Cask verifies the checksum and removes quarantine. Neither signature provides
+Apple-verified publisher identity or Gatekeeper trust. The public fixed-identity
+certificate is pinned in the repository; its private key exists only in the
+release maintainer's protected backup and GitHub Actions secrets. The distribution trust boundary
 is the official GitHub repository, immutable versioned assets, the official Tap,
 exact SHA-256 values, and package identity checks.
 
@@ -22,15 +24,17 @@ exact SHA-256 values, and package identity checks.
 - `package.json` is the version source of truth. A `vX.Y.Z` tag must match it.
 - A release is assembled from already-tested workflow artifacts. Build jobs never
   publish public assets independently.
-- macOS produces arm64 and x64 DMG and ZIP artifacts. Windows produces NSIS and
-  Linux produces AppImage and DEB artifacts.
-- Local macOS builds use `mac.identity: "-"`. Release jobs override that identity
-  with the fixed certificate in `build/macos-signing-certificate.pem`. Hardened
-  runtime and notarization remain disabled. Release jobs require `codesign
-  --verify` to pass, reject any fallback to `Signature=adhoc`, require a stable
-  certificate-based designated requirement, and require `spctl --assess` to
-  reject the App.
-- Every public asset is named with its version, platform, and architecture.
+- macOS produces direct arm64/x64 DMG and ZIP artifacts plus a distinctly named
+  `-homebrew.dmg` for each architecture. Windows produces NSIS and Linux produces
+  AppImage and DEB artifacts.
+- Direct and local macOS builds use `mac.identity: "-"`. The Homebrew package uses
+  the fixed certificate in `build/macos-signing-certificate.pem`. Hardened runtime
+  and notarization remain disabled. Release jobs require `codesign --verify` for
+  both variants, require `Signature=adhoc` for direct assets, reject ad-hoc fallback
+  for Homebrew assets, pin the Homebrew designated requirement, and require
+  `spctl --assess` to reject both Apps.
+- Every public asset is named with its version, platform, architecture, and the
+  `homebrew` channel suffix where applicable.
 - The release includes `SHA256SUMS`, a CycloneDX SBOM, and
   `release-manifest.json` containing repository, tag, version, asset size,
   SHA-256, architecture, and build fingerprint.
@@ -58,8 +62,11 @@ exact SHA-256 values, and package identity checks.
   `/Applications` path.
 - Quarantine removal happens only after Homebrew's checksum verification.
 - Uninstall removes the application but never removes AgentEnv canonical data.
-- GitHub Release downloads keep quarantine. Users approve the first launch through
-  System Settings > Privacy & Security > Open Anyway.
+- GitHub Release downloads keep quarantine. Users first copy the App to Applications
+  and eject the DMG, then approve that installed copy through System Settings >
+  Privacy & Security > Open Anyway and the final Open confirmation. This route is a
+  best-effort fallback because organization-managed Macs may forbid the exception;
+  the verified Cask is the reliable no-Developer-ID installation path.
 
 ## Update Contract
 

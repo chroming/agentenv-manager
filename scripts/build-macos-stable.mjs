@@ -152,8 +152,20 @@ try {
   });
   await runInteractive(
     process.execPath,
+    ["scripts/verify-macos-signature.mjs"],
+    process.env
+  );
+  await runInteractive(
+    process.execPath,
     [
       "scripts/verify-macos-signature.mjs",
+      "--app",
+      resolve(
+        "release",
+        "homebrew",
+        process.arch === "arm64" ? "mac-arm64" : "mac",
+        "AgentEnv Manager.app"
+      ),
       "--certificate",
       certificatePath
     ],

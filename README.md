@@ -6,7 +6,7 @@ AgentEnv Manager 是一个本地桌面应用，用来整理 coding agent 的 Ski
 
 它不会接管模型、账号或所有原生配置。每次写入前都会先展示变化并创建恢复点。
 
-> `0.1.0` 是首个公开版本。原生 CI 会在 macOS、Windows 和 Linux 上构建并启动打包应用，使用隔离的假 Agent 验证核心工作流；这不代表所有真实 Agent 版本都已验证。macOS Release 使用项目固定的自签名身份建立资源封印和跨版本应用身份，但没有 Developer ID，也没有公证。官方 Homebrew Cask 会先核对 SHA-256，再移除 quarantine 属性。
+> `0.1.0` 是首个公开版本。原生 CI 会在 macOS、Windows 和 Linux 上构建并启动打包应用，使用隔离的假 Agent 验证核心工作流；这不代表所有真实 Agent 版本都已验证。macOS 没有 Developer ID，也没有公证：直接下载包使用 ad-hoc 资源封印，官方 Homebrew Cask 使用固定身份包，并在核对 SHA-256 后移除 quarantine 属性。
 
 ## 安装
 
@@ -18,7 +18,7 @@ brew install --cask chroming/tap/agentenv-manager
 
 Homebrew 会按当前架构下载固定版本的官方 Release，并在安装前验证 SHA-256，安装后可直接打开。应用内自动更新也只对这类 Homebrew 安装生效。
 
-从 GitHub Release 直接下载时，系统会保留 quarantine。首次尝试打开后，请按 [Apple 的说明](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac)前往“系统设置 > 隐私与安全性”点击“仍要打开”。直接下载的用户仍可在应用中检查更新，并从官方 Release 页面手动安装。
+从 GitHub Release 直接下载时，系统会保留 quarantine。请先把应用拖入“应用程序”并推出 DMG，再尝试打开；随后按 [Apple 的说明](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac)前往“系统设置 > 隐私与安全性”，点击“仍要打开”，并在再次出现的确认框中选择“打开”。受组织策略管理的 Mac 可能不允许保存这个例外，这类设备请使用上面的官方 Cask。直接下载的用户仍可在应用中检查更新，并从官方 Release 页面手动安装。
 
 ## Agents
 

@@ -41,8 +41,10 @@ jobs:
         include:
           - runner: macos-15
             arch: arm64
+            app_dir: mac-arm64
           - runner: macos-15-intel
             arch: x64
+            app_dir: mac
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 70
     env:
@@ -66,19 +68,27 @@ jobs:
           MACOS_SIGNING_P12_BASE64: ${{ secrets.MACOS_SIGNING_P12_BASE64 }}
           MACOS_SIGNING_P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
         run: node scripts/prepare-macos-signing-keychain.mjs
-      - name: Build exact macOS release assets
+      - name: Build direct and Homebrew macOS release assets
         run: npm run dist:mac:release
-      - name: Verify stable signature and Gatekeeper boundary
-        run: node scripts/verify-macos-signature.mjs --certificate build/macos-signing-certificate.pem
+      - name: Verify direct-download ad-hoc signature
+        run: node scripts/verify-macos-signature.mjs
+      - name: Verify stable Homebrew signature and Gatekeeper boundary
+        run: >-
+          node scripts/verify-macos-signature.mjs
+          --app "release/homebrew/${{ matrix.app_dir }}/AgentEnv Manager.app"
+          --certificate build/macos-signing-certificate.pem
       - name: Run packaged application workflow
         run: node scripts/test-packaged-app.mjs
-      - name: Verify disk image
-        run: hdiutil verify release/AgentEnv-Manager-*-mac-${{ matrix.arch }}.dmg
+      - name: Verify disk images
+        run: |
+          hdiutil verify release/AgentEnv-Manager-*-mac-${{ matrix.arch }}.dmg
+          hdiutil verify release/homebrew/AgentEnv-Manager-*-mac-${{ matrix.arch }}-homebrew.dmg
       - name: Collect macOS release assets
         run: |
           mkdir release-assets
           cp release/AgentEnv-Manager-*-mac-${{ matrix.arch }}.dmg release-assets/
           cp release/AgentEnv-Manager-*-mac-${{ matrix.arch }}.zip release-assets/
+          cp release/homebrew/AgentEnv-Manager-*-mac-${{ matrix.arch }}-homebrew.dmg release-assets/
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-macos-${{ matrix.arch }}
@@ -175,8 +185,10 @@ jobs:
           expected=(
             "AgentEnv-Manager-${version}-mac-arm64.dmg"
             "AgentEnv-Manager-${version}-mac-arm64.zip"
+            "AgentEnv-Manager-${version}-mac-arm64-homebrew.dmg"
             "AgentEnv-Manager-${version}-mac-x64.dmg"
             "AgentEnv-Manager-${version}-mac-x64.zip"
+            "AgentEnv-Manager-${version}-mac-x64-homebrew.dmg"
             "AgentEnv-Manager-${version}-windows-x64.exe"
             "AgentEnv-Manager-${version}-linux-x64.AppImage"
             "AgentEnv-Manager-${version}-linux-x64.deb"

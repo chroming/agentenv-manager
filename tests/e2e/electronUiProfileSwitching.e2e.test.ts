@@ -551,6 +551,7 @@ const launchApp = async (
     includeTraeTarget?: boolean;
     includePiTarget?: boolean;
     enabledTargetIds?: string[];
+    agentDiscoveryReviewedIds?: string[];
     suppressedAgentSuggestionIds?: string[];
     openCodeBetaProfileName?: string;
     malformedProfile?: boolean;
@@ -601,6 +602,7 @@ const launchApp = async (
     skillAutoCheckIntervalMinutes: 60,
     backupRetentionDays: null,
     enabledTargetIds,
+    agentDiscoveryReviewedIds: options.agentDiscoveryReviewedIds ?? supportedTargetIds,
     suppressedAgentSuggestionIds:
       options.suppressedAgentSuggestionIds ??
       supportedTargetIds.filter((targetId) => !enabledTargetIds.includes(targetId))
@@ -8206,6 +8208,8 @@ describe("Electron UI profile switching e2e", () => {
         ];
         const headerCells = Array.from(head.children) as HTMLElement[];
         const visibleHeaderCells = headerCells.filter((cell) => getComputedStyle(cell).display !== "none");
+        const headerIdentityRange = document.createRange();
+        headerIdentityRange.selectNodeContents(headerCells[0]!);
         const metrics = rows.map((row) => {
           const status = row.querySelector<HTMLElement>(".library-status-cell")!;
           const primaryStatus = status.querySelector<HTMLElement>(".library-primary-status")!;
@@ -8226,6 +8230,7 @@ describe("Electron UI profile switching e2e", () => {
             moreRight: moreRect.right,
             primaryTag: primaryStatus.tagName,
             rowHeight: rowRect.height,
+            skillNameLeft: row.querySelector<HTMLElement>(".skill-title")!.getBoundingClientRect().left,
             statusIconLeft: statusIcon.getBoundingClientRect().left,
             statusLabelOverflow: statusLabel.scrollWidth - statusLabel.clientWidth,
             statusLeft: statusRect.left,
@@ -8237,6 +8242,7 @@ describe("Electron UI profile switching e2e", () => {
           documentWidth: document.documentElement.scrollWidth,
           headerCount: headerCells.length,
           headerDisplay: getComputedStyle(head).display,
+          headerIdentityLeft: headerIdentityRange.getBoundingClientRect().left,
           metrics,
           viewportWidth: document.documentElement.clientWidth,
           visibleHeaderCount: visibleHeaderCells.length
@@ -8254,6 +8260,7 @@ describe("Electron UI profile switching e2e", () => {
         expect(row.actionCellCount).toBe(0);
         expect(row.childrenFit).toBe(true);
         expect(row.gridColumnCount).toBe(width <= 920 ? 4 : 5);
+        expect(Math.abs(row.skillNameLeft - geometry.headerIdentityLeft)).toBeLessThanOrEqual(1);
         expect(row.moreLeft - row.statusRight).toBeGreaterThanOrEqual(9);
         expect(row.statusLabelOverflow).toBeLessThanOrEqual(1);
         expect(Math.abs(row.statusIconLeft - row.statusLeft)).toBeLessThanOrEqual(1);
@@ -9107,6 +9114,7 @@ describe("Electron UI profile switching e2e", () => {
   it("offers detected Agents without changing their files until the user enables one", async () => {
     const { appDataRoot, opencodeDir, codexDir, page } = await launchApp({
       enabledTargetIds: [],
+      agentDiscoveryReviewedIds: [],
       omitAllProfiles: true,
       suppressedAgentSuggestionIds: [],
       initialWorkspace: null
@@ -9136,11 +9144,20 @@ describe("Electron UI profile switching e2e", () => {
     await dialog.getByRole("button", { name: "Enable 1 Agent" }).click();
 
     await expect.poll(async () => {
-      const settings = await readJson<{ enabledTargetIds?: string[] }>(
+      const settings = await readJson<{
+        enabledTargetIds?: string[];
+        agentDiscoveryReviewedIds?: string[];
+      }>(
         join(appDataRoot, "settings.json")
       );
-      return settings.enabledTargetIds;
-    }).toEqual(["opencode"]);
+      return {
+        enabledTargetIds: settings.enabledTargetIds,
+        reviewedIds: settings.agentDiscoveryReviewedIds
+      };
+    }).toEqual({
+      enabledTargetIds: ["opencode"],
+      reviewedIds: ["opencode", "codex"]
+    });
     const setupDialog = page.getByRole("dialog", { name: "Agents enabled" });
     await setupDialog.waitFor({ state: "visible" });
     expect(await setupDialog.textContent()).toContain("Agent files have not changed");
@@ -11025,6 +11042,10 @@ describe("Electron UI profile switching e2e", () => {
     const targetListGeometry = await page.locator(".target-list").evaluate((list) => {
       const rows = Array.from(list.querySelectorAll<HTMLElement>(".target-card--workflow"));
       const listBox = list.getBoundingClientRect();
+      const agentHeader = list.querySelector<HTMLElement>(".target-list__header > span:nth-child(2)")!;
+      const agentHeaderRange = document.createRange();
+      agentHeaderRange.selectNodeContents(agentHeader);
+      const agentHeaderLeft = agentHeaderRange.getBoundingClientRect().left;
       const lifecycleLefts = rows.map((row) =>
         row.querySelector<HTMLElement>(".target-workflow-lifecycle")!.getBoundingClientRect().left
       );
@@ -11051,6 +11072,12 @@ describe("Electron UI profile switching e2e", () => {
           const status = row.querySelector<HTMLElement>(".target-health-status")!;
           return getComputedStyle(status).backgroundColor === "rgba(0, 0, 0, 0)";
         }),
+        identityHeaderAligned: rows.every((row) =>
+          Math.abs(
+            row.querySelector<HTMLElement>(".target-workflow-name-line strong")!
+              .getBoundingClientRect().left - agentHeaderLeft
+          ) <= 1
+        ),
         lifecycleLanesAligned: Math.max(...lifecycleLefts) - Math.min(...lifecycleLefts) <= 1,
         profileLanesAligned: Math.max(...profileLefts) - Math.min(...profileLefts) <= 1,
         actionLanesAligned: Math.max(...actionLefts) - Math.min(...actionLefts) <= 1
@@ -11062,6 +11089,7 @@ describe("Electron UI profile switching e2e", () => {
       continuous: true,
       flatRows: true,
       healthBackgroundsAreNeutral: true,
+      identityHeaderAligned: true,
       lifecycleLanesAligned: true,
       profileLanesAligned: true
     });

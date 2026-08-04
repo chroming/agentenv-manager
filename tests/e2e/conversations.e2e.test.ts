@@ -74,7 +74,8 @@ describe("Conversations desktop workflow", () => {
         skillAutoCheckEnabled: false,
         skillAutoCheckIntervalMinutes: 60,
         backupRetentionDays: null,
-        enabledTargetIds: ["codex", "opencode", "antigravity", "trae-cli"]
+        enabledTargetIds: ["codex", "opencode", "antigravity", "trae-cli"],
+        agentDiscoveryReviewedIds: ["codex", "opencode", "antigravity", "trae-cli"]
       }, null, 2)}\n`,
       "utf8"
     );

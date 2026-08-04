@@ -146,8 +146,8 @@ describe("package metadata", () => {
     expect(packageJson.scripts?.["dist:mac"]).toBe(
       "npm run icons:mac && npm run build && electron-builder --mac --publish never"
     );
-    expect(packageJson.scripts?.["dist:mac:release"]).toContain(
-      '--config.mac.identity="$AGENTENV_MACOS_SIGNING_IDENTITY"'
+    expect(packageJson.scripts?.["dist:mac:release"]).toBe(
+      "node scripts/build-macos-release-assets.mjs"
     );
     expect(packageJson.scripts?.["dist:mac:stable"]).toBe(
       "node scripts/build-macos-stable.mjs"
@@ -237,6 +237,9 @@ describe("package metadata", () => {
     expect(workflow).toContain('MACOS_SIGNING_P12_BASE64');
     expect(workflow).toContain('MACOS_SIGNING_P12_PASSWORD');
     expect(workflow).toContain('npm run dist:mac:release');
+    expect(workflow).toContain('Verify direct-download ad-hoc signature');
+    expect(workflow).toContain('AgentEnv-Manager-${version}-mac-arm64-homebrew.dmg');
+    expect(workflow).toContain('AgentEnv-Manager-${version}-mac-x64-homebrew.dmg');
     expect(workflow).toContain('--certificate build/macos-signing-certificate.pem');
     expect(workflow).toContain('npm sbom --sbom-format cyclonedx');
     expect(workflow).toContain('SHA256SUMS');
@@ -260,8 +263,9 @@ describe("package metadata", () => {
   });
 
   it("pins the macOS Release signer while requiring Gatekeeper rejection", async () => {
-    const [script, localBuildScript, trustScript, cleanupScript, certificate] = await Promise.all([
+    const [script, releaseBuildScript, localBuildScript, trustScript, cleanupScript, certificate] = await Promise.all([
       readFile(join(process.cwd(), "scripts", "verify-macos-signature.mjs"), "utf8"),
+      readFile(join(process.cwd(), "scripts", "build-macos-release-assets.mjs"), "utf8"),
       readFile(join(process.cwd(), "scripts", "build-macos-stable.mjs"), "utf8"),
       readFile(
         join(process.cwd(), "scripts", "trust-macos-signing-certificate.mjs"),
@@ -287,6 +291,9 @@ describe("package metadata", () => {
     expect(script).toContain('"/usr/sbin/spctl"');
     expect(script).toContain('"--assess"');
     expect(script).toContain("Gatekeeper unexpectedly accepted");
+    expect(releaseBuildScript).toContain('"--config.mac.identity=-"');
+    expect(releaseBuildScript).toContain("-homebrew.${ext}");
+    expect(releaseBuildScript).toContain("AGENTENV_MACOS_SIGNING_IDENTITY");
     expect(localBuildScript).toContain("AGENTENV_MACOS_SIGNING_KEYCHAIN");
     expect(localBuildScript).toContain("agentenv-release-signing.keychain-db");
     expect(localBuildScript).toContain("agentenv-release-signing.password");

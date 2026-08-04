@@ -426,6 +426,11 @@ Preview/Apply transaction, never a second editor or a reduced resource model.
   suppresses future automatic suggestions until the user reverses that choice.
 - Existing installations whose stored settings predate the enabled-Agent field preserve the
   previous all-enabled scope during migration. An explicit empty enabled list MUST remain empty.
+- Agent discovery review is persisted independently from enabled scope. Existing installations
+  whose settings predate discovery review MUST receive the read-only chooser once even when legacy
+  migration enabled every Agent. Confirming records every displayed Agent as reviewed and persists
+  the exact checked enabled set; `Not now` remains launch-local, and an Agent first detected later
+  remains eligible for its own future suggestion.
 - Supported, detected, enabled, and managed are distinct states. The all-supported detection
   probe is read-only and MUST NOT weaken operation guards: operational Target APIs continue to
   expose enabled Agents only.
@@ -942,7 +947,7 @@ The complete issue policy is normative:
 | `native-disabled-skill` | `block` | `external-action` | The Agent's native settings disable a Skill required by the Profile. |
 | `runtime-observation` | `notice` | `preserve` | Read-only runtime evidence is disclosed without mutation. |
 | `runtime-state-unavailable` | `block` | `external-action` | Required runtime state cannot be inspected reliably. |
-| `runtime-skill-conflict` | `block` | `external-action` | Runtime discovery reports ambiguous or conflicting Skill identity. |
+| `runtime-skill-conflict` | `block` | `external-action` | Runtime discovery reports ambiguous or conflicting Skill identity not already resolved by an exact reviewed mutation in this Preview. |
 | `unsupported-skill-management` | `block` | `edit-profile` | Profile requests Skill management unsupported by the adapter. |
 | `shared-skill-conflict` | `block` | `review-local-skills` | Shared compatibility content conflicts with canonical intent and must open the exact Local Skills collection review. |
 | `shared-skill-deferred` | `notice` | `preserve` | Shared compatibility content remains until all consumers have explicit intent. |
@@ -1003,6 +1008,12 @@ Apply executes the immutable Preview plan. It MAY re-read and hash the plan's bo
 Switching Profiles MUST reconcile every writable Skill location declared by the selected Target adapter. Skills absent or disabled in the Profile are removed from managed locations; content outside AgentEnv is changed only when the fresh Preview names the exact backup-and-replace or backup-and-remove effect. Observe-only locations and locations covered by `Leave unmanaged` remain unchanged. MCP choices absent from the sparse policy remain Agent-controlled.
 
 A same-name Skill replacement outside AgentEnv MUST be scoped to exact paths named by the fresh Preview, included in the operation Backup, and installed atomically as an AgentEnv-owned resource. Confirming that Preview authorizes only those named paths. External-tool evidence does not create a blocker by itself; an unsupported or observe-only path capability does.
+
+If Capture or Profile reconciliation selected one runtime Skill while another exact writable path
+declares the same runtime name, Preview MUST expose the unselected path as a reviewed backup-and-remove
+or backup-and-replace effect. Runtime validation MUST accept that exact fresh mutation plan instead of
+reporting the same path again as an unresolved conflict. Same-name paths outside the reviewed plan,
+observe-only paths, and ambiguous collection boundaries remain blocking.
 
 Takeover is the first Apply to an unmanaged Target. Preview MUST disclose:
 
@@ -1939,7 +1950,11 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
   within their lane and activating them must not shift or crop the sidebar.
 - Empty, one-item, long-content, 50, 100, and 500-item cases where relevant.
 - Default and minimum viewport without document overflow.
-- Skill table headers and every data row MUST share one column contract; contextual actions MUST NOT resize preceding columns. Compact width uses a visible grouped header and retains Skill, source, version, Profile usage, update, install, and action information rather than hiding columns.
+- Skill, Skill-source, and Agent table headers and every data row MUST share one column contract;
+  the visible identity header text aligns with the first visible identity text rather than the
+  disclosure, artwork, or icon lane. Contextual actions MUST NOT resize preceding columns. Compact
+  width uses a visible grouped header and retains Skill, source, version, Profile usage, update,
+  install, and action information rather than hiding columns.
 - Version, update, usage, and install metadata MUST use aligned first- and second-line tracks, including empty states and truncated values.
 - The Profile Target selector uses the selected Target name as its visible label without a redundant `Target:` prefix; its accessible name retains the full command meaning.
 - First and last row menus are topmost and in viewport.
@@ -1971,7 +1986,7 @@ This matrix is the release-facing index. A capability may be `Implemented` only 
 | Data Export and Restore | `Implemented` | Validated export, recovery copy, atomic app-data replacement | Domain and packaged restart smoke |
 | Desktop geometry and interaction | `Implemented` | No persisted effect; native window, focus, overlay, scroll, and viewport contracts | Renderer geometry and Electron screenshots |
 | Windows and Linux native packages | `Required` | Platform data roots, links, Git, terminal, menu, and installer lifecycle | Native CI packaged smoke on each operating system |
-| Verified stable-identity release and Homebrew Cask | `Implemented` | Pinned project certificate, stable designated requirement, valid App resource seal, expected Gatekeeper rejection, exact-tag assets, SHA-256, manifest, SBOM, draft verification, official Tap | Release generation, native package jobs, signature gate, Cask and packaged Electron tests |
+| Verified direct and Homebrew macOS release | `Implemented` | Ad-hoc direct assets; pinned fixed-identity Homebrew assets; valid App seals, expected Gatekeeper rejection, exact-tag SHA-256, manifest, SBOM, draft verification, official Tap | Release generation, native package jobs, dual signature gate, Cask and packaged Electron tests |
 | App update checks and Homebrew install | `Implemented` | Official stable Release only; Homebrew prefetch/install; settings persist locally | Domain, renderer, Electron E2E |
 | Optional reliability reporting | `Implemented` | Default-off consent; one allowlisted daily event; network failure is non-blocking | Domain and renderer tests |
 
@@ -2031,7 +2046,7 @@ The current machine-readable totals, source commit, deterministic tracked-and-un
 - Drift recovery adopts compatible Instructions and existing managed MCP activation choices into a backed-up Profile while naming excluded native configuration and unmapped items.
 - Production dependency audit reported zero known vulnerabilities.
 - The packaged arm64 macOS application completed an isolated OpenCode Profile takeover at `1180 x 728` without document overflow or writes to the real Agent environment.
-- The macOS release workflow imports the fixed project signing identity on native runners, verifies its pinned certificate, stable designated requirement, App resource seal, and expected Gatekeeper rejection, assembles an isolated draft, verifies downloaded artifact hashes, publishes exact release metadata, and only then updates the official checksum-bound Homebrew Cask. Quarantine removal belongs to the Cask postflight after Homebrew verification; direct downloads keep quarantine.
+- The macOS release workflow builds ad-hoc direct DMG/ZIP assets and a separately named fixed-identity Homebrew DMG on native runners. It verifies both App resource seals and expected Gatekeeper rejection, pins the Homebrew certificate and designated requirement across architectures, assembles an isolated draft, verifies downloaded hashes, and only then updates the checksum-bound Cask to the `-homebrew.dmg` assets. Quarantine removal belongs to the Cask postflight after Homebrew verification. Direct downloads keep quarantine and are a best-effort fallback: users copy the App to Applications, eject the DMG, and complete both Open Anyway and the final Open confirmation; managed-device policy may still reject that exception.
 
 ## 26. Current Priority Gaps
 

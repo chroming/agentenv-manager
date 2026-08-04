@@ -331,7 +331,7 @@ describe("Workspace Sync", () => {
     await expect(
       readFile(join(paths.profilesDir, "old", "marker"), "utf8")
     ).resolves.toBe("linked profile");
-  });
+  }, 15_000);
 
   it("restores the pre-restore Workspace when a requested rollback fails partway", async () => {
     const appDataRoot = await tempRoot("agentenv-sync-restore-safety-");

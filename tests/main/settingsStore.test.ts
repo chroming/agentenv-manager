@@ -172,6 +172,25 @@ describe("settings store", () => {
     }));
   });
 
+  it("persists reviewed Agent discovery choices independently from enabled Agents", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-settings-agent-discovery-review-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const store = createSettingsStore(paths, {
+      supportedTargetIds: ["opencode", "codex"]
+    });
+
+    await expect(store.updateSettings({
+      enabledTargetIds: ["opencode"],
+      agentDiscoveryReviewedIds: ["opencode", "codex", "codex", "unknown"]
+    })).resolves.toEqual(expect.objectContaining({
+      enabledTargetIds: ["opencode"],
+      agentDiscoveryReviewedIds: ["opencode", "codex"]
+    }));
+    await expect(store.readSettings()).resolves.toEqual(expect.objectContaining({
+      agentDiscoveryReviewedIds: ["opencode", "codex"]
+    }));
+  });
+
   it("persists safe per-Agent command overrides and expands home paths", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-settings-agent-commands-"));
     const homeDir = join(root, "home");

@@ -5,7 +5,7 @@ cask "agentenv-manager" do
   sha256 arm:   "{{ARM64_SHA256}}",
          intel: "{{X64_SHA256}}"
 
-  url "https://github.com/{{REPOSITORY}}/releases/download/v#{version}/AgentEnv-Manager-#{version}-mac-#{arch}.dmg"
+  url "https://github.com/{{REPOSITORY}}/releases/download/v#{version}/AgentEnv-Manager-#{version}-mac-#{arch}-homebrew.dmg"
   name "AgentEnv Manager"
   desc "Manage reusable local AI Agent environments"
   homepage "https://github.com/{{REPOSITORY}}"

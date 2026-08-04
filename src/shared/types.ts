@@ -1241,6 +1241,7 @@ export interface AgentEnvSettings {
   telemetryEnabled?: boolean;
   backupRetentionDays: BackupRetentionDays;
   enabledTargetIds?: string[];
+  agentDiscoveryReviewedIds?: string[];
   suppressedAgentSuggestionIds?: string[];
   targetConfigRoots?: Record<string, string>;
   targetCommandOverrides?: Record<string, string>;

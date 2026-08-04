@@ -20,6 +20,7 @@
 
 .skill-source-table-head > span:first-child {
   grid-column: 1 / 4;
+  padding-inline-start: 72px;
 }
 
 .skill-source-table-head.can-merge,
@@ -29,10 +30,12 @@
 
 .skill-source-table-head.can-merge > span:first-child {
   grid-column: auto;
+  padding-inline-start: 0;
 }
 
 .skill-source-table-head.can-merge > span:nth-child(2) {
   grid-column: 2 / 5;
+  padding-inline-start: 72px;
 }
 
 .skill-source-group-row {
@@ -212,6 +215,18 @@ button.skill-source-status:disabled { cursor: default; }
   .skill-source-table-head.can-merge,
   .skill-source-list.can-merge .skill-source-group-row {
     grid-template-columns: 18px 20px 22px minmax(116px, 1fr) 60px 128px 28px;
+  }
+
+  .skill-source-table-head > span:first-child {
+    padding-inline-start: 60px;
+  }
+
+  .skill-source-table-head.can-merge > span:first-child {
+    padding-inline-start: 0;
+  }
+
+  .skill-source-table-head.can-merge > span:nth-child(2) {
+    padding-inline-start: 58px;
   }
 
   .skill-source-table-head:not(.can-merge) > span:nth-child(3),

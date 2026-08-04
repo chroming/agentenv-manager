@@ -31,7 +31,7 @@
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder --publish never",
     "dist:mac": "npm run icons:mac && npm run build && electron-builder --mac --publish never",
-    "dist:mac:release": "npm run icons:mac && npm run build && electron-builder --mac --publish never --config.mac.identity=\"$AGENTENV_MACOS_SIGNING_IDENTITY\"",
+    "dist:mac:release": "node scripts/build-macos-release-assets.mjs",
     "dist:mac:stable": "node scripts/build-macos-stable.mjs",
     "signing:mac:trust": "node scripts/trust-macos-signing-certificate.mjs",
     "verify:mac-signature": "node scripts/verify-macos-signature.mjs",

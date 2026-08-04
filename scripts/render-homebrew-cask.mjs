@@ -13,7 +13,11 @@ const TEMPLATE_PATH = resolve(
 
 const requireMacDmg = (manifest, arch) => {
   const asset = manifest.assets.find(
-    (candidate) => candidate.platform === "mac" && candidate.arch === arch && candidate.name.endsWith(".dmg")
+    (candidate) =>
+      candidate.platform === "mac" &&
+      candidate.arch === arch &&
+      candidate.channel === "homebrew" &&
+      candidate.name.endsWith("-homebrew.dmg")
   );
   if (!asset) throw new Error(`Release manifest is missing the mac ${arch} DMG`);
   const expectedPrefix = `https://github.com/${manifest.repository}/releases/download/${manifest.tag}/`;
@@ -40,7 +44,7 @@ export const renderHomebrewCask = (manifest, template) => {
   sha256 arm:   "{{ARM64_SHA256}}",
          intel: "{{X64_SHA256}}"
 
-  url "https://github.com/{{REPOSITORY}}/releases/download/v#{version}/AgentEnv-Manager-#{version}-mac-#{arch}.dmg"
+  url "https://github.com/{{REPOSITORY}}/releases/download/v#{version}/AgentEnv-Manager-#{version}-mac-#{arch}-homebrew.dmg"
   name "AgentEnv Manager"
   desc "Manage reusable local AI Agent environments"
   homepage "https://github.com/{{REPOSITORY}}"

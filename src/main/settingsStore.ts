@@ -19,6 +19,7 @@ export const SettingsSchema = z.object({
   telemetryEnabled: z.boolean().default(false),
   backupRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).default(null),
   enabledTargetIds: z.array(z.string().min(1)).optional(),
+  agentDiscoveryReviewedIds: z.array(z.string().min(1)).optional(),
   suppressedAgentSuggestionIds: z.array(z.string().min(1)).optional(),
   targetConfigRoots: z.record(z.string().min(1), z.string().min(1)).optional(),
   targetCommandOverrides: z.record(z.string().min(1), z.string().min(1)).optional()
@@ -174,6 +175,11 @@ export const createSettingsStore = (
           !options.supportedTargetIds || options.supportedTargetIds.includes(targetId)
         )
       : undefined;
+    const agentDiscoveryReviewedIds = settings.agentDiscoveryReviewedIds
+      ? [...new Set(settings.agentDiscoveryReviewedIds)].filter((targetId) =>
+          !options.supportedTargetIds || options.supportedTargetIds.includes(targetId)
+        )
+      : undefined;
     const targetConfigRoots = Object.fromEntries(
       Object.entries(settings.targetConfigRoots ?? {})
         .filter(([targetId, path]) =>
@@ -196,6 +202,7 @@ export const createSettingsStore = (
         ? { conversationTerminal: "default" as const }
         : {}),
       ...(enabledTargetIds ? { enabledTargetIds } : {}),
+      ...(agentDiscoveryReviewedIds ? { agentDiscoveryReviewedIds } : {}),
       ...(suppressedAgentSuggestionIds ? { suppressedAgentSuggestionIds } : {})
     };
     if (Object.keys(targetConfigRoots).length > 0) normalized.targetConfigRoots = targetConfigRoots;

@@ -26,13 +26,31 @@ describe("release packaging", () => {
     );
   });
 
+  it("reserves the Homebrew channel suffix for macOS disk images", async () => {
+    const root = await mkdtemp(join(tmpdir(), "agentenv-release-channel-"));
+    roots.push(root);
+    const invalidName = "AgentEnv-Manager-0.2.0-linux-x64-homebrew.AppImage";
+    await writeFile(join(root, invalidName), "invalid package", "utf8");
+
+    await expect(createReleaseManifest({
+      releaseDir: root,
+      repository: "chroming/agentenv-manager",
+      tag: "v0.2.0",
+      version: "0.2.0",
+      buildFingerprint: "build-123",
+      assetNames: [invalidName]
+    })).rejects.toThrow("Homebrew release assets must be macOS DMGs");
+  });
+
   it("records immutable asset identity and content digests", async () => {
     const root = await mkdtemp(join(tmpdir(), "agentenv-release-"));
     roots.push(root);
     const armName = "AgentEnv-Manager-0.2.0-mac-arm64.dmg";
     const intelName = "AgentEnv-Manager-0.2.0-mac-x64.dmg";
+    const homebrewName = "AgentEnv-Manager-0.2.0-mac-arm64-homebrew.dmg";
     await writeFile(join(root, armName), "arm package", "utf8");
     await writeFile(join(root, intelName), "intel package", "utf8");
+    await writeFile(join(root, homebrewName), "homebrew package", "utf8");
 
     const manifest = await createReleaseManifest({
       releaseDir: root,
@@ -40,7 +58,7 @@ describe("release packaging", () => {
       tag: "v0.2.0",
       version: "0.2.0",
       buildFingerprint: "build-123",
-      assetNames: [armName, intelName]
+      assetNames: [armName, intelName, homebrewName]
     });
 
     expect(manifest).toMatchObject({
@@ -50,11 +68,13 @@ describe("release packaging", () => {
       version: "0.2.0",
       buildFingerprint: "build-123"
     });
-    expect(manifest.assets).toEqual([
+    expect(manifest.assets).toHaveLength(3);
+    expect(manifest.assets).toEqual(expect.arrayContaining([
       expect.objectContaining({
         name: armName,
         platform: "mac",
         arch: "arm64",
+        channel: "direct",
         size: 11,
         sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
         url: `https://github.com/chroming/agentenv-manager/releases/download/v0.2.0/${armName}`
@@ -63,11 +83,20 @@ describe("release packaging", () => {
         name: intelName,
         platform: "mac",
         arch: "x64",
+        channel: "direct",
         size: 13,
         sha256: expect.stringMatching(/^[a-f0-9]{64}$/)
+      }),
+      expect.objectContaining({
+        name: homebrewName,
+        platform: "mac",
+        arch: "arm64",
+        channel: "homebrew",
+        size: 16,
+        sha256: expect.stringMatching(/^[a-f0-9]{64}$/)
       })
-    ]);
-    expect(manifest.assets[0].sha256).not.toBe(manifest.assets[1].sha256);
+    ]));
+    expect(new Set(manifest.assets.map((asset) => asset.sha256)).size).toBe(3);
   });
 
   it("renders a checksum-bound Cask that clears quarantine after installation", async () => {
@@ -80,20 +109,22 @@ describe("release packaging", () => {
       generatedAt: "2026-08-03T00:00:00.000Z",
       assets: [
         {
-          name: "AgentEnv-Manager-0.2.0-mac-arm64.dmg",
+          name: "AgentEnv-Manager-0.2.0-mac-arm64-homebrew.dmg",
           platform: "mac" as const,
           arch: "arm64" as const,
+          channel: "homebrew" as const,
           size: 11,
           sha256: "a".repeat(64),
-          url: "https://github.com/chroming/agentenv-manager/releases/download/v0.2.0/AgentEnv-Manager-0.2.0-mac-arm64.dmg"
+          url: "https://github.com/chroming/agentenv-manager/releases/download/v0.2.0/AgentEnv-Manager-0.2.0-mac-arm64-homebrew.dmg"
         },
         {
-          name: "AgentEnv-Manager-0.2.0-mac-x64.dmg",
+          name: "AgentEnv-Manager-0.2.0-mac-x64-homebrew.dmg",
           platform: "mac" as const,
           arch: "x64" as const,
+          channel: "homebrew" as const,
           size: 13,
           sha256: "b".repeat(64),
-          url: "https://github.com/chroming/agentenv-manager/releases/download/v0.2.0/AgentEnv-Manager-0.2.0-mac-x64.dmg"
+          url: "https://github.com/chroming/agentenv-manager/releases/download/v0.2.0/AgentEnv-Manager-0.2.0-mac-x64-homebrew.dmg"
         }
       ]
     };
@@ -107,6 +138,7 @@ describe("release packaging", () => {
     expect(cask).not.toContain("on_arm do");
     expect(cask).not.toContain("on_intel do");
     expect(cask).toContain("releases/download/v#{version}");
+    expect(cask).toContain("mac-#{arch}-homebrew.dmg");
     expect(cask).toContain("depends_on macos: :monterey");
     expect(cask).toContain('app "AgentEnv Manager.app"');
     expect(cask).toContain('c.appdir/"AgentEnv Manager.app"');

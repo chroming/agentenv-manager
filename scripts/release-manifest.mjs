@@ -4,7 +4,7 @@ import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
-const ASSET_PATTERN = /^AgentEnv-Manager-(\d+\.\d+\.\d+)-(mac|windows|linux)-(arm64|x64)\.(dmg|zip|exe|AppImage|deb)$/;
+const ASSET_PATTERN = /^AgentEnv-Manager-(\d+\.\d+\.\d+)-(mac|windows|linux)-(arm64|x64)(-homebrew)?\.(dmg|zip|exe|AppImage|deb)$/;
 
 export const validateReleaseVersion = (tag, packageVersion) => {
   const match = TAG_PATTERN.exec(tag);
@@ -23,7 +23,14 @@ const identityForAsset = (name, version) => {
   if (!match || match[1] !== version) {
     throw new Error(`Release asset name is invalid for ${version}: ${name}`);
   }
-  return { platform: match[2], arch: match[3] };
+  if (match[4] && (match[2] !== "mac" || match[5] !== "dmg")) {
+    throw new Error(`Homebrew release assets must be macOS DMGs: ${name}`);
+  }
+  return {
+    platform: match[2],
+    arch: match[3],
+    channel: match[4] ? "homebrew" : "direct"
+  };
 };
 
 export const createReleaseManifest = async ({

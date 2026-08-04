@@ -76,13 +76,19 @@ export const useAgentDiscovery = ({
   }, [discoveredTargets, enabledAgentIds]);
   const automaticAgentSuggestions = useMemo(() => {
     const suppressed = new Set(settings.suppressedAgentSuggestionIds ?? []);
+    const reviewed = new Set(settings.agentDiscoveryReviewedIds ?? []);
     const dismissed = new Set(sessionDismissedAgentIds);
-    return detectedDisabledAgents.filter(
-      (target) => !suppressed.has(target.id) && !dismissed.has(target.id)
+    return discoveredTargets.filter(
+      (target) =>
+        isTargetInstalled(target.health) &&
+        !reviewed.has(target.id) &&
+        !suppressed.has(target.id) &&
+        !dismissed.has(target.id)
     );
   }, [
-    detectedDisabledAgents,
+    discoveredTargets,
     sessionDismissedAgentIds,
+    settings.agentDiscoveryReviewedIds,
     settings.suppressedAgentSuggestionIds
   ]);
   const visibleAgentSuggestions = agentSuggestionMode === "setup"
@@ -144,6 +150,9 @@ export const useAgentDiscovery = ({
     else suppressed.add(targetId);
     await updateSettings({
       enabledTargetIds: nextIds,
+      agentDiscoveryReviewedIds: [
+        ...new Set([...(settings.agentDiscoveryReviewedIds ?? []), targetId])
+      ],
       suppressedAgentSuggestionIds: [...suppressed]
     });
   };
@@ -154,8 +163,18 @@ export const useAgentDiscovery = ({
     const skippedIds = visibleAgentSuggestions
       .map((target) => target.id)
       .filter((id) => !agentIds.includes(id));
+    const reviewedIds = visibleAgentSuggestions.map((target) => target.id);
+    const reviewedSet = new Set(reviewedIds);
     const next = await updateSettings({
-      enabledTargetIds: [...new Set([...enabledAgentIds, ...agentIds])],
+      enabledTargetIds: [
+        ...new Set([
+          ...enabledAgentIds.filter((id) => !reviewedSet.has(id)),
+          ...agentIds
+        ])
+      ],
+      agentDiscoveryReviewedIds: [
+        ...new Set([...(settings.agentDiscoveryReviewedIds ?? []), ...reviewedIds])
+      ],
       suppressedAgentSuggestionIds: [...suppressed]
     });
     if (!next) return;
@@ -166,6 +185,9 @@ export const useAgentDiscovery = ({
 
   const suppressAgentSuggestion = async (targetId: string) => {
     const next = await updateSettings({
+      agentDiscoveryReviewedIds: [
+        ...new Set([...(settings.agentDiscoveryReviewedIds ?? []), targetId])
+      ],
       suppressedAgentSuggestionIds: [
         ...new Set([...(settings.suppressedAgentSuggestionIds ?? []), targetId])
       ]
@@ -176,6 +198,8 @@ export const useAgentDiscovery = ({
 
   const restoreAgentSuggestion = async (targetId: string) => {
     await updateSettings({
+      agentDiscoveryReviewedIds: (settings.agentDiscoveryReviewedIds ?? [])
+        .filter((id) => id !== targetId),
       suppressedAgentSuggestionIds: (settings.suppressedAgentSuggestionIds ?? [])
         .filter((id) => id !== targetId)
     });

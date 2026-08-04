@@ -145,6 +145,36 @@ describe("activation service v2", () => {
     await expect(createBackupStore(paths).listBackups()).resolves.toHaveLength(1);
   });
 
+  it("reviews and removes an unselected directory that declares the selected runtime Skill name", async () => {
+    const { paths, service } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const duplicatePath = join(paths.codexHome, "skills", "review-copy");
+    await mkdir(duplicatePath, { recursive: true });
+    await writeFile(
+      join(duplicatePath, "SKILL.md"),
+      ["---", "name: review", "description: Older duplicate.", "---", "", "# Duplicate", ""].join("\n")
+    );
+
+    const preview = await service.previewProfile("daily-coding", "codex");
+
+    expect(blockingMessages(preview.issues)).toEqual([]);
+    expect(reviewMessages(preview.issues)).toEqual(expect.arrayContaining([
+      expect.stringContaining("review is not in this Profile and will be backed up and removed")
+    ]));
+    expect(preview.resourceChanges).toContainEqual(expect.objectContaining({
+      kind: "skill",
+      action: "remove",
+      path: duplicatePath
+    }));
+
+    await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual(
+      expect.objectContaining({ ok: true })
+    );
+    await expect(lstat(duplicatePath)).rejects.toThrow();
+    await expect(readFile(join(paths.codexHome, "skills", "review", "SKILL.md"), "utf8"))
+      .resolves.toContain("# Review");
+  });
+
   it("retains managed state visibility for configuration-root safety when an Agent is turned off", async () => {
     const { paths, service, settingsStore } = await makeEnv();
     await writeCodexLiveFiles(paths);

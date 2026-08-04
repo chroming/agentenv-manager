@@ -373,6 +373,14 @@ const prepareFixture = async (root) => {
     skillStorageLocation: "appData",
     skillAutoCheckEnabled: false,
     skillAutoCheckIntervalMinutes: 60,
+    agentDiscoveryReviewedIds: [
+      "opencode",
+      "codex",
+      "claude-code",
+      "antigravity",
+      "trae-cli",
+      "pi"
+    ],
     projectSkillRoots: [projectSkillRoot]
   });
   const projectSkillDir = join(projectSkillRoot, "automation", "release-safety-review");

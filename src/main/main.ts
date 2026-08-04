@@ -1030,6 +1030,7 @@ const initializeServices = () => {
                 skillAutoCheckIntervalMinutes: settings.skillAutoCheckIntervalMinutes,
                 backupRetentionDays: settings.backupRetentionDays,
                 enabledTargetIds: settings.enabledTargetIds,
+                agentDiscoveryReviewedIds: settings.agentDiscoveryReviewedIds,
                 targetConfigRoots: settings.targetConfigRoots,
                 targetCommandOverrides: settings.targetCommandOverrides
               }

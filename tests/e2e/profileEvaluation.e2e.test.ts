@@ -179,7 +179,8 @@ describe.skipIf(process.platform !== "darwin" || !gitExecutable)(
         skillAutoCheckEnabled: false,
         skillAutoCheckIntervalMinutes: 60,
         backupRetentionDays: null,
-        enabledTargetIds: ["opencode"]
+        enabledTargetIds: ["opencode"],
+        agentDiscoveryReviewedIds: ["opencode"]
       });
       await writeJson(join(profileDir, "profile.json"), {
         id: "evaluation-profile",
@@ -492,7 +493,8 @@ printf '{"type":"step_finish","part":{"modelID":"fake/e2e","cost":0.01,"tokens":
         skillAutoCheckEnabled: false,
         skillAutoCheckIntervalMinutes: 60,
         backupRetentionDays: null,
-        enabledTargetIds: ["codex"]
+        enabledTargetIds: ["codex"],
+        agentDiscoveryReviewedIds: ["codex"]
       });
       await writeJson(join(profileDir, "profile.json"), {
         id: "codex-evaluation-profile",
@@ -662,7 +664,8 @@ printf '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens
         skillAutoCheckEnabled: false,
         skillAutoCheckIntervalMinutes: 60,
         backupRetentionDays: null,
-        enabledTargetIds: ["claude-code", "antigravity", "pi", "trae-cli"]
+        enabledTargetIds: ["claude-code", "antigravity", "pi", "trae-cli"],
+        agentDiscoveryReviewedIds: ["claude-code", "antigravity", "pi", "trae-cli"]
       });
 
       const agents = [

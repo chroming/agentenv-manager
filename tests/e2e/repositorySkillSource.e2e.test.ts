@@ -226,6 +226,9 @@ describe("Repository Skill source", () => {
       const geometry = await page.locator(".skill-source-group-row").evaluate((row) => {
         const header = document.querySelector<HTMLElement>(".skill-source-table-head")!;
         const headerCells = Array.from(header.children) as HTMLElement[];
+        const sourceHeaderCell = headerCells[0]!;
+        const sourceHeaderRange = document.createRange();
+        sourceHeaderRange.selectNodeContents(sourceHeaderCell);
         const identity = row.querySelector<HTMLElement>(".skill-source-identity")!;
         const counts = row.querySelector<HTMLElement>(".skill-source-counts")!;
         const checked = row.querySelector<HTMLElement>(".skill-source-last-checked")!;
@@ -245,6 +248,8 @@ describe("Repository Skill source", () => {
           countsFit: counts.scrollWidth <= counts.clientWidth + 1,
           documentWidth: document.documentElement.scrollWidth,
           identityLeft: identity.getBoundingClientRect().left,
+          identityTextLeft: row.querySelector<HTMLElement>(".skill-source-link-text")!
+            .getBoundingClientRect().left,
           moreHeaderLeft: headerCells[4]!.getBoundingClientRect().left,
           moreLeft: more.getBoundingClientRect().left,
           moreRight: more.getBoundingClientRect().right,
@@ -255,12 +260,14 @@ describe("Repository Skill source", () => {
           statusLeft: status.getBoundingClientRect().left,
           statusFits: statusLabel.scrollWidth <= statusLabel.clientWidth + 1,
           statusToMoreGap: more.getBoundingClientRect().left - status.getBoundingClientRect().right,
+          sourceHeaderLeft: sourceHeaderRange.getBoundingClientRect().left,
           viewportWidth: document.documentElement.clientWidth
         };
       });
       expect(geometry.documentWidth).toBe(geometry.viewportWidth);
       expect(geometry.rowScrollContained).toBe(true);
       expect(geometry.countsFit).toBe(true);
+      expect(Math.abs(geometry.identityTextLeft - geometry.sourceHeaderLeft)).toBeLessThanOrEqual(1);
       expect(geometry.statusFits).toBe(true);
       expect(Math.abs(geometry.countsLeft - geometry.countsHeaderLeft)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.statusLeft - geometry.statusHeaderLeft)).toBeLessThanOrEqual(1);

@@ -16,6 +16,7 @@ import type {
   TargetState
 } from "../shared/types";
 import { createApplyIssue, dedupeApplyIssues } from "./applyIssues";
+import type { SkillDeploymentPlan } from "./skillDeploymentPlanner";
 import type { AgentTargetAdapter } from "./targets/types";
 
 export const desiredSkillTargets = (profile: ProfileDetail) =>
@@ -43,6 +44,16 @@ interface NativeSkillState {
   disabledRuntimeNames: string[];
   issues: SkillRuntimeIssue[];
 }
+
+const plannedRuntimeSkillMutationPaths = (
+  plan: SkillDeploymentPlan,
+  skillsDir?: string
+) => new Set([
+  ...plan.removalPaths.map((path) => resolve(path)),
+  ...plan.effectiveSkills
+    .filter((reference) => !reference.enabled && skillsDir)
+    .map((reference) => resolve(join(skillsDir as string, reference.targetName)))
+]);
 
 export const fingerprintRuntimeSkillPreconditions = (
   nativeState: NativeSkillState,
@@ -78,10 +89,14 @@ export const validateRuntimeSkills = async (
   profile: ProfileDetail,
   skillLibrary: SkillLibraryEntry[],
   inventory: SkillInventoryEntry[],
-  nativeState?: NativeSkillState
+  nativeState?: NativeSkillState,
+  skillDeploymentPlan?: SkillDeploymentPlan
 ) => {
   const currentNativeState =
     nativeState ?? await adapter.skills.readNativeState(targetPaths);
+  const plannedMutationPaths = skillDeploymentPlan
+    ? plannedRuntimeSkillMutationPaths(skillDeploymentPlan, targetPaths.skillsDir)
+    : new Set<string>();
   const desired = desiredRuntimeSkills(profile, skillLibrary);
   const byRuntimeName = new Map<string, typeof desired>();
   for (const item of desired) {
@@ -150,7 +165,8 @@ export const validateRuntimeSkills = async (
               normalizeSkillKey(item.runtimeName ?? item.name) === runtimeName &&
               normalizeSkillKey(item.deploymentName ?? item.id) !==
                 normalizeSkillKey(desiredItem.deploymentName) &&
-              !(item.status === "managed" && item.managedByTarget === true)
+              !(item.status === "managed" && item.managedByTarget === true) &&
+              !plannedMutationPaths.has(resolve(item.path))
           )
           .map((item) => item.path)
       )

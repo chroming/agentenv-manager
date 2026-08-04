@@ -145,12 +145,13 @@ claimed operating system. Linux uses Xvfb only as a display host; Windows,
 Linux, and macOS all execute the packaged Electron binary.
 
 DMG checksum and mount verification establish package-container integrity only.
-The current macOS release uses a fixed project-created identity and is not notarized. Release validation
-requires `codesign --verify` to accept the complete application resource seal and
-`spctl --assess` to reject it because it has no Developer ID or notarization. The
-official Homebrew Cask pins the expected Release asset and SHA-256, then removes
-quarantine only after Homebrew verifies the download. This must not be described
-as Developer ID signed, notarized, or approved by Gatekeeper.
+The current macOS release is not notarized. Direct assets use an ad-hoc resource
+seal; the distinctly named Homebrew DMGs use the fixed project-created identity.
+Release validation requires `codesign --verify` to accept both complete application
+resource seals, confirms their intended identities, and requires `spctl --assess`
+to reject both because neither has Developer ID or notarization. The official Cask
+pins only the Homebrew asset and SHA-256, then removes quarantine after verification.
+This must not be described as Developer ID signed, notarized, or approved by Gatekeeper.
 
 ## Installed Agent probe
 

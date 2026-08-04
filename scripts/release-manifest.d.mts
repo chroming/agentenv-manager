@@ -2,6 +2,7 @@ export interface ReleaseManifestAsset {
   name: string;
   platform: "mac" | "windows" | "linux";
   arch: "arm64" | "x64";
+  channel: "direct" | "homebrew";
   size: number;
   sha256: string;
   url: string;

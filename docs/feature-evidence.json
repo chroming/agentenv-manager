@@ -3,7 +3,7 @@
   "features": [
     {
       "id": "verified-macos-release-updates",
-      "summary": "Publish exact stable-identity macOS assets and update Homebrew-managed installations through the official checksum-bound Cask.",
+      "summary": "Publish ad-hoc direct macOS assets and separate stable-identity Homebrew assets, then update Cask installations through exact checksums.",
       "contract": {
         "path": "docs/superpowers/specs/2026-08-03-unsigned-release-distribution-design.md",
         "anchor": "## Release Contract"
