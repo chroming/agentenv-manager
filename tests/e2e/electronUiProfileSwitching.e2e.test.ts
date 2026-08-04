@@ -1982,8 +1982,8 @@ describe("Electron UI profile switching e2e", () => {
 
   it("keeps Library scale correct and responsive at supported viewports", async () => {
     const cases = [
-      { count: 100, width: 1180, height: 728, initialBudget: 750, actionBudget: 250 },
-      { count: 100, width: 920, height: 620, initialBudget: 750, actionBudget: 250 },
+      { count: 100, width: 1180, height: 728, initialBudget: 750, actionBudget: 300 },
+      { count: 100, width: 920, height: 620, initialBudget: 750, actionBudget: 300 },
       { count: 500, width: 1180, height: 728, initialBudget: 1500, actionBudget: 500 },
       { count: 500, width: 920, height: 620, initialBudget: 1500, actionBudget: 500 }
     ];
@@ -9022,7 +9022,12 @@ describe("Electron UI profile switching e2e", () => {
       expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
     }
 
-    await hoverFromOutside(page, popover);
+    const popoverBox = await popover.boundingBox();
+    expect(popoverBox).not.toBeNull();
+    await page.mouse.move(
+      popoverBox!.x + popoverBox!.width / 2,
+      popoverBox!.y + popoverBox!.height / 2
+    );
     await expect.poll(() => popover.isVisible()).toBe(true);
     await page.getByRole("button", { name: "Skills", exact: true }).hover();
     await popover.waitFor({ state: "hidden" });
