@@ -7,6 +7,19 @@ versioning after its first stable release.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-05
+
+### Fixed
+
+- Prompt for installed Agents once on upgraded installations as well as clean
+  installations, then persist the reviewed selection.
+- Apply a captured Profile after resolving duplicate runtime Skill names without
+  blocking again on the copy already scheduled for backup and removal.
+- Align Agents and Skill Library list headers at every supported window size.
+- Publish separate ad-hoc direct-download and fixed-identity Homebrew macOS
+  assets so direct downloads can use macOS Open Anyway while Homebrew retains a
+  stable Keychain identity.
+
 ## [0.1.0] - 2026-08-04
 
 Initial public release.
