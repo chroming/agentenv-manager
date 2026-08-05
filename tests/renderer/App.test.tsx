@@ -1109,10 +1109,13 @@ describe("App", () => {
       .toBeInTheDocument();
     expect(within(editor).getByRole("button", { name: "Import skills" }))
       .toBeInTheDocument();
-    expect(within(editor).queryByRole("button", { name: "Scan local" }))
-      .not.toBeInTheDocument();
-    expect(within(editor).getByRole("button", { name: "More Skill actions" }))
+    expect(within(editor).getByRole("button", { name: "Local Skills" }))
       .toBeInTheDocument();
+    expect(within(editor).queryByRole("button", { name: "More Skill actions" }))
+      .not.toBeInTheDocument();
+    const refreshSkills = within(editor).getByRole("button", { name: "Refresh skills" });
+    expect(refreshSkills).toHaveClass("ui-button", "ui-button--secondary");
+    expect(refreshSkills).toHaveTextContent("Refresh");
   });
 
   it("opens an indexed conversation directly from Quick Open content search", async () => {
@@ -1339,8 +1342,7 @@ describe("App", () => {
 
   const openRecoveryHistory = async () => {
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
-    fireEvent.click(await screen.findByRole("button", { name: "More Agent actions" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Recovery" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Recovery" }));
     const dialog = await screen.findByRole("dialog", { name: "Recovery" });
     return within(dialog).getByRole("region", { name: "History" });
   };
@@ -2301,8 +2303,7 @@ describe("App", () => {
     await screen.findByRole("region", { name: "Skill library" });
     expect(api.scanSkillInventory).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "More Skill actions" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Scan local" }));
+    fireEvent.click(screen.getByRole("button", { name: "Local Skills" }));
 
     expect(await screen.findByRole("region", { name: "Environment skills" })).toBeInTheDocument();
     expect(api.scanSkillInventory).toHaveBeenCalledTimes(2);
@@ -2547,8 +2548,9 @@ describe("App", () => {
     expect(await screen.findByText("Logs & diagnostics")).toBeInTheDocument();
     const logsButton = screen.getByRole("button", { name: "Open logs" });
     expect(logsButton).toHaveClass("ui-button", "ui-button--secondary");
-    fireEvent.click(screen.getByRole("button", { name: "More diagnostics actions" }));
-    const copyAction = screen.getByRole("menuitem", { name: "Copy latest issue" });
+    const copyAction = await screen.findByRole("button", { name: "Copy latest issue" });
+    expect(screen.queryByRole("button", { name: "More diagnostics actions" }))
+      .not.toBeInTheDocument();
     fireEvent.click(copyAction);
     await waitFor(() =>
       expect(api.copyText).toHaveBeenCalledWith(expect.stringContaining("Inventory failed"))
@@ -4931,9 +4933,7 @@ describe("App", () => {
 
     await screen.findByRole("region", { name: "Agents" });
     expect(screen.queryByRole("region", { name: "History" })).not.toBeInTheDocument();
-    const recoveryTrigger = screen.getByRole("button", { name: "More Agent actions" });
-    fireEvent.click(recoveryTrigger);
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Recovery" }));
+    fireEvent.click(screen.getByRole("button", { name: "Recovery" }));
     const recoveryDialog = await screen.findByRole("dialog", { name: "Recovery" });
     const history = within(recoveryDialog).getByRole("region", { name: "History" });
     fireEvent.click(

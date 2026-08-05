@@ -1103,8 +1103,7 @@ const openSkillLibrary = async (page: Page) => {
 };
 
 const openLocalSkills = async (page: Page) => {
-  await page.getByRole("button", { name: "More Skill actions" }).click();
-  await page.getByRole("menuitem", { name: "Scan local" }).click();
+  await page.getByRole("button", { name: "Local Skills" }).click();
 };
 
 const openAgentActionMenu = async (
@@ -4496,15 +4495,16 @@ describe("Electron UI profile switching e2e", () => {
     expect(targetPeerActions[0]).toMatchObject({
       background: "rgba(0, 0, 0, 0)",
       border: "rgba(0, 0, 0, 0)",
-      height: 30
+      height: 28
     });
     expect(targetPeerActions[1]).toMatchObject({
       color: "rgb(29, 29, 31)",
-      height: 30
+      height: 28
     });
     expect(targetPeerActions[1].background).not.toBe(targetPeerActions[0].background);
     expect(targetPeerActions[1].border).not.toBe(targetPeerActions[0].border);
-    await expectInViewport(page, page.getByRole("button", { name: "More Agent actions" }));
+    expect(await page.getByRole("button", { name: "Recovery" }).count()).toBe(0);
+    expect(await page.getByRole("button", { name: "More Agent actions" }).count()).toBe(0);
     expect(await page.getByRole("dialog", { name: "Recovery" }).count()).toBe(0);
 
     const dimensions = await page.evaluate(() => ({
@@ -5648,10 +5648,8 @@ describe("Electron UI profile switching e2e", () => {
     expect(await openCodeCard.getByRole("region", { name: "OpenCode diagnostics" }).count()).toBe(0);
 
     expect(await page.getByRole("button", { name: "Activity", exact: true }).count()).toBe(0);
-    await page.getByRole("button", { name: "More Agent actions" }).click();
-    const recoveryAction = page.getByRole("menuitem", { name: "Recovery" });
-    expect(await recoveryAction.isDisabled()).toBe(true);
-    await page.keyboard.press("Escape");
+    expect(await page.getByRole("button", { name: "Recovery" }).count()).toBe(0);
+    expect(await page.getByRole("button", { name: "More Agent actions" }).count()).toBe(0);
 
     await codexCard.getByRole("button", { name: "Codex", exact: true }).click();
     await page.getByRole("region", { name: "Profiles" }).waitFor({ state: "visible" });

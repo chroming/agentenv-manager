@@ -4015,6 +4015,11 @@ const AppContent = ({
       selectWorkspace("library");
     },
     onOpenTarget: openAgentConfiguration,
+    onOpenLocalSkills: () => {
+      setSkillLibraryMode("skills");
+      selectWorkspace("library");
+      void openSkillDiscoveries();
+    },
     onRefreshSkills: refreshSkills,
     onRefreshTargets: refreshTargets
   });

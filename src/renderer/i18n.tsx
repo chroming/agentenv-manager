@@ -1379,6 +1379,7 @@ Object.assign(zhCN, {
   "{{name}} workspace": "{{name}} 工作区",
   "Library is the shared resource layer. Profiles reference these skills and MCP servers instead of duplicating files in every profile.": "资源库是共享资源层。配置方案引用其中的技能与 MCP 服务器，无需在每个配置方案中重复文件。",
   "Import": "导入",
+  "Local Skills": "本地技能",
   "Scan local": "扫描本地技能",
   "Review local Skill copies, add a canonical version to Library, and remove redundant copies with a restorable backup.": "查看本地技能副本，将唯一版本加入资源库，并通过可恢复备份移除冗余副本。",
   "Library keeps the canonical copy. Target-specific folders are deployments. Shared compatibility folders are preserved until every installed consumer is managed.": "资源库保存唯一原件，目标专属目录是部署结果；共享目录会保留到所有已安装目标都完成迁移准备。",
@@ -2157,6 +2158,7 @@ Object.assign(zhCN, {
 });
 
 const zhTW: Record<string, string> = {
+  "Local Skills": "本機技能",
   "Choose which local Agents AgentEnv displays and can manage. Detection remains read-only.": "選擇 AgentEnv 要顯示並可管理的本機 Agents。安裝偵測始終為唯讀。",
   "Choose Agents": "選擇 Agents",
   "AgentEnv found installed Agents. Enabling only adds them to AgentEnv; it does not Capture, Apply, or change Agent files.": "AgentEnv 偵測到已安裝的 Agents。啟用只會將其加入 AgentEnv，不會擷取設定、套用方案或修改 Agent 檔案。",

@@ -32,8 +32,7 @@ import {
   focusInitialActionMenuItem,
   IconButton,
   ModalFrame,
-  PageHeader,
-  ToolbarOverflowMenu
+  PageHeader
 } from "./ui";
 import { isTargetInstalled } from "../../shared/targetHealth";
 import type { EnvironmentReviewSummary } from "../environmentReview";
@@ -308,19 +307,16 @@ export const TargetWorkspace = ({
         actions={(
           <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
             <FreshnessStatus state={freshness} verb="Refreshed" />
-            <ToolbarOverflowMenu
-              ref={recoveryTriggerRef}
-              label={t("More Agent actions")}
-              disabled={busy || isLoading}
-              menuLabel={t("Agent actions")}
-              items={[{
-                id: "recovery",
-                label: t("Recovery"),
-                disabled: backups.length === 0,
-                icon: <ArchiveRestore size={15} strokeWidth={2.2} aria-hidden="true" />,
-                onSelect: () => setIsRecoveryOpen(true)
-              }]}
-            />
+            {backups.length > 0 ? (
+              <Button
+                ref={recoveryTriggerRef}
+                disabled={busy || isLoading}
+                icon={<ArchiveRestore size={15} strokeWidth={2.2} aria-hidden="true" />}
+                onClick={() => setIsRecoveryOpen(true)}
+              >
+                {t("Recovery")}
+              </Button>
+            ) : null}
             <Button
               busy={freshness.status === "refreshing"}
               disabled={busy || isLoading || freshness.status === "refreshing"}

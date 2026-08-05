@@ -1,4 +1,4 @@
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, ScanLine } from "lucide-react";
 import type {
   ConversationSummary,
   ProfileSummary,
@@ -19,6 +19,7 @@ interface QuickOpenItemOptions {
   onOpenProfile(id: string): void;
   onOpenSkill(skill: SkillLibraryEntry): void;
   onOpenTarget(id: string): void;
+  onOpenLocalSkills(): void | Promise<void>;
   onRefreshSkills(): void | Promise<void>;
   onRefreshTargets(): void | Promise<void>;
 }
@@ -47,6 +48,7 @@ export const buildQuickOpenItems = ({
   onOpenProfile,
   onOpenSkill,
   onOpenTarget,
+  onOpenLocalSkills,
   onRefreshSkills,
   onRefreshTargets
 }: QuickOpenItemOptions): QuickOpenItem[] => [
@@ -117,6 +119,13 @@ export const buildQuickOpenItems = ({
     icon: <ProductIcon name="agents" />,
     onSelect: () => onOpenTarget(target.id)
   })),
+  {
+    id: "action:local-skills",
+    group: t("Actions"),
+    label: t("Local Skills"),
+    icon: <ScanLine size={16} strokeWidth={2.2} />,
+    onSelect: onOpenLocalSkills
+  },
   {
     id: "action:refresh-skills",
     group: t("Actions"),

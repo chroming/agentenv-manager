@@ -49,9 +49,12 @@ describe("product icon semantics", () => {
       onOpenProfile: noop,
       onOpenSkill: noop,
       onOpenTarget: noop,
+      onOpenLocalSkills: noop,
       onRefreshSkills: noop,
       onRefreshTargets: noop
     });
+    expect(items.find((candidate) => candidate.id === "action:local-skills"))
+      .toMatchObject({ label: "Local Skills" });
     const expected = new Map([
       ["workspace:targets", "agents"],
       ["workspace:profiles", "profiles"],

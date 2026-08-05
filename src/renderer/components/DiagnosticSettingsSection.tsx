@@ -1,7 +1,7 @@
 import { Copy, FileDown, FolderOpen } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "../i18n";
-import { Button, ToolbarOverflowMenu } from "./ui";
+import { Button, IconButton } from "./ui";
 
 export const DiagnosticSettingsSection = ({
   busy,
@@ -16,6 +16,21 @@ export const DiagnosticSettingsSection = ({
 }) => {
   const { t } = useI18n();
   const [exporting, setExporting] = useState(false);
+  const [hasLatestIssue, setHasLatestIssue] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void window.agentEnv.readLatestDiagnosticIssue()
+      .then((issue) => {
+        if (active) setHasLatestIssue(Boolean(issue));
+      })
+      .catch(() => {
+        if (active) setHasLatestIssue(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const exportReport = async () => {
     setExporting(true);
@@ -41,7 +56,7 @@ export const DiagnosticSettingsSection = ({
           </p>
         </div>
       </div>
-      <div className="diagnostics-settings-actions">
+      <div className="diagnostics-settings-actions settings-row-actions">
         <Button
           busy={exporting}
           disabled={busy || exporting}
@@ -57,17 +72,15 @@ export const DiagnosticSettingsSection = ({
         >
           {t("Open logs")}
         </Button>
-        <ToolbarOverflowMenu
-          disabled={busy || exporting}
-          label={t("More diagnostics actions")}
-          menuLabel={t("Diagnostics actions")}
-          items={[{
-            id: "copy-latest",
-            label: t("Copy latest issue"),
-            icon: <Copy size={15} strokeWidth={2.2} aria-hidden="true" />,
-            onSelect: () => void onCopyLatest()
-          }]}
-        />
+        {hasLatestIssue ? (
+          <IconButton
+            disabled={busy || exporting}
+            label={t("Copy latest issue")}
+            onClick={() => void onCopyLatest()}
+          >
+            <Copy size={15} strokeWidth={2.2} aria-hidden="true" />
+          </IconButton>
+        ) : null}
       </div>
     </section>
   );
