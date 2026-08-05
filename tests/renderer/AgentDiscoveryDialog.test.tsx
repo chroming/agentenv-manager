@@ -61,15 +61,14 @@ describe("AgentDiscoveryDialog", () => {
           agent("opencode", "OpenCode", true),
           agent("codex", "Codex", false)
         ]}
+        allowSuggestionPreferences={false}
         busy={false}
         open
         phase="choose"
         setupActions={{}}
-        suppressedAgentIds={[]}
         onConfigure={vi.fn()}
         onDismiss={vi.fn()}
         onEnable={vi.fn().mockResolvedValue(undefined)}
-        onRestore={vi.fn().mockResolvedValue(undefined)}
         onSuppress={vi.fn().mockResolvedValue(undefined)}
       />
     );

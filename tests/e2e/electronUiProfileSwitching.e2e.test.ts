@@ -552,6 +552,7 @@ const launchApp = async (
     includeTraeTarget?: boolean;
     includePiTarget?: boolean;
     enabledTargetIds?: string[];
+    agentDiscoveryVersion?: number | null;
     agentDiscoveryReviewedIds?: string[];
     suppressedAgentSuggestionIds?: string[];
     openCodeBetaProfileName?: string;
@@ -603,6 +604,9 @@ const launchApp = async (
     skillAutoCheckIntervalMinutes: 60,
     backupRetentionDays: null,
     enabledTargetIds,
+    ...(options.agentDiscoveryVersion === null
+      ? {}
+      : { agentDiscoveryVersion: options.agentDiscoveryVersion ?? 1 }),
     agentDiscoveryReviewedIds: options.agentDiscoveryReviewedIds ?? supportedTargetIds,
     suppressedAgentSuggestionIds:
       options.suppressedAgentSuggestionIds ??
@@ -9288,6 +9292,7 @@ describe("Electron UI profile switching e2e", () => {
   it("offers detected Agents without changing their files until the user enables one", async () => {
     const { appDataRoot, opencodeDir, codexDir, page } = await launchApp({
       enabledTargetIds: [],
+      agentDiscoveryVersion: null,
       agentDiscoveryReviewedIds: [],
       omitAllProfiles: true,
       suppressedAgentSuggestionIds: [],
@@ -9320,16 +9325,19 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(async () => {
       const settings = await readJson<{
         enabledTargetIds?: string[];
+        agentDiscoveryVersion?: number;
         agentDiscoveryReviewedIds?: string[];
       }>(
         join(appDataRoot, "settings.json")
       );
       return {
         enabledTargetIds: settings.enabledTargetIds,
+        discoveryVersion: settings.agentDiscoveryVersion,
         reviewedIds: settings.agentDiscoveryReviewedIds
       };
     }).toEqual({
       enabledTargetIds: ["opencode"],
+      discoveryVersion: 1,
       reviewedIds: ["opencode", "codex"]
     });
     const setupDialog = page.getByRole("dialog", { name: "Agents enabled" });
@@ -9369,6 +9377,62 @@ describe("Electron UI profile switching e2e", () => {
       .toBe(before.opencodeInstructions);
     expect(await readFile(join(opencodeDir, "opencode.jsonc"), "utf8"))
       .toBe(before.opencodeConfig);
+  }, standardElectronTestTimeout);
+
+  it("recalibrates an older all-enabled Agent scope once and keeps missing Agents off", async () => {
+    const { appDataRoot, page } = await launchApp({
+      enabledTargetIds: [
+        "opencode",
+        "claude-code",
+        "codex",
+        "antigravity",
+        "trae-cli",
+        "pi"
+      ],
+      agentDiscoveryVersion: null,
+      agentDiscoveryReviewedIds: [
+        "opencode",
+        "claude-code",
+        "codex",
+        "antigravity",
+        "trae-cli",
+        "pi"
+      ],
+      suppressedAgentSuggestionIds: [],
+      omitAllProfiles: true,
+      initialWorkspace: null
+    });
+
+    const dialog = page.getByRole("dialog", { name: "Choose Agents" });
+    await dialog.waitFor({ state: "visible" });
+    await resizeAppWindow(page, 920, 620);
+    await expectNoHorizontalOverflow(page, [".agent-discovery-dialog", ".agent-discovery-list"]);
+    expect(await dialog.getByRole("checkbox", { name: "OpenCode" }).isChecked()).toBe(true);
+    expect(await dialog.getByRole("checkbox", { name: "Codex" }).isChecked()).toBe(true);
+    expect(await dialog.getByRole("checkbox", { name: "Claude Code" }).isChecked()).toBe(false);
+    expect(await dialog.getByRole("checkbox", { name: "Antigravity" }).isChecked()).toBe(false);
+    expect(await dialog.getByRole("checkbox", { name: "Trae CLI" }).isChecked()).toBe(false);
+    expect(await dialog.getByRole("checkbox", { name: "Pi" }).isChecked()).toBe(false);
+    if (process.env.AGENTENV_AGENT_DISCOVERY_CAPTURE_DIR) {
+      await mkdir(process.env.AGENTENV_AGENT_DISCOVERY_CAPTURE_DIR, { recursive: true });
+      await page.screenshot({
+        path: join(
+          process.env.AGENTENV_AGENT_DISCOVERY_CAPTURE_DIR,
+          "agent-recalibration-920x620.png"
+        )
+      });
+    }
+    await dialog.getByRole("button", { name: "Enable 2 Agents" }).click();
+
+    await expect.poll(async () => readJson<{
+      enabledTargetIds?: string[];
+      agentDiscoveryVersion?: number;
+      agentDiscoveryReviewedIds?: string[];
+    }>(join(appDataRoot, "settings.json"))).toEqual(expect.objectContaining({
+      enabledTargetIds: ["opencode", "codex"],
+      agentDiscoveryVersion: 1,
+      agentDiscoveryReviewedIds: ["opencode", "codex"]
+    }));
   }, standardElectronTestTimeout);
 
   it("persists enabled Agents and excludes disabled Agents from operations", async () => {
@@ -9426,6 +9490,9 @@ describe("Electron UI profile switching e2e", () => {
     }
 
     await openCodeSwitch.click();
+
+    expect(await page.getByRole("button", { name: "Suggest OpenCode again" }).count())
+      .toBe(0);
 
     await expect
       .poll(async () => {

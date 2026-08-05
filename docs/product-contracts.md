@@ -421,16 +421,19 @@ Preview/Apply transaction, never a second editor or a reduced resource model.
   for repair, or start the ordinary read-only Create from Target flow. Multiple enabled Agents
   remain independent rows and MUST NOT trigger a chained sequence of Capture dialogs.
 - `Not now`, closing the dialog, and Escape skip only the current application launch. A user MAY
-  suppress one detected Agent persistently with `Don't suggest again`; Settings MUST show that
-  choice and provide a reversible `Suggest again` action. Turning an Agent off manually also
-  suppresses future automatic suggestions until the user reverses that choice.
+  suppress one detected Agent persistently with `Don't suggest again`. Turning an Agent off also
+  counts as reviewing that Agent, so it remains off without creating a second row-level action.
+  Explicitly suppressed reminders are reversible from the advanced discovery-reminder section in
+  Settings; restoring them changes only future suggestions, never Agent enablement or Agent files,
+  and the Settings result MUST be immediately visible.
 - Existing installations whose stored settings predate the enabled-Agent field preserve the
   previous all-enabled scope during migration. An explicit empty enabled list MUST remain empty.
-- Agent discovery review is persisted independently from enabled scope. Existing installations
-  whose settings predate discovery review MUST receive the read-only chooser once even when legacy
-  migration enabled every Agent. Confirming records every displayed Agent as reviewed and persists
-  the exact checked enabled set; `Not now` remains launch-local, and an Agent first detected later
-  remains eligible for its own future suggestion.
+- Agent discovery review is persisted independently from enabled scope and carries a review-version
+  marker. Existing installations whose settings predate the current review version MUST receive the
+  read-only chooser once even when legacy migration enabled every Agent or an older build wrote
+  reviewed IDs. Confirming persists the exact checked enabled set, records only currently installed
+  Agents as reviewed, and advances the review version. `Not now` remains launch-local, and an Agent
+  first detected later remains eligible for its own future suggestion.
 - Supported, detected, enabled, and managed are distinct states. The all-supported detection
   probe is read-only and MUST NOT weaken operation guards: operational Target APIs continue to
   expose enabled Agents only.

@@ -304,6 +304,7 @@ try {
   }
   await writeJson(join(appDataRoot, "settings.json"), {
     enabledTargetIds: packagedTargets.map((target) => target.id),
+    agentDiscoveryVersion: 1,
     agentDiscoveryReviewedIds: packagedTargets.map((target) => target.id)
   });
 

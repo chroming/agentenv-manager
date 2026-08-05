@@ -1612,13 +1612,13 @@ const AppContent = ({
     pendingSkillImport || pendingProfileAction || profileDialogMode || deleteProfileCandidateId || dataRestorePreview || backupManagerOpen
   );
   const {
-    agentProbeComplete, detectedDisabledAgents,
+    agentProbeComplete, allowSuggestionPreferences, detectedDisabledAgents,
     dialogPhase: agentDiscoveryDialogPhase,
     dialogOpen: agentDiscoveryDialogOpen,
     discoveredTargets, enabledAgentIds, visibleAgentSuggestions,
     chooseTargetConfigRoot, dismissAgentSuggestions, enableSuggestedAgents,
     openAgentChooser, probeSupportedAgents, resetTargetConfigRoot,
-    restoreAgentSuggestion, setAgentEnabled, setDiscoveredTargets, setTargetCommandOverride,
+    restoreAllAgentSuggestions, setAgentEnabled, setDiscoveredTargets, setTargetCommandOverride,
     suppressAgentSuggestion
   } = useAgentDiscovery({
     appModalOpen,
@@ -4917,10 +4917,7 @@ const AppContent = ({
               suppressedAgentIds={skillSettings.suppressedAgentSuggestionIds ?? []}
               busy={busy}
               onSetEnabled={setAgentEnabled}
-              onSetSuggestionSuppressed={(agentId, suppressed) =>
-                suppressed
-                  ? suppressAgentSuggestion(agentId)
-                  : restoreAgentSuggestion(agentId)}
+              onRestoreAgentSuggestions={restoreAllAgentSuggestions}
               onOpenRecovery={() => openWorkspaceNow("targets")}
               configRoots={skillSettings.targetConfigRoots ?? {}}
               commandOverrides={skillSettings.targetCommandOverrides ?? {}}
@@ -5115,18 +5112,17 @@ const AppContent = ({
         />
         <AgentDiscoveryDialog
           agents={visibleAgentSuggestions}
+          allowSuggestionPreferences={allowSuggestionPreferences}
           busy={busy}
           open={agentDiscoveryDialogOpen}
           phase={agentDiscoveryDialogPhase}
           setupActions={agentSetupActions}
-          suppressedAgentIds={skillSettings.suppressedAgentSuggestionIds ?? []}
           onDismiss={dismissAgentSuggestions}
           onEnable={enableSuggestedAgents}
           onConfigure={(targetId) => {
             dismissAgentSuggestions();
             openAgentConfiguration(targetId);
           }}
-          onRestore={restoreAgentSuggestion}
           onSuppress={suppressAgentSuggestion}
         />
       </section>

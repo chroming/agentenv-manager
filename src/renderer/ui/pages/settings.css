@@ -573,6 +573,28 @@
   margin-bottom: 8px;
 }
 
+.agent-suggestion-preference {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 52px;
+  padding: 7px 2px;
+}
+
+@container (max-width: 480px) {
+  .agent-suggestion-preference {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agent-suggestion-preference > .ui-button {
+    justify-self: start;
+  }
+}
+
 .agent-path-row {
   align-items: center;
   display: grid;

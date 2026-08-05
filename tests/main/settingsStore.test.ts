@@ -196,12 +196,15 @@ describe("settings store", () => {
 
     await expect(store.updateSettings({
       enabledTargetIds: ["opencode"],
+      agentDiscoveryVersion: 1,
       agentDiscoveryReviewedIds: ["opencode", "codex", "codex", "unknown"]
     })).resolves.toEqual(expect.objectContaining({
       enabledTargetIds: ["opencode"],
+      agentDiscoveryVersion: 1,
       agentDiscoveryReviewedIds: ["opencode", "codex"]
     }));
     await expect(store.readSettings()).resolves.toEqual(expect.objectContaining({
+      agentDiscoveryVersion: 1,
       agentDiscoveryReviewedIds: ["opencode", "codex"]
     }));
   });

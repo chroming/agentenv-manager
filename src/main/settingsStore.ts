@@ -19,6 +19,7 @@ export const SettingsSchema = z.object({
   telemetryEnabled: z.boolean().default(true),
   backupRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).default(null),
   enabledTargetIds: z.array(z.string().min(1)).optional(),
+  agentDiscoveryVersion: z.number().int().positive().optional(),
   agentDiscoveryReviewedIds: z.array(z.string().min(1)).optional(),
   suppressedAgentSuggestionIds: z.array(z.string().min(1)).optional(),
   targetConfigRoots: z.record(z.string().min(1), z.string().min(1)).optional(),

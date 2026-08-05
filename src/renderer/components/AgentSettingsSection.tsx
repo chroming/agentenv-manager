@@ -19,7 +19,7 @@ interface AgentSettingsSectionProps {
   suppressedAgentIds: string[];
   busy: boolean;
   onSetEnabled(agentId: string, enabled: boolean): Promise<void>;
-  onSetSuggestionSuppressed(agentId: string, suppressed: boolean): Promise<void>;
+  onRestoreAgentSuggestions(): Promise<void>;
   onOpenRecovery(): void;
   configRoots: Record<string, string>;
   commandOverrides: Record<string, string>;
@@ -44,7 +44,7 @@ export const AgentSettingsSection = ({
   suppressedAgentIds,
   busy,
   onSetEnabled,
-  onSetSuggestionSuppressed,
+  onRestoreAgentSuggestions,
   onOpenRecovery,
   configRoots,
   commandOverrides,
@@ -63,6 +63,7 @@ export const AgentSettingsSection = ({
     commandOverrides
   );
   const [pendingCommandAgentId, setPendingCommandAgentId] = useState<string>();
+  const [restoringSuggestions, setRestoringSuggestions] = useState(false);
   const dialogRef = useRef<HTMLElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -71,6 +72,9 @@ export const AgentSettingsSection = ({
   const agentsById = new Map(agents.map((agent) => [agent.id, agent]));
   const statesById = new Map(agentStates.map((state) => [state.targetId, state]));
   const suppressedIds = new Set(suppressedAgentIds);
+  const suppressedAgentNames = supportedAgents
+    .filter((agent) => suppressedIds.has(agent.id))
+    .map((agent) => agent.name);
 
   useEffect(() => {
     setCommandDrafts(commandOverrides);
@@ -144,6 +148,15 @@ export const AgentSettingsSection = ({
     }
   };
 
+  const restoreSuggestions = async () => {
+    setRestoringSuggestions(true);
+    try {
+      await onRestoreAgentSuggestions();
+    } finally {
+      setRestoringSuggestions(false);
+    }
+  };
+
   return (
     <>
       <section className="resource-section settings-section" aria-labelledby="agent-settings-heading">
@@ -190,17 +203,6 @@ export const AgentSettingsSection = ({
                       {t("Open Recovery")}
                     </button>
                   ) : null}
-                  {!enabled && suppressedIds.has(agent.id) ? (
-                    <button
-                      className="text-action"
-                      type="button"
-                      disabled={busy || Boolean(pendingAgentId)}
-                      aria-label={t("Suggest {{name}} again", { name: agent.name })}
-                      onClick={() => void onSetSuggestionSuppressed(agent.id, false)}
-                    >
-                      {t("Suggest again")}
-                    </button>
-                  ) : null}
                 </div>
                 <Switch
                   checked={enabled}
@@ -212,6 +214,32 @@ export const AgentSettingsSection = ({
             );
           })}
         </div>
+        <details className="agent-path-settings agent-suggestion-settings">
+          <summary>{t("Future Agent suggestions")}</summary>
+          <p className="settings-muted">
+            {t("Turning an Agent off keeps it off. Restore suggestions only if you want AgentEnv to notify you when an ignored Agent is detected again.")}
+          </p>
+          <div className="agent-suggestion-preference">
+            <span className="agent-path-copy">
+              <strong>{t("Automatic suggestions")}</strong>
+              <small className="agent-path-value">
+                {suppressedAgentNames.length > 0
+                  ? t("Won't suggest: {{names}}", { names: suppressedAgentNames.join(", ") })
+                  : t("No Agent suggestions are ignored")}
+              </small>
+            </span>
+            {suppressedAgentNames.length > 0 ? (
+              <Button
+                size="compact"
+                busy={restoringSuggestions}
+                disabled={busy || restoringSuggestions}
+                onClick={() => void restoreSuggestions()}
+              >
+                {t("Allow future suggestions")}
+              </Button>
+            ) : null}
+          </div>
+        </details>
         <details className="agent-path-settings">
           <summary>{t("Custom folders")}</summary>
           <p className="settings-muted">

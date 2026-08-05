@@ -10,29 +10,27 @@ import { Button, ModalFrame } from "./ui";
 
 interface AgentDiscoveryDialogProps {
   agents: TargetInfo[];
+  allowSuggestionPreferences: boolean;
   busy: boolean;
   open: boolean;
   phase: "choose" | "setup";
   setupActions: Record<string, AgentSetupAction>;
-  suppressedAgentIds: string[];
   onConfigure(agentId: string): void;
   onDismiss(): void;
   onEnable(agentIds: string[]): Promise<void>;
-  onRestore(agentId: string): Promise<void>;
   onSuppress(agentId: string): Promise<void>;
 }
 
 export const AgentDiscoveryDialog = ({
   agents,
+  allowSuggestionPreferences,
   busy,
   open,
   phase,
   setupActions,
-  suppressedAgentIds,
   onConfigure,
   onDismiss,
   onEnable,
-  onRestore,
   onSuppress
 }: AgentDiscoveryDialogProps) => {
   const { t } = useI18n();
@@ -62,7 +60,6 @@ export const AgentDiscoveryDialog = ({
   });
 
   const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
-  const suppressed = useMemo(() => new Set(suppressedAgentIds), [suppressedAgentIds]);
   if (!open) return null;
   const setupPhase = phase === "setup";
   const dialogTitle = setupPhase ? t("Agents enabled") : t("Choose Agents");
@@ -158,21 +155,17 @@ export const AgentDiscoveryDialog = ({
                 <Button size="compact" disabled={busy} onClick={() => onConfigure(agent.id)}>
                   {setupLabel}
                 </Button>
-              ) : (
+              ) : allowSuggestionPreferences && installed ? (
                 <button
                   className="text-action agent-discovery-suppress"
                   type="button"
                   disabled={busy}
-                  aria-label={suppressed.has(agent.id)
-                    ? t("Suggest {{name}} again", { name: agent.name })
-                    : t("Don't suggest {{name}} again", { name: agent.name })}
-                  onClick={() => void (suppressed.has(agent.id)
-                    ? onRestore(agent.id)
-                    : onSuppress(agent.id))}
+                  aria-label={t("Don't suggest {{name}} again", { name: agent.name })}
+                  onClick={() => void onSuppress(agent.id)}
                 >
-                  {t(suppressed.has(agent.id) ? "Suggest again" : "Don't suggest again")}
+                  {t("Don't suggest again")}
                 </button>
-              )}
+              ) : null}
             </div>
           );
         })}
