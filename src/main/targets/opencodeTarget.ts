@@ -14,6 +14,7 @@ import type {
 } from "../../shared/types";
 import { profileManagesResource } from "../../shared/profileResources";
 import { createApplyIssue } from "../applyIssues";
+import { createProjectCapability } from "../projects/projectCapability";
 import { createOpenCodeConversationCapability } from "./conversations/opencodeConversations";
 import { createOpenCodeEvaluationCapability } from "./evaluations/opencodeEvaluation";
 import { createUnifiedDiff } from "../diff";
@@ -194,6 +195,27 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     }, { homeDir });
   },
   skills,
+  projects: createProjectCapability({
+    support: {
+      instructions: { inspect: "supported", mutate: "supported" },
+      skills: { inspect: "supported", mutate: "supported" },
+      mcp: { inspect: "partial", mutate: "unsupported" },
+      effectivePreview: "partial",
+      cliLaunch: "supported"
+    },
+    instructionFiles: ["AGENTS.md", "CLAUDE.md"],
+    skillDirectories: [".opencode/skills", ".claude/skills", ".agents/skills"],
+    mcpFiles: ["opencode.json", "opencode.jsonc"],
+    compareResourcePaths: [
+      "opencode.json",
+      "opencode.jsonc",
+      ".opencode",
+      "AGENTS.md",
+      "CLAUDE.md",
+      ".claude/skills",
+      ".agents/skills"
+    ]
+  }),
   conversations: createOpenCodeConversationCapability(),
   evaluations: createOpenCodeEvaluationCapability(),
   createDefaultProfile: (id) => ({

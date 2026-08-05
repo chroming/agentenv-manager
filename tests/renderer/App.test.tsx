@@ -373,6 +373,21 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     releaseSkillArchive: vi.fn().mockResolvedValue(undefined),
     selectTargetConfigRoot: vi.fn().mockResolvedValue(undefined),
     selectComparisonWorkspace: vi.fn().mockResolvedValue(undefined),
+    selectProjectFolder: vi.fn().mockResolvedValue(undefined),
+    listProjects: vi.fn().mockResolvedValue([]),
+    findProjectByPath: vi.fn().mockResolvedValue(undefined),
+    addProject: vi.fn().mockRejectedValue(new Error("Project unavailable")),
+    updateProject: vi.fn().mockRejectedValue(new Error("Project unavailable")),
+    removeProject: vi.fn().mockRejectedValue(new Error("Project unavailable")),
+    inspectProject: vi.fn().mockRejectedValue(new Error("Project unavailable")),
+    previewProject: vi.fn().mockRejectedValue(new Error("Project unavailable")),
+    openProject: vi.fn().mockRejectedValue(new Error("Project unavailable")),
+    readProjectResource: vi.fn().mockRejectedValue(new Error("Project unavailable")),
+    saveProjectResource: vi.fn().mockRejectedValue(new Error("Project unavailable")),
+    addProjectSkill: vi.fn().mockRejectedValue(new Error("Project unavailable")),
+    removeProjectSkill: vi.fn().mockRejectedValue(new Error("Project unavailable")),
+    listProjectRecovery: vi.fn().mockResolvedValue([]),
+    restoreProjectRecovery: vi.fn().mockRejectedValue(new Error("Project unavailable")),
     probeSupportedTargets: vi.fn().mockResolvedValue([target, codexTarget]),
     previewProfileComparison: vi.fn().mockRejectedValue(new Error("Comparison unavailable")),
     startProfileComparison: vi.fn().mockRejectedValue(new Error("Comparison unavailable")),
@@ -1072,18 +1087,107 @@ describe("App", () => {
 
     const navigation = screen.getByRole("navigation", { name: "Workspace" });
     const agents = within(navigation).getByRole("button", { name: "Agents" });
+    const projects = within(navigation).getByRole("button", { name: "Projects" });
     const profiles = within(navigation).getByRole("button", { name: "Profiles" });
     const conversations = within(navigation).getByRole("button", {
       name: "Conversations"
     });
     const skills = within(navigation).getByRole("button", { name: "Skills" });
 
-    expect(agents.compareDocumentPosition(profiles) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(agents.compareDocumentPosition(projects) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+    expect(projects.compareDocumentPosition(profiles) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
     expect(profiles.compareDocumentPosition(conversations) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
     expect(conversations.compareDocumentPosition(skills) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
+  });
+
+  it("adds and removes a Project reference without presenting a folder delete action", async () => {
+    const addedProject = {
+      id: "project-example",
+      name: "example",
+      rootPath: "/work/example",
+      createdAt: "2026-08-06T00:00:00.000Z",
+      lastOpenedAt: "2026-08-06T00:00:00.000Z",
+      exists: true
+    };
+    const listProjects = vi.fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([addedProject])
+      .mockResolvedValueOnce([{ ...addedProject, lastAgentId: "opencode" }])
+      .mockResolvedValueOnce([]);
+    const addProject = vi.fn().mockResolvedValue(addedProject);
+    const removeProject = vi.fn().mockResolvedValue(undefined);
+    const inspectProject = vi.fn().mockResolvedValue({
+      projectId: addedProject.id,
+      projectRoot: addedProject.rootPath,
+      resources: [{
+        id: "instructions-1",
+        kind: "instructions",
+        name: "AGENTS.md",
+        relativePath: "AGENTS.md",
+        absolutePath: "/work/example/AGENTS.md",
+        consumerAgentIds: ["opencode"],
+        state: "ready",
+        editable: true
+      }],
+      agentSupport: [],
+      issues: [],
+      partial: true
+    });
+    const previewProject = vi.fn().mockResolvedValue({
+      projectId: addedProject.id,
+      agentId: "opencode",
+      agentName: "OpenCode",
+      fidelity: "partial",
+      loadOrder: "unknown",
+      projectResources: [],
+      globalResources: [],
+      issues: []
+    });
+    const openProject = vi.fn().mockResolvedValue({
+      agentId: "opencode",
+      agentName: "OpenCode",
+      message: "Opened example in OpenCode"
+    });
+    installApi({
+      selectProjectFolder: vi.fn().mockResolvedValue("/work/example"),
+      listProjects,
+      addProject,
+      removeProject,
+      inspectProject,
+      previewProject,
+      openProject
+    });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Projects" }));
+    expect(await screen.findByRole("heading", { name: "Projects" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add Project" }));
+
+    expect((await screen.findAllByText("/work/example")).length).toBeGreaterThan(0);
+    expect(addProject).toHaveBeenCalledWith("/work/example");
+    expect(screen.queryByRole("button", { name: /Delete folder/i })).not.toBeInTheDocument();
+
+    expect((await screen.findAllByText("AGENTS.md")).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Preview environment" }));
+    expect(await screen.findByRole("dialog", { name: "Effective environment preview" }))
+      .toBeInTheDocument();
+    expect(previewProject).toHaveBeenCalledWith("project-example", "opencode");
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open in OpenCode" }));
+    await waitFor(() => expect(openProject).toHaveBeenCalledWith("project-example", "opencode"));
+
+    fireEvent.click(screen.getByRole("button", { name: "More Project actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Remove reference" }));
+    expect(await screen.findByText("Remove Project reference?")).toBeInTheDocument();
+    expect(screen.getByText("The folder and its files will stay unchanged.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remove reference" }));
+
+    await waitFor(() => expect(removeProject).toHaveBeenCalledWith("project-example"));
   });
 
   it("keeps macOS window chrome quiet and page actions in their content", async () => {
@@ -4824,7 +4928,7 @@ describe("App", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
 
-    const guard = screen.getByRole("dialog", { name: "Unsaved profile changes" });
+    const guard = screen.getByRole("dialog", { name: "Unsaved changes" });
     expect(guard).toHaveTextContent("create a new profile");
     expect(within(guard).getAllByRole("button").every((button) =>
       button.classList.contains("ui-button")
@@ -4842,14 +4946,14 @@ describe("App", () => {
         { name: "Skills" }
       )
     );
-    const navigationGuard = screen.getByRole("dialog", { name: "Unsaved profile changes" });
+    const navigationGuard = screen.getByRole("dialog", { name: "Unsaved changes" });
     expect(navigationGuard).toHaveTextContent("open Skills");
     fireEvent.click(within(navigationGuard).getByRole("button", { name: "Cancel" }));
     expect(screen.getByRole("heading", { name: "Profiles" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
     fireEvent.click(
-      within(screen.getByRole("dialog", { name: "Unsaved profile changes" })).getByRole(
+      within(screen.getByRole("dialog", { name: "Unsaved changes" })).getByRole(
         "button",
         { name: "Discard changes" }
       )
@@ -4868,16 +4972,16 @@ describe("App", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
     fireEvent.click(
-      within(screen.getByRole("dialog", { name: "Unsaved profile changes" })).getByRole(
+      within(screen.getByRole("dialog", { name: "Unsaved changes" })).getByRole(
         "button",
         { name: "Save and continue" }
       )
     );
 
     await screen.findByRole("alert");
-    expect(screen.getByRole("dialog", { name: "Unsaved profile changes" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Unsaved changes" })).toBeInTheDocument();
     fireEvent.click(
-      within(screen.getByRole("dialog", { name: "Unsaved profile changes" })).getByRole(
+      within(screen.getByRole("dialog", { name: "Unsaved changes" })).getByRole(
         "button",
         { name: "Cancel" }
       )
@@ -4905,7 +5009,7 @@ describe("App", () => {
     await waitFor(() => expect(api.setWindowCloseGuard).toHaveBeenLastCalledWith(true));
     act(() => requestClose());
 
-    const guard = await screen.findByRole("dialog", { name: "Unsaved profile changes" });
+    const guard = await screen.findByRole("dialog", { name: "Unsaved changes" });
     expect(guard).toHaveTextContent("close AgentEnv Manager");
     fireEvent.click(within(guard).getByRole("button", { name: "Discard changes" }));
     await waitFor(() => expect(api.confirmWindowClose).toHaveBeenCalledOnce());
@@ -4928,7 +5032,7 @@ describe("App", () => {
     });
     act(() => requestClose());
     fireEvent.click(
-      within(await screen.findByRole("dialog", { name: "Unsaved profile changes" })).getByRole(
+      within(await screen.findByRole("dialog", { name: "Unsaved changes" })).getByRole(
         "button",
         { name: "Cancel" }
       )

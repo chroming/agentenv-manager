@@ -1,6 +1,7 @@
 import {
   BookOpen,
   FileText,
+  FolderGit2,
   Layers3,
   MessagesSquare,
   Monitor,
@@ -14,6 +15,7 @@ export type ProductIconName =
   | "agents"
   | "profiles"
   | "conversations"
+  | "projects"
   | "skills"
   | "instructions"
   | "mcps"
@@ -23,6 +25,7 @@ export const productIconComponents: Record<ProductIconName, LucideIcon> = {
   agents: Monitor,
   profiles: Layers3,
   conversations: MessagesSquare,
+  projects: FolderGit2,
   skills: BookOpen,
   instructions: FileText,
   mcps: Plug,

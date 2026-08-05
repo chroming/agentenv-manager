@@ -8,6 +8,7 @@
 @import "./primitives.css" layer(primitives);
 @import "./shell.css" layer(shell);
 @import "./pages/targets.css" layer(pages);
+@import "./pages/projects.css" layer(pages);
 @import "./pages/settings.css" layer(pages);
 @import "./pages/settings-sync.css" layer(pages);
 @import "./pages/settings-backups.css" layer(pages);

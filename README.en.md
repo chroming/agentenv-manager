@@ -48,6 +48,12 @@ Compare runs the same task once with the current Agent environment and once with
 
 Compare consumes quota from the selected Agent account. It does not Apply the Profile or modify the real Agent or original project. Isolated comparison currently requires macOS. OpenCode, Claude Code, Codex, Antigravity CLI, and Pi have verified implementations; Trae CLI does not currently expose a reliable one-shot command.
 
+## Projects
+
+Projects keeps references to frequently used local folders and shows the Instructions, Skills, and MCP names each selected Agent can load there. You can edit supported Instructions in place, add or remove project Skills from the Library, and open the folder with an installed Agent.
+
+The original folder remains the source of truth and is never bound to or overwritten by a global Profile. Writes verify the current file and create a separate recovery point first. Removing a Project deletes only the app reference, never the folder.
+
 ## Skill Library
 
 The Library keeps one reusable copy of each Skill. Import from a local folder, ZIP archive, GitHub path, or regular Git repository, then install Skills into Agent-specific directories through Profiles.
@@ -60,7 +66,7 @@ The source view shows additions, updates, and removals within the same repositor
 
 ## Conversations
 
-Conversations maintains a read-only index of local Agent history. Search titles and messages, return to the original conversation, or review its context before continuing in another Agent.
+Conversations maintains a read-only index of local Agent history. Search titles and messages, filter by folder, return to the original conversation, or review its context before continuing in another Agent. When a conversation folder is already a Project, you can jump directly to it.
 
 ![Conversation history](docs/images/conversations.png)
 

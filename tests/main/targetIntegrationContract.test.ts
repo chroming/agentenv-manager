@@ -156,6 +156,130 @@ describe("target integration contract", () => {
     });
   });
 
+  it("declares the honest Project support matrix for every built-in Agent", () => {
+    const support = Object.fromEntries(
+      createBuiltInTargetAdapters().map((adapter) => [
+        adapter.descriptor.id,
+        adapter.projects?.support
+      ])
+    );
+
+    expect(support).toEqual({
+      opencode: {
+        instructions: { inspect: "supported", mutate: "supported" },
+        skills: { inspect: "supported", mutate: "supported" },
+        mcp: { inspect: "partial", mutate: "unsupported" },
+        effectivePreview: "partial",
+        cliLaunch: "supported"
+      },
+      "claude-code": {
+        instructions: { inspect: "supported", mutate: "supported" },
+        skills: { inspect: "supported", mutate: "supported" },
+        mcp: { inspect: "partial", mutate: "unsupported" },
+        effectivePreview: "partial",
+        cliLaunch: "supported"
+      },
+      codex: {
+        instructions: { inspect: "supported", mutate: "supported" },
+        skills: { inspect: "supported", mutate: "supported" },
+        mcp: { inspect: "unsupported", mutate: "unsupported" },
+        effectivePreview: "partial",
+        cliLaunch: "supported"
+      },
+      antigravity: {
+        instructions: { inspect: "supported", mutate: "supported" },
+        skills: { inspect: "partial", mutate: "unsupported" },
+        mcp: { inspect: "unsupported", mutate: "unsupported" },
+        effectivePreview: "partial",
+        cliLaunch: "supported"
+      },
+      "trae-cli": {
+        instructions: { inspect: "partial", mutate: "supported" },
+        skills: { inspect: "supported", mutate: "supported" },
+        mcp: { inspect: "partial", mutate: "unsupported" },
+        effectivePreview: "partial",
+        cliLaunch: "supported"
+      },
+      pi: {
+        instructions: { inspect: "supported", mutate: "supported" },
+        skills: { inspect: "supported", mutate: "supported" },
+        mcp: { inspect: "unsupported", mutate: "unsupported" },
+        effectivePreview: "partial",
+        cliLaunch: "supported"
+      }
+    });
+  });
+
+  it("keeps Project declarations alongside independent Compare masks", () => {
+    const declarations = Object.fromEntries(
+      createBuiltInTargetAdapters().map((adapter) => [
+        adapter.descriptor.id,
+        {
+          instructions: adapter.projects?.instructionFiles,
+          skills: adapter.projects?.skillDirectories,
+          mcp: adapter.projects?.mcpFiles,
+          compare: adapter.projects?.compareResourcePaths,
+          evaluationOwnsPaths: adapter.evaluations
+            ? "projectResourcePaths" in adapter.evaluations
+            : false
+        }
+      ])
+    );
+
+    expect(declarations).toEqual({
+      opencode: {
+        instructions: ["AGENTS.md", "CLAUDE.md"],
+        skills: [".opencode/skills", ".claude/skills", ".agents/skills"],
+        mcp: ["opencode.json", "opencode.jsonc"],
+        compare: [
+          "opencode.json",
+          "opencode.jsonc",
+          ".opencode",
+          "AGENTS.md",
+          "CLAUDE.md",
+          ".claude/skills",
+          ".agents/skills"
+        ],
+        evaluationOwnsPaths: true
+      },
+      "claude-code": {
+        instructions: ["CLAUDE.md"],
+        skills: [".claude/skills", ".agents/skills"],
+        mcp: [".mcp.json"],
+        compare: ["CLAUDE.md", ".claude", ".agents", "AGENTS.md"],
+        evaluationOwnsPaths: true
+      },
+      codex: {
+        instructions: ["AGENTS.md", "AGENTS.override.md"],
+        skills: [".agents/skills", ".codex/skills"],
+        mcp: [],
+        compare: ["AGENTS.md", "AGENTS.override.md", ".agents", ".codex"],
+        evaluationOwnsPaths: true
+      },
+      antigravity: {
+        instructions: ["GEMINI.md"],
+        skills: [".gemini/skills", ".agents/skills"],
+        mcp: [],
+        compare: ["GEMINI.md", ".gemini", ".agents"],
+        evaluationOwnsPaths: true
+      },
+      "trae-cli": {
+        instructions: [".trae/rules", "AGENTS.md"],
+        skills: [".trae/skills"],
+        mcp: [".trae/traecli.toml", ".trae/traecli.yaml"],
+        compare: [".trae", "AGENTS.md"],
+        evaluationOwnsPaths: false
+      },
+      pi: {
+        instructions: ["AGENTS.md", "CLAUDE.md"],
+        skills: [".pi/skills", ".agents/skills"],
+        mcp: [],
+        compare: ["AGENTS.md", "CLAUDE.md", ".pi", ".agents"],
+        evaluationOwnsPaths: true
+      }
+    });
+  });
+
   it("rejects runtime declarations whose primary command is not the first candidate", () => {
     expect(() => defineTargetIntegration({
       ...fixtureAgentIntegration,

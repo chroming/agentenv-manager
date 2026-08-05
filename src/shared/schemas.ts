@@ -53,6 +53,20 @@ export const ResourceIconKeySchema = z.enum([
   "server"
 ]);
 
+export const ProjectReferenceSchema = z.object({
+  id: SafeIdSchema,
+  name: z.string().trim().min(1).max(120),
+  rootPath: z.string().min(1).max(4096),
+  createdAt: z.string().datetime(),
+  lastOpenedAt: z.string().datetime().optional(),
+  lastAgentId: SafeIdSchema.optional()
+}).strict();
+
+export const ProjectReferenceFileSchema = z.object({
+  formatVersion: z.literal(1),
+  projects: z.array(ProjectReferenceSchema)
+}).strict();
+
 export const ProfileManifestSchema = z.object({
   id: SafeIdSchema,
   name: z.string().min(1),

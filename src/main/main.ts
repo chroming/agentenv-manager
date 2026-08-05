@@ -37,6 +37,11 @@ import {
 import { registerIpcHandlers } from "./ipc";
 import { createPaths } from "./paths";
 import { createProfileStore } from "./profileStore";
+import { createProjectStore } from "./projects/projectStore";
+import { createProjectEnvironmentService } from "./projects/projectEnvironmentService";
+import { createProjectLaunchService } from "./projects/projectLaunchService";
+import { createProjectMutationService } from "./projects/projectMutationService";
+import { createProjectRecoveryStore } from "./projects/projectRecoveryStore";
 import { createSettingsStore } from "./settingsStore";
 import { createSkillLibraryStore } from "./skillLibraryStore";
 import { createTargetDiscoveryService } from "./targetDiscovery";
@@ -45,6 +50,7 @@ import {
   createConversationService,
   type ConversationService
 } from "./conversations/conversationService";
+import { createConversationLauncher } from "./conversations/conversationLauncher";
 import { createTargetRegistry } from "./targets/registry";
 import { createFilesystemSkillDriver } from "./targets/shared/skillRuntime";
 import { createTargetScope } from "./targets/targetScope";
@@ -758,6 +764,15 @@ const createServices = async (
     appDataRoot: paths.appDataRoot,
     fakeHomeRoot: paths.fakeHomeRoot
   }, targetRegistry);
+  const projectStore = createProjectStore({
+    appDataRoot: paths.appDataRoot,
+    projectsPath: paths.projectsPath
+  });
+  const projectEnvironmentService = createProjectEnvironmentService({
+    projectStore,
+    targetRegistry
+  });
+  const projectRecoveryStore = createProjectRecoveryStore(paths.appDataRoot);
   const backupStore = createBackupStore(paths, { platform: process.platform });
   const workspaceSyncTransaction = createWorkspaceSyncTransaction({ paths, backupStore });
   reportPhase("recovering-sync");
@@ -819,6 +834,23 @@ const createServices = async (
     ...(process.env.AGENTENV_AUTOMATION_TARGET_PATH
       ? { pathEnv: process.env.AGENTENV_AUTOMATION_TARGET_PATH }
       : {})
+  });
+  const projectMutationService = createProjectMutationService({
+    environmentService: projectEnvironmentService,
+    recoveryStore: projectRecoveryStore,
+    skillLibraryStore,
+    enabledAgentIds: async () =>
+      (await targetDiscoveryService.listTargets()).map((target) => target.id)
+  });
+  const projectLaunchService = createProjectLaunchService({
+    projectStore,
+    targetRegistry,
+    targetDiscoveryService,
+    launcher: createConversationLauncher({
+      artifactDir: paths.conversationHandoffDir,
+      terminalPreference: async () =>
+        (await settingsStore.readSettings()).conversationTerminal
+    })
   });
   const targetCaptureService = createTargetCaptureService({
     paths,
@@ -960,6 +992,11 @@ const createServices = async (
   return {
     paths,
     profileStore,
+    projectStore,
+    projectEnvironmentService,
+    projectLaunchService,
+    projectMutationService,
+    projectRecoveryStore,
     backupStore,
     backupMaintenanceService,
     githubAuthService,

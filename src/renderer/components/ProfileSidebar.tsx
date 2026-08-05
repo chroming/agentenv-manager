@@ -55,6 +55,7 @@ export const agentIconUrlFor = (iconKey: ResourceIconKey) =>
 
 export type AppWorkspace =
   | "library"
+  | "projects"
   | "profiles"
   | "conversations"
   | "targets"
@@ -424,6 +425,7 @@ export const ProfileSidebar = ({
     icon: ProductIconName;
   }> = [
     { id: "targets", label: t("Agents"), detail: t("Configure and inspect"), icon: "agents" },
+    { id: "projects", label: t("Projects"), detail: t("Project environments"), icon: "projects" },
     { id: "profiles", label: t("Profiles"), detail: t("Compose environments"), icon: "profiles" },
     {
       id: "conversations",

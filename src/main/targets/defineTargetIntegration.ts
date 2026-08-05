@@ -73,6 +73,7 @@ export const defineTargetIntegration = (
         )
       ),
     skills: integration.skills,
+    projects: integration.projects,
     conversations: integration.conversations,
     evaluations: integration.evaluations,
     createDefaultProfile: (id) => integration.profile.createDefaultProfile(id),

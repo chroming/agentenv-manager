@@ -1,7 +1,11 @@
 import { lstat, readFile, readdir } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { z } from "zod";
-import { ResourceIconKeySchema, SafeIdSchema } from "../shared/schemas";
+import {
+  ProjectReferenceFileSchema,
+  ResourceIconKeySchema,
+  SafeIdSchema
+} from "../shared/schemas";
 import { readAppDataManifest } from "./appDataFormat";
 import { isMissingFileError } from "./fileUtils";
 import { createPaths } from "./paths";
@@ -146,6 +150,9 @@ export const validateAppDataRoot = async (
 
   const workspaceSync = await readJsonIfPresent(paths.workspaceSyncStatePath);
   if (workspaceSync !== undefined) parseWorkspaceSyncStateData(workspaceSync);
+
+  const projects = await readJsonIfPresent(paths.projectsPath);
+  if (projects !== undefined) ProjectReferenceFileSchema.parse(projects);
 
   const profileStore = createProfileStore({
     appDataRoot,

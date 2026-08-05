@@ -8,6 +8,7 @@ import type {
 import type {
   AgentConversationCapability,
   AgentEvaluationCapability,
+  AgentProjectCapability,
   AgentTargetAdapter,
   CapturedTargetProfile,
   TargetAssetInput,
@@ -63,6 +64,7 @@ export interface AgentTargetIntegration {
   profile: TargetProfileDriver;
   preview: TargetPreviewDriver;
   skills: TargetSkillDriver;
+  projects?: AgentProjectCapability;
   conversations?: AgentConversationCapability;
   evaluations?: AgentEvaluationCapability;
   assets: TargetAssetDriver;

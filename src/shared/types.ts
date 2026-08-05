@@ -122,6 +122,21 @@ export interface AgentEnvApi {
   releaseSkillArchive(token: string): Promise<void>;
   selectTargetConfigRoot(targetId: string): Promise<string | undefined>;
   selectComparisonWorkspace(): Promise<string | undefined>;
+  selectProjectFolder(): Promise<string | undefined>;
+  listProjects(): Promise<ProjectSummary[]>;
+  findProjectByPath(rootPath: string): Promise<ProjectSummary | undefined>;
+  addProject(rootPath: string): Promise<ProjectSummary>;
+  updateProject(input: UpdateProjectInput): Promise<ProjectSummary>;
+  removeProject(id: string): Promise<void>;
+  inspectProject(id: string): Promise<ProjectEnvironmentSnapshot>;
+  previewProject(projectId: string, agentId: string): Promise<ProjectEnvironmentPreview>;
+  readProjectResource(projectId: string, resourceId: string): Promise<ProjectResourceFile>;
+  saveProjectResource(input: SaveProjectResourceInput): Promise<ProjectMutationResult>;
+  addProjectSkill(input: AddProjectSkillInput): Promise<ProjectMutationResult>;
+  removeProjectSkill(input: RemoveProjectSkillInput): Promise<ProjectMutationResult>;
+  listProjectRecovery(projectId?: string): Promise<ProjectRecoverySummary[]>;
+  restoreProjectRecovery(receiptId: string): Promise<ProjectMutationResult>;
+  openProject(projectId: string, agentId: string): Promise<ProjectLaunchResult>;
   listSupportedTargets(): Promise<TargetDescriptor[]>;
   probeSupportedTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
   listTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
@@ -1244,6 +1259,130 @@ export interface AgentEnvSettings {
   suppressedAgentSuggestionIds?: string[];
   targetConfigRoots?: Record<string, string>;
   targetCommandOverrides?: Record<string, string>;
+}
+
+export interface ProjectReference {
+  id: string;
+  name: string;
+  rootPath: string;
+  createdAt: string;
+  lastOpenedAt?: string;
+  lastAgentId?: string;
+}
+
+export interface ProjectSummary extends ProjectReference {
+  exists: boolean;
+}
+
+export interface UpdateProjectInput {
+  id: string;
+  name?: string;
+  lastAgentId?: string;
+  markOpened?: boolean;
+}
+
+export type ProjectResourceKind = "instructions" | "skill" | "mcp";
+export type ProjectResourceState = "ready" | "partial" | "unsafe" | "unreadable";
+
+export interface ProjectResourceSummary {
+  id: string;
+  kind: ProjectResourceKind;
+  name: string;
+  relativePath: string;
+  absolutePath: string;
+  consumerAgentIds: string[];
+  state: ProjectResourceState;
+  editable: boolean;
+  description?: string;
+  version?: string;
+  contentHash?: string;
+  modifiedAt?: string;
+  issue?: string;
+}
+
+export interface ProjectEnvironmentSnapshot {
+  projectId: string;
+  projectRoot: string;
+  resources: ProjectResourceSummary[];
+  agentSupport: Array<{
+    agentId: string;
+    agentName: string;
+    instructions: { inspect: string; mutate: string };
+    skills: { inspect: string; mutate: string };
+    mcp: { inspect: string; mutate: string };
+    effectivePreview: string;
+    cliLaunch: string;
+  }>;
+  issues: string[];
+  partial: boolean;
+}
+
+export interface ProjectEnvironmentPreview {
+  projectId: string;
+  agentId: string;
+  agentName: string;
+  fidelity: "full" | "partial";
+  loadOrder: "known" | "unknown";
+  projectResources: ProjectResourceSummary[];
+  globalResources: Array<{
+    kind: ProjectResourceKind;
+    name: string;
+    path: string;
+    state: ProjectResourceState;
+    detail?: string;
+  }>;
+  issues: string[];
+}
+
+export interface ProjectLaunchResult {
+  agentId: string;
+  agentName: string;
+  message: string;
+}
+
+export interface ProjectResourceFile {
+  resourceId: string;
+  name: string;
+  path: string;
+  content: string;
+  contentHash: string;
+  modifiedAt: string;
+  editable: boolean;
+}
+
+export interface SaveProjectResourceInput {
+  projectId: string;
+  resourceId: string;
+  expectedHash: string;
+  content: string;
+}
+
+export interface AddProjectSkillInput {
+  projectId: string;
+  agentId: string;
+  libraryId: string;
+}
+
+export interface RemoveProjectSkillInput {
+  projectId: string;
+  resourceId: string;
+  expectedHash: string;
+}
+
+export interface ProjectMutationResult {
+  status: "saved" | "restored" | "no-op";
+  contentHash: string;
+  receiptId?: string;
+}
+
+export interface ProjectRecoverySummary {
+  id: string;
+  projectId: string;
+  resourceId: string;
+  path: string;
+  createdAt: string;
+  status: "committed" | "failed-restored" | "recovery-required" | "restored";
+  kind: "instructions" | "skill";
 }
 
 export type ProjectSkillCandidateStatus = "ready" | "in-library" | "changed" | "invalid";

@@ -19,7 +19,7 @@ import {
   type OwnedDirExpectation
 } from "./ownershipMarkers";
 
-const copySkillEntries = async (sourceDir: string, targetDir: string) => {
+export const copySkillEntries = async (sourceDir: string, targetDir: string) => {
   await mkdir(targetDir, { recursive: true });
   for (const entry of await readdir(sourceDir, { withFileTypes: true })) {
     if (entry.name === ".agentenv-skill.json" || entry.name === ".agentenv-owner.json") {

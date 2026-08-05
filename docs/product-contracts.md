@@ -214,6 +214,64 @@ Quick Open is a navigation accelerator, not a second command model.
 - Search, active selection, and result list use the standard combobox/listbox accessibility model. Arrow keys move one result, Home and End move to the first and last result, Enter opens the active result, and Escape restores focus to the invoking surface.
 - The active result MUST remain visible while keyboard navigation moves through a longer result list. Opening an item closes Quick Open before navigation so focus and feedback belong to the destination workspace.
 
+### 4.2.4 Projects
+
+A Project is a device-local reference to a real working directory. It is not an
+AgentEnv-owned copy of project configuration and does not require Git.
+
+- AgentEnv persists only the Project ID, canonical root path, display name, creation and
+  last-opened times, and last-used Agent. Project resources remain canonical in the selected
+  directory. Removing a Project removes only this reference and MUST NOT remove, move, rewrite,
+  or traverse the referenced directory.
+- Projects never bind or automatically Apply a Profile. Opening a Project uses the selected
+  Agent's current real global environment. The active AgentEnv Profile may be shown as provenance
+  for managed global resources, but it is not a Project relationship.
+- A Conversation belongs to a Project only when its recorded workspace resolves to that Project's
+  canonical directory. This relationship is derived, never persisted as a second binding. The
+  Conversation workspace filter groups canonical Project matches separately from other folders,
+  and a matching Conversation may navigate to that exact Project reference.
+- Project detail lists actual Instructions, Skills, and MCP files through adapter-declared paths.
+  A shared project path consumed by several Agents appears once with every known consumer. An
+  unsupported resource kind is labelled unsupported rather than rendered as an empty managed list.
+- Every effective-environment preview is for one selected Agent and starts with a fresh read. It
+  keeps project, Agent-global, AgentEnv-managed, and external sources separate; shows exact paths;
+  identifies same-name conflicts; and names every excluded or unreadable source. It may state load
+  precedence only when the adapter can prove it. Otherwise it reports `Load order unknown` and the
+  result is `Partial`.
+- Project Open uses an adapter-generated absolute executable, argument array, and the canonical
+  Project root as `cwd`. The primary action uses the last-used installed Agent and its adjacent menu
+  offers other installed Agents with launch capability. Open does not Save or Apply a Profile and
+  does not mutate project resources.
+- Project file mutation is supported only for paths and formats explicitly declared by the Agent
+  adapter. Every mutation is `fresh read -> semantic diff -> explicit command -> backup -> atomic
+  write -> verification -> recovery`. A semantic no-op creates no backup and performs no write.
+  Stale bytes require a fresh review. Failure restores the original bytes or leaves a visible
+  recovery record before any success is reported.
+- Inspection support never grants mutation authority. Renderer paths are never mutation authority:
+  Main issues opaque resource IDs and accepts writes only as `{ projectId, agentId, resourceId,
+  expectedHash }`, then revalidates the canonical root, bounded relative path, parents, entry type,
+  and hash immediately before commit. Child links, special files, escaping paths, and case-folded
+  duplicate destinations remain inspect-only.
+- Dirty Project editors use one Save / Discard / Cancel guard for Project or resource switching,
+  workspace navigation, dialog dismissal, reference removal, and app close. A stale hash refreshes
+  review rather than overwriting external changes.
+- Every committed Project mutation has a private recovery receipt. Failed writes MUST restore and
+  verify original bytes; failed restoration creates a persistent `Recovery required` state and
+  blocks only the same canonical path. Restore rechecks the current hash; if the path changed after
+  the receipt, it refuses to overwrite the newer bytes and requires another review. Removing a
+  Project reference never removes protected recovery receipts.
+- MCP preview exposes names, source labels, and non-secret status only. Credential values, raw
+  unsupported configuration, and secret-like arguments MUST NOT cross preload or enter diagnostics.
+- Adding a Library Skill to a Project creates a verified project-owned copy in the explicitly
+  selected project Skill directory. AgentEnv MUST NOT create a link from a Project into the user
+  Library, copy escaping links or private AgentEnv Library metadata, or silently import an existing
+  Project Skill into Library.
+- Project references and recovery data are device-local and excluded from Workspace Sync. Ordinary
+  AgentEnv data backup includes the reference registry but never copies the referenced Project.
+- `Projects` uses the same list-detail geometry, Page Header, controls, rows, dialogs, progress,
+  feedback, diff, file preview, keyboard dismissal, and supported viewport rules as sibling desktop
+  workspaces. The Project list owns its scroll; the page never gains horizontal scrolling.
+
 ### 4.3 Profile
 
 A Profile is a saved environment recipe. It owns:

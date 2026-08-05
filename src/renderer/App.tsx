@@ -197,6 +197,10 @@ import { useAgentDiscovery } from "./hooks/useAgentDiscovery";
 import { useAgentRefresh } from "./hooks/useAgentRefresh";
 import { useWorkspaceFreshness } from "./hooks/useWorkspaceFreshness";
 import { useWorkspaceNavigation } from "./hooks/useWorkspaceNavigation";
+import {
+  ProjectsWorkspace,
+} from "./components/ProjectsWorkspace";
+import type { ProjectEditorGuard } from "./components/ProjectResourceEditorDialog";
 import { useSidebarState } from "./hooks/useSidebarState";
 import { useConversationQuickOpen } from "./hooks/useConversationQuickOpen";
 import { useConversationIndexWarmup } from "./hooks/useConversationIndexWarmup";
@@ -321,6 +325,8 @@ const AppContent = ({
   } = useWorkspaceNavigation();
   const { sidebarCollapsed, toggleSidebar } = useSidebarState();
   const [conversationViewState, setConversationViewState] = useState<ConversationWorkspaceViewState>();
+  const [projectEditorGuard, setProjectEditorGuard] = useState<ProjectEditorGuard>();
+  const [projectOpenRequest, setProjectOpenRequest] = useState<{ requestId: number; projectId: string }>();
 
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("general");
   const [quickOpen, setQuickOpen] = useState(false);
@@ -1083,11 +1089,11 @@ const AppContent = ({
     guardAction: guardProfileAction,
     pendingAction: pendingProfileAction
   } = useProfileActionGuard({
-    dirty: isProfileDirty,
+    dirty: isProfileDirty || Boolean(projectEditorGuard?.dirty),
     onBusyChange: setBusy,
-    onDiscard: discardProfileDraft,
+    onDiscard: projectEditorGuard?.dirty ? projectEditorGuard.discard : discardProfileDraft,
     onError: setError,
-    onSave: saveDraft
+    onSave: projectEditorGuard?.dirty ? projectEditorGuard.save : saveDraft
   });
   const conversationQuickOpen = useConversationQuickOpen({
     targets, t, formatDate, guardAction: guardProfileAction,
@@ -1133,6 +1139,7 @@ const AppContent = ({
     }
     const label = {
       library: "open Skills",
+      projects: "open Projects",
       profiles: "open Profiles",
       conversations: "open Conversations",
       targets: "open Agents",
@@ -4061,6 +4068,8 @@ const AppContent = ({
             ? t("Library workspace")
             : activeWorkspace === "profiles"
               ? t("Profile editor")
+              : activeWorkspace === "projects"
+                ? t("Project workspace")
               : activeWorkspace === "conversations"
                 ? t("Conversation workspace")
               : t("{{name}} workspace", { name: activeWorkspace })
@@ -4730,13 +4739,13 @@ const AppContent = ({
                     ref={appModalDialogRef}
                     className="profile-form-dialog profile-form-dialog--compact"
                     role="dialog"
-                    aria-label={t("Unsaved profile changes")}
+                    aria-label={t("Unsaved changes")}
                     aria-modal="true"
                     onClick={(event) => event.stopPropagation()}
                   >
                     <header className="profile-dialog-header">
                       <div className="ui-dialog-header__copy">
-                        <div className="section-title ui-dialog-title">{t("Save profile changes?")}</div>
+                        <div className="section-title ui-dialog-title">{t("Save changes?")}</div>
                         <p className="muted ui-dialog-description">
                           {t("Save before you {{action}}, or discard the current draft.", { action: t(pendingProfileAction.label) })}
                         </p>
@@ -4836,6 +4845,13 @@ const AppContent = ({
               ) : null}
             </section>
           </section>
+        ) : activeWorkspace === "projects" ? (
+          <ProjectsWorkspace
+            targets={targets}
+            onEditorGuardChange={setProjectEditorGuard}
+            openRequest={projectOpenRequest}
+            editorGuardPromptOpen={Boolean(pendingProfileAction && projectEditorGuard?.dirty)}
+          />
         ) : activeWorkspace === "conversations" ? (
           <ConversationWorkspace
             targets={targets}
@@ -4843,6 +4859,10 @@ const AppContent = ({
             onViewStateChange={setConversationViewState}
             openRequest={conversationQuickOpen.openRequest}
             onOpenRequestHandled={conversationQuickOpen.handleOpenRequest}
+            onOpenProject={(project) => {
+              setProjectOpenRequest({ requestId: Date.now(), projectId: project.id });
+              openWorkspaceNow("projects");
+            }}
           />
         ) : activeWorkspace === "targets" ? (
             <TargetWorkspace

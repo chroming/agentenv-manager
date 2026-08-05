@@ -8,6 +8,7 @@ import type {
 } from "../../shared/types";
 import { profileManagesResource } from "../../shared/profileResources";
 import { createApplyIssue } from "../applyIssues";
+import { createProjectCapability } from "../projects/projectCapability";
 import { createCodexConversationCapability } from "./conversations/codexConversations";
 import { createCodexEvaluationCapability } from "./evaluations/codexEvaluation";
 import { createUnifiedDiff } from "../diff";
@@ -99,6 +100,19 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     }, { homeDir });
   },
   skills,
+  projects: createProjectCapability({
+    support: {
+      instructions: { inspect: "supported", mutate: "supported" },
+      skills: { inspect: "supported", mutate: "supported" },
+      mcp: { inspect: "unsupported", mutate: "unsupported" },
+      effectivePreview: "partial",
+      cliLaunch: "supported"
+    },
+    instructionFiles: ["AGENTS.md", "AGENTS.override.md"],
+    skillDirectories: [".agents/skills", ".codex/skills"],
+    mcpFiles: [],
+    compareResourcePaths: ["AGENTS.md", "AGENTS.override.md", ".agents", ".codex"]
+  }),
   conversations: createCodexConversationCapability(),
   evaluations: createCodexEvaluationCapability(),
   createDefaultProfile: (id) => ({

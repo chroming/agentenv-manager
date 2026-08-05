@@ -48,6 +48,12 @@ Compare 会让当前 Agent 环境和候选 Profile 对同一个任务各运行�
 
 Compare 会消耗对应 Agent 的账号额度，但不会 Apply，也不会修改真实 Agent 或原项目。当前隔离对比需要 macOS；OpenCode、Claude Code、Codex、Antigravity CLI 和 Pi 提供已验证的实现，Trae CLI 暂不支持可靠的一次性运行。
 
+## Projects
+
+Projects 保存常用本地目录的引用，并按所选 Agent 展示该目录会加载的 Instructions、Skills 和 MCP 名称。你可以直接在项目目录中编辑受支持的 Instructions、从 Library 添加或移除项目 Skill，也可以用已安装的 Agent 在该目录启动工作。
+
+项目文件始终以原目录为准，不会绑定或 Apply 全局 Profile。写入前会校验文件版本并创建独立恢复点；移除 Project 只删除应用内引用，不会删除目录。
+
 ## Skill Library
 
 Library 为每个 Skill 保存一份可复用内容。可以从本地目录、ZIP、GitHub 路径或普通 Git 仓库导入，再通过 Profile 安装到各 Agent 的专属目录。
@@ -60,7 +66,7 @@ Library 为每个 Skill 保存一份可复用内容。可以从本地目录、ZI
 
 ## Conversations
 
-Conversations 只读索引本机 Agent 的历史记录。可以搜索标题和消息、回到原对话，或检查上下文后交给另一个 Agent 继续。
+Conversations 只读索引本机 Agent 的历史记录。可以搜索标题和消息、按目录筛选、回到原对话，或检查上下文后交给另一个 Agent 继续。对话目录已添加为 Project 时，还可以直接跳到对应 Project。
 
 ![Conversation history](docs/images/conversations.png)
 

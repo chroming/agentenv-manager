@@ -96,18 +96,50 @@ export interface AgentConversationContext {
   targetPaths: TargetPaths;
 }
 
-export interface ConversationLaunchSpec {
+export interface AgentLaunchSpec {
   executablePath: string;
   args: string[];
   cwd?: string;
   env?: Record<string, string>;
   envToDelete?: string[];
+}
+
+export interface ConversationLaunchSpec extends AgentLaunchSpec {
   resumeAfterExit?: {
     kind: "json-session";
     sessionIdField: string;
     argsBeforeSessionId: string[];
     argsAfterSessionId?: string[];
   };
+}
+
+export type ProjectSupportLevel = "supported" | "partial" | "unsupported";
+
+export interface ProjectResourceSupport {
+  inspect: ProjectSupportLevel;
+  mutate: ProjectSupportLevel;
+}
+
+export interface ProjectCapabilitySupport {
+  instructions: ProjectResourceSupport;
+  skills: ProjectResourceSupport;
+  mcp: ProjectResourceSupport;
+  effectivePreview: ProjectSupportLevel;
+  cliLaunch: ProjectSupportLevel;
+}
+
+export interface ProjectLaunchInput {
+  executablePath?: string;
+  projectRoot: string;
+}
+
+export interface AgentProjectCapability {
+  support: ProjectCapabilitySupport;
+  instructionFiles: readonly string[];
+  skillDirectories: readonly string[];
+  mcpFiles: readonly string[];
+  compareResourcePaths: readonly string[];
+  createLaunchSpec(input: ProjectLaunchInput): AgentLaunchSpec | undefined;
 }
 
 export interface ConversationContinuationInput extends AgentConversationContext {
@@ -209,6 +241,7 @@ export interface AgentTargetAdapter {
     readNativeState(targetPaths: TargetPaths): Promise<SkillRuntimeNativeState>;
     inspectRuntime(targetPaths: TargetPaths): Promise<SkillRuntimeSnapshot>;
   };
+  projects?: AgentProjectCapability;
   conversations?: AgentConversationCapability;
   evaluations?: AgentEvaluationCapability;
   createDefaultProfile(id: string): Omit<ProfileDetail, "profileDir">;

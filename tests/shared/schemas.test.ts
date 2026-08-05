@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { ProfileManifestSchema, ProfileResourcesSchema } from "../../src/shared/schemas";
+import {
+  ProfileManifestSchema,
+  ProfileResourcesSchema,
+  ProjectReferenceSchema
+} from "../../src/shared/schemas";
 
 describe("Profile v2 schemas", () => {
   it("accepts portable metadata and target-specific MCP policies", () => {
@@ -78,5 +82,33 @@ describe("Profile v2 schemas", () => {
         }
       }
     })).toThrow("declared more than once");
+  });
+});
+
+describe("Project reference schema", () => {
+  it("accepts bounded device-local reference metadata", () => {
+    expect(ProjectReferenceSchema.parse({
+      id: "project-1",
+      name: "AgentEnv Manager",
+      rootPath: "/Users/example/Github/agentenv-manager",
+      createdAt: "2026-08-06T00:00:00.000Z",
+      lastAgentId: "codex"
+    })).toMatchObject({ id: "project-1", lastAgentId: "codex" });
+  });
+
+  it("rejects empty names and unbounded metadata", () => {
+    expect(() => ProjectReferenceSchema.parse({
+      id: "project-1",
+      name: "",
+      rootPath: "/tmp/project",
+      createdAt: "2026-08-06T00:00:00.000Z"
+    })).toThrow();
+    expect(() => ProjectReferenceSchema.parse({
+      id: "project-1",
+      name: "Project",
+      rootPath: "/tmp/project",
+      createdAt: "2026-08-06T00:00:00.000Z",
+      arbitrary: true
+    })).toThrow();
   });
 });

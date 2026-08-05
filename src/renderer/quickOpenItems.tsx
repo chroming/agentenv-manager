@@ -61,6 +61,14 @@ export const buildQuickOpenItems = ({
     onSelect: () => onOpenWorkspace("targets")
   },
   {
+    id: "workspace:projects",
+    group: t("Pages"),
+    label: t("Projects"),
+    description: t("Project environments"),
+    icon: <ProductIcon name="projects" />,
+    onSelect: () => onOpenWorkspace("projects")
+  },
+  {
     id: "workspace:profiles",
     group: t("Pages"),
     label: t("Profiles"),

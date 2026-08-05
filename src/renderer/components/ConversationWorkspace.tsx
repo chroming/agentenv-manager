@@ -3,6 +3,7 @@ import {
   Clock3,
   Copy,
   ExternalLink,
+  FolderGit2,
   FolderOpen,
   LoaderCircle,
   MoreHorizontal,
@@ -29,6 +30,7 @@ import type {
   ConversationListResult,
   ConversationRefreshResult,
   ConversationSummary,
+  ProjectSummary,
   TargetInfo
 } from "../../shared/types";
 import type { FreshnessReason } from "../freshness";
@@ -462,13 +464,15 @@ export const ConversationWorkspace = ({
   initialViewState,
   onViewStateChange,
   openRequest,
-  onOpenRequestHandled
+  onOpenRequestHandled,
+  onOpenProject
 }: {
   targets: TargetInfo[];
   initialViewState?: ConversationWorkspaceViewState;
   onViewStateChange?(state: ConversationWorkspaceViewState): void;
   openRequest?: ConversationOpenRequest;
   onOpenRequestHandled?(requestId: number): void;
+  onOpenProject?(project: ProjectSummary): void;
 }) => {
   const { t, formatDate, localeTag } = useI18n();
   const [items, setItems] = useState<ConversationSummary[]>(
@@ -507,6 +511,9 @@ export const ConversationWorkspace = ({
   const [warning, setWarning] = useState("");
   const [error, setError] = useState("");
   const [review, setReview] = useState<ConversationContinuationPreview>();
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [workspaceProjects, setWorkspaceProjects] = useState<Record<string, ProjectSummary>>({});
+  const [detailProject, setDetailProject] = useState<ProjectSummary>();
   const {
     states: freshnessStates,
     statesRef: freshnessStatesRef,
@@ -577,6 +584,56 @@ export const ConversationWorkspace = ({
     conversationPageSize,
     Math.max(0, total - items.length)
   );
+  const projectWorkspacePaths = workspacePaths.filter((path) => Boolean(workspaceProjects[path]));
+  const otherWorkspacePaths = workspacePaths.filter((path) =>
+    !projectWorkspacePaths.includes(path)
+  );
+
+  useEffect(() => {
+    let current = true;
+    void window.agentEnv.listProjects()
+      .then((next) => {
+        if (current) setProjects(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let current = true;
+    void Promise.all(workspacePaths.map(async (path) => {
+      const exact = projects.find((project) => project.exists && project.rootPath === path);
+      if (exact) return [path, exact] as const;
+      const match = await window.agentEnv.findProjectByPath(path).catch(() => undefined);
+      return [path, match?.exists ? match : undefined] as const;
+    })).then((matches) => {
+      if (!current) return;
+      setWorkspaceProjects(Object.fromEntries(
+        matches.filter((entry): entry is readonly [string, ProjectSummary] => Boolean(entry[1]))
+      ));
+    });
+    return () => {
+      current = false;
+    };
+  }, [projects, workspacePaths]);
+
+  useEffect(() => {
+    let current = true;
+    setDetailProject(undefined);
+    if (!detail?.workspacePath) return () => {
+      current = false;
+    };
+    void window.agentEnv.findProjectByPath(detail.workspacePath)
+      .then((project) => {
+        if (current) setDetailProject(project);
+      })
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [detail?.id, detail?.workspacePath]);
   const updateConversationListEnd = () => {
     const list = conversationListRef.current;
     if (!list) return;
@@ -1262,9 +1319,22 @@ export const ConversationWorkspace = ({
                     onChange={(event) => setWorkspaceFilter(event.target.value)}
                   >
                     <option value="">{t("All workspaces")}</option>
-                    {workspacePaths.map((path) => (
-                      <option value={path} key={path}>{workspaceName(path)}</option>
-                    ))}
+                    {projectWorkspacePaths.length > 0 ? (
+                      <optgroup label={t("Projects")}>
+                        {projectWorkspacePaths.map((path) => (
+                          <option value={path} key={path}>
+                            {workspaceProjects[path]?.name ?? workspaceName(path)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                    {otherWorkspacePaths.length > 0 ? (
+                      <optgroup label={t("Other folders")}>
+                        {otherWorkspacePaths.map((path) => (
+                          <option value={path} key={path}>{workspaceName(path)}</option>
+                        ))}
+                      </optgroup>
+                    ) : null}
                   </select>
                 </label>
               </div>
@@ -1532,6 +1602,15 @@ export const ConversationWorkspace = ({
                         await openOriginal();
                       }}
                     />
+                    {detailProject ? (
+                      <Button
+                        size="compact"
+                        icon={<FolderGit2 size={14} />}
+                        onClick={() => onOpenProject?.(detailProject)}
+                      >
+                        {t("Open Project")}
+                      </Button>
+                    ) : null}
                     <TargetMenu
                       targets={continuationDestinations}
                       sourceAgentId={detail.agentId}

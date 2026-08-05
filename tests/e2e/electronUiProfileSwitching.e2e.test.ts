@@ -6149,7 +6149,7 @@ describe("Electron UI profile switching e2e", () => {
     await instructions.fill(savedDraft);
     await navigation.getByRole("button", { name: "Skills", exact: true }).click();
 
-    let guard = page.getByRole("dialog", { name: "Unsaved profile changes" });
+    let guard = page.getByRole("dialog", { name: "Unsaved changes" });
     await guard.waitFor({ state: "visible", timeout: 5_000 });
     const actionClearance = await guard.evaluate((dialog) => {
       const saveAndContinue = dialog.querySelector<HTMLButtonElement>(
@@ -6172,7 +6172,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(instructionsPath, "utf8")).resolves.not.toBe(savedDraft);
 
     await navigation.getByRole("button", { name: "Skills", exact: true }).click();
-    guard = page.getByRole("dialog", { name: "Unsaved profile changes" });
+    guard = page.getByRole("dialog", { name: "Unsaved changes" });
     await guard.waitFor({ state: "visible", timeout: 5_000 });
     await guard.getByRole("button", { name: "Save and continue" }).click();
     await page.getByRole("heading", { name: "Skills" }).waitFor({
@@ -6241,7 +6241,7 @@ describe("Electron UI profile switching e2e", () => {
     const reloadedInstructions = page.getByRole("textbox", { name: "AGENTS.md" });
     await reloadedInstructions.fill(discardedDraft);
     await navigation.getByRole("button", { name: "Agents", exact: true }).click();
-    const guard = page.getByRole("dialog", { name: "Unsaved profile changes" });
+    const guard = page.getByRole("dialog", { name: "Unsaved changes" });
     await guard.waitFor({ state: "visible", timeout: 5_000 });
     await guard.getByRole("button", { name: "Discard changes" }).click();
     await page.getByRole("heading", { name: "Agents" }).waitFor({
@@ -6289,14 +6289,14 @@ describe("Electron UI profile switching e2e", () => {
     const windowHandle = await app!.browserWindow(page);
 
     await windowHandle.evaluate((browserWindow) => browserWindow.close());
-    let guard = page.getByRole("dialog", { name: "Unsaved profile changes" });
+    let guard = page.getByRole("dialog", { name: "Unsaved changes" });
     await guard.waitFor({ state: "visible" });
     await guard.getByRole("button", { name: "Cancel" }).click();
     await guard.waitFor({ state: "hidden" });
     expect(page.isClosed()).toBe(false);
 
     await windowHandle.evaluate((browserWindow) => browserWindow.close());
-    guard = page.getByRole("dialog", { name: "Unsaved profile changes" });
+    guard = page.getByRole("dialog", { name: "Unsaved changes" });
     await guard.waitFor({ state: "visible" });
     const closed = page.waitForEvent("close");
     const discardClick = guard

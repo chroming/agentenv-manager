@@ -23,6 +23,7 @@ const composeBuiltInIntegration = (
     createPreview: adapter.createPreview
   },
   skills: adapter.skills,
+  projects: adapter.projects,
   conversations: adapter.conversations,
   evaluations: adapter.evaluations,
   assets: {

@@ -2,6 +2,62 @@
   "formatVersion": 1,
   "features": [
     {
+      "id": "project-environments",
+      "summary": "Manage real project-local Agent resources, preview one Agent's observable environment, and launch that Agent in the directory without binding a Profile.",
+      "contract": {
+        "path": "docs/product-contracts.md",
+        "anchor": "### 4.2.4 Projects"
+      },
+      "support": {
+        "opencode": "partial",
+        "claude-code": "partial",
+        "codex": "partial",
+        "antigravity": "partial",
+        "trae-cli": "partial",
+        "pi": "partial"
+      },
+      "states": {
+        "idle": "Projects lists device-local directory references and reads selected resources only on demand.",
+        "working": "The initiating add, inspect, edit, preview, or open control reports local progress without blocking sibling workspaces.",
+        "success": "The reference, verified project file mutation, fresh preview, or Agent launch is visible beside the affected Project.",
+        "error": "The scoped command names its path and diagnostic reference while preserving the prior reference and project bytes.",
+        "cancelled": "A cancelled picker, preview, editor, or launch preparation changes no reference, Profile, Agent, or project file.",
+        "noOp": "Unchanged text and an already-copied identical Skill perform no write and create no backup.",
+        "stale": "A project file changed after review requires a refreshed diff before mutation.",
+        "partial": "Unsupported, unreadable, or precedence-unknown Agent sources are named and the effective preview stays Partial.",
+        "persisted": "Only Project reference metadata and verified recovery receipts persist in device-local AgentEnv data.",
+        "rollback": "A Project mutation backup restores the exact original path; removing a reference never requires rollback because it never touches the directory."
+      },
+      "evidence": {
+        "domain": [
+          "tests/main/projects/projectStore.test.ts",
+          "tests/main/projects/projectCapability.test.ts",
+          "tests/main/projects/projectEnvironmentService.test.ts",
+          "tests/main/projects/projectMutationService.test.ts",
+          "tests/main/projects/projectLaunchService.test.ts"
+        ],
+        "renderer": [
+          "tests/renderer/ProjectsWorkspace.test.tsx",
+          "tests/renderer/ProjectEnvironmentPreviewDialog.test.tsx",
+          "tests/renderer/ConversationWorkspace.test.tsx"
+        ],
+        "desktop": [
+          "tests/e2e/projects.e2e.test.ts"
+        ],
+        "persistence": [
+          "tests/main/projects/projectStore.test.ts",
+          "tests/main/projects/projectMutationService.test.ts",
+          "tests/e2e/projects.e2e.test.ts"
+        ],
+        "visual": [
+          "projects-empty-920x620.png",
+          "projects-selected-920x620.png",
+          "project-environment-preview-920x620.png",
+          "projects-selected-1180x728.png"
+        ]
+      }
+    },
+    {
       "id": "verified-macos-release-updates",
       "summary": "Publish ad-hoc direct macOS assets and separate stable-identity Homebrew assets, then update Cask installations through exact checksums.",
       "contract": {

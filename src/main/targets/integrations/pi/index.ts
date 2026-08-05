@@ -6,6 +6,7 @@ import type {
 } from "../../../../shared/types";
 import { profileManagesResource } from "../../../../shared/profileResources";
 import { createApplyIssue } from "../../../applyIssues";
+import { createProjectCapability } from "../../../projects/projectCapability";
 import { createUnifiedDiff } from "../../../diff";
 import { readTextIfExists } from "../../../fileUtils";
 import { findSecretWarnings } from "../../../secretWarnings";
@@ -91,6 +92,19 @@ export const piIntegration: AgentTargetIntegration = {
     }
   },
   skills,
+  projects: createProjectCapability({
+    support: {
+      instructions: { inspect: "supported", mutate: "supported" },
+      skills: { inspect: "supported", mutate: "supported" },
+      mcp: { inspect: "unsupported", mutate: "unsupported" },
+      effectivePreview: "partial",
+      cliLaunch: "supported"
+    },
+    instructionFiles: ["AGENTS.md", "CLAUDE.md"],
+    skillDirectories: [".pi/skills", ".agents/skills"],
+    mcpFiles: [],
+    compareResourcePaths: ["AGENTS.md", "CLAUDE.md", ".pi", ".agents"]
+  }),
   conversations: createPiConversationCapability(),
   evaluations: createPiEvaluationCapability(),
   profile: {

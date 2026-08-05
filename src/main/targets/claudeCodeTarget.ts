@@ -15,6 +15,7 @@ import type {
 } from "../../shared/types";
 import { profileManagesResource } from "../../shared/profileResources";
 import { createApplyIssue } from "../applyIssues";
+import { createProjectCapability } from "../projects/projectCapability";
 import { createClaudeConversationCapability } from "./conversations/claudeConversations";
 import { createClaudeEvaluationCapability } from "./evaluations/claudeEvaluation";
 import { createUnifiedDiff } from "../diff";
@@ -243,6 +244,19 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
     };
   },
   skills,
+  projects: createProjectCapability({
+    support: {
+      instructions: { inspect: "supported", mutate: "supported" },
+      skills: { inspect: "supported", mutate: "supported" },
+      mcp: { inspect: "partial", mutate: "unsupported" },
+      effectivePreview: "partial",
+      cliLaunch: "supported"
+    },
+    instructionFiles: ["CLAUDE.md"],
+    skillDirectories: [".claude/skills", ".agents/skills"],
+    mcpFiles: [".mcp.json"],
+    compareResourcePaths: ["CLAUDE.md", ".claude", ".agents", "AGENTS.md"]
+  }),
   conversations: createClaudeConversationCapability(),
   evaluations: createClaudeEvaluationCapability(),
   createDefaultProfile: (id) => ({

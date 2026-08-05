@@ -7,6 +7,7 @@ import type {
 } from "../../../../shared/types";
 import { profileManagesResource } from "../../../../shared/profileResources";
 import { createApplyIssue } from "../../../applyIssues";
+import { createProjectCapability } from "../../../projects/projectCapability";
 import { createAntigravityConversationCapability } from "../../conversations/antigravityConversations";
 import { createAntigravityEvaluationCapability } from "../../evaluations/antigravityEvaluation";
 import { createUnifiedDiff } from "../../../diff";
@@ -128,6 +129,19 @@ export const antigravityIntegration: AgentTargetIntegration = {
     }
   },
   skills,
+  projects: createProjectCapability({
+    support: {
+      instructions: { inspect: "supported", mutate: "supported" },
+      skills: { inspect: "partial", mutate: "unsupported" },
+      mcp: { inspect: "unsupported", mutate: "unsupported" },
+      effectivePreview: "partial",
+      cliLaunch: "supported"
+    },
+    instructionFiles: ["GEMINI.md"],
+    skillDirectories: [".gemini/skills", ".agents/skills"],
+    mcpFiles: [],
+    compareResourcePaths: ["GEMINI.md", ".gemini", ".agents"]
+  }),
   profile: {
     createDefaultProfile: (id) => ({
       id,

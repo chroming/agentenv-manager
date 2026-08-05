@@ -137,6 +137,8 @@ const installApi = (
       mode: "context-file",
       message: "Started a new conversation in OpenCode"
     }),
+    listProjects: vi.fn().mockResolvedValue([]),
+    findProjectByPath: vi.fn().mockResolvedValue(undefined),
     openExternalUrl: vi.fn().mockResolvedValue(undefined),
     copyText: vi.fn().mockResolvedValue(undefined)
   };
@@ -154,6 +156,58 @@ afterEach(() => {
 });
 
 describe("ConversationWorkspace", () => {
+  it("groups known Projects in the folder filter and opens a matching Project", async () => {
+    const api = installApi();
+    const project = {
+      id: "project-work",
+      name: "Release Tools",
+      rootPath: "/work/project",
+      createdAt: "2026-08-06T00:00:00.000Z",
+      exists: true
+    };
+    api.listProjects.mockResolvedValue([project]);
+    api.findProjectByPath.mockResolvedValue(project);
+    const onOpenProject = vi.fn();
+
+    render(
+      <ConversationWorkspace
+        targets={[target("codex", "Codex")]}
+        onOpenProject={onOpenProject}
+      />
+    );
+
+    await screen.findByText("I found the failing step.");
+    const workspaceFilter = screen.getByRole("combobox", { name: "Filter by workspace" });
+    expect(within(workspaceFilter).getByRole("group", { name: "Projects" }))
+      .toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Open Project" }));
+    expect(onOpenProject).toHaveBeenCalledWith(project);
+  });
+
+  it("groups a canonical Project match even when the conversation uses a path alias", async () => {
+    const api = installApi();
+    const project = {
+      id: "project-work",
+      name: "Work Project",
+      rootPath: "/canonical/work/project",
+      createdAt: "2026-08-06T00:00:00.000Z",
+      exists: true
+    };
+    api.listProjects.mockResolvedValue([project]);
+    api.findProjectByPath.mockImplementation(async (path: string) =>
+      path === "/work/project" ? project : undefined
+    );
+
+    render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);
+
+    const workspaceFilter = await screen.findByRole("combobox", { name: "Filter by workspace" });
+    await waitFor(() => expect(
+      within(workspaceFilter).getByRole("group", { name: "Projects" })
+    ).toBeInTheDocument());
+    expect(within(workspaceFilter).getByRole("option", { name: "Work Project" }))
+      .toHaveValue("/work/project");
+  });
+
   it("opens an ordinary conversation at its latest message", async () => {
     installApi();
     const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollHeight");

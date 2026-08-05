@@ -18,6 +18,7 @@ import type {
 } from "../../../../shared/types";
 import { profileManagesResource } from "../../../../shared/profileResources";
 import { createApplyIssue } from "../../../applyIssues";
+import { createProjectCapability } from "../../../projects/projectCapability";
 import { createUnifiedDiff } from "../../../diff";
 import { readTextIfExists } from "../../../fileUtils";
 import { findSecretWarnings } from "../../../secretWarnings";
@@ -377,6 +378,19 @@ export const traeCliIntegration: AgentTargetIntegration = {
     }
   },
   skills,
+  projects: createProjectCapability({
+    support: {
+      instructions: { inspect: "partial", mutate: "supported" },
+      skills: { inspect: "supported", mutate: "supported" },
+      mcp: { inspect: "partial", mutate: "unsupported" },
+      effectivePreview: "partial",
+      cliLaunch: "supported"
+    },
+    instructionFiles: [".trae/rules", "AGENTS.md"],
+    skillDirectories: [".trae/skills"],
+    mcpFiles: [".trae/traecli.toml", ".trae/traecli.yaml"],
+    compareResourcePaths: [".trae", "AGENTS.md"]
+  }),
   conversations: createTraeCliConversationCapability(),
   profile: {
     createDefaultProfile: (id) => ({

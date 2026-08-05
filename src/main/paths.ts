@@ -13,6 +13,7 @@ export interface AgentEnvPaths {
   workspaceSyncJournalPath: string;
   evaluationCacheDir: string;
   evaluationResultPath: string;
+  projectsPath: string;
   skillSourcesPath: string;
   unmanagedSkillLocationsPath: string;
   skillCollectionDecisionsPath: string;
@@ -69,6 +70,8 @@ export const createPaths = (overrides: PathOverrides): AgentEnvPaths => {
       overrides.evaluationCacheDir ?? join(cacheRoot, "evaluations"),
     evaluationResultPath:
       overrides.evaluationResultPath ?? join(overrides.appDataRoot, "evaluations", "latest.json"),
+    projectsPath:
+      overrides.projectsPath ?? join(overrides.appDataRoot, "projects.json"),
     skillSourcesPath:
       overrides.skillSourcesPath ?? join(overrides.appDataRoot, "skill-sources.json"),
     unmanagedSkillLocationsPath:
