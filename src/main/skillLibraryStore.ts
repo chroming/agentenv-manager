@@ -2790,7 +2790,7 @@ export const createSkillLibraryStore = (
       await rm(join(candidateDir, ".agentenv-skill.json"), { force: true });
       await rm(join(candidateDir, ".agentenv-owner.json"), { force: true });
       const expectedLibraryContentHash = await computeContentHash(targetDir);
-      const { changes, filePaths } = await createSkillChangeSet(targetDir, candidateDir);
+      const { changes } = await createSkillChangeSet(targetDir, candidateDir);
       if (await computeContentHash(targetDir) !== expectedLibraryContentHash) {
         throw new Error("Library skill changed while preparing the update preview; retry");
       }
@@ -2845,7 +2845,6 @@ export const createSkillLibraryStore = (
         currentRevision: metadata.remoteRevision ?? metadata.contentHash,
         latestRevision,
         updateAvailable: true,
-        filePaths,
         changes,
         errors: [],
         impact

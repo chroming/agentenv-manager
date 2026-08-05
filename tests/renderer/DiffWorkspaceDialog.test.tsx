@@ -23,15 +23,10 @@ const changes: PlannedFileChange[] = [
 ];
 
 describe("DiffWorkspaceDialog", () => {
-  it("opens maximized with a complete aligned tree that marks changed context", () => {
+  it("shows only files that have selectable preview content", () => {
     render(
       <DiffWorkspaceDialog
         changes={changes}
-        filePaths={[
-          "/tmp/project/SKILL.md",
-          "/tmp/project/references/guide.md",
-          "/tmp/project/references/unchanged.md"
-        ]}
         open
         title="Skill update"
         onClose={vi.fn()}
@@ -42,9 +37,10 @@ describe("DiffWorkspaceDialog", () => {
     expect(dialog).toHaveClass("is-maximized");
     expect(within(dialog).getByText("/tmp/project")).toBeInTheDocument();
     expect(dialog.querySelector('[data-file-icon="docs"]')).toBeInTheDocument();
-    expect(dialog.querySelectorAll('[data-file-icon="markdown"]')).toHaveLength(3);
-    expect(within(dialog).getByRole("button", { name: "unchanged.md" }))
-      .toHaveAttribute("aria-disabled", "true");
+    expect(dialog.querySelectorAll('[data-file-icon="markdown"]')).toHaveLength(2);
+    expect(within(dialog).getAllByRole("button").filter((button) =>
+      button.closest(".diff-workspace__tree")
+    ).every((button) => button.getAttribute("aria-disabled") !== "true")).toBe(true);
     expect(within(dialog).getByRole("button", { name: "references" }))
       .toHaveClass("has-changes");
     expect(within(dialog).getByRole("table", {
@@ -77,5 +73,26 @@ describe("DiffWorkspaceDialog", () => {
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens readonly files when they share a tree with changed files", () => {
+    render(
+      <DiffWorkspaceDialog
+        changes={changes.slice(0, 1)}
+        readonlyFiles={[{
+          path: "/tmp/project/README.md",
+          content: "# Project notes\n"
+        }]}
+        open
+        title="Skill update"
+        onClose={vi.fn()}
+      />
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Full-screen preview" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "README.md" }));
+
+    expect(within(dialog).getByText("# Project notes")).toBeInTheDocument();
+    expect(within(dialog).getByText("/tmp/project/README.md")).toBeInTheDocument();
   });
 });

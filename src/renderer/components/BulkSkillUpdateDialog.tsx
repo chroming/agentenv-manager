@@ -75,12 +75,6 @@ export const BulkSkillUpdateDialog = ({
     }))),
     [plans]
   );
-  const workspaceFilePaths = useMemo(
-    () => plans.flatMap((plan) => (plan.filePaths ?? plan.changes.map((change) => change.path))
-      .map((path) => `${plan.name}/${path}`)),
-    [plans]
-  );
-
   useModalDialog({
     open: true,
     dialogRef,
@@ -269,7 +263,6 @@ export const BulkSkillUpdateDialog = ({
       </ModalFrame>
       <DiffWorkspaceDialog
         changes={workspaceChanges}
-        filePaths={workspaceFilePaths}
         open={diffWorkspaceOpen}
         returnFocusRef={expandPreviewRef}
         title={t("Update all skills")}

@@ -22,7 +22,6 @@ import { IconButton, ModalFrame } from "./ui";
 
 interface DiffWorkspaceDialogProps {
   changes: PlannedFileChange[];
-  filePaths?: string[];
   readonlyFiles?: Array<{ content: string; path: string }>;
   open: boolean;
   returnFocusRef?: RefObject<HTMLElement | null>;
@@ -137,7 +136,6 @@ const treeFor = (
 
 export const DiffWorkspaceDialog = ({
   changes,
-  filePaths,
   readonlyFiles = [],
   open,
   returnFocusRef,
@@ -149,25 +147,23 @@ export const DiffWorkspaceDialog = ({
   const closeRef = useRef<HTMLButtonElement>(null);
   const dragStartRef = useRef<{ pointerX: number; width: number } | undefined>(undefined);
   const [treeWidth, setTreeWidth] = useState(248);
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState(changes.length > 0 ? 0 : -1);
   const [selectedReadonlyPath, setSelectedReadonlyPath] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const changeSetKey = useMemo(
     () => [
       ...changes.map((change) => `${change.action ?? "replace"}:${change.path}`),
-      ...(filePaths ?? []).map((path) => `file:${path}`),
       ...readonlyFiles.map((file) => `readonly:${file.path}`)
     ].join("|"),
-    [changes, filePaths, readonlyFiles]
+    [changes, readonlyFiles]
   );
   const indexedPaths = useMemo(() => {
     const paths = [...new Set([
-      ...(filePaths ?? []),
       ...readonlyFiles.map((file) => file.path),
       ...changes.map((change) => change.path)
     ].map(normalizePath))];
     return paths.length > 0 ? paths : changes.map((change) => normalizePath(change.path));
-  }, [changes, filePaths, readonlyFiles]);
+  }, [changes, readonlyFiles]);
   const display = useMemo(
     () => displayPathsFor(indexedPaths),
     [indexedPaths]
@@ -194,7 +190,7 @@ export const DiffWorkspaceDialog = ({
     ),
     [changedPathIndexes, changes, display.paths, indexedPaths, readonlyFileByPath]
   );
-  const selected = changes[selectedIndex] ?? changes[0];
+  const selected = selectedIndex >= 0 ? changes[selectedIndex] : undefined;
   const firstReadonlyPath = normalizePath(readonlyFiles[0]?.path ?? "");
   const selectedReadonly = selected
     ? undefined
@@ -211,10 +207,10 @@ export const DiffWorkspaceDialog = ({
 
   useEffect(() => {
     if (!open) return;
-    setSelectedIndex(0);
+    setSelectedIndex(changes.length > 0 ? 0 : -1);
     setSelectedReadonlyPath(firstReadonlyPath);
     setCollapsed(new Set());
-  }, [open, changeSetKey, firstReadonlyPath]);
+  }, [changes.length, open, changeSetKey, firstReadonlyPath]);
 
   if (!open || (!selected && !selectedReadonly)) return null;
 
@@ -230,7 +226,6 @@ export const DiffWorkspaceDialog = ({
   const renderNodes = (nodes: DiffTreeNode[], depth = 0) =>
     nodes.map((node) => {
       const isFile = node.kind === "file";
-      const isContextFile = isFile && node.changeIndex === undefined && !node.readonlyPath;
       const isSelected = isFile && (
         (node.changeIndex === selectedIndex && selected !== undefined) ||
         node.readonlyPath === normalizePath(selectedReadonly?.path ?? "")
@@ -240,16 +235,17 @@ export const DiffWorkspaceDialog = ({
       return (
         <li key={node.id}>
           <button
-            className={`diff-workspace__tree-item${node.hasChanges ? " has-changes" : ""}${isContextFile ? " is-context" : ""}${changeClass}${isSelected ? " is-selected" : ""}`}
+            className={`diff-workspace__tree-item${node.hasChanges ? " has-changes" : ""}${changeClass}${isSelected ? " is-selected" : ""}`}
             style={{ paddingInlineStart: `${10 + depth * 16}px` }}
             type="button"
             aria-expanded={isFile ? undefined : !isCollapsed}
-            aria-disabled={isContextFile ? "true" : undefined}
-            tabIndex={isContextFile ? -1 : undefined}
             onClick={() => {
               if (isFile) {
                 if (node.changeIndex !== undefined) setSelectedIndex(node.changeIndex);
-                else if (node.readonlyPath) setSelectedReadonlyPath(node.readonlyPath);
+                else if (node.readonlyPath) {
+                  setSelectedIndex(-1);
+                  setSelectedReadonlyPath(node.readonlyPath);
+                }
                 return;
               }
               toggleDirectory(node.id);

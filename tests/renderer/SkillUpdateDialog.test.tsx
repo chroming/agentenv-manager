@@ -15,12 +15,6 @@ const planWithChanges = (count: number): SkillUpdatePlan => ({
   currentRevision: "2492a1a",
   latestRevision: "adba0a5",
   updateAvailable: true,
-  filePaths: [
-    ...Array.from({ length: count }, (_, index) =>
-      index === 0 ? "SKILL.md" : `references/file-${index}.md`
-    ),
-    "references/unchanged.md"
-  ],
   changes: Array.from({ length: count }, (_, index) => ({
     path: index === 0 ? "SKILL.md" : `references/file-${index}.md`,
     before: `old ${index}\n`,
@@ -86,8 +80,8 @@ describe("SkillUpdateDialog", () => {
 
     const workspace = screen.getByRole("dialog", { name: "Full-screen preview" });
     expect(workspace).toHaveClass("is-maximized");
-    expect(within(workspace).getByRole("button", { name: "unchanged.md" }))
-      .toHaveAttribute("aria-disabled", "true");
+    expect(within(workspace).getByRole("button", { name: "SKILL.md" })).toBeEnabled();
+    expect(within(workspace).getByRole("button", { name: "file-1.md" })).toBeEnabled();
     expect(parent).toHaveAttribute("aria-hidden", "true");
 
     fireEvent.keyDown(document, { key: "Escape" });

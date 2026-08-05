@@ -2486,7 +2486,6 @@ description: >
       updateAvailable: true,
       errors: []
     });
-    expect(plan.filePaths).toEqual(["SKILL.md", "new.md", "old.md"]);
     expect(plan.changes.map((change) => change.path)).toEqual(["SKILL.md", "new.md", "old.md"]);
     expect(plan.changes[0].diff).toContain("# v2");
   });

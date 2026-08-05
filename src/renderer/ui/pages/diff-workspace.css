@@ -114,15 +114,6 @@
   color: var(--warning-strong);
 }
 
-.diff-workspace__tree-item.is-context {
-  cursor: default;
-}
-
-.diff-workspace__tree-item.is-context:hover {
-  background: transparent;
-  color: var(--muted);
-}
-
 .diff-workspace__tree-item > svg,
 .diff-workspace__tree-item > .file-type-icon {
   flex: 0 0 auto;

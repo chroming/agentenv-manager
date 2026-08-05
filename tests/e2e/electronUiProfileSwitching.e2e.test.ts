@@ -8470,6 +8470,29 @@ describe("Electron UI profile switching e2e", () => {
     await bulkUpdateDialog.getByRole("button", { name: "Maximize preview" }).click();
     const fullPreview = page.getByRole("dialog", { name: "Full-screen preview" });
     await fullPreview.waitFor({ state: "visible" });
+    expect(await fullPreview.locator('.diff-workspace__tree-item[aria-disabled="true"]').count())
+      .toBe(0);
+    const previewFiles = fullPreview.locator(
+      ".diff-workspace__tree-item:has(.diff-workspace__tree-chevron-placeholder)"
+    );
+    expect(await previewFiles.count()).toBe(2);
+    const selectedPaths: string[] = [];
+    for (let index = 0; index < await previewFiles.count(); index += 1) {
+      await previewFiles.nth(index).click();
+      selectedPaths.push(
+        await fullPreview.locator(".diff-workspace__preview > header strong").getAttribute("title")
+          ?? ""
+      );
+    }
+    expect(selectedPaths.sort()).toEqual([
+      "Shared Reviewer/SKILL.md",
+      "batch-helper/SKILL.md"
+    ]);
+    if (bulkUpdateCaptureDir) {
+      await page.screenshot({
+        path: join(bulkUpdateCaptureDir, "bulk-update-preview-maximized-920x620.png")
+      });
+    }
     await fullPreview.getByRole("button", { name: "Close" }).click();
     await bulkUpdateDialog.getByRole("button", { name: "Update 2 skills" }).click();
     await bulkUpdateDialog

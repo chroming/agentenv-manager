@@ -211,7 +211,6 @@ export const SkillUpdateDialog = ({
       </ModalFrame>
       <DiffWorkspaceDialog
         changes={plan.changes}
-        filePaths={plan.filePaths}
         open={diffWorkspaceOpen}
         returnFocusRef={expandPreviewRef}
         title={t("Update {{name}}", { name: plan.name })}
