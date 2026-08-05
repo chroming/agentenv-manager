@@ -1,8 +1,9 @@
 # Privacy
 
 AgentEnv Manager is a local-first desktop application. It has no advertising or
-application-operated service for user data. Optional anonymous reliability
-reporting is disabled by default.
+application-operated service for user data. Official builds enable a bounded
+anonymous daily usage event by default; it can be disabled at any time in
+Settings.
 
 ## Data Read Locally
 
@@ -71,17 +72,24 @@ Apply Profiles, pull Workspace changes, or push local changes.
 
 The app can check the official `chroming/agentenv-manager` GitHub Releases for
 updates. Homebrew-managed macOS installations can also prefetch and install the
-checksum-bound Cask update. Update checks are independent from reliability
-reporting consent.
+checksum-bound Cask update. Update checks are independent from the anonymous
+usage statistics preference.
 
-If you explicitly enable anonymous reliability reporting in Settings, the app
-sends at most one daily startup event. The exact payload is visible in Settings
-and contains only: schema version, event date, app version, operating-system
-family and major version, architecture, interface locale, install channel, and
-a stable startup outcome category. It contains no device or account identifier,
-paths, names, Profiles, Skills, source URLs, conversations, prompts, MCP data,
+Unless you disable anonymous usage statistics in Settings, an official build
+sends at most one startup event per local calendar day to PostHog Cloud. An information popover
+and expandable preview show the shared fields, which contain only: schema
+version, event date, app version, operating-system
+family and major version, architecture, interface locale, and install channel.
+Each application data directory receives a random installation identifier that
+is not derived from hardware, an operating-system account, or any Agent account.
+It is used only to count anonymous installations across app versions. Events
+disable PostHog person-profile creation and GeoIP enrichment. They contain no
+actions or results, hardware or account identifier, paths, names, Profiles,
+Skills, source URLs, conversations, prompts, MCP data,
 environment values, command output, or stack traces. Builds without a compiled
-HTTPS reporting endpoint send nothing. Network failures are discarded and never
+PostHog project token send nothing. Like any direct HTTPS service, PostHog
+processes the connection metadata needed to receive the request. Network
+failures are discarded and never
 delay startup or user actions.
 
 ## Removing Data

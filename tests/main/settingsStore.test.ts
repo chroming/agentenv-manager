@@ -40,7 +40,7 @@ describe("settings store", () => {
       appUpdateAutoCheckEnabled: true,
       appUpdateAutoDownloadEnabled: true,
       appUpdateInstallOnQuit: true,
-      telemetryEnabled: false,
+      telemetryEnabled: true,
       backupRetentionDays: null
     });
 
@@ -94,15 +94,30 @@ describe("settings store", () => {
       appUpdateAutoCheckEnabled: true,
       appUpdateAutoDownloadEnabled: true,
       appUpdateInstallOnQuit: true,
-      telemetryEnabled: false
+      telemetryEnabled: true
     });
     expect(JSON.parse(await readFile(join(paths.appDataRoot, "settings.json"), "utf8")))
       .toMatchObject({
         appUpdateAutoCheckEnabled: true,
         appUpdateAutoDownloadEnabled: true,
         appUpdateInstallOnQuit: true,
-        telemetryEnabled: false
+        telemetryEnabled: true
       });
+  });
+
+  it("preserves an existing telemetry opt-out", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-settings-telemetry-opt-out-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    await mkdir(paths.appDataRoot, { recursive: true });
+    await writeFile(
+      join(paths.appDataRoot, "settings.json"),
+      JSON.stringify({ telemetryEnabled: false }),
+      "utf8"
+    );
+
+    await expect(createSettingsStore(paths).readSettings()).resolves.toEqual(
+      expect.objectContaining({ telemetryEnabled: false })
+    );
   });
 
   it("starts new installations with every Agent off", async () => {

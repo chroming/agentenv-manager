@@ -55,8 +55,7 @@ export type {
 export type {
   TelemetryDailyStartupPayload,
   TelemetryPreview,
-  TelemetrySendResult,
-  TelemetryStartupOutcome
+  TelemetrySendResult
 } from "./telemetry";
 
 export type {

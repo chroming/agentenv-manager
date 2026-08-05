@@ -79,10 +79,18 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
       .getByRole("button", { name: "Settings" })
       .click({ timeout: 5_000 });
     await page.getByText("Installed with Homebrew").waitFor({ timeout: 5_000 });
-    await page.getByText("This build does not send reliability data.").waitFor({ timeout: 5_000 });
+    await page.getByRole("tab", { name: "Data" }).click();
+    await page.getByText("This build does not send anonymous usage statistics. Your preference is kept for future builds.")
+      .waitFor({ timeout: 5_000 });
     await expect.poll(() =>
-      page.getByRole("switch", { name: "Share anonymous reliability data" }).isDisabled()
-    ).toBe(true);
+      page.getByRole("switch", { name: "Share anonymous usage statistics" }).isDisabled()
+    ).toBe(false);
+    await page.getByRole("switch", { name: "Share anonymous usage statistics" }).click();
+    await expect.poll(async () =>
+      JSON.parse(await readFile(join(dataRoot, "settings.json"), "utf8"))
+        .telemetryEnabled
+    ).toBe(false);
+    await page.getByRole("tab", { name: "General" }).click();
     await page.getByRole("button", { name: "Check now" }).click({ timeout: 5_000 });
     await expect.poll(
       () => page.evaluate(() => window.agentEnv.readAppUpdateStatus()),
@@ -120,6 +128,11 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
       .click({ timeout: 5_000 });
     await expect.poll(() =>
       page.getByRole("switch", { name: "Automatic update checks" })
+        .getAttribute("aria-checked")
+    ).toBe("false");
+    await page.getByRole("tab", { name: "Data" }).click();
+    await expect.poll(() =>
+      page.getByRole("switch", { name: "Share anonymous usage statistics" })
         .getAttribute("aria-checked")
     ).toBe("false");
   }, 60_000);

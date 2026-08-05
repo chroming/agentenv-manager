@@ -640,7 +640,8 @@ const createServices = async (
   });
   const telemetryService = createTelemetryService({
     statePath: join(paths.appDataRoot, "telemetry-state.json"),
-    endpoint: __AGENTENV_TELEMETRY_ENDPOINT__,
+    host: __AGENTENV_POSTHOG_HOST__,
+    projectToken: app.isPackaged ? __AGENTENV_POSTHOG_PROJECT_TOKEN__ : "",
     settingsStore,
     context: {
       appVersion: app.getVersion(),
@@ -1100,7 +1101,7 @@ const initializeServices = () => {
         void services.appUpdateService.readStatus()
           .then((status) => {
             services.telemetryService.setInstallChannel(status.installChannel);
-            return services.telemetryService.recordDailyStartup("ready");
+            return services.telemetryService.recordDailyStartup();
           })
           .catch(() => undefined);
         const runBackupCleanup = async () => {

@@ -1,10 +1,8 @@
 import type { AppInstallChannel } from "./appUpdates";
 
-export type TelemetryStartupOutcome = "ready" | "startup-failed";
-
 export interface TelemetryDailyStartupPayload {
-  schemaVersion: 1;
-  event: "daily-startup";
+  schemaVersion: 2;
+  event: "agentenv_daily_startup";
   date: string;
   appVersion: string;
   platform: "darwin" | "win32" | "linux";
@@ -12,11 +10,12 @@ export interface TelemetryDailyStartupPayload {
   arch: string;
   locale: "en" | "zh_CN" | "zh_TW";
   installChannel: AppInstallChannel;
-  outcome: TelemetryStartupOutcome;
 }
 
 export interface TelemetryPreview {
   enabledInBuild: boolean;
+  destination: "PostHog Cloud";
+  installationId: string;
   payload: TelemetryDailyStartupPayload;
 }
 

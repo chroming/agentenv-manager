@@ -78,7 +78,7 @@ The source Agent still owns the original history. AgentEnv does not edit convers
 - Agents keep their MCP definitions and credentials. Profiles manage only supported enablement states.
 - Repository scans use a separate cache and never modify an existing checkout.
 - Workspace Sync includes portable Profile and Library data, not credentials, Target state, or backups.
-- The app has no advertising or hosted service for user data. Anonymous reliability reporting is off by default, and Settings shows every field before opt-in.
+- The app has no advertising or hosted service for user data. Official builds send at most one anonymous usage event per day by default. You can disable it at any time and preview every shared field in Settings.
 
 See [Product contracts](docs/product-contracts.md) for exact behavior and [PRIVACY.md](PRIVACY.md) for local data and network access.
 
@@ -122,7 +122,7 @@ npm run dist:win
 npm run dist:linux
 ```
 
-Pushing a `vX.Y.Z` tag that exactly matches `package.json` runs the cross-platform release workflow. It produces an SBOM, checksums, a release manifest, and the Homebrew Cask. Publishing requires `HOMEBREW_TAP_DEPLOY_KEY`, a repository-scoped Deploy Key that can write only to `chroming/homebrew-tap`.
+Pushing a `vX.Y.Z` tag that exactly matches `package.json` runs the cross-platform release workflow. It produces an SBOM, checksums, a release manifest, and the Homebrew Cask. Publishing requires `HOMEBREW_TAP_DEPLOY_KEY`, a repository-scoped Deploy Key that can write only to `chroming/homebrew-tap`. Anonymous usage statistics also require the public repository variable `AGENTENV_POSTHOG_PROJECT_TOKEN`; builds without it send nothing. For PostHog EU Cloud, set `AGENTENV_POSTHOG_HOST` to `https://eu.i.posthog.com`.
 
 See [Development](docs/development.md) for architecture, Target integrations, test evidence, and the release workflow.
 

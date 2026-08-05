@@ -110,7 +110,7 @@
 - Test: `tests/main/telemetryService.test.ts`
 
 - [ ] Write failing tests proving opt-out sends nothing and forbidden values cannot enter the payload.
-- [ ] Implement a compile-time endpoint, native fetch transport, short timeout, daily coalescing, and stable result codes.
+- [ ] Implement compile-time PostHog Cloud host and project-token configuration, native fetch transport, short timeout, daily coalescing, and stable result codes.
 - [ ] Verify network failure never rejects startup or user commands.
 
 ### Task 8: Privacy settings and documentation
@@ -124,7 +124,7 @@
 - Modify: `README.en.md`
 - Test: `tests/renderer/TelemetrySettings.test.tsx`
 
-- [ ] Write failing tests for explicit consent, payload preview, persistence, and independent update controls.
+- [ ] Write failing tests for the default-on preference, persistent opt-out, payload preview, and independent update controls.
 - [ ] Add the Settings surface using existing preference primitives.
 - [ ] Update privacy and installation documentation without overstating platform trust.
 - [ ] Run renderer, translation, and documentation audits.

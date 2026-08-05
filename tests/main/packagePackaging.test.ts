@@ -236,6 +236,9 @@ describe("package metadata", () => {
     expect(workflow).toContain('node scripts/verify-macos-release-identity.mjs release-assets');
     expect(workflow).toContain('MACOS_SIGNING_P12_BASE64');
     expect(workflow).toContain('MACOS_SIGNING_P12_PASSWORD');
+    expect(workflow).toContain('AGENTENV_POSTHOG_HOST');
+    expect(workflow).toContain('AGENTENV_POSTHOG_PROJECT_TOKEN');
+    expect(workflow).not.toContain('AGENTENV_TELEMETRY_ENDPOINT');
     expect(workflow).toContain('npm run dist:mac:release');
     expect(workflow).toContain('Verify direct-download ad-hoc signature');
     expect(workflow).toContain('AgentEnv-Manager-${version}-mac-arm64-homebrew.dmg');

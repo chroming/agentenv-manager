@@ -4898,11 +4898,6 @@ const AppContent = ({
                 onChange={(input) => void updateSkillSettings(input)}
                 onOpenConnections={openGitHubConnectionSettings}
               />
-              <TelemetrySettings
-                busy={busy}
-                settings={skillSettings}
-                onChange={(input) => void updateSkillSettings(input)}
-              />
               </>
             ) : null}
             {settingsCategory === "agents" ? (
@@ -4968,6 +4963,11 @@ const AppContent = ({
               onManageBackups={openBackupManager}
               onOpenFolder={() => void window.agentEnv.openDataFolder()}
               onRestore={() => void selectAgentEnvDataRestore()}
+            />
+            <TelemetrySettings
+              busy={busy}
+              settings={skillSettings}
+              onChange={(input) => void updateSkillSettings(input)}
             />
             <DiagnosticSettingsSection
               busy={busy}

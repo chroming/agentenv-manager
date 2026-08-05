@@ -342,17 +342,18 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     onAppUpdateStatusChanged: vi.fn().mockReturnValue(() => undefined),
     readTelemetryPreview: vi.fn().mockResolvedValue({
       enabledInBuild: false,
+      destination: "PostHog Cloud",
+      installationId: "31e27e20-a4ed-4a4a-96b1-c4213d2864eb",
       payload: {
-        schemaVersion: 1,
-        event: "daily-startup",
+        schemaVersion: 2,
+        event: "agentenv_daily_startup",
         date: "2026-08-03",
         appVersion: "0.1.0",
         platform: "darwin",
         osMajor: "26",
         arch: "arm64",
         locale: "en",
-        installChannel: "development",
-        outcome: "ready"
+        installChannel: "development"
       }
     }),
     reportRendererError: vi.fn(),

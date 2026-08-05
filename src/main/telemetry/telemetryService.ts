@@ -1,15 +1,16 @@
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { AgentEnvSettings } from "../../shared/types";
 import type {
   TelemetryDailyStartupPayload,
   TelemetryPreview,
-  TelemetrySendResult,
-  TelemetryStartupOutcome
+  TelemetrySendResult
 } from "../../shared/telemetry";
 import type { AppInstallChannel } from "../../shared/appUpdates";
 import { writeAtomic } from "../fileUtils";
 
 interface TelemetryState {
+  installationId?: string;
   lastSentDate?: string;
 }
 
@@ -23,15 +24,22 @@ interface TelemetryContext {
 }
 
 export interface TelemetryService {
-  preview(outcome?: TelemetryStartupOutcome): TelemetryPreview;
-  recordDailyStartup(outcome: TelemetryStartupOutcome): Promise<TelemetrySendResult>;
+  preview(): Promise<TelemetryPreview>;
+  recordDailyStartup(): Promise<TelemetrySendResult>;
   setInstallChannel(channel: AppInstallChannel): void;
 }
+
+const installationIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const readState = async (path: string): Promise<TelemetryState> => {
   try {
     const value = JSON.parse(await readFile(path, "utf8")) as TelemetryState;
-    return typeof value.lastSentDate === "string" ? { lastSentDate: value.lastSentDate } : {};
+    return {
+      ...(typeof value.installationId === "string" && installationIdPattern.test(value.installationId)
+        ? { installationId: value.installationId }
+        : {}),
+      ...(typeof value.lastSentDate === "string" ? { lastSentDate: value.lastSentDate } : {})
+    };
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return {};
     return {};
@@ -40,71 +48,127 @@ const readState = async (path: string): Promise<TelemetryState> => {
 
 const payloadFor = (
   context: TelemetryContext,
-  date: string,
-  outcome: TelemetryStartupOutcome
+  date: string
 ): TelemetryDailyStartupPayload => ({
-  schemaVersion: 1,
-  event: "daily-startup",
+  schemaVersion: 2,
+  event: "agentenv_daily_startup",
   date,
   appVersion: context.appVersion,
   platform: context.platform,
   osMajor: context.osVersion.split(".")[0] || "unknown",
   arch: context.arch,
   locale: context.locale,
-  installChannel: context.installChannel,
-  outcome
+  installChannel: context.installChannel
 });
+
+const localDateFor = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 export const createTelemetryService = (options: {
   statePath: string;
-  endpoint: string;
+  host: string;
+  projectToken: string;
   settingsStore: Pick<{ readSettings(): Promise<Pick<AgentEnvSettings, "telemetryEnabled">> }, "readSettings">;
   context: TelemetryContext;
   fetch?: typeof globalThis.fetch;
   now?: () => Date;
+  createInstallationId?: () => string;
   timeoutMs?: number;
 }): TelemetryService => {
-  const configuredEndpoint = options.endpoint.trim();
+  const configuredHost = options.host.trim();
+  const projectToken = options.projectToken.trim();
   const endpoint = (() => {
-    if (!configuredEndpoint) return "";
+    if (!configuredHost || !projectToken) return "";
     try {
-      return new URL(configuredEndpoint).protocol === "https:" ? configuredEndpoint : "";
+      const url = new URL(configuredHost);
+      if (
+        url.protocol !== "https:" ||
+        !["us.i.posthog.com", "eu.i.posthog.com"].includes(url.hostname)
+      ) {
+        return "";
+      }
+      return `${url.origin}/i/v0/e/`;
     } catch {
       return "";
     }
   })();
   const request = options.fetch ?? globalThis.fetch;
   const now = options.now ?? (() => new Date());
+  const createInstallationId = options.createInstallationId ?? randomUUID;
   const timeoutMs = options.timeoutMs ?? 3_000;
   let inFlight: Promise<TelemetrySendResult> | undefined;
+  let statePromise: Promise<TelemetryState> | undefined;
   let installChannel = options.context.installChannel;
 
-  const preview = (outcome: TelemetryStartupOutcome = "ready"): TelemetryPreview => ({
-    enabledInBuild: Boolean(endpoint),
-    payload: payloadFor(
-      { ...options.context, installChannel },
-      now().toISOString().slice(0, 10),
-      outcome
-    )
-  });
+  const persistState = async (state: TelemetryState) => {
+    await writeAtomic(options.statePath, `${JSON.stringify(state, null, 2)}\n`);
+    statePromise = Promise.resolve(state);
+  };
 
-  const recordDailyStartup = (outcome: TelemetryStartupOutcome) => {
+  const ensureState = () => {
+    statePromise ??= readState(options.statePath).then(async (state) => {
+      if (state.installationId) return state;
+      const next = { ...state, installationId: createInstallationId() };
+      await persistState(next);
+      return next;
+    });
+    return statePromise;
+  };
+
+  const preview = async (): Promise<TelemetryPreview> => {
+    const state = await ensureState();
+    return {
+      enabledInBuild: Boolean(endpoint),
+      destination: "PostHog Cloud",
+      installationId: state.installationId!,
+      payload: payloadFor(
+        { ...options.context, installChannel },
+        localDateFor(now())
+      )
+    };
+  };
+
+  const recordDailyStartup = () => {
     if (inFlight) return inFlight;
     inFlight = (async (): Promise<TelemetrySendResult> => {
       const settings = await options.settingsStore.readSettings().catch(() => ({ telemetryEnabled: false }));
       if (!endpoint || settings.telemetryEnabled !== true) return { status: "disabled" };
-      const payload = preview(outcome).payload;
-      const state = await readState(options.statePath);
-      if (state.lastSentDate === payload.date) return { status: "already-sent" };
       try {
+        const currentPreview = await preview();
+        const payload = currentPreview.payload;
+        const state = await ensureState();
+        if (state.lastSentDate === payload.date) return { status: "already-sent" };
         const response = await request(endpoint, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            api_key: projectToken,
+            distinct_id: currentPreview.installationId,
+            event: payload.event,
+            properties: {
+              schemaVersion: payload.schemaVersion,
+              date: payload.date,
+              appVersion: payload.appVersion,
+              platform: payload.platform,
+              osMajor: payload.osMajor,
+              arch: payload.arch,
+              locale: payload.locale,
+              installChannel: payload.installChannel,
+              $process_person_profile: false,
+              $geoip_disable: true
+            }
+          }),
           signal: AbortSignal.timeout(timeoutMs)
         });
         if (!response.ok) return { status: "failed" };
-        await writeAtomic(options.statePath, `${JSON.stringify({ lastSentDate: payload.date }, null, 2)}\n`);
+        await persistState({
+          installationId: currentPreview.installationId,
+          lastSentDate: payload.date
+        });
         return { status: "sent" };
       } catch {
         return { status: "failed" };

@@ -3965,6 +3965,13 @@ summary {
   color: var(--accent);
 }
 
+.settings-preference-label {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+  min-width: 0;
+}
+
 .app-feedback {
   align-items: start;
   border: 1px solid var(--border);

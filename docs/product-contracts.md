@@ -1988,7 +1988,7 @@ This matrix is the release-facing index. A capability may be `Implemented` only 
 | Windows and Linux native packages | `Required` | Platform data roots, links, Git, terminal, menu, and installer lifecycle | Native CI packaged smoke on each operating system |
 | Verified direct and Homebrew macOS release | `Implemented` | Ad-hoc direct assets; pinned fixed-identity Homebrew assets; valid App seals, expected Gatekeeper rejection, exact-tag SHA-256, manifest, SBOM, draft verification, official Tap | Release generation, native package jobs, dual signature gate, Cask and packaged Electron tests |
 | App update checks and Homebrew install | `Implemented` | Official stable Release only; Homebrew prefetch/install; settings persist locally | Domain, renderer, Electron E2E |
-| Optional reliability reporting | `Implemented` | Default-off consent; one allowlisted daily event; network failure is non-blocking | Domain and renderer tests |
+| Anonymous usage statistics | `Implemented` | Default-on official builds; persistent opt-out; random installation ID; one basic-information event per local day; no action or result data; network failure is non-blocking | Domain, renderer, and Electron E2E |
 
 ## 25. Production Release Gate
 

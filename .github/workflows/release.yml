@@ -49,7 +49,8 @@ jobs:
     timeout-minutes: 70
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
-      AGENTENV_TELEMETRY_ENDPOINT: ${{ vars.AGENTENV_TELEMETRY_ENDPOINT }}
+      AGENTENV_POSTHOG_HOST: ${{ vars.AGENTENV_POSTHOG_HOST }}
+      AGENTENV_POSTHOG_PROJECT_TOKEN: ${{ vars.AGENTENV_POSTHOG_PROJECT_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -105,7 +106,8 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 55
     env:
-      AGENTENV_TELEMETRY_ENDPOINT: ${{ vars.AGENTENV_TELEMETRY_ENDPOINT }}
+      AGENTENV_POSTHOG_HOST: ${{ vars.AGENTENV_POSTHOG_HOST }}
+      AGENTENV_POSTHOG_PROJECT_TOKEN: ${{ vars.AGENTENV_POSTHOG_PROJECT_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -129,7 +131,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     env:
-      AGENTENV_TELEMETRY_ENDPOINT: ${{ vars.AGENTENV_TELEMETRY_ENDPOINT }}
+      AGENTENV_POSTHOG_HOST: ${{ vars.AGENTENV_POSTHOG_HOST }}
+      AGENTENV_POSTHOG_PROJECT_TOKEN: ${{ vars.AGENTENV_POSTHOG_PROJECT_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

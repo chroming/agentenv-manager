@@ -16,7 +16,7 @@ export const SettingsSchema = z.object({
   appUpdateAutoCheckEnabled: z.boolean().default(true),
   appUpdateAutoDownloadEnabled: z.boolean().default(true),
   appUpdateInstallOnQuit: z.boolean().default(true),
-  telemetryEnabled: z.boolean().default(false),
+  telemetryEnabled: z.boolean().default(true),
   backupRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).default(null),
   enabledTargetIds: z.array(z.string().min(1)).optional(),
   agentDiscoveryReviewedIds: z.array(z.string().min(1)).optional(),
@@ -38,7 +38,7 @@ const DEFAULT_SETTINGS: AgentEnvSettings = {
   appUpdateAutoCheckEnabled: true,
   appUpdateAutoDownloadEnabled: true,
   appUpdateInstallOnQuit: true,
-  telemetryEnabled: false,
+  telemetryEnabled: true,
   backupRetentionDays: null
 };
 

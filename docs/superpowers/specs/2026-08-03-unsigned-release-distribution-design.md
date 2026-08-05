@@ -94,17 +94,25 @@ exact SHA-256 values, and package identity checks.
 
 - Existing GitHub Release download counts and Homebrew aggregate analytics are
   the baseline distribution metrics.
-- Application telemetry is disabled by default and requires an explicit Settings
-  choice. Update checks do not depend on telemetry consent.
-- The payload allowlist is limited to schema version, app version, OS family and
-  major version, architecture, locale, install channel, a daily startup outcome,
-  update outcome codes, and stable startup failure categories.
+- Official builds enable one anonymous daily startup event by default. Users can
+  disable it at any time in `Settings > Data > Privacy`; an information popover
+  and expandable preview disclose the complete field allowlist. Existing explicit
+  opt-outs remain off. Update checks do not depend on telemetry state.
+- The payload allowlist is limited to schema version, local event date, app
+  version, OS family and major version, architecture, locale, and install channel.
 - Paths, usernames, Agent names, Profile and Skill identity/content, source URLs,
   conversations, prompts, MCP data, environment values, account identity, raw
   command output, and raw stack traces are forbidden.
-- The client uses a short timeout, bounded queue, and silent failure. Telemetry can
+- Official builds send directly to the PostHog Cloud capture endpoint with no
+  analytics SDK. The public project token is compile-time configuration and is
+  never presented as a secret. Each application data directory receives a random
+  installation identifier that is unrelated to hardware or account identity.
+  Events disable person-profile creation and GeoIP enrichment.
+- The client uses a short timeout, one-event-per-day local deduplication, and
+  silent failure. Telemetry can
   never delay startup, shutdown, Apply, update, or recovery.
-- Official builds opt into a compile-time endpoint. Forks without an endpoint do
+- Official builds opt into a compile-time PostHog project token and US/EU Cloud
+  host. Forks without a token do
   not send data. Settings provides a human-readable payload preview.
 
 ## Evidence

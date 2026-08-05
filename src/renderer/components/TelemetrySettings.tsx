@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { AgentEnvSettings, TelemetryPreview } from "../../shared/types";
 import { useI18n } from "../i18n";
+import { InfoTip } from "./InfoTip";
 import { SettingsPreferenceRow } from "./SettingsPreferenceRow";
 import { Switch } from "./ui";
 
@@ -35,14 +36,17 @@ export const TelemetrySettings = ({
       </div>
       <div className="settings-preference-list">
         <SettingsPreferenceRow
-          label={t("Anonymous reliability data")}
+          label={<span className="settings-preference-label">
+            {t("Anonymous usage statistics")}
+            <InfoTip label={t("Once per local day, AgentEnv sends a random installation ID, its version, operating-system family and major version, architecture, interface language, and install channel to PostHog Cloud. It never includes actions, results, paths, names, repositories, conversations, prompts, or file contents.")} />
+          </span>}
           description={preview?.enabledInBuild === false
-            ? t("This build does not send reliability data.")
-            : t("Sends one bounded daily startup event. It is off until you enable it.")}
+            ? t("This build does not send anonymous usage statistics. Your preference is kept for future builds.")
+            : t("Shares one anonymous startup event per day. Turn it off at any time.")}
           control={<Switch
             checked={settings.telemetryEnabled === true}
-            disabled={busy || preview?.enabledInBuild === false}
-            label={t("Share anonymous reliability data")}
+            disabled={busy}
+            label={t("Share anonymous usage statistics")}
             onClick={() => onChange({ telemetryEnabled: settings.telemetryEnabled !== true })}
           />}
         />
@@ -50,7 +54,10 @@ export const TelemetrySettings = ({
       {preview ? (
         <details className="telemetry-preview">
           <summary>{t("Preview shared data")}</summary>
-          <pre>{JSON.stringify(preview.payload, null, 2)}</pre>
+          <pre>{JSON.stringify({
+            installationId: preview.installationId,
+            ...preview.payload
+          }, null, 2)}</pre>
         </details>
       ) : null}
     </section>
