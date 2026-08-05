@@ -109,6 +109,7 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       cliLaunch: "supported"
     },
     instructionFiles: ["AGENTS.md", "AGENTS.override.md"],
+    instructionCreateFile: "AGENTS.md",
     skillDirectories: [".agents/skills", ".codex/skills"],
     mcpFiles: [],
     compareResourcePaths: ["AGENTS.md", "AGENTS.override.md", ".agents", ".codex"]

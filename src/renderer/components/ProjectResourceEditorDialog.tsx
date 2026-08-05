@@ -1,9 +1,13 @@
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ProjectMutationResult, ProjectResourceFile } from "../../shared/types";
+import type {
+  ProjectInstructionDraft,
+  ProjectMutationResult,
+  ProjectResourceFile
+} from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
-import { Button, ModalFrame } from "./ui";
+import { Button, ModalFrame, Notice } from "./ui";
 
 export interface ProjectEditorGuard {
   dirty: boolean;
@@ -15,6 +19,7 @@ interface ProjectResourceEditorDialogProps {
   open: boolean;
   projectId: string;
   resourceId?: string;
+  agentId?: string;
   onClose(): void;
   onSaved(result: ProjectMutationResult): Promise<void> | void;
   onGuardChange?(guard?: ProjectEditorGuard): void;
@@ -25,6 +30,7 @@ export const ProjectResourceEditorDialog = ({
   open,
   projectId,
   resourceId,
+  agentId,
   onClose,
   onSaved,
   onGuardChange,
@@ -33,11 +39,11 @@ export const ProjectResourceEditorDialog = ({
   const { t, formatDate } = useI18n();
   const dialogRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const fileRef = useRef<ProjectResourceFile | undefined>(undefined);
+  const fileRef = useRef<ProjectResourceFile | ProjectInstructionDraft | undefined>(undefined);
   const contentRef = useRef("");
-  const [file, setFile] = useState<ProjectResourceFile>();
+  const [file, setFile] = useState<ProjectResourceFile | ProjectInstructionDraft>();
   const [content, setContent] = useState("");
-  const [busy, setBusy] = useState<"load" | "save">();
+  const [busy, setBusy] = useState<"load" | "save" | undefined>(open ? "load" : undefined);
   const [error, setError] = useState("");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
 
@@ -47,11 +53,13 @@ export const ProjectResourceEditorDialog = ({
   const stale = error.includes("changed outside AgentEnv");
 
   const load = async () => {
-    if (!resourceId) return;
+    if (!resourceId && !agentId) return;
     setBusy("load");
     setError("");
     try {
-      const next = await window.agentEnv.readProjectResource(projectId, resourceId);
+      const next = resourceId
+        ? await window.agentEnv.readProjectResource(projectId, resourceId)
+        : await window.agentEnv.prepareProjectInstruction(projectId, agentId!);
       setFile(next);
       setContent(next.content);
       setConfirmDiscard(false);
@@ -63,9 +71,9 @@ export const ProjectResourceEditorDialog = ({
   };
 
   useEffect(() => {
-    if (!open || !resourceId) return;
+    if (!open || (!resourceId && !agentId)) return;
     void load();
-  }, [open, projectId, resourceId]);
+  }, [open, projectId, resourceId, agentId]);
 
   const save = async () => {
     const current = fileRef.current;
@@ -73,15 +81,23 @@ export const ProjectResourceEditorDialog = ({
     setBusy("save");
     setError("");
     try {
-      const result = await window.agentEnv.saveProjectResource({
-        projectId,
-        resourceId: current.resourceId,
-        expectedHash: current.contentHash,
-        content: contentRef.current
-      });
-      const next = { ...current, content: contentRef.current, contentHash: result.contentHash };
-      setFile(next);
+      const result = "resourceId" in current
+        ? await window.agentEnv.saveProjectResource({
+            projectId,
+            resourceId: current.resourceId,
+            expectedHash: current.contentHash,
+            content: contentRef.current
+          })
+        : await window.agentEnv.createProjectInstruction({
+            projectId,
+            agentId: current.agentId,
+            content: contentRef.current
+          });
+      if ("resourceId" in current) {
+        setFile({ ...current, content: contentRef.current, contentHash: result.contentHash });
+      }
       await onSaved(result);
+      if (!("resourceId" in current)) onClose();
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       throw unknownError;
@@ -123,7 +139,9 @@ export const ProjectResourceEditorDialog = ({
   });
 
   const metadata = useMemo(() => file
-    ? `${file.path} · ${formatDate(file.modifiedAt)}`
+    ? file.modifiedAt
+      ? `${file.path} · ${formatDate(file.modifiedAt)}`
+      : file.path
     : t("Reading Project file…"), [file, formatDate, t]);
 
   if (!open) return null;
@@ -145,15 +163,20 @@ export const ProjectResourceEditorDialog = ({
       </header>
       <div className="ui-dialog-body project-editor-dialog__body">
         {error ? (
-          <div className="project-editor-error" role="alert">
-            <AlertTriangle size={16} aria-hidden="true" />
-            <span>{error}</span>
-            {stale ? (
-              <Button icon={<RotateCcw size={14} />} onClick={() => void load()}>{t("Reload")}</Button>
-            ) : null}
-          </div>
+          <Notice
+            tone="danger"
+            role="alert"
+            icon={<AlertTriangle size={16} />}
+            actions={stale ? (
+              <Button size="compact" icon={<RotateCcw size={14} />} onClick={() => void load()}>
+                {t("Reload")}
+              </Button>
+            ) : undefined}
+          >
+            {error}
+          </Notice>
         ) : null}
-        {busy === "load" ? (
+        {busy === "load" || !file ? (
           <div className="project-editor-loading">{t("Reading Project file…")}</div>
         ) : (
           <textarea
@@ -165,14 +188,19 @@ export const ProjectResourceEditorDialog = ({
           />
         )}
         {confirmDiscard ? (
-          <div className="project-editor-discard" role="alert">
-            <div>
-              <strong>{t("Discard unsaved changes?")}</strong>
-              <span>{t("The Project file has not been changed yet.")}</span>
-            </div>
-            <Button onClick={() => setConfirmDiscard(false)}>{t("Keep editing")}</Button>
-            <Button variant="danger" onClick={() => void discard()}>{t("Discard changes")}</Button>
-          </div>
+          <Notice
+            tone="warning"
+            role="alert"
+            title={t("Discard unsaved changes?")}
+            actions={(
+              <>
+                <Button size="compact" onClick={() => setConfirmDiscard(false)}>{t("Keep editing")}</Button>
+                <Button size="compact" variant="danger" onClick={() => void discard()}>{t("Discard changes")}</Button>
+              </>
+            )}
+          >
+            {t("The Project file has not been changed yet.")}
+          </Notice>
         ) : null}
       </div>
       <footer className="ui-dialog-footer">

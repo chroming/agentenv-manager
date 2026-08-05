@@ -204,6 +204,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       cliLaunch: "supported"
     },
     instructionFiles: ["AGENTS.md", "CLAUDE.md"],
+    instructionCreateFile: "AGENTS.md",
     skillDirectories: [".opencode/skills", ".claude/skills", ".agents/skills"],
     mcpFiles: ["opencode.json", "opencode.jsonc"],
     compareResourcePaths: [

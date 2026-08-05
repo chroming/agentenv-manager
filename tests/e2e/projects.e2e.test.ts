@@ -29,12 +29,11 @@ describe("Projects desktop workflow", () => {
     const instructionsPath = join(projectRoot, "AGENTS.md");
     const librarySkill = join(dataRoot, "skills-library", "testing");
     const addedProjectSkill = join(projectRoot, ".opencode", "skills", "testing");
-    const existingProjectSkill = join(projectRoot, ".opencode", "skills", "review");
     await Promise.all([
       mkdir(home, { recursive: true }),
       mkdir(dataRoot, { recursive: true }),
       mkdir(bin, { recursive: true }),
-      mkdir(existingProjectSkill, { recursive: true }),
+      mkdir(projectRoot, { recursive: true }),
       mkdir(librarySkill, { recursive: true })
     ]);
     await writeFile(join(dataRoot, "agentenv-data.json"), '{"formatVersion":2}\n');
@@ -66,11 +65,6 @@ describe("Projects desktop workflow", () => {
         createdAt: "2026-08-06T00:00:00.000Z"
       }]
     })}\n`);
-    await writeFile(instructionsPath, "# Original project rules\n");
-    await writeFile(
-      join(existingProjectSkill, "SKILL.md"),
-      "---\nname: review\ndescription: Review changes.\n---\n\n# Review\n"
-    );
     await writeFile(
       join(librarySkill, "SKILL.md"),
       "---\nname: testing\ndescription: Test changes.\n---\n\n# Testing\n"
@@ -109,11 +103,36 @@ describe("Projects desktop workflow", () => {
     const notNow = page.getByRole("button", { name: "Not now", exact: true });
     if (await notNow.isVisible().catch(() => false)) await notNow.click();
     await page.getByRole("button", { name: "Projects", exact: true }).click();
-    await page.getByRole("button", { name: "AGENTS.md", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Add instruction", exact: true }).waitFor();
     await expectNoHorizontalOverflow(page);
     const captureDir = process.env.AGENTENV_CAPTURE_PROJECTS_DIR;
     if (captureDir) {
       await mkdir(captureDir, { recursive: true });
+      await page.screenshot({ path: join(captureDir, "project-empty-resources-920x620.png") });
+    }
+
+    await page.getByRole("button", { name: "Add instruction", exact: true }).click();
+    const editor = page.getByRole("textbox", { name: "Project instruction content" });
+    if (captureDir) {
+      await page.screenshot({ path: join(captureDir, "project-instruction-editor-920x620.png") });
+    }
+    await editor.fill("# Project rules\n");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect.poll(() => readFile(instructionsPath, "utf8"))
+      .toBe("# Project rules\n");
+
+    await page.getByRole("button", { name: "Add from Library" }).click();
+    await page.getByRole("dialog", { name: "Add Skill to Project" }).waitFor();
+    if (captureDir) {
+      await page.screenshot({ path: join(captureDir, "project-add-skill-920x620.png") });
+    }
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
+      .toContain("# Testing");
+    await expect(readFile(join(addedProjectSkill, ".agentenv-skill.json"), "utf8"))
+      .rejects.toMatchObject({ code: "ENOENT" });
+
+    if (captureDir) {
       await page.screenshot({ path: join(captureDir, "projects-selected-920x620.png") });
       await page.setViewportSize({ width: 1180, height: 728 });
       await expectNoHorizontalOverflow(page);
@@ -128,49 +147,42 @@ describe("Projects desktop workflow", () => {
       await closePreview.click();
     }
 
-    await page.getByRole("button", { name: "AGENTS.md", exact: true }).click();
-    const editor = page.getByRole("textbox", { name: "Project instruction content" });
-    await editor.fill("# Updated project rules\n");
-    await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect.poll(() => readFile(instructionsPath, "utf8"))
-      .toBe("# Updated project rules\n");
-    await page.getByRole("button", { name: "Close", exact: true }).click();
-
     await page.getByRole("button", { name: "More Project actions" }).click();
     await page.getByRole("menuitem", { name: "Recovery" }).click();
-    await page.getByRole("button", { name: "Restore", exact: true }).click();
-    await expect.poll(() => readFile(instructionsPath, "utf8"))
-      .toBe("# Original project rules\n");
-    await page.getByRole("button", { name: "Close", exact: true }).click();
-
-    await page.getByRole("button", { name: "Add from Library" }).click();
-    await page.getByRole("dialog", { name: "Add Skill to Project" }).waitFor();
-    await page.getByRole("button", { name: "Add", exact: true }).click();
-    await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
-      .toContain("# Testing");
-    await expect(readFile(join(addedProjectSkill, ".agentenv-skill.json"), "utf8"))
-      .rejects.toMatchObject({ code: "ENOENT" });
-
-    await page.getByRole("button", { name: "More Project actions" }).click();
-    await page.getByRole("menuitem", { name: "Recovery" }).click();
+    if (captureDir) {
+      await page.screenshot({ path: join(captureDir, "project-recovery-920x620.png") });
+    }
     await page.getByRole("button", { name: "Restore", exact: true }).first().click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8").then(
       () => true,
       () => false
     )).toBe(false);
+    await page.getByRole("button", { name: "Restore", exact: true }).first().click();
+    await expect.poll(() => readFile(instructionsPath, "utf8").then(
+      () => true,
+      () => false
+    )).toBe(false);
     await page.getByRole("button", { name: "Close", exact: true }).click();
 
-    await page.getByRole("button", { name: "Remove review from Project" }).click();
+    await page.getByRole("button", { name: "Add instruction", exact: true }).click();
+    await page.getByRole("textbox", { name: "Project instruction content" }).fill("# Project rules\n");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await page.getByRole("button", { name: "Add from Library" }).click();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
+      .toContain("# Testing");
+
+    await page.getByRole("button", { name: "Remove testing from Project" }).click();
     await page.getByRole("button", { name: "Remove", exact: true }).click();
-    await expect.poll(() => readFile(join(existingProjectSkill, "SKILL.md"), "utf8").then(
+    await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8").then(
       () => true,
       () => false
     )).toBe(false);
     await page.getByRole("button", { name: "More Project actions" }).click();
     await page.getByRole("menuitem", { name: "Recovery" }).click();
     await page.getByRole("button", { name: "Restore", exact: true }).first().click();
-    await expect.poll(() => readFile(join(existingProjectSkill, "SKILL.md"), "utf8"))
-      .toContain("# Review");
+    await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
+      .toContain("# Testing");
     await page.getByRole("button", { name: "Close", exact: true }).click();
 
     await page.getByRole("button", { name: "More Project actions" }).click();
@@ -178,7 +190,7 @@ describe("Projects desktop workflow", () => {
     await page.getByRole("button", { name: "Remove reference", exact: true }).click();
     await expect.poll(async () => JSON.parse(await readFile(join(dataRoot, "projects.json"), "utf8")).projects)
       .toEqual([]);
-    await expect(readFile(instructionsPath, "utf8")).resolves.toBe("# Original project rules\n");
+    await expect(readFile(instructionsPath, "utf8")).resolves.toBe("# Project rules\n");
     if (captureDir) {
       await page.screenshot({ path: join(captureDir, "projects-empty-920x620.png") });
     }

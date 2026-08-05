@@ -29,6 +29,7 @@ import { ResourceIconKeySchema, SafeIdSchema } from "../shared/schemas";
 import type {
   CreateProfileInput,
   AddProjectSkillInput,
+  CreateProjectInstructionInput,
   CreateProfileFromTargetInput,
   DeleteManagedBackupInput,
   ForkProfileSkillsInput,
@@ -438,8 +439,17 @@ export const registerIpcHandlers = ({
       parseId(resourceId, "Project resource id")
     )
   );
+  diagnosticHandle("projects:prepare-instruction", (_event, projectId: unknown, agentId: unknown) =>
+    projectMutationService.prepareInstruction(
+      parseId(projectId, "Project id"),
+      parseId(agentId, "Agent id")
+    )
+  );
   handleMutation("projects:save-resource", (_event, input: SaveProjectResourceInput) =>
     projectMutationService.save(input)
+  );
+  handleMutation("projects:create-instruction", (_event, input: CreateProjectInstructionInput) =>
+    projectMutationService.createInstruction(input)
   );
   handleMutation("projects:add-skill", (_event, input: AddProjectSkillInput) =>
     projectMutationService.addSkill(input)

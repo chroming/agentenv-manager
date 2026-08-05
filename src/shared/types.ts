@@ -131,7 +131,9 @@ export interface AgentEnvApi {
   inspectProject(id: string): Promise<ProjectEnvironmentSnapshot>;
   previewProject(projectId: string, agentId: string): Promise<ProjectEnvironmentPreview>;
   readProjectResource(projectId: string, resourceId: string): Promise<ProjectResourceFile>;
+  prepareProjectInstruction(projectId: string, agentId: string): Promise<ProjectInstructionDraft>;
   saveProjectResource(input: SaveProjectResourceInput): Promise<ProjectMutationResult>;
+  createProjectInstruction(input: CreateProjectInstructionInput): Promise<ProjectMutationResult>;
   addProjectSkill(input: AddProjectSkillInput): Promise<ProjectMutationResult>;
   removeProjectSkill(input: RemoveProjectSkillInput): Promise<ProjectMutationResult>;
   listProjectRecovery(projectId?: string): Promise<ProjectRecoverySummary[]>;
@@ -1308,6 +1310,7 @@ export interface ProjectEnvironmentSnapshot {
     agentId: string;
     agentName: string;
     instructions: { inspect: string; mutate: string };
+    instructionCreateFile?: string;
     skills: { inspect: string; mutate: string };
     mcp: { inspect: string; mutate: string };
     effectivePreview: string;
@@ -1350,10 +1353,26 @@ export interface ProjectResourceFile {
   editable: boolean;
 }
 
+export interface ProjectInstructionDraft {
+  agentId: string;
+  name: string;
+  path: string;
+  content: "";
+  contentHash: "absent";
+  modifiedAt?: undefined;
+  editable: true;
+}
+
 export interface SaveProjectResourceInput {
   projectId: string;
   resourceId: string;
   expectedHash: string;
+  content: string;
+}
+
+export interface CreateProjectInstructionInput {
+  projectId: string;
+  agentId: string;
   content: string;
 }
 

@@ -78,7 +78,10 @@ const api: AgentEnvApi = {
   openProject: (projectId, agentId) => ipcRenderer.invoke("projects:open", projectId, agentId),
   readProjectResource: (projectId, resourceId) =>
     ipcRenderer.invoke("projects:read-resource", projectId, resourceId),
+  prepareProjectInstruction: (projectId, agentId) =>
+    ipcRenderer.invoke("projects:prepare-instruction", projectId, agentId),
   saveProjectResource: (input) => ipcRenderer.invoke("projects:save-resource", input),
+  createProjectInstruction: (input) => ipcRenderer.invoke("projects:create-instruction", input),
   addProjectSkill: (input) => ipcRenderer.invoke("projects:add-skill", input),
   removeProjectSkill: (input) => ipcRenderer.invoke("projects:remove-skill", input),
   listProjectRecovery: (projectId) => ipcRenderer.invoke("projects:list-recovery", projectId),

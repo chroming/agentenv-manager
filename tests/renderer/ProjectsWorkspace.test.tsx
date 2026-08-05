@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProjectsWorkspace } from "../../src/renderer/components/ProjectsWorkspace";
 import type { AgentEnvApi, ProjectSummary, TargetInfo } from "../../src/shared/types";
@@ -49,6 +49,7 @@ const installApi = () => {
         agentId: "opencode",
         agentName: "OpenCode",
         instructions: { inspect: "supported", mutate: "supported" },
+        instructionCreateFile: "AGENTS.md",
         skills: { inspect: "supported", mutate: "supported" },
         mcp: { inspect: "partial", mutate: "unsupported" },
         effectivePreview: "partial",
@@ -84,7 +85,9 @@ const installApi = () => {
       modifiedAt: "2026-08-06T00:00:00.000Z",
       editable: true
     }),
+    prepareProjectInstruction: vi.fn(),
     saveProjectResource: vi.fn().mockResolvedValue({ status: "saved", contentHash: "next" }),
+    createProjectInstruction: vi.fn(),
     listProjectRecovery: vi.fn().mockResolvedValue([]),
     restoreProjectRecovery: vi.fn(),
     listSkillLibrary: vi.fn().mockResolvedValue([{
@@ -135,6 +138,41 @@ describe("ProjectsWorkspace", () => {
       .toBeInTheDocument();
   });
 
+  it("offers an instruction draft when the selected Agent file is missing", async () => {
+    const api = installApi();
+    api.inspectProject.mockResolvedValue({
+      projectId: project.id,
+      projectRoot: project.rootPath,
+      resources: [],
+      agentSupport: [{
+        agentId: "opencode",
+        agentName: "OpenCode",
+        instructions: { inspect: "supported", mutate: "supported" },
+        instructionCreateFile: "AGENTS.md",
+        skills: { inspect: "supported", mutate: "supported" },
+        mcp: { inspect: "partial", mutate: "unsupported" },
+        effectivePreview: "partial",
+        cliLaunch: "supported"
+      }],
+      issues: [],
+      partial: false
+    });
+    api.prepareProjectInstruction.mockResolvedValue({
+      agentId: "opencode",
+      name: "AGENTS.md",
+      path: "/work/example/AGENTS.md",
+      content: "",
+      contentHash: "absent",
+      editable: true
+    });
+    render(<ProjectsWorkspace targets={[target]} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add instruction" }));
+    expect(await screen.findByRole("dialog", { name: "Edit Project instruction" }))
+      .toBeInTheDocument();
+    expect(api.createProjectInstruction).not.toHaveBeenCalled();
+  });
+
   it("adds a Library copy and confirms removal of a Project-owned Skill", async () => {
     const api = installApi();
     render(<ProjectsWorkspace targets={[target]} />);
@@ -158,6 +196,33 @@ describe("ProjectsWorkspace", () => {
       resourceId: "skill-1",
       expectedHash: "skill-hash"
     }));
+  });
+
+  it("refreshes the selected Project environment instead of only reloading references", async () => {
+    const api = installApi();
+    render(<ProjectsWorkspace targets={[target]} />);
+    await screen.findByRole("button", { name: "AGENTS.md" });
+    api.listProjects.mockClear();
+    api.inspectProject.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh Projects" }));
+
+    await waitFor(() => expect(api.listProjects).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.inspectProject).toHaveBeenCalledWith("project-1"));
+  });
+
+  it("keeps a failed Project Skill add actionable inside its dialog", async () => {
+    const api = installApi();
+    api.addProjectSkill.mockRejectedValue(new Error("Project resource parent is not a regular directory"));
+    render(<ProjectsWorkspace targets={[target]} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add from Library" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add Skill to Project" });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Add$/ }));
+
+    expect(await within(dialog).findByRole("alert"))
+      .toHaveTextContent("Project resource parent is not a regular directory");
+    expect(dialog).toBeInTheDocument();
   });
 
   it("opens the same Project actions from a row context menu and dismisses with Escape", async () => {

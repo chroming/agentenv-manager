@@ -1,17 +1,20 @@
 import { randomUUID } from "node:crypto";
-import { lstat, readFile, readdir, rename, rm } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { lstat, mkdir, readFile, readdir, rename, rm, rmdir } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import type {
   AddProjectSkillInput,
+  CreateProjectInstructionInput,
+  ProjectInstructionDraft,
   ProjectMutationResult,
   ProjectResourceFile,
   RemoveProjectSkillInput,
   SaveProjectResourceInput
 } from "../../shared/types";
-import { pathEntryExists, writeAtomic } from "../fileUtils";
+import { isMissingFileError, pathEntryExists, writeAtomic } from "../fileUtils";
 import { copyPathVerified, hashFileContent } from "../filesystemIntegrity";
 import { hashSkillContent } from "../skillContentHash";
 import { copySkillEntries } from "../skillDeployment";
+import { pathsEqual } from "../platformPaths";
 import type { SkillLibraryStore } from "../skillLibraryStore";
 import type { ProjectEnvironmentService } from "./projectEnvironmentService";
 import type { ProjectRecoveryStore } from "./projectRecoveryStore";
@@ -27,7 +30,9 @@ interface ProjectMutationServiceOptions {
 
 export interface ProjectMutationService {
   read(projectId: string, resourceId: string): Promise<ProjectResourceFile>;
+  prepareInstruction(projectId: string, agentId: string): Promise<ProjectInstructionDraft>;
   save(input: SaveProjectResourceInput): Promise<ProjectMutationResult>;
+  createInstruction(input: CreateProjectInstructionInput): Promise<ProjectMutationResult>;
   addSkill(input: AddProjectSkillInput): Promise<ProjectMutationResult>;
   removeSkill(input: RemoveProjectSkillInput): Promise<ProjectMutationResult>;
   restore(receiptId: string): Promise<ProjectMutationResult>;
@@ -39,6 +44,52 @@ export const createProjectMutationService = ({
   skillLibraryStore,
   enabledAgentIds
 }: ProjectMutationServiceOptions): ProjectMutationService => {
+  const ensureRegularProjectDirectory = async (projectRoot: string, target: string) => {
+    const relativePath = relative(projectRoot, target);
+    if (!relativePath || relativePath === ".") return [];
+    if (
+      relativePath === ".." ||
+      relativePath.startsWith(`..${sep}`) ||
+      isAbsolute(relativePath)
+    ) {
+      throw new Error("Project directory destination escapes its root");
+    }
+    const created: string[] = [];
+    let current = projectRoot;
+    for (const part of relativePath.split(sep)) {
+      current = join(current, part);
+      let entry = await lstat(current).catch((error) => {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+        throw error;
+      });
+      if (!entry) {
+        let createdHere = false;
+        try {
+          await mkdir(current);
+          createdHere = true;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        }
+        entry = await lstat(current);
+        if (createdHere) created.push(current);
+      }
+      if (!entry.isDirectory() || entry.isSymbolicLink()) {
+        throw new Error(`Project resource parent is not a regular directory: ${current}`);
+      }
+    }
+    return created;
+  };
+
+  const removeCreatedEmptyDirectories = async (paths: readonly string[]) => {
+    for (const path of [...paths].reverse()) {
+      await rmdir(path).catch((error) => {
+        if (!["ENOENT", "ENOTEMPTY", "EEXIST"].includes((error as NodeJS.ErrnoException).code ?? "")) {
+          throw error;
+        }
+      });
+    }
+  };
+
   const assertPortableSkill = async (root: string) => {
     const queue = [root];
     let count = 0;
@@ -151,7 +202,68 @@ export const createProjectMutationService = ({
 
   return {
     read,
+    prepareInstruction: async (projectId, agentId) => {
+      const { destination } = await environmentService.resolveInstructionDestination(projectId, agentId);
+      if (await pathEntryExists(destination)) {
+        throw new Error("Project instruction already exists. Refresh the Project before editing it.");
+      }
+      return {
+        agentId,
+        name: dirname(destination) === destination ? destination : destination.split(/[\\/]/).pop()!,
+        path: destination,
+        content: "",
+        contentHash: "absent",
+        editable: true
+      };
+    },
     save,
+    createInstruction: async (input) => {
+      if (Buffer.byteLength(input.content) > MAX_PROJECT_TEXT_BYTES) {
+        throw new Error("Project instruction file is too large to save safely");
+      }
+      const { projectRoot, destination } = await environmentService.resolveInstructionDestination(
+        input.projectId,
+        input.agentId
+      );
+      if (await pathEntryExists(destination)) {
+        throw new Error("Project instruction changed outside AgentEnv. Refresh before saving.");
+      }
+      const appliedHash = hashFileContent(input.content);
+      await recoveryStore.assertWritablePath(destination);
+      const receipt = await recoveryStore.prepare({
+        projectId: input.projectId,
+        resourceId: `instruction-create:${input.agentId}`,
+        agentId: input.agentId,
+        path: destination,
+        kind: "instructions",
+        originalWasAbsent: true,
+        originalHash: "absent",
+        appliedHash
+      });
+      let createdParents: string[] = [];
+      try {
+        createdParents = await ensureRegularProjectDirectory(projectRoot, dirname(destination));
+        await writeAtomic(destination, input.content, { expectedTargetHash: undefined });
+        const verified = hashFileContent(await readFile(destination));
+        if (verified !== appliedHash) throw new Error("Project instruction verification failed after save");
+        await recoveryStore.update(receipt.id, "committed");
+        return { status: "saved", contentHash: appliedHash, receiptId: receipt.id };
+      } catch (error) {
+        const currentHash = await readFile(destination)
+          .then(
+            (content) => hashFileContent(content),
+            (readError) => isMissingFileError(readError) ? "absent" : "unreadable"
+          );
+        if (currentHash === appliedHash) await rm(destination).catch(() => undefined);
+        const restored = currentHash !== "unreadable" && (
+          currentHash !== appliedHash || !await pathEntryExists(destination)
+        );
+        await removeCreatedEmptyDirectories(createdParents);
+        await recoveryStore.update(receipt.id, restored ? "failed-restored" : "recovery-required");
+        if (!restored) throw new Error("Project instruction creation failed and recovery requires attention");
+        throw error;
+      }
+    },
     addSkill: async (input) => {
       const library = (await skillLibraryStore.listSkills()).find((skill) => skill.id === input.libraryId);
       if (!library) throw new Error(`Library Skill not found: ${input.libraryId}`);
@@ -160,7 +272,7 @@ export const createProjectMutationService = ({
       }
       await assertPortableSkill(library.path);
       const sourceHash = await hashSkillContent(library.path);
-      const { destination } = await environmentService.resolveSkillDestination(
+      const { projectRoot, skillRoot, destination } = await environmentService.resolveSkillDestination(
         input.projectId,
         input.agentId,
         library.id
@@ -181,12 +293,20 @@ export const createProjectMutationService = ({
         appliedHash: sourceHash,
         originalWasAbsent: true
       });
+      let createdParents: string[] = [];
       try {
+        createdParents = await ensureRegularProjectDirectory(projectRoot, skillRoot);
         await copySkillAtomically(library.path, destination, sourceHash, true);
         await recoveryStore.update(receipt.id, "committed");
         return { status: "saved", contentHash: sourceHash, receiptId: receipt.id };
       } catch (error) {
-        await rm(destination, { recursive: true, force: true }).catch(() => undefined);
+        const currentHash = await pathEntryExists(destination)
+          ? await hashSkillContent(destination).catch(() => "unreadable")
+          : "absent";
+        if (currentHash === sourceHash) {
+          await rm(destination, { recursive: true, force: true }).catch(() => undefined);
+        }
+        await removeCreatedEmptyDirectories(createdParents);
         const restored = !await pathEntryExists(destination);
         await recoveryStore.update(receipt.id, restored ? "failed-restored" : "recovery-required");
         if (!restored) throw new Error("Project Skill add failed and recovery requires attention");
@@ -273,8 +393,35 @@ export const createProjectMutationService = ({
         await recoveryStore.update(receipt.id, "restored");
         return { status: "restored", contentHash: receipt.originalHash, receiptId };
       }
+      if (receipt.originalWasAbsent) {
+        if (!receipt.agentId) throw new Error("Project instruction recovery is missing its Agent declaration");
+        const { destination } = await environmentService.resolveInstructionDestination(
+          receipt.projectId,
+          receipt.agentId
+        );
+        if (!pathsEqual(destination, receipt.path)) {
+          throw new Error("Project recovery path no longer matches the declared instruction file");
+        }
+        if (!await pathEntryExists(receipt.path)) {
+          await recoveryStore.update(receipt.id, "restored");
+          return { status: "no-op", contentHash: "absent", receiptId };
+        }
+        const currentHash = hashFileContent(await readFile(receipt.path));
+        if (currentHash !== receipt.appliedHash) {
+          throw new Error("Project instruction changed after this recovery point. Review the current file before restoring.");
+        }
+        await rm(receipt.path);
+        if (await pathEntryExists(receipt.path)) {
+          await recoveryStore.update(receipt.id, "recovery-required");
+          throw new Error("Project recovery could not remove the created instruction file");
+        }
+        await recoveryStore.update(receipt.id, "restored");
+        return { status: "restored", contentHash: "absent", receiptId };
+      }
       const resource = await resolveInstruction(receipt.projectId, receipt.resourceId);
-      if (resource.absolutePath !== receipt.path) throw new Error("Project recovery path no longer matches the declared resource");
+      if (!pathsEqual(resource.absolutePath, receipt.path)) {
+        throw new Error("Project recovery path no longer matches the declared resource");
+      }
       const current = await readFile(receipt.path);
       const currentHash = hashFileContent(current);
       if (currentHash === receipt.originalHash) {

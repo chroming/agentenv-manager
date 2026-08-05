@@ -4,6 +4,7 @@ export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from ".
 export { ControlGroup } from "./ControlGroup";
 export { IconButton } from "./IconButton";
 export { ModalFrame, type ModalDismissPolicy } from "./ModalFrame";
+export { Notice } from "./Notice";
 export { PageHeader } from "./PageHeader";
 export { ResourceRow } from "./ResourceRow";
 export { Switch } from "./Switch";

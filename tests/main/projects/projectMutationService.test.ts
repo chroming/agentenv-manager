@@ -143,6 +143,67 @@ describe("project mutation service", () => {
     await expect(readFile(join(destination, "SKILL.md"), "utf8")).rejects.toThrow();
   });
 
+  it("creates a missing declared Project Skill directory and restores its prior absence", async () => {
+    const { project, projectRoot, service } = await setup();
+    await rm(join(projectRoot, ".agents"), { recursive: true, force: true });
+
+    const result = await service.addSkill({
+      projectId: project.id,
+      agentId: "codex",
+      libraryId: "review"
+    });
+    const destination = join(projectRoot, ".agents", "skills", "review");
+    await expect(readFile(join(destination, "SKILL.md"), "utf8"))
+      .resolves.toContain("# Review");
+
+    await expect(service.restore(result.receiptId!)).resolves.toMatchObject({ status: "restored" });
+    await expect(readFile(join(destination, "SKILL.md"), "utf8")).rejects.toThrow();
+  });
+
+  it("does not replace an unsafe parent while creating a Project Skill directory", async () => {
+    const { project, projectRoot, service } = await setup();
+    await rm(join(projectRoot, ".agents"), { recursive: true, force: true });
+    await writeFile(join(projectRoot, ".agents"), "reserved by the project\n", "utf8");
+
+    await expect(service.addSkill({
+      projectId: project.id,
+      agentId: "codex",
+      libraryId: "review"
+    })).rejects.toThrow("not a regular directory");
+    await expect(readFile(join(projectRoot, ".agents"), "utf8"))
+      .resolves.toBe("reserved by the project\n");
+  });
+
+  it("creates a missing primary Project instruction from a draft and restores absence", async () => {
+    const { project, instructionPath, service } = await setup();
+    await rm(instructionPath);
+
+    const result = await service.createInstruction({
+      projectId: project.id,
+      agentId: "codex",
+      content: "# New project rules\n"
+    });
+    expect(await readFile(instructionPath, "utf8")).toBe("# New project rules\n");
+
+    await expect(service.restore(result.receiptId!)).resolves.toMatchObject({ status: "restored" });
+    await expect(readFile(instructionPath, "utf8")).rejects.toThrow();
+  });
+
+  it("refuses to remove a newly created instruction that changed after its recovery point", async () => {
+    const { project, instructionPath, service } = await setup();
+    await rm(instructionPath);
+
+    const result = await service.createInstruction({
+      projectId: project.id,
+      agentId: "codex",
+      content: "# New project rules\n"
+    });
+    await writeFile(instructionPath, "# External project rules\n", "utf8");
+
+    await expect(service.restore(result.receiptId!)).rejects.toThrow("changed after this recovery point");
+    await expect(readFile(instructionPath, "utf8")).resolves.toBe("# External project rules\n");
+  });
+
   it("backs up a Project Skill before removal and restores the verified directory", async () => {
     const { project, projectRoot, service, environmentService } = await setup();
     await service.addSkill({ projectId: project.id, agentId: "codex", libraryId: "review" });

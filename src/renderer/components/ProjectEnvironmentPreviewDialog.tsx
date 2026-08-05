@@ -1,9 +1,9 @@
-import { AlertTriangle, Maximize2, Minimize2 } from "lucide-react";
+import { AlertTriangle, BookOpen, FileText, Maximize2, Minimize2, Plug } from "lucide-react";
 import { useRef, useState } from "react";
 import type { ProjectEnvironmentPreview } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
-import { Button, IconButton, ModalFrame } from "./ui";
+import { Button, IconButton, ModalFrame, Notice, ResourceRow } from "./ui";
 
 interface ProjectEnvironmentPreviewDialogProps {
   open: boolean;
@@ -15,6 +15,13 @@ interface ProjectEnvironmentPreviewDialogProps {
 
 const kindLabel = (kind: "instructions" | "skill" | "mcp") =>
   kind === "instructions" ? "Instructions" : kind === "skill" ? "Skill" : "MCP";
+
+const kindIcon = (kind: "instructions" | "skill" | "mcp") =>
+  kind === "instructions"
+    ? <FileText size={15} />
+    : kind === "skill"
+      ? <BookOpen size={15} />
+      : <Plug size={15} />;
 
 export const ProjectEnvironmentPreviewDialog = ({
   open,
@@ -62,16 +69,15 @@ export const ProjectEnvironmentPreviewDialog = ({
       </header>
       <div className="ui-dialog-body project-environment-dialog__body">
         {busy ? <div className="project-preview-loading">{t("Reading the current Agent environment…")}</div> : null}
-        {error ? <div className="project-preview-error" role="alert">{error}</div> : null}
+        {error ? <Notice tone="danger" role="alert">{error}</Notice> : null}
         {preview ? (
           <>
-            <div className="project-preview-scope-note">
-              <AlertTriangle size={15} aria-hidden="true" />
-              <span>{t("Load order unknown. Project and Agent-global sources remain separate.")}</span>
-            </div>
+            <Notice tone="warning" icon={<AlertTriangle size={15} />}>
+              {t("Load order unknown. Project and Agent-global sources remain separate.")}
+            </Notice>
             <div className="project-preview-columns">
-              <section aria-label={t("Project resources")}>
-                <header>
+              <section className="project-preview-section" aria-label={t("Project resources")}>
+                <header className="project-preview-section__header">
                   <strong>{t("Project resources")}</strong>
                   <span>{preview.projectResources.length}</span>
                 </header>
@@ -79,16 +85,19 @@ export const ProjectEnvironmentPreviewDialog = ({
                   {preview.projectResources.length === 0 ? (
                     <p>{t("No project resources found for this Agent.")}</p>
                   ) : preview.projectResources.map((resource) => (
-                    <div className="project-preview-resource" key={resource.id}>
-                      <span>{t(kindLabel(resource.kind))}</span>
-                      <strong>{resource.name}</strong>
-                      <code className="selectable" title={resource.absolutePath}>{resource.relativePath}</code>
-                    </div>
+                    <ResourceRow
+                      density="compact"
+                      description={<span className="selectable" title={resource.absolutePath}>{resource.relativePath}</span>}
+                      icon={kindIcon(resource.kind)}
+                      key={resource.id}
+                      metadata={t(kindLabel(resource.kind))}
+                      title={resource.name}
+                    />
                   ))}
                 </div>
               </section>
-              <section aria-label={t("Agent-global resources")}>
-                <header>
+              <section className="project-preview-section" aria-label={t("Agent-global resources")}>
+                <header className="project-preview-section__header">
                   <strong>{t("Agent-global resources")}</strong>
                   <span>{preview.globalResources.length}</span>
                 </header>
@@ -96,11 +105,15 @@ export const ProjectEnvironmentPreviewDialog = ({
                   {preview.globalResources.length === 0 ? (
                     <p>{t("No observable global resources found.")}</p>
                   ) : preview.globalResources.map((resource, index) => (
-                    <div className="project-preview-resource" key={`${resource.kind}:${resource.path}:${resource.name}:${index}`}>
-                      <span>{t(kindLabel(resource.kind))}</span>
-                      <strong>{resource.name}</strong>
-                      <code className="selectable" title={resource.path}>{resource.path}</code>
-                    </div>
+                    <ResourceRow
+                      density="compact"
+                      description={<span className="selectable" title={resource.path}>{resource.path}</span>}
+                      icon={kindIcon(resource.kind)}
+                      key={`${resource.kind}:${resource.path}:${resource.name}:${index}`}
+                      metadata={t(kindLabel(resource.kind))}
+                      state={resource.detail}
+                      title={resource.name}
+                    />
                   ))}
                 </div>
               </section>

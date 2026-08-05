@@ -387,6 +387,7 @@ export const traeCliIntegration: AgentTargetIntegration = {
       cliLaunch: "supported"
     },
     instructionFiles: [".trae/rules", "AGENTS.md"],
+    instructionCreateFile: "AGENTS.md",
     skillDirectories: [".trae/skills"],
     mcpFiles: [".trae/traecli.toml", ".trae/traecli.yaml"],
     compareResourcePaths: [".trae", "AGENTS.md"]

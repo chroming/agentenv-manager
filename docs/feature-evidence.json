@@ -26,7 +26,7 @@
         "stale": "A project file changed after review requires a refreshed diff before mutation.",
         "partial": "Unsupported, unreadable, or precedence-unknown Agent sources are named and the effective preview stays Partial.",
         "persisted": "Only Project reference metadata and verified recovery receipts persist in device-local AgentEnv data.",
-        "rollback": "A Project mutation backup restores the exact original path; removing a reference never requires rollback because it never touches the directory."
+        "rollback": "A Project mutation backup restores exact original bytes or prior absence; removing a reference never requires rollback because it never touches the directory."
       },
       "evidence": {
         "domain": [
@@ -50,6 +50,10 @@
           "tests/e2e/projects.e2e.test.ts"
         ],
         "visual": [
+          "project-empty-resources-920x620.png",
+          "project-instruction-editor-920x620.png",
+          "project-add-skill-920x620.png",
+          "project-recovery-920x620.png",
           "projects-empty-920x620.png",
           "projects-selected-920x620.png",
           "project-environment-preview-920x620.png",

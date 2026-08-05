@@ -28,6 +28,11 @@ export interface ProjectEnvironmentService {
   inspectProject(projectId: string, enabledAgentIds: readonly string[]): Promise<ProjectEnvironmentSnapshot>;
   findResource(projectId: string, resourceId: string, enabledAgentIds: readonly string[]): Promise<ProjectResourceSummary>;
   previewProject(projectId: string, target: TargetInfo): Promise<ProjectEnvironmentPreview>;
+  resolveInstructionDestination(projectId: string, agentId: string): Promise<{
+    projectRoot: string;
+    destination: string;
+    relativePath: string;
+  }>;
   resolveSkillDestination(projectId: string, agentId: string, skillId: string): Promise<{
     projectRoot: string;
     skillRoot: string;
@@ -57,12 +62,16 @@ const assertBoundedParents = async (root: string, candidate: string) => {
     throw new Error(`Project resource escapes its root: ${candidate}`);
   }
   let current = root;
-  for (const part of relativePath.split(sep)) {
+  const parts = relativePath.split(sep);
+  for (const [index, part] of parts.entries()) {
     current = join(current, part);
     try {
       const entry = await lstat(current);
       if (entry.isSymbolicLink()) {
         throw new Error(`Project resource uses an unsafe symbolic link: ${current}`);
+      }
+      if (index < parts.length - 1 && !entry.isDirectory()) {
+        throw new Error(`Project resource parent is not a regular directory: ${current}`);
       }
     } catch (error) {
       if (isMissingFileError(error)) return;
@@ -287,6 +296,7 @@ export const createProjectEnvironmentService = ({
         agentId: adapter.descriptor.id,
         agentName: adapter.descriptor.name,
         instructions: { ...adapter.projects!.support.instructions },
+        instructionCreateFile: adapter.projects!.instructionCreateFile,
         skills: { ...adapter.projects!.support.skills },
         mcp: { ...adapter.projects!.support.mcp },
         effectivePreview: adapter.projects!.support.effectivePreview,
@@ -299,6 +309,28 @@ export const createProjectEnvironmentService = ({
 
   return {
     inspectProject,
+    resolveInstructionDestination: async (projectId, agentId) => {
+      const project = await requireProject(projectId);
+      const adapter = targetRegistry.get(agentId);
+      if (!adapter.projects || adapter.projects.support.instructions.mutate !== "supported") {
+        throw new Error(`${adapter.descriptor.name} does not support Project instruction changes`);
+      }
+      const declaration = adapter.projects.instructionCreateFile;
+      if (!declaration) {
+        throw new Error(`${adapter.descriptor.name} does not declare a Project instruction file`);
+      }
+      const relativePath = normalizeRelativeDeclaration(declaration);
+      const destination = resolve(project.rootPath, relativePath);
+      await assertBoundedParents(project.rootPath, destination);
+      const entry = await lstat(destination).catch((error) => {
+        if (isMissingFileError(error)) return undefined;
+        throw error;
+      });
+      if (entry && (!entry.isFile() || entry.isSymbolicLink())) {
+        throw new Error(`Project instruction destination is not a regular file: ${destination}`);
+      }
+      return { projectRoot: project.rootPath, destination, relativePath };
+    },
     resolveSkillDestination: async (projectId, agentId, unsafeSkillId) => {
       const project = await requireProject(projectId);
       const adapter = targetRegistry.get(agentId);
@@ -314,8 +346,8 @@ export const createProjectEnvironmentService = ({
         if (isMissingFileError(error)) return undefined;
         throw error;
       });
-      if (!rootEntry?.isDirectory() || rootEntry.isSymbolicLink()) {
-        throw new Error(`Create the regular Project Skills directory before adding a Skill: ${skillRoot}`);
+      if (rootEntry && (!rootEntry.isDirectory() || rootEntry.isSymbolicLink())) {
+        throw new Error(`Project Skills destination is not a regular directory: ${skillRoot}`);
       }
       const skillId = SafeIdSchema.parse(unsafeSkillId);
       const destination = join(skillRoot, skillId);

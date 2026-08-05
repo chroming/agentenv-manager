@@ -138,6 +138,7 @@ export const antigravityIntegration: AgentTargetIntegration = {
       cliLaunch: "supported"
     },
     instructionFiles: ["GEMINI.md"],
+    instructionCreateFile: "GEMINI.md",
     skillDirectories: [".gemini/skills", ".agents/skills"],
     mcpFiles: [],
     compareResourcePaths: ["GEMINI.md", ".gemini", ".agents"]

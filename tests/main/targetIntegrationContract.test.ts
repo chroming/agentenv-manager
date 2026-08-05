@@ -216,6 +216,7 @@ describe("target integration contract", () => {
         adapter.descriptor.id,
         {
           instructions: adapter.projects?.instructionFiles,
+          instructionCreateFile: adapter.projects?.instructionCreateFile,
           skills: adapter.projects?.skillDirectories,
           mcp: adapter.projects?.mcpFiles,
           compare: adapter.projects?.compareResourcePaths,
@@ -229,6 +230,7 @@ describe("target integration contract", () => {
     expect(declarations).toEqual({
       opencode: {
         instructions: ["AGENTS.md", "CLAUDE.md"],
+        instructionCreateFile: "AGENTS.md",
         skills: [".opencode/skills", ".claude/skills", ".agents/skills"],
         mcp: ["opencode.json", "opencode.jsonc"],
         compare: [
@@ -244,6 +246,7 @@ describe("target integration contract", () => {
       },
       "claude-code": {
         instructions: ["CLAUDE.md"],
+        instructionCreateFile: "CLAUDE.md",
         skills: [".claude/skills", ".agents/skills"],
         mcp: [".mcp.json"],
         compare: ["CLAUDE.md", ".claude", ".agents", "AGENTS.md"],
@@ -251,6 +254,7 @@ describe("target integration contract", () => {
       },
       codex: {
         instructions: ["AGENTS.md", "AGENTS.override.md"],
+        instructionCreateFile: "AGENTS.md",
         skills: [".agents/skills", ".codex/skills"],
         mcp: [],
         compare: ["AGENTS.md", "AGENTS.override.md", ".agents", ".codex"],
@@ -258,6 +262,7 @@ describe("target integration contract", () => {
       },
       antigravity: {
         instructions: ["GEMINI.md"],
+        instructionCreateFile: "GEMINI.md",
         skills: [".gemini/skills", ".agents/skills"],
         mcp: [],
         compare: ["GEMINI.md", ".gemini", ".agents"],
@@ -265,6 +270,7 @@ describe("target integration contract", () => {
       },
       "trae-cli": {
         instructions: [".trae/rules", "AGENTS.md"],
+        instructionCreateFile: "AGENTS.md",
         skills: [".trae/skills"],
         mcp: [".trae/traecli.toml", ".trae/traecli.yaml"],
         compare: [".trae", "AGENTS.md"],
@@ -272,6 +278,7 @@ describe("target integration contract", () => {
       },
       pi: {
         instructions: ["AGENTS.md", "CLAUDE.md"],
+        instructionCreateFile: "AGENTS.md",
         skills: [".pi/skills", ".agents/skills"],
         mcp: [],
         compare: ["AGENTS.md", "CLAUDE.md", ".pi", ".agents"],

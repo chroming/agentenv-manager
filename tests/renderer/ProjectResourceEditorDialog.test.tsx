@@ -17,10 +17,23 @@ const file = {
 const installApi = () => {
   const api = {
     readProjectResource: vi.fn().mockResolvedValue(file),
+    prepareProjectInstruction: vi.fn().mockResolvedValue({
+      agentId: "opencode",
+      name: "AGENTS.md",
+      path: "/work/example/AGENTS.md",
+      content: "",
+      contentHash: "absent",
+      editable: true
+    }),
     saveProjectResource: vi.fn().mockResolvedValue({
       status: "saved",
       contentHash: "saved-hash",
       receiptId: "receipt-1"
+    }),
+    createProjectInstruction: vi.fn().mockResolvedValue({
+      status: "saved",
+      contentHash: "created-hash",
+      receiptId: "receipt-created"
     })
   };
   Object.defineProperty(window, "agentEnv", {
@@ -87,5 +100,31 @@ describe("ProjectResourceEditorDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByRole("button", { name: "Reload" })).toBeInTheDocument();
+  });
+
+  it("keeps a missing instruction as a draft until Save creates it", async () => {
+    const api = installApi();
+    const onClose = vi.fn();
+    render(
+      <ProjectResourceEditorDialog
+        open
+        projectId="project-1"
+        agentId="opencode"
+        onClose={onClose}
+        onSaved={vi.fn()}
+      />
+    );
+
+    const editor = await screen.findByRole("textbox", { name: "Project instruction content" });
+    expect(api.createProjectInstruction).not.toHaveBeenCalled();
+    fireEvent.change(editor, { target: { value: "# New project rules\n" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(api.createProjectInstruction).toHaveBeenCalledWith({
+      projectId: "project-1",
+      agentId: "opencode",
+      content: "# New project rules\n"
+    }));
+    expect(onClose).toHaveBeenCalled();
   });
 });

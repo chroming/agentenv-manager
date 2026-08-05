@@ -253,6 +253,7 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       cliLaunch: "supported"
     },
     instructionFiles: ["CLAUDE.md"],
+    instructionCreateFile: "CLAUDE.md",
     skillDirectories: [".claude/skills", ".agents/skills"],
     mcpFiles: [".mcp.json"],
     compareResourcePaths: ["CLAUDE.md", ".claude", ".agents", "AGENTS.md"]

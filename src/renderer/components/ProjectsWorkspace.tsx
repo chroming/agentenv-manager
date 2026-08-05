@@ -1,7 +1,10 @@
 import {
+  AlertTriangle,
   BookOpen,
   Eye,
+  ExternalLink,
   FileText,
+  FilePlus2,
   FolderGit2,
   History,
   MoreHorizontal,
@@ -37,7 +40,9 @@ import {
   focusInitialActionMenuItem,
   IconButton,
   ModalFrame,
-  PageHeader
+  Notice,
+  PageHeader,
+  ResourceRow
 } from "./ui";
 
 type ProjectOperation = "add" | "refresh" | "rename" | "remove" | "add-skill" | "remove-skill" | "inspect" | "open" | "preview";
@@ -59,6 +64,7 @@ export const ProjectsWorkspace = ({
   const [selectedId, setSelectedId] = useState<string>();
   const [operation, setOperation] = useState<ProjectOperation>();
   const [error, setError] = useState("");
+  const [modalError, setModalError] = useState("");
   const [projectMenu, setProjectMenu] = useState<ProjectMenuState>();
   const [removeCandidate, setRemoveCandidate] = useState<ProjectSummary>();
   const [snapshot, setSnapshot] = useState<ProjectEnvironmentSnapshot>();
@@ -66,7 +72,10 @@ export const ProjectsWorkspace = ({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [preview, setPreview] = useState<ProjectEnvironmentPreview>();
   const [previewError, setPreviewError] = useState("");
-  const [editorResourceId, setEditorResourceId] = useState<string>();
+  const [editorRequest, setEditorRequest] = useState<{
+    resourceId?: string;
+    agentId?: string;
+  }>();
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -90,23 +99,31 @@ export const ProjectsWorkspace = ({
   const availableTargets = targets.filter((target) => Boolean(target.health.executablePath));
   const selectedAgent = availableTargets.find((target) => target.id === selectedAgentId)
     ?? availableTargets[0];
+  const selectedAgentSupport = snapshot?.agentSupport.find(
+    (support) => support.agentId === selectedAgent?.id
+  );
   const skillAgents = availableTargets.filter((target) =>
     snapshot?.agentSupport.some((support) =>
       support.agentId === target.id && support.skills.mutate === "supported"
     )
   );
 
-  const refresh = async () => {
+  const refresh = async (refreshEnvironment = false) => {
     setOperation("refresh");
     setError("");
     try {
       const next = await window.agentEnv.listProjects();
       setProjects(next);
-      setSelectedId((current) =>
-        current && next.some((project) => project.id === current)
-          ? current
-          : next[0]?.id
-      );
+      const nextSelectedId = selectedId && next.some((project) => project.id === selectedId)
+        ? selectedId
+        : next[0]?.id;
+      setSelectedId(nextSelectedId);
+      if (refreshEnvironment) {
+        const nextSelected = next.find((project) => project.id === nextSelectedId);
+        setSnapshot(nextSelected?.exists
+          ? await window.agentEnv.inspectProject(nextSelected.id)
+          : undefined);
+      }
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -238,13 +255,13 @@ export const ProjectsWorkspace = ({
   const removeReference = async () => {
     if (!removeCandidate) return;
     setOperation("remove");
-    setError("");
+    setModalError("");
     try {
       await window.agentEnv.removeProject(removeCandidate.id);
       setRemoveCandidate(undefined);
       await refresh();
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      setModalError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       setOperation(undefined);
     }
   };
@@ -252,19 +269,20 @@ export const ProjectsWorkspace = ({
   const renameProject = async () => {
     if (!selected || !renameValue.trim()) return;
     setOperation("rename");
-    setError("");
+    setModalError("");
     try {
       await window.agentEnv.updateProject({ id: selected.id, name: renameValue.trim() });
       setRenameOpen(false);
       await refresh();
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      setModalError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       setOperation(undefined);
     }
   };
 
   const openAddSkill = async () => {
     setError("");
+    setModalError("");
     try {
       const next = (await window.agentEnv.listSkillLibrary())
         .filter((skill) => skill.globallyEnabled !== false);
@@ -303,6 +321,7 @@ export const ProjectsWorkspace = ({
     action: "rename" | "recovery" | "remove"
   ) => {
     setProjectMenu(undefined);
+    setModalError("");
     setSelectedId(project.id);
     if (action === "rename") {
       setRenameValue(project.name);
@@ -319,7 +338,7 @@ export const ProjectsWorkspace = ({
   const addSkill = async () => {
     if (!selected || !selectedLibraryId || !skillAgentId) return;
     setOperation("add-skill");
-    setError("");
+    setModalError("");
     try {
       await window.agentEnv.addProjectSkill({
         projectId: selected.id,
@@ -329,7 +348,7 @@ export const ProjectsWorkspace = ({
       setSkillDialogOpen(false);
       await refreshSelectedProject();
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      setModalError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
       setOperation(undefined);
     }
@@ -338,7 +357,7 @@ export const ProjectsWorkspace = ({
   const removeSkill = async () => {
     if (!selected || !removeSkillCandidate?.contentHash) return;
     setOperation("remove-skill");
-    setError("");
+    setModalError("");
     try {
       await window.agentEnv.removeProjectSkill({
         projectId: selected.id,
@@ -348,7 +367,7 @@ export const ProjectsWorkspace = ({
       setRemoveSkillCandidate(undefined);
       await refreshSelectedProject();
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      setModalError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
       setOperation(undefined);
     }
@@ -387,6 +406,16 @@ export const ProjectsWorkspace = ({
   const resourcesByKind = (kind: ProjectResourceKind) =>
     snapshot?.resources.filter((resource) => resource.kind === kind) ?? [];
 
+  const canCreateInstruction = Boolean(
+    selectedAgent &&
+    selectedAgentSupport?.instructions.mutate === "supported" &&
+    selectedAgentSupport.instructionCreateFile &&
+    !resourcesByKind("instructions").some((resource) =>
+      resource.consumerAgentIds.includes(selectedAgent.id) &&
+      resource.relativePath.replaceAll("\\", "/") === selectedAgentSupport.instructionCreateFile
+    )
+  );
+
   const refreshSelectedProject = async () => {
     if (!selected?.exists) return;
     setSnapshot(await window.agentEnv.inspectProject(selected.id));
@@ -404,7 +433,7 @@ export const ProjectsWorkspace = ({
               aria-label={t("Refresh Projects")}
               busy={operation === "refresh"}
               icon={<RefreshCw size={15} />}
-              onClick={() => void refresh()}
+              onClick={() => void refresh(true)}
             >
               {t("Refresh")}
             </Button>
@@ -421,10 +450,15 @@ export const ProjectsWorkspace = ({
       />
 
       {error ? (
-        <div className="project-scoped-error" role="alert">
-          <strong>{t("Could not complete this step")}</strong>
-          <span>{error}</span>
-        </div>
+        <Notice
+          className="project-scoped-error"
+          icon={<AlertTriangle size={15} />}
+          role="alert"
+          title={t("Could not complete this step")}
+          tone="danger"
+        >
+          {error}
+        </Notice>
       ) : null}
 
       <div className="projects-workbench ui-surface-frame">
@@ -500,6 +534,7 @@ export const ProjectsWorkspace = ({
                       ? t("Open in {{name}}", { name: selectedAgent.name })
                       : t("No Agent available")}
                     variant="primary"
+                    icon={<ExternalLink size={15} />}
                     busy={operation === "open"}
                     disabled={!selected.exists || !selectedAgent}
                     onClick={() => void openProject()}
@@ -556,42 +591,53 @@ export const ProjectsWorkspace = ({
                                 : t("{{count}} resources", { count: resources.length })}
                             </small>
                           </span>
-                          {kind === "skill" && skillAgents.length > 0 ? (
+                          {kind === "instructions" && canCreateInstruction ? (
+                            <Button
+                              size="compact"
+                              icon={<FilePlus2 size={13} />}
+                              onClick={() => setEditorRequest({ agentId: selectedAgent!.id })}
+                            >
+                              {t("Add instruction")}
+                            </Button>
+                          ) : kind === "skill" && skillAgents.length > 0 ? (
                             <Button size="compact" icon={<Plus size={13} />} onClick={() => void openAddSkill()}>
                               {t("Add from Library")}
                             </Button>
                           ) : null}
                         </header>
                         {resources.map((resource) => (
-                          <div className="project-resource-item" key={resource.id}>
-                            <span>
-                              {resource.kind === "instructions" && resource.editable ? (
-                                <button
-                                  className="project-resource-item__edit"
-                                  type="button"
-                                  onClick={() => setEditorResourceId(resource.id)}
-                                >
-                                  <span>{resource.name}</span>
-                                  <Pencil size={13} aria-hidden="true" />
-                                </button>
-                              ) : <strong>{resource.name}</strong>}
-                              <small title={resource.absolutePath}>{resource.relativePath}</small>
-                            </span>
-                            <span className="project-resource-item__agents">
-                              {resource.consumerAgentIds
-                                .map((agentId) => targets.find((target) => target.id === agentId)?.name ?? agentId)
-                                .join(" · ")}
-                            </span>
-                            {resource.kind === "skill" && resource.editable ? (
+                          <ResourceRow
+                            className="project-resource-entry"
+                            density="compact"
+                            description={<span title={resource.absolutePath}>{resource.relativePath}</span>}
+                            icon={icon}
+                            key={resource.id}
+                            state={resource.consumerAgentIds
+                              .map((agentId) => targets.find((target) => target.id === agentId)?.name ?? agentId)
+                              .join(" · ")}
+                            title={resource.kind === "instructions" && resource.editable ? (
+                              <button
+                                className="project-resource-item__edit"
+                                type="button"
+                                onClick={() => setEditorRequest({ resourceId: resource.id })}
+                              >
+                                <span>{resource.name}</span>
+                                <Pencil size={13} aria-hidden="true" />
+                              </button>
+                            ) : resource.name}
+                            actions={resource.kind === "skill" && resource.editable ? (
                               <IconButton
                                 size="compact"
                                 label={t("Remove {{name}} from Project", { name: resource.name })}
-                                onClick={() => setRemoveSkillCandidate(resource)}
+                                onClick={() => {
+                                  setModalError("");
+                                  setRemoveSkillCandidate(resource);
+                                }}
                               >
                                 <Trash2 size={14} />
                               </IconButton>
-                            ) : null}
-                          </div>
+                            ) : undefined}
+                          />
                         ))}
                       </section>
                     );
@@ -661,6 +707,9 @@ export const ProjectsWorkspace = ({
             </div>
           </header>
           <div className="ui-dialog-body">
+            {modalError ? (
+              <Notice tone="danger" role="alert" icon={<AlertTriangle size={15} />}>{modalError}</Notice>
+            ) : null}
             <p>{t("The folder and its files will stay unchanged.")}</p>
             <code className="selectable">{removeCandidate.rootPath}</code>
           </div>
@@ -692,6 +741,9 @@ export const ProjectsWorkspace = ({
             </div>
           </header>
           <div className="ui-dialog-body">
+            {modalError ? (
+              <Notice tone="danger" role="alert" icon={<AlertTriangle size={15} />}>{modalError}</Notice>
+            ) : null}
             <label className="ui-field-stack">
               <span>{t("Name")}</span>
               <input
@@ -729,6 +781,9 @@ export const ProjectsWorkspace = ({
             </div>
           </header>
           <div className="ui-dialog-body project-add-skill-fields">
+            {modalError ? (
+              <Notice tone="danger" role="alert" icon={<AlertTriangle size={15} />}>{modalError}</Notice>
+            ) : null}
             <label className="ui-field-stack">
               <span>{t("Agent")}</span>
               <select value={skillAgentId} onChange={(event) => setSkillAgentId(event.target.value)}>
@@ -771,6 +826,9 @@ export const ProjectsWorkspace = ({
             </div>
           </header>
           <div className="ui-dialog-body">
+            {modalError ? (
+              <Notice tone="danger" role="alert" icon={<AlertTriangle size={15} />}>{modalError}</Notice>
+            ) : null}
             <p>{t("The Project-owned copy will be backed up before removal.")}</p>
             <code className="selectable">{removeSkillCandidate.absolutePath}</code>
           </div>
@@ -789,12 +847,13 @@ export const ProjectsWorkspace = ({
         error={previewError}
         onClose={() => setPreviewOpen(false)}
       />
-      {selected && editorResourceId ? (
+      {selected && editorRequest ? (
         <ProjectResourceEditorDialog
           open
           projectId={selected.id}
-          resourceId={editorResourceId}
-          onClose={() => setEditorResourceId(undefined)}
+          resourceId={editorRequest.resourceId}
+          agentId={editorRequest.agentId}
+          onClose={() => setEditorRequest(undefined)}
           onGuardChange={onEditorGuardChange}
           onSaved={refreshSelectedProject}
           suspended={editorGuardPromptOpen}

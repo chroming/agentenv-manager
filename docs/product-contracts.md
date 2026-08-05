@@ -247,6 +247,10 @@ AgentEnv-owned copy of project configuration and does not require Git.
   write -> verification -> recovery`. A semantic no-op creates no backup and performs no write.
   Stale bytes require a fresh review. Failure restores the original bytes or leaves a visible
   recovery record before any success is reported.
+- A missing primary Project instruction remains absent until the user explicitly saves its draft.
+  Save creates only the adapter-declared file and the minimum missing regular parent directories;
+  Restore returns the path to absence. Existing links, special files, and non-directory parents are
+  never replaced to make creation succeed.
 - Inspection support never grants mutation authority. Renderer paths are never mutation authority:
   Main issues opaque resource IDs and accepts writes only as `{ projectId, agentId, resourceId,
   expectedHash }`, then revalidates the canonical root, bounded relative path, parents, entry type,
@@ -265,7 +269,9 @@ AgentEnv-owned copy of project configuration and does not require Git.
 - Adding a Library Skill to a Project creates a verified project-owned copy in the explicitly
   selected project Skill directory. AgentEnv MUST NOT create a link from a Project into the user
   Library, copy escaping links or private AgentEnv Library metadata, or silently import an existing
-  Project Skill into Library.
+  Project Skill into Library. The explicit Add command may create the adapter-declared Skill root
+  when it is absent. A failed Add removes only empty parents created by that command and removes the
+  destination only while its verified content still matches the attempted Library copy.
 - Project references and recovery data are device-local and excluded from Workspace Sync. Ordinary
   AgentEnv data backup includes the reference registry but never copies the referenced Project.
 - `Projects` uses the same list-detail geometry, Page Header, controls, rows, dialogs, progress,

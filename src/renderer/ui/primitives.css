@@ -651,6 +651,60 @@
   min-width: var(--icon-box-compact);
 }
 
+.ui-notice {
+  align-items: center;
+  background: var(--info-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 42px;
+  padding: 8px 10px;
+}
+
+.ui-notice--warning {
+  background: var(--warning-bg);
+  border-color: color-mix(in srgb, var(--warning) 22%, transparent);
+  color: var(--warning-text);
+}
+
+.ui-notice--danger {
+  background: var(--danger-bg);
+  border-color: color-mix(in srgb, var(--danger) 22%, transparent);
+  color: var(--danger);
+}
+
+.ui-notice__icon {
+  align-items: center;
+  display: inline-flex;
+}
+
+.ui-notice__copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ui-notice__copy strong,
+.ui-notice__copy span {
+  font-size: var(--font-size-metadata);
+  font-weight: var(--font-weight-regular);
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+
+.ui-notice__copy strong {
+  font-weight: var(--font-weight-medium);
+}
+
+.ui-notice__actions {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+}
+
 .ui-action-menu {
   background: var(--surface);
   border: 1px solid var(--border-strong);

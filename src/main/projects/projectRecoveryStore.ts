@@ -13,6 +13,7 @@ const ReceiptSchema = z.object({
   id: z.string().min(1),
   projectId: z.string().min(1),
   resourceId: z.string().min(1),
+  agentId: z.string().min(1).optional(),
   path: z.string().min(1),
   createdAt: z.string().datetime(),
   status: z.enum(["prepared", "committed", "failed-restored", "recovery-required", "restored"]),

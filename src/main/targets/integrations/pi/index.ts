@@ -101,6 +101,7 @@ export const piIntegration: AgentTargetIntegration = {
       cliLaunch: "supported"
     },
     instructionFiles: ["AGENTS.md", "CLAUDE.md"],
+    instructionCreateFile: "AGENTS.md",
     skillDirectories: [".pi/skills", ".agents/skills"],
     mcpFiles: [],
     compareResourcePaths: ["AGENTS.md", "CLAUDE.md", ".pi", ".agents"]

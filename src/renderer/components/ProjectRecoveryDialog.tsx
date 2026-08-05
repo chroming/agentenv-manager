@@ -1,9 +1,9 @@
-import { RotateCcw } from "lucide-react";
+import { AlertTriangle, BookOpen, FileText, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ProjectRecoverySummary } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
-import { Button, ModalFrame } from "./ui";
+import { Button, ModalFrame, Notice, ResourceRow } from "./ui";
 
 export const ProjectRecoveryDialog = ({
   open,
@@ -78,29 +78,37 @@ export const ProjectRecoveryDialog = ({
         </div>
       </header>
       <div className="ui-dialog-body project-recovery-dialog__body">
-        {error ? <div className="project-preview-error" role="alert">{error}</div> : null}
+        {error ? (
+          <Notice tone="danger" role="alert" icon={<AlertTriangle size={15} />}>{error}</Notice>
+        ) : null}
         {loading ? <div className="project-editor-loading">{t("Loading recovery points…")}</div> : null}
         {!loading && items.length === 0 ? (
           <div className="project-recovery-empty">{t("No recovery points for this Project.")}</div>
         ) : null}
         {items.map((item) => (
-          <div className={`project-recovery-row is-${item.status}`} key={item.id}>
-            <span>
-              <strong>{item.status === "recovery-required"
-                ? t("Recovery required")
-                : item.kind === "skill" ? t("Project Skill change") : t("Saved Project file")}</strong>
-              <small className="selectable" title={item.path}>{item.path}</small>
-            </span>
-            <span>{formatDate(item.createdAt)}</span>
-            <Button
-              icon={<RotateCcw size={14} />}
-              busy={busyId === item.id}
-              disabled={Boolean(busyId) || item.status === "restored" || item.status === "failed-restored"}
-              onClick={() => void restore(item)}
-            >
-              {item.status === "restored" ? t("Restored") : t("Restore")}
-            </Button>
-          </div>
+          <ResourceRow
+            className="project-recovery-entry"
+            density="default"
+            description={<span className="selectable" title={item.path}>{item.path}</span>}
+            icon={item.kind === "skill" ? <BookOpen size={15} /> : <FileText size={15} />}
+            key={item.id}
+            metadata={formatDate(item.createdAt)}
+            title={item.status === "recovery-required"
+              ? t("Recovery required")
+              : item.kind === "skill" ? t("Project Skill change") : t("Saved Project file")}
+            tone={item.status === "recovery-required" ? "attention" : "default"}
+            actions={(
+              <Button
+                size="compact"
+                icon={<RotateCcw size={14} />}
+                busy={busyId === item.id}
+                disabled={Boolean(busyId) || item.status === "restored" || item.status === "failed-restored"}
+                onClick={() => void restore(item)}
+              >
+                {item.status === "restored" ? t("Restored") : t("Restore")}
+              </Button>
+            )}
+          />
         ))}
       </div>
       <footer className="ui-dialog-footer">

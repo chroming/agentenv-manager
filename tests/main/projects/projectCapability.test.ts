@@ -12,12 +12,14 @@ describe("Project capability", () => {
         cliLaunch: "supported"
       },
       instructionFiles: ["AGENTS.md"],
+      instructionCreateFile: "AGENTS.md",
       skillDirectories: [".agents/skills"],
       mcpFiles: ["agent.json"],
       compareResourcePaths: ["AGENTS.md", ".agents", "agent.json", ".agents"]
     });
 
     expect(capability.instructionFiles).toEqual(["AGENTS.md"]);
+    expect(capability.instructionCreateFile).toBe("AGENTS.md");
     expect(capability.skillDirectories).toEqual([".agents/skills"]);
     expect(capability.mcpFiles).toEqual(["agent.json"]);
     expect(capability.compareResourcePaths).toEqual([
@@ -25,6 +27,23 @@ describe("Project capability", () => {
       ".agents",
       "agent.json"
     ]);
+  });
+
+  it("rejects a Project instruction create target that cannot be inspected", () => {
+    expect(() => createProjectCapability({
+      support: {
+        instructions: { inspect: "supported", mutate: "supported" },
+        skills: { inspect: "supported", mutate: "supported" },
+        mcp: { inspect: "unsupported", mutate: "unsupported" },
+        effectivePreview: "partial",
+        cliLaunch: "supported"
+      },
+      instructionFiles: ["AGENTS.md"],
+      instructionCreateFile: "CLAUDE.md",
+      skillDirectories: [".agents/skills"],
+      mcpFiles: [],
+      compareResourcePaths: ["AGENTS.md", ".agents"]
+    })).toThrow("must also be declared for inspection");
   });
 
   it("launches in the real Project directory only when the executable exists", () => {

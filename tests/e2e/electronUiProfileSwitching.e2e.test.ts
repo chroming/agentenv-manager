@@ -1354,6 +1354,7 @@ describe("Electron UI profile switching e2e", () => {
     );
     expect(order).toEqual([
       "targets",
+      "projects",
       "profiles",
       "conversations",
       "library",

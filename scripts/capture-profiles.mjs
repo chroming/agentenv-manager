@@ -1500,7 +1500,9 @@ try {
   await capturePage(page, join(outputDir, "settings-general-1440x900.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("tab", { name: "Agents" }).click();
-  const customFolders = page.locator("details.agent-path-settings:not(.agent-command-settings)");
+  const customFolders = page.locator("details.agent-path-settings").filter({
+    has: page.getByText("Custom folders", { exact: true })
+  });
   await customFolders.getByText("Custom folders", { exact: true }).click();
   await customFolders.scrollIntoViewIfNeeded();
   await capturePage(page, join(outputDir, "settings-custom-folders-920x620.png"));

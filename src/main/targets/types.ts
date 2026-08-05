@@ -136,6 +136,7 @@ export interface ProjectLaunchInput {
 export interface AgentProjectCapability {
   support: ProjectCapabilitySupport;
   instructionFiles: readonly string[];
+  instructionCreateFile?: string;
   skillDirectories: readonly string[];
   mcpFiles: readonly string[];
   compareResourcePaths: readonly string[];
