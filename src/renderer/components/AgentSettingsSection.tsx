@@ -237,31 +237,32 @@ export const AgentSettingsSection = ({
                       text={fullPath}
                     />
                   </span>
-                  <Button
-                    size="compact"
-                    disabled={busy || Boolean(pendingPathAction)}
-                    icon={pendingAction === "choose" ? <LoaderCircle className="is-spinning" size={14} /> : undefined}
-                    onClick={() => void commitPathChange(agent.id, "choose")}
-                  >
-                    {pendingAction === "choose"
-                      ? t("Choosing...")
-                      : customRoot
-                        ? t("Change")
-                        : t("Choose")}
-                  </Button>
-                  {customRoot ? (
-                    <button
-                      className="text-action agent-path-reset"
-                      type="button"
+                  <span className="settings-row-actions">
+                    <Button
                       disabled={busy || Boolean(pendingPathAction)}
-                      onClick={() => void commitPathChange(agent.id, "reset")}
+                      icon={pendingAction === "choose" ? <LoaderCircle className="is-spinning" size={14} /> : undefined}
+                      onClick={() => void commitPathChange(agent.id, "choose")}
                     >
-                      {pendingAction === "reset" ? (
-                        <LoaderCircle className="is-spinning" size={14} aria-hidden="true" />
-                      ) : null}
-                      {pendingAction === "reset" ? t("Saving...") : t("Use default")}
-                    </button>
-                  ) : <span aria-hidden="true" />}
+                      {pendingAction === "choose"
+                        ? t("Choosing...")
+                        : customRoot
+                          ? t("Change")
+                          : t("Choose")}
+                    </Button>
+                    {customRoot ? (
+                      <button
+                        className="text-action agent-path-reset"
+                        type="button"
+                        disabled={busy || Boolean(pendingPathAction)}
+                        onClick={() => void commitPathChange(agent.id, "reset")}
+                      >
+                        {pendingAction === "reset" ? (
+                          <LoaderCircle className="is-spinning" size={14} aria-hidden="true" />
+                        ) : null}
+                        {pendingAction === "reset" ? t("Saving...") : t("Use default")}
+                      </button>
+                    ) : null}
+                  </span>
                 </div>
               );
             })}
@@ -298,31 +299,32 @@ export const AgentSettingsSection = ({
                       [agent.id]: event.target.value
                     }))}
                   />
-                  <Button
-                    size="compact"
-                    aria-label={t("Save {{name}} command", { name: agent.name })}
-                    disabled={
-                      busy ||
-                      Boolean(pendingCommandAgentId) ||
-                      !draft.trim() ||
-                      draft.trim() === savedCommand
-                    }
-                    icon={pending ? <LoaderCircle className="is-spinning" size={14} /> : undefined}
-                    onClick={() => void commitCommandOverride(agent.id, draft.trim())}
-                  >
-                    {pending ? t("Saving...") : t("Save")}
-                  </Button>
-                  {savedCommand ? (
-                    <button
-                      className="text-action agent-command-reset"
-                      type="button"
-                      aria-label={t("Use default {{name}} command", { name: agent.name })}
-                      disabled={busy || Boolean(pendingCommandAgentId)}
-                      onClick={() => void commitCommandOverride(agent.id)}
+                  <span className="settings-row-actions">
+                    <Button
+                      aria-label={t("Save {{name}} command", { name: agent.name })}
+                      disabled={
+                        busy ||
+                        Boolean(pendingCommandAgentId) ||
+                        !draft.trim() ||
+                        draft.trim() === savedCommand
+                      }
+                      icon={pending ? <LoaderCircle className="is-spinning" size={14} /> : undefined}
+                      onClick={() => void commitCommandOverride(agent.id, draft.trim())}
                     >
-                      {t("Use default")}
-                    </button>
-                  ) : <span aria-hidden="true" />}
+                      {pending ? t("Saving...") : t("Save")}
+                    </Button>
+                    {savedCommand ? (
+                      <button
+                        className="text-action agent-command-reset"
+                        type="button"
+                        aria-label={t("Use default {{name}} command", { name: agent.name })}
+                        disabled={busy || Boolean(pendingCommandAgentId)}
+                        onClick={() => void commitCommandOverride(agent.id)}
+                      >
+                        {t("Use default")}
+                      </button>
+                    ) : null}
+                  </span>
                 </div>
               );
             })}

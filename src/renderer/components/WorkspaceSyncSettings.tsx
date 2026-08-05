@@ -348,7 +348,7 @@ export const WorkspaceSyncSettings = () => {
               {status.conflictCount ? t("{{count}} conflicts", { count: status.conflictCount }) : null}
             </span>
           </div>
-          <div className="workspace-sync-actions">
+          <div className="workspace-sync-actions settings-row-actions">
             {status.kind === "recovery-required" ? (
               <Button variant="primary" busy={working === "recover"} icon={<RefreshCw />} disabled={Boolean(working)} onClick={() => void recover()}>
                 {t("Recover Workspace")}

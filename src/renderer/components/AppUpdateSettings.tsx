@@ -82,12 +82,22 @@ export const AppUpdateSettings = ({
       <div className="settings-section-title">
         <div className="resource-heading" id="app-updates-heading">{t("App updates")}</div>
       </div>
-      <div className="app-update-summary">
-        <span className="settings-preference-copy">
-          <strong>{statusCopy}</strong>
-          <small>{channelCopy}</small>
-        </span>
-        <span className="app-update-actions">
+      <div className="settings-preference-list">
+        <SettingsPreferenceRow
+          className="app-update-summary"
+          label={statusCopy}
+          description={<>
+            <span>{channelCopy}</span>
+            {status?.phase === "available" && !status.automaticInstallSupported ? (
+              <span className="app-update-note">
+                {t("Install with the official Homebrew Cask to update automatically. Manual downloads remain checksum-verified on the official Release page.")}
+              </span>
+            ) : null}
+            {status?.phase === "failed" && status.message ? (
+              <code className="app-update-error">{t(status.message)}</code>
+            ) : null}
+          </>}
+          control={<span className="app-update-actions">
           {connectionIssue && onOpenConnections ? (
             <Button onClick={onOpenConnections}>{t("Connections")}</Button>
           ) : null}
@@ -127,20 +137,11 @@ export const AppUpdateSettings = ({
               {status?.phase === "failed" ? t("Try again") : t("Check now")}
             </Button>
           ) : null}
-        </span>
-        {status?.phase === "available" && !status.automaticInstallSupported ? (
-          <p className="app-update-note">
-            {t("Install with the official Homebrew Cask to update automatically. Manual downloads remain checksum-verified on the official Release page.")}
-          </p>
-        ) : null}
-        {status?.phase === "failed" && status.message ? (
-          <code className="app-update-error">{t(status.message)}</code>
-        ) : null}
-      </div>
-      <div className="settings-preference-list">
+          </span>}
+        />
         <SettingsPreferenceRow
           label={t("Automatic checks")}
-          description={t("Checks the official stable Release after startup without delaying the app.")}
+          description={t("Checks for stable releases after startup.")}
           control={<Switch
             checked={settings.appUpdateAutoCheckEnabled !== false}
             disabled={busy}

@@ -55,7 +55,11 @@ describe("App update settings", () => {
     const onChange = vi.fn();
     render(<AppUpdateSettings busy={false} settings={settings} onChange={onChange} />);
 
-    expect(await screen.findByText("Installed with Homebrew")).toBeInTheDocument();
+    const channel = await screen.findByText("Installed with Homebrew");
+    const statusRow = channel.closest(".settings-preference-row");
+    const autoCheck = screen.getByRole("switch", { name: "Automatic update checks" });
+    expect(statusRow).toHaveClass("app-update-summary");
+    expect(statusRow?.parentElement).toBe(autoCheck.closest(".settings-preference-list"));
     fireEvent.click(screen.getByRole("button", { name: "Check now" }));
     await waitFor(() => expect(api.checkAppUpdate).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole("switch", { name: "Automatic update checks" }));

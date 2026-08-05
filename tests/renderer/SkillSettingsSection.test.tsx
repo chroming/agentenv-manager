@@ -28,13 +28,15 @@ describe("SkillSettingsSection", () => {
 
     const control = screen.getByRole("switch", { name: "Skill auto update check" });
     const row = control.closest(".settings-preference-row");
+    const lane = control.closest(".settings-preference-control");
 
     expect(row).not.toBeNull();
-    expect(control.parentElement).toBe(row);
+    expect(lane?.parentElement).toBe(row);
+    expect(control.parentElement).toBe(lane);
     expect(row?.querySelector(".settings-preference-copy .ui-switch")).toBeNull();
   });
 
-  it("uses one direct trailing control for every preference row", () => {
+  it("uses one shared trailing control lane for every preference row", () => {
     const { container } = render(
       <SkillSettingsSection
         busy={false}
@@ -46,6 +48,9 @@ describe("SkillSettingsSection", () => {
     const rows = [...container.querySelectorAll<HTMLElement>(".settings-preference-row")];
     expect(rows).toHaveLength(3);
     expect(rows.map((row) => row.lastElementChild?.matches(
+      ".settings-preference-control"
+    ))).toEqual([true, true, true]);
+    expect(rows.map((row) => row.lastElementChild?.firstElementChild?.matches(
       "select, .ui-switch, .settings-interval-field"
     ))).toEqual([true, true, true]);
   });

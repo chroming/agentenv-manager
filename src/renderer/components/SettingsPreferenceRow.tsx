@@ -18,6 +18,6 @@ export const SettingsPreferenceRow = ({
       <strong>{label}</strong>
       <small>{description}</small>
     </span>
-    {control}
+    <span className="settings-preference-control">{control}</span>
   </div>
 );

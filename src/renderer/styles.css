@@ -4588,16 +4588,6 @@ summary {
     display: none;
   }
 
-  .settings-data-header {
-    align-items: start;
-    display: grid;
-    gap: 12px;
-  }
-
-  .settings-data-header .settings-data-actions {
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-  }
 }
 
 .library-table-row {

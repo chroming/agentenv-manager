@@ -4878,11 +4878,12 @@ const AppContent = ({
             />
             <SettingsCategoryTabs active={settingsCategory} onChange={setSettingsCategory} />
             <div
-              className="settings-category-panel ui-surface-frame"
+              className="settings-category-frame ui-surface-frame"
               id="settings-category-panel"
               role="tabpanel"
               aria-labelledby={`settings-tab-${settingsCategory}`}
             >
+            <div className="settings-category-panel">
             {settingsCategory === "general" ? (
               <>
               <GeneralSettingsSection
@@ -4977,6 +4978,7 @@ const AppContent = ({
             />
             </>
             ) : null}
+            </div>
             </div>
             {backupManagerOpen ? (
               <BackupManagerDialog

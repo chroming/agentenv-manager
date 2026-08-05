@@ -255,7 +255,7 @@
 
 /* Profiles owns one control and density contract across its supported window sizes. */
 .app-shell--profiles {
-  --profile-control-height: 34px;
+  --profile-control-height: var(--control-height-default);
   --profile-hero-height: 104px;
   --profile-hero-height-compact: 120px;
   --profile-icon-slot: 24px;
@@ -601,19 +601,24 @@
   width: auto;
 }
 
+.profile-commit-actions .profile-evaluate-button .ui-button__content {
+  gap: 4px;
+}
+
 .profile-commit-actions .save-button,
 .profile-commit-actions .profile-apply-button {
-  flex: 0 0 104px;
-  min-width: 104px;
+  flex: 0 0 auto;
+  min-width: 92px;
   padding-inline: 12px;
-  width: 104px;
+  width: auto;
 }
 
 .profile-commit-actions .profile-evaluate-button {
-  flex: 0 0 104px;
-  min-width: 104px;
-  padding-inline: 9px;
-  width: 104px;
+  flex: 0 0 92px;
+  min-width: 92px;
+  overflow: hidden;
+  padding-inline: 6px;
+  width: 92px;
 }
 
 .profile-commit-actions .profile-apply-control {

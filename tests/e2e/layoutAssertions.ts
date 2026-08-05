@@ -234,7 +234,7 @@ export const expectStructuredDialog = async (dialog: Locator) => {
   expect(geometry.dialogOverflowY).toBe("hidden");
   expect(["auto", "scroll"]).toContain(geometry.bodyOverflowY);
   expect(new Set(geometry.buttonHeights).size).toBeLessThanOrEqual(1);
-  expect(geometry.buttonHeights.every((height) => height === 40)).toBe(true);
+  expect(geometry.buttonHeights.every((height) => height === 34)).toBe(true);
   expect(geometry.titleTransform).toBe("none");
   expect(geometry.titleWeight).toBeGreaterThanOrEqual(600);
 };

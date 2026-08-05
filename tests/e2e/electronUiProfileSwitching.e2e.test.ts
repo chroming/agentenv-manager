@@ -19,6 +19,7 @@ import { delimiter, dirname, join } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import electronPath from "electron";
+import packageMetadata from "../../package.json";
 import {
   _electron as electron,
   type ElectronApplication,
@@ -3963,7 +3964,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(mcpRowGeometry.length).toBeGreaterThan(0);
     expect(mcpRowGeometry.every((row) => row.contained)).toBe(true);
     expect(mcpRowGeometry.every((row) => row.height <= 58)).toBe(true);
-    expect(mcpRowGeometry.every((row) => row.controlHeight === 30)).toBe(true);
+    expect(mcpRowGeometry.every((row) => row.controlHeight === 28)).toBe(true);
     const mcpLaneGeometry = await profileMcpEditor.evaluate((editor) => {
       const toolbarScope = editor.querySelector<HTMLElement>(
         ".profile-mcp-toolbar__scope"
@@ -4206,10 +4207,8 @@ describe("Electron UI profile switching e2e", () => {
       expect(Math.abs(saveBox!.width - applyButtonBox!.width)).toBeLessThanOrEqual(1);
       expect(Math.abs(compareButtonBox!.height - applyButtonBox!.height)).toBeLessThanOrEqual(1);
       expect(Math.abs(compareButtonBox!.width - applyButtonBox!.width)).toBeLessThanOrEqual(1);
-      expect(Math.round(saveBox!.height)).toBe(34);
-      expect(Math.round(saveBox!.width)).toBe(
-        page.viewportSize()?.width === 920 ? 92 : 104
-      );
+      expect(Math.round(saveBox!.height)).toBe(32);
+      expect(Math.round(saveBox!.width)).toBe(92);
 
       const controlsFitText = await commitActions.locator("button").evaluateAll((buttons) =>
         buttons.every((button) => {
@@ -4851,7 +4850,7 @@ describe("Electron UI profile switching e2e", () => {
       { borderTopWidth: "1px", width: 40 },
       { borderTopWidth: "1px", width: 40 }
     ]);
-    expect(collapsedGeometry.navButtons.every(({ height, width }) => height === 36 && width === 40))
+    expect(collapsedGeometry.navButtons.every(({ height, width }) => height === 34 && width === 40))
       .toBe(true);
 
     await navigation.getByRole("button", { name: "Quick open" }).click();
@@ -4961,6 +4960,15 @@ describe("Electron UI profile switching e2e", () => {
   it("keeps one control taxonomy across workspaces and decision dialogs", async () => {
     const { page } = await launchApp();
     await page.setViewportSize({ width: 920, height: 620 });
+    const settingsCaptureDir = process.env.AGENTENV_SETTINGS_CAPTURE_DIR;
+    if (settingsCaptureDir) await mkdir(settingsCaptureDir, { recursive: true });
+    const captureSettings = async (name: string) => {
+      if (!settingsCaptureDir) return;
+      await page.screenshot({
+        animations: "disabled",
+        path: join(settingsCaptureDir, name)
+      });
+    };
     const navigation = page.getByRole("complementary", { name: "Global navigation" });
     const readBoxes = (locator: Locator) => locator.evaluateAll((elements) =>
       elements
@@ -4981,12 +4989,12 @@ describe("Electron UI profile switching e2e", () => {
     await navigation.getByRole("button", { name: "Skills", exact: true }).click();
     const pageActions = await readBoxes(page.locator(".ui-page-header__actions button"));
     expect(pageActions.length).toBeGreaterThanOrEqual(3);
-    expect(new Set(pageActions.map(({ height }) => height))).toEqual(new Set([34]));
+    expect(new Set(pageActions.map(({ height }) => height))).toEqual(new Set([32]));
     const toolbarControls = await readBoxes(
       page.locator(".library-toolbar > .ui-composite-field, .library-toolbar > button")
     );
     expect(toolbarControls.length).toBeGreaterThanOrEqual(3);
-    expect(new Set(toolbarControls.map(({ height }) => height))).toEqual(new Set([34]));
+    expect(new Set(toolbarControls.map(({ height }) => height))).toEqual(new Set([32]));
     const compositeField = await page.locator(".library-toolbar .ui-composite-field").evaluate(
       (field) => {
         const input = field.querySelector("input")!;
@@ -5010,14 +5018,14 @@ describe("Electron UI profile switching e2e", () => {
     const libraryModeOptions = await readBoxes(
       page.locator(".library-mode-switch .ui-segmented-control__option")
     );
-    expect(libraryMode[0]?.height).toBe(30);
+    expect(libraryMode[0]?.height).toBe(28);
     expect(new Set(libraryModeOptions.map(({ height }) => height))).toEqual(new Set([24]));
     const libraryRowMenus = await readBoxes(
       page.locator(".library-actions-cell .icon-action")
     );
     expect(libraryRowMenus.length).toBeGreaterThan(0);
     expect(new Set(libraryRowMenus.map(({ height, width }) => `${width}x${height}`)))
-      .toEqual(new Set(["34x34"]));
+      .toEqual(new Set(["32x32"]));
 
     await navigation.getByRole("button", { name: "Settings", exact: true }).click();
     const settingsTabs = await readBoxes(page.locator(".settings-categories"));
@@ -5026,34 +5034,180 @@ describe("Electron UI profile switching e2e", () => {
     );
     expect(settingsTabs[0]?.height).toBe(34);
     expect(new Set(settingsTabOptions.map(({ height }) => height))).toEqual(new Set([28]));
+    const assertSettingsCommandControls = async (category: string) => {
+      const geometry = await page.locator(".settings-category-panel .ui-button").evaluateAll(
+        (buttons) => buttons
+          .filter((button) => {
+            const box = button.getBoundingClientRect();
+            return box.width > 0 && box.height > 0;
+          })
+          .map((button) => {
+            const box = button.getBoundingClientRect();
+            const icon = button.querySelector<HTMLElement>(".ui-button__icon");
+            return {
+              height: Math.round(box.height),
+              iconHeight: icon ? Math.round(icon.getBoundingClientRect().height) : undefined,
+              iconWidth: icon ? Math.round(icon.getBoundingClientRect().width) : undefined
+            };
+          })
+      );
+      expect(
+        geometry.every(({ height }) => height === 32),
+        JSON.stringify({ category, geometry })
+      ).toBe(true);
+      expect(
+        geometry.every(({ iconHeight, iconWidth }) =>
+          iconHeight === undefined || (iconHeight === 16 && iconWidth === 16)
+        ),
+        JSON.stringify({ category, geometry })
+      ).toBe(true);
+    };
     await page.getByRole("tab", { name: "General", exact: true }).click();
     const settingsSelects = await readBoxes(
       page.locator(".settings-category-panel select")
     );
     expect(settingsSelects.length).toBeGreaterThanOrEqual(2);
-    expect(new Set(settingsSelects.map(({ height }) => height))).toEqual(new Set([34]));
+    expect(new Set(settingsSelects.map(({ height }) => height))).toEqual(new Set([32]));
     expect(new Set(settingsSelects.map(({ borderRadius }) => borderRadius)))
       .toEqual(new Set(["6px"]));
+    const updateAlignment = await page.locator(".app-update-summary").evaluate((statusRow) => {
+      const automaticSwitch = document.querySelector<HTMLElement>(
+        '[aria-label="Automatic update checks"]'
+      )!;
+      const automaticRow = automaticSwitch.closest<HTMLElement>(".settings-preference-row")!;
+      const checkButton = statusRow.querySelector<HTMLElement>("button")!;
+      const statusBox = statusRow.getBoundingClientRect();
+      const automaticBox = automaticRow.getBoundingClientRect();
+      const switchBox = automaticSwitch.getBoundingClientRect();
+      const checkBox = checkButton.getBoundingClientRect();
+      return {
+        checkRight: Math.round(checkBox.right),
+        rowHeightDelta: Math.abs(
+          Math.round(statusBox.height) - Math.round(automaticBox.height)
+        ),
+        sameList: statusRow.parentElement === automaticRow.parentElement,
+        switchRight: Math.round(switchBox.right)
+      };
+    });
+    expect(updateAlignment.sameList).toBe(true);
+    expect(
+      updateAlignment.rowHeightDelta,
+      JSON.stringify(updateAlignment)
+    ).toBeLessThanOrEqual(1);
+    expect(Math.abs(updateAlignment.checkRight - updateAlignment.switchRight)).toBeLessThanOrEqual(1);
+    await assertSettingsCommandControls("General");
+    await captureSettings("settings-general-920x620.png");
+
+    await page.getByRole("tab", { name: "Agents", exact: true }).click();
+    await page.getByText("Custom folders", { exact: true }).click();
+    await page.getByText("Custom commands", { exact: true }).click();
+    await expectNoHorizontalOverflow(page, [
+      ".settings-category-panel",
+      ".agent-path-settings",
+      ".agent-path-list",
+      ".agent-command-list"
+    ]);
+    const expandedSettingsGeometry = await page.locator(".settings-category-frame")
+      .evaluate((frame) => {
+        const panel = frame.querySelector<HTMLElement>(".settings-category-panel")!;
+        const editor = panel.closest<HTMLElement>(".editor-panel")!;
+        const frameBox = frame.getBoundingClientRect();
+        const panelBox = panel.getBoundingClientRect();
+        const editorBox = editor.getBoundingClientRect();
+        const details = Array.from(
+          panel.querySelectorAll<HTMLElement>(".agent-path-settings")
+        );
+        return {
+          frameBottom: Math.round(frameBox.bottom),
+          frameRight: Math.round(frameBox.right),
+          panelBottom: Math.round(panelBox.bottom),
+          panelRight: Math.round(panelBox.right),
+          editorBottom: Math.round(editorBox.bottom),
+          editorRight: Math.round(editorBox.right),
+          frameOverflowY: getComputedStyle(frame).overflowY,
+          overflowY: getComputedStyle(panel).overflowY,
+          hasInternalOverflow: panel.scrollHeight > panel.clientHeight,
+          detailsContained: details.every((entry) => entry.scrollWidth <= entry.clientWidth + 1)
+        };
+      });
+    expect(expandedSettingsGeometry.overflowY).toBe("auto");
+    expect(expandedSettingsGeometry.frameOverflowY).toBe("hidden");
+    expect(expandedSettingsGeometry.frameBottom - expandedSettingsGeometry.panelBottom)
+      .toBeLessThanOrEqual(1);
+    expect(expandedSettingsGeometry.frameRight - expandedSettingsGeometry.panelRight)
+      .toBeLessThanOrEqual(1);
+    expect(expandedSettingsGeometry.panelBottom)
+      .toBeLessThanOrEqual(expandedSettingsGeometry.editorBottom);
+    expect(expandedSettingsGeometry.frameRight)
+      .toBeLessThanOrEqual(expandedSettingsGeometry.editorRight);
+    expect(expandedSettingsGeometry.hasInternalOverflow).toBe(true);
+    expect(expandedSettingsGeometry.detailsContained).toBe(true);
+    const agentActionGeometry = await page.locator(".agent-path-row").evaluateAll((rows) =>
+      rows.map((row) => {
+        const button = row.querySelector<HTMLElement>(".ui-button")!;
+        const rowBox = row.getBoundingClientRect();
+        const buttonBox = button.getBoundingClientRect();
+        return {
+          buttonHeight: Math.round(buttonBox.height),
+          rightDelta: Math.round(rowBox.right - buttonBox.right)
+        };
+      })
+    );
+    expect(agentActionGeometry.every(({ buttonHeight }) => buttonHeight === 32)).toBe(true);
+    expect(agentActionGeometry.every(({ rightDelta }) => Math.abs(rightDelta) <= 2)).toBe(true);
+    await assertSettingsCommandControls("Agents");
+    await captureSettings("settings-agents-expanded-920x620.png");
+
+    await page.getByRole("tab", { name: "Skills", exact: true }).click();
+    await assertSettingsCommandControls("Skills");
+
+    await page.getByRole("tab", { name: "Connections", exact: true }).click();
+    await assertSettingsCommandControls("Connections");
+    await captureSettings("settings-connections-920x620.png");
+
+    await page.getByRole("tab", { name: "Data", exact: true }).click();
+    const dataHeaderAlignment = await page.locator(".settings-data-header").evaluate((header) => {
+      const button = header.querySelector<HTMLElement>(".ui-button")!;
+      const location = header.parentElement!.querySelector<HTMLElement>(".settings-data-location")!;
+      return {
+        buttonHeight: Math.round(button.getBoundingClientRect().height),
+        buttonRight: Math.round(button.getBoundingClientRect().right),
+        locationRight: Math.round(location.getBoundingClientRect().right)
+      };
+    });
+    expect(dataHeaderAlignment.buttonHeight).toBe(32);
+    expect(Math.abs(dataHeaderAlignment.buttonRight - dataHeaderAlignment.locationRight))
+      .toBeLessThanOrEqual(1);
+    await assertSettingsCommandControls("Data");
+    await captureSettings("settings-data-920x620.png");
+    if (settingsCaptureDir) {
+      await page.getByRole("tab", { name: "General", exact: true }).click();
+      await resizeAppWindow(page, 1180, 728);
+      await captureSettings("settings-general-1180x728.png");
+      await resizeAppWindow(page, 1440, 900);
+      await captureSettings("settings-general-1440x900.png");
+      await resizeAppWindow(page, 920, 620);
+    }
 
     await navigation.getByRole("button", { name: "Profiles", exact: true }).click();
     const profileCommitControls = await readBoxes(
       page.locator(".profile-commit-actions button, .profile-commit-actions select")
     );
     expect(profileCommitControls.length).toBeGreaterThanOrEqual(4);
-    expect(new Set(profileCommitControls.map(({ height }) => height))).toEqual(new Set([34]));
+    expect(new Set(profileCommitControls.map(({ height }) => height))).toEqual(new Set([32]));
     const policies = await readBoxes(page.locator(".profile-resource-policy"));
     const policyOptions = await readBoxes(
       page.locator(".profile-resource-policy .ui-segmented-control__option")
     );
     expect(policies.length).toBe(3);
-    expect(new Set(policies.map(({ height }) => height))).toEqual(new Set([30]));
+    expect(new Set(policies.map(({ height }) => height))).toEqual(new Set([28]));
     expect(new Set(policyOptions.map(({ height }) => height))).toEqual(new Set([24]));
 
     await page.getByRole("button", { name: "New Profile", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "New profile" });
     const dialogFields = await readBoxes(dialog.locator("input, select"));
     expect(dialogFields.length).toBeGreaterThanOrEqual(1);
-    expect(new Set(dialogFields.map(({ height }) => height))).toEqual(new Set([34]));
+    expect(new Set(dialogFields.map(({ height }) => height))).toEqual(new Set([32]));
     const dialogSegment = await readBoxes(dialog.locator(".ui-segmented-control"));
     const dialogSegmentOptions = await readBoxes(
       dialog.locator(".ui-segmented-control__option")
@@ -5062,13 +5216,13 @@ describe("Electron UI profile switching e2e", () => {
     expect(new Set(dialogSegmentOptions.map(({ height }) => height))).toEqual(new Set([28]));
     const dialogActions = await readBoxes(dialog.locator(".ui-dialog-footer button"));
     expect(dialogActions.length).toBe(2);
-    expect(new Set(dialogActions.map(({ height }) => height))).toEqual(new Set([40]));
+    expect(new Set(dialogActions.map(({ height }) => height))).toEqual(new Set([34]));
 
     await page.keyboard.press("Escape");
     await navigation.getByRole("button", { name: "Conversations", exact: true }).click();
     const conversationFilters = await readBoxes(page.locator(".conversation-filters select"));
     expect(conversationFilters.length).toBe(2);
-    expect(new Set(conversationFilters.map(({ height }) => height))).toEqual(new Set([34]));
+    expect(new Set(conversationFilters.map(({ height }) => height))).toEqual(new Set([32]));
     expect(new Set(conversationFilters.map(({ borderRadius }) => borderRadius)))
       .toEqual(new Set(["6px"]));
 
@@ -5183,7 +5337,7 @@ describe("Electron UI profile switching e2e", () => {
       ]);
       expect(cancelBox).not.toBeNull();
       expect(confirmBox).not.toBeNull();
-      expect(Math.round(cancelBox!.height)).toBe(40);
+      expect(Math.round(cancelBox!.height)).toBe(34);
       expect(Math.abs(cancelBox!.height - confirmBox!.height)).toBeLessThanOrEqual(1);
       await expectInViewport(page, previewDialog.locator(".preview-header"));
       await expectInViewport(page, previewDialog.locator(".preview-actions"));
@@ -5967,7 +6121,7 @@ describe("Electron UI profile switching e2e", () => {
       new Set(["6px"])
     );
     expect(
-      commitControlGeometry.every((control) => Math.abs(control.height - 34) <= 1),
+      commitControlGeometry.every((control) => Math.abs(control.height - 32) <= 1),
       JSON.stringify(commitControlGeometry)
     ).toBe(true);
 
@@ -8972,8 +9126,7 @@ describe("Electron UI profile switching e2e", () => {
     const largeSettingsWidth = await page.locator(".settings-page").evaluate(
       (element) => Math.round(element.getBoundingClientRect().width)
     );
-    expect(largeSettingsWidth).toBeGreaterThanOrEqual(1020);
-    expect(largeSettingsWidth).toBeLessThanOrEqual(1040);
+    expect(largeSettingsWidth).toBeGreaterThanOrEqual(1180);
     await assertAutoCheckLayout();
     await expect.poll(() => autoCheck.getAttribute("aria-checked")).toBe("true");
     await autoCheck.click();
@@ -10608,6 +10761,8 @@ describe("Electron UI profile switching e2e", () => {
     const { page } = await launchApp();
     await resizeAppWindow(page, 920, 620);
     const sidebar = page.locator(".global-sidebar");
+    expect(await sidebar.locator(".brand-lockup").textContent())
+      .toContain(`v${packageMetadata.version}`);
     const sharedSearchContracts: Array<{
       borderWidth: string;
       height: number;
@@ -10664,7 +10819,7 @@ describe("Electron UI profile switching e2e", () => {
       expect(metrics.contained).toBe(true);
       expect(
         metrics.actionHeights.every((height) =>
-          Math.abs(height - 34) <= 1
+          Math.abs(height - 32) <= 1
         ),
         JSON.stringify({ workspace, metrics })
       ).toBe(true);
@@ -10859,7 +11014,7 @@ describe("Electron UI profile switching e2e", () => {
     });
     expect(readonlySourceContract).toEqual({
       backgroundColor: "rgb(245, 245, 247)",
-      height: 34,
+      height: 32,
       readOnly: true,
       radius: "6px"
     });
@@ -10949,20 +11104,20 @@ describe("Electron UI profile switching e2e", () => {
       cancel: {
         backgroundColor: "rgb(245, 245, 247)",
         fontWeight: "400",
-        height: 40,
+        height: 34,
         radius: "6px"
       },
       create: {
         backgroundColor: "rgb(245, 245, 247)",
         disabled: true,
         fontWeight: "400",
-        height: 40,
+        height: 34,
         radius: "6px"
       },
       input: {
         backgroundColor: "rgb(255, 255, 255)",
         borderWidth: "1px",
-        height: 34,
+        height: 32,
         radius: "6px"
       },
       textarea: {
@@ -11032,10 +11187,10 @@ describe("Electron UI profile switching e2e", () => {
     await sidebar.getByRole("button", { name: "Conversations", exact: true }).click();
     sharedSearchContracts.push(await readCompositeFieldContract(".conversation-search"));
     expect(sharedSearchContracts).toEqual([
-      { borderWidth: "1px", height: 34, inputBorderWidth: "0px", radius: "6px" },
-      { borderWidth: "1px", height: 34, inputBorderWidth: "0px", radius: "6px" },
-      { borderWidth: "1px", height: 34, inputBorderWidth: "0px", radius: "6px" },
-      { borderWidth: "1px", height: 34, inputBorderWidth: "0px", radius: "6px" }
+      { borderWidth: "1px", height: 32, inputBorderWidth: "0px", radius: "6px" },
+      { borderWidth: "1px", height: 32, inputBorderWidth: "0px", radius: "6px" },
+      { borderWidth: "1px", height: 32, inputBorderWidth: "0px", radius: "6px" },
+      { borderWidth: "1px", height: 32, inputBorderWidth: "0px", radius: "6px" }
     ]);
 
     await sidebar.getByRole("button", { name: "Agents", exact: true }).click();
@@ -11104,7 +11259,7 @@ describe("Electron UI profile switching e2e", () => {
       rows.map((row) => {
         const copy = row.querySelector<HTMLElement>(".settings-preference-copy")!;
         const control = row.querySelector<HTMLElement>(
-          ":scope > select, :scope > .settings-readonly-value, :scope > .settings-interval-field, :scope > .ui-switch"
+          ".settings-preference-control > select, .settings-preference-control > .settings-readonly-value, .settings-preference-control > .settings-interval-field, .settings-preference-control > .ui-switch"
         )!;
         const rowBox = row.getBoundingClientRect();
         const copyBox = copy.getBoundingClientRect();
@@ -11114,7 +11269,7 @@ describe("Electron UI profile switching e2e", () => {
             copyBox.left >= rowBox.left &&
             controlBox.right <= rowBox.right + 1 &&
             row.scrollWidth <= row.clientWidth + 1,
-          expectedHeight: 34,
+          expectedHeight: 32,
           height: controlBox.height,
           overlaps: !(
             copyBox.right <= controlBox.left ||
@@ -11140,7 +11295,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(preferenceTypography).toEqual({ description: "400", label: "500" });
     const settingsFieldTypography = await page.evaluate(() => {
       const controls = [
-        document.querySelector<HTMLSelectElement>(".settings-preference-row > select"),
+        document.querySelector<HTMLSelectElement>(".settings-preference-control > select"),
         document.querySelector<HTMLInputElement>(".settings-interval-control input")
       ].filter((control): control is HTMLSelectElement | HTMLInputElement => Boolean(control));
       return controls.map((control) => ({
@@ -11161,7 +11316,10 @@ describe("Electron UI profile switching e2e", () => {
         controls.map((control) => (control as HTMLElement).getBoundingClientRect().height)
       );
     expect(settingsActionHeights.length).toBeGreaterThanOrEqual(7);
-    expect(settingsActionHeights.every((height) => Math.abs(height - 34) <= 1)).toBe(true);
+    expect(
+      settingsActionHeights.every((height) => Math.abs(height - 32) <= 1),
+      JSON.stringify(settingsActionHeights)
+    ).toBe(true);
     const settingsActionContracts = await page
       .locator(".settings-data-actions button, .diagnostics-settings-actions button")
       .evaluateAll((controls) => controls.map((control) =>
@@ -11199,7 +11357,7 @@ describe("Electron UI profile switching e2e", () => {
       };
     });
     expect(cleanupDrawerGeometry).toEqual({
-      actionHeights: [34, 34],
+      actionHeights: [32, 32],
       borderMatches: true,
       pageActionsDisabled: true,
       radius: "10px",

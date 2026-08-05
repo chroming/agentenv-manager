@@ -48,13 +48,13 @@
   --line-height-tight: 1.2;
   --line-height-body: 1.45;
 
-  --control-height-compact: 30px;
-  --control-height-default: 34px;
-  --control-height-prominent: 36px;
-  --control-height-dialog: 40px;
+  --control-height-compact: 28px;
+  --control-height-default: 32px;
+  --control-height-prominent: 34px;
+  --control-height-dialog: 34px;
   --icon-size-default: 16px;
-  --icon-box-compact: 30px;
-  --icon-box-default: 34px;
+  --icon-box-compact: 28px;
+  --icon-box-default: 32px;
   /* Standalone controls, surfaces, and dialogs own radii; connected rows stay square inside them. */
   --radius-tight: 4px;
   --radius-control: 6px;

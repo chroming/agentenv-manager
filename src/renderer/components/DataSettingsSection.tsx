@@ -44,7 +44,7 @@ export const DataSettingsSection = ({
           <div className="resource-heading" id="agentenv-data-heading">{t("Data & Backups")}</div>
           <p className="settings-muted">{t("AgentEnv data and the recovery points created before local changes.")}</p>
         </div>
-        <div className="settings-data-actions">
+        <div className="settings-data-actions settings-row-actions">
           <Button
             disabled={busy}
             icon={<FolderOpen size={15} strokeWidth={2.2} aria-hidden="true" />}
@@ -71,7 +71,7 @@ export const DataSettingsSection = ({
                   })}
             </small>
           </span>
-          <span className="backup-settings-row-actions">
+          <span className="backup-settings-row-actions settings-row-actions">
             <FreshnessStatus state={freshness} verb="Refreshed" />
             <Button disabled={busy} onClick={onManageBackups}>{t("Manage")}</Button>
           </span>
@@ -103,7 +103,7 @@ export const DataSettingsSection = ({
       </div>
       <div className="settings-data-footer">
         <span className="settings-field-note">{t("Data exports are stored outside AgentEnv and are never cleaned automatically.")}</span>
-        <div className="settings-data-actions">
+        <div className="settings-data-actions settings-row-actions">
           <Button
             disabled={busy}
             icon={<HardDrive size={15} strokeWidth={2.2} aria-hidden="true" />}

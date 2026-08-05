@@ -57,10 +57,9 @@ export const GitHubConnectionSettings = ({
             </p>
           </div>
         </div>
-        <div className="github-settings-actions">
+        <div className="github-settings-actions settings-row-actions">
           {authStatus.state === "signed-in" ? (
             <Button
-              size="compact"
               variant="secondary"
               disabled={busy || loginChecking}
               onClick={onSignOut}
@@ -109,7 +108,7 @@ export const GitHubConnectionSettings = ({
               {loginMessage || t("Waiting for authorization. This page updates automatically.")}
             </span>
           </div>
-          <div className="github-device-actions">
+          <div className="github-device-actions settings-row-actions">
             <Button
               icon={<ExternalLink size={15} aria-hidden="true" />}
               onClick={() => onOpenDevicePage(deviceLogin.verificationUri)}
