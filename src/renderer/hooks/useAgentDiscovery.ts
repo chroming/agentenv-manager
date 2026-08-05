@@ -78,6 +78,15 @@ export const useAgentDiscovery = ({
     const suppressed = new Set(settings.suppressedAgentSuggestionIds ?? []);
     const reviewed = new Set(settings.agentDiscoveryReviewedIds ?? []);
     const dismissed = new Set(sessionDismissedAgentIds);
+    const firstReview = settings.agentDiscoveryReviewedIds === undefined;
+    const hasInstalledAgent = discoveredTargets.some((target) =>
+      isTargetInstalled(target.health)
+    );
+    if (firstReview && hasInstalledAgent) {
+      return discoveredTargets.filter(
+        (target) => !suppressed.has(target.id) && !dismissed.has(target.id)
+      );
+    }
     return discoveredTargets.filter(
       (target) =>
         isTargetInstalled(target.health) &&

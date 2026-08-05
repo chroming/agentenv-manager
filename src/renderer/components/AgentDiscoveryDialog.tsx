@@ -1,5 +1,6 @@
 import { CheckCircle2, Monitor } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { isTargetInstalled } from "../../shared/targetHealth";
 import type { TargetInfo } from "../../shared/types";
 import type { AgentSetupAction } from "../agentSetup";
 import { useModalDialog } from "../hooks/useModalDialog";
@@ -38,10 +39,18 @@ export const AgentDiscoveryDialog = ({
   const dialogRef = useRef<HTMLElement>(null);
   const dismissRef = useRef<HTMLButtonElement>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const agentKey = agents.map((agent) => agent.id).join(":");
+  const agentKey = agents
+    .map((agent) => `${agent.id}:${isTargetInstalled(agent.health) ? "installed" : "missing"}`)
+    .join(":");
 
   useLayoutEffect(() => {
-    if (open && phase === "choose") setSelectedIds(agents.map((agent) => agent.id));
+    if (open && phase === "choose") {
+      setSelectedIds(
+        agents
+          .filter((agent) => isTargetInstalled(agent.health))
+          .map((agent) => agent.id)
+      );
+    }
   }, [agentKey, open, phase]);
 
   useModalDialog({
@@ -90,6 +99,7 @@ export const AgentDiscoveryDialog = ({
         ) : null}
         {agents.map((agent) => {
           const icon = targetIconFor(agent);
+          const installed = isTargetInstalled(agent.health);
           const evidence = agent.health.executablePath
             ?? agent.health.installationEvidence[0]?.path;
           const checked = selected.has(agent.id);
@@ -134,11 +144,14 @@ export const AgentDiscoveryDialog = ({
                 </span>
                 <span className="agent-discovery-copy">
                   <span>{agent.name}</span>
-                  {phase === "setup" || evidence ? (
-                    <small title={phase === "setup" ? setupCopy : evidence}>
-                      {phase === "setup" ? setupCopy : evidence}
-                    </small>
-                  ) : null}
+                  <small title={phase === "setup"
+                    ? setupCopy
+                    : evidence ?? t(installed ? agent.health.summary : "Not detected")}
+                  >
+                    {phase === "setup"
+                      ? setupCopy
+                      : evidence ?? t(installed ? agent.health.summary : "Not detected")}
+                  </small>
                 </span>
               </label>
               {phase === "setup" ? (

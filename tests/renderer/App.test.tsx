@@ -1442,9 +1442,24 @@ describe("App", () => {
         suppressedAgentSuggestionIds: input.suppressedAgentSuggestionIds ?? []
       };
     });
+    const missingCodex = {
+      ...codexTarget,
+      health: {
+        ...codexTarget.health,
+        status: "missing" as const,
+        installationFound: false,
+        installationEvidence: [],
+        executableStatus: "missing" as const,
+        executableCandidate: undefined,
+        executablePath: undefined,
+        executableFound: false,
+        canWrite: false,
+        summary: "Not detected"
+      }
+    };
     installApi({
-      listSupportedTargets: vi.fn().mockResolvedValue([target]),
-      probeSupportedTargets: vi.fn().mockResolvedValue([target]),
+      listSupportedTargets: vi.fn().mockResolvedValue([target, codexTarget]),
+      probeSupportedTargets: vi.fn().mockResolvedValue([target, missingCodex]),
       listTargets: vi.fn(async () => enabledTargetIds.length > 0 ? [target] : []),
       readSettings: vi.fn().mockResolvedValue({
         locale: "system",
@@ -1464,6 +1479,8 @@ describe("App", () => {
     const dialog = await screen.findByRole("dialog", { name: "Choose Agents" });
     expect(dialog).toHaveTextContent("does not Capture, Apply, or change Agent files");
     expect(within(dialog).getByRole("checkbox", { name: "OpenCode" })).toBeChecked();
+    expect(within(dialog).getByRole("checkbox", { name: "Codex" })).not.toBeChecked();
+    expect(dialog).toHaveTextContent("Not detected");
     expect(updateSettings).not.toHaveBeenCalled();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Not now" }));
