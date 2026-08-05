@@ -1226,6 +1226,16 @@ describe("SkillLibraryPanel", () => {
     expect(
       within(changedManagedGroup).queryByRole("button", { name: "Review drift copied-local" })
     ).not.toBeInTheDocument();
+    expect(
+      within(changedManagedGroup).queryByRole("button", {
+        name: "More cleanup actions for copied-local"
+      })
+    ).not.toBeInTheDocument();
+    fireEvent.click(changedManagedGroup);
+    expect(screen.getByRole("dialog", {
+      name: "Skill details copied-local"
+    })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
     let resolveAutoCleanup: (() => void) | undefined;
     onAutoConsolidateSkillGroups.mockImplementationOnce(
       () => new Promise<string[]>((resolve) => {
@@ -1297,6 +1307,11 @@ describe("SkillLibraryPanel", () => {
       name: "Cleanup group represented-external"
     });
     expect(representedExternalGroup).toHaveTextContent("Ready");
+    fireEvent.click(representedExternalGroup);
+    expect(screen.getByRole("dialog", {
+      name: "Skill details represented-external"
+    })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(
       within(representedExternalGroup).queryByRole("button", { name: /ownership/i })
     ).not.toBeInTheDocument();

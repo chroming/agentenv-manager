@@ -817,9 +817,16 @@
 
 .skill-library-panel .cleanup-group-row {
   align-items: start;
+  cursor: pointer;
   gap: 14px;
   grid-template-columns: minmax(0, 1fr) 88px 176px;
   padding-block: 10px;
+}
+
+.skill-library-panel .cleanup-group-row:focus-visible {
+  background: #f8faff;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .skill-library-panel .cleanup-group-row > .cleanup-group-actions {

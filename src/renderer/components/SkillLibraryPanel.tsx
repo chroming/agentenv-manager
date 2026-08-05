@@ -3506,6 +3506,15 @@ export const SkillLibraryPanel = ({
                 const sharedMigration = group.sharedMigration;
                 const sharedMigrationNeedsAction =
                   sharedSkillMigrationNeedsAction(sharedMigration);
+                const hasSharedRetentionAction = Boolean(
+                  sharedMigration &&
+                  sharedMigration.state !== "outside" &&
+                  sharedMigration.state !== "unmanaged"
+                );
+                const hasIgnoreAction = canIgnore && !sharedMigrationNeedsAction;
+                const hasManageAction = hasUnmanaged && !sharedMigrationNeedsAction;
+                const hasAdditionalCleanupActions =
+                  hasSharedRetentionAction || hasIgnoreAction || hasManageAction;
                 const linkedLibraryId = group.items.find((item) => item.libraryId)?.libraryId;
                 const contentVersionCount = new Set(
                   group.activeItems.map((item) => item.contentHash).filter(Boolean)
@@ -3618,7 +3627,26 @@ export const SkillLibraryPanel = ({
                   <div
                     aria-label={t("Cleanup group {{id}}", { id: group.skillKey })}
                     className="resource-row cleanup-group-row"
+                    onClick={(event) => {
+                      if (
+                        event.target instanceof Element &&
+                        event.target.closest("button, a, input, select, textarea, [role='button'], [role='menuitem']")
+                      ) {
+                        return;
+                      }
+                      setCleanupDetailsKey(group.skillKey);
+                    }}
+                    onKeyDown={(event) => {
+                      if (
+                        event.target === event.currentTarget &&
+                        (event.key === "Enter" || event.key === " ")
+                      ) {
+                        event.preventDefault();
+                        setCleanupDetailsKey(group.skillKey);
+                      }
+                    }}
                     role="group"
+                    tabIndex={0}
                   >
                     <span className="resource-avatar cleanup-group-icon" aria-hidden="true">
                       <Folder size={17} strokeWidth={2.1} />
@@ -3681,19 +3709,21 @@ export const SkillLibraryPanel = ({
                           {actionDisplayLabel}
                         </Button>
                       ) : null}
-                      <button
-                        className="icon-action"
-                        type="button"
-                        aria-label={t("More cleanup actions for {{id}}", { id: group.skillKey })}
-                        aria-expanded={openActionId === cleanupActionId}
-                        aria-haspopup="menu"
-                        disabled={Boolean(automaticCleanupKey) || groupIsWorking}
-                        onClick={(event) => toggleActionMenu(cleanupActionId, event.currentTarget)}
-                      >
-                        <MoreHorizontal size={16} strokeWidth={2.2} />
-                      </button>
-                      {openActionId === cleanupActionId && openAction
-                        ? createPortal(
+                      {hasAdditionalCleanupActions ? (
+                        <>
+                          <button
+                            className="icon-action"
+                            type="button"
+                            aria-label={t("More cleanup actions for {{id}}", { id: group.skillKey })}
+                            aria-expanded={openActionId === cleanupActionId}
+                            aria-haspopup="menu"
+                            disabled={Boolean(automaticCleanupKey) || groupIsWorking}
+                            onClick={(event) => toggleActionMenu(cleanupActionId, event.currentTarget)}
+                          >
+                            <MoreHorizontal size={16} strokeWidth={2.2} />
+                          </button>
+                          {openActionId === cleanupActionId && openAction
+                            ? createPortal(
                             <ActionMenu
                               ariaLabel={t("Cleanup actions for {{id}}", { id: group.skillKey })}
                               className="row-action-popover cleanup-action-popover"
@@ -3712,9 +3742,7 @@ export const SkillLibraryPanel = ({
                                 <Search size={14} strokeWidth={2.2} />
                                 <span><strong>{t("Details")}</strong></span>
                               </button>
-                              {sharedMigration &&
-                              sharedMigration.state !== "outside" &&
-                              sharedMigration.state !== "unmanaged" ? (
+                              {hasSharedRetentionAction ? (
                                 <button
                                   className="row-action-item"
                                   type="button"
@@ -3728,7 +3756,7 @@ export const SkillLibraryPanel = ({
                                   <span><strong>{t("Leave shared copy unmanaged")}</strong></span>
                                 </button>
                               ) : null}
-                              {canIgnore && !sharedMigrationNeedsAction ? (
+                              {hasIgnoreAction ? (
                                 <button
                                   className="row-action-item"
                                   type="button"
@@ -3742,7 +3770,7 @@ export const SkillLibraryPanel = ({
                                   <span><strong>{t("Leave unmanaged")}</strong></span>
                                 </button>
                               ) : null}
-                              {hasUnmanaged && !sharedMigrationNeedsAction ? (
+                              {hasManageAction ? (
                                 <button
                                   className="row-action-item"
                                   type="button"
@@ -3765,9 +3793,11 @@ export const SkillLibraryPanel = ({
                                 </button>
                               ) : null}
                             </ActionMenu>,
-                            document.body
-                          )
-                        : null}
+                              document.body
+                            )
+                            : null}
+                        </>
+                      ) : null}
                     </div>
                   </div>
                     ) : null}
