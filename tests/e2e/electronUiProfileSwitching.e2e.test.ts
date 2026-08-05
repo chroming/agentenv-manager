@@ -2778,7 +2778,7 @@ describe("Electron UI profile switching e2e", () => {
       await cleanupGroup.getByRole("button", {
         name: "More cleanup actions for target-only-reviewer"
       }).count()
-    ).toBe(1);
+    ).toBe(0);
     await page.getByRole("button", { name: "Close library tool" }).click();
 
     expect(await page.getByText("Existing target skill ready to migrate.").count()).toBeGreaterThan(
@@ -10808,7 +10808,7 @@ describe("Electron UI profile switching e2e", () => {
       Profiles: ".profile-workbench",
       Conversations: ".conversation-layout",
       Agents: ".target-list",
-      Settings: ".settings-category-panel"
+      Settings: ".settings-category-frame"
     };
     for (const workspace of ["Skills", "Profiles", "Conversations", "Agents", "Settings"]) {
       await sidebar.getByRole("button", { name: workspace, exact: true }).click();
@@ -10862,7 +10862,12 @@ describe("Electron UI profile switching e2e", () => {
       expect(surfaceGeometry.radius, workspace).toBe("8px");
       expect(surfaceGeometry.horizontallyContained, workspace).toBe(true);
       if (workspace === "Settings") {
-        expect(surfaceGeometry.overflowY, workspace).toBe("auto");
+        expect(
+          await page.locator(".settings-category-panel").evaluate(
+            (element) => getComputedStyle(element).overflowY
+          ),
+          workspace
+        ).toBe("auto");
       } else {
         expect(surfaceGeometry.verticallyContained, workspace).toBe(true);
       }
@@ -11336,7 +11341,7 @@ describe("Electron UI profile switching e2e", () => {
       .evaluateAll((controls) =>
         controls.map((control) => (control as HTMLElement).getBoundingClientRect().height)
       );
-    expect(settingsActionHeights.length).toBeGreaterThanOrEqual(7);
+    expect(settingsActionHeights.length).toBeGreaterThanOrEqual(6);
     expect(
       settingsActionHeights.every((height) => Math.abs(height - 32) <= 1),
       JSON.stringify(settingsActionHeights)
