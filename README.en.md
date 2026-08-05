@@ -2,31 +2,71 @@
 
 English | [简体中文](README.md)
 
-AgentEnv Manager is a local desktop app for organizing coding-agent Skills, Profiles, and conversation history, then applying the same working environment across different Agents.
+[![Latest release](https://img.shields.io/github/v/release/chroming/agentenv-manager)](https://github.com/chroming/agentenv-manager/releases/latest)
+[![CI](https://github.com/chroming/agentenv-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/chroming/agentenv-manager/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/chroming/agentenv-manager)](LICENSE)
 
-It does not take ownership of models, accounts, or every native setting. Before writing anything, it shows the changes and creates a recovery point.
+AgentEnv Manager is a local desktop app for organizing Skills, Instructions, MCP enablement, and conversation history across coding agents. Save a working environment as a Profile, preview and compare it before writing to an Agent, and recover from a restore point when needed.
 
-> `0.1.0` is the first public release. Native CI builds and launches the packaged app on macOS, Windows, and Linux, then exercises core workflows with isolated fake Agents. This does not verify every real Agent version. macOS packages have no Developer ID and are not notarized: direct downloads use an ad-hoc resource seal, while the official Homebrew Cask uses a fixed-identity package and removes quarantine after verifying its SHA-256.
+The app does not take ownership of models, accounts, credentials, or entire native configuration files. Each Agent integration exposes only the resources it is designed to manage.
+
+![Agents overview](docs/images/agents.png)
 
 ## Install
 
-The recommended macOS installation is the official Cask:
+The recommended macOS installation is the official Homebrew Cask:
 
 ```bash
 brew install --cask chroming/tap/agentenv-manager
 ```
 
-Homebrew downloads an exact versioned asset for the current architecture, verifies its SHA-256, and removes quarantine after installation so the app can open directly. In-app automatic installation is available only for Homebrew-managed copies.
+Homebrew downloads the official Release for your architecture, verifies its SHA-256, and removes quarantine. Future updates can be installed from inside the app.
 
-GitHub Release downloads keep quarantine. First drag the app to Applications and eject the DMG, then try to open the installed copy. Follow [Apple's instructions](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac), choose Open Anyway in System Settings > Privacy & Security, and choose Open in the confirmation that appears again. Organization-managed Macs may prevent this exception from being saved; use the official Cask on those devices. Direct downloads can still check for updates and open the official Release page.
+Installers for macOS, Windows, and Linux are also available from [GitHub Releases](https://github.com/chroming/agentenv-manager/releases/latest). Direct macOS downloads are ad-hoc signed, without a Developer ID or notarization. Copy the app to Applications and eject the DMG before following [Apple's instructions](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac) to choose Open Anyway. Direct downloads can check for updates, but you install the new version manually.
 
-## Agents
+## First run
 
-AgentEnv detects installed Agents and shows which ones it manages, which Profile each Agent uses, and the result of the latest Apply.
+1. Launch the app and confirm the Agents it detected. Agents that are not installed stay disabled by default.
+2. Configure one Agent from the Agents page. Save its current environment as a Profile, or start with an empty Profile.
+3. If the machine already has many Skills, open `Skills > Local Skills` before the first Apply to review duplicate copies, conflicts, shared directories, and broken links.
+4. Choose how the Profile should handle Instructions, Skills, and MCP state, then save it and open the Apply preview.
+5. Confirm the changes before Apply. AgentEnv creates a restore point first, attempts an automatic rollback after a failed write, and keeps recovery records.
 
-![Agents overview](docs/images/agents.png)
+## Profiles
 
-Built-in integrations currently include:
+A Profile is a reusable working environment containing Instructions, Skills from the Library, and enablement choices for MCP servers already known to a supported Agent. Each resource type can use the Profile, be turned off, or keep the Agent's current state.
+
+![Profiles workspace](docs/images/profiles.png)
+
+Before Apply, AgentEnv reads the target again and lists resources that will be added, replaced, removed, preserved, or need confirmation. It writes only after confirmation and verifies the result.
+
+### Compare before Apply
+
+Compare runs the same task once with the current Agent environment and once with the proposed Profile. Both runs use isolated temporary Homes and Workspaces. Results show responses, file changes, duration, and token usage reported by the CLI.
+
+![Profile comparison](docs/images/profile-compare.png)
+
+Compare consumes quota from the selected Agent account. It does not Apply the Profile or modify the real Agent or original project. Isolated comparison currently requires macOS. OpenCode, Claude Code, Codex, Antigravity CLI, and Pi have verified implementations; Trae CLI does not currently expose a reliable one-shot command.
+
+## Skill Library
+
+The Library keeps one reusable copy of each Skill. Import from a local folder, ZIP archive, GitHub path, or regular Git repository, then install Skills into Agent-specific directories through Profiles.
+
+![Skills grouped by source](docs/images/skills-by-source.png)
+
+The source view shows additions, updates, and removals within the same repository or folder. You can check a source for updates, merge sources, ignore entries you do not want to import, or disable automatic checks for a source.
+
+`Local Skills` handles duplicate copies, content conflicts, broken links, and shared collections already on the machine. Every cleanup action has a preview and keeps recovery records for changed files.
+
+## Conversations
+
+Conversations maintains a read-only index of local Agent history. Search titles and messages, return to the original conversation, or review its context before continuing in another Agent.
+
+![Conversation history](docs/images/conversations.png)
+
+The source Agent still owns the original history. AgentEnv does not edit conversation databases or include conversations in Profiles, Backups, or Workspace Sync.
+
+## Supported Agents
 
 - OpenCode
 - Claude Code
@@ -35,50 +75,23 @@ Built-in integrations currently include:
 - Trae CLI 2.0 and the legacy layout
 - Pi Coding Agent
 
-MCP and conversation capabilities differ between Agents. The app reports unavailable features directly instead of silently running another Agent.
+Instructions, MCP, Conversations, and Compare support differs between Agents. The app exposes actions according to the detected capability and never substitutes another Agent behind the scenes.
 
-## Profiles
+## More features
 
-A Profile is a reusable working environment. It can contain Instructions, Skills from the Library, and enablement choices for MCP servers that already exist in an Agent. Capture the current Agent, start with an empty Profile, or duplicate an existing one.
+- Workspace Sync uses a dedicated private Git repository for portable Profiles and Skill Library data. Pull and publish both require review, and sync never Applies changes to a local Agent.
+- Recovery collects restore points created by Apply, Skill cleanup, and sync. You can inspect the files before restoring them.
+- GitHub sign-in raises API limits for repository imports and update checks. Regular Git and SSH repositories continue to use system Git credentials.
+- The interface supports English, Simplified Chinese, and Traditional Chinese.
 
-![Profiles workspace](docs/images/profiles.png)
+## Safety and privacy
 
-Before Apply, AgentEnv reads the target again, shows file changes and conflicts, and lists anything it will preserve. It writes only after confirmation, creates a backup first, and attempts recovery if the operation fails.
-
-### Compare before Apply
-
-Compare runs the same task once with the current Agent environment and once with the proposed Profile. Both runs use isolated temporary Homes and Workspaces. The result shows responses, file changes, duration, and token usage reported by the CLI.
-
-![Profile comparison](docs/images/profile-compare.png)
-
-Compare calls the selected Agent's model and may consume account quota. It does not Apply the Profile or modify the real Agent or original project. Resources that cannot be isolated are clearly marked as excluded.
-
-## Skill Library
-
-The Library keeps one reusable copy of each Skill. Import Skills from a local folder, ZIP archive, GitHub path, or regular Git repository, then install them into Agent-specific directories through Profiles.
-
-The source view groups Skills from the same repository or folder. It shows additions, updates, and removals, and lets you check a source, merge related sources, or ignore entries you do not want to import.
-
-![Skills grouped by source](docs/images/skills-by-source.png)
-
-`Scan local` finds duplicate copies, content conflicts, broken links, and shared directories already on the machine. Cleanup actions show a preview and keep recovery records for changed files.
-
-## Conversations
-
-Conversations searches a read-only index of local Agent history. Search titles and visible messages, open the original conversation, or review the context before continuing it in another Agent.
-
-![Conversation history](docs/images/conversations.png)
-
-The source Agent still owns the original history. AgentEnv does not edit conversation databases or include conversations in Profiles, Backups, or Workspace Sync.
-
-## Safety boundaries
-
-- Profile writes follow Preview, Backup, Apply, and Verify.
+- Profile writes follow Preview, Backup, Apply, and Verify. A semantic no-op does not write files.
 - AgentEnv changes only the files or fields declared by each Target integration.
 - Agents keep their MCP definitions and credentials. Profiles manage only supported enablement states.
 - Repository scans use a separate cache and never modify an existing checkout.
-- Workspace Sync includes portable Profile and Library data, not credentials, Target state, or backups.
-- The app has no advertising or hosted service for user data. Official builds send at most one anonymous usage event per day by default. You can disable it at any time and preview every shared field in Settings.
+- Workspace Sync excludes credentials, Target state, Backups, and local absolute paths.
+- Official builds send at most one anonymous installation event per day by default. It contains a random installation ID, app version, operating-system family and major version, architecture, interface language, and install channel. You can disable it and preview every field in Settings.
 
 See [Product contracts](docs/product-contracts.md) for exact behavior and [PRIVACY.md](PRIVACY.md) for local data and network access.
 
@@ -91,7 +104,7 @@ npm ci
 npm run dev
 ```
 
-For filesystem development, isolate both application data and the Agent Home:
+When developing filesystem operations, isolate both application data and the Agent Home:
 
 ```bash
 export AGENTENV_DATA_ROOT="$PWD/.agentenv-runtime/data"
@@ -99,19 +112,12 @@ export AGENTENV_HOME="$PWD/.agentenv-runtime/home"
 npm run dev
 ```
 
-## Test and package
+Common verification commands:
 
 ```bash
-npm run build
-npm test
-npm run test:e2e
-npm run verify:release
-```
-
-Create an unpacked app for the current platform:
-
-```bash
-npm run pack
+npm run test:quick       # Tests selected from the current diff
+npm run verify:commit    # Full pre-commit verification
+npm run verify:release   # Packaged app and release gates
 ```
 
 Create installers:
@@ -122,9 +128,7 @@ npm run dist:win
 npm run dist:linux
 ```
 
-Pushing a `vX.Y.Z` tag that exactly matches `package.json` runs the cross-platform release workflow. It produces an SBOM, checksums, a release manifest, and the Homebrew Cask. Publishing requires `HOMEBREW_TAP_DEPLOY_KEY`, a repository-scoped Deploy Key that can write only to `chroming/homebrew-tap`. Anonymous usage statistics also require the public repository variable `AGENTENV_POSTHOG_PROJECT_TOKEN`; builds without it send nothing. For PostHog EU Cloud, set `AGENTENV_POSTHOG_HOST` to `https://eu.i.posthog.com`.
-
-See [Development](docs/development.md) for architecture, Target integrations, test evidence, and the release workflow.
+See [Development](docs/development.md) for architecture, Target integrations, testing strategy, and the release workflow.
 
 ## Contributing
 
