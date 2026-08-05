@@ -525,6 +525,7 @@ export const ConversationWorkspace = ({
     conversationId: string;
     query: string;
   } | undefined>(undefined);
+  const positionedConversationRef = useRef<string | undefined>(undefined);
   const queryRef = useRef("");
   const agentFilterRef = useRef("");
   const workspaceFilterRef = useRef("");
@@ -1023,6 +1024,20 @@ export const ConversationWorkspace = ({
     () => groupMessages(detail?.messages ?? []),
     [detail?.messages]
   );
+  useLayoutEffect(() => {
+    if (query.trim()) {
+      positionedConversationRef.current = undefined;
+      return;
+    }
+    if (!detail || detailLoading) return;
+    if (positionedConversationRef.current === detail.id) return;
+    positionedConversationRef.current = detail.id;
+    const frame = window.requestAnimationFrame(() => {
+      const transcript = conversationTranscriptRef.current;
+      if (transcript) transcript.scrollTop = transcript.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [detail, detailLoading, query]);
   useLayoutEffect(() => {
     const matchedMessageId = detail?.matchedMessageId;
     if (!query.trim() || !matchedMessageId) return;

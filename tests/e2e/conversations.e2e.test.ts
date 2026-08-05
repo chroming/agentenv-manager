@@ -448,6 +448,12 @@ describe("Conversations desktop workflow", () => {
       timeout: 15_000
     });
     await page.getByRole("heading", { name: "Result" }).waitFor();
+    const ordinaryOpenPosition = await page.locator(".conversation-transcript")
+      .evaluate((transcript) => ({
+        atLatest: transcript.scrollTop + transcript.clientHeight >= transcript.scrollHeight - 2,
+        scrollHeight: transcript.scrollHeight
+      }));
+    expect(ordinaryOpenPosition.atLatest, JSON.stringify(ordinaryOpenPosition)).toBe(true);
 
     await page.keyboard.press("Meta+K");
     const quickOpen = page.getByRole("dialog", { name: "Quick open" });

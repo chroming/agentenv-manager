@@ -154,6 +154,30 @@ afterEach(() => {
 });
 
 describe("ConversationWorkspace", () => {
+  it("opens an ordinary conversation at its latest message", async () => {
+    installApi();
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollHeight");
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+      configurable: true,
+      get() {
+        return this.classList.contains("conversation-transcript") ? 840 : 0;
+      }
+    });
+    try {
+      render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);
+      await screen.findByText("I found the failing step.");
+      const transcript = document.querySelector<HTMLElement>(".conversation-transcript");
+      expect(transcript).not.toBeNull();
+      await waitFor(() => expect(transcript!.scrollTop).toBe(840));
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(HTMLElement.prototype, "scrollHeight", descriptor);
+      } else {
+        delete (HTMLElement.prototype as { scrollHeight?: unknown }).scrollHeight;
+      }
+    }
+  });
+
   it("reuses the startup index prefetch instead of issuing a second initial list request", async () => {
     const api = installApi();
     let resolveList!: (value: Awaited<ReturnType<AgentEnvApi["listConversations"]>>) => void;
