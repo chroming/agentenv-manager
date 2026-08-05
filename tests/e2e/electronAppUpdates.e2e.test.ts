@@ -25,13 +25,15 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
     const homeRoot = join(root, "home");
     const agentBinRoot = join(root, "agent-bin");
     const brewLog = join(root, "brew.log");
+    const brewVersion = join(root, "brew-version");
     const brewPath = join(root, "brew");
     const releaseFixture = join(root, "release.json");
     await Promise.all([
       mkdir(homeRoot, { recursive: true }),
       mkdir(agentBinRoot, { recursive: true })
     ]);
-    await writeFile(brewPath, `#!/bin/sh\necho "$@" >> "${brewLog}"\nif [ "$1" = "list" ]; then echo "agentenv-manager 0.1.0"; fi\nexit 0\n`);
+    await writeFile(brewVersion, "0.1.0\n");
+    await writeFile(brewPath, `#!/bin/sh\necho "$@" >> "${brewLog}"\nif [ "$1" = "upgrade" ]; then echo "0.2.0" > "${brewVersion}"; fi\nif [ "$1" = "list" ]; then echo "agentenv-manager $(cat "${brewVersion}")"; fi\nexit 0\n`);
     await chmod(brewPath, 0o755);
     await writeFile(releaseFixture, JSON.stringify({
       tag_name: "v0.2.0",
@@ -98,7 +100,15 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
         .appUpdateAutoCheckEnabled
     ).toBe(false);
 
-    await app.close();
+    await app.evaluate(({ app: electronApp }) => {
+      (electronApp as unknown as { relaunch(): void }).relaunch = () => undefined;
+    });
+    await page.getByRole("button", { name: "Restart and update" }).click();
+    await expect.poll(() => readFile(brewLog, "utf8")).toContain(
+      "upgrade --cask chroming/tap/agentenv-manager"
+    );
+    await expect.poll(() => app?.windows().length ?? 0).toBe(0);
+    app = undefined;
     app = await launch();
     page = await app.firstWindow();
     await expect.poll(

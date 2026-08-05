@@ -3,6 +3,7 @@ import type { AppUpdateRelease } from "../../shared/appUpdates";
 const REPOSITORY = "chroming/agentenv-manager";
 const RELEASE_API = `https://api.github.com/repos/${REPOSITORY}/releases/latest`;
 const RELEASE_ORIGIN = `https://github.com/${REPOSITORY}/`;
+const RELEASE_MANIFEST_URL = `${RELEASE_ORIGIN}releases/latest/download/release-manifest.json`;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 interface GitHubAsset {
@@ -19,6 +20,26 @@ interface GitHubRelease {
   prerelease?: unknown;
   published_at?: unknown;
   body?: unknown;
+  assets?: unknown;
+}
+
+interface ReleaseManifestAsset {
+  name?: unknown;
+  platform?: unknown;
+  arch?: unknown;
+  channel?: unknown;
+  size?: unknown;
+  sha256?: unknown;
+  url?: unknown;
+}
+
+interface ReleaseManifest {
+  schemaVersion?: unknown;
+  repository?: unknown;
+  tag?: unknown;
+  version?: unknown;
+  buildFingerprint?: unknown;
+  generatedAt?: unknown;
   assets?: unknown;
 }
 
@@ -123,6 +144,90 @@ const parseRelease = (
   };
 };
 
+const manifestPlatformFor = (platform: NodeJS.Platform) => {
+  if (platform === "darwin") return "mac";
+  if (platform === "win32") return "windows";
+  if (platform === "linux") return "linux";
+  throw new Error(`Application updates are unavailable on ${platform}`);
+};
+
+const parseReleaseManifest = (
+  raw: ReleaseManifest,
+  platform: NodeJS.Platform,
+  arch: string
+): TrustedRelease => {
+  if (raw.schemaVersion !== 1 || raw.repository !== REPOSITORY) {
+    throw new Error("Latest Release manifest has an unsupported identity");
+  }
+  const tag = requireString(raw.tag, "manifest tag");
+  const version = requireString(raw.version, "manifest version");
+  if (tag !== `v${version}` || !/^v\d+\.\d+\.\d+$/.test(tag)) {
+    throw new Error("Latest Release manifest version and tag do not match");
+  }
+  parseVersion(version);
+  if (!/^[a-f0-9]{64}$/.test(requireString(raw.buildFingerprint, "build fingerprint"))) {
+    throw new Error("Latest Release manifest has no valid build fingerprint");
+  }
+  const generatedAt = requireString(raw.generatedAt, "generation time");
+  if (Number.isNaN(Date.parse(generatedAt))) {
+    throw new Error("Latest Release manifest has no valid generation time");
+  }
+  const expectedName = assetNameFor(version, platform, arch);
+  const asset = Array.isArray(raw.assets)
+    ? (raw.assets as ReleaseManifestAsset[]).find((candidate) => candidate.name === expectedName)
+    : undefined;
+  if (!asset) throw new Error(`Latest Release manifest is missing ${expectedName}`);
+  if (
+    asset.platform !== manifestPlatformFor(platform) ||
+    asset.arch !== arch ||
+    asset.channel !== "direct"
+  ) {
+    throw new Error("Latest Release manifest asset identity does not match this device");
+  }
+  const expectedUrl = `${RELEASE_ORIGIN}releases/download/${tag}/${expectedName}`;
+  if (asset.url !== expectedUrl) {
+    throw new Error("Latest Release manifest asset has no official immutable URL");
+  }
+  const sha256 = requireString(asset.sha256, "asset SHA-256");
+  if (!/^[a-f0-9]{64}$/.test(sha256)) {
+    throw new Error("Latest Release manifest asset has no valid SHA-256 digest");
+  }
+  if (typeof asset.size !== "number" || !Number.isSafeInteger(asset.size) || asset.size <= 0) {
+    throw new Error("Latest Release manifest asset has no valid size");
+  }
+  return {
+    version,
+    tag,
+    releaseUrl: `${RELEASE_ORIGIN}releases/tag/${tag}`,
+    publishedAt: generatedAt,
+    asset: {
+      name: expectedName,
+      url: expectedUrl,
+      sha256,
+      size: asset.size
+    }
+  };
+};
+
+const failureForResponse = (response: Response) => {
+  if (response.status === 401) {
+    return new ReleaseClientError(
+      "authentication-required",
+      "The GitHub connection is no longer valid. Reconnect GitHub, then try again."
+    );
+  }
+  if (response.status === 403 || response.status === 429) {
+    return new ReleaseClientError(
+      "rate-limited",
+      "GitHub temporarily limited update checks. Connect GitHub or try again later."
+    );
+  }
+  return new ReleaseClientError(
+    "request-failed",
+    `Could not check the official Release service (HTTP ${response.status}).`
+  );
+};
+
 export const createReleaseClient = (options: {
   authTokenProvider?: () => Promise<string | undefined>;
   fetch?: typeof globalThis.fetch;
@@ -140,29 +245,44 @@ export const createReleaseClient = (options: {
         "User-Agent": "AgentEnv-Manager"
       };
       if (token?.trim()) headers.Authorization = `Bearer ${token.trim()}`;
-      const response = await request(RELEASE_API, {
-        headers,
-        signal: AbortSignal.timeout(timeoutMs)
-      });
-      if (response.status === 401) {
-        throw new ReleaseClientError(
-          "authentication-required",
-          "The GitHub connection is no longer valid. Reconnect GitHub, then try again."
-        );
-      }
-      if (response.status === 403 || response.status === 429) {
-        throw new ReleaseClientError(
-          "rate-limited",
-          "GitHub temporarily limited update checks. Connect GitHub or try again later."
-        );
-      }
-      if (!response.ok) {
-        throw new ReleaseClientError(
+      let apiFailure: ReleaseClientError | undefined;
+      let apiResponse: Response | undefined;
+      try {
+        apiResponse = await request(RELEASE_API, {
+          headers,
+          signal: AbortSignal.timeout(timeoutMs)
+        });
+      } catch (error) {
+        apiFailure = new ReleaseClientError(
           "request-failed",
-          `Could not check the official Release service (HTTP ${response.status}).`
+          `Could not check the official Release service: ${error instanceof Error ? error.message : String(error)}`
         );
       }
-      return parseRelease(await response.json() as GitHubRelease, platform, arch);
+      if (apiResponse?.ok) {
+        return parseRelease(await apiResponse.json() as GitHubRelease, platform, arch);
+      }
+      if (apiResponse) apiFailure = failureForResponse(apiResponse);
+
+      let manifestResponse: Response;
+      try {
+        manifestResponse = await request(RELEASE_MANIFEST_URL, {
+          headers: { "User-Agent": "AgentEnv-Manager" },
+          signal: AbortSignal.timeout(timeoutMs)
+        });
+      } catch {
+        throw apiFailure ?? new ReleaseClientError(
+          "request-failed",
+          "Could not check the official Release service."
+        );
+      }
+      if (!manifestResponse.ok) {
+        throw apiFailure ?? failureForResponse(manifestResponse);
+      }
+      return parseReleaseManifest(
+        await manifestResponse.json() as ReleaseManifest,
+        platform,
+        arch
+      );
     }
   };
 };

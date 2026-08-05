@@ -88,6 +88,7 @@ describe("app update service", () => {
   });
 
   it("prefetches through Homebrew and installs only a ready update", async () => {
+    const onInstalled = vi.fn();
     const homebrew = {
       inspect: vi.fn().mockResolvedValue({ available: true, managed: true, executablePath: "/opt/homebrew/bin/brew" }),
       download: vi.fn().mockResolvedValue(undefined),
@@ -102,13 +103,15 @@ describe("app update service", () => {
       homebrew,
       settingsStore: {
         readSettings: vi.fn().mockResolvedValue({ ...settings, appUpdateAutoDownloadEnabled: true })
-      }
+      },
+      onInstalled
     });
 
-    await expect(service.check({ manual: true })).resolves.toMatchObject({ phase: "ready" });
-    await expect(service.install()).resolves.toMatchObject({ phase: "up-to-date" });
+    await expect(service.check()).resolves.toMatchObject({ phase: "ready" });
+    await expect(service.install({ restart: true })).resolves.toMatchObject({ phase: "up-to-date" });
     expect(homebrew.download).toHaveBeenCalledTimes(1);
     expect(homebrew.install).toHaveBeenCalledTimes(1);
+    expect(onInstalled).toHaveBeenCalledWith(true);
   });
 
   it("turns offline failures into non-blocking copyable state", async () => {

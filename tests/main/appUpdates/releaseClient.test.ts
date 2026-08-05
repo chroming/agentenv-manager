@@ -20,6 +20,25 @@ const releaseResponse = (overrides: Record<string, unknown> = {}) => ({
   ...overrides
 });
 
+const manifestResponse = (overrides: Record<string, unknown> = {}) => ({
+  schemaVersion: 1,
+  repository: "chroming/agentenv-manager",
+  tag: "v0.2.0",
+  version: "0.2.0",
+  buildFingerprint: "b".repeat(64),
+  generatedAt: "2026-08-03T00:00:00Z",
+  assets: [{
+    name: "AgentEnv-Manager-0.2.0-mac-arm64.dmg",
+    platform: "mac",
+    arch: "arm64",
+    channel: "direct",
+    size: 123,
+    sha256: "a".repeat(64),
+    url: "https://github.com/chroming/agentenv-manager/releases/download/v0.2.0/AgentEnv-Manager-0.2.0-mac-arm64.dmg"
+  }],
+  ...overrides
+});
+
 describe("release client", () => {
   it("accepts only an exact stable official release and architecture asset", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(releaseResponse()), {
@@ -95,14 +114,40 @@ describe("release client", () => {
     expect(new Headers(request.headers).has("Authorization")).toBe(false);
   });
 
-  it("turns GitHub rate limits into an actionable failure", async () => {
+  it("falls back to the checksum-bound official manifest when the API is rate limited", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response("rate limited", { status: 403 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(manifestResponse()), { status: 200 }));
     const client = createReleaseClient({
-      fetch: vi.fn().mockResolvedValue(new Response("rate limited", { status: 403 }))
+      fetch
     });
 
-    await expect(client.readLatest({ platform: "darwin", arch: "arm64" })).rejects.toMatchObject({
-      code: "rate-limited",
-      message: "GitHub temporarily limited update checks. Connect GitHub or try again later."
+    await expect(client.readLatest({ platform: "darwin", arch: "arm64" })).resolves.toMatchObject({
+      version: "0.2.0",
+      asset: {
+        name: "AgentEnv-Manager-0.2.0-mac-arm64.dmg",
+        sha256: "a".repeat(64)
+      }
     });
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+      "https://api.github.com/repos/chroming/agentenv-manager/releases/latest",
+      "https://github.com/chroming/agentenv-manager/releases/latest/download/release-manifest.json"
+    ]);
+  });
+
+  it("rejects an invalid fallback manifest instead of trusting a mutable asset", async () => {
+    const client = createReleaseClient({
+      fetch: vi.fn()
+        .mockResolvedValueOnce(new Response("rate limited", { status: 403 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify(manifestResponse({
+          assets: [{
+            ...manifestResponse().assets[0],
+            url: "https://example.test/AgentEnv-Manager.dmg"
+          }]
+        })), { status: 200 }))
+    });
+
+    await expect(client.readLatest({ platform: "darwin", arch: "arm64" }))
+      .rejects.toThrow("official immutable URL");
   });
 });
