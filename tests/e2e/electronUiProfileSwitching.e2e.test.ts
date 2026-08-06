@@ -3914,7 +3914,7 @@ describe("Electron UI profile switching e2e", () => {
     const pickerGeometry = await skillPicker.evaluate((dialog) => {
       const search = dialog.querySelector<HTMLElement>(".resource-picker-search")?.getBoundingClientRect();
       const list = dialog.querySelector<HTMLElement>(".resource-picker-list")?.getBoundingClientRect();
-      const footer = dialog.querySelector<HTMLElement>(".preview-actions")?.getBoundingClientRect();
+      const footer = dialog.querySelector<HTMLElement>(".ui-dialog-footer")?.getBoundingClientRect();
       const box = dialog.getBoundingClientRect();
       return {
         searchBottom: search?.bottom ?? 0,
@@ -4841,7 +4841,7 @@ describe("Electron UI profile switching e2e", () => {
       documentContained: true,
       editorLeft: 64,
       feedbackInset: 18,
-      groupCount: 3,
+      groupCount: 4,
       sidebarTop: 38,
       sidebarWidth: 64
     });
@@ -4858,6 +4858,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(collapsedGeometry.collapseButtonBox.bottom - collapsedGeometry.collapseButtonBox.top)
       .toBe(28);
     expect(collapsedGeometry.groupSeparators).toEqual([
+      { borderTopWidth: "1px", width: 40 },
       { borderTopWidth: "1px", width: 40 },
       { borderTopWidth: "1px", width: 40 }
     ]);
@@ -9654,7 +9655,7 @@ describe("Electron UI profile switching e2e", () => {
       page.getByRole("radiogroup", { name: "OpenCode 的 MCP 应用策略" })
     ];
     for (const policy of localizedPolicies) {
-      for (const label of ["使用保存项", "停用", "保持现状"]) {
+      for (const label of ["使用方案", "停用", "保留 Agent"]) {
         await expectTextFits(policy.getByRole("radio", { name: label }));
       }
       await expectSegmentedControlGeometry(policy);

@@ -20,7 +20,7 @@ await execFile(
     "vitest",
     "run",
     "tests/e2e/profileEvaluation.e2e.test.ts",
-    "--testNamePattern=isolated Profile comparison desktop workflow",
+    "--testNamePattern=isolated Environment comparison desktop workflow",
     "--maxWorkers=1",
     "--no-file-parallelism"
   ],
@@ -57,4 +57,4 @@ await writeFile(join(outputDir, "capture-manifest.json"), `${JSON.stringify({
   files
 }, null, 2)}\n`, "utf8");
 
-process.stdout.write(`Captured critical Profile comparison states in ${outputDir}.\n`);
+process.stdout.write(`Captured critical Environment comparison states in ${outputDir}.\n`);

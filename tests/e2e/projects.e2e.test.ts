@@ -190,15 +190,18 @@ describe("Workspaces desktop workflow", () => {
     if (captureDir) {
       await page.screenshot({ path: join(captureDir, "project-recovery-920x620.png") });
     }
-    await page.getByRole("button", { name: "Restore", exact: true }).first().click();
+    const restoreButton = page.getByRole("button", { name: "Restore", exact: true }).first();
+    await restoreButton.click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
       .toContain("# Testing");
-    await page.getByRole("button", { name: "Restore", exact: true }).first().click();
+    await expect.poll(() => restoreButton.isEnabled()).toBe(true);
+    await restoreButton.click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8").then(
       () => true,
       () => false
     )).toBe(false);
-    await page.getByRole("button", { name: "Restore", exact: true }).first().click();
+    await expect.poll(() => restoreButton.isEnabled()).toBe(true);
+    await restoreButton.click();
     await expect.poll(() => readFile(instructionsPath, "utf8").then(
       () => true,
       () => false

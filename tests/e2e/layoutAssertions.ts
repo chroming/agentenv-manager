@@ -87,7 +87,7 @@ export const findVisibleTextLayoutDefects = async (page: Page) =>
       .filter((element) => Array.from(element.childNodes).some(
         (node) => node.nodeType === Node.TEXT_NODE && Boolean(node.textContent?.trim())
       ))
-      .filter((element) => !element.classList.contains("ui-visually-hidden"));
+      .filter((element) => !element.closest(".ui-visually-hidden"));
     const candidates = Array.from(new Set([...contractCandidates, ...truncatedTextCandidates]));
     const selectorFor = (element: HTMLElement) => {
       const id = element.id ? `#${element.id}` : "";
