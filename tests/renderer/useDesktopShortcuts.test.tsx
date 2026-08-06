@@ -107,6 +107,27 @@ describe("useDesktopShortcuts", () => {
     expect(refs[target].current.selectionEnd).toBe(refs[target].current.value.length);
   });
 
+  it("opens the Profile switcher before focusing its temporary search", () => {
+    const onOpenProfileSearch = vi.fn();
+    renderHook(() =>
+      useDesktopShortcuts({
+        activeWorkspace: "profiles",
+        isProfileSaving: false,
+        onSaveProfile: vi.fn(),
+        onOpenProfileSearch,
+        onOpenQuickSearch: vi.fn(),
+        onRefreshSkills: vi.fn(),
+        profileSearchRef: { current: null },
+        skillSearchRef: createSearchRef("skill"),
+        platform: "MacIntel"
+      })
+    );
+
+    const event = dispatchCommand("f", { metaKey: true });
+    expect(event.defaultPrevented).toBe(true);
+    expect(onOpenProfileSearch).toHaveBeenCalledTimes(1);
+  });
+
   it.each(["targets", "settings"] as const)("does not intercept Find in %s", (activeWorkspace) => {
     const profileSearchRef = createSearchRef("daily");
     renderHook(() =>

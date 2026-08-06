@@ -101,10 +101,10 @@ Only the owning page implements a mutation. Other pages navigate to that workflo
 
 ## Workspace Screen
 
-Workspaces uses the existing list-detail shell. The list owns search and scrolling; the detail owns one current folder.
+Workspaces uses the shared single-object workspace shell. A temporary searchable object switcher replaces the permanent middle list, so the selected folder owns the available content width.
 
-- Page toolbar: freshness, Refresh, and Add folder. Add folder is primary only in the empty state; once a Workspace is selected, Open is the one emphasized action.
-- List row: folder name, compact path, last-used Agent, and exceptional state only.
+- Page toolbar: freshness and Refresh. Add folder lives in the object switcher footer and the empty state; once a Workspace is selected, Open is the one emphasized action.
+- Object switcher row: folder name, compact path, last-used Agent, and exceptional state only.
 - Inspector header: folder identity, an explicitly labelled `Open with` Agent selector, primary Open, and More.
 - Loaded-resource summary: applied Profile provenance for the selected Agent, workspace-local counts, Agent-owned input count, and concrete conflicts. It never reports Workspace/Profile sync.
 - Workspace files: compact disclosure sections for Instructions, Skills, and detected MCPs. Empty unsupported categories are omitted; read-only categories say Detected only.
@@ -117,7 +117,7 @@ Workspaces uses the existing list-detail shell. The list owns search and scrolli
 |---|---|---|
 | Page title and actions | `PageHeader`, `ControlGroup`, `FreshnessStatus` | shared UI/pattern styles |
 | Add folder / Refresh / Open | `Button` with existing size and icon variants | shared primitive styles |
-| List-detail shell | `MasterDetailLayout`, `MasterListPane`, `MasterDetailPane` | shared pattern styles |
+| Single-object shell | `SingleObjectWorkspace`, `ObjectSwitcher` | shared pattern styles |
 | Folder row | `SelectableListRow`, `OverflowTooltip` | shared pattern styles |
 | Detail header | `InspectorHeader`, `SelectField`, `ActionMenu` | shared UI/pattern styles |
 | Resource disclosure | new `ResourceDisclosureSection`, extracted below `ProfileComposerSection` | shared pattern styles |

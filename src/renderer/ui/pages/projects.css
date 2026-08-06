@@ -16,29 +16,24 @@
 
 .projects-workbench {
   min-height: 0;
+  overflow: hidden;
 }
 
-.project-index {
-  min-width: 0;
-  overflow: auto;
-}
-
-.project-list-toolbar {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border-subtle);
-  padding: var(--space-2);
-  position: sticky;
-  top: 0;
-  z-index: var(--z-raised);
-}
-
-.project-list-toolbar .ui-field {
-  gap: 0;
+.project-switcher {
+  width: clamp(220px, 28vw, 310px);
 }
 
 .project-detail {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
   min-height: 0;
   overflow: hidden;
+}
+
+.project-detail > .ui-empty-state {
+  align-self: stretch;
+  grid-row: 1 / -1;
 }
 
 .project-resource-groups {

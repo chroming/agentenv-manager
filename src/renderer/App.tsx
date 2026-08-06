@@ -176,7 +176,8 @@ import {
   Button,
   ControlGroup,
   focusInitialActionMenuItem,
-  PageHeader
+  PageHeader,
+  SingleObjectWorkspace
 } from "./components/ui";
 import {
   deriveApplyActionLabel,
@@ -358,6 +359,7 @@ const AppContent = ({
   const [targetRefreshStatus, setTargetRefreshStatus] = useState<"refreshing" | "refreshed">();
   const [skillRefreshStatus, setSkillRefreshStatus] = useState<"refreshing" | "refreshed">();
   const [profileSearch, setProfileSearch] = useState("");
+  const [profileSwitcherOpen, setProfileSwitcherOpen] = useState(false);
   const [activeComposerSection, setActiveComposerSection] =
     useState<ComposerSection>();
   const [isTargetMenuOpen, setIsTargetMenuOpen] = useState(false);
@@ -1308,6 +1310,13 @@ const AppContent = ({
     isProfileSaving,
     onSaveProfile: saveSelectedProfile,
     onRefreshSkills: refreshSkills,
+    onOpenProfileSearch: () => {
+      setProfileSwitcherOpen(true);
+      window.requestAnimationFrame(() => {
+        profileSearchInputRef.current?.focus();
+        profileSearchInputRef.current?.select();
+      });
+    },
     onOpenQuickSearch: () => setQuickOpen(true),
     profileSearchRef: profileSearchInputRef,
     skillSearchRef: skillSearchInputRef
@@ -4294,32 +4303,32 @@ const AppContent = ({
                   label={t("Compose reusable resources, then preview and apply them to an Agent.")}
                 />
               }
-              actions={
-                <Button
-                  icon={<Plus size={16} strokeWidth={2.3} />}
-                  onClick={openCreateProfileDialog}
-                >
-                  {t("New Profile")}
-                </Button>
-              }
+              actions={(
+                <ProfileList
+                  isLoading={isLoading}
+                  profiles={profiles}
+                  search={profileSearch}
+                  searchInputRef={profileSearchInputRef}
+                  selectedProfileId={profileLoadingId ?? selectedProfileId}
+                  draftProfile={draftProfile}
+                  isProfileDirty={isProfileDirty}
+                  targets={targets}
+                  targetStates={targetStates}
+                  actionsDisabled={busy}
+                  open={profileSwitcherOpen}
+                  onOpenChange={setProfileSwitcherOpen}
+                  onCreate={(returnFocus) => {
+                    appModalFallbackFocusRef.current = returnFocus;
+                    openCreateProfileDialog();
+                  }}
+                  onDelete={openDeleteProfileDialog}
+                  onDuplicate={duplicateProfile}
+                  onSearchChange={setProfileSearch}
+                  onSelect={selectProfile}
+                />
+              )}
             />
-            <section className="profile-workbench ui-surface-frame" aria-label={t("Profiles")}>
-              <ProfileList
-                isLoading={isLoading}
-                profiles={profiles}
-                search={profileSearch}
-                searchInputRef={profileSearchInputRef}
-                selectedProfileId={profileLoadingId ?? selectedProfileId}
-                draftProfile={draftProfile}
-                isProfileDirty={isProfileDirty}
-                targets={targets}
-                targetStates={targetStates}
-                actionsDisabled={busy}
-                onDelete={openDeleteProfileDialog}
-                onDuplicate={duplicateProfile}
-                onSearchChange={setProfileSearch}
-                onSelect={selectProfile}
-              />
+            <SingleObjectWorkspace className="profile-workbench" aria-label={t("Profiles")}>
               <div className="profile-editor-surface">
                 {profileLoadingId ? (
                   <div
@@ -4843,7 +4852,7 @@ const AppContent = ({
                   }}
                 />
               ) : null}
-            </section>
+            </SingleObjectWorkspace>
           </section>
         ) : activeWorkspace === "projects" ? (
           <ProjectsWorkspace

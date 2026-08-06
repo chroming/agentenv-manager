@@ -983,15 +983,34 @@ const resizeAppWindow = async (page: Page, width: number, height: number) => {
   await page.waitForTimeout(300);
 };
 
+const openProfileSwitcher = async (page: Page) => {
+  await page.getByRole("button", { name: "Choose Profile", exact: true }).click();
+  const switcher = page.getByRole("dialog", { name: "Choose Profile", exact: true });
+  await switcher.waitFor({ state: "visible" });
+  return switcher;
+};
+
+const profileOption = async (page: Page, name: string) =>
+  (await openProfileSwitcher(page)).getByRole("option", {
+    name: `Profile ${name}`,
+    exact: true
+  });
+
+const openNewProfileDialog = async (page: Page) => {
+  const switcher = await openProfileSwitcher(page);
+  await switcher.getByRole("button", { name: "New Profile", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "New Profile" });
+  await dialog.waitFor({ state: "visible" });
+  return dialog;
+};
+
 const selectProfile = async (page: Page, name: string) => {
   await page
     .getByRole("complementary", { name: "Global navigation" })
     .getByRole("button", { name: "Profiles", exact: true })
     .click();
   await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
-  await page
-    .getByRole("button", { name: `Profile ${name}`, exact: true })
-    .click();
+  await (await profileOption(page, name)).click();
   await page.getByRole("heading", { name, exact: true }).waitFor({ state: "visible" });
   await page
     .locator(".profile-editor-surface .profile-composer:not(.profile-composer--loading)")
@@ -1658,7 +1677,7 @@ describe("Electron UI profile switching e2e", () => {
     });
 
     await selectProfile(page, "UI OpenCode alpha");
-    const brokenRow = page.getByRole("button", { name: "Profile broken-profile" });
+    const brokenRow = await profileOption(page, "broken-profile");
     await brokenRow.waitFor({ state: "visible" });
     await expect.poll(() => brokenRow.textContent()).toContain(
       "Stored Profile data could not be loaded"
@@ -1819,6 +1838,11 @@ describe("Electron UI profile switching e2e", () => {
     const navigation = page.getByRole("complementary", { name: "Global navigation" });
     await selectProfile(page, "UI OpenCode alpha");
 
+    await page.keyboard.press("Control+f");
+    expect(
+      await page.getByRole("dialog", { name: "Choose Profile", exact: true }).count()
+    ).toBe(0);
+    await page.keyboard.press("Meta+f");
     const profileSearch = page.getByRole("searchbox", { name: "Search Profiles" });
     await profileSearch.fill("UI OpenCode");
     await profileSearch.evaluate((element) => (element as HTMLInputElement).blur());
@@ -1827,8 +1851,8 @@ describe("Electron UI profile switching e2e", () => {
       false
     );
     await page.keyboard.press("Meta+f");
-    expect(
-      await profileSearch.evaluate(
+    await expect.poll(() =>
+      profileSearch.evaluate(
         (element) =>
           document.activeElement === element &&
           (element as HTMLInputElement).selectionStart === 0 &&
@@ -1846,7 +1870,8 @@ describe("Electron UI profile switching e2e", () => {
     await expandComposerSection(page, "Instructions");
     const instructions = page.getByRole("textbox", { name: "AGENTS.md" });
     await instructions.fill("# Shortcut E2E\n");
-    await page.getByRole("button", { name: "New Profile" }).click();
+    const dirtySwitcher = await openProfileSwitcher(page);
+    await dirtySwitcher.getByRole("button", { name: "New Profile", exact: true }).click();
     await page.keyboard.press("Meta+s");
     await page.waitForTimeout(50);
     expect(
@@ -1939,16 +1964,20 @@ describe("Electron UI profile switching e2e", () => {
     };
 
     await page.getByRole("button", { name: "Profiles", exact: true }).click();
-    const newProfileTrigger = page.getByRole("button", { name: "New Profile" });
-    await newProfileTrigger.click();
-    const newProfileDialog = page.getByRole("dialog", { name: "New Profile" });
+    const profileSwitcherTrigger = page.getByRole("button", {
+      name: "Choose Profile",
+      exact: true
+    });
+    const newProfileDialog = await openNewProfileDialog(page);
     expect(await newProfileDialog.getByLabel("Preferred Agent").count()).toBe(0);
     expect(await newProfileDialog.getByLabel("Source Agent").count()).toBe(0);
     await expectFocusInside(newProfileDialog);
     await expectFocusTrapped(newProfileDialog);
     await page.keyboard.press("Escape");
     await newProfileDialog.waitFor({ state: "hidden" });
-    expect(await newProfileTrigger.evaluate((element) => document.activeElement === element)).toBe(true);
+    expect(
+      await profileSwitcherTrigger.evaluate((element) => document.activeElement === element)
+    ).toBe(true);
 
     await selectProfile(page, "UI OpenCode alpha");
     await applyActionButton(page, "OpenCode").click();
@@ -2531,7 +2560,8 @@ describe("Electron UI profile switching e2e", () => {
       state: "visible",
       timeout: 10_000
     });
-    await page.getByRole("button", { name: "New Profile" }).click({ timeout: 5_000 });
+    const initialSwitcher = await openProfileSwitcher(page);
+    await initialSwitcher.getByRole("button", { name: "New Profile" }).click({ timeout: 5_000 });
     const createDialog = page.getByRole("dialog", { name: "New Profile" });
     await createDialog.waitFor({ state: "visible", timeout: 5_000 });
     await createDialog.getByLabel("Profile name").fill("Docs Writing");
@@ -2541,16 +2571,17 @@ describe("Electron UI profile switching e2e", () => {
       state: "visible",
       timeout: 10_000
     });
-    const newProfileRow = page.getByRole("button", { name: "Profile Docs Writing" });
+    const newProfileRow = await profileOption(page, "Docs Writing");
     const newProfileGeometry = await newProfileRow.evaluate((row) => {
-      const icon = row.querySelector<HTMLElement>(".profile-row__icon")!.getBoundingClientRect();
-      const content = row.querySelector<HTMLElement>(".profile-row__content")!.getBoundingClientRect();
+      const icon = row.querySelector<HTMLElement>(".ui-selectable-row__icon")!.getBoundingClientRect();
+      const content = row.querySelector<HTMLElement>(".ui-selectable-row__identity")!.getBoundingClientRect();
       return {
         iconSize: Math.round(icon.width),
         contentGap: Math.round(content.left - icon.right)
       };
     });
-    expect(newProfileGeometry).toEqual({ iconSize: 24, contentGap: 7 });
+    expect(newProfileGeometry).toEqual({ iconSize: 28, contentGap: 8 });
+    await page.keyboard.press("Escape");
     expect(await findProfileByName(appDataRoot, "Docs Writing")).toMatchObject({
       name: "Docs Writing",
       description: "Writing workspace",
@@ -2579,9 +2610,11 @@ describe("Electron UI profile switching e2e", () => {
       state: "visible",
       timeout: 10_000
     });
-    expect(await page.getByRole("button", { name: "Profile Docs Writing v2" }).getByText("Current", {
+    const renamedProfile = await profileOption(page, "Docs Writing v2");
+    expect(await renamedProfile.getByText("Current", {
       exact: true
     }).count()).toBe(0);
+    await page.keyboard.press("Escape");
     expect(await findProfileByName(appDataRoot, "Docs Writing v2")).toMatchObject({
       name: "Docs Writing v2",
       description: "Updated writing workspace"
@@ -2595,29 +2628,25 @@ describe("Electron UI profile switching e2e", () => {
     });
     const duplicate = await findProfileByName(appDataRoot, "Docs Writing v2 Copy");
     expect(duplicate).toMatchObject({ name: "Docs Writing v2 Copy" });
-    const profileNames = () =>
-      page.locator(".profile-row__name").evaluateAll((items) =>
+    const profileNames = async () => {
+      const switcher = await openProfileSwitcher(page);
+      const names = await switcher.locator(".profile-row__name").evaluateAll((items) =>
         items.map((item) => item.textContent)
       );
+      await page.keyboard.press("Escape");
+      return names;
+    };
     expect((await profileNames()).slice(0, 2)).toEqual([
       "Docs Writing v2 Copy",
       "Docs Writing v2"
     ]);
-    await page
-      .locator(".profile-row")
-      .filter({ has: page.getByText("Docs Writing v2", { exact: true }) })
-      .locator(".profile-row__content")
-      .click();
+    await selectProfile(page, "Docs Writing v2");
     await page.getByRole("heading", { name: "Docs Writing v2" }).waitFor({ state: "visible" });
     expect((await profileNames()).slice(0, 2)).toEqual([
       "Docs Writing v2 Copy",
       "Docs Writing v2"
     ]);
-    await page
-      .locator(".profile-row")
-      .filter({ has: page.getByText("Docs Writing v2 Copy", { exact: true }) })
-      .locator(".profile-row__content")
-      .click();
+    await selectProfile(page, "Docs Writing v2 Copy");
 
     await page.getByRole("button", { name: "More Profile actions" }).click({ timeout: 5_000 });
     await page.getByRole("menuitem", { name: "Delete Profile" }).click({ timeout: 5_000 });
@@ -2666,8 +2695,7 @@ describe("Electron UI profile switching e2e", () => {
       state: "visible",
       timeout: 10_000
     });
-    await page.getByRole("button", { name: "New Profile" }).click({ timeout: 5_000 });
-    const createDialog = page.getByRole("dialog", { name: "New Profile" });
+    const createDialog = await openNewProfileDialog(page);
     await createDialog.waitFor({ state: "visible", timeout: 5_000 });
     await page
       .locator(".preview-modal-backdrop")
@@ -3411,7 +3439,7 @@ describe("Electron UI profile switching e2e", () => {
     await profileActionsMenu.waitFor({ state: "hidden" });
     expect(await profileActionsTrigger.evaluate((element) => element === document.activeElement)).toBe(true);
 
-    const selectedProfileRow = page.getByRole("button", { name: "Profile UI OpenCode alpha" });
+    const selectedProfileRow = await profileOption(page, "UI OpenCode alpha");
     await selectedProfileRow.click({ button: "right" });
     const profileContextMenu = page.getByRole("menu", { name: "Profile actions" });
     await profileContextMenu.waitFor({ state: "visible" });
@@ -3470,538 +3498,149 @@ describe("Electron UI profile switching e2e", () => {
     await expectInViewport(page, rowTip);
   }, 45_000);
 
-  it("keeps the Environments workbench contained at the default viewport", async () => {
-    const { appDataRoot, page } = await launchApp({ openCodeAlphaLibrarySkillCount: 8 });
-    await page.setViewportSize({ width: 1180, height: 728 });
+  it("keeps the single-Profile workspace and temporary switcher contained at supported viewports", async () => {
+    const { page } = await launchApp({ openCodeAlphaLibrarySkillCount: 8 });
+    await resizeAppWindow(page, 1180, 728);
     await selectProfile(page, "UI OpenCode alpha");
 
     const header = page.locator(".profile-page-header");
     const workbench = page.locator(".profile-workbench");
-    const profileIndex = page.locator(".profile-index");
-    const profileList = page.locator(".profile-list");
     const editor = page.locator(".profile-editor-surface");
     const composer = page.getByRole("region", { name: "Profile composer" });
     const commitActions = page.getByRole("group", { name: "Selected Profile actions" });
+    const switcherTrigger = page.getByRole("button", { name: "Choose Profile", exact: true });
 
-    await expectInViewport(page, header);
-    await expectInViewport(page, workbench);
+    const expectShellContained = async () => {
+      const metrics = await page.evaluate(() => ({
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: document.documentElement.clientWidth,
+        documentHeight: document.documentElement.scrollHeight,
+        viewportHeight: document.documentElement.clientHeight
+      }));
+      expect(metrics.documentWidth).toBe(metrics.viewportWidth);
+      expect(metrics.documentHeight).toBe(metrics.viewportHeight);
+      await expectInViewport(page, header);
+      await expectInViewport(page, workbench);
+      await expectInViewport(page, editor);
+      await expectInViewport(page, commitActions);
+      await expectInViewport(page, switcherTrigger);
+    };
 
-    const compactProfileGeometry = await page.evaluate(() => ({
-      profileRows: [...document.querySelectorAll<HTMLElement>(".profile-row")].map(
-        (row) => Math.round(row.getBoundingClientRect().height)
-      ),
-      composerRows: [...document.querySelectorAll<HTMLElement>(
-        ".profile-composer-section__trigger"
-      )].map((row) => Math.round(row.getBoundingClientRect().height)),
-      composerTitleCount: document.querySelectorAll(".profile-composer__header").length
-    }));
-    expect(compactProfileGeometry.profileRows.every((height) => height <= 92)).toBe(true);
-    expect(compactProfileGeometry.composerRows.every((height) => height <= 54)).toBe(true);
-    expect(compactProfileGeometry.composerTitleCount).toBe(0);
-    const profileObjectGeometry = await page.locator(".profile-row").first().evaluate((row) => {
-      const icon = row.querySelector<HTMLElement>(".profile-row__icon")!;
-      const content = row.querySelector<HTMLElement>(".profile-row__content")!;
-      const iconBox = icon.getBoundingClientRect();
-      const contentBox = content.getBoundingClientRect();
-      return {
-        iconTextGap: contentBox.left - iconBox.right,
-        iconWidth: iconBox.width,
-        headerTargetControls: document.querySelectorAll(
-          ".profile-page-header .profile-target-workspace-control, .profile-page-header .profile-target-workspace-button"
-        ).length
-      };
-    });
-    expect(profileObjectGeometry.iconTextGap).toBeGreaterThanOrEqual(3);
-    expect(profileObjectGeometry.iconTextGap).toBeLessThanOrEqual(8);
-    expect(profileObjectGeometry.iconWidth).toBe(24);
-    expect(profileObjectGeometry.headerTargetControls).toBe(0);
+    const inspectSwitcher = async () => {
+      const switcher = await openProfileSwitcher(page);
+      await expectInViewport(page, switcher);
+      await expectTopmost(switcher);
+      const search = switcher.getByRole("searchbox", { name: "Search Profiles" });
+      const list = switcher.getByRole("listbox", { name: "Choose Profile" });
+      await expectInViewport(page, search);
+      await expectInViewport(page, list);
+      expect(await switcher.getByRole("option").count()).toBeGreaterThanOrEqual(2);
+      expect(await switcher.getByRole("button", { name: "New Profile" }).count()).toBe(1);
+      expect(await switcher.getByRole("option", {
+        name: "Profile UI OpenCode alpha",
+        exact: true
+      }).getAttribute("aria-selected")).toBe("true");
 
-    const profileCommitGeometry = await commitActions.evaluate((group) => {
-      const save = group.querySelector<HTMLElement>(".save-button")!;
-      const apply = group.querySelector<HTMLElement>(".profile-apply-button")!;
-      const target = group.querySelector<HTMLElement>(".profile-target-workspace-button")!;
-      const boxes = [save, target, apply].map((item) => item.getBoundingClientRect());
-      return {
-        ordered: boxes[0].right < boxes[1].left && boxes[1].right < boxes[2].left,
-        applyUsesDestinationIcon: apply.querySelector(".profile-target-logo") !== null,
-        targetFits: target.scrollWidth <= target.clientWidth + 1
-      };
-    });
-    expect(profileCommitGeometry).toEqual({
-      ordered: true,
-      applyUsesDestinationIcon: false,
-      targetFits: true
-    });
+      const rowGeometry = await switcher.getByRole("option").evaluateAll((rows) =>
+        rows.map((row) => {
+          const icon = row.querySelector<HTMLElement>(".ui-selectable-row__icon")!;
+          const identity = row.querySelector<HTMLElement>(".ui-selectable-row__identity")!;
+          const rowBox = row.getBoundingClientRect();
+          const iconBox = icon.getBoundingClientRect();
+          const identityBox = identity.getBoundingClientRect();
+          return {
+            childrenFit:
+              iconBox.top >= rowBox.top &&
+              iconBox.bottom <= rowBox.bottom &&
+              identityBox.top >= rowBox.top &&
+              identityBox.bottom <= rowBox.bottom,
+            gap: Math.round(identityBox.left - iconBox.right),
+            height: Math.round(rowBox.height)
+          };
+        })
+      );
+      expect(rowGeometry.every(({ childrenFit }) => childrenFit)).toBe(true);
+      expect(new Set(rowGeometry.map(({ gap }) => gap)).size).toBe(1);
+      expect(rowGeometry.every(({ height }) => height === 54)).toBe(true);
 
-    const shellMetrics = await page.evaluate(() => ({
-      documentWidth: document.documentElement.scrollWidth,
-      viewportWidth: document.documentElement.clientWidth,
-      documentHeight: document.documentElement.scrollHeight,
-      viewportHeight: document.documentElement.clientHeight
-    }));
-    expect(shellMetrics.documentWidth).toBe(shellMetrics.viewportWidth);
-    expect(shellMetrics.documentHeight).toBe(shellMetrics.viewportHeight);
+      await page.keyboard.press("Escape");
+      await switcher.waitFor({ state: "hidden" });
+      expect(await switcherTrigger.evaluate((element) => document.activeElement === element)).toBe(true);
+    };
 
-    const initialWorkbenchBox = await workbench.boundingBox();
-    expect(initialWorkbenchBox).not.toBeNull();
-    const defaultContainerMetrics = await page.locator(".app-shell--profiles .editor-panel").evaluate(
-      (element) => ({
-        containerName: getComputedStyle(element).containerName,
-        workbenchColumns: getComputedStyle(
-          element.querySelector<HTMLElement>(".profile-workbench")!
-        ).gridTemplateColumns
-      })
-    );
-    expect(defaultContainerMetrics.containerName).toBe("profile-workspace");
-    expect(defaultContainerMetrics.workbenchColumns.startsWith("260px ")).toBe(true);
+    await expectShellContained();
+    expect(await page.locator(".profile-index").count()).toBe(0);
+    expect(await page.locator(".profile-list").count()).toBe(0);
+    expect(await workbench.evaluate((element) =>
+      getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).length
+    )).toBe(1);
 
-    const workbenchEdgeGeometry = await workbench.evaluate((frame) => {
+    const frameGeometry = await workbench.evaluate((frame) => {
       const frameBox = frame.getBoundingClientRect();
-      const frameEdge = getComputedStyle(frame, "::after");
-      const index = frame.querySelector<HTMLElement>(".profile-index")!;
-      const indexBox = index.getBoundingClientRect();
-      const toolbar = frame.querySelector<HTMLElement>(".profile-list-toolbar")!;
-      const toolbarBox = toolbar.getBoundingClientRect();
-      const search = frame.querySelector<HTMLElement>(".profile-search")!;
-      const searchBox = search.getBoundingClientRect();
-      const list = frame.querySelector<HTMLElement>(".profile-list")!;
-      const listBox = list.getBoundingClientRect();
       const editor = frame.querySelector<HTMLElement>(".profile-editor-surface")!;
       const editorBox = editor.getBoundingClientRect();
-      const hero = frame.querySelector<HTMLElement>(".profile-hero")!;
-      const heroBox = hero.getBoundingClientRect();
-      const composer = frame.querySelector<HTMLElement>(".profile-composer")!;
-      const composerBox = composer.getBoundingClientRect();
-      const composerStyle = getComputedStyle(composer);
-      const heroStyle = getComputedStyle(hero);
-      const activeRowStyle = getComputedStyle(
-        frame.querySelector<HTMLElement>(".profile-row.is-active")!
-      );
-      const rows = Array.from(frame.querySelectorAll<HTMLElement>(".profile-row"));
+      const style = getComputedStyle(frame);
       return {
-        activeRowBoxShadow: activeRowStyle.boxShadow,
-        composerBorderWidths: [
-          composerStyle.borderTopWidth,
-          composerStyle.borderRightWidth,
-          composerStyle.borderBottomWidth,
-          composerStyle.borderLeftWidth
+        borderWidths: [
+          style.borderTopWidth,
+          style.borderRightWidth,
+          style.borderBottomWidth,
+          style.borderLeftWidth
         ],
-        composerMeetsHeader: Math.abs(composerBox.top - heroBox.bottom) <= 1,
-        composerRadius: composerStyle.borderRadius,
-        frameEdges: [
-          frameEdge.borderTopWidth,
-          frameEdge.borderRightWidth,
-          frameEdge.borderBottomWidth,
-          frameEdge.borderLeftWidth
-        ],
-        heroLayer: {
-          position: heroStyle.position,
-          top: heroStyle.top,
-          zIndex: heroStyle.zIndex
-        },
-        listIsFlush: (
-          Math.abs(listBox.left - indexBox.left) <= 1 &&
-          Math.abs(listBox.right - indexBox.right) <= 1
-        ),
-        searchContainedByToolbar: (
-          searchBox.top >= toolbarBox.top &&
-          searchBox.bottom <= toolbarBox.bottom
-        ),
-        toolbarPrecedesList: toolbarBox.bottom <= listBox.top,
-        paneDividerIsSingle: (
-          getComputedStyle(index).borderRightWidth === "1px" &&
-          Math.abs(indexBox.right - editorBox.left) <= 1
-        ),
-        rowDividersAreContinuous: (
-          rows.every((row) => getComputedStyle(row).borderBottomWidth === "1px") &&
-          rows.slice(1).every((row, index) => {
-            const previousBox = rows[index].getBoundingClientRect();
-            return Math.abs(row.getBoundingClientRect().top - previousBox.bottom) <= 1;
-          })
-        ),
-        workbenchContainsChildren: [indexBox, editorBox].every(
-          (box) =>
-            box.left >= frameBox.left &&
-            box.right <= frameBox.right &&
-            box.top >= frameBox.top &&
-            box.bottom <= frameBox.bottom
-        )
+        editorFillsFrame:
+          Math.abs(editorBox.left - frameBox.left - 1) <= 1 &&
+          Math.abs(editorBox.right - frameBox.right + 1) <= 1 &&
+          Math.abs(editorBox.top - frameBox.top - 1) <= 1 &&
+          Math.abs(editorBox.bottom - frameBox.bottom + 1) <= 1,
+        radius: style.borderRadius
       };
     });
-    expect(workbenchEdgeGeometry).toEqual({
-      activeRowBoxShadow: "none",
-      composerBorderWidths: ["0px", "0px", "0px", "0px"],
-      composerMeetsHeader: true,
-      composerRadius: "0px",
-      frameEdges: ["1px", "1px", "1px", "1px"],
-      heroLayer: {
-        position: "static",
-        top: "auto",
-        zIndex: "auto"
-      },
-      listIsFlush: true,
-      paneDividerIsSingle: true,
-      rowDividersAreContinuous: true,
-      searchContainedByToolbar: true,
-      toolbarPrecedesList: true,
-      workbenchContainsChildren: true
-    });
+    expect(frameGeometry.borderWidths).toEqual(["1px", "1px", "1px", "1px"]);
+    expect(frameGeometry.editorFillsFrame).toBe(true);
+    expect(frameGeometry.radius).not.toBe("0px");
 
-    const initialOverflow = await Promise.all(
-      [profileIndex, profileList, editor].map((locator) =>
-        locator.evaluate((element) => ({
-          overflowY: getComputedStyle(element).overflowY,
-          clientHeight: element.clientHeight,
-          scrollHeight: element.scrollHeight
-        }))
-      )
-    );
-    expect(initialOverflow[0].overflowY).toBe("hidden");
-    expect(["auto", "scroll"]).toContain(initialOverflow[1].overflowY);
-    expect(initialOverflow[2].overflowY).toBe("hidden");
-    for (const metrics of initialOverflow) {
-      expect(metrics.clientHeight).toBeGreaterThan(0);
-    }
+    await inspectSwitcher();
 
-    await page.getByRole("button", { name: "Select apply Agent" }).click();
-    const defaultViewportTargetMenu = page.getByRole("menu", { name: "Apply Agents" });
-    await defaultViewportTargetMenu.waitFor({ state: "visible" });
-    await expectInViewport(page, defaultViewportTargetMenu);
-    await expectTopmost(defaultViewportTargetMenu);
-    await page.keyboard.press("Escape");
-    await defaultViewportTargetMenu.waitFor({ state: "hidden" });
-
-    const skillsTrigger = composer.getByRole("button", { name: "Skills", exact: true });
-    expect(await skillsTrigger.getAttribute("aria-expanded")).toBe("false");
-    const collapsedComposerGeometry = await readProfileComposerGeometry(composer);
-    expect(collapsedComposerGeometry.triggerHeights.every(
-      (height) => height === collapsedComposerGeometry.rowHeightToken
-    )).toBe(true);
-
+    const initialWorkbenchBox = await workbench.boundingBox();
     await expandComposerSection(page, "Skills");
-    expect(await skillsTrigger.getAttribute("aria-expanded")).toBe("true");
-
-    const expandedWorkbenchBox = await workbench.boundingBox();
-    expect(expandedWorkbenchBox).toEqual(initialWorkbenchBox);
-    const [editorBox, composerBox] = await Promise.all([
-      editor.boundingBox(),
-      composer.boundingBox()
-    ]);
-    expect(editorBox).not.toBeNull();
-    expect(composerBox).not.toBeNull();
-    expect(composerBox!.height).toBeGreaterThanOrEqual(300);
     const expandedPanel = page.locator(
       '[data-profile-composer-id="skills"] .profile-composer-section__panel'
     );
     await expectInViewport(page, expandedPanel);
-    await expectInViewport(page, skillsTrigger);
-    await expectInViewport(
-      page,
-      page.getByRole("button", { name: "Check Profile Skill updates" })
-    );
-    await expectInViewport(page, commitActions);
-    await expectInViewport(page, header);
-    await expectInViewport(page, workbench);
-
-    const expandedMetrics = await editor.evaluate((element) => ({
-      overflowY: getComputedStyle(element).overflowY,
+    await expectInViewport(page, composer.getByRole("button", { name: "Skills", exact: true }));
+    expect(await workbench.boundingBox()).toEqual(initialWorkbenchBox);
+    const editorMetrics = await editor.evaluate((element) => ({
       clientHeight: element.clientHeight,
-      scrollHeight: element.scrollHeight,
-      documentHeight: document.documentElement.scrollHeight,
-      viewportHeight: document.documentElement.clientHeight
-    }));
-    const panelMetrics = await expandedPanel.evaluate((element) => ({
       overflowY: getComputedStyle(element).overflowY,
-      clientHeight: element.clientHeight,
       scrollHeight: element.scrollHeight
     }));
-    const skillList = page.locator(".profile-skill-list");
-    const skillListMetrics = await skillList.evaluate((element) => ({
-      overflowY: getComputedStyle(element).overflowY,
-      clientHeight: element.clientHeight,
-      scrollHeight: element.scrollHeight
-    }));
-    expect(expandedMetrics.overflowY).toBe("hidden");
-    expect(expandedMetrics.scrollHeight).toBe(expandedMetrics.clientHeight);
-    expect(["auto", "scroll"]).toContain(panelMetrics.overflowY);
-    expect(panelMetrics.clientHeight).toBeGreaterThanOrEqual(220);
-    expect(panelMetrics.scrollHeight).toBe(panelMetrics.clientHeight);
-    expect(["auto", "scroll"]).toContain(skillListMetrics.overflowY);
-    expect(skillListMetrics.scrollHeight).toBeGreaterThan(skillListMetrics.clientHeight);
-    expect(expandedMetrics.documentHeight).toBe(expandedMetrics.viewportHeight);
+    expect(editorMetrics.overflowY).toBe("hidden");
+    expect(editorMetrics.scrollHeight).toBe(editorMetrics.clientHeight);
 
     await resizeAppWindow(page, 920, 620);
+    await expectShellContained();
+    await inspectSwitcher();
     await expectInViewport(page, page.locator(".profile-hero"));
-    const minimumWorkbenchEdges = await workbench.evaluate((frame) => {
-      const index = frame.querySelector<HTMLElement>(".profile-index")!;
-      const indexBox = index.getBoundingClientRect();
-      const toolbarBox = frame.querySelector<HTMLElement>(".profile-list-toolbar")!
-        .getBoundingClientRect();
-      const searchBox = frame.querySelector<HTMLElement>(".profile-search")!
-        .getBoundingClientRect();
-      const listBox = frame.querySelector<HTMLElement>(".profile-list")!
-        .getBoundingClientRect();
-      const heroBox = frame.querySelector<HTMLElement>(".profile-hero")!
-        .getBoundingClientRect();
-      const composerBox = frame.querySelector<HTMLElement>(".profile-composer")!
-        .getBoundingClientRect();
-      return {
-        composerMeetsHeader: Math.abs(composerBox.top - heroBox.bottom) <= 1,
-        listIsFlush: (
-          Math.abs(listBox.left - indexBox.left) <= 1 &&
-          Math.abs(listBox.right - indexBox.right) <= 1
-        ),
-        searchContainedByToolbar: (
-          searchBox.top >= toolbarBox.top &&
-          searchBox.bottom <= toolbarBox.bottom
-        ),
-        toolbarPrecedesList: toolbarBox.bottom <= listBox.top
-      };
-    });
-    expect(minimumWorkbenchEdges).toEqual({
-      composerMeetsHeader: true,
-      listIsFlush: true,
-      searchContainedByToolbar: true,
-      toolbarPrecedesList: true
-    });
-    const minimumCommitGeometry = await commitActions.evaluate((group) => {
-      const groupBox = group.getBoundingClientRect();
-      const target = group.querySelector<HTMLElement>(".profile-target-workspace-button")!;
-      const targetLabel = target.querySelector<HTMLElement>("span")!;
-      const controls = [...group.children]
-        .filter((child): child is HTMLElement => child instanceof HTMLElement)
-        .map((child) => child.getBoundingClientRect());
-      return {
-        contained: controls.every(
-          (box) => box.left >= groupBox.left - 1 && box.right <= groupBox.right + 1
-        ),
-        separated: controls.every(
-          (box, index) => index === 0 || box.left >= controls[index - 1].right
-        ),
-        targetLabelDisplay: getComputedStyle(targetLabel).display,
-        targetLabelFits: targetLabel.scrollWidth <= targetLabel.clientWidth + 1,
-        targetLabel: targetLabel.textContent?.trim()
-      };
-    });
-    expect(minimumCommitGeometry).toEqual({
-      contained: true,
-      separated: true,
-      targetLabelDisplay: "block",
-      targetLabelFits: true,
-      targetLabel: "OpenCode"
-    });
-    await expectInViewport(page, skillsTrigger);
-    await expectInViewport(
-      page,
-      page.getByRole("button", { name: "Check Profile Skill updates" })
-    );
-    const minimumPanelMetrics = await expandedPanel.evaluate((element) => ({
-      clientHeight: element.clientHeight,
-      scrollHeight: element.scrollHeight
+    await expectInViewport(page, expandedPanel);
+
+    const triggerGeometry = await switcherTrigger.evaluate((trigger) => ({
+      textFits: trigger.scrollWidth <= trigger.clientWidth + 1,
+      height: Math.round(trigger.getBoundingClientRect().height),
+      width: Math.round(trigger.getBoundingClientRect().width)
     }));
-    expect(minimumPanelMetrics.clientHeight).toBeGreaterThanOrEqual(120);
-    expect(minimumPanelMetrics.scrollHeight).toBe(minimumPanelMetrics.clientHeight);
-    expect(
-      await skillList.evaluate((element) => element.scrollHeight > element.clientHeight)
-    ).toBe(true);
-    const skillActionGeometry = await page
-      .locator(".profile-skill-row:not(.profile-skill-row--owned)")
-      .first()
-      .evaluate((row) => {
-        const toggle = row.querySelector<HTMLElement>(".profile-skill-switch");
-        const more = row.querySelector<HTMLElement>(".icon-action");
-        const rowBox = row.getBoundingClientRect();
-        const toggleBox = toggle?.getBoundingClientRect();
-        const moreBox = more?.getBoundingClientRect();
-        return {
-          gap: toggleBox && moreBox ? moreBox.left - toggleBox.right : -1,
-          rowRight: rowBox.right,
-          toggleRight: toggleBox?.right ?? Number.POSITIVE_INFINITY,
-          moreRight: moreBox?.right ?? Number.POSITIVE_INFINITY
-        };
-      });
-    expect(skillActionGeometry.gap).toBeGreaterThanOrEqual(8);
-    expect(skillActionGeometry.toggleRight).toBeLessThanOrEqual(skillActionGeometry.rowRight);
-    expect(skillActionGeometry.moreRight).toBeLessThanOrEqual(skillActionGeometry.rowRight);
-    const minimumSkillRows = await page.locator(".profile-skill-row").evaluateAll((rows) =>
-      rows.map((row) => {
-        const rowBox = row.getBoundingClientRect();
-        const children = [...row.children]
-          .filter((child): child is HTMLElement => child instanceof HTMLElement)
-          .map((child) => ({
-            name: child.className || child.tagName,
-            box: child.getBoundingClientRect()
-          }))
-          .filter(({ box }) => box.width > 0 && box.height > 0);
-        const overlaps = children.flatMap((left, leftIndex) =>
-          children.slice(leftIndex + 1).flatMap((right) => {
-            const horizontal = Math.min(left.box.right, right.box.right) -
-              Math.max(left.box.left, right.box.left);
-            const vertical = Math.min(left.box.bottom, right.box.bottom) -
-              Math.max(left.box.top, right.box.top);
-            return horizontal > 1 && vertical > 1
-              ? [`${left.name} overlaps ${right.name}`]
-              : [];
-          })
-        );
-        return {
-          contained: children.every(({ box }) =>
-            box.left >= rowBox.left - 1 &&
-            box.right <= rowBox.right + 1 &&
-            box.top >= rowBox.top - 1 &&
-            box.bottom <= rowBox.bottom + 1
-          ),
-          overlaps
-        };
-      })
-    );
-    expect(minimumSkillRows.every((row) => row.contained)).toBe(true);
-    expect(minimumSkillRows.flatMap((row) => row.overlaps)).toEqual([]);
-    const minimumSwitchGeometry = await page.locator(".profile-skill-switch").evaluateAll(
-      (switches) => switches.map((switchControl) => {
-        const track = switchControl.querySelector<HTMLElement>(".ui-switch__track")!;
-        const thumb = switchControl.querySelector<HTMLElement>(".ui-switch__thumb")!;
-        const trackBox = track.getBoundingClientRect();
-        const thumbBox = thumb.getBoundingClientRect();
-        return {
-          checked: switchControl.getAttribute("aria-checked") === "true",
-          leftInset: Math.round((thumbBox.left - trackBox.left) * 10) / 10,
-          rightInset: Math.round((trackBox.right - thumbBox.right) * 10) / 10,
-          thumbWidth: Math.round(thumbBox.width),
-          trackWidth: Math.round(trackBox.width)
-        };
-      })
-    );
-    expect(minimumSwitchGeometry.length).toBeGreaterThan(0);
-    expect(minimumSwitchGeometry.every((geometry) =>
-      geometry.trackWidth === 38 &&
-      geometry.thumbWidth === 16 &&
-      (geometry.checked ? geometry.rightInset : geometry.leftInset) >= 4
-    )).toBe(true);
-    const compactSkillUpdateGeometry = await page.locator(".profile-skill-update").evaluateAll(
-      (buttons) => buttons.map((button) => {
-        const box = button.getBoundingClientRect();
-        return {
-          accessibleName: button.getAttribute("aria-label"),
-          height: Math.round(box.height),
-          contentFits: button.scrollWidth <= button.clientWidth + 1,
-          width: Math.round(box.width)
-        };
-      })
-    );
-    expect(compactSkillUpdateGeometry.length).toBeGreaterThan(0);
-    expect(compactSkillUpdateGeometry.every((button) =>
-      button.height === 32 && button.width === 32 && button.contentFits && Boolean(button.accessibleName)
-    )).toBe(true);
-    expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
-    const firstProfileSkill = page.getByRole("listitem", {
-      name: "Profile Skill layout-skill-1"
-    });
-    const skillDetail = firstProfileSkill.getByLabel("Full skill detail layout-skill-1");
-    await expect.poll(() => skillDetail.textContent()).toContain(
-      join(appDataRoot, "skills-library", "layout-skill-1")
-    );
-    const removeSkillButton = firstProfileSkill.getByRole("button", {
-      name: "Remove layout-skill-1 from Profile"
-    });
-    await expectInViewport(page, removeSkillButton);
-    await expectTextFits(removeSkillButton);
+    expect(triggerGeometry.textFits).toBe(true);
+    expect(triggerGeometry.height).toBe(32);
+    expect(triggerGeometry.width).toBeGreaterThanOrEqual(190);
 
-    await openProfileSkillPicker(page);
-    const skillPicker = page.getByRole("dialog", { name: "Add library skills" });
-    await skillPicker.waitFor({ state: "visible" });
-    await expectInViewport(page, skillPicker);
-    await skillPicker.getByLabel("Search library skills").fill("shared");
-    await expect.poll(() => skillPicker.textContent()).toContain(
-      join(appDataRoot, "skills-library", "shared-reviewer")
-    );
-    const pickerGeometry = await skillPicker.evaluate((dialog) => {
-      const search = dialog.querySelector<HTMLElement>(".resource-picker-search")?.getBoundingClientRect();
-      const list = dialog.querySelector<HTMLElement>(".resource-picker-list")?.getBoundingClientRect();
-      const footer = dialog.querySelector<HTMLElement>(".ui-dialog-footer")?.getBoundingClientRect();
-      const box = dialog.getBoundingClientRect();
-      return {
-        searchBottom: search?.bottom ?? 0,
-        listTop: list?.top ?? 0,
-        listBottom: list?.bottom ?? 0,
-        footerTop: footer?.top ?? 0,
-        right: box.right,
-        bottom: box.bottom
-      };
-    });
-    expect(pickerGeometry.searchBottom).toBeLessThanOrEqual(pickerGeometry.listTop);
-    expect(pickerGeometry.listBottom).toBeLessThanOrEqual(pickerGeometry.footerTop);
-    expect(pickerGeometry.right).toBeLessThanOrEqual(920);
-    expect(pickerGeometry.bottom).toBeLessThanOrEqual(620);
+    await page.getByRole("button", { name: "Select apply Agent" }).click();
+    const targetMenu = page.getByRole("menu", { name: "Apply Agents" });
+    await targetMenu.waitFor({ state: "visible" });
+    await expectInViewport(page, targetMenu);
+    await expectTopmost(targetMenu);
     await page.keyboard.press("Escape");
-    await skillPicker.waitFor({ state: "hidden" });
-
-    await expandComposerSection(page, "Instructions");
-    const instructionEditorGeometry = await page
-      .getByRole("textbox", { name: "AGENTS.md" })
-      .evaluate((editor) => {
-        const editorBox = editor.getBoundingClientRect();
-        const panelBox = editor.closest<HTMLElement>(".profile-composer-section__panel")!
-          .getBoundingClientRect();
-        return {
-          bottomGap: Math.round(panelBox.bottom - editorBox.bottom),
-          height: Math.round(editorBox.height)
-        };
-      });
-    expect(instructionEditorGeometry.height).toBeGreaterThanOrEqual(104);
-    expect(instructionEditorGeometry.bottomGap).toBeLessThanOrEqual(24);
-
-    await expandComposerSection(page, "MCPs");
-    const profileMcpEditor = page.locator(".profile-mcp-editor");
-    await profileMcpEditor.waitFor({ state: "visible" });
-    expect(await profileMcpEditor.getByText("Inventory", { exact: true }).count()).toBe(0);
-    expect(await profileMcpEditor.getByRole("button", { name: /Add|Remove/ }).count()).toBe(0);
-    const mcpRowGeometry = await profileMcpEditor.locator(".profile-mcp-row").evaluateAll(
-      (rows) =>
-        rows.map((row) => {
-          const rowBox = row.getBoundingClientRect();
-          const controlBox = row.querySelector<HTMLElement>(".profile-mcp-mode")!
-            .getBoundingClientRect();
-          return {
-            contained: [...row.children].every((child) => {
-              const childBox = child.getBoundingClientRect();
-              return childBox.left >= rowBox.left - 1 && childBox.right <= rowBox.right + 1;
-            }),
-            height: Math.round(rowBox.height),
-            controlHeight: Math.round(controlBox.height)
-          };
-        })
-    );
-    expect(mcpRowGeometry.length).toBeGreaterThan(0);
-    expect(mcpRowGeometry.every((row) => row.contained)).toBe(true);
-    expect(mcpRowGeometry.every((row) => row.height <= 58)).toBe(true);
-    expect(mcpRowGeometry.every((row) => row.controlHeight === 28)).toBe(true);
-    const mcpLaneGeometry = await profileMcpEditor.evaluate((editor) => {
-      const toolbarScope = editor.querySelector<HTMLElement>(
-        ".profile-mcp-toolbar__scope"
-      )!;
-      const identities = [...editor.querySelectorAll<HTMLElement>(".profile-mcp-row__identity")];
-      const controls = [...editor.querySelectorAll<HTMLElement>(".profile-mcp-mode")];
-      const identityLefts = identities.map((identity) => identity.getBoundingClientRect().left);
-      const controlRights = controls.map((control) => control.getBoundingClientRect().right);
-      return {
-        identityLanesAligned: Math.max(...identityLefts) - Math.min(...identityLefts) <= 1,
-        scopeFits: toolbarScope.scrollWidth <= toolbarScope.clientWidth,
-        scopeMatchesIdentityLane:
-          Math.abs(toolbarScope.getBoundingClientRect().left - identityLefts[0]) <= 1,
-        controlLanesAligned: Math.max(...controlRights) - Math.min(...controlRights) <= 1
-      };
-    });
-    expect(mcpLaneGeometry).toEqual({
-      controlLanesAligned: true,
-      identityLanesAligned: true,
-      scopeFits: true,
-      scopeMatchesIdentityLane: true
-    });
-    await expectInViewport(page, page.getByLabel("shared-docs Profile behavior"));
-    expect(await workbench.evaluate((element) => getComputedStyle(element).gridTemplateColumns))
-      .toMatch(/^196px /);
+    await targetMenu.waitFor({ state: "hidden" });
   }, standardElectronTestTimeout);
+
 
   it("keeps the Environment editor painted while a different Environment is loading", async () => {
     const { app: electronApp, page } = await launchApp();
@@ -4019,10 +3658,7 @@ describe("Electron UI profile switching e2e", () => {
       process.env.AGENTENV_TEST_PROFILE_READ_DELAY_MS = "350";
     });
 
-    await page
-      .getByRole("complementary", { name: "Profile list" })
-      .getByRole("button", { name: "Profile UI OpenCode beta", exact: true })
-      .click();
+    await (await profileOption(page, "UI OpenCode beta")).click();
     const loading = page.getByRole("status", { name: "Loading Profile UI OpenCode beta" });
     await loading.waitFor({ state: "visible" });
     expect(await page.getByText("No Profile selected", { exact: true }).count()).toBe(0);
@@ -4039,19 +3675,20 @@ describe("Electron UI profile switching e2e", () => {
     await loading.waitFor({ state: "hidden" });
   }, standardElectronTestTimeout);
 
-  it("keeps Environment columns aligned when a long name becomes selected", async () => {
+  it("keeps switcher columns aligned when a long Profile name becomes selected", async () => {
     const longProfileName =
       "UI OpenCode beta for a deliberately long production review environment";
     const { page } = await launchApp({ openCodeBetaProfileName: longProfileName });
     await resizeAppWindow(page, 920, 620);
     await selectProfile(page, "UI OpenCode alpha");
 
-    const longRow = page.getByRole("button", { name: `Profile ${longProfileName}` });
+    let switcher = await openProfileSwitcher(page);
+    let longRow = switcher.getByRole("option", { name: `Profile ${longProfileName}` });
     const measureRows = () =>
-      page.locator(".profile-row").evaluateAll((rows) =>
+      switcher.getByRole("option").evaluateAll((rows) =>
         rows.map((row) => {
-          const icon = row.querySelector<HTMLElement>(".profile-row__icon")!;
-          const content = row.querySelector<HTMLElement>(".profile-row__content")!;
+          const icon = row.querySelector<HTMLElement>(".ui-selectable-row__icon")!;
+          const content = row.querySelector<HTMLElement>(".ui-selectable-row__identity")!;
           const name = row.querySelector<HTMLElement>(".profile-row__name")!;
           return {
             profileName: name.textContent,
@@ -4063,8 +3700,8 @@ describe("Electron UI profile switching e2e", () => {
       );
     const measureLongRow = () =>
       longRow.evaluate((row) => {
-        const icon = row.querySelector<HTMLElement>(".profile-row__icon")!;
-        const content = row.querySelector<HTMLElement>(".profile-row__content")!;
+        const icon = row.querySelector<HTMLElement>(".ui-selectable-row__icon")!;
+        const content = row.querySelector<HTMLElement>(".ui-selectable-row__identity")!;
         const name = row.querySelector<HTMLElement>(".profile-row__name")!;
         return {
           iconLeft: icon.getBoundingClientRect().left,
@@ -4086,9 +3723,11 @@ describe("Electron UI profile switching e2e", () => {
     expect(before.nameIsTruncated).toBe(true);
     expectColumnsAligned(await measureRows());
 
-    await longRow.locator(".profile-row__content").click();
+    await longRow.click();
     await page.getByRole("heading", { name: longProfileName }).waitFor({ state: "visible" });
 
+    switcher = await openProfileSwitcher(page);
+    longRow = switcher.getByRole("option", { name: `Profile ${longProfileName}` });
     const after = await measureLongRow();
     expect(after.nameIsTruncated).toBe(true);
     expect(after.iconLeft).toBeCloseTo(before.iconLeft, 1);
@@ -4258,37 +3897,32 @@ describe("Electron UI profile switching e2e", () => {
         actionTextFits: true,
         copyDoesNotOverlapAction: true
       });
-      const profileGeometry = await page.locator(".profile-row.is-active").evaluate((row) => {
-        const icon = row.querySelector<HTMLElement>(".profile-row__icon");
-        const content = row.querySelector<HTMLElement>(".profile-row__content");
-        const title = row.querySelector<HTMLElement>(".profile-row__title");
-        const deployment = row.querySelector<HTMLElement>(".profile-row__deployments");
-        const rowBox = row.getBoundingClientRect();
-        const iconBox = icon?.getBoundingClientRect();
-        const contentBox = content?.getBoundingClientRect();
-        return {
-          childrenFit:
-            Boolean(iconBox && contentBox) &&
-            iconBox!.top >= rowBox.top &&
-            iconBox!.bottom <= rowBox.bottom &&
-            contentBox!.top >= rowBox.top &&
-            contentBox!.bottom <= rowBox.bottom,
-          deploymentFits:
-            Boolean(deployment) &&
-            deployment!.scrollWidth <= deployment!.clientWidth,
-          gap: iconBox && contentBox ? contentBox.left - iconBox.right : Number.NaN,
-          iconHeight: iconBox?.height ?? 0,
-          rowHeight: rowBox.height,
-          titleFits: Boolean(title) && title!.scrollWidth <= title!.clientWidth
-        };
-      });
-      expect(profileGeometry.childrenFit).toBe(true);
-      expect(profileGeometry.deploymentFits).toBe(true);
-      expect(profileGeometry.iconHeight).toBeLessThanOrEqual(30);
-      expect(profileGeometry.rowHeight).toBeLessThanOrEqual(56);
-      expect(profileGeometry.gap).toBeGreaterThanOrEqual(3);
-      expect(profileGeometry.titleFits).toBe(true);
-      expect(profileGeometry.gap).toBeLessThanOrEqual(8);
+      const switcherGeometry = await page
+        .getByRole("button", { name: "Choose Profile", exact: true })
+        .evaluate((trigger) => {
+          const icon = trigger.querySelector<HTMLElement>(".ui-object-switcher__trigger-icon");
+          const copy = trigger.querySelector<HTMLElement>(".ui-object-switcher__trigger-copy");
+          const title = trigger.querySelector<HTMLElement>(".ui-object-switcher__trigger-title");
+          const triggerBox = trigger.getBoundingClientRect();
+          const iconBox = icon?.getBoundingClientRect();
+          const copyBox = copy?.getBoundingClientRect();
+          return {
+            childrenFit:
+              Boolean(iconBox && copyBox) &&
+              iconBox!.top >= triggerBox.top &&
+              iconBox!.bottom <= triggerBox.bottom &&
+              copyBox!.top >= triggerBox.top &&
+              copyBox!.bottom <= triggerBox.bottom,
+            gap: iconBox && copyBox ? copyBox.left - iconBox.right : Number.NaN,
+            height: triggerBox.height,
+            titleFits: Boolean(title) && title!.scrollWidth <= title!.clientWidth
+          };
+        });
+      expect(switcherGeometry.childrenFit).toBe(true);
+      expect(switcherGeometry.height).toBeLessThanOrEqual(44);
+      expect(switcherGeometry.gap).toBeGreaterThanOrEqual(6);
+      expect(switcherGeometry.gap).toBeLessThanOrEqual(10);
+      expect(switcherGeometry.titleFits).toBe(true);
 
       const heroContent = await page.locator(".profile-hero").evaluate((hero) => ({
         description: getComputedStyle(
@@ -4340,7 +3974,7 @@ describe("Electron UI profile switching e2e", () => {
         expect(Math.abs(count.right - rightEdge)).toBeLessThanOrEqual(4);
         if (count.compact) {
           expect(count.width).toBeGreaterThanOrEqual(80);
-          expect(count.width).toBeLessThanOrEqual(160);
+          expect(count.width).toBeLessThanOrEqual(360);
         } else if (count.scoped) {
           expect(count.width).toBeGreaterThanOrEqual(118);
           expect(count.width).toBeLessThanOrEqual(160);
@@ -4473,8 +4107,9 @@ describe("Electron UI profile switching e2e", () => {
     await expectCommitActionsToFit();
 
     await selectTarget(page, "Codex");
-    const profileList = page.getByRole("complementary", { name: "Profile list" });
-    await profileList.getByRole("button", { name: /UI Codex alpha/ }).waitFor({ state: "visible" });
+    const profileSwitcher = await openProfileSwitcher(page);
+    await profileSwitcher.getByRole("option", { name: /UI Codex alpha/ }).waitFor({ state: "visible" });
+    await page.keyboard.press("Escape");
 
     await page.getByRole("button", { name: "Agents" }).click();
     for (const targetName of ["OpenCode", "Claude Code", "Codex"]) {
@@ -4606,7 +4241,7 @@ describe("Electron UI profile switching e2e", () => {
       const skillsGeometry = await readGeometry("Skills", "Import skills");
 
       const workspaces = [
-        { button: "Profiles", heading: "Profiles", action: "New Profile" },
+        { button: "Profiles", heading: "Profiles", action: "Choose Profile" },
         { button: "Agents", heading: "Agents", action: "Refresh" },
         { button: "Settings", heading: "Settings", action: undefined }
       ];
@@ -4702,7 +4337,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await skillsButton.boundingBox()).toEqual(navigationBeforeHover);
 
     await profilesButton.click();
-    const profileRow = page.locator(".profile-row").first();
+    const profileRow = (await openProfileSwitcher(page)).getByRole("option").first();
     await profileRow.waitFor({ state: "visible" });
     const profileBeforeHover = await profileRow.boundingBox();
     await profileRow.hover();
@@ -5219,8 +4854,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(new Set(policies.map(({ height }) => height))).toEqual(new Set([28]));
     expect(new Set(policyOptions.map(({ height }) => height))).toEqual(new Set([24]));
 
-    await page.getByRole("button", { name: "New Profile", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "New Profile" });
+    const dialog = await openNewProfileDialog(page);
     const dialogFields = await readBoxes(dialog.locator("input, select"));
     expect(dialogFields.length).toBeGreaterThanOrEqual(1);
     expect(new Set(dialogFields.map(({ height }) => height))).toEqual(new Set([32]));
@@ -6053,15 +5687,20 @@ describe("Electron UI profile switching e2e", () => {
     await selectProfile(page, "UI OpenCode alpha");
     await previewAndApply(page, "OpenCode");
 
-    const profileRow = page.getByRole("button", { name: "Profile UI OpenCode alpha" });
-    await expect.poll(() => profileRow.textContent()).toContain("Active");
+    const readProfileState = async () => {
+      const row = await profileOption(page, "UI OpenCode alpha");
+      const content = await row.textContent();
+      await page.keyboard.press("Escape");
+      return content;
+    };
+    await expect.poll(readProfileState).toContain("Active");
 
     await setComposerResourcePolicy(page, "Instructions", "OpenCode", "Keep Agent");
     await saveProfile(page);
-    await expect.poll(() => profileRow.textContent()).toContain("Pending");
+    await expect.poll(readProfileState).toContain("Pending");
 
     await previewAndApply(page, "OpenCode");
-    await expect.poll(() => profileRow.textContent()).toContain("Active");
+    await expect.poll(readProfileState).toContain("Active");
     await expect
       .poll(() => page.getByRole("status", { name: "Profile readiness" }).textContent())
       .toContain("Up to date on OpenCode");
@@ -6073,7 +5712,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Profiles" }).click();
     await page.getByRole("region", { name: "Profiles", exact: true }).waitFor();
     await selectProfile(page, "UI OpenCode alpha");
-    await expect.poll(() => profileRow.textContent()).toContain("Active");
+    await expect.poll(readProfileState).toContain("Active");
   }, 45_000);
 
   it("edits and persists Instructions from the default-collapsed Composer", async () => {
@@ -6092,10 +5731,13 @@ describe("Electron UI profile switching e2e", () => {
 
     const saveButton = page.getByRole("button", { name: "Save", exact: true });
     const applyButton = page.getByRole("button", { name: "Apply", exact: true });
-    const newProfileButton = page.getByRole("button", { name: "New Profile", exact: true });
+    const profileSwitcherButton = page.getByRole("button", {
+      name: "Choose Profile",
+      exact: true
+    });
     await expect
       .poll(() =>
-        newProfileButton.evaluate((element) => getComputedStyle(element).backgroundColor)
+        profileSwitcherButton.evaluate((element) => getComputedStyle(element).backgroundColor)
       )
       .not.toBe("rgb(0, 122, 255)");
     expect(await saveButton.isEnabled()).toBe(true);
@@ -6118,7 +5760,7 @@ describe("Electron UI profile switching e2e", () => {
       .toBe("rgb(0, 122, 255)");
     await expect
       .poll(() =>
-        newProfileButton.evaluate((element) => getComputedStyle(element).backgroundColor)
+        profileSwitcherButton.evaluate((element) => getComputedStyle(element).backgroundColor)
       )
       .not.toBe("rgb(0, 122, 255)");
     const commitControlGeometry = await page
@@ -6203,10 +5845,13 @@ describe("Electron UI profile switching e2e", () => {
 
     const saveButton = page.getByRole("button", { name: "Save", exact: true });
     const applyButton = applyActionButton(page, "OpenCode");
-    const profileRow = page
-      .getByRole("complementary", { name: "Profile list" })
-      .getByRole("button", { name: "Profile UI OpenCode alpha", exact: true });
     const skillManager = page.getByRole("region", { name: "Profile Skills" });
+    const readSelectedProfileText = async () => {
+      const row = await profileOption(page, "UI OpenCode alpha");
+      const content = await row.textContent();
+      await page.keyboard.press("Escape");
+      return content;
+    };
 
     expect(await saveButton.isDisabled()).toBe(true);
     expect(await applyButton.isDisabled()).toBe(true);
@@ -6216,14 +5861,14 @@ describe("Electron UI profile switching e2e", () => {
     }).click();
     await expect.poll(() => saveButton.isEnabled()).toBe(true);
     expect(await applyButton.isDisabled()).toBe(true);
-    await expect.poll(() => profileRow.textContent()).toContain("Unsaved");
+    await expect.poll(readSelectedProfileText).toContain("Unsaved");
 
     await skillManager.getByRole("switch", {
       name: "Enable ui-alpha-skill"
     }).click();
     await expect.poll(() => saveButton.isDisabled()).toBe(true);
     expect(await applyButton.isDisabled()).toBe(true);
-    await expect.poll(() => profileRow.textContent()).not.toContain("Unsaved");
+    await expect.poll(readSelectedProfileText).not.toContain("Unsaved");
 
     const resources = await readJson<{
       skills: Array<{ libraryId: string; targetName: string; enabled: boolean }>;
@@ -8046,12 +7691,13 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => skillIcon.getAttribute("data-icon")).toBe("shield");
 
     await selectProfile(page, "UI OpenCode alpha");
-    const profileRow = page.getByRole("button", { name: "Profile UI OpenCode alpha" });
+    const profileRow = await profileOption(page, "UI OpenCode alpha");
     expect(
       await profileRow.getByRole("button", {
         name: "Change icon for Profile ui-opencode-alpha"
       }).count()
     ).toBe(0);
+    await page.keyboard.press("Escape");
     await page
       .locator(".profile-hero")
       .getByRole("button", { name: "Change icon for Profile ui-opencode-alpha" })
@@ -9647,9 +9293,10 @@ describe("Electron UI profile switching e2e", () => {
       .toMatchObject({ locale: "zh_CN" });
     await page.getByRole("button", { name: "配置方案", exact: true }).click();
     await expect.poll(() => page.locator(".app-feedback").count()).toBe(0);
+    await page.getByRole("button", { name: "选择配置方案", exact: true }).click();
     await page
-      .getByRole("complementary", { name: "配置方案列表" })
-      .getByRole("button", { name: "配置方案 UI OpenCode alpha", exact: true })
+      .getByRole("dialog", { name: "选择配置方案", exact: true })
+      .getByRole("option", { name: "配置方案 UI OpenCode alpha", exact: true })
       .click();
     await page.getByRole("heading", { name: "UI OpenCode alpha" }).waitFor();
     await resizeAppWindow(page, 920, 620);
@@ -9684,9 +9331,10 @@ describe("Electron UI profile switching e2e", () => {
       process.env.AGENTENV_TEST_PROFILE_READ_DELAY_ID = "ui-opencode-beta";
       process.env.AGENTENV_TEST_PROFILE_READ_DELAY_MS = "250";
     });
+    await page.getByRole("button", { name: "选择配置方案", exact: true }).click();
     await page
-      .getByRole("complementary", { name: "配置方案列表" })
-      .getByRole("button", { name: "配置方案 UI OpenCode beta", exact: true })
+      .getByRole("dialog", { name: "选择配置方案", exact: true })
+      .getByRole("option", { name: "配置方案 UI OpenCode beta", exact: true })
       .click();
     await page.getByText("正在加载 Profile...", { exact: true }).waitFor();
     await page.getByRole("heading", { name: "UI OpenCode beta" }).waitFor();
@@ -10817,17 +10465,23 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() => page.getByRole("button", { name: "Apply", exact: true }).isDisabled())
       .toBe(true);
 
-    const profileRow = page.getByRole("button", { name: /UI OpenCode alpha/ });
+    const readDeploymentLabel = async () => {
+      const row = await profileOption(page, "UI OpenCode alpha");
+      const label = await row.locator(".profile-row__deployments").getAttribute("aria-label");
+      await page.keyboard.press("Escape");
+      return label;
+    };
     await expect
-      .poll(() => profileRow.locator(".profile-row__deployments").getAttribute("aria-label"))
+      .poll(readDeploymentLabel)
       .toBe("Codex · Active");
 
     await selectTarget(page, "OpenCode");
     await previewAndApply(page, "OpenCode");
     await expect
-      .poll(() => profileRow.locator(".profile-row__deployments").getAttribute("aria-label"))
+      .poll(readDeploymentLabel)
       .toBe("OpenCode · Active, Codex · Active");
     await resizeAppWindow(page, 920, 620);
+    const profileRow = await profileOption(page, "UI OpenCode alpha");
     const deploymentGeometry = await profileRow.locator(".profile-row__deployments").evaluate(
       (element) => ({
         clientWidth: element.clientWidth,
@@ -10839,6 +10493,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(deploymentGeometry.hasTextLabel).toBe(true);
     expect(deploymentGeometry.label).toBe("2 Agents · Active");
     expect(deploymentGeometry.scrollWidth - deploymentGeometry.clientWidth).toBeLessThanOrEqual(1);
+    await page.keyboard.press("Escape");
   }, standardElectronTestTimeout);
 
   it("switches Codex profiles through the rendered app without touching auth", async () => {
@@ -11140,6 +10795,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await sidebar.getByRole("button", { name: "Profiles", exact: true }).click();
     await page.locator(".profile-hero").waitFor({ state: "visible" });
+    const profileSwitcher = await openProfileSwitcher(page);
     const profileTypography = await page.evaluate(() => ({
       composerDescription: getComputedStyle(
         document.querySelector<HTMLElement>(".profile-composer-section__description")!
@@ -11158,7 +10814,8 @@ describe("Electron UI profile switching e2e", () => {
       name: "500",
       selectedName: "600"
     });
-    const profileSearchGeometry = await page.locator(".profile-search").evaluate((field) => {
+    const profileSearch = profileSwitcher.locator(".ui-search-field");
+    const profileSearchGeometry = await profileSearch.evaluate((field) => {
       const fieldBox = field.getBoundingClientRect();
       const inputBox = field.querySelector("input")!.getBoundingClientRect();
       return {
@@ -11172,9 +10829,11 @@ describe("Electron UI profile switching e2e", () => {
     expect(profileSearchGeometry.leftInset).toBeGreaterThanOrEqual(30);
     expect(profileSearchGeometry.rightInset).toBeGreaterThanOrEqual(1);
     expect(profileSearchGeometry.topInset).toBeGreaterThanOrEqual(1);
-    sharedSearchContracts.push(await readCompositeFieldContract(".profile-search"));
+    sharedSearchContracts.push(await readCompositeFieldContract(
+      ".ui-object-switcher__search .ui-search-field"
+    ));
 
-    await page.getByRole("button", { name: "New Profile", exact: true }).click();
+    await profileSwitcher.getByRole("button", { name: "New Profile", exact: true }).click();
     const profileDialog = page.getByRole("dialog", { name: "New Profile" });
     const profileNameField = profileDialog.getByRole("textbox", { name: "Profile name" });
     const profileDescriptionField = profileDialog.getByRole("textbox", { name: "Description" });

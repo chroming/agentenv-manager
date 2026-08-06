@@ -1,6 +1,13 @@
-import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  type MouseEvent as ReactMouseEvent,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState
+} from "react";
 import { createPortal } from "react-dom";
-import { Search, TriangleAlert } from "lucide-react";
+import { Plus, TriangleAlert } from "lucide-react";
 import type {
   ProfileDetail,
   ProfileSummary,
@@ -15,7 +22,7 @@ import {
 import { ResourceIcon } from "./ResourceIconPicker";
 import { ProfileActionsMenu } from "./ProfileActionsMenu";
 import { defaultProfileIconKey } from "../productIcons";
-import { SearchField, SelectableListRow } from "./ui";
+import { ObjectSwitcher } from "./ui";
 
 const deploymentStatusLabels = {
   attention: "Attention",
@@ -35,6 +42,9 @@ interface ProfileListProps {
   targets: TargetInfo[];
   targetStates: TargetManagementState[];
   actionsDisabled?: boolean;
+  open: boolean;
+  onOpenChange(open: boolean): void;
+  onCreate(returnFocus: HTMLButtonElement | null): void;
   onDelete(profileId: string, returnFocus: HTMLElement): void;
   onDuplicate(profileId: string): void;
   onSearchChange(value: string): void;
@@ -52,6 +62,9 @@ export const ProfileList = ({
   targets,
   targetStates,
   actionsDisabled = false,
+  open,
+  onOpenChange,
+  onCreate,
   onDelete,
   onDuplicate,
   onSearchChange,
@@ -65,13 +78,7 @@ export const ProfileList = ({
   }>();
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const contextReturnFocusRef = useRef<HTMLElement>(null);
-  const normalizedSearch = search.trim().toLowerCase();
-  const visibleProfiles = profiles
-    .filter((profile) =>
-      normalizedSearch.length === 0 ||
-      `${profile.name} ${profile.description}`.toLowerCase().includes(normalizedSearch)
-    )
-    .sort(compareProfilesByCreationTime);
+  const orderedProfiles = [...profiles].sort(compareProfilesByCreationTime);
 
   useLayoutEffect(() => {
     if (!contextMenu || !contextMenuRef.current) return;
@@ -124,136 +131,120 @@ export const ProfileList = ({
     };
   }, [contextMenu]);
 
+  const switcherItems = orderedProfiles.map((profile) => {
+    const isBroken = Boolean(profile.loadError);
+    const applications = listProfileApplications(profile.id, targetStates, targets);
+    const isSelected = profile.id === selectedProfileId;
+    const iconKey =
+      (isSelected ? draftProfile?.manifest.iconKey : undefined) ??
+      profile.iconKey ??
+      defaultProfileIconKey;
+    const applicationStates = applications.map((application) => {
+      const needsAttention =
+        application.state.lifecycleStatus === "drifted" ||
+        application.state.lifecycleStatus === "recovery-required" ||
+        (application.state.errorCount ?? 0) > 0;
+      const isCurrent =
+        !needsAttention &&
+        (
+          application.state.lifecycleStatus === "applied" ||
+          application.state.lifecycleStatus === "applied-with-local-override"
+        );
+      return {
+        name: application.target?.name ?? application.state.targetId,
+        state: needsAttention ? "attention" : isCurrent ? "current" : "pending"
+      } as const;
+    });
+    const deploymentState = applicationStates.length === 0
+      ? "empty"
+      : applicationStates.some((application) => application.state === "attention")
+        ? "attention"
+        : applicationStates.every((application) => application.state === "current")
+          ? "current"
+          : "pending";
+    const deploymentStatus = t(deploymentStatusLabels[deploymentState]);
+    const deploymentLabel = applicationStates.length > 1
+      ? t("{{count}} Agents · {{status}}", {
+          count: applicationStates.length,
+          status: deploymentStatus
+        })
+      : applicationStates.length === 1
+        ? t("{{name}} · {{status}}", {
+            name: applicationStates[0].name,
+            status: deploymentStatus
+          })
+        : deploymentStatus;
+    const deploymentTitle = applicationStates.length > 0
+      ? applicationStates
+          .map((application) => t("{{name}} · {{status}}", {
+            name: application.name,
+            status: t(deploymentStatusLabels[application.state])
+          }))
+          .join(", ")
+      : deploymentLabel;
+    return {
+      id: profile.id,
+      ariaLabel: t("Profile {{name}}", { name: profile.name }),
+      searchText: `${profile.name} ${profile.description}`,
+      icon: isBroken
+        ? <TriangleAlert size={18} strokeWidth={2.2} />
+        : <ResourceIcon iconKey={iconKey} size={18} />,
+      title: (
+        <>
+          <span className="profile-row__name">{profile.name}</span>
+          {isSelected && isProfileDirty ? (
+            <strong className="profile-row__dirty">{t("Unsaved")}</strong>
+          ) : null}
+        </>
+      ),
+      description: isBroken
+        ? t("Stored Profile data could not be loaded")
+        : (
+          <span
+            className={`profile-row__deployments profile-row__deployments--${deploymentState}`}
+            aria-label={deploymentTitle}
+            title={deploymentTitle}
+          >
+            <span className="profile-row__deployment-label">{deploymentLabel}</span>
+          </span>
+        ),
+      tooltip: profile.loadError,
+      disabled: isLoading,
+      onContextMenu: (event: ReactMouseEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        if (isBroken || actionsDisabled) return;
+        contextReturnFocusRef.current = event.currentTarget;
+        setContextMenu({
+          profileId: profile.id,
+          left: event.clientX,
+          top: event.clientY
+        });
+      }
+    };
+  });
+
   return (
     <>
-      <aside className="profile-index" aria-label={t("Profile list")}>
-        <div className="profile-list-toolbar">
-          <SearchField
-            ref={searchInputRef}
-            fieldClassName="profile-search"
-            icon={<Search size={15} strokeWidth={2.2} />}
-            label={t("Search Profiles")}
-            placeholder={t("Search Profiles")}
-            value={search}
-            onChange={(event) => onSearchChange(event.currentTarget.value)}
-          />
-        </div>
-        <div className="profile-list">
-        {isLoading ? (
-          <div className="inline-state inline-state--loading" role="status">
-            <span className="inline-state__icon" aria-hidden="true" />
-            <span>{t("Loading Profiles")}</span>
-          </div>
-        ) : null}
-        {!isLoading && visibleProfiles.length === 0 ? (
-          <div className="inline-state">
-            <span className="inline-state__icon" aria-hidden="true">
-              <Search size={15} strokeWidth={2.2} />
-            </span>
-            <span>{t("No Profiles match this view")}</span>
-          </div>
-        ) : null}
-        {visibleProfiles.map((profile) => {
-          const isBroken = Boolean(profile.loadError);
-          const applications = listProfileApplications(profile.id, targetStates, targets);
-          const isSelected = profile.id === selectedProfileId;
-          const iconKey =
-            (isSelected ? draftProfile?.manifest.iconKey : undefined) ??
-            profile.iconKey ??
-            defaultProfileIconKey;
-          const applicationStates = applications.map((application) => {
-            const needsAttention =
-              application.state.lifecycleStatus === "drifted" ||
-              application.state.lifecycleStatus === "recovery-required" ||
-              (application.state.errorCount ?? 0) > 0;
-            const isCurrent =
-              !needsAttention &&
-              (
-                application.state.lifecycleStatus === "applied" ||
-                application.state.lifecycleStatus === "applied-with-local-override"
-              );
-            return {
-              name: application.target?.name ?? application.state.targetId,
-              state: needsAttention ? "attention" : isCurrent ? "current" : "pending"
-            } as const;
-          });
-          const deploymentState = applicationStates.length === 0
-            ? "empty"
-            : applicationStates.some((application) => application.state === "attention")
-              ? "attention"
-              : applicationStates.every((application) => application.state === "current")
-                ? "current"
-                : "pending";
-          const deploymentStatus = t(deploymentStatusLabels[deploymentState]);
-          const deploymentLabel = applicationStates.length > 1
-            ? t("{{count}} Agents · {{status}}", {
-                count: applicationStates.length,
-                status: deploymentStatus
-              })
-            : applicationStates.length === 1
-              ? t("{{name}} · {{status}}", {
-                  name: applicationStates[0].name,
-                  status: deploymentStatus
-                })
-              : deploymentStatus;
-          const deploymentTitle = applicationStates.length > 0
-            ? applicationStates
-                .map((application) => t("{{name}} · {{status}}", {
-                  name: application.name,
-                  status: t(deploymentStatusLabels[application.state])
-                }))
-                .join(", ")
-            : deploymentLabel;
-          return (
-            <SelectableListRow
-              className={`profile-row${isSelected ? " is-active" : ""}${isBroken ? " is-invalid" : ""}`}
-              key={profile.id}
-              aria-label={t("Profile {{name}}", { name: profile.name })}
-              selected={isSelected}
-              iconClassName={`profile-row__icon${isBroken ? " profile-row__icon--invalid" : ""}`}
-              icon={isBroken
-                ? <TriangleAlert size={18} strokeWidth={2.2} />
-                : <ResourceIcon iconKey={iconKey} size={18} />}
-              identityClassName="profile-row__content"
-              titleClassName="profile-row__title"
-              title={(
-                <>
-                  <span className="profile-row__name">{profile.name}</span>
-                  {isSelected && isProfileDirty ? (
-                    <strong className="profile-row__dirty">{t("Unsaved")}</strong>
-                  ) : null}
-                </>
-              )}
-              descriptionClassName={isBroken ? "profile-row__description--invalid" : ""}
-              description={isBroken ? (
-                t("Stored Profile data could not be loaded")
-              ) : (
-                <span
-                  className={`profile-row__deployments profile-row__deployments--${deploymentState}`}
-                  aria-label={deploymentTitle}
-                  title={deploymentTitle}
-                >
-                  <span className="profile-row__deployment-label">{deploymentLabel}</span>
-                </span>
-              )}
-              tooltip={profile.loadError}
-              onSelect={() => onSelect(profile.id)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                if (isBroken || actionsDisabled) return;
-                const row = event.currentTarget;
-                contextReturnFocusRef.current = row;
-                setContextMenu({
-                  profileId: profile.id,
-                  left: event.clientX,
-                  top: event.clientY
-                });
-              }}
-            />
-          );
-        })}
-        </div>
-      </aside>
+      <ObjectSwitcher
+        ariaLabel={t("Choose Profile")}
+        className="profile-switcher"
+        emptyMessage={t(isLoading ? "Loading Profiles" : "No Profiles match this view")}
+        footerAction={{
+          icon: <Plus size={15} />,
+          label: t("New Profile"),
+          onClick: onCreate
+        }}
+        items={switcherItems}
+        open={open}
+        query={search}
+        searchInputRef={searchInputRef}
+        searchLabel={t("Search Profiles")}
+        searchPlaceholder={t("Search Profiles")}
+        selectedId={selectedProfileId}
+        onOpenChange={onOpenChange}
+        onQueryChange={onSearchChange}
+        onSelect={onSelect}
+      />
       {contextMenu ? createPortal(
         <ProfileActionsMenu
           className="profile-row-context-menu"

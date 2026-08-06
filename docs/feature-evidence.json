@@ -48,6 +48,57 @@
       }
     },
     {
+      "id": "single-object-workspaces",
+      "summary": "Give Profiles and Workspaces the full work surface while preserving searchable object switching, creation, context actions, and dirty navigation protection in a temporary Page Header switcher.",
+      "contract": {
+        "path": "docs/product-contracts.md",
+        "anchor": "Profiles and Workspaces instead show one selected object"
+      },
+      "support": {
+        "opencode": "not-applicable",
+        "claude-code": "not-applicable",
+        "codex": "not-applicable",
+        "antigravity": "not-applicable",
+        "trae-cli": "not-applicable",
+        "pi": "not-applicable"
+      },
+      "states": {
+        "idle": "The selected Profile or Workspace owns the full framed work surface and the switcher trigger identifies the current object.",
+        "working": "Profile loading, Workspace inspection, and initiating actions keep stable object geometry and report progress in their existing scoped controls.",
+        "success": "Choosing another object closes the switcher and renders that object without adding a persistent navigation column.",
+        "error": "Broken Profiles and unavailable Workspace references remain selectable and expose their existing repair or removal paths.",
+        "cancelled": "Escape or outside dismissal closes the switcher, clears its transient query, and leaves the current object unchanged.",
+        "noOp": "Choosing the current object closes the switcher without reloading, mutating, or reordering it.",
+        "stale": "Profile dirty-state guards and Workspace refresh semantics remain authoritative when selection races with newer state.",
+        "partial": "Loading or broken object metadata is named in the switcher without replacing the stable work surface with a false empty state.",
+        "persisted": "Object choice follows existing Profile and Workspace state; open state and search queries remain session-only UI state.",
+        "rollback": "The layout performs no filesystem mutation; cancelled selection restores focus and existing Profile mutation recovery remains unchanged."
+      },
+      "evidence": {
+        "domain": [
+          "tests/renderer/ObjectSwitcher.test.tsx"
+        ],
+        "renderer": [
+          "tests/renderer/ObjectSwitcher.test.tsx",
+          "tests/renderer/App.test.tsx",
+          "tests/renderer/ProjectsWorkspace.test.tsx"
+        ],
+        "desktop": [
+          "tests/e2e/electronUiProfileSwitching.e2e.test.ts",
+          "tests/e2e/projects.e2e.test.ts"
+        ],
+        "persistence": [
+          "tests/renderer/App.test.tsx",
+          "tests/renderer/ProjectsWorkspace.test.tsx"
+        ],
+        "visual": [
+          "profiles-920x620.png",
+          "projects-selected-920x620.png",
+          "projects-selected-1180x728.png"
+        ]
+      }
+    },
+    {
       "id": "project-environments",
       "summary": "Keep device-local Workspace references, inspect and edit real project-owned Agent files, and open the selected Agent in that directory without binding or applying a Profile.",
       "contract": {

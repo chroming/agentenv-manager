@@ -296,9 +296,10 @@ AgentEnv-owned copy of the folder and does not require Git.
   NOT stage, commit, checkout, reset, clean, stash, or modify repository configuration.
 - Workspace references and recovery data are device-local and excluded from Workspace Sync. Ordinary
   AgentEnv data backup includes the reference registry but never copies the referenced Workspace.
-- `Workspaces` uses the same list-detail geometry, Page Header, controls, rows, dialogs, progress,
-  feedback, diff, file preview, keyboard dismissal, and supported viewport rules as sibling desktop
-  workspaces. The Workspace list owns its scroll; the page never gains horizontal scrolling.
+- `Workspaces` shows one selected directory at a time. A compact Page Header switcher temporarily
+  opens the searchable Workspace list and owns `Add folder`; closing it returns the full work area
+  to the selected directory. Switching preserves the existing reference and mutation contracts,
+  while the page never gains horizontal scrolling.
 
 ### 4.3 Profile
 
@@ -1673,7 +1674,14 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Shared Electron geometry tests MUST scan visible controls, statuses, and clipped text across all first-level workspaces, the minimum and default viewports, supported locales, and Ready, Review, and Blocked Apply states. Document-level containment alone is insufficient.
 - Text line boxes, icon boxes, and control padding MUST fit inside their controls without vertical clipping.
 - A framed work surface has one edge owner painted above its scrolling children. Toolbars, rows, backgrounds, and scroll regions MUST stay inside that edge and MUST NOT redraw, cover, or visually interrupt any side or corner.
-- List-and-detail work surfaces such as Profiles and Conversations use one continuous outer frame and one pane divider. The list body meets the pane edges below its inset toolbar; selected rows use a restrained background fill and retain the same divider rhythm as their siblings instead of drawing a second accent edge. Detail headers and editors may draw semantic horizontal separators but MUST NOT redraw or cover the outer edge, add nested corner radii, or introduce a gap between the header and body.
+- Conversations keeps one continuous list-and-detail frame because scanning and comparing many
+  records is its primary task. Profiles and Workspaces instead show one selected object in a
+  continuous full-width work surface; their searchable object lists appear only in the shared
+  Page Header switcher. The switcher MUST preserve dirty-state guards, selection semantics, row
+  context actions, keyboard dismissal, focus restoration, and empty-state creation without
+  introducing a second persistent navigation pane. Detail headers and editors may draw semantic
+  horizontal separators but MUST NOT redraw or cover the outer edge, add nested corner radii, or
+  introduce a gap between the header and body.
 - Composite icon-and-input controls draw one border on the parent control. Their transparent borderless input remains inside the parent's content box and MUST NOT cover the parent edge at any supported width.
 - Editable single-line text fields and selects use the shared default control height, control radius, surface fill, strong border, and accent focus ring. Read-only and disabled fields remain selectable where appropriate but are visually distinct from editable fields. Search fields in workspaces and selection dialogs use the same composite-field geometry; Quick Open is the intentional command-palette exception.
 - Apply Preview keeps its header and footer stable. One modal body owns vertical scrolling; semantic resource groups never create another vertical scroll region, and long diff content owns only its code overflow.

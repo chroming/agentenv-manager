@@ -138,17 +138,22 @@ afterEach(() => {
 });
 
 describe("ProjectsWorkspace", () => {
-  it("uses the shared master-detail, selection, inspector, resource, and field contracts", async () => {
+  it("uses the shared single-object workspace, switcher, inspector, resource, and field contracts", async () => {
     installApi();
     render(<ProjectsWorkspace targets={[target]} />);
 
     expect(screen.getByRole("heading", { name: "Workspaces" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add folder" })).toBeInTheDocument();
-    const projectRow = await screen.findByRole("button", { name: /Example/ });
+    const switcherTrigger = await screen.findByRole("button", { name: "Choose Workspace" });
+    fireEvent.click(switcherTrigger);
+    const switcher = await screen.findByRole("dialog", { name: "Choose Workspace" });
+    expect(within(switcher).getByRole("button", { name: "Add folder" })).toBeInTheDocument();
+    const projectRow = within(switcher).getByRole("option", { name: /Example/ });
     expect(projectRow).toHaveClass("ui-selectable-row", "is-selected");
-    expect(projectRow.closest(".ui-master-list")).toBeInTheDocument();
-    expect(document.querySelector(".projects-workbench")).toHaveClass("ui-master-detail");
-    expect(document.querySelector(".project-detail")).toHaveClass("ui-master-detail__pane");
+    expect(projectRow.closest(".ui-object-switcher__list")).toBeInTheDocument();
+    expect(document.querySelector(".projects-workbench")).toHaveClass("ui-single-object-workspace");
+    expect(document.querySelector(".projects-workbench")).not.toHaveClass("ui-master-detail");
+    expect(document.querySelector(".project-detail")).not.toHaveClass("ui-master-detail__pane");
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(await screen.findByText("Git · 1 changed")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Example" }).closest(".ui-inspector-header"))
       .toBeInTheDocument();
@@ -352,7 +357,9 @@ describe("ProjectsWorkspace", () => {
     installApi();
     render(<ProjectsWorkspace targets={[target]} />);
 
-    const row = await screen.findByRole("button", { name: /Example/ });
+    fireEvent.click(await screen.findByRole("button", { name: "Choose Workspace" }));
+    const switcher = await screen.findByRole("dialog", { name: "Choose Workspace" });
+    const row = within(switcher).getByRole("option", { name: /Example/ });
     fireEvent.contextMenu(row, { clientX: 40, clientY: 80 });
     expect(screen.getByRole("menuitem", { name: "Rename" })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });

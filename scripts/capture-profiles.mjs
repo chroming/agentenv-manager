@@ -1120,25 +1120,39 @@ try {
     await capturePage(page, join(outputDir, `${filePrefix}-920x620.png`));
   };
 
+  const selectCaptureProfile = async (name) => {
+    await page.getByRole("button", { name: "Choose Profile", exact: true }).click();
+    const switcher = page.getByRole("dialog", { name: "Choose Profile", exact: true });
+    await switcher.getByRole("option", { name: `Profile ${name}`, exact: true }).click();
+    await page.getByRole("heading", { name, exact: true }).waitFor({ state: "visible" });
+  };
+
+  const ensureComposerExpanded = async (name) => {
+    const id = name === "MCPs" ? "mcp" : name.toLowerCase();
+    const section = page.locator(`[data-profile-composer-id="${id}"]`);
+    const trigger = section.getByRole("button", { name, exact: true });
+    if (await trigger.getAttribute("aria-expanded") !== "true") {
+      await trigger.click();
+    }
+    await section.locator(".profile-composer-section__panel").waitFor({ state: "visible" });
+    return section;
+  };
+
   await captureWorkspace(
     "Profiles",
     "profiles",
     () => page.getByRole("region", { name: "Profiles", exact: true }),
     async () => {
-      await page.getByRole("button", { name: "Profile Code Review" }).click();
-      await page.getByRole("heading", { name: "Code Review" }).waitFor({
-        state: "visible"
-      });
+      await selectCaptureProfile("Code Review");
     }
   );
 
-  await page.getByRole("button", { name: "Profile Daily Coding" }).click();
-  await page.getByRole("heading", { name: "Daily Coding" }).waitFor({ state: "visible" });
+  await selectCaptureProfile("Daily Coding");
   await app.evaluate(() => {
     process.env.AGENTENV_TEST_PROFILE_READ_DELAY_ID = "code-review";
     process.env.AGENTENV_TEST_PROFILE_READ_DELAY_MS = "350";
   });
-  await page.getByRole("button", { name: "Profile Code Review" }).click();
+  await selectCaptureProfile("Code Review");
   const loadingProfile = page.getByRole("status", { name: "Loading Profile Code Review" });
   await loadingProfile.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "profile-loading-920x620.png"));
@@ -1149,7 +1163,11 @@ try {
     delete process.env.AGENTENV_TEST_PROFILE_READ_DELAY_MS;
   });
 
-  await page.getByRole("button", { name: "New Profile" }).click();
+  await page.getByRole("button", { name: "Choose Profile" }).click();
+  await page
+    .getByRole("dialog", { name: "Choose Profile" })
+    .getByRole("button", { name: "New Profile" })
+    .click();
   const sparseProfileDialog = page.getByRole("dialog", { name: "New Profile" });
   await sparseProfileDialog.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "profile-create-920x620.png"));
@@ -1159,11 +1177,7 @@ try {
     .fill("Visual fixture for sparse resource states.");
   await sparseProfileDialog.getByRole("button", { name: "Create" }).click();
   await page.getByRole("heading", { name: "Sparse Capture" }).waitFor({ state: "visible" });
-  const sparseSkillsSection = page.locator('[data-profile-composer-id="skills"]');
-  await sparseSkillsSection.getByRole("button", { name: "Skills", exact: true }).click();
-  await sparseSkillsSection
-    .locator(".profile-composer-section__panel")
-    .waitFor({ state: "visible" });
+  const sparseSkillsSection = await ensureComposerExpanded("Skills");
   await capturePage(page, join(outputDir, "profile-skills-empty-920x620.png"));
 
   await sparseSkillsSection.getByRole("button", { name: "Add", exact: true }).click();
@@ -1192,7 +1206,7 @@ try {
   await sparseDeleteDialog.getByRole("button", { name: "Remove Profile" }).click();
   await sparseDeleteDialog.waitFor({ state: "hidden" });
 
-  await page.getByRole("button", { name: "Profile Code Review" }).click();
+  await selectCaptureProfile("Code Review");
   await page.getByRole("heading", { name: "Code Review" }).waitFor({ state: "visible" });
   await page
     .locator(".profile-hero")
@@ -1221,13 +1235,7 @@ try {
     });
   }
   for (const sectionName of ["Instructions", "Skills", "MCPs"]) {
-    await page
-      .locator(`[data-profile-composer-id="${sectionName === "MCPs" ? "mcp" : sectionName.toLowerCase()}"]`)
-      .getByRole("button", { name: sectionName, exact: true })
-      .click();
-    await page
-      .locator(`[data-profile-composer-id="${sectionName === "MCPs" ? "mcp" : sectionName.toLowerCase()}"] .profile-composer-section__panel`)
-      .waitFor({ state: "visible" });
+    await ensureComposerExpanded(sectionName);
     await capturePage(
       page,
       join(outputDir, `profile-${sectionName.toLowerCase().replace(" ", "-")}-920x620.png`)
@@ -1267,7 +1275,7 @@ try {
   await page.reload();
   await page.waitForLoadState("domcontentloaded");
   await page.getByRole("button", { name: "Profiles", exact: true }).click();
-  await page.getByRole("button", { name: "Profile Code Review" }).click();
+  await selectCaptureProfile("Code Review");
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   const driftPreviewDialog = page.getByRole("dialog", { name: "Preview" });
   await driftPreviewDialog.waitFor({ state: "visible" });
@@ -1288,16 +1296,11 @@ try {
   await page.waitForLoadState("domcontentloaded");
   await page.getByRole("button", { name: "Profiles", exact: true }).click();
   await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
-  await page.getByRole("button", { name: "Profile Code Review" }).click();
+  await selectCaptureProfile("Code Review");
   await page.getByRole("heading", { name: "Code Review" }).waitFor({ state: "visible" });
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "profiles-applied-920x620.png"));
-  await page
-    .locator('[data-profile-composer-id="skills"]')
-    .getByRole("button", { name: "Skills", exact: true })
-    .click();
-  await page.locator('[data-profile-composer-id="skills"] .profile-composer-section__panel')
-    .waitFor({ state: "visible" });
+  await ensureComposerExpanded("Skills");
   await capturePage(page, join(outputDir, "profile-skills-applied-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "profile-skills-applied-1180x728.png"));
@@ -1332,11 +1335,8 @@ try {
   await page.reload();
   await page.waitForLoadState("domcontentloaded");
   await page.getByRole("button", { name: "Profiles", exact: true }).click();
-  await page.getByRole("button", { name: "Profile Code Review" }).click();
-  await page
-    .locator('[data-profile-composer-id="skills"]')
-    .getByRole("button", { name: "Skills", exact: true })
-    .click();
+  await selectCaptureProfile("Code Review");
+  await ensureComposerExpanded("Skills");
   await page
     .getByRole("listitem", { name: "Profile Skill git-workflow" })
     .scrollIntoViewIfNeeded();
@@ -1368,12 +1368,9 @@ try {
   await page.getByRole("complementary", { name: "Global navigation" }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Profiles", exact: true }).click();
   await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
-  await page.getByRole("button", { name: "Profile Code Review" }).click();
+  await selectCaptureProfile("Code Review");
   await page.getByRole("heading", { name: "Code Review" }).waitFor({ state: "visible" });
-  await page
-    .locator('[data-profile-composer-id="skills"]')
-    .getByRole("button", { name: "Skills", exact: true })
-    .click();
+  await ensureComposerExpanded("Skills");
   await capturePage(page, join(outputDir, "profiles-applied-1180x728.png"));
   await captureWorkspace(
     "Agents",
@@ -1650,7 +1647,7 @@ try {
 
   await setWindowSize(page, windowHandle, 1536, 1024);
   await page.getByRole("button", { name: "Profiles" }).click();
-  await page.getByRole("button", { name: "Profile Daily Coding" }).click();
+  await selectCaptureProfile("Daily Coding");
   await page.getByRole("heading", { name: "Daily Coding" }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Select apply Agent" }).click();
   await page.waitForTimeout(250);

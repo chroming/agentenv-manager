@@ -283,6 +283,14 @@
   min-height: var(--page-header-height);
 }
 
+.profile-page-header .profile-switcher {
+  width: clamp(220px, 30vw, 310px);
+}
+
+.profile-page-header .profile-switcher .ui-object-switcher__trigger {
+  width: 100%;
+}
+
 .profile-commit-actions {
   align-items: center;
   display: flex;
@@ -337,10 +345,6 @@
 
 .profile-workbench {
   background: var(--surface);
-  border-color: transparent;
-  border-radius: var(--radius-surface);
-  gap: 0;
-  grid-template-columns: 260px minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
@@ -446,6 +450,24 @@
   white-space: nowrap;
 }
 
+.ui-object-switcher__row .ui-selectable-row__title,
+.profile-switcher .ui-object-switcher__trigger-title {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.profile-row__dirty {
+  background: var(--warning-bg);
+  border-radius: var(--radius-pill);
+  color: var(--warning);
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: var(--font-weight-regular);
+  line-height: 16px;
+  padding: 0 5px;
+}
+
 .profile-row__title strong {
   background: #eafaf1;
   border-radius: var(--radius-pill);
@@ -468,8 +490,10 @@
   border-radius: 0;
   container-name: profile-detail;
   container-type: inline-size;
+  display: grid;
   gap: 0;
   grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
   overflow-x: hidden;
   overflow-y: hidden;
 }
@@ -1169,26 +1193,6 @@
   .profile-workbench {
     --profile-icon-slot: 28px;
     --profile-policy-column-width: clamp(236px, 56%, 264px);
-    gap: 0;
-    grid-template-columns: 196px minmax(0, 1fr);
-  }
-
-  .profile-index {
-    padding: 0;
-  }
-
-  .profile-list-toolbar {
-    padding: 8px 8px 6px;
-  }
-
-  .profile-row {
-    gap: 6px;
-    min-height: 52px;
-    padding: 7px 8px;
-  }
-
-  .profile-row__deployments {
-    display: flex;
   }
 
   .profile-hero {

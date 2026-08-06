@@ -1217,9 +1217,9 @@ describe("App", () => {
     fireEvent.click(within(navigation).getByRole("button", { name: "Profiles" }));
     expect(await within(editor).findByRole("heading", { name: "Profiles" }))
       .toBeInTheDocument();
-    expect(within(editor).getByRole("button", { name: "New Profile" }))
+    expect(within(editor).getByRole("button", { name: "Choose Profile" }))
       .toBeInTheDocument();
-    expect(within(titlebar).queryByRole("button", { name: "New Profile" }))
+    expect(within(titlebar).queryByRole("button", { name: "Choose Profile" }))
       .not.toBeInTheDocument();
 
     fireEvent.click(within(navigation).getByRole("button", { name: "Skills" }));
@@ -1447,6 +1447,16 @@ describe("App", () => {
 
   const openProfiles = async () => {
     fireEvent.click(await screen.findByRole("button", { name: "Profiles" }));
+  };
+
+  const openProfileSwitcher = async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Choose Profile" }));
+    return screen.findByRole("dialog", { name: "Choose Profile" });
+  };
+
+  const clickNewProfile = async () => {
+    const switcher = await openProfileSwitcher();
+    fireEvent.click(within(switcher).getByRole("button", { name: "New Profile" }));
   };
 
   const openLibrary = async () => {
@@ -2050,9 +2060,7 @@ describe("App", () => {
       await screen.findByRole("button", { name: "Agents" })
     ).toBeInTheDocument();
     await openProfiles();
-    expect(
-      await screen.findByRole("button", { name: /Daily Coding/ })
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
     expect(api.readProfile).toHaveBeenCalledWith("daily-coding");
     expect(screen.queryByText("Action failed")).not.toBeInTheDocument();
     expect(screen.queryByText(cleanupHistoryError)).not.toBeInTheDocument();
@@ -3301,7 +3309,7 @@ describe("App", () => {
 
     await openProfiles();
     expect(await screen.findByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
-    const brokenRow = screen.getByRole("button", { name: "Profile broken-profile" });
+    const brokenRow = within(await openProfileSwitcher()).getByRole("option", { name: /broken-profile/ });
     expect(brokenRow).toHaveTextContent("Stored Profile data could not be loaded");
 
     fireEvent.click(brokenRow);
@@ -3362,8 +3370,8 @@ describe("App", () => {
 
     await openProfiles();
     expect(await screen.findByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
-    const profileList = screen.getByRole("complementary", { name: "Profile list" });
-    const profileRows = profileList.querySelectorAll(".profile-row");
+    const profileList = await openProfileSwitcher();
+    const profileRows = within(profileList).getAllByRole("option");
     expect(profileRows[0]).toHaveTextContent("Profile B");
     expect(profileRows[1]).toHaveTextContent("Daily Coding");
     expect(within(profileRows[1] as HTMLElement).queryByText("Current")).not.toBeInTheDocument();
@@ -3422,8 +3430,8 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    const profileList = screen.getByRole("complementary", { name: "Profile list" });
-    const row = within(profileList).getByRole("button", { name: /Daily Coding/ });
+    const profileList = await openProfileSwitcher();
+    const row = within(profileList).getByRole("option", { name: /Daily Coding/ });
     expect(row).toHaveAttribute("aria-current", "page");
     expect(row).not.toHaveTextContent("2 skills");
     expect(row).not.toHaveTextContent("3 MCP");
@@ -3432,24 +3440,27 @@ describe("App", () => {
     expect(within(row).getByLabelText("Codex · Active, OpenCode · Active")).toBeInTheDocument();
     expect(row).toHaveTextContent("2 Agents · Active");
     expect(document.querySelector(".profile-hero")).not.toHaveTextContent("Applied Jul 9");
+    fireEvent.keyDown(document, { key: "Escape" });
 
     fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
     fireEvent.change(screen.getByLabelText("AGENTS.md"), {
       target: { value: "# Updated Agent\n" }
     });
-    expect(row).toHaveTextContent("Unsaved");
-    expect(row.querySelector(".profile-row__dirty")).toHaveTextContent("Unsaved");
+    const dirtyRow = within(await openProfileSwitcher()).getByRole("option", { name: /Daily Coding/ });
+    expect(dirtyRow).toHaveTextContent("Unsaved");
+    expect(dirtyRow.querySelector(".profile-row__dirty")).toHaveTextContent("Unsaved");
     expect(document.querySelector(".app-feedback")).toBeNull();
   });
 
-  it("keeps the only New Profile action in the shared page header", async () => {
+  it("keeps the only New Profile action in the temporary Profile switcher", async () => {
     installApi();
     render(<App />);
 
     await openProfiles();
-    const newProfileButtons = screen.getAllByRole("button", { name: "New Profile" });
+    const profileSwitcher = await openProfileSwitcher();
+    const newProfileButtons = within(profileSwitcher).getAllByRole("button", { name: "New Profile" });
     expect(newProfileButtons).toHaveLength(1);
-    expect(newProfileButtons[0].closest(".profile-page-header")).not.toBeNull();
+    expect(newProfileButtons[0].closest(".ui-object-switcher__footer")).not.toBeNull();
     expect(document.querySelector(".profile-index h2")).toBeNull();
 
     const edit = screen.getByRole("button", { name: "Edit Profile" });
@@ -3472,7 +3483,7 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    const row = screen.getByRole("button", { name: "Profile Profile B" });
+    const row = within(await openProfileSwitcher()).getByRole("option", { name: /Profile B/ });
     fireEvent.contextMenu(row, { clientX: 280, clientY: 220 });
     const menu = screen.getByRole("menu", { name: "Profile actions" });
     expect(menu).toHaveClass("profile-row-context-menu");
@@ -3522,7 +3533,7 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText("AGENTS.md"), {
       target: { value: "# Unsaved instructions\n" }
     });
-    const row = screen.getByRole("button", { name: "Profile Daily Coding" });
+    const row = within(await openProfileSwitcher()).getByRole("option", { name: /Daily Coding/ });
     expect(within(row).queryByRole("button", {
       name: "Change icon for Profile daily-coding"
     })).not.toBeInTheDocument();
@@ -3774,10 +3785,11 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    const profileList = screen.getByRole("complementary", { name: "Profile list" });
+    let profileList = await openProfileSwitcher();
     const profileOrder = () =>
       [...profileList.querySelectorAll(".profile-row__name")].map((item) => item.textContent);
     expect(profileOrder()).toEqual(["Codex Review", "Daily Coding"]);
+    fireEvent.keyDown(document, { key: "Escape" });
     let menuButton = screen.getByRole("button", { name: "Select apply Agent" });
     expect(menuButton).toHaveTextContent("OpenCode");
     expect(menuButton).not.toHaveTextContent("Target:");
@@ -3812,15 +3824,18 @@ describe("App", () => {
     fireEvent.click(menuButton);
     menu = screen.getByRole("menu", { name: "Apply Agents" });
     fireEvent.click(within(menu).getByRole("menuitemradio", { name: "Codex" }));
-    expect(within(profileList).getByText("Daily Coding")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
+    profileList = await openProfileSwitcher();
+    expect(within(profileList).getByText("Daily Coding")).toBeInTheDocument();
     expect(profileOrder()).toEqual(["Codex Review", "Daily Coding"]);
 
-    fireEvent.click(within(profileList).getByRole("button", { name: /Codex Review/ }));
+    fireEvent.click(within(profileList).getByRole("option", { name: /Codex Review/ }));
     await waitFor(() => expect(api.readProfile).toHaveBeenCalledWith("codex-review"));
     expect(await screen.findByRole("heading", { name: "Codex Review" })).toBeInTheDocument();
+    profileList = await openProfileSwitcher();
     expect(profileOrder()).toEqual(["Codex Review", "Daily Coding"]);
+    fireEvent.keyDown(document, { key: "Escape" });
     menuButton = screen.getByRole("button", { name: "Select apply Agent" });
     fireEvent.click(menuButton);
     expect(
@@ -3835,7 +3850,8 @@ describe("App", () => {
         { name: "OpenCode" }
       )
     );
-    fireEvent.click(within(profileList).getByRole("button", { name: /Daily Coding/ }));
+    profileList = await openProfileSwitcher();
+    fireEvent.click(within(profileList).getByRole("option", { name: /Daily Coding/ }));
     menuButton = await screen.findByRole("button", { name: "Select apply Agent" });
     fireEvent.click(menuButton);
     expect(
@@ -3870,9 +3886,7 @@ describe("App", () => {
     expect(instructions).toHaveValue("# Unsaved target-safe draft\n");
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
     expect(
-      within(screen.getByRole("complementary", { name: "Profile list" })).getByRole("button", {
-        name: /Daily Coding/
-      })
+      within(await openProfileSwitcher()).getByRole("option", { name: /Daily Coding/ })
     ).toHaveTextContent("Unsaved");
   });
 
@@ -3894,8 +3908,8 @@ describe("App", () => {
     expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
 
     deferProfileB = true;
-    const profileList = screen.getByRole("complementary", { name: "Profile list" });
-    fireEvent.click(within(profileList).getByRole("button", { name: /Profile B/ }));
+    const profileList = await openProfileSwitcher();
+    fireEvent.click(within(profileList).getByRole("option", { name: /Profile B/ }));
 
     expect(screen.queryByRole("heading", { name: "Daily Coding" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Profile composer" })).not.toBeInTheDocument();
@@ -3930,9 +3944,10 @@ describe("App", () => {
     await openProfiles();
     await screen.findByRole("heading", { name: "Daily Coding" });
     deferSelectionReads = true;
-    const profileList = screen.getByRole("complementary", { name: "Profile list" });
-    fireEvent.click(within(profileList).getByRole("button", { name: /Profile B/ }));
-    fireEvent.click(within(profileList).getByRole("button", { name: /Profile C/ }));
+    let profileList = await openProfileSwitcher();
+    fireEvent.click(within(profileList).getByRole("option", { name: /Profile B/ }));
+    profileList = await openProfileSwitcher();
+    fireEvent.click(within(profileList).getByRole("option", { name: /Profile C/ }));
 
     await act(async () => {
       profileCRead.resolve(profileC);
@@ -3946,7 +3961,7 @@ describe("App", () => {
     });
     expect(screen.getByRole("heading", { name: "Profile C" })).toBeInTheDocument();
     expect(
-      within(profileList).getByRole("button", { name: /Profile C/ })
+      within(await openProfileSwitcher()).getByRole("option", { name: /Profile C/ })
     ).toHaveAttribute("aria-current", "page");
     fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
     expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Profile C\n");
@@ -3972,9 +3987,10 @@ describe("App", () => {
     await openProfiles();
     await screen.findByRole("heading", { name: "Daily Coding" });
     deferSelectionReads = true;
-    const profileList = screen.getByRole("complementary", { name: "Profile list" });
-    fireEvent.click(within(profileList).getByRole("button", { name: /Profile B/ }));
-    fireEvent.click(within(profileList).getByRole("button", { name: /Profile C/ }));
+    let profileList = await openProfileSwitcher();
+    fireEvent.click(within(profileList).getByRole("option", { name: /Profile B/ }));
+    profileList = await openProfileSwitcher();
+    fireEvent.click(within(profileList).getByRole("option", { name: /Profile C/ }));
 
     await act(async () => {
       profileBRead.resolve(profileB);
@@ -4021,8 +4037,8 @@ describe("App", () => {
     );
 
     deferProfileC = true;
-    const profileList = screen.getByRole("complementary", { name: "Profile list" });
-    fireEvent.click(within(profileList).getByRole("button", { name: /Profile C/ }));
+    const profileList = await openProfileSwitcher();
+    fireEvent.click(within(profileList).getByRole("option", { name: /Profile C/ }));
     await act(async () => {
       stalePreview.resolve({ ...preview, profileId: profileB.id });
       await stalePreview.promise;
@@ -4668,7 +4684,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Duplicate Profile" }));
     await waitFor(() => expect(api.duplicateProfile).toHaveBeenCalledWith("daily-coding"));
 
-    fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
+    await clickNewProfile();
     const createDialog = screen.getByRole("dialog", { name: "New Profile" });
     expect(within(createDialog).queryByLabelText("Preferred Agent")).not.toBeInTheDocument();
     expect(within(createDialog).queryByLabelText("Source Agent")).not.toBeInTheDocument();
@@ -4744,7 +4760,7 @@ describe("App", () => {
     render(<App />);
     await openProfiles();
 
-    fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
+    await clickNewProfile();
     let dialog = screen.getByRole("dialog", { name: "New Profile" });
     fireEvent.click(within(dialog).getByRole("button", { name: "From Agent" }));
     dialog = screen.getByRole("dialog", { name: "Create Profile from OpenCode" });
@@ -4848,7 +4864,7 @@ describe("App", () => {
     render(<App />);
     await openProfiles();
 
-    fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
+    await clickNewProfile();
     fireEvent.click(within(screen.getByRole("dialog", { name: "New Profile" }))
       .getByRole("button", { name: "From Agent" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "Create Profile from OpenCode" }))
@@ -4902,7 +4918,7 @@ describe("App", () => {
     render(<App />);
     await openProfiles();
 
-    fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
+    await clickNewProfile();
     fireEvent.click(within(screen.getByRole("dialog", { name: "New Profile" }))
       .getByRole("button", { name: "From Agent" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "Create Profile from OpenCode" }))
@@ -4957,7 +4973,7 @@ describe("App", () => {
     render(<App />);
     await openProfiles();
 
-    fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
+    await clickNewProfile();
     fireEvent.click(screen.getByRole("button", { name: "From Agent" }));
     let dialog = screen.getByRole("dialog", { name: "Create Profile from OpenCode" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Review" }));
@@ -4981,7 +4997,7 @@ describe("App", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "AGENTS.md" }), {
       target: { value: "# Unsaved guard\n" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
+    await clickNewProfile();
 
     const guard = screen.getByRole("dialog", { name: "Unsaved changes" });
     expect(guard).toHaveTextContent("create a new Profile");
@@ -5006,7 +5022,7 @@ describe("App", () => {
     fireEvent.click(within(navigationGuard).getByRole("button", { name: "Cancel" }));
     expect(screen.getByRole("heading", { name: "Profiles" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
+    await clickNewProfile();
     fireEvent.click(
       within(screen.getByRole("dialog", { name: "Unsaved changes" })).getByRole(
         "button",
@@ -5025,7 +5041,7 @@ describe("App", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "AGENTS.md" }), {
       target: { value: "# Keep this draft\n" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
+    await clickNewProfile();
     fireEvent.click(
       within(screen.getByRole("dialog", { name: "Unsaved changes" })).getByRole(
         "button",

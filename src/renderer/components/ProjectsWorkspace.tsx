@@ -48,16 +48,13 @@ import {
   focusInitialActionMenuItem,
   IconButton,
   InspectorHeader,
-  MasterDetailLayout,
-  MasterDetailPane,
-  MasterListPane,
   ModalFrame,
   Notice,
+  ObjectSwitcher,
   PageHeader,
   ResourceDisclosureSection,
-  SearchField,
   SelectField,
-  SelectableListRow,
+  SingleObjectWorkspace,
   TextField,
   ResourceRow
 } from "./ui";
@@ -79,6 +76,7 @@ export const ProjectsWorkspace = ({
   const { t } = useI18n();
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [query, setQuery] = useState("");
+  const [switcherOpen, setSwitcherOpen] = useState(false);
   const [expandedKinds, setExpandedKinds] = useState<Set<ProjectResourceKind>>(() => new Set());
   const [selectedId, setSelectedId] = useState<string>();
   const [operation, setOperation] = useState<ProjectOperation>();
@@ -114,10 +112,6 @@ export const ProjectsWorkspace = ({
   const menuReturnFocusRef = useRef<HTMLElement | null>(null);
 
   const selected = projects.find((project) => project.id === selectedId) ?? projects[0];
-  const visibleProjects = projects.filter((project) => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return !normalizedQuery || `${project.name} ${project.rootPath}`.toLowerCase().includes(normalizedQuery);
-  });
   const availableTargets = targets.filter((target) => Boolean(target.health.executablePath));
   const selectedAgent = availableTargets.find((target) => target.id === selectedAgentId)
     ?? availableTargets[0];
@@ -490,6 +484,24 @@ export const ProjectsWorkspace = ({
     )
   );
 
+  const switcherItems = projects.map((project) => ({
+    id: project.id,
+    ariaLabel: t("Workspace {{name}}", { name: project.name }),
+    searchText: `${project.name} ${project.rootPath}`,
+    icon: <Folder size={17} strokeWidth={2} />,
+    title: project.name,
+    description: <span title={project.rootPath}>{project.rootPath}</span>,
+    status: !project.exists
+      ? t("Folder missing")
+      : project.lastAgentId
+        ? targets.find((target) => target.id === project.lastAgentId)?.name ?? project.lastAgentId
+        : undefined,
+    onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      showProjectMenu(project, event.clientX, event.clientY, event.currentTarget);
+    }
+  }));
+
   const refreshSelectedProject = async () => {
     if (!selected?.exists) return;
     setSnapshot(await window.agentEnv.inspectProject(selected.id));
@@ -511,14 +523,29 @@ export const ProjectsWorkspace = ({
             >
               {t("Refresh")}
             </Button>
-            <Button
-              variant="primary"
-              busy={operation === "add"}
-              icon={<Plus size={15} />}
-              onClick={() => void addProject()}
-            >
-              {t("Add folder")}
-            </Button>
+            <ObjectSwitcher
+              ariaLabel={t("Choose Workspace")}
+              className="project-switcher"
+              emptyMessage={operation === "refresh"
+                ? t("Loading Workspaces")
+                : projects.length > 0
+                  ? t("No matching folders")
+                  : t("No Workspaces yet")}
+              footerAction={{
+                icon: <Plus size={15} />,
+                label: t("Add folder"),
+                onClick: () => void addProject()
+              }}
+              items={switcherItems}
+              open={switcherOpen}
+              query={query}
+              searchLabel={t("Search Workspaces")}
+              searchPlaceholder={t("Search folders...")}
+              selectedId={selected?.id}
+              onOpenChange={setSwitcherOpen}
+              onQueryChange={setQuery}
+              onSelect={setSelectedId}
+            />
           </ControlGroup>
         )}
       />
@@ -535,50 +562,8 @@ export const ProjectsWorkspace = ({
         </Notice>
       ) : null}
 
-      <MasterDetailLayout className="projects-workbench" aria-label={t("Workspace browser")}>
-        <MasterListPane className="project-index" aria-label={t("Workspace list")}>
-          <div className="project-list-toolbar">
-            <SearchField
-              label={t("Search Workspaces")}
-              placeholder={t("Search folders...")}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </div>
-          {projects.length === 0 && operation !== "refresh" ? (
-            <EmptyState
-              className="project-empty-list"
-              icon={<Folder size={22} strokeWidth={1.8} />}
-              title={t("No Workspaces yet")}
-              description={t("Add a folder you return to often.")}
-            />
-          ) : null}
-          {projects.length > 0 && visibleProjects.length === 0 ? (
-            <EmptyState title={t("No matching folders")} />
-          ) : null}
-          {visibleProjects.map((project) => (
-            <SelectableListRow
-              className="project-row"
-              description={<span title={project.rootPath}>{project.rootPath}</span>}
-              icon={<Folder size={17} strokeWidth={2} />}
-              key={project.id}
-              selected={selected?.id === project.id}
-              status={!project.exists
-                ? t("Folder missing")
-                : project.lastAgentId
-                  ? targets.find((target) => target.id === project.lastAgentId)?.name ?? project.lastAgentId
-                  : undefined}
-              title={project.name}
-              onSelect={() => setSelectedId(project.id)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                showProjectMenu(project, event.clientX, event.clientY, event.currentTarget);
-              }}
-            />
-          ))}
-        </MasterListPane>
-
-        <MasterDetailPane className="project-detail" aria-label={selected ? selected.name : t("Workspace detail")}>
+      <SingleObjectWorkspace className="projects-workbench" aria-label={t("Workspace browser")}>
+        <div className="project-detail" aria-label={selected ? selected.name : t("Workspace detail")}>
           {selected ? (
             <>
               <InspectorHeader
@@ -754,10 +739,20 @@ export const ProjectsWorkspace = ({
               icon={<Folder size={28} strokeWidth={1.7} />}
               title={t("Add a folder to open with an Agent")}
               description={t("AgentEnv stores the folder reference and changes project files only after an explicit action.")}
+              actions={(
+                <Button
+                  variant="primary"
+                  busy={operation === "add"}
+                  icon={<Plus size={15} />}
+                  onClick={() => void addProject()}
+                >
+                  {t("Add folder")}
+                </Button>
+              )}
             />
           )}
-        </MasterDetailPane>
-      </MasterDetailLayout>
+        </div>
+      </SingleObjectWorkspace>
 
       {projectMenu ? (() => {
         const menuProject = projects.find((project) => project.id === projectMenu.projectId);

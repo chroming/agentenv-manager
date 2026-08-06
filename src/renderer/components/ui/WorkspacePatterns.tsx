@@ -44,6 +44,16 @@ export const MasterDetailPane = ({
   </section>
 );
 
+export const SingleObjectWorkspace = ({
+  children,
+  className = "",
+  ...props
+}: HTMLAttributes<HTMLElement>) => (
+  <section {...props} className={`ui-single-object-workspace ${className}`.trim()}>
+    {children}
+  </section>
+);
+
 interface SelectableListRowProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "title"> {
   description?: ReactNode;

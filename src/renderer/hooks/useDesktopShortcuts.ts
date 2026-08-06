@@ -6,6 +6,7 @@ interface DesktopShortcutOptions {
   isProfileSaving: boolean;
   onSaveProfile(): void | Promise<void>;
   onRefreshSkills(): void | Promise<void>;
+  onOpenProfileSearch?(): void;
   onOpenQuickSearch(): void;
   profileSearchRef: RefObject<HTMLInputElement | null>;
   skillSearchRef: RefObject<HTMLInputElement | null>;
@@ -28,6 +29,7 @@ export const useDesktopShortcuts = ({
   isProfileSaving,
   onSaveProfile,
   onRefreshSkills,
+  onOpenProfileSearch,
   onOpenQuickSearch,
   profileSearchRef,
   skillSearchRef,
@@ -82,10 +84,13 @@ export const useDesktopShortcuts = ({
         return;
       }
 
-      const searchInput =
-        activeWorkspace === "profiles"
-          ? profileSearchRef.current
-          : skillSearchRef.current;
+      if (activeWorkspace === "profiles" && onOpenProfileSearch) {
+        onOpenProfileSearch();
+        return;
+      }
+      const searchInput = activeWorkspace === "profiles"
+        ? profileSearchRef.current
+        : skillSearchRef.current;
       searchInput?.focus();
       searchInput?.select();
     };
@@ -97,6 +102,7 @@ export const useDesktopShortcuts = ({
     isProfileSaving,
     onSaveProfile,
     onRefreshSkills,
+    onOpenProfileSearch,
     onOpenQuickSearch,
     platform,
     profileSearchRef,

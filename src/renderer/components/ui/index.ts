@@ -8,6 +8,7 @@ export { SearchField, SelectField, TextAreaField, TextField } from "./FormFields
 export { IconButton } from "./IconButton";
 export { ModalFrame, type ModalDismissPolicy } from "./ModalFrame";
 export { Notice } from "./Notice";
+export { ObjectSwitcher, type ObjectSwitcherItem } from "./ObjectSwitcher";
 export { PageHeader } from "./PageHeader";
 export { ResourceRow } from "./ResourceRow";
 export {
@@ -23,6 +24,7 @@ export {
   MasterDetailPane,
   MasterListPane,
   ResourceSection,
+  SingleObjectWorkspace,
   SelectableListRow
 } from "./WorkspacePatterns";
 export { ToolbarOverflowMenu, type ToolbarOverflowMenuItem } from "./ToolbarOverflowMenu";

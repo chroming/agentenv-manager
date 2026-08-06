@@ -129,6 +129,13 @@ const verifyProfileComparisonActionLayout = async (page: Page, width: number, he
   expect(Math.abs(compareBox!.width - applyBox!.width)).toBeLessThanOrEqual(1);
 };
 
+const selectEvaluationProfile = async (page: Page, name: string) => {
+  await page.getByRole("button", { name: "Choose Profile", exact: true }).click();
+  const switcher = page.getByRole("dialog", { name: "Choose Profile", exact: true });
+  await switcher.getByRole("option", { name: `Profile ${name}`, exact: true }).click();
+  await page.getByRole("heading", { name, exact: true }).waitFor({ state: "visible" });
+};
+
 const verifyComparisonResultNavigation = async (dialog: ReturnType<Page["getByRole"]>) => {
   const tabs = dialog.getByRole("tablist", { name: "Comparison result views" });
   const selected = tabs.getByRole("tab", { selected: true });
@@ -338,7 +345,7 @@ printf '{"type":"step_finish","part":{"modelID":"fake/e2e","cost":0.01,"tokens":
       );
 
       await page.getByRole("button", { name: "Profiles" }).click();
-      await page.getByRole("button", { name: "Profile Evaluation Environment" }).click();
+      await selectEvaluationProfile(page, "Evaluation Environment");
       await verifyProfileComparisonActionLayout(page, 920, 620);
       if (process.env.AGENTENV_EVALUATION_CAPTURE_DIR) {
         await mkdir(process.env.AGENTENV_EVALUATION_CAPTURE_DIR, { recursive: true });
@@ -591,7 +598,7 @@ printf '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens
       }).toEqual({ state: "ready" });
 
       await page.getByRole("button", { name: "Profiles" }).click();
-      await page.getByRole("button", { name: "Profile Codex Evaluation Environment" }).click();
+      await selectEvaluationProfile(page, "Codex Evaluation Environment");
       const compareButton = page.getByRole("button", { name: "Compare" });
       await expect.poll(() => compareButton.isEnabled()).toBe(true);
       await compareButton.click();
@@ -770,7 +777,7 @@ printf '{"type":"message_end","message":{"role":"assistant","model":"fake-pi","c
       await page.getByRole("button", { name: "Profiles" }).click();
 
       for (const agent of agents.slice(0, 3)) {
-        await page.getByRole("button", { name: `Profile ${agent.name}` }).click();
+        await selectEvaluationProfile(page, agent.name);
         const compare = page.getByRole("button", { name: "Compare" });
         await expect.poll(() => compare.isEnabled()).toBe(true);
         await compare.click();
@@ -810,7 +817,7 @@ printf '{"type":"message_end","message":{"role":"assistant","model":"fake-pi","c
       }
 
       const trae = agents[3];
-      await page.getByRole("button", { name: `Profile ${trae.name}` }).click();
+      await selectEvaluationProfile(page, trae.name);
       const compare = page.getByRole("button", { name: "Compare" });
       await expect.poll(() => compare.isDisabled()).toBe(true);
       await expect(compare.getAttribute("title")).resolves.toBe(
