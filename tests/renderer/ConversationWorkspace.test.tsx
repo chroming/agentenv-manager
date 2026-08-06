@@ -149,6 +149,11 @@ const installApi = (
   return api;
 };
 
+const chooseConversationSort = (label: "Recent" | "Largest" | "Most messages") => {
+  fireEvent.click(screen.getByRole("button", { name: /Sort conversations:/ }));
+  fireEvent.click(screen.getByRole("menuitemradio", { name: label }));
+};
+
 afterEach(() => {
   invalidateConversationListPrefetch();
   cleanup();
@@ -178,9 +183,9 @@ describe("ConversationWorkspace", () => {
 
     await screen.findByText("I found the failing step.");
     const workspaceFilter = screen.getByRole("combobox", { name: "Filter by workspace" });
-    expect(within(workspaceFilter).getByRole("group", { name: "Projects" }))
+    expect(within(workspaceFilter).getByRole("group", { name: "Workspaces" }))
       .toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("button", { name: "Open Project" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open Workspace" }));
     expect(onOpenProject).toHaveBeenCalledWith(project);
   });
 
@@ -202,7 +207,7 @@ describe("ConversationWorkspace", () => {
 
     const workspaceFilter = await screen.findByRole("combobox", { name: "Filter by workspace" });
     await waitFor(() => expect(
-      within(workspaceFilter).getByRole("group", { name: "Projects" })
+      within(workspaceFilter).getByRole("group", { name: "Workspaces" })
     ).toBeInTheDocument());
     expect(within(workspaceFilter).getByRole("option", { name: "Work Project" }))
       .toHaveValue("/work/project");
@@ -300,10 +305,15 @@ describe("ConversationWorkspace", () => {
     await waitFor(() => expect(screen.getByRole("searchbox", {
       name: "Search conversations"
     })).toHaveValue("release"));
+    chooseConversationSort("Largest");
+    await waitFor(() => expect(screen.getByRole("button", {
+      name: "Sort conversations: Largest"
+    })).toHaveAttribute("aria-pressed", "true"));
     first.unmount();
 
     expect(savedState).toEqual(expect.objectContaining({
       query: "release",
+      sort: "size-desc",
       selectedId: detail.id,
       detail: expect.objectContaining({ id: detail.id })
     }));
@@ -316,6 +326,8 @@ describe("ConversationWorkspace", () => {
     );
     expect(screen.getByRole("searchbox", { name: "Search conversations" }))
       .toHaveValue("release");
+    expect(screen.getByRole("button", { name: "Sort conversations: Largest" }))
+      .toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Please repair the release workflow.")).toBeInTheDocument();
     expect(api.listConversations).toHaveBeenCalled();
   });
@@ -929,6 +941,67 @@ describe("ConversationWorkspace", () => {
       workspacePaths: ["/work/project"],
       limit: 200
     }));
+  });
+
+  it("sorts the complete indexed result and removes misleading date groups", async () => {
+    const api = installApi();
+    api.listConversations.mockImplementation(async (input?: { sort?: string }) => ({
+      items: input?.sort === "size-desc"
+        ? [{ ...conversationSummary, id: "codex:large", title: "Large conversation" }]
+        : input?.sort === "messages-desc"
+          ? [{ ...conversationSummary, id: "codex:long", title: "Long conversation" }]
+          : [conversationSummary],
+      total: 1,
+      workspacePaths: ["/work/project"],
+      agentCounts: { codex: 1 },
+      lastRefreshedAt: new Date().toISOString()
+    }));
+
+    render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);
+    await screen.findByText("Repair release workflow");
+    expect(screen.getByText("Earlier")).toBeInTheDocument();
+
+    chooseConversationSort("Largest");
+    expect(await screen.findByText("Large conversation")).toBeInTheDocument();
+    expect(api.listConversations).toHaveBeenLastCalledWith({
+      sort: "size-desc",
+      limit: 200
+    });
+    expect(screen.queryByText("Earlier")).toBeNull();
+
+    chooseConversationSort("Most messages");
+    expect(await screen.findByText("Long conversation")).toBeInTheDocument();
+    expect(api.listConversations).toHaveBeenLastCalledWith({
+      sort: "messages-desc",
+      limit: 200
+    });
+  });
+
+  it("uses one compact sort menu beside search and restores focus on Escape", async () => {
+    installApi();
+    render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);
+    await screen.findByText("Repair release workflow");
+
+    const trigger = screen.getByRole("button", { name: "Sort conversations: Recent" });
+    expect(trigger).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menuitemradio", { name: "Recent" }))
+      .toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("menuitemradio", { name: "Largest" }))
+      .toHaveAttribute("aria-checked", "false");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menu", { name: "Sort conversations" })).toBeNull();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("shows message count and source size in the conversation detail summary", async () => {
+    installApi();
+    render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);
+
+    await screen.findByText("I found the failing step.");
+    expect(screen.getByText("2 messages")).toBeInTheDocument();
+    expect(screen.getAllByText("24 KB").length).toBeGreaterThan(0);
   });
 
   it("shows metadata-only history as an honest readable summary", async () => {

@@ -188,6 +188,62 @@ describe("conversation index store", () => {
     ).toBeUndefined();
   });
 
+  it("sorts the complete filtered index by size or message count before pagination", async () => {
+    const { store: index } = await setup();
+    const fixtures = [
+      {
+        id: "codex:large",
+        size: 8_192,
+        messageCount: 4,
+        updatedAt: "2026-07-20T06:00:00.000Z"
+      },
+      {
+        id: "codex:small",
+        size: 1_024,
+        messageCount: 12,
+        updatedAt: "2026-07-25T06:00:00.000Z"
+      },
+      {
+        id: "codex:unknown",
+        size: undefined,
+        messageCount: 30,
+        updatedAt: "2026-07-26T06:00:00.000Z"
+      }
+    ];
+
+    for (const fixture of fixtures) {
+      index.upsert({
+        ...detail,
+        id: fixture.id,
+        sourceId: fixture.id,
+        title: fixture.id,
+        updatedAt: fixture.updatedAt,
+        messageCount: fixture.messageCount
+      }, {
+        ...candidate,
+        recordId: fixture.id,
+        source: {
+          ...candidate.source,
+          version: fixture.size === undefined
+            ? "database-revision"
+            : fileVersion(fixture.size)
+        },
+        providerSession: {
+          kind: "native",
+          id: fixture.id,
+          resumeLocator: fixture.id
+        }
+      });
+    }
+
+    expect((await index.list({ sort: "size-desc", limit: 2 })).items.map((item) => item.id))
+      .toEqual(["codex:large", "codex:small"]);
+    expect((await index.list({ sort: "size-desc", limit: 2, offset: 2 })).items.map((item) => item.id))
+      .toEqual(["codex:unknown"]);
+    expect((await index.list({ sort: "messages-desc" })).items.map((item) => item.id))
+      .toEqual(["codex:unknown", "codex:small", "codex:large"]);
+  });
+
   it("persists the Agent discovery version without changing indexed history", async () => {
     const { path, store: index } = await setup();
     index.upsert(detail, candidate);
@@ -253,6 +309,7 @@ describe("conversation index store", () => {
 
     const legacy = new DatabaseSync(path);
     legacy.exec(`
+      ALTER TABLE conversations DROP COLUMN size_bytes;
       DROP TABLE conversation_search;
       PRAGMA user_version = 2;
     `);
@@ -270,12 +327,16 @@ describe("conversation index store", () => {
     expect(
       (migrated.prepare("PRAGMA user_version").get() as { user_version: number })
         .user_version
-    ).toBe(3);
+    ).toBe(4);
     expect(
       migrated.prepare(
         "SELECT count(*) AS count FROM conversation_search"
       ).get()
     ).toEqual({ count: 1 });
+    expect(
+      (migrated.prepare("PRAGMA table_info(conversations)").all() as Array<{ name: string }>)
+        .some((column) => column.name === "size_bytes")
+    ).toBe(true);
     migrated.close();
   });
 

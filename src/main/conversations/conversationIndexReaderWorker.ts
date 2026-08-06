@@ -52,30 +52,13 @@ const visibleColumnNames = [
   "created_at",
   "updated_at",
   "message_count",
+  "size_bytes",
   "detail_state",
   "archived"
 ];
 const visibleColumns = visibleColumnNames
   .map((column) => "c." + column + " AS " + column)
   .join(", ");
-
-const sourceByteSize = (encodedVersion) => {
-  const parserPrefix = "agentenv-parser:5\n";
-  const version = String(encodedVersion || "").startsWith(parserPrefix)
-    ? String(encodedVersion).slice(parserPrefix.length)
-    : String(encodedVersion || "");
-  const [size, mtime, dev, ino, headHash, tailHash] = version.split(":");
-  const value = Number(size);
-  return Number.isSafeInteger(value) &&
-    value >= 0 &&
-    /^\d+$/.test(mtime || "") &&
-    Boolean(dev) &&
-    Boolean(ino) &&
-    /^[a-f0-9]{64}$/i.test(headHash || "") &&
-    /^[a-f0-9]{64}$/i.test(tailHash || "")
-      ? value
-      : undefined;
-};
 
 const summaryFromRow = (row) => ({
   id: row.id,
@@ -88,7 +71,9 @@ const summaryFromRow = (row) => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   messageCount: Number(row.message_count),
-  sizeBytes: sourceByteSize(row.source_version),
+  sizeBytes: row.size_bytes === null || row.size_bytes === undefined
+    ? undefined
+    : Number(row.size_bytes),
   matchSnippet: row.match_snippet || undefined,
   detailState: row.detail_state,
   archived: Number(row.archived) === 1 || undefined
@@ -203,12 +188,17 @@ const selectRows = (input, maximumLimit) => {
   const relevance = context.usesFts
     ? "bm25(conversation_search, 0.0, 8.0, 4.0, 2.0, 1.0)"
     : "0";
+  const orderBy = input.sort === "size-desc"
+    ? "c.size_bytes IS NULL ASC, c.size_bytes DESC, c.updated_at DESC, c.id ASC"
+    : input.sort === "messages-desc"
+      ? "c.message_count DESC, c.updated_at DESC, c.id ASC"
+      : "title_rank ASC, relevance ASC, c.updated_at DESC, c.id ASC";
   const rows = database.prepare(
     "SELECT " + visibleColumns + ", " + matchSnippet + " AS match_snippet" +
     matchSource + ", " + titleRank + " AS title_rank, " +
     relevance + " AS relevance " +
     context.from + " " + context.where +
-    " ORDER BY title_rank ASC, relevance ASC, c.updated_at DESC, c.id ASC " +
+    " ORDER BY " + orderBy + " " +
     "LIMIT ? OFFSET ?"
   ).all(
     ...titleRankParameters,

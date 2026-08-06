@@ -1,11 +1,15 @@
 import {
+  ArrowUpDown,
+  Check,
   ChevronDown,
   Clock3,
   Copy,
   ExternalLink,
   FolderGit2,
   FolderOpen,
+  HardDrive,
   LoaderCircle,
+  MessagesSquare,
   MoreHorizontal,
   RefreshCw,
   Search,
@@ -29,6 +33,7 @@ import type {
   ConversationDetail,
   ConversationListResult,
   ConversationRefreshResult,
+  ConversationSortOrder,
   ConversationSummary,
   ProjectSummary,
   TargetInfo
@@ -45,6 +50,7 @@ import { targetIconFor } from "./ProfileSidebar";
 import { OverflowTooltip } from "./OverflowTooltip";
 import {
   ActionMenu,
+  ActionMenuItem,
   Badge,
   Button,
   ControlGroup,
@@ -103,6 +109,15 @@ const conversationListEndThreshold = 56;
 const manualRefreshFeedbackMinimumMs = 240;
 type ConversationOperation = "copy" | "open-original" | "continue";
 
+const conversationSortOptions: Array<{
+  value: ConversationSortOrder;
+  label: "Recent" | "Largest" | "Most messages";
+}> = [
+  { value: "recent", label: "Recent" },
+  { value: "size-desc", label: "Largest" },
+  { value: "messages-desc", label: "Most messages" }
+];
+
 const workspaceName = (path?: string) => {
   const normalized = path?.replace(/[\\/]+$/, "");
   return normalized?.split(/[\\/]/).filter(Boolean).at(-1) ?? path ?? "";
@@ -143,6 +158,136 @@ const groupMessages = (messages: ConversationDetail["messages"]) =>
     else groups.push({ role: message.role, entries: [message] });
     return groups;
   }, []);
+
+const ConversationSortMenu = ({
+  queryActive,
+  sort,
+  onChange
+}: {
+  queryActive: boolean;
+  sort: ConversationSortOrder;
+  onChange(sort: ConversationSortOrder): void;
+}) => {
+  const { t } = useI18n();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [style, setStyle] = useState<CSSProperties>();
+  const currentOption = conversationSortOptions.find((option) => option.value === sort) ??
+    conversationSortOptions[0];
+  const currentLabel = sort === "recent" && queryActive
+    ? t("Best match")
+    : t(currentOption.label);
+  const triggerLabel = `${t("Sort conversations")}: ${currentLabel}`;
+
+  const show = () => {
+    const bounds = buttonRef.current?.getBoundingClientRect();
+    if (bounds) {
+      const width = 190;
+      const estimatedHeight = 116;
+      const fitsBelow = bounds.bottom + 6 + estimatedHeight <= window.innerHeight - 12;
+      setStyle({
+        width,
+        left: Math.max(12, Math.min(bounds.right - width, window.innerWidth - width - 12)),
+        top: fitsBelow
+          ? bounds.bottom + 6
+          : Math.max(12, bounds.top - estimatedHeight - 6)
+      });
+    }
+    setOpen(true);
+    window.setTimeout(() => {
+      const selected = menuRef.current?.querySelector<HTMLElement>(
+        '[role="menuitemradio"][aria-checked="true"]'
+      );
+      (selected ?? menuRef.current?.querySelector<HTMLElement>('[role="menuitemradio"]'))
+        ?.focus();
+    });
+  };
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const dismiss = (event: MouseEvent) => {
+      if (
+        event.target instanceof Node &&
+        !buttonRef.current?.contains(event.target) &&
+        !menuRef.current?.contains(event.target)
+      ) {
+        setOpen(false);
+      }
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOpen(false);
+      buttonRef.current?.focus();
+    };
+    const dismissForViewportChange = () => setOpen(false);
+    document.addEventListener("mousedown", dismiss);
+    document.addEventListener("keydown", escape);
+    window.addEventListener("resize", dismissForViewportChange);
+    window.addEventListener("scroll", dismissForViewportChange, true);
+    return () => {
+      document.removeEventListener("mousedown", dismiss);
+      document.removeEventListener("keydown", escape);
+      window.removeEventListener("resize", dismissForViewportChange);
+      window.removeEventListener("scroll", dismissForViewportChange, true);
+    };
+  }, [open]);
+
+  const select = (value: ConversationSortOrder) => {
+    onChange(value);
+    setOpen(false);
+    buttonRef.current?.focus();
+  };
+
+  return (
+    <>
+      <IconButton
+        ref={buttonRef}
+        className={`conversation-sort-button${sort === "recent" ? "" : " is-active"}`}
+        label={triggerLabel}
+        title={triggerLabel}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-pressed={sort !== "recent"}
+        onClick={() => open ? setOpen(false) : show()}
+      >
+        <ArrowUpDown size={15} aria-hidden="true" />
+      </IconButton>
+      {open ? createPortal(
+        <ActionMenu
+          ariaLabel={t("Sort conversations")}
+          className="conversation-sort-menu"
+          menuRef={menuRef}
+          style={style}
+        >
+          {conversationSortOptions.map((option) => {
+            const checked = option.value === sort;
+            const label = option.value === "recent" && queryActive
+              ? t("Best match")
+              : t(option.label);
+            return (
+              <ActionMenuItem
+                key={option.value}
+                role="menuitemradio"
+                aria-checked={checked}
+                onClick={() => select(option.value)}
+              >
+                <span>{label}</span>
+                <Check
+                  className={checked ? undefined : "conversation-sort-menu__check--hidden"}
+                  size={14}
+                  aria-hidden="true"
+                />
+              </ActionMenuItem>
+            );
+          })}
+        </ActionMenu>,
+        document.body
+      ) : null}
+    </>
+  );
+};
 
 const TargetMenu = ({
   targets,
@@ -445,6 +590,7 @@ export interface ConversationWorkspaceViewState {
   query: string;
   agentFilter: string;
   workspaceFilter: string;
+  sort?: ConversationSortOrder;
   workspacePaths: string[];
   agentCounts: Record<string, number>;
   selectedId?: string;
@@ -485,6 +631,9 @@ export const ConversationWorkspace = ({
   );
   const [workspaceFilter, setWorkspaceFilter] = useState(
     () => initialViewState?.workspaceFilter ?? ""
+  );
+  const [sort, setSort] = useState<ConversationSortOrder>(
+    () => initialViewState?.sort ?? "recent"
   );
   const [workspacePaths, setWorkspacePaths] = useState<string[]>(
     () => initialViewState?.workspacePaths ?? []
@@ -536,6 +685,7 @@ export const ConversationWorkspace = ({
   const queryRef = useRef("");
   const agentFilterRef = useRef("");
   const workspaceFilterRef = useRef("");
+  const sortRef = useRef<ConversationSortOrder>(initialViewState?.sort ?? "recent");
   const listRequestRef = useRef(0);
   const refreshRef = useRef<
     (reason?: Extract<FreshnessReason, "page-entry" | "focus" | "manual">, force?: boolean) =>
@@ -553,6 +703,7 @@ export const ConversationWorkspace = ({
     query,
     agentFilter,
     workspaceFilter,
+    sort,
     workspacePaths,
     agentCounts,
     selectedId,
@@ -564,12 +715,14 @@ export const ConversationWorkspace = ({
   queryRef.current = query;
   agentFilterRef.current = agentFilter;
   workspaceFilterRef.current = workspaceFilter;
+  sortRef.current = sort;
   viewStateRef.current = {
     items,
     total,
     query,
     agentFilter,
     workspaceFilter,
+    sort,
     workspacePaths,
     agentCounts,
     selectedId,
@@ -701,7 +854,8 @@ export const ConversationWorkspace = ({
     trackSearch = false,
     limit = conversationPageSize,
     preferredSummary?: ConversationSummary,
-    preferPrefetchedList = false
+    preferPrefetchedList = false,
+    nextSort = sortRef.current
   ) => {
     const requestId = ++listRequestRef.current;
     try {
@@ -709,12 +863,14 @@ export const ConversationWorkspace = ({
         !nextQuery &&
         !nextAgentFilter &&
         !nextWorkspaceFilter &&
+        nextSort === "recent" &&
         limit === conversationPageSize
         ? await preloadConversationList()
         : await window.agentEnv.listConversations({
             query: nextQuery || undefined,
             agentIds: nextAgentFilter ? [nextAgentFilter] : undefined,
             workspacePaths: nextWorkspaceFilter ? [nextWorkspaceFilter] : undefined,
+            sort: nextSort === "recent" ? undefined : nextSort,
             limit
           });
       if (requestId !== listRequestRef.current) return undefined;
@@ -758,6 +914,7 @@ export const ConversationWorkspace = ({
         workspacePaths: workspaceFilterRef.current
           ? [workspaceFilterRef.current]
           : undefined,
+        sort: sortRef.current === "recent" ? undefined : sortRef.current,
         offset: items.length,
         limit: conversationPageSize
       });
@@ -880,13 +1037,16 @@ export const ConversationWorkspace = ({
     skipNextQueryEffectRef.current =
       queryRef.current !== nextQuery ||
       Boolean(agentFilterRef.current) ||
-      Boolean(workspaceFilterRef.current);
+      Boolean(workspaceFilterRef.current) ||
+      sortRef.current !== "recent";
     queryRef.current = nextQuery;
     agentFilterRef.current = "";
     workspaceFilterRef.current = "";
+    sortRef.current = "recent";
     setQuery(nextQuery);
     setAgentFilter("");
     setWorkspaceFilter("");
+    setSort("recent");
     setError("");
     setWarning("");
     setDetail((current) =>
@@ -946,7 +1106,7 @@ export const ConversationWorkspace = ({
         });
     }, 220);
     return () => window.clearTimeout(timeout);
-  }, [agentFilter, query, workspaceFilter]);
+  }, [agentFilter, query, sort, workspaceFilter]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -1281,20 +1441,27 @@ export const ConversationWorkspace = ({
           >
           <aside className="conversation-list-pane" aria-label={t("Conversation list")}>
             <div className="conversation-list-toolbar">
-              <label className="conversation-search ui-composite-field">
-                {searching
-                  ? <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
-                  : <Search size={15} aria-hidden="true" />}
-                <input
-                  ref={searchInputRef}
-                  type="search"
-                  value={query}
-                  placeholder={t("Search indexed history…")}
-                  aria-label={t("Search conversations")}
-                  title={t("Searches all indexed conversations and message text.")}
-                  onChange={(event) => setQuery(event.target.value)}
+              <div className="conversation-search-row">
+                <label className="conversation-search ui-composite-field">
+                  {searching
+                    ? <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
+                    : <Search size={15} aria-hidden="true" />}
+                  <input
+                    ref={searchInputRef}
+                    type="search"
+                    value={query}
+                    placeholder={t("Search indexed history…")}
+                    aria-label={t("Search conversations")}
+                    title={t("Searches all indexed conversations and message text.")}
+                    onChange={(event) => setQuery(event.target.value)}
+                  />
+                </label>
+                <ConversationSortMenu
+                  queryActive={Boolean(query.trim())}
+                  sort={sort}
+                  onChange={setSort}
                 />
-              </label>
+              </div>
               <div className="conversation-filters" aria-label={t("Conversation filters")}>
                 <label>
                   <span className="ui-visually-hidden">{t("Agent")}</span>
@@ -1320,7 +1487,7 @@ export const ConversationWorkspace = ({
                   >
                     <option value="">{t("All workspaces")}</option>
                     {projectWorkspacePaths.length > 0 ? (
-                      <optgroup label={t("Projects")}>
+                      <optgroup label={t("Workspaces")}>
                         {projectWorkspacePaths.map((path) => (
                           <option value={path} key={path}>
                             {workspaceProjects[path]?.name ?? workspaceName(path)}
@@ -1408,7 +1575,7 @@ export const ConversationWorkspace = ({
                 );
                 return (
                   <Fragment key={item.id}>
-                    {dateGroup !== previousDateGroup ? (
+                    {sort === "recent" && !query.trim() && dateGroup !== previousDateGroup ? (
                       <div className="conversation-date-group" role="presentation">
                         {t(dateGroup)}
                       </div>
@@ -1563,6 +1730,16 @@ export const ConversationWorkspace = ({
                             {formatDetailTime(detail.updatedAt)}
                           </time>
                         </span>
+                        <span className="conversation-detail-metadata__messages">
+                          <MessagesSquare size={12} aria-hidden="true" />
+                          {t("{{count}} messages", { count: detail.messageCount })}
+                        </span>
+                        {detail.sizeBytes !== undefined ? (
+                          <span className="conversation-detail-metadata__size">
+                            <HardDrive size={12} aria-hidden="true" />
+                            {formatConversationSize(detail.sizeBytes)}
+                          </span>
+                        ) : null}
                         {detail.archived ? <Badge>{t("Archived")}</Badge> : null}
                         {detail.detailState === "summary-only"
                           ? <Badge tone="warning">{t("Summary only")}</Badge>
@@ -1608,7 +1785,7 @@ export const ConversationWorkspace = ({
                         icon={<FolderGit2 size={14} />}
                         onClick={() => onOpenProject?.(detailProject)}
                       >
-                        {t("Open Project")}
+                        {t("Open Workspace")}
                       </Button>
                     ) : null}
                     <TargetMenu

@@ -771,7 +771,7 @@ try {
   );
   await rm(sharedSkillDir, { recursive: true, force: true });
   await page.reload();
-  await agentsWorkspace.getByText("Environment ready", { exact: true }).waitFor({
+  await agentsWorkspace.getByText("Profile ready", { exact: true }).waitFor({
     state: "visible"
   });
   await capturePage(page, join(outputDir, "agents-ready-920x620.png"));
@@ -795,7 +795,7 @@ try {
     process.env.AGENTENV_AUTOMATION_SKILL_SCAN_FAILURE = "1";
   });
   await page.reload();
-  await agentsWorkspace.getByText("Environment check unavailable", { exact: true }).waitFor({
+  await agentsWorkspace.getByText("Profile check unavailable", { exact: true }).waitFor({
     state: "visible"
   });
   await setWindowSize(page, windowHandle, 920, 620);
@@ -1106,7 +1106,7 @@ try {
   await page.keyboard.press("Escape");
   await cleanupDialog.waitFor({ state: "hidden", timeout: 5_000 });
   await page
-    .getByRole("region", { name: "Environment skills" })
+    .getByRole("region", { name: "Local Skill Cleanup" })
     .waitFor({ state: "visible", timeout: 5_000 });
   await page.getByRole("button", { name: "Close library tool" }).click();
 
@@ -1125,21 +1125,21 @@ try {
     "profiles",
     () => page.getByRole("region", { name: "Profiles", exact: true }),
     async () => {
-      await page.getByRole("button", { name: /^Code Review/ }).click();
+      await page.getByRole("button", { name: "Profile Code Review" }).click();
       await page.getByRole("heading", { name: "Code Review" }).waitFor({
         state: "visible"
       });
     }
   );
 
-  await page.getByRole("button", { name: /^Daily Coding/ }).click();
+  await page.getByRole("button", { name: "Profile Daily Coding" }).click();
   await page.getByRole("heading", { name: "Daily Coding" }).waitFor({ state: "visible" });
   await app.evaluate(() => {
     process.env.AGENTENV_TEST_PROFILE_READ_DELAY_ID = "code-review";
     process.env.AGENTENV_TEST_PROFILE_READ_DELAY_MS = "350";
   });
-  await page.getByRole("button", { name: /^Code Review/ }).click();
-  const loadingProfile = page.getByRole("status", { name: "Loading profile Code Review" });
+  await page.getByRole("button", { name: "Profile Code Review" }).click();
+  const loadingProfile = page.getByRole("status", { name: "Loading Profile Code Review" });
   await loadingProfile.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "profile-loading-920x620.png"));
   await page.getByRole("heading", { name: "Code Review" }).waitFor({ state: "visible" });
@@ -1150,7 +1150,7 @@ try {
   });
 
   await page.getByRole("button", { name: "New Profile" }).click();
-  const sparseProfileDialog = page.getByRole("dialog", { name: "New profile" });
+  const sparseProfileDialog = page.getByRole("dialog", { name: "New Profile" });
   await sparseProfileDialog.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "profile-create-920x620.png"));
   await sparseProfileDialog.getByLabel("Profile name").fill("Sparse Capture");
@@ -1172,7 +1172,7 @@ try {
   await sparseSkillPicker.getByLabel("git-workflow", { exact: true }).check();
   await sparseSkillPicker.getByRole("button", { name: /^Add 1$/ }).click();
   await sparseSkillPicker.waitFor({ state: "hidden" });
-  await page.getByRole("listitem", { name: "Profile skill git-workflow" }).waitFor();
+  await page.getByRole("listitem", { name: "Profile Skill git-workflow" }).waitFor();
 
   const sparseSaveButton = page.getByRole("button", { name: "Save", exact: true });
   await sparseSaveButton.click();
@@ -1185,18 +1185,18 @@ try {
   });
   await page.waitForTimeout(5_200);
   await capturePage(page, join(outputDir, "profile-skills-single-920x620.png"));
-  await page.getByRole("button", { name: "More profile actions" }).click();
-  await page.getByRole("menuitem", { name: "Delete profile" }).click();
-  const sparseDeleteDialog = page.getByRole("dialog", { name: "Delete profile" });
+  await page.getByRole("button", { name: "More Profile actions" }).click();
+  await page.getByRole("menuitem", { name: "Delete Profile" }).click();
+  const sparseDeleteDialog = page.getByRole("dialog", { name: "Delete Profile" });
   await sparseDeleteDialog.waitFor({ state: "visible" });
-  await sparseDeleteDialog.getByRole("button", { name: "Remove profile" }).click();
+  await sparseDeleteDialog.getByRole("button", { name: "Remove Profile" }).click();
   await sparseDeleteDialog.waitFor({ state: "hidden" });
 
-  await page.getByRole("button", { name: /^Code Review/ }).click();
+  await page.getByRole("button", { name: "Profile Code Review" }).click();
   await page.getByRole("heading", { name: "Code Review" }).waitFor({ state: "visible" });
   await page
     .locator(".profile-hero")
-    .getByRole("button", { name: "Change icon for profile code-review" })
+    .getByRole("button", { name: "Change icon for Profile code-review" })
     .click();
   await page.getByRole("menu", { name: "Icons for Code Review" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "profile-icon-picker-920x620.png"));
@@ -1207,7 +1207,7 @@ try {
   await capturePage(page, join(outputDir, "profile-policy-use-profile-920x620.png"));
   await skillsPolicy.getByRole("radio", { name: "Turn off" }).click();
   await capturePage(page, join(outputDir, "profile-policy-turn-off-920x620.png"));
-  await skillsPolicy.getByRole("radio", { name: "Keep current" }).click();
+  await skillsPolicy.getByRole("radio", { name: "Keep Agent" }).click();
   await capturePage(page, join(outputDir, "profile-policy-keep-current-920x620.png"));
   await skillsPolicy.getByRole("radio", { name: "Use Profile" }).click();
   const policySaveButton = page.getByRole("button", { name: "Save", exact: true });
@@ -1239,7 +1239,7 @@ try {
     }
     if (sectionName === "Skills") {
       await page
-        .getByRole("region", { name: "Profile skills" })
+        .getByRole("region", { name: "Profile Skills" })
         .getByRole("button", { name: "Add", exact: true })
         .click();
       const skillPicker = page.getByRole("dialog", { name: "Add library skills" });
@@ -1267,7 +1267,7 @@ try {
   await page.reload();
   await page.waitForLoadState("domcontentloaded");
   await page.getByRole("button", { name: "Profiles", exact: true }).click();
-  await page.getByRole("button", { name: /^Code Review/ }).click();
+  await page.getByRole("button", { name: "Profile Code Review" }).click();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   const driftPreviewDialog = page.getByRole("dialog", { name: "Preview" });
   await driftPreviewDialog.waitFor({ state: "visible" });
@@ -1288,7 +1288,7 @@ try {
   await page.waitForLoadState("domcontentloaded");
   await page.getByRole("button", { name: "Profiles", exact: true }).click();
   await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
-  await page.getByRole("button", { name: /^Code Review/ }).click();
+  await page.getByRole("button", { name: "Profile Code Review" }).click();
   await page.getByRole("heading", { name: "Code Review" }).waitFor({ state: "visible" });
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "profiles-applied-920x620.png"));
@@ -1332,13 +1332,13 @@ try {
   await page.reload();
   await page.waitForLoadState("domcontentloaded");
   await page.getByRole("button", { name: "Profiles", exact: true }).click();
-  await page.getByRole("button", { name: /^Code Review/ }).click();
+  await page.getByRole("button", { name: "Profile Code Review" }).click();
   await page
     .locator('[data-profile-composer-id="skills"]')
     .getByRole("button", { name: "Skills", exact: true })
     .click();
   await page
-    .getByRole("listitem", { name: "Profile skill git-workflow" })
+    .getByRole("listitem", { name: "Profile Skill git-workflow" })
     .scrollIntoViewIfNeeded();
   await capturePage(
     page,
@@ -1350,9 +1350,9 @@ try {
     join(outputDir, "profile-skills-local-override-1180x728.png")
   );
   await setWindowSize(page, windowHandle, 920, 620);
-  const mixedSkillRegion = page.getByRole("region", { name: "Profile skills" });
+  const mixedSkillRegion = page.getByRole("region", { name: "Profile Skills" });
   await mixedSkillRegion
-    .getByRole("listitem", { name: "Profile skill testing-strategies" })
+    .getByRole("listitem", { name: "Profile Skill testing-strategies" })
     .getByRole("switch", { name: "Disable testing-strategies" })
     .click();
   await mixedSkillRegion.getByRole("button", { name: "Add", exact: true }).click();
@@ -1368,7 +1368,7 @@ try {
   await page.getByRole("complementary", { name: "Global navigation" }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Profiles", exact: true }).click();
   await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
-  await page.getByRole("button", { name: /^Code Review/ }).click();
+  await page.getByRole("button", { name: "Profile Code Review" }).click();
   await page.getByRole("heading", { name: "Code Review" }).waitFor({ state: "visible" });
   await page
     .locator('[data-profile-composer-id="skills"]')
@@ -1383,7 +1383,7 @@ try {
   const claudeAgent = page.getByRole("article", { name: "Agent Claude Code" });
   await claudeAgent.getByRole("button", { name: "Configure Claude Code" }).click();
   const unmanagedAgentCapture = page.getByRole("dialog", {
-    name: "Create profile from Claude Code"
+    name: "Create Profile from Claude Code"
   });
   await unmanagedAgentCapture.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "agent-configure-unmanaged-920x620.png"));
@@ -1451,7 +1451,7 @@ try {
     .getByRole("button", { name: "More actions for OpenCode" })
     .click();
   await page.getByRole("menuitem", { name: "Capture" }).click();
-  const targetCaptureDialog = page.getByRole("dialog", { name: "Create profile from OpenCode" });
+  const targetCaptureDialog = page.getByRole("dialog", { name: "Create Profile from OpenCode" });
   await targetCaptureDialog.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "target-capture-setup-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
@@ -1476,6 +1476,14 @@ try {
     state: "visible"
   });
   await capturePage(page, join(outputDir, "conversations-detail-920x620.png"));
+  const conversationSort = page.getByRole("button", { name: /Sort conversations:/ });
+  await conversationSort.click();
+  await page.getByRole("menuitemradio", { name: "Largest" }).click();
+  await page.locator(".conversation-date-group").waitFor({ state: "detached" });
+  await capturePage(page, join(outputDir, "conversations-largest-920x620.png"));
+  await conversationSort.click();
+  await page.getByRole("menuitemradio", { name: "Recent" }).click();
+  await page.locator(".conversation-date-group").first().waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("menu", { name: "Continue in" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "conversations-continue-menu-920x620.png"));
@@ -1642,7 +1650,7 @@ try {
 
   await setWindowSize(page, windowHandle, 1536, 1024);
   await page.getByRole("button", { name: "Profiles" }).click();
-  await page.getByRole("button", { name: /Daily Coding/ }).click();
+  await page.getByRole("button", { name: "Profile Daily Coding" }).click();
   await page.getByRole("heading", { name: "Daily Coding" }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Select apply Agent" }).click();
   await page.waitForTimeout(250);

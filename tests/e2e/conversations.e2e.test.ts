@@ -366,7 +366,7 @@ describe("Conversations desktop workflow", () => {
     const conversationHelp = page.getByLabel(
       "Find local Agent history and continue it in another Agent."
     );
-    await conversationHelp.hover();
+    await conversationHelp.focus();
     await page.getByRole("tooltip").filter({
       hasText: "Find local Agent history and continue it in another Agent."
     }).waitFor({ state: "visible" });
@@ -385,6 +385,40 @@ describe("Conversations desktop workflow", () => {
     });
     await expect.poll(() => page.getByText("Could not complete this step").count()).toBe(0);
     await page.getByText("200 of 201 conversations", { exact: true }).waitFor();
+    const sortedConversationTitles = await page.evaluate(async () => {
+      const [largest, recent] = await Promise.all([
+        window.agentEnv.listConversations({ sort: "size-desc", limit: 1 }),
+        window.agentEnv.listConversations({ limit: 1 })
+      ]);
+      return {
+        largest: largest.items[0]?.title,
+        recent: recent.items[0]?.title
+      };
+    });
+    expect(sortedConversationTitles.largest).toBeTruthy();
+    expect(sortedConversationTitles.recent).toBeTruthy();
+    const conversationSort = page.getByRole("button", { name: /Sort conversations:/ });
+    const chooseConversationSort = async (label: "Recent" | "Largest") => {
+      await conversationSort.click();
+      await page.getByRole("menuitemradio", { name: label }).click();
+    };
+    await chooseConversationSort("Largest");
+    await expect.poll(() => page.locator(".conversation-list-item__title").first().textContent())
+      .toBe(sortedConversationTitles.largest);
+    await expect(page.locator(".conversation-date-group").count()).resolves.toBe(0);
+    if (process.env.AGENTENV_CAPTURE_CONVERSATIONS) {
+      await conversationSort.focus();
+      await page.getByRole("tooltip").waitFor({ state: "hidden" });
+      await page.screenshot({
+        path: process.env.AGENTENV_CAPTURE_CONVERSATIONS.replace(
+          /\.png$/,
+          "-largest.png"
+        )
+      });
+    }
+    await chooseConversationSort("Recent");
+    await expect.poll(() => page.locator(".conversation-list-item__title").first().textContent())
+      .toBe(sortedConversationTitles.recent);
     const historySearch = page.getByRole("searchbox", { name: "Search conversations" });
     await historySearch.fill("Older indexed task 197");
     await page.getByRole("option", { name: /Older indexed task 197/ }).waitFor();
@@ -686,6 +720,7 @@ describe("Conversations desktop workflow", () => {
 
     await page.setViewportSize({ width: 920, height: 620 });
     await expectNoHorizontalOverflow(page, [".conversation-page", ".conversation-layout"]);
+    await expectInViewport(page, conversationSort);
     await expectInViewport(page, page.getByRole("button", { name: "Continue" }));
     const compactHeaderGeometry = await page.locator(".conversation-detail-header").evaluate(
       (header) => {

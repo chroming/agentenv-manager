@@ -30,6 +30,7 @@ interface ConversationRow {
   created_at: string;
   updated_at: string;
   message_count: number;
+  size_bytes: number | null;
   detail_state: "full" | "summary-only";
   archived: number;
   match_snippet?: string | null;
@@ -84,7 +85,7 @@ const summaryFromRow = (row: ConversationRow): ConversationSummary => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   messageCount: row.message_count,
-  sizeBytes: sourceByteSize(decodeSourceVersion(row.source_version)),
+  sizeBytes: row.size_bytes ?? undefined,
   detailState: row.detail_state,
   archived: row.archived === 1 || undefined
 });
@@ -96,7 +97,7 @@ const createDatabase = (path: string) => {
       (database.prepare("PRAGMA user_version").get() as { user_version: number })
         .user_version
     );
-    if (version > 3) throw new Error("Conversation cache uses a newer schema");
+    if (version > 4) throw new Error("Conversation cache uses a newer schema");
     database.exec(`
       PRAGMA foreign_keys = ON;
       PRAGMA journal_mode = WAL;
@@ -117,6 +118,7 @@ const createDatabase = (path: string) => {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         message_count INTEGER NOT NULL,
+        size_bytes INTEGER,
         detail_state TEXT NOT NULL CHECK (detail_state IN ('full', 'summary-only')),
         archived INTEGER NOT NULL DEFAULT 0,
         search_text TEXT NOT NULL
@@ -166,6 +168,27 @@ const createDatabase = (path: string) => {
         WHERE provider_resume_locator IS NULL;
       `);
     }
+    if (version < 4) {
+      const columns = new Set(
+        (database.prepare("PRAGMA table_info(conversations)").all() as Array<{ name: string }>)
+          .map((column) => column.name)
+      );
+      if (!columns.has("size_bytes")) {
+        database.exec("ALTER TABLE conversations ADD COLUMN size_bytes INTEGER");
+      }
+      const rows = database.prepare(
+        "SELECT id, source_version FROM conversations"
+      ).all() as Array<{ id: string; source_version: string }>;
+      const updateSize = database.prepare(
+        "UPDATE conversations SET size_bytes = ? WHERE id = ?"
+      );
+      for (const row of rows) {
+        updateSize.run(
+          sourceByteSize(decodeSourceVersion(row.source_version)) ?? null,
+          row.id
+        );
+      }
+    }
     const searchIndexExists = Boolean(database.prepare(`
       SELECT name
       FROM sqlite_master
@@ -207,7 +230,7 @@ const createDatabase = (path: string) => {
         throw error;
       }
     }
-    database.exec("PRAGMA user_version = 3;");
+    database.exec("PRAGMA user_version = 4;");
     database.prepare(`
       SELECT id, agent_id, record_id, source_version, source_locator, search_text
       FROM conversations
@@ -274,7 +297,7 @@ export const createConversationIndexStore = async (
       id, agent_id, agent_name, record_id, source_id, source_version, source_locator,
       source_runtime_home, provider_session_kind, provider_resume_locator,
       title, snippet, workspace_path, created_at, updated_at, message_count,
-      detail_state, archived
+      size_bytes, detail_state, archived
     FROM conversations
     WHERE id = ?`
   );
@@ -283,8 +306,8 @@ export const createConversationIndexStore = async (
       id, agent_id, agent_name, record_id, source_id, source_version, source_locator,
       source_runtime_home, provider_session_kind, provider_resume_locator,
       title, snippet, workspace_path, created_at, updated_at, message_count,
-      detail_state, archived, search_text
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      size_bytes, detail_state, archived, search_text
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       agent_id = excluded.agent_id,
       agent_name = excluded.agent_name,
@@ -301,6 +324,7 @@ export const createConversationIndexStore = async (
       created_at = excluded.created_at,
       updated_at = excluded.updated_at,
       message_count = excluded.message_count,
+      size_bytes = excluded.size_bytes,
       detail_state = excluded.detail_state,
       archived = excluded.archived,
       search_text = excluded.search_text
@@ -374,6 +398,7 @@ export const createConversationIndexStore = async (
           detail.createdAt,
           detail.updatedAt,
           detail.messageCount,
+          sourceByteSize(candidate.source.version) ?? null,
           detail.detailState,
           detail.archived ? 1 : 0,
           searchText

@@ -2,11 +2,57 @@
   "formatVersion": 1,
   "features": [
     {
-      "id": "project-environments",
-      "summary": "Manage real project-local Agent resources, preview one Agent's observable environment, and launch that Agent in the directory without binding a Profile.",
+      "id": "conversation-index-sorting",
+      "summary": "Sort the complete filtered local Conversation index by recent activity, verified source size, or visible message count without rescanning Agent history.",
       "contract": {
         "path": "docs/product-contracts.md",
-        "anchor": "### 4.2.4 Projects"
+        "anchor": "Conversation sorting is also an index query applied after filtering and before pagination."
+      },
+      "support": {
+        "opencode": "supported",
+        "claude-code": "supported",
+        "codex": "supported",
+        "antigravity": "supported",
+        "trae-cli": "supported",
+        "pi": "supported"
+      },
+      "states": {
+        "idle": "Recent or Best match keeps the existing local index order and selection.",
+        "working": "The initiating sort field reloads one bounded page from the index while stale requests are ignored.",
+        "success": "The list shows the complete filtered index in the requested deterministic order before pagination.",
+        "error": "The existing Conversation feedback surface reports the index read failure without mutating source history.",
+        "cancelled": "A superseded sort request cannot replace the result of a newer search, filter, or sort.",
+        "noOp": "Selecting the current sort leaves the read-only index and Agent history unchanged.",
+        "stale": "A newer list request wins; a later background refresh may update derived sizes and ordering normally.",
+        "partial": "Records without a verified source size remain available after known-size records and never appear as zero.",
+        "persisted": "Only the disposable device-local index stores derived source sizes; navigation retains the sort in memory.",
+        "rollback": "Sorting performs no source or application-data mutation that requires recovery."
+      },
+      "evidence": {
+        "domain": [
+          "tests/main/conversations/conversationIndexStore.test.ts"
+        ],
+        "renderer": [
+          "tests/renderer/ConversationWorkspace.test.tsx"
+        ],
+        "desktop": [
+          "tests/e2e/conversations.e2e.test.ts"
+        ],
+        "persistence": [
+          "tests/main/conversations/conversationIndexStore.test.ts",
+          "tests/renderer/ConversationWorkspace.test.tsx"
+        ],
+        "visual": [
+          "conversations-largest-920x620.png"
+        ]
+      }
+    },
+    {
+      "id": "project-environments",
+      "summary": "Keep device-local Workspace references, inspect and edit real project-owned Agent files, and open the selected Agent in that directory without binding or applying a Profile.",
+      "contract": {
+        "path": "docs/product-contracts.md",
+        "anchor": "### 4.2.4 Workspaces"
       },
       "support": {
         "opencode": "partial",
@@ -17,21 +63,22 @@
         "pi": "partial"
       },
       "states": {
-        "idle": "Projects lists device-local directory references and reads selected resources only on demand.",
+        "idle": "Workspaces lists device-local directory references and reads selected project-owned resources only on demand.",
         "working": "The initiating add, inspect, edit, preview, or open control reports local progress without blocking sibling workspaces.",
-        "success": "The reference, verified project file mutation, fresh preview, or Agent launch is visible beside the affected Project.",
+        "success": "The reference, verified Workspace file mutation, loaded-resource detail, or Agent launch is visible beside the affected Workspace.",
         "error": "The scoped command names its path and diagnostic reference while preserving the prior reference and project bytes.",
         "cancelled": "A cancelled picker, preview, editor, or launch preparation changes no reference, Profile, Agent, or project file.",
         "noOp": "Unchanged text and an already-copied identical Skill perform no write and create no backup.",
-        "stale": "A project file changed after review requires a refreshed diff before mutation.",
-        "partial": "Unsupported, unreadable, or precedence-unknown Agent sources are named and the effective preview stays Partial.",
-        "persisted": "Only Project reference metadata and verified recovery receipts persist in device-local AgentEnv data.",
-        "rollback": "A Project mutation backup restores exact original bytes or prior absence; removing a reference never requires rollback because it never touches the directory."
+        "stale": "A Workspace file changed after review requires a refreshed diff before mutation.",
+        "partial": "Unsupported, unreadable, or precedence-unknown Agent sources are named and loaded-resource details stay Partial.",
+        "persisted": "Only Workspace reference metadata and verified recovery receipts persist in device-local AgentEnv data.",
+        "rollback": "A Workspace mutation backup restores exact original bytes or prior absence; removing a reference never requires rollback because it never touches the directory."
       },
       "evidence": {
         "domain": [
           "tests/main/projects/projectStore.test.ts",
           "tests/main/projects/projectCapability.test.ts",
+          "tests/main/projects/projectGitService.test.ts",
           "tests/main/projects/projectEnvironmentService.test.ts",
           "tests/main/projects/projectMutationService.test.ts",
           "tests/main/projects/projectLaunchService.test.ts"
@@ -152,7 +199,7 @@
           "tests/main/telemetryService.test.ts"
         ],
         "visual": [
-          "settings-privacy-920x620.png"
+          "settings-general-920x620.png"
         ]
       }
     },
