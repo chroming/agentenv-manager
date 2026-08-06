@@ -102,7 +102,10 @@ export const piIntegration: AgentTargetIntegration = {
     },
     instructionFiles: ["AGENTS.md", "CLAUDE.md"],
     instructionCreateFile: "AGENTS.md",
-    skillDirectories: [".pi/skills", ".agents/skills"],
+    skillLocations: [
+      { relativePath: ".agents/skills", scope: "shared", writable: true, priority: 100 },
+      { relativePath: ".pi/skills", scope: "agent-specific", writable: true, priority: 50 }
+    ],
     mcpFiles: [],
     compareResourcePaths: ["AGENTS.md", "CLAUDE.md", ".pi", ".agents"]
   }),

@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { X509Certificate } from "node:crypto";
 import { join } from "node:path";
 import { inflateSync } from "node:zlib";
@@ -353,6 +353,28 @@ describe("package metadata", () => {
     for (const script of ["test:quick", "test:feature", "test:full", "verify:commit"]) {
       expect(packageJsonSource).toContain(`"${script}"`);
     }
+  });
+
+  it("schedules every Electron E2E outside the parallel test pool", async () => {
+    const e2eRoot = join(process.cwd(), "tests", "e2e");
+    const schedulerConfig = await readFile(
+      join(process.cwd(), "scripts", "vitest-groups.mjs"),
+      "utf8"
+    );
+    const configuredElectronTests = [...new Set(
+      [...schedulerConfig.matchAll(/"(tests\/e2e\/[^\"]+\.e2e\.test\.ts)"/g)]
+        .map((match) => match[1])
+    )];
+    const electronTests: string[] = [];
+    for (const file of await readdir(e2eRoot)) {
+      if (!file.endsWith(".e2e.test.ts")) continue;
+      const source = await readFile(join(e2eRoot, file), "utf8");
+      if (source.includes('from "electron"') || source.includes("_electron as electron")) {
+        electronTests.push(`tests/e2e/${file}`);
+      }
+    }
+
+    expect(configuredElectronTests.sort()).toEqual(electronTests.sort());
   });
 
   it("bounds and identifies packaged desktop workflow stages", async () => {

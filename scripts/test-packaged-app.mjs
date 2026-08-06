@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
@@ -29,6 +29,7 @@ const fakeHomeRoot = join(root, "fake-home");
 const opencodeDir = join(homeDir, ".config", "opencode");
 const repositoryRemote = join(root, "repository.git");
 const repositoryWork = join(root, "repository-work");
+const projectRoot = join(root, "project-workspace");
 const legacyOwnerSidecar = join(homeDir, ".claude", "skills", "operations-helper.agentenv-owner.json");
 const legacyTargetState = join(appDataRoot, "target-states", "claude-code.json");
 const unsafeCleanupBackupId = "cleanup-1784603431398-4571ea80";
@@ -233,6 +234,8 @@ try {
   await mkdir(opencodeDir, { recursive: true });
   await mkdir(repositoryRemote, { recursive: true });
   await mkdir(repositoryWork, { recursive: true });
+  await mkdir(projectRoot, { recursive: true });
+  await writeFile(join(projectRoot, "AGENTS.md"), "# Packaged Project\n", "utf8");
   for (const target of packagedTargets) {
     await mkdir(dirname(target.executablePath), { recursive: true });
     await writeFile(
@@ -368,6 +371,36 @@ try {
       assert.match((await agent.textContent()) ?? "", /Ready/);
     }
   });
+  const packagedProject = await runPackagedStep(
+    "add and inspect packaged Project",
+    async () => {
+      const project = await page.evaluate(
+        (rootPath) => window.agentEnv.addProject(rootPath),
+        projectRoot
+      );
+      const snapshot = await page.evaluate(
+        (projectId) => window.agentEnv.inspectProject(projectId),
+        project.id
+      );
+      assert.equal(await realpath(snapshot.projectRoot), await realpath(projectRoot));
+      assert.equal(
+        snapshot.resources.some((resource) =>
+          resource.kind === "instructions" && resource.name === "AGENTS.md"
+        ),
+        true
+      );
+      const preview = await page.evaluate(
+        ({ projectId, agentId }) => window.agentEnv.previewProject(projectId, agentId),
+        { projectId: project.id, agentId: "opencode" }
+      );
+      assert.equal(preview.agentId, "opencode");
+      assert.equal(
+        preview.projectResources.some((resource) => resource.name === "AGENTS.md"),
+        true
+      );
+      return project;
+    }
+  );
   const repositoryScan = await runPackagedStep(
     "scan repository Skill through packaged preload",
     () => page.evaluate(
@@ -479,6 +512,11 @@ try {
     restartedStates.map((state) => [state.targetId, state.lifecycleStatus]).sort(),
     packagedTargets.map((target) => [target.id, "applied"]).sort()
   );
+  const restartedProjects = await runPackagedStep(
+    "read restarted Projects",
+    () => restartedPage.evaluate(() => window.agentEnv.listProjects())
+  );
+  assert.equal(restartedProjects.some((project) => project.id === packagedProject.id), true);
   await runPackagedStep(
     "close restarted application",
     () => closePackagedApplication(application, restartedPage, applicationProcess),
@@ -487,7 +525,7 @@ try {
   application = undefined;
   applicationProcess = undefined;
   process.stdout.write(
-    `Packaged ${process.platform} six-Agent Apply, restart, and Repository workflows passed\n`
+    `Packaged ${process.platform} six-Agent Apply, Project, restart, and Repository workflows passed\n`
   );
   packagedWorkflowCompleted = true;
 } finally {

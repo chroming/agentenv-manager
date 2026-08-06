@@ -3,7 +3,16 @@ import { useRef, useState } from "react";
 import type { ProjectEnvironmentPreview } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
-import { Button, IconButton, ModalFrame, Notice, ResourceRow } from "./ui";
+import {
+  Button,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+  IconButton,
+  ModalFrame,
+  Notice,
+  ResourceRow
+} from "./ui";
 
 interface ProjectEnvironmentPreviewDialogProps {
   open: boolean;
@@ -47,43 +56,44 @@ export const ProjectEnvironmentPreviewDialog = ({
   const fidelityLabel = preview?.fidelity === "partial" ? t("Partial") : t("Complete");
   return (
     <ModalFrame
-      ariaLabel={t("Effective environment preview")}
+      ariaLabel={t("Loaded resource details")}
       className={`project-environment-dialog ui-dialog-shell${maximized ? " is-maximized" : ""}`}
       dialogRef={dialogRef}
       dismissDisabled={busy}
       onDismiss={onClose}
     >
-      <header className="ui-dialog-header project-environment-dialog__header">
-        <div className="ui-dialog-header__copy">
-          <div className="ui-dialog-title">{t("Effective environment preview")}</div>
-          <p className="ui-dialog-description">
-            {preview ? `${preview.agentName} · ${fidelityLabel}` : t("Reading the current Agent environment…")}
-          </p>
-        </div>
-        <IconButton
-          label={t(maximized ? "Restore preview" : "Maximize preview")}
-          onClick={() => setMaximized((value) => !value)}
-        >
-          {maximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-        </IconButton>
-      </header>
-      <div className="ui-dialog-body project-environment-dialog__body">
-        {busy ? <div className="project-preview-loading">{t("Reading the current Agent environment…")}</div> : null}
+      <DialogHeader
+        className="project-environment-dialog__header"
+        title={t("Loaded resource details")}
+        description={preview ? `${preview.agentName} · ${fidelityLabel}` : t("Reading loaded resources…")}
+        actions={(
+          <IconButton
+            label={t(maximized ? "Restore preview" : "Maximize preview")}
+            onClick={() => setMaximized((value) => !value)}
+          >
+            {maximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </IconButton>
+        )}
+      />
+      <DialogBody className="project-environment-dialog__body">
+        {busy ? <div className="project-preview-loading">{t("Reading loaded resources…")}</div> : null}
         {error ? <Notice tone="danger" role="alert">{error}</Notice> : null}
         {preview ? (
           <>
-            <Notice tone="warning" icon={<AlertTriangle size={15} />}>
-              {t("Load order unknown. Project and Agent-global sources remain separate.")}
-            </Notice>
+            {preview.loadOrder === "unknown" ? (
+              <Notice tone="warning" icon={<AlertTriangle size={15} />}>
+                {t("Load order unknown. Workspace and Agent-global sources remain separate.")}
+              </Notice>
+            ) : null}
             <div className="project-preview-columns">
-              <section className="project-preview-section" aria-label={t("Project resources")}>
+              <section className="project-preview-section" aria-label={t("Workspace resources")}>
                 <header className="project-preview-section__header">
-                  <strong>{t("Project resources")}</strong>
+                  <strong>{t("Workspace resources")}</strong>
                   <span>{preview.projectResources.length}</span>
                 </header>
                 <div className="project-preview-resource-list">
                   {preview.projectResources.length === 0 ? (
-                    <p>{t("No project resources found for this Agent.")}</p>
+                    <p>{t("No Workspace resources found for this Agent.")}</p>
                   ) : preview.projectResources.map((resource) => (
                     <ResourceRow
                       density="compact"
@@ -126,10 +136,10 @@ export const ProjectEnvironmentPreviewDialog = ({
             ) : null}
           </>
         ) : null}
-      </div>
-      <footer className="ui-dialog-footer">
+      </DialogBody>
+      <DialogFooter>
         <Button ref={closeRef} disabled={busy} onClick={onClose}>{t("Close")}</Button>
-      </footer>
+      </DialogFooter>
     </ModalFrame>
   );
 };

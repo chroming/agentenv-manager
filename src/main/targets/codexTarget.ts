@@ -110,7 +110,10 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     },
     instructionFiles: ["AGENTS.md", "AGENTS.override.md"],
     instructionCreateFile: "AGENTS.md",
-    skillDirectories: [".agents/skills", ".codex/skills"],
+    skillLocations: [
+      { relativePath: ".agents/skills", scope: "shared", writable: true, priority: 100 },
+      { relativePath: ".codex/skills", scope: "agent-specific", writable: true, priority: 50 }
+    ],
     mcpFiles: [],
     compareResourcePaths: ["AGENTS.md", "AGENTS.override.md", ".agents", ".codex"]
   }),

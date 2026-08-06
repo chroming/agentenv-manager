@@ -388,7 +388,9 @@ export const traeCliIntegration: AgentTargetIntegration = {
     },
     instructionFiles: [".trae/rules", "AGENTS.md"],
     instructionCreateFile: "AGENTS.md",
-    skillDirectories: [".trae/skills"],
+    skillLocations: [
+      { relativePath: ".trae/skills", scope: "agent-specific", writable: true, priority: 50 }
+    ],
     mcpFiles: [".trae/traecli.toml", ".trae/traecli.yaml"],
     compareResourcePaths: [".trae", "AGENTS.md"]
   }),

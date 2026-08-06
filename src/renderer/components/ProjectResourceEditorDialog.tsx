@@ -7,7 +7,15 @@ import type {
 } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
-import { Button, ModalFrame, Notice } from "./ui";
+import {
+  Button,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+  ModalFrame,
+  Notice,
+  TextAreaField
+} from "./ui";
 
 export interface ProjectEditorGuard {
   dirty: boolean;
@@ -140,14 +148,20 @@ export const ProjectResourceEditorDialog = ({
 
   const metadata = useMemo(() => file
     ? file.modifiedAt
-      ? `${file.path} · ${formatDate(file.modifiedAt)}`
+      ? `${file.path} · ${formatDate(file.modifiedAt)}${"gitState" in file && file.gitState ? ` · ${
+          file.gitState === "tracked-clean" ? t("Tracked")
+            : file.gitState === "tracked-modified" ? t("Modified")
+              : file.gitState === "untracked" ? t("Untracked")
+                : file.gitState === "ignored" ? t("Ignored")
+                  : t("Git status unavailable")
+        }` : ""}`
       : file.path
-    : t("Reading Project file…"), [file, formatDate, t]);
+    : t("Reading Workspace file…"), [file, formatDate, t]);
 
   if (!open) return null;
   return (
     <ModalFrame
-      ariaLabel={t("Edit Project instruction")}
+      ariaLabel={t("Edit Workspace instruction")}
       className="project-editor-dialog ui-dialog-shell"
       dialogRef={dialogRef}
       dismissPolicy="intentional"
@@ -155,13 +169,11 @@ export const ProjectResourceEditorDialog = ({
       onDismiss={requestClose}
       suspended={suspended}
     >
-      <header className="ui-dialog-header">
-        <div className="ui-dialog-header__copy">
-          <div className="ui-dialog-title">{file?.name ?? t("Edit Project instruction")}</div>
-          <p className="ui-dialog-description selectable" title={file?.path}>{metadata}</p>
-        </div>
-      </header>
-      <div className="ui-dialog-body project-editor-dialog__body">
+      <DialogHeader
+        title={file?.name ?? t("Edit Workspace instruction")}
+        description={<span className="selectable" title={file?.path}>{metadata}</span>}
+      />
+      <DialogBody className="project-editor-dialog__body">
         {error ? (
           <Notice
             tone="danger"
@@ -177,11 +189,13 @@ export const ProjectResourceEditorDialog = ({
           </Notice>
         ) : null}
         {busy === "load" || !file ? (
-          <div className="project-editor-loading">{t("Reading Project file…")}</div>
+          <div className="project-editor-loading">{t("Reading Workspace file…")}</div>
         ) : (
-          <textarea
-            aria-label={t("Project instruction content")}
+          <TextAreaField
             className="project-editor-textarea"
+            fieldClassName="project-editor-field"
+            label={t("Workspace instruction content")}
+            labelHidden
             spellCheck={false}
             value={content}
             onChange={(event) => setContent(event.target.value)}
@@ -199,11 +213,11 @@ export const ProjectResourceEditorDialog = ({
               </>
             )}
           >
-            {t("The Project file has not been changed yet.")}
+            {t("The Workspace file has not been changed yet.")}
           </Notice>
         ) : null}
-      </div>
-      <footer className="ui-dialog-footer">
+      </DialogBody>
+      <DialogFooter>
         <Button ref={closeRef} disabled={Boolean(busy)} onClick={requestClose}>{t("Close")}</Button>
         <Button
           variant="primary"
@@ -213,7 +227,7 @@ export const ProjectResourceEditorDialog = ({
         >
           {t("Save")}
         </Button>
-      </footer>
+      </DialogFooter>
     </ModalFrame>
   );
 };

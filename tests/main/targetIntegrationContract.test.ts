@@ -217,7 +217,7 @@ describe("target integration contract", () => {
         {
           instructions: adapter.projects?.instructionFiles,
           instructionCreateFile: adapter.projects?.instructionCreateFile,
-          skills: adapter.projects?.skillDirectories,
+          skills: adapter.projects?.skillLocations.map((location) => location.relativePath),
           mcp: adapter.projects?.mcpFiles,
           compare: adapter.projects?.compareResourcePaths,
           evaluationOwnsPaths: adapter.evaluations
@@ -231,7 +231,7 @@ describe("target integration contract", () => {
       opencode: {
         instructions: ["AGENTS.md", "CLAUDE.md"],
         instructionCreateFile: "AGENTS.md",
-        skills: [".opencode/skills", ".claude/skills", ".agents/skills"],
+        skills: [".agents/skills", ".opencode/skills", ".claude/skills"],
         mcp: ["opencode.json", "opencode.jsonc"],
         compare: [
           "opencode.json",
@@ -247,7 +247,7 @@ describe("target integration contract", () => {
       "claude-code": {
         instructions: ["CLAUDE.md"],
         instructionCreateFile: "CLAUDE.md",
-        skills: [".claude/skills", ".agents/skills"],
+        skills: [".agents/skills", ".claude/skills"],
         mcp: [".mcp.json"],
         compare: ["CLAUDE.md", ".claude", ".agents", "AGENTS.md"],
         evaluationOwnsPaths: true
@@ -263,7 +263,7 @@ describe("target integration contract", () => {
       antigravity: {
         instructions: ["GEMINI.md"],
         instructionCreateFile: "GEMINI.md",
-        skills: [".gemini/skills", ".agents/skills"],
+        skills: [".agents/skills", ".gemini/skills"],
         mcp: [],
         compare: ["GEMINI.md", ".gemini", ".agents"],
         evaluationOwnsPaths: true
@@ -279,7 +279,7 @@ describe("target integration contract", () => {
       pi: {
         instructions: ["AGENTS.md", "CLAUDE.md"],
         instructionCreateFile: "AGENTS.md",
-        skills: [".pi/skills", ".agents/skills"],
+        skills: [".agents/skills", ".pi/skills"],
         mcp: [],
         compare: ["AGENTS.md", "CLAUDE.md", ".pi", ".agents"],
         evaluationOwnsPaths: true

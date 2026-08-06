@@ -40,10 +40,10 @@ describe("ProjectEnvironmentPreviewDialog", () => {
       />
     );
 
-    expect(screen.getByRole("region", { name: "Project resources" })).toHaveTextContent("AGENTS.md");
+    expect(screen.getByRole("region", { name: "Workspace resources" })).toHaveTextContent("AGENTS.md");
     expect(screen.getByRole("region", { name: "Agent-global resources" })).toHaveTextContent("review");
     fireEvent.click(screen.getByRole("button", { name: "Maximize preview" }));
-    expect(screen.getByRole("dialog", { name: "Effective environment preview" }))
+    expect(screen.getByRole("dialog", { name: "Loaded resource details" }))
       .toHaveClass("is-maximized");
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);

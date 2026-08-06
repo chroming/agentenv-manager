@@ -110,7 +110,8 @@ export const createProjectMutationService = ({
     source: string,
     destination: string,
     expectedHash: string,
-    excludeLibraryMetadata = false
+    excludeLibraryMetadata = false,
+    replaceExisting = false
   ) => {
     const staging = join(dirname(destination), `.agentenv-project-skill-${randomUUID()}`);
     try {
@@ -119,6 +120,7 @@ export const createProjectMutationService = ({
       if (await hashSkillContent(staging) !== expectedHash) {
         throw new Error("Project Skill copy verification failed before commit");
       }
+      if (replaceExisting) await rm(destination, { recursive: true, force: true });
       await rename(staging, destination);
       if (await hashSkillContent(destination) !== expectedHash) {
         throw new Error("Project Skill copy verification failed after commit");
@@ -153,7 +155,8 @@ export const createProjectMutationService = ({
       content,
       contentHash: hashFileContent(content),
       modifiedAt: resource.modifiedAt ?? new Date(0).toISOString(),
-      editable: true
+      editable: true,
+      gitState: resource.gitState
     };
   };
 
@@ -274,40 +277,63 @@ export const createProjectMutationService = ({
       const sourceHash = await hashSkillContent(library.path);
       const { projectRoot, skillRoot, destination } = await environmentService.resolveSkillDestination(
         input.projectId,
-        input.agentId,
-        library.id
+        input.locationId,
+        library.id,
+        await enabledAgentIds()
       );
+      let existingHash = "absent";
       if (await pathEntryExists(destination)) {
         const existing = await lstat(destination);
-        if (existing.isDirectory() && !existing.isSymbolicLink() && await hashSkillContent(destination) === sourceHash) {
+        if (!existing.isDirectory() || existing.isSymbolicLink()) {
+          throw new Error(`Project Skill destination is not a regular directory: ${destination}`);
+        }
+        await assertPortableSkill(destination);
+        existingHash = await hashSkillContent(destination);
+        if (existingHash === sourceHash) {
           return { status: "no-op", contentHash: sourceHash };
         }
-        throw new Error(`Project Skill destination already exists: ${destination}`);
+        if (input.conflictResolution !== "replace") {
+          throw new Error(`Project Skill replacement requires an explicit replacement choice: ${destination}`);
+        }
       }
       await recoveryStore.assertWritablePath(destination);
       const receipt = await recoveryStore.prepareDirectory({
         projectId: input.projectId,
-        resourceId: `skill-add:${input.agentId}:${library.id}`,
+        resourceId: `skill-add:${input.locationId}:${library.id}`,
         path: destination,
-        originalHash: "absent",
+        originalHash: existingHash,
         appliedHash: sourceHash,
-        originalWasAbsent: true
+        originalWasAbsent: existingHash === "absent",
+        sourcePath: existingHash === "absent" ? undefined : destination
       });
       let createdParents: string[] = [];
       try {
         createdParents = await ensureRegularProjectDirectory(projectRoot, skillRoot);
-        await copySkillAtomically(library.path, destination, sourceHash, true);
+        await copySkillAtomically(
+          library.path,
+          destination,
+          sourceHash,
+          true,
+          existingHash !== "absent"
+        );
         await recoveryStore.update(receipt.id, "committed");
         return { status: "saved", contentHash: sourceHash, receiptId: receipt.id };
       } catch (error) {
         const currentHash = await pathEntryExists(destination)
           ? await hashSkillContent(destination).catch(() => "unreadable")
           : "absent";
-        if (currentHash === sourceHash) {
-          await rm(destination, { recursive: true, force: true }).catch(() => undefined);
+        if (currentHash === sourceHash) await rm(destination, { recursive: true, force: true }).catch(() => undefined);
+        if (existingHash !== "absent" && !await pathEntryExists(destination)) {
+          await copySkillAtomically(
+            recoveryStore.directoryBackupPath(receipt.id),
+            destination,
+            existingHash
+          ).catch(() => undefined);
         }
         await removeCreatedEmptyDirectories(createdParents);
-        const restored = !await pathEntryExists(destination);
+        const restored = existingHash === "absent"
+          ? !await pathEntryExists(destination)
+          : await pathEntryExists(destination) && await hashSkillContent(destination).catch(() => "unreadable") === existingHash;
         await recoveryStore.update(receipt.id, restored ? "failed-restored" : "recovery-required");
         if (!restored) throw new Error("Project Skill add failed and recovery requires attention");
         throw error;
@@ -388,7 +414,9 @@ export const createProjectMutationService = ({
         await copySkillAtomically(
           recoveryStore.directoryBackupPath(receipt.id),
           receipt.path,
-          receipt.originalHash
+          receipt.originalHash,
+          false,
+          currentHash !== "absent"
         );
         await recoveryStore.update(receipt.id, "restored");
         return { status: "restored", contentHash: receipt.originalHash, receiptId };

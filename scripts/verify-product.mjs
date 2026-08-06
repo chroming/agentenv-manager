@@ -82,6 +82,22 @@ if (
   );
 }
 await run("node", ["scripts/capture-profiles.mjs", "--output", captureRoot]);
+await run(
+  process.platform === "win32" ? "npx.cmd" : "npx",
+  [
+    "vitest",
+    "run",
+    "tests/e2e/projects.e2e.test.ts",
+    "--maxWorkers=1",
+    "--no-file-parallelism"
+  ],
+  {
+    env: {
+      ...process.env,
+      AGENTENV_CAPTURE_PROJECTS_DIR: captureRoot
+    }
+  }
+);
 await run("node", ["scripts/capture-critical-comparison.mjs", "--output", captureRoot]);
 await rm(visualReportRoot, { recursive: true, force: true });
 await run("swift", [

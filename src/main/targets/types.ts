@@ -133,11 +133,18 @@ export interface ProjectLaunchInput {
   projectRoot: string;
 }
 
+export interface ProjectSkillLocationDeclaration {
+  relativePath: string;
+  scope: "shared" | "agent-specific";
+  writable: boolean;
+  priority: number;
+}
+
 export interface AgentProjectCapability {
   support: ProjectCapabilitySupport;
   instructionFiles: readonly string[];
   instructionCreateFile?: string;
-  skillDirectories: readonly string[];
+  skillLocations: readonly ProjectSkillLocationDeclaration[];
   mcpFiles: readonly string[];
   compareResourcePaths: readonly string[];
   createLaunchSpec(input: ProjectLaunchInput): AgentLaunchSpec | undefined;

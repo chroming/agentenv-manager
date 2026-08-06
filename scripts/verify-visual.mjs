@@ -17,12 +17,12 @@ const contractPath = join(
   "critical-captures.json"
 );
 
-const run = async (command, args) => {
+const run = async (command, args, extraEnv = {}) => {
   process.stdout.write(`\n> ${command} ${args.join(" ")}\n`);
   try {
     const result = await execFileAsync(command, args, {
       cwd: projectRoot,
-      env: process.env,
+      env: { ...process.env, ...extraEnv },
       maxBuffer: 20 * 1024 * 1024
     });
     if (result.stdout) process.stdout.write(result.stdout);
@@ -44,6 +44,17 @@ await run("node", [
   "--output",
   captureRoot
 ]);
+await run(
+  process.platform === "win32" ? "npx.cmd" : "npx",
+  [
+    "vitest",
+    "run",
+    "tests/e2e/projects.e2e.test.ts",
+    "--maxWorkers=1",
+    "--no-file-parallelism"
+  ],
+  { AGENTENV_CAPTURE_PROJECTS_DIR: captureRoot }
+);
 await run("node", [
   "scripts/capture-critical-comparison.mjs",
   "--output",

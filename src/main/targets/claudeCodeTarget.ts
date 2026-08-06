@@ -254,7 +254,10 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
     },
     instructionFiles: ["CLAUDE.md"],
     instructionCreateFile: "CLAUDE.md",
-    skillDirectories: [".claude/skills", ".agents/skills"],
+    skillLocations: [
+      { relativePath: ".agents/skills", scope: "shared", writable: true, priority: 100 },
+      { relativePath: ".claude/skills", scope: "agent-specific", writable: true, priority: 50 }
+    ],
     mcpFiles: [".mcp.json"],
     compareResourcePaths: ["CLAUDE.md", ".claude", ".agents", "AGENTS.md"]
   }),

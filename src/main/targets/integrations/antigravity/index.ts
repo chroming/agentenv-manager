@@ -139,7 +139,10 @@ export const antigravityIntegration: AgentTargetIntegration = {
     },
     instructionFiles: ["GEMINI.md"],
     instructionCreateFile: "GEMINI.md",
-    skillDirectories: [".gemini/skills", ".agents/skills"],
+    skillLocations: [
+      { relativePath: ".agents/skills", scope: "shared", writable: false, priority: 100 },
+      { relativePath: ".gemini/skills", scope: "agent-specific", writable: false, priority: 50 }
+    ],
     mcpFiles: [],
     compareResourcePaths: ["GEMINI.md", ".gemini", ".agents"]
   }),

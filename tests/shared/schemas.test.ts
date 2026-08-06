@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  AddProjectSkillInputSchema,
+  CreateProjectInstructionInputSchema,
   ProfileManifestSchema,
   ProfileResourcesSchema,
-  ProjectReferenceSchema
+  ProjectReferenceSchema,
+  RemoveProjectSkillInputSchema,
+  SaveProjectResourceInputSchema,
+  UpdateProjectInputSchema
 } from "../../src/shared/schemas";
 
 describe("Profile v2 schemas", () => {
@@ -109,6 +114,58 @@ describe("Project reference schema", () => {
       rootPath: "/tmp/project",
       createdAt: "2026-08-06T00:00:00.000Z",
       arbitrary: true
+    })).toThrow();
+  });
+});
+
+describe("Project command schemas", () => {
+  it("accepts bounded opaque identifiers and explicit Skill replacement", () => {
+    expect(AddProjectSkillInputSchema.parse({
+      projectId: "project-1",
+      locationId: "location-a1",
+      libraryId: "review",
+      conflictResolution: "replace"
+    })).toMatchObject({ libraryId: "review", conflictResolution: "replace" });
+    expect(SaveProjectResourceInputSchema.parse({
+      projectId: "project-1",
+      resourceId: "resource-1",
+      expectedHash: "abc123",
+      content: "# Rules\n"
+    }).content).toBe("# Rules\n");
+    expect(CreateProjectInstructionInputSchema.parse({
+      projectId: "project-1",
+      agentId: "opencode",
+      content: "# Rules\n"
+    }).agentId).toBe("opencode");
+    expect(RemoveProjectSkillInputSchema.parse({
+      projectId: "project-1",
+      resourceId: "resource-1",
+      expectedHash: "abc123"
+    }).resourceId).toBe("resource-1");
+    expect(UpdateProjectInputSchema.parse({
+      id: "project-1",
+      name: "Review Tools"
+    }).name).toBe("Review Tools");
+  });
+
+  it("rejects unknown fields, unsafe ids, and invented conflict behavior", () => {
+    expect(() => AddProjectSkillInputSchema.parse({
+      projectId: "../project",
+      locationId: "location-a1",
+      libraryId: "review"
+    })).toThrow();
+    expect(() => AddProjectSkillInputSchema.parse({
+      projectId: "project-1",
+      locationId: "location-a1",
+      libraryId: "review",
+      conflictResolution: "overwrite"
+    })).toThrow();
+    expect(() => SaveProjectResourceInputSchema.parse({
+      projectId: "project-1",
+      resourceId: "resource-1",
+      expectedHash: "abc123",
+      content: "# Rules\n",
+      path: "/tmp/escape"
     })).toThrow();
   });
 });

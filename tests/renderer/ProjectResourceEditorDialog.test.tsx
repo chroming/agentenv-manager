@@ -62,7 +62,7 @@ describe("ProjectResourceEditorDialog", () => {
       />
     );
 
-    const editor = await screen.findByRole("textbox", { name: "Project instruction content" });
+    const editor = await screen.findByRole("textbox", { name: "Workspace instruction content" });
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
     fireEvent.change(editor, { target: { value: "# Updated\n" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -92,7 +92,7 @@ describe("ProjectResourceEditorDialog", () => {
       />
     );
 
-    const editor = await screen.findByRole("textbox", { name: "Project instruction content" });
+    const editor = await screen.findByRole("textbox", { name: "Workspace instruction content" });
     fireEvent.change(editor, { target: { value: "# Updated\n" } });
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(await screen.findByText("Discard unsaved changes?")).toBeInTheDocument();
@@ -115,7 +115,7 @@ describe("ProjectResourceEditorDialog", () => {
       />
     );
 
-    const editor = await screen.findByRole("textbox", { name: "Project instruction content" });
+    const editor = await screen.findByRole("textbox", { name: "Workspace instruction content" });
     expect(api.createProjectInstruction).not.toHaveBeenCalled();
     fireEvent.change(editor, { target: { value: "# New project rules\n" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));

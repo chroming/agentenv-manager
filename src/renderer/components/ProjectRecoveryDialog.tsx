@@ -3,7 +3,15 @@ import { useEffect, useRef, useState } from "react";
 import type { ProjectRecoverySummary } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
-import { Button, ModalFrame, Notice, ResourceRow } from "./ui";
+import {
+  Button,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+  ModalFrame,
+  Notice,
+  ResourceRow
+} from "./ui";
 
 export const ProjectRecoveryDialog = ({
   open,
@@ -65,25 +73,23 @@ export const ProjectRecoveryDialog = ({
   if (!open) return null;
   return (
     <ModalFrame
-      ariaLabel={t("Project Recovery")}
+      ariaLabel={t("Workspace Recovery")}
       className="project-recovery-dialog ui-dialog-shell"
       dialogRef={dialogRef}
       dismissDisabled={Boolean(busyId)}
       onDismiss={onClose}
     >
-      <header className="ui-dialog-header">
-        <div className="ui-dialog-header__copy">
-          <div className="ui-dialog-title">{t("Project Recovery")}</div>
-          <p className="ui-dialog-description">{t("Restore a Project file to a verified earlier version.")}</p>
-        </div>
-      </header>
-      <div className="ui-dialog-body project-recovery-dialog__body">
+      <DialogHeader
+        title={t("Workspace Recovery")}
+        description={t("Restore a Workspace file to a verified earlier version.")}
+      />
+      <DialogBody className="project-recovery-dialog__body">
         {error ? (
           <Notice tone="danger" role="alert" icon={<AlertTriangle size={15} />}>{error}</Notice>
         ) : null}
         {loading ? <div className="project-editor-loading">{t("Loading recovery points…")}</div> : null}
         {!loading && items.length === 0 ? (
-          <div className="project-recovery-empty">{t("No recovery points for this Project.")}</div>
+          <div className="project-recovery-empty">{t("No recovery points for this Workspace.")}</div>
         ) : null}
         {items.map((item) => (
           <ResourceRow
@@ -95,7 +101,7 @@ export const ProjectRecoveryDialog = ({
             metadata={formatDate(item.createdAt)}
             title={item.status === "recovery-required"
               ? t("Recovery required")
-              : item.kind === "skill" ? t("Project Skill change") : t("Saved Project file")}
+              : item.kind === "skill" ? t("Workspace Skill change") : t("Saved Workspace file")}
             tone={item.status === "recovery-required" ? "attention" : "default"}
             actions={(
               <Button
@@ -110,10 +116,10 @@ export const ProjectRecoveryDialog = ({
             )}
           />
         ))}
-      </div>
-      <footer className="ui-dialog-footer">
+      </DialogBody>
+      <DialogFooter>
         <Button ref={closeRef} disabled={Boolean(busyId)} onClick={onClose}>{t("Close")}</Button>
-      </footer>
+      </DialogFooter>
     </ModalFrame>
   );
 };

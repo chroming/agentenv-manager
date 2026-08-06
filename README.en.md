@@ -6,7 +6,7 @@ English | [简体中文](README.md)
 [![CI](https://github.com/chroming/agentenv-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/chroming/agentenv-manager/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/chroming/agentenv-manager)](LICENSE)
 
-AgentEnv Manager is a local desktop app for organizing Skills, Instructions, MCP enablement, and conversation history across coding agents. Save a working environment as a Profile, preview and compare it before writing to an Agent, and recover from a restore point when needed.
+AgentEnv Manager is a local desktop app for organizing Skills, Instructions, MCP enablement, and conversation history across coding agents. Save a reusable Profile, preview and compare it before writing to an Agent, and recover from a restore point when needed.
 
 The app does not take ownership of models, accounts, credentials, or entire native configuration files. Each Agent integration exposes only the resources it is designed to manage.
 
@@ -27,32 +27,32 @@ Installers for macOS, Windows, and Linux are also available from [GitHub Release
 ## First run
 
 1. Launch the app and confirm the Agents it detected. Agents that are not installed stay disabled by default.
-2. Configure one Agent from the Agents page. Save its current environment as a Profile, or start with an empty Profile.
+2. Configure one Agent from the Agents page. Save its current setup as a Profile, or start with an empty Profile.
 3. If the machine already has many Skills, open `Skills > Local Skills` before the first Apply to review duplicate copies, conflicts, shared directories, and broken links.
 4. Choose how the Profile should handle Instructions, Skills, and MCP state, then save it and open the Apply preview.
 5. Confirm the changes before Apply. AgentEnv creates a restore point first, attempts an automatic rollback after a failed write, and keeps recovery records.
 
 ## Profiles
 
-A Profile is a reusable working environment containing Instructions, Skills from the Library, and enablement choices for MCP servers already known to a supported Agent. Each resource type can use the Profile, be turned off, or keep the Agent's current state.
+A Profile contains reusable Instructions, Skills from the Library, and enablement choices for MCP servers already known to a supported Agent. Each resource type can use the saved content, be turned off, or keep the Agent's current state.
 
-![Profiles workspace](docs/images/profiles.png)
+![Profiles](docs/images/profiles.png)
 
 Before Apply, AgentEnv reads the target again and lists resources that will be added, replaced, removed, preserved, or need confirmation. It writes only after confirmation and verifies the result.
 
 ### Compare before Apply
 
-Compare runs the same task once with the current Agent environment and once with the proposed Profile. Both runs use isolated temporary Homes and Workspaces. Results show responses, file changes, duration, and token usage reported by the CLI.
+Compare runs the same task once with the current Agent setup and once with the proposed Profile. Both runs use isolated temporary Homes and Workspaces. Results show responses, file changes, duration, and token usage reported by the CLI.
 
 ![Profile comparison](docs/images/profile-compare.png)
 
-Compare consumes quota from the selected Agent account. It does not Apply the Profile or modify the real Agent or original project. Isolated comparison currently requires macOS. OpenCode, Claude Code, Codex, Antigravity CLI, and Pi have verified implementations; Trae CLI does not currently expose a reliable one-shot command.
+Compare consumes quota from the selected Agent account. It does not Apply the Profile or modify the real Agent or original folder. Isolated comparison currently requires macOS. OpenCode, Claude Code, Codex, Antigravity CLI, and Pi have verified implementations; Trae CLI does not currently expose a reliable one-shot command.
 
-## Projects
+## Workspaces
 
-Projects keeps references to frequently used local folders and shows the Instructions, Skills, and MCP names each selected Agent can load there. You can edit supported Instructions in place, add or remove project Skills from the Library, and open the folder with an installed Agent.
+Workspaces keeps references to frequently used local folders and shows the Instructions, Skills, and MCP names each selected Agent can load there. You can edit explicitly supported Instructions, copy Library Skills into ordinary folder-owned files, and open the folder with an installed Agent.
 
-The original folder remains the source of truth and is never bound to or overwritten by a global Profile. Writes verify the current file and create a separate recovery point first. Removing a Project deletes only the app reference, never the folder.
+The original folder remains the source of truth and is never bound to or overwritten by a Profile. AgentEnv does not create Library links in Workspaces or stage and commit Git changes. Writes verify the current file and create a separate recovery point first. Removing a Workspace deletes only the app reference, never the folder.
 
 ## Skill Library
 
@@ -66,7 +66,7 @@ The source view shows additions, updates, and removals within the same repositor
 
 ## Conversations
 
-Conversations maintains a read-only index of local Agent history. Search titles and messages, filter by folder, return to the original conversation, or review its context before continuing in another Agent. When a conversation folder is already a Project, you can jump directly to it.
+Conversations maintains a read-only index of local Agent history. Search titles and messages, filter by folder, return to the original conversation, or review its context before continuing in another Agent. When a conversation folder is already a Workspace, you can jump directly to it.
 
 ![Conversation history](docs/images/conversations.png)
 

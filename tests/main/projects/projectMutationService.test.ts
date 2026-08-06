@@ -57,7 +57,9 @@ describe("project mutation service", () => {
       enabledAgentIds: async () => ["codex"]
     });
     const resource = (await environmentService.inspectProject(project.id, ["codex"])).resources[0]!;
-    return { project, projectRoot, resource, service, recoveryStore, instructionPath, environmentService };
+    const skillLocationId = (await environmentService.inspectProject(project.id, ["codex"]))
+      .skillLocations.find((location) => location.recommended)!.id;
+    return { project, projectRoot, resource, service, recoveryStore, instructionPath, environmentService, skillLocationId };
   };
 
   it("saves with expected-hash authority and restores from a private receipt", async () => {
@@ -127,10 +129,10 @@ describe("project mutation service", () => {
   });
 
   it("copies a Library Skill as Project-owned files and can restore the prior absence", async () => {
-    const { project, projectRoot, service } = await setup();
+    const { project, projectRoot, service, skillLocationId } = await setup();
     const result = await service.addSkill({
       projectId: project.id,
-      agentId: "codex",
+      locationId: skillLocationId,
       libraryId: "review"
     });
     const destination = join(projectRoot, ".agents", "skills", "review");
@@ -144,12 +146,12 @@ describe("project mutation service", () => {
   });
 
   it("creates a missing declared Project Skill directory and restores its prior absence", async () => {
-    const { project, projectRoot, service } = await setup();
+    const { project, projectRoot, service, skillLocationId } = await setup();
     await rm(join(projectRoot, ".agents"), { recursive: true, force: true });
 
     const result = await service.addSkill({
       projectId: project.id,
-      agentId: "codex",
+      locationId: skillLocationId,
       libraryId: "review"
     });
     const destination = join(projectRoot, ".agents", "skills", "review");
@@ -161,17 +163,45 @@ describe("project mutation service", () => {
   });
 
   it("does not replace an unsafe parent while creating a Project Skill directory", async () => {
-    const { project, projectRoot, service } = await setup();
+    const { project, projectRoot, service, skillLocationId } = await setup();
     await rm(join(projectRoot, ".agents"), { recursive: true, force: true });
     await writeFile(join(projectRoot, ".agents"), "reserved by the project\n", "utf8");
 
     await expect(service.addSkill({
       projectId: project.id,
-      agentId: "codex",
+      locationId: skillLocationId,
       libraryId: "review"
     })).rejects.toThrow("not a regular directory");
     await expect(readFile(join(projectRoot, ".agents"), "utf8"))
       .resolves.toBe("reserved by the project\n");
+  });
+
+  it("requires an explicit replacement choice and restores the prior Project Skill", async () => {
+    const { project, projectRoot, service, skillLocationId } = await setup();
+    const destination = join(projectRoot, ".agents", "skills", "review");
+    await mkdir(destination, { recursive: true });
+    await writeFile(join(destination, "SKILL.md"), "# Project version\n", "utf8");
+
+    await expect(service.addSkill({
+      projectId: project.id,
+      locationId: skillLocationId,
+      libraryId: "review"
+    })).rejects.toThrow("requires an explicit replacement choice");
+    await expect(readFile(join(destination, "SKILL.md"), "utf8"))
+      .resolves.toBe("# Project version\n");
+
+    const result = await service.addSkill({
+      projectId: project.id,
+      locationId: skillLocationId,
+      libraryId: "review",
+      conflictResolution: "replace"
+    });
+    await expect(readFile(join(destination, "SKILL.md"), "utf8"))
+      .resolves.toContain("# Review");
+
+    await expect(service.restore(result.receiptId!)).resolves.toMatchObject({ status: "restored" });
+    await expect(readFile(join(destination, "SKILL.md"), "utf8"))
+      .resolves.toBe("# Project version\n");
   });
 
   it("creates a missing primary Project instruction from a draft and restores absence", async () => {
@@ -205,8 +235,8 @@ describe("project mutation service", () => {
   });
 
   it("backs up a Project Skill before removal and restores the verified directory", async () => {
-    const { project, projectRoot, service, environmentService } = await setup();
-    await service.addSkill({ projectId: project.id, agentId: "codex", libraryId: "review" });
+    const { project, projectRoot, service, environmentService, skillLocationId } = await setup();
+    await service.addSkill({ projectId: project.id, locationId: skillLocationId, libraryId: "review" });
     const resource = (await environmentService.inspectProject(project.id, ["codex"]))
       .resources.find((candidate) => candidate.kind === "skill")!;
     const removed = await service.removeSkill({

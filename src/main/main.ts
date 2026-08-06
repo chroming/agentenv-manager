@@ -42,6 +42,7 @@ import { createProjectEnvironmentService } from "./projects/projectEnvironmentSe
 import { createProjectLaunchService } from "./projects/projectLaunchService";
 import { createProjectMutationService } from "./projects/projectMutationService";
 import { createProjectRecoveryStore } from "./projects/projectRecoveryStore";
+import { createProjectGitService } from "./projects/projectGitService";
 import { createSettingsStore } from "./settingsStore";
 import { createSkillLibraryStore } from "./skillLibraryStore";
 import { createTargetDiscoveryService } from "./targetDiscovery";
@@ -768,9 +769,28 @@ const createServices = async (
     appDataRoot: paths.appDataRoot,
     projectsPath: paths.projectsPath
   });
+  let projectGitRunner: GitCommandRunner | undefined;
+  const projectGitService = createProjectGitService({
+    resolveRunner: async () => {
+      if (projectGitRunner) return projectGitRunner;
+      const executablePath = await findExecutable("git", {
+        environment: process.env,
+        homeDir: paths.homeDir,
+        platform: process.platform
+      });
+      if (!executablePath) return undefined;
+      projectGitRunner = createGitCommandRunner({
+        executablePath,
+        defaultTimeoutMs: 2_000,
+        maxOutputBytes: 128 * 1024
+      });
+      return projectGitRunner;
+    }
+  });
   const projectEnvironmentService = createProjectEnvironmentService({
     projectStore,
-    targetRegistry
+    targetRegistry,
+    gitService: projectGitService
   });
   const projectRecoveryStore = createProjectRecoveryStore(paths.appDataRoot);
   const backupStore = createBackupStore(paths, { platform: process.platform });
@@ -1022,6 +1042,7 @@ const createServices = async (
       workspaceSyncService.dispose();
       conversationService.dispose();
       gitRunner?.dispose();
+      projectGitRunner?.dispose();
     }
   };
 };
@@ -1068,7 +1089,9 @@ const initializeServices = () => {
                 skillAutoCheckIntervalMinutes: settings.skillAutoCheckIntervalMinutes,
                 backupRetentionDays: settings.backupRetentionDays,
                 enabledTargetIds: settings.enabledTargetIds,
+                agentDiscoveryVersion: settings.agentDiscoveryVersion,
                 agentDiscoveryReviewedIds: settings.agentDiscoveryReviewedIds,
+                suppressedAgentSuggestionIds: settings.suppressedAgentSuggestionIds,
                 targetConfigRoots: settings.targetConfigRoots,
                 targetCommandOverrides: settings.targetCommandOverrides
               }

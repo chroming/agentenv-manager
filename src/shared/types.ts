@@ -435,9 +435,12 @@ export interface ConversationListInput {
   query?: string;
   agentIds?: string[];
   workspacePaths?: string[];
+  sort?: ConversationSortOrder;
   limit?: number;
   offset?: number;
 }
+
+export type ConversationSortOrder = "recent" | "size-desc" | "messages-desc";
 
 export interface ConversationSearchInput {
   query: string;
@@ -1285,6 +1288,19 @@ export interface UpdateProjectInput {
 
 export type ProjectResourceKind = "instructions" | "skill" | "mcp";
 export type ProjectResourceState = "ready" | "partial" | "unsafe" | "unreadable";
+export type ProjectGitPathState =
+  | "tracked-clean"
+  | "tracked-modified"
+  | "untracked"
+  | "ignored"
+  | "unavailable";
+
+export interface ProjectGitObservation {
+  repository: "git" | "not-git" | "unavailable";
+  rootRelation?: "workspace-root" | "workspace-inside-repository" | "repository-inside-workspace";
+  pathStates: Record<string, ProjectGitPathState>;
+  issue?: string;
+}
 
 export interface ProjectResourceSummary {
   id: string;
@@ -1300,12 +1316,14 @@ export interface ProjectResourceSummary {
   contentHash?: string;
   modifiedAt?: string;
   issue?: string;
+  gitState?: ProjectGitPathState;
 }
 
 export interface ProjectEnvironmentSnapshot {
   projectId: string;
   projectRoot: string;
   resources: ProjectResourceSummary[];
+  skillLocations: ProjectSkillLocationSummary[];
   agentSupport: Array<{
     agentId: string;
     agentName: string;
@@ -1318,6 +1336,16 @@ export interface ProjectEnvironmentSnapshot {
   }>;
   issues: string[];
   partial: boolean;
+  git: ProjectGitObservation;
+}
+
+export interface ProjectSkillLocationSummary {
+  id: string;
+  relativePath: string;
+  scope: "shared" | "agent-specific";
+  consumerAgentIds: string[];
+  writable: boolean;
+  recommended: boolean;
 }
 
 export interface ProjectEnvironmentPreview {
@@ -1351,6 +1379,7 @@ export interface ProjectResourceFile {
   contentHash: string;
   modifiedAt: string;
   editable: boolean;
+  gitState?: ProjectGitPathState;
 }
 
 export interface ProjectInstructionDraft {
@@ -1378,8 +1407,9 @@ export interface CreateProjectInstructionInput {
 
 export interface AddProjectSkillInput {
   projectId: string;
-  agentId: string;
+  locationId: string;
   libraryId: string;
+  conflictResolution?: "replace";
 }
 
 export interface RemoveProjectSkillInput {

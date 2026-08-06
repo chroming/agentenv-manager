@@ -19,8 +19,8 @@ afterEach(async () => {
   root = "";
 });
 
-describe("Projects desktop workflow", () => {
-  it("persists a Project and restores edited bytes without deleting the folder", async () => {
+describe("Workspaces desktop workflow", () => {
+  it("persists a Workspace and restores edited bytes without deleting the folder", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-projects-e2e-"));
     const home = join(root, "home");
     const dataRoot = join(root, "data");
@@ -28,7 +28,7 @@ describe("Projects desktop workflow", () => {
     const projectRoot = join(root, "workspace", "release-tools");
     const instructionsPath = join(projectRoot, "AGENTS.md");
     const librarySkill = join(dataRoot, "skills-library", "testing");
-    const addedProjectSkill = join(projectRoot, ".opencode", "skills", "testing");
+    const addedProjectSkill = join(projectRoot, ".agents", "skills", "testing");
     await Promise.all([
       mkdir(home, { recursive: true }),
       mkdir(dataRoot, { recursive: true }),
@@ -102,9 +102,18 @@ describe("Projects desktop workflow", () => {
     await page.setViewportSize({ width: 920, height: 620 });
     const notNow = page.getByRole("button", { name: "Not now", exact: true });
     if (await notNow.isVisible().catch(() => false)) await notNow.click();
-    await page.getByRole("button", { name: "Projects", exact: true }).click();
+    await page.getByRole("button", { name: "Workspaces", exact: true }).click();
+    await page.getByRole("button", { name: "Expand Instructions", exact: true }).click();
     await page.getByRole("button", { name: "Add instruction", exact: true }).waitFor();
     await expectNoHorizontalOverflow(page);
+    const inspectorTitle = page.locator(".project-detail__header").getByRole("heading", {
+      name: "Release Tools",
+      exact: true
+    });
+    await expect.poll(async () => {
+      const box = await inspectorTitle.boundingBox();
+      return Boolean(box && box.width >= 80 && box.height >= 18);
+    }).toBe(true);
     const captureDir = process.env.AGENTENV_CAPTURE_PROJECTS_DIR;
     if (captureDir) {
       await mkdir(captureDir, { recursive: true });
@@ -112,7 +121,7 @@ describe("Projects desktop workflow", () => {
     }
 
     await page.getByRole("button", { name: "Add instruction", exact: true }).click();
-    const editor = page.getByRole("textbox", { name: "Project instruction content" });
+    const editor = page.getByRole("textbox", { name: "Workspace instruction content" });
     if (captureDir) {
       await page.screenshot({ path: join(captureDir, "project-instruction-editor-920x620.png") });
     }
@@ -121,8 +130,9 @@ describe("Projects desktop workflow", () => {
     await expect.poll(() => readFile(instructionsPath, "utf8"))
       .toBe("# Project rules\n");
 
-    await page.getByRole("button", { name: "Add from Library" }).click();
-    await page.getByRole("dialog", { name: "Add Skill to Project" }).waitFor();
+    await page.getByRole("button", { name: "Expand Skills", exact: true }).click();
+    await page.getByRole("button", { name: "Copy from Library" }).click();
+    await page.getByRole("dialog", { name: "Copy Skill to Workspace" }).waitFor();
     if (captureDir) {
       await page.screenshot({ path: join(captureDir, "project-add-skill-920x620.png") });
     }
@@ -132,14 +142,42 @@ describe("Projects desktop workflow", () => {
     await expect(readFile(join(addedProjectSkill, ".agentenv-skill.json"), "utf8"))
       .rejects.toMatchObject({ code: "ENOENT" });
 
+    await page.getByRole("button", { name: "Copy from Library" }).click();
+    const matchingDialog = page.getByRole("dialog", { name: "Copy Skill to Workspace" });
+    await matchingDialog.getByText("Already in this Workspace", { exact: true }).waitFor();
+    await expect.poll(() => matchingDialog.getByRole("button", {
+      name: "Already added",
+      exact: true
+    }).isDisabled()).toBe(true);
+    await matchingDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+
+    await writeFile(
+      join(librarySkill, "SKILL.md"),
+      "---\nname: testing\ndescription: Updated test changes.\n---\n\n# Updated Testing\n"
+    );
+    await page.getByRole("button", { name: "Copy from Library" }).click();
+    const conflictDialog = page.getByRole("dialog", { name: "Copy Skill to Workspace" });
+    await conflictDialog.getByText("A different Workspace copy already exists", {
+      exact: true
+    }).waitFor();
+    await conflictDialog.getByRole("button", { name: "Keep Workspace copy", exact: true }).click();
+    await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
+      .toContain("# Testing");
+
+    await page.getByRole("button", { name: "Copy from Library" }).click();
+    await page.getByRole("button", { name: "Replace with Library copy", exact: true }).click();
+    await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
+      .toContain("# Updated Testing");
+
     if (captureDir) {
       await page.screenshot({ path: join(captureDir, "projects-selected-920x620.png") });
       await page.setViewportSize({ width: 1180, height: 728 });
       await expectNoHorizontalOverflow(page);
       await page.screenshot({ path: join(captureDir, "projects-selected-1180x728.png") });
       await page.setViewportSize({ width: 920, height: 620 });
-      await page.getByRole("button", { name: "Preview environment" }).click();
-      await page.getByRole("dialog", { name: "Effective environment preview" }).waitFor();
+      await page.getByRole("button", { name: "More Workspace actions" }).click();
+      await page.getByRole("menuitem", { name: "Loaded resource details" }).click();
+      await page.getByRole("dialog", { name: "Loaded resource details" }).waitFor();
       const closePreview = page.getByRole("button", { name: "Close", exact: true });
       await expect.poll(() => closePreview.isEnabled()).toBe(true);
       await expectNoHorizontalOverflow(page);
@@ -147,11 +185,14 @@ describe("Projects desktop workflow", () => {
       await closePreview.click();
     }
 
-    await page.getByRole("button", { name: "More Project actions" }).click();
+    await page.getByRole("button", { name: "More Workspace actions" }).click();
     await page.getByRole("menuitem", { name: "Recovery" }).click();
     if (captureDir) {
       await page.screenshot({ path: join(captureDir, "project-recovery-920x620.png") });
     }
+    await page.getByRole("button", { name: "Restore", exact: true }).first().click();
+    await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
+      .toContain("# Testing");
     await page.getByRole("button", { name: "Restore", exact: true }).first().click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8").then(
       () => true,
@@ -165,27 +206,27 @@ describe("Projects desktop workflow", () => {
     await page.getByRole("button", { name: "Close", exact: true }).click();
 
     await page.getByRole("button", { name: "Add instruction", exact: true }).click();
-    await page.getByRole("textbox", { name: "Project instruction content" }).fill("# Project rules\n");
+    await page.getByRole("textbox", { name: "Workspace instruction content" }).fill("# Project rules\n");
     await page.getByRole("button", { name: "Save", exact: true }).click();
-    await page.getByRole("button", { name: "Add from Library" }).click();
+    await page.getByRole("button", { name: "Copy from Library" }).click();
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
-      .toContain("# Testing");
+      .toContain("# Updated Testing");
 
-    await page.getByRole("button", { name: "Remove testing from Project" }).click();
+    await page.getByRole("button", { name: "Remove testing from Workspace" }).click();
     await page.getByRole("button", { name: "Remove", exact: true }).click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8").then(
       () => true,
       () => false
     )).toBe(false);
-    await page.getByRole("button", { name: "More Project actions" }).click();
+    await page.getByRole("button", { name: "More Workspace actions" }).click();
     await page.getByRole("menuitem", { name: "Recovery" }).click();
     await page.getByRole("button", { name: "Restore", exact: true }).first().click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
-      .toContain("# Testing");
+      .toContain("# Updated Testing");
     await page.getByRole("button", { name: "Close", exact: true }).click();
 
-    await page.getByRole("button", { name: "More Project actions" }).click();
+    await page.getByRole("button", { name: "More Workspace actions" }).click();
     await page.getByRole("menuitem", { name: "Remove reference" }).click();
     await page.getByRole("button", { name: "Remove reference", exact: true }).click();
     await expect.poll(async () => JSON.parse(await readFile(join(dataRoot, "projects.json"), "utf8")).projects)
@@ -194,5 +235,5 @@ describe("Projects desktop workflow", () => {
     if (captureDir) {
       await page.screenshot({ path: join(captureDir, "projects-empty-920x620.png") });
     }
-  }, 30_000);
+  }, 90_000);
 });

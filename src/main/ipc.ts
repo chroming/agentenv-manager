@@ -25,11 +25,17 @@ import type { SkillLibraryStore } from "./skillLibraryStore";
 import type { TargetDiscoveryService } from "./targetDiscovery";
 import type { TargetCaptureService } from "./targetCaptureService";
 import type { EvaluationService } from "./evaluations/evaluationService";
-import { ResourceIconKeySchema, SafeIdSchema } from "../shared/schemas";
+import {
+  AddProjectSkillInputSchema,
+  CreateProjectInstructionInputSchema,
+  RemoveProjectSkillInputSchema,
+  ResourceIconKeySchema,
+  SafeIdSchema,
+  SaveProjectResourceInputSchema,
+  UpdateProjectInputSchema
+} from "../shared/schemas";
 import type {
   CreateProfileInput,
-  AddProjectSkillInput,
-  CreateProjectInstructionInput,
   CreateProfileFromTargetInput,
   DeleteManagedBackupInput,
   ForkProfileSkillsInput,
@@ -38,7 +44,6 @@ import type {
   RepositorySkillSourceInput,
   ManageTargetSkillInput,
   RetireSharedSkillInput,
-  RemoveProjectSkillInput,
   SharedSkillRetentionInput,
   SkillCleanupRequest,
   SkillImportInput,
@@ -57,9 +62,7 @@ import type {
   TargetCaptureScope,
   TargetPaths,
   OneShotEvaluationPreviewInput,
-  OneShotEvaluationStartInput,
-  SaveProjectResourceInput,
-  UpdateProjectInput
+  OneShotEvaluationStartInput
 } from "../shared/types";
 import type { TargetRegistry } from "./targets/registry";
 import type { AgentEnvPaths } from "./paths";
@@ -445,17 +448,17 @@ export const registerIpcHandlers = ({
       parseId(agentId, "Agent id")
     )
   );
-  handleMutation("projects:save-resource", (_event, input: SaveProjectResourceInput) =>
-    projectMutationService.save(input)
+  handleMutation("projects:save-resource", (_event, input: unknown) =>
+    projectMutationService.save(SaveProjectResourceInputSchema.parse(input))
   );
-  handleMutation("projects:create-instruction", (_event, input: CreateProjectInstructionInput) =>
-    projectMutationService.createInstruction(input)
+  handleMutation("projects:create-instruction", (_event, input: unknown) =>
+    projectMutationService.createInstruction(CreateProjectInstructionInputSchema.parse(input))
   );
-  handleMutation("projects:add-skill", (_event, input: AddProjectSkillInput) =>
-    projectMutationService.addSkill(input)
+  handleMutation("projects:add-skill", (_event, input: unknown) =>
+    projectMutationService.addSkill(AddProjectSkillInputSchema.parse(input))
   );
-  handleMutation("projects:remove-skill", (_event, input: RemoveProjectSkillInput) =>
-    projectMutationService.removeSkill(input)
+  handleMutation("projects:remove-skill", (_event, input: unknown) =>
+    projectMutationService.removeSkill(RemoveProjectSkillInputSchema.parse(input))
   );
   diagnosticHandle("projects:list-recovery", (_event, projectId: unknown) =>
     projectRecoveryStore.list(
@@ -468,8 +471,8 @@ export const registerIpcHandlers = ({
   handleMutation("projects:add", (_event, rootPath: unknown) =>
     projectStore.addProject(String(rootPath))
   );
-  handleMutation("projects:update", (_event, input: UpdateProjectInput) =>
-    projectStore.updateProject(input)
+  handleMutation("projects:update", (_event, input: unknown) =>
+    projectStore.updateProject(UpdateProjectInputSchema.parse(input))
   );
   handleMutation("projects:remove", (_event, id: unknown) =>
     projectStore.removeProject(parseId(id, "Project id"))

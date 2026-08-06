@@ -9,6 +9,7 @@ import type {
   ProjectEnvironmentSnapshot,
   ProjectResourceKind,
   ProjectResourceSummary,
+  ProjectSkillLocationSummary,
   TargetInfo
 } from "../../shared/types";
 import { isMissingFileError, pathExists } from "../fileUtils";
@@ -17,11 +18,13 @@ import { hashSkillContent } from "../skillContentHash";
 import { parseSkillFrontmatter } from "../skillFrontmatter";
 import type { TargetRegistry } from "../targets/registry";
 import type { ProjectStore } from "./projectStore";
+import type { ProjectGitService } from "./projectGitService";
 import { SafeIdSchema } from "../../shared/schemas";
 
 interface ProjectEnvironmentServiceOptions {
   projectStore: ProjectStore;
   targetRegistry: TargetRegistry;
+  gitService?: ProjectGitService;
 }
 
 export interface ProjectEnvironmentService {
@@ -33,7 +36,12 @@ export interface ProjectEnvironmentService {
     destination: string;
     relativePath: string;
   }>;
-  resolveSkillDestination(projectId: string, agentId: string, skillId: string): Promise<{
+  resolveSkillDestination(
+    projectId: string,
+    locationId: string,
+    skillId: string,
+    enabledAgentIds: readonly string[]
+  ): Promise<{
     projectRoot: string;
     skillRoot: string;
     destination: string;
@@ -45,6 +53,9 @@ const MAX_SKILL_TREE_ENTRIES = 2_000;
 
 const resourceId = (kind: ProjectResourceKind, relativePath: string) =>
   `${kind}-${createHash("sha256").update(relativePath).digest("hex").slice(0, 20)}`;
+
+const skillLocationId = (relativePath: string) =>
+  `project-skill-location-${createHash("sha256").update(relativePath).digest("hex").slice(0, 20)}`;
 
 const normalizeRelativeDeclaration = (value: string) => {
   if (!value || isAbsolute(value)) throw new Error(`Unsafe absolute Project resource path: ${value}`);
@@ -119,7 +130,8 @@ const parseMcpNames = (path: string, content: string): string[] => {
 
 export const createProjectEnvironmentService = ({
   projectStore,
-  targetRegistry
+  targetRegistry,
+  gitService
 }: ProjectEnvironmentServiceOptions): ProjectEnvironmentService => {
   const requireProject = async (projectId: string) => {
     const project = (await projectStore.listProjects()).find((candidate) => candidate.id === projectId);
@@ -136,6 +148,7 @@ export const createProjectEnvironmentService = ({
       enabled.has(adapter.descriptor.id) && adapter.projects
     );
     const resources = new Map<string, ProjectResourceSummary>();
+    const skillLocationCandidates = new Map<string, ProjectSkillLocationSummary & { priority: number }>();
     const issues: string[] = [];
 
     const addResource = (resource: ProjectResourceSummary) => {
@@ -148,9 +161,51 @@ export const createProjectEnvironmentService = ({
         ...existing.consumerAgentIds,
         ...resource.consumerAgentIds
       ])].sort();
-      existing.editable = existing.editable && resource.editable;
+      existing.editable = existing.editable || resource.editable;
       if (resource.state !== "ready") existing.state = resource.state;
     };
+
+    for (const adapter of adapters) {
+      const capability = adapter.projects!;
+      for (const declaration of capability.skillLocations) {
+        const normalized = normalizeRelativeDeclaration(declaration.relativePath);
+        const relativePath = normalized.split(sep).join("/");
+        const id = skillLocationId(relativePath);
+        const writable = capability.support.skills.mutate === "supported" && declaration.writable;
+        const existing = skillLocationCandidates.get(id);
+        if (existing) {
+          existing.consumerAgentIds = [...new Set([
+            ...existing.consumerAgentIds,
+            adapter.descriptor.id
+          ])].sort();
+          existing.writable = existing.writable || writable;
+          existing.priority = Math.max(existing.priority, declaration.priority);
+          if (declaration.scope === "shared") existing.scope = "shared";
+        } else {
+          skillLocationCandidates.set(id, {
+            id,
+            relativePath,
+            scope: declaration.scope,
+            consumerAgentIds: [adapter.descriptor.id],
+            writable,
+            recommended: false,
+            priority: declaration.priority
+          });
+        }
+      }
+    }
+
+    const skillLocationsWithPriority = [...skillLocationCandidates.values()].sort((left, right) =>
+      Number(right.writable) - Number(left.writable) ||
+      right.priority - left.priority ||
+      Number(right.scope === "shared") - Number(left.scope === "shared") ||
+      left.relativePath.localeCompare(right.relativePath)
+    );
+    const recommendedLocation = skillLocationsWithPriority.find((location) => location.writable);
+    const skillLocations: ProjectSkillLocationSummary[] = skillLocationsWithPriority.map(({ priority: _priority, ...location }) => ({
+      ...location,
+      recommended: location.id === recommendedLocation?.id
+    }));
 
     for (const adapter of adapters) {
       const capability = adapter.projects!;
@@ -198,9 +253,9 @@ export const createProjectEnvironmentService = ({
         }
       }
 
-      for (const declaration of capability.skillDirectories) {
+      for (const declaration of capability.skillLocations) {
         try {
-          const relativeDeclaration = normalizeRelativeDeclaration(declaration);
+          const relativeDeclaration = normalizeRelativeDeclaration(declaration.relativePath);
           const skillRoot = resolve(project.rootPath, relativeDeclaration);
           await assertBoundedParents(project.rootPath, skillRoot);
           let rootEntry;
@@ -232,7 +287,7 @@ export const createProjectEnvironmentService = ({
                 absolutePath: skillPath,
                 consumerAgentIds: [agentId],
                 state: frontmatter.errors.length > 0 ? "partial" : "ready",
-                editable: capability.support.skills.mutate === "supported",
+                editable: capability.support.skills.mutate === "supported" && declaration.writable,
                 description: frontmatter.description,
                 version: frontmatter.version,
                 contentHash: await hashSkillContent(skillPath),
@@ -286,12 +341,21 @@ export const createProjectEnvironmentService = ({
       }
     }
 
+    const sortedResources = [...resources.values()].sort((left, right) =>
+      left.kind.localeCompare(right.kind) || left.relativePath.localeCompare(right.relativePath)
+    );
+    const git = gitService
+      ? await gitService.inspect(project.rootPath, sortedResources.map((resource) => resource.relativePath))
+      : { repository: "not-git" as const, pathStates: {} };
+    for (const resource of sortedResources) {
+      resource.gitState = git.pathStates[resource.relativePath];
+    }
+
     return {
       projectId: project.id,
       projectRoot: project.rootPath,
-      resources: [...resources.values()].sort((left, right) =>
-        left.kind.localeCompare(right.kind) || left.relativePath.localeCompare(right.relativePath)
-      ),
+      resources: sortedResources,
+      skillLocations,
       agentSupport: adapters.map((adapter) => ({
         agentId: adapter.descriptor.id,
         agentName: adapter.descriptor.name,
@@ -303,7 +367,8 @@ export const createProjectEnvironmentService = ({
         cliLaunch: adapter.projects!.support.cliLaunch
       })),
       issues,
-      partial: issues.length > 0
+      partial: issues.length > 0,
+      git
     };
   };
 
@@ -331,15 +396,22 @@ export const createProjectEnvironmentService = ({
       }
       return { projectRoot: project.rootPath, destination, relativePath };
     },
-    resolveSkillDestination: async (projectId, agentId, unsafeSkillId) => {
+    resolveSkillDestination: async (projectId, locationId, unsafeSkillId, enabledAgentIds) => {
       const project = await requireProject(projectId);
-      const adapter = targetRegistry.get(agentId);
-      if (!adapter.projects || adapter.projects.support.skills.mutate !== "supported") {
-        throw new Error(`${adapter.descriptor.name} does not support Project Skill changes`);
-      }
-      const declaration = adapter.projects.skillDirectories[0];
-      if (!declaration) throw new Error(`${adapter.descriptor.name} has no Project Skills directory`);
-      const relativeRoot = normalizeRelativeDeclaration(declaration);
+      const enabledIds = new Set(enabledAgentIds);
+      const declaration = targetRegistry.listAdapters().flatMap((adapter) =>
+        enabledIds.has(adapter.descriptor.id) &&
+        adapter.projects?.support.skills.mutate === "supported"
+          ? adapter.projects.skillLocations
+              .filter((location) => location.writable)
+              .map((location) => ({ adapter, location }))
+          : []
+      ).find(({ location }) => {
+        const relativePath = normalizeRelativeDeclaration(location.relativePath).split(sep).join("/");
+        return skillLocationId(relativePath) === locationId;
+      });
+      if (!declaration) throw new Error("Project Skill location is unavailable or read-only");
+      const relativeRoot = normalizeRelativeDeclaration(declaration.location.relativePath);
       const skillRoot = resolve(project.rootPath, relativeRoot);
       await assertBoundedParents(project.rootPath, skillRoot);
       const rootEntry = await lstat(skillRoot).catch((error) => {
@@ -358,8 +430,10 @@ export const createProjectEnvironmentService = ({
       const project = await requireProject(projectId);
       const candidates = targetRegistry.listAdapters().flatMap((adapter) =>
         adapter.projects?.support.skills.mutate === "supported"
-          ? adapter.projects.skillDirectories.map((declaration) =>
-              resolve(project.rootPath, normalizeRelativeDeclaration(declaration)))
+          ? adapter.projects.skillLocations
+              .filter((declaration) => declaration.writable)
+              .map((declaration) =>
+                resolve(project.rootPath, normalizeRelativeDeclaration(declaration.relativePath)))
           : []
       );
       const insideDeclaredRoot = candidates.some((root) => {

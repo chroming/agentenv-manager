@@ -67,6 +67,44 @@ export const ProjectReferenceFileSchema = z.object({
   projects: z.array(ProjectReferenceSchema)
 }).strict();
 
+const ProjectContentHashSchema = z.string().min(1).max(256);
+
+export const UpdateProjectInputSchema = z.object({
+  id: SafeIdSchema,
+  name: z.string().trim().min(1).max(120).optional(),
+  lastAgentId: SafeIdSchema.optional(),
+  markOpened: z.boolean().optional()
+}).strict().refine(
+  ({ name, lastAgentId, markOpened }) => name !== undefined || lastAgentId !== undefined || markOpened !== undefined,
+  "Project update must change at least one field"
+);
+
+export const SaveProjectResourceInputSchema = z.object({
+  projectId: SafeIdSchema,
+  resourceId: SafeIdSchema,
+  expectedHash: ProjectContentHashSchema,
+  content: z.string().max(2_000_000)
+}).strict();
+
+export const CreateProjectInstructionInputSchema = z.object({
+  projectId: SafeIdSchema,
+  agentId: SafeIdSchema,
+  content: z.string().max(2_000_000)
+}).strict();
+
+export const AddProjectSkillInputSchema = z.object({
+  projectId: SafeIdSchema,
+  locationId: SafeIdSchema,
+  libraryId: SafeIdSchema,
+  conflictResolution: z.literal("replace").optional()
+}).strict();
+
+export const RemoveProjectSkillInputSchema = z.object({
+  projectId: SafeIdSchema,
+  resourceId: SafeIdSchema,
+  expectedHash: ProjectContentHashSchema
+}).strict();
+
 export const ProfileManifestSchema = z.object({
   id: SafeIdSchema,
   name: z.string().min(1),

@@ -1,19 +1,33 @@
 import type {
   AgentProjectCapability,
-  ProjectCapabilitySupport
+  ProjectCapabilitySupport,
+  ProjectSkillLocationDeclaration
 } from "../targets/types";
 
 interface ProjectCapabilityDeclaration {
   support: ProjectCapabilitySupport;
   instructionFiles: readonly string[];
   instructionCreateFile?: string;
-  skillDirectories: readonly string[];
+  skillLocations: readonly ProjectSkillLocationDeclaration[];
   mcpFiles: readonly string[];
   compareResourcePaths: readonly string[];
   launchArgs?: readonly string[];
 }
 
 const uniquePaths = (paths: readonly string[]): string[] => [...new Set(paths)];
+
+const uniqueSkillLocations = (
+  locations: readonly ProjectSkillLocationDeclaration[]
+): ProjectSkillLocationDeclaration[] => {
+  const result = new Map<string, ProjectSkillLocationDeclaration>();
+  for (const location of locations) {
+    if (!Number.isFinite(location.priority)) {
+      throw new Error(`Project Skill location priority must be finite: ${location.relativePath}`);
+    }
+    if (!result.has(location.relativePath)) result.set(location.relativePath, { ...location });
+  }
+  return [...result.values()];
+};
 
 export const createProjectCapability = (
   declaration: ProjectCapabilityDeclaration
@@ -40,7 +54,7 @@ export const createProjectCapability = (
     },
     instructionFiles: uniquePaths(declaration.instructionFiles),
     instructionCreateFile: declaration.instructionCreateFile,
-    skillDirectories: uniquePaths(declaration.skillDirectories),
+    skillLocations: uniqueSkillLocations(declaration.skillLocations),
     mcpFiles: uniquePaths(declaration.mcpFiles),
     compareResourcePaths: uniquePaths(declaration.compareResourcePaths),
     createLaunchSpec: ({ executablePath, projectRoot }) =>

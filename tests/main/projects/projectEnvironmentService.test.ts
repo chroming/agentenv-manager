@@ -50,6 +50,22 @@ describe("project environment service", () => {
     });
     expect(snapshot.resources.find((resource) => resource.relativePath === "AGENTS.md"))
       .toMatchObject({ consumerAgentIds: ["codex", "opencode"], editable: true });
+    expect(snapshot.skillLocations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        relativePath: ".agents/skills",
+        scope: "shared",
+        consumerAgentIds: ["codex", "opencode"],
+        writable: true,
+        recommended: true
+      }),
+      expect.objectContaining({
+        relativePath: ".opencode/skills",
+        scope: "agent-specific",
+        consumerAgentIds: ["opencode"],
+        writable: true,
+        recommended: false
+      })
+    ]));
   });
 
   it("reports escaping or linked resources as unsafe without reading their contents", async () => {

@@ -214,73 +214,97 @@ Quick Open is a navigation accelerator, not a second command model.
 - Search, active selection, and result list use the standard combobox/listbox accessibility model. Arrow keys move one result, Home and End move to the first and last result, Enter opens the active result, and Escape restores focus to the invoking surface.
 - The active result MUST remain visible while keyboard navigation moves through a longer result list. Opening an item closes Quick Open before navigation so focus and feedback belong to the destination workspace.
 
-### 4.2.4 Projects
+### 4.2.4 Workspaces
 
-A Project is a device-local reference to a real working directory. It is not an
-AgentEnv-owned copy of project configuration and does not require Git.
+A Workspace is a device-local reference to a real working directory. It is not an
+AgentEnv-owned copy of the folder and does not require Git.
 
-- AgentEnv persists only the Project ID, canonical root path, display name, creation and
-  last-opened times, and last-used Agent. Project resources remain canonical in the selected
-  directory. Removing a Project removes only this reference and MUST NOT remove, move, rewrite,
+- AgentEnv persists only the Workspace ID, canonical root path, display name, creation and
+  last-opened times, and last-used Agent. Workspace resources remain canonical in the selected
+  directory. Removing a Workspace removes only this reference and MUST NOT remove, move, rewrite,
   or traverse the referenced directory.
-- Projects never bind or automatically Apply a Profile. Opening a Project uses the selected
-  Agent's current real global environment. The active AgentEnv Profile may be shown as provenance
-  for managed global resources, but it is not a Project relationship.
-- A Conversation belongs to a Project only when its recorded workspace resolves to that Project's
+- Workspaces never bind or automatically Apply a Profile. Opening a Workspace uses the selected
+  Agent's current real global setup. The active AgentEnv Profile may be shown as provenance
+  for managed global resources, but it is not a Workspace relationship.
+- A Conversation belongs to a Workspace only when its recorded workspace resolves to that Workspace's
   canonical directory. This relationship is derived, never persisted as a second binding. The
-  Conversation workspace filter groups canonical Project matches separately from other folders,
-  and a matching Conversation may navigate to that exact Project reference.
-- Project detail lists actual Instructions, Skills, and MCP files through adapter-declared paths.
-  A shared project path consumed by several Agents appears once with every known consumer. An
+  Conversation workspace filter groups canonical Workspace matches separately from other folders,
+  and a matching Conversation may navigate to that exact Workspace reference.
+- Workspace detail lists actual Instructions, Skills, and MCP files through adapter-declared paths.
+  A shared Workspace path consumed by several Agents appears once with every known consumer. An
   unsupported resource kind is labelled unsupported rather than rendered as an empty managed list.
-- Every effective-environment preview is for one selected Agent and starts with a fresh read. It
-  keeps project, Agent-global, AgentEnv-managed, and external sources separate; shows exact paths;
+- Loaded resource details are for one selected Agent and start with a fresh read. They
+  keep Workspace-local, Agent-global, AgentEnv-managed, and external sources separate; show exact paths;
   identifies same-name conflicts; and names every excluded or unreadable source. It may state load
   precedence only when the adapter can prove it. Otherwise it reports `Load order unknown` and the
   result is `Partial`.
-- Project Open uses an adapter-generated absolute executable, argument array, and the canonical
-  Project root as `cwd`. The primary action uses the last-used installed Agent and its adjacent menu
+- Workspace Open uses an adapter-generated absolute executable, argument array, and the canonical
+  Workspace root as `cwd`. The primary action uses the last-used installed Agent and its adjacent menu
   offers other installed Agents with launch capability. Open does not Save or Apply a Profile and
-  does not mutate project resources.
-- Project file mutation is supported only for paths and formats explicitly declared by the Agent
+  does not mutate Workspace resources.
+- The selected `Agent` is the context for Workspace inspection, supported edits, Preview, and Open;
+  it MUST NOT be labelled as only an `Open with` preference. Changing it refreshes the visible
+  resources before another Agent-scoped mutation can be reviewed. Resource identity remains plain
+  text, an editable resource exposes a separate row action, and a relative path identical to its
+  displayed name is not repeated as secondary metadata.
+- Workspace file mutation is supported only for paths and formats explicitly declared by the Agent
   adapter. Every mutation is `fresh read -> semantic diff -> explicit command -> backup -> atomic
   write -> verification -> recovery`. A semantic no-op creates no backup and performs no write.
   Stale bytes require a fresh review. Failure restores the original bytes or leaves a visible
   recovery record before any success is reported.
-- A missing primary Project instruction remains absent until the user explicitly saves its draft.
+- A missing primary Workspace instruction remains absent until the user explicitly saves its draft.
   Save creates only the adapter-declared file and the minimum missing regular parent directories;
   Restore returns the path to absence. Existing links, special files, and non-directory parents are
   never replaced to make creation succeed.
 - Inspection support never grants mutation authority. Renderer paths are never mutation authority:
-  Main issues opaque resource IDs and accepts writes only as `{ projectId, agentId, resourceId,
-  expectedHash }`, then revalidates the canonical root, bounded relative path, parents, entry type,
-  and hash immediately before commit. Child links, special files, escaping paths, and case-folded
+  Main issues opaque resource and Skill-location IDs, then revalidates the canonical root, bounded
+  relative path, parents, entry type, and hash immediately before commit. Instruction writes use an
+  Agent declaration; Skill writes use an explicit location declaration and never infer the location
+  from the Agent selected for Open. Child links, special files, escaping paths, and case-folded
   duplicate destinations remain inspect-only.
-- Dirty Project editors use one Save / Discard / Cancel guard for Project or resource switching,
+- Dirty Workspace editors use one Save / Discard / Cancel guard for Workspace or resource switching,
   workspace navigation, dialog dismissal, reference removal, and app close. A stale hash refreshes
   review rather than overwriting external changes.
-- Every committed Project mutation has a private recovery receipt. Failed writes MUST restore and
+- Every committed Workspace mutation has a private recovery receipt. Failed writes MUST restore and
   verify original bytes; failed restoration creates a persistent `Recovery required` state and
   blocks only the same canonical path. Restore rechecks the current hash; if the path changed after
   the receipt, it refuses to overwrite the newer bytes and requires another review. Removing a
-  Project reference never removes protected recovery receipts.
+  Workspace reference never removes protected recovery receipts.
 - MCP preview exposes names, source labels, and non-secret status only. Credential values, raw
   unsupported configuration, and secret-like arguments MUST NOT cross preload or enter diagnostics.
-- Adding a Library Skill to a Project creates a verified project-owned copy in the explicitly
-  selected project Skill directory. AgentEnv MUST NOT create a link from a Project into the user
+- Adding a Library Skill to a Workspace creates a verified Workspace-owned copy in the explicitly
+  selected Workspace Skill directory. The default is the highest-priority writable shared declaration;
+  for compatible Agents this is `<workspace>/.agents/skills`, while Agent-specific directories remain
+  explicit alternatives. This Workspace-local shared directory is ordinary Workspace content and is not
+  the global `~/.agents/skills` migration boundary. AgentEnv MUST NOT create a link from a Workspace into the user
   Library, copy escaping links or private AgentEnv Library metadata, or silently import an existing
-  Project Skill into Library. The explicit Add command may create the adapter-declared Skill root
+  Workspace Skill into Library. The explicit Add command may create the adapter-declared Skill root
   when it is absent. A failed Add removes only empty parents created by that command and removes the
-  destination only while its verified content still matches the attempted Library copy.
-- Project references and recovery data are device-local and excluded from Workspace Sync. Ordinary
-  AgentEnv data backup includes the reference registry but never copies the referenced Project.
-- `Projects` uses the same list-detail geometry, Page Header, controls, rows, dialogs, progress,
+  destination only while its verified content still matches the attempted Library copy. An identical
+  destination is a no-op. Different content requires an explicit Keep Workspace copy or Replace with
+  Library copy decision; replacement backs up and verifies the original directory before commit.
+- Profile composition and Workspace copy use the same Library Skill picker primitive: searchable
+  identity rows show the same icon, description, version/hash, path, selection, empty, and keyboard
+  states. Profile composition may select several Skills, while Workspace copy selects one and then
+  shows the Workspace location and file impact in the same dialog. A native Skill dropdown is not a
+  separate Workspace interaction pattern.
+- Git observation is advisory and bounded to the selected Workspace and affected relative paths.
+  It reports only `Tracked`, `Modified`, `Untracked`, `Ignored`, `Not a Git repository`, or
+  `Git unavailable`. Git absence or dirtiness never expands or removes filesystem authority.
+- AgentEnv MAY execute only read-only Git queries for this feature (`rev-parse`, `status`, and
+  `ls-files`) with argument arrays, a bounded working directory, timeout, and output limit. It MUST
+  NOT stage, commit, checkout, reset, clean, stash, or modify repository configuration.
+- Workspace references and recovery data are device-local and excluded from Workspace Sync. Ordinary
+  AgentEnv data backup includes the reference registry but never copies the referenced Workspace.
+- `Workspaces` uses the same list-detail geometry, Page Header, controls, rows, dialogs, progress,
   feedback, diff, file preview, keyboard dismissal, and supported viewport rules as sibling desktop
-  workspaces. The Project list owns its scroll; the page never gains horizontal scrolling.
+  workspaces. The Workspace list owns its scroll; the page never gains horizontal scrolling.
 
 ### 4.3 Profile
 
-A Profile is a saved environment recipe. It owns:
+A Profile is the public and persisted reusable Agent setup recipe. It is the product's primary
+composition object, but it does not own an Agent runtime, a Workspace folder, or native Agent
+settings outside an adapter's declared resource boundary. A Profile owns:
 
 - Instructions.
 - References to Library Skills, each with an install name and enabled state.
@@ -394,7 +418,7 @@ A v2 Profile directory contains exactly `profile.json`, `INSTRUCTIONS.md`, and `
 
 Profile name, description, and icon are identity metadata rather than environment payload. Editing
 them MUST persist immediately and independently without saving a dirty Instructions, Skills, MCP activation,
-or resource draft, changing deployment readiness, or writing any Target. Environment content keeps
+or resource draft, changing deployment readiness, or writing any Target. Profile content keeps
 the explicit whole-Profile Save contract below.
 
 Each Library Skill reference has a Profile-scoped enabled state. Missing legacy state means enabled.
@@ -479,7 +503,7 @@ Preview/Apply transaction, never a second editor or a reduced resource model.
 - After an explicit Enable succeeds, the same dialog MAY advance to an ephemeral next-step view
   for only the Agents enabled by that action. It MUST state that Agent files have not changed,
   MUST NOT persist wizard progress, and MUST NOT automatically Capture, create a Profile, or
-  Apply. Dismissal leaves the Agent enabled and Environment Review remains the repeatable entry.
+  Apply. Dismissal leaves the Agent enabled and Profile Review remains the repeatable entry.
 - Each next-step row derives exactly one action from canonical state: open the active Profile,
   continue the newest valid Profile captured from that Agent, surface a malformed active Profile
   for repair, or start the ordinary read-only Create from Target flow. Multiple enabled Agents
@@ -498,6 +522,10 @@ Preview/Apply transaction, never a second editor or a reduced resource model.
   reviewed IDs. Confirming persists the exact checked enabled set, records only currently installed
   Agents as reviewed, and advances the review version. `Not now` remains launch-local, and an Agent
   first detected later remains eligible for its own future suggestion.
+- A confirmed chooser result MUST survive a full renderer and application restart. When the
+  installed Agent IDs, review version, reviewed IDs, and suppression choices are unchanged, startup
+  MUST NOT reopen `Choose Agents`. Diagnostics include those non-secret discovery fields so a
+  repeated chooser can be distinguished from a newly detected Agent or a review-version migration.
 - Supported, detected, enabled, and managed are distinct states. The all-supported detection
   probe is read-only and MUST NOT weaken operation guards: operational Target APIs continue to
   expose enabled Agents only.
@@ -513,13 +541,13 @@ Status: read-only installed-Agent suggestion, explicit Enable, ephemeral post-en
 one Agent-to-Profile configuration entry, complete Capture, canonical Profile composition,
 and shared Preview/Apply orchestration are `Implemented`.
 
-### 4.4.3 Environment Review
+### 4.4.3 Profile Review
 
-Environment Review is the repeatable readiness projection on Agents. It is not a Home page,
+Profile Review is the repeatable readiness projection on Agents. It is not a Home page,
 onboarding destination, filesystem mutation command, or second Local Skill Cleanup
 implementation.
 
-- Agents is the first top-level Workspace destination. Profiles and Conversations follow it;
+- Agents is the first top-level destination. Profiles, Workspaces, and Conversations follow it;
   Skills remains the sole global Library destination, and Settings remains separate.
 - The stable shell opens Agents immediately on every launch. Local core discovery, a legacy
   saved Workspace preference, and background enrichment MUST NOT replace that destination.
@@ -527,9 +555,9 @@ implementation.
   MUST preserve that explicit destination.
 - Agent discovery and local Skill inventory run as independent readiness stages. Agents and
   canonical local data render before optional inventory and remote enrichment complete. A
-  Skill scan failure reports that Environment Review is unavailable without hiding Agents,
+  Skill scan failure reports that Profile Review is unavailable without hiding Agents,
   Profiles, or Library content.
-- Environment Review derives its state from installed Agents, usable Profiles, Target
+- Profile Review derives its state from installed Agents, usable Profiles, Target
   lifecycle state, and the current local Skill inventory. It stores no wizard step and owns no
   duplicate lifecycle state.
 - The compact status projection shows exactly one of: checking local Skills, environment
@@ -539,7 +567,7 @@ implementation.
   its machine-local exception remains visible on the affected Agent and Profile. The projection
   exposes at most one current action. Commands name their affected object:
   `Review Skills`, `Review Profile`, `Configure Agent`, or `Retry check`; a bare lifecycle verb
-  such as `Review` is not an Environment Review command.
+  such as `Review` is not a Profile Review command.
 - Status detail remains a single compact line. When it overflows, the complete selectable value
   is available through the shared enterable detail overlay; truncation MUST NOT discard affected
   Agent names or recovery context.
@@ -553,17 +581,17 @@ implementation.
   effective environment, and must be reviewed before a Profile can claim to disable or omit a
   Skill that the Agent still loads from that location. Leaving migration outside AgentEnv remains
   an explicit device-local boundary and must produce `Applied with local overrides` on the affected
-  Agent. The global Environment Review may still show `Environment ready` because it answers
+  Agent. The global Profile Review may still show `Profile ready` because it answers
   whether an action is currently required; it MUST NOT hide the exception from Agent or Profile
   detail.
 - Refresh is idempotent. An unchanged inventory produces no canonical write, Backup, ownership
   change, or timestamp churn. A changed inventory invalidates stale review plans and exposes
   only the remaining current work.
 - First-run presentation may give the same status projection stronger explanatory copy.
-  Completion changes only presentation emphasis; every Environment Review action remains
+  Completion changes only presentation emphasis; every Profile Review action remains
   available on later runs.
 
-Status: repeatable Environment Review, shared-location scoping, and first-run presentation are
+Status: repeatable Profile Review, shared-location scoping, and first-run presentation are
 `Implemented`.
 
 ### 4.4.4 Data Freshness
@@ -703,6 +731,14 @@ an archive, or a native-session database migration tool.
 - Agent and workspace filters are index queries, not renderer-only hiding. Changing search or a
   filter invalidates older pending list requests, preserves selection only when the selected task
   remains in the result, and never mutates source history.
+- Conversation sorting is also an index query applied after filtering and before pagination.
+  `Recent` is the default, becomes `Best match` while searching, and uses indexed relevance before
+  update time. `Largest` uses only byte sizes already verified in source fingerprints; records with
+  unknown size remain available after sized records and MUST NOT be displayed or sorted as zero.
+  `Most messages` uses the indexed visible-message count. Non-chronological results do not show
+  date-group headings because those headings would imply an ordering the list does not have. Sort
+  is a fixed-size icon menu beside search; Agent and Workspace remain the two symmetric filter
+  fields below it, and the result-count row contains no interactive control.
 - Search queries the complete device-local index, including indexed visible message text, rather
   than only the currently loaded list page. Bounded list pages disclose loaded and total counts;
   the next-page command names how many records it will add and ignores a stale response after the
@@ -1203,7 +1239,7 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 ### 16.1 Import
 
 - Import from a local folder copies canonical content into the Library.
-- Import presents only `Local` and `Repository` as source modes. A local selection MAY be one Skill directory, a containing directory with multiple nested Skills, or a ZIP archive; a separate Projects workflow or saved-location concept MUST NOT duplicate this intent.
+- Import presents only `Local` and `Repository` as source modes. A local selection MAY be one Skill directory, a containing directory with multiple nested Skills, or a ZIP archive; a separate Workspaces workflow or saved-location concept MUST NOT duplicate this intent.
 - Selecting a local directory scans it read-only. Import copies only selected Skills through the same Preview, duplicate-review, validation, Backup, and atomic Library-write contract as other imports and MUST NOT modify the selected directory.
 - A ZIP is a one-time import transport, not a continuously checked source. AgentEnv extracts it only into an isolated temporary directory; rejects encrypted entries, links, path traversal, duplicate paths, unsupported compression, excessive entry counts, and declared or observed expansion beyond fixed limits; and removes the temporary copy when the import dialog closes. Library metadata MAY retain the original archive path as provenance but MUST NOT retain the temporary extraction path or enable update checks by default.
 - A folder or ZIP containing multiple valid Skills exposes one `Import all` command. It runs the ordinary per-Skill Preview and conflict flow sequentially, reports failures beside the affected Skill, leaves other candidates available, and never bypasses duplicate decisions. The dialog exit command is `Close`; mutation commands keep their own progress state.
@@ -1415,12 +1451,12 @@ Management-boundary and evidence contract:
 - Unmanaged copies are never deleted.
 - Deletion with managed installs creates an undoable Backup.
 
-Status: local, read-only Project, recursive GitHub, and System Git Repository import/update; in-place Refresh; per-Skill update policy; YAML frontmatter runtime identity; direct and recursive Agent scanning; read-only Skills CLI and Claude plugin evidence detection with malformed-inventory isolation; independent copy import; scan; cleanup; device-local management boundaries; icon metadata; duplicate runtime-name blocking; reference blocking; managed-install removal; and undo are `Implemented`.
+Status: local, read-only Workspace, recursive GitHub, and System Git Repository import/update; in-place Refresh; per-Skill update policy; YAML frontmatter runtime identity; direct and recursive Agent scanning; read-only Skills CLI and Claude plugin evidence detection with malformed-inventory isolation; independent copy import; scan; cleanup; device-local management boundaries; icon metadata; duplicate runtime-name blocking; reference blocking; managed-install removal; and undo are `Implemented`.
 
 ## 17. Native MCP Contract
 
 - Each Agent is the source of truth for MCP definitions, installation, sign-in, authentication, and credentials.
-- AgentEnv discovers only user/global MCP names, activation state, transport hint, source path, and control capability. Project, plugin, workspace, and policy-managed MCPs MAY be observed but MUST NOT be adopted or mutated.
+- AgentEnv discovers only user/global MCP names, activation state, transport hint, source path, and control capability. Workspace, plugin, workspace, and policy-managed MCPs MAY be observed but MUST NOT be adopted or mutated.
 - Discovery MUST include credential-bearing definitions such as `computer-use` and `node_repl`; secret values MUST NOT enter Profile data, renderer payloads, logs, or diagnostics.
 - A Profile stores a policy per Target. `Keep current` opts that Target entirely out of MCP activation changes. `Use Profile` stores sparse three-state rows: an absent row is shown as `Agent setting` and performs no mutation, while explicit `On` and `Off` choices update only a verified native activation field. Selecting `Use Profile` MUST NOT synthesize overrides for discovered MCPs; returning a row to `Agent setting` removes its saved selection. `Turn off` retains those sparse choices but treats every retained selection as `Off` for the selected Target.
 - Codex, OpenCode, and Trae CLI activation control are `Implemented`. Claude Code and Antigravity are read-only until an official, reliable user-scope activation mechanism is verified. Pi has no built-in MCP configuration and remains outside MCP discovery and mutation.
@@ -1576,7 +1612,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
   comparison column; at the supported minimum it moves under source identity while Changes and
   Status + Action retain stable lanes. Disclosure, source artwork, and overflow controls keep
   fixed hit targets and do not become text-sized tracks.
-- The Agents table may combine Management and Profile into one Environment lane at the supported
+- The Agents table may combine Management and Profile into one Profile lane at the supported
   minimum width. Agent identity, health, environment ownership, and the primary Configure
   destination remain visible; lower-frequency timestamps and commands may move into metadata or
   overflow without creating horizontal scrolling.
@@ -1586,7 +1622,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Large Skill update file rows keep their intrinsic height inside the scrolling dialog body. The list may scroll, but file names and the open diff MUST NOT be compressed into blank rows.
 - Confirming a Skill update turns its preview into a persistent task panel rather than closing it. One-Skill updates show that Skill's waiting, updating, success, or failure state; bulk updates execute Skills sequentially and retain every per-Skill result until the user explicitly closes the dialog. Each Skill remains an independent atomic filesystem transaction, and failed items remain visible and retryable without repeating successful updates.
 - Disabled Skills remain readable and use one neutral row treatment plus the explicit `Disabled` status. They MUST NOT accumulate decorative grayscale, inset rules, badges, and opacity effects, and they are excluded from Enabled, Updates, and non-All Usage filters.
-- Every Profile Composer resource row owns a Target-specific application policy beside the row summary. A compact segmented control exposes the mutually exclusive outcomes `Use Profile`, `Turn off`, and `Keep current` simultaneously; all three labels use the same command voice and describe what happens to that resource category on the selected Agent. It MUST NOT use an on/off switch, checkbox, or hidden dropdown because the Profile can retain and edit its resource content while a selected Target either receives it, receives an explicitly disabled state, or is left untouched. The selected Target in the Profile action area provides scope without adding a detached table header above the resource rows. One parent-owned fixed policy column aligns all sibling controls and static statuses at every supported width. Every segment MUST remain equal in size and fully contained by the control frame, and changing the selected policy MUST NOT move or resize any segment. Unsupported categories show a right-aligned, non-interactive `Agent controlled` ownership state in the same stable lane; it MUST NOT resemble a disabled select or reuse the dimmed `Keep current` treatment.
+- Every Profile Composer resource row owns a Target-specific application policy beside the row summary. A compact segmented control exposes the mutually exclusive outcomes `Profile`, `Off`, and `Agent` simultaneously; their full accessible names remain `Use Profile`, `Turn off`, and `Keep Agent`, with `Keep Agent` mapping to the persisted `Keep current` policy. The short visible labels form one stable source/state axis instead of reading like three unrelated command buttons, while tooltips explain the exact Apply effect. It MUST NOT use an on/off switch, checkbox, or hidden dropdown because the Profile can retain and edit its resource content while a selected Target either receives it, receives an explicitly disabled state, or is left untouched. The selected Target in the Profile action area provides scope without adding a detached table header above the resource rows. One parent-owned fixed policy column aligns all sibling controls and static statuses at every supported width. Every segment MUST remain equal in size, vertically centered, and fully contained by the control frame, and changing the selected policy MUST NOT move or resize any segment. Each selected outcome uses a restrained but distinct state surface inside a stable neutral frame. Unsupported categories show a right-aligned, non-interactive `Agent controlled` ownership state in the same stable lane; it MUST NOT resemble a disabled select or reuse the dimmed `Keep current` treatment.
 - The resource disclosure occupies the leading edge and uses the platform-standard right/down direction. Its hover and pressed states change the chevron color without drawing a rounded tile behind the full disclosure lane; keyboard focus remains visible. The segmented policy control occupies the trailing edge. Disclosure, row body, and policy choices are distinct click zones: the first two only expand or collapse the editor, while each policy choice changes only the saved Target policy. The active choice uses a selected surface rather than checkbox, switch, filled-primary, or whole-row selection styling. Arrow keys move to the adjacent choice, while Home and End select the first and last choices.
 - `Keep current` gives the complete resource header a quiet neutral treatment so the non-managed category is visible without reading the policy label. `Turn off` uses a separate restrained treatment that remains visibly managed rather than looking unavailable. The disclosure and segmented policy control remain fully legible and interactive; neither state uses whole-container opacity because saved Profile content remains editable.
 - Resource editors remain available for `Turn off` and `Keep current`, because the saved Profile recipe can still be edited or used by another Target. The expanded panel MUST state the selected Target effect. Target-specific child choices become observational under `Keep current`; under `Turn off` they remain editable but do not become effective until the category returns to `Use Profile`.
@@ -1603,7 +1639,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Settings renders ordinary preferences as stable `name and explanation -> control` rows. Labels are never detached into a separate alignment scheme, and toggles, selects, read-only values, and numeric inputs share one right-hand control lane.
 - Settings is one continuous, restrained preference surface rather than a stack of feature cards. Its content width and control lane remain bounded so short controls stay close to their labels; account, data, and diagnostic commands use the same Button primitive and only the current continuation receives accent fill.
 - Settings MAY override one configuration root per Agent. The Adapter remains the sole owner of deriving Instructions, Skills, and native configuration paths below that root. Selecting a root performs no migration, does not move existing files, and performs no Agent write. All later reads and writes use the same resolved paths. An Agent with retained AgentEnv ownership state MUST be stopped before its root can change even when that Agent is disabled and hidden from ordinary active-state lists. Full custom paths use the shared selectable overflow-detail behavior, and Choose, Change, and Use default show progress on their owning row.
-- Truncated values and contextual explanations use one shared hover-detail primitive. Plain text opens detail only when it is measurably clipped; short fitting text MUST NOT create a hover surface. Complete text remains selectable and pointer-enterable, uses regular body weight and neutral overlay styling, stays inside the viewport with bounded scrolling, closes on Escape or owning-list scroll, and never relies on a browser `title` as the only readable copy. Wheel input at a detail layer's scroll boundary continues scrolling the nearest owning list rather than making the interface appear frozen.
+- Truncated values and contextual explanations use one shared hover-detail primitive with two explicit interaction modes. Overflow and decision details open only when measurably clipped and remain selectable and pointer-enterable for copying. Brief `InfoTip` explanations are passive, non-interactive tooltips: they MUST NOT intercept a command underneath or prevent focus from moving to the next control. Both modes use regular body weight and neutral overlay styling, stay inside the viewport, close on Escape or owning-list scroll, and never rely on a browser `title` as the only readable copy. Wheel input at an interactive detail layer's scroll boundary continues scrolling the nearest owning list rather than making the interface appear frozen.
 - At narrow widths, Profile readiness is read before its Save and Apply command group. Secondary Profile commands MUST NOT duplicate a direct command already visible beside the selected Profile name, and expanded Skills and MCP resources share one flat list hierarchy rather than introducing resource-specific nested cards.
 - Comparable actions in one command group use the same control height; Profile Save and Apply also reserve the same width so lifecycle state changes do not shift surrounding content.
 - Switch tracks and thumbs have non-shrinking primitive-owned geometry. On and Off states preserve equal optical inset between the thumb and the track edge at every supported viewport; a page grid MUST allocate the complete intrinsic switch width and MUST NOT rely on flex shrink to make the control fit.
@@ -1663,14 +1699,14 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Optional account and service setup starts as a neutral command. After the user enters that setup flow, its next explicit continuation MAY become the accent-filled primary action; unrelated sync or workspace actions keep their own emphasis only when that setup flow is not active.
 - Drawer and modal surfaces use the shared overlay edge, shadow, header divider, and header-control geometry. Feature-specific legacy borders, shadows, close buttons, or control heights MUST NOT leak into a shared overlay.
 - Settings switches sit beside the setting label they control, with supporting copy on the following line; they MUST NOT float as visually detached controls at the far edge of a wide row.
-- Hover/focus tooltips are mutually exclusive and use a subtle trigger-anchored entry. The first pointer disclosure uses a short intentional delay; moving directly to an adjacent tooltip while one remains active opens the next immediately. Long-text tooltips allow pointer entry and native text selection for copying, then close after the pointer leaves both trigger and tooltip. Repeated passive overflow spans MUST NOT each add a Tab stop: an existing row command or identity action owns keyboard focus and its full accessible name, while standalone error or decision details MAY opt into focus explicitly.
+- Hover/focus tooltips are mutually exclusive and use a subtle trigger-anchored entry. The first pointer disclosure uses a short intentional delay; moving directly to an adjacent tooltip while one remains active opens the next immediately. Long-text tooltips allow pointer entry and native text selection for copying, then close after the pointer leaves both trigger and tooltip. Passive information tooltips remain outside pointer hit testing so they cannot cover or block neighboring commands. Repeated passive overflow spans MUST NOT each add a Tab stop: an existing row command or identity action owns keyboard focus and its full accessible name, while standalone error or decision details MAY opt into focus explicitly.
 - Modal dialogs trap keyboard focus until they close.
 - Modal dismissal follows one explicit policy. `Standard` dialogs contain read-only detail, previews, or one-step confirmation with no staged input; safe outside click and Escape both cancel them. `Intentional` dialogs contain typed values, selections, conflict choices, or multi-step draft state; outside click MUST preserve the dialog and draft, while Escape and the explicit Cancel or Close command discard it. A working dialog is temporarily non-dismissible regardless of policy. Menus, popovers, and tooltips continue to close on safe outside click.
 - Escape closes only the topmost dismissible layer; the handled event MUST NOT continue and close a parent dialog or drawer. A non-dismissible working layer consumes Escape without exposing or closing the layer beneath it. Focus returns to the trigger or the next logical surviving control.
 - Primary workflows work with keyboard only.
 - Status is never communicated through color alone.
 - Dynamic visible copy and accessible labels use the active locale. Truncated Profile descriptions use the shared selectable overflow detail instead of native browser title tooltips.
-- Conversations, Skills, Profiles, Agents, and Settings share the same shell-owned content origin. Feature pages MUST NOT add a second outer inset that makes navigation appear to resize or the work surface jump between destinations.
+- Conversations, Skills, Profiles, Agents, Workspaces, and Settings share the same shell-owned content origin. Feature pages MUST NOT add a second outer inset that makes navigation appear to resize or the work surface jump between destinations.
 - On macOS, the full-width title-bar strip remains separate from sidebar navigation and owns the shell's only drag region. The sidebar box and divider begin below that strip. Its expand/collapse control is a fixed `no-drag` child after the native traffic lights; the draggable blank area starts after the control so their native hit regions never overlap. The control stays in one position in both sidebar states and never reserves a header row inside collapsed navigation. When collapsed navigation hides section labels, each section boundary remains visible as one shared hairline instead of being implied by unequal icon spacing.
 - Startup presents the current recovery or preparation phase before the main workspace is interactive. A recoverable failure keeps Retry, data-folder access, diagnostics export, and Quit visible at the minimum viewport; every async recovery command uses the shared local busy state.
 - Renderer styling follows one ordered cascade contract: accessibility, tokens, base, frozen legacy, primitives, shell, pages, and overlays.
@@ -1813,14 +1849,14 @@ provider session ID, the captured working directory, and the resolved Pi environ
 
 ## 23.2 First-Run Workflow
 
-The first useful journey is the empty-workspace presentation of the repeatable Environment
+The first useful journey is the empty-workspace presentation of the repeatable Profile
 Review and canonical Agent/Profile workflows:
 
 1. Render the stable shell on Agents. Probe every supported integration in the background while
    operational views remain scoped to explicitly enabled Agents.
 2. If installed disabled Agents are found, offer one reversible selection dialog. Enabling an
    Agent changes only AgentEnv settings; it does not Capture, Apply, or write Agent files.
-3. Run a read-only local Skill inventory. Shared compatibility findings appear in Environment
+3. Run a read-only local Skill inventory. Shared compatibility findings appear in Profile
    Review; no modal opens and no file changes without an explicit command.
 4. Configure opens the complete Create from Target flow. Capture reads Instructions, Skills,
    supported MCP activation policy, and effective shared resources without changing the Agent.
@@ -1831,7 +1867,7 @@ Review and canonical Agent/Profile workflows:
    copy into canonical Library and Agent-specific deployment locations.
 7. Review and Apply the saved Profile through the standard Preview, ownership, Backup,
    verification, and rollback transaction.
-8. Later launches open Agents again. Environment Review remains manually refreshable and
+8. Later launches open Agents again. Profile Review remains manually refreshable and
    automatically reflects newly discovered shared Skills; background work never changes the
    user's current workspace.
 
@@ -1972,7 +2008,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 ### Library
 
 - Local import survives deletion of original folder.
-- Project discovery scans configured roots read-only, deduplicates overlapping roots, isolates invalid candidates, preserves source files, and routes selected imports through the ordinary Library Preview flow.
+- Workspace discovery scans configured roots read-only, deduplicates overlapping roots, isolates invalid candidates, preserves source files, and routes selected imports through the ordinary Library Preview flow.
 - GitHub direct-Skill, containing-directory, and repository scan; candidate selection; partial import; rate limit; sign-in remediation; update check; Preview; and update.
 - GitHub Device Flow pending, focus return, `slow_down`, expiry, denial, and successful account-state refresh without overlapping network polls.
 - GitHub status clears a stored token after decryption failure or `401`, retains it through offline, timeout, rate-limit, and service failures, and keeps Sign out independent from Library and source state.

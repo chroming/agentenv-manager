@@ -205,7 +205,11 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     },
     instructionFiles: ["AGENTS.md", "CLAUDE.md"],
     instructionCreateFile: "AGENTS.md",
-    skillDirectories: [".opencode/skills", ".claude/skills", ".agents/skills"],
+    skillLocations: [
+      { relativePath: ".agents/skills", scope: "shared", writable: true, priority: 100 },
+      { relativePath: ".opencode/skills", scope: "agent-specific", writable: true, priority: 50 },
+      { relativePath: ".claude/skills", scope: "agent-specific", writable: false, priority: 0 }
+    ],
     mcpFiles: ["opencode.json", "opencode.jsonc"],
     compareResourcePaths: [
       "opencode.json",

@@ -6,7 +6,7 @@
 [![CI](https://github.com/chroming/agentenv-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/chroming/agentenv-manager/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/chroming/agentenv-manager)](LICENSE)
 
-AgentEnv Manager 是一个本地桌面应用，用来整理多个 coding agent 的 Skills、Instructions、MCP 启停状态和历史对话。你可以把一套工作环境保存为 Profile，在写入 Agent 前预览变化、运行隔离对比，并在需要时从恢复点还原。
+AgentEnv Manager 是一个本地桌面应用，用来整理多个 coding agent 的 Skills、Instructions、MCP 启停状态和历史对话。你可以把一套工作方式保存为 Profile，在写入 Agent 前预览变化、运行隔离对比，并在需要时从恢复点还原。
 
 应用不会接管模型、账号、凭据或整份原生配置。每个 Agent 只开放经过明确适配的资源。
 
@@ -27,32 +27,32 @@ macOS、Windows 和 Linux 安装包也可以从 [GitHub Releases](https://github
 ## 第一次使用
 
 1. 启动应用，确认自动检测到的 Agent。没有安装的 Agent 默认保持关闭。
-2. 在 Agents 中配置一个 Agent，把当前环境保存为 Profile，或从空 Profile 开始。
+2. 在 Agents 中配置一个 Agent，把当前设置保存为 Profile，或从空 Profile 开始。
 3. 如果机器上已经有较多 Skills，先打开 `Skills > Local Skills`，检查重复副本、冲突、共享目录和失效链接。
 4. 在 Profile 中选择要管理的 Instructions、Skills 和 MCP 状态，保存后查看 Apply 预览。
 5. 确认变化后再 Apply。AgentEnv 会先创建恢复点，写入失败时尝试自动回滚并保留恢复记录。
 
 ## Profiles
 
-Profile 保存可复用的工作环境，包括 Instructions、Library Skills，以及受支持 Agent 中已有 MCP 的启停选择。每类资源都可以选择使用 Profile、关闭或保留 Agent 当前状态。
+Profile 保存可复用的 Agent 工作方式，包括 Instructions、Library Skills，以及受支持 Agent 中已有 MCP 的启停选择。每类资源都可以选择使用已保存内容、关闭或保留 Agent 当前状态。
 
-![Profiles workspace](docs/images/profiles.png)
+![Profiles](docs/images/profiles.png)
 
 Apply 前会重新读取目标环境，列出新增、替换、删除、保留和需要确认的资源。AgentEnv 只在确认后写入，并验证最终状态。
 
 ### Apply 前对比
 
-Compare 会让当前 Agent 环境和候选 Profile 对同一个任务各运行一次。两次运行使用隔离的临时 Home 和 Workspace，结果并排展示回复、文件变化、耗时和 CLI 明确上报的 token。
+Compare 会让当前 Agent 设置和候选 Profile 对同一个任务各运行一次。两次运行使用隔离的临时 Home 和 Workspace，结果并排展示回复、文件变化、耗时和 CLI 明确上报的 token。
 
 ![Profile comparison](docs/images/profile-compare.png)
 
 Compare 会消耗对应 Agent 的账号额度，但不会 Apply，也不会修改真实 Agent 或原项目。当前隔离对比需要 macOS；OpenCode、Claude Code、Codex、Antigravity CLI 和 Pi 提供已验证的实现，Trae CLI 暂不支持可靠的一次性运行。
 
-## Projects
+## Workspaces
 
-Projects 保存常用本地目录的引用，并按所选 Agent 展示该目录会加载的 Instructions、Skills 和 MCP 名称。你可以直接在项目目录中编辑受支持的 Instructions、从 Library 添加或移除项目 Skill，也可以用已安装的 Agent 在该目录启动工作。
+Workspaces 保存常用本地目录的引用，并按所选 Agent 展示该目录会加载的 Instructions、Skills 和 MCP 名称。你可以编辑明确支持的 Workspace Instructions、把 Library Skill 复制为目录中的普通文件，也可以用已安装的 Agent 在该目录启动工作。
 
-项目文件始终以原目录为准，不会绑定或 Apply 全局 Profile。写入前会校验文件版本并创建独立恢复点；移除 Project 只删除应用内引用，不会删除目录。
+目录中的文件始终是唯一事实源，不会绑定或 Apply Profile。AgentEnv 不会在 Workspace 中创建 Library 链接，也不会替你 stage 或 commit Git 变化。写入前会校验文件版本并创建独立恢复点；移除 Workspace 只删除应用内引用，不会删除目录。
 
 ## Skill Library
 
@@ -66,7 +66,7 @@ Library 为每个 Skill 保存一份可复用内容。可以从本地目录、ZI
 
 ## Conversations
 
-Conversations 只读索引本机 Agent 的历史记录。可以搜索标题和消息、按目录筛选、回到原对话，或检查上下文后交给另一个 Agent 继续。对话目录已添加为 Project 时，还可以直接跳到对应 Project。
+Conversations 只读索引本机 Agent 的历史记录。可以搜索标题和消息、按目录筛选、回到原对话，或检查上下文后交给另一个 Agent 继续。对话目录已添加为 Workspace 时，还可以直接跳到对应 Workspace。
 
 ![Conversation history](docs/images/conversations.png)
 

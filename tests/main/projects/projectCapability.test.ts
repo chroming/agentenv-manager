@@ -13,14 +13,24 @@ describe("Project capability", () => {
       },
       instructionFiles: ["AGENTS.md"],
       instructionCreateFile: "AGENTS.md",
-      skillDirectories: [".agents/skills"],
+      skillLocations: [{
+        relativePath: ".agents/skills",
+        scope: "shared",
+        writable: true,
+        priority: 100
+      }],
       mcpFiles: ["agent.json"],
       compareResourcePaths: ["AGENTS.md", ".agents", "agent.json", ".agents"]
     });
 
     expect(capability.instructionFiles).toEqual(["AGENTS.md"]);
     expect(capability.instructionCreateFile).toBe("AGENTS.md");
-    expect(capability.skillDirectories).toEqual([".agents/skills"]);
+    expect(capability.skillLocations).toEqual([{
+      relativePath: ".agents/skills",
+      scope: "shared",
+      writable: true,
+      priority: 100
+    }]);
     expect(capability.mcpFiles).toEqual(["agent.json"]);
     expect(capability.compareResourcePaths).toEqual([
       "AGENTS.md",
@@ -40,7 +50,7 @@ describe("Project capability", () => {
       },
       instructionFiles: ["AGENTS.md"],
       instructionCreateFile: "CLAUDE.md",
-      skillDirectories: [".agents/skills"],
+      skillLocations: [{ relativePath: ".agents/skills", scope: "shared", writable: true, priority: 100 }],
       mcpFiles: [],
       compareResourcePaths: ["AGENTS.md", ".agents"]
     })).toThrow("must also be declared for inspection");
@@ -56,7 +66,7 @@ describe("Project capability", () => {
         cliLaunch: "supported"
       },
       instructionFiles: ["AGENTS.md"],
-      skillDirectories: [".agents/skills"],
+      skillLocations: [{ relativePath: ".agents/skills", scope: "shared", writable: true, priority: 100 }],
       mcpFiles: [],
       compareResourcePaths: ["AGENTS.md", ".agents"],
       launchArgs: ["interactive"]
