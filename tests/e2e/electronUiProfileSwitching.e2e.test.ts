@@ -3336,12 +3336,16 @@ describe("Electron UI profile switching e2e", () => {
     const descriptionOverflows = await description.evaluate(
       (element) => element.scrollWidth > element.clientWidth + 1
     );
-    await hoverFromOutside(page, description);
-    await page.waitForTimeout(380);
-    expect(await page.getByRole("tooltip").count()).toBe(descriptionOverflows ? 1 : 0);
+    const descriptionTooltip = page.getByRole("tooltip");
+    if (descriptionOverflows) {
+      await hoverUntilVisible(page, description, descriptionTooltip);
+    } else {
+      await hoverFromOutside(page, description);
+      await expect.poll(() => descriptionTooltip.count()).toBe(0);
+    }
     await page.mouse.move(1, 1);
-    await expect.poll(() => page.getByRole("tooltip").count()).toBe(0);
-    const descriptionTip = page.getByRole("tooltip");
+    await expect.poll(() => descriptionTooltip.count()).toBe(0);
+    const descriptionTip = descriptionTooltip;
     await hoverUntilVisible(
       page,
       page.getByLabel("Full source for shared-reviewer"),
