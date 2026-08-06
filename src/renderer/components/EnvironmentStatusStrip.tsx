@@ -35,7 +35,7 @@ const statusCopy = (
       };
     case "unavailable":
       return {
-        title: t("Environment check unavailable"),
+        title: t("Profile check unavailable"),
         detail: t("Agent configuration is still available. Retry the check when ready.")
       };
     case "shared-review":
@@ -53,7 +53,7 @@ const statusCopy = (
     case "setup":
       return {
         title: t("Set up your first Agent"),
-        detail: t("Save its current environment as a Profile. Agent files change only after Apply.")
+        detail: t("Save its current setup as a Profile. Agent files change only after Apply.")
       };
     case "agent-review":
       return {
@@ -72,7 +72,7 @@ const statusCopy = (
       };
     default:
       return {
-        title: t("Environment ready"),
+        title: t("Profile ready"),
         detail: t("{{agents}} Agents detected · {{profiles}} Profiles", {
           agents: summary.installedAgentCount,
           profiles: summary.usableProfileCount
@@ -108,7 +108,7 @@ export const EnvironmentStatusStrip = ({
 
   return (
     <section
-      aria-label={t("Environment status")}
+      aria-label={t("Profile status")}
       aria-live="polite"
       className={`environment-status-strip environment-status-strip--${summary.state}`}
     >

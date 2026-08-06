@@ -738,6 +738,7 @@ export const SkillSourceView = ({
             <span>{t("Skills")}</span>
             <span>{t("Last checked")}</span>
             <span>{t("Status")}</span>
+            <span>{t("Action")}</span>
             <span aria-label={t("More")} />
           </div>
         ) : null}
@@ -914,53 +915,46 @@ export const SkillSourceView = ({
                       ? formatDate(group.checkedAt)
                       : "—"}
                 </span>
-                {!isChecking && reviewableUpdateIds.length > 0 ? (
-                  <button
-                    aria-label={t(sourceStatus)}
-                    aria-busy={reviewingGroup}
-                    className={statusClassName}
-                    type="button"
-                    disabled={activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void runReviewUpdates(reviewableUpdateIds);
-                    }}
-                  >
-                    {reviewingGroup ? (
-                      <>
-                        <LoaderCircle className="is-spinning" size={13} strokeWidth={2.2} />
-                        <span className="skill-source-status-label">{t("Preparing...")}</span>
-                      </>
-                    ) : statusContents}
-                  </button>
-                ) : !isChecking && group.error ? (
-                  <button
-                    aria-label={t(sourceStatus)}
-                    className={statusClassName}
-                    type="button"
-                    disabled={activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void runCheck(group.sourceId);
-                    }}
-                  >
-                    {statusContents}
-                  </button>
-                ) : !isChecking && hasAttention ? (
-                  <button
-                    aria-label={t(sourceStatus)}
-                    className={statusClassName}
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      toggleExpanded(group.sourceId);
-                    }}
-                  >
-                    {statusContents}
-                  </button>
-                ) : (
-                  <div className={statusClassName}>{statusContents}</div>
-                )}
+                <div className={statusClassName}>{statusContents}</div>
+                <div className="skill-source-current-action">
+                  {!isChecking && reviewableUpdateIds.length > 0 ? (
+                    <Button
+                      aria-label={t("Update source skills")}
+                      busy={reviewingGroup}
+                      size="compact"
+                      disabled={activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void runReviewUpdates(reviewableUpdateIds);
+                      }}
+                    >
+                      {t("Update")}
+                    </Button>
+                  ) : !isChecking && group.error ? (
+                    <Button
+                      aria-label={t("Retry source check")}
+                      size="compact"
+                      disabled={activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void runCheck(group.sourceId);
+                      }}
+                    >
+                      {t("Retry")}
+                    </Button>
+                  ) : !isChecking && hasAttention ? (
+                    <Button
+                      aria-label={t("Review source changes")}
+                      size="compact"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleExpanded(group.sourceId);
+                      }}
+                    >
+                      {t("Review")}
+                    </Button>
+                  ) : null}
+                </div>
                 <div className="skill-source-more">
                   <IconButton
                     label={t("Source actions for {{name}}", { name: groupName })}

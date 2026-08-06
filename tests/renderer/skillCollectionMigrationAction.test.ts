@@ -49,7 +49,7 @@ describe("runSkillCollectionMigration", () => {
 
     await expect(runSkillCollectionMigration(action)).resolves.toEqual({
       status: "needs-save",
-      message: "The active Profile has unsaved edits. Save them before moving this collection."
+      message: "The active Profile has unsaved edits. Save it before moving this collection."
     });
     expect(action.saveDirtyProfile).not.toHaveBeenCalled();
     expect(action.setBusy).not.toHaveBeenCalled();

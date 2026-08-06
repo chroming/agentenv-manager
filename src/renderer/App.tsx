@@ -1278,7 +1278,7 @@ const AppContent = ({
     setError(undefined);
     setProfileMetadataSavingId(profileId);
     if (draftProfile?.id === profileId) {
-      setProfileSaveStatus("Saving profile details");
+      setProfileSaveStatus("Saving Profile details");
     }
     try {
       const previousName =
@@ -1334,7 +1334,7 @@ const AppContent = ({
   };
 
   const openCreateProfileDialog = () => {
-    guardProfileAction("create a new profile", openCreateProfileDialogNow);
+    guardProfileAction("create a new Profile", openCreateProfileDialogNow);
   };
 
   const openCreateFromTargetDialogNow = (
@@ -1480,7 +1480,7 @@ const AppContent = ({
         if (!draftProfile.contentHash) {
           throw new Error("Refresh this Profile before saving its details.");
         }
-        setProfileSaveStatus("Saving profile details");
+        setProfileSaveStatus("Saving Profile details");
         const saved = await window.agentEnv.updateProfileMetadata({
           id: draftProfile.id,
           expectedContentHash: draftProfile.contentHash,
@@ -1545,7 +1545,7 @@ const AppContent = ({
 
   const duplicateProfile = (profileId: string | undefined = selectedProfileId) => {
     if (!profileId) return;
-    guardProfileAction("duplicate this profile", () => duplicateProfileNow(profileId));
+    guardProfileAction("duplicate this Profile", () => duplicateProfileNow(profileId));
   };
 
   const deleteProfile = async () => {
@@ -1597,7 +1597,7 @@ const AppContent = ({
     appModalFallbackFocusRef.current = returnFocus;
     const open = () => setDeleteProfileCandidateId(profileId);
     if (profileId === selectedProfileId) {
-      guardProfileAction("delete this profile", open);
+      guardProfileAction("delete this Profile", open);
     } else {
       open();
     }
@@ -1921,7 +1921,7 @@ const AppContent = ({
     isProfilePreviewing
       ? t("Reviewing changes")
       : isProfileApplying
-        ? t("Applying profile")
+        ? t("Applying Profile")
         : readiness.status === "applied"
           ? t("Up to date on {{name}}", { name: readinessTargetName })
           : readiness.status === "apply-pending"
@@ -1955,13 +1955,13 @@ const AppContent = ({
     isProfileDirty ||
     readiness.status === "applied";
   const applyDescription = !draftProfile
-    ? t("Select a profile before previewing changes")
+    ? t("Select a Profile before previewing changes")
     : !selectedTarget
       ? t("Select an Agent before previewing changes")
       : busy
         ? t("An action is in progress")
         : profileMetadataSavingId === draftProfile.id
-          ? t("Saving profile details")
+          ? t("Saving Profile details")
         : t(readiness.message);
   const previewHasBlockingIssues =
     preview?.issues.some((issue) => issue.disposition === "block") === true;
@@ -2479,7 +2479,7 @@ const AppContent = ({
     setSkillUpdateFeedbackWorkspace(
       activeWorkspace === "targets" ? "targets" : "profiles"
     );
-    setSkillUpdateCheckStatus({ state: "checking", message: "Checking profile skills..." });
+    setSkillUpdateCheckStatus({ state: "checking", message: "Checking Profile Skills..." });
     try {
       const updates = await window.agentEnv.checkSkillLibraryUpdates(ids);
       const selectedIds = new Set(ids);
@@ -2494,7 +2494,7 @@ const AppContent = ({
       }
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-      setSkillUpdateCheckStatus({ state: "error", message: "Profile skill check failed" });
+      setSkillUpdateCheckStatus({ state: "error", message: "Profile Skill check failed" });
     } finally {
       setCheckingProfileSkillUpdates(false);
     }
@@ -3809,7 +3809,7 @@ const AppContent = ({
                     count: skillCleanupResult.managedLocations.length
                   })
               : skillCleanupResult.operation === "merge"
-                ? t("Updated {{profiles}} profiles and {{installs}} managed installs. A restorable backup is available in History.", {
+                ? t("Updated {{profiles}} Profiles and {{installs}} managed installs. A restorable backup is available in History.", {
                     profiles: skillCleanupResult.profilesUpdated ?? 0,
                     installs: skillCleanupResult.installsUpdated ?? 0
                   })
@@ -3854,8 +3854,8 @@ const AppContent = ({
               profileSaveStatus === "Profile saved" ||
               profileSaveStatus === "Profile details saved"
                 ? "success"
-                : profileSaveStatus === "Saving profile" ||
-                    profileSaveStatus === "Saving profile details"
+                : profileSaveStatus === "Saving Profile" ||
+                    profileSaveStatus === "Saving Profile details"
                   ? "loading"
                   : "info",
             title: profileSaveStatus,
@@ -4069,7 +4069,7 @@ const AppContent = ({
             : activeWorkspace === "profiles"
               ? t("Profile editor")
               : activeWorkspace === "projects"
-                ? t("Project workspace")
+                ? t("Workspace browser")
               : activeWorkspace === "conversations"
                 ? t("Conversation workspace")
               : t("{{name}} workspace", { name: activeWorkspace })
@@ -4326,7 +4326,7 @@ const AppContent = ({
                     className="profile-loading-surface"
                     role="status"
                     aria-live="polite"
-                    aria-label={t("Loading profile {{name}}", {
+                    aria-label={t("Loading Profile {{name}}", {
                       name: loadingProfileSummary?.name ?? t("Profile")
                     })}
                   >
@@ -4338,7 +4338,7 @@ const AppContent = ({
                         <div className="profile-hero__title">
                           <h2>{loadingProfileSummary?.name ?? t("Profile")}</h2>
                         </div>
-                        <p className="profile-description">{t("Loading profile...")}</p>
+                        <p className="profile-description">{t("Loading Profile...")}</p>
                       </div>
                       <LoaderCircle
                         className="is-spinning profile-loading-indicator"
@@ -4368,7 +4368,7 @@ const AppContent = ({
                         iconKey={draftProfile.manifest.iconKey ?? defaultProfileIconKey}
                         label={draftProfile.manifest.name}
                         showAgentIcons
-                        triggerLabel={t("Change icon for profile {{id}}", { id: draftProfile.id })}
+                        triggerLabel={t("Change icon for Profile {{id}}", { id: draftProfile.id })}
                         onChange={(iconKey) => {
                           if (iconKey) changeProfileIcon(draftProfile.id, iconKey);
                         }}
@@ -4384,8 +4384,8 @@ const AppContent = ({
                           <button
                             className="icon-action"
                             type="button"
-                            aria-label={t("Edit profile")}
-                            title={t("Edit profile")}
+                            aria-label={t("Edit Profile")}
+                            title={t("Edit Profile")}
                             onClick={openEditProfileDialog}
                           >
                             <Pencil size={13} strokeWidth={2.1} />
@@ -4431,7 +4431,7 @@ const AppContent = ({
                           className="profile-commit-actions"
                           ref={profileObjectActionsRef}
                           role="group"
-                          aria-label={t("Selected profile actions")}
+                          aria-label={t("Selected Profile actions")}
                         >
                           <div className="profile-save-control">
                             <button
@@ -4473,8 +4473,8 @@ const AppContent = ({
                             type="button"
                             aria-expanded={isProfileActionsOpen}
                             aria-haspopup="menu"
-                            aria-label={t("More profile actions")}
-                            title={t("More profile actions")}
+                            aria-label={t("More Profile actions")}
+                            title={t("More Profile actions")}
                             disabled={busy || !draftProfile || draftProfile.id !== selectedProfileId}
                             onClick={() => {
                               setIsTargetMenuOpen(false);
@@ -4617,7 +4617,7 @@ const AppContent = ({
                         )}
                         count={resourceSummary?.mcp.total ?? 0}
                         enabledCount={resourceSummary?.mcp.count ?? 0}
-                        countSummary={t("Profile {{profile}} · Agent {{agent}}", {
+                        countSummary={t("Saved {{profile}} · Agent {{agent}}", {
                           profile: resourceSummary?.mcp.total ?? 0,
                           agent: (nativeMcpConnections ?? []).filter(
                             (connection) => connection.targetId === selectedTarget?.id
@@ -4722,8 +4722,8 @@ const AppContent = ({
                 ) : (
                   <div className="profile-empty-surface">
                     <div className="empty-state">
-                      <h2>{t("No profile selected")}</h2>
-                      <p className="muted">{t("Choose a profile or create one.")}</p>
+                      <h2>{t("No Profile selected")}</h2>
+                      <p className="muted">{t("Choose a Profile or create one.")}</p>
                     </div>
                     {profileApplyControl}
                   </div>
@@ -5065,7 +5065,7 @@ const AppContent = ({
           />
         ) : (
           <div className="empty-state">
-            <h2>{t("No profile selected")}</h2>
+            <h2>{t("No Profile selected")}</h2>
           </div>
         )}
         {pendingSkillImport ? (

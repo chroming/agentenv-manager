@@ -212,7 +212,7 @@ export const ProfileMcpEditor = ({
                 </span>
                 {!managing ? null : canManage && connection.controllable ? (
                   <div
-                    className={`profile-mcp-mode ui-segmented-control ui-segmented-control--compact${mode === "agent" ? "" : " is-profile-override"}`}
+                    className={`profile-mcp-mode ui-segmented-control ui-segmented-control--compact is-${mode}`}
                     role="radiogroup"
                     aria-label={t("{{name}} Profile behavior", { name: connection.name })}
                     onKeyDown={(event) => handleModeKeyDown(event, connection.name, mode)}

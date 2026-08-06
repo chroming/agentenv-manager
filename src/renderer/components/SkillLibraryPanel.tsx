@@ -1928,7 +1928,7 @@ export const SkillLibraryPanel = ({
             {t("Usage")}
             <InfoTip
               label={t(
-                "Shows Profile references and Agent installs for this skill."
+                "Shows Profile references and Agent installs for this Skill."
               )}
             />
           </span>
@@ -1936,6 +1936,7 @@ export const SkillLibraryPanel = ({
             {t("Status")}
             <InfoTip label={t("Shows the current maintenance state for this skill.")} />
           </span>
+          <span>{t("Action")}</span>
           <span aria-label={t("More")} />
         </div>
         <div className="library-table__body" ref={scrollOwnerRef}>
@@ -1963,6 +1964,13 @@ export const SkillLibraryPanel = ({
             const availabilityIsChanging = availabilityOperation?.id === skill.id;
             const hasUpdate = globallyEnabled && isTracked && Boolean(updateInfo?.updateAvailable);
             const hasError = globallyEnabled && isTracked && Boolean(updateInfo?.error);
+            const maintenanceStatusLabel = isTracked && updateInfo
+              ? "Up to date"
+              : isTracked && hasUpdateSource
+                ? "Not checked"
+                : hasUpdateSource && skill.sourceType !== "local"
+                  ? "Monitoring off"
+                  : "Available";
             const usageCount = (skillUsage[skill.id] ?? []).length;
             const revisionLabel = shortSkillRevision(skill);
             const versionLabel = skill.version ?? skill.remoteRef ?? revisionLabel;
@@ -2146,78 +2154,32 @@ export const SkillLibraryPanel = ({
                       <span>{t("Disabled")}</span>
                     </strong>
                   ) : hasUpdate ? (
-                    <button
-                      aria-label={t("Update {{name}}", { name: skill.id })}
-                      aria-busy={previewingSkillId === skill.id}
-                      className="library-primary-status is-actionable is-update"
-                      type="button"
-                      disabled={updateActivityBusy || Boolean(previewingSkillId)}
-                      onClick={(event) => {
-                        modalFallbackFocusRef.current = event.currentTarget;
-                        void runSkillUpdatePreview(skill.id);
-                      }}
-                    >
-                      {previewingSkillId === skill.id ? (
-                        <LoaderCircle className="is-spinning" size={13} strokeWidth={2.2} />
-                      ) : (
-                        <CircleArrowUp size={13} strokeWidth={2.2} />
-                      )}
-                      <span>{t(previewingSkillId === skill.id ? "Preparing..." : "Update available")}</span>
-                    </button>
+                    <strong className="library-primary-status is-update">
+                      <CircleArrowUp size={13} strokeWidth={2.2} />
+                      <span>{t("Update available")}</span>
+                    </strong>
                   ) : hasError ? (
-                    <button
-                      aria-label={t("Retry update check {{id}}", { id: skill.id })}
-                      aria-busy={previewingSkillId === skill.id}
-                      className="library-primary-status is-actionable is-error"
-                      type="button"
-                      disabled={updateActivityBusy || Boolean(previewingSkillId)}
-                      onClick={(event) => {
-                        modalFallbackFocusRef.current = event.currentTarget;
-                        void runSkillUpdatePreview(skill.id);
-                      }}
-                    >
-                      {previewingSkillId === skill.id ? (
-                        <LoaderCircle className="is-spinning" size={13} strokeWidth={2.2} />
-                      ) : (
-                        <TriangleAlert size={13} strokeWidth={2.2} />
-                      )}
-                      <span>{t(previewingSkillId === skill.id ? "Preparing..." : "Check failed")}</span>
-                    </button>
+                    <strong className="library-primary-status is-error">
+                      <TriangleAlert size={13} strokeWidth={2.2} />
+                      <span>{t("Check failed")}</span>
+                    </strong>
                   ) : staleCopies.length > 0 ? (
-                    <button
-                      aria-label={t(
-                        staleCopies.length === 1
-                          ? "Sync install of {{id}}"
-                          : "Sync {{count}} installs of {{id}}",
-                        { count: staleCopies.length, id: skill.id }
-                      )}
-                      className="library-primary-status is-actionable is-warning"
-                      type="button"
-                      onClick={() => onSyncSkillInstalls(skill.id)}
-                    >
+                    <strong className="library-primary-status is-warning">
                       <CircleAlert size={13} strokeWidth={2.2} />
                       <span>{t("Needs sync")}</span>
-                    </button>
+                    </strong>
                   ) : (
                     <strong className="library-primary-status">
                       {isTracked && updateInfo ? (
                         <CheckCircle2 size={13} strokeWidth={2.2} />
-                      ) : hasUpdateSource && !isTracked ? (
+                      ) : hasUpdateSource && !isTracked && skill.sourceType !== "local" ? (
                         <Link2Off size={13} strokeWidth={2.2} />
                       ) : isTracked && hasUpdateSource ? (
                         <Circle size={13} strokeWidth={2.2} />
                       ) : (
                         <Circle size={13} strokeWidth={2.2} />
                       )}
-                      <span>{t(
-                        isTracked && updateInfo
-                          ? "Up to date"
-                          : isTracked && hasUpdateSource
-                            ? "Not checked"
-                            : hasUpdateSource
-                              ? "Monitoring off"
-                              : "Manual"
-                      )}</span>
+                      <span>{t(maintenanceStatusLabel)}</span>
                     </strong>
                   )}
                   {statusDetail ? (
@@ -2226,6 +2188,51 @@ export const SkillLibraryPanel = ({
                       className="library-status-detail"
                       text={statusDetail}
                     />
+                  ) : null}
+                </div>
+                <div className="library-current-action-cell">
+                  {hasUpdate ? (
+                    <Button
+                      aria-label={t("Update {{name}}", { name: skill.id })}
+                      busy={previewingSkillId === skill.id}
+                      className="library-row-action"
+                      size="compact"
+                      disabled={updateActivityBusy || Boolean(previewingSkillId)}
+                      onClick={(event) => {
+                        modalFallbackFocusRef.current = event.currentTarget;
+                        void runSkillUpdatePreview(skill.id);
+                      }}
+                    >
+                      {t("Update")}
+                    </Button>
+                  ) : hasError ? (
+                    <Button
+                      aria-label={t("Retry update check {{id}}", { id: skill.id })}
+                      busy={previewingSkillId === skill.id}
+                      className="library-row-action"
+                      size="compact"
+                      disabled={updateActivityBusy || Boolean(previewingSkillId)}
+                      onClick={(event) => {
+                        modalFallbackFocusRef.current = event.currentTarget;
+                        void runSkillUpdatePreview(skill.id);
+                      }}
+                    >
+                      {t("Retry")}
+                    </Button>
+                  ) : staleCopies.length > 0 ? (
+                    <Button
+                      aria-label={t(
+                        staleCopies.length === 1
+                          ? "Sync install of {{id}}"
+                          : "Sync {{count}} installs of {{id}}",
+                        { count: staleCopies.length, id: skill.id }
+                      )}
+                      className="library-row-action"
+                      size="compact"
+                      onClick={() => onSyncSkillInstalls(skill.id)}
+                    >
+                      {t("Sync")}
+                    </Button>
                   ) : null}
                 </div>
                 <div className="library-actions-cell">
@@ -2423,7 +2430,7 @@ export const SkillLibraryPanel = ({
                             .filter(Boolean)
                             .join(" · ")}
                         </small>
-                        <small>{t("{{profiles}} profiles · {{installs}} installs", {
+                        <small>{t("{{profiles}} Profiles · {{installs}} installs", {
                           profiles: entry.profileNames.length,
                           installs: entry.installCount
                         })}</small>
@@ -2469,7 +2476,7 @@ export const SkillLibraryPanel = ({
 
               <div className="skill-merge-impact">
                 <strong>{t("Merge impact")}</strong>
-                <span>{t("{{skills}} entries become one · {{profiles}} profiles updated · {{installs}} installs relinked", {
+                <span>{t("{{skills}} entries become one · {{profiles}} Profiles updated · {{installs}} installs relinked", {
                   skills: mergePreview.entries.length,
                   profiles: mergePreview.profileCount,
                   installs: mergePreview.entries
@@ -2528,7 +2535,7 @@ export const SkillLibraryPanel = ({
                 <div className="section-title ui-dialog-title">{t("Remove from library")}</div>
                 <p className="muted ui-dialog-description">
                   {(skillUsage[deleteCandidate.id] ?? []).length > 0
-                    ? t("{{name}} is used by {{profiles}}. Remove it from those profiles first.", {
+                    ? t("{{name}} is used by {{profiles}} Profiles. Remove it from those Profiles first.", {
                         name: deleteCandidate.name,
                         profiles: (skillUsage[deleteCandidate.id] ?? []).join(", ")
                       })
@@ -2591,7 +2598,7 @@ export const SkillLibraryPanel = ({
                     setDeleteCandidate(undefined);
                   }}
                 >
-                  {t("Review profiles")}
+                  {t("Review Profiles")}
                 </Button>
               ) : (
                 <Button
@@ -2880,8 +2887,8 @@ export const SkillLibraryPanel = ({
               <p className="skill-availability-dialog__usage">
                 {t(
                   (skillUsage[disableCandidate.id] ?? []).length === 1
-                    ? "1 Profile references this skill."
-                    : "{{count}} Profiles reference this skill.",
+                    ? "1 Profile references this Skill."
+                    : "{{count}} Profiles reference this Skill.",
                   { count: (skillUsage[disableCandidate.id] ?? []).length }
                 )}
               </p>
@@ -3437,7 +3444,7 @@ export const SkillLibraryPanel = ({
       ) : null}
 
       {activeTool === "discoveries" ? (
-        <section className="library-drawer" aria-label={t("Environment skills")}>
+        <section className="library-drawer" aria-label={t("Local Skill Cleanup")}>
           <div className="library-drawer__header">
             <div>
               <strong>

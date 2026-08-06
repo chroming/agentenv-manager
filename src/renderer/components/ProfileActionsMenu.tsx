@@ -1,7 +1,7 @@
 import type { CSSProperties, Ref } from "react";
 import { Copy, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n";
-import { ActionMenu } from "./ui";
+import { ActionMenu, ActionMenuItem } from "./ui";
 
 interface ProfileActionsMenuProps {
   className?: string;
@@ -28,20 +28,18 @@ export const ProfileActionsMenu = ({
       menuRef={menuRef}
       style={style}
     >
-      <button disabled={disabled} type="button" role="menuitem" onClick={onDuplicate}>
+      <ActionMenuItem disabled={disabled} onClick={onDuplicate}>
         <Copy size={15} strokeWidth={2.2} aria-hidden="true" />
-        <span>{t("Duplicate profile")}</span>
-      </button>
-      <button
-        className="is-danger"
+        <span>{t("Duplicate Profile")}</span>
+      </ActionMenuItem>
+      <ActionMenuItem
         disabled={disabled}
-        type="button"
-        role="menuitem"
+        tone="danger"
         onClick={onDelete}
       >
         <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
-        <span>{t("Delete profile")}</span>
-      </button>
+        <span>{t("Delete Profile")}</span>
+      </ActionMenuItem>
     </ActionMenu>
   );
 };

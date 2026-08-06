@@ -1,5 +1,9 @@
 import { readFile, readdir } from "node:fs/promises";
 import { relative, resolve } from "node:path";
+import {
+  collectRendererRawInteractiveUsage,
+  compareRawInteractiveBaseline
+} from "./ui-component-policy.mjs";
 
 const projectRoot = resolve(import.meta.dirname, "..");
 const rendererRoot = resolve(projectRoot, "src/renderer");
@@ -57,8 +61,15 @@ const primitiveRootSelectors = new Set([
   ".ui-dialog-footer",
   ".ui-dialog-header",
   ".ui-icon-button",
+  ".ui-inspector-header",
+  ".ui-master-detail",
+  ".ui-master-list",
   ".ui-page-header",
+  ".ui-resource-section",
   ".ui-resource-row",
+  ".ui-selectable-row",
+  ".ui-empty-state",
+  ".ui-field",
   ".ui-composite-field",
   ".ui-segmented-control",
   ".ui-surface-frame",
@@ -334,6 +345,14 @@ const result = {
   }))
 };
 
+const rawControlBaseline = JSON.parse(
+  await readFile(resolve(projectRoot, "scripts/ui-raw-control-baseline.json"), "utf8")
+);
+result.architecture.rawInteractiveControlViolations = compareRawInteractiveBaseline(
+  await collectRendererRawInteractiveUsage(projectRoot),
+  rawControlBaseline
+);
+
 process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 
 if (shouldCheck) {
@@ -378,6 +397,9 @@ if (shouldCheck) {
       ? `Standard commands must use the shared Button primitive: ${result.architecture.legacyActionClassUsage
           .map(({ file, line }) => `${file}:${line}`)
           .join(", ")}`
+      : undefined,
+    result.architecture.rawInteractiveControlViolations.length > 0
+      ? `Feature markup must use shared UI components: ${result.architecture.rawInteractiveControlViolations.join("; ")}`
       : undefined,
     result.architecture.animationOwnerViolations.length > 0
       ? `Animation declarations belong to shared primitives or accessibility: ${result.architecture.animationOwnerViolations

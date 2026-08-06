@@ -176,7 +176,7 @@ describe("SkillCollectionDialog", () => {
     const onMoveSkillCollection = vi.fn()
       .mockResolvedValueOnce({
         status: "needs-save",
-        message: "The active Profile has unsaved edits. Save them before moving this collection."
+        message: "The active Profile has unsaved edits. Save it before moving this collection."
       })
       .mockResolvedValueOnce({ status: "moved" });
 

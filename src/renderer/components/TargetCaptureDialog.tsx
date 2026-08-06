@@ -61,7 +61,7 @@ const resourceKindLabels: Record<TargetCaptureResource["kind"], string> = {
 };
 
 const resourceActionLabels: Record<TargetCaptureResource["action"], string> = {
-  include: "Add to profile",
+  include: "Add to Profile",
   reuse: "Use Library copy",
   import: "Import to Library",
   exclude: "Leave untouched"
@@ -184,7 +184,7 @@ export const TargetCaptureDialog = ({
           ? t(isSkillsOnly ? "Review {{name}} Skill setup" : "Review {{name}} capture", {
               name: target?.name ?? t("Agent")
             })
-          : t(isSkillsOnly ? "Manage {{name}} Skills" : "Create profile from {{name}}", {
+          : t(isSkillsOnly ? "Manage {{name}} Skills" : "Create Profile from {{name}}", {
               name: target?.name ?? t("Agent")
             })}
         onClick={(event) => event.stopPropagation()}
@@ -195,7 +195,7 @@ export const TargetCaptureDialog = ({
             <h2>
               {isReview
                 ? t(isSkillsOnly ? "Review managed Skill setup" : "Review captured Profile")
-                : t(isSkillsOnly ? "Manage {{name}} Skills" : "Create profile from {{name}}", {
+                : t(isSkillsOnly ? "Manage {{name}} Skills" : "Create Profile from {{name}}", {
                     name: target?.name ?? t("Agent")
                   })}
             </h2>
@@ -210,7 +210,7 @@ export const TargetCaptureDialog = ({
                 : t(
                     isSkillsOnly
                       ? "Preserve the current Skills in a reusable setup. Instructions and MCPs stay Agent-controlled."
-                      : "Save the current environment as a reusable Profile without changing the Agent."
+                      : "Save the current Agent setup as a reusable Profile without changing the Agent."
                   )}
             </p>
           </div>
@@ -271,7 +271,7 @@ export const TargetCaptureDialog = ({
                     {t(
                       isSkillsOnly
                         ? "AgentEnv reads current Skills and saves canonical copies. The Agent stays unchanged until Apply."
-                        : "AgentEnv reads the current files and saves copies to Library and Profile. Source files stay unchanged."
+                        : "AgentEnv reads the current files and saves copies to Library and the Profile. Source files stay unchanged."
                     )}
                   </small>
                 </span>

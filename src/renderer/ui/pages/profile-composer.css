@@ -26,19 +26,27 @@
   white-space: nowrap;
 }
 
-.profile-composer-section__trigger {
-  height: var(--profile-composer-row-height);
-}
-
 .profile-resource-policy {
   display: grid;
+  height: var(--control-height-compact);
   grid-template-columns: repeat(3, minmax(0, 1fr));
   margin: 0 10px 0 0;
+  padding: 1px;
   width: auto;
 }
 
-.profile-resource-policy__option {
+.profile-composer-section__description {
   font-size: 11px;
+  line-height: 16px;
+}
+
+.profile-resource-policy__option {
+  align-items: center;
+  display: inline-flex;
+  font-size: 11px;
+  height: 24px;
+  line-height: 16px;
+  min-height: 24px;
   overflow: hidden;
   padding: 0 6px;
   text-overflow: ellipsis;
@@ -51,12 +59,25 @@
   outline-offset: 1px;
 }
 
-.profile-resource-policy.is-ignore {
-  background: #e9ecf1;
+.profile-resource-policy.is-manage
+  .profile-resource-policy__option.is-selected {
+  background: #eaf3ff;
+  box-shadow: inset 0 0 0 1px #b9d2f7;
+  color: #155db5;
 }
 
-.profile-resource-policy.is-disable {
-  background: #f0eee9;
+.profile-resource-policy.is-disable
+  .profile-resource-policy__option.is-selected {
+  background: #fff6e6;
+  box-shadow: inset 0 0 0 1px #ead4a7;
+  color: #875b12;
+}
+
+.profile-resource-policy.is-ignore
+  .profile-resource-policy__option.is-selected {
+  background: #edf0f4;
+  box-shadow: inset 0 0 0 1px #cbd2dc;
+  color: #536174;
 }
 
 .profile-resource-policy__status {
@@ -95,8 +116,21 @@
   border-top: 0;
 }
 
+.profile-composer-section[data-profile-composer-id="skills"]
+  > .profile-composer-section__panel,
+.profile-composer-section[data-profile-composer-id="mcp"]
+  > .profile-composer-section__panel {
+  background: var(--surface);
+  padding: 0;
+}
+
+.profile-composer-section[data-profile-composer-id="instructions"]
+  > .profile-composer-section__panel {
+  padding: 10px;
+}
+
 .profile-composer-section.is-expanded > .profile-composer-section__header {
-  background: var(--profile-expanded-trigger);
+  background: #f7f9fc;
   box-shadow: inset 2px 0 0 var(--profile-expanded-accent);
 }
 

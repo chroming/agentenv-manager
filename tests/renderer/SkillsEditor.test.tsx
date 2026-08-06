@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SkillsEditor } from "../../src/renderer/components/SkillsEditor";
 import type { ProfileResources, SkillLibraryEntry } from "../../src/shared/types";
@@ -69,7 +69,9 @@ describe("SkillsEditor v2", () => {
     render(<SkillsEditor value={resources} librarySkills={skills} onChange={onChange} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    expect(screen.getByRole("dialog", { name: "Add library skills" })).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "Add library skills" });
+    expect(dialog).toHaveClass("resource-picker-dialog", "resource-picker-dialog--skills");
+    expect(within(dialog).getByRole("group", { name: "Library Skills" })).toBeInTheDocument();
     expect(screen.getByText("Docs")).toBeInTheDocument();
     expect(screen.queryByText("Hidden")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("checkbox", { name: "Docs" }));
@@ -99,7 +101,7 @@ describe("SkillsEditor v2", () => {
 
     expect(screen.getByText("Missing")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Relink missing" }));
-    fireEvent.click(screen.getByRole("checkbox", { name: "Code Review" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Code Review" }));
     fireEvent.click(screen.getByRole("button", { name: "Relink skill" }));
     expect(onChange).toHaveBeenCalledWith({
       skills: [{ libraryId: "review", targetName: "missing", enabled: true }],
@@ -124,7 +126,7 @@ describe("SkillsEditor v2", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Check profile skill updates" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check Profile Skill updates" }));
     expect(onCheck).toHaveBeenCalledWith(["review"]);
   });
 
@@ -172,7 +174,7 @@ describe("SkillsEditor v2", () => {
       />
     );
 
-    const row = screen.getByRole("listitem", { name: "Profile skill review" });
+    const row = screen.getByRole("listitem", { name: "Profile Skill review" });
     expect(row).toHaveTextContent("External active");
     expect(row).toHaveTextContent("Codex · Unmanaged");
     expect(row).not.toHaveTextContent("Apply pending");
@@ -204,7 +206,7 @@ describe("SkillsEditor v2", () => {
       />
     );
 
-    const row = screen.getByRole("listitem", { name: "Profile skill review" });
+    const row = screen.getByRole("listitem", { name: "Profile Skill review" });
     expect(row).toHaveTextContent("External still active");
     expect(row).toHaveTextContent("Codex · Unmanaged");
     expect(row).not.toHaveTextContent("Apply pending");

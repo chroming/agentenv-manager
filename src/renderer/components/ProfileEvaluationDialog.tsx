@@ -51,7 +51,7 @@ type ResultTab = "overview" | "responses" | "changes" | "details";
 type ChangeScope = "delta" | "current" | "proposed";
 
 const modeLabel = (mode: string) =>
-  mode === "manage" ? "Use Profile" : mode === "disable" ? "Turn off" : "Keep current";
+  mode === "manage" ? "Use saved" : mode === "disable" ? "Turn off" : "Keep current";
 
 const statusLabel = (status: OneShotEvaluationRun["status"]) => ({
   preparing: "Preparing",
@@ -432,7 +432,7 @@ export const ProfileEvaluationDialog = ({
               </label>
 
               {preview ? (
-                <section className="profile-comparison-environments" aria-label={t("Environment comparison") }>
+                <section className="profile-comparison-environments" aria-label={t("Profile comparison") }>
                   <div className="profile-comparison-environments__header">
                     <span />
                     <strong>{t("Agent now")}</strong>

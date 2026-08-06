@@ -1,17 +1,32 @@
 // @vitest-environment jsdom
 import { useRef } from "react";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { RefreshCw } from "lucide-react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ActionMenu,
+  ActionMenuItem,
   Badge,
   Button,
   ControlGroup,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+  EmptyState,
+  InspectorHeader,
   IconButton,
+  MasterDetailLayout,
+  MasterDetailPane,
+  MasterListPane,
   ModalFrame,
   PageHeader,
+  ResourceDisclosureSection,
+  ResourceSection,
   ResourceRow,
+  SearchField,
+  SelectField,
+  SelectableListRow,
+  SegmentedControl,
   Switch
 } from "../../src/renderer/components/ui";
 import { OverflowTooltip } from "../../src/renderer/components/OverflowTooltip";
@@ -82,8 +97,8 @@ describe("renderer UI primitives", () => {
   it("uses one keyboard menu surface for contextual actions", () => {
     render(
       <ActionMenu ariaLabel="Resource actions">
-        <button type="button" role="menuitem">First</button>
-        <button type="button" role="menuitem">Second</button>
+        <ActionMenuItem>First</ActionMenuItem>
+        <ActionMenuItem>Second</ActionMenuItem>
       </ActionMenu>
     );
 
@@ -400,6 +415,7 @@ describe("renderer UI primitives", () => {
     fireEvent.focus(screen.getByLabelText("A complete explanation"));
     expect(screen.getByRole("tooltip")).toHaveClass(
       "ui-hover-detail",
+      "ui-hover-detail--noninteractive",
       "info-tip__bubble"
     );
   });
@@ -442,5 +458,162 @@ describe("renderer UI primitives", () => {
     );
     expect(row.querySelector(".ui-resource-row__metadata")).toHaveTextContent("GitHub · main");
     expect(screen.getByText("Update")).toHaveClass("ui-badge--warning");
+  });
+
+  it("owns list-detail geometry through one shared desktop pattern", () => {
+    render(
+      <MasterDetailLayout aria-label="Profiles workspace">
+        <MasterListPane aria-label="Profile list">
+          <SelectableListRow
+            selected
+            icon={<RefreshCw />}
+            title="Daily Coding"
+            description="OpenCode · Active"
+            onSelect={() => undefined}
+          />
+        </MasterListPane>
+        <MasterDetailPane aria-label="Profile detail">
+          <InspectorHeader
+            icon={<RefreshCw />}
+            title="Daily Coding"
+            description="Reusable Agent environment"
+            actions={<Button variant="primary">Apply</Button>}
+          />
+        </MasterDetailPane>
+      </MasterDetailLayout>
+    );
+
+    expect(screen.getByLabelText("Profiles workspace")).toHaveClass("ui-master-detail");
+    expect(screen.getByLabelText("Profile list")).toHaveClass("ui-master-list");
+    expect(screen.getByLabelText("Profile detail")).toHaveClass("ui-master-detail__pane");
+    expect(screen.getByRole("button", { name: "Daily Coding OpenCode · Active" })).toHaveClass(
+      "ui-selectable-row",
+      "is-selected"
+    );
+    expect(screen.getByRole("heading", { name: "Daily Coding" }).closest(".ui-inspector-header"))
+      .toBeInTheDocument();
+  });
+
+  it("exposes a responsive inspector layout without changing its action contract", () => {
+    render(
+      <InspectorHeader
+        responsive="stack"
+        title="Release Tools"
+        description="/projects/release-tools"
+        actions={<Button>Open</Button>}
+      />
+    );
+
+    const header = screen.getByRole("banner");
+    expect(header).toHaveClass("ui-inspector-header--responsive-stack");
+    expect(within(header).getByRole("heading", { name: "Release Tools" })).toBeInTheDocument();
+    expect(within(header).getByRole("button", { name: "Open" })).toBeInTheDocument();
+  });
+
+  it("owns resource grouping and empty states without page-specific containers", () => {
+    render(
+      <ResourceSection
+        icon={<RefreshCw />}
+        title="Skills"
+        summary="0 resources"
+        actions={<Button size="compact">Add from Library</Button>}
+      >
+        <EmptyState title="No project Skills" description="Add one from the Library." />
+      </ResourceSection>
+    );
+
+    const section = screen.getByRole("region", { name: "Skills" });
+    expect(section).toHaveClass("ui-resource-section");
+    expect(screen.getByText("0 resources")).toHaveClass("ui-resource-section__summary");
+    expect(screen.getByText("No project Skills").closest(".ui-empty-state"))
+      .toBeInTheDocument();
+  });
+
+  it("owns compact resource disclosure geometry and the shared section action slot", () => {
+    const onToggle = vi.fn();
+    render(
+      <ResourceDisclosureSection
+        id="workspace-skills"
+        icon={<RefreshCw />}
+        title="Skills"
+        description="Project-owned Skill files"
+        summary="3"
+        expanded
+        toggleLabel="Collapse Skills"
+        actions={<Button size="compact">Add</Button>}
+        onToggle={onToggle}
+      >
+        <ResourceRow icon={<RefreshCw />} title="reviewer" description=".agents/skills/reviewer" />
+      </ResourceDisclosureSection>
+    );
+
+    const section = screen.getByRole("region", { name: "Skills" });
+    expect(section).toHaveClass("ui-resource-disclosure", "is-expanded");
+    expect(within(section).getByRole("button", { name: "Collapse Skills" }))
+      .toHaveAttribute("aria-expanded", "true");
+    expect(within(section).getByText("3")).toHaveClass("ui-resource-disclosure__summary");
+    expect(within(section).getByRole("button", { name: "Add" }).closest(".ui-resource-disclosure__actions"))
+      .not.toBeNull();
+
+    fireEvent.click(within(section).getByRole("button", { name: "Collapse Skills" }));
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it("owns field and dialog composition instead of relying on page-local form markup", () => {
+    render(
+      <ModalFrame ariaLabel="Add Skill" onDismiss={() => undefined}>
+        <DialogHeader title="Add Skill" description="Choose a Library Skill and destination." />
+        <DialogBody>
+          <SelectField label="Location" value="shared" onChange={() => undefined}>
+            <option value="shared">Shared project Skills</option>
+          </SelectField>
+        </DialogBody>
+        <DialogFooter>
+          <Button>Cancel</Button>
+          <Button variant="primary">Add</Button>
+        </DialogFooter>
+      </ModalFrame>
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Add Skill" });
+    expect(dialog.querySelector(".ui-dialog-header")).not.toBeNull();
+    expect(dialog.querySelector(".ui-dialog-body")).not.toBeNull();
+    expect(dialog.querySelector(".ui-dialog-footer")).not.toBeNull();
+    expect(screen.getByRole("combobox", { name: "Location" }).closest(".ui-field"))
+      .toBeInTheDocument();
+  });
+
+  it("owns searchable fields and single-choice segmented controls", () => {
+    const onSearch = vi.fn();
+    const onChange = vi.fn();
+    render(
+      <>
+        <SearchField
+          icon={<RefreshCw />}
+          label="Search Profiles"
+          value="daily"
+          onChange={(event) => onSearch(event.currentTarget.value)}
+        />
+        <SegmentedControl
+          label="Profile source"
+          value="blank"
+          options={[
+            { value: "blank", label: "Blank" },
+            { value: "agent", label: "From Agent" }
+          ]}
+          onChange={onChange}
+        />
+      </>
+    );
+
+    const search = screen.getByRole("searchbox", { name: "Search Profiles" });
+    expect(search.closest(".ui-search-field")).toBeInTheDocument();
+    fireEvent.change(search, { target: { value: "review" } });
+    expect(onSearch).toHaveBeenCalledWith("review");
+    expect(screen.getByRole("group", { name: "Profile source" }))
+      .toHaveClass("ui-segmented-control");
+    expect(screen.getByRole("button", { name: "Blank" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "From Agent" }));
+    expect(onChange).toHaveBeenCalledWith("agent");
   });
 });

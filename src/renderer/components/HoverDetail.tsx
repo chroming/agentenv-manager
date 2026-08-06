@@ -28,6 +28,7 @@ interface HoverDetailProps {
   focusable?: boolean;
   hoverDelay?: number;
   id?: string;
+  interactive?: boolean;
   maxWidth?: number;
   popoverClassName?: string;
   preferredPlacement?: "top" | "bottom";
@@ -50,6 +51,7 @@ export const HoverDetail = ({
   focusable = true,
   hoverDelay = 160,
   id,
+  interactive = true,
   maxWidth = 420,
   popoverClassName = "",
   preferredPlacement,
@@ -265,7 +267,7 @@ export const HoverDetail = ({
       {isOpen
         ? createPortal(
             <div
-              className={`ui-hover-detail ui-hover-detail--${position?.placement ?? "bottom"}${showArrow ? " ui-hover-detail--arrow" : ""}${popoverClassName ? ` ${popoverClassName}` : ""}`}
+              className={`ui-hover-detail ui-hover-detail--${position?.placement ?? "bottom"}${interactive ? "" : " ui-hover-detail--noninteractive"}${showArrow ? " ui-hover-detail--arrow" : ""}${popoverClassName ? ` ${popoverClassName}` : ""}`}
               data-ui-hover-detail="true"
               id={popoverId}
               ref={popoverRef}

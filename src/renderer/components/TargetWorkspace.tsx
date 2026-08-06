@@ -303,7 +303,7 @@ export const TargetWorkspace = ({
       <PageHeader
         className="page-header workspace-page-header"
         title={t("Agents")}
-        help={<InfoTip label={t("Configure each Agent through the same reusable Profile editor, then review every change before Apply.")} />}
+        help={<InfoTip label={t("Inspect each Agent and apply a saved Profile only when you choose.")} />}
         actions={(
           <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
             <FreshnessStatus state={freshness} verb="Refreshed" />
@@ -352,7 +352,7 @@ export const TargetWorkspace = ({
               <span>{t("Management")}</span>
               <span>{t("Profile")}</span>
               <span className="target-list__environment-heading--compact">
-                {t("Environment state")}
+                {t("Profile state")}
               </span>
             </span>
             <span>{t("Last applied")}</span>

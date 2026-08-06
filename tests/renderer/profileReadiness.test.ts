@@ -148,8 +148,8 @@ describe("profile readiness", () => {
       })
     ).toEqual({
       status: "no-profile",
-      label: "No profile",
-      message: "Create a profile to continue"
+      label: "No environment",
+      message: "Create an environment to continue"
     });
 
     expect(
@@ -190,7 +190,7 @@ describe("profile readiness", () => {
     expect(deriveProfileReadiness(managedInput)).toEqual({
       status: "applied",
       label: "Applied",
-      message: "Codex matches this profile"
+      message: "Codex matches this environment"
     });
     expect(deriveApplyActionLabel(managedInput)).toBe("Applied to Codex");
 
@@ -254,7 +254,7 @@ describe("profile readiness", () => {
     ).toEqual({
       status: "apply-pending",
       label: "Apply pending",
-      message: "Library resources changed after this profile was applied to Codex"
+      message: "Library resources changed after this environment was applied to Codex"
     });
   });
 
@@ -268,7 +268,7 @@ describe("profile readiness", () => {
         input: { isDirty: true },
         expected: [
           "no-profile",
-          "Create a profile to continue",
+          "Create an environment to continue",
           undefined
         ]
       },
@@ -278,7 +278,7 @@ describe("profile readiness", () => {
       },
       {
         input: { profile, target, isDirty: true },
-        expected: ["dirty", "Save this profile before previewing changes", "Save now"]
+        expected: ["dirty", "Save this environment before previewing changes", "Save now"]
       },
       {
         input: { profile, target: unavailableTarget, isDirty: false },
@@ -292,7 +292,7 @@ describe("profile readiness", () => {
           localValidationErrors: ["Instructions are empty"],
           preview: blockedPreview("Preview blocked")
         },
-        expected: ["validation-error", "This profile has validation issues", undefined]
+        expected: ["validation-error", "This environment has validation issues", undefined]
       },
       {
         input: {
@@ -309,7 +309,7 @@ describe("profile readiness", () => {
       },
       {
         input: { profile, target, targetState: managedState, isDirty: false },
-        expected: ["applied", "Codex matches this profile", undefined]
+        expected: ["applied", "Codex matches this environment", undefined]
       }
     ] as const;
 

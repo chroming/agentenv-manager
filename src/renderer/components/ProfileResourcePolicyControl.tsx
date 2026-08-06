@@ -15,25 +15,29 @@ interface ProfileResourcePolicyControlProps {
 
 const policyOptions: Array<{
   description:
-    | "Use this Profile's saved resources"
-    | "Turn off this Profile's resources in the Agent"
-    | "Keep the Agent's current resources unchanged";
-  label: "Use Profile" | "Turn off" | "Keep current";
+    | "Apply this Profile's saved resources to the Agent"
+    | "Remove this resource type from the Agent when applying"
+    | "Leave this resource type exactly as it is in the Agent";
+  label: "Use Profile" | "Turn off" | "Keep Agent";
+  visibleLabel: "Profile" | "Off" | "Agent";
   value: ProfileResourcePolicy;
 }> = [
   {
-    description: "Use this Profile's saved resources",
+    description: "Apply this Profile's saved resources to the Agent",
     label: "Use Profile",
+    visibleLabel: "Profile",
     value: "manage"
   },
   {
-    description: "Turn off this Profile's resources in the Agent",
+    description: "Remove this resource type from the Agent when applying",
     label: "Turn off",
+    visibleLabel: "Off",
     value: "disable"
   },
   {
-    description: "Keep the Agent's current resources unchanged",
-    label: "Keep current",
+    description: "Leave this resource type exactly as it is in the Agent",
+    label: "Keep Agent",
+    visibleLabel: "Agent",
     value: "ignore"
   }
 ];
@@ -108,6 +112,7 @@ export const ProfileResourcePolicyControl = ({
             type="button"
             role="radio"
             aria-checked={selected}
+            aria-label={t(option.label)}
             data-policy-value={option.value}
             key={option.value}
             tabIndex={selected ? 0 : -1}
@@ -116,7 +121,7 @@ export const ProfileResourcePolicyControl = ({
               if (!selected) onChange(option.value);
             }}
           >
-            {t(option.label)}
+            {t(option.visibleLabel)}
           </button>
         );
       })}

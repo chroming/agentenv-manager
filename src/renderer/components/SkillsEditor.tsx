@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Download, Link2, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Download, Link2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type {
   AppliedSkillReceipt,
   ProfileResources,
@@ -10,7 +10,16 @@ import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
-import { Button, IconButton, ModalFrame, Switch } from "./ui";
+import { LibrarySkillPicker } from "./LibrarySkillPicker";
+import {
+  Button,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+  IconButton,
+  ModalFrame,
+  Switch
+} from "./ui";
 
 interface SkillsEditorProps {
   value: ProfileResources;
@@ -43,7 +52,6 @@ export const SkillsEditor = ({
 }: SkillsEditorProps) => {
   const { t } = useI18n();
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerQuery, setPickerQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [replacingIndex, setReplacingIndex] = useState<number>();
   const pickerDialogRef = useRef<HTMLElement>(null);
@@ -68,20 +76,15 @@ export const SkillsEditor = ({
     .filter((skill): skill is SkillLibraryEntry => Boolean(skill))
     .filter((skill) => skill.globallyEnabled !== false && skill.updatePolicy === "tracked")
     .map((skill) => skill.id);
-  const availableSkills = librarySkills.filter((skill) => {
-    if (skill.globallyEnabled === false) return false;
-    const attachedElsewhere = value.skills.some(
-      (reference, index) => index !== replacingIndex && reference.libraryId === skill.id
-    );
-    if (attachedElsewhere) return false;
-    const query = pickerQuery.trim().toLocaleLowerCase();
-    return !query || [skill.name, skill.id, skill.description, skill.path, skill.source ?? ""]
-      .some((field) => field.toLocaleLowerCase().includes(query));
-  });
+  const pickerSkills = librarySkills.filter((skill) => skill.globallyEnabled !== false);
+  const pickerExcludedIds = new Set(
+    value.skills
+      .filter((_, index) => index !== replacingIndex)
+      .map((reference) => reference.libraryId)
+  );
 
   const closePicker = () => {
     setPickerOpen(false);
-    setPickerQuery("");
     setSelectedIds([]);
     setReplacingIndex(undefined);
   };
@@ -97,7 +100,6 @@ export const SkillsEditor = ({
   const openPicker = (replaceIndex?: number) => {
     setReplacingIndex(replaceIndex);
     setSelectedIds([]);
-    setPickerQuery("");
     setPickerOpen(true);
   };
   const commitPicker = () => {
@@ -126,11 +128,11 @@ export const SkillsEditor = ({
   return (
     <section
       className={`profile-skill-manager${value.skills.length <= 1 ? " is-compact" : ""}`}
-      aria-label={t("Profile skills")}
+      aria-label={t("Profile Skills")}
       data-profile-skill-count={value.skills.length}
     >
       <header className="profile-skill-toolbar">
-        <div className="profile-skill-summary">
+        <div className="profile-skill-summary ui-visually-hidden">
           <span>
             {t("{{count}} enabled", { count: enabledCount })}
             {value.skills.length > enabledCount
@@ -143,7 +145,7 @@ export const SkillsEditor = ({
             className="profile-skill-check"
             variant="secondary"
             size="compact"
-            aria-label={t("Check profile skill updates")}
+            aria-label={t("Check Profile Skill updates")}
             disabled={disabled || checkingSkillUpdates || checkableIds.length === 0}
             onClick={() => onCheckSkillUpdates?.(checkableIds)}
             icon={(
@@ -222,7 +224,7 @@ export const SkillsEditor = ({
               }`}
               key={`${reference.libraryId}:${reference.targetName}:${index}`}
               role="listitem"
-              aria-label={t("Profile skill {{name}}", { name: reference.libraryId })}
+              aria-label={t("Profile Skill {{name}}", { name: reference.libraryId })}
             >
               <span className="profile-skill-icon" aria-hidden="true">
                 <ResourceIconArtwork
@@ -305,8 +307,8 @@ export const SkillsEditor = ({
                 className="icon-action"
                 type="button"
                 disabled={disabled}
-                aria-label={t("Remove {{name}} from profile", { name: skill?.name ?? reference.targetName })}
-                title={t("Remove from profile")}
+                aria-label={t("Remove {{name}} from Profile", { name: skill?.name ?? reference.targetName })}
+                title={t("Remove from Profile")}
                 onClick={() => onChange({
                   ...value,
                   skills: value.skills.filter((_, currentIndex) => currentIndex !== index)
@@ -319,7 +321,7 @@ export const SkillsEditor = ({
         })}
         {value.skills.length === 0 ? (
           <div className="profile-skill-empty">
-            <strong>{t("No skills in this profile")}</strong>
+            <strong>{t("No Skills in this Profile")}</strong>
             <span>{t("Add reusable skills from Library.")}</span>
           </div>
         ) : null}
@@ -333,55 +335,20 @@ export const SkillsEditor = ({
           dismissPolicy="intentional"
           onDismiss={closePicker}
         >
-            <header className="profile-dialog-header ui-dialog-header">
-              <div className="ui-dialog-header__copy">
-                <div className="section-title ui-dialog-title">
-                  {t(replacingIndex === undefined ? "Add library skills" : "Relink missing skill")}
-                </div>
-                <p className="ui-dialog-description">{t("Choose reusable skills from Library.")}</p>
-              </div>
-            </header>
-            <div className="resource-picker-dialog__body ui-dialog-body">
-              <label className="resource-picker-search ui-composite-field">
-                <Search size={15} strokeWidth={2.2} aria-hidden="true" />
-                <input
-                  aria-label={t("Search library skills")}
-                  placeholder={t("Search skills...")}
-                  value={pickerQuery}
-                  onChange={(event) => setPickerQuery(event.currentTarget.value)}
-                />
-              </label>
-              <div className="resource-picker-list">
-                {availableSkills.length === 0 ? (
-                  <div className="inline-state">{t("No library skills available")}</div>
-                ) : null}
-                {availableSkills.map((skill) => (
-                  <label className="resource-picker-option" key={skill.id}>
-                    <input
-                      aria-label={skill.name}
-                      checked={selectedIds.includes(skill.id)}
-                      type="checkbox"
-                      onChange={() => setSelectedIds((current) =>
-                        replacingIndex !== undefined
-                          ? current.includes(skill.id) ? [] : [skill.id]
-                          : current.includes(skill.id)
-                            ? current.filter((id) => id !== skill.id)
-                            : [...current, skill.id]
-                      )}
-                    />
-                    <span className="resource-picker-option__main">
-                      <strong>{skill.name}</strong>
-                      <OverflowTooltip className="resource-picker-option__description" text={skill.description || skill.id} />
-                      <OverflowTooltip
-                        className="resource-picker-option__metadata"
-                        text={`${skill.version ? `v${skill.version}` : skill.contentHash.slice(0, 7)} · ${skill.path}`}
-                      />
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <footer className="preview-actions ui-dialog-footer">
+            <DialogHeader
+              title={t(replacingIndex === undefined ? "Add library skills" : "Relink missing skill")}
+              description={t("Choose reusable skills from Library.")}
+            />
+            <DialogBody className="resource-picker-dialog__body">
+              <LibrarySkillPicker
+                excludedIds={pickerExcludedIds}
+                onChange={setSelectedIds}
+                selectedIds={selectedIds}
+                selectionMode={replacingIndex === undefined ? "multiple" : "single"}
+                skills={pickerSkills}
+              />
+            </DialogBody>
+            <DialogFooter>
               {onImportNewSkill ? (
                 <Button
                   className="resource-picker-import"
@@ -401,7 +368,7 @@ export const SkillsEditor = ({
                   ? t("Relink skill")
                   : t("Add {{count}}", { count: selectedIds.length })}
               </Button>
-            </footer>
+            </DialogFooter>
         </ModalFrame>
       ) : null}
     </section>

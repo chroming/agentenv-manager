@@ -228,7 +228,7 @@ describe("ProfileEvaluationDialog", () => {
     expect(screen.getByText("Runs both setups separately and may consume two model calls."))
       .toBeInTheDocument();
     expect(screen.getByText("Keep current · 5")).toBeInTheDocument();
-    expect(screen.getByText("Use Profile · 8")).toBeInTheDocument();
+    expect(screen.getByText("Use saved · 8")).toBeInTheDocument();
     const dialog = screen.getByRole("dialog", { name: "Compare Daily Coding on OpenCode" });
     fireEvent.click(screen.getByRole("button", { name: "Maximize preview" }));
     expect(dialog).toHaveClass("is-maximized");

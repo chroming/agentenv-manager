@@ -429,6 +429,12 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
   min-width: 0;
 }
 
+.workspace-nav__group--utility {
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+}
+
 .workspace-nav .nav-section-label {
   display: block;
 }
@@ -544,6 +550,12 @@ html[data-platform="darwin"] .global-sidebar--collapsed {
 
 .global-sidebar--collapsed .workspace-nav__group {
   width: 40px;
+}
+
+.global-sidebar--collapsed .workspace-nav__group--utility {
+  border-bottom: 0;
+  margin-bottom: 0;
+  padding-bottom: 0;
 }
 
 .global-sidebar--collapsed .workspace-nav__group + .workspace-nav__group {

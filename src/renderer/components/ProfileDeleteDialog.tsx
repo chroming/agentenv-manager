@@ -40,19 +40,19 @@ export const ProfileDeleteDialog = ({
         ref={dialogRef}
         className="profile-form-dialog profile-form-dialog--compact"
         role="dialog"
-        aria-label={t("Delete profile")}
+        aria-label={t("Delete Profile")}
         aria-modal="true"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="profile-dialog-header">
           <div className="ui-dialog-header__copy">
             <div className="section-title ui-dialog-title">
-              {t("Delete profile")}
+              {t("Delete Profile")}
             </div>
             <p className="muted ui-dialog-description">
               {active
                 ? t(
-                    "{{name}} is active on {{targets}}. Apply another profile or stop managing each Agent before removing it.",
+                    "{{name}} is active on {{targets}}. Apply another Profile or stop managing each Agent before removing it.",
                     {
                       name: profileName,
                       targets: activeTargetNames.join(", ")
@@ -86,7 +86,7 @@ export const ProfileDeleteDialog = ({
               disabled={busy}
               onClick={onDelete}
             >
-              {t("Remove profile")}
+              {t("Remove Profile")}
             </Button>
           )}
         </footer>

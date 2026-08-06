@@ -155,10 +155,11 @@
   overflow: visible;
   column-gap: 10px;
   grid-template-columns:
-    minmax(210px, 1.5fr)
-    minmax(150px, 0.95fr)
-    minmax(92px, 0.6fr)
-    minmax(142px, 0.9fr)
+    minmax(200px, 1.45fr)
+    minmax(145px, 0.95fr)
+    minmax(88px, 0.55fr)
+    minmax(126px, 0.82fr)
+    74px
     34px;
 }
 
@@ -244,6 +245,7 @@
 .skill-library-panel .library-source-cell,
 .skill-library-panel .library-usage-cell,
 .skill-library-panel .library-status-cell,
+.skill-library-panel .library-current-action-cell,
 .skill-library-panel .library-actions-cell {
   align-content: center;
   grid-area: auto;
@@ -376,29 +378,6 @@
   margin: 0;
 }
 
-.skill-library-panel button.library-primary-status {
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-tight);
-  box-sizing: border-box;
-  cursor: pointer;
-  font-family: inherit;
-  padding: 0;
-  text-align: left;
-  width: 100%;
-}
-
-.skill-library-panel button.library-primary-status:hover:not(:disabled),
-.skill-library-panel button.library-primary-status:focus-visible {
-  color: var(--accent-strong);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.skill-library-panel button.library-primary-status:disabled {
-  cursor: wait;
-}
-
 .skill-library-panel .library-primary-status {
   color: var(--muted);
 }
@@ -426,6 +405,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.skill-library-panel .library-current-action-cell {
+  align-items: center;
+  display: flex;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.skill-library-panel .library-row-action {
+  min-width: 62px;
+  width: 100%;
 }
 
 .skill-library-panel .library-actions-cell {
@@ -476,23 +467,14 @@
 }
 
 @container skill-library (max-width: 820px) {
-  .skill-library-panel .library-toolbar-action {
-    min-width: var(--icon-box-default);
-    padding: 0;
-    width: var(--icon-box-default);
-  }
-
-  .skill-library-panel .library-toolbar-action .ui-button__label {
-    display: none;
-  }
-
   .skill-library-panel .library-table__head,
   .skill-library-panel .library-table-row {
     column-gap: 10px;
     grid-template-columns:
       minmax(160px, 1.2fr)
-      minmax(136px, 1fr)
-      minmax(132px, 0.9fr)
+      minmax(126px, 1fr)
+      minmax(104px, 0.82fr)
+      64px
       32px;
   }
 
@@ -563,12 +545,17 @@
     grid-row: 1 / span 2;
   }
 
+  .skill-library-panel .library-current-action-cell {
+    grid-column: 4;
+    grid-row: 1 / span 2;
+  }
+
   .skill-library-panel .library-status-detail {
     display: none;
   }
 
   .skill-library-panel .library-actions-cell {
-    grid-column: 4;
+    grid-column: 5;
     grid-row: 1 / span 2;
   }
 

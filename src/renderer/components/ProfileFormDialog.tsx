@@ -1,7 +1,17 @@
 import type { RefObject } from "react";
 import type { TargetInfo } from "../../shared/types";
 import { useI18n } from "../i18n";
-import { Button } from "./ui";
+import {
+  Button,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+  ModalFrame,
+  SegmentedControl,
+  SelectField,
+  TextAreaField,
+  TextField
+} from "./ui";
 
 interface ProfileFormDialogProps {
   open: boolean;
@@ -49,103 +59,65 @@ export const ProfileFormDialog = ({
 
   const creating = mode === "create";
   return (
-    <div
-      className="preview-modal-backdrop"
-      data-dismiss-policy="intentional"
+    <ModalFrame
+      ariaLabel={t(creating ? "New Profile" : "Edit Profile")}
+      className="profile-editor-dialog ui-dialog-shell"
+      dialogRef={dialogRef}
+      dismissPolicy="intentional"
+      dismissDisabled={busy}
+      onDismiss={onClose}
     >
-      <section
-        ref={dialogRef}
-        className="profile-form-dialog profile-editor-dialog ui-dialog-shell"
-        role="dialog"
-        aria-label={t(creating ? "New profile" : "Edit profile")}
-        aria-modal="true"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className="profile-dialog-header ui-dialog-header">
-          <div className="ui-dialog-header__copy">
-            <div className="section-title ui-dialog-title">
-              {t(creating ? "New profile" : "Edit profile")}
-            </div>
-            <p className="muted ui-dialog-description">
-              {creating
-                ? t("Start blank or capture an existing local agent environment.")
-                : t("Update the profile name and description.")}
-            </p>
-          </div>
-        </header>
-        <div className="profile-form-grid ui-dialog-body">
+        <DialogHeader
+          className="profile-dialog-header"
+          title={t(creating ? "New Profile" : "Edit Profile")}
+          description={creating
+            ? t("Start blank or capture an existing local Agent setup.")
+            : t("Update the Profile name and description.")}
+        />
+        <DialogBody className="profile-form-grid">
           {creating ? (
             <>
               {!sourceChoiceComplete ? (
-                <div
-                  className="profile-source-choice ui-segmented-control"
-                  role="group"
-                  aria-label={t("Profile source")}
-                >
-                  <button
-                    className={`ui-segmented-control__option${source === "blank" ? " is-selected" : ""}`}
-                    type="button"
-                    onClick={() => onSourceChange("blank")}
-                  >
-                    {t("Blank")}
-                  </button>
-                  <button
-                    className={`ui-segmented-control__option${source === "target" ? " is-selected" : ""}`}
-                    type="button"
-                    onClick={() => onSourceChange("target")}
-                  >
-                    {t("From Agent")}
-                  </button>
-                </div>
+                <SegmentedControl
+                  className="profile-source-choice"
+                  label={t("Profile source")}
+                  value={source}
+                  options={[
+                    { value: "blank", label: t("Blank") },
+                    { value: "target", label: t("From Agent") }
+                  ]}
+                  onChange={onSourceChange}
+                />
               ) : null}
               {source === "target" ? (
-                <label>
-                  <span>{t("Source Agent")}</span>
-                  <select
-                    aria-label={t("Source Agent")}
-                    value={form.targetId}
-                    onChange={(event) =>
-                      onTargetChange(event.currentTarget.value)}
-                  >
-                    {targets.map((target) => (
-                      <option value={target.id} key={target.id}>
-                        {target.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <SelectField
+                  label={t("Source Agent")}
+                  value={form.targetId}
+                  onChange={(event) => onTargetChange(event.currentTarget.value)}
+                >
+                  {targets.map((target) => (
+                    <option value={target.id} key={target.id}>{target.name}</option>
+                  ))}
+                </SelectField>
               ) : null}
             </>
           ) : null}
-          <label>
-            <span>{t("Profile name")}</span>
-            <input
-              aria-label={t("Profile name")}
-              aria-invalid={Boolean(error)}
-              aria-describedby={error ? "profile-name-error" : undefined}
-              value={form.name}
-              onChange={(event) => onNameChange(event.currentTarget.value)}
-            />
-            {error ? (
-              <small className="field-error" id="profile-name-error">
-                {error}
-              </small>
-            ) : null}
-          </label>
+          <TextField
+            label={t("Profile name")}
+            error={error || undefined}
+            value={form.name}
+            onChange={(event) => onNameChange(event.currentTarget.value)}
+          />
           {mode === "edit" || source === "blank" ? (
-            <label>
-              <span>{t("Description")}</span>
-              <textarea
-                aria-label={t("Description")}
-                rows={3}
-                value={form.description}
-                onChange={(event) =>
-                  onDescriptionChange(event.currentTarget.value)}
-              />
-            </label>
+            <TextAreaField
+              label={t("Description")}
+              rows={3}
+              value={form.description}
+              onChange={(event) => onDescriptionChange(event.currentTarget.value)}
+            />
           ) : null}
-        </div>
-        <footer className="preview-actions ui-dialog-footer">
+        </DialogBody>
+        <DialogFooter className="preview-actions">
           <Button
             ref={initialFocusRef}
             disabled={busy}
@@ -160,8 +132,7 @@ export const ProfileFormDialog = ({
           >
             {t(mode === "edit" ? "Done" : "Create")}
           </Button>
-        </footer>
-      </section>
-    </div>
+        </DialogFooter>
+    </ModalFrame>
   );
 };

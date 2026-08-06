@@ -1,0 +1,159 @@
+import {
+  forwardRef,
+  useId,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes
+} from "react";
+
+interface FieldFrameProps {
+  children: ReactNode;
+  className?: string;
+  description?: ReactNode;
+  error?: ReactNode;
+  htmlFor: string;
+  label: ReactNode;
+  labelHidden?: boolean;
+}
+
+const FieldFrame = ({
+  children,
+  className = "",
+  description,
+  error,
+  htmlFor,
+  label,
+  labelHidden = false
+}: FieldFrameProps) => (
+  <label className={`ui-field ${className}`.trim()} htmlFor={htmlFor}>
+    <span className={`ui-field__label${labelHidden ? " ui-visually-hidden" : ""}`}>{label}</span>
+    {children}
+    {description ? <span className="ui-field__description">{description}</span> : null}
+    {error ? <span className="ui-field__error" role="alert">{error}</span> : null}
+  </label>
+);
+
+interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
+  description?: ReactNode;
+  error?: ReactNode;
+  fieldClassName?: string;
+  label: ReactNode;
+  labelHidden?: boolean;
+}
+
+export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(({
+  className = "",
+  description,
+  error,
+  fieldClassName,
+  id,
+  label,
+  labelHidden,
+  ...props
+}, ref) => {
+  const generatedId = useId();
+  const fieldId = id ?? generatedId;
+  return (
+    <FieldFrame className={fieldClassName} description={description} error={error} htmlFor={fieldId} label={label} labelHidden={labelHidden}>
+      <input ref={ref} {...props} aria-invalid={error ? true : props["aria-invalid"]} className={className} id={fieldId} />
+    </FieldFrame>
+  );
+});
+
+TextField.displayName = "TextField";
+
+interface SearchFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
+  fieldClassName?: string;
+  icon?: ReactNode;
+  label: ReactNode;
+}
+
+export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(({
+  className = "",
+  fieldClassName = "",
+  icon,
+  id,
+  label,
+  ...props
+}, ref) => {
+  const generatedId = useId();
+  const fieldId = id ?? generatedId;
+  return (
+    <label className={`ui-search-field ${fieldClassName}`.trim()} htmlFor={fieldId}>
+      {icon ? <span className="ui-search-field__icon" aria-hidden="true">{icon}</span> : null}
+      <input
+        ref={ref}
+        {...props}
+        aria-label={typeof label === "string" ? label : undefined}
+        className={className}
+        id={fieldId}
+        type="search"
+      />
+      {typeof label === "string" ? null : <span className="ui-visually-hidden">{label}</span>}
+    </label>
+  );
+});
+
+SearchField.displayName = "SearchField";
+
+interface SelectFieldProps extends SelectHTMLAttributes<HTMLSelectElement> {
+  description?: ReactNode;
+  error?: ReactNode;
+  fieldClassName?: string;
+  label: ReactNode;
+  labelHidden?: boolean;
+}
+
+export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(({
+  children,
+  className = "",
+  description,
+  error,
+  fieldClassName,
+  id,
+  label,
+  labelHidden,
+  ...props
+}: SelectFieldProps, ref) => {
+  const generatedId = useId();
+  const fieldId = id ?? generatedId;
+  return (
+    <FieldFrame className={fieldClassName} description={description} error={error} htmlFor={fieldId} label={label} labelHidden={labelHidden}>
+      <select ref={ref} {...props} aria-invalid={error ? true : props["aria-invalid"]} className={className} id={fieldId}>
+        {children}
+      </select>
+    </FieldFrame>
+  );
+});
+
+SelectField.displayName = "SelectField";
+
+interface TextAreaFieldProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+  description?: ReactNode;
+  error?: ReactNode;
+  fieldClassName?: string;
+  label: ReactNode;
+  labelHidden?: boolean;
+}
+
+export const TextAreaField = forwardRef<HTMLTextAreaElement, TextAreaFieldProps>(({
+  className = "",
+  description,
+  error,
+  fieldClassName,
+  id,
+  label,
+  labelHidden,
+  ...props
+}: TextAreaFieldProps, ref) => {
+  const generatedId = useId();
+  const fieldId = id ?? generatedId;
+  return (
+    <FieldFrame className={fieldClassName} description={description} error={error} htmlFor={fieldId} label={label} labelHidden={labelHidden}>
+      <textarea ref={ref} {...props} aria-invalid={error ? true : props["aria-invalid"]} className={className} id={fieldId} />
+    </FieldFrame>
+  );
+});
+
+TextAreaField.displayName = "TextAreaField";

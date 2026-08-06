@@ -21,7 +21,7 @@ export type ProfileReadinessStatus =
 
 export interface ProfileReadiness {
   status: ProfileReadinessStatus;
-  label: "No profile" | "No Agent" | "Unsaved" | "Agent unavailable" | "Needs review" | "Apply pending" | "Applied" | "Ready";
+  label: "No environment" | "No Agent" | "Unsaved" | "Agent unavailable" | "Needs review" | "Apply pending" | "Applied" | "Ready";
   message: string;
   remediationLabel?: "Open Agents" | "Save now" | "Open Recovery";
 }
@@ -67,8 +67,8 @@ export const deriveProfileReadiness = ({
   if (!profile) {
     return {
       status: "no-profile",
-      label: "No profile",
-      message: "Create a profile to continue"
+      label: "No environment",
+      message: "Create an environment to continue"
     };
   }
 
@@ -84,7 +84,7 @@ export const deriveProfileReadiness = ({
     return {
       status: "dirty",
       label: "Unsaved",
-      message: "Save this profile before previewing changes",
+      message: "Save this environment before previewing changes",
       remediationLabel: "Save now"
     };
   }
@@ -102,7 +102,7 @@ export const deriveProfileReadiness = ({
     return {
       status: "validation-error",
       label: "Needs review",
-      message: "This profile has validation issues"
+      message: "This environment has validation issues"
     };
   }
 
@@ -158,7 +158,7 @@ export const deriveProfileReadiness = ({
       status: "apply-pending",
       label: "Apply pending",
       message: dependenciesCurrent === false
-        ? `Library resources changed after this profile was applied to ${target.name}`
+        ? `Library resources changed after this environment was applied to ${target.name}`
         : targetState.appliedProfileHash
           ? `Saved changes have not been applied to ${target.name}`
         : `${target.name} applied version is unknown; preview before continuing`
@@ -178,8 +178,8 @@ export const deriveProfileReadiness = ({
       status: "applied",
       label: "Applied",
       message: targetState.lifecycleStatus === "applied-with-local-override"
-        ? targetState.lifecycleReason ?? `${target.name} uses this profile with local management boundaries`
-        : `${target.name} matches this profile`
+        ? targetState.lifecycleReason ?? `${target.name} uses this environment with local management boundaries`
+        : `${target.name} matches this environment`
     };
   }
 
@@ -193,7 +193,7 @@ export const deriveProfileReadiness = ({
 export const deriveApplyActionLabel = (input: ProfileReadinessInput): string => {
   const { target, localValidationErrors = [], preview, targetState, isDirty } = input;
   if (!target) {
-    return "Apply profile";
+    return "Apply environment";
   }
 
   if (!target.health.canWrite || localValidationErrors.length > 0) {
@@ -201,7 +201,7 @@ export const deriveApplyActionLabel = (input: ProfileReadinessInput): string => 
   }
 
   if (isDirty) {
-    return "Save profile first";
+    return "Save environment first";
   }
 
   const readiness = deriveProfileReadiness(input);

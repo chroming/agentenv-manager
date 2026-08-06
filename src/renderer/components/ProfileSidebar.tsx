@@ -406,7 +406,7 @@ export const ProfileSidebar = ({
     : t("{{ready}}/{{total}} Agents · {{profiles}}", {
         ready: readyTargets,
         total: targets.length,
-        profiles: t(profiles.length === 1 ? "{{count}} profile" : "{{count}} profiles", {
+        profiles: t(profiles.length === 1 ? "{{count}} Profile" : "{{count}} Profiles", {
           count: profiles.length
         })
       });
@@ -425,8 +425,8 @@ export const ProfileSidebar = ({
     icon: ProductIconName;
   }> = [
     { id: "targets", label: t("Agents"), detail: t("Configure and inspect"), icon: "agents" },
-    { id: "projects", label: t("Projects"), detail: t("Project environments"), icon: "projects" },
-    { id: "profiles", label: t("Profiles"), detail: t("Compose environments"), icon: "profiles" },
+    { id: "profiles", label: t("Profiles"), detail: t("Compose reusable Agent setups"), icon: "profiles" },
+    { id: "projects", label: t("Workspaces"), detail: t("Recurring project folders"), icon: "projects" },
     {
       id: "conversations",
       label: t("Conversations"),
@@ -451,8 +451,8 @@ export const ProfileSidebar = ({
           </div>
         </div>
       </div>
-      <nav className="workspace-nav" aria-label={t("Workspace")}>
-        <div className="workspace-nav__group">
+      <nav className="workspace-nav" aria-label={t("Primary navigation")}>
+        <div className="workspace-nav__group workspace-nav__group--utility">
           <button
             className="workspace-search-button"
             type="button"
@@ -464,7 +464,8 @@ export const ProfileSidebar = ({
             <span>{t("Quick open")}</span>
             <kbd>{quickOpenShortcut}</kbd>
           </button>
-          <div className="nav-section-label">{t("Workspace")}</div>
+        </div>
+        <div className="workspace-nav__group workspace-nav__group--destinations">
           {workspaceItems.map((item) => {
             return (
               <button

@@ -1,4 +1,10 @@
-import type { CSSProperties, HTMLAttributes, ReactNode, Ref } from "react";
+import type {
+  ButtonHTMLAttributes,
+  CSSProperties,
+  HTMLAttributes,
+  ReactNode,
+  Ref
+} from "react";
 import { handleActionMenuKeyDown } from "./actionMenuKeyboard";
 
 interface ActionMenuProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
@@ -29,4 +35,26 @@ export const ActionMenu = ({
   >
     {children}
   </div>
+);
+
+interface ActionMenuItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  tone?: "default" | "danger";
+}
+
+export const ActionMenuItem = ({
+  children,
+  className = "",
+  role = "menuitem",
+  tone = "default",
+  type = "button",
+  ...props
+}: ActionMenuItemProps) => (
+  <button
+    {...props}
+    className={`ui-action-menu__item ui-action-menu__item--${tone} ${className}`.trim()}
+    role={role}
+    type={type}
+  >
+    {children}
+  </button>
 );

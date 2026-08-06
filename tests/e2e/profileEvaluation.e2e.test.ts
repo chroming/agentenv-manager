@@ -115,7 +115,7 @@ const verifyMaximizedDialogLayout = async (
 
 const verifyProfileComparisonActionLayout = async (page: Page, width: number, height: number) => {
   await page.setViewportSize({ width, height });
-  const actions = page.getByRole("group", { name: "Selected profile actions" });
+  const actions = page.getByRole("group", { name: "Selected Profile actions" });
   const compare = actions.getByRole("button", { name: "Compare" });
   const apply = actions.getByRole("button", { name: "Apply" });
   await expectInViewport(page, actions);
@@ -147,7 +147,7 @@ const verifyComparisonResultNavigation = async (dialog: ReturnType<Page["getByRo
 };
 
 describe.skipIf(process.platform !== "darwin" || !gitExecutable)(
-  "isolated Profile comparison desktop workflow",
+  "isolated Environment comparison desktop workflow",
   () => {
     it("runs Current and Proposed on one snapshot without changing the real Agent or folder", async () => {
       root = await mkdtemp(join(tmpdir(), "agentenv-comparison-e2e-"));
@@ -185,14 +185,14 @@ describe.skipIf(process.platform !== "darwin" || !gitExecutable)(
       });
       await writeJson(join(profileDir, "profile.json"), {
         id: "evaluation-profile",
-        name: "Evaluation Profile",
+        name: "Evaluation Environment",
         description: "Isolated comparison proof",
         preferredTargetId: "opencode",
         version: 2
       });
       await writeFile(
         join(profileDir, "INSTRUCTIONS.md"),
-        "# Proposed Profile instructions\n",
+        "# Proposed Environment instructions\n",
         "utf8"
       );
       await writeJson(join(profileDir, "resources.json"), {
@@ -231,7 +231,7 @@ describe.skipIf(process.platform !== "darwin" || !gitExecutable)(
       });
       await writeFile(
         join(workspace, ".opencode", "skills", "project-only", "SKILL.md"),
-        "---\nname: project-only\ndescription: Must not enter Profile Comparison.\n---\n",
+        "---\nname: project-only\ndescription: Must not enter Environment Comparison.\n---\n",
         "utf8"
       );
       git = createGitCommandRunner({ executablePath: gitExecutable! });
@@ -266,7 +266,7 @@ done
 environment=current
 profile_loaded=false
 skill_loaded=false
-grep -q 'Proposed Profile instructions' "$OPENCODE_CONFIG_DIR/AGENTS.md" && environment=proposed && profile_loaded=true
+grep -q 'Proposed Environment instructions' "$OPENCODE_CONFIG_DIR/AGENTS.md" && environment=proposed && profile_loaded=true
 [ -f "$OPENCODE_CONFIG_DIR/skills/evaluation-skill/SKILL.md" ] && grep -q 'Evaluation Skill' "$OPENCODE_CONFIG_DIR/skills/evaluation-skill/SKILL.md" && skill_loaded=true
 home_isolated=false
 project_resources_excluded=false
@@ -338,7 +338,7 @@ printf '{"type":"step_finish","part":{"modelID":"fake/e2e","cost":0.01,"tokens":
       );
 
       await page.getByRole("button", { name: "Profiles" }).click();
-      await page.getByRole("group", { name: "Profile Evaluation Profile" }).click();
+      await page.getByRole("button", { name: "Profile Evaluation Environment" }).click();
       await verifyProfileComparisonActionLayout(page, 920, 620);
       if (process.env.AGENTENV_EVALUATION_CAPTURE_DIR) {
         await mkdir(process.env.AGENTENV_EVALUATION_CAPTURE_DIR, { recursive: true });
@@ -355,7 +355,7 @@ printf '{"type":"step_finish","part":{"modelID":"fake/e2e","cost":0.01,"tokens":
       await verifyProfileComparisonActionLayout(page, 1440, 900);
       await page.getByRole("button", { name: "Compare" }).click();
       const dialog = page.getByRole("dialog", {
-        name: "Compare Evaluation Profile on OpenCode"
+        name: "Compare Evaluation Environment on OpenCode"
       });
       await dialog.waitFor({ state: "visible" });
       await dialog.getByText("Temporary empty Workspace").waitFor();
@@ -467,7 +467,7 @@ printf '{"type":"step_finish","part":{"modelID":"fake/e2e","cost":0.01,"tokens":
       expect(reportText).not.toContain(root);
     }, 50_000);
 
-    it("enables an apply-pending Codex Profile and compares it with the current Codex setup", async () => {
+    it("enables an apply-pending Codex Environment and compares it with the current Codex setup", async () => {
       root = await mkdtemp(join(tmpdir(), "agentenv-codex-comparison-e2e-"));
       const home = join(root, "home");
       const dataRoot = join(root, "data");
@@ -500,7 +500,7 @@ printf '{"type":"step_finish","part":{"modelID":"fake/e2e","cost":0.01,"tokens":
       });
       await writeJson(join(profileDir, "profile.json"), {
         id: "codex-evaluation-profile",
-        name: "Codex Evaluation Profile",
+        name: "Codex Evaluation Environment",
         description: "Codex isolated comparison proof",
         preferredTargetId: "codex",
         version: 2
@@ -591,12 +591,12 @@ printf '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens
       }).toEqual({ state: "ready" });
 
       await page.getByRole("button", { name: "Profiles" }).click();
-      await page.getByRole("group", { name: "Profile Codex Evaluation Profile" }).click();
+      await page.getByRole("button", { name: "Profile Codex Evaluation Environment" }).click();
       const compareButton = page.getByRole("button", { name: "Compare" });
       await expect.poll(() => compareButton.isEnabled()).toBe(true);
       await compareButton.click();
       const dialog = page.getByRole("dialog", {
-        name: "Compare Codex Evaluation Profile on Codex"
+        name: "Compare Codex Evaluation Environment on Codex"
       });
       await dialog.getByRole("textbox", { name: "Task" }).fill("Compare Codex environments");
       await dialog.getByRole("button", { name: "Run comparison" }).click();
@@ -770,7 +770,7 @@ printf '{"type":"message_end","message":{"role":"assistant","model":"fake-pi","c
       await page.getByRole("button", { name: "Profiles" }).click();
 
       for (const agent of agents.slice(0, 3)) {
-        await page.getByRole("group", { name: `Profile ${agent.name}` }).click();
+        await page.getByRole("button", { name: `Profile ${agent.name}` }).click();
         const compare = page.getByRole("button", { name: "Compare" });
         await expect.poll(() => compare.isEnabled()).toBe(true);
         await compare.click();
@@ -810,7 +810,7 @@ printf '{"type":"message_end","message":{"role":"assistant","model":"fake-pi","c
       }
 
       const trae = agents[3];
-      await page.getByRole("group", { name: `Profile ${trae.name}` }).click();
+      await page.getByRole("button", { name: `Profile ${trae.name}` }).click();
       const compare = page.getByRole("button", { name: "Compare" });
       await expect.poll(() => compare.isDisabled()).toBe(true);
       await expect(compare.getAttribute("title")).resolves.toBe(

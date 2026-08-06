@@ -39,12 +39,13 @@
 
 .profile-skill-toolbar {
   align-items: center;
-  border-bottom: 1px solid #e8edf4;
+  background: #fbfcfe;
+  border-bottom: 1px solid var(--border-subtle);
   display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  min-height: 44px;
-  padding: 5px 4px 7px 6px;
+  gap: 10px;
+  justify-content: flex-end;
+  min-height: 40px;
+  padding: 4px 8px;
 }
 
 .profile-skill-summary {
@@ -64,7 +65,7 @@
 .profile-skill-toolbar__actions {
   display: flex;
   flex: 0 0 auto;
-  gap: 8px;
+  gap: 6px;
 }
 
 .profile-skill-list {
@@ -80,13 +81,13 @@
   align-items: center;
   border-bottom: 1px solid #edf1f6;
   display: grid;
-  gap: 10px;
+  gap: 8px;
   grid-template-columns:
     34px minmax(120px, 1fr) 128px
     40px 44px 38px;
-  min-height: 62px;
+  min-height: 56px;
   min-width: 0;
-  padding: 6px 9px 6px 10px;
+  padding: 5px 8px;
 }
 
 .profile-skill-row:last-child {

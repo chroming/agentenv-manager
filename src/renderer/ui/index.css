@@ -1,4 +1,4 @@
-@layer accessibility, tokens, base, controls, legacy, primitives, shell, pages, overlays;
+@layer accessibility, tokens, base, controls, legacy, primitives, patterns, shell, pages, overlays;
 
 @import "./accessibility.css" layer(accessibility);
 @import "./tokens.css" layer(tokens);
@@ -6,6 +6,7 @@
 @import "./controls.css" layer(controls);
 @import "../styles.css" layer(legacy);
 @import "./primitives.css" layer(primitives);
+@import "./patterns.css" layer(patterns);
 @import "./shell.css" layer(shell);
 @import "./pages/targets.css" layer(pages);
 @import "./pages/projects.css" layer(pages);

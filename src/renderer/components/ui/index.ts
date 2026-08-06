@@ -1,12 +1,29 @@
-export { ActionMenu } from "./ActionMenu";
+export { ActionMenu, ActionMenuItem } from "./ActionMenu";
 export { Badge } from "./Badge";
 export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./Button";
+export { ChoiceInput, type ChoiceInputProps } from "./ChoiceInput";
 export { ControlGroup } from "./ControlGroup";
+export { DialogBody, DialogFooter, DialogHeader } from "./DialogParts";
+export { SearchField, SelectField, TextAreaField, TextField } from "./FormFields";
 export { IconButton } from "./IconButton";
 export { ModalFrame, type ModalDismissPolicy } from "./ModalFrame";
 export { Notice } from "./Notice";
 export { PageHeader } from "./PageHeader";
 export { ResourceRow } from "./ResourceRow";
+export {
+  ResourceDisclosureSection,
+  type ResourceDisclosureSectionProps
+} from "./ResourceDisclosureSection";
 export { Switch } from "./Switch";
+export { SegmentedControl } from "./SegmentedControl";
+export {
+  EmptyState,
+  InspectorHeader,
+  MasterDetailLayout,
+  MasterDetailPane,
+  MasterListPane,
+  ResourceSection,
+  SelectableListRow
+} from "./WorkspacePatterns";
 export { ToolbarOverflowMenu, type ToolbarOverflowMenuItem } from "./ToolbarOverflowMenu";
 export { focusInitialActionMenuItem, handleActionMenuKeyDown } from "./actionMenuKeyboard";

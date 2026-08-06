@@ -30,11 +30,11 @@ export const AgentsEditor = ({
       )
     : policy === "disable"
       ? t(
-          "Profile Apply clears this instruction file. New {{name}} sessions load the change; running conversations keep their current context.",
+          "Applying the Profile clears this instruction file. New {{name}} sessions load the change; running conversations keep their current context.",
           { name: targetName }
         )
       : t(
-          "Profile Apply writes this file. New {{name}} sessions load changes; running conversations keep their current context.",
+          "Applying the Profile writes this file. New {{name}} sessions load changes; running conversations keep their current context.",
           { name: targetName }
         );
 

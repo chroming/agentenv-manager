@@ -39,10 +39,13 @@ describe("ProfileComposerSection", () => {
       </ProfileComposerSection>
     );
 
-    const trigger = screen.getByRole("button", { name: /^Skills$/ });
-    const panel = screen.getByRole("region");
+    const trigger = screen.getByRole("button", { name: "Skills" });
+    const panel = screen.getByRole("group", { name: "Skills" });
     const panelId = trigger.getAttribute("aria-controls");
 
+    expect(trigger.closest(".ui-resource-disclosure")).toHaveClass(
+      "profile-composer-section"
+    );
     expect(trigger.tagName).toBe("BUTTON");
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     expect(panelId).toBeTruthy();
@@ -140,15 +143,15 @@ describe("ProfileComposerSection", () => {
     expect(skillsTrigger.getAttribute("aria-controls")).not.toBe(
       mcpTrigger.getAttribute("aria-controls")
     );
-    expect(skillsPanel).toHaveAttribute("role", "region");
-    expect(mcpPanel).toHaveAttribute("role", "region");
+    expect(skillsPanel).toHaveAttribute("role", "group");
+    expect(mcpPanel).toHaveAttribute("role", "group");
     expect(skillsPanel).toHaveAttribute("aria-labelledby", skillsTrigger.id);
     expect(mcpPanel).toHaveAttribute("aria-labelledby", mcpTrigger.id);
 
     for (const trigger of [skillsTrigger, mcpTrigger]) {
       const descriptionIds = trigger.getAttribute("aria-describedby")?.split(/\s+/) ?? [];
 
-      expect(descriptionIds).toHaveLength(3);
+      expect(descriptionIds).toHaveLength(2);
       expect(descriptionIds.every((descriptionId) => document.getElementById(descriptionId))).toBe(
         true
       );
@@ -180,7 +183,7 @@ describe("ProfileComposerSection", () => {
       "aria-expanded",
       "false"
     );
-    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+    expect(screen.queryByRole("group")).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Instructions editor" })).not.toBeInTheDocument();
     expect(
       document.getElementById(
@@ -216,26 +219,29 @@ describe("ProfileComposerSection", () => {
       name: "Skills application policy for OpenCode"
     });
     expect(
-      within(policy).getByRole("radio", { name: "Keep current" })
+      within(policy).getByRole("radio", { name: "Keep Agent" })
     ).toHaveAttribute("aria-checked", "true");
     expect(
       within(policy).getByRole("radio", { name: "Use Profile" })
     ).toHaveAttribute("aria-checked", "false");
+    expect(within(policy).getByText("Profile")).toBeInTheDocument();
+    expect(within(policy).getByText("Off")).toBeInTheDocument();
+    expect(within(policy).getByText("Agent")).toBeInTheDocument();
     expect(policy).toHaveClass("is-ignore");
     expect(policy.closest(".profile-composer-section")).toHaveClass("is-unmanaged");
     const count = document.querySelector(".profile-composer-section__count");
     expect(count).toHaveAttribute("title", "2 of 3 enabled");
     expect(count?.querySelector(".profile-composer-section__count-visual")).toHaveTextContent("2/3");
     const header = policy.closest(".profile-composer-section__header");
-    expect(header?.children[0]).toBe(screen.getByRole("button", { name: "Expand Skills" }));
-    expect(header?.children[1]).toBe(screen.getByRole("button", { name: "Skills" }));
-    expect(header?.children[2]).toBe(policy);
+    expect(header?.children[0]).toBe(screen.getByRole("button", { name: "Skills" }));
+    expect(header?.children[1]).toContainElement(policy);
+    expect(header?.querySelectorAll("button")).toHaveLength(4);
 
     fireEvent.click(within(policy).getByRole("radio", { name: "Use Profile" }));
 
     expect(onPolicyChange).toHaveBeenCalledWith("manage");
     expect(onToggle).not.toHaveBeenCalled();
-    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+    expect(screen.queryByRole("group")).not.toBeInTheDocument();
   });
 
   it("keeps Profile content editable and explains an unmanaged policy", () => {
@@ -289,7 +295,7 @@ describe("ProfileComposerSection", () => {
     );
 
     expect(screen.getByText(/Saved in this Profile/)).toHaveTextContent(
-      "Applying to OpenCode disables this section's Profile resources."
+      "Applying to OpenCode turns off this Profile's resources in the Agent."
     );
     expect(screen.getByRole("textbox", { name: "Instructions editor" })).toHaveValue(
       "# Saved Profile content"

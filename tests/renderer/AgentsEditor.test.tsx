@@ -22,7 +22,7 @@ describe("AgentsEditor", () => {
     expect(screen.getByText("/Users/example/.trae/rules/agentenv-manager.md"))
       .toBeInTheDocument();
     const help = screen.getByLabelText(
-      "Profile Apply writes this file. New Trae CLI sessions load changes; running conversations keep their current context."
+      "Applying the Profile writes this file. New Trae CLI sessions load changes; running conversations keep their current context."
     );
     fireEvent.focus(help);
     expect(screen.getByRole("tooltip")).toHaveTextContent(

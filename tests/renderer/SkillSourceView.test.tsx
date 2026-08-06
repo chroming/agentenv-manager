@@ -128,10 +128,10 @@ describe("SkillSourceView", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Merge selected/ })).not.toBeInTheDocument();
     expect(document.querySelector(".skill-source-counts .is-change")).toHaveClass("has-value");
-    fireEvent.click(screen.getByRole("button", { name: "Update available" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update source skills" }));
     expect(onReviewUpdates).toHaveBeenCalledWith(["review"]);
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Update available" })).toBeEnabled()
+      expect(screen.getByRole("button", { name: "Update source skills" })).toBeEnabled()
     );
     fireEvent.click(screen.getByRole("button", { name: "Expand source" }));
 
@@ -757,7 +757,7 @@ describe("SkillSourceView", () => {
     expect(document.querySelector(".skill-source-counts .is-removed")).toBeNull();
   });
 
-  it("uses an actionable status instead of a duplicate Action column", async () => {
+  it("keeps source status factual and exposes the current action separately", async () => {
     const onReviewUpdates = vi.fn().mockResolvedValue(undefined);
     render(
       <SkillSourceView
@@ -778,12 +778,14 @@ describe("SkillSourceView", () => {
       />
     );
 
-    expect(screen.queryByText("Action", { selector: ".skill-source-table-head span" })).not.toBeInTheDocument();
-    const statusAction = screen.getByRole("button", { name: "Update available" });
-    expect(statusAction).toHaveClass("skill-source-status");
+    expect(screen.getByText("Action", { selector: ".skill-source-table-head span" })).toBeInTheDocument();
+    const status = screen.getByText("Update available", { selector: ".skill-source-status-label" });
+    expect(status.closest("button")).toBeNull();
+    const updateAction = screen.getByRole("button", { name: "Update source skills" });
+    expect(updateAction).toHaveTextContent("Update");
+    expect(updateAction.closest(".skill-source-current-action")).not.toBeNull();
     expect(screen.getByText("—", { selector: ".skill-source-last-checked" })).toBeInTheDocument();
-    expect(document.querySelector(".skill-source-current-action")).toBeNull();
-    fireEvent.click(statusAction);
+    fireEvent.click(updateAction);
     await waitFor(() => expect(onReviewUpdates).toHaveBeenCalledWith(["review"]));
   });
 

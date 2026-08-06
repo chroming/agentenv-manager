@@ -205,7 +205,7 @@ export const useProfileDraftController = ({
       draftProfile.manifest.name;
     const previousLibraryVersions = profileLibraryVersions[draftProfile.id];
     setIsSaving(true);
-    setStatus("Saving profile");
+    setStatus("Saving environment");
     try {
       const saved = await window.agentEnv.saveProfile(profileSaveInput(draftProfile));
       const summary: ProfileSummary = {

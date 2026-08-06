@@ -15,6 +15,7 @@ import {
 import { ResourceIcon } from "./ResourceIconPicker";
 import { ProfileActionsMenu } from "./ProfileActionsMenu";
 import { defaultProfileIconKey } from "../productIcons";
+import { SearchField, SelectableListRow } from "./ui";
 
 const deploymentStatusLabels = {
   attention: "Attention",
@@ -127,22 +128,21 @@ export const ProfileList = ({
     <>
       <aside className="profile-index" aria-label={t("Profile list")}>
         <div className="profile-list-toolbar">
-          <label className="profile-search ui-composite-field">
-            <Search size={15} strokeWidth={2.2} aria-hidden="true" />
-            <input
-              ref={searchInputRef}
-              aria-label={t("Search profiles")}
-              placeholder={t("Search profiles")}
-              value={search}
-              onChange={(event) => onSearchChange(event.currentTarget.value)}
-            />
-          </label>
+          <SearchField
+            ref={searchInputRef}
+            fieldClassName="profile-search"
+            icon={<Search size={15} strokeWidth={2.2} />}
+            label={t("Search Profiles")}
+            placeholder={t("Search Profiles")}
+            value={search}
+            onChange={(event) => onSearchChange(event.currentTarget.value)}
+          />
         </div>
         <div className="profile-list">
         {isLoading ? (
           <div className="inline-state inline-state--loading" role="status">
             <span className="inline-state__icon" aria-hidden="true" />
-            <span>{t("Loading profiles")}</span>
+            <span>{t("Loading Profiles")}</span>
           </div>
         ) : null}
         {!isLoading && visibleProfiles.length === 0 ? (
@@ -150,7 +150,7 @@ export const ProfileList = ({
             <span className="inline-state__icon" aria-hidden="true">
               <Search size={15} strokeWidth={2.2} />
             </span>
-            <span>{t("No profiles match this view")}</span>
+            <span>{t("No Profiles match this view")}</span>
           </div>
         ) : null}
         {visibleProfiles.map((profile) => {
@@ -205,61 +205,51 @@ export const ProfileList = ({
                 .join(", ")
             : deploymentLabel;
           return (
-            <div
+            <SelectableListRow
               className={`profile-row${isSelected ? " is-active" : ""}${isBroken ? " is-invalid" : ""}`}
               key={profile.id}
-              role="group"
               aria-label={t("Profile {{name}}", { name: profile.name })}
+              selected={isSelected}
+              iconClassName={`profile-row__icon${isBroken ? " profile-row__icon--invalid" : ""}`}
+              icon={isBroken
+                ? <TriangleAlert size={18} strokeWidth={2.2} />
+                : <ResourceIcon iconKey={iconKey} size={18} />}
+              identityClassName="profile-row__content"
+              titleClassName="profile-row__title"
+              title={(
+                <>
+                  <span className="profile-row__name">{profile.name}</span>
+                  {isSelected && isProfileDirty ? (
+                    <strong className="profile-row__dirty">{t("Unsaved")}</strong>
+                  ) : null}
+                </>
+              )}
+              descriptionClassName={isBroken ? "profile-row__description--invalid" : ""}
+              description={isBroken ? (
+                t("Stored Profile data could not be loaded")
+              ) : (
+                <span
+                  className={`profile-row__deployments profile-row__deployments--${deploymentState}`}
+                  aria-label={deploymentTitle}
+                  title={deploymentTitle}
+                >
+                  <span className="profile-row__deployment-label">{deploymentLabel}</span>
+                </span>
+              )}
+              tooltip={profile.loadError}
+              onSelect={() => onSelect(profile.id)}
               onContextMenu={(event) => {
                 event.preventDefault();
                 if (isBroken || actionsDisabled) return;
                 const row = event.currentTarget;
-                const content = row.querySelector<HTMLElement>(".profile-row__content") ?? row;
-                contextReturnFocusRef.current = content;
+                contextReturnFocusRef.current = row;
                 setContextMenu({
                   profileId: profile.id,
                   left: event.clientX,
                   top: event.clientY
                 });
               }}
-            >
-              {isBroken ? (
-                <span className="profile-row__icon profile-row__icon--invalid" aria-hidden="true">
-                  <TriangleAlert size={18} strokeWidth={2.2} />
-                </span>
-              ) : (
-                <span className="profile-row__icon" aria-hidden="true">
-                  <ResourceIcon iconKey={iconKey} size={18} />
-                </span>
-              )}
-              <button
-                className="profile-row__content"
-                type="button"
-                aria-current={isSelected ? "page" : undefined}
-                title={profile.loadError}
-                onClick={() => onSelect(profile.id)}
-              >
-                <span className="profile-row__title">
-                  <span className="profile-row__name">{profile.name}</span>
-                  {isSelected && isProfileDirty ? (
-                    <strong className="profile-row__dirty">{t("Unsaved")}</strong>
-                  ) : null}
-                </span>
-                {isBroken ? (
-                  <span className="profile-row__description profile-row__description--invalid">
-                    {t("Stored Profile data could not be loaded")}
-                  </span>
-                ) : (
-                  <span
-                    className={`profile-row__deployments profile-row__deployments--${deploymentState}`}
-                    aria-label={deploymentTitle}
-                    title={deploymentTitle}
-                  >
-                    <span className="profile-row__deployment-label">{deploymentLabel}</span>
-                  </span>
-                )}
-              </button>
-            </div>
+            />
           );
         })}
         </div>

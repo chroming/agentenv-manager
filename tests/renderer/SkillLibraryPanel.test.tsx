@@ -709,7 +709,7 @@ describe("SkillLibraryPanel", () => {
 
     expect(screen.getByRole("region", { name: "Skill library" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Import skills" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Environment skills" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Local Skill Cleanup" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Library storage settings" })).not.toBeInTheDocument();
     const sharedRow = screen.getByRole("group", { name: "Library item shared-reviewer" });
     expect(sharedRow).toHaveTextContent("Profiles1");
@@ -755,18 +755,18 @@ describe("SkillLibraryPanel", () => {
     ).toBeInTheDocument();
     fireEvent.click(within(settingsDialog).getByRole("button", { name: "Close" }));
     const githubRow = screen.getByRole("group", { name: "Library item github-reviewer" });
-    const updateStatus = within(githubRow).getByRole("button", {
+    const updateStatus = within(githubRow).getByText("Update available", {
+      selector: ".library-primary-status span"
+    });
+    expect(updateStatus.closest("button")).toBeNull();
+    const updateAction = within(githubRow).getByRole("button", {
       name: "Update github-reviewer"
     });
-    expect(updateStatus).toHaveTextContent(/^Update available$/);
-    expect(updateStatus.closest(".library-status-cell")).not.toBeNull();
-    expect(githubRow.querySelector(".library-current-action-cell")).toBeNull();
-    expect(
-      within(githubRow).queryByRole("button", { name: /^Review$/ })
-    ).not.toBeInTheDocument();
+    expect(updateAction).toHaveTextContent(/^Update$/);
+    expect(updateAction.closest(".library-current-action-cell")).not.toBeNull();
     expect(githubRow).toHaveTextContent("Update available");
-    expect(within(screen.getByRole("region", { name: "Library skills" })).queryByText("Action"))
-      .not.toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Library skills" })).getByText("Action"))
+      .toBeInTheDocument();
     const githubSource = within(githubRow).getByLabelText("Full source for github-reviewer");
     expect(githubSource).not.toHaveAttribute("title");
     fireEvent.mouseEnter(githubSource);
@@ -844,6 +844,10 @@ describe("SkillLibraryPanel", () => {
       within(copiedLocalRow).getByRole("button", { name: "Sync install of copied-local" })
     );
     expect(onSyncSkillInstalls).toHaveBeenCalledWith("copied-local");
+
+    const localOnlyRow = screen.getByRole("group", { name: "Library item represented-external" });
+    expect(localOnlyRow).toHaveTextContent("Available");
+    expect(localOnlyRow).not.toHaveTextContent("Manual");
     fireEvent.click(
       within(copiedLocalRow).getByRole("button", { name: "More actions for copied-local" })
     );
@@ -947,7 +951,7 @@ describe("SkillLibraryPanel", () => {
     expect(deleteDialog).toHaveTextContent("Shared Reviewer");
     expect(deleteDialog).toHaveTextContent("used by Daily Coding");
     expect(deleteDialog).toHaveTextContent("/tmp/skills-library/shared-reviewer");
-    fireEvent.click(within(deleteDialog).getByRole("button", { name: "Review profiles" }));
+    fireEvent.click(within(deleteDialog).getByRole("button", { name: "Review Profiles" }));
     expect(onReviewSkillUsage).toHaveBeenCalledWith("shared-reviewer");
     expect(onRemoveLibrarySkill).not.toHaveBeenCalled();
     fireEvent.click(
@@ -1124,7 +1128,7 @@ describe("SkillLibraryPanel", () => {
     expect(onCloseTool).toHaveBeenCalledTimes(2);
 
     rerender(renderPanel("discoveries"));
-    const discoveries = screen.getByRole("region", { name: "Environment skills" });
+    const discoveries = screen.getByRole("region", { name: "Local Skill Cleanup" });
     fireEvent.click(within(discoveries).getByRole("button", { name: "Refresh local skills" }));
     expect(onRefreshInventory).toHaveBeenCalledTimes(2);
     fireEvent.mouseDown(document.body);
@@ -1439,10 +1443,10 @@ describe("SkillLibraryPanel", () => {
     fireEvent.mouseDown(conflictLocationsTooltip);
     fireEvent.click(conflictLocationsTooltip);
     expect(onCloseTool).toHaveBeenCalledTimes(closeCountBeforeTooltipClick);
-    expect(screen.getByRole("region", { name: "Environment skills" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Local Skill Cleanup" })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Environment skills" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Local Skill Cleanup" })).toBeInTheDocument();
     fireEvent.click(
       within(conflictGroup).getByRole("button", { name: "Add to Library conflict-reviewer" })
     );

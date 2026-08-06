@@ -216,6 +216,9 @@ describe("Repository Skill source", () => {
     expect(await page.getByRole("button", { name: "Refresh sources" }).count()).toBe(1);
     expect(await page.getByRole("button", { name: "Check updates" }).count()).toBe(1);
     const sourceGroup = page.locator(".skill-source-group");
+    const sourceStatus = sourceGroup.locator(
+      ".skill-source-group-row .skill-source-status-label"
+    );
     await expect.poll(() => sourceGroup.count()).toBe(1);
     const checkSource = async () => {
       await sourceGroup.getByRole("button", { name: /Source actions for/ }).click();
@@ -250,7 +253,10 @@ describe("Repository Skill source", () => {
           identityLeft: identity.getBoundingClientRect().left,
           identityTextLeft: row.querySelector<HTMLElement>(".skill-source-link-text")!
             .getBoundingClientRect().left,
-          moreHeaderLeft: headerCells[4]!.getBoundingClientRect().left,
+          actionHeaderLeft: headerCells[4]!.getBoundingClientRect().left,
+          actionLeft: row.querySelector<HTMLElement>(".skill-source-current-action")!
+            .getBoundingClientRect().left,
+          moreHeaderLeft: headerCells[5]!.getBoundingClientRect().left,
           moreLeft: more.getBoundingClientRect().left,
           moreRight: more.getBoundingClientRect().right,
           rowRight: row.getBoundingClientRect().right,
@@ -273,15 +279,16 @@ describe("Repository Skill source", () => {
       expect(Math.abs(geometry.statusLeft - geometry.statusHeaderLeft)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.statusContentLeft - geometry.statusLeft)).toBeLessThanOrEqual(1);
       expect(geometry.statusToMoreGap).toBeGreaterThanOrEqual(7);
+      expect(Math.abs(geometry.actionLeft - geometry.actionHeaderLeft)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.moreLeft - geometry.moreHeaderLeft)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.moreRight - geometry.rowRight + 12)).toBeLessThanOrEqual(1);
       if (width === 920) {
-        expect(geometry.columnCount).toBe(6);
+        expect(geometry.columnCount).toBe(7);
         expect(geometry.checkedHeaderDisplay).toBe("none");
         expect(Math.abs(geometry.checkedLeft - geometry.identityLeft)).toBeLessThanOrEqual(1);
         expect(geometry.checkedBelowIdentityTitle).toBe(true);
       } else {
-        expect(geometry.columnCount).toBe(7);
+        expect(geometry.columnCount).toBe(8);
         expect(geometry.checkedHeaderDisplay).not.toBe("none");
         expect(Math.abs(geometry.checkedLeft - geometry.checkedHeaderLeft)).toBeLessThanOrEqual(1);
       }
@@ -352,7 +359,7 @@ describe("Repository Skill source", () => {
     staleMetadata.remoteRevision = "stale-transport-revision";
     await writeFile(metadataPath, `${JSON.stringify(staleMetadata, null, 2)}\n`, "utf8");
     await checkSource();
-    await sourceGroup.getByRole("button", { name: "Update available", exact: true })
+    await sourceStatus.filter({ hasText: /^Update available$/ })
       .waitFor({ state: "visible" });
     await expectSourceLaneGeometry(920, 620);
     await expectSourceLaneGeometry(1536, 900);
@@ -361,7 +368,7 @@ describe("Repository Skill source", () => {
     await page.getByText("api-design-internal source is current", { exact: true })
       .waitFor({ state: "visible" });
     await expect.poll(() =>
-      sourceGroup.getByRole("button", { name: "Update available" }).count()
+      sourceStatus.filter({ hasText: /^Update available$/ }).count()
     ).toBe(0);
     const reconciledMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as {
       remoteRevision?: string;
@@ -386,8 +393,10 @@ describe("Repository Skill source", () => {
     await repository.commit("update api design skill");
     await page.getByRole("tab", { name: "By source" }).click();
     await checkSource();
+    await sourceStatus.filter({ hasText: /^Update available$/ })
+      .waitFor({ state: "visible" });
     const reviewSourceUpdates = sourceGroup.getByRole("button", {
-      name: "Update available",
+      name: "Update source skills",
       exact: true
     });
     await reviewSourceUpdates.waitFor({ state: "visible" });
@@ -413,7 +422,7 @@ describe("Repository Skill source", () => {
       { exact: true }
     ).waitFor({ state: "visible" });
     await expect.poll(() =>
-      sourceGroup.getByRole("button", { name: "Update available" }).count()
+      sourceStatus.filter({ hasText: /^Update available$/ }).count()
     ).toBe(0);
     await expect(readFile(join(librarySkill, "SKILL.md"), "utf8"))
       .resolves.toContain("Review compatibility");
