@@ -16,6 +16,7 @@ import type {
   ResolvedGitSkillSource
 } from "./contract";
 import type { GitCommandRunner } from "./gitCommandRunner";
+import { GitCommandError } from "./gitCommandRunner";
 import type { GitRepositoryCache } from "./gitRepositoryCache";
 import { createSkillSourceScope } from "../skillSourceScope";
 import { githubContentsRevision } from "./revisionCompatibility";
@@ -30,6 +31,17 @@ export interface GitCliSkillSourceOptions {
   cache: GitRepositoryCache;
   runner: GitCommandRunner;
   maxCandidates?: number;
+}
+
+export class RepositorySkillSourceMissingError extends Error {
+  constructor(directory: string) {
+    super(
+      directory
+        ? `Repository directory does not contain SKILL.md: ${directory}`
+        : "Repository root does not contain SKILL.md"
+    );
+    this.name = "RepositorySkillSourceMissingError";
+  }
 }
 
 const SOURCE_HISTORY_DEPTH = 128;
@@ -144,6 +156,30 @@ const resolvedSkill = async (
         : {})
     }
   };
+};
+
+const assertSkillManifest = async (
+  runner: GitCommandRunner,
+  repository: ResolvedGitRepository,
+  directory: string,
+  signal?: AbortSignal
+) => {
+  const skillPath = directory ? `${directory}/SKILL.md` : "SKILL.md";
+  try {
+    await runner.run(
+      ["--git-dir", repository.cachePath, "cat-file", "-e", `${repository.resolvedCommit}:${skillPath}`],
+      { signal, timeoutMs: 30_000 }
+    );
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    if (
+      error instanceof GitCommandError &&
+      /path ['"].+['"] does not exist in /i.test(error.stderr)
+    ) {
+      throw new RepositorySkillSourceMissingError(directory);
+    }
+    throw error;
+  }
 };
 
 interface TreeEntry {
@@ -304,6 +340,7 @@ export const createGitCliSkillSource = (
       includeBlobs: readOptions?.includeBlobs
     });
     const directory = normalizeDirectory(input.directory ?? repository.location.inferredDirectory);
+    await assertSkillManifest(options.runner, repository, directory, signal);
     return resolvedSkill(options.runner, repository, directory, signal);
   };
 
@@ -548,7 +585,7 @@ export const createGitCliSkillSource = (
         { signal, timeoutMs: 120_000, env: { GIT_INDEX_FILE: indexPath } }
       );
       if (!(await pathEntryExists(join(destination, "SKILL.md")))) {
-        throw new Error("Repository directory does not contain SKILL.md");
+        throw new RepositorySkillSourceMissingError(source.directory);
       }
       await assertNoLfsPointers(destination);
       return { ...source, destination };

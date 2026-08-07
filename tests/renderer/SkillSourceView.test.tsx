@@ -128,10 +128,10 @@ describe("SkillSourceView", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Merge selected/ })).not.toBeInTheDocument();
     expect(document.querySelector(".skill-source-counts .is-change")).toHaveClass("has-value");
-    fireEvent.click(screen.getByRole("button", { name: "Update source skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review source updates" }));
     expect(onReviewUpdates).toHaveBeenCalledWith(["review"]);
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Update source skills" })).toBeEnabled()
+      expect(screen.getByRole("button", { name: "Review source updates" })).toBeEnabled()
     );
     fireEvent.click(screen.getByRole("button", { name: "Expand source" }));
 
@@ -680,7 +680,7 @@ describe("SkillSourceView", () => {
     fireEvent.click(checkboxes[1]!);
     fireEvent.click(screen.getByRole("button", { name: "Merge selected (2)" }));
     const dialog = screen.getByRole("dialog", { name: "Confirm source merge" });
-    expect(dialog.querySelector(".profile-dialog-header")).not.toBeNull();
+    expect(dialog.querySelector(".ui-dialog-header")).not.toBeNull();
     expect(dialog.querySelector(".preview-actions")).not.toBeNull();
     expect(screen.getByLabelText("Merged source directory")).toHaveValue("engineering");
     await waitFor(() => expect(onPreviewMerge).toHaveBeenCalledWith({
@@ -719,7 +719,7 @@ describe("SkillSourceView", () => {
     }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Rename source" }));
     const dialog = screen.getByRole("dialog", { name: "Rename source" });
-    expect(dialog.querySelector(".profile-dialog-header")).not.toBeNull();
+    expect(dialog.querySelector(".ui-dialog-header")).not.toBeNull();
     expect(dialog.querySelector(".preview-actions")).not.toBeNull();
     fireEvent.change(within(dialog).getByLabelText("Source name"), {
       target: { value: "Engineering Skills" }
@@ -757,7 +757,7 @@ describe("SkillSourceView", () => {
     expect(document.querySelector(".skill-source-counts .is-removed")).toBeNull();
   });
 
-  it("keeps source status factual and exposes the current action separately", async () => {
+  it("uses the source status as the review entry without a separate action column", async () => {
     const onReviewUpdates = vi.fn().mockResolvedValue(undefined);
     render(
       <SkillSourceView
@@ -778,14 +778,16 @@ describe("SkillSourceView", () => {
       />
     );
 
-    expect(screen.getByText("Action", { selector: ".skill-source-table-head span" })).toBeInTheDocument();
+    expect(screen.queryByText("Action", { selector: ".skill-source-table-head span" }))
+      .not.toBeInTheDocument();
     const status = screen.getByText("Update available", { selector: ".skill-source-status-label" });
-    expect(status.closest("button")).toBeNull();
-    const updateAction = screen.getByRole("button", { name: "Update source skills" });
-    expect(updateAction).toHaveTextContent("Update");
-    expect(updateAction.closest(".skill-source-current-action")).not.toBeNull();
+    const updateReview = status.closest("button");
+    expect(updateReview).toHaveAccessibleName("Review source updates");
+    expect(updateReview).toHaveAttribute("data-status-kind", "update-available");
+    expect(updateReview).toHaveAttribute("data-tone", "accent");
+    expect(document.querySelector(".skill-source-current-action")).toBeNull();
     expect(screen.getByText("—", { selector: ".skill-source-last-checked" })).toBeInTheDocument();
-    fireEvent.click(updateAction);
+    fireEvent.click(updateReview!);
     await waitFor(() => expect(onReviewUpdates).toHaveBeenCalledWith(["review"]));
   });
 

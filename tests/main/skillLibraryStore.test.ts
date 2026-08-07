@@ -957,6 +957,23 @@ description: >
     await expect(store.listCleanupBackups()).resolves.toEqual([
       expect.objectContaining({ libraryId: imported.id, operation: "update" })
     ]);
+    await rm(join(repository.workDir, "skills", "review"), { recursive: true, force: true });
+    await repository.commit("remove repository skill");
+    await expect(store.checkUpdates([imported.id])).resolves.toEqual([
+      expect.objectContaining({
+        id: imported.id,
+        sourceStatus: "removed",
+        updateAvailable: false
+      })
+    ]);
+    expect((await store.checkUpdates([imported.id]))[0]?.error).toBeUndefined();
+    await expect(store.previewUpdate(imported.id)).resolves.toMatchObject({
+      id: imported.id,
+      sourceStatus: "removed",
+      updateAvailable: false,
+      changes: [],
+      errors: []
+    });
     await rm(repository.remoteDir, { recursive: true, force: true });
     await expect(store.checkUpdates([imported.id])).resolves.toEqual([
       expect.objectContaining({
@@ -3138,6 +3155,68 @@ description: >
     await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")).resolves.toContain(
       "# v2"
     );
+  });
+
+  it("classifies a removed GitHub Skill source without treating it as an update failure", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    let sourceRemoved = false;
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("/commits?")) return new Response("[]");
+      if (url.endsWith("/repos/acme/agent-skills/commits/main")) {
+        return new Response(JSON.stringify({ commit: { tree: { sha: "repository-tree" } } }));
+      }
+      if (url.endsWith("/git/trees/repository-tree?recursive=1")) {
+        return new Response(JSON.stringify({
+          tree: sourceRemoved
+            ? [{ type: "blob", mode: "100644", path: "README.md", sha: "readme-sha" }]
+            : [{
+                type: "blob",
+                mode: "100644",
+                path: "skills/reviewer/SKILL.md",
+                sha: "reviewer-sha"
+              }]
+        }));
+      }
+      if (url.endsWith("/contents/skills/reviewer?ref=main")) {
+        return new Response(JSON.stringify(sourceRemoved ? [] : [{
+          type: "file",
+          name: "SKILL.md",
+          path: "skills/reviewer/SKILL.md",
+          download_url: "https://raw.example/reviewer/SKILL.md",
+          sha: "reviewer-sha"
+        }]));
+      }
+      if (url === "https://raw.example/reviewer/SKILL.md") {
+        return new Response("---\nname: reviewer\n---\n# Reviewer\n");
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    const store = createSkillLibraryStore(paths, undefined, { fetch: fetchImpl });
+    const imported = await store.importGitHubSkill({
+      url: "https://github.com/acme/agent-skills/tree/main/skills/reviewer"
+    });
+
+    sourceRemoved = true;
+
+    await expect(store.checkUpdates([imported.id])).resolves.toEqual([
+      expect.objectContaining({
+        id: imported.id,
+        sourceStatus: "removed",
+        updateAvailable: false
+      })
+    ]);
+    expect((await store.checkUpdates([imported.id]))[0]?.error).toBeUndefined();
+    await expect(store.previewUpdate(imported.id)).resolves.toMatchObject({
+      id: imported.id,
+      sourceStatus: "removed",
+      updateAvailable: false,
+      changes: [],
+      errors: []
+    });
+    await expect(
+      readFile(join(paths.skillsLibraryDir, imported.id, "SKILL.md"), "utf8")
+    ).resolves.toContain("# Reviewer");
   });
 
   it("checks multiple skills from one GitHub repository with one commit and tree request", async () => {

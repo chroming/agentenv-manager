@@ -77,6 +77,7 @@ import { targetPathInputFor } from "./targets/pathInput";
 import { createFilesystemSkillDriver } from "./targets/shared/skillRuntime";
 import { applyLibraryUpdatePropagation, prepareLibraryUpdatePropagation } from "./skillLibraryUpdatePropagation";
 import type { GitCliSkillSource } from "./skillSources/contract";
+import { RepositorySkillSourceMissingError } from "./skillSources/gitCliSource";
 import { parseRepositoryLocation } from "./skillSources/repositoryLocation";
 import {
   boundedSkillFiles,
@@ -117,6 +118,7 @@ import {
 import { createSkillSourceMergeService } from "./skillSourceMergeService";
 import { githubContentsRevision } from "./skillSources/revisionCompatibility";
 import { scanProjectSkillRoots } from "./projectSkillDiscovery";
+import { createRemovedSourceSkillUpdatePlan } from "./skillUpdatePlans";
 import {
   createGitHubSkillClient,
   encodeGitHubPath,
@@ -369,7 +371,11 @@ export const createSkillLibraryStore = (
     resolveLibraryDir: libraryDir,
     targetPathsProvider
   });
-  const recentUpdateChecks = new Map<string, { checkedAt: number; metadataHash: string }>();
+  const recentUpdateChecks = new Map<string, {
+    checkedAt: number;
+    metadataHash: string;
+    sourceStatus?: SkillUpdateInfo["sourceStatus"];
+  }>();
   const {
     fetchJson: fetchGitHubJson,
     fetchText: fetchGitHubText,
@@ -2484,9 +2490,26 @@ export const createSkillLibraryStore = (
           remotePath: metadata.remotePath
         });
         const manifest = await githubManifestFor(source);
+        const skillManifestPath = [source.remotePath, "SKILL.md"].filter(Boolean).join("/");
+        const githubTree = manifest
+          ? undefined
+          : await readGitHubTree(source, undefined, { refresh: true });
+        const hasSkillMd = manifest
+          ? manifest.some((entry) => entry.type === "blob" && entry.path === skillManifestPath)
+          : githubTree?.hasSkillMd === true;
+        if (!hasSkillMd) {
+          return {
+            id: skill.id,
+            name: skill.name,
+            sourceType: "github",
+            currentRevision: metadata.remoteRevision,
+            updateAvailable: false,
+            sourceStatus: "removed"
+          };
+        }
         const latestRevision = manifest
           ? githubContentsRevision(source.remotePath, manifest)
-          : (await readGitHubTree(source, undefined, { refresh: true })).revision;
+          : githubTree!.revision;
         const updateAvailable = latestRevision !== metadata.remoteRevision;
         const latestUpdatedAt = updateAvailable
           ? await readGitHubSkillUpdatedAt(source, { refresh: true })
@@ -2501,6 +2524,16 @@ export const createSkillLibraryStore = (
           updateAvailable
         };
       } catch (error) {
+        if (error instanceof RepositorySkillSourceMissingError) {
+          return {
+            id: skill.id,
+            name: skill.name,
+            sourceType: metadata.sourceType ?? skill.sourceType,
+            currentRevision: metadata.remoteRevision ?? metadata.contentHash,
+            updateAvailable: false,
+            sourceStatus: "removed"
+          };
+        }
         return {
           id: skill.id,
           name: skill.name,
@@ -2517,7 +2550,8 @@ export const createSkillLibraryStore = (
       if (!result.error && checkedMetadataHash) {
         recentUpdateChecks.set(result.id, {
           checkedAt,
-          metadataHash: checkedMetadataHash
+          metadataHash: checkedMetadataHash,
+          sourceStatus: result.sourceStatus
         });
       }
     }
@@ -2754,6 +2788,16 @@ export const createSkillLibraryStore = (
       Date.now() - recentCheck.checkedAt <= RECENT_UPDATE_CHECK_TTL_MS
     );
     const impact = await skillUpdateImpact(safeId);
+    const removedSourcePlan = () => createRemovedSourceSkillUpdatePlan({
+      discardPendingUpdates: discardPendingUpdatesForSkill, impact, metadata, skill
+    });
+    if (
+      recentCheck?.sourceStatus === "removed" &&
+      recentCheck.metadataHash === metadataHash(metadata) &&
+      Date.now() - recentCheck.checkedAt <= RECENT_UPDATE_CHECK_TTL_MS
+    ) {
+      return removedSourcePlan();
+    }
     if (skill.updatePolicy !== "tracked") {
       return {
         id: skill.id,
@@ -2863,10 +2907,10 @@ export const createSkillLibraryStore = (
             refresh: shouldRefreshSource,
             refreshFiles: true
           }),
-          readGitHubSkillUpdatedAt(source, { refresh: shouldRefreshSource })
+          readGitHubSkillUpdatedAt(source, { refresh: shouldRefreshSource }).catch(() => undefined)
         ]);
         if (!hasSkillMd) {
-          throw new Error(`GitHub skill source is missing SKILL.md: ${metadata.source}`);
+          return await removedSourcePlan();
         }
         return await finalizeCandidate(candidateDir, {
           ...metadata,
@@ -2888,6 +2932,9 @@ export const createSkillLibraryStore = (
       } catch (error) {
         if (![...pendingUpdates.values()].some((pending) => pending.candidateDir === candidateDir)) {
           await rm(candidateDir, { recursive: true, force: true });
+        }
+        if (error instanceof RepositorySkillSourceMissingError) {
+          return removedSourcePlan();
         }
         throw error;
       }

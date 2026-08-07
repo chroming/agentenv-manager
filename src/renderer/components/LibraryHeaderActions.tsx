@@ -40,7 +40,7 @@ export const LibraryHeaderActions = ({
       ) : null}
       {freshness}
       <Button
-        variant={toolOpen ? "secondary" : "primary"}
+        variant="secondary"
         aria-label={t("Import skills")}
         disabled={toolOpen}
         icon={<Plus size={16} strokeWidth={2.4} />}

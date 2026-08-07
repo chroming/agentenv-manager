@@ -76,5 +76,13 @@ describe("library view state", () => {
     expect(matchesSkillStatusFilter("enabled", disabledSkill, availableUpdate)).toBe(false);
     expect(matchesSkillStatusFilter("updates", disabledSkill, availableUpdate)).toBe(false);
     expect(matchesSkillStatusFilter("disabled", disabledSkill, availableUpdate)).toBe(true);
+
+    const removedUpstream = {
+      ...availableUpdate,
+      updateAvailable: false,
+      sourceStatus: "removed" as const
+    };
+    expect(matchesSkillStatusFilter("enabled", enabledSkill, removedUpstream)).toBe(true);
+    expect(matchesSkillStatusFilter("updates", enabledSkill, removedUpstream)).toBe(false);
   });
 });

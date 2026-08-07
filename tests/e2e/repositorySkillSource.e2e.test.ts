@@ -253,10 +253,7 @@ describe("Repository Skill source", () => {
           identityLeft: identity.getBoundingClientRect().left,
           identityTextLeft: row.querySelector<HTMLElement>(".skill-source-link-text")!
             .getBoundingClientRect().left,
-          actionHeaderLeft: headerCells[4]!.getBoundingClientRect().left,
-          actionLeft: row.querySelector<HTMLElement>(".skill-source-current-action")!
-            .getBoundingClientRect().left,
-          moreHeaderLeft: headerCells[5]!.getBoundingClientRect().left,
+          moreHeaderLeft: headerCells[4]!.getBoundingClientRect().left,
           moreLeft: more.getBoundingClientRect().left,
           moreRight: more.getBoundingClientRect().right,
           rowRight: row.getBoundingClientRect().right,
@@ -279,16 +276,15 @@ describe("Repository Skill source", () => {
       expect(Math.abs(geometry.statusLeft - geometry.statusHeaderLeft)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.statusContentLeft - geometry.statusLeft)).toBeLessThanOrEqual(1);
       expect(geometry.statusToMoreGap).toBeGreaterThanOrEqual(7);
-      expect(Math.abs(geometry.actionLeft - geometry.actionHeaderLeft)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.moreLeft - geometry.moreHeaderLeft)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.moreRight - geometry.rowRight + 12)).toBeLessThanOrEqual(1);
       if (width === 920) {
-        expect(geometry.columnCount).toBe(7);
+        expect(geometry.columnCount).toBe(6);
         expect(geometry.checkedHeaderDisplay).toBe("none");
         expect(Math.abs(geometry.checkedLeft - geometry.identityLeft)).toBeLessThanOrEqual(1);
         expect(geometry.checkedBelowIdentityTitle).toBe(true);
       } else {
-        expect(geometry.columnCount).toBe(8);
+        expect(geometry.columnCount).toBe(7);
         expect(geometry.checkedHeaderDisplay).not.toBe("none");
         expect(Math.abs(geometry.checkedLeft - geometry.checkedHeaderLeft)).toBeLessThanOrEqual(1);
       }
@@ -361,6 +357,8 @@ describe("Repository Skill source", () => {
     await checkSource();
     await sourceStatus.filter({ hasText: /^Update available$/ })
       .waitFor({ state: "visible" });
+    expect(await sourceGroup.locator(".skill-source-status").getAttribute("data-tone"))
+      .toBe("accent");
     await expectSourceLaneGeometry(920, 620);
     await expectSourceLaneGeometry(1536, 900);
     await page.setViewportSize({ width: 920, height: 620 });
@@ -396,7 +394,7 @@ describe("Repository Skill source", () => {
     await sourceStatus.filter({ hasText: /^Update available$/ })
       .waitFor({ state: "visible" });
     const reviewSourceUpdates = sourceGroup.getByRole("button", {
-      name: "Update source skills",
+      name: "Review source updates",
       exact: true
     });
     await reviewSourceUpdates.waitFor({ state: "visible" });
@@ -404,6 +402,7 @@ describe("Repository Skill source", () => {
     await page.getByRole("tab", { name: "Skill list" }).click();
     const updateButton = row.getByRole("button", { name: "Update api-design-internal" });
     await updateButton.waitFor({ state: "visible" });
+    expect(await updateButton.getAttribute("data-tone")).toBe("accent");
     await page.getByRole("tab", { name: "By source" }).click();
     await reviewSourceUpdates.click();
 
@@ -446,6 +445,12 @@ describe("Repository Skill source", () => {
     await checkSource();
     await sourceGroup.getByText("Removed upstream", { exact: true }).waitFor({ state: "visible" });
     expect(await sourceGroup.getByRole("button", { name: "Delete", exact: true }).count()).toBe(1);
+
+    await page.getByRole("tab", { name: "Skill list" }).click();
+    const removedRow = page.getByRole("group", { name: "Library item release-check-internal" });
+    await removedRow.getByText("Removed upstream", { exact: true }).waitFor({ state: "visible" });
+    await page.getByRole("tab", { name: /^Updates / }).click();
+    expect(await removedRow.count()).toBe(0);
   }, 90_000);
 
   it("merges separately imported repository directories through an explicit preview", async () => {

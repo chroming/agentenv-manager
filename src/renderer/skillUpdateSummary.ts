@@ -18,8 +18,8 @@ export const updatesFromSourceGroups = (
     if (!candidate.libraryId || candidate.state === "unchecked") continue;
     const skill = skillsById.get(candidate.libraryId);
     if (!skill || skill.globallyEnabled === false || skill.updatePolicy !== "tracked") continue;
-    const error = ["invalid", "removed", "conflict", "missing"].includes(candidate.state)
-      ? candidate.detail ?? (candidate.state === "removed" ? "Removed upstream" : "Source check failed")
+    const error = ["invalid", "conflict", "missing"].includes(candidate.state)
+      ? candidate.detail ?? "Source check failed"
       : undefined;
     updates.set(skill.id, {
       id: skill.id,
@@ -29,6 +29,7 @@ export const updatesFromSourceGroups = (
       latestRevision: candidate.contentRevision,
       latestUpdatedAt: candidate.upstreamUpdatedAt,
       updateAvailable: candidate.state === "update",
+      sourceStatus: candidate.state === "removed" ? "removed" : undefined,
       error
     });
   }
@@ -43,6 +44,9 @@ export const summarizeSkillUpdateChecks = (
   const availableUpdates = skillUpdateItems.filter(
     (update) => update.updateAvailable && !update.error
   ).length;
+  const removedSources = skillUpdateItems.filter(
+    (update) => update.sourceStatus === "removed"
+  ).length;
   if (failedChecks > 0) {
     return {
       state: "error",
@@ -53,6 +57,17 @@ export const summarizeSkillUpdateChecks = (
   }
   if (skillUpdateItems.length === 0) {
     return { state: "info", message: t("No skills have update checks enabled") };
+  }
+  if (removedSources > 0 && availableUpdates === 0) {
+    return {
+      state: "info",
+      message: t(
+        removedSources === 1
+          ? "{{count}} source removed upstream"
+          : "{{count}} sources removed upstream",
+        { count: removedSources }
+      )
+    };
   }
   return {
     state: "success",

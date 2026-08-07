@@ -49,7 +49,7 @@
   display: grid;
   gap: 8px;
   grid-template-columns: minmax(220px, 1fr) auto auto auto;
-  padding: 10px 12px;
+  padding: 7px 12px;
 }
 
 .skill-source-toolbar.is-merge-selection {

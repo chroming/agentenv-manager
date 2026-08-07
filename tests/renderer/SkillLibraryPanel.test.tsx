@@ -683,8 +683,12 @@ describe("SkillLibraryPanel", () => {
     expect(within(sourceIconMenu).getAllByRole("menuitemradio").length).toBeGreaterThan(30);
     fireEvent.click(within(sourceIconMenu).getByRole("menuitemradio", { name: "Use source icon" }));
     expect(onSetIcon).toHaveBeenCalledWith({ id: "github-reviewer", iconKey: undefined });
-    expect(screen.getByLabelText("Source details for github-reviewer"))
-      .toHaveTextContent(/Updated Jul 18, 2026/);
+    const githubSourceDetails = screen.getByLabelText("Full source for github-reviewer");
+    expect(githubSourceDetails).not.toHaveTextContent(/Source updated/);
+    fireEvent.mouseEnter(githubSourceDetails);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(/Source updated.*7\/18\/2026/);
+    fireEvent.mouseLeave(githubSourceDetails);
+    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
 
     fireEvent.change(screen.getByRole("textbox", { name: "Search skills" }), {
       target: { value: "github" }
@@ -712,8 +716,13 @@ describe("SkillLibraryPanel", () => {
     expect(screen.queryByRole("region", { name: "Local Skill Cleanup" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Library storage settings" })).not.toBeInTheDocument();
     const sharedRow = screen.getByRole("group", { name: "Library item shared-reviewer" });
-    expect(sharedRow).toHaveTextContent("Profiles1");
-    expect(sharedRow).toHaveTextContent("Agents2");
+    expect(sharedRow).toHaveTextContent("1 Profile · 2 Agents");
+    expect(sharedRow).not.toHaveTextContent("Review code");
+    const sharedIdentity = within(sharedRow).getByLabelText("Skill details for shared-reviewer");
+    fireEvent.mouseEnter(sharedIdentity);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Review code");
+    fireEvent.mouseLeave(sharedIdentity);
+    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
     fireEvent.click(within(sharedRow).getByText("Shared Reviewer"));
     const filesDialog = await screen.findByRole("dialog", { name: "Files in Shared Reviewer" });
     expect(onListSkillFiles).toHaveBeenCalledWith("shared-reviewer");
@@ -725,20 +734,13 @@ describe("SkillLibraryPanel", () => {
         .toHaveTextContent("Shared Reviewer")
     );
     fireEvent.click(within(filesDialog).getByRole("button", { name: "Close" }));
-    fireEvent.click(screen.getByText("Review code"));
-    expect(screen.queryByRole("dialog", { name: "Files in Shared Reviewer" }))
-      .not.toBeInTheDocument();
-    expect(onListSkillFiles).toHaveBeenCalledTimes(1);
     const sharedUsage = within(sharedRow).getByLabelText("Usage details for shared-reviewer");
     fireEvent.mouseEnter(sharedUsage);
     expect(await screen.findByRole("tooltip")).toHaveTextContent("Daily Coding");
     expect(screen.getByRole("tooltip")).toHaveTextContent("OpenCode, Codex");
     fireEvent.mouseLeave(sharedUsage);
     await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
-    const sharedDescription = screen.getByText("Review code");
-    expect(sharedDescription).not.toHaveAttribute("title");
-    fireEvent.focus(sharedDescription);
-    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(sharedIdentity).not.toHaveAttribute("title");
     fireEvent.contextMenu(sharedRow, { clientX: 320, clientY: 240 });
     const rowMenu = screen.getByRole("menu", { name: "Actions for shared-reviewer" });
     fireEvent.click(within(rowMenu).getByRole("menuitem", { name: "Update settings" }));
@@ -758,15 +760,15 @@ describe("SkillLibraryPanel", () => {
     const updateStatus = within(githubRow).getByText("Update available", {
       selector: ".library-primary-status span"
     });
-    expect(updateStatus.closest("button")).toBeNull();
-    const updateAction = within(githubRow).getByRole("button", {
-      name: "Update github-reviewer"
-    });
-    expect(updateAction).toHaveTextContent(/^Update$/);
-    expect(updateAction.closest(".library-current-action-cell")).not.toBeNull();
+    const updateReview = updateStatus.closest("button");
+    expect(updateReview).toHaveAccessibleName("Review update github-reviewer");
+    fireEvent.click(updateReview!);
+    expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledWith("github-reviewer");
     expect(githubRow).toHaveTextContent("Update available");
-    expect(within(screen.getByRole("region", { name: "Library skills" })).getByText("Action"))
-      .toBeInTheDocument();
+    expect(within(githubRow).queryByRole("button", { name: "Update github-reviewer" }))
+      .not.toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Library skills" })).queryByText("Action"))
+      .not.toBeInTheDocument();
     const githubSource = within(githubRow).getByLabelText("Full source for github-reviewer");
     expect(githubSource).not.toHaveAttribute("title");
     fireEvent.mouseEnter(githubSource);
@@ -840,9 +842,10 @@ describe("SkillLibraryPanel", () => {
     expect(copiedLocalRow).toHaveTextContent("Needs sync");
     expect(copiedLocalRow).toHaveTextContent("1 out of sync");
     expect(within(copiedLocalRow).queryByRole("button", { name: /Check update/ })).toBeNull();
-    fireEvent.click(
-      within(copiedLocalRow).getByRole("button", { name: "Sync install of copied-local" })
-    );
+    expect(within(copiedLocalRow).queryByRole("button", { name: "Sync install of copied-local" }))
+      .not.toBeInTheDocument();
+    fireEvent.click(within(copiedLocalRow).getByRole("button", { name: "More actions for copied-local" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Sync installs" }));
     expect(onSyncSkillInstalls).toHaveBeenCalledWith("copied-local");
 
     const localOnlyRow = screen.getByRole("group", { name: "Library item represented-external" });
@@ -864,7 +867,7 @@ describe("SkillLibraryPanel", () => {
       "shared-reviewer"
     ]);
 
-    expect(sharedRow).toHaveTextContent("Agents2");
+    expect(sharedRow).toHaveTextContent("1 Profile · 2 Agents");
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.mouseDown(document.body);
     expect(screen.queryByLabelText("Update source for shared-reviewer")).not.toBeInTheDocument();
@@ -922,14 +925,14 @@ describe("SkillLibraryPanel", () => {
       }
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Update shared-reviewer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review update shared-reviewer" }));
     expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledWith("shared-reviewer");
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Update shared-reviewer" })).toBeEnabled()
+      expect(screen.getByRole("button", { name: "Review update shared-reviewer" })).toBeEnabled()
     );
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /^Update$/ }));
-    expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledTimes(2);
+    expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledTimes(3);
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /Disable globally/ }));
     const disableDialog = screen.getByRole("dialog", { name: "Disable library skill" });

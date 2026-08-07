@@ -46,7 +46,17 @@ import type { SkillUpdateActivity } from "../skillUpdateActivity";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
-import { ActionMenu, Button, IconButton, ModalFrame } from "./ui";
+import {
+  ActionMenu,
+  Button,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+  IconButton,
+  InteractiveStatus,
+  statusToneFor,
+  ModalFrame
+} from "./ui";
 
 interface SkillSourceViewProps {
   active: boolean;
@@ -738,7 +748,6 @@ export const SkillSourceView = ({
             <span>{t("Skills")}</span>
             <span>{t("Last checked")}</span>
             <span>{t("Status")}</span>
-            <span>{t("Action")}</span>
             <span aria-label={t("More")} />
           </div>
         ) : null}
@@ -789,19 +798,26 @@ export const SkillSourceView = ({
                   : group.checkedAt
                     ? "Up to date"
                     : "Not checked";
+          const semanticStatus = isChecking
+            ? "working"
+            : group.error
+              ? "error"
+              : group.counts.updates > 0
+                ? "update-available"
+                : changedCount > 0
+                  ? "changes-available"
+                  : "neutral";
           const statusClassName = `skill-source-status${group.error ? " is-error" : ""}${hasAttention ? " has-attention" : ""}`;
-          const statusContents = (
-            <>
-              {isChecking ? (
-                <LoaderCircle className="is-spinning" size={13} strokeWidth={2.2} />
-              ) : group.error || hasAttention ? (
-                <CircleAlert size={13} strokeWidth={2.2} />
-              ) : group.checkedAt ? (
-                <CheckCircle2 size={13} strokeWidth={2.2} />
-              ) : (
-                <RefreshCw size={13} strokeWidth={2.2} />
-              )}
-              {group.error ? (
+          const statusIcon = isChecking ? (
+            <LoaderCircle className="is-spinning" size={13} strokeWidth={2.2} />
+          ) : group.error || hasAttention ? (
+            <CircleAlert size={13} strokeWidth={2.2} />
+          ) : group.checkedAt ? (
+            <CheckCircle2 size={13} strokeWidth={2.2} />
+          ) : (
+            <RefreshCw size={13} strokeWidth={2.2} />
+          );
+          const statusLabel = group.error ? (
                 <OverflowTooltip
                   className="skill-source-status-label"
                   text={group.error}
@@ -809,9 +825,21 @@ export const SkillSourceView = ({
                 />
               ) : (
                 <span className="skill-source-status-label">{t(sourceStatus)}</span>
-              )}
-            </>
-          );
+              );
+          const reviewStatus = !isChecking && reviewableUpdateIds.length > 0
+            ? () => void runReviewUpdates(reviewableUpdateIds)
+            : !isChecking && group.error
+              ? () => void runCheck(group.sourceId)
+              : !isChecking && hasAttention
+                ? () => toggleExpanded(group.sourceId)
+                : undefined;
+          const reviewStatusLabel = reviewableUpdateIds.length > 0
+            ? t("Review source updates")
+            : group.error
+              ? t("Retry source check")
+              : hasAttention
+                ? t("Review source changes")
+                : undefined;
           return (
             <article
               className={`skill-source-group${isExpanded ? " is-expanded" : ""}${isSelected ? " is-selected" : ""}${hasAttention ? " has-attention" : ""}`}
@@ -915,46 +943,20 @@ export const SkillSourceView = ({
                       ? formatDate(group.checkedAt)
                       : "—"}
                 </span>
-                <div className={statusClassName}>{statusContents}</div>
-                <div className="skill-source-current-action">
-                  {!isChecking && reviewableUpdateIds.length > 0 ? (
-                    <Button
-                      aria-label={t("Update source skills")}
-                      busy={reviewingGroup}
-                      size="compact"
-                      disabled={activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void runReviewUpdates(reviewableUpdateIds);
-                      }}
-                    >
-                      {t("Update")}
-                    </Button>
-                  ) : !isChecking && group.error ? (
-                    <Button
-                      aria-label={t("Retry source check")}
-                      size="compact"
-                      disabled={activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void runCheck(group.sourceId);
-                      }}
-                    >
-                      {t("Retry")}
-                    </Button>
-                  ) : !isChecking && hasAttention ? (
-                    <Button
-                      aria-label={t("Review source changes")}
-                      size="compact"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        toggleExpanded(group.sourceId);
-                      }}
-                    >
-                      {t("Review")}
-                    </Button>
-                  ) : null}
-                </div>
+                <InteractiveStatus
+                  busy={reviewingGroup}
+                  className={statusClassName}
+                  disabled={activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
+                  icon={statusIcon}
+                  label={statusLabel}
+                  reviewLabel={reviewStatusLabel}
+                  statusKind={semanticStatus}
+                  tone={statusToneFor(semanticStatus)}
+                  onReview={reviewStatus ? (event) => {
+                    event.stopPropagation();
+                    reviewStatus();
+                  } : undefined}
+                />
                 <div className="skill-source-more">
                   <IconButton
                     label={t("Source actions for {{name}}", { name: groupName })}
@@ -1169,13 +1171,11 @@ export const SkillSourceView = ({
           dismissDisabled={mergeBusy}
           onDismiss={closeMerge}
         >
-          <header className="profile-dialog-header ui-dialog-header">
-            <div className="ui-dialog-header__copy">
-              <div className="section-title ui-dialog-title">{t("Confirm source merge")}</div>
-              <p className="muted ui-dialog-description">{t("Review and adjust the shared source before merging selected groups.")}</p>
-            </div>
-          </header>
-          <div className="skill-source-merge-body ui-dialog-body">
+          <DialogHeader
+            title={t("Confirm source merge")}
+            description={t("Review and adjust the shared source before merging selected groups.")}
+          />
+          <DialogBody className="skill-source-merge-body">
             <div className="skill-source-merge-summary">
               <div><span>{t("Selected sources")}</span><strong>{mergeSelection.size}</strong></div>
               <div><span>{t("Library Skills")}</span><strong>{mergePreview?.affectedSkillCount ?? "—"}</strong></div>
@@ -1229,8 +1229,8 @@ export const SkillSourceView = ({
                 />
               </div>
             ) : null}
-          </div>
-          <footer className="preview-actions ui-dialog-footer">
+          </DialogBody>
+          <DialogFooter className="preview-actions">
             <Button disabled={mergeBusy} onClick={() => closeMerge()}>{t("Cancel")}</Button>
             <Button
               variant="primary"
@@ -1240,7 +1240,7 @@ export const SkillSourceView = ({
             >
               {t("Confirm merge")}
             </Button>
-          </footer>
+          </DialogFooter>
         </ModalFrame>
       ) : null}
 
@@ -1253,18 +1253,18 @@ export const SkillSourceView = ({
           dismissDisabled={renameBusy}
           onDismiss={closeRename}
         >
-          <header className="profile-dialog-header ui-dialog-header">
-            <div className="ui-dialog-header__copy">
-              <div className="section-title ui-dialog-title">{t("Rename source")}</div>
+          <DialogHeader
+            title={t("Rename source")}
+            description={(
               <OverflowTooltip
                 className="skill-source-name-location"
                 displayText={`${sourceRepositoryLabel(renameSource.repository)} · ${sourceScopeLabel(renameSource)}`}
                 focusable={false}
                 text={renameSource.canonicalLink}
               />
-            </div>
-          </header>
-          <div className="skill-source-name-body ui-dialog-body">
+            )}
+          />
+          <DialogBody className="skill-source-name-body">
             <label className="skill-source-merge-field">
               <span>{t("Source name")}</span>
               <input
@@ -1281,8 +1281,8 @@ export const SkillSourceView = ({
               />
             </label>
             {renameError ? <p className="skill-source-merge-notice is-error">{renameError}</p> : null}
-          </div>
-          <footer className="preview-actions ui-dialog-footer">
+          </DialogBody>
+          <DialogFooter className="preview-actions">
             <Button disabled={renameBusy} onClick={closeRename}>{t("Cancel")}</Button>
             <Button
               variant="primary"
@@ -1292,7 +1292,7 @@ export const SkillSourceView = ({
             >
               {t("Save")}
             </Button>
-          </footer>
+          </DialogFooter>
         </ModalFrame>
       ) : null}
     </section>
