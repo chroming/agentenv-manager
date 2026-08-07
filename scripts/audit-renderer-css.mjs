@@ -258,6 +258,30 @@ const pagePrimitiveRedefinitions = reports.flatMap((report) => {
     .filter((selector) => primitiveRootSelectors.has(selector))
     .map((selector) => ({ file: report.file, selector }));
 });
+const protectedPrimitiveDescendants = [
+  ".ui-object-switcher__trigger",
+  ".ui-resource-disclosure__",
+  ".ui-resource-row__"
+];
+const protectedPrimitiveGeometry = /(?:background(?:-color)?|border(?:-[a-z]+)?|border-radius|box-shadow|color|font-size|font-weight|gap|grid-template-columns|height|line-height|max-height|max-width|min-height|min-width|padding(?:-[a-z]+)?|width)\s*:/;
+const pagePrimitiveDescendantOverrides = (
+  await Promise.all(
+    files
+      .filter((file) => file.startsWith("src/renderer/ui/pages/"))
+      .map(async (file) => {
+        const content = (await readFile(resolve(projectRoot, file), "utf8"))
+          .replace(/\/\*[\s\S]*?\*\//g, "");
+        return [...content.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap((match) => {
+          const selector = match[1].replace(/\s+/g, " ").trim();
+          const declarations = match[2];
+          return protectedPrimitiveDescendants.some((candidate) => selector.includes(candidate)) &&
+            protectedPrimitiveGeometry.test(declarations)
+            ? [{ file, selector }]
+            : [];
+        });
+      })
+  )
+).flat();
 const legacyControlDefinitions = (() => {
   const legacyReport = reports.find(({ file }) => file === "src/renderer/styles.css");
   if (!legacyReport) return [];
@@ -332,6 +356,7 @@ const result = {
     legacyCrossFileSelectors: legacySharedSelectors.length,
     legacyControlDefinitions,
     pagePrimitiveRedefinitions,
+    pagePrimitiveDescendantOverrides,
     unapprovedCrossFileSelectors: unapprovedSharedSelectors,
     undefinedCustomProperties,
     importsControlLayer: /@import\s+"\.\/controls\.css"\s+layer\(controls\)/.test(rendererIndex),
@@ -387,6 +412,11 @@ if (shouldCheck) {
       : undefined,
     result.architecture.pagePrimitiveRedefinitions.length > 0
       ? `Page styles must not redefine primitive roots: ${result.architecture.pagePrimitiveRedefinitions
+          .map(({ file, selector }) => `${file} (${selector})`)
+          .join(", ")}`
+      : undefined,
+    result.architecture.pagePrimitiveDescendantOverrides.length > 0
+      ? `Page styles may arrange shared primitives but must not redraw their internal geometry: ${result.architecture.pagePrimitiveDescendantOverrides
           .map(({ file, selector }) => `${file} (${selector})`)
           .join(", ")}`
       : undefined,

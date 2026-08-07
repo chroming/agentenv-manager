@@ -233,6 +233,7 @@ const prepareFixture = async (root) => {
   const binDir = join(root, "bin");
   const githubFixtureRoot = join(root, "github-fixtures");
   const projectSkillRoot = join(root, "project-workspace");
+  const workspaceRoot = join(root, "release-console");
   const opencodeDir = join(homeDir, ".config", "opencode");
   const codexDir = join(homeDir, ".codex");
   await mkdir(appDataRoot, { recursive: true });
@@ -240,6 +241,28 @@ const prepareFixture = async (root) => {
   await mkdir(binDir, { recursive: true });
   await mkdir(opencodeDir, { recursive: true });
   await mkdir(codexDir, { recursive: true });
+  await mkdir(join(workspaceRoot, ".agents", "skills", "release-safety"), { recursive: true });
+  await writeFile(
+    join(workspaceRoot, "AGENTS.md"),
+    "# Release Console\n\nKeep release changes reviewable and reversible.\n",
+    "utf8"
+  );
+  await writeFile(
+    join(workspaceRoot, ".agents", "skills", "release-safety", "SKILL.md"),
+    "---\nname: Release Safety\ndescription: Check a release before publishing.\nversion: 1.0.0\n---\n\n# Release Safety\n",
+    "utf8"
+  );
+  await writeJson(join(appDataRoot, "projects.json"), {
+    formatVersion: 1,
+    projects: [{
+      id: "project-release-console",
+      name: "Release Console",
+      rootPath: workspaceRoot,
+      createdAt: captureFixtureTimestamp.toISOString(),
+      lastOpenedAt: captureFixtureTimestamp.toISOString(),
+      lastAgentId: "opencode"
+    }]
+  });
   const conversationSessionDir = join(
     codexDir,
     "sessions",
@@ -489,6 +512,7 @@ const prepareFixture = async (root) => {
   await normalizeFixtureTimes(appDataRoot);
   await normalizeFixtureTimes(homeDir);
   await normalizeFixtureTimes(projectSkillRoot);
+  await normalizeFixtureTimes(workspaceRoot);
   await normalizeFixtureTimes(githubFixtureRoot);
 
   return {
@@ -498,6 +522,7 @@ const prepareFixture = async (root) => {
     githubFixtureRoot,
     homeDir,
     projectSkillRoot,
+    workspaceRoot,
     workspaceSyncRemote
   };
 };
@@ -771,12 +796,35 @@ try {
   );
   await rm(sharedSkillDir, { recursive: true, force: true });
   await page.reload();
-  await agentsWorkspace.getByText("Profile ready", { exact: true }).waitFor({
-    state: "visible"
-  });
+  await agentsWorkspace.locator(".target-page-summary").waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "agents-ready-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "agents-ready-1180x728.png"));
+  await setWindowSize(page, windowHandle, 1440, 900);
+  await capturePage(page, join(outputDir, "agents-ready-1440x900.png"));
+
+  await page.getByRole("button", { name: "Workspaces", exact: true }).click();
+  await page.getByRole("heading", { name: "Workspaces", exact: true }).waitFor({
+    state: "visible"
+  });
+  await page.getByRole("heading", { name: "Release Console", exact: true }).waitFor({
+    state: "visible"
+  });
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "workspaces-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(page, join(outputDir, "workspaces-920x620.png"));
+  await setWindowSize(page, windowHandle, 1440, 900);
+  await capturePage(page, join(outputDir, "workspaces-1440x900.png"));
+  await page.getByRole("button", { name: "Expand Skills", exact: true }).click();
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(page, join(outputDir, "workspaces-skills-expanded-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "workspaces-skills-expanded-1180x728.png"));
+  await setWindowSize(page, windowHandle, 1440, 900);
+  await capturePage(page, join(outputDir, "workspaces-skills-expanded-1440x900.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
 
   const profilesDir = join(appDataRoot, "profiles");
   const heldProfilesDir = join(appDataRoot, "profiles-capture-hold");
@@ -844,6 +892,9 @@ try {
   await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({ state: "visible" });
   await page.getByRole("group", { name: "Library item react-best-practices" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-1180x728.png"));
+  await setWindowSize(page, windowHandle, 1440, 900);
+  await capturePage(page, join(outputDir, "skills-1440x900.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
   const hiddenAgents = page.getByRole("button", {
     name: /^Show hidden Agent list, \d+ items?$/
   });
@@ -900,6 +951,8 @@ try {
   await capturePage(page, join(outputDir, "skills-sources-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "skills-sources-1180x728.png"));
+  await setWindowSize(page, windowHandle, 1440, 900);
+  await capturePage(page, join(outputDir, "skills-sources-1440x900.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("button", { name: "Expand source" }).first().click();
   await capturePage(page, join(outputDir, "skills-sources-expanded-920x620.png"));
@@ -1116,6 +1169,8 @@ try {
     await prepare?.();
     await setWindowSize(page, windowHandle, 1180, 728);
     await capturePage(page, join(outputDir, `${filePrefix}-1180x728.png`));
+    await setWindowSize(page, windowHandle, 1440, 900);
+    await capturePage(page, join(outputDir, `${filePrefix}-1440x900.png`));
     await setWindowSize(page, windowHandle, 920, 620);
     await capturePage(page, join(outputDir, `${filePrefix}-920x620.png`));
   };
@@ -1124,7 +1179,17 @@ try {
     await page.getByRole("button", { name: "Choose Profile", exact: true }).click();
     const switcher = page.getByRole("dialog", { name: "Choose Profile", exact: true });
     await switcher.getByRole("option", { name: `Profile ${name}`, exact: true }).click();
-    await page.getByRole("heading", { name, exact: true }).waitFor({ state: "visible" });
+    await page
+      .locator(".profile-switcher--hero .ui-object-switcher__trigger-title")
+      .filter({ hasText: name })
+      .waitFor({ state: "visible" });
+  };
+
+  const waitForProfileTitle = async (name) => {
+    await page
+      .locator(".profile-switcher--hero .ui-object-switcher__trigger-title")
+      .filter({ hasText: name })
+      .waitFor({ state: "visible" });
   };
 
   const ensureComposerExpanded = async (name) => {
@@ -1156,7 +1221,7 @@ try {
   const loadingProfile = page.getByRole("status", { name: "Loading Profile Code Review" });
   await loadingProfile.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "profile-loading-920x620.png"));
-  await page.getByRole("heading", { name: "Code Review" }).waitFor({ state: "visible" });
+  await waitForProfileTitle("Code Review");
   await loadingProfile.waitFor({ state: "hidden" });
   await app.evaluate(() => {
     delete process.env.AGENTENV_TEST_PROFILE_READ_DELAY_ID;
@@ -1176,11 +1241,11 @@ try {
     .getByLabel("Description")
     .fill("Visual fixture for sparse resource states.");
   await sparseProfileDialog.getByRole("button", { name: "Create" }).click();
-  await page.getByRole("heading", { name: "Sparse Capture" }).waitFor({ state: "visible" });
+  await waitForProfileTitle("Sparse Capture");
   const sparseSkillsSection = await ensureComposerExpanded("Skills");
   await capturePage(page, join(outputDir, "profile-skills-empty-920x620.png"));
 
-  await sparseSkillsSection.getByRole("button", { name: "Add", exact: true }).click();
+  await sparseSkillsSection.getByRole("button", { name: "Add Skill", exact: true }).click();
   const sparseSkillPicker = page.getByRole("dialog", { name: "Add library skills" });
   await sparseSkillPicker.waitFor({ state: "visible" });
   await sparseSkillPicker.getByLabel("git-workflow", { exact: true }).check();
@@ -1207,7 +1272,7 @@ try {
   await sparseDeleteDialog.waitFor({ state: "hidden" });
 
   await selectCaptureProfile("Code Review");
-  await page.getByRole("heading", { name: "Code Review" }).waitFor({ state: "visible" });
+  await waitForProfileTitle("Code Review");
   await page
     .locator(".profile-hero")
     .getByRole("button", { name: "Change icon for Profile code-review" })
@@ -1248,7 +1313,7 @@ try {
     if (sectionName === "Skills") {
       await page
         .getByRole("region", { name: "Profile Skills" })
-        .getByRole("button", { name: "Add", exact: true })
+        .getByRole("button", { name: "Add Skill", exact: true })
         .click();
       const skillPicker = page.getByRole("dialog", { name: "Add library skills" });
       await skillPicker.waitFor({ state: "visible" });
@@ -1297,7 +1362,7 @@ try {
   await page.getByRole("button", { name: "Profiles", exact: true }).click();
   await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
   await selectCaptureProfile("Code Review");
-  await page.getByRole("heading", { name: "Code Review" }).waitFor({ state: "visible" });
+  await waitForProfileTitle("Code Review");
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "profiles-applied-920x620.png"));
   await ensureComposerExpanded("Skills");
@@ -1355,7 +1420,7 @@ try {
     .getByRole("listitem", { name: "Profile Skill testing-strategies" })
     .getByRole("switch", { name: "Disable testing-strategies" })
     .click();
-  await mixedSkillRegion.getByRole("button", { name: "Add", exact: true }).click();
+  await mixedSkillRegion.getByRole("button", { name: "Add Skill", exact: true }).click();
   const mixedSkillPicker = page.getByRole("dialog", { name: "Add library skills" });
   await mixedSkillPicker.getByLabel("react-best-practices", { exact: true }).check();
   await mixedSkillPicker.getByRole("button", { name: /^Add 1$/ }).click();
@@ -1369,16 +1434,19 @@ try {
   await page.getByRole("button", { name: "Profiles", exact: true }).click();
   await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
   await selectCaptureProfile("Code Review");
-  await page.getByRole("heading", { name: "Code Review" }).waitFor({ state: "visible" });
+  await waitForProfileTitle("Code Review");
   await ensureComposerExpanded("Skills");
   await capturePage(page, join(outputDir, "profiles-applied-1180x728.png"));
+  await setWindowSize(page, windowHandle, 1440, 900);
+  await capturePage(page, join(outputDir, "profiles-applied-1440x900.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
   await captureWorkspace(
     "Agents",
     "targets",
     () => page.getByRole("region", { name: "Agents", exact: true })
   );
   const claudeAgent = page.getByRole("article", { name: "Agent Claude Code" });
-  await claudeAgent.getByRole("button", { name: "Configure Claude Code" }).click();
+  await claudeAgent.getByRole("button", { name: "Claude Code", exact: true }).click();
   const unmanagedAgentCapture = page.getByRole("dialog", {
     name: "Create Profile from Claude Code"
   });
@@ -1393,7 +1461,7 @@ try {
     state: "visible"
   });
   const openCodeAgent = page.getByRole("article", { name: "Agent OpenCode" });
-  await openCodeAgent.getByRole("button", { name: "Configure OpenCode" }).click();
+  await openCodeAgent.getByRole("button", { name: "OpenCode", exact: true }).click();
   const agentProfileComposer = page.getByRole("region", { name: "Profile composer" });
   await agentProfileComposer.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "agent-profile-config-920x620.png"));
@@ -1484,7 +1552,7 @@ try {
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("menu", { name: "Continue in" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "conversations-continue-menu-920x620.png"));
-  await page.getByRole("menuitem", { name: "Trae CLI, Copy and paste" }).click();
+  await page.getByRole("menuitem", { name: "Trae CLI, Paste prompt" }).click();
   const continuationReview = page.getByRole("dialog", { name: "Review continuation" });
   await continuationReview.waitFor({ state: "visible" });
   await continuationReview.getByText("/work/agentenv-manager", { exact: true }).waitFor({
@@ -1584,9 +1652,7 @@ try {
   await page.getByRole("region", { name: "配置方案", exact: true }).waitFor({
     state: "visible"
   });
-  await page.getByRole("heading", { name: "Code Review" }).waitFor({
-    state: "visible"
-  });
+  await waitForProfileTitle("Code Review");
   await capturePage(page, join(outputDir, "profiles-zh-cn-920x620.png"));
   await page.getByRole("button", { name: "设置", exact: true }).click();
   await page.getByRole("region", { name: "设置", exact: true }).waitFor({
@@ -1614,9 +1680,7 @@ try {
   await page.getByRole("region", { name: "設定檔", exact: true }).waitFor({
     state: "visible"
   });
-  await page.getByRole("heading", { name: "Code Review" }).waitFor({
-    state: "visible"
-  });
+  await waitForProfileTitle("Code Review");
   await capturePage(page, join(outputDir, "profiles-zh-tw-920x620.png"));
   await page.getByRole("button", { name: "設定", exact: true }).click();
   await page.getByRole("tab", { name: "一般" }).click();
@@ -1628,6 +1692,7 @@ try {
   const collapsedWorkspaces = [
     ["Skills", "Skills", "sidebar-collapsed-skills-920x620.png"],
     ["Profiles", "Profiles", "sidebar-collapsed-profiles-920x620.png"],
+    ["Workspaces", "Workspaces", "sidebar-collapsed-workspaces-920x620.png"],
     ["Conversations", "Conversations", "sidebar-collapsed-conversations-920x620.png"],
     ["Agents", "Agents", "sidebar-collapsed-agents-920x620.png"],
     ["Settings", "Settings", "sidebar-collapsed-settings-920x620.png"]
@@ -1648,7 +1713,7 @@ try {
   await setWindowSize(page, windowHandle, 1536, 1024);
   await page.getByRole("button", { name: "Profiles" }).click();
   await selectCaptureProfile("Daily Coding");
-  await page.getByRole("heading", { name: "Daily Coding" }).waitFor({ state: "visible" });
+  await waitForProfileTitle("Daily Coding");
   await page.getByRole("button", { name: "Select apply Agent" }).click();
   await page.waitForTimeout(250);
   await capturePage(page, join(outputDir, "implementation-1536x1024.png"));
