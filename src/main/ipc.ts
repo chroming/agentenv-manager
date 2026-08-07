@@ -73,7 +73,7 @@ import { isSkillCollectionItemLibraryReady } from "../shared/skillCleanup";
 import type { MutationCoordinator } from "./mutationCoordinator";
 import { readAllProfilesForResourceMutation } from "./profileSafety";
 import { parseDesktopContextMenuItems } from "../shared/desktopContextMenu";
-import { pathEntryExists } from "./fileUtils";
+import { pathEntryExists, readTextIfExists } from "./fileUtils";
 import { createSkillArchiveService } from "./skillArchiveService";
 import { createSkillFileBrowser } from "./skillFileBrowser";
 import type { ConversationService } from "./conversations/conversationService";
@@ -520,6 +520,44 @@ export const registerIpcHandlers = ({
           left.name.localeCompare(right.name)
         ),
       issues: inspections.flatMap((inspection) => inspection.issues)
+    };
+  });
+  diagnosticHandle("targets:list-native-instructions", async () => {
+    const targets = await targetDiscoveryService.listTargets();
+    const inspections = await Promise.all(
+      targets
+        .filter((target) => isTargetInstalled(target.health))
+        .map(async (target) => {
+          try {
+            return {
+              snapshot: {
+                targetId: target.id,
+                targetName: target.name,
+                path: target.paths.instructionsPath,
+                content: await readTextIfExists(target.paths.instructionsPath)
+              },
+              issue: undefined
+            };
+          } catch (error) {
+            return {
+              snapshot: undefined,
+              issue: {
+                targetId: target.id,
+                targetName: target.name,
+                path: target.paths.instructionsPath,
+                message: error instanceof Error ? error.message : String(error)
+              }
+            };
+          }
+        })
+    );
+    return {
+      snapshots: inspections.flatMap((inspection) =>
+        inspection.snapshot ? [inspection.snapshot] : []
+      ),
+      issues: inspections.flatMap((inspection) =>
+        inspection.issue ? [inspection.issue] : []
+      )
     };
   });
   diagnosticHandle("skills:list-library", () => skillLibraryStore.listSkills());

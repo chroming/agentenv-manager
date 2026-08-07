@@ -7,6 +7,7 @@ import {
   FilePlus2,
   Folder,
   History,
+  Monitor,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -30,8 +31,10 @@ import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { InfoTip } from "./InfoTip";
 import { LibrarySkillPicker } from "./LibrarySkillPicker";
+import { OverflowTooltip } from "./OverflowTooltip";
 import { ProjectEnvironmentPreviewDialog } from "./ProjectEnvironmentPreviewDialog";
 import { ProjectRecoveryDialog } from "./ProjectRecoveryDialog";
+import { targetIconFor } from "./ProfileSidebar";
 import {
   ProjectResourceEditorDialog,
   type ProjectEditorGuard
@@ -77,6 +80,8 @@ export const ProjectsWorkspace = ({
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [query, setQuery] = useState("");
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [agentSwitcherOpen, setAgentSwitcherOpen] = useState(false);
+  const [agentQuery, setAgentQuery] = useState("");
   const [expandedKinds, setExpandedKinds] = useState<Set<ProjectResourceKind>>(() => new Set());
   const [selectedId, setSelectedId] = useState<string>();
   const [operation, setOperation] = useState<ProjectOperation>();
@@ -115,6 +120,24 @@ export const ProjectsWorkspace = ({
   const availableTargets = targets.filter((target) => Boolean(target.health.executablePath));
   const selectedAgent = availableTargets.find((target) => target.id === selectedAgentId)
     ?? availableTargets[0];
+  const agentSwitcherItems = availableTargets.map((target) => {
+    const icon = targetIconFor(target);
+    return {
+      id: target.id,
+      ariaLabel: t("Agent {{name}}", { name: target.name }),
+      icon: icon.assetUrl ? (
+        <img
+          className="project-agent-switcher__logo"
+          src={icon.assetUrl}
+          alt=""
+        />
+      ) : (
+        <Monitor size={17} strokeWidth={2.1} aria-hidden="true" />
+      ),
+      searchText: target.name,
+      title: target.name
+    };
+  });
   const selectedAgentSupport = snapshot?.agentSupport.find(
     (support) => support.agentId === selectedAgent?.id
   );
@@ -503,8 +526,16 @@ export const ProjectsWorkspace = ({
   }));
 
   const refreshSelectedProject = async () => {
-    if (!selected?.exists) return;
-    setSnapshot(await window.agentEnv.inspectProject(selected.id));
+    if (!selected?.exists || operation === "inspect") return;
+    setOperation("inspect");
+    setError("");
+    try {
+      setSnapshot(await window.agentEnv.inspectProject(selected.id));
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setOperation((value) => value === "inspect" ? undefined : value);
+    }
   };
 
   return (
@@ -516,36 +547,12 @@ export const ProjectsWorkspace = ({
         actions={(
           <ControlGroup className="projects-page-actions">
             <Button
-              aria-label={t("Refresh Workspaces")}
-              busy={operation === "refresh"}
-              icon={<RefreshCw size={15} />}
-              onClick={() => void refresh(true)}
+              aria-label={t("Add Workspace folder")}
+              icon={<Plus size={15} />}
+              onClick={() => void addProject()}
             >
-              {t("Refresh")}
+              {t("Add folder")}
             </Button>
-            <ObjectSwitcher
-              ariaLabel={t("Choose Workspace")}
-              className="project-switcher"
-              emptyMessage={operation === "refresh"
-                ? t("Loading Workspaces")
-                : projects.length > 0
-                  ? t("No matching folders")
-                  : t("No Workspaces yet")}
-              footerAction={{
-                icon: <Plus size={15} />,
-                label: t("Add folder"),
-                onClick: () => void addProject()
-              }}
-              items={switcherItems}
-              open={switcherOpen}
-              query={query}
-              searchLabel={t("Search Workspaces")}
-              searchPlaceholder={t("Search folders...")}
-              selectedId={selected?.id}
-              onOpenChange={setSwitcherOpen}
-              onQueryChange={setQuery}
-              onSelect={setSelectedId}
-            />
           </ControlGroup>
         )}
       />
@@ -562,7 +569,11 @@ export const ProjectsWorkspace = ({
         </Notice>
       ) : null}
 
-      <SingleObjectWorkspace className="projects-workbench" aria-label={t("Workspace browser")}>
+      <SingleObjectWorkspace
+        className="projects-workbench"
+        surface="open"
+        aria-label={t("Workspace browser")}
+      >
         <div className="project-detail" aria-label={selected ? selected.name : t("Workspace detail")}>
           {selected ? (
             <>
@@ -570,21 +581,66 @@ export const ProjectsWorkspace = ({
                 className="project-detail__header"
                 icon={<Folder size={20} strokeWidth={1.9} />}
                 responsive="stack"
-                title={selected.name}
+                titleLabel={selected.name}
+                title={(
+                  <span className="project-detail__title-control">
+                    <ObjectSwitcher
+                      ariaLabel={t("Choose Workspace")}
+                      className="project-switcher"
+                      emptyMessage={operation === "refresh"
+                        ? t("Loading Workspaces")
+                        : projects.length > 0
+                          ? t("No matching folders")
+                          : t("No Workspaces yet")}
+                      footerAction={{
+                        icon: <Plus size={15} />,
+                        label: t("Add folder"),
+                        onClick: () => void addProject()
+                      }}
+                      items={switcherItems}
+                      open={switcherOpen}
+                      query={query}
+                      searchLabel={t("Search Workspaces")}
+                      searchPlaceholder={t("Search folders...")}
+                      selectedId={selected.id}
+                      showTriggerDescription={false}
+                      onOpenChange={setSwitcherOpen}
+                      onQueryChange={setQuery}
+                      onSelect={setSelectedId}
+                      triggerVariant="inline"
+                    />
+                    <IconButton
+                      aria-busy={operation === "inspect"}
+                      className="project-detail__refresh"
+                      disabled={!selected.exists || operation === "inspect"}
+                      label={t("Refresh Workspace")}
+                      size="compact"
+                      variant="ghost"
+                      onClick={() => void refreshSelectedProject()}
+                    >
+                      <RefreshCw className={operation === "inspect" ? "is-spinning" : ""} size={15} />
+                    </IconButton>
+                  </span>
+                )}
                 description={<span className="selectable" title={selected.rootPath}>{selected.rootPath}</span>}
                 actions={(
                   <ControlGroup className="project-detail__actions">
-                  <SelectField
-                    fieldClassName="project-agent-select"
-                    label={t("Agent")}
-                    value={selectedAgent?.id ?? ""}
+                  <ObjectSwitcher
+                    ariaLabel={t("Choose Agent")}
+                    className="project-agent-switcher"
                     disabled={availableTargets.length === 0}
-                    onChange={(event) => setSelectedAgentId(event.target.value)}
-                  >
-                    {availableTargets.map((target) => (
-                      <option value={target.id} key={target.id}>{target.name}</option>
-                    ))}
-                  </SelectField>
+                    emptyMessage={t("No enabled Agents")}
+                    fullWidth
+                    items={agentSwitcherItems}
+                    open={agentSwitcherOpen}
+                    query={agentQuery}
+                    searchLabel={t("Search Agents")}
+                    searchPlaceholder={t("Search Agents")}
+                    selectedId={selectedAgent?.id}
+                    onOpenChange={setAgentSwitcherOpen}
+                    onQueryChange={setAgentQuery}
+                    onSelect={setSelectedAgentId}
+                  />
                   <Button
                     aria-label={selectedAgent
                       ? t("Open in {{name}}", { name: selectedAgent.name })
@@ -631,16 +687,9 @@ export const ProjectsWorkspace = ({
                 />
               ) : (
                 <div className="project-resource-groups">
-                  <div className="project-context-summary" role="status">
-                    <span>{selectedAgent?.name ?? t("No Agent available")}</span>
-                    <span>{t("{{instructions}} instructions · {{skills}} Skills · {{mcps}} MCPs", {
-                      instructions: resourcesByKind("instructions").length,
-                      skills: resourcesByKind("skill").length,
-                      mcps: resourcesByKind("mcp").length
-                    })}</span>
-                    <span title={snapshot?.git?.issue}>{gitSummary}</span>
-                    {snapshot?.partial ? <span>{t("Some sources unavailable")}</span> : null}
-                  </div>
+                  <span className="ui-visually-hidden" role="status">
+                    {gitSummary}{snapshot?.partial ? ` · ${t("Some sources unavailable")}` : ""}
+                  </span>
                   {([
                     ["instructions", t("Instructions"), t("Workspace-owned guidance files"), <FileText size={17} aria-hidden="true" />],
                     ["skill", t("Skills"), t("Regular files copied into this folder"), <BookOpen size={17} aria-hidden="true" />],
@@ -657,6 +706,7 @@ export const ProjectsWorkspace = ({
                         id={`workspace-${kind}`}
                         key={kind}
                         onToggle={() => toggleResourceKind(kind)}
+                        nested={kind === "skill" || kind === "mcp"}
                         title={label}
                         toggleLabel={t(expanded ? "Collapse {{name}}" : "Expand {{name}}", { name: label })}
                         summary={operation === "inspect"
@@ -680,53 +730,72 @@ export const ProjectsWorkspace = ({
                             </Button>
                           </div>
                         ) : null}
-                        {resources.map((resource) => (
-                          <ResourceRow
-                            className="project-resource-entry"
-                            density="compact"
-                            description={resource.relativePath !== resource.name
-                              ? <span title={resource.absolutePath}>{resource.relativePath}</span>
-                              : undefined}
-                            icon={icon}
-                            key={resource.id}
-                            state={[
-                              resource.consumerAgentIds
-                                .map((agentId) => targets.find((target) => target.id === agentId)?.name ?? agentId)
-                                .join(" · "),
-                              gitStateLabel(resource.gitState)
-                            ].filter(Boolean).join(" · ")}
-                            title={resource.name}
-                            actions={resource.kind === "instructions" && resource.editable ? (
-                              <IconButton
-                                size="compact"
-                                variant="ghost"
-                                label={t("Edit {{name}}", { name: resource.name })}
-                                onClick={() => setEditorRequest({ resourceId: resource.id })}
-                              >
-                                <Pencil size={14} />
-                              </IconButton>
-                            ) : resource.kind === "skill" && resource.editable ? (
-                              <IconButton
-                                size="compact"
-                                label={t("Remove {{name}} from Workspace", { name: resource.name })}
-                                onClick={() => {
-                                  setModalError("");
-                                  setRemoveSkillCandidate(resource);
-                                }}
-                              >
-                                <Trash2 size={14} />
-                              </IconButton>
-                            ) : undefined}
-                          />
-                        ))}
-                        {kind === "skill" && writableSkillLocations.length === 0 ? (
-                          <p className="project-resource-note">
-                            {t("No enabled Agent provides a writable Workspace Skill location.")}
-                          </p>
-                        ) : null}
-                        {resources.length === 0 ? (
-                          <p className="project-resource-note">{t("No files detected")}</p>
-                        ) : null}
+                        <div className="ui-resource-children project-resource-section__list">
+                          {resources.map((resource) => {
+                          const consumerNames = resource.consumerAgentIds
+                            .map((agentId) => targets.find((target) => target.id === agentId)?.name ?? agentId);
+                          const gitLabel = gitStateLabel(resource.gitState);
+                          const consumerSummary = consumerNames.length > 1
+                            ? t("{{count}} Agents", { count: consumerNames.length })
+                            : consumerNames[0];
+                          const compactState = [consumerSummary, gitLabel].filter(Boolean).join(" · ");
+                          const fullState = [consumerNames.join(" · "), gitLabel].filter(Boolean).join(" · ");
+                          return (
+                            <ResourceRow
+                              className="ui-resource-children__item project-resource-entry"
+                              density="compact"
+                              description={resource.relativePath !== resource.name
+                                ? (
+                                  <OverflowTooltip
+                                    className="project-resource-entry__path"
+                                    displayText={resource.relativePath}
+                                    text={resource.absolutePath}
+                                  />
+                                )
+                                : undefined}
+                              icon={icon}
+                              key={resource.id}
+                              state={compactState ? (
+                                <OverflowTooltip
+                                  className="project-resource-entry__state"
+                                  displayText={compactState}
+                                  text={fullState}
+                                />
+                              ) : undefined}
+                              title={resource.name}
+                              actions={resource.kind === "instructions" && resource.editable ? (
+                                <IconButton
+                                  size="compact"
+                                  variant="ghost"
+                                  label={t("Edit {{name}}", { name: resource.name })}
+                                  onClick={() => setEditorRequest({ resourceId: resource.id })}
+                                >
+                                  <Pencil size={14} />
+                                </IconButton>
+                              ) : resource.kind === "skill" && resource.editable ? (
+                                <IconButton
+                                  size="compact"
+                                  label={t("Remove {{name}} from Workspace", { name: resource.name })}
+                                  onClick={() => {
+                                    setModalError("");
+                                    setRemoveSkillCandidate(resource);
+                                  }}
+                                >
+                                  <Trash2 size={14} />
+                                </IconButton>
+                              ) : undefined}
+                            />
+                          );
+                          })}
+                          {kind === "skill" && writableSkillLocations.length === 0 ? (
+                            <p className="project-resource-note">
+                              {t("No enabled Agent provides a writable Workspace Skill location.")}
+                            </p>
+                          ) : null}
+                          {resources.length === 0 ? (
+                            <p className="project-resource-note">{t("No files detected")}</p>
+                          ) : null}
+                        </div>
                       </ResourceDisclosureSection>
                     );
                   })}

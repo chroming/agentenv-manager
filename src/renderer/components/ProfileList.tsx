@@ -42,6 +42,7 @@ interface ProfileListProps {
   targets: TargetInfo[];
   targetStates: TargetManagementState[];
   actionsDisabled?: boolean;
+  variant?: "header" | "hero";
   open: boolean;
   onOpenChange(open: boolean): void;
   onCreate(returnFocus: HTMLButtonElement | null): void;
@@ -62,6 +63,7 @@ export const ProfileList = ({
   targets,
   targetStates,
   actionsDisabled = false,
+  variant = "header",
   open,
   onOpenChange,
   onCreate,
@@ -227,7 +229,7 @@ export const ProfileList = ({
     <>
       <ObjectSwitcher
         ariaLabel={t("Choose Profile")}
-        className="profile-switcher"
+        className={`profile-switcher profile-switcher--${variant}`}
         emptyMessage={t(isLoading ? "Loading Profiles" : "No Profiles match this view")}
         footerAction={{
           icon: <Plus size={15} />,
@@ -241,6 +243,10 @@ export const ProfileList = ({
         searchLabel={t("Search Profiles")}
         searchPlaceholder={t("Search Profiles")}
         selectedId={selectedProfileId}
+        triggerVariant={variant === "hero" ? "inline" : "default"}
+        showTriggerIcon={variant !== "hero"}
+        showTriggerTitle
+        showTriggerDescription={variant !== "hero"}
         onOpenChange={onOpenChange}
         onQueryChange={onSearchChange}
         onSelect={onSelect}

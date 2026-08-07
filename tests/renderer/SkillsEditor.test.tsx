@@ -51,12 +51,49 @@ afterEach(() => {
 });
 
 describe("SkillsEditor v2", () => {
+  it("projects an Off policy as disabled switches without allowing child edits", () => {
+    const onChange = vi.fn();
+    render(
+      <SkillsEditor
+        value={resources}
+        librarySkills={skills}
+        policy="disable"
+        onChange={onChange}
+      />
+    );
+
+    const skillSwitch = screen.getByRole("switch", { name: "Enable Code Review" });
+    expect(skillSwitch).toBeDisabled();
+    expect(skillSwitch).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Add Skill" })).toBeDisabled();
+    fireEvent.click(skillSwitch);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("projects an Agent policy from the current target snapshot", () => {
+    render(
+      <SkillsEditor
+        value={resources}
+        librarySkills={skills}
+        policy="ignore"
+        currentSkillStates={{ review: false }}
+        currentStateAvailable
+        onChange={vi.fn()}
+      />
+    );
+
+    const skillSwitch = screen.getByRole("switch", { name: "Enable Code Review" });
+    expect(skillSwitch).toBeDisabled();
+    expect(skillSwitch).not.toBeChecked();
+  });
+
   it("shows Library metadata and toggles a Profile Skill", () => {
     const onChange = vi.fn();
     render(<SkillsEditor value={resources} librarySkills={skills} onChange={onChange} />);
 
     expect(screen.getByText("Code Review")).toBeInTheDocument();
-    expect(screen.getByText(/v1\.2\.0 · GitHub · \/library\/review/)).toBeInTheDocument();
+    expect(screen.getByText("v1.2.0 · GitHub")).toBeInTheDocument();
+    expect(screen.queryByText(/\/library\/review/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("switch", { name: "Disable Code Review" }));
     expect(onChange).toHaveBeenCalledWith({
       ...resources,
@@ -68,7 +105,7 @@ describe("SkillsEditor v2", () => {
     const onChange = vi.fn();
     render(<SkillsEditor value={resources} librarySkills={skills} onChange={onChange} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Skill" }));
     const dialog = screen.getByRole("dialog", { name: "Add library skills" });
     expect(dialog).toHaveClass("resource-picker-dialog", "resource-picker-dialog--skills");
     expect(within(dialog).getByRole("group", { name: "Library Skills" })).toBeInTheDocument();
@@ -100,7 +137,8 @@ describe("SkillsEditor v2", () => {
     );
 
     expect(screen.getByText("Missing")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Relink missing" }));
+    fireEvent.click(screen.getByRole("button", { name: "More actions for missing" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Relink missing" }));
     fireEvent.click(screen.getByRole("radio", { name: "Code Review" }));
     fireEvent.click(screen.getByRole("button", { name: "Relink skill" }));
     expect(onChange).toHaveBeenCalledWith({
@@ -126,7 +164,10 @@ describe("SkillsEditor v2", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Check Profile Skill updates" }));
+    const checkButton = screen.getByRole("button", { name: "Check Profile Skill updates" });
+    expect(checkButton).toHaveClass("ui-icon-button", "ui-icon-button--ghost");
+    expect(screen.queryByText("Check updates")).not.toBeInTheDocument();
+    fireEvent.click(checkButton);
     expect(onCheck).toHaveBeenCalledWith(["review"]);
   });
 
@@ -147,8 +188,21 @@ describe("SkillsEditor v2", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Update Code Review" }));
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Code Review" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Review update" }));
     expect(onPreview).toHaveBeenCalledWith("review");
+  });
+
+  it("keeps row actions behind one stable overflow control", () => {
+    render(<SkillsEditor value={resources} librarySkills={skills} onChange={vi.fn()} />);
+
+    const row = screen.getByRole("listitem", { name: "Profile Skill review" });
+    expect(row).toHaveClass("ui-resource-row", "ui-resource-row--compact");
+    expect(within(row).getByRole("switch", { name: "Disable Code Review" }))
+      .toBeInTheDocument();
+    expect(within(row).getAllByRole("button")).toHaveLength(1);
+    fireEvent.click(within(row).getByRole("button", { name: "More actions for Code Review" }));
+    expect(screen.getByRole("menuitem", { name: "Remove from Profile" })).toBeInTheDocument();
   });
 
   it("shows a Target-local override instead of an Apply pending state", () => {
@@ -176,7 +230,6 @@ describe("SkillsEditor v2", () => {
 
     const row = screen.getByRole("listitem", { name: "Profile Skill review" });
     expect(row).toHaveTextContent("External active");
-    expect(row).toHaveTextContent("Codex · Unmanaged");
     expect(row).not.toHaveTextContent("Apply pending");
   });
 
@@ -208,7 +261,6 @@ describe("SkillsEditor v2", () => {
 
     const row = screen.getByRole("listitem", { name: "Profile Skill review" });
     expect(row).toHaveTextContent("External still active");
-    expect(row).toHaveTextContent("Codex · Unmanaged");
     expect(row).not.toHaveTextContent("Apply pending");
   });
 });

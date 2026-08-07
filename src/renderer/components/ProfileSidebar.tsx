@@ -432,7 +432,8 @@ export const ProfileSidebar = ({
       label: t("Conversations"),
       detail: t("Continue across Agents"),
       icon: "conversations"
-    }
+    },
+    { id: "library", label: t("Skills"), detail: t("Skill library"), icon: "skills" }
   ];
 
   return (
@@ -487,26 +488,7 @@ export const ProfileSidebar = ({
             );
           })}
         </div>
-        <div className="workspace-nav__group">
-          <div className="nav-section-label">{t("Library")}</div>
-          <button
-            aria-label={t("Skills")}
-            aria-current={activeWorkspace === "library" ? "page" : undefined}
-            className={`workspace-button${activeWorkspace === "library" ? " is-active" : ""}`}
-            data-workspace="library"
-            type="button"
-            title={collapsed ? t("Skills") : undefined}
-            onClick={() => onWorkspaceSelect("library")}
-          >
-            <span className="workspace-button__icon" aria-hidden="true">
-              <ProductIcon name="skills" />
-            </span>
-            <span>{t("Skills")}</span>
-            <small>{t("Skill library")}</small>
-          </button>
-        </div>
-        <div className="workspace-nav__group">
-          <div className="nav-section-label">{t("Settings")}</div>
+        <div className="workspace-nav__group workspace-nav__group--settings">
           <button
             aria-label={t("Settings")}
             aria-current={activeWorkspace === "settings" ? "page" : undefined}

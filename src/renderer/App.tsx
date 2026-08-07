@@ -52,10 +52,7 @@ import type {
   ManagedBackupInventory,
   ManagedBackupItem,
   ManagedBackupPreview,
-  NativeMcpConnection,
-  NativeMcpInspectionIssue,
   RetireSharedSkillInput,
-  SharedSkillRetentionInput,
   SkillInventoryEntry,
   SkillImportConflictResolution,
   SkillImportInput,
@@ -76,7 +73,6 @@ import type {
   SkillUpstream,
   SkillMergeInput,
   SkillMergePreview,
-  SkillCollectionMemberDecisionUpdate,
   SkillUpdateInfo,
   SkillUpdatePlan,
   SkillUpdatePreviewBatchResult,
@@ -86,7 +82,6 @@ import type {
   TargetCaptureDecision,
   TargetCapturePreview,
   TargetManagementState,
-  UnmanagedSkillLocationUpdate
 } from "../shared/types";
 import { profileWithoutLocalSkillOverrides } from "../shared/effectiveProfile";
 import { I18nProvider, useI18n } from "./i18n";
@@ -176,6 +171,7 @@ import {
   Button,
   ControlGroup,
   focusInitialActionMenuItem,
+  IconButton,
   PageHeader,
   SingleObjectWorkspace
 } from "./components/ui";
@@ -209,6 +205,11 @@ import { useProfileActionGuard } from "./hooks/useProfileActionGuard";
 import { useProfileDraftController } from "./hooks/useProfileDraftController";
 import { useProfileActivationController } from "./hooks/useProfileActivationController";
 import { useSkillUpdateQueue } from "./hooks/useSkillUpdateQueue";
+import {
+  projectSkillInventoryBoundary,
+  useSkillCleanupBoundaries
+} from "./hooks/useSkillCleanupBoundaries";
+import { useNativeResourceInspection } from "./hooks/useNativeResourceInspection";
 import { useWindowChromeState } from "./hooks/useWindowChromeState";
 import { WindowTitlebar } from "./components/WindowTitlebar";
 import {
@@ -271,9 +272,6 @@ const AppContent = ({
     [supportedTargets, t]
   );
   const [targetStates, setTargetStates] = useState<TargetManagementState[]>([]);
-  const [nativeMcpConnections, setNativeMcpConnections] =
-    useState<NativeMcpConnection[]>();
-  const [nativeMcpIssues, setNativeMcpIssues] = useState<NativeMcpInspectionIssue[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [librarySkills, setLibrarySkills] = useState<SkillLibraryEntry[]>([]);
   const [skillSourceGroups, setSkillSourceGroups] = useState<SkillSourceGroupView[]>([]);
@@ -386,6 +384,16 @@ const AppContent = ({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [diagnosticIssue, setDiagnosticIssue] = useState<DiagnosticIssueDetail>();
+  const {
+    nativeMcpConnections,
+    nativeMcpIssues,
+    nativeInstructionSnapshots,
+    nativeInstructionIssues,
+    setNativeMcpConnections,
+    setNativeMcpIssues,
+    refreshNativeResources,
+    loadForProfileCore
+  } = useNativeResourceInspection({ setError });
   useConversationIndexWarmup(!isLoading);
   const profileObjectActionsRef = useRef<HTMLDivElement>(null);
   const profileApplyControlRef = useRef<HTMLDivElement>(null);
@@ -512,19 +520,6 @@ const AppContent = ({
       else console.warn(`[AgentEnv] Recovery storage refresh failed: ${message}`);
     }
   }, [runFreshness]);
-  const refreshNativeMcpConnections = useCallback(async () => {
-    try {
-      const inspection = await window.agentEnv.listNativeMcpConnections();
-      setNativeMcpConnections(inspection.connections);
-      setNativeMcpIssues(inspection.issues);
-    } catch (unknownError) {
-      setError(
-        unknownError instanceof Error
-          ? unknownError.message
-          : String(unknownError)
-      );
-    }
-  }, []);
   const libraryScroll = useLibraryScrollRestoration({
     activeView: activeLibraryView,
     scrollTop: activeLibraryView === "skills" ? skillLibraryViewState.scrollTop : 0,
@@ -628,25 +623,7 @@ const AppContent = ({
     forceTargetRefresh = false
   ) => {
     const skillItemsPromise = window.agentEnv.listSkillLibrary();
-    const nativeMcpPromise = window.agentEnv.listNativeMcpConnections();
-    void nativeMcpPromise
-      .then((inspection) => {
-        if (shouldApply()) {
-          setNativeMcpConnections(inspection.connections);
-          setNativeMcpIssues(inspection.issues);
-        }
-      })
-      .catch((unknownError) => {
-        if (shouldApply()) {
-          setNativeMcpConnections(undefined);
-          setNativeMcpIssues([]);
-          console.warn(
-            `[AgentEnv] Native MCP diagnostics are unavailable: ${
-              unknownError instanceof Error ? unknownError.message : String(unknownError)
-            }`
-          );
-        }
-      });
+    loadForProfileCore(shouldApply);
     void loadSkillCleanupHistory(shouldApply);
     void loadTargetRecoveryHistory(shouldApply);
     const corePromise = Promise.all([
@@ -1870,6 +1847,20 @@ const AppContent = ({
     draftProfile && profileTarget
       ? summarizeProfile(draftProfile, profileTarget, librarySkills)
       : undefined;
+  const currentTargetSkillStates = Object.fromEntries(
+    (selectedTargetState?.skillReceipts ?? [])
+      .filter((receipt) => receipt.outcome !== "absent")
+      .map((receipt) => [receipt.libraryId, receipt.outcome === "managed-active" || receipt.outcome === "external-active"])
+  );
+  const currentTargetInstructions = nativeInstructionSnapshots.find(
+    (snapshot) => snapshot.targetId === selectedTarget?.id
+  );
+  const instructionsPolicy = profileTarget?.capabilities.instructions
+    ? resourceSummary?.instructions.mode ?? "manage"
+    : "ignore";
+  const skillsPolicy = profileTarget?.capabilities.skills
+    ? resourceSummary?.skills.mode ?? "manage"
+    : "ignore";
   const updateSelectedResourceManagement = (
     resource: ManagedProfileResource,
     mode: ProfileResourceMode
@@ -2023,17 +2014,21 @@ const AppContent = ({
     refreshPreview: () => Promise<void>
   ) => {
     if (!issue.path || !issue.resourceId) return;
+    const issuePath = issue.path;
     setError(undefined);
     try {
       await window.agentEnv.setUnmanagedSkillLocations({
         items: [{
-          path: issue.path,
+          path: issuePath,
           targetId,
           coverage: "exact"
         }],
         unmanaged: true
       });
-      setSkillInventory(await window.agentEnv.scanSkillInventory());
+      setSkillInventory((current) => projectSkillInventoryBoundary(current, {
+        items: [{ path: issuePath, targetId, coverage: "exact" }],
+        unmanaged: true
+      }));
       await refreshPreview();
       setProfileSaveStatus(
         `${issue.resourceId} is left unmanaged on this device.`
@@ -2584,140 +2579,20 @@ const AppContent = ({
     void refreshSkillDiscoveries(false, "page-entry");
   };
 
-  const setUnmanagedSkillLocations = async (input: UnmanagedSkillLocationUpdate) => {
-    setError(undefined);
-    try {
-      await window.agentEnv.setUnmanagedSkillLocations(input);
-      setSkillInventory(await window.agentEnv.scanSkillInventory());
-      return true;
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-      return false;
-    }
-  };
-
-  const setSkillCollectionDecision = async (
-    input: SkillCollectionMemberDecisionUpdate
-  ) => {
-    setError(undefined);
-    try {
-      await window.agentEnv.setSkillCollectionDecision(input);
-      setSkillInventory(await window.agentEnv.scanSkillInventory());
-      return true;
-    } catch (unknownError) {
-      setError(
-        unknownError instanceof Error ? unknownError.message : String(unknownError)
-      );
-      return false;
-    }
-  };
-
-  const leaveSkillGroupUnmanaged = async (skillKey: string) => {
-    setBusy(true);
-    setError(undefined);
-    setProfileSaveStatus("");
-    setSkillUpdateCheckStatus({
-      state: "checking",
-      message: `Leaving ${skillKey} unmanaged...`
-    });
-    try {
-      await window.agentEnv.setUnmanagedSkillLocations({
-        items: skillInventory
-          .filter(
-            (item) =>
-              item.skillKey === skillKey &&
-              item.status !== "managed" &&
-              item.status !== "left-unmanaged"
-          )
-          .flatMap((item) =>
-            item.foundIn.length > 0
-              ? item.foundIn.map((targetId) => ({
-                  path: item.path,
-                  targetId: item.sharedLocation ? undefined : targetId,
-                  coverage: "exact" as const
-                }))
-              : [{ path: item.path, coverage: "exact" as const }]
-          ),
-        unmanaged: true
-      });
-      setSkillInventory(await window.agentEnv.scanSkillInventory());
-      setSkillUpdateCheckStatus({
-        state: "success",
-        message: `${skillKey} is left unmanaged on this device`
-      });
-    } catch (unknownError) {
-      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
-      setError(message);
-      setSkillUpdateCheckStatus({
-        state: "error",
-        message: "Could not save local management boundary"
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const manageSkillGroupWithAgentEnv = async (skillKey: string) => {
-    setBusy(true);
-    setError(undefined);
-    setProfileSaveStatus("");
-    setSkillUpdateCheckStatus({
-      state: "checking",
-      message: `Reviewing ${skillKey} again...`
-    });
-    try {
-      await window.agentEnv.setUnmanagedSkillLocations({
-        items: skillInventory
-          .filter(
-            (item) =>
-              item.skillKey === skillKey &&
-              item.status === "left-unmanaged"
-          )
-          .flatMap((item) =>
-            item.foundIn.length > 0
-              ? item.foundIn.map((targetId) => ({
-                  path: item.path,
-                  targetId: item.sharedLocation ? undefined : targetId,
-                  coverage: "exact" as const
-                }))
-              : [{ path: item.path, coverage: "exact" as const }]
-          ),
-        unmanaged: false
-      });
-      setSkillInventory(await window.agentEnv.scanSkillInventory());
-      setSkillUpdateCheckStatus({
-        state: "success",
-        message: `${skillKey} is back in review`
-      });
-    } catch (unknownError) {
-      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
-      setError(message);
-      setSkillUpdateCheckStatus({
-        state: "error",
-        message: "Could not clear local management boundary"
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const setSharedSkillRetention = async (input: SharedSkillRetentionInput) => {
-    setError(undefined);
-    try {
-      await window.agentEnv.setSharedSkillRetention(input);
-      setSkillInventory(await window.agentEnv.scanSkillInventory());
-      setSkillUpdateCheckStatus({
-        state: "success",
-        message: input.retained
-          ? `${input.skillKey} will remain in the shared compatibility directory`
-          : `${input.skillKey} is back in migration review`
-      });
-      return true;
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-      return false;
-    }
-  };
+  const {
+    setUnmanagedSkillLocations,
+    setSkillCollectionDecision,
+    leaveSkillGroupUnmanaged,
+    manageSkillGroupWithAgentEnv,
+    setSharedSkillRetention
+  } = useSkillCleanupBoundaries({
+    skillInventory,
+    setSkillInventory,
+    setBusy,
+    setError,
+    setProfileSaveStatus,
+    setSkillUpdateCheckStatus
+  });
 
   const retireSharedSkill = async (input: RetireSharedSkillInput) => {
     setError(undefined);
@@ -3300,7 +3175,29 @@ const AppContent = ({
     setSkillUpdateCheckStatus({ state: "checking", message: `Checking ${id}...` });
     try {
       const updatePlan = await window.agentEnv.previewLibrarySkillUpdate(id);
-      if (updatePlan.errors.length > 0) {
+      if (updatePlan.sourceStatus === "removed") {
+        commitSkillUpdates((current) => {
+          const previous = current.find((update) => update.id === id);
+          const removedUpdate: SkillUpdateInfo = {
+            id,
+            name: updatePlan.name,
+            sourceType: updatePlan.sourceType,
+            currentRevision: updatePlan.currentRevision,
+            updateAvailable: false,
+            sourceStatus: "removed"
+          };
+          return previous
+            ? current.map((update) => update.id === id ? removedUpdate : update)
+            : [...current, removedUpdate];
+        });
+        setSkillUpdateCheckStatus({
+          state: "info",
+          message: t("{{id}} was removed upstream", { id })
+        });
+        if (librarySkills.some((skill) => skill.id === id && skill.sourceCollection)) {
+          await refreshSkillSourceGroups();
+        }
+      } else if (updatePlan.errors.length > 0) {
         setSkillUpdateCheckStatus({
           state: "error",
           message: `${id} check failed`
@@ -3893,29 +3790,18 @@ const AppContent = ({
     appFeedback?.kind === "error" || appFeedback?.kind === "warning";
   const profileApplyControl = targets.length > 0 ? (
     <div className="profile-apply-control" ref={profileApplyControlRef}>
-      <button
+      <Button
         className="profile-apply-button"
-        type="button"
         aria-describedby="profile-apply-description"
         title={t(applyActionLabel)}
         disabled={applyDisabled}
-        aria-busy={isProfilePreviewing}
+        busy={isProfilePreviewing}
+        variant="primary"
         onClick={previewSelectedProfile}
+        icon={<ArrowRight size={17} strokeWidth={2.2} />}
       >
-        {isProfilePreviewing ? (
-          <LoaderCircle
-            className="is-spinning"
-            size={17}
-            strokeWidth={2.2}
-            aria-hidden="true"
-          />
-        ) : (
-          <ArrowRight size={17} strokeWidth={2.2} aria-hidden="true" />
-        )}
-        <strong>
-          {t("Apply")}
-        </strong>
-      </button>
+        {t("Apply")}
+      </Button>
       <span id="profile-apply-description" hidden>{applyDescription}</span>
     </div>
   ) : null;
@@ -4013,6 +3899,64 @@ const AppContent = ({
       ) : null}
     </div>
   );
+
+  const profileObjectActions = draftProfile && !profileLoadingId ? (
+    <ControlGroup
+      className="profile-commit-actions"
+      ref={profileObjectActionsRef}
+      aria-label={t("Selected Profile actions")}
+    >
+      <Button
+        ref={saveButtonRef}
+        className="save-button"
+        busy={isProfileSaving}
+        disabled={
+          busy ||
+          isProfileSaving ||
+          profileMetadataSavingId === draftProfile.id ||
+          !isProfileDirty
+        }
+        variant={isProfileDirty ? "primary" : "secondary"}
+        onClick={saveSelectedProfile}
+      >
+        {t(isProfileSaving ? "Saving..." : "Save")}
+      </Button>
+      {targetWorkspaceControl}
+      <ProfileComparisonButton
+        buttonRef={profileEvaluationButtonRef}
+        control={evaluationControl}
+        description={evaluationDescription}
+        label={t("Compare")}
+        onClick={openProfileEvaluation}
+      />
+      {profileApplyControl}
+      <IconButton
+        ref={profileActionsButtonRef}
+        className="profile-more-button"
+        aria-expanded={isProfileActionsOpen}
+        aria-haspopup="menu"
+        disabled={busy || !draftProfile || draftProfile.id !== selectedProfileId}
+        label={t("More Profile actions")}
+        onClick={() => {
+          setIsTargetMenuOpen(false);
+          setIsProfileActionsOpen((current) => !current);
+        }}
+      >
+        <MoreHorizontal size={16} strokeWidth={2.2} />
+      </IconButton>
+      {isProfileActionsOpen ? (
+        <ProfileActionsMenu
+          disabled={busy}
+          menuRef={profileActionsMenuRef}
+          onDuplicate={() => duplicateProfile()}
+          onDelete={() => {
+            setIsProfileActionsOpen(false);
+            openDeleteProfileDialog();
+          }}
+        />
+      ) : null}
+    </ControlGroup>
+  ) : null;
 
   const quickOpenItems = buildQuickOpenItems({
     profiles,
@@ -4295,40 +4239,20 @@ const AppContent = ({
           </>
         ) : activeWorkspace === "profiles" ? (
           <section className="profile-page">
-            <PageHeader
-              className="profile-page-header"
-              title={t("Profiles")}
+              <PageHeader
+                className="profile-page-header"
+                title={t("Profiles")}
               help={
                 <InfoTip
                   label={t("Compose reusable resources, then preview and apply them to an Agent.")}
                 />
               }
-              actions={(
-                <ProfileList
-                  isLoading={isLoading}
-                  profiles={profiles}
-                  search={profileSearch}
-                  searchInputRef={profileSearchInputRef}
-                  selectedProfileId={profileLoadingId ?? selectedProfileId}
-                  draftProfile={draftProfile}
-                  isProfileDirty={isProfileDirty}
-                  targets={targets}
-                  targetStates={targetStates}
-                  actionsDisabled={busy}
-                  open={profileSwitcherOpen}
-                  onOpenChange={setProfileSwitcherOpen}
-                  onCreate={(returnFocus) => {
-                    appModalFallbackFocusRef.current = returnFocus;
-                    openCreateProfileDialog();
-                  }}
-                  onDelete={openDeleteProfileDialog}
-                  onDuplicate={duplicateProfile}
-                  onSearchChange={setProfileSearch}
-                  onSelect={selectProfile}
-                />
-              )}
             />
-            <SingleObjectWorkspace className="profile-workbench" aria-label={t("Profiles")}>
+            <SingleObjectWorkspace
+              className="profile-workbench"
+              surface="open"
+              aria-label={t("Profiles")}
+            >
               <div className="profile-editor-surface">
                 {profileLoadingId ? (
                   <div
@@ -4344,17 +4268,44 @@ const AppContent = ({
                         <ProductIcon name="profiles" size={19} strokeWidth={2.1} />
                       </span>
                       <div className="profile-hero__body">
-                        <div className="profile-hero__title">
-                          <h2>{loadingProfileSummary?.name ?? t("Profile")}</h2>
-                        </div>
+                        <h3
+                          aria-label={loadingProfileSummary?.name ?? t("Profile")}
+                          className="profile-hero__title"
+                        >
+                          <ProfileList
+                            isLoading={isLoading}
+                            profiles={profiles}
+                            search={profileSearch}
+                            searchInputRef={profileSearchInputRef}
+                            selectedProfileId={profileLoadingId ?? selectedProfileId}
+                            draftProfile={draftProfile}
+                            isProfileDirty={isProfileDirty}
+                            targets={targets}
+                            targetStates={targetStates}
+                            actionsDisabled={busy}
+                            variant="hero"
+                            open={profileSwitcherOpen}
+                            onOpenChange={setProfileSwitcherOpen}
+                            onCreate={(returnFocus) => {
+                              appModalFallbackFocusRef.current = returnFocus;
+                              openCreateProfileDialog();
+                            }}
+                            onDelete={openDeleteProfileDialog}
+                            onDuplicate={duplicateProfile}
+                            onSearchChange={setProfileSearch}
+                            onSelect={selectProfile}
+                          />
+                        </h3>
                         <p className="profile-description">{t("Loading Profile...")}</p>
                       </div>
-                      <LoaderCircle
-                        className="is-spinning profile-loading-indicator"
-                        size={18}
-                        strokeWidth={2.2}
-                        aria-hidden="true"
-                      />
+                      <div className="profile-hero__actions profile-hero__actions--loading">
+                        <LoaderCircle
+                          className="is-spinning profile-loading-indicator"
+                          size={18}
+                          strokeWidth={2.2}
+                          aria-hidden="true"
+                        />
+                      </div>
                     </header>
                     <div className="profile-composer profile-composer--loading" aria-hidden="true">
                       {["Instructions", "Skills", "MCPs"].map((section) => (
@@ -4383,23 +4334,41 @@ const AppContent = ({
                         }}
                       />
                       <div className="profile-hero__body">
-                        <div className="profile-hero__title">
-                          <h2
-                            data-ui-overflow-detail="true"
-                            title={draftProfile.manifest.name}
-                          >
-                            {draftProfile.manifest.name}
-                          </h2>
-                          <button
-                            className="icon-action"
-                            type="button"
+                      <h3 aria-label={draftProfile.manifest.name} className="profile-hero__title">
+                          <ProfileList
+                            isLoading={isLoading}
+                            profiles={profiles}
+                            search={profileSearch}
+                            searchInputRef={profileSearchInputRef}
+                            selectedProfileId={profileLoadingId ?? selectedProfileId}
+                            draftProfile={draftProfile}
+                            isProfileDirty={isProfileDirty}
+                            targets={targets}
+                            targetStates={targetStates}
+                            actionsDisabled={busy}
+                            variant="hero"
+                            open={profileSwitcherOpen}
+                            onOpenChange={setProfileSwitcherOpen}
+                            onCreate={(returnFocus) => {
+                              appModalFallbackFocusRef.current = returnFocus;
+                              openCreateProfileDialog();
+                            }}
+                            onDelete={openDeleteProfileDialog}
+                            onDuplicate={duplicateProfile}
+                            onSearchChange={setProfileSearch}
+                            onSelect={selectProfile}
+                          />
+                          <IconButton
                             aria-label={t("Edit Profile")}
-                            title={t("Edit Profile")}
+                            className="profile-edit-button"
+                            label={t("Edit Profile")}
+                            size="compact"
+                            variant="ghost"
                             onClick={openEditProfileDialog}
                           >
                             <Pencil size={13} strokeWidth={2.1} />
-                          </button>
-                        </div>
+                          </IconButton>
+                        </h3>
                         <p className="profile-description">
                           {draftProfile.manifest.description || t("No description")}
                         </p>
@@ -4435,75 +4404,8 @@ const AppContent = ({
                           ) : null}
                         </div>
                       </div>
-                      <div className="profile-action-stack">
-                        <div
-                          className="profile-commit-actions"
-                          ref={profileObjectActionsRef}
-                          role="group"
-                          aria-label={t("Selected Profile actions")}
-                        >
-                          <div className="profile-save-control">
-                            <button
-                              ref={saveButtonRef}
-                              className={`save-button${isProfileDirty ? " is-primary" : ""}`}
-                              type="button"
-                              aria-busy={isProfileSaving}
-                              disabled={
-                                busy ||
-                                isProfileSaving ||
-                                profileMetadataSavingId === draftProfile.id ||
-                                !isProfileDirty
-                              }
-                              onClick={saveSelectedProfile}
-                            >
-                              {isProfileSaving ? (
-                                <LoaderCircle
-                                  className="is-spinning"
-                                  size={15}
-                                  strokeWidth={2.2}
-                                  aria-hidden="true"
-                                />
-                              ) : null}
-                              {t(isProfileSaving ? "Saving..." : "Save")}
-                            </button>
-                          </div>
-                          {targetWorkspaceControl}
-                          <ProfileComparisonButton
-                            buttonRef={profileEvaluationButtonRef}
-                            control={evaluationControl}
-                            description={evaluationDescription}
-                            label={t("Compare")}
-                            onClick={openProfileEvaluation}
-                          />
-                          {profileApplyControl}
-                          <button
-                            ref={profileActionsButtonRef}
-                            className="icon-action"
-                            type="button"
-                            aria-expanded={isProfileActionsOpen}
-                            aria-haspopup="menu"
-                            aria-label={t("More Profile actions")}
-                            title={t("More Profile actions")}
-                            disabled={busy || !draftProfile || draftProfile.id !== selectedProfileId}
-                            onClick={() => {
-                              setIsTargetMenuOpen(false);
-                              setIsProfileActionsOpen((current) => !current);
-                            }}
-                          >
-                            <MoreHorizontal size={16} strokeWidth={2.2} />
-                          </button>
-                          {isProfileActionsOpen ? (
-                            <ProfileActionsMenu
-                              disabled={busy}
-                              menuRef={profileActionsMenuRef}
-                              onDuplicate={() => duplicateProfile()}
-                              onDelete={() => {
-                                setIsProfileActionsOpen(false);
-                                openDeleteProfileDialog();
-                              }}
-                            />
-                          ) : null}
-                        </div>
+                      <div className="profile-hero__actions">
+                        {profileObjectActions}
                       </div>
                     </header>
                     <section
@@ -4548,9 +4450,12 @@ const AppContent = ({
                             t("Instructions")
                           }
                           path={selectedTarget?.paths.instructionsPath}
-                          policy={resourceSummary?.instructions.mode ?? "manage"}
+                          policy={instructionsPolicy}
                           targetName={activeTargetName}
                           value={draftProfile.instructions}
+                          currentValue={currentTargetInstructions?.content}
+                          currentValueAvailable={Boolean(currentTargetInstructions) &&
+                            !nativeInstructionIssues.some((issue) => issue.targetId === selectedTarget?.id)}
                           onChange={(instructions) => {
                             updateDraftProfile({
                               ...draftProfile,
@@ -4584,11 +4489,14 @@ const AppContent = ({
                           updateSelectedResourceManagement("skills", policy)
                         }
                       >
-                        <SkillsEditor
-                          value={draftProfile.resources ?? emptyProfileResources}
-                          librarySkills={librarySkills}
-                          skillUpdates={skillUpdates}
-                          checkingSkillUpdates={checkingProfileSkillUpdates}
+                          <SkillsEditor
+                            value={draftProfile.resources ?? emptyProfileResources}
+                            librarySkills={librarySkills}
+                            skillUpdates={skillUpdates}
+                            checkingSkillUpdates={checkingProfileSkillUpdates}
+                            policy={skillsPolicy}
+                            currentSkillStates={currentTargetSkillStates}
+                            currentStateAvailable={selectedTargetState?.skillReceipts !== undefined}
                           appliedSkillVersions={
                             selectedTargetState?.activeProfileId ===
                             draftProfile.id
@@ -4658,7 +4566,7 @@ const AppContent = ({
                           onChange={(resources) =>
                             updateDraftProfile({ ...draftProfile, resources })
                           }
-                          onRefresh={refreshNativeMcpConnections}
+                          onRefresh={refreshNativeResources}
                         />
                       </ProfileComposerSection>
                     </section>
@@ -4912,7 +4820,7 @@ const AppContent = ({
             />
             <SettingsCategoryTabs active={settingsCategory} onChange={setSettingsCategory} />
             <div
-              className="settings-category-frame ui-surface-frame"
+              className="settings-category-frame"
               id="settings-category-panel"
               role="tabpanel"
               aria-labelledby={`settings-tab-${settingsCategory}`}

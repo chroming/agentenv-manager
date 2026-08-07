@@ -103,6 +103,8 @@ const api: AgentEnvApi = {
     ipcRenderer.invoke("conversations:continue", previewId),
   listNativeMcpConnections: () =>
     ipcRenderer.invoke("targets:list-native-mcps"),
+  listNativeInstructions: () =>
+    ipcRenderer.invoke("targets:list-native-instructions"),
   listSkillLibrary: () => ipcRenderer.invoke("skills:list-library"),
   listSkillFiles: (id) => ipcRenderer.invoke("skills:list-files", id),
   readSkillFile: (input) => ipcRenderer.invoke("skills:read-file", input),

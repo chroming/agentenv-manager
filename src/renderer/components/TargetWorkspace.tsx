@@ -29,6 +29,9 @@ import {
   ActionMenu,
   Button,
   ControlGroup,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
   focusInitialActionMenuItem,
   IconButton,
   ModalFrame,
@@ -113,14 +116,12 @@ const TargetRowActions = ({
   busy,
   expanded,
   onCapture,
-  onConfigure,
   onToggleDiagnostics
 }: {
   target: TargetInfo;
   busy: boolean;
   expanded: boolean;
   onCapture(returnFocus?: HTMLElement | null): void;
-  onConfigure(): void;
   onToggleDiagnostics(): void;
 }) => {
   const { t } = useI18n();
@@ -187,14 +188,6 @@ const TargetRowActions = ({
 
   return (
     <ControlGroup className="target-workflow-actions" aria-label={t("Agent actions")}>
-      <Button
-        className="target-profile-action"
-        size="compact"
-        aria-label={t("Configure {{name}}", { name: target.name })}
-        onClick={onConfigure}
-      >
-        {t("Configure")}
-      </Button>
       <IconButton
         ref={triggerRef}
         className="target-more-action"
@@ -306,6 +299,14 @@ export const TargetWorkspace = ({
         help={<InfoTip label={t("Inspect each Agent and apply a saved Profile only when you choose.")} />}
         actions={(
           <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
+            {environmentReview.state === "ready" ? (
+              <span className="target-page-summary">
+                {t("{{agents}} Agents detected · {{profiles}} Profiles", {
+                  agents: environmentReview.installedAgentCount,
+                  profiles: environmentReview.usableProfileCount
+                })}
+              </span>
+            ) : null}
             <FreshnessStatus state={freshness} verb="Refreshed" />
             {backups.length > 0 ? (
               <Button
@@ -329,7 +330,7 @@ export const TargetWorkspace = ({
         )}
       />
 
-      {environmentReview.state !== "no-agents" ? (
+      {environmentReview.state !== "no-agents" && environmentReview.state !== "ready" ? (
         <EnvironmentStatusStrip
           summary={environmentReview}
           targetNames={targetNames}
@@ -424,7 +425,6 @@ export const TargetWorkspace = ({
                   expanded={isExpanded}
                   onCapture={(returnFocus) =>
                     onCreateProfileFromTarget(target.id, returnFocus)}
-                  onConfigure={() => onConfigure(target.id)}
                   onToggleDiagnostics={() => setExpandedTargetId(isExpanded ? undefined : target.id)}
                 />
               </header>
@@ -551,14 +551,13 @@ export const TargetWorkspace = ({
           dismissDisabled={busy}
           onDismiss={() => setIsRecoveryOpen(false)}
         >
-            <header className="profile-dialog-header target-recovery-dialog__header ui-dialog-header">
-              <div className="ui-dialog-header__copy">
-                <div className="section-title ui-dialog-title">{t("Recovery")}</div>
-                <p className="muted ui-dialog-description">{t("Backups created before managed applies.")}</p>
-              </div>
-              <span>{t(backups.length === 1 ? "{{count}} backup" : "{{count}} backups", { count: backups.length })}</span>
-            </header>
-            <div className="target-recovery-dialog__body ui-dialog-body">
+            <DialogHeader
+              className="target-recovery-dialog__header"
+              title={t("Recovery")}
+              description={t("Backups created before managed applies.")}
+              actions={<span>{t(backups.length === 1 ? "{{count}} backup" : "{{count}} backups", { count: backups.length })}</span>}
+            />
+            <DialogBody className="target-recovery-dialog__body">
               <HistoryView
                 backups={backups}
                 busy={busy}
@@ -569,8 +568,8 @@ export const TargetWorkspace = ({
                 }}
                 onRestoreRollback={onRestoreRollback}
               />
-            </div>
-            <footer className="preview-actions ui-dialog-footer">
+            </DialogBody>
+            <DialogFooter className="preview-actions">
               <Button
                 ref={recoveryCloseRef}
                 disabled={busy}
@@ -578,7 +577,7 @@ export const TargetWorkspace = ({
               >
                 {t("Close")}
               </Button>
-            </footer>
+            </DialogFooter>
         </ModalFrame>
       ) : null}
       {rollbackPreview ? (
@@ -601,13 +600,11 @@ export const TargetWorkspace = ({
           dismissDisabled={busy}
           onDismiss={() => setStopManagingTargetId(undefined)}
         >
-            <header className="profile-dialog-header ui-dialog-header">
-              <div className="ui-dialog-header__copy">
-                <div className="section-title ui-dialog-title">{t("Stop managing {{name}}", { name: targets.find((target) => target.id === stopManagingTargetId)?.name ?? "" })}</div>
-                <p className="muted ui-dialog-description">{t("Choose what should happen to the current Agent environment.")}</p>
-              </div>
-            </header>
-            <div className="ui-choice-list ui-dialog-body" role="radiogroup" aria-label={t("Stop managing behavior")}>
+            <DialogHeader
+              title={t("Stop managing {{name}}", { name: targets.find((target) => target.id === stopManagingTargetId)?.name ?? "" })}
+              description={t("Choose what should happen to the current Agent environment.")}
+            />
+            <DialogBody className="ui-choice-list" role="radiogroup" aria-label={t("Stop managing behavior")}>
               <label className={`ui-choice-card${stopManagingMode === "keep-current" ? " is-selected" : ""}`}>
                 <input type="radio" name="stop-managing-mode" checked={stopManagingMode === "keep-current"} onChange={() => setStopManagingMode("keep-current")} />
                 <span><strong>{t("Keep current environment")}</strong><small>{t("Detach AgentEnv ownership and turn linked Skills into independent files.")}</small></span>
@@ -616,14 +613,14 @@ export const TargetWorkspace = ({
                 <input type="radio" name="stop-managing-mode" checked={stopManagingMode === "restore-pre-takeover"} onChange={() => setStopManagingMode("restore-pre-takeover")} />
                 <span><strong>{t("Restore environment before takeover")}</strong><small>{t("Replace current managed files with the earliest pre-takeover backup.")}</small></span>
               </label>
-            </div>
-            <footer className="preview-actions ui-dialog-footer">
+            </DialogBody>
+            <DialogFooter className="preview-actions">
               <Button ref={stopManagingCancelRef} variant="secondary" disabled={busy} onClick={() => setStopManagingTargetId(undefined)}>{t("Cancel")}</Button>
               <Button variant="primary" disabled={busy} onClick={() => {
                 onPreviewStopManaging(stopManagingTargetId, stopManagingMode);
                 setStopManagingTargetId(undefined);
               }}>{t("Review changes")}</Button>
-            </footer>
+            </DialogFooter>
         </ModalFrame>
       ) : null}
       {stopManagingPreview ? (

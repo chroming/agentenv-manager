@@ -45,7 +45,7 @@ const installApi = () => {
         name: "review",
         relativePath: ".opencode/skills/review",
         absolutePath: "/work/example/.opencode/skills/review",
-        consumerAgentIds: ["opencode"],
+        consumerAgentIds: ["opencode", "codex"],
         state: "ready",
         editable: true,
         contentHash: "skill-hash",
@@ -154,15 +154,30 @@ describe("ProjectsWorkspace", () => {
     expect(document.querySelector(".projects-workbench")).not.toHaveClass("ui-master-detail");
     expect(document.querySelector(".project-detail")).not.toHaveClass("ui-master-detail__pane");
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(await screen.findByText("Git · 1 changed")).toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent("Git · 1 changed");
+    expect(document.querySelector(".project-context-summary")).toBeNull();
     expect(screen.getByRole("heading", { name: "Example" }).closest(".ui-inspector-header"))
       .toBeInTheDocument();
+    const agentSwitcher = screen.getByRole("button", { name: "Choose Agent" });
+    expect(agentSwitcher.closest(".project-agent-switcher")).not.toBeNull();
+    expect(agentSwitcher.querySelector(".project-agent-switcher__logo")).not.toBeNull();
+    fireEvent.click(agentSwitcher);
+    const agentDialog = await screen.findByRole("dialog", { name: "Choose Agent" });
+    const agentOption = within(agentDialog).getByRole("option", { name: /OpenCode/ });
+    expect(agentOption).toHaveClass("ui-selectable-row");
+    expect(agentOption.querySelector(".project-agent-switcher__logo")).not.toBeNull();
+    fireEvent.keyDown(document, { key: "Escape" });
     const skillsSection = await screen.findByRole("region", { name: "Skills" });
     expect(skillsSection).toHaveClass("ui-resource-disclosure");
     expect(within(skillsSection).queryByRole("button", { name: "Copy from Library" }))
       .not.toBeInTheDocument();
     fireEvent.click(within(skillsSection).getByRole("button", { name: "Expand Skills" }));
     expect(within(skillsSection).getByText(/Tracked/)).toBeInTheDocument();
+    expect(within(skillsSection).getByText(/2 Agents/)).toBeInTheDocument();
+    expect(within(skillsSection).queryByText("OpenCode · codex")).not.toBeInTheDocument();
+    const skillPath = within(skillsSection).getByText(".opencode/skills/review");
+    expect(skillPath).toHaveClass("project-resource-entry__path");
+    expect(skillPath).toHaveAttribute("data-ui-overflow-detail", "true");
 
     fireEvent.click(await within(skillsSection).findByRole("button", { name: "Copy from Library" }));
     const dialog = await screen.findByRole("dialog", { name: "Copy Skill to Workspace" });
@@ -174,7 +189,7 @@ describe("ProjectsWorkspace", () => {
     expect(within(dialog).getByRole("combobox", { name: /Workspace location/ }).closest(".ui-field"))
       .toBeInTheDocument();
     expect(within(dialog).queryByRole("combobox", { name: "Agent" })).not.toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Agent" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose Agent" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Preview environment" })).not.toBeInTheDocument();
   });
 
@@ -325,17 +340,17 @@ describe("ProjectsWorkspace", () => {
     expect(screen.queryByRole("button", { name: "Copy from Library" })).not.toBeInTheDocument();
   });
 
-  it("refreshes the selected Project environment instead of only reloading references", async () => {
+  it("refreshes the selected Workspace instead of reloading every reference", async () => {
     const api = installApi();
     render(<ProjectsWorkspace targets={[target]} />);
     await screen.findByRole("button", { name: "Expand Instructions" });
     api.listProjects.mockClear();
     api.inspectProject.mockClear();
 
-    fireEvent.click(screen.getByRole("button", { name: "Refresh Workspaces" }));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh Workspace" }));
 
-    await waitFor(() => expect(api.listProjects).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(api.inspectProject).toHaveBeenCalledWith("project-1"));
+    expect(api.listProjects).not.toHaveBeenCalled();
   });
 
   it("keeps a failed Project Skill add actionable inside its dialog", async () => {

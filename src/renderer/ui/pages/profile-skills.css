@@ -1,16 +1,5 @@
-.profile-skill-row {
-  min-height: var(--resource-row-compact);
-}
-
-.profile-skill-icon {
-  height: var(--resource-icon-box);
-  width: var(--resource-icon-box);
-}
-
 .profile-composer-section__panel > .profile-skill-manager {
   background: transparent;
-  border: 0;
-  border-radius: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
@@ -39,37 +28,26 @@
 
 .profile-skill-toolbar {
   align-items: center;
-  background: #fbfcfe;
+  background: transparent;
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
-  gap: 10px;
   justify-content: flex-end;
-  min-height: 40px;
-  padding: 4px 8px;
-}
-
-.profile-skill-summary {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-  min-width: 0;
-}
-
-.profile-skill-summary span {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 18px;
-  white-space: nowrap;
+  min-height: 36px;
+  padding: 3px 8px;
 }
 
 .profile-skill-toolbar__actions {
+  align-items: center;
   display: flex;
   flex: 0 0 auto;
-  gap: 6px;
+  gap: var(--space-2);
+}
+
+.profile-skill-check {
+  color: var(--muted);
 }
 
 .profile-skill-list {
-  background: var(--surface);
   display: grid;
   min-height: 0;
   min-width: 0;
@@ -77,79 +55,9 @@
   overflow-y: auto;
 }
 
-.profile-skill-row {
-  align-items: center;
-  border-bottom: 1px solid #edf1f6;
-  display: grid;
-  gap: 8px;
-  grid-template-columns:
-    34px minmax(120px, 1fr) 128px
-    40px 44px 38px;
-  min-height: 56px;
-  min-width: 0;
-  padding: 5px 8px;
-}
-
-.profile-skill-row:last-child {
-  border-bottom: 0;
-}
-
-.profile-skill-row.is-disabled {
-  background: #fafbfc;
-}
-
-.profile-skill-row.is-disabled .profile-skill-icon,
-.profile-skill-row.is-disabled .profile-skill-main,
-.profile-skill-row.is-disabled .profile-skill-state {
-  opacity: 0.58;
-}
-
-.profile-skill-row.has-local-override .profile-skill-state {
-  opacity: 1;
-}
-
-.profile-skill-row--owned {
-  grid-template-columns: 34px minmax(120px, 1fr) 128px 72px 38px;
-}
-
-.profile-skill-row--owned > .icon-action {
-  grid-column: 5;
-}
-
-.profile-skill-icon {
-  align-items: center;
-  background: transparent;
-  border-radius: 0;
-  color: var(--muted);
-  display: inline-flex;
-  height: 32px;
-  justify-content: center;
-  width: 32px;
-}
-
-.profile-skill-main {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.profile-skill-name,
-.profile-skill-main > span:first-child {
-  color: var(--text);
+.profile-skill-detail,
+.profile-skill-name {
   display: block;
-  font-size: 12px;
-  font-weight: var(--font-weight-medium);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.profile-skill-detail {
-  color: var(--muted);
-  display: block;
-  font-size: 12px;
-  line-height: 16px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -157,174 +65,42 @@
 }
 
 .profile-skill-state {
-  align-content: start;
-  align-self: center;
-  color: #5d6c83;
-  display: grid;
-  font-size: 11px;
-  gap: 2px;
-  justify-items: start;
-  line-height: 15px;
-  min-height: 32px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  width: 100%;
-}
-
-.profile-skill-state strong,
-.profile-skill-state small {
+  color: var(--muted);
   display: block;
-  max-width: 100%;
+  max-width: 96px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.profile-skill-state strong {
-  font-size: 11px;
-  font-weight: var(--font-weight-regular);
-}
-
-.profile-skill-state small {
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: var(--font-weight-regular);
-}
-
-.profile-skill-state.is-neutral {
-  color: var(--muted);
-}
-
 .profile-skill-state.is-update {
-  color: #9b620e;
+  color: var(--accent-strong);
 }
 
 .profile-skill-state.is-error {
   color: var(--danger);
 }
 
-.profile-skill-update,
-.profile-skill-update-placeholder {
-  align-self: center;
-  grid-column: 4;
-  height: 32px;
-  min-height: 32px;
-  min-width: 32px;
-  padding: 0;
-  justify-self: center;
-  width: 32px;
-}
-
-.profile-skill-switch {
-  grid-column: 5;
-  justify-self: center;
-  min-height: 32px;
-}
-
-.profile-skill-row:not(.profile-skill-row--owned) > .icon-action {
-  grid-column: 6;
-  justify-self: center;
+.profile-skill-current-state {
+  color: var(--muted);
+  font-size: var(--font-size-metadata);
+  white-space: nowrap;
 }
 
 .profile-skill-empty {
   display: grid;
   gap: 4px;
   justify-items: start;
-  padding: 24px 14px;
+  padding: 20px 14px;
 }
 
 .profile-skill-empty strong {
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
 }
 
 .profile-skill-empty span {
   color: var(--muted);
-  font-size: 12px;
-}
-
-@media (max-width: 980px) {
-  .profile-skill-row {
-    gap: 10px;
-    grid-template-columns:
-      32px minmax(92px, 1fr) 100px
-      40px 44px 38px;
-    padding-inline: 8px;
-  }
-
-  .profile-skill-update,
-  .profile-skill-update-placeholder {
-    min-width: 32px;
-  }
-}
-
-@container profile-workspace (max-width: 760px) {
-  .profile-skill-toolbar {
-    gap: 8px;
-  }
-
-  .profile-skill-summary {
-    flex: 1 1 auto;
-    overflow: hidden;
-  }
-
-  .profile-skill-summary span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .profile-skill-row {
-    column-gap: 8px;
-    grid-template-columns: 30px minmax(0, 1fr) 34px 40px 32px;
-    grid-template-rows: minmax(18px, auto) minmax(15px, auto);
-    min-height: 62px;
-    row-gap: 1px;
-  }
-
-  .profile-skill-icon {
-    grid-column: 1;
-    grid-row: 1 / 3;
-  }
-
-  .profile-skill-main {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .profile-skill-detail {
-    display: none;
-  }
-
-  .profile-skill-state {
-    align-self: start;
-    grid-column: 2;
-    grid-row: 2;
-    min-height: 15px;
-  }
-
-  .profile-skill-state small {
-    display: none;
-  }
-
-  .profile-skill-update,
-  .profile-skill-update-placeholder {
-    grid-column: 3;
-    grid-row: 1 / 3;
-    height: 32px;
-    min-height: 32px;
-    min-width: 32px;
-    padding: 0;
-    width: 32px;
-  }
-
-  .profile-skill-switch {
-    grid-column: 4;
-    grid-row: 1 / 3;
-  }
-
-  .profile-skill-row:not(.profile-skill-row--owned) > .icon-action {
-    grid-column: 5;
-    grid-row: 1 / 3;
-  }
+  font-size: var(--font-size-metadata);
 }

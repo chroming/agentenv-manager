@@ -5,12 +5,12 @@
 
 .profile-mcp-toolbar {
   align-items: center;
-  background: #fbfcfe;
+  background: transparent;
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   justify-content: space-between;
-  min-height: 40px;
-  padding: 4px 8px;
+  min-height: 36px;
+  padding: 3px 8px 3px 56px;
 }
 
 .profile-mcp-toolbar__scope {
@@ -51,11 +51,7 @@
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) 156px;
   min-height: 46px;
-  padding: 5px 8px;
-}
-
-.profile-mcp-row.is-unmanaged {
-  grid-template-columns: minmax(0, 1fr);
+  padding: 5px 8px 5px 58px;
 }
 
 .profile-mcp-row:last-child {
@@ -88,36 +84,6 @@
   font-size: 11px;
 }
 
-.profile-mcp-mode {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  width: 100%;
-}
-
-.profile-mcp-mode__option {
-  font-size: 11px;
-  padding: 0 5px;
-  width: 100%;
-}
-
-.profile-mcp-mode.is-agent .profile-mcp-mode__option.is-selected {
-  background: #edf0f4;
-  box-shadow: inset 0 0 0 1px #cbd2dc;
-  color: #536174;
-}
-
-.profile-mcp-mode.is-on .profile-mcp-mode__option.is-selected {
-  background: #eaf3ff;
-  box-shadow: inset 0 0 0 1px #b9d2f7;
-  color: #155db5;
-}
-
-.profile-mcp-mode.is-off .profile-mcp-mode__option.is-selected {
-  background: #fff6e6;
-  box-shadow: inset 0 0 0 1px #ead4a7;
-  color: #875b12;
-}
-
 .profile-mcp-readonly,
 .profile-mcp-agent-state {
   white-space: nowrap;
@@ -138,10 +104,8 @@
   width: 156px;
 }
 
-.profile-mcp-reset {
-  justify-self: stretch;
-  min-height: 34px;
-  width: 100%;
+.profile-mcp-switch {
+  justify-self: end;
 }
 
 .profile-mcp-empty {
@@ -149,7 +113,7 @@
   display: flex;
   gap: 8px;
   min-height: 50px;
-  padding: 9px 12px;
+  padding: 9px 12px 9px 56px;
 }
 
 .profile-mcp-inspection-error {
@@ -159,7 +123,7 @@
   gap: 10px;
   grid-template-columns: auto minmax(0, 1fr) auto;
   min-height: 56px;
-  padding: 8px 12px;
+  padding: 8px 12px 8px 56px;
 }
 
 .profile-composer-section[data-profile-composer-id="mcp"].is-expanded {
@@ -169,17 +133,13 @@
 .profile-composer-section[data-profile-composer-id="mcp"]
   .profile-composer-section__panel {
   max-height: min(340px, 44vh);
-  padding: 8px;
+  padding: 0;
 }
 
 @container profile-workspace (max-width: 760px) {
   .profile-mcp-row {
     gap: 10px;
     grid-template-columns: minmax(0, 1fr) 150px;
-  }
-
-  .profile-mcp-row.is-unmanaged {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .profile-mcp-agent-state {

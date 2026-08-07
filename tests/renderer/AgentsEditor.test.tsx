@@ -6,6 +6,24 @@ import { AgentsEditor } from "../../src/renderer/components/AgentsEditor";
 afterEach(cleanup);
 
 describe("AgentsEditor", () => {
+  it("does not show Profile instructions as current Agent content when the Agent state is unavailable", () => {
+    render(
+      <AgentsEditor
+        label="AGENTS.md"
+        path="/agent/AGENTS.md"
+        policy="ignore"
+        targetName="Codex"
+        value="# Profile instructions"
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByDisplayValue("# Profile instructions")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Current Agent instructions unavailable"
+    );
+  });
+
   it("shows the resolved instruction file and explains when changes load", () => {
     const onChange = vi.fn();
     render(
@@ -46,10 +64,15 @@ describe("AgentsEditor", () => {
         policy={policy}
         targetName="Example Agent"
         value="# Guidance"
+        currentValue="# Current Agent guidance"
+        currentValueAvailable
         onChange={vi.fn()}
       />
     );
 
+    expect(screen.getByRole("textbox", { name: "AGENTS.md" })).toHaveAttribute(
+      "readonly"
+    );
     const help = screen.getByLabelText(new RegExp(expected));
     fireEvent.focus(help);
     expect(screen.getByRole("tooltip")).toHaveTextContent(expected);

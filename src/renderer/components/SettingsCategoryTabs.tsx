@@ -1,6 +1,7 @@
 import type { AgentEnvSettings, AppLocale } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { SettingsPreferenceRow } from "./SettingsPreferenceRow";
+import { TabBar } from "./ui";
 
 export type SettingsCategory = "general" | "agents" | "skills" | "connections" | "data";
 
@@ -21,41 +22,15 @@ export const SettingsCategoryTabs = ({
 }) => {
   const { t } = useI18n();
   return (
-    <div
-      className="settings-categories ui-segmented-control"
-      role="tablist"
-      aria-label={t("Settings")}
-      onKeyDown={(event) => {
-        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-        const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-        const currentIndex = tabs.indexOf(document.activeElement as HTMLButtonElement);
-        if (currentIndex < 0) return;
-        event.preventDefault();
-        const nextIndex = event.key === "Home"
-          ? 0
-          : event.key === "End"
-            ? tabs.length - 1
-            : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
-        tabs[nextIndex]?.click();
-        tabs[nextIndex]?.focus();
-      }}
-    >
-      {categories.map(([category, label]) => (
-        <button
-          className={`ui-segmented-control__option${active === category ? " is-active" : ""}`}
-          id={`settings-tab-${category}`}
-          key={category}
-          role="tab"
-          type="button"
-          aria-controls="settings-category-panel"
-          aria-selected={active === category}
-          tabIndex={active === category ? 0 : -1}
-          onClick={() => onChange(category)}
-        >
-          {t(label)}
-        </button>
-      ))}
-    </div>
+    <TabBar
+      className="settings-categories"
+      idPrefix="settings-tab"
+      label={t("Settings")}
+      options={categories.map(([value, label]) => ({ value, label: t(label) }))}
+      panelId="settings-category-panel"
+      value={active}
+      onChange={onChange}
+    />
   );
 };
 

@@ -78,6 +78,7 @@ export const ProfileComposerSection = ({
       icon={icon}
       id={id}
       onToggle={onToggle}
+      nested={id === "skills" || id === "mcp"}
       slotClassNames={{
         actions: "profile-composer-section__actions",
         chevron: "profile-composer-section__chevron",

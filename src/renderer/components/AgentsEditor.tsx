@@ -10,6 +10,8 @@ interface AgentsEditorProps {
   policy: ProfileResourcePolicy;
   targetName: string;
   value: string;
+  currentValue?: string;
+  currentValueAvailable?: boolean;
   onChange(value: string): void;
 }
 
@@ -19,6 +21,8 @@ export const AgentsEditor = ({
   policy,
   targetName,
   value,
+  currentValue,
+  currentValueAvailable = false,
   onChange
 }: AgentsEditorProps) => {
   const { t } = useI18n();
@@ -36,7 +40,14 @@ export const AgentsEditor = ({
       : t(
           "Applying the Profile writes this file. New {{name}} sessions load changes; running conversations keep their current context.",
           { name: targetName }
-        );
+      );
+  const showingAgentState = policy === "ignore";
+  const effectiveValue = policy === "manage"
+    ? value
+    : policy === "disable"
+      ? ""
+      : currentValue ?? "";
+  const agentStateUnavailable = showingAgentState && !currentValueAvailable;
 
   return (
     <div className="field-block instruction-editor">
@@ -51,13 +62,20 @@ export const AgentsEditor = ({
         ) : null}
         <InfoTip label={help} />
       </div>
-      <textarea
-        id={editorId}
-        aria-label={label}
-        spellCheck={false}
-        value={value}
-        onChange={(event) => onChange(event.currentTarget.value)}
-      />
+      {agentStateUnavailable ? (
+        <div className="instruction-editor__unavailable" role="status">
+          {t("Current Agent instructions unavailable")}
+        </div>
+      ) : (
+        <textarea
+          id={editorId}
+          aria-label={label}
+          readOnly={policy !== "manage"}
+          spellCheck={false}
+          value={effectiveValue}
+          onChange={(event) => onChange(event.currentTarget.value)}
+        />
+      )}
     </div>
   );
 };

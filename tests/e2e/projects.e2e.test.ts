@@ -103,6 +103,16 @@ describe("Workspaces desktop workflow", () => {
     const notNow = page.getByRole("button", { name: "Not now", exact: true });
     if (await notNow.isVisible().catch(() => false)) await notNow.click();
     await page.getByRole("button", { name: "Workspaces", exact: true }).click();
+    const agentSwitcher = page.getByRole("button", { name: "Choose Agent", exact: true });
+    await expect.poll(() => agentSwitcher.locator(".project-agent-switcher__logo").count())
+      .toBe(1);
+    await agentSwitcher.click();
+    const agentDialog = page.getByRole("dialog", { name: "Choose Agent", exact: true });
+    await agentDialog.getByRole("option", { name: "Agent OpenCode", exact: true }).waitFor();
+    expect(await agentDialog.getByRole("option", { name: "Agent OpenCode", exact: true })
+      .locator(".project-agent-switcher__logo").count()).toBe(1);
+    await page.keyboard.press("Escape");
+    await agentDialog.waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Expand Instructions", exact: true }).click();
     await page.getByRole("button", { name: "Add instruction", exact: true }).waitFor();
     await expectNoHorizontalOverflow(page);
@@ -139,6 +149,34 @@ describe("Workspaces desktop workflow", () => {
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
       .toContain("# Testing");
+    const skillResourceList = page.locator(
+      '[data-resource-disclosure-id="workspace-skill"] .project-resource-section__list'
+    );
+    await skillResourceList.locator(".project-resource-entry").waitFor();
+    const resourceHierarchyGeometry = await skillResourceList.evaluate((list) => {
+      const row = list.querySelector<HTMLElement>(".project-resource-entry")!;
+      const listBox = list.getBoundingClientRect();
+      const panel = list.closest<HTMLElement>(".ui-resource-disclosure__panel")!;
+      const disclosure = panel.closest<HTMLElement>(".ui-resource-disclosure")!;
+      const panelBox = panel.getBoundingClientRect();
+      const disclosureBox = disclosure.getBoundingClientRect();
+      const listGuide = getComputedStyle(list, "::before");
+      const rowGuide = getComputedStyle(row, "::before");
+      return {
+        panelIsInset: panelBox.left >= disclosureBox.left + 12,
+        panelContained: panelBox.right <= disclosureBox.right + 1,
+        listHasNoConnector: listGuide.content === "none" || listGuide.display === "none",
+        rowHasNoConnector: rowGuide.content === "none" || rowGuide.display === "none",
+        listIsContained: listBox.right <= panelBox.right + 1
+      };
+    });
+    expect(resourceHierarchyGeometry).toEqual({
+      panelIsInset: true,
+      panelContained: true,
+      listHasNoConnector: true,
+      rowHasNoConnector: true,
+      listIsContained: true
+    });
     await expect(readFile(join(addedProjectSkill, ".agentenv-skill.json"), "utf8"))
       .rejects.toMatchObject({ code: "ENOENT" });
 

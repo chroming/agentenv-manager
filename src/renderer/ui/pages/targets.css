@@ -83,7 +83,16 @@
   gap: 8px;
 }
 
+.target-page-summary {
+  color: var(--muted);
+  font-size: var(--font-size-caption);
+  white-space: nowrap;
+}
+
 .target-list {
+  --target-list-columns:
+    32px minmax(132px, 200px) 84px minmax(112px, 0.68fr)
+    minmax(150px, 1fr) minmax(112px, 0.7fr) 32px;
   align-items: start;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -146,9 +155,7 @@
   flex: 0 0 32px;
   font-size: var(--font-size-metadata);
   gap: 8px;
-  grid-template-columns:
-    32px minmax(128px, 1.1fr) 76px minmax(84px, 0.65fr)
-    minmax(110px, 0.9fr) minmax(100px, 0.8fr) 116px;
+  grid-template-columns: var(--target-list-columns);
   min-height: 32px;
   padding: 0 12px;
   width: 100%;
@@ -190,20 +197,16 @@
   align-items: center;
   display: grid;
   gap: 8px;
-  grid-template-columns:
-    32px minmax(128px, 1.1fr) 76px minmax(84px, 0.65fr)
-    minmax(110px, 0.9fr) minmax(100px, 0.8fr) 116px;
+  grid-template-columns: var(--target-list-columns);
   min-height: 60px;
   min-width: 0;
 }
 
 .target-workflow-actions {
   align-items: center;
-  display: grid;
-  gap: 5px;
-  grid-template-columns: 78px var(--control-height-compact);
+  display: flex;
   justify-self: end;
-  width: 113px;
+  width: var(--control-height-compact);
 }
 
 .target-workflow-actions .ui-button {
@@ -344,18 +347,28 @@
 }
 
 @container (max-width: 900px) {
-  .target-list__header,
-  .target-workflow-header {
-    grid-template-columns:
-      32px minmax(110px, 1fr) 70px minmax(126px, 0.92fr) 116px;
+  .target-list {
+    --target-list-columns:
+      32px minmax(112px, 180px) 76px minmax(170px, 1fr) var(--control-height-compact);
   }
 
-  .target-list__environment-headings,
+  .target-list__header,
+  .target-workflow-header {
+    grid-template-columns: var(--target-list-columns);
+  }
+
   .target-workflow-environment {
     align-content: center;
     display: grid;
     gap: 2px;
     grid-template-rows: 18px 18px;
+    min-width: 0;
+  }
+
+  .target-list__environment-headings {
+    align-items: center;
+    display: flex;
+    min-height: 22px;
     min-width: 0;
   }
 
@@ -375,6 +388,10 @@
   .target-list__header > span:last-child,
   .target-workflow-actions {
     grid-column: 5;
+  }
+
+  .target-list__header > span:last-child {
+    visibility: hidden;
   }
 }
 

@@ -256,8 +256,8 @@
 /* Profiles owns one control and density contract across its supported window sizes. */
 .app-shell--profiles {
   --profile-control-height: var(--control-height-default);
-  --profile-hero-height: 104px;
-  --profile-hero-height-compact: 120px;
+  --profile-hero-height: 88px;
+  --profile-hero-height-compact: 76px;
   --profile-icon-slot: 24px;
   --profile-policy-column-width: clamp(244px, 42%, 264px);
 }
@@ -283,12 +283,15 @@
   min-height: var(--page-header-height);
 }
 
-.profile-page-header .profile-switcher {
-  width: clamp(220px, 30vw, 310px);
+.profile-page-actions {
+  align-items: center;
+  display: flex;
+  max-width: 100%;
+  min-width: 0;
 }
 
-.profile-page-header .profile-switcher .ui-object-switcher__trigger {
-  width: 100%;
+.profile-page-header .ui-page-header__actions {
+  min-width: 0;
 }
 
 .profile-commit-actions {
@@ -450,13 +453,6 @@
   white-space: nowrap;
 }
 
-.ui-object-switcher__row .ui-selectable-row__title,
-.profile-switcher .ui-object-switcher__trigger-title {
-  align-items: center;
-  display: flex;
-  gap: 6px;
-}
-
 .profile-row__dirty {
   background: var(--warning-bg);
   border-radius: var(--radius-pill);
@@ -533,8 +529,9 @@
 .profile-hero {
   align-items: center;
   gap: 12px;
-  grid-template-columns: 30px minmax(150px, 1fr) auto;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
   grid-template-rows: auto;
+  grid-template-areas: "icon body actions";
   border: 0;
   border-bottom: 1px solid var(--border);
   border-radius: 0;
@@ -550,43 +547,53 @@
   color: var(--muted);
   height: 30px;
   width: 30px;
-  grid-column: 1;
-  grid-row: 1;
+  grid-area: icon;
 }
 
 .profile-hero__body {
   gap: 5px;
-  grid-column: 2;
-  grid-row: 1;
+  grid-area: body;
+}
+
+.profile-hero__actions {
+  align-items: center;
+  display: flex;
+  grid-area: actions;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .profile-hero__title {
+  align-items: center;
+  display: flex;
   gap: 6px;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  margin: 0;
   min-height: 32px;
+  min-width: 0;
 }
 
-.profile-hero__title > .icon-action {
+.profile-hero__title .profile-switcher--hero {
+  flex: 0 1 auto;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.profile-hero__title > .profile-edit-button {
   border-color: transparent;
-  flex: 0 0 22px;
-  height: 22px;
-  min-height: 22px;
-  min-width: 22px;
+  flex: 0 0 24px;
+  height: 24px;
+  min-height: 24px;
+  min-width: 24px;
   padding: 0;
-  width: 22px;
+  width: 24px;
 }
 
-.profile-hero__title > .icon-action svg {
+.profile-hero__title > .profile-edit-button svg {
   height: 13px;
   width: 13px;
-}
-
-.profile-hero__title h2 {
-  flex: 0 1 auto;
-  font-size: 17px;
-  font-weight: var(--font-weight-semibold);
-  line-height: 26px;
-  min-width: 0;
-  text-wrap: nowrap;
 }
 
 .profile-hero .profile-description {
@@ -609,8 +616,9 @@
 }
 
 .profile-commit-actions {
-  align-self: start;
-  justify-self: end;
+  align-items: center;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
 }
 
 .profile-action-stack {
@@ -670,6 +678,14 @@
 .profile-commit-actions > .icon-action {
   height: var(--profile-control-height);
   width: var(--profile-control-height);
+}
+
+.profile-commit-actions .profile-more-button {
+  flex: 0 0 var(--profile-control-height);
+}
+
+.profile-edit-button {
+  flex: 0 0 var(--control-height-compact);
 }
 
 .profile-action-status {
@@ -742,79 +758,22 @@
   color: #a86b14;
 }
 
-.profile-composer-section__trigger,
-.profile-composer:not(:has(.profile-composer-section.is-expanded)) .profile-composer-section__trigger {
-  gap: 10px;
-  grid-template-columns: 18px 30px minmax(140px, 1fr) 54px;
-  height: var(--profile-composer-row-height);
-  min-height: 52px;
-  padding: 6px 12px;
-}
-
-.profile-composer-section__header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--profile-policy-column-width);
-  min-height: var(--profile-composer-row-height);
-}
-
 .profile-composer-section__actions {
   align-self: center;
   justify-content: flex-end;
   min-width: 0;
 }
 
-.profile-composer-section.is-expanded > .profile-composer-section__panel {
-  background: var(--profile-expanded-surface);
-  border-top-color: var(--profile-expanded-border);
-  padding: 8px;
-}
-
-.profile-composer-section__icon {
-  align-items: center;
-  align-self: center;
-  background: transparent;
-  color: var(--muted);
-  display: inline-flex;
-  height: 30px;
-  justify-content: center;
-  width: 30px;
-}
-
-.profile-composer-section__title {
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  line-height: 18px;
-}
-
 .profile-composer-section__count {
-  background: transparent;
-  color: var(--muted);
   display: inline-flex;
-  font-weight: var(--font-weight-regular);
   font-variant-numeric: tabular-nums;
-  justify-content: center;
-  line-height: 22px;
-  min-width: 54px;
-  width: 54px;
-  white-space: nowrap;
-}
-
-.profile-composer-section.has-scope-summary
-  .profile-composer-section__trigger,
-.profile-composer:not(:has(.profile-composer-section.is-expanded))
-  .profile-composer-section.has-scope-summary
-  .profile-composer-section__trigger {
-  grid-template-columns: 18px 30px minmax(110px, 1fr) minmax(118px, auto);
 }
 
 .profile-composer-section.has-scope-summary
   .profile-composer-section__count {
-  justify-content: flex-end;
   max-width: 160px;
-  min-width: 118px;
   overflow: hidden;
   text-overflow: ellipsis;
-  width: auto;
 }
 
 .profile-composer-section__count-scope {
@@ -851,9 +810,10 @@
 }
 
 .profile-composer-section[data-profile-composer-id="instructions"] textarea {
-  flex: 1 1 auto;
-  height: auto;
-  min-height: 104px;
+  flex: 0 1 auto;
+  height: min(320px, 32vh);
+  max-height: 320px;
+  min-height: 180px;
 }
 
 .profile-composer-section[data-profile-composer-id="mcp"] .skills-editor {
@@ -1196,12 +1156,15 @@
   }
 
   .profile-hero {
+    grid-template-areas:
+      "icon body"
+      "actions actions";
     grid-template-columns: 32px minmax(0, 1fr);
-    grid-template-rows: auto auto;
-    height: var(--profile-hero-height-compact);
+    grid-template-rows: auto;
+    height: auto;
     min-height: var(--profile-hero-height-compact);
-    padding: 10px 12px;
-    row-gap: 8px;
+    padding: 7px 12px;
+    row-gap: 4px;
   }
 
   .profile-editor-surface {
@@ -1213,6 +1176,20 @@
     width: 32px;
   }
 
+  .profile-hero__body {
+    gap: 3px;
+  }
+
+  .profile-action-status {
+    line-height: 16px;
+    min-height: 16px;
+  }
+
+  .profile-action-status__action {
+    height: 20px;
+    min-height: 20px;
+  }
+
   .profile-hero__title h2 {
     font-size: 17px;
     overflow: hidden;
@@ -1221,30 +1198,22 @@
   }
 
   .profile-hero .profile-description {
-    display: none;
+    display: -webkit-box;
   }
 
   .profile-hero--loading .profile-description {
     display: block;
   }
 
-  .profile-action-stack {
-    align-items: stretch;
-    display: flex;
-    gap: 8px;
-    grid-column: 1 / -1;
-    grid-row: 2;
-    justify-content: flex-end;
-    justify-self: stretch;
+  .profile-commit-actions {
+    flex-wrap: wrap;
+    min-width: 0;
     width: 100%;
   }
 
-  .profile-commit-actions {
-    min-width: 0;
-  }
-
-  .profile-commit-actions {
-    justify-self: end;
+  .profile-hero__actions {
+    justify-content: flex-end;
+    width: 100%;
   }
 
   .profile-commit-actions .profile-apply-control {
@@ -1285,71 +1254,18 @@
     display: block;
   }
 
-  .profile-composer-section__trigger,
-  .profile-composer:not(:has(.profile-composer-section.is-expanded)) .profile-composer-section__trigger {
-    align-content: center;
-    column-gap: 7px;
-    grid-template-columns: 18px 30px minmax(0, 1fr);
-    grid-template-rows: 18px 16px;
-    min-height: 52px;
-    overflow: hidden;
-    padding-block: 6px;
-    row-gap: 0;
-    width: auto;
-  }
-
-  .profile-composer-section__chevron {
-    grid-column: 1;
-    grid-row: 1 / 3;
-  }
-
-  .profile-composer-section__icon {
-    grid-column: 2;
-    grid-row: 1 / 3;
-  }
-
-  .profile-composer-section__heading {
-    grid-column: 3;
-    grid-row: 1;
-  }
-
   .profile-composer-section__description {
     display: none;
   }
 
   .profile-composer-section__count {
-    grid-column: 3;
-    grid-row: 2;
-    justify-content: flex-start;
-    line-height: 16px;
-    max-width: 100%;
-    min-width: 0;
-    width: 100%;
-  }
-
-  .profile-composer-section.has-scope-summary
-    .profile-composer-section__trigger,
-  .profile-composer:not(:has(.profile-composer-section.is-expanded))
-    .profile-composer-section.has-scope-summary
-    .profile-composer-section__trigger {
-    align-content: center;
-    column-gap: 7px;
-    grid-template-columns: 18px 30px minmax(0, 1fr);
-    grid-template-rows: 18px 16px;
-    row-gap: 0;
+    max-width: 120px;
   }
 
   .profile-composer-section.has-scope-summary
     .profile-composer-section__count {
-    justify-content: flex-start;
-    max-width: 100%;
+    max-width: 120px;
     min-width: 0;
-    width: 100%;
-  }
-
-  .profile-composer-section__icon {
-    height: 30px;
-    width: 30px;
   }
 
   .profile-composer-section__summary {
@@ -1409,21 +1325,6 @@
   min-width: 0;
 }
 
-.profile-composer-section__icon {
-  background: transparent;
-  border-radius: 0;
-  color: var(--muted);
-  height: 28px;
-  width: 28px;
-}
-
-.profile-composer-section[data-profile-composer-id="instructions"] .profile-composer-section__icon,
-.profile-composer-section[data-profile-composer-id="skills"] .profile-composer-section__icon,
-.profile-composer-section[data-profile-composer-id="mcp"] .profile-composer-section__icon {
-  background: transparent;
-  color: var(--muted);
-}
-
 .preview-resource-plan__list > article {
   align-items: center;
   display: grid;
@@ -1475,17 +1376,34 @@
 @container profile-detail (max-width: 760px) {
   .profile-hero {
     align-items: start;
+    grid-template-areas:
+      "icon body"
+      "actions actions";
     grid-template-columns: 32px minmax(0, 1fr);
-    grid-template-rows: minmax(42px, auto) auto;
-    height: var(--profile-hero-height-compact);
+    grid-template-rows: auto;
+    height: auto;
     min-height: var(--profile-hero-height-compact);
-    padding: 10px 12px;
-    row-gap: 8px;
+    padding: 7px 12px;
+    row-gap: 4px;
   }
 
   .profile-hero__icon {
     height: 32px;
     width: 32px;
+  }
+
+  .profile-hero__body {
+    gap: 3px;
+  }
+
+  .profile-action-status {
+    line-height: 16px;
+    min-height: 16px;
+  }
+
+  .profile-action-status__action {
+    height: 20px;
+    min-height: 20px;
   }
 
   .profile-hero__title h2 {
@@ -1495,21 +1413,22 @@
   }
 
   .profile-hero .profile-description {
-    display: none;
+    display: -webkit-box;
+  }
+
+  .profile-hero__actions {
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  .profile-commit-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    width: 100%;
   }
 
   .profile-hero--loading .profile-description {
     display: block;
   }
 
-  .profile-action-stack {
-    align-items: stretch;
-    display: flex;
-    gap: 8px;
-    grid-column: 1 / -1;
-    grid-row: 2;
-    justify-content: flex-end;
-    justify-self: stretch;
-    width: 100%;
-  }
 }

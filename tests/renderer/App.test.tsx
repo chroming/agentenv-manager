@@ -891,9 +891,9 @@ describe("App", () => {
     expect(
       within(workspace).getByRole("article", { name: "Agent OpenCode" })
     ).toBeInTheDocument();
-    expect(
-      within(workspace).getByRole("button", { name: "Configure OpenCode" })
-    ).toBeInTheDocument();
+    expect(within(workspace).getByRole("button", { name: "OpenCode" })).toBeInTheDocument();
+    expect(within(workspace).queryByRole("button", { name: "Configure OpenCode" }))
+      .not.toBeInTheDocument();
     expect(within(workspace).queryByRole("button", { name: "Capture" })).not.toBeInTheDocument();
     const moreActions = within(workspace).getByRole("button", {
       name: "More actions for OpenCode"
@@ -927,14 +927,17 @@ describe("App", () => {
     const workspace = await screen.findByRole("region", { name: "Agents" });
     expect(within(workspace).getByText("Checking local Skills")).toBeInTheDocument();
     expect(
-      within(workspace).getByRole("button", { name: "Configure OpenCode" })
+      within(workspace).getByRole("button", { name: "OpenCode" })
     ).toBeEnabled();
 
     await act(async () => {
       inventoryRequest.resolve([]);
       await Promise.resolve();
     });
-    expect(await within(workspace).findByText("Profile ready")).toBeInTheDocument();
+    expect(await within(workspace).findByText("1 Agents detected · 1 Profiles"))
+      .toBeInTheDocument();
+    expect(within(workspace).queryByRole("region", { name: "Profile status" }))
+      .toBeNull();
   });
 
   it("keeps Agents usable when the optional environment scan fails", async () => {
@@ -952,7 +955,7 @@ describe("App", () => {
       await within(workspace).findByText("Profile check unavailable")
     ).toBeInTheDocument();
     expect(
-      within(workspace).getByRole("button", { name: "Configure OpenCode" })
+      within(workspace).getByRole("button", { name: "OpenCode" })
     ).toBeEnabled();
     expect(
       within(
@@ -1062,21 +1065,10 @@ describe("App", () => {
     render(<App />);
 
     const workspace = await screen.findByRole("region", { name: "Agents" });
-    const environmentStatus = await within(workspace).findByRole("region", {
-      name: "Profile status"
-    });
-    expect(
-      within(environmentStatus).getByText("Profile ready")
-    ).toBeInTheDocument();
-    expect(
-      within(environmentStatus).queryByText(/Agent needs review/)
-    ).toBeNull();
-    expect(
-      within(environmentStatus).queryByText(/local exceptions/i)
-    ).toBeNull();
-    expect(
-      within(environmentStatus).queryByRole("button", { name: "Review Profile" })
-    ).toBeNull();
+    expect(within(workspace).queryByRole("region", { name: "Profile status" }))
+      .toBeNull();
+    expect(within(workspace).getByText("1 Agents detected · 1 Profiles"))
+      .toBeInTheDocument();
     expect(
       within(within(workspace).getByRole("article", { name: "Agent OpenCode" }))
         .getByText("Local overrides")
@@ -2160,8 +2152,8 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "Skills" })).toBeInTheDocument();
     expect(
       within(screen.getByRole("group", { name: "Library item github-reviewer" }))
-        .getByRole("button", { name: "Update github-reviewer" })
-    ).toHaveTextContent("Update");
+        .getByRole("button", { name: "Review update github-reviewer" })
+    ).toHaveTextContent("Update available");
     expect(screen.queryByRole("complementary", { name: "Library summary" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Activation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Profile sections" })).not.toBeInTheDocument();
@@ -2269,6 +2261,65 @@ describe("App", () => {
     expect(api.previewLibrarySkillUpdate).toHaveBeenCalledWith("local-reviewer");
   });
 
+  it("reconciles a stale update row when preview finds the Skill was removed upstream", async () => {
+    const skill = {
+      id: "removed-reviewer",
+      name: "Removed Reviewer",
+      description: "Review from a removed source",
+      path: "/tmp/skills-library/removed-reviewer",
+      sourceType: "github" as const,
+      source: "https://github.com/acme/skills/tree/main/removed-reviewer",
+      updatePolicy: "tracked" as const,
+      remoteRevision: "revision-1",
+      contentHash: "hash-1",
+      updatedAt: "2026-07-02T00:00:00.000Z"
+    };
+    installApi({
+      listSkillLibrary: vi.fn().mockResolvedValue([skill]),
+      checkSkillLibraryUpdates: vi.fn().mockResolvedValue([{
+        id: skill.id,
+        name: skill.name,
+        sourceType: skill.sourceType,
+        currentRevision: "revision-1",
+        latestRevision: "revision-2",
+        updateAvailable: true
+      }]),
+      previewLibrarySkillUpdate: vi.fn().mockResolvedValue({
+        id: skill.id,
+        name: skill.name,
+        sourceType: skill.sourceType,
+        source: skill.source,
+        currentRevision: "revision-1",
+        updateAvailable: false,
+        sourceStatus: "removed",
+        changes: [],
+        errors: [],
+        impact: {
+          profileNames: [],
+          linkedInstallCount: 0,
+          linkedTargetIds: [],
+          copiedInstallCount: 0,
+          copiedTargetIds: []
+        }
+      })
+    });
+    render(<App />);
+
+    await openLibrary();
+    const row = await screen.findByRole("group", { name: "Library item removed-reviewer" });
+    fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
+    const updateStatus = await within(row).findByRole("button", {
+      name: "Review update removed-reviewer"
+    });
+    fireEvent.click(updateStatus);
+
+    await waitFor(() => expect(row).toHaveTextContent("Removed upstream"));
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "removed-reviewer was removed upstream"
+    );
+    expect(screen.queryByRole("dialog", { name: /Update preview/ })).toBeNull();
+  });
+
   it("clears a stale Skill update after its source check reports current content", async () => {
     const skill = {
       id: "source-reviewer",
@@ -2321,7 +2372,7 @@ describe("App", () => {
     await openLibrary();
     const row = await screen.findByRole("group", { name: "Library item source-reviewer" });
     await waitFor(() => expect(
-      within(row).getByRole("button", { name: "Update source-reviewer" })
+      within(row).getByRole("button", { name: "Review update source-reviewer" })
     ).toBeInTheDocument());
     fireEvent.click(screen.getByRole("tab", { name: "By source" }));
     await screen.findByText("Source Reviewer", { exact: true });
@@ -2336,7 +2387,7 @@ describe("App", () => {
     await waitFor(() => expect(api.checkSkillSourceGroup).toHaveBeenCalledWith("source-acme"));
     fireEvent.click(screen.getByRole("tab", { name: "Skill list" }));
     await waitFor(() => expect(
-      within(row).queryByRole("button", { name: "Update source-reviewer" })
+      within(row).queryByRole("button", { name: "Review update source-reviewer" })
     ).toBeNull());
   });
 
@@ -2709,6 +2760,8 @@ describe("App", () => {
 
     await openSettingsCategory("General");
     const generalTab = screen.getByRole("tab", { name: "General" });
+    expect(generalTab.closest("[role=tablist]")).toHaveClass("ui-tab-bar");
+    expect(generalTab.closest("[role=tablist]")).not.toHaveClass("ui-segmented-control");
     generalTab.focus();
     fireEvent.keyDown(generalTab, { key: "ArrowRight" });
 
@@ -3001,10 +3054,8 @@ describe("App", () => {
         })
       ).getByRole("radio", { name: "Use Profile" })
     );
-    const behavior = await screen.findByLabelText("context7 Profile behavior");
-    expect(within(behavior).getByRole("radio", { name: "Agent" })).toBeChecked();
-    expect(within(behavior).getByRole("radio", { name: "On" })).toBeInTheDocument();
-    expect(within(behavior).getByRole("radio", { name: "Off" })).toBeInTheDocument();
+    const toggle = await screen.findByRole("switch", { name: "Turn off context7" });
+    expect(toggle).toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(api.saveProfile).toHaveBeenCalled());
     expect(
@@ -3012,7 +3063,7 @@ describe("App", () => {
     ).toEqual({ mode: "manage", selections: [] });
     vi.mocked(api.saveProfile).mockClear();
 
-    fireEvent.click(within(behavior).getByRole("radio", { name: "Off" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Turn off context7" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(api.saveProfile).toHaveBeenCalled());
@@ -3103,7 +3154,7 @@ describe("App", () => {
         screen.getByRole("region", { name: "Profile composer" })
       ).getByRole("button", { name: "MCPs" })
     );
-    const agentControlled = await screen.findByText("Agent controlled");
+    const agentControlled = (await screen.findAllByText("Agent controlled"))[0];
     expect(agentControlled).toBeInTheDocument();
     const section = agentControlled.closest(".profile-composer-section");
     expect(section).toHaveClass("is-agent-controlled");
@@ -3153,8 +3204,8 @@ describe("App", () => {
     })).closest(".profile-mcp-row");
     expect(row).toHaveTextContent("Defined in multiple Agent files · Agent controlled");
     expect(screen.queryByLabelText("docs Profile behavior")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Remove override" }));
-    expect(screen.getByText("Agent controlled")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove override" })).not.toBeInTheDocument();
+    expect(screen.getAllByText("Agent controlled").length).toBeGreaterThanOrEqual(1);
   });
 
   it("refreshes target discovery from the Targets page", async () => {
@@ -3492,7 +3543,7 @@ describe("App", () => {
     expect(dialog).toHaveTextContent("Remove Profile B?");
     fireEvent.click(within(dialog).getByRole("button", { name: "Remove Profile" }));
     await waitFor(() => expect(api.deleteProfile).toHaveBeenCalledWith("profile-b"));
-    expect(screen.getByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
   });
 
   it("keeps Compare with Apply in the selected Profile action group", async () => {
@@ -3502,7 +3553,7 @@ describe("App", () => {
     await openProfiles();
     const hero = document.querySelector(".profile-hero");
     expect(hero).not.toBeNull();
-    const actions = within(hero as HTMLElement).getByRole("group", {
+    const actions = within(document.querySelector(".profile-hero") as HTMLElement).getByRole("group", {
       name: "Selected Profile actions"
     });
     const actionLabels = within(actions)
@@ -3515,10 +3566,10 @@ describe("App", () => {
     const applyButton = within(actions).getByRole("button", { name: "Apply" });
     expect(compareButton.nextElementSibling?.contains(applyButton)).toBe(true);
     expect(saveButton).toBeDisabled();
-    expect(saveButton).not.toHaveClass("is-primary");
+    expect(saveButton).toHaveClass("ui-button--secondary");
     expect(applyButton).toBeEnabled();
-    expect(document.querySelector(".profile-page-header .save-button")).toBeNull();
-    expect(document.querySelector(".profile-page-header [aria-label='More Profile actions']")).toBeNull();
+    expect(document.querySelector(".profile-hero .save-button")).not.toBeNull();
+    expect(document.querySelector(".profile-hero [aria-label='More Profile actions']")).not.toBeNull();
   });
 
   it("auto-saves profile icons without committing environment draft changes", async () => {
@@ -3582,7 +3633,7 @@ describe("App", () => {
     const saveButton = screen.getByRole("button", { name: "Save" });
     const applyButton = screen.getByRole("button", { name: "Apply" });
     expect(saveButton).toBeEnabled();
-    expect(saveButton).toHaveClass("is-primary");
+    expect(saveButton).toHaveClass("ui-button--primary");
     expect(applyButton).toBeDisabled();
     fireEvent.click(applyButton);
 
@@ -3590,7 +3641,7 @@ describe("App", () => {
     fireEvent.click(saveButton);
     await waitFor(() => expect(api.saveProfile).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(saveButton).toBeDisabled());
-    expect(saveButton).not.toHaveClass("is-primary");
+    expect(saveButton).toHaveClass("ui-button--secondary");
     expect(applyButton).toBeEnabled();
   });
 
@@ -3824,7 +3875,7 @@ describe("App", () => {
     fireEvent.click(menuButton);
     menu = screen.getByRole("menu", { name: "Apply Agents" });
     fireEvent.click(within(menu).getByRole("menuitemradio", { name: "Codex" }));
-    expect(screen.getByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
     profileList = await openProfileSwitcher();
     expect(within(profileList).getByText("Daily Coding")).toBeInTheDocument();
@@ -3882,7 +3933,7 @@ describe("App", () => {
 
     expect(screen.queryByRole("menu", { name: "Apply Agents" })).not.toBeInTheDocument();
     expect(targetButton).toHaveFocus();
-    expect(screen.getByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
     expect(instructions).toHaveValue("# Unsaved target-safe draft\n");
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
     expect(
@@ -4375,7 +4426,7 @@ describe("App", () => {
     await screen.findByRole("region", { name: "Agents" });
     const targetCard = await screen.findByRole("article", { name: "Agent OpenCode" });
     fireEvent.click(
-      within(targetCard).getByRole("button", { name: "Configure OpenCode" })
+      within(targetCard).getByRole("button", { name: "OpenCode" })
     );
 
     await screen.findByRole("region", { name: "Profiles" });
@@ -4399,7 +4450,7 @@ describe("App", () => {
     await screen.findByRole("region", { name: "Agents" });
     const targetCard = await screen.findByRole("article", { name: "Agent Codex" });
     fireEvent.click(
-      within(targetCard).getByRole("button", { name: "Configure Codex" })
+      within(targetCard).getByRole("button", { name: "Codex" })
     );
 
     await screen.findByRole("region", { name: "Profiles" });
@@ -4449,7 +4500,7 @@ describe("App", () => {
     await screen.findByRole("region", { name: "Agents" });
     const targetCard = await screen.findByRole("article", { name: "Agent OpenCode" });
     fireEvent.click(
-      within(targetCard).getByRole("button", { name: "Configure OpenCode" })
+      within(targetCard).getByRole("button", { name: "OpenCode" })
     );
     let dialog = screen.getByRole("dialog", { name: "Create Profile from OpenCode" });
     expect(dialog).toHaveTextContent("Save the current Agent setup as a reusable Profile");
@@ -4944,7 +4995,7 @@ describe("App", () => {
     await screen.findByRole("region", { name: "Agents" });
     const targetsWorkspace = await screen.findByRole("region", { name: "Agents" });
     const targetCard = within(targetsWorkspace).getByRole("article", { name: "Agent OpenCode" });
-    fireEvent.click(within(targetCard).getByRole("button", { name: "Configure OpenCode" }));
+    fireEvent.click(within(targetCard).getByRole("button", { name: "OpenCode" }));
 
     const dialog = screen.getByRole("dialog", { name: "Create Profile from OpenCode" });
     expect(screen.getByRole("region", { name: "Agents" })).toBeInTheDocument();

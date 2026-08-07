@@ -153,6 +153,7 @@ export interface AgentEnvApi {
   ): Promise<ConversationContinuationPreview>;
   continueConversation(previewId: string): Promise<ConversationLaunchResult>;
   listNativeMcpConnections(): Promise<NativeMcpInspection>;
+  listNativeInstructions?(): Promise<NativeInstructionsInspection>;
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
   listSkillFiles(id: string): Promise<SkillFileNode[]>;
   readSkillFile(input: SkillFileReadInput): Promise<SkillFileContent>;
@@ -898,6 +899,7 @@ export interface SkillUpdateInfo {
   latestRevision?: string;
   latestUpdatedAt?: string;
   updateAvailable: boolean;
+  sourceStatus?: "removed";
   error?: string;
 }
 
@@ -944,6 +946,7 @@ export interface SkillUpdatePlan {
   currentRevision?: string;
   latestRevision?: string;
   updateAvailable: boolean;
+  sourceStatus?: "removed";
   changes: PlannedFileChange[];
   errors: string[];
   impact: SkillUpdateImpact;
@@ -1244,6 +1247,25 @@ export interface NativeMcpInspectionIssue {
 export interface NativeMcpInspection {
   connections: NativeMcpConnection[];
   issues: NativeMcpInspectionIssue[];
+}
+
+export interface NativeInstructionSnapshot {
+  targetId: string;
+  targetName: string;
+  path: string;
+  content: string;
+}
+
+export interface NativeInstructionsInspectionIssue {
+  targetId: string;
+  targetName: string;
+  path: string;
+  message: string;
+}
+
+export interface NativeInstructionsInspection {
+  snapshots: NativeInstructionSnapshot[];
+  issues: NativeInstructionsInspectionIssue[];
 }
 
 export interface AgentEnvSettings {

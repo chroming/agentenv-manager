@@ -11,6 +11,7 @@ import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
 import { LibrarySkillPicker } from "./LibrarySkillPicker";
+import type { ProfileResourcePolicy } from "./ProfileResourcePolicyControl";
 import {
   Button,
   DialogBody,
@@ -18,6 +19,8 @@ import {
   DialogHeader,
   IconButton,
   ModalFrame,
+  ResourceRow,
+  ToolbarOverflowMenu,
   Switch
 } from "./ui";
 
@@ -30,6 +33,9 @@ interface SkillsEditorProps {
   appliedSkillVersions?: Record<string, string>;
   skillReceipts?: AppliedSkillReceipt[];
   selectedTargetName?: string;
+  policy?: ProfileResourcePolicy;
+  currentSkillStates?: Record<string, boolean>;
+  currentStateAvailable?: boolean;
   onCheckSkillUpdates?(ids: string[]): void;
   onImportNewSkill?(): void;
   onPreviewSkillUpdate?(id: string): void;
@@ -44,13 +50,18 @@ export const SkillsEditor = ({
   disabled = false,
   appliedSkillVersions,
   skillReceipts = [],
-  selectedTargetName,
+  policy = "manage",
+  currentSkillStates = {},
+  currentStateAvailable = false,
   onCheckSkillUpdates,
   onImportNewSkill,
   onPreviewSkillUpdate,
   onChange
 }: SkillsEditorProps) => {
   const { t } = useI18n();
+  const profileManagesSkills = policy === "manage";
+  const profileDisablesSkills = policy === "disable";
+  const agentOwnsSkills = policy === "ignore";
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [replacingIndex, setReplacingIndex] = useState<number>();
@@ -71,7 +82,7 @@ export const SkillsEditor = ({
     return Boolean(skill && reference.enabled !== false && skill.globallyEnabled !== false);
   }).length;
   const checkableIds = value.skills
-    .filter((reference) => reference.enabled !== false)
+    .filter((reference) => profileManagesSkills && reference.enabled !== false)
     .map((reference) => skillsById.get(reference.libraryId))
     .filter((skill): skill is SkillLibraryEntry => Boolean(skill))
     .filter((skill) => skill.globallyEnabled !== false && skill.updatePolicy === "tracked")
@@ -141,44 +152,53 @@ export const SkillsEditor = ({
           </span>
         </div>
         <div className="profile-skill-toolbar__actions">
-          <Button
+          <IconButton
             className="profile-skill-check"
-            variant="secondary"
+            variant="ghost"
             size="compact"
-            aria-label={t("Check Profile Skill updates")}
-            disabled={disabled || checkingSkillUpdates || checkableIds.length === 0}
+            label={t("Check Profile Skill updates")}
+            disabled={disabled || !profileManagesSkills || checkingSkillUpdates || checkableIds.length === 0}
             onClick={() => onCheckSkillUpdates?.(checkableIds)}
-            icon={(
-              <RefreshCw
-                className={checkingSkillUpdates ? "is-spinning" : undefined}
-                size={14}
-                strokeWidth={2.2}
-                aria-hidden="true"
-              />
-            )}
           >
-            {t(checkingSkillUpdates ? "Checking" : "Check updates")}
-          </Button>
+            <RefreshCw
+              className={checkingSkillUpdates ? "is-spinning" : undefined}
+              size={14}
+              strokeWidth={2.2}
+              aria-hidden="true"
+            />
+          </IconButton>
           <Button
             ref={pickerTriggerRef}
             variant="secondary"
             size="compact"
-            disabled={disabled}
+            disabled={disabled || !profileManagesSkills}
             onClick={() => openPicker()}
             icon={<Plus size={14} strokeWidth={2.2} aria-hidden="true" />}
           >
-            {t("Add")}
+            {t("Add Skill")}
           </Button>
         </div>
       </header>
 
-      <div className="profile-skill-list" role="list">
+      <div className="ui-resource-children profile-skill-list" role="list">
         {value.skills.map((reference, index) => {
           const skill = skillsById.get(reference.libraryId);
           const update = updatesById.get(reference.libraryId);
           const profileEnabled = reference.enabled !== false;
           const globallyEnabled = skill?.globallyEnabled !== false;
-          const enabled = Boolean(skill && profileEnabled && globallyEnabled);
+          const currentState = currentSkillStates[reference.libraryId] ??
+            currentSkillStates[reference.targetName];
+          const hasCurrentState = Object.prototype.hasOwnProperty.call(
+            currentSkillStates,
+            reference.libraryId
+          ) || Object.prototype.hasOwnProperty.call(currentSkillStates, reference.targetName);
+          const enabled = profileDisablesSkills
+            ? false
+            : agentOwnsSkills
+              ? Boolean(currentState)
+              : Boolean(skill && profileEnabled && globallyEnabled);
+          const effectiveStateKnown = profileManagesSkills || profileDisablesSkills ||
+            (currentStateAvailable && hasCurrentState);
           const appliedRevision = appliedSkillVersions?.[reference.libraryId];
           const localOverride = skillReceipts.find(
             (entry) =>
@@ -187,62 +207,94 @@ export const SkillsEditor = ({
               entry.targetName === reference.targetName
           );
           const deploymentPending = Boolean(
-            !localOverride && skill && appliedSkillVersions && (enabled
+            profileManagesSkills && !localOverride && skill && appliedSkillVersions && (enabled
               ? appliedRevision !== skill.contentHash
               : appliedRevision)
           );
           const status = !skill
             ? "Missing"
-            : localOverride?.outcome === "external-active"
-              ? "External active"
-              : localOverride?.outcome === "external-remains"
-                ? "External still active"
-              : !globallyEnabled
-              ? "Disabled in Library"
-              : !profileEnabled
-                ? deploymentPending ? "Apply pending" : "Disabled"
-                : update?.error
-                  ? "Check failed"
-                  : update?.updateAvailable
-                    ? "Update available"
-                    : deploymentPending
-                      ? "Apply pending"
-                      : "Ready";
+            : profileDisablesSkills
+              ? "Off for Agent"
+              : agentOwnsSkills && !effectiveStateKnown
+                ? "Current state unavailable"
+                : agentOwnsSkills
+                  ? enabled ? "On in Agent" : "Off in Agent"
+                  : localOverride?.outcome === "external-active"
+                    ? "External active"
+                    : localOverride?.outcome === "external-remains"
+                      ? "External still active"
+                      : !globallyEnabled
+                        ? "Disabled in Library"
+                        : !profileEnabled
+                          ? deploymentPending ? "Apply pending" : "Disabled"
+                          : update?.error
+                            ? "Check failed"
+                            : update?.updateAvailable
+                              ? "Update available"
+                              : deploymentPending
+                                ? "Apply pending"
+                                : "Ready";
           const sourceLabel = skill?.sourceType === "github" ? "GitHub" : t("Local");
           const versionLabel = skill?.version
             ? `v${skill.version}`
             : skill?.contentHash.slice(0, 7) ?? reference.libraryId;
           const detail = skill
-            ? `${versionLabel} · ${sourceLabel} · ${
-                localOverride?.path ?? skill.path
-              }`
+            ? `${versionLabel} · ${sourceLabel} · ${localOverride?.path ?? skill.path}`
             : t("Library skill {{id}} is missing", { id: reference.libraryId });
+          const visibleDetail = skill
+            ? `${versionLabel} · ${sourceLabel}`
+            : t("Library skill {{id}} is missing", { id: reference.libraryId });
+          const skillName = skill?.name ?? reference.targetName;
+          const menuItems = [
+            ...(!skill ? [{
+              id: "relink",
+              icon: <Link2 size={14} strokeWidth={2.2} aria-hidden="true" />,
+              label: t("Relink {{name}}", { name: reference.targetName }),
+              onSelect: () => openPicker(index)
+            }] : []),
+            ...(profileManagesSkills && skill && enabled && update?.updateAvailable ? [{
+              id: "update",
+              icon: <Download size={14} strokeWidth={2.2} aria-hidden="true" />,
+              label: t("Review update"),
+              onSelect: () => onPreviewSkillUpdate?.(reference.libraryId)
+            }] : []),
+            {
+              id: "remove",
+              icon: <Trash2 size={14} strokeWidth={2.2} aria-hidden="true" />,
+              label: t("Remove from Profile"),
+              onSelect: () => onChange({
+                ...value,
+                skills: value.skills.filter((_, currentIndex) => currentIndex !== index)
+              })
+            }
+          ];
           return (
-            <div
-              className={`profile-skill-row${enabled ? "" : " is-disabled"}${
+            <ResourceRow
+              className={`ui-resource-children__item profile-skill-row${enabled ? "" : " is-disabled"}${
                 localOverride ? " has-local-override" : ""
               }`}
-              key={`${reference.libraryId}:${reference.targetName}:${index}`}
-              role="listitem"
-              aria-label={t("Profile Skill {{name}}", { name: reference.libraryId })}
-            >
-              <span className="profile-skill-icon" aria-hidden="true">
+              density="compact"
+              description={(
+                <OverflowTooltip
+                  ariaLabel={t("Full skill detail {{id}}", { id: reference.libraryId })}
+                  className="profile-skill-detail"
+                  displayText={visibleDetail}
+                  text={detail}
+                />
+              )}
+              icon={(
                 <ResourceIconArtwork
                   fallbackIconKey={skill?.sourceType === "github" || skill?.sourceType === "git" ? "github" : "folder"}
                   iconKey={skill?.iconKey}
                   sourceUrl={skill?.sourceType === "github" || skill?.sourceType === "git" ? skill.source : undefined}
                   size={16}
                 />
-              </span>
-              <div className="profile-skill-main">
-                <OverflowTooltip className="profile-skill-name" text={skill?.name ?? reference.targetName} />
-                <OverflowTooltip
-                  ariaLabel={t("Full skill detail {{id}}", { id: reference.libraryId })}
-                  className="profile-skill-detail"
-                  text={detail}
-                />
-              </div>
-              <span
+              )}
+              key={`${reference.libraryId}:${reference.targetName}:${index}`}
+              role="listitem"
+              aria-label={t("Profile Skill {{name}}", { name: reference.libraryId })}
+              state={(
+                <span
                 className={`profile-skill-state${
                   status === "Ready" || localOverride ? " is-neutral" : ""
                 }${
@@ -252,71 +304,47 @@ export const SkillsEditor = ({
                 }${!skill || update?.error ? " is-error" : ""}`}
                 title={update?.error ?? status}
               >
-                <strong>{t(status)}</strong>
-                {localOverride && selectedTargetName ? (
-                  <small>{selectedTargetName} · {t("Unmanaged")}</small>
-                ) : appliedRevision && selectedTargetName ? (
-                  <small>{t("{{name}} · {{revision}}", {
-                    name: selectedTargetName,
-                    revision: appliedRevision.slice(0, 7)
-                  })}</small>
-                ) : null}
+                {t(status)}
               </span>
-              {!skill ? (
-                <IconButton
-                  className="profile-skill-update"
-                  label={t("Relink {{name}}", { name: reference.targetName })}
-                  size="compact"
-                  variant="secondary"
-                  disabled={disabled}
-                  onClick={() => openPicker(index)}
-                >
-                  <Link2 size={14} strokeWidth={2.2} />
-                </IconButton>
-              ) : enabled && update?.updateAvailable ? (
-                <IconButton
-                  className="profile-skill-update"
-                  label={t("Update {{name}}", { name: skill.name })}
-                  size="compact"
-                  variant="secondary"
-                  disabled={disabled}
-                  onClick={() => onPreviewSkillUpdate?.(reference.libraryId)}
-                >
-                  <Download size={14} strokeWidth={2.2} />
-                </IconButton>
-              ) : <span className="profile-skill-update-placeholder" aria-hidden="true" />}
-              <Switch
-                checked={enabled}
-                className="profile-skill-switch"
-                disabled={disabled || !skill || !globallyEnabled}
-                label={t(!globallyEnabled
-                  ? "{{name}} is disabled in Library"
-                  : profileEnabled
-                    ? "Disable {{name}}"
-                    : "Enable {{name}}", {
-                  name: skill?.name ?? reference.targetName
-                })}
-                onClick={() => onChange({
-                  ...value,
-                  skills: value.skills.map((entry, currentIndex) =>
-                    currentIndex === index ? { ...entry, enabled: entry.enabled === false } : entry
-                  )
-                })}
-              />
-              <button
-                className="icon-action"
-                type="button"
-                disabled={disabled}
-                aria-label={t("Remove {{name}} from Profile", { name: skill?.name ?? reference.targetName })}
-                title={t("Remove from Profile")}
-                onClick={() => onChange({
-                  ...value,
-                  skills: value.skills.filter((_, currentIndex) => currentIndex !== index)
-                })}
-              >
-                <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
-              </button>
-            </div>
+              )}
+              title={<OverflowTooltip className="profile-skill-name" text={skillName} />}
+              tone={enabled ? "default" : "disabled"}
+              actions={(
+                <>
+                  {effectiveStateKnown ? (
+                    <Switch
+                      checked={enabled}
+                      className="profile-skill-switch"
+                      disabled={disabled || !profileManagesSkills || !skill || !globallyEnabled}
+                      label={t(!globallyEnabled
+                        ? "{{name}} is disabled in Library"
+                        : enabled
+                          ? "Disable {{name}}"
+                          : "Enable {{name}}", { name: skillName })}
+                      onClick={() => onChange({
+                        ...value,
+                        skills: value.skills.map((entry, currentIndex) =>
+                          currentIndex === index ? { ...entry, enabled: entry.enabled === false } : entry
+                        )
+                      })}
+                    />
+                  ) : (
+                    <span
+                      className="profile-skill-current-state"
+                      title={t("Current state unavailable")}
+                    >
+                      {t("Unavailable")}
+                    </span>
+                  )}
+                  <ToolbarOverflowMenu
+                    disabled={disabled || !profileManagesSkills}
+                    items={menuItems}
+                    label={t("More actions for {{name}}", { name: skillName })}
+                    menuLabel={t("Actions for {{name}}", { name: skillName })}
+                  />
+                </>
+              )}
+            />
           );
         })}
         {value.skills.length === 0 ? (

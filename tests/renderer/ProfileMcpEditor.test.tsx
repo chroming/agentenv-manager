@@ -108,7 +108,7 @@ describe("ProfileMcpEditor", () => {
     expect(refresh).toBeEnabled();
   });
 
-  it("uses one keyboard-operable three-state control for each manageable connection", () => {
+  it("uses one On/Off switch for each manageable connection", () => {
     const onChange = vi.fn();
     render(
       <ProfileMcpEditor
@@ -133,22 +133,77 @@ describe("ProfileMcpEditor", () => {
       />
     );
 
-    const modes = screen.getByRole("radiogroup", { name: "docs Profile behavior" });
-    expect(within(modes).getByRole("radio", { name: "Agent" })).toBeChecked();
-    fireEvent.click(within(modes).getByRole("radio", { name: "On" }));
-    expect(onChange).toHaveBeenLastCalledWith({
-      ...resources,
-      mcpByTarget: {
-        opencode: { mode: "manage", selections: [{ name: "docs", enabled: true }] }
-      }
-    });
-
-    fireEvent.keyDown(modes, { key: "ArrowLeft" });
+    expect(screen.queryByRole("radiogroup", { name: "docs Profile behavior" })).toBeNull();
+    const toggle = screen.getByRole("switch", { name: "Turn off docs" });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
     expect(onChange).toHaveBeenLastCalledWith({
       ...resources,
       mcpByTarget: {
         opencode: { mode: "manage", selections: [{ name: "docs", enabled: false }] }
       }
     });
+  });
+
+  it("renders Off as a read-only effective state", () => {
+    const onChange = vi.fn();
+    render(
+      <ProfileMcpEditor
+        target={target}
+        connections={[{
+          targetId: "opencode",
+          name: "docs",
+          scope: "user",
+          transport: "stdio",
+          enabled: true,
+          controllable: true,
+          sourcePath: "/tmp/home/.config/opencode/opencode.jsonc"
+        }]}
+        value={{
+          ...resources,
+          mcpByTarget: {
+            opencode: { mode: "disable", selections: [{ name: "docs", enabled: true }] }
+          }
+        }}
+        onChange={onChange}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    const toggle = screen.getByRole("switch", { name: "Turn on docs" });
+    expect(toggle).toBeDisabled();
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(toggle);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("uses a static state label when the Agent controls MCP activation", () => {
+    const onChange = vi.fn();
+    render(
+      <ProfileMcpEditor
+        target={{
+          ...target,
+          capabilities: { ...target.capabilities, mcpActivation: false }
+        }}
+        connections={[{
+          targetId: "opencode",
+          name: "docs",
+          scope: "user",
+          transport: "stdio",
+          enabled: true,
+          controllable: false,
+          sourcePath: "/tmp/home/.config/opencode/opencode.jsonc"
+        }]}
+        value={resources}
+        onChange={onChange}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    const state = screen.getByText("Agent controlled");
+    expect(state.tagName).toBe("SPAN");
+    expect(state).toHaveClass("profile-mcp-agent-state");
+    expect(screen.queryByRole("button", { name: "Agent controlled" })).not.toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

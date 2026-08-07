@@ -1,5 +1,5 @@
 import { AlertTriangle, LoaderCircle, RefreshCw } from "lucide-react";
-import { useState, type KeyboardEvent } from "react";
+import { useState } from "react";
 import type {
   NativeMcpConnection,
   NativeMcpInspectionIssue,
@@ -8,20 +8,8 @@ import type {
 } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
-import { Button, IconButton } from "./ui";
+import { Button, IconButton, Switch } from "./ui";
 import { ProductIcon } from "../productIcons";
-
-type McpSelectionMode = "agent" | "on" | "off";
-
-const mcpModeOptions: Array<{
-  label: "Agent" | "On" | "Off";
-  title: "Use Agent setting" | "Turn on in this Profile" | "Turn off in this Profile";
-  value: McpSelectionMode;
-}> = [
-  { label: "Agent", title: "Use Agent setting", value: "agent" },
-  { label: "On", title: "Turn on in this Profile", value: "on" },
-  { label: "Off", title: "Turn off in this Profile", value: "off" }
-];
 
 interface ProfileMcpEditorProps {
   target?: TargetInfo;
@@ -59,7 +47,8 @@ export const ProfileMcpEditor = ({
 
   const canManage = target.capabilities.mcpActivation === true;
   const policy = value.mcpByTarget[target.id] ?? { mode: "ignore" as const, selections: [] };
-  const managing = canManage && policy.mode !== "ignore";
+  const profileManages = canManage && policy.mode === "manage";
+  const profileDisables = policy.mode === "disable";
   const targetConnections = (connections ?? []).filter(
     (connection) => connection.targetId === target.id
   );
@@ -88,44 +77,23 @@ export const ProfileMcpEditor = ({
     });
   };
 
-  const modeFor = (name: string): McpSelectionMode => {
+  const explicitStateFor = (name: string): boolean | undefined => {
     const selection = policy.selections.find((item) => item.name === name);
-    if (!selection) return "agent";
-    return selection.enabled ? "on" : "off";
+    return selection?.enabled;
   };
 
-  const updateMode = (name: string, mode: McpSelectionMode) => {
+  const effectiveStateFor = (name: string, enabled: boolean) => {
+    if (profileDisables) return false;
+    if (policy.mode === "ignore") return enabled;
+    return explicitStateFor(name) ?? enabled;
+  };
+
+  const updateState = (name: string, enabled: boolean) => {
     const otherSelections = policy.selections.filter((selection) => selection.name !== name);
     updatePolicy({
       mode: policy.mode === "ignore" ? "manage" : policy.mode,
-      selections: mode === "agent"
-        ? otherSelections
-        : [...otherSelections, { name, enabled: mode === "on" }]
+      selections: [...otherSelections, { name, enabled }]
     });
-  };
-
-  const handleModeKeyDown = (
-    event: KeyboardEvent<HTMLDivElement>,
-    name: string,
-    mode: McpSelectionMode
-  ) => {
-    const currentIndex = mcpModeOptions.findIndex((option) => option.value === mode);
-    let nextIndex: number | undefined;
-    if (event.key === "Home") nextIndex = 0;
-    if (event.key === "End") nextIndex = mcpModeOptions.length - 1;
-    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-      nextIndex = (currentIndex - 1 + mcpModeOptions.length) % mcpModeOptions.length;
-    }
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-      nextIndex = (currentIndex + 1) % mcpModeOptions.length;
-    }
-    if (nextIndex === undefined) return;
-    event.preventDefault();
-    const nextMode = mcpModeOptions[nextIndex]!.value;
-    event.currentTarget
-      .querySelector<HTMLButtonElement>(`[data-mcp-mode="${nextMode}"]`)
-      ?.focus();
-    if (nextMode !== mode) updateMode(name, nextMode);
   };
 
   return (
@@ -185,14 +153,17 @@ export const ProfileMcpEditor = ({
           <span>{t("No MCP connections are configured in {{name}}.", { name: target.name })}</span>
         </div>
       ) : (
-        <div className="profile-mcp-list">
+        <div className="ui-resource-children profile-mcp-list">
           {rows.map((connection) => {
             const missing = connection.detail === "setup-required";
             const duplicate = connection.detail === "duplicate-user-sources";
-            const mode = modeFor(connection.name);
+            const effectiveEnabled = effectiveStateFor(connection.name, connection.enabled);
+            const editable = profileManages && connection.controllable;
             return (
               <div
-                className={`profile-mcp-row${managing ? "" : " is-unmanaged"}`}
+                className={`ui-resource-children__item profile-mcp-row${profileDisables ? " is-policy-disabled" : ""}${
+                  policy.mode === "ignore" ? " is-unmanaged" : ""
+                }`}
                 key={`${target.id}:${connection.name}`}
               >
                 <span className="profile-mcp-row__identity">
@@ -203,55 +174,30 @@ export const ProfileMcpEditor = ({
                     {duplicate
                       ? t("Defined in multiple Agent files · Agent controlled")
                       : missing
-                      ? mode === "on"
+                      ? effectiveEnabled
                         ? t("Missing in Agent · Apply blocked")
                         : t("Not configured · No change")
                       : t(connection.enabled ? "On in Agent" : "Off in Agent")}
                     {connection.transport ? ` · ${connection.transport}` : ""}
                   </small>
                 </span>
-                {!managing ? null : canManage && connection.controllable ? (
-                  <div
-                    className={`profile-mcp-mode ui-segmented-control ui-segmented-control--compact is-${mode}`}
-                    role="radiogroup"
-                    aria-label={t("{{name}} Profile behavior", { name: connection.name })}
-                    onKeyDown={(event) => handleModeKeyDown(event, connection.name, mode)}
-                  >
-                    {mcpModeOptions.map((option) => {
-                      const selected = option.value === mode;
-                      return (
-                        <button
-                          className={`profile-mcp-mode__option ui-segmented-control__option${selected ? " is-selected" : ""}`}
-                          data-mcp-mode={option.value}
-                          type="button"
-                          role="radio"
-                          aria-checked={selected}
-                          tabIndex={selected ? 0 : -1}
-                          title={t(option.title)}
-                          key={option.value}
-                          onClick={() => {
-                            if (!selected) updateMode(connection.name, option.value);
-                          }}
-                        >
-                          {t(option.label)}
-                        </button>
-                      );
+                {canManage && connection.controllable ? (
+                  <Switch
+                    className="profile-mcp-switch"
+                    checked={effectiveEnabled}
+                    disabled={!editable}
+                    label={t(effectiveEnabled ? "Turn off {{name}}" : "Turn on {{name}}", {
+                      name: connection.name
                     })}
-                  </div>
-                ) : mode !== "agent" ? (
-                  <Button
-                    className="profile-mcp-reset"
-                    size="compact"
-                    variant="secondary"
-                    onClick={() => updateMode(connection.name, "agent")}
-                  >
-                    {t("Remove override")}
-                  </Button>
+                    onClick={() => updateState(connection.name, !effectiveEnabled)}
+                  />
+                ) : effectiveEnabled !== undefined ? (
+                  <span className="profile-mcp-agent-state">
+                    {t("Agent controlled")}
+                  </span>
                 ) : (
                   <span className="profile-mcp-agent-state">
-                    {t(!connection.controllable && canManage
-                      ? "Agent controlled"
-                      : connection.enabled ? "On in Agent" : "Off in Agent")}
+                    {t("Unavailable")}
                   </span>
                 )}
               </div>
