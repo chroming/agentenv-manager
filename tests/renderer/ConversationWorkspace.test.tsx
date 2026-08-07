@@ -154,6 +154,10 @@ const chooseConversationSort = (label: "Recent" | "Largest" | "Most messages") =
   fireEvent.click(screen.getByRole("menuitemradio", { name: label }));
 };
 
+const openConversationFilters = () => {
+  fireEvent.click(screen.getByRole("button", { name: /Filter conversations/ }));
+};
+
 afterEach(() => {
   invalidateConversationListPrefetch();
   cleanup();
@@ -182,6 +186,7 @@ describe("ConversationWorkspace", () => {
     );
 
     await screen.findByText("I found the failing step.");
+    openConversationFilters();
     const workspaceFilter = screen.getByRole("combobox", { name: "Filter by workspace" });
     expect(within(workspaceFilter).getByRole("group", { name: "Workspaces" }))
       .toBeInTheDocument();
@@ -205,6 +210,7 @@ describe("ConversationWorkspace", () => {
 
     render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);
 
+    openConversationFilters();
     const workspaceFilter = await screen.findByRole("combobox", { name: "Filter by workspace" });
     await waitFor(() => expect(
       within(workspaceFilter).getByRole("group", { name: "Workspaces" })
@@ -692,10 +698,10 @@ describe("ConversationWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     const menu = await screen.findByRole("menu", { name: "Continue in" });
     const destination = within(menu).getByRole("menuitem", {
-      name: "OpenCode, Copy and paste"
+      name: "OpenCode, Paste prompt"
     });
     expect(destination.getAttribute("title"))
-      .toContain("Paste it into the new conversation.");
+      .toContain("Paste the short handoff prompt into the new conversation.");
   });
 
   it("keeps progress on the selected destination while continuation is prepared", async () => {
@@ -926,6 +932,7 @@ describe("ConversationWorkspace", () => {
       target("opencode", "OpenCode")
     ]} />);
     await screen.findByText("Repair release workflow");
+    openConversationFilters();
     expect(screen.getByRole("option", { name: "Codex (1)" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "OpenCode (2)" })).toBeInTheDocument();
 

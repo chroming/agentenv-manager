@@ -8,6 +8,7 @@ import {
   FolderGit2,
   FolderOpen,
   HardDrive,
+  ListFilter,
   LoaderCircle,
   MessagesSquare,
   MoreHorizontal,
@@ -54,10 +55,16 @@ import {
   Badge,
   Button,
   ControlGroup,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+  FilterPopover,
   focusInitialActionMenuItem,
   IconButton,
   ModalFrame,
-  PageHeader
+  PageHeader,
+  SearchField,
+  SelectField
 } from "./ui";
 
 let conversationRefreshOperation: Promise<ConversationRefreshResult> | undefined;
@@ -420,7 +427,7 @@ const TargetMenu = ({
                 const methodLabel = isOriginal
                   ? "Open original"
                   : requiresPaste
-                    ? "Copy and paste"
+                    ? "Paste prompt"
                     : "Continue automatically";
                 return (
                   <button
@@ -432,7 +439,7 @@ const TargetMenu = ({
                     title={`${target.name} — ${t(isOriginal
                       ? "Resume the original conversation in this Agent."
                       : requiresPaste
-                        ? "Context will be copied. Paste it into the new conversation."
+                        ? "Paste the short handoff prompt into the new conversation."
                         : "The Agent will open with a private context file. A fallback copy is also ready.")}`}
                     onClick={() => void selectTarget(target.id)}
                   >
@@ -1228,12 +1235,12 @@ export const ConversationWorkspace = ({
     : undefined;
   const reviewTargetIcon = reviewTarget ? targetIconFor(reviewTarget) : undefined;
   const reviewModeLabel = review?.mode === "clipboard"
-    ? t("Copy and paste")
+    ? t("Paste prompt")
     : review
       ? t("Context file")
       : "";
   const reviewActionLabel = review?.mode === "clipboard"
-    ? t("Copy and open {{name}}", { name: review.targetName })
+    ? t("Copy prompt and open {{name}}", { name: review.targetName })
     : review
       ? t("Open {{name}}", { name: review.targetName })
       : "";
@@ -1442,68 +1449,79 @@ export const ConversationWorkspace = ({
           <aside className="conversation-list-pane" aria-label={t("Conversation list")}>
             <div className="conversation-list-toolbar">
               <div className="conversation-search-row">
-                <label className="conversation-search ui-composite-field">
-                  {searching
-                    ? <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
-                    : <Search size={15} aria-hidden="true" />}
-                  <input
-                    ref={searchInputRef}
-                    type="search"
-                    value={query}
-                    placeholder={t("Search indexed history…")}
-                    aria-label={t("Search conversations")}
-                    title={t("Searches all indexed conversations and message text.")}
-                    onChange={(event) => setQuery(event.target.value)}
-                  />
-                </label>
+                <SearchField
+                  ref={searchInputRef}
+                  fieldClassName="conversation-search"
+                  icon={searching
+                    ? <LoaderCircle className="is-spinning" size={15} />
+                    : <Search size={15} />}
+                  label={t("Search conversations")}
+                  value={query}
+                  placeholder={t("Search indexed history…")}
+                  title={t("Searches all indexed conversations and message text.")}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
                 <ConversationSortMenu
                   queryActive={Boolean(query.trim())}
                   sort={sort}
                   onChange={setSort}
                 />
-              </div>
-              <div className="conversation-filters" aria-label={t("Conversation filters")}>
-                <label>
-                  <span className="ui-visually-hidden">{t("Agent")}</span>
-                  <select
-                    aria-label={t("Filter by Agent")}
-                    value={agentFilter}
-                    onChange={(event) => setAgentFilter(event.target.value)}
-                  >
-                    <option value="">{t("All Agents")}</option>
-                    {filterTargets.map((target) => (
-                      <option value={target.id} key={target.id}>
-                        {target.name} ({agentCounts[target.id] ?? 0})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span className="ui-visually-hidden">{t("Workspace")}</span>
-                  <select
-                    aria-label={t("Filter by workspace")}
-                    value={workspaceFilter}
-                    onChange={(event) => setWorkspaceFilter(event.target.value)}
-                  >
-                    <option value="">{t("All workspaces")}</option>
-                    {projectWorkspacePaths.length > 0 ? (
-                      <optgroup label={t("Workspaces")}>
-                        {projectWorkspacePaths.map((path) => (
-                          <option value={path} key={path}>
-                            {workspaceProjects[path]?.name ?? workspaceName(path)}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ) : null}
-                    {otherWorkspacePaths.length > 0 ? (
-                      <optgroup label={t("Other folders")}>
-                        {otherWorkspacePaths.map((path) => (
-                          <option value={path} key={path}>{workspaceName(path)}</option>
-                        ))}
-                      </optgroup>
-                    ) : null}
-                  </select>
-                </label>
+                <FilterPopover
+                  activeCount={Number(Boolean(agentFilter)) + Number(Boolean(workspaceFilter))}
+                  className="conversation-filter-popover"
+                  icon={<ListFilter size={15} />}
+                  label={t("Filter conversations")}
+                >
+                  <div className="conversation-filter-fields">
+                    <SelectField
+                      label={t("Agent")}
+                      aria-label={t("Filter by Agent")}
+                      value={agentFilter}
+                      onChange={(event) => setAgentFilter(event.target.value)}
+                    >
+                      <option value="">{t("All Agents")}</option>
+                      {filterTargets.map((target) => (
+                        <option value={target.id} key={target.id}>
+                          {target.name} ({agentCounts[target.id] ?? 0})
+                        </option>
+                      ))}
+                    </SelectField>
+                    <SelectField
+                      label={t("Workspace")}
+                      aria-label={t("Filter by workspace")}
+                      value={workspaceFilter}
+                      onChange={(event) => setWorkspaceFilter(event.target.value)}
+                    >
+                      <option value="">{t("All workspaces")}</option>
+                      {projectWorkspacePaths.length > 0 ? (
+                        <optgroup label={t("Workspaces")}>
+                          {projectWorkspacePaths.map((path) => (
+                            <option value={path} key={path}>
+                              {workspaceProjects[path]?.name ?? workspaceName(path)}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ) : null}
+                      {otherWorkspacePaths.length > 0 ? (
+                        <optgroup label={t("Other folders")}>
+                          {otherWorkspacePaths.map((path) => (
+                            <option value={path} key={path}>{workspaceName(path)}</option>
+                          ))}
+                        </optgroup>
+                      ) : null}
+                    </SelectField>
+                    <Button
+                      size="compact"
+                      disabled={!agentFilter && !workspaceFilter}
+                      onClick={() => {
+                        setAgentFilter("");
+                        setWorkspaceFilter("");
+                      }}
+                    >
+                      {t("Clear filters")}
+                    </Button>
+                  </div>
+                </FilterPopover>
               </div>
             </div>
             <div className="conversation-list-meta">
@@ -1935,17 +1953,11 @@ export const ConversationWorkspace = ({
             dismissDisabled={busy}
             onDismiss={() => setReview(undefined)}
             >
-              <header className="profile-dialog-header ui-dialog-header">
-                <div className="ui-dialog-header__copy">
-                  <div className="section-title ui-dialog-title">
-                    {t("Continue in {{name}}", { name: review.targetName })}
-                  </div>
-                  <p className="muted ui-dialog-description">
-                    {t("Review how this conversation will be transferred.")}
-                  </p>
-                </div>
-              </header>
-            <div className="conversation-review-body ui-dialog-body">
+              <DialogHeader
+                title={t("Continue in {{name}}", { name: review.targetName })}
+                description={t("Review how this conversation will be transferred.")}
+              />
+            <DialogBody className="conversation-review-body">
               <div className="conversation-review-destination">
                 <span
                   className={`conversation-agent-icon conversation-agent-icon--${reviewTargetIcon?.flavor ?? "generic"}`}
@@ -1996,8 +2008,8 @@ export const ConversationWorkspace = ({
                   </div>
                 </div>
               ) : null}
-            </div>
-            <footer className="preview-actions ui-dialog-footer">
+            </DialogBody>
+            <DialogFooter className="preview-actions">
               <Button
                 ref={reviewCancelRef}
                 disabled={busy}
@@ -2015,7 +2027,7 @@ export const ConversationWorkspace = ({
                   ? t("Opening…")
                   : reviewActionLabel}
               </Button>
-            </footer>
+            </DialogFooter>
           </ModalFrame>
         ) : null}
       </section>

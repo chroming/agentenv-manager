@@ -668,7 +668,7 @@ describe("conversation service", () => {
     service.dispose();
   });
 
-  it("opens Codex with a private context file and a clipboard fallback", async () => {
+  it("opens Codex with a private context file and copies only a short fallback prompt", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-conversation-codex-fallback-"));
     const paths = createPaths({
       appDataRoot: join(root, "data"),
@@ -730,10 +730,13 @@ describe("conversation service", () => {
 
     expect(result).toEqual({
       mode: "context-file",
-      message: "Opened Codex with context; paste the fallback copy if needed"
+      message: "Opened Codex with context; paste the fallback prompt if needed"
     });
     expect(clipboard.writeText).toHaveBeenCalledWith(
-      expect.stringContaining("I found the failing step.")
+      expect.stringContaining(`Read the continuation context at ${contextPath}`)
+    );
+    expect(clipboard.writeText).toHaveBeenCalledWith(
+      expect.not.stringContaining("I found the failing step.")
     );
     expect(launched).toHaveLength(1);
     expect(launched[0]).toMatchObject({
@@ -748,7 +751,7 @@ describe("conversation service", () => {
     service.dispose();
   });
 
-  it("preserves the source working directory in a generic clipboard fallback", async () => {
+  it("preserves the source working directory and writes a private handoff for a paste fallback", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-conversation-generic-fallback-"));
     const paths = createPaths({
       appDataRoot: join(root, "data"),
@@ -802,6 +805,7 @@ describe("conversation service", () => {
     });
 
     await service.continue(preview.previewId);
+    const contextPath = join(paths.conversationHandoffDir, `${preview.previewId}.md`);
     expect(launched).toEqual([
       expect.objectContaining({
         executablePath: "/usr/local/bin/opencode",
@@ -810,7 +814,16 @@ describe("conversation service", () => {
       })
     ]);
     expect(clipboard.writeText).toHaveBeenCalledWith(
-      expect.stringContaining("Workspace: /work/project")
+      expect.stringContaining(`Read the continuation context at ${contextPath}`)
+    );
+    expect(clipboard.writeText).toHaveBeenCalledWith(
+      expect.stringContaining("The original working directory is /work/project.")
+    );
+    expect(clipboard.writeText).toHaveBeenCalledWith(
+      expect.not.stringContaining("I found the failing step.")
+    );
+    await expect(readFile(contextPath, "utf8")).resolves.toContain(
+      "I found the failing step."
     );
     service.dispose();
   });

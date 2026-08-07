@@ -202,6 +202,11 @@ const fallbackLaunchSpec = (
     : undefined;
 };
 
+const handoffPrompt = (contextPath: string, workspacePath?: string) => [
+  `Read the continuation context at ${contextPath}, then continue the user's work.`,
+  ...(workspacePath ? [`The original working directory is ${workspacePath}.`] : [])
+].join("\n");
+
 export const createConversationService = async (options: {
   paths: AgentEnvPaths;
   targetRegistry: TargetRegistry;
@@ -504,35 +509,39 @@ export const createConversationService = async (options: {
       const entry = pending.get(previewId);
       if (!entry) throw new Error("Continuation review expired; choose the target again");
       pending.delete(previewId);
-      if (entry.launchSpec) {
-        options.clipboard.writeText(entry.context);
-        await mkdir(options.paths.conversationHandoffDir, {
-          recursive: true,
-          mode: 0o700
-        });
-        await writeFile(entry.contextPath, entry.context, {
-          encoding: "utf8",
-          mode: 0o600
-        });
-        if (process.platform !== "win32") {
-          await chmod(entry.contextPath, 0o600);
-        }
+      await mkdir(options.paths.conversationHandoffDir, {
+        recursive: true,
+        mode: 0o700
+      });
+      await writeFile(entry.contextPath, entry.context, {
+        encoding: "utf8",
+        mode: 0o600
+      });
+      if (process.platform !== "win32") {
+        await chmod(entry.contextPath, 0o600);
+      }
+      options.clipboard.writeText(handoffPrompt(
+        entry.contextPath,
+        entry.preview.workspacePath
+      ));
+      const spec = entry.launchSpec ?? entry.fallbackSpec;
+      if (spec) {
         try {
-          await launcher.launch(entry.launchSpec);
+          await launcher.launch(spec);
         } catch (error) {
           await rm(entry.contextPath, { force: true });
           throw error;
         }
+      }
+      if (entry.launchSpec) {
         return {
           mode: "context-file",
-          message: `Opened ${entry.preview.targetName} with context; paste the fallback copy if needed`
+          message: `Opened ${entry.preview.targetName} with context; paste the fallback prompt if needed`
         };
       }
-      options.clipboard.writeText(entry.context);
-      if (entry.fallbackSpec) await launcher.launch(entry.fallbackSpec);
       return {
         mode: "clipboard",
-        message: `Opened ${entry.preview.targetName}; paste the copied context to continue`
+        message: `Opened ${entry.preview.targetName}; paste the copied handoff prompt to continue`
       };
     },
     dispose: () => index.close()

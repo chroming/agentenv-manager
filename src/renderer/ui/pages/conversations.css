@@ -24,7 +24,7 @@
   background: var(--surface);
   border-radius: var(--radius-surface);
   display: grid;
-  grid-template-columns: clamp(300px, 34%, 380px) minmax(0, 1fr);
+  grid-template-columns: clamp(280px, 32%, 340px) minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -40,8 +40,7 @@
 }
 
 .conversation-list-toolbar {
-  display: grid;
-  gap: 6px;
+  display: block;
   padding: 10px 10px 6px;
 }
 
@@ -54,7 +53,7 @@
   align-items: center;
   display: grid;
   gap: 6px;
-  grid-template-columns: minmax(0, 1fr) var(--control-height-default);
+  grid-template-columns: minmax(0, 1fr) var(--control-height-default) var(--control-height-default);
 }
 
 .conversation-sort-button {
@@ -86,36 +85,13 @@
   font-size: var(--font-size-body);
 }
 
-.conversation-filters {
+.conversation-filter-fields {
   display: grid;
-  gap: 6px;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-3);
 }
 
-.conversation-filters label {
-  min-width: 0;
-}
-
-.conversation-filters select {
-  background-position: right 7px center;
-  background-size: 14px 14px;
-  color: var(--muted-strong);
-  font-size: var(--font-size-caption);
-  max-width: 100%;
-  overflow: hidden;
-  padding: 0 26px 0 8px;
-  text-overflow: ellipsis;
-  width: 100%;
-}
-
-.conversation-filters select:hover {
-  border-color: var(--border-strong);
-}
-
-.conversation-filters select:focus-visible {
-  border-color: var(--accent);
-  outline: 2px solid color-mix(in srgb, var(--accent) 24%, transparent);
-  outline-offset: 1px;
+.conversation-filter-fields .ui-button {
+  justify-self: end;
 }
 
 .conversation-list-meta {
