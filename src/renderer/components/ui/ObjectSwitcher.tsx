@@ -30,6 +30,7 @@ export interface ObjectSwitcherItem {
 interface ObjectSwitcherProps {
   ariaLabel: string;
   className?: string;
+  disabled?: boolean;
   emptyMessage?: ReactNode;
   footerAction?: {
     icon?: ReactNode;
@@ -43,6 +44,11 @@ interface ObjectSwitcherProps {
   searchLabel: string;
   searchPlaceholder: string;
   selectedId?: string;
+  fullWidth?: boolean;
+  showTriggerIcon?: boolean;
+  showTriggerTitle?: boolean;
+  showTriggerDescription?: boolean;
+  triggerVariant?: "default" | "icon" | "inline";
   onOpenChange(open: boolean): void;
   onQueryChange(query: string): void;
   onSelect(id: string): void;
@@ -51,6 +57,7 @@ interface ObjectSwitcherProps {
 export const ObjectSwitcher = ({
   ariaLabel,
   className = "",
+  disabled = false,
   emptyMessage,
   footerAction,
   items,
@@ -60,10 +67,16 @@ export const ObjectSwitcher = ({
   searchLabel,
   searchPlaceholder,
   selectedId,
+  fullWidth = false,
+  showTriggerIcon = true,
+  showTriggerTitle = true,
+  showTriggerDescription = true,
+  triggerVariant = "default",
   onOpenChange,
   onQueryChange,
   onSelect
 }: ObjectSwitcherProps) => {
+  const Root = triggerVariant === "inline" ? "span" : "div";
   const popoverId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const fallbackSearchRef = useRef<HTMLInputElement>(null);
@@ -137,13 +150,22 @@ export const ObjectSwitcher = ({
   }, [open, query]);
 
   return (
-    <div className={`ui-object-switcher ${className}`.trim()}>
+    <Root
+      className={`ui-object-switcher${fullWidth ? " ui-object-switcher--full-width" : ""}${
+        triggerVariant === "icon"
+          ? " ui-object-switcher--icon-trigger"
+          : triggerVariant === "inline"
+            ? " ui-object-switcher--inline-trigger"
+            : ""
+      } ${className}`.trim()}
+    >
       <button
         aria-controls={open ? popoverId : undefined}
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label={ariaLabel}
         className="ui-object-switcher__trigger"
+        disabled={disabled}
         ref={triggerRef}
         type="button"
         onClick={() => onOpenChange(!open)}
@@ -154,15 +176,17 @@ export const ObjectSwitcher = ({
           }
         }}
       >
-        {selected?.icon ? (
+        {showTriggerIcon && selected?.icon ? (
           <span className="ui-object-switcher__trigger-icon" aria-hidden="true">{selected.icon}</span>
         ) : null}
-        <span className="ui-object-switcher__trigger-copy">
-          <span className="ui-object-switcher__trigger-title">{selected?.title ?? ariaLabel}</span>
-          {selected?.description ? (
-            <span className="ui-object-switcher__trigger-description">{selected.description}</span>
-          ) : null}
-        </span>
+        {showTriggerTitle ? (
+          <span className="ui-object-switcher__trigger-copy">
+            <span className="ui-object-switcher__trigger-title">{selected?.title ?? ariaLabel}</span>
+            {showTriggerDescription && selected?.description ? (
+              <span className="ui-object-switcher__trigger-description">{selected.description}</span>
+            ) : null}
+          </span>
+        ) : null}
         <ChevronDown className={open ? "is-open" : ""} size={15} strokeWidth={2.1} aria-hidden="true" />
       </button>
       {open ? createPortal(
@@ -230,6 +254,6 @@ export const ObjectSwitcher = ({
         </div>,
         document.body
       ) : null}
-    </div>
+    </Root>
   );
 };

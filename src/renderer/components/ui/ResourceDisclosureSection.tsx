@@ -22,6 +22,7 @@ export interface ResourceDisclosureSectionProps
   icon?: ReactNode;
   id: string;
   onToggle(): void;
+  nested?: boolean;
   slotClassNames?: ResourceDisclosureSlotClassNames;
   summary?: ReactNode;
   summaryLabel?: string;
@@ -42,6 +43,7 @@ export const ResourceDisclosureSection = ({
   icon,
   id,
   onToggle,
+  nested = false,
   slotClassNames = {},
   summary,
   summaryLabel,
@@ -63,7 +65,7 @@ export const ResourceDisclosureSection = ({
     <section
       {...props}
       aria-label={props["aria-label"] ?? title}
-      className={`ui-resource-disclosure${expanded ? " is-expanded" : ""} ${className}`.trim()}
+      className={`ui-resource-disclosure${expanded ? " is-expanded" : ""}${nested ? " is-nested" : ""} ${className}`.trim()}
       data-resource-disclosure-id={id}
     >
       <header className={withSlotClass("ui-resource-disclosure__header", slotClassNames.header)}>

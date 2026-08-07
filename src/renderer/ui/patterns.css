@@ -52,14 +52,19 @@
   overflow: auto;
 }
 
+.ui-single-object-workspace--open {
+  border: 0;
+  border-radius: 0;
+}
+
 .ui-object-switcher {
   min-width: 0;
 }
 
 .ui-object-switcher__trigger {
   align-items: center;
-  background: transparent;
-  border: 1px solid transparent;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-control);
   color: var(--text);
   display: grid;
@@ -80,6 +85,82 @@
 .ui-object-switcher__trigger:focus-visible {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
   outline: 0;
+}
+
+.ui-object-switcher__trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.ui-object-switcher--full-width .ui-object-switcher__trigger {
+  min-width: 0;
+  width: 100%;
+}
+
+.ui-object-switcher--icon-trigger {
+  flex: 0 0 28px;
+  min-width: 28px;
+  width: 28px;
+}
+
+.ui-object-switcher--icon-trigger .ui-object-switcher__trigger {
+  background: transparent;
+  border-color: transparent;
+  grid-template-columns: auto;
+  justify-content: center;
+  min-height: 32px;
+  min-width: 28px;
+  padding: 0 2px;
+  width: 28px;
+}
+
+.ui-object-switcher--icon-trigger .ui-object-switcher__trigger:hover,
+.ui-object-switcher--icon-trigger .ui-object-switcher__trigger[aria-expanded="true"] {
+  background: var(--surface-muted);
+  border-color: var(--border);
+}
+
+.ui-object-switcher--inline-trigger {
+  display: inline-flex;
+  flex: 0 1 auto;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.ui-object-switcher--inline-trigger .ui-object-switcher__trigger {
+  background: transparent;
+  border-color: transparent;
+  display: inline-grid;
+  gap: 4px;
+  grid-template-columns: minmax(0, auto) auto;
+  height: var(--control-height-compact);
+  min-height: 28px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 3px;
+  vertical-align: middle;
+  width: auto;
+}
+
+.ui-object-switcher--inline-trigger .ui-object-switcher__trigger:hover,
+.ui-object-switcher--inline-trigger .ui-object-switcher__trigger[aria-expanded="true"] {
+  background: var(--surface-muted);
+  border-color: var(--border);
+}
+
+.ui-object-switcher--inline-trigger .ui-object-switcher__trigger-copy {
+  min-width: 0;
+}
+
+.ui-object-switcher--inline-trigger .ui-object-switcher__trigger {
+  max-width: min(360px, 100%);
+}
+
+.ui-object-switcher--inline-trigger .ui-object-switcher__trigger-title {
+  font-size: 17px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 26px;
+  min-width: 0;
 }
 
 .ui-object-switcher__trigger-icon {
@@ -105,9 +186,18 @@
 }
 
 .ui-object-switcher__trigger-title {
+  align-items: center;
+  display: flex;
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-medium);
+  gap: 6px;
   line-height: 18px;
+}
+
+.ui-object-switcher__row .ui-selectable-row__title {
+  align-items: center;
+  display: flex;
+  gap: 6px;
 }
 
 .ui-object-switcher__trigger-description {
@@ -132,6 +222,10 @@
   padding-block: 2px;
 }
 
+.ui-page-header__actions .ui-object-switcher {
+  width: clamp(180px, 22vw, 240px);
+}
+
 .ui-page-header__actions .ui-object-switcher__trigger-icon {
   height: 24px;
   width: 24px;
@@ -139,6 +233,24 @@
 
 .ui-page-header__actions .ui-object-switcher__trigger-description {
   display: none;
+}
+
+/* Object selectors inside any action group share the default desktop control height. */
+.ui-control-group .ui-object-switcher__trigger {
+  height: var(--control-height-default);
+  min-height: var(--control-height-default);
+  padding-block: 2px;
+}
+
+.ui-control-group .ui-object-switcher__trigger-icon {
+  height: 24px;
+  width: 24px;
+}
+
+@container app-shell (max-width: 700px) {
+  .ui-object-switcher--inline-trigger .ui-object-switcher__trigger {
+    max-width: min(260px, calc(100vw - 120px));
+  }
 }
 
 .ui-object-switcher__popover {
@@ -397,8 +509,10 @@
 
 .ui-resource-disclosure__header {
   align-items: stretch;
+  background: var(--surface);
   display: flex;
   min-height: 54px;
+  transition: background-color var(--motion-fast), box-shadow var(--motion-fast);
 }
 
 .ui-resource-disclosure__trigger {
@@ -417,12 +531,21 @@
 }
 
 .ui-resource-disclosure__trigger:hover {
-  background: var(--surface-muted);
+  background: transparent;
 }
 
 .ui-resource-disclosure__trigger:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--accent);
-  outline: 0;
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, transparent);
+  outline-offset: -2px;
+}
+
+.ui-resource-disclosure__header:hover {
+  background: var(--surface-muted);
+}
+
+.ui-resource-disclosure.is-expanded > .ui-resource-disclosure__header {
+  background: var(--surface-subtle);
+  box-shadow: inset 0 -1px var(--border-subtle);
 }
 
 .ui-resource-disclosure__chevron {
@@ -481,6 +604,18 @@
   background: var(--surface-subtle);
   border-top: 1px solid var(--border-subtle);
   min-width: 0;
+}
+
+.ui-resource-disclosure.is-nested > .ui-resource-disclosure__panel {
+  background: var(--surface-subtle);
+  margin-left: 16px;
+  max-width: calc(100% - 16px);
+  padding-block: 2px;
+}
+
+/* The inset surface is the hierarchy cue; connector lines are intentionally omitted. */
+.ui-resource-disclosure.is-nested > .ui-resource-disclosure__panel .ui-resource-row {
+  padding-left: 24px;
 }
 
 @media (prefers-reduced-motion: reduce) {

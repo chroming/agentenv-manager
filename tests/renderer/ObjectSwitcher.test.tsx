@@ -161,4 +161,55 @@ describe("ObjectSwitcher", () => {
 
     expect(onFooterAction).toHaveBeenCalledWith(trigger);
   });
+
+  it("supports an icon-free detail trigger and a disabled empty state", () => {
+    render(
+      <ObjectSwitcher
+        ariaLabel="Choose Agent"
+        className="project-agent-switcher"
+        disabled
+        fullWidth
+        items={[]}
+        open={false}
+        query=""
+        searchLabel="Search Agents"
+        searchPlaceholder="Search Agents"
+        showTriggerIcon={false}
+        triggerVariant="icon"
+        onOpenChange={() => undefined}
+        onQueryChange={() => undefined}
+        onSelect={() => undefined}
+      />
+    );
+
+    const trigger = screen.getByRole("button", { name: "Choose Agent" });
+    expect(trigger).toBeDisabled();
+    expect(trigger.querySelector(".ui-object-switcher__trigger-icon")).toBeNull();
+    expect(trigger.parentElement?.classList.contains("ui-object-switcher--full-width")).toBe(true);
+    expect(trigger.parentElement?.classList.contains("ui-object-switcher--icon-trigger")).toBe(true);
+  });
+
+  it("supports an inline title trigger for the current object header", () => {
+    render(
+      <ObjectSwitcher
+        ariaLabel="Choose Profile"
+        items={[{ id: "daily", title: "Daily Coding" }]}
+        open={false}
+        query=""
+        searchLabel="Search Profiles"
+        searchPlaceholder="Search Profiles"
+        selectedId="daily"
+        triggerVariant="inline"
+        showTriggerDescription={false}
+        onOpenChange={() => undefined}
+        onQueryChange={() => undefined}
+        onSelect={() => undefined}
+      />
+    );
+
+    const trigger = screen.getByRole("button", { name: "Choose Profile" });
+    expect(trigger.parentElement?.classList.contains("ui-object-switcher--inline-trigger")).toBe(true);
+    expect(screen.getByText("Daily Coding")).toBeInTheDocument();
+    expect(screen.queryByText("OpenCode · Active")).not.toBeInTheDocument();
+  });
 });

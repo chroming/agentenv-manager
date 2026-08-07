@@ -4,8 +4,11 @@ export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from ".
 export { ChoiceInput, type ChoiceInputProps } from "./ChoiceInput";
 export { ControlGroup } from "./ControlGroup";
 export { DialogBody, DialogFooter, DialogHeader } from "./DialogParts";
+export { FilterPopover } from "./FilterPopover";
 export { SearchField, SelectField, TextAreaField, TextField } from "./FormFields";
 export { IconButton } from "./IconButton";
+export { InteractiveStatus } from "./InteractiveStatus";
+export { statusToneFor, type SemanticStatusKind } from "./statusPresentation";
 export { ModalFrame, type ModalDismissPolicy } from "./ModalFrame";
 export { Notice } from "./Notice";
 export { ObjectSwitcher, type ObjectSwitcherItem } from "./ObjectSwitcher";
@@ -16,6 +19,7 @@ export {
   type ResourceDisclosureSectionProps
 } from "./ResourceDisclosureSection";
 export { Switch } from "./Switch";
+export { TabBar } from "./TabBar";
 export { SegmentedControl } from "./SegmentedControl";
 export {
   EmptyState,

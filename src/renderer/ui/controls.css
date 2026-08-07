@@ -130,7 +130,8 @@ textarea::placeholder {
 input:not([type="checkbox"]):not([type="radio"]):disabled,
 input:not([type="checkbox"]):not([type="radio"])[readonly],
 select:disabled,
-textarea:disabled {
+textarea:disabled,
+textarea[readonly] {
   background-color: var(--surface-muted);
   box-shadow: none;
   color: var(--muted);
@@ -144,6 +145,10 @@ input:not([type="checkbox"]):not([type="radio"]):disabled,
 select:disabled,
 textarea:disabled {
   cursor: not-allowed;
+}
+
+textarea[readonly] {
+  cursor: default;
 }
 
 input:not([type="checkbox"]):not([type="radio"])[readonly] {
@@ -163,11 +168,11 @@ textarea[aria-invalid="true"]:focus {
 }
 
 textarea[aria-label="AGENTS.md"] {
-  min-height: 260px;
+  min-height: min(260px, 32vh);
 }
 
 textarea[aria-label="opencode.jsonc"] {
-  min-height: 280px;
+  min-height: min(280px, 34vh);
 }
 
 .icon-action {

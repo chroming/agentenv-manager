@@ -13,8 +13,10 @@ import {
   DialogFooter,
   DialogHeader,
   EmptyState,
+  FilterPopover,
   InspectorHeader,
   IconButton,
+  InteractiveStatus,
   MasterDetailLayout,
   MasterDetailPane,
   MasterListPane,
@@ -27,7 +29,8 @@ import {
   SelectField,
   SelectableListRow,
   SegmentedControl,
-  Switch
+  Switch,
+  TabBar
 } from "../../src/renderer/components/ui";
 import { OverflowTooltip } from "../../src/renderer/components/OverflowTooltip";
 import { InfoTip } from "../../src/renderer/components/InfoTip";
@@ -453,6 +456,7 @@ describe("renderer UI primitives", () => {
 
     const row = screen.getByLabelText("Skill reviewer");
     expect(row).toHaveClass("ui-resource-row--default");
+    expect(row.querySelector(".resource-row__main")).toBeNull();
     expect(row.querySelector(".ui-resource-row__identity")).toHaveTextContent(
       "reviewerReview changes"
     );
@@ -498,7 +502,8 @@ describe("renderer UI primitives", () => {
     render(
       <InspectorHeader
         responsive="stack"
-        title="Release Tools"
+        titleLabel="Release Tools"
+        title={<button type="button">Choose Workspace</button>}
         description="/projects/release-tools"
         actions={<Button>Open</Button>}
       />
@@ -539,6 +544,7 @@ describe("renderer UI primitives", () => {
         description="Project-owned Skill files"
         summary="3"
         expanded
+        nested
         toggleLabel="Collapse Skills"
         actions={<Button size="compact">Add</Button>}
         onToggle={onToggle}
@@ -548,7 +554,7 @@ describe("renderer UI primitives", () => {
     );
 
     const section = screen.getByRole("region", { name: "Skills" });
-    expect(section).toHaveClass("ui-resource-disclosure", "is-expanded");
+    expect(section).toHaveClass("ui-resource-disclosure", "is-expanded", "is-nested");
     expect(within(section).getByRole("button", { name: "Collapse Skills" }))
       .toHaveAttribute("aria-expanded", "true");
     expect(within(section).getByText("3")).toHaveClass("ui-resource-disclosure__summary");
@@ -615,5 +621,83 @@ describe("renderer UI primitives", () => {
     expect(screen.getByRole("button", { name: "Blank" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", { name: "From Agent" }));
     expect(onChange).toHaveBeenCalledWith("agent");
+  });
+
+  it("keeps page navigation tabs distinct from value segmented controls", () => {
+    const onChange = vi.fn();
+    render(
+      <TabBar
+        label="Settings sections"
+        value="general"
+        options={[
+          { value: "general", label: "General" },
+          { value: "agents", label: "Agents" },
+          { value: "skills", label: "Skills" }
+        ]}
+        onChange={onChange}
+      />
+    );
+
+    const tablist = screen.getByRole("tablist", { name: "Settings sections" });
+    expect(tablist).toHaveClass("ui-tab-bar");
+    expect(tablist).not.toHaveClass("ui-segmented-control");
+    expect(screen.getByRole("tab", { name: "General" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    expect(screen.getByRole("tab", { name: "Agents" })).toHaveAttribute("tabindex", "-1");
+
+    screen.getByRole("tab", { name: "General" }).focus();
+    fireEvent.keyDown(screen.getByRole("tab", { name: "General" }), {
+      key: "ArrowRight"
+    });
+    expect(onChange).toHaveBeenCalledWith("agents");
+  });
+
+  it("uses a truthful status label as the review entry without adding an action column", () => {
+    const onReview = vi.fn();
+    const { rerender } = render(
+      <InteractiveStatus
+        icon={<RefreshCw />}
+        label="Update available"
+        reviewLabel="Review update for reviewer"
+        tone="accent"
+        onReview={onReview}
+      />
+    );
+
+    const review = screen.getByRole("button", { name: "Review update for reviewer" });
+    expect(review).toHaveClass("ui-interactive-status", "ui-interactive-status--accent");
+    expect(review).toHaveAttribute("data-tone", "accent");
+    expect(review).toHaveTextContent("Update available");
+    fireEvent.click(review);
+    expect(onReview).toHaveBeenCalledOnce();
+
+    rerender(<InteractiveStatus label="Current" />);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.getByText("Current").closest(".ui-interactive-status"))
+      .toHaveClass("ui-interactive-status");
+  });
+
+  it("owns compact filter disclosure, Escape dismissal, and focus restoration", () => {
+    render(
+      <FilterPopover label="Filter conversations" activeCount={1} icon={<RefreshCw />}>
+        <SelectField label="Agent" value="" onChange={() => undefined}>
+          <option value="">All Agents</option>
+        </SelectField>
+      </FilterPopover>
+    );
+
+    const trigger = screen.getByRole("button", { name: "Filter conversations, 1 active" });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("dialog", { name: "Filter conversations" }))
+      .toHaveClass("ui-filter-popover__panel");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Filter conversations" }))
+      .not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 });

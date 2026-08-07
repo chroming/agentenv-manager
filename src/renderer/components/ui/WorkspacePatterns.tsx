@@ -47,9 +47,13 @@ export const MasterDetailPane = ({
 export const SingleObjectWorkspace = ({
   children,
   className = "",
+  surface = "framed",
   ...props
-}: HTMLAttributes<HTMLElement>) => (
-  <section {...props} className={`ui-single-object-workspace ${className}`.trim()}>
+}: HTMLAttributes<HTMLElement> & { surface?: "framed" | "open" }) => (
+  <section
+    {...props}
+    className={`ui-single-object-workspace ui-single-object-workspace--${surface} ${className}`.trim()}
+  >
     {children}
   </section>
 );
@@ -118,6 +122,7 @@ interface InspectorHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "title"
   icon?: ReactNode;
   responsive?: "inline" | "stack";
   title: ReactNode;
+  titleLabel?: string;
 }
 
 export const InspectorHeader = ({
@@ -127,6 +132,7 @@ export const InspectorHeader = ({
   icon,
   responsive = "inline",
   title,
+  titleLabel,
   ...props
 }: InspectorHeaderProps) => (
   <header
@@ -136,7 +142,7 @@ export const InspectorHeader = ({
     <div className="ui-inspector-header__identity">
       {icon ? <span className="ui-inspector-header__icon" aria-hidden="true">{icon}</span> : null}
       <div className="ui-inspector-header__copy">
-        <h3>{title}</h3>
+        <h3 aria-label={titleLabel}>{title}</h3>
         {description ? <span>{description}</span> : null}
       </div>
     </div>

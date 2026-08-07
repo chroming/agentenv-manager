@@ -30,15 +30,15 @@ export const ResourceRow = ({
     {...props}
     className={`ui-resource-row ui-resource-row--${density} ui-resource-row--${tone} ${className}`.trim()}
   >
-    <span className="ui-resource-row__icon resource-avatar" aria-hidden="true">
+    <span className="ui-resource-row__icon" aria-hidden="true">
       {icon}
     </span>
-    <div className="ui-resource-row__identity resource-row__main">
+    <div className="ui-resource-row__identity">
       <strong>{title}</strong>
       {description ? <span>{description}</span> : null}
     </div>
     {metadata ? <div className="ui-resource-row__metadata">{metadata}</div> : null}
     {state ? <div className="ui-resource-row__state">{state}</div> : null}
-    {actions ? <div className="ui-resource-row__actions resource-row__actions">{actions}</div> : null}
+    {actions ? <div className="ui-resource-row__actions">{actions}</div> : null}
   </div>
 );
