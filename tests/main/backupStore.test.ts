@@ -348,6 +348,7 @@ describe("backup store", () => {
     });
     await store.createBackup([]);
     await mkdir(join(paths.backupsDir, "skill-cleanup", "cleanup-1"), { recursive: true });
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     await expect(store.listBackups()).resolves.toEqual([
       {
@@ -356,6 +357,8 @@ describe("backup store", () => {
         fileCount: 0
       }
     ]);
+    expect(warning).not.toHaveBeenCalled();
+    warning.mockRestore();
   });
 
   it("rejects a tampered manifest that expands rollback outside a safe id", async () => {

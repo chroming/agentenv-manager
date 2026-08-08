@@ -49,7 +49,7 @@
   height: var(--control-height-compact);
   grid-template-columns: repeat(3, minmax(0, 1fr));
   margin: 0;
-  padding: 2px;
+  padding: 1px;
   width: 192px;
 }
 

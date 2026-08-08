@@ -484,11 +484,49 @@ description: >
     expect(warning).toHaveBeenCalledWith(
       expect.stringContaining(`Ignoring invalid Skill cleanup backup ${unsafeId}`)
     );
+    await store.listCleanupBackups();
+    expect(warning).toHaveBeenCalledTimes(1);
     await expect(store.rollbackSkillCleanup(unsafeId)).rejects.toThrow(
       `Skill cleanup backup contains an unsafe expected path: ${unsafeId}`
     );
     await expect(readFile(join(backupRoot, unsafeId, "manifest.json"), "utf8"))
       .resolves.toContain(unsafeId);
+    warning.mockRestore();
+  });
+
+  it("retains legacy cleanup backups without repeatedly warning or exposing unsafe recovery", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "app-data"),
+      homeDir: join(root, "home")
+    });
+    const backupId = "cleanup-1784038468351-legacy";
+    const backupRoot = join(paths.backupsDir, "skill-cleanup", backupId);
+    const sourcePath = join(paths.userSkillsDir, "legacy-reviewer");
+    const backupPath = join(backupRoot, "locations", "0-legacy-reviewer");
+    await mkdir(backupPath, { recursive: true });
+    await writeFile(join(backupPath, "SKILL.md"), "# Legacy backup\n", "utf8");
+    await writeFile(
+      join(backupRoot, "manifest.json"),
+      `${JSON.stringify({
+        id: backupId,
+        libraryId: "legacy-reviewer",
+        libraryCreated: false,
+        createdAt: "2026-07-14T14:14:28.358Z",
+        operation: "cleanup",
+        entries: [{ sourcePath, backupPath }]
+      }, null, 2)}\n`,
+      "utf8"
+    );
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const store = createSkillLibraryStore(paths);
+
+    await expect(store.listCleanupBackups()).resolves.toEqual([]);
+    await expect(store.listCleanupBackups()).resolves.toEqual([]);
+    expect(warning).not.toHaveBeenCalled();
+    await expect(readFile(join(backupRoot, "manifest.json"), "utf8"))
+      .resolves.toContain(backupId);
+    warning.mockRestore();
   });
 
   it("lists reusable skills from the central library directory", async () => {

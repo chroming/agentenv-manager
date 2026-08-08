@@ -43,6 +43,8 @@ interface SkillCleanupBackupStoreOptions {
   targetPathsProvider: () => TargetPaths[] | Promise<TargetPaths[]>;
 }
 
+class UnsupportedLegacyCleanupBackupError extends Error {}
+
 type CleanupPathClaimer = ((...sourcePaths: string[]) => Promise<void>) & {
   readonly claimedPaths: ReadonlySet<string>;
   readonly mutationHashes: ReadonlyMap<string, string | undefined>;
@@ -58,6 +60,7 @@ export const createSkillCleanupBackupStore = ({
   const cleanupBackupRoot = () => join(paths.backupsDir, "skill-cleanup");
   const mutationTrackerByManifest = new WeakMap<SkillCleanupBackupManifest, CleanupPathClaimer>();
   const safetyBackupStore = createBackupStore(paths);
+  const invalidBackupWarnings = new Set<string>();
 
   const writeCleanupManifest = async (manifest: SkillCleanupBackupManifest) => {
     const backupDir = join(cleanupBackupRoot(), manifest.id);
@@ -181,6 +184,11 @@ export const createSkillCleanupBackupStore = ({
     const manifest = JSON.parse(
       await readFile(manifestPath, "utf8")
     ) as SkillCleanupBackupManifest;
+    if (manifest.formatVersion === undefined) {
+      throw new UnsupportedLegacyCleanupBackupError(
+        `Legacy Skill cleanup backup cannot be restored safely: ${safeId}`
+      );
+    }
     const safeLibraryId = SafeIdSchema.parse(manifest.libraryId);
     if (
       manifest.formatVersion !== 2 ||
@@ -316,11 +324,15 @@ export const createSkillCleanupBackupStore = ({
           if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
             return undefined;
           }
-          console.warn(
-            `[AgentEnv] Ignoring invalid Skill cleanup backup ${entry.name}: ${
-              error instanceof Error ? error.message : String(error)
-            }`
-          );
+          if (error instanceof UnsupportedLegacyCleanupBackupError) return undefined;
+          const message = error instanceof Error ? error.message : String(error);
+          const warning = `${entry.name}: ${message}`;
+          if (!invalidBackupWarnings.has(warning)) {
+            invalidBackupWarnings.add(warning);
+            console.warn(
+              `[AgentEnv] Ignoring invalid Skill cleanup backup ${warning}`
+            );
+          }
           return undefined;
         }
       })

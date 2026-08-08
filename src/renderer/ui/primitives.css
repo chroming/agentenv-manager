@@ -225,6 +225,7 @@
 .ui-segmented-control--compact {
   height: var(--control-height-compact);
   min-height: var(--control-height-compact);
+  padding: 1px;
 }
 
 .ui-segmented-control__option {

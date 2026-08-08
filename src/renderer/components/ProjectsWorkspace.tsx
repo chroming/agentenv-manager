@@ -545,17 +545,6 @@ export const ProjectsWorkspace = ({
         className="projects-page-header"
         title={t("Workspaces")}
         help={<InfoTip label={t("Open recurring folders with an Agent and manage only the files owned by that folder.")} />}
-        actions={(
-          <ControlGroup className="projects-page-actions">
-            <Button
-              aria-label={t("Add Workspace folder")}
-              icon={<Plus size={15} />}
-              onClick={() => void addProject()}
-            >
-              {t("Add folder")}
-            </Button>
-          </ControlGroup>
-        )}
       />
 
       {error ? (
@@ -604,12 +593,30 @@ export const ProjectsWorkspace = ({
                       searchLabel={t("Search Workspaces")}
                       searchPlaceholder={t("Search folders...")}
                       selectedId={selected.id}
+                      showTriggerIcon={false}
                       showTriggerDescription={false}
                       onOpenChange={setSwitcherOpen}
                       onQueryChange={setQuery}
                       onSelect={setSelectedId}
                       triggerVariant="inline"
                     />
+                    <IconButton
+                      className="project-detail__edit"
+                      label={t("Rename Workspace")}
+                      size="compact"
+                      variant="ghost"
+                      onClick={() => {
+                        setRenameValue(selected.name);
+                        setRenameOpen(true);
+                      }}
+                    >
+                      <Pencil size={13} strokeWidth={2.1} />
+                    </IconButton>
+                  </span>
+                )}
+                description={<span className="selectable" title={selected.rootPath}>{selected.rootPath}</span>}
+                actions={(
+                  <ControlGroup className="project-detail__actions">
                     <IconButton
                       aria-busy={operation === "inspect"}
                       className="project-detail__refresh"
@@ -621,62 +628,57 @@ export const ProjectsWorkspace = ({
                     >
                       <RefreshCw className={operation === "inspect" ? "is-spinning" : ""} size={15} />
                     </IconButton>
-                  </span>
-                )}
-                description={<span className="selectable" title={selected.rootPath}>{selected.rootPath}</span>}
-                actions={(
-                  <ControlGroup className="project-detail__actions">
-                  <ObjectSwitcher
-                    ariaLabel={t("Choose Agent")}
-                    className="project-agent-switcher"
-                    disabled={availableTargets.length === 0}
-                    emptyMessage={t("No enabled Agents")}
-                    fullWidth
-                    items={agentSwitcherItems}
-                    open={agentSwitcherOpen}
-                    query={agentQuery}
-                    searchLabel={t("Search Agents")}
-                    searchPlaceholder={t("Search Agents")}
-                    selectedId={selectedAgent?.id}
-                    onOpenChange={setAgentSwitcherOpen}
-                    onQueryChange={setAgentQuery}
-                    onSelect={setSelectedAgentId}
-                  />
-                  <Button
-                    aria-label={selectedAgent
-                      ? t("Open in {{name}}", { name: selectedAgent.name })
-                      : t("No Agent available")}
-                    variant="primary"
-                    icon={<ExternalLink size={15} />}
-                    busy={operation === "open"}
-                    disabled={!selected.exists || !selectedAgent}
-                    onClick={() => void openProject()}
-                  >
-                    {t("Open")}
-                  </Button>
-                  <div className="project-actions-menu-wrap">
-                    <IconButton
-                      ref={menuTriggerRef}
-                      label={t("More Workspace actions")}
-                      aria-expanded={projectMenu?.projectId === selected.id}
-                      aria-haspopup="menu"
-                      onClick={(event) => {
-                        if (projectMenu?.projectId === selected.id) {
-                          setProjectMenu(undefined);
-                          return;
-                        }
-                        const rect = event.currentTarget.getBoundingClientRect();
-                        showProjectMenu(
-                          selected,
-                          rect.right - 184,
-                          rect.bottom + 6,
-                          event.currentTarget
-                        );
-                      }}
+                    <ObjectSwitcher
+                      ariaLabel={t("Choose Agent")}
+                      className="project-agent-switcher"
+                      disabled={availableTargets.length === 0}
+                      emptyMessage={t("No enabled Agents")}
+                      fullWidth
+                      items={agentSwitcherItems}
+                      open={agentSwitcherOpen}
+                      query={agentQuery}
+                      searchLabel={t("Search Agents")}
+                      searchPlaceholder={t("Search Agents")}
+                      selectedId={selectedAgent?.id}
+                      onOpenChange={setAgentSwitcherOpen}
+                      onQueryChange={setAgentQuery}
+                      onSelect={setSelectedAgentId}
+                    />
+                    <Button
+                      aria-label={selectedAgent
+                        ? t("Open in {{name}}", { name: selectedAgent.name })
+                        : t("No Agent available")}
+                      variant="primary"
+                      icon={<ExternalLink size={15} />}
+                      busy={operation === "open"}
+                      disabled={!selected.exists || !selectedAgent}
+                      onClick={() => void openProject()}
                     >
-                      <MoreHorizontal size={17} />
-                    </IconButton>
-                  </div>
+                      {t("Open")}
+                    </Button>
+                    <div className="project-actions-menu-wrap">
+                      <IconButton
+                        ref={menuTriggerRef}
+                        label={t("More Workspace actions")}
+                        aria-expanded={projectMenu?.projectId === selected.id}
+                        aria-haspopup="menu"
+                        onClick={(event) => {
+                          if (projectMenu?.projectId === selected.id) {
+                            setProjectMenu(undefined);
+                            return;
+                          }
+                          const rect = event.currentTarget.getBoundingClientRect();
+                          showProjectMenu(
+                            selected,
+                            rect.right - 184,
+                            rect.bottom + 6,
+                            event.currentTarget
+                          );
+                        }}
+                      >
+                        <MoreHorizontal size={17} />
+                      </IconButton>
+                    </div>
                   </ControlGroup>
                 )}
               />

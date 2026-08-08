@@ -1135,7 +1135,7 @@ const expectSegmentedControlGeometry = async (control: Locator) => {
     expect(optionBox.right).toBeLessThanOrEqual(box!.x + box!.width);
     expect(optionBox.y).toBeGreaterThanOrEqual(box!.y);
     expect(optionBox.bottom).toBeLessThanOrEqual(box!.y + box!.height);
-    expect(Math.abs(optionBox.y + optionBox.height / 2 - centerY)).toBeLessThanOrEqual(1);
+    expect(Math.abs(optionBox.y + optionBox.height / 2 - centerY)).toBeLessThanOrEqual(0.1);
   }
   expect(Math.max(...optionBoxes.map((option) => option.width)) -
     Math.min(...optionBoxes.map((option) => option.width))).toBeLessThanOrEqual(1);
@@ -11165,6 +11165,7 @@ describe("Electron UI profile switching e2e", () => {
       return {
         borderWidth: style.borderTopWidth,
         height: Math.round(trigger.getBoundingClientRect().height),
+        iconCount: trigger.querySelectorAll(".ui-object-switcher__trigger-icon").length,
         radius: style.borderRadius,
         width: Math.round(trigger.getBoundingClientRect().width)
       };
@@ -11172,6 +11173,21 @@ describe("Electron UI profile switching e2e", () => {
     const profileSwitcherContract = await readSwitcherContract(
       ".profile-switcher--hero .ui-object-switcher__trigger"
     );
+    const profileContextGeometry = await page.locator(".profile-hero__title").evaluate((group) => {
+      const switcher = group.querySelector<HTMLElement>(".profile-switcher")!;
+      const edit = group.querySelector<HTMLElement>(".profile-edit-button")!;
+      const switcherBox = switcher.getBoundingClientRect();
+      const editBox = edit.getBoundingClientRect();
+      const groupBox = group.getBoundingClientRect();
+      return {
+        controlsAreContained:
+          switcherBox.left >= groupBox.left &&
+          editBox.right <= groupBox.right + 1,
+        controlsShareRow: Math.abs(switcherBox.top - editBox.top) <= 2,
+        editHeight: Math.round(editBox.height),
+        gap: Math.round(editBox.left - switcherBox.right)
+      };
+    });
     await sidebar.getByRole("button", { name: "Workspaces", exact: true }).click();
     await page.locator(".project-switcher .ui-object-switcher__trigger").waitFor({
       state: "visible"
@@ -11181,37 +11197,55 @@ describe("Electron UI profile switching e2e", () => {
     );
     const workspaceContextGeometry = await page.locator(".project-detail__title-control").evaluate((group) => {
       const switcher = group.querySelector<HTMLElement>(".project-switcher")!;
-      const refresh = group.querySelector<HTMLElement>(".project-detail__refresh")!;
+      const edit = group.querySelector<HTMLElement>(".project-detail__edit")!;
       const switcherBox = switcher.getBoundingClientRect();
-      const refreshBox = refresh.getBoundingClientRect();
+      const editBox = edit.getBoundingClientRect();
       const groupBox = group.getBoundingClientRect();
       return {
         controlsAreContained:
           switcherBox.left >= groupBox.left &&
-          refreshBox.right <= groupBox.right + 1,
-        controlsShareRow: Math.abs(switcherBox.top - refreshBox.top) <= 1,
-        gap: refreshBox.left - switcherBox.right
+          editBox.right <= groupBox.right + 1,
+        controlsShareRow: Math.abs(switcherBox.top - editBox.top) <= 2,
+        editHeight: Math.round(editBox.height),
+        gap: Math.round(editBox.left - switcherBox.right)
       };
     });
+    const workspaceActionTopology = await page.locator(".project-detail__header").evaluate((header) => ({
+      addInPageHeader: document.querySelector(".projects-page-header [aria-label='Add Workspace folder']") !== null,
+      refreshInActions: header.querySelector(".ui-inspector-header__actions .project-detail__refresh") !== null
+    }));
     expect(profileSwitcherContract).toMatchObject({
       borderWidth: "1px",
       height: 28,
+      iconCount: 0,
       radius: "6px"
     });
     expect(profileSwitcherContract.width).toBeGreaterThan(100);
+    expect(profileContextGeometry).toEqual({
+      controlsAreContained: true,
+      controlsShareRow: true,
+      editHeight: 24,
+      gap: 6
+    });
     expect(workspaceSwitcherContract).toMatchObject({
       borderWidth: "1px",
       height: 28,
+      iconCount: 0,
       radius: "6px"
     });
     expect(workspaceSwitcherContract.width).toBeGreaterThan(100);
     expect(workspaceContextGeometry).toEqual({
       controlsAreContained: true,
       controlsShareRow: true,
+      editHeight: 24,
       gap: expect.any(Number)
     });
     expect(workspaceContextGeometry.gap).toBeGreaterThanOrEqual(0);
     expect(workspaceContextGeometry.gap).toBeLessThanOrEqual(8);
+    expect(workspaceActionTopology).toEqual({
+      addInPageHeader: false,
+      refreshInActions: true
+    });
 
     await sidebar.getByRole("button", { name: "Conversations", exact: true }).click();
     sharedSearchContracts.push(await readCompositeFieldContract(".conversation-search"));

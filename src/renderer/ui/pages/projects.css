@@ -14,15 +14,6 @@
   margin-bottom: 10px;
 }
 
-.projects-page-actions {
-  gap: 4px;
-  max-width: 100%;
-}
-
-.projects-page-actions > .ui-button {
-  flex: 0 0 auto;
-}
-
 .projects-workbench {
   min-height: 0;
   overflow: hidden;
@@ -112,6 +103,21 @@
   flex: 0 1 auto;
   max-width: 100%;
   min-width: 0;
+}
+
+.project-detail__edit {
+  border-color: transparent;
+  flex: 0 0 24px;
+  height: 24px;
+  min-height: 24px;
+  min-width: 24px;
+  padding: 0;
+  width: 24px;
+}
+
+.project-detail__edit svg {
+  height: 13px;
+  width: 13px;
 }
 
 .project-detail__refresh {
@@ -299,11 +305,6 @@
   .projects-page-header .ui-page-header__actions {
     flex: 1 1 auto;
     min-width: 0;
-  }
-
-  .projects-page-actions {
-    justify-content: flex-end;
-    width: 100%;
   }
 
 }

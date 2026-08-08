@@ -144,6 +144,13 @@ describe("ProjectsWorkspace", () => {
 
     expect(screen.getByRole("heading", { name: "Workspaces" })).toBeInTheDocument();
     const switcherTrigger = await screen.findByRole("button", { name: "Choose Workspace" });
+    expect(screen.queryByRole("button", { name: "Add Workspace folder" }))
+      .not.toBeInTheDocument();
+    expect(switcherTrigger.querySelector(".ui-object-switcher__trigger-icon")).toBeNull();
+    expect(screen.getByRole("button", { name: "Rename Workspace" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refresh Workspace" }).closest(
+      ".ui-inspector-header__actions"
+    )).not.toBeNull();
     fireEvent.click(switcherTrigger);
     const switcher = await screen.findByRole("dialog", { name: "Choose Workspace" });
     expect(within(switcher).getByRole("button", { name: "Add folder" })).toBeInTheDocument();

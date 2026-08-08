@@ -53,6 +53,9 @@ const isMissingFileError = (error: unknown) =>
 
 const toBackupId = (date: Date) => date.toISOString().replace(/[:.]/g, "-");
 
+const isActivationBackupId = (value: string) =>
+  /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z(?:-\d+)?$/.test(value);
+
 const encodePath = (sourcePath: string): string =>
   Buffer.from(sourcePath).toString("base64url");
 
@@ -319,27 +322,29 @@ export const createBackupStore = (
 
     const manifests = (
       await Promise.all(
-        entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
-          try {
-            if (!SafeIdSchema.safeParse(entry.name).success) {
+        entries
+          .filter((entry) => entry.isDirectory() && isActivationBackupId(entry.name))
+          .map(async (entry) => {
+            try {
+              if (!SafeIdSchema.safeParse(entry.name).success) {
+                return undefined;
+              }
+              return await readBackup(entry.name);
+            } catch (error) {
+              if (
+                isMissingFileError(error) &&
+                !(await pathEntryExists(join(paths.backupsDir, entry.name)))
+              ) {
+                return undefined;
+              }
+              const warning = `${entry.name}: ${errorMessage(error)}`;
+              if (!invalidBackupWarnings.has(warning)) {
+                invalidBackupWarnings.add(warning);
+                console.warn(`[AgentEnv] Ignoring invalid backup ${warning}`);
+              }
               return undefined;
             }
-            return await readBackup(entry.name);
-          } catch (error) {
-            if (
-              isMissingFileError(error) &&
-              !(await pathEntryExists(join(paths.backupsDir, entry.name)))
-            ) {
-              return undefined;
-            }
-            const warning = `${entry.name}: ${errorMessage(error)}`;
-            if (!invalidBackupWarnings.has(warning)) {
-              invalidBackupWarnings.add(warning);
-              console.warn(`[AgentEnv] Ignoring invalid backup ${warning}`);
-            }
-            return undefined;
-          }
-        })
+          })
       )
     ).filter((manifest): manifest is BackupManifest => Boolean(manifest));
     return manifests
