@@ -8125,6 +8125,8 @@ describe("Electron UI profile switching e2e", () => {
           const rowRect = row.getBoundingClientRect();
           const statusRect = status.getBoundingClientRect();
           const moreRect = more.getBoundingClientRect();
+          const hiddenDetail = status.querySelector<HTMLElement>(".ui-visually-hidden");
+          const hiddenDetailRect = hiddenDetail?.getBoundingClientRect();
           return {
             actionCellCount: row.querySelectorAll(".library-current-action-cell").length,
             childrenFit: Array.from(row.children).every((child) => {
@@ -8143,8 +8145,16 @@ describe("Electron UI profile switching e2e", () => {
             statusIconLeft: statusIcon.getBoundingClientRect().left,
             statusLabelText: statusLabel.textContent?.trim(),
             statusLabelOverflow: statusLabel.scrollWidth - statusLabel.clientWidth,
+            statusFontSize: getComputedStyle(primaryStatus).fontSize,
+            statusLineHeight: getComputedStyle(primaryStatus).lineHeight,
             statusLeft: statusRect.left,
-            statusRight: statusRect.right
+            statusRight: statusRect.right,
+            hiddenDetailPresent: Boolean(hiddenDetail),
+            hiddenDetailFitsVisuallyHiddenContract:
+              Boolean(hiddenDetailRect) &&
+              hiddenDetailRect!.width <= 1 &&
+              hiddenDetailRect!.height <= 1 &&
+              getComputedStyle(hiddenDetail!).position === "absolute"
           };
         });
         return {
@@ -8169,6 +8179,10 @@ describe("Electron UI profile switching e2e", () => {
       expect(geometry.headerTextCenterSpread).toBeLessThanOrEqual(1);
       expect(geometry.metrics[0]!.primaryTag).toBe("BUTTON");
       expect(geometry.metrics[1]!.primaryTag).toBe("STRONG");
+      expect(geometry.metrics[0]!.hiddenDetailPresent).toBe(true);
+      expect(geometry.metrics[0]!.hiddenDetailFitsVisuallyHiddenContract).toBe(true);
+      expect(geometry.metrics[0]!.statusFontSize).toBe(geometry.metrics[1]!.statusFontSize);
+      expect(geometry.metrics[0]!.statusLineHeight).toBe(geometry.metrics[1]!.statusLineHeight);
       expect(geometry.metrics[0]!.statusLabelText).toBe(width <= 920 ? "Update" : "Update available");
       for (const row of geometry.metrics) {
         expect(row.actionCellCount).toBe(0);

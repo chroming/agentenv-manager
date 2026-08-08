@@ -2219,7 +2219,7 @@ export const SkillLibraryPanel = ({
                       label={t(maintenanceStatusLabel)}
                     />
                   )}
-                  {statusDetail ? <span className="sr-only">{statusDetail}</span> : null}
+                  {statusDetail ? <span className="ui-visually-hidden">{statusDetail}</span> : null}
                 </div>
                 <div className="library-actions-cell">
                   <div className="row-action-menu">

@@ -765,6 +765,8 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(updateReview!);
     expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledWith("github-reviewer");
     expect(githubRow).toHaveTextContent("Update available");
+    const updateDetail = githubRow.querySelector(".ui-visually-hidden");
+    expect(updateDetail).toHaveTextContent("available");
     expect(within(githubRow).queryByRole("button", { name: "Update github-reviewer" }))
       .not.toBeInTheDocument();
     expect(within(screen.getByRole("region", { name: "Library skills" })).queryByText("Action"))

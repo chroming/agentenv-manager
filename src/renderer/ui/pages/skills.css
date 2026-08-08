@@ -207,8 +207,7 @@
 }
 
 .skill-library-panel .library-table-row.is-globally-disabled .library-source-cell,
-.skill-library-panel .library-table-row.is-globally-disabled .library-usage-cell,
-.skill-library-panel .library-table-row.is-globally-disabled .library-status-detail {
+.skill-library-panel .library-table-row.is-globally-disabled .library-usage-cell {
   opacity: 0.62;
 }
 
@@ -333,8 +332,7 @@
 }
 
 .skill-library-panel .library-source-meta,
-.skill-library-panel .library-usage-detail,
-.skill-library-panel .library-status-detail {
+.skill-library-panel .library-usage-detail {
   align-items: center;
   align-self: stretch;
   color: var(--muted);
@@ -570,10 +568,6 @@
     display: grid;
     grid-column: 3;
     grid-row: 1 / span 2;
-  }
-
-  .skill-library-panel .library-status-detail {
-    display: none;
   }
 
   .skill-library-panel .library-update-status-full {

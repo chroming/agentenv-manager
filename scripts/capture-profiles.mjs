@@ -972,6 +972,7 @@ try {
   await sourceMergeDialog.getByText("Checking merged source...").waitFor({ state: "hidden" });
   await capturePage(page, join(outputDir, "skills-source-merge-920x620.png"));
   await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Exit merge selection" }).click();
   await page.getByRole("tab", { name: "Skill list" }).click();
   await page.getByRole("tab", { name: /Disabled/ }).click();
   await capturePage(page, join(outputDir, "skills-disabled-920x620.png"));
@@ -1023,6 +1024,21 @@ try {
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "skills-update-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
+  await page.getByRole("tab", { name: "By source" }).click();
+  const updatedSourceGroup = page.locator(".skill-source-group").filter({
+    hasText: "react-best-practices"
+  }).first();
+  await updatedSourceGroup.getByRole("button", { name: /Source actions for/ }).click();
+  const checkSourceMenuItem = page.getByRole("menuitem", { name: "Check source" });
+  await checkSourceMenuItem.click();
+  await updatedSourceGroup.locator(".skill-source-status-label")
+    .filter({ hasText: "Update available" })
+    .waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "skills-sources-update-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "skills-sources-update-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  await page.getByRole("tab", { name: "Skill list" }).click();
   await page
     .getByRole("group", { name: "Library item react-best-practices" })
     .getByRole("button", { name: "Update react-best-practices" })

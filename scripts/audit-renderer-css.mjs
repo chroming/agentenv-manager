@@ -36,12 +36,25 @@ const listTsxFiles = async (directory) => {
 const files = (await listCssFiles(rendererRoot))
   .map((file) => relative(projectRoot, file))
   .sort();
+const tsxFiles = await listTsxFiles(rendererRoot);
 const legacyActionClassUsage = (
   await Promise.all(
-    (await listTsxFiles(rendererRoot)).map(async (file) => {
+    tsxFiles.map(async (file) => {
       const lines = (await readFile(file, "utf8")).split("\n");
       return lines.flatMap((line, index) =>
         /className=.*\b(?:primary-action|secondary-action|danger-action)\b/.test(line)
+          ? [{ file: relative(projectRoot, file), line: index + 1 }]
+          : []
+      );
+    })
+  )
+).flat();
+const unsupportedHiddenUtilityUsage = (
+  await Promise.all(
+    tsxFiles.map(async (file) => {
+      const lines = (await readFile(file, "utf8")).split("\n");
+      return lines.flatMap((line, index) =>
+        /className=(?:["'`][^"'`]*\bsr-only\b|\{[^}]*["'`]sr-only["'`])/.test(line)
           ? [{ file: relative(projectRoot, file), line: index + 1 }]
           : []
       );
@@ -358,6 +371,7 @@ const result = {
     pagePrimitiveRedefinitions,
     pagePrimitiveDescendantOverrides,
     unapprovedCrossFileSelectors: unapprovedSharedSelectors,
+    unsupportedHiddenUtilityUsage,
     undefinedCustomProperties,
     importsControlLayer: /@import\s+"\.\/controls\.css"\s+layer\(controls\)/.test(rendererIndex),
     ordersControlLayerBeforeLegacy:
@@ -430,6 +444,11 @@ if (shouldCheck) {
       : undefined,
     result.architecture.rawInteractiveControlViolations.length > 0
       ? `Feature markup must use shared UI components: ${result.architecture.rawInteractiveControlViolations.join("; ")}`
+      : undefined,
+    result.architecture.unsupportedHiddenUtilityUsage.length > 0
+      ? `Visually hidden content must use ui-visually-hidden: ${result.architecture.unsupportedHiddenUtilityUsage
+          .map(({ file, line }) => `${file}:${line}`)
+          .join(", ")}`
       : undefined,
     result.architecture.animationOwnerViolations.length > 0
       ? `Animation declarations belong to shared primitives or accessibility: ${result.architecture.animationOwnerViolations

@@ -246,6 +246,7 @@ describe("ProfileEvaluationDialog", () => {
     const overview = screen.getByRole("tabpanel");
     expect(screen.getByRole("tablist", { name: "Comparison result views" }))
       .toHaveClass("ui-segmented-control");
+    expect(within(overview).getByText("Metric")).toHaveClass("ui-visually-hidden");
     expect(within(overview).getByText("Agent now")).toBeInTheDocument();
     expect(within(overview).getByText("With Profile")).toBeInTheDocument();
     expect(within(overview).getByText("1 output file differs")).toBeInTheDocument();

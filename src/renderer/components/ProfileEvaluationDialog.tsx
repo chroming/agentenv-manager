@@ -567,7 +567,7 @@ export const ProfileEvaluationDialog = ({
                     <table className="profile-comparison-metrics">
                       <thead>
                         <tr>
-                          <th scope="col"><span className="sr-only">{t("Metric")}</span></th>
+                          <th scope="col"><span className="ui-visually-hidden">{t("Metric")}</span></th>
                           <th scope="col">{t("Agent now")}</th>
                           <th scope="col">{t("With Profile")}</th>
                           <th scope="col">{t("Difference")}</th>
