@@ -23,6 +23,73 @@ export interface ResourceDisclosureHeaderGeometry {
   x: number;
 }
 
+export interface AlignedResourceRowGeometry {
+  actionKind: "icon" | "menu" | "none" | "switch" | "text";
+  actionLeft: number | null;
+  contained: boolean;
+  stateContentFits: boolean;
+  stateContentTop: number;
+  stateLeft: number;
+}
+
+export const readAlignedResourceRows = async (
+  rows: Locator
+): Promise<AlignedResourceRowGeometry[]> => rows.evaluateAll((elements) => elements.map((row) => {
+  const rowBox = row.getBoundingClientRect();
+  const state = row.querySelector<HTMLElement>(".ui-resource-row__state");
+  if (!state) throw new Error("Aligned resource row is missing its state lane");
+  const stateContent = state.firstElementChild instanceof HTMLElement
+    ? state.firstElementChild
+    : state;
+  const actions = row.querySelector<HTMLElement>(".ui-resource-row__actions");
+  const actionKind = !actions
+    ? "none"
+    : actions.querySelector("[role='switch']")
+      ? "switch"
+      : actions.querySelector(".profile-skill-current-state")
+        ? "text"
+      : actions.querySelector("[role='menu'], [aria-haspopup='menu']")
+        ? "menu"
+        : actions.querySelector("button")
+          ? "icon"
+          : "text";
+  return {
+    actionKind,
+    actionLeft: actions ? Math.round(actions.getBoundingClientRect().left) : null,
+    contained: row.scrollWidth <= row.clientWidth + 1,
+    stateContentFits: (
+      stateContent.scrollWidth <= stateContent.clientWidth + 1 &&
+      stateContent.scrollHeight <= stateContent.clientHeight + 1
+    ) || Boolean(
+      stateContent.getAttribute("title") ||
+      stateContent.dataset.uiOverflowDetail === "true"
+    ),
+    stateContentTop: Math.round(stateContent.getBoundingClientRect().top - rowBox.top),
+    stateLeft: Math.round(state.getBoundingClientRect().left)
+  };
+}));
+
+export const expectAlignedResourceRows = (
+  geometry: AlignedResourceRowGeometry[],
+  { minimumRows = 2, requireMixedActions = false } = {}
+) => {
+  expect(geometry.length).toBeGreaterThanOrEqual(minimumRows);
+  expect(Math.max(...geometry.map(({ stateLeft }) => stateLeft)) -
+    Math.min(...geometry.map(({ stateLeft }) => stateLeft))).toBeLessThanOrEqual(1);
+  const actionLefts = geometry.flatMap(({ actionLeft }) => actionLeft === null ? [] : [actionLeft]);
+  if (actionLefts.length > 1) {
+    expect(Math.max(...actionLefts) - Math.min(...actionLefts)).toBeLessThanOrEqual(1);
+  }
+  expect(Math.max(...geometry.map(({ stateContentTop }) => stateContentTop)) -
+    Math.min(...geometry.map(({ stateContentTop }) => stateContentTop))).toBeLessThanOrEqual(1);
+  expect(geometry.every(({ contained, stateContentFits }) => contained && stateContentFits))
+    .toBe(true);
+  if (requireMixedActions) {
+    expect(new Set(geometry.map(({ actionKind }) => actionKind).filter((kind) => kind !== "none")).size)
+      .toBeGreaterThan(1);
+  }
+};
+
 export const readResourceDisclosureHeaders = async (
   scope: Locator
 ): Promise<ResourceDisclosureHeaderGeometry[]> => scope.locator(

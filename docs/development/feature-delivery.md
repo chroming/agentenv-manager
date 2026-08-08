@@ -39,6 +39,10 @@ button scale, tab indicator, status vocabulary, or modal hierarchy.
 
 If the existing primitive cannot express the feature, change its owner and
 sweep sibling surfaces. Do not hide a shared rule in a page override.
+Repeated resource rows use `AlignedResourceList`; pages select a named action
+track and may not recreate state/action columns with local CSS. A shared UI
+change must keep its mixed-state fixture, cross-page geometry helper, and strict
+region captures registered with `audit:ui-contracts`.
 
 ## 3. Register executable evidence
 

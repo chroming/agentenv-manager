@@ -53,7 +53,9 @@ must state that unselected Electron scenarios were not run.
 `AGENTENV_TEST_BASE`), always runs TypeScript, uses Vitest's dependency graph
 for related tests, widens shared IPC/Renderer boundaries to their contract
 tests, and selects architecture audits from the changed ownership area. It
-never launches Electron.
+never launches Electron. Shared UI primitive or token changes additionally run
+the primitive fixture tests and `audit:ui-contracts`; the complete commit gate
+then proves the registered sibling-page geometry in rebuilt Electron.
 
 Most Vitest files are parallel-safe. Files that launch a real Electron process
 share operating-system resources such as application lifecycle, focus, native
@@ -112,7 +114,9 @@ false changes.
 The pixel comparator allows a small per-channel tolerance and a one-pixel
 neighborhood match for platform antialiasing. The configured changed-pixel
 ratio remains intentionally low enough to reject a different page, missing
-content, clipping, or meaningful layout movement. A baseline may be updated
+content, clipping, or meaningful layout movement. Dense, high-risk regions are
+captured independently and use stricter per-image thresholds so a small local
+regression cannot hide inside an otherwise unchanged window. A baseline may be updated
 only after a cold pixel review, a repeat capture, and a deliberate fault that
 proves the comparator still fails.
 

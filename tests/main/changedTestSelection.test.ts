@@ -30,4 +30,17 @@ describe("changed test selection", () => {
       "audit:targets"
     ]));
   });
+
+  it("routes shared UI changes through primitive tests and the UI contract audit", () => {
+    const selection = selectQuickVerification([
+      "src/renderer/components/ui/AlignedResourceList.tsx",
+      "src/renderer/ui/primitives.css"
+    ]);
+
+    expect(selection.extraTests).toEqual(expect.arrayContaining([
+      "tests/renderer/uiPrimitives.test.tsx",
+      "tests/main/uiContractAudit.test.ts"
+    ]));
+    expect(selection.audits).toContain("audit:ui-contracts");
+  });
 });

@@ -2463,6 +2463,7 @@ const zhTW: Record<string, string> = {
   "{{verb}} {{date}}": "{{verb}} {{date}}",
   "Last successful refresh: {{date}}": "上次成功重新整理：{{date}}",
   "Conversation list": "對話列表",
+  "Search": "搜尋",
   "Search indexed history…": "搜尋已建立索引的歷史…",
   "Search conversations": "搜尋對話",
   "Searches all indexed conversations and message text.": "搜尋所有已建立索引的對話及訊息內容。",

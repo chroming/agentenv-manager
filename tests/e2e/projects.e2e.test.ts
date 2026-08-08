@@ -5,8 +5,10 @@ import electronPath from "electron";
 import { _electron as electron, type ElectronApplication } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  expectAlignedResourceRows,
   expectNoHorizontalOverflow,
   expectStableResourceDisclosureHeaders,
+  readAlignedResourceRows,
   readResourceDisclosureHeaders
 } from "./layoutAssertions";
 import { requireCurrentElectronBuild } from "./currentBuild";
@@ -177,16 +179,10 @@ describe("Workspaces desktop workflow", () => {
       '[data-resource-disclosure-id="workspace-instructions"] .project-resource-entry'
     ).first();
     const skillResource = skillResourceList.locator(".project-resource-entry").first();
-    await instructionResource.locator(".ui-resource-row__actions").evaluate((actions) => {
-      actions.style.width = "56px";
-    });
-    const workspaceStateLefts = await Promise.all(
-      [instructionResource, skillResource].map((row) => row.locator(
-        ".ui-resource-row__state"
-      ).evaluate((state) => Math.round(state.getBoundingClientRect().left)))
+    expectAlignedResourceRows(
+      await readAlignedResourceRows(page.locator(".project-resource-entry")),
+      { minimumRows: 2 }
     );
-    expect(Math.max(...workspaceStateLefts) - Math.min(...workspaceStateLefts))
-      .toBeLessThanOrEqual(1);
     const resourceHierarchyGeometry = await skillResourceList.evaluate((list) => {
       const row = list.querySelector<HTMLElement>(".project-resource-entry")!;
       const listBox = list.getBoundingClientRect();
@@ -243,6 +239,10 @@ describe("Workspaces desktop workflow", () => {
 
     if (captureDir) {
       await page.screenshot({ path: join(captureDir, "projects-selected-920x620.png") });
+      await page.locator(".project-resource-groups").screenshot({
+        animations: "disabled",
+        path: join(captureDir, "workspaces-resources-region-920.png")
+      });
       await page.setViewportSize({ width: 1180, height: 728 });
       await expectNoHorizontalOverflow(page);
       await page.screenshot({ path: join(captureDir, "projects-selected-1180x728.png") });

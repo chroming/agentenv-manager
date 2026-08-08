@@ -65,7 +65,8 @@
   --resource-row-default: 58px;
   --resource-row-comfortable: 64px;
   --resource-icon-box: 30px;
-  --resource-row-actions-track: 108px;
+  --resource-row-actions-standard: 108px;
+  --resource-row-actions-compact: 56px;
   --resource-row-metadata-track: 0px;
   --resource-row-state-track: 112px;
   --page-header-height: 44px;

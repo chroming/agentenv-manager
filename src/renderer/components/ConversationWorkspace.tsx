@@ -1457,7 +1457,7 @@ export const ConversationWorkspace = ({
                     : <Search size={15} />}
                   label={t("Search conversations")}
                   value={query}
-                  placeholder={t("Search indexed history…")}
+                  placeholder={t("Search")}
                   title={t("Searches all indexed conversations and message text.")}
                   onChange={(event) => setQuery(event.target.value)}
                 />

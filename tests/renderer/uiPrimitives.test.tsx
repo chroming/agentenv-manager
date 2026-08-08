@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ActionMenu,
   ActionMenuItem,
+  AlignedResourceList,
   Badge,
   Button,
   ControlGroup,
@@ -33,6 +34,7 @@ import {
   Switch,
   TabBar
 } from "../../src/renderer/components/ui";
+import { alignedResourceRowFixtures } from "../fixtures/alignedResourceRows";
 import { OverflowTooltip } from "../../src/renderer/components/OverflowTooltip";
 import { InfoTip } from "../../src/renderer/components/InfoTip";
 import { useModalDialog } from "../../src/renderer/hooks/useModalDialog";
@@ -463,6 +465,36 @@ describe("renderer UI primitives", () => {
     );
     expect(row.querySelector(".ui-resource-row__metadata")).toHaveTextContent("GitHub · main");
     expect(screen.getByText("Update")).toHaveClass("ui-badge--warning");
+  });
+
+  it("owns mixed resource state and action tracks through one named list primitive", () => {
+    render(
+      <AlignedResourceList actionTrack="compact" aria-label="Mixed resources" role="list">
+        {alignedResourceRowFixtures.map((fixture) => (
+          <ResourceRow
+            actions={fixture.action === "none" ? undefined : <span>{fixture.action}</span>}
+            description={fixture.description}
+            icon={<RefreshCw />}
+            key={fixture.name}
+            role="listitem"
+            state={fixture.state}
+            title={fixture.name}
+          />
+        ))}
+      </AlignedResourceList>
+    );
+
+    const list = screen.getByRole("list", { name: "Mixed resources" });
+    expect(list).toHaveClass(
+      "ui-resource-children",
+      "ui-aligned-resource-list",
+      "ui-aligned-resource-list--compact-actions"
+    );
+    expect(within(list).getAllByRole("listitem")).toHaveLength(
+      alignedResourceRowFixtures.length
+    );
+    expect(within(list).getByText("目前由 Agent 控制")).toBeInTheDocument();
+    expect(within(list).getByText("來源無法讀取")).toBeInTheDocument();
   });
 
   it("owns list-detail geometry through one shared desktop pattern", () => {

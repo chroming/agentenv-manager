@@ -42,6 +42,7 @@ import {
 import {
   ActionMenu,
   ActionMenuItem,
+  AlignedResourceList,
   Button,
   ControlGroup,
   DialogBody,
@@ -734,7 +735,10 @@ export const ProjectsWorkspace = ({
                             </Button>
                           </ResourcePanelToolbar>
                         ) : null}
-                        <div className="ui-resource-children ui-resource-children--aligned project-resource-section__list">
+                        <AlignedResourceList
+                          actionTrack="compact"
+                          className="project-resource-section__list"
+                        >
                           {resources.map((resource) => {
                           const consumerNames = resource.consumerAgentIds
                             .map((agentId) => targets.find((target) => target.id === agentId)?.name ?? agentId);
@@ -799,7 +803,7 @@ export const ProjectsWorkspace = ({
                           {resources.length === 0 ? (
                             <p className="project-resource-note">{t("No files detected")}</p>
                           ) : null}
-                        </div>
+                        </AlignedResourceList>
                       </ResourceDisclosureSection>
                     );
                   })}

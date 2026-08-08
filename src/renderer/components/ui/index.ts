@@ -1,4 +1,8 @@
 export { ActionMenu, ActionMenuItem } from "./ActionMenu";
+export {
+  AlignedResourceList,
+  type AlignedResourceListActionTrack
+} from "./AlignedResourceList";
 export { Badge } from "./Badge";
 export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./Button";
 export { ChoiceInput, type ChoiceInputProps } from "./ChoiceInput";

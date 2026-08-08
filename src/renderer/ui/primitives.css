@@ -699,13 +699,26 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
 }
 
 /* Repeated rows share stable state and action tracks even when their contents differ. */
-.ui-resource-children--aligned > .ui-resource-row {
+.ui-aligned-resource-list {
+  display: grid;
+}
+
+.ui-aligned-resource-list > .ui-resource-row {
   grid-template-columns:
     var(--resource-icon-box)
     minmax(0, 1fr)
     var(--resource-row-metadata-track, 0)
     var(--resource-row-state-track, 112px)
-    var(--resource-row-actions-track, 108px);
+    var(--resource-row-actions-standard, 108px);
+}
+
+.ui-aligned-resource-list--compact-actions > .ui-resource-row {
+  grid-template-columns:
+    var(--resource-icon-box)
+    minmax(0, 1fr)
+    var(--resource-row-metadata-track, 0)
+    var(--resource-row-state-track, 112px)
+    var(--resource-row-actions-compact, 56px);
 }
 
 .ui-resource-row--compact {

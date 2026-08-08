@@ -13,6 +13,7 @@ import { ResourceIconArtwork } from "./ResourceIconPicker";
 import { LibrarySkillPicker } from "./LibrarySkillPicker";
 import type { ProfileResourcePolicy } from "./ProfileResourcePolicyControl";
 import {
+  AlignedResourceList,
   Button,
   DialogBody,
   DialogFooter,
@@ -184,8 +185,8 @@ export const SkillsEditor = ({
         </div>
       </ResourcePanelToolbar>
 
-      <div
-        className="ui-resource-children ui-resource-children--aligned profile-skill-list"
+      <AlignedResourceList
+        className="profile-skill-list"
         role="list"
       >
         {value.skills.map((reference, index) => {
@@ -360,7 +361,7 @@ export const SkillsEditor = ({
             <span>{t("Add reusable skills from Library.")}</span>
           </div>
         ) : null}
-      </div>
+      </AlignedResourceList>
 
       {pickerOpen ? (
         <ModalFrame

@@ -17,6 +17,11 @@ export const selectQuickVerification = (changedFiles) => {
   const translationsChanged = files.some((file) =>
     file === "src/renderer/i18n.tsx" || file.includes("/i18n/")
   );
+  const sharedUiChanged = files.some((file) =>
+    file.startsWith("src/renderer/components/ui/") ||
+    file === "src/renderer/ui/primitives.css" ||
+    file === "src/renderer/ui/tokens.css"
+  );
 
   const extraTests = [];
   if (rendererChanged || sharedBoundaryChanged) {
@@ -25,11 +30,18 @@ export const selectQuickVerification = (changedFiles) => {
   if (sharedBoundaryChanged) {
     extraTests.push("tests/main/packagePackaging.test.ts");
   }
+  if (sharedUiChanged) {
+    extraTests.push(
+      "tests/renderer/uiPrimitives.test.tsx",
+      "tests/main/uiContractAudit.test.ts"
+    );
+  }
 
   const audits = ["audit:modules"];
   if (styleChanged) audits.push("audit:styles");
   if (targetBoundaryChanged) audits.push("audit:targets");
   if (translationsChanged || rendererChanged) audits.push("audit:translations");
+  if (sharedUiChanged) audits.push("audit:ui-contracts");
 
   return {
     audits: unique(audits),

@@ -65,7 +65,8 @@ for (const script of [
   "audit:modules",
   "audit:targets",
   "audit:translations",
-  "audit:features"
+  "audit:features",
+  "audit:ui-contracts"
 ]) {
   await run("npm", ["run", script]);
 }

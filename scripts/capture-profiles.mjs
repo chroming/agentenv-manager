@@ -639,6 +639,25 @@ const capturePage = async (
   }
 };
 
+const captureRegion = async (page, locator, path) => {
+  await locator.scrollIntoViewIfNeeded();
+  await page.evaluate(async () => {
+    await document.fonts?.ready;
+    for (const animation of document.getAnimations()) {
+      try {
+        animation.finish();
+      } catch {
+        animation.pause();
+        animation.currentTime = 0;
+      }
+    }
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
+  });
+  await page.mouse.move(2, 2);
+  await locator.screenshot({ path, animations: "disabled" });
+};
+
 const fileExists = async (path) => {
   try {
     await access(path);
@@ -1397,6 +1416,11 @@ try {
     page,
     join(outputDir, "profile-resources-multi-expanded-920x620.png")
   );
+  await captureRegion(
+    page,
+    page.locator('[data-profile-composer-id="skills"]'),
+    join(outputDir, "profile-skills-region-920.png")
+  );
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(
     page,
@@ -1626,6 +1650,11 @@ try {
   await page.getByRole("menuitemradio", { name: "Largest" }).click();
   await page.locator(".conversation-date-group").waitFor({ state: "detached" });
   await capturePage(page, join(outputDir, "conversations-largest-920x620.png"));
+  await captureRegion(
+    page,
+    page.locator(".conversation-list-pane"),
+    join(outputDir, "conversations-list-region-920.png")
+  );
   await conversationSort.click();
   await page.getByRole("menuitemradio", { name: "Recent" }).click();
   await page.locator(".conversation-date-group").first().waitFor({ state: "visible" });

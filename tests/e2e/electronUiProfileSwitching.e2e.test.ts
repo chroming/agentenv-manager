@@ -28,6 +28,7 @@ import {
 } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  expectAlignedResourceRows,
   expectInViewport,
   expectNoHorizontalOverflow,
   expectNoOverlap,
@@ -36,6 +37,7 @@ import {
   expectTextFits,
   expectTopmost,
   findVisibleTextLayoutDefects,
+  readAlignedResourceRows,
   readResourceDisclosureHeaders
 } from "./layoutAssertions";
 import { requireCurrentElectronBuild } from "./currentBuild";
@@ -9480,6 +9482,19 @@ describe("Electron UI profile switching e2e", () => {
       new Set(localizedPolicyBoxes.map((box) => Math.round(box!.x + box!.width))).size
     ).toBe(1);
     expect(new Set(localizedPolicyBoxes.map((box) => Math.round(box!.height))).size).toBe(1);
+    const localizedSkillsSection = page.locator('[data-profile-composer-id="skills"]');
+    const localizedSkillsTrigger = localizedSkillsSection.getByRole("button", {
+      name: "技能",
+      exact: true
+    });
+    if (await localizedSkillsTrigger.getAttribute("aria-expanded") !== "true") {
+      await localizedSkillsTrigger.click();
+    }
+    await localizedSkillsSection.locator(".profile-skill-row").first().waitFor();
+    expectAlignedResourceRows(
+      await readAlignedResourceRows(localizedSkillsSection.locator(".profile-skill-row")),
+      { minimumRows: 1 }
+    );
     await electronApp.evaluate(() => {
       process.env.AGENTENV_TEST_PROFILE_READ_DELAY_ID = "ui-opencode-beta";
       process.env.AGENTENV_TEST_PROFILE_READ_DELAY_MS = "250";
@@ -9874,53 +9889,19 @@ describe("Electron UI profile switching e2e", () => {
       { width: 920, height: 620 }
     ]) {
       await resizeAppWindow(page, viewport.width, viewport.height);
-      const geometry = await page.locator(".profile-skill-row").evaluateAll((rows) =>
-        rows.map((row) => {
-          const rowBox = row.getBoundingClientRect();
-          const state = row.querySelector<HTMLElement>(".profile-skill-state")!;
-          const stateTitle = state;
-          const action = row.querySelector<HTMLElement>(".ui-resource-row__actions")!;
-          const stateBox = state.getBoundingClientRect();
-          return {
-            actionLeft: action.getBoundingClientRect().left,
-            contained: row.scrollWidth <= row.clientWidth + 1,
-            stateLeft: stateBox.left,
-            stateTitleFits: stateTitle.scrollWidth <= stateTitle.clientWidth + 1,
-            stateTitleTop: stateTitle.getBoundingClientRect().top - rowBox.top
-          };
-        })
+      expectAlignedResourceRows(
+        await readAlignedResourceRows(page.locator(".profile-skill-row")),
+        { minimumRows: 4 }
       );
-      expect(geometry.length).toBeGreaterThanOrEqual(4);
-      expect(Math.max(...geometry.map((item) => item.stateLeft)) -
-        Math.min(...geometry.map((item) => item.stateLeft))).toBeLessThanOrEqual(1);
-      expect(Math.max(...geometry.map((item) => item.actionLeft)) -
-        Math.min(...geometry.map((item) => item.actionLeft))).toBeLessThanOrEqual(1);
-      expect(Math.max(...geometry.map((item) => item.stateTitleTop)) -
-        Math.min(...geometry.map((item) => item.stateTitleTop))).toBeLessThanOrEqual(1);
-      expect(geometry.every((item) => item.contained && item.stateTitleFits)).toBe(true);
     }
 
     await setComposerResourcePolicy(page, "Skills", "OpenCode", "Keep Agent");
     await expect.poll(() => newRow.locator(".profile-skill-state").textContent())
       .toContain("Current state unavailable");
-    const mixedActionGeometry = await page.locator(".profile-skill-row").evaluateAll((rows) =>
-      rows.map((row) => {
-        const state = row.querySelector<HTMLElement>(".profile-skill-state")!;
-        const actions = row.querySelector<HTMLElement>(".ui-resource-row__actions")!;
-        return {
-          actionKind: actions.querySelector("[role='switch']")
-            ? "switch"
-            : actions.querySelector(".profile-skill-current-state")
-              ? "current-state"
-              : "other",
-          stateLeft: Math.round(state.getBoundingClientRect().left)
-        };
-      })
+    expectAlignedResourceRows(
+      await readAlignedResourceRows(page.locator(".profile-skill-row")),
+      { minimumRows: 4, requireMixedActions: true }
     );
-    expect(new Set(mixedActionGeometry.map(({ actionKind }) => actionKind)).size)
-      .toBeGreaterThan(1);
-    expect(Math.max(...mixedActionGeometry.map(({ stateLeft }) => stateLeft)) -
-      Math.min(...mixedActionGeometry.map(({ stateLeft }) => stateLeft))).toBeLessThanOrEqual(1);
   }, standardElectronTestTimeout);
 
   it("keeps Profile Skill edits, Save, and Preview responsive with many Skills", async () => {
