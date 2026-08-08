@@ -5,7 +5,6 @@ export interface ResourceDisclosureSectionProps
   extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   actions?: ReactNode;
   description?: ReactNode;
-  descriptionMode?: "always" | "collapsed";
   expanded: boolean;
   icon?: ReactNode;
   id: string;
@@ -25,7 +24,6 @@ export const ResourceDisclosureSection = ({
   children,
   className = "",
   description,
-  descriptionMode = "always",
   expanded,
   icon,
   id,
@@ -86,10 +84,7 @@ export const ResourceDisclosureSection = ({
               {title}
             </strong>
             {description ? (
-              <span
-                className={`ui-resource-disclosure__description${descriptionMode === "collapsed" && expanded ? " ui-visually-hidden" : ""}`}
-                id={descriptionId}
-              >
+              <span className="ui-resource-disclosure__description" id={descriptionId}>
                 {description}
               </span>
             ) : null}

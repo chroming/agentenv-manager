@@ -5518,12 +5518,40 @@ describe("Electron UI profile switching e2e", () => {
     ).toBe(1);
     expect(new Set(policyBoxes.map((box) => Math.round(box!.height))).size).toBe(1);
     const collapsedComposerHeaders = await readResourceDisclosureHeaders(composer);
+    const instructionsSection = composer.locator(
+      '[data-profile-composer-id="instructions"]'
+    );
+    const instructionsHeader = instructionsSection.locator(
+      ".ui-resource-disclosure__header"
+    );
+    const collapsedInstructionsSurface = await instructionsHeader.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        backgroundColor: style.backgroundColor,
+        borderRadius: style.borderRadius,
+        boxShadow: style.boxShadow
+      };
+    });
     await expandComposerSection(page, "Skills");
     expectStableResourceDisclosureHeaders(
       collapsedComposerHeaders,
       await readResourceDisclosureHeaders(composer),
-      "skills"
+      ["skills"]
     );
+    await expandComposerSection(page, "Instructions");
+    expectStableResourceDisclosureHeaders(
+      collapsedComposerHeaders,
+      await readResourceDisclosureHeaders(composer),
+      ["instructions", "skills"]
+    );
+    expect(await skillsRow.getAttribute("aria-expanded")).toBe("true");
+    await page.mouse.move(0, 0);
+    await expect.poll(() => instructionsHeader.evaluate(
+      (element) => getComputedStyle(element).backgroundColor
+    )).toBe(collapsedInstructionsSurface.backgroundColor);
+    expect(await instructionsHeader.evaluate(
+      (element) => getComputedStyle(element).boxShadow
+    )).toBe(collapsedInstructionsSurface.boxShadow);
     const skillManager = composer.getByRole("region", { name: "Profile Skills" });
     const checkSkillUpdates = skillManager.getByRole("button", {
       name: "Check Profile Skill updates"
@@ -5551,9 +5579,6 @@ describe("Electron UI profile switching e2e", () => {
     expect(Math.abs(skillHierarchy.childLeft - skillHierarchy.parentLeft)).toBeLessThanOrEqual(1);
     await skillsRow.click();
     await expect.poll(() => skillsRow.getAttribute("aria-expanded")).toBe("false");
-    const instructionsSection = composer.locator(
-      '[data-profile-composer-id="instructions"]'
-    );
     const instructionsDisclosure = instructionsSection.getByRole("button", {
       name: "Instructions",
       exact: true
@@ -5578,11 +5603,9 @@ describe("Electron UI profile switching e2e", () => {
     });
     expect(hoveredDisclosureStyle.borderRadius).toBe("0px");
     expect(hoveredDisclosureStyle.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
-    await instructionsDisclosure.click();
-    await expect.poll(() => instructionsDisclosure.getAttribute("aria-expanded")).toBe("true");
-    const pressedDisclosureStyle = await instructionsSection.locator(
-      ".ui-resource-disclosure__header"
-    ).evaluate((element) => {
+    expect(await instructionsDisclosure.getAttribute("aria-expanded")).toBe("true");
+    await page.mouse.move(0, 0);
+    const expandedDisclosureStyle = await instructionsHeader.evaluate((element) => {
       const style = getComputedStyle(element);
       return {
         backgroundColor: style.backgroundColor,
@@ -5590,9 +5613,7 @@ describe("Electron UI profile switching e2e", () => {
         boxShadow: style.boxShadow
       };
     });
-    expect(pressedDisclosureStyle.borderRadius).toBe("0px");
-    expect(pressedDisclosureStyle.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
-    expect(pressedDisclosureStyle.boxShadow).not.toBe("none");
+    expect(expandedDisclosureStyle).toEqual(collapsedInstructionsSurface);
     const instructionHierarchy = await instructionsSection.evaluate((section) => {
       const parent = section.querySelector<HTMLElement>(".ui-resource-disclosure__title")!;
       const child = section.querySelector<HTMLElement>(".instruction-editor__header > label")!;

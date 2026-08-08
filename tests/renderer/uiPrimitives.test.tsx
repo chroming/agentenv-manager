@@ -543,7 +543,6 @@ describe("renderer UI primitives", () => {
         icon={<RefreshCw />}
         title="Skills"
         description="Project-owned Skill files"
-        descriptionMode="collapsed"
         summary="3"
         expanded
         nested
@@ -561,7 +560,7 @@ describe("renderer UI primitives", () => {
     expect(within(section).getByRole("button", { name: "Collapse Skills" }))
       .toHaveAttribute("aria-expanded", "true");
     expect(within(section).getByText("Project-owned Skill files"))
-      .toHaveClass("ui-visually-hidden");
+      .not.toHaveClass("ui-visually-hidden");
     expect(within(section).getByRole("button", { name: "Collapse Skills" }))
       .toHaveAccessibleDescription("Project-owned Skill files 3");
     expect(within(section).getByText("3")).toHaveClass("ui-resource-disclosure__summary");

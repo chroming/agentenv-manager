@@ -57,7 +57,7 @@ describe("ProfileComposerSection", () => {
       screen.getByText("Choose reusable capabilities").closest(
         ".ui-resource-disclosure__description"
       )
-    ).toHaveClass("ui-visually-hidden");
+    ).not.toHaveClass("ui-visually-hidden");
     expect(screen.getByTestId("section-icon")).toBeInTheDocument();
 
     fireEvent.click(trigger);

@@ -13,6 +13,8 @@ export interface TextLayoutDefect {
 
 export interface ResourceDisclosureHeaderGeometry {
   actionsTop: number | null;
+  descriptionTop: number | null;
+  descriptionVisible: boolean;
   expanded: boolean;
   height: number;
   id: string;
@@ -28,12 +30,28 @@ export const readResourceDisclosureHeaders = async (
 ).evaluateAll((sections) => sections.map((section) => {
   const header = section.querySelector<HTMLElement>(".ui-resource-disclosure__header")!;
   const title = section.querySelector<HTMLElement>(".ui-resource-disclosure__title")!;
+  const description = section.querySelector<HTMLElement>(
+    ".ui-resource-disclosure__description"
+  );
   const actions = section.querySelector<HTMLElement>(".ui-resource-disclosure__actions");
   const headerBox = header.getBoundingClientRect();
   const titleBox = title.getBoundingClientRect();
+  const descriptionBox = description?.getBoundingClientRect();
+  const descriptionStyle = description ? getComputedStyle(description) : undefined;
   const actionsBox = actions?.getBoundingClientRect();
   return {
     actionsTop: actionsBox ? Math.round(actionsBox.top - headerBox.top) : null,
+    descriptionTop: descriptionBox
+      ? Math.round(descriptionBox.top - headerBox.top)
+      : null,
+    descriptionVisible: Boolean(
+      description &&
+      descriptionBox &&
+      descriptionBox.width > 0 &&
+      descriptionBox.height > 0 &&
+      descriptionStyle?.display !== "none" &&
+      descriptionStyle?.visibility !== "hidden"
+    ),
     expanded: section.classList.contains("is-expanded"),
     height: Math.round(headerBox.height),
     id: section.getAttribute("data-resource-disclosure-id") ?? "",
@@ -46,7 +64,7 @@ export const readResourceDisclosureHeaders = async (
 export const expectStableResourceDisclosureHeaders = (
   before: ResourceDisclosureHeaderGeometry[],
   after: ResourceDisclosureHeaderGeometry[],
-  activeId: string
+  expandedIds: string[]
 ) => {
   expect(after).toHaveLength(before.length);
   for (const initial of before) {
@@ -58,13 +76,13 @@ export const expectStableResourceDisclosureHeaders = (
       width: initial.width,
       x: initial.x
     });
-    if (initial.id !== activeId) {
-      expect(current?.titleTop).toBe(initial.titleTop);
-      expect(current?.actionsTop).toBe(initial.actionsTop);
-    }
+    expect(current?.titleTop).toBe(initial.titleTop);
+    expect(current?.descriptionTop).toBe(initial.descriptionTop);
+    expect(current?.descriptionVisible).toBe(true);
+    expect(current?.actionsTop).toBe(initial.actionsTop);
   }
-  expect(after.filter(({ expanded }) => expanded)).toHaveLength(1);
-  expect(after.find(({ id }) => id === activeId)?.expanded).toBe(true);
+  expect(after.filter(({ expanded }) => expanded).map(({ id }) => id).sort())
+    .toEqual([...expandedIds].sort());
 };
 
 const readBox = async (locator: Locator): Promise<Box> => {

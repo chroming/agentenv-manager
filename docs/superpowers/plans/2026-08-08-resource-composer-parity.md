@@ -5,8 +5,8 @@
 **Goal:** Make Profiles and Workspaces use one stable resource disclosure and expanded-content
 grammar, including a regression gate that prevents sibling header resize and reflow.
 
-**Architecture:** Keep `ResourceDisclosureSection` as the semantic primitive, share the exclusive
-expansion controller and the composition needed for toolbar/children/empty-state parity, and make
+**Architecture:** Keep `ResourceDisclosureSection` as the semantic primitive, share the independent
+expansion-set controller and the composition needed for toolbar/children/empty-state parity, and make
 Profile/Workspace code thin semantic adapters. Move geometry into the shared pattern owner,
 remove the geometry slot escape hatch, and delete page/legacy redraws.
 
@@ -35,7 +35,7 @@ visual capture tooling; no new dependency.
 ### Task 2: Add shared expanded-content composition
 
 **Files:**
-- Create: `src/renderer/components/ui/useExclusiveDisclosure.ts`
+- Create: `src/renderer/components/ui/useDisclosureSet.ts`
 - Reuse: `src/renderer/components/ui/ResourcePanelToolbar.tsx`
 - Reuse: `src/renderer/components/ui/ResourceRow.tsx`
 - Modify: `src/renderer/components/ui/index.ts`
@@ -76,7 +76,7 @@ visual capture tooling; no new dependency.
 - Modify: `src/renderer/ui/pages/projects.css`
 - Test: `tests/renderer/ProjectsWorkspace.test.tsx`
 
-- [ ] Add a failing test for exclusive one-group expansion using the shared controller.
+- [ ] Add a failing test for independent multi-group expansion using the shared controller.
 - [ ] Use the same shared expanded-content composition for all three resource types.
 - [ ] Preserve Workspace-specific edit/copy/remove and detected-only MCP semantics.
 - [ ] Verify zero, one, and many rows retain the canonical density.
@@ -96,7 +96,7 @@ visual capture tooling; no new dependency.
       pair identity includes surface, kind, state, viewport, locale, fixture, and artifact hash.
 - [ ] Cover collapsed/expanded, zero/one/many, long text, policy modes, and translated labels.
 - [ ] Assert header baselines, stable sibling lanes, toolbar/row heights, panel inset, no overlap,
-      exclusive expansion, focus retention, and one scroll owner on both surfaces.
+      independent multi-group expansion, focus retention, and one scroll owner on both surfaces.
 - [ ] Cover loading, partial/error, actionless MCP, zero/one/many rows, and Profile policy modes.
 - [ ] Rebuild, run focused Renderer/Electron tests, verify pixels, and cold-read paired captures.
 - [ ] Run `npm run verify:commit`, `npm run verify:visual`, and packaged smoke if shell behavior changed.

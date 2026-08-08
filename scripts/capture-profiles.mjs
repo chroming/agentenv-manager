@@ -823,6 +823,17 @@ try {
   await capturePage(page, join(outputDir, "workspaces-skills-expanded-1180x728.png"));
   await setWindowSize(page, windowHandle, 1440, 900);
   await capturePage(page, join(outputDir, "workspaces-skills-expanded-1440x900.png"));
+  await page.getByRole("button", { name: "Expand Instructions", exact: true }).click();
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(
+    page,
+    join(outputDir, "workspaces-resources-multi-expanded-920x620.png")
+  );
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(
+    page,
+    join(outputDir, "workspaces-resources-multi-expanded-1180x728.png")
+  );
   await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("button", { name: "Agents", exact: true }).click();
 
@@ -1338,6 +1349,16 @@ try {
       await skillPicker.waitFor({ state: "hidden" });
     }
   }
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(
+    page,
+    join(outputDir, "profile-resources-multi-expanded-920x620.png")
+  );
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(
+    page,
+    join(outputDir, "profile-resources-multi-expanded-1180x728.png")
+  );
   await setWindowSize(page, windowHandle, 1180, 728);
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   const previewDialog = page.getByRole("dialog", { name: "Preview" });

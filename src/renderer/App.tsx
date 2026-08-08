@@ -164,7 +164,7 @@ import {
   IconButton,
   PageHeader,
   SingleObjectWorkspace,
-  useExclusiveDisclosure
+  useDisclosureSet
 } from "./components/ui";
 import {
   deriveApplyActionLabel,
@@ -323,10 +323,12 @@ const AppContent = ({
   const [profileSearch, setProfileSearch] = useState("");
   const [profileSwitcherOpen, setProfileSwitcherOpen] = useState(false);
   const {
-    expandedId: activeComposerSection,
-    setExpandedId: setActiveComposerSection,
+    clearExpandedIds: clearComposerSections,
+    expandId: expandComposerSection,
+    isExpanded: composerSectionIsExpanded,
+    replaceExpandedIds: replaceComposerSections,
     toggleExpandedId: toggleComposerSection
-  } = useExclusiveDisclosure<ComposerSection>();
+  } = useDisclosureSet<ComposerSection>();
   const [isTargetMenuOpen, setIsTargetMenuOpen] = useState(false);
   const [isProfileActionsOpen, setIsProfileActionsOpen] = useState(false);
   const [profileDialogMode, setProfileDialogMode] = useState<ProfileDialogMode>();
@@ -1016,7 +1018,7 @@ const AppContent = ({
           initialTargetId ?? initialProfile.preferredTargetId ?? targetItems[0]?.id;
         setSelectedTargetId(initialProfileTargetId);
         setProfileTargetSelections({ [initialProfile.id]: initialProfileTargetId });
-        setActiveComposerSection(activeProfileId === initialProfile.id ? "skills" : undefined);
+        replaceComposerSections(activeProfileId === initialProfile.id ? ["skills"] : []);
         const requestId = beginProfileFlow();
         const profile = await window.agentEnv.readProfile(initialProfile.id);
         if (isMounted && isProfileFlowCurrent(requestId)) {
@@ -1077,7 +1079,7 @@ const AppContent = ({
     composerSection?: ComposerSection,
     targetOverrideId?: string
   ) => {
-    setActiveComposerSection(composerSection);
+    replaceComposerSections(composerSection ? [composerSection] : []);
     openWorkspaceNow("profiles");
     await loadSelectedProfile(profileId, {
       onBeforeLoad: () => {
@@ -1160,7 +1162,7 @@ const AppContent = ({
         }));
       }
       openWorkspaceNow("profiles");
-      setActiveComposerSection(composerSection);
+      if (composerSection) expandComposerSection(composerSection);
       return;
     }
     const profileName = profiles.find((profile) => profile.id === profileId)?.name ?? "profile";
@@ -1468,7 +1470,7 @@ const AppContent = ({
         });
         acceptProfileMetadata(saved, draftProfile.manifest.name);
       }
-      setActiveComposerSection(undefined);
+      clearComposerSections();
       openWorkspaceNow(
         profileCaptureOrigin === "targets" && profileCaptureScope === "skills"
           ? "targets"
@@ -1512,7 +1514,7 @@ const AppContent = ({
           : {})
       }));
       acceptSelectedProfile(saved);
-      setActiveComposerSection(undefined);
+      clearComposerSections();
       clearProfilePreview();
       setRollbackPreview(undefined);
     } catch (unknownError) {
@@ -4113,7 +4115,7 @@ const AppContent = ({
                             ? undefined
                             : t("Agent controlled")
                         }
-                        expanded={activeComposerSection === "instructions"}
+                        expanded={composerSectionIsExpanded("instructions")}
                         onToggle={() => toggleComposerSection("instructions")}
                         onPolicyChange={(policy) =>
                           updateSelectedResourceManagement("instructions", policy)
@@ -4157,7 +4159,7 @@ const AppContent = ({
                             ? undefined
                             : t("Agent controlled")
                         }
-                        expanded={activeComposerSection === "skills"}
+                        expanded={composerSectionIsExpanded("skills")}
                         onToggle={() => toggleComposerSection("skills")}
                         onPolicyChange={(policy) =>
                           updateSelectedResourceManagement("skills", policy)
@@ -4225,7 +4227,7 @@ const AppContent = ({
                             ? undefined
                             : t("Agent controlled")
                         }
-                        expanded={activeComposerSection === "mcp"}
+                        expanded={composerSectionIsExpanded("mcp")}
                         onToggle={() => toggleComposerSection("mcp")}
                         onPolicyChange={(policy) =>
                           updateSelectedResourceManagement("mcp", policy)

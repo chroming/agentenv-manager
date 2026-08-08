@@ -61,7 +61,7 @@ import {
   SingleObjectWorkspace,
   TextField,
   ResourceRow,
-  useExclusiveDisclosure
+  useDisclosureSet
 } from "./ui";
 
 type ProjectOperation = "add" | "refresh" | "rename" | "remove" | "add-skill" | "remove-skill" | "inspect" | "open" | "preview";
@@ -85,9 +85,9 @@ export const ProjectsWorkspace = ({
   const [agentSwitcherOpen, setAgentSwitcherOpen] = useState(false);
   const [agentQuery, setAgentQuery] = useState("");
   const {
-    expandedId: expandedKind,
+    isExpanded: resourceKindIsExpanded,
     toggleExpandedId: toggleResourceKind
-  } = useExclusiveDisclosure<ProjectResourceKind>();
+  } = useDisclosureSet<ProjectResourceKind>();
   const [selectedId, setSelectedId] = useState<string>();
   const [operation, setOperation] = useState<ProjectOperation>();
   const [error, setError] = useState("");
@@ -694,12 +694,11 @@ export const ProjectsWorkspace = ({
                     ["mcp", t("MCPs"), t("Detected only; AgentEnv does not edit these files"), <Plug size={17} aria-hidden="true" />]
                   ] as const).filter(([kind]) => resourceKindIsVisible(kind)).map(([kind, label, description, icon]) => {
                     const resources = resourcesByKind(kind);
-                    const expanded = expandedKind === kind;
+                    const expanded = resourceKindIsExpanded(kind);
                     return (
                       <ResourceDisclosureSection
                         className="project-resource-section"
                         description={description}
-                        descriptionMode="collapsed"
                         expanded={expanded}
                         icon={icon}
                         id={`workspace-${kind}`}

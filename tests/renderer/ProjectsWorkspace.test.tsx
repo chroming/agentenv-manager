@@ -182,7 +182,7 @@ describe("ProjectsWorkspace", () => {
       .not.toBeInTheDocument();
     fireEvent.click(within(skillsSection).getByRole("button", { name: "Expand Skills" }));
     expect(within(skillsSection).getByText("Regular files copied into this folder"))
-      .toHaveClass("ui-visually-hidden");
+      .not.toHaveClass("ui-visually-hidden");
     expect(within(skillsSection).getByText(/Tracked/)).toBeInTheDocument();
     expect(within(skillsSection).getByText(/2 Agents/)).toBeInTheDocument();
     expect(within(skillsSection).queryByText("OpenCode · codex")).not.toBeInTheDocument();
@@ -219,7 +219,7 @@ describe("ProjectsWorkspace", () => {
     expect(screen.getByText("The folder and its files will stay unchanged.")).toBeInTheDocument();
   });
 
-  it("keeps resource expansion exclusive across Instructions, Skills, and MCPs", async () => {
+  it("keeps resource groups independently expanded across Instructions, Skills, and MCPs", async () => {
     installApi();
     render(<ProjectsWorkspace targets={[target]} />);
 
@@ -231,12 +231,12 @@ describe("ProjectsWorkspace", () => {
       .toHaveAttribute("aria-expanded", "true");
 
     fireEvent.click(within(skills).getByRole("button", { name: "Expand Skills" }));
-    expect(within(instructions).getByRole("button", { name: "Expand Instructions" }))
-      .toHaveAttribute("aria-expanded", "false");
+    expect(within(instructions).getByRole("button", { name: "Collapse Instructions" }))
+      .toHaveAttribute("aria-expanded", "true");
     expect(within(skills).getByRole("button", { name: "Collapse Skills" }))
       .toHaveAttribute("aria-expanded", "true");
     expect(document.querySelectorAll('.ui-resource-disclosure [aria-expanded="true"]'))
-      .toHaveLength(1);
+      .toHaveLength(2);
   });
 
   it("opens only explicit instruction edit actions as a safe editor", async () => {

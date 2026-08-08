@@ -37,4 +37,4 @@ export {
 } from "./WorkspacePatterns";
 export { ToolbarOverflowMenu, type ToolbarOverflowMenuItem } from "./ToolbarOverflowMenu";
 export { focusInitialActionMenuItem, handleActionMenuKeyDown } from "./actionMenuKeyboard";
-export { useExclusiveDisclosure } from "./useExclusiveDisclosure";
+export { useDisclosureSet } from "./useDisclosureSet";

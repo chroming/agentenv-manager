@@ -40,13 +40,17 @@ state pairs, paired captures, manual pixel review, style/component audits, and f
 
 - A group header is 54px and uses fixed chevron, icon, identity, summary, and action lanes.
 - The whole identity/summary region toggles the group. Actions remain independent controls.
-- The description appears only while collapsed.
-- At most one group is expanded in each resource composer.
+- The description remains visible in both collapsed and expanded states so the group header does
+  not change its information structure.
+- Every group expands independently. Opening another group never closes a group the user already
+  opened.
 - Expanding a group changes only its own panel. Every sibling header keeps the same x, width,
   height, lane positions, and typography. A later sibling's y-coordinate may change only by the
   inserted panel height, without an additional animation or layout jump.
-- The expanded header uses a neutral subtle surface and accent icon/chevron.
-- Skills and MCP panels use the same 16px inset surface without connector lines.
+- The header keeps the same neutral surface in both states; only the chevron direction and content
+  visibility communicate expansion.
+- Skills and MCP panels use the same 16px inset, neutral content surface without connector lines
+  or an extra selected-looking first row.
 - The optional toolbar is 36px and appears only when an action exists.
 - Children use compact `ResourceRow` geometry. Identity gets at most two lines; status and actions
   retain stable lanes; long values remain inspectable through existing detail surfaces.
@@ -67,7 +71,8 @@ state pairs, paired captures, manual pixel review, style/component audits, and f
 ## Ownership
 
 - `ResourceDisclosureSection` owns disclosure semantics and header/panel geometry.
-- A shared exclusive-disclosure controller owns `expandedId` and toggle behavior on both surfaces.
+- A shared disclosure-set controller owns independent expanded IDs and toggle behavior on both
+  surfaces.
 - A shared Resource Composer composition owns toolbar, compact empty state, nested panel, and
   stable expansion presentation.
 - `ProfileComposerSection` becomes a thin semantic wrapper that supplies policy state.
@@ -81,6 +86,7 @@ state pairs, paired captures, manual pixel review, style/component audits, and f
 
 The change is complete when paired Profiles/Workspaces captures from the same rebuilt artifact,
 fixture, locale, viewport, resource kind, and state show the same header, inset, toolbar, row, and
-empty-state grammar; sibling header size and internal lanes are invariant across expansion; only
-one group is expanded per surface; the activated header retains focus; all interactions remain
+empty-state grammar; sibling header size and internal lanes are invariant across expansion;
+already expanded groups remain open when another group expands; the activated header retains
+focus; all interactions remain
 keyboard accessible; and the rebuilt full product verification suite passes.
