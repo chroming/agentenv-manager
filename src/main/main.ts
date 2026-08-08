@@ -373,7 +373,9 @@ ipcMain.on("diagnostics:renderer-error", (_event, input: unknown) => {
   void runtimeDiagnostics?.record("renderer:unhandled", "failed", {
     outcome: "failed",
     context: {
-      kind: value.kind === "unhandled-rejection" ? value.kind : "error"
+      kind: value.kind === "unhandled-rejection" || value.kind === "react-render-error"
+        ? value.kind
+        : "error"
     },
     error: {
       name: typeof value.name === "string" ? value.name : "Error",

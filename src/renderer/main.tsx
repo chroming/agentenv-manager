@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { AGENTENV_RUNTIME_VERSION, isAgentEnvRuntimeCompatible } from "../shared/runtimeVersion";
 import { StartupGate } from "./StartupGate";
+import { RendererErrorBoundary } from "./RendererErrorBoundary";
 import { resolveAppLocale, translate } from "./i18n";
 import "./ui/index.css";
 
@@ -52,6 +53,8 @@ const runtimeMismatch = (
 
 createRoot(root).render(
   <React.StrictMode>
-    {isAgentEnvRuntimeCompatible(runtimeApi?.runtimeVersion) ? <StartupGate /> : runtimeMismatch}
+    <RendererErrorBoundary>
+      {isAgentEnvRuntimeCompatible(runtimeApi?.runtimeVersion) ? <StartupGate /> : runtimeMismatch}
+    </RendererErrorBoundary>
   </React.StrictMode>
 );

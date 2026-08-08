@@ -15,6 +15,9 @@ export type TranslationValues = Record<string, string | number>;
 const zhCN: Record<string, string> = {
   ...generatedZhCN,
   "Installed with Homebrew": "通过 Homebrew 安装",
+  "The interface stopped unexpectedly": "界面意外停止运行",
+  "Your AgentEnv data was not changed. Reload the interface or export diagnostics for support.": "AgentEnv 数据未被修改。请重新加载界面，或导出诊断信息以便排查。",
+  "Reload interface": "重新加载界面",
   "Installed directly": "直接安装",
   "Development build": "开发版本",
   "Automatic installation unavailable": "无法自动安装",

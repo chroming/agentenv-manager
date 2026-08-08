@@ -369,7 +369,7 @@ export interface DiagnosticIssueDetail {
 }
 
 export interface RendererDiagnosticError {
-  kind: "error" | "unhandled-rejection";
+  kind: "error" | "unhandled-rejection" | "react-render-error";
   message: string;
   name?: string;
   stack?: string;
