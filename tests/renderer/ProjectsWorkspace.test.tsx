@@ -219,6 +219,26 @@ describe("ProjectsWorkspace", () => {
     expect(screen.getByText("The folder and its files will stay unchanged.")).toBeInTheDocument();
   });
 
+  it("keeps resource expansion exclusive across Instructions, Skills, and MCPs", async () => {
+    installApi();
+    render(<ProjectsWorkspace targets={[target]} />);
+
+    const instructions = await screen.findByRole("region", { name: "Instructions" });
+    const skills = await screen.findByRole("region", { name: "Skills" });
+
+    fireEvent.click(within(instructions).getByRole("button", { name: "Expand Instructions" }));
+    expect(within(instructions).getByRole("button", { name: "Collapse Instructions" }))
+      .toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.click(within(skills).getByRole("button", { name: "Expand Skills" }));
+    expect(within(instructions).getByRole("button", { name: "Expand Instructions" }))
+      .toHaveAttribute("aria-expanded", "false");
+    expect(within(skills).getByRole("button", { name: "Collapse Skills" }))
+      .toHaveAttribute("aria-expanded", "true");
+    expect(document.querySelectorAll('.ui-resource-disclosure [aria-expanded="true"]'))
+      .toHaveLength(1);
+  });
+
   it("opens only explicit instruction edit actions as a safe editor", async () => {
     installApi();
     render(<ProjectsWorkspace targets={[target]} />);

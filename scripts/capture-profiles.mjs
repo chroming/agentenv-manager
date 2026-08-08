@@ -1215,7 +1215,7 @@ try {
     if (await trigger.getAttribute("aria-expanded") !== "true") {
       await trigger.click();
     }
-    await section.locator(".profile-composer-section__panel").waitFor({ state: "visible" });
+    await section.locator(".ui-resource-disclosure__panel").waitFor({ state: "visible" });
     return section;
   };
 

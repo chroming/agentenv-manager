@@ -547,6 +547,7 @@ describe("renderer UI primitives", () => {
         summary="3"
         expanded
         nested
+        muted
         toggleLabel="Collapse Skills"
         actions={<Button size="compact">Add</Button>}
         onToggle={onToggle}
@@ -556,7 +557,7 @@ describe("renderer UI primitives", () => {
     );
 
     const section = screen.getByRole("region", { name: "Skills" });
-    expect(section).toHaveClass("ui-resource-disclosure", "is-expanded", "is-nested");
+    expect(section).toHaveClass("ui-resource-disclosure", "is-expanded", "is-nested", "is-muted");
     expect(within(section).getByRole("button", { name: "Collapse Skills" }))
       .toHaveAttribute("aria-expanded", "true");
     expect(within(section).getByText("Project-owned Skill files"))

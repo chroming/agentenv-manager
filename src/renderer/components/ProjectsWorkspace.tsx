@@ -60,7 +60,8 @@ import {
   SelectField,
   SingleObjectWorkspace,
   TextField,
-  ResourceRow
+  ResourceRow,
+  useExclusiveDisclosure
 } from "./ui";
 
 type ProjectOperation = "add" | "refresh" | "rename" | "remove" | "add-skill" | "remove-skill" | "inspect" | "open" | "preview";
@@ -83,7 +84,10 @@ export const ProjectsWorkspace = ({
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [agentSwitcherOpen, setAgentSwitcherOpen] = useState(false);
   const [agentQuery, setAgentQuery] = useState("");
-  const [expandedKinds, setExpandedKinds] = useState<Set<ProjectResourceKind>>(() => new Set());
+  const {
+    expandedId: expandedKind,
+    toggleExpandedId: toggleResourceKind
+  } = useExclusiveDisclosure<ProjectResourceKind>();
   const [selectedId, setSelectedId] = useState<string>();
   const [operation, setOperation] = useState<ProjectOperation>();
   const [error, setError] = useState("");
@@ -489,15 +493,6 @@ export const ProjectsWorkspace = ({
     return selectedAgentSupport.mcp.inspect !== "unsupported";
   };
 
-  const toggleResourceKind = (kind: ProjectResourceKind) => {
-    setExpandedKinds((current) => {
-      const next = new Set(current);
-      if (next.has(kind)) next.delete(kind);
-      else next.add(kind);
-      return next;
-    });
-  };
-
   const canCreateInstruction = Boolean(
     selectedAgent &&
     selectedAgentSupport?.instructions.mutate === "supported" &&
@@ -699,7 +694,7 @@ export const ProjectsWorkspace = ({
                     ["mcp", t("MCPs"), t("Detected only; AgentEnv does not edit these files"), <Plug size={17} aria-hidden="true" />]
                   ] as const).filter(([kind]) => resourceKindIsVisible(kind)).map(([kind, label, description, icon]) => {
                     const resources = resourcesByKind(kind);
-                    const expanded = expandedKinds.has(kind);
+                    const expanded = expandedKind === kind;
                     return (
                       <ResourceDisclosureSection
                         className="project-resource-section"

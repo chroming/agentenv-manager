@@ -30,7 +30,6 @@ describe("ProfileComposerSection", () => {
         chipNames={["Reviewer", "Planner"]}
         policy="manage"
         policyLabel="Skills application policy for OpenCode"
-        targetName="OpenCode"
         expanded
         onToggle={onToggle}
         onPolicyChange={() => undefined}
@@ -78,7 +77,6 @@ describe("ProfileComposerSection", () => {
         chipNames={["Context7", "Filesystem", "Context7", "GitHub", "Figma", "Slack"]}
         policy="ignore"
         policyLabel="MCPs application policy for OpenCode"
-        targetName="OpenCode"
         expanded={false}
         onToggle={() => undefined}
         onPolicyChange={() => undefined}
@@ -93,7 +91,7 @@ describe("ProfileComposerSection", () => {
     );
     expect(screen.queryByTestId("profile-composer-chip")).toBeNull();
     expect(screen.queryByText("+3")).toBeNull();
-    const count = document.querySelector(".profile-composer-section__count");
+    const count = document.querySelector(".ui-resource-disclosure__summary");
     expect(count).toHaveAttribute("title", "1 Profile override · 6 in OpenCode");
     expect(count?.querySelector(".profile-composer-section__count-scope"))
       .toHaveTextContent("1 Profile override · 6 in OpenCode");
@@ -112,7 +110,6 @@ describe("ProfileComposerSection", () => {
           chipNames={["Reviewer"]}
           policy="manage"
           policyLabel="Skills application policy for OpenCode"
-          targetName="OpenCode"
           expanded
           onToggle={() => undefined}
           onPolicyChange={() => undefined}
@@ -129,7 +126,6 @@ describe("ProfileComposerSection", () => {
           chipNames={["Context7"]}
           policy="manage"
           policyLabel="MCPs application policy for OpenCode"
-          targetName="OpenCode"
           expanded
           onToggle={() => undefined}
           onPolicyChange={() => undefined}
@@ -175,7 +171,6 @@ describe("ProfileComposerSection", () => {
         chipNames={["AGENTS.md"]}
         policy="manage"
         policyLabel="Instructions application policy for OpenCode"
-        targetName="OpenCode"
         expanded={false}
         onToggle={() => undefined}
         onPolicyChange={() => undefined}
@@ -211,7 +206,6 @@ describe("ProfileComposerSection", () => {
         chipNames={["Reviewer"]}
         policy="ignore"
         policyLabel="Skills application policy for OpenCode"
-        targetName="OpenCode"
         expanded={false}
         onToggle={onToggle}
         onPolicyChange={onPolicyChange}
@@ -234,10 +228,10 @@ describe("ProfileComposerSection", () => {
     expect(within(policy).getByText("Agent")).toBeInTheDocument();
     expect(policy).toHaveClass("is-ignore");
     expect(policy.closest(".profile-composer-section")).toHaveClass("is-unmanaged");
-    const count = document.querySelector(".profile-composer-section__count");
+    const count = document.querySelector(".ui-resource-disclosure__summary");
     expect(count).toHaveAttribute("title", "2 of 3 enabled");
     expect(count?.querySelector(".profile-composer-section__count-visual")).toHaveTextContent("2/3");
-    const header = policy.closest(".profile-composer-section__header");
+    const header = policy.closest(".ui-resource-disclosure__header");
     expect(header?.children[0]).toBe(screen.getByRole("button", { name: "Skills" }));
     expect(header?.children[1]).toContainElement(policy);
     expect(header?.querySelectorAll("button")).toHaveLength(4);
@@ -249,7 +243,7 @@ describe("ProfileComposerSection", () => {
     expect(screen.queryByRole("group")).not.toBeInTheDocument();
   });
 
-  it("keeps Profile content editable and explains an unmanaged policy", () => {
+  it("keeps Profile content inspectable without adding an unmanaged explanation row", () => {
     render(
       <ProfileComposerSection
         id="profile-instructions"
@@ -261,7 +255,6 @@ describe("ProfileComposerSection", () => {
         chipNames={["AGENTS.md"]}
         policy="ignore"
         policyLabel="Instructions application policy for OpenCode"
-        targetName="OpenCode"
         expanded
         onToggle={() => undefined}
         onPolicyChange={() => undefined}
@@ -270,15 +263,13 @@ describe("ProfileComposerSection", () => {
       </ProfileComposerSection>
     );
 
-    expect(screen.getByText(/Saved in this Profile/)).toHaveTextContent(
-      "Applying to OpenCode leaves this section unchanged."
-    );
+    expect(screen.queryByText(/Saved in this Profile/)).not.toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Instructions editor" })).toHaveValue(
       "# Saved Profile content"
     );
   });
 
-  it("keeps saved content editable while explaining a disabled policy", () => {
+  it("keeps saved content inspectable without adding a disabled explanation row", () => {
     render(
       <ProfileComposerSection
         id="profile-instructions"
@@ -290,7 +281,6 @@ describe("ProfileComposerSection", () => {
         chipNames={["AGENTS.md"]}
         policy="disable"
         policyLabel="Instructions application policy for OpenCode"
-        targetName="OpenCode"
         expanded
         onToggle={() => undefined}
         onPolicyChange={() => undefined}
@@ -299,9 +289,7 @@ describe("ProfileComposerSection", () => {
       </ProfileComposerSection>
     );
 
-    expect(screen.getByText(/Saved in this Profile/)).toHaveTextContent(
-      "Applying to OpenCode turns off this Profile's resources in the Agent."
-    );
+    expect(screen.queryByText(/Saved in this Profile/)).not.toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Instructions editor" })).toHaveValue(
       "# Saved Profile content"
     );
@@ -323,7 +311,6 @@ describe("ProfileComposerSection", () => {
         chipNames={["Reviewer"]}
         policy="manage"
         policyLabel="Skills application policy for OpenCode"
-        targetName="OpenCode"
         expanded={false}
         onToggle={() => undefined}
         onPolicyChange={onPolicyChange}

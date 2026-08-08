@@ -163,7 +163,8 @@ import {
   focusInitialActionMenuItem,
   IconButton,
   PageHeader,
-  SingleObjectWorkspace
+  SingleObjectWorkspace,
+  useExclusiveDisclosure
 } from "./components/ui";
 import {
   deriveApplyActionLabel,
@@ -321,8 +322,11 @@ const AppContent = ({
   const [skillRefreshStatus, setSkillRefreshStatus] = useState<"refreshing" | "refreshed">();
   const [profileSearch, setProfileSearch] = useState("");
   const [profileSwitcherOpen, setProfileSwitcherOpen] = useState(false);
-  const [activeComposerSection, setActiveComposerSection] =
-    useState<ComposerSection>();
+  const {
+    expandedId: activeComposerSection,
+    setExpandedId: setActiveComposerSection,
+    toggleExpandedId: toggleComposerSection
+  } = useExclusiveDisclosure<ComposerSection>();
   const [isTargetMenuOpen, setIsTargetMenuOpen] = useState(false);
   const [isProfileActionsOpen, setIsProfileActionsOpen] = useState(false);
   const [profileDialogMode, setProfileDialogMode] = useState<ProfileDialogMode>();
@@ -1989,10 +1993,6 @@ const AppContent = ({
       openWorkspaceNow("settings");
       backupRecovery.actions.revealManager();
     }
-  };
-
-  const toggleComposerSection = (section: ComposerSection) => {
-    setActiveComposerSection((current) => current === section ? undefined : section);
   };
 
   const applySelectedProfile = () => applyProfileActivation(draftProfile);
@@ -4113,7 +4113,6 @@ const AppContent = ({
                             ? undefined
                             : t("Agent controlled")
                         }
-                        targetName={activeTargetName}
                         expanded={activeComposerSection === "instructions"}
                         onToggle={() => toggleComposerSection("instructions")}
                         onPolicyChange={(policy) =>
@@ -4158,7 +4157,6 @@ const AppContent = ({
                             ? undefined
                             : t("Agent controlled")
                         }
-                        targetName={activeTargetName}
                         expanded={activeComposerSection === "skills"}
                         onToggle={() => toggleComposerSection("skills")}
                         onPolicyChange={(policy) =>
@@ -4227,7 +4225,6 @@ const AppContent = ({
                             ? undefined
                             : t("Agent controlled")
                         }
-                        targetName={activeTargetName}
                         expanded={activeComposerSection === "mcp"}
                         onToggle={() => toggleComposerSection("mcp")}
                         onPolicyChange={(policy) =>

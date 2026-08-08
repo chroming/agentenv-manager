@@ -11,6 +11,62 @@ export interface TextLayoutDefect {
   verticalOverflow: number;
 }
 
+export interface ResourceDisclosureHeaderGeometry {
+  actionsTop: number | null;
+  expanded: boolean;
+  height: number;
+  id: string;
+  titleTop: number;
+  width: number;
+  x: number;
+}
+
+export const readResourceDisclosureHeaders = async (
+  scope: Locator
+): Promise<ResourceDisclosureHeaderGeometry[]> => scope.locator(
+  ".ui-resource-disclosure"
+).evaluateAll((sections) => sections.map((section) => {
+  const header = section.querySelector<HTMLElement>(".ui-resource-disclosure__header")!;
+  const title = section.querySelector<HTMLElement>(".ui-resource-disclosure__title")!;
+  const actions = section.querySelector<HTMLElement>(".ui-resource-disclosure__actions");
+  const headerBox = header.getBoundingClientRect();
+  const titleBox = title.getBoundingClientRect();
+  const actionsBox = actions?.getBoundingClientRect();
+  return {
+    actionsTop: actionsBox ? Math.round(actionsBox.top - headerBox.top) : null,
+    expanded: section.classList.contains("is-expanded"),
+    height: Math.round(headerBox.height),
+    id: section.getAttribute("data-resource-disclosure-id") ?? "",
+    titleTop: Math.round(titleBox.top - headerBox.top),
+    width: Math.round(headerBox.width),
+    x: Math.round(headerBox.x)
+  };
+}));
+
+export const expectStableResourceDisclosureHeaders = (
+  before: ResourceDisclosureHeaderGeometry[],
+  after: ResourceDisclosureHeaderGeometry[],
+  activeId: string
+) => {
+  expect(after).toHaveLength(before.length);
+  for (const initial of before) {
+    const current = after.find(({ id }) => id === initial.id);
+    expect(current, `Missing resource header ${initial.id}`).toBeDefined();
+    expect(current).toMatchObject({
+      height: 54,
+      id: initial.id,
+      width: initial.width,
+      x: initial.x
+    });
+    if (initial.id !== activeId) {
+      expect(current?.titleTop).toBe(initial.titleTop);
+      expect(current?.actionsTop).toBe(initial.actionsTop);
+    }
+  }
+  expect(after.filter(({ expanded }) => expanded)).toHaveLength(1);
+  expect(after.find(({ id }) => id === activeId)?.expanded).toBe(true);
+};
+
 const readBox = async (locator: Locator): Promise<Box> => {
   const box = await locator.boundingBox();
   expect(box).not.toBeNull();
@@ -76,7 +132,7 @@ export const findVisibleTextLayoutDefects = async (page: Page) =>
       ".library-primary-status",
       ".profile-skill-state",
       ".capture-resource__status",
-      ".profile-composer-section__count",
+      ".ui-resource-disclosure__summary",
       ".agent-settings-status",
       ".target-health-status"
     ];

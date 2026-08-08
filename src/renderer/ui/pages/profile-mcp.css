@@ -102,16 +102,6 @@
   padding: 8px 12px 8px 56px;
 }
 
-.profile-composer-section[data-profile-composer-id="mcp"].is-expanded {
-  flex: 0 1 auto;
-}
-
-.profile-composer-section[data-profile-composer-id="mcp"]
-  .profile-composer-section__panel {
-  max-height: min(340px, 44vh);
-  padding: 0;
-}
-
 @container profile-workspace (max-width: 760px) {
   .profile-mcp-row {
     gap: 10px;

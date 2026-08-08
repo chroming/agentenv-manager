@@ -78,6 +78,8 @@ const primitiveRootSelectors = new Set([
   ".ui-master-detail",
   ".ui-master-list",
   ".ui-page-header",
+  ".ui-resource-disclosure",
+  ".ui-resource-panel-toolbar",
   ".ui-resource-section",
   ".ui-resource-row",
   ".ui-selectable-row",

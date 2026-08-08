@@ -1,21 +1,12 @@
-.profile-composer-section__panel > .profile-skill-manager {
+.profile-skill-manager {
   background: transparent;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  height: 100%;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.profile-composer-section[data-profile-composer-id="skills"].is-expanded:has(
-    .profile-skill-manager.is-compact
-  ) {
-  flex: 0 0 auto;
-}
-
-.profile-composer-section__panel > .profile-skill-manager.is-compact {
   grid-template-rows: auto auto;
-  height: auto;
+  min-width: 0;
+}
+
+.profile-skill-manager.is-compact {
+  grid-template-rows: auto auto;
 }
 
 .profile-skill-manager.is-compact .profile-skill-list {
@@ -41,8 +32,7 @@
   display: grid;
   min-height: 0;
   min-width: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .profile-skill-detail,

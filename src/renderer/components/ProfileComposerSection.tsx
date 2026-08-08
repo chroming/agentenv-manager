@@ -20,7 +20,6 @@ export interface ProfileComposerSectionProps {
   policyDisabled?: boolean;
   policyLabel: string;
   policyStatus?: string;
-  targetName: string;
   expanded: boolean;
   onToggle(): void;
   onPolicyChange(policy: ProfileResourcePolicy): void;
@@ -40,7 +39,6 @@ export const ProfileComposerSection = ({
   policyDisabled = false,
   policyLabel,
   policyStatus,
-  targetName,
   expanded,
   onToggle,
   onPolicyChange,
@@ -61,7 +59,6 @@ export const ProfileComposerSection = ({
       className={[
         "profile-composer-section",
         countSummary ? "has-scope-summary" : "",
-        expanded ? "is-expanded" : "",
         !policyDisabled && policy === "disable" ? "is-resource-disabled" : "",
         policyDisabled ? "is-agent-controlled" : "",
         !policyDisabled && policy === "ignore" ? "is-unmanaged" : ""
@@ -80,18 +77,7 @@ export const ProfileComposerSection = ({
       id={id}
       onToggle={onToggle}
       nested={id === "skills" || id === "mcp"}
-      slotClassNames={{
-        actions: "profile-composer-section__actions",
-        chevron: "profile-composer-section__chevron",
-        description: "profile-composer-section__description-slot",
-        header: "profile-composer-section__header",
-        heading: "profile-composer-section__heading",
-        icon: "profile-composer-section__icon",
-        panel: "profile-composer-section__panel",
-        summary: "profile-composer-section__count",
-        title: "profile-composer-section__title",
-        trigger: "profile-composer-section__trigger"
-      }}
+      muted={policyDisabled || policy !== "manage"}
       summary={countSummary ? (
         <span className="profile-composer-section__count-scope" aria-hidden="true">
           {countSummary}
@@ -105,6 +91,7 @@ export const ProfileComposerSection = ({
       )}
       summaryLabel={accessibleSummary}
       summaryTitle={countLabel}
+      summaryWidth={countSummary ? "wide" : "compact"}
       title={title}
       toggleLabel={title}
       actions={(
@@ -117,22 +104,6 @@ export const ProfileComposerSection = ({
         />
       )}
     >
-      {!policyDisabled && policy === "ignore" ? (
-        <p className="profile-composer-section__policy-note">
-          {t(
-            "Saved in this Profile. Applying to {{name}} leaves this section unchanged.",
-            { name: targetName }
-          )}
-        </p>
-      ) : null}
-      {!policyDisabled && policy === "disable" ? (
-        <p className="profile-composer-section__policy-note">
-          {t(
-            "Saved in this Profile. Applying to {{name}} turns off this Profile's resources in the Agent.",
-            { name: targetName }
-          )}
-        </p>
-      ) : null}
       {children}
     </ResourceDisclosureSection>
   );

@@ -53,11 +53,6 @@
   width: 192px;
 }
 
-.profile-composer-section__description {
-  font-size: 11px;
-  line-height: 16px;
-}
-
 .profile-resource-policy__option {
   align-items: center;
   display: inline-flex;
@@ -118,92 +113,6 @@
 
 .profile-resource-policy__status svg {
   flex: 0 0 auto;
-}
-
-.profile-composer-section__policy-note {
-  border-bottom: 1px solid var(--border-soft);
-  color: var(--muted-strong);
-  flex: 0 0 auto;
-  font-size: 11px;
-  line-height: 17px;
-  margin: 0;
-  padding: 5px 7px 9px;
-}
-
-.profile-composer-section__policy-note + * {
-  border-top: 0;
-}
-
-.profile-composer-section[data-profile-composer-id="skills"]
-  > .profile-composer-section__panel,
-.profile-composer-section[data-profile-composer-id="mcp"]
-  > .profile-composer-section__panel {
-  background: var(--surface);
-  padding: 0;
-}
-
-.profile-composer-section.is-expanded > .profile-composer-section__panel {
-  width: auto;
-}
-
-.profile-composer-section[data-profile-composer-id="instructions"]
-  > .profile-composer-section__panel {
-  padding: 8px 10px;
-}
-
-.profile-composer-section.is-expanded > .profile-composer-section__header
-  .profile-composer-section__icon,
-.profile-composer-section.is-expanded > .profile-composer-section__header
-  .profile-composer-section__chevron {
-  color: var(--accent-strong);
-}
-
-.profile-composer-section.is-unmanaged
-  > .profile-composer-section__header
-  .profile-composer-section__icon,
-.profile-composer-section.is-unmanaged
-  > .profile-composer-section__header
-  .profile-composer-section__chevron,
-.profile-composer-section.is-unmanaged
-  > .profile-composer-section__header
-  .profile-composer-section__title,
-.profile-composer-section.is-unmanaged
-  > .profile-composer-section__header
-  .profile-composer-section__count-visual strong {
-  color: #7d8797;
-}
-
-.profile-composer-section.is-unmanaged
-  > .profile-composer-section__header
-  .profile-composer-section__description,
-.profile-composer-section.is-unmanaged
-  > .profile-composer-section__header
-  .profile-composer-section__count,
-.profile-composer-section.is-unmanaged
-  > .profile-composer-section__header
-  .profile-composer-section__summary {
-  color: #9199a6;
-}
-
-.profile-composer-section.is-unmanaged
-  > .profile-composer-section__header
-  .profile-composer-section__summary {
-  opacity: 0.68;
-}
-
-.profile-composer-section.is-agent-controlled
-  > .profile-composer-section__header
-  .profile-composer-section__icon,
-.profile-composer-section.is-agent-controlled
-  > .profile-composer-section__header
-  .profile-composer-section__chevron {
-  color: #6f7f94;
-}
-
-.profile-composer-section.is-resource-disabled
-  > .profile-composer-section__header
-  .profile-composer-section__count-visual strong {
-  color: var(--muted);
 }
 
 .profile-loading-surface {

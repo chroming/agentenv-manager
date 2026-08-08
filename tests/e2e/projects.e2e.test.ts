@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import electronPath from "electron";
 import { _electron as electron, type ElectronApplication } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { expectNoHorizontalOverflow } from "./layoutAssertions";
+import {
+  expectNoHorizontalOverflow,
+  expectStableResourceDisclosureHeaders,
+  readResourceDisclosureHeaders
+} from "./layoutAssertions";
 import { requireCurrentElectronBuild } from "./currentBuild";
 
 let root = "";
@@ -113,7 +117,14 @@ describe("Workspaces desktop workflow", () => {
       .locator(".project-agent-switcher__logo").count()).toBe(1);
     await page.keyboard.press("Escape");
     await agentDialog.waitFor({ state: "hidden" });
+    const workspaceResources = page.locator(".project-resource-groups");
+    const collapsedResourceHeaders = await readResourceDisclosureHeaders(workspaceResources);
     await page.getByRole("button", { name: "Expand Instructions", exact: true }).click();
+    expectStableResourceDisclosureHeaders(
+      collapsedResourceHeaders,
+      await readResourceDisclosureHeaders(workspaceResources),
+      "workspace-instructions"
+    );
     await page.getByRole("button", { name: "Add instruction", exact: true }).waitFor();
     await expectNoHorizontalOverflow(page);
     const inspectorTitle = page.locator(".project-detail__header").getByRole("heading", {
@@ -141,6 +152,15 @@ describe("Workspaces desktop workflow", () => {
       .toBe("# Project rules\n");
 
     await page.getByRole("button", { name: "Expand Skills", exact: true }).click();
+    await expect.poll(() => page.getByRole("button", {
+      name: "Expand Instructions",
+      exact: true
+    }).getAttribute("aria-expanded")).toBe("false");
+    expectStableResourceDisclosureHeaders(
+      collapsedResourceHeaders,
+      await readResourceDisclosureHeaders(workspaceResources),
+      "workspace-skill"
+    );
     await page.getByRole("button", { name: "Copy from Library" }).click();
     await page.getByRole("dialog", { name: "Copy Skill to Workspace" }).waitFor();
     if (captureDir) {
@@ -246,9 +266,11 @@ describe("Workspaces desktop workflow", () => {
     )).toBe(false);
     await page.getByRole("button", { name: "Close", exact: true }).click();
 
+    await page.getByRole("button", { name: "Expand Instructions", exact: true }).click();
     await page.getByRole("button", { name: "Add instruction", exact: true }).click();
     await page.getByRole("textbox", { name: "Workspace instruction content" }).fill("# Project rules\n");
     await page.getByRole("button", { name: "Save", exact: true }).click();
+    await page.getByRole("button", { name: "Expand Skills", exact: true }).click();
     await page.getByRole("button", { name: "Copy from Library" }).click();
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))

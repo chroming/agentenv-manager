@@ -32,9 +32,11 @@ import {
   expectNoHorizontalOverflow,
   expectNoOverlap,
   expectStructuredDialog,
+  expectStableResourceDisclosureHeaders,
   expectTextFits,
   expectTopmost,
-  findVisibleTextLayoutDefects
+  findVisibleTextLayoutDefects,
+  readResourceDisclosureHeaders
 } from "./layoutAssertions";
 import { requireCurrentElectronBuild } from "./currentBuild";
 import { createStoredZip } from "../helpers/createStoredZip";
@@ -1283,10 +1285,10 @@ const readProfileComposerGeometry = async (composer: Locator) =>
       ".profile-composer-section.is-expanded"
     );
     const expandedTrigger = expanded?.querySelector<HTMLElement>(
-      ".profile-composer-section__trigger"
+      ".ui-resource-disclosure__trigger"
     );
     const panel = expanded?.querySelector<HTMLElement>(
-      ".profile-composer-section__panel"
+      ".ui-resource-disclosure__panel"
     );
     return {
       expandedPanelBackground: panel ? getComputedStyle(panel).backgroundColor : undefined,
@@ -1297,7 +1299,7 @@ const readProfileComposerGeometry = async (composer: Locator) =>
         rootStyle.getPropertyValue("--profile-composer-row-height")
       ),
       triggerHeights: [...element.querySelectorAll<HTMLElement>(
-        ".profile-composer-section__trigger"
+        ".ui-resource-disclosure__trigger"
       )].map((trigger) => Math.round(trigger.getBoundingClientRect().height))
     };
   });
@@ -3612,7 +3614,7 @@ describe("Electron UI profile switching e2e", () => {
     const initialWorkbenchBox = await workbench.boundingBox();
     await expandComposerSection(page, "Skills");
     const expandedPanel = page.locator(
-      '[data-profile-composer-id="skills"] .profile-composer-section__panel'
+      '[data-profile-composer-id="skills"] .ui-resource-disclosure__panel'
     );
     await expectInViewport(page, expandedPanel);
     await expectInViewport(page, composer.getByRole("button", { name: "Skills", exact: true }));
@@ -3957,7 +3959,7 @@ describe("Electron UI profile switching e2e", () => {
       expect(heroContent.duplicateAgentMeta).toBe(0);
 
       const composerCountGeometry = await page
-        .locator(".profile-composer-section__count")
+        .locator(".ui-resource-disclosure__summary")
         .evaluateAll((counts) =>
           counts.map((count) => {
             const visual = count.querySelector<HTMLElement>(
@@ -3970,7 +3972,7 @@ describe("Electron UI profile switching e2e", () => {
               right: box.right,
               width: box.width,
               compact:
-                getComputedStyle(count.closest(".profile-composer-section__trigger")!)
+                getComputedStyle(count.closest(".ui-resource-disclosure__trigger")!)
                   .gridTemplateRows.split(" ").length > 1,
               scoped: count.querySelector(".profile-composer-section__count-scope") !== null,
               visualFits:
@@ -4009,7 +4011,7 @@ describe("Electron UI profile switching e2e", () => {
     await expectCommitActionsToFit();
     const profileContainment = await page.evaluate(() => {
       const overflowingComposerChildren = [...document.querySelectorAll<HTMLElement>(
-        ".profile-composer-section__trigger"
+        ".ui-resource-disclosure__trigger"
       )].flatMap((trigger, triggerIndex) => {
         const box = trigger.getBoundingClientRect();
         return [...trigger.children].flatMap((child) => {
@@ -4033,9 +4035,9 @@ describe("Electron UI profile switching e2e", () => {
     const scopedSummaryGeometry = await page
       .locator(".profile-composer-section.has-scope-summary")
       .evaluate((section) => {
-        const trigger = section.querySelector<HTMLElement>(".profile-composer-section__trigger")!;
-        const title = section.querySelector<HTMLElement>(".profile-composer-section__title")!;
-        const count = section.querySelector<HTMLElement>(".profile-composer-section__count")!;
+        const trigger = section.querySelector<HTMLElement>(".ui-resource-disclosure__trigger")!;
+        const title = section.querySelector<HTMLElement>(".ui-resource-disclosure__title")!;
+        const count = section.querySelector<HTMLElement>(".ui-resource-disclosure__summary")!;
         const policy = section.querySelector<HTMLElement>(
           ".profile-resource-policy, .profile-resource-policy__status"
         )!;
@@ -4065,7 +4067,7 @@ describe("Electron UI profile switching e2e", () => {
       triggerClearOfPolicy: true
     });
     expect(
-      await page.locator(".profile-composer-section__trigger").evaluateAll((triggers) =>
+      await page.locator(".ui-resource-disclosure__trigger").evaluateAll((triggers) =>
         triggers.every((trigger) => trigger.getBoundingClientRect().height <= 54)
       )
     ).toBe(true);
@@ -5515,7 +5517,13 @@ describe("Electron UI profile switching e2e", () => {
       new Set(policyBoxes.map((box) => Math.round(box!.x + box!.width))).size
     ).toBe(1);
     expect(new Set(policyBoxes.map((box) => Math.round(box!.height))).size).toBe(1);
+    const collapsedComposerHeaders = await readResourceDisclosureHeaders(composer);
     await expandComposerSection(page, "Skills");
+    expectStableResourceDisclosureHeaders(
+      collapsedComposerHeaders,
+      await readResourceDisclosureHeaders(composer),
+      "skills"
+    );
     const skillManager = composer.getByRole("region", { name: "Profile Skills" });
     const checkSkillUpdates = skillManager.getByRole("button", {
       name: "Check Profile Skill updates"
@@ -5533,7 +5541,7 @@ describe("Electron UI profile switching e2e", () => {
     const skillHierarchy = await composer.locator(
       '[data-profile-composer-id="skills"]'
     ).evaluate((section) => {
-      const parent = section.querySelector<HTMLElement>(".profile-composer-section__title")!;
+      const parent = section.querySelector<HTMLElement>(".ui-resource-disclosure__title")!;
       const child = section.querySelector<HTMLElement>(".ui-resource-row__identity strong")!;
       return {
         childLeft: Math.round(child.getBoundingClientRect().left),
@@ -5559,7 +5567,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(rowBox!.x + rowBox!.width).toBeLessThanOrEqual(policyBox!.x);
     await instructionsDisclosure.hover();
     const hoveredDisclosureStyle = await instructionsSection.locator(
-      ".profile-composer-section__header"
+      ".ui-resource-disclosure__header"
     ).evaluate((element) => {
       const style = getComputedStyle(element);
       return {
@@ -5573,7 +5581,7 @@ describe("Electron UI profile switching e2e", () => {
     await instructionsDisclosure.click();
     await expect.poll(() => instructionsDisclosure.getAttribute("aria-expanded")).toBe("true");
     const pressedDisclosureStyle = await instructionsSection.locator(
-      ".profile-composer-section__header"
+      ".ui-resource-disclosure__header"
     ).evaluate((element) => {
       const style = getComputedStyle(element);
       return {
@@ -5586,7 +5594,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(pressedDisclosureStyle.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
     expect(pressedDisclosureStyle.boxShadow).not.toBe("none");
     const instructionHierarchy = await instructionsSection.evaluate((section) => {
-      const parent = section.querySelector<HTMLElement>(".profile-composer-section__title")!;
+      const parent = section.querySelector<HTMLElement>(".ui-resource-disclosure__title")!;
       const child = section.querySelector<HTMLElement>(".instruction-editor__header > label")!;
       return {
         childLeft: Math.round(child.getBoundingClientRect().left),
@@ -5601,7 +5609,7 @@ describe("Electron UI profile switching e2e", () => {
     const mcpSection = composer.locator('[data-profile-composer-id="mcp"]');
     await mcpSection.locator(".profile-mcp-row").first().waitFor({ state: "visible" });
     const mcpHierarchy = await mcpSection.evaluate((section) => {
-      const parent = section.querySelector<HTMLElement>(".profile-composer-section__title")!;
+      const parent = section.querySelector<HTMLElement>(".ui-resource-disclosure__title")!;
       const child = section.querySelector<HTMLElement>(".profile-mcp-row__identity strong")!;
       return {
         childLeft: Math.round(child.getBoundingClientRect().left),
@@ -5645,8 +5653,8 @@ describe("Electron UI profile switching e2e", () => {
       await expectSegmentedControlGeometry(policy);
     }
     const disabledSectionSurface = await instructionsSection.evaluate((section) => {
-      const header = section.querySelector<HTMLElement>(".profile-composer-section__header");
-      const title = section.querySelector<HTMLElement>(".profile-composer-section__title");
+      const header = section.querySelector<HTMLElement>(".ui-resource-disclosure__header");
+      const title = section.querySelector<HTMLElement>(".ui-resource-disclosure__title");
       const policy = section.querySelector<HTMLElement>(".profile-resource-policy");
       if (!header || !title || !policy) throw new Error("Profile resource row is incomplete");
       return {
@@ -5740,11 +5748,8 @@ describe("Electron UI profile switching e2e", () => {
       }).count()
     ).toBe(1);
     expect(
-      await composer.getByText(
-        "Saved in this Profile. Applying to OpenCode leaves this section unchanged.",
-        { exact: true }
-      ).count()
-    ).toBe(1);
+      await composer.getByText(/Saved in this Profile/).count()
+    ).toBe(0);
     expect(await mcpConnectionControl(page, "shared-docs").count()).toBe(1);
   }, 45_000);
 
@@ -7819,7 +7824,7 @@ describe("Electron UI profile switching e2e", () => {
       expect(policyGeometry.backgroundColor).toBe("rgba(0, 0, 0, 0)");
       const policyBox = await policyStatus.boundingBox();
       const sectionBox = await page.locator(
-        '[data-profile-composer-id="mcp"] > .profile-composer-section__header'
+        '[data-profile-composer-id="mcp"] > .ui-resource-disclosure__header'
       ).boundingBox();
       expect(policyBox).not.toBeNull();
       expect(sectionBox).not.toBeNull();
@@ -10958,7 +10963,7 @@ describe("Electron UI profile switching e2e", () => {
         document.querySelector<HTMLElement>(".profile-composer-section__description")!
       ).fontWeight,
       composerTitle: getComputedStyle(
-        document.querySelector<HTMLElement>(".profile-composer-section__title")!
+        document.querySelector<HTMLElement>(".ui-resource-disclosure__title")!
       ).fontWeight,
       deployment: getComputedStyle(document.querySelector<HTMLElement>(".profile-row__deployments")!).fontWeight,
       name: getComputedStyle(document.querySelector<HTMLElement>(

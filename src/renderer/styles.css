@@ -4375,184 +4375,13 @@ summary {
   height: 100%;
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
-}
-
-.profile-composer-section {
-  background: #fff;
-  border-bottom: 1px solid #edf1f6;
-  flex: 0 0 auto;
-  min-height: 0;
-  min-width: 0;
-}
-
-.profile-composer-section.is-expanded {
-  display: grid;
-  flex: 0 1 auto;
-  grid-template-rows: auto minmax(0, 1fr);
-  max-height: 100%;
-  overflow: hidden;
-}
-
-.profile-composer-section:last-child {
-  border-bottom: 0;
-}
-
-.profile-composer-section__header {
-  align-items: center;
-  background: #fff;
-  display: grid;
-}
-
-.profile-composer-section__trigger {
-  align-items: center;
-  align-self: stretch;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  display: grid;
-  text-align: left;
-  width: 100%;
-}
-
-.profile-composer-section__trigger:hover:not(:disabled) {
-  background: #f8fbff;
-  border-color: transparent;
-}
-
-.profile-composer-section__disclosure {
-  align-items: center;
-  align-self: stretch;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  color: var(--muted);
-  display: inline-flex;
-  justify-content: center;
-  padding: 0;
-}
-
-.profile-composer-section__disclosure:hover:not(:disabled),
-.profile-composer-section__disclosure:active:not(:disabled) {
-  background: transparent;
-  color: var(--accent);
-}
-
-.profile-composer-section__disclosure:focus-visible {
-  outline-offset: -4px;
-}
-
-.profile-composer-section__heading {
-  align-self: center;
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.profile-composer-section__title {
-  color: var(--text);
-}
-
-.profile-composer-section__description {
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.profile-composer-section__count {
-  align-self: center;
-  border-radius: var(--radius-pill);
-  font-size: 11px;
-  padding: 0 6px;
-  text-align: center;
-}
-
-.profile-composer-section__summary {
-  align-items: center;
-  align-self: center;
-  display: flex;
-  gap: 5px;
-  justify-content: flex-end;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.profile-composer-section__summary .resource-chip {
-  flex: 0 1 auto;
-  max-width: 116px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.profile-composer-section__chevron {
-  align-self: center;
-  color: #64748b;
-  transition: transform var(--motion-standard);
-}
-
-.profile-composer-section.is-expanded .profile-composer-section__chevron {
-  transform: rotate(90deg);
-}
-
-.profile-composer-section__panel {
-  background: #fbfcff;
-  border-top: 1px solid #edf1f6;
-  display: grid;
-  gap: 0;
-  max-height: min(420px, 52vh);
-  min-height: 0;
-  min-width: 0;
   overflow: auto;
-  padding: 6px;
-}
-
-.profile-composer-section__panel > .field-block,
-.profile-composer-section__panel > .skills-editor,
-.profile-composer-section__panel > .validation-panel,
-.profile-composer-section__panel > .history-view {
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  margin: 0;
-  min-width: 0;
-}
-
-.profile-composer-section__panel > .skills-editor {
-  gap: 8px;
-  padding: 8px;
-}
-
-.profile-composer-section__panel > .skills-editor > .resource-section {
-  padding: 10px;
-}
-
-.profile-composer-section__panel > * + * {
-  border-top: 1px solid #edf1f6;
-}
-
-.profile-composer-section__panel textarea,
-.profile-composer-section__panel input {
-  max-width: 100%;
-  min-width: 0;
-}
-
-.profile-composer-section__panel .asset-editor-header {
-  align-items: center;
 }
 
 .preview-action-error {
   margin: 0 14px 12px;
 }
 
-.profile-composer-section__panel .resource-section {
-  background: transparent;
-  border-left: 0;
-  border-right: 0;
-  border-bottom: 0;
-}
 
 @media (max-width: 1050px) {
   .app-shell--profiles .editor-panel {
@@ -4565,14 +4394,8 @@ summary {
     grid-template-columns: 268px minmax(0, 1fr);
   }
 
-  .profile-apply-label,
-  .profile-composer-section__description,
-  .profile-composer-section__summary {
+  .profile-apply-label {
     display: none;
-  }
-
-  .profile-composer-section__trigger {
-    grid-template-columns: 38px minmax(0, 1fr) 54px;
   }
 
   .profile-readiness-strip {

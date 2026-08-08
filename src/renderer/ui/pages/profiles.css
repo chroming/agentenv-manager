@@ -245,14 +245,6 @@
   padding: 12px 14px 14px;
 }
 
-.profile-composer:not(:has(.profile-composer-section.is-expanded)) .profile-composer-section {
-  flex: 0 0 auto;
-}
-
-.profile-composer:not(:has(.profile-composer-section.is-expanded)) .profile-composer-section__trigger {
-  height: 52px;
-}
-
 /* Profiles owns one control and density contract across its supported window sizes. */
 .app-shell--profiles {
   --profile-control-height: var(--control-height-default);
@@ -517,10 +509,6 @@
   text-align: left;
 }
 
-.profile-composer:has(.profile-composer-section.is-expanded) {
-  min-height: 0;
-}
-
 .profile-composer {
   border: 0;
   border-radius: 0;
@@ -604,15 +592,6 @@
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
-}
-
-.profile-composer-section__summary .resource-chip {
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  color: var(--muted);
-  font-weight: var(--font-weight-regular);
-  padding-inline: 0;
 }
 
 .profile-commit-actions {
@@ -758,25 +737,9 @@
   color: #a86b14;
 }
 
-.profile-composer-section__actions {
-  align-self: center;
-  justify-content: flex-end;
-  min-width: 0;
-}
-
-.profile-composer-section__count {
-  display: inline-flex;
-  font-variant-numeric: tabular-nums;
-}
-
-.profile-composer-section.has-scope-summary
-  .profile-composer-section__count {
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .profile-composer-section__count-scope {
+  display: block;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -787,6 +750,7 @@
   display: inline-grid;
   gap: 3px;
   grid-template-columns: minmax(10px, auto) auto minmax(10px, auto);
+  font-variant-numeric: tabular-nums;
 }
 
 .profile-composer-section__count-visual strong {
@@ -795,17 +759,11 @@
 }
 
 .profile-composer-section[data-profile-composer-id="instructions"]
-  .profile-composer-section__panel {
+  .instruction-editor {
   display: flex;
-  flex-direction: column;
-}
-
-.profile-composer-section[data-profile-composer-id="instructions"]
-  .profile-composer-section__panel > .field-block {
-  display: flex;
-  flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
+  padding: 8px 10px 8px 24px;
   width: 100%;
 }
 
@@ -1254,22 +1212,8 @@
     display: block;
   }
 
-  .profile-composer-section__description {
-    display: none;
-  }
-
-  .profile-composer-section__count {
+  .profile-composer-section__count-scope {
     max-width: 120px;
-  }
-
-  .profile-composer-section.has-scope-summary
-    .profile-composer-section__count {
-    max-width: 120px;
-    min-width: 0;
-  }
-
-  .profile-composer-section__summary {
-    display: none;
   }
 
 }

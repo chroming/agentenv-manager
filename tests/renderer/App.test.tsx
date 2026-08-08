@@ -1494,7 +1494,7 @@ describe("App", () => {
     expect(within(composer).getByRole("button", { name: "Instructions" })).toBeInTheDocument();
     const emptyMcpRow = within(composer).getByRole("button", { name: "MCPs" });
     expect(emptyMcpRow).toBeInTheDocument();
-    expect(emptyMcpRow.querySelector('.profile-composer-section__count'))
+    expect(emptyMcpRow.querySelector('.ui-resource-disclosure__summary'))
       .toHaveAttribute("title", "Saved 0 · Agent 0");
     expect(within(composer).queryByRole("button", { name: "Advanced" })).not.toBeInTheDocument();
     for (const oldTab of ["Overview", "Instructions", "Config", "Resources", "Validation"]) {

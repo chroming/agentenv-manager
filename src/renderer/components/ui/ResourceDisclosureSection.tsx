@@ -1,19 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import { useId, type HTMLAttributes, type ReactNode } from "react";
 
-interface ResourceDisclosureSlotClassNames {
-  header?: string;
-  trigger?: string;
-  chevron?: string;
-  icon?: string;
-  heading?: string;
-  title?: string;
-  description?: string;
-  summary?: string;
-  actions?: string;
-  panel?: string;
-}
-
 export interface ResourceDisclosureSectionProps
   extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   actions?: ReactNode;
@@ -24,16 +11,14 @@ export interface ResourceDisclosureSectionProps
   id: string;
   onToggle(): void;
   nested?: boolean;
-  slotClassNames?: ResourceDisclosureSlotClassNames;
+  muted?: boolean;
   summary?: ReactNode;
   summaryLabel?: string;
   summaryTitle?: string;
+  summaryWidth?: "compact" | "wide";
   title: string;
   toggleLabel: string;
 }
-
-const withSlotClass = (base: string, extra?: string) =>
-  `${base}${extra ? ` ${extra}` : ""}`;
 
 export const ResourceDisclosureSection = ({
   actions,
@@ -46,10 +31,11 @@ export const ResourceDisclosureSection = ({
   id,
   onToggle,
   nested = false,
-  slotClassNames = {},
+  muted = false,
   summary,
   summaryLabel,
   summaryTitle,
+  summaryWidth = "compact",
   title,
   toggleLabel,
   ...props
@@ -67,44 +53,41 @@ export const ResourceDisclosureSection = ({
     <section
       {...props}
       aria-label={props["aria-label"] ?? title}
-      className={`ui-resource-disclosure${expanded ? " is-expanded" : ""}${nested ? " is-nested" : ""} ${className}`.trim()}
+      className={`ui-resource-disclosure${expanded ? " is-expanded" : ""}${nested ? " is-nested" : ""}${muted ? " is-muted" : ""}${summaryWidth === "wide" ? " has-wide-summary" : ""} ${className}`.trim()}
       data-resource-disclosure-id={id}
     >
-      <header className={withSlotClass("ui-resource-disclosure__header", slotClassNames.header)}>
+      <header className="ui-resource-disclosure__header">
         <button
           aria-controls={panelId}
           aria-describedby={describedBy}
           aria-expanded={expanded}
           aria-label={toggleLabel}
-          className={withSlotClass("ui-resource-disclosure__trigger", slotClassNames.trigger)}
+          className="ui-resource-disclosure__trigger"
           id={triggerId}
           onClick={onToggle}
           type="button"
         >
           <ChevronRight
             aria-hidden="true"
-            className={withSlotClass("ui-resource-disclosure__chevron", slotClassNames.chevron)}
+            className="ui-resource-disclosure__chevron"
             size={17}
             strokeWidth={2.2}
           />
           {icon ? (
             <span
               aria-hidden="true"
-              className={withSlotClass("ui-resource-disclosure__icon", slotClassNames.icon)}
+              className="ui-resource-disclosure__icon"
             >
               {icon}
             </span>
           ) : null}
-          <span className={withSlotClass("ui-resource-disclosure__heading", slotClassNames.heading)}>
-            <strong className={withSlotClass("ui-resource-disclosure__title", slotClassNames.title)}>
+          <span className="ui-resource-disclosure__heading">
+            <strong className="ui-resource-disclosure__title">
               {title}
             </strong>
             {description ? (
               <span
-                className={withSlotClass(
-                  `ui-resource-disclosure__description${descriptionMode === "collapsed" && expanded ? " ui-visually-hidden" : ""}`,
-                  slotClassNames.description
-                )}
+                className={`ui-resource-disclosure__description${descriptionMode === "collapsed" && expanded ? " ui-visually-hidden" : ""}`}
                 id={descriptionId}
               >
                 {description}
@@ -113,7 +96,7 @@ export const ResourceDisclosureSection = ({
           </span>
           {summary ? (
             <span
-              className={withSlotClass("ui-resource-disclosure__summary", slotClassNames.summary)}
+              className="ui-resource-disclosure__summary"
               id={summaryId}
               title={summaryTitle}
             >
@@ -127,7 +110,7 @@ export const ResourceDisclosureSection = ({
           ) : null}
         </button>
         {actions ? (
-          <div className={withSlotClass("ui-resource-disclosure__actions", slotClassNames.actions)}>
+          <div className="ui-resource-disclosure__actions">
             {actions}
           </div>
         ) : null}
@@ -135,7 +118,7 @@ export const ResourceDisclosureSection = ({
       {expanded ? (
         <div
           aria-labelledby={triggerId}
-          className={withSlotClass("ui-resource-disclosure__panel", slotClassNames.panel)}
+          className="ui-resource-disclosure__panel"
           id={panelId}
           role="group"
         >

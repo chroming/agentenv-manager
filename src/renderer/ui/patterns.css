@@ -503,7 +503,9 @@
 }
 
 .ui-resource-disclosure {
+  --resource-disclosure-header-height: 54px;
   border-bottom: 1px solid var(--border-subtle);
+  flex: 0 0 auto;
   min-width: 0;
 }
 
@@ -511,7 +513,9 @@
   align-items: stretch;
   background: var(--surface);
   display: flex;
-  min-height: 54px;
+  height: var(--resource-disclosure-header-height);
+  min-height: var(--resource-disclosure-header-height);
+  overflow: hidden;
   transition: background-color var(--motion-fast), box-shadow var(--motion-fast);
 }
 
@@ -526,7 +530,8 @@
   gap: var(--space-2);
   grid-template-columns: 18px 28px minmax(0, 1fr) auto;
   min-width: 0;
-  padding: var(--space-2) var(--space-3);
+  height: var(--resource-disclosure-header-height);
+  padding: 0 var(--space-3);
   text-align: left;
 }
 
@@ -546,6 +551,22 @@
 .ui-resource-disclosure.is-expanded > .ui-resource-disclosure__header {
   background: var(--surface-subtle);
   box-shadow: inset 0 -1px var(--border-subtle);
+}
+
+.ui-resource-disclosure.is-expanded > .ui-resource-disclosure__header
+  .ui-resource-disclosure__chevron,
+.ui-resource-disclosure.is-expanded > .ui-resource-disclosure__header
+  .ui-resource-disclosure__icon {
+  color: var(--accent-strong);
+}
+
+.ui-resource-disclosure.is-muted > .ui-resource-disclosure__header
+  .ui-resource-disclosure__icon,
+.ui-resource-disclosure.is-muted > .ui-resource-disclosure__header
+  .ui-resource-disclosure__title,
+.ui-resource-disclosure.is-muted > .ui-resource-disclosure__header
+  .ui-resource-disclosure__summary {
+  color: var(--muted);
 }
 
 .ui-resource-disclosure__chevron {
@@ -590,20 +611,32 @@
   color: var(--muted);
   font-size: var(--font-size-metadata);
   justify-self: end;
+  min-width: 40px;
+  text-align: right;
   white-space: nowrap;
+}
+
+.ui-resource-disclosure.has-wide-summary .ui-resource-disclosure__summary {
+  max-width: 160px;
+  min-width: 108px;
 }
 
 .ui-resource-disclosure__actions {
   align-items: center;
   display: flex;
   flex: 0 0 auto;
-  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+  height: var(--resource-disclosure-header-height);
+  padding: 0 var(--space-3) 0 0;
 }
 
 .ui-resource-disclosure__panel {
   background: var(--surface-subtle);
   border-top: 1px solid var(--border-subtle);
+  display: grid;
+  max-height: min(340px, 44vh);
   min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .ui-resource-disclosure.is-nested > .ui-resource-disclosure__panel {
