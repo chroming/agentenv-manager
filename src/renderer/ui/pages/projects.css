@@ -38,6 +38,8 @@
 }
 
 .project-resource-section__list {
+  --resource-row-actions-track: 56px;
+  --resource-row-state-track: 112px;
   display: grid;
 }
 

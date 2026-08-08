@@ -9899,6 +9899,28 @@ describe("Electron UI profile switching e2e", () => {
         Math.min(...geometry.map((item) => item.stateTitleTop))).toBeLessThanOrEqual(1);
       expect(geometry.every((item) => item.contained && item.stateTitleFits)).toBe(true);
     }
+
+    await setComposerResourcePolicy(page, "Skills", "OpenCode", "Keep Agent");
+    await expect.poll(() => newRow.locator(".profile-skill-state").textContent())
+      .toContain("Current state unavailable");
+    const mixedActionGeometry = await page.locator(".profile-skill-row").evaluateAll((rows) =>
+      rows.map((row) => {
+        const state = row.querySelector<HTMLElement>(".profile-skill-state")!;
+        const actions = row.querySelector<HTMLElement>(".ui-resource-row__actions")!;
+        return {
+          actionKind: actions.querySelector("[role='switch']")
+            ? "switch"
+            : actions.querySelector(".profile-skill-current-state")
+              ? "current-state"
+              : "other",
+          stateLeft: Math.round(state.getBoundingClientRect().left)
+        };
+      })
+    );
+    expect(new Set(mixedActionGeometry.map(({ actionKind }) => actionKind)).size)
+      .toBeGreaterThan(1);
+    expect(Math.max(...mixedActionGeometry.map(({ stateLeft }) => stateLeft)) -
+      Math.min(...mixedActionGeometry.map(({ stateLeft }) => stateLeft))).toBeLessThanOrEqual(1);
   }, standardElectronTestTimeout);
 
   it("keeps Profile Skill edits, Save, and Preview responsive with many Skills", async () => {

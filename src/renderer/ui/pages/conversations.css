@@ -195,12 +195,16 @@
   color: var(--text);
   display: -webkit-box;
   font-size: var(--font-size-body);
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-regular);
   line-height: 18px;
   max-height: 36px;
   overflow: hidden;
   overflow-wrap: anywhere;
   white-space: normal;
+}
+
+.conversation-list-item.is-selected .conversation-list-item__title {
+  font-weight: var(--font-weight-medium);
 }
 
 .conversation-list-item__snippet {

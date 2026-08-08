@@ -184,7 +184,10 @@ export const SkillsEditor = ({
         </div>
       </ResourcePanelToolbar>
 
-      <div className="ui-resource-children profile-skill-list" role="list">
+      <div
+        className="ui-resource-children ui-resource-children--aligned profile-skill-list"
+        role="list"
+      >
         {value.skills.map((reference, index) => {
           const skill = skillsById.get(reference.libraryId);
           const update = updatesById.get(reference.libraryId);

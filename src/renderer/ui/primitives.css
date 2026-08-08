@@ -698,6 +698,16 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   gap: var(--space-1);
 }
 
+/* Repeated rows share stable state and action tracks even when their contents differ. */
+.ui-resource-children--aligned > .ui-resource-row {
+  grid-template-columns:
+    var(--resource-icon-box)
+    minmax(0, 1fr)
+    var(--resource-row-metadata-track, 0)
+    var(--resource-row-state-track, 112px)
+    var(--resource-row-actions-track, 108px);
+}
+
 .ui-resource-row--compact {
   min-height: var(--resource-row-compact);
 }

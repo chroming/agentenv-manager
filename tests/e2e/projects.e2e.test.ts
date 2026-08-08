@@ -173,6 +173,20 @@ describe("Workspaces desktop workflow", () => {
       '[data-resource-disclosure-id="workspace-skill"] .project-resource-section__list'
     );
     await skillResourceList.locator(".project-resource-entry").waitFor();
+    const instructionResource = page.locator(
+      '[data-resource-disclosure-id="workspace-instructions"] .project-resource-entry'
+    ).first();
+    const skillResource = skillResourceList.locator(".project-resource-entry").first();
+    await instructionResource.locator(".ui-resource-row__actions").evaluate((actions) => {
+      actions.style.width = "56px";
+    });
+    const workspaceStateLefts = await Promise.all(
+      [instructionResource, skillResource].map((row) => row.locator(
+        ".ui-resource-row__state"
+      ).evaluate((state) => Math.round(state.getBoundingClientRect().left)))
+    );
+    expect(Math.max(...workspaceStateLefts) - Math.min(...workspaceStateLefts))
+      .toBeLessThanOrEqual(1);
     const resourceHierarchyGeometry = await skillResourceList.evaluate((list) => {
       const row = list.querySelector<HTMLElement>(".project-resource-entry")!;
       const listBox = list.getBoundingClientRect();

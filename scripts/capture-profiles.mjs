@@ -312,6 +312,49 @@ const prepareFixture = async (root) => {
     ].map((entry) => `${entry}\n`).join(""),
     "utf8"
   );
+  for (const [timestamp, id, prompt, response] of [
+    [
+      "2026-07-25T08:30:00.000Z",
+      "22222222-2222-4222-8222-222222222222",
+      "Compare release notes before publishing",
+      "The release notes match the saved Profile changes."
+    ],
+    [
+      "2026-07-25T08:00:00.000Z",
+      "33333333-3333-4333-8333-333333333333",
+      "Check Workspace Skill ownership",
+      "The Workspace Skill remains project-owned."
+    ]
+  ]) {
+    await writeFile(
+      join(conversationSessionDir, `rollout-${timestamp.replaceAll(":", "-")}-${id}.jsonl`),
+      [
+        JSON.stringify({
+          type: "session_meta",
+          payload: { id, cwd: "/work/agentenv-manager", timestamp }
+        }),
+        JSON.stringify({
+          type: "response_item",
+          payload: {
+            id: `${id}-user`,
+            type: "message",
+            role: "user",
+            content: [{ type: "input_text", text: prompt }]
+          }
+        }),
+        JSON.stringify({
+          type: "response_item",
+          payload: {
+            id: `${id}-assistant`,
+            type: "message",
+            role: "assistant",
+            content: [{ type: "output_text", text: response }]
+          }
+        })
+      ].map((entry) => `${entry}\n`).join(""),
+      "utf8"
+    );
+  }
 
   for (const command of ["opencode", "codex", "claude", "traecli"]) {
     const executable = join(binDir, command);

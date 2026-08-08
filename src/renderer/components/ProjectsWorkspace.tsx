@@ -734,7 +734,7 @@ export const ProjectsWorkspace = ({
                             </Button>
                           </ResourcePanelToolbar>
                         ) : null}
-                        <div className="ui-resource-children project-resource-section__list">
+                        <div className="ui-resource-children ui-resource-children--aligned project-resource-section__list">
                           {resources.map((resource) => {
                           const consumerNames = resource.consumerAgentIds
                             .map((agentId) => targets.find((target) => target.id === agentId)?.name ?? agentId);

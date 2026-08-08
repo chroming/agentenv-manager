@@ -435,6 +435,10 @@ describe("Conversations desktop workflow", () => {
     await expect.poll(() => page.getByRole("button", { name: "Load 1 more" }).count()).toBe(0);
     expect(await page.locator(".conversation-list-item__agent img").count())
       .toBeGreaterThanOrEqual(4);
+    const ordinaryTitleWeight = await page.locator(
+      ".conversation-list-item:not(.is-selected) .conversation-list-item__title"
+    ).first().evaluate((title) => getComputedStyle(title).fontWeight);
+    expect(ordinaryTitleWeight).toBe("400");
     const selectedConversation = page.getByRole("option", {
       name: /Repair the desktop release workflow/
     });
@@ -444,6 +448,9 @@ describe("Conversations desktop workflow", () => {
     );
     await expect.poll(() => selectedConversation.getAttribute("aria-selected"))
       .toBe("true");
+    expect(await selectedConversation.locator(
+      ".conversation-list-item__title"
+    ).evaluate((title) => getComputedStyle(title).fontWeight)).toBe("500");
     const selectedRowGeometry = await selectedConversation.evaluate((row) => {
       const rowBounds = row.getBoundingClientRect();
       const titleBounds = row
