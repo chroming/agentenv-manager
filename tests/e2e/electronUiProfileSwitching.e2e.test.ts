@@ -1063,6 +1063,9 @@ const expandComposerSection = async (page: Page, name: ComposerSectionName) => {
     await trigger.click();
   }
   await expect.poll(() => trigger.getAttribute("aria-expanded")).toBe("true");
+  await trigger.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
 };
 
 type ComposerResourceName = "Instructions" | "Skills" | "MCPs";
@@ -11039,6 +11042,10 @@ describe("Electron UI profile switching e2e", () => {
     const profileDialog = page.getByRole("dialog", { name: "New Profile" });
     const profileNameField = profileDialog.getByRole("textbox", { name: "Profile name" });
     const profileDescriptionField = profileDialog.getByRole("textbox", { name: "Description" });
+    await profileDialog.hover({ position: { x: 16, y: 16 } });
+    await expect.poll(() => profileDescriptionField.evaluate(
+      (field) => getComputedStyle(field).backgroundColor
+    )).toBe("rgb(255, 255, 255)");
     const profileFieldContract = await profileDialog.evaluate((dialog) => {
       const input = dialog.querySelector<HTMLInputElement>("input")!;
       const textarea = dialog.querySelector<HTMLTextAreaElement>("textarea")!;
@@ -11076,7 +11083,10 @@ describe("Electron UI profile switching e2e", () => {
         }
       };
     });
-    expect(profileFieldContract).toEqual({
+    expect(
+      profileFieldContract,
+      `New Profile field contract: ${JSON.stringify(profileFieldContract)}`
+    ).toEqual({
       cancel: {
         backgroundColor: "rgb(245, 245, 247)",
         fontWeight: "400",

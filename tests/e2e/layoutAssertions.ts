@@ -139,16 +139,14 @@ export const expectStableResourceDisclosureHeaders = (
   for (const initial of before) {
     const current = after.find(({ id }) => id === initial.id);
     expect(current, `Missing resource header ${initial.id}`).toBeDefined();
-    expect(current).toMatchObject({
-      height: 54,
-      id: initial.id,
-      width: initial.width,
-      x: initial.x
-    });
-    expect(current?.titleTop).toBe(initial.titleTop);
-    expect(current?.descriptionTop).toBe(initial.descriptionTop);
-    expect(current?.descriptionVisible).toBe(true);
-    expect(current?.actionsTop).toBe(initial.actionsTop);
+    const context = `resource header ${initial.id}: ${JSON.stringify({ initial, current })}`;
+    expect(current?.height, context).toBe(54);
+    expect(current?.width, context).toBe(initial.width);
+    expect(current?.x, context).toBe(initial.x);
+    expect(current?.titleTop, context).toBe(initial.titleTop);
+    expect(current?.descriptionTop, context).toBe(initial.descriptionTop);
+    expect(current?.descriptionVisible, context).toBe(true);
+    expect(current?.actionsTop, context).toBe(initial.actionsTop);
   }
   expect(after.filter(({ expanded }) => expanded).map(({ id }) => id).sort())
     .toEqual([...expandedIds].sort());
