@@ -16,7 +16,182 @@ afterEach(() => {
   Reflect.deleteProperty(window, "agentEnv");
 });
 
+const LegacySkillLibraryPanel = (props: Record<string, any>) => (
+  <SkillLibraryPanel
+    model={{
+      status: {
+        isLoading: props.isLoading,
+        isBusy: props.isBusy,
+        isRefreshingInventory: props.isRefreshingInventory
+      },
+      catalog: {
+        librarySkills: props.librarySkills,
+        skillUpdates: props.skillUpdates,
+        skillUsage: props.skillUsage,
+        installedTargetIds: props.installedTargetIds,
+        targetNames: props.targetNames,
+        preparedTargetsBySkill: props.preparedTargetsBySkill
+      },
+      sources: {
+        sourceGroups: props.sourceGroups,
+        sourceGroupsLoading: props.sourceGroupsLoading,
+        libraryMode: props.libraryMode
+      },
+      cleanup: {
+        skillInventory: props.skillInventory,
+        cleanupBackups: props.cleanupBackups,
+        cleanupScope: props.cleanupScope,
+        focusCollectionPath: props.focusCollectionPath
+      },
+      updates: {
+        selectedUpdatePlan: props.selectedUpdatePlan,
+        bulkUpdatePlans: props.bulkUpdatePlans,
+        bulkUpdateFailures: props.bulkUpdateFailures,
+        updateRun: props.updateRun,
+        bulkUpdateStopRequested: props.bulkUpdateStopRequested,
+        updateActivity: props.updateActivity
+      },
+      workspace: {
+        activeTool: props.activeTool,
+        importConflictOpen: props.importConflictOpen
+      },
+      view: {
+        viewState: props.viewState,
+        searchInputRef: props.searchInputRef
+      }
+    }}
+    actions={{
+      navigation: {
+        onCloseTool: props.onCloseTool,
+        onFocusCollectionHandled: props.onFocusCollectionHandled,
+        onLibraryModeChange: props.onLibraryModeChange,
+        onViewStateChange: props.onViewStateChange,
+        scrollOwnerRef: props.scrollOwnerRef
+      },
+      inventory: {
+        onRefreshInventory: props.onRefreshInventory,
+        onSelectLocalSkillSource: props.onSelectLocalSkillSource,
+        onReleaseSkillArchive: props.onReleaseSkillArchive,
+        onScanLocalSkillSource: props.onScanLocalSkillSource,
+        onImportUnmanaged: props.onImportUnmanaged,
+        onResolveCollectionConflict: props.onResolveCollectionConflict,
+        onImportLocalSourceSkill: props.onImportLocalSourceSkill,
+        onImportExternal: props.onImportExternal,
+        onManageTargetSkill: props.onManageTargetSkill,
+        onConsolidateSkillGroup: props.onConsolidateSkillGroup,
+        onAutoConsolidateSkillGroups: props.onAutoConsolidateSkillGroups,
+        onCopyCleanupDetails: props.onCopyCleanupDetails,
+        onLeaveSkillGroupUnmanaged: props.onLeaveSkillGroupUnmanaged,
+        onManageSkillGroupWithAgentEnv: props.onManageSkillGroupWithAgentEnv,
+        onSetUnmanagedSkillLocations: props.onSetUnmanagedSkillLocations,
+        onSetSkillCollectionDecision: props.onSetSkillCollectionDecision,
+        onSetSharedSkillRetention: props.onSetSharedSkillRetention,
+        onRetireSharedSkill: props.onRetireSharedSkill,
+        onMoveSharedSkillToAgents: props.onMoveSharedSkillToAgents,
+        onMoveSkillCollection: props.onMoveSkillCollection,
+        onRestoreCleanup: props.onRestoreCleanup
+      },
+      files: {
+        onListSkillFiles: props.onListSkillFiles,
+        onReadSkillFile: props.onReadSkillFile
+      },
+      repository: {
+        onScanGitHubSkills: props.onScanGitHubSkills,
+        onImportGitHubSkills: props.onImportGitHubSkills,
+        onScanRepositorySkills: props.onScanRepositorySkills,
+        onImportRepositorySkills: props.onImportRepositorySkills,
+        onCancelRepositoryOperations: props.onCancelRepositoryOperations
+      },
+      sources: {
+        onCheckSourceGroup: props.onCheckSourceGroup,
+        onCheckMonitoredSourceGroups: props.onCheckMonitoredSourceGroups,
+        onSetSourceName: props.onSetSourceName,
+        onSetSourceMonitored: props.onSetSourceMonitored,
+        onSetSourceCandidateIgnored: props.onSetSourceCandidateIgnored,
+        onPreviewSourceMerge: props.onPreviewSourceMerge,
+        onMergeSources: props.onMergeSources
+      },
+      catalog: {
+        onSaveUpdateSettings: props.onSaveUpdateSettings,
+        onSetAvailability: props.onSetAvailability,
+        onSetIcon: props.onSetIcon,
+        onSyncSkillInstalls: props.onSyncSkillInstalls,
+        onRemoveLibrarySkill: props.onRemoveLibrarySkill,
+        onPreviewSkillMerge: props.onPreviewSkillMerge,
+        onMergeLibrarySkills: props.onMergeLibrarySkills,
+        onReviewSkillUsage: props.onReviewSkillUsage,
+        onOpenSource: props.onOpenSource,
+        onCopySource: props.onCopySource
+      },
+      updates: {
+        onPreviewLibrarySkillUpdate: props.onPreviewLibrarySkillUpdate,
+        onCloseUpdatePreview: props.onCloseUpdatePreview,
+        onUpdateLibrarySkill: props.onUpdateLibrarySkill,
+        onUpdateAllLibrarySkills: props.onUpdateAllLibrarySkills,
+        onStopBulkLibrarySkillUpdates: props.onStopBulkLibrarySkillUpdates,
+        onPreviewAllLibrarySkillUpdates: props.onPreviewAllLibrarySkillUpdates,
+        onCloseBulkUpdatePreview: props.onCloseBulkUpdatePreview,
+        onCheckUpdates: props.onCheckUpdates
+      }
+    }}
+  />
+);
+
 describe("SkillLibraryPanel", () => {
+  it("routes grouped model state and actions through the panel boundary", () => {
+    const onCheckUpdates = vi.fn();
+
+    render(
+      <SkillLibraryPanel
+        model={{
+          status: {},
+          catalog: {
+            librarySkills: [{
+              id: "contract-reviewer",
+              name: "Contract Reviewer",
+              description: "Proves grouped state reaches the panel",
+              path: "/tmp/skills-library/contract-reviewer",
+              sourceType: "local",
+              updatePolicy: "untracked",
+              contentHash: "contract-hash",
+              updatedAt: "2026-08-08T00:00:00.000Z"
+            }],
+            skillUpdates: [],
+            skillUsage: {}
+          },
+          sources: {
+            sourceGroups: [],
+            libraryMode: "skills"
+          },
+          cleanup: {
+            skillInventory: [],
+            cleanupBackups: []
+          },
+          updates: {},
+          workspace: {},
+          view: {
+            viewState: defaultSkillLibraryViewState
+          }
+        } as never}
+        actions={{
+          navigation: {},
+          inventory: {},
+          files: {},
+          repository: {},
+          sources: {},
+          catalog: {},
+          updates: {
+            onCheckUpdates
+          }
+        } as never}
+      />
+    );
+
+    expect(screen.getByText("Contract Reviewer")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
+    expect(onCheckUpdates).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps the skill list clean and routes secondary workflows through drawers and row actions", async () => {
     const onImportUnmanaged = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
     const onScanGitHubSkills = vi.fn().mockResolvedValue({
@@ -195,7 +370,7 @@ describe("SkillLibraryPanel", () => {
       bulkUpdateFailures: Array<{ id: string; error: string }> = [],
       updateRun: SkillUpdateRun = {}
     ) => (
-      <SkillLibraryPanel
+      <LegacySkillLibraryPanel
         sourceGroups={[]}
         libraryMode="skills"
         onLibraryModeChange={vi.fn()}
@@ -1678,7 +1853,7 @@ describe("SkillLibraryPanel", () => {
     const noop = vi.fn();
 
     render(
-      <SkillLibraryPanel
+      <LegacySkillLibraryPanel
         sourceGroups={[]}
         libraryMode="skills"
         onLibraryModeChange={vi.fn()}
@@ -1857,7 +2032,7 @@ describe("SkillLibraryPanel", () => {
     const noop = vi.fn();
 
     render(
-      <SkillLibraryPanel
+      <LegacySkillLibraryPanel
         sourceGroups={[]}
         libraryMode="skills"
         onLibraryModeChange={vi.fn()}

@@ -25,7 +25,6 @@ import {
 import type {
   ApplyIssue,
   BackupSummary,
-  DataRestorePreview,
   DiagnosticIssueDetail,
   ProfileDetail,
   ProfileResourceMode,
@@ -37,9 +36,6 @@ import type {
   StopManagingPreview,
   AgentEnvSettings,
   AppLocale,
-  GitHubAuthStatus,
-  GitHubDeviceLogin,
-  GitHubDeviceLoginResult,
   GitHubSkillImportInput,
   GitHubSkillImportResult,
   GitHubSkillScanResult,
@@ -49,9 +45,6 @@ import type {
   RepositorySkillSourceInput,
   LibraryResourceVersions,
   ManageTargetSkillInput,
-  ManagedBackupInventory,
-  ManagedBackupItem,
-  ManagedBackupPreview,
   RetireSharedSkillInput,
   SkillInventoryEntry,
   SkillImportConflictResolution,
@@ -109,10 +102,7 @@ import {
 import { DiagnosticSettingsSection } from "./components/DiagnosticSettingsSection";
 import { AppUpdateSettings } from "./components/AppUpdateSettings";
 import { TelemetrySettings } from "./components/TelemetrySettings";
-import {
-  BackupManagerDialog,
-  type BackupManagerNotice
-} from "./components/BackupManagerDialog";
+import { BackupManagerDialog } from "./components/BackupManagerDialog";
 import { DataSettingsSection } from "./components/DataSettingsSection";
 import { DiagnosticIssueDialog } from "./components/DiagnosticIssueDialog";
 import { FreshnessStatus } from "./components/FreshnessStatus";
@@ -204,6 +194,9 @@ import { useConversationIndexWarmup } from "./hooks/useConversationIndexWarmup";
 import { useProfileActionGuard } from "./hooks/useProfileActionGuard";
 import { useProfileDraftController } from "./hooks/useProfileDraftController";
 import { useProfileActivationController } from "./hooks/useProfileActivationController";
+import { useGitHubConnectionController } from "./hooks/useGitHubConnectionController";
+import { useBackupRecoveryController } from "./hooks/useBackupRecoveryController";
+import { useSettingsController } from "./hooks/useSettingsController";
 import { useSkillUpdateQueue } from "./hooks/useSkillUpdateQueue";
 import {
   projectSkillInventoryBoundary,
@@ -293,24 +286,6 @@ const AppContent = ({
   const [profileLibraryVersions, setProfileLibraryVersions] = useState<
     Record<string, LibraryResourceVersions>
   >({});
-  const [skillSettings, setSkillSettings] = useState<AgentEnvSettings>({
-    locale: "system",
-    conversationTerminal: "default",
-    skillSyncMethod: "auto",
-    skillStorageLocation: "appData",
-    skillAutoCheckEnabled: true,
-    skillAutoCheckIntervalMinutes: 60,
-    backupRetentionDays: null
-  });
-  const [githubAuthStatus, setGithubAuthStatus] = useState<GitHubAuthStatus>({
-    state: "signed-out"
-  });
-  const [githubDeviceLogin, setGithubDeviceLogin] = useState<GitHubDeviceLogin>();
-  const [githubLoginMessage, setGithubLoginMessage] = useState("");
-  const [githubLoginChecking, setGithubLoginChecking] = useState(false);
-  const [githubCodeCopied, setGithubCodeCopied] = useState(false);
-  const githubLoginPollingRef = useRef(false);
-  const githubCopyResetRef = useRef<number | undefined>(undefined);
   const [skillUsage, setSkillUsage] = useState<Record<string, string[]>>({});
   const [backups, setBackups] = useState<BackupSummary[]>([]);
   const [selectedTargetId, setSelectedTargetId] = useState<string>();
@@ -342,18 +317,6 @@ const AppContent = ({
     useState<"library" | "profiles" | "targets">("library");
   const [checkingProfileSkillUpdates, setCheckingProfileSkillUpdates] = useState(false);
   const [profileMetadataSavingId, setProfileMetadataSavingId] = useState<string>();
-  const [settingsSaveStatus, setSettingsSaveStatus] = useState("");
-  const [dataBackupStatus, setDataBackupStatus] = useState("");
-  const [dataRestorePreview, setDataRestorePreview] = useState<DataRestorePreview>();
-  const [managedBackups, setManagedBackups] = useState<ManagedBackupInventory>();
-  const [managedBackupsLoading, setManagedBackupsLoading] = useState(false);
-  const [backupManagerOpen, setBackupManagerOpen] = useState(false);
-  const [backupPreviewCandidate, setBackupPreviewCandidate] = useState<ManagedBackupItem>();
-  const [managedBackupPreview, setManagedBackupPreview] = useState<ManagedBackupPreview>();
-  const [managedBackupPreviewLoading, setManagedBackupPreviewLoading] = useState(false);
-  const [backupDeleteCandidate, setBackupDeleteCandidate] = useState<ManagedBackupItem>();
-  const [backupCleanupConfirm, setBackupCleanupConfirm] = useState(false);
-  const [backupManagerNotice, setBackupManagerNotice] = useState<BackupManagerNotice>();
   const [targetRefreshStatus, setTargetRefreshStatus] = useState<"refreshing" | "refreshed">();
   const [skillRefreshStatus, setSkillRefreshStatus] = useState<"refreshing" | "refreshed">();
   const [profileSearch, setProfileSearch] = useState("");
@@ -408,8 +371,6 @@ const AppContent = ({
   const dataRefreshRequestRef = useRef(0);
   const skillUpdateResultRevisionRef = useRef(0);
   const rollbackReturnFocusRef = useRef<HTMLElement | null>(null);
-  const dataRestoreReturnFocusRef = useRef<HTMLElement | null>(null);
-  const backupManagerReturnFocusRef = useRef<HTMLElement | null>(null);
   const appModalDialogRef = useRef<HTMLElement>(null);
   const appModalInitialFocusRef = useRef<HTMLButtonElement>(null);
   const appModalFallbackFocusRef = useRef<HTMLElement>(null);
@@ -481,6 +442,24 @@ const AppContent = ({
     translate: t
   });
   resetProfileActivationRef.current = resetProfileActivation;
+  const settingsController = useSettingsController({
+    onBackupRetentionChanged: () => backupRecovery.actions.refreshManagedBackups("mutation"),
+    onBusyChange: setBusy,
+    onError: setError,
+    onLocaleChange: onLocalePreferenceChange,
+    onTargetSettingsChanged: async (nextSettings) => {
+      clearProfilePreview();
+      setRollbackPreview(undefined);
+      await refreshProfiles({
+        checkSkillUpdates: false,
+        forceTargetRefresh: true,
+        settingsOverride: nextSettings
+      });
+    }
+  });
+  const skillSettings = settingsController.state.settings;
+  const settingsSaveStatus = settingsController.state.status;
+  const updateSkillSettings = settingsController.actions.update;
   const { activity: skillUpdateActivity, activityRef: skillUpdateActivityRef,
     begin: beginSkillUpdateActivity, finish: finishSkillUpdateActivity
   } = useSkillUpdateActivity(() => setSkillRefreshStatus(undefined));
@@ -498,28 +477,6 @@ const AppContent = ({
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     }
   }, []);
-  const refreshManagedBackups = useCallback(async (
-    reason: "page-entry" | "mutation" | "manual" = "manual"
-  ) => {
-    try {
-      await runFreshness("backups", reason, async () => {
-        setManagedBackupsLoading(true);
-        try {
-          const inventory = await window.agentEnv.listManagedBackups();
-          setManagedBackups(inventory);
-          return inventory;
-        } finally {
-          setManagedBackupsLoading(false);
-        }
-      });
-    } catch (unknownError) {
-      const message = unknownError instanceof Error
-        ? unknownError.message
-        : String(unknownError);
-      if (reason === "manual") setError(message);
-      else console.warn(`[AgentEnv] Recovery storage refresh failed: ${message}`);
-    }
-  }, [runFreshness]);
   const libraryScroll = useLibraryScrollRestoration({
     activeView: activeLibraryView,
     scrollTop: activeLibraryView === "skills" ? skillLibraryViewState.scrollTop : 0,
@@ -532,11 +489,6 @@ const AppContent = ({
   });
 
   useEffect(() => {
-    if (activeWorkspace !== "settings") return;
-    void refreshManagedBackups("page-entry");
-  }, [activeWorkspace, refreshManagedBackups]);
-
-  useEffect(() => {
     if (rollbackPreview || busy) {
       return;
     }
@@ -546,14 +498,6 @@ const AppContent = ({
     }
     rollbackReturnFocusRef.current = null;
   }, [busy, rollbackPreview]);
-
-  useEffect(() => {
-    if (settingsSaveStatus !== "Settings saved") {
-      return undefined;
-    }
-    const timeout = window.setTimeout(() => setSettingsSaveStatus(""), 2400);
-    return () => window.clearTimeout(timeout);
-  }, [settingsSaveStatus]);
 
   useEffect(() => {
     if (targetRefreshStatus !== "refreshed") {
@@ -671,10 +615,9 @@ const AppContent = ({
       }))
     );
     setProfiles(profileItems);
-    setSkillSettings(settings);
+    settingsController.actions.accept(settings);
     markFresh("agents");
     markFresh("skill-library");
-    onLocalePreferenceChange(settings.locale);
     setSelectedTargetId((current) =>
       current && targetItems.some((target) => target.id === current)
         ? current
@@ -811,7 +754,7 @@ const AppContent = ({
         }`
       );
     }
-    setGithubAuthStatus(githubStatus);
+    githubConnection.actions.acceptAuthStatus(githubStatus);
     if (checkedSources) {
       markFresh("skill-upstreams", {
         error: checkedSources.failed > 0
@@ -856,6 +799,52 @@ const AppContent = ({
     );
     return { ...core, ...enrichment };
   };
+
+  const backupRecovery = useBackupRecoveryController({
+    activeWorkspace,
+    onBusyChange: setBusy,
+    onError: setError,
+    onRestoreApplied: async () => {
+      clearSelectedProfile();
+      const refreshed = await refreshProfiles();
+      const firstProfile = refreshed.profileItems.find((profile) => !profile.loadError);
+      if (firstProfile) {
+        setSelectedTargetId(firstProfile.preferredTargetId ?? targets[0]?.id);
+        acceptSelectedProfile(await window.agentEnv.readProfile(firstProfile.id));
+      }
+    },
+    runFreshness,
+    translate: t
+  });
+  const {
+    backupCleanupConfirm,
+    backupDeleteCandidate,
+    backupManagerNotice,
+    backupManagerOpen,
+    backupPreviewCandidate,
+    dataBackupStatus,
+    dataRestorePreview,
+    managedBackupPreview,
+    managedBackupPreviewLoading,
+    managedBackups,
+    managedBackupsLoading,
+    managerReturnFocusRef: backupManagerReturnFocusRef,
+    restoreReturnFocusRef: dataRestoreReturnFocusRef
+  } = backupRecovery.state;
+
+  const githubConnection = useGitHubConnectionController({
+    onError: setError,
+    onOpenPage: (url) => window.agentEnv.openGitHubDevicePage(url),
+    onRefresh: () => refreshProfiles(),
+    onStatusReset: settingsController.actions.clearStatus
+  });
+  const {
+    authStatus: githubAuthStatus,
+    codeCopied: githubCodeCopied,
+    deviceLogin: githubDeviceLogin,
+    loginChecking: githubLoginChecking,
+    loginMessage: githubLoginMessage
+  } = githubConnection.state;
 
   const refreshSkills = async (
     reason: "page-entry" | "focus" | "mutation" | "manual" = "manual"
@@ -1625,9 +1614,9 @@ const AppContent = ({
     if (pendingSkillImport) {
       dismissSkillImport();
     } else if (backupManagerOpen) {
-      closeBackupManager();
+      backupRecovery.actions.closeManager();
     } else if (dataRestorePreview) {
-      setDataRestorePreview(undefined);
+      backupRecovery.actions.dismissDataRestore();
     } else if (pendingProfileAction) {
       cancelPendingProfileAction();
     } else {
@@ -1998,7 +1987,7 @@ const AppContent = ({
     if (readiness.remediationLabel === "Open Recovery") {
       setSettingsCategory("data");
       openWorkspaceNow("settings");
-      setBackupManagerOpen(true);
+      backupRecovery.actions.revealManager();
     }
   };
 
@@ -3242,201 +3231,6 @@ const AppContent = ({
     }
   };
 
-  async function updateSkillSettings(input: Partial<AgentEnvSettings>) {
-    setBusy(true);
-    setError(undefined);
-    setSettingsSaveStatus("Saving settings");
-    try {
-      const nextSettings = await window.agentEnv.updateSettings(input);
-      setSkillSettings(nextSettings);
-      onLocalePreferenceChange(nextSettings.locale);
-      if ("backupRetentionDays" in input) await refreshManagedBackups("mutation");
-      if (
-        "enabledTargetIds" in input ||
-        "targetConfigRoots" in input ||
-        "targetCommandOverrides" in input
-      ) {
-        clearProfilePreview();
-        setRollbackPreview(undefined);
-        await refreshProfiles({
-          checkSkillUpdates: false,
-          forceTargetRefresh: true,
-          settingsOverride: nextSettings
-        });
-      }
-      setSettingsSaveStatus("Settings saved");
-      return nextSettings;
-    } catch (unknownError) {
-      setSettingsSaveStatus("");
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-      return undefined;
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const openBackupManager = () => {
-    backupManagerReturnFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setBackupDeleteCandidate(undefined);
-    setBackupPreviewCandidate(undefined);
-    setManagedBackupPreview(undefined);
-    setManagedBackupPreviewLoading(false);
-    setBackupCleanupConfirm(false);
-    setBackupManagerNotice(undefined);
-    setBackupManagerOpen(true);
-    void refreshManagedBackups("manual");
-  };
-
-  const closeBackupManager = () => {
-    if (backupPreviewCandidate) {
-      setBackupPreviewCandidate(undefined);
-      setManagedBackupPreview(undefined);
-      setManagedBackupPreviewLoading(false);
-      return;
-    }
-    if (backupDeleteCandidate) {
-      setBackupDeleteCandidate(undefined);
-      return;
-    }
-    if (backupCleanupConfirm) {
-      setBackupCleanupConfirm(false);
-      return;
-    }
-    setBackupManagerOpen(false);
-    setBackupManagerNotice(undefined);
-  };
-
-  const previewManagedBackup = async (item: ManagedBackupItem) => {
-    setBackupPreviewCandidate(item);
-    setManagedBackupPreview(undefined);
-    setManagedBackupPreviewLoading(true);
-    setBackupManagerNotice(undefined);
-    try {
-      const previewResult = await window.agentEnv.previewManagedBackup({
-        id: item.id,
-        kind: item.kind
-      });
-      setManagedBackupPreview(previewResult);
-    } catch (unknownError) {
-      setBackupPreviewCandidate(undefined);
-      setBackupManagerNotice({
-        kind: "error",
-        message: unknownError instanceof Error ? unknownError.message : String(unknownError)
-      });
-    } finally {
-      setManagedBackupPreviewLoading(false);
-    }
-  };
-
-  const deleteSelectedManagedBackup = async () => {
-    if (!backupDeleteCandidate) return;
-    setBusy(true);
-    setBackupManagerNotice(undefined);
-    try {
-      const result = await window.agentEnv.deleteManagedBackup({
-        id: backupDeleteCandidate.id,
-        kind: backupDeleteCandidate.kind
-      });
-      setBackupDeleteCandidate(undefined);
-      setBackupManagerNotice({
-        kind: "success",
-        message: t("Deleted {{count}} backup · Freed {{size}}", {
-          count: result.deletedCount,
-          size: formatBytes(result.freedBytes)
-        })
-      });
-      await refreshManagedBackups("mutation");
-    } catch (unknownError) {
-      setBackupManagerNotice({
-        kind: "error",
-        message: unknownError instanceof Error ? unknownError.message : String(unknownError)
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const cleanupManagedBackups = async () => {
-    setBusy(true);
-    setBackupManagerNotice(undefined);
-    try {
-      const result = await window.agentEnv.cleanupManagedBackups();
-      setBackupCleanupConfirm(false);
-      setBackupManagerNotice({
-        kind: result.failures.length > 0 ? "error" : "success",
-        message: result.failures.length > 0
-          ? t(result.deletedCount === 1 ? "Deleted 1 backup; {{failed}} failed" : "Deleted {{count}} backups; {{failed}} failed", {
-              count: result.deletedCount,
-              failed: result.failures.length
-            })
-          : t(result.deletedCount === 1 ? "Deleted 1 backup · Freed {{size}}" : "Deleted {{count}} backups · Freed {{size}}", {
-              count: result.deletedCount,
-              size: formatBytes(result.freedBytes)
-            })
-      });
-      await refreshManagedBackups("mutation");
-    } catch (unknownError) {
-      setBackupManagerNotice({
-        kind: "error",
-        message: unknownError instanceof Error ? unknownError.message : String(unknownError)
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const createAgentEnvDataBackup = async () => {
-    setBusy(true);
-    setError(undefined);
-    setDataBackupStatus("Creating data export");
-    try {
-      const result = await window.agentEnv.createDataBackup();
-      setDataBackupStatus(result ? t("Data export created at {{path}}", { path: result.path }) : "");
-    } catch (unknownError) {
-      setDataBackupStatus("");
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const selectAgentEnvDataRestore = async () => {
-    dataRestoreReturnFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setBusy(true);
-    setError(undefined);
-    try {
-      setDataRestorePreview(await window.agentEnv.selectDataRestore());
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const restoreAgentEnvData = async () => {
-    if (!dataRestorePreview) return;
-    setBusy(true);
-    setError(undefined);
-    try {
-      const result = await window.agentEnv.restoreDataBackup(dataRestorePreview.path);
-      setDataRestorePreview(undefined);
-      clearSelectedProfile();
-      const refreshed = await refreshProfiles();
-      const firstProfile = refreshed.profileItems.find((profile) => !profile.loadError);
-      if (firstProfile) {
-        setSelectedTargetId(firstProfile.preferredTargetId ?? targets[0]?.id);
-        acceptSelectedProfile(await window.agentEnv.readProfile(firstProfile.id));
-      }
-      setDataBackupStatus(`AgentEnv data restored; safety backup created at ${result.safetyBackupPath}`);
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const refreshTargets = useAgentRefresh({
     loadRecoveryHistory: loadTargetRecoveryHistory,
     profiles,
@@ -3461,158 +3255,12 @@ const AppContent = ({
     refreshTargets
   });
 
-  const startGitHubLogin = async () => {
-    setGithubLoginChecking(true);
-    setError(undefined);
-    setSettingsSaveStatus("");
-    setDataBackupStatus("");
-    setGithubLoginMessage("Opening GitHub authorization...");
-    setGithubCodeCopied(false);
-    try {
-      const login = await window.agentEnv.startGitHubDeviceLogin();
-      setGithubDeviceLogin(login);
-      setGithubAuthStatus(await window.agentEnv.readGitHubAuthStatus());
-      setGithubLoginMessage("Waiting for authorization. This page updates automatically.");
-      await window.agentEnv.openGitHubDevicePage(login.verificationUri);
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-      setGithubLoginMessage("");
-    } finally {
-      setGithubLoginChecking(false);
-    }
-  };
-
-  const pollGitHubLogin = async (
-    login = githubDeviceLogin,
-    showProgress = true
-  ): Promise<GitHubDeviceLoginResult | undefined> => {
-    if (!login || githubLoginPollingRef.current) {
-      return undefined;
-    }
-    githubLoginPollingRef.current = true;
-    setGithubLoginChecking(true);
-    setError(undefined);
-    setSettingsSaveStatus("");
-    if (showProgress) {
-      setGithubLoginMessage("Checking GitHub authorization...");
-    }
-    try {
-      const result = await window.agentEnv.pollGitHubDeviceLogin(login.id);
-      if (result.state === "signed-in") {
-        const status = result.status ?? (await window.agentEnv.readGitHubAuthStatus());
-        setGithubAuthStatus(status);
-        setGithubDeviceLogin(undefined);
-        setGithubCodeCopied(false);
-        setGithubLoginMessage(
-          status.user?.login ? `Signed in as ${status.user.login}` : "Signed in with GitHub"
-        );
-        await refreshProfiles();
-        return result;
-      }
-      if (result.state === "expired" || result.state === "denied") {
-        setGithubDeviceLogin(undefined);
-      }
-      setGithubLoginMessage(
-        result.state === "pending"
-          ? "Waiting for authorization. This page updates automatically."
-          : result.message ?? "GitHub authorization is still pending"
-      );
-      return result;
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-      return undefined;
-    } finally {
-      githubLoginPollingRef.current = false;
-      setGithubLoginChecking(false);
-    }
-  };
-
-  const copyGitHubDeviceCode = async () => {
-    if (!githubDeviceLogin) {
-      return;
-    }
-    try {
-      await window.agentEnv.copyText(githubDeviceLogin.userCode);
-      setGithubCodeCopied(true);
-      if (githubCopyResetRef.current) {
-        window.clearTimeout(githubCopyResetRef.current);
-      }
-      githubCopyResetRef.current = window.setTimeout(() => setGithubCodeCopied(false), 1800);
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-    }
-  };
-
-  useEffect(() => {
-    const login = githubDeviceLogin;
-    if (!login) {
-      return undefined;
-    }
-
-    let cancelled = false;
-    let timeoutId: number | undefined;
-    let delayMs = Math.max(login.intervalSeconds * 1000, 1000);
-    const schedule = () => {
-      timeoutId = window.setTimeout(async () => {
-        const result = await pollGitHubLogin(login, false);
-        if (
-          cancelled ||
-          result?.state === "signed-in" ||
-          result?.state === "expired" ||
-          result?.state === "denied"
-        ) {
-          return;
-        }
-        delayMs = Math.max((result?.retryAfterSeconds ?? login.intervalSeconds) * 1000, 1000);
-        schedule();
-      }, delayMs);
-    };
-    const handleFocus = () => {
-      void pollGitHubLogin(login, false);
-    };
-
-    schedule();
-    window.addEventListener("focus", handleFocus);
-    return () => {
-      cancelled = true;
-      if (timeoutId) {
-        window.clearTimeout(timeoutId);
-      }
-      window.removeEventListener("focus", handleFocus);
-    };
-  }, [githubDeviceLogin?.id]);
-
-  useEffect(
-    () => () => {
-      if (githubCopyResetRef.current) {
-        window.clearTimeout(githubCopyResetRef.current);
-      }
-    },
-    []
-  );
-
-  const signOutGitHub = async () => {
-    setGithubLoginChecking(true);
-    setError(undefined);
-    setSettingsSaveStatus("");
-    try {
-      const status = await window.agentEnv.signOutGitHub();
-      setGithubAuthStatus(status);
-      setGithubDeviceLogin(undefined);
-      setGithubLoginMessage("Signed out of GitHub");
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-    } finally {
-      setGithubLoginChecking(false);
-    }
-  };
-
   const dismissAppFeedback = () => {
     setError(undefined);
     setSkillUpdateCheckStatus(undefined);
     setProfileSaveStatus("");
     clearProfileApplyRefreshDetail();
-    setSettingsSaveStatus("");
+    settingsController.actions.clearStatus();
     setTargetRefreshStatus(undefined);
     setSkillRefreshStatus(undefined);
     setSkillCleanupResult(undefined);
@@ -3630,22 +3278,22 @@ const AppContent = ({
     try {
       const issue = await window.agentEnv.readLatestDiagnosticIssue();
       if (!issue) {
-        setSettingsSaveStatus("No diagnostic issues recorded");
+        settingsController.actions.setStatus("No diagnostic issues recorded");
         return;
       }
       await window.agentEnv.copyText(formatDiagnosticIssue(issue));
-      setSettingsSaveStatus("Latest diagnostic issue copied");
+      settingsController.actions.setStatus("Latest diagnostic issue copied");
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     }
   };
   const exportDiagnosticReport = async () => {
     setError(undefined);
-    setSettingsSaveStatus("");
+    settingsController.actions.clearStatus();
     try {
       const path = await window.agentEnv.exportDiagnostics();
       if (path) {
-        setSettingsSaveStatus(t("Diagnostic report exported to {{path}}", { path }));
+        settingsController.actions.setStatus(t("Diagnostic report exported to {{path}}", { path }));
       }
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -4072,169 +3720,197 @@ const AppContent = ({
               }
             />
             <SkillLibraryPanel
-                isLoading={isLoading}
-                isBusy={busy}
-                librarySkills={librarySkills}
-                sourceGroups={skillSourceGroups}
-                sourceGroupsLoading={false}
-                libraryMode={skillLibraryMode}
-                skillUpdates={skillUpdates}
-                skillInventory={skillInventory}
-                cleanupBackups={skillCleanupBackups}
-                selectedUpdatePlan={selectedSkillUpdatePlan}
-                bulkUpdatePlans={bulkSkillUpdatePlans}
-                bulkUpdateFailures={bulkSkillUpdateFailures}
-                updateRun={skillUpdateQueue.run}
-                bulkUpdateStopRequested={skillUpdateQueue.stopRequested}
-                skillUsage={skillUsage}
-                installedTargetIds={targets
-                  .filter((target) => isTargetInstalled(target.health))
-                  .map((target) => target.id)}
-                targetNames={targetNames}
-                preparedTargetsBySkill={preparedSkillTargetsBySkill}
-                activeTool={skillLibraryTool}
-                cleanupScope={skillCleanupScope}
-                focusCollectionPath={skillCollectionFocusPath}
-                isRefreshingInventory={skillInventoryRefreshing}
-                onCloseTool={() => {
-                  setSkillLibraryTool(undefined);
-                  setSkillCleanupScope("all");
-                  setSkillCollectionFocusPath(undefined);
-                }}
-                onFocusCollectionHandled={() => setSkillCollectionFocusPath(undefined)}
-                onRefreshInventory={refreshSkillDiscoveries}
-                onSelectLocalSkillSource={() => window.agentEnv.selectLocalSkillSource()}
-                onReleaseSkillArchive={(token) => window.agentEnv.releaseSkillArchive(token)}
-                onScanLocalSkillSource={(rootPath) => window.agentEnv.scanLocalSkillSource(rootPath)}
-                onImportUnmanaged={(sourcePath, sourceHandling, deferFullRefresh) =>
-                  importUnmanagedSkill(sourcePath, sourceHandling,
-                    deferFullRefresh ? "batch" : "global").then((outcome) => outcome.ok)}
-                onResolveCollectionConflict={async (item, strategy, deferFullRefresh) => {
-                  const preferredResolution =
-                    strategy === "use-collection" && item.libraryId
-                      ? {
-                          action: "replace" as const,
-                          existingId: item.libraryId
-                        }
-                      : undefined;
-                  const outcome = await importUnmanagedSkill(
-                    item.path,
-                    "copy-only",
-                    deferFullRefresh ? "batch" : "global",
-                    undefined,
-                    undefined,
-                    preferredResolution
-                  );
-                  if (!outcome.ok) return false;
-                  if (outcome.conflictResolution?.action === "keep-existing") {
-                    return setSkillCollectionDecision({
-                      path: item.path,
-                      useLibrary: true,
-                      sourceContentHash: item.contentHash
-                    });
-                  }
-                  if (item.collectionDecision === "use-library") {
-                    return setSkillCollectionDecision({
-                      path: item.path,
-                      useLibrary: false
-                    });
-                  }
-                  return true;
-                }}
-                onImportLocalSourceSkill={(sourcePath, sourceCollection, upstream) =>
-                  importUnmanagedSkill(
-                    sourcePath,
-                    "copy-only",
-                    "caller",
-                    sourceCollection,
-                    upstream
-                  ).then((outcome) => outcome.ok)}
-                onListSkillFiles={(id) => window.agentEnv.listSkillFiles(id)}
-                onReadSkillFile={(id, path) => window.agentEnv.readSkillFile({ id, path })}
-                onImportExternal={importExternalSkill}
-                onScanGitHubSkills={scanGitHubSkills}
-                onImportGitHubSkills={importGitHubSkills}
-                onScanRepositorySkills={scanRepositorySkills}
-                onImportRepositorySkills={importRepositorySkills}
-                onLibraryModeChange={setSkillLibraryMode}
-                onCheckSourceGroup={checkSkillSourceGroup}
-                onCheckMonitoredSourceGroups={checkMonitoredSkillSourceGroups}
-                onSetSourceName={setSkillSourceName}
-                onSetSourceMonitored={setSkillSourceMonitored}
-                onSetSourceCandidateIgnored={setSkillSourceCandidateIgnored}
-                onPreviewSourceMerge={previewSkillSourceMerge}
-                onMergeSources={mergeSkillSources}
-                onCancelRepositoryOperations={() => window.agentEnv.cancelRepositoryOperations()}
-                onManageTargetSkill={manageTargetSkill}
-                onConsolidateSkillGroup={consolidateSkillGroup}
-                onAutoConsolidateSkillGroups={autoConsolidateSkillGroups}
-                onSaveUpdateSettings={saveSkillUpdateSettings}
-                onSetAvailability={setSkillAvailability}
-                onSetIcon={(input) => void setSkillIcon(input)}
-                onPreviewLibrarySkillUpdate={previewLibrarySkillUpdate}
-                onCloseUpdatePreview={() => {
-                  setSelectedSkillUpdatePlan(undefined);
-                  skillUpdateQueue.resetRun();
-                }}
-                onUpdateLibrarySkill={updateLibrarySkill}
-                onUpdateAllLibrarySkills={updateAllLibrarySkills}
-                onStopBulkLibrarySkillUpdates={skillUpdateQueue.requestStop}
-                onPreviewAllLibrarySkillUpdates={previewAllLibrarySkillUpdates}
-                onCloseBulkUpdatePreview={() => {
-                  setBulkSkillUpdatePlans(undefined);
-                  setBulkSkillUpdateFailures([]);
-                  skillUpdateQueue.resetRun();
-                  skillUpdateQueue.resetStop();
-                }}
-                onSyncSkillInstalls={(id) => void syncSkillInstalls(id)}
-                onRemoveLibrarySkill={removeLibrarySkill}
-                onPreviewSkillMerge={previewSkillMerge}
-                onMergeLibrarySkills={mergeLibrarySkills}
-                onReviewSkillUsage={reviewSkillUsage}
-                onCheckUpdates={checkSkillUpdates}
-                onOpenSource={(url) => {
-                  void window.agentEnv.openExternalUrl(url).catch((unknownError) => {
-                    setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-                  });
-                }}
-                onCopySource={(source) => {
-                  void window.agentEnv.copyText(source).then(() => {
-                    setSkillUpdateCheckStatus({ state: "success", message: t("Repository address copied") });
-                  }).catch((unknownError) => {
-                    setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-                  });
-                }}
-                onCopyCleanupDetails={async (details) => {
-                  try {
-                    await window.agentEnv.copyText(details);
+              model={{
+                status: {
+                  isLoading,
+                  isBusy: busy,
+                  isRefreshingInventory: skillInventoryRefreshing
+                },
+                catalog: {
+                  librarySkills,
+                  skillUpdates,
+                  skillUsage,
+                  installedTargetIds: targets
+                    .filter((target) => isTargetInstalled(target.health))
+                    .map((target) => target.id),
+                  targetNames,
+                  preparedTargetsBySkill: preparedSkillTargetsBySkill
+                },
+                sources: {
+                  sourceGroups: skillSourceGroups,
+                  sourceGroupsLoading: false,
+                  libraryMode: skillLibraryMode
+                },
+                cleanup: {
+                  skillInventory,
+                  cleanupBackups: skillCleanupBackups,
+                  cleanupScope: skillCleanupScope,
+                  focusCollectionPath: skillCollectionFocusPath
+                },
+                updates: {
+                  selectedUpdatePlan: selectedSkillUpdatePlan,
+                  bulkUpdatePlans: bulkSkillUpdatePlans,
+                  bulkUpdateFailures: bulkSkillUpdateFailures,
+                  updateRun: skillUpdateQueue.run,
+                  bulkUpdateStopRequested: skillUpdateQueue.stopRequested,
+                  updateActivity: skillUpdateActivity
+                },
+                workspace: {
+                  activeTool: skillLibraryTool,
+                  importConflictOpen: Boolean(pendingSkillImport)
+                },
+                view: {
+                  viewState: skillLibraryViewState,
+                  searchInputRef: skillSearchInputRef
+                }
+              }}
+              actions={{
+                navigation: {
+                  onCloseTool: () => {
+                    setSkillLibraryTool(undefined);
+                    setSkillCleanupScope("all");
+                    setSkillCollectionFocusPath(undefined);
+                  },
+                  onFocusCollectionHandled: () => setSkillCollectionFocusPath(undefined),
+                  onLibraryModeChange: setSkillLibraryMode,
+                  onViewStateChange: (next) => {
+                    libraryScroll.resetScrollNow();
+                    setSkillLibraryViewState(next);
+                  },
+                  scrollOwnerRef: libraryScroll.setScrollOwner
+                },
+                inventory: {
+                  onRefreshInventory: refreshSkillDiscoveries,
+                  onSelectLocalSkillSource: () => window.agentEnv.selectLocalSkillSource(),
+                  onReleaseSkillArchive: (token) => window.agentEnv.releaseSkillArchive(token),
+                  onScanLocalSkillSource: (rootPath) => window.agentEnv.scanLocalSkillSource(rootPath),
+                  onImportUnmanaged: (sourcePath, sourceHandling, deferFullRefresh) =>
+                    importUnmanagedSkill(
+                      sourcePath,
+                      sourceHandling,
+                      deferFullRefresh ? "batch" : "global"
+                    ).then((outcome) => outcome.ok),
+                  onResolveCollectionConflict: async (item, strategy, deferFullRefresh) => {
+                    const preferredResolution =
+                      strategy === "use-collection" && item.libraryId
+                        ? { action: "replace" as const, existingId: item.libraryId }
+                        : undefined;
+                    const outcome = await importUnmanagedSkill(
+                      item.path,
+                      "copy-only",
+                      deferFullRefresh ? "batch" : "global",
+                      undefined,
+                      undefined,
+                      preferredResolution
+                    );
+                    if (!outcome.ok) return false;
+                    if (outcome.conflictResolution?.action === "keep-existing") {
+                      return setSkillCollectionDecision({
+                        path: item.path,
+                        useLibrary: true,
+                        sourceContentHash: item.contentHash
+                      });
+                    }
+                    if (item.collectionDecision === "use-library") {
+                      return setSkillCollectionDecision({ path: item.path, useLibrary: false });
+                    }
                     return true;
-                  } catch (unknownError) {
-                    setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-                    return false;
+                  },
+                  onImportLocalSourceSkill: (sourcePath, sourceCollection, upstream) =>
+                    importUnmanagedSkill(
+                      sourcePath,
+                      "copy-only",
+                      "caller",
+                      sourceCollection,
+                      upstream
+                    ).then((outcome) => outcome.ok),
+                  onImportExternal: importExternalSkill,
+                  onManageTargetSkill: manageTargetSkill,
+                  onConsolidateSkillGroup: consolidateSkillGroup,
+                  onAutoConsolidateSkillGroups: autoConsolidateSkillGroups,
+                  onCopyCleanupDetails: async (details) => {
+                    try {
+                      await window.agentEnv.copyText(details);
+                      return true;
+                    } catch (unknownError) {
+                      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+                      return false;
+                    }
+                  },
+                  onLeaveSkillGroupUnmanaged: (skillKey) => void leaveSkillGroupUnmanaged(skillKey),
+                  onManageSkillGroupWithAgentEnv: (skillKey) => void manageSkillGroupWithAgentEnv(skillKey),
+                  onSetUnmanagedSkillLocations: setUnmanagedSkillLocations,
+                  onSetSkillCollectionDecision: setSkillCollectionDecision,
+                  onSetSharedSkillRetention: setSharedSkillRetention,
+                  onRetireSharedSkill: retireSharedSkill,
+                  onMoveSharedSkillToAgents: moveSharedSkillToAgentDirectories,
+                  onMoveSkillCollection: moveSkillCollectionToAgentDirectories,
+                  onRestoreCleanup: (backupId) => void undoSkillCleanup(backupId)
+                },
+                files: {
+                  onListSkillFiles: (id) => window.agentEnv.listSkillFiles(id),
+                  onReadSkillFile: (id, path) => window.agentEnv.readSkillFile({ id, path })
+                },
+                repository: {
+                  onScanGitHubSkills: scanGitHubSkills,
+                  onImportGitHubSkills: importGitHubSkills,
+                  onScanRepositorySkills: scanRepositorySkills,
+                  onImportRepositorySkills: importRepositorySkills,
+                  onCancelRepositoryOperations: () => window.agentEnv.cancelRepositoryOperations()
+                },
+                sources: {
+                  onCheckSourceGroup: checkSkillSourceGroup,
+                  onCheckMonitoredSourceGroups: checkMonitoredSkillSourceGroups,
+                  onSetSourceName: setSkillSourceName,
+                  onSetSourceMonitored: setSkillSourceMonitored,
+                  onSetSourceCandidateIgnored: setSkillSourceCandidateIgnored,
+                  onPreviewSourceMerge: previewSkillSourceMerge,
+                  onMergeSources: mergeSkillSources
+                },
+                catalog: {
+                  onSaveUpdateSettings: saveSkillUpdateSettings,
+                  onSetAvailability: setSkillAvailability,
+                  onSetIcon: (input) => void setSkillIcon(input),
+                  onSyncSkillInstalls: (id) => void syncSkillInstalls(id),
+                  onRemoveLibrarySkill: removeLibrarySkill,
+                  onPreviewSkillMerge: previewSkillMerge,
+                  onMergeLibrarySkills: mergeLibrarySkills,
+                  onReviewSkillUsage: reviewSkillUsage,
+                  onOpenSource: (url) => {
+                    void window.agentEnv.openExternalUrl(url).catch((unknownError) => {
+                      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+                    });
+                  },
+                  onCopySource: (source) => {
+                    void window.agentEnv.copyText(source).then(() => {
+                      setSkillUpdateCheckStatus({
+                        state: "success",
+                        message: t("Repository address copied")
+                      });
+                    }).catch((unknownError) => {
+                      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+                    });
                   }
-                }}
-                onLeaveSkillGroupUnmanaged={(skillKey) => {
-                  void leaveSkillGroupUnmanaged(skillKey);
-                }}
-                onManageSkillGroupWithAgentEnv={(skillKey) => {
-                  void manageSkillGroupWithAgentEnv(skillKey);
-                }}
-                onSetUnmanagedSkillLocations={setUnmanagedSkillLocations}
-                onSetSkillCollectionDecision={setSkillCollectionDecision}
-                onSetSharedSkillRetention={setSharedSkillRetention}
-                onRetireSharedSkill={retireSharedSkill}
-                onMoveSharedSkillToAgents={moveSharedSkillToAgentDirectories}
-                onMoveSkillCollection={moveSkillCollectionToAgentDirectories}
-                importConflictOpen={Boolean(pendingSkillImport)}
-                onRestoreCleanup={(backupId) => void undoSkillCleanup(backupId)}
-                updateActivity={skillUpdateActivity}
-                viewState={skillLibraryViewState}
-                onViewStateChange={(next) => {
-                  libraryScroll.resetScrollNow();
-                  setSkillLibraryViewState(next);
-                }}
-                searchInputRef={skillSearchInputRef}
-                scrollOwnerRef={libraryScroll.setScrollOwner}
+                },
+                updates: {
+                  onPreviewLibrarySkillUpdate: previewLibrarySkillUpdate,
+                  onCloseUpdatePreview: () => {
+                    setSelectedSkillUpdatePlan(undefined);
+                    skillUpdateQueue.resetRun();
+                  },
+                  onUpdateLibrarySkill: updateLibrarySkill,
+                  onUpdateAllLibrarySkills: updateAllLibrarySkills,
+                  onStopBulkLibrarySkillUpdates: skillUpdateQueue.requestStop,
+                  onPreviewAllLibrarySkillUpdates: previewAllLibrarySkillUpdates,
+                  onCloseBulkUpdatePreview: () => {
+                    setBulkSkillUpdatePlans(undefined);
+                    setBulkSkillUpdateFailures([]);
+                    skillUpdateQueue.resetRun();
+                    skillUpdateQueue.resetStop();
+                  },
+                  onCheckUpdates: checkSkillUpdates
+                }
+              }}
             />
           </>
         ) : activeWorkspace === "profiles" ? (
@@ -4607,7 +4283,7 @@ const AppContent = ({
           clearProfilePreview();
                           setSettingsCategory("data");
                           openWorkspaceNow("settings");
-                          setBackupManagerOpen(true);
+                          backupRecovery.actions.revealManager();
                         }}
                         onAdoptTargetChanges={adoptCompatibleTargetChanges}
                         onLeaveSkillUnmanaged={(issue) =>
@@ -4880,11 +4556,14 @@ const AppContent = ({
                   deviceLogin={githubDeviceLogin}
                   loginChecking={githubLoginChecking}
                   loginMessage={githubLoginMessage}
-                  onCheckLogin={() => void pollGitHubLogin()}
-                  onCopyCode={() => void copyGitHubDeviceCode()}
-                  onOpenDevicePage={(url) => void window.agentEnv.openGitHubDevicePage(url)}
-                  onSignIn={() => void startGitHubLogin()}
-                  onSignOut={() => void signOutGitHub()}
+                  onCheckLogin={() => void githubConnection.actions.pollLogin()}
+                  onCopyCode={() => void githubConnection.actions.copyDeviceCode()}
+                  onOpenDevicePage={(url) => void githubConnection.actions.openDevicePage(url)}
+                  onSignIn={() => {
+                    backupRecovery.actions.clearDataBackupStatus();
+                    void githubConnection.actions.startLogin();
+                  }}
+                  onSignOut={() => void githubConnection.actions.signOut()}
                 />
               </>
             ) : null}
@@ -4899,10 +4578,10 @@ const AppContent = ({
               onBackupRetentionChange={(backupRetentionDays) => {
                 void updateSkillSettings({ backupRetentionDays });
               }}
-              onExport={() => void createAgentEnvDataBackup()}
-              onManageBackups={openBackupManager}
+              onExport={() => void backupRecovery.actions.createDataBackup()}
+              onManageBackups={backupRecovery.actions.openManager}
               onOpenFolder={() => void window.agentEnv.openDataFolder()}
-              onRestore={() => void selectAgentEnvDataRestore()}
+              onRestore={() => void backupRecovery.actions.selectDataRestore()}
             />
             <TelemetrySettings
               busy={busy}
@@ -4934,14 +4613,14 @@ const AppContent = ({
                 previewLoading={managedBackupPreviewLoading}
                 formatBytes={formatBytes}
                 formatDate={formatDate}
-                onBackOrClose={closeBackupManager}
-                onCancelCleanup={() => setBackupCleanupConfirm(false)}
-                onCancelDelete={() => setBackupDeleteCandidate(undefined)}
-                onCleanup={() => void cleanupManagedBackups()}
-                onDelete={() => void deleteSelectedManagedBackup()}
-                onOpenCleanupConfirm={() => setBackupCleanupConfirm(true)}
-                onOpenDelete={setBackupDeleteCandidate}
-                onPreview={(item) => void previewManagedBackup(item)}
+                onBackOrClose={backupRecovery.actions.closeManager}
+                onCancelCleanup={backupRecovery.actions.cancelCleanup}
+                onCancelDelete={backupRecovery.actions.cancelDelete}
+                onCleanup={() => void backupRecovery.actions.cleanupBackups()}
+                onDelete={() => void backupRecovery.actions.deleteSelectedBackup()}
+                onOpenCleanupConfirm={backupRecovery.actions.openCleanupConfirm}
+                onOpenDelete={backupRecovery.actions.openDelete}
+                onPreview={(item) => void backupRecovery.actions.previewBackup(item)}
               />
             ) : null}
             {dataRestorePreview ? (
@@ -4949,7 +4628,7 @@ const AppContent = ({
                 className="preview-modal-backdrop"
                 data-dismiss-policy="standard"
                 onClick={() => {
-                  if (!busy) setDataRestorePreview(undefined);
+                  if (!busy) backupRecovery.actions.dismissDataRestore();
                 }}
               >
                 <section ref={appModalDialogRef} className="profile-form-dialog profile-form-dialog--compact data-restore-dialog ui-dialog-shell" role="dialog" aria-modal="true" aria-label={t("Restore AgentEnv data")} onClick={(event) => event.stopPropagation()}>
@@ -4967,8 +4646,8 @@ const AppContent = ({
                     <p>{t("A safety backup of the current data will be created before replacement.")}</p>
                   </div>
                   <footer className="preview-actions ui-dialog-footer">
-                    <Button ref={appModalInitialFocusRef} disabled={busy} onClick={() => setDataRestorePreview(undefined)}>{t("Cancel")}</Button>
-                    <Button variant="danger" disabled={busy} onClick={() => void restoreAgentEnvData()}>{t("Restore data")}</Button>
+                    <Button ref={appModalInitialFocusRef} disabled={busy} onClick={backupRecovery.actions.dismissDataRestore}>{t("Cancel")}</Button>
+                    <Button variant="danger" disabled={busy} onClick={() => void backupRecovery.actions.applyDataRestore()}>{t("Restore data")}</Button>
                   </footer>
                 </section>
               </div>
