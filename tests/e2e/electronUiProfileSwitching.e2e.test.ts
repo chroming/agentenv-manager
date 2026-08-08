@@ -830,6 +830,13 @@ const launchApp = async (
   }
   if (options.workspaceFixture) {
     await mkdir(projectSkillRoot, { recursive: true });
+    const workspaceSkillRoot = join(projectSkillRoot, ".agents", "skills", "workspace-review");
+    await mkdir(workspaceSkillRoot, { recursive: true });
+    await writeFile(
+      join(workspaceSkillRoot, "SKILL.md"),
+      "---\nname: Workspace Review\ndescription: Workspace layout fixture.\n---\n\n# Workspace Review\n",
+      "utf8"
+    );
     await writeJson(join(appDataRoot, "projects.json"), {
       formatVersion: 1,
       projects: [{
@@ -5547,7 +5554,7 @@ describe("Electron UI profile switching e2e", () => {
       ["instructions", "skills"]
     );
     expect(await skillsRow.getAttribute("aria-expanded")).toBe("true");
-    await page.mouse.move(0, 0);
+    await page.locator(".profile-hero").hover({ position: { x: 4, y: 4 } });
     await expect.poll(() => instructionsHeader.evaluate(
       (element) => getComputedStyle(element).backgroundColor
     )).toBe(collapsedInstructionsSurface.backgroundColor);
@@ -5606,7 +5613,10 @@ describe("Electron UI profile switching e2e", () => {
     expect(hoveredDisclosureStyle.borderRadius).toBe("0px");
     expect(hoveredDisclosureStyle.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
     expect(await instructionsDisclosure.getAttribute("aria-expanded")).toBe("true");
-    await page.mouse.move(0, 0);
+    await page.locator(".profile-hero").hover({ position: { x: 4, y: 4 } });
+    await expect.poll(() => instructionsHeader.evaluate(
+      (element) => getComputedStyle(element).backgroundColor
+    )).toBe(collapsedInstructionsSurface.backgroundColor);
     const expandedDisclosureStyle = await instructionsHeader.evaluate((element) => {
       const style = getComputedStyle(element);
       return {
@@ -8681,16 +8691,11 @@ describe("Electron UI profile switching e2e", () => {
     const capturedSkillRow = page.getByRole("listitem", {
       name: "Profile Skill target-only-reviewer"
     });
-    await expect.poll(() => capturedSkillRow.textContent()).toContain(
+    await expect.poll(() => capturedSkillRow.textContent()).toContain("Ready");
+    await expect.poll(() => capturedSkillRow.textContent()).not.toContain(
       capturedSkillMetadata.contentHash.slice(0, 7)
     );
-    const capturedSkillDetail = capturedSkillRow.locator(".profile-skill-detail");
-    const capturedSkillTooltip = page.getByRole("tooltip");
-    await hoverUntilVisible(page, capturedSkillDetail, capturedSkillTooltip);
-    await expect.poll(() => capturedSkillTooltip.textContent()).toContain(
-      join(appDataRoot, "skills-library", "target-only-reviewer")
-    );
-    await page.mouse.move(2, 2);
+    expect(await capturedSkillRow.locator(".profile-skill-detail").count()).toBe(0);
     await expect.poll(() => capturedSkillRow.textContent()).not.toContain("Not tracked");
   }, standardElectronTestTimeout);
 
@@ -9781,16 +9786,9 @@ describe("Electron UI profile switching e2e", () => {
 
     await expandComposerSection(page, "Skills");
     const skillRow = page.getByRole("listitem", { name: "Profile Skill layout-skill-1" });
-    const libraryMetadata = await readJson<{ contentHash: string }>(
-      join(appDataRoot, "skills-library", "layout-skill-1", ".agentenv-skill.json")
-    );
-    const skillDetail = skillRow.locator(".profile-skill-detail");
-    const skillDetailTooltip = page.getByRole("tooltip");
-    await hoverUntilVisible(page, skillDetail, skillDetailTooltip);
-    await expect.poll(() => skillDetailTooltip.textContent()).toContain(
-      libraryMetadata.contentHash.slice(0, 7)
-    );
-    await page.mouse.move(2, 2);
+    await expect.poll(() => skillRow.locator(".profile-skill-state").textContent())
+      .toMatch(/Ready|Update available/);
+    expect(await skillRow.locator(".profile-skill-detail").count()).toBe(0);
     await skillRow.getByRole("switch", { name: "Disable layout-skill-1" }).click();
     await expect(fileExists(join(installedSkillDir, "SKILL.md"))).resolves.toBe(true);
     await expect.poll(() => skillRow.textContent()).toContain("Apply pending");
@@ -10687,7 +10685,7 @@ describe("Electron UI profile switching e2e", () => {
   }, standardElectronTestTimeout);
 
   it("keeps the shared desktop visual contract stable across workspaces and review surfaces", async () => {
-    const { page } = await launchApp({ workspaceFixture: true });
+    const { page } = await launchApp({ projectSkillFixture: true, workspaceFixture: true });
     await resizeAppWindow(page, 920, 620);
     const sidebar = page.locator(".global-sidebar");
     expect(await sidebar.locator(".brand-lockup").textContent())
@@ -11166,14 +11164,15 @@ describe("Electron UI profile switching e2e", () => {
       listIsContained: true
     });
     const profileSkillTypography = await page.locator(".profile-skill-row").first().evaluate((row) => {
-      const detail = row.querySelector<HTMLElement>(".profile-skill-detail")!;
       return {
-        detail: getComputedStyle(detail).fontWeight,
         name: getComputedStyle(row.querySelector<HTMLElement>(".profile-skill-name")!).fontWeight,
         state: getComputedStyle(row.querySelector<HTMLElement>(".profile-skill-state")!).fontWeight
       };
     });
-    expect(profileSkillTypography).toEqual({ detail: "400", name: "500", state: "400" });
+    expect(profileSkillTypography).toEqual({ name: "500", state: "400" });
+    expect(await page.locator(".profile-skill-detail").evaluateAll((details) =>
+      details.every((detail) => getComputedStyle(detail).fontWeight === "400")
+    )).toBe(true);
     const profileSkillActionContract = await page.locator(".profile-skill-row").first().evaluate((row) => ({
       fullPathVisible: row.textContent?.includes("/.config/agentenv-manager/skills-library/") ?? false,
       menuButtons: row.querySelectorAll(".toolbar-overflow-menu, [aria-haspopup='menu']").length,
@@ -11275,6 +11274,12 @@ describe("Electron UI profile switching e2e", () => {
       addInPageHeader: false,
       refreshInActions: true
     });
+    const workspaceSkills = page.getByRole("region", { name: "Skills", exact: true });
+    await workspaceSkills.getByRole("button", { name: "Expand Skills", exact: true }).click();
+    expectAlignedResourceRows(
+      await readAlignedResourceRows(workspaceSkills.locator(".project-resource-entry")),
+      { minimumRows: 1 }
+    );
 
     await sidebar.getByRole("button", { name: "Conversations", exact: true }).click();
     sharedSearchContracts.push(await readCompositeFieldContract(".conversation-search"));

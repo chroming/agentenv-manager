@@ -27,8 +27,8 @@ export interface AlignedResourceRowGeometry {
   actionKind: "icon" | "menu" | "none" | "switch" | "text";
   actionLeft: number | null;
   contained: boolean;
+  stateCenterOffset: number;
   stateContentFits: boolean;
-  stateContentTop: number;
   stateLeft: number;
 }
 
@@ -57,6 +57,10 @@ export const readAlignedResourceRows = async (
     actionKind,
     actionLeft: actions ? Math.round(actions.getBoundingClientRect().left) : null,
     contained: row.scrollWidth <= row.clientWidth + 1,
+    stateCenterOffset: Math.round(Math.abs(
+      stateContent.getBoundingClientRect().top + stateContent.getBoundingClientRect().height / 2 -
+      (rowBox.top + rowBox.height / 2)
+    )),
     stateContentFits: (
       stateContent.scrollWidth <= stateContent.clientWidth + 1 &&
       stateContent.scrollHeight <= stateContent.clientHeight + 1
@@ -64,7 +68,6 @@ export const readAlignedResourceRows = async (
       stateContent.getAttribute("title") ||
       stateContent.dataset.uiOverflowDetail === "true"
     ),
-    stateContentTop: Math.round(stateContent.getBoundingClientRect().top - rowBox.top),
     stateLeft: Math.round(state.getBoundingClientRect().left)
   };
 }));
@@ -80,8 +83,7 @@ export const expectAlignedResourceRows = (
   if (actionLefts.length > 1) {
     expect(Math.max(...actionLefts) - Math.min(...actionLefts)).toBeLessThanOrEqual(1);
   }
-  expect(Math.max(...geometry.map(({ stateContentTop }) => stateContentTop)) -
-    Math.min(...geometry.map(({ stateContentTop }) => stateContentTop))).toBeLessThanOrEqual(1);
+  expect(geometry.every(({ stateCenterOffset }) => stateCenterOffset <= 1)).toBe(true);
   expect(geometry.every(({ contained, stateContentFits }) => contained && stateContentFits))
     .toBe(true);
   if (requireMixedActions) {

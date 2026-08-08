@@ -151,6 +151,9 @@ export const WorkspaceSyncSettings = () => {
 
   const statusLabel = useMemo(() => {
     if (status.working === "checking") return t("Checking");
+    if (status.kind === "error" && status.issue === "remote-snapshot-invalid") {
+      return t("Remote data needs attention");
+    }
     const labels: Record<WorkspaceSyncStatus["kind"], string> = {
       "not-connected": t("Not connected"),
       "up-to-date": t("Up to date"),
@@ -161,7 +164,10 @@ export const WorkspaceSyncSettings = () => {
       "recovery-required": t("Recovery required")
     };
     return labels[status.kind];
-  }, [status.kind, status.working, t]);
+  }, [status.issue, status.kind, status.working, t]);
+  const statusMessage = status.issue === "remote-snapshot-invalid"
+    ? t("AgentEnv did not change this device. Update AgentEnv on your other devices, then check again. If the problem continues, disconnect this repository and connect a known-good one.")
+    : error || status.message;
   const statusIcon = status.working === "checking"
     ? <LoaderCircle className="is-spinning" size={15} />
     : status.kind === "up-to-date"
@@ -368,8 +374,8 @@ export const WorkspaceSyncSettings = () => {
           </div>
         </>
       )}
-      {connected && (error || status.message) ? (
-        <div className="workspace-sync-error" role="alert">{error || status.message}</div>
+      {connected && statusMessage ? (
+        <div className="workspace-sync-error" role="alert">{statusMessage}</div>
       ) : null}
 
       {review ? (

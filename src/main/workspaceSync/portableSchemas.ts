@@ -14,6 +14,13 @@ const RepositoryIndexManifestPathSchema = z.string().max(4096).refine((value) =>
   /(?:^|\/)llms\.txt$/i.test(value)
 );
 
+const PortableSourceSubpathSchema = z.string().max(4096).refine((value) =>
+  !value.startsWith("/") &&
+  !value.includes("\\") &&
+  !value.split("/").includes("..") &&
+  !/[\u0000-\u001f\u007f]/.test(value)
+);
+
 export const PortableSkillMetadataSchema = z.object({
   formatVersion: z.literal(1),
   id: SafeIdSchema,
@@ -46,20 +53,18 @@ export const PortableSkillMetadataSchema = z.object({
 export const PortableSkillSourceSchema = z.object({
   formatVersion: z.literal(1),
   id: SafeIdSchema,
+  kind: z.enum(["repository", "local"]).optional(),
   canonicalLink: z.string(),
   repository: z.string(),
   ref: z.string(),
   directory: z.string(),
   indexManifestPath: RepositoryIndexManifestPathSchema.optional(),
   displayName: z.string().max(80).optional(),
-  ignoredSubpaths: z.array(
-    z.string().refine((value) =>
-      !value.startsWith("/") &&
-      !value.includes("\\") &&
-      !value.split("/").includes("..") &&
-      !/[\u0000-\u001f\u007f]/.test(value)
-    )
-  ).optional()
+  automaticChecks: z.boolean().optional(),
+  ignoredSubpaths: z.array(PortableSourceSubpathSchema).optional(),
+  // Older AgentEnv exports could retain this collection-only field. Accept it
+  // so their signed hash remains verifiable, but new exports omit it.
+  sourceSubpath: PortableSourceSubpathSchema.optional()
 });
 
 export const PortableSkillSourcesSchema = z.object({

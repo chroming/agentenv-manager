@@ -43,6 +43,18 @@ interface CheckedWorkspace {
   operationRoot: string;
 }
 
+class RemoteWorkspaceSnapshotError extends Error {
+  readonly issue = "remote-snapshot-invalid" as const;
+
+  constructor(cause: unknown) {
+    super(
+      "The remote Workspace snapshot could not be verified. This device was not changed.",
+      { cause }
+    );
+    this.name = "RemoteWorkspaceSnapshotError";
+  }
+}
+
 const emptyStatus = (): WorkspaceSyncStatus => ({
   kind: "not-connected",
   localChangeCount: 0,
@@ -180,7 +192,14 @@ export const createWorkspaceSyncService = (input: {
         remoteRoot,
         state.baseRevision
       );
-      const remote = remoteResult.snapshotRoot ? await descriptorAt(remoteResult.snapshotRoot) : undefined;
+      let remote: WorkspaceSnapshotDescriptor | undefined;
+      if (remoteResult.snapshotRoot) {
+        try {
+          remote = await descriptorAt(remoteResult.snapshotRoot);
+        } catch (error) {
+          throw new RemoteWorkspaceSnapshotError(error);
+        }
+      }
       if (remote && remote.manifest.workspaceId !== state.workspaceId) {
         if (state.baseRevision) {
           throw new Error("The remote repository belongs to a different AgentEnv Workspace");
@@ -244,6 +263,7 @@ export const createWorkspaceSyncService = (input: {
       return lastStatus = {
         ...lastStatus,
         kind: "error",
+        issue: error instanceof RemoteWorkspaceSnapshotError ? error.issue : undefined,
         working: undefined,
         message: error instanceof Error ? error.message : String(error)
       };

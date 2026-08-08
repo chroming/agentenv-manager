@@ -795,8 +795,8 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
 }
 
 .ui-resource-row__state {
-  align-self: start;
-  align-items: flex-start;
+  align-self: center;
+  align-items: center;
   display: grid;
   grid-column: 4;
   justify-items: start;

@@ -82,6 +82,35 @@ describe("Workspace Sync settings", () => {
     expect(screen.getByRole("button", { name: "Check" })).toBeEnabled();
   });
 
+  it("turns an invalid remote snapshot into a safe and actionable state", async () => {
+    const status: WorkspaceSyncStatus = {
+      kind: "error",
+      issue: "remote-snapshot-invalid",
+      connection: { repository: "git@github.com:me/workspace.git", branch: "main" },
+      message: "The remote Workspace snapshot could not be verified. This device was not changed.",
+      localChangeCount: 0,
+      remoteChangeCount: 0,
+      conflictCount: 0,
+      immediateAgentCount: 0
+    };
+    const api = {
+      readWorkspaceSyncStatus: vi.fn().mockResolvedValue(status),
+      checkWorkspaceSync: vi.fn().mockResolvedValue(status)
+    } as unknown as AgentEnvApi;
+    Object.defineProperty(window, "agentEnv", { configurable: true, value: api });
+
+    render(<WorkspaceSyncSettings />);
+
+    await waitFor(() => expect(screen.getByRole("status"))
+      .toHaveTextContent("Remote data needs attention"));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "AgentEnv did not change this device. Update AgentEnv on your other devices, then check again."
+    );
+    expect(screen.getByRole("alert")).not.toHaveTextContent("hash mismatch");
+    expect(screen.getByRole("button", { name: "Check" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Disconnect" })).toBeEnabled();
+  });
+
   it("replaces a stale success status when a manual check fails", async () => {
     const status: WorkspaceSyncStatus = {
       kind: "up-to-date",

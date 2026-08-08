@@ -242,16 +242,11 @@ export const SkillsEditor = ({
                               : deploymentPending
                                 ? "Apply pending"
                                 : "Ready";
-          const sourceLabel = skill?.sourceType === "github" ? "GitHub" : t("Local");
-          const versionLabel = skill?.version
+          const visibleDetail = skill?.version
             ? `v${skill.version}`
-            : skill?.contentHash.slice(0, 7) ?? reference.libraryId;
-          const detail = skill
-            ? `${versionLabel} · ${sourceLabel} · ${localOverride?.path ?? skill.path}`
-            : t("Library skill {{id}} is missing", { id: reference.libraryId });
-          const visibleDetail = skill
-            ? `${versionLabel} · ${sourceLabel}`
-            : t("Library skill {{id}} is missing", { id: reference.libraryId });
+            : !skill
+              ? t("Library skill {{id}} is missing", { id: reference.libraryId })
+              : undefined;
           const skillName = skill?.name ?? reference.targetName;
           const menuItems = [
             ...(!skill ? [{
@@ -282,14 +277,14 @@ export const SkillsEditor = ({
                 localOverride ? " has-local-override" : ""
               }`}
               density="compact"
-              description={(
+              description={visibleDetail ? (
                 <OverflowTooltip
                   ariaLabel={t("Full skill detail {{id}}", { id: reference.libraryId })}
                   className="profile-skill-detail"
                   displayText={visibleDetail}
-                  text={detail}
+                  text={visibleDetail}
                 />
-              )}
+              ) : undefined}
               icon={(
                 <ResourceIconArtwork
                   fallbackIconKey={skill?.sourceType === "github" || skill?.sourceType === "git" ? "github" : "folder"}

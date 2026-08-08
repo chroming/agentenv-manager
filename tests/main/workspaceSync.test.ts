@@ -242,6 +242,47 @@ describe("Workspace Sync", () => {
     expect(toPortableOnlineLocator("../private-skills")).toBeUndefined();
   });
 
+  it("validates the portable Skill sources emitted by its own exporter", async () => {
+    const appDataRoot = await tempRoot("agentenv-sync-source-codec-");
+    const paths = createPaths({ appDataRoot, homeDir: join(appDataRoot, "home") });
+    await mkdir(paths.appDataRoot, { recursive: true });
+    await writeFile(paths.skillSourcesPath, canonicalJson({
+      formatVersion: 1,
+      sources: [{
+        formatVersion: 1,
+        id: "source-remote",
+        kind: "repository",
+        canonicalLink: "https://github.com/example/skills/tree/main/skills",
+        repository: "https://github.com/example/skills.git",
+        ref: "main",
+        directory: "skills",
+        automaticChecks: false,
+        sourceSubpath: "legacy-extra-field",
+        createdAt: "2026-07-20T00:00:00.000Z",
+        updatedAt: "2026-07-21T00:00:00.000Z"
+      }]
+    }));
+    const destination = join(appDataRoot, "export");
+    const codec = createPortableWorkspaceCodec({
+      paths,
+      profileStore: { listProfiles: async () => [] } as never,
+      skillLibraryStore: { listSkills: async () => [] } as never
+    });
+
+    await codec.exportSnapshot(destination, "11111111-1111-4111-8111-111111111111");
+
+    await expect(validatePortableWorkspace(destination)).resolves.toBeDefined();
+    const sourceData = JSON.parse(
+      await readFile(join(destination, "workspace", "skill-sources.json"), "utf8")
+    );
+    expect(sourceData.sources[0]).toMatchObject({
+      id: "source-remote",
+      kind: "repository",
+      automaticChecks: false
+    });
+    expect(sourceData.sources[0]).not.toHaveProperty("sourceSubpath");
+  });
+
   it("backs up and replaces Profiles, Skills, and sources as one recoverable operation", async () => {
     const appDataRoot = await tempRoot("agentenv-sync-transaction-");
     const paths = createPaths({ appDataRoot, homeDir: join(appDataRoot, "home") });
@@ -670,6 +711,51 @@ describe("Workspace Sync", () => {
     await expect(service.readStatus()).resolves.toMatchObject({
       connection: { repository: "/tmp/working.git", branch: "main" }
     });
+    service.dispose();
+  });
+
+  it("does not expose internal hash errors when a connected remote snapshot is invalid", async () => {
+    const root = await tempRoot("agentenv-sync-invalid-remote-");
+    const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
+    const remote = await writeSnapshot(join(root, "remote"));
+    const service = createWorkspaceSyncService({
+      paths,
+      codec: {
+        exportSnapshot: async (destination, workspaceId) =>
+          (await writeSnapshot(destination, { workspaceId })).manifest
+      },
+      stateStore: createWorkspaceSyncStateStore(paths),
+      transaction: {
+        recover: async () => undefined,
+        isRecoveryRequired: async () => false,
+        apply: async () => ({ backupId: "unused" }),
+        restore: async () => undefined
+      },
+      loadTransport: async () => ({
+        fetch: async () => ({ revision: "remote-revision", snapshotRoot: remote.root }),
+        publish: async () => "unused",
+        cancel: () => undefined,
+        dispose: () => undefined
+      }),
+      targetPathsProvider: async () => [],
+      findManagedInstallPaths: async () => []
+    });
+
+    await expect(service.connect({ repository: "/tmp/remote.git", branch: "main" }))
+      .resolves.toMatchObject({ kind: "up-to-date" });
+    await writeFile(
+      join(remote.root, "workspace", "skill-sources.json"),
+      canonicalJson({ formatVersion: 1, sources: [{ unexpected: true }] })
+    );
+
+    const status = await service.check();
+
+    expect(status).toMatchObject({
+      kind: "error",
+      issue: "remote-snapshot-invalid",
+      message: "The remote Workspace snapshot could not be verified. This device was not changed."
+    });
+    expect(status.message).not.toContain("hash");
     service.dispose();
   });
 

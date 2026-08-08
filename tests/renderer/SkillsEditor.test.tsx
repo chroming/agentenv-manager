@@ -87,18 +87,36 @@ describe("SkillsEditor v2", () => {
     expect(skillSwitch).not.toBeChecked();
   });
 
-  it("shows Library metadata and toggles a Profile Skill", () => {
+  it("shows only an authored version in the Profile row and toggles a Skill", () => {
     const onChange = vi.fn();
     render(<SkillsEditor value={resources} librarySkills={skills} onChange={onChange} />);
 
     expect(screen.getByText("Code Review")).toBeInTheDocument();
-    expect(screen.getByText("v1.2.0 · GitHub")).toBeInTheDocument();
+    expect(screen.getByText("v1.2.0")).toBeInTheDocument();
+    expect(screen.queryByText(/GitHub|Local/)).not.toBeInTheDocument();
     expect(screen.queryByText(/\/library\/review/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("switch", { name: "Disable Code Review" }));
     expect(onChange).toHaveBeenCalledWith({
       ...resources,
       skills: [{ libraryId: "review", targetName: "review", enabled: false }]
     });
+  });
+
+  it("does not present a content hash as a version for an unversioned Skill", () => {
+    render(
+      <SkillsEditor
+        value={{
+          skills: [{ libraryId: "docs", targetName: "docs", enabled: true }],
+          mcpByTarget: {}
+        }}
+        librarySkills={skills}
+        onChange={vi.fn()}
+      />
+    );
+
+    const row = screen.getByRole("listitem", { name: "Profile Skill docs" });
+    expect(row).not.toHaveTextContent("123456a");
+    expect(row).not.toHaveTextContent("Local");
   });
 
   it("adds selected globally available Skills from Library", () => {

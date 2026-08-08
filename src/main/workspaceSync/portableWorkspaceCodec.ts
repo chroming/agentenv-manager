@@ -7,6 +7,7 @@ import { createSkillSourceRegistry } from "../skillSourceRegistry";
 import { writeAtomic } from "../fileUtils";
 import {
   PortableSkillMetadataSchema,
+  PortableSkillSourcesSchema,
   type PortableSkillMetadata,
   type PortableWorkspaceManifest
 } from "./portableSchemas";
@@ -95,12 +96,24 @@ export const createPortableWorkspaceCodec = (input: {
     }
 
     const sourceRegistry = createSkillSourceRegistry(input.paths.skillSourcesPath);
-    const sourceData = {
-      formatVersion: 1 as const,
+    const sourceData = PortableSkillSourcesSchema.parse({
+      formatVersion: 1,
       sources: (await sourceRegistry.list())
         .filter((source) => toPortableOnlineLocator(source.repository) && toPortableOnlineLocator(source.canonicalLink))
-        .map(({ createdAt: _createdAt, updatedAt: _updatedAt, ...source }) => source)
-    };
+        .map((source) => ({
+          formatVersion: 1,
+          id: source.id,
+          kind: source.kind,
+          canonicalLink: source.canonicalLink,
+          repository: source.repository,
+          ref: source.ref,
+          directory: source.directory,
+          indexManifestPath: source.indexManifestPath,
+          displayName: source.displayName,
+          automaticChecks: source.automaticChecks,
+          ignoredSubpaths: source.ignoredSubpaths
+        }))
+    });
     await writeFile(join(destination, "workspace", "skill-sources.json"), canonicalJson(sourceData), { mode: 0o600 });
     const sourcesHash = hashJson(sourceData);
     const unsigned = { formatVersion: 1 as const, workspaceId, profileHashes, skillHashes, sourcesHash };

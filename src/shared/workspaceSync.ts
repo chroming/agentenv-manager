@@ -8,6 +8,7 @@ export type WorkspaceSyncStatusKind =
   | "recovery-required";
 
 export type WorkspaceSyncWorkingState = "checking" | "publishing" | "updating";
+export type WorkspaceSyncIssue = "remote-snapshot-invalid";
 
 export interface WorkspaceSyncConnection {
   repository: string;
@@ -17,6 +18,7 @@ export interface WorkspaceSyncConnection {
 export interface WorkspaceSyncStatus {
   kind: WorkspaceSyncStatusKind;
   connection?: WorkspaceSyncConnection;
+  issue?: WorkspaceSyncIssue;
   working?: WorkspaceSyncWorkingState;
   message?: string;
   lastCheckedAt?: string;
