@@ -1899,10 +1899,24 @@ describe("Electron UI profile switching e2e", () => {
     const profileSearch = page.getByRole("searchbox", { name: "Search Profiles" });
     await profileSearch.fill("UI OpenCode");
     await profileSearch.evaluate((element) => (element as HTMLInputElement).blur());
-    await page.keyboard.press("Control+f");
-    expect(await profileSearch.evaluate((element) => document.activeElement === element)).toBe(
-      false
-    );
+    const controlFind = await page.evaluate(() => {
+      const activeBefore = document.activeElement;
+      const event = new KeyboardEvent("keydown", {
+        key: "f",
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true
+      });
+      document.dispatchEvent(event);
+      return {
+        activeElementChanged: document.activeElement !== activeBefore,
+        defaultPrevented: event.defaultPrevented
+      };
+    });
+    expect(controlFind).toEqual({
+      activeElementChanged: false,
+      defaultPrevented: false
+    });
     await page.keyboard.press("Meta+f");
     await expect.poll(() =>
       profileSearch.evaluate(

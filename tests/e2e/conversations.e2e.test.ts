@@ -684,8 +684,19 @@ describe("Conversations desktop workflow", () => {
       name: /Long conversation performance test/
     }).count()).resolves.toBe(0);
 
+    await page.evaluate(() => {
+      document.body.dataset.observedConversationRefresh = "false";
+      const observer = new MutationObserver(() => {
+        if (!document.querySelector(".conversation-refresh-overlay")) return;
+        observer.disconnect();
+        document.body.dataset.observedConversationRefresh = "true";
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    });
     await page.getByRole("button", { name: "Refresh" }).click();
-    await page.locator(".conversation-refresh-overlay").waitFor({ state: "visible" });
+    await expect.poll(() => page.evaluate(() =>
+      document.body.dataset.observedConversationRefresh
+    )).toBe("true");
     await page.getByRole("option", {
       name: /Long conversation performance test/
     }).waitFor({ state: "visible", timeout: 15_000 });
