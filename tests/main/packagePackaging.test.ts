@@ -84,6 +84,45 @@ const readPngRgba = async (path: string) => {
 };
 
 describe("package metadata", () => {
+  it("publishes AgentEnv Manager under GPL-3.0-only consistently", async () => {
+    const [packageSource, lockSource, license, readme, readmeEnglish, contributing, notices] =
+      await Promise.all([
+        readFile(join(process.cwd(), "package.json"), "utf8"),
+        readFile(join(process.cwd(), "package-lock.json"), "utf8"),
+        readFile(join(process.cwd(), "LICENSE"), "utf8"),
+        readFile(join(process.cwd(), "README.md"), "utf8"),
+        readFile(join(process.cwd(), "README.en.md"), "utf8"),
+        readFile(join(process.cwd(), "CONTRIBUTING.md"), "utf8"),
+        readFile(join(process.cwd(), "THIRD_PARTY_NOTICES.md"), "utf8")
+      ]);
+    const packageJson = JSON.parse(packageSource) as { license?: string };
+    const packageLock = JSON.parse(lockSource) as {
+      packages?: Record<string, { license?: string }>;
+    };
+
+    expect(packageJson.license).toBe("GPL-3.0-only");
+    expect(packageLock.packages?.[""]?.license).toBe("GPL-3.0-only");
+    expect(license).toContain("GNU GENERAL PUBLIC LICENSE");
+    expect(license).toContain("Version 3, 29 June 2007");
+    expect(readme).toContain("[GNU General Public License v3.0](LICENSE)");
+    expect(readmeEnglish).toContain("[GNU General Public License v3.0](LICENSE)");
+    expect(contributing).toContain("GPL-3.0-only");
+    expect(notices).toContain("AgentEnv Manager's GPL-3.0-only license");
+  });
+
+  it("uses the product name Trae CLI without versioned branding in documentation", async () => {
+    const documentation = await Promise.all(
+      ["README.md", "README.en.md", "docs/product-contracts.md", "docs/testing-strategy.md"]
+        .map((path) => readFile(join(process.cwd(), path), "utf8"))
+    );
+    const versionedTraeName =
+      /Trae CLI[^\n.]{0,100}(?:2\.0|V2|v1\/v2|V2-first|Legacy layout)|Trae V2/iu;
+
+    for (const content of documentation) {
+      expect(content).not.toMatch(versionedTraeName);
+    }
+  });
+
   it("provides a painted renderer state before React mounts", async () => {
     const rendererHtml = await readFile(
       join(process.cwd(), "src", "renderer", "index.html"),

@@ -54,5 +54,5 @@ npm run verify:release
   private repository details.
 - State which verification commands were run.
 
-Contributions are licensed under the project's Apache-2.0 license. No separate
+Contributions are licensed under the project's GPL-3.0-only license. No separate
 CLA is required.

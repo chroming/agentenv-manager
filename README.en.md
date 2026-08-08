@@ -78,7 +78,7 @@ The source Agent still owns the original history. AgentEnv does not edit convers
 - Claude Code
 - Codex
 - Antigravity CLI
-- Trae CLI 2.0 and the legacy layout
+- Trae CLI
 - Pi Coding Agent
 
 Instructions, MCP, Conversations, and Compare support differs between Agents. The app exposes actions according to the detected capability and never substitutes another Agent behind the scenes.
@@ -140,4 +140,4 @@ See [Development](docs/development.md) for architecture, Target integrations, te
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before sending changes. Report security issues privately through [SECURITY.md](SECURITY.md).
 
-AgentEnv Manager is licensed under the [Apache License 2.0](LICENSE). Product names and logos belong to their owners; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). This independent project is not affiliated with or endorsed by the Agent vendors listed above.
+AgentEnv Manager is licensed under the [GNU General Public License v3.0](LICENSE). Product names and logos belong to their owners; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). This independent project is not affiliated with or endorsed by the Agent vendors listed above.

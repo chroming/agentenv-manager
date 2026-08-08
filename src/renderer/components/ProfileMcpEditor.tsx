@@ -8,7 +8,7 @@ import type {
 } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
-import { Button, IconButton, Switch } from "./ui";
+import { Button, IconButton, ResourcePanelToolbar, Switch } from "./ui";
 import { ProductIcon } from "../productIcons";
 
 interface ProfileMcpEditorProps {
@@ -98,10 +98,10 @@ export const ProfileMcpEditor = ({
 
   return (
     <div className="profile-mcp-editor">
-      <div className="profile-mcp-toolbar">
-        <span className="profile-mcp-toolbar__scope">
-          {t("Configured in {{name}}", { name: target.name })}
-        </span>
+      <ResourcePanelToolbar
+        aria-label={t("Profile MCP actions")}
+        className="profile-mcp-toolbar"
+      >
         <span className="profile-mcp-toolbar__actions">
           {!canManage && policy.mode !== "ignore" ? (
             <Button
@@ -127,7 +127,7 @@ export const ProfileMcpEditor = ({
             )}
           </IconButton>
         </span>
-      </div>
+      </ResourcePanelToolbar>
 
       {connections === undefined ? (
         <div className="profile-mcp-empty">{t("Loading MCP connections...")}</div>

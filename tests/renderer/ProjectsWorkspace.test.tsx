@@ -169,9 +169,13 @@ describe("ProjectsWorkspace", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     const skillsSection = await screen.findByRole("region", { name: "Skills" });
     expect(skillsSection).toHaveClass("ui-resource-disclosure");
+    expect(within(skillsSection).getByText("Regular files copied into this folder"))
+      .not.toHaveClass("ui-visually-hidden");
     expect(within(skillsSection).queryByRole("button", { name: "Copy from Library" }))
       .not.toBeInTheDocument();
     fireEvent.click(within(skillsSection).getByRole("button", { name: "Expand Skills" }));
+    expect(within(skillsSection).getByText("Regular files copied into this folder"))
+      .toHaveClass("ui-visually-hidden");
     expect(within(skillsSection).getByText(/Tracked/)).toBeInTheDocument();
     expect(within(skillsSection).getByText(/2 Agents/)).toBeInTheDocument();
     expect(within(skillsSection).queryByText("OpenCode · codex")).not.toBeInTheDocument();

@@ -3,35 +3,11 @@
   min-width: 0;
 }
 
-.profile-mcp-toolbar {
-  align-items: center;
-  background: transparent;
-  border-bottom: 1px solid var(--border-subtle);
-  display: flex;
-  justify-content: space-between;
-  min-height: 36px;
-  padding: 3px 8px 3px 56px;
-}
-
-.profile-mcp-toolbar__scope {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 16px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .profile-mcp-toolbar__actions {
   align-items: center;
   display: flex;
   flex: 0 0 auto;
   gap: 6px;
-}
-
-.profile-mcp-toolbar .ui-icon-button {
-  color: var(--muted);
 }
 
 .profile-mcp-empty {

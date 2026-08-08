@@ -18,6 +18,10 @@ export {
   ResourceDisclosureSection,
   type ResourceDisclosureSectionProps
 } from "./ResourceDisclosureSection";
+export {
+  ResourcePanelToolbar,
+  type ResourcePanelToolbarProps
+} from "./ResourcePanelToolbar";
 export { Switch } from "./Switch";
 export { TabBar } from "./TabBar";
 export { SegmentedControl } from "./SegmentedControl";

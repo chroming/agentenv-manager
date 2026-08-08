@@ -4078,13 +4078,11 @@ describe("Electron UI profile switching e2e", () => {
       const refresh = toolbar.querySelector<HTMLButtonElement>(
         '[aria-label="Refresh MCP connections"]'
       )!;
-      const scope = toolbar.querySelector<HTMLElement>(".profile-mcp-toolbar__scope")!;
       const toolbarBox = toolbar.getBoundingClientRect();
       const refreshBox = refresh.getBoundingClientRect();
       return {
+        toolbarLabel: toolbar.getAttribute("aria-label"),
         hasNoRepeatedHeading: toolbar.querySelector("strong") === null,
-        scopeText: scope.textContent,
-        scopeFits: scope.scrollWidth <= scope.clientWidth,
         refreshFits:
           refreshBox.left >= toolbarBox.left &&
           refreshBox.top >= toolbarBox.top &&
@@ -4093,9 +4091,8 @@ describe("Electron UI profile switching e2e", () => {
       };
     });
     expect(mcpToolbarGeometry).toEqual({
+      toolbarLabel: "Profile MCP actions",
       hasNoRepeatedHeading: true,
-      scopeText: "Configured in OpenCode",
-      scopeFits: true,
       refreshFits: true
     });
     await page.getByRole("button", { name: "MCPs", exact: true }).click();

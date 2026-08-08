@@ -74,6 +74,7 @@ export const ProfileComposerSection = ({
           text={description}
         />
       )}
+      descriptionMode="collapsed"
       expanded={expanded}
       icon={icon}
       id={id}

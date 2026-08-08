@@ -54,6 +54,11 @@ describe("ProfileComposerSection", () => {
     expect(trigger).toHaveAccessibleDescription(
       "Choose reusable capabilities 1 of 2 enabled Reviewer, Planner"
     );
+    expect(
+      screen.getByText("Choose reusable capabilities").closest(
+        ".ui-resource-disclosure__description"
+      )
+    ).toHaveClass("ui-visually-hidden");
     expect(screen.getByTestId("section-icon")).toBeInTheDocument();
 
     fireEvent.click(trigger);

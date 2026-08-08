@@ -46,15 +46,6 @@
   overflow: auto;
 }
 
-.project-resource-section__toolbar {
-  align-items: center;
-  border-bottom: 1px solid var(--border-subtle);
-  display: flex;
-  justify-content: flex-end;
-  min-height: 36px;
-  padding: var(--space-1) var(--space-3);
-}
-
 .project-resource-section__list {
   display: grid;
 }

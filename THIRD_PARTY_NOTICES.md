@@ -30,7 +30,7 @@ endorsed by, or sponsored by those owners.
 
 The product-identification assets under
 `src/renderer/assets/target-icons/` are excluded from AgentEnv Manager's
-Apache-2.0 grant. They may be used only as permitted by their respective owners
+GPL-3.0-only license. They may be used only as permitted by their respective owners
 and applicable trademark law. Downstream redistributors who cannot rely on that
 permission should replace these assets while preserving the adapter identifiers.
 
@@ -43,5 +43,5 @@ Official product references:
 - [TRAE](https://www.trae.ai/)
 - [Pi Coding Agent](https://github.com/earendil-works/pi/tree/main/packages/coding-agent)
 
-The Apache-2.0 license for AgentEnv Manager does not grant rights to third-party
+AgentEnv Manager's GPL-3.0-only license does not grant rights to third-party
 trademarks, product names, or logos.

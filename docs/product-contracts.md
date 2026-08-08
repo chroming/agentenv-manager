@@ -780,7 +780,7 @@ an archive, or a native-session database migration tool.
   it with the shared selection accent. A title-, workspace-, or metadata-only match falls back to
   the ordinary bounded tail rather than loading the complete transcript. Selecting the already
   open row repeats the focus action so the match is recoverable after manual scrolling.
-- Trae CLI V2 discovery selects the first available runtime from the resolved runtime, the active
+- Trae CLI conversation discovery selects the first available runtime from the resolved runtime, the active
   Trae config root's `cli` directory, and the default `~/.trae/cli` runtime in that order. It never
   mixes histories from separate runtimes or probes unrelated legacy products. One missing,
   malformed, or unreadable rollout is reported and skipped without hiding readable neighboring
@@ -1099,7 +1099,7 @@ Status: stale checks and no-op detection are `Implemented`.
 
 Apply means complete replacement of the AgentEnv-managed portion of one Target with one saved Profile.
 
-Instructions and dedicated Skill deployments may be fully AgentEnv-owned paths. Agent native configuration remains shared and Agent-owned except for explicit sparse MCP activation fields. OpenCode Legacy may patch only `mcp.<name>.enabled`, while OpenCode V2 may patch only `mcp.servers.<name>.disabled`; Codex may patch only `mcp_servers.<name>.enabled`; Trae CLI V2 may patch only `mcp_servers.<name>.enabled` in `traecli.toml`, while its Legacy layout may patch only an existing MCP's `disabled` field in `traecli.yaml`. Claude Code, Antigravity, Pi, and any adapter without a verified activation field MUST NOT write MCP configuration.
+Instructions and dedicated Skill deployments may be fully AgentEnv-owned paths. Agent native configuration remains shared and Agent-owned except for explicit sparse MCP activation fields. OpenCode Legacy may patch only `mcp.<name>.enabled`, while OpenCode V2 may patch only `mcp.servers.<name>.disabled`; Codex may patch only `mcp_servers.<name>.enabled`; Trae CLI's TOML layout may patch only `mcp_servers.<name>.enabled` in `traecli.toml`, while its YAML compatibility layout may patch only an existing MCP's `disabled` field in `traecli.yaml`. Claude Code, Antigravity, Pi, and any adapter without a verified activation field MUST NOT write MCP configuration.
 
 When the selected Target's MCP policy is `Keep current`, Apply MUST preserve its configuration byte-for-byte, omit the path from Preview freshness and Backup, and clear prior MCP ownership metadata. When the policy is `Use Profile` or `Turn off`, the adapter parses the current file, patches only named existing activation fields, preserves every definition and unknown field, and includes that file in freshness and Backup only when a semantic change is planned. Configuration files MUST NOT be recorded as whole-file AgentEnv-managed resources.
 
@@ -1807,13 +1807,14 @@ the Antigravity desktop application is a separate product and is not sufficient.
 MCP names from `~/.gemini/config/mcp_config.json` without mutating that file. Secret-bearing headers, OAuth configuration, literal
 environment values, and all other MCP definition fields remain Agent-owned.
 
-Trae CLI uses one internal integration with V2-first layout resolution. `TRAE_HOME`, when
+Trae CLI uses one internal integration that prefers its current TOML layout. `TRAE_HOME`, when
 available to the application, selects the configuration and shared-resource root; otherwise it
-defaults to `~/.trae`. `TRAECLI_HOME` selects the V2 runtime root; otherwise that root is
-`<TRAE_HOME>/cli`. The integration resolves V2 first when `traecli.toml`, a V2 runtime history or
-state marker, or either explicit Home variable is present. Only when no V2 evidence exists and
-`traecli.yaml` is present does it resolve the Legacy layout; an otherwise fresh installation
-defaults to V2. If both layouts exist, V2 is active and the Legacy config remains Agent-owned.
+defaults to `~/.trae`. `TRAECLI_HOME` selects the runtime root; otherwise that root is
+`<TRAE_HOME>/cli`. The integration resolves the TOML layout first when `traecli.toml`, a current
+runtime history or state marker, or either explicit Home variable is present. Only when no TOML
+layout evidence exists and `traecli.yaml` is present does it resolve the YAML compatibility layout;
+an otherwise fresh installation defaults to the TOML layout. If both layouts exist, the TOML layout
+is active and the YAML compatibility config remains Agent-owned.
 
 Both layouts manage the isolated instruction file `~/.trae/rules/agentenv-manager.md` and
 dedicated Skills under `~/.trae/skills`. Existing `~/.trae/AGENTS.md`, the inactive version config,
@@ -1827,17 +1828,17 @@ that personal rule does not rewrite the context of a running conversation: Apply
 write, then tells the user to start a new Trae CLI session to load changed Instructions. An
 unchanged rule is a semantic no-op and MUST NOT emit a reload notice.
 
-V2 discovers MCP names only from `~/.trae/traecli.toml` and may patch only an existing
-`mcp_servers.<name>.enabled` Boolean. Legacy discovers MCP names only from
+The TOML layout discovers MCP names only from `~/.trae/traecli.toml` and may patch only an existing
+`mcp_servers.<name>.enabled` Boolean. The YAML compatibility layout discovers MCP names only from
 `~/.trae/traecli.yaml` and may patch only an existing server's `disabled` Boolean. Definitions,
 commands, URLs, headers, environment, credentials, unknown fields, native named config files,
 project sources, plugins, and built-ins remain Agent-owned.
 
-V2 Conversations reads only `rollout-*.jsonl` from
+Trae CLI Conversations reads only `rollout-*.jsonl` from
 `~/.trae/cli/sessions` and `~/.trae/cli/archived_sessions`. It ignores input history, databases,
 logs, memories, plans, tool protocol records, and per-session `.artifacts`. Native resume uses the
 provider session ID, captured working directory, and the exact `TRAE_HOME` and `TRAECLI_HOME`.
-Legacy exposes no Trae CLI conversation history rather than attributing another product's runtime
+The YAML compatibility layout exposes no Trae CLI conversation history rather than attributing another product's runtime
 files to Trae.
 
 Pi uses `PI_CODING_AGENT_DIR` when it is available to the application and otherwise defaults to
@@ -2175,7 +2176,7 @@ The current machine-readable totals, source commit, deterministic tracked-and-un
 - Target-local import now creates an independent Library copy without changing the source path; shared managed paths deduplicate across Target scans, and auto-ready cleanup groups pass single, bulk, conflict-exclusion, persistence, backup, and responsive-layout coverage.
 - Codex Capture now reuses identical Library Skills and previews a stable alternate ID for different same-name content instead of failing during Save. Same-name writable OpenCode and Claude Code destinations become explicit Preview review items and pass Backup, atomic replacement, ownership, and recovery assertions; Skills CLI and plugin metadata remain read-only evidence.
 - Local Skill cleanup distinguishes Library-managed, outside, kept, and conflict states; consolidation remains transactional, preserves backup history, and never treats a cleanup choice as a Profile Apply omission.
-- Native MCP discovery includes all configured names without copying credential values. OpenCode, Codex, and Trae CLI Apply change only native activation fields, preserve definitions added outside AgentEnv, block an enabled missing definition, treat a disabled missing definition as a no-op, and produce a real no-op when states already match. Trae CLI tests cover V2 TOML and Legacy YAML independently and prove that inactive or obsolete version files remain untouched.
+- Native MCP discovery includes all configured names without copying credential values. OpenCode, Codex, and Trae CLI Apply change only native activation fields, preserve definitions added outside AgentEnv, block an enabled missing definition, treat a disabled missing definition as a no-op, and produce a real no-op when states already match. Trae CLI tests cover the TOML and YAML compatibility layouts independently and prove that inactive or obsolete configuration files remain untouched.
 - Claude Code and Antigravity expose Agent-owned MCPs read-only. Antigravity CLI requires `agy`, applies and rolls back `GEMINI.md` and dedicated CLI Skills, transactionally migrates AgentEnv-owned legacy Skill copies, and leaves `mcp_config.json` unchanged.
 - All six built-in adapters expose the same read-only Skill runtime contract. Tests cover direct and recursive discovery, symlink-cycle safety, frontmatter runtime identity, duplicate declarations, Claude plugin ownership, duplicate desired runtime names, Antigravity legacy migration with rollback, Trae CLI's version-neutral shared Skill location, and Pi's dedicated plus shared-compatible roots. Profile Skill On/Off is represented only by managed install presence, never by an Agent configuration switch.
 - GitHub Device Flow respects server polling intervals, absorbs `slow_down` as a longer pending interval, blocks overlapping token requests, and refreshes connected account state after browser authorization.

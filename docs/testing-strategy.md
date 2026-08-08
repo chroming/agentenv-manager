@@ -23,7 +23,7 @@ tree matches its pre-Apply state.
 Machine-layout fixtures in
 `tests/fixtures/target-homes/compatibility.json` cover current and legacy
 directories, shared root links, plugin-owned Skills, broken links, and Trae CLI
-v1/v2 selection. Fixture inspection must remain read-only.
+TOML/YAML layout selection. Fixture inspection must remain read-only.
 
 ## Specialized integration tests
 

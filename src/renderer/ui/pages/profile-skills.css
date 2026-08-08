@@ -26,16 +26,6 @@
   padding-block: 14px;
 }
 
-.profile-skill-toolbar {
-  align-items: center;
-  background: transparent;
-  border-bottom: 1px solid var(--border-subtle);
-  display: flex;
-  justify-content: flex-end;
-  min-height: 36px;
-  padding: 3px 8px;
-}
-
 .profile-skill-toolbar__actions {
   align-items: center;
   display: flex;

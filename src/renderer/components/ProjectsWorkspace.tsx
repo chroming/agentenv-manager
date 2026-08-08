@@ -56,6 +56,7 @@ import {
   ObjectSwitcher,
   PageHeader,
   ResourceDisclosureSection,
+  ResourcePanelToolbar,
   SelectField,
   SingleObjectWorkspace,
   TextField,
@@ -701,6 +702,7 @@ export const ProjectsWorkspace = ({
                       <ResourceDisclosureSection
                         className="project-resource-section"
                         description={description}
+                        descriptionMode="collapsed"
                         expanded={expanded}
                         icon={icon}
                         id={`workspace-${kind}`}
@@ -714,7 +716,10 @@ export const ProjectsWorkspace = ({
                           : String(resources.length)}
                       >
                         {kind === "instructions" && canCreateInstruction ? (
-                          <div className="project-resource-section__toolbar">
+                          <ResourcePanelToolbar
+                            aria-label={t("Instruction actions")}
+                            className="project-resource-section__toolbar"
+                          >
                             <Button
                               size="compact"
                               icon={<FilePlus2 size={13} />}
@@ -722,13 +727,16 @@ export const ProjectsWorkspace = ({
                             >
                               {t("Add instruction")}
                             </Button>
-                          </div>
+                          </ResourcePanelToolbar>
                         ) : kind === "skill" && writableSkillLocations.length > 0 ? (
-                          <div className="project-resource-section__toolbar">
+                          <ResourcePanelToolbar
+                            aria-label={t("Skill actions")}
+                            className="project-resource-section__toolbar"
+                          >
                             <Button size="compact" icon={<Plus size={13} />} onClick={() => void openAddSkill()}>
                               {t("Copy from Library")}
                             </Button>
-                          </div>
+                          </ResourcePanelToolbar>
                         ) : null}
                         <div className="ui-resource-children project-resource-section__list">
                           {resources.map((resource) => {

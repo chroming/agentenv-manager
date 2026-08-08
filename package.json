@@ -14,7 +14,7 @@
   "bugs": {
     "url": "https://github.com/chroming/agentenv-manager/issues"
   },
-  "license": "Apache-2.0",
+  "license": "GPL-3.0-only",
   "private": true,
   "desktopName": "AgentEnv Manager",
   "packageManager": "npm@11.17.0",

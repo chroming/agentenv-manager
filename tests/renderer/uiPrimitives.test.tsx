@@ -23,6 +23,7 @@ import {
   ModalFrame,
   PageHeader,
   ResourceDisclosureSection,
+  ResourcePanelToolbar,
   ResourceSection,
   ResourceRow,
   SearchField,
@@ -542,6 +543,7 @@ describe("renderer UI primitives", () => {
         icon={<RefreshCw />}
         title="Skills"
         description="Project-owned Skill files"
+        descriptionMode="collapsed"
         summary="3"
         expanded
         nested
@@ -557,12 +559,28 @@ describe("renderer UI primitives", () => {
     expect(section).toHaveClass("ui-resource-disclosure", "is-expanded", "is-nested");
     expect(within(section).getByRole("button", { name: "Collapse Skills" }))
       .toHaveAttribute("aria-expanded", "true");
+    expect(within(section).getByText("Project-owned Skill files"))
+      .toHaveClass("ui-visually-hidden");
+    expect(within(section).getByRole("button", { name: "Collapse Skills" }))
+      .toHaveAccessibleDescription("Project-owned Skill files 3");
     expect(within(section).getByText("3")).toHaveClass("ui-resource-disclosure__summary");
     expect(within(section).getByRole("button", { name: "Add" }).closest(".ui-resource-disclosure__actions"))
       .not.toBeNull();
 
     fireEvent.click(within(section).getByRole("button", { name: "Collapse Skills" }));
     expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it("owns the expanded resource action toolbar", () => {
+    render(
+      <ResourcePanelToolbar aria-label="Skill actions">
+        <Button size="compact">Add Skill</Button>
+      </ResourcePanelToolbar>
+    );
+
+    expect(screen.getByRole("toolbar", { name: "Skill actions" })).toHaveClass(
+      "ui-resource-panel-toolbar"
+    );
   });
 
   it("owns field and dialog composition instead of relying on page-local form markup", () => {

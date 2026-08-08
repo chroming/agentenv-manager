@@ -19,6 +19,7 @@ import {
   DialogHeader,
   IconButton,
   ModalFrame,
+  ResourcePanelToolbar,
   ResourceRow,
   ToolbarOverflowMenu,
   Switch
@@ -142,7 +143,10 @@ export const SkillsEditor = ({
       aria-label={t("Profile Skills")}
       data-profile-skill-count={value.skills.length}
     >
-      <header className="profile-skill-toolbar">
+      <ResourcePanelToolbar
+        aria-label={t("Profile Skill actions")}
+        className="profile-skill-toolbar"
+      >
         <div className="profile-skill-summary ui-visually-hidden">
           <span>
             {t("{{count}} enabled", { count: enabledCount })}
@@ -178,7 +182,7 @@ export const SkillsEditor = ({
             {t("Add Skill")}
           </Button>
         </div>
-      </header>
+      </ResourcePanelToolbar>
 
       <div className="ui-resource-children profile-skill-list" role="list">
         {value.skills.map((reference, index) => {

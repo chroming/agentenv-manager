@@ -78,7 +78,7 @@ Conversations 只读索引本机 Agent 的历史记录。可以搜索标题和�
 - Claude Code
 - Codex
 - Antigravity CLI
-- Trae CLI 2.0 和 Legacy 布局
+- Trae CLI
 - Pi Coding Agent
 
 不同 Agent 支持的 Instructions、MCP、Conversations 和 Compare 能力并不完全相同。应用会按实际能力显示可用操作，不会用另一个 Agent 代替执行。
@@ -140,4 +140,4 @@ npm run dist:linux
 
 提交改动前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题请按 [SECURITY.md](SECURITY.md) 私下报告。
 
-AgentEnv Manager 使用 [Apache License 2.0](LICENSE)。产品名称和标志归各自权利人所有，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。本项目是独立项目，与上述 Agent 的开发者没有隶属或背书关系。
+AgentEnv Manager 使用 [GNU General Public License v3.0](LICENSE)。产品名称和标志归各自权利人所有，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。本项目是独立项目，与上述 Agent 的开发者没有隶属或背书关系。

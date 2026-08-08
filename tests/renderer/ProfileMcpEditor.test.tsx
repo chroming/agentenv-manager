@@ -72,7 +72,7 @@ afterEach(() => {
 });
 
 describe("ProfileMcpEditor", () => {
-  it("labels the live connection area and keeps refresh progress on its initiating control", async () => {
+  it("labels the shared action toolbar and keeps refresh progress on its initiating control", async () => {
     let finishRefresh: (() => void) | undefined;
     const onRefresh = vi.fn(() => new Promise<void>((resolve) => {
       finishRefresh = resolve;
@@ -88,7 +88,8 @@ describe("ProfileMcpEditor", () => {
       />
     );
 
-    expect(screen.getByText("Configured in OpenCode")).toBeInTheDocument();
+    expect(screen.getByRole("toolbar", { name: "Profile MCP actions" })).toBeInTheDocument();
+    expect(screen.queryByText("Configured in OpenCode")).not.toBeInTheDocument();
     expect(screen.getByText("No MCP connections are configured in OpenCode.")).toBeInTheDocument();
     const refresh = screen.getByRole("button", { name: "Refresh MCP connections" });
     fireEvent.click(refresh);
