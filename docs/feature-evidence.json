@@ -414,6 +414,54 @@
           "startup-failure-920x620.png"
         ]
       }
+    },
+    {
+      "id": "skill-mutation-recovery-and-identity",
+      "summary": "Recover interrupted multi-path Skill mutations only from verified receipts and distinguish Agent deployment endpoints from physical Skill content aliases.",
+      "contract": {
+        "path": "docs/superpowers/specs/2026-08-08-skill-mutation-recovery-and-identity.md",
+        "anchor": "## Feature admission"
+      },
+      "support": {
+        "opencode": "not-applicable",
+        "claude-code": "not-applicable",
+        "codex": "not-applicable",
+        "antigravity": "not-applicable",
+        "trae-cli": "not-applicable",
+        "pi": "not-applicable"
+      },
+      "states": {
+        "idle": "Completed and rolled-back journals do not affect normal Library, Profile, Agent, or Workspace operations.",
+        "working": "Every claimed path receives a durable post-write content receipt before the operation advances.",
+        "success": "Completed operations retain all deployment endpoints and a rescan groups aliases by canonical physical content.",
+        "error": "Ambiguous or externally changed paths retain their backup and block later resource mutations with the recovery record ID.",
+        "cancelled": "Cancellation before a filesystem mutation leaves the prepared journal as a verified no-change rollback candidate.",
+        "noOp": "A prepared operation with no changed paths is marked rolled back without restoring or rewriting user content.",
+        "stale": "A current path that differs from both its pre-write hash and mutation receipt enters recovery-required.",
+        "partial": "Verified paths are never used to justify restoring an unverified sibling path; ambiguity preserves the complete recovery record.",
+        "persisted": "Pre-write hashes, mutation receipts, terminal status, and recovery metadata are written and synced in the operation journal.",
+        "rollback": "Startup restores only receipted changed paths through a safety backup, then records the terminal rolled-back state."
+      },
+      "evidence": {
+        "domain": [
+          "tests/main/skillMutationRecovery.test.ts",
+          "tests/shared/skillCleanup.test.ts"
+        ],
+        "renderer": [
+          "tests/renderer/SkillCollectionCleanup.test.tsx",
+          "tests/renderer/useBackupRecoveryController.test.tsx"
+        ],
+        "desktop": [
+          "tests/e2e/startupRecovery.e2e.test.ts"
+        ],
+        "persistence": [
+          "tests/main/skillMutationRecovery.test.ts",
+          "tests/main/skillLibraryStore.test.ts"
+        ],
+        "visual": [
+          "skills-cleanup-review-920x620.png"
+        ]
+      }
     }
   ]
 }

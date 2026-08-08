@@ -45,6 +45,7 @@ import { createProjectRecoveryStore } from "./projects/projectRecoveryStore";
 import { createProjectGitService } from "./projects/projectGitService";
 import { createSettingsStore } from "./settingsStore";
 import { createSkillLibraryStore } from "./skillLibraryStore";
+import { createSkillMutationRecoveryGate } from "./skillMutationRecoveryGate";
 import { createTargetDiscoveryService } from "./targetDiscovery";
 import { createTargetCaptureService } from "./targetCaptureService";
 import {
@@ -834,6 +835,14 @@ const createServices = async (
         : {})
     }
   );
+  const skillMutationRecoveryGate = createSkillMutationRecoveryGate({
+    appDataRoot: paths.appDataRoot,
+    backupStore,
+    skillLibraryStore
+  });
+  await mutationCoordinator.runExclusive("Recover interrupted Skill mutations", () =>
+    skillMutationRecoveryGate.recover()
+  );
   const backupMaintenanceService = createBackupMaintenanceService(
     paths,
     backupStore,
@@ -1024,6 +1033,7 @@ const createServices = async (
     githubAuthService,
     settingsStore,
     skillLibraryStore,
+    skillMutationRecoveryGate,
     activationService,
     targetCaptureService,
     evaluationService,

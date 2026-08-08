@@ -13,6 +13,7 @@ import type { ProjectRecoveryStore } from "./projects/projectRecoveryStore";
 import type { SettingsStore } from "./settingsStore";
 import type { WorkspaceSyncService } from "./workspaceSync/workspaceSyncService";
 import type { SkillLibraryStore } from "./skillLibraryStore";
+import type { SkillMutationRecoveryGate } from "./skillMutationRecoveryGate";
 import type { TargetDiscoveryService } from "./targetDiscovery";
 import type { TargetCaptureService } from "./targetCaptureService";
 import type { EvaluationService } from "./evaluations/evaluationService";
@@ -79,6 +80,7 @@ export interface IpcServices {
   githubAuthService: GitHubAuthService;
   settingsStore: SettingsStore;
   skillLibraryStore: SkillLibraryStore;
+  skillMutationRecoveryGate: SkillMutationRecoveryGate;
   targetRegistry: TargetRegistry;
   targetDiscoveryService: TargetDiscoveryService;
   conversationService: ConversationService;
@@ -114,6 +116,7 @@ export const registerIpcHandlers = ({
   githubAuthService,
   settingsStore,
   skillLibraryStore,
+  skillMutationRecoveryGate,
   targetRegistry,
   targetDiscoveryService,
   conversationService,
@@ -142,15 +145,17 @@ export const registerIpcHandlers = ({
   ) => {
     diagnosticHandle(channel, (event, ...args) =>
       mutationCoordinator.runExclusive(channel, async () => {
-        const changesWorkspace = /^(skills|profiles|activation|targets|data|settings|workspace-sync):/.test(channel);
-        if (
-          changesWorkspace &&
-          channel !== "workspace-sync:recover" &&
-          await pathEntryExists(paths.workspaceSyncJournalPath)
-        ) {
-          throw new Error("Workspace recovery is required before changing Profiles, Library resources, or Agents");
-        }
-        return handler(event, ...args);
+        return skillMutationRecoveryGate.run(channel, async () => {
+          const changesWorkspace = /^(skills|profiles|activation|targets|data|settings|workspace-sync):/.test(channel);
+          if (
+            changesWorkspace &&
+            channel !== "workspace-sync:recover" &&
+            await pathEntryExists(paths.workspaceSyncJournalPath)
+          ) {
+            throw new Error("Workspace recovery is required before changing Profiles, Library resources, or Agents");
+          }
+          return await handler(event, ...args);
+        });
       })
     );
   };
@@ -161,13 +166,15 @@ export const registerIpcHandlers = ({
     diagnosticHandle(channel, (event, ...args) => {
       workspaceSyncService.cancel();
       return mutationCoordinator.runExclusive(channel, async () => {
-        if (
-          channel !== "workspace-sync:recover" &&
-          await pathEntryExists(paths.workspaceSyncJournalPath)
-        ) {
-          throw new Error("Workspace recovery is required before changing Profiles, Library resources, or Agents");
-        }
-        return handler(event, ...args);
+        return skillMutationRecoveryGate.run(channel, async () => {
+          if (
+            channel !== "workspace-sync:recover" &&
+            await pathEntryExists(paths.workspaceSyncJournalPath)
+          ) {
+            throw new Error("Workspace recovery is required before changing Profiles, Library resources, or Agents");
+          }
+          return await handler(event, ...args);
+        });
       });
     });
   };

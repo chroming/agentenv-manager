@@ -224,6 +224,11 @@ export const buildSkillCleanupGroups = (
       const activeItems = items.filter(
         (item) => item.status !== "left-unmanaged"
       );
+      const physicalItems = [
+        ...new Map(
+          activeItems.map((item) => [item.canonicalPath ?? item.path, item])
+        ).values()
+      ];
       const hashes = new Set(activeItems.map((item) => item.contentHash).filter(Boolean));
       const statuses = new Set(activeItems.map((item) => item.status));
       const allLeftUnmanaged = activeItems.length === 0;
@@ -340,7 +345,7 @@ export const buildSkillCleanupGroups = (
               ? "conflict"
               : staleManaged
                 ? "stale"
-                : activeItems.length > 1
+                : physicalItems.length > 1
                   ? "duplicate"
                   : statuses.has("outside")
                     ? "outside"
@@ -471,13 +476,13 @@ export const buildSkillCleanupGroups = (
                         ? { state: "local-changes-found", action: "review-differences" }
                         : hashes.size > 1
                           ? { state: "multiple-versions", action: "add-to-library" }
-                          : activeItems.length > 1
+                          : physicalItems.length > 1
                             ? { state: "duplicate-copies", action: "add-to-library" }
                             : { state: "not-in-library", action: "add-to-library" }
                       : !hasLibraryCopy
                         ? hashes.size > 1
                           ? { state: "multiple-versions", action: "add-to-library" }
-                          : activeItems.length > 1
+                          : physicalItems.length > 1
                             ? { state: "duplicate-copies", action: "add-to-library" }
                             : { state: "not-in-library", action: "add-to-library" }
                         : staleManaged

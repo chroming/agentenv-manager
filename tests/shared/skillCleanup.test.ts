@@ -21,6 +21,27 @@ const inventoryItem = (
 });
 
 describe("skill cleanup groups", () => {
+  it("does not report two deployment aliases of one physical Skill as duplicate copies", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        path: "/tmp/codex/skills/reviewer",
+        canonicalPath: "/tmp/library/reviewer",
+        foundIn: ["codex"]
+      }),
+      inventoryItem({
+        path: "/tmp/opencode/skills/reviewer",
+        canonicalPath: "/tmp/library/reviewer",
+        foundIn: ["opencode"]
+      })
+    ]);
+
+    expect(group).toMatchObject({
+      state: "outside",
+      presentation: { state: "not-in-library", action: "add-to-library" }
+    });
+    expect(group.activeItems).toHaveLength(2);
+  });
+
   it("groups nested Skills by their collection link and removes them from per-Skill cleanup", () => {
     const collectionLink = {
       path: "/tmp/home/.agents/skills/superpowers",

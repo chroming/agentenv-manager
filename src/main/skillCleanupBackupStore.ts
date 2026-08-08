@@ -34,7 +34,13 @@ export interface SkillCleanupBackupManifest {
   safetyBackupId?: string;
   libraryBackupHash?: string;
   expectedPaths: Array<{ path: string; sha256?: string }>;
+  mutationHashes?: Array<{ path: string; sha256?: string }>;
   entries: Array<{ sourcePath: string; backupPath: string; sha256: string }>;
+}
+
+export interface SkillCleanupRecoveryResult {
+  recoveredIds: string[];
+  recoveryRequiredIds: string[];
 }
 
 interface SkillCleanupBackupStoreOptions {
@@ -122,6 +128,10 @@ export const createSkillCleanupBackupStore = ({
           }
           mutationHashes.set(path, await hashPathEntry(path));
         }
+        manifest.mutationHashes = [...mutationHashes.entries()]
+          .map(([path, sha256]) => ({ path, sha256 }))
+          .sort((left, right) => left.path.localeCompare(right.path));
+        await writeCleanupManifest(manifest);
       },
       findUnrecordedChanges: async () => {
         const changed: string[] = [];
@@ -195,6 +205,7 @@ export const createSkillCleanupBackupStore = ({
       manifest.id !== safeId ||
       !Array.isArray(manifest.entries) ||
       !Array.isArray(manifest.expectedPaths) ||
+      (manifest.mutationHashes !== undefined && !Array.isArray(manifest.mutationHashes)) ||
       !["prepared", "complete", "rolled-back", "rollback-prepared", "restored", "recovery-required"]
         .includes(manifest.status)
     ) {
@@ -211,6 +222,7 @@ export const createSkillCleanupBackupStore = ({
     }
     const seenBackupPaths = new Set<string>();
     const seenExpectedPaths = new Set<string>();
+    const expectedPathKeys = new Set<string>();
     for (const entry of manifest.expectedPaths) {
       if (
         !entry ||
@@ -229,6 +241,24 @@ export const createSkillCleanupBackupStore = ({
         throw new Error(`Skill cleanup backup contains an unsafe expected path: ${safeId}`);
       }
       seenExpectedPaths.add(key);
+      expectedPathKeys.add(key);
+    }
+    const seenMutationPaths = new Set<string>();
+    for (const mutation of manifest.mutationHashes ?? []) {
+      if (
+        !mutation ||
+        typeof mutation.path !== "string" ||
+        (mutation.sha256 !== undefined &&
+          (typeof mutation.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(mutation.sha256)))
+      ) {
+        throw new Error(`Invalid Skill cleanup mutation receipt: ${safeId}`);
+      }
+      const mutationPath = resolve(mutation.path);
+      const key = canonicalPathKey(mutationPath);
+      if (!expectedPathKeys.has(key) || seenMutationPaths.has(key)) {
+        throw new Error(`Skill cleanup backup contains an unsafe mutation receipt: ${safeId}`);
+      }
+      seenMutationPaths.add(key);
     }
     for (const entry of manifest.entries) {
       if (
@@ -475,6 +505,138 @@ export const createSkillCleanupBackupStore = ({
     throw new Error(`${label} failed and was rolled back: ${operationMessage}`);
   };
 
+  const recoverInterruptedCleanupBackups = async (): Promise<SkillCleanupRecoveryResult> => {
+    let entries: Dirent[];
+    try {
+      entries = await readdir(cleanupBackupRoot(), { withFileTypes: true });
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+        return { recoveredIds: [], recoveryRequiredIds: [] };
+      }
+      throw error;
+    }
+
+    const recoveredIds: string[] = [];
+    const recoveryRequiredIds: string[] = [];
+    for (const entry of entries.filter((candidate) => candidate.isDirectory())) {
+      if (!SafeIdSchema.safeParse(entry.name).success) continue;
+      let manifest: SkillCleanupBackupManifest;
+      try {
+        ({ manifest } = await readCleanupBackup(entry.name));
+      } catch {
+        const pending = await readFile(
+          join(cleanupBackupRoot(), entry.name, "manifest.json"),
+          "utf8"
+        )
+          .then((content) => JSON.parse(content) as Partial<SkillCleanupBackupManifest>)
+          .then((candidate) =>
+            candidate.formatVersion === 2 &&
+            ["prepared", "rollback-prepared", "recovery-required"].includes(
+              String(candidate.status)
+            )
+          )
+          .catch(() => false);
+        if (pending) recoveryRequiredIds.push(entry.name);
+        continue;
+      }
+      if (manifest.status === "recovery-required" || manifest.status === "rollback-prepared") {
+        recoveryRequiredIds.push(manifest.id);
+        continue;
+      }
+      if (manifest.status !== "prepared") continue;
+
+      const expectedHashes = new Map(
+        manifest.expectedPaths.map((item) => [resolve(item.path), item.sha256])
+      );
+      const mutationHashes = new Map(
+        (manifest.mutationHashes ?? []).map((item) => [resolve(item.path), item.sha256])
+      );
+      const changedPaths: string[] = [];
+      const ambiguousPaths: string[] = [];
+      for (const [path, expectedHash] of expectedHashes) {
+        const currentHash = await hashPathEntry(path).catch(() => "unreadable");
+        if (currentHash === expectedHash) continue;
+        changedPaths.push(path);
+        if (!mutationHashes.has(path) || currentHash !== mutationHashes.get(path)) {
+          ambiguousPaths.push(path);
+        }
+      }
+
+      if (ambiguousPaths.length > 0) {
+        await setCleanupStatus(manifest, "recovery-required", {
+          recoveryError:
+            `Interrupted Skill mutation has unverified filesystem changes: ${ambiguousPaths.join(", ")}`
+        });
+        recoveryRequiredIds.push(manifest.id);
+        continue;
+      }
+
+      try {
+        if (changedPaths.length > 0) {
+          const expectedCurrentHashes = new Map(
+            changedPaths.map((path) => [path, mutationHashes.get(path)])
+          );
+          const safetyBackup = await restoreCleanupBackupSafely(
+            manifest,
+            changedPaths,
+            undefined,
+            expectedCurrentHashes
+          );
+          await setCleanupStatus(manifest, "rolled-back", {
+            safetyBackupId: safetyBackup?.id
+          });
+        } else {
+          await setCleanupStatus(manifest, "rolled-back");
+        }
+        recoveredIds.push(manifest.id);
+      } catch (error) {
+        const recoveryError = error instanceof Error ? error.message : String(error);
+        await setCleanupStatus(manifest, "recovery-required", { recoveryError }).catch(
+          () => undefined
+        );
+        recoveryRequiredIds.push(manifest.id);
+      }
+    }
+    return { recoveredIds, recoveryRequiredIds };
+  };
+
+  const listPendingCleanupRecoveries = async (): Promise<string[]> => {
+    let entries: Dirent[];
+    try {
+      entries = await readdir(cleanupBackupRoot(), { withFileTypes: true });
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+        return [];
+      }
+      throw error;
+    }
+    const pending: string[] = [];
+    for (const entry of entries.filter((candidate) => candidate.isDirectory())) {
+      if (!SafeIdSchema.safeParse(entry.name).success) continue;
+      try {
+        const { manifest } = await readCleanupBackup(entry.name);
+        if (["prepared", "rollback-prepared", "recovery-required"].includes(manifest.status)) {
+          pending.push(entry.name);
+        }
+      } catch {
+        const isPending = await readFile(
+          join(cleanupBackupRoot(), entry.name, "manifest.json"),
+          "utf8"
+        )
+          .then((content) => JSON.parse(content) as Partial<SkillCleanupBackupManifest>)
+          .then((candidate) =>
+            candidate.formatVersion === 2 &&
+            ["prepared", "rollback-prepared", "recovery-required"].includes(
+              String(candidate.status)
+            )
+          )
+          .catch(() => false);
+        if (isPending) pending.push(entry.name);
+      }
+    }
+    return pending.sort();
+  };
+
   return {
     cleanupBackupRoot,
     writeCleanupManifest,
@@ -485,6 +647,8 @@ export const createSkillCleanupBackupStore = ({
     readCleanupBackup,
     listCleanupBackups,
     previewCleanupBackup,
+    listPendingCleanupRecoveries,
+    recoverInterruptedCleanupBackups,
     restoreCleanupBackupSafely,
     failAfterCleanupRollback
   };

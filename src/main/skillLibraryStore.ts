@@ -96,7 +96,8 @@ import {
 } from "./filesystemIntegrity";
 import {
   createSkillCleanupBackupStore,
-  type SkillCleanupBackupManifest
+  type SkillCleanupBackupManifest,
+  type SkillCleanupRecoveryResult
 } from "./skillCleanupBackupStore";
 import {
   createLibrarySkillSourceService,
@@ -185,6 +186,8 @@ export interface SkillLibraryStore {
   findManagedInstallPaths(libraryId: string, targetPaths: TargetPaths[]): Promise<string[]>;
   listCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;
   previewCleanupBackup(id: string): Promise<ManagedBackupFile[]>;
+  recoverInterruptedCleanupBackups(): Promise<SkillCleanupRecoveryResult>;
+  listPendingCleanupRecoveries(): Promise<string[]>;
   setUnmanagedSkillLocations(
     input: UnmanagedSkillLocationUpdate
   ): Promise<UnmanagedSkillLocation[]>;
@@ -354,6 +357,8 @@ export const createSkillLibraryStore = (
     readCleanupBackup,
     listCleanupBackups,
     previewCleanupBackup,
+    recoverInterruptedCleanupBackups,
+    listPendingCleanupRecoveries,
     restoreCleanupBackupSafely,
     failAfterCleanupRollback
   } = createSkillCleanupBackupStore({
@@ -951,6 +956,7 @@ export const createSkillLibraryStore = (
             name: observation.runtimeName,
             description: "Skill link target is unavailable.",
             path: skillDir,
+            canonicalPath: resolve(skillDir),
             foundIn: [target.targetId],
             status,
             libraryId: libraryIds.has(deploymentName) ? deploymentName : undefined,
@@ -1021,6 +1027,7 @@ export const createSkillLibraryStore = (
           externalEvidence = { ...externalEvidence, confidence, state: "healthy" };
         }
         const contentHash = await computeContentHash(skillDir);
+        const canonicalPath = await realpath(skillDir).catch(() => resolve(skillDir));
         const externalLibraryId = externalEvidence
           ? librarySkills.find((skill) => skill.contentHash === contentHash)?.id
           : undefined;
@@ -1053,6 +1060,7 @@ export const createSkillLibraryStore = (
           name: observation.runtimeName,
           description: frontmatter.description,
           path: skillDir,
+          canonicalPath,
           foundIn: [target.targetId],
           status,
           libraryId,
@@ -3167,6 +3175,8 @@ export const createSkillLibraryStore = (
     findManagedInstallPaths,
     listCleanupBackups,
     previewCleanupBackup,
+    recoverInterruptedCleanupBackups,
+    listPendingCleanupRecoveries,
     setUnmanagedSkillLocations,
     setSkillCollectionDecision,
     scanUnmanaged,

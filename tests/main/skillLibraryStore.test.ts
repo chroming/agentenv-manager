@@ -308,6 +308,49 @@ description: >
     ).resolves.toContain("Skills CLI installation");
   });
 
+  it("preserves Agent deployment paths while identifying aliases of one physical Skill", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const canonicalDir = join(root, "shared", "reviewer");
+    const codexDir = join(paths.homeDir, ".codex", "skills", "reviewer");
+    const openCodeDir = join(paths.homeDir, ".config", "opencode", "skills", "reviewer");
+    await mkdir(canonicalDir, { recursive: true });
+    await mkdir(dirname(codexDir), { recursive: true });
+    await mkdir(dirname(openCodeDir), { recursive: true });
+    await writeFile(
+      join(canonicalDir, "SKILL.md"),
+      "---\nname: Reviewer\ndescription: Shared content.\n---\n"
+    );
+    await symlink(canonicalDir, codexDir, "dir");
+    await symlink(canonicalDir, openCodeDir, "dir");
+
+    const inventory = await createSkillLibraryStore(paths).scanInventory([
+      {
+        targetId: "codex",
+        configDir: dirname(dirname(codexDir)),
+        instructionsPath: "",
+        configPath: "",
+        skillsDir: dirname(codexDir)
+      },
+      {
+        targetId: "opencode",
+        configDir: dirname(dirname(openCodeDir)),
+        instructionsPath: "",
+        configPath: "",
+        skillsDir: dirname(openCodeDir)
+      }
+    ]);
+
+    expect(inventory.map((item) => item.path).sort()).toEqual([codexDir, openCodeDir].sort());
+    expect(new Set(inventory.map((item) => item.canonicalPath))).toEqual(
+      new Set([await realpath(canonicalDir)])
+    );
+    expect(buildSkillCleanupGroups(inventory)[0]).toMatchObject({
+      state: "outside",
+      presentation: { state: "not-in-library" }
+    });
+  });
+
   it("keeps a broken Skills CLI link visible during scanning", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

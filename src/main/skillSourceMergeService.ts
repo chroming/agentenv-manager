@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, realpath } from "node:fs/promises";
+import { mkdir, readFile, readdir, realpath } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import type {
+  BackupManifest,
   RepositorySkillScanResult,
   ProjectSkillScanResult,
   SkillLibraryEntry,
@@ -28,7 +29,7 @@ import {
   restoreBackupWithSafety,
   selectBackupEntries
 } from "./backupRestore";
-import { syncPathTree } from "./filesystemIntegrity";
+import { hashPathEntry, syncPathTree } from "./filesystemIntegrity";
 
 interface PendingSkillSourceMerge {
   preview: SkillSourceMergePreview;
@@ -53,6 +54,189 @@ interface SkillSourceMergeServiceOptions {
 }
 
 const PREVIEW_TTL_MS = 30 * 60 * 1000;
+
+type SkillSourceMergeJournalStatus =
+  | "prepared"
+  | "complete"
+  | "rolled-back"
+  | "recovery-required";
+
+interface SkillSourceMergeJournal {
+  formatVersion: 1;
+  operation: "merge-skill-sources";
+  createdAt: string;
+  status: SkillSourceMergeJournalStatus;
+  transactionBackupId: string;
+  safetyBackupId?: string;
+  recoveryError?: string;
+  mutationHashes?: Array<{ path: string; sha256?: string }>;
+  preview?: SkillSourceMergePreview;
+  sourceRegistry?: SkillSourceRecord[];
+}
+
+export interface SkillSourceMergeRecoveryResult {
+  recoveredIds: string[];
+  recoveryRequiredIds: string[];
+}
+
+const sourceMergeBackupRoot = (appDataRoot: string) =>
+  join(appDataRoot, "skill-source-merge-backups");
+
+const sourceMergeJournalPath = (backupPath: string) => join(backupPath, "manifest.json");
+
+const writeSourceMergeJournal = async (
+  backupPath: string,
+  journal: SkillSourceMergeJournal
+) => {
+  await writeAtomic(
+    sourceMergeJournalPath(backupPath),
+    `${JSON.stringify(journal, null, 2)}\n`
+  );
+  await syncPathTree(backupPath);
+};
+
+const readSourceMergeJournal = async (backupPath: string): Promise<SkillSourceMergeJournal> => {
+  const parsed = JSON.parse(await readFile(sourceMergeJournalPath(backupPath), "utf8")) as
+    Partial<SkillSourceMergeJournal>;
+  if (
+    parsed.formatVersion !== 1 ||
+    parsed.operation !== "merge-skill-sources" ||
+    typeof parsed.createdAt !== "string" ||
+    typeof parsed.transactionBackupId !== "string" ||
+    !["prepared", "complete", "rolled-back", "recovery-required"].includes(
+      String(parsed.status)
+    ) ||
+    (parsed.mutationHashes !== undefined && !Array.isArray(parsed.mutationHashes))
+  ) {
+    throw new Error("Invalid Skill source merge recovery journal");
+  }
+  for (const receipt of parsed.mutationHashes ?? []) {
+    if (
+      !receipt ||
+      typeof receipt.path !== "string" ||
+      (receipt.sha256 !== undefined && !/^[a-f0-9]{64}$/.test(receipt.sha256))
+    ) {
+      throw new Error("Invalid Skill source merge mutation receipt");
+    }
+  }
+  return parsed as SkillSourceMergeJournal;
+};
+
+const changedBackupPaths = async (backup: BackupManifest) => {
+  const changed: string[] = [];
+  for (const entry of backup.entries) {
+    const expected = entry.missing ? undefined : entry.sha256;
+    if (await hashPathEntry(entry.sourcePath).catch(() => "unreadable") !== expected) {
+      changed.push(resolve(entry.sourcePath));
+    }
+  }
+  return changed;
+};
+
+export const listPendingSkillSourceMerges = async (
+  appDataRoot: string
+): Promise<string[]> => {
+  let entries;
+  try {
+    entries = await readdir(sourceMergeBackupRoot(appDataRoot), { withFileTypes: true });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+  const pending: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+    const backupPath = join(sourceMergeBackupRoot(appDataRoot), entry.name);
+    try {
+      const journal = await readSourceMergeJournal(backupPath);
+      if (journal.status === "prepared" || journal.status === "recovery-required") {
+        pending.push(entry.name);
+      }
+    } catch {
+      pending.push(entry.name);
+    }
+  }
+  return pending.sort();
+};
+
+export const recoverInterruptedSkillSourceMerges = async (
+  appDataRoot: string,
+  backupStore: BackupStore
+): Promise<SkillSourceMergeRecoveryResult> => {
+  let entries;
+  try {
+    entries = await readdir(sourceMergeBackupRoot(appDataRoot), { withFileTypes: true });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return { recoveredIds: [], recoveryRequiredIds: [] };
+    }
+    throw error;
+  }
+  const recoveredIds: string[] = [];
+  const recoveryRequiredIds: string[] = [];
+  for (const entry of entries.filter((candidate) => candidate.isDirectory())) {
+    const backupPath = join(sourceMergeBackupRoot(appDataRoot), entry.name);
+    let journal: SkillSourceMergeJournal;
+    try {
+      journal = await readSourceMergeJournal(backupPath);
+    } catch {
+      recoveryRequiredIds.push(entry.name);
+      continue;
+    }
+    if (journal.status === "recovery-required") {
+      recoveryRequiredIds.push(entry.name);
+      continue;
+    }
+    if (journal.status !== "prepared") continue;
+
+    try {
+      const backup = await backupStore.readBackup(journal.transactionBackupId);
+      const backupPaths = new Set(backup.entries.map((item) => resolve(item.sourcePath)));
+      const mutationHashes = new Map(
+        (journal.mutationHashes ?? []).map((item) => [resolve(item.path), item.sha256])
+      );
+      if ([...mutationHashes.keys()].some((path) => !backupPaths.has(path))) {
+        throw new Error("Skill source merge journal contains a path outside its backup");
+      }
+      const changedPaths = await changedBackupPaths(backup);
+      const ambiguousPaths: string[] = [];
+      for (const path of changedPaths) {
+        const currentHash = await hashPathEntry(path).catch(() => "unreadable");
+        if (!mutationHashes.has(path) || currentHash !== mutationHashes.get(path)) {
+          ambiguousPaths.push(path);
+        }
+      }
+      if (ambiguousPaths.length > 0) {
+        throw new Error(
+          `Interrupted Skill source merge has unverified filesystem changes: ${ambiguousPaths.join(", ")}`
+        );
+      }
+      if (changedPaths.length > 0) {
+        await restoreBackupWithSafety({
+          backup: selectBackupEntries(backup, changedPaths),
+          backupStore,
+          continueOnError: true,
+          restoreSafetyOnFailure: false,
+          safetyProfileName: "Skill sources before interrupted merge recovery",
+          expectedCurrentHashes: new Map(
+            changedPaths.map((path) => [path, mutationHashes.get(path)])
+          )
+        });
+      }
+      journal.status = "rolled-back";
+      await writeSourceMergeJournal(backupPath, journal);
+      recoveredIds.push(entry.name);
+    } catch (error) {
+      journal.status = "recovery-required";
+      journal.recoveryError = error instanceof Error ? error.message : String(error);
+      await writeSourceMergeJournal(backupPath, journal).catch(() => undefined);
+      recoveryRequiredIds.push(entry.name);
+    }
+  }
+  return { recoveredIds, recoveryRequiredIds };
+};
 
 const scopeKey = (
   source: Pick<
@@ -248,7 +432,7 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
       snapshots.set(metadataPath, content);
       await writeAtomic(join(backupPath, `${skill.id}.agentenv-skill.json`), content);
     }
-    const backupManifest = {
+    const backupManifest: SkillSourceMergeJournal = {
       formatVersion: 1,
       operation: "merge-skill-sources",
       createdAt: now().toISOString(),
@@ -257,28 +441,32 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
       preview: pending.preview,
       sourceRegistry: pending.sourceRegistrySnapshot
     };
-    await writeAtomic(
-      join(backupPath, "manifest.json"),
-      `${JSON.stringify(backupManifest, null, 2)}\n`
-    );
-    await syncPathTree(backupPath);
+    await writeSourceMergeJournal(backupPath, backupManifest);
+
+    const recordMutation = async (...paths: string[]) => {
+      await claimPath.recordMutation(...paths);
+      backupManifest.mutationHashes = [...claimPath.mutationHashes.entries()]
+        .map(([path, sha256]) => ({ path, sha256 }))
+        .sort((left, right) => left.path.localeCompare(right.path));
+      await writeSourceMergeJournal(backupPath, backupManifest);
+    };
 
     try {
       await claimPath(options.sourceRegistryPath);
       const [mergedRecord] = await options.sourceRegistry.ensure([pending.preview.mergedSource]);
-      await claimPath.recordMutation(options.sourceRegistryPath);
+      await recordMutation(options.sourceRegistryPath);
       await options.sourceRegistry.setAutomaticChecks(
         mergedRecord!.id,
         pending.preview.automaticChecks
       );
-      await claimPath.recordMutation(options.sourceRegistryPath);
+      await recordMutation(options.sourceRegistryPath);
       for (const ignoredSubpath of mergedIgnoredSubpaths) {
         await options.sourceRegistry.setIgnoredSubpath(
           mergedRecord!.id,
           ignoredSubpath,
           true
         );
-        await claimPath.recordMutation(options.sourceRegistryPath);
+        await recordMutation(options.sourceRegistryPath);
       }
       for (const skill of affectedSkills) {
         const collection = skill.sourceCollection!;
@@ -301,13 +489,13 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
         };
         metadata.updatedAt = now().toISOString();
         await writeAtomic(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
-        await claimPath.recordMutation(metadataPath);
+        await recordMutation(metadataPath);
       }
       const records = await options.sourceRegistry.list();
       await options.sourceRegistry.replace(records.filter((record) =>
         !pending.affectedSourceIds.includes(record.id) || record.id === mergedRecord!.id
       ));
-      await claimPath.recordMutation(options.sourceRegistryPath);
+      await recordMutation(options.sourceRegistryPath);
       await claimPath(options.sourceObservationsDir);
       if (pending.preview.mergedSource.kind === "local") {
         await options.sourceService.recordLocalScan(
@@ -320,17 +508,15 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
           pending.result as RepositorySkillScanResult
         );
       }
-      await claimPath.recordMutation(options.sourceObservationsDir);
+      await recordMutation(options.sourceObservationsDir);
       const group = (await options.listSourceGroups()).find((candidate) =>
         candidate.sourceId === mergedRecord!.id
       );
       if (!group || group.candidates.some((candidate) => candidate.state === "conflict")) {
         throw new Error("Merged Skill source could not be verified");
       }
-      await writeAtomic(
-        join(backupPath, "manifest.json"),
-        `${JSON.stringify({ ...backupManifest, status: "complete" }, null, 2)}\n`
-      );
+      backupManifest.status = "complete";
+      await writeSourceMergeJournal(backupPath, backupManifest);
       pendingMerges.delete(previewId);
       return {
         source: group,
@@ -372,24 +558,17 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
         );
       }
       if (failures.length > 0) {
-        await writeAtomic(
-          join(backupPath, "manifest.json"),
-          `${JSON.stringify({
-            ...backupManifest,
-            status: "recovery-required",
-            safetyBackupId: recoverySafetyBackupId,
-            recoveryError: failures.join("; ")
-          }, null, 2)}\n`
-        ).catch(() => undefined);
+        backupManifest.status = "recovery-required";
+        backupManifest.safetyBackupId = recoverySafetyBackupId;
+        backupManifest.recoveryError = failures.join("; ");
+        await writeSourceMergeJournal(backupPath, backupManifest).catch(() => undefined);
         throw new Error(
           `Skill source merge failed and recovery is incomplete. Original metadata remains in ${backupPath}. ${failures.join("; ")}`,
           { cause: error }
         );
       }
-      await writeAtomic(
-        join(backupPath, "manifest.json"),
-        `${JSON.stringify({ ...backupManifest, status: "rolled-back" }, null, 2)}\n`
-      );
+      backupManifest.status = "rolled-back";
+      await writeSourceMergeJournal(backupPath, backupManifest);
       throw error;
     }
   };

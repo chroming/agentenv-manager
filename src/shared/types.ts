@@ -978,6 +978,7 @@ export type SkillInventoryStatus =
 
 export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   status: SkillInventoryStatus;
+  canonicalPath?: string;
   version?: string;
   libraryId?: string;
   skillKey: string;
