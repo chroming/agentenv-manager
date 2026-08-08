@@ -135,6 +135,10 @@ import {
 import { isPathInside, pathsEqual } from "./platformPaths";
 import { mergeInventoryLocation } from "./skillInventoryLocation";
 import { createSkillPolicyStore } from "./skillPolicyStore";
+import {
+  createRecentSkillUpdateCheckStore,
+  createSkillUpdatePreviewStore
+} from "./skillUpdatePreviewStore";
 
 export interface ImportSkillStoreInput extends SkillImportInput {
   sourceType?: SkillSourceType;
@@ -243,20 +247,6 @@ interface SkillLibraryStoreOptions {
   repositorySource?: GitCliSkillSource;
 }
 
-interface PendingSkillUpdate {
-  previewId: string;
-  id: string;
-  candidateDir: string;
-  candidateContentHash: string;
-  expectedLibraryContentHash: string;
-  expectedMetadataHash: string;
-  createdAt: number;
-  nextMetadata: SkillMetadataFile;
-}
-
-const SKILL_UPDATE_PREVIEW_TTL_MS = 30 * 60 * 1000;
-const RECENT_UPDATE_CHECK_TTL_MS = 2 * 60 * 1000;
-
 const DEFAULT_SETTINGS: AgentEnvSettings = {
   locale: "system",
   conversationTerminal: "default",
@@ -352,7 +342,7 @@ export const createSkillLibraryStore = (
   });
   const runtimeSnapshotProvider = options.runtimeSnapshotProvider ?? ((targetPaths) =>
     createFilesystemSkillDriver({ targetId: targetPaths.targetId }).inspectRuntime(targetPaths));
-  const pendingUpdates = new Map<string, PendingSkillUpdate>();
+  const pendingUpdates = createSkillUpdatePreviewStore();
   const safetyBackupStore = createBackupStore(paths);
   const {
     cleanupBackupRoot,
@@ -371,11 +361,7 @@ export const createSkillLibraryStore = (
     resolveLibraryDir: libraryDir,
     targetPathsProvider
   });
-  const recentUpdateChecks = new Map<string, {
-    checkedAt: number;
-    metadataHash: string;
-    sourceStatus?: SkillUpdateInfo["sourceStatus"];
-  }>();
+  const recentUpdateChecks = createRecentSkillUpdateCheckStore();
   const {
     fetchJson: fetchGitHubJson,
     fetchText: fetchGitHubText,
@@ -433,29 +419,9 @@ export const createSkillLibraryStore = (
   const metadataHash = (metadata: SkillMetadataFile) =>
     createHash("sha256").update(JSON.stringify(metadata)).digest("hex");
 
-  const discardPendingUpdate = async (previewId: string) => {
-    const pending = pendingUpdates.get(previewId);
-    if (!pending) return;
-    pendingUpdates.delete(previewId);
-    await rm(pending.candidateDir, { recursive: true, force: true });
-  };
-
-  const discardPendingUpdatesForSkill = async (id: string, exceptPreviewId?: string) => {
-    await Promise.all(
-      [...pendingUpdates.values()]
-        .filter((pending) => pending.id === id && pending.previewId !== exceptPreviewId)
-        .map((pending) => discardPendingUpdate(pending.previewId))
-    );
-  };
-
-  const discardExpiredPendingUpdates = async () => {
-    const cutoff = Date.now() - SKILL_UPDATE_PREVIEW_TTL_MS;
-    await Promise.all(
-      [...pendingUpdates.values()]
-        .filter((pending) => pending.createdAt < cutoff)
-        .map((pending) => discardPendingUpdate(pending.previewId))
-    );
-  };
+  const discardPendingUpdate = pendingUpdates.discard;
+  const discardPendingUpdatesForSkill = pendingUpdates.discardForSkill;
+  const discardExpiredPendingUpdates = pendingUpdates.discardExpired;
 
   const migrateLegacySkillPolicies = skillPolicyStore.migrateLegacy;
   const readUnmanagedSkillLocations =
@@ -2781,20 +2747,14 @@ export const createSkillLibraryStore = (
     }
     const skill = await entryFor(safeId, targetDir);
     const metadata = await readLibraryMetadata(targetDir);
-    const recentCheck = recentUpdateChecks.get(safeId);
-    const shouldRefreshSource = refreshSource ?? !(
-      recentCheck &&
-      recentCheck.metadataHash === metadataHash(metadata) &&
-      Date.now() - recentCheck.checkedAt <= RECENT_UPDATE_CHECK_TTL_MS
-    );
+    const recentCheck = recentUpdateChecks.getFresh(safeId, metadataHash(metadata));
+    const shouldRefreshSource = refreshSource ?? !recentCheck;
     const impact = await skillUpdateImpact(safeId);
     const removedSourcePlan = () => createRemovedSourceSkillUpdatePlan({
       discardPendingUpdates: discardPendingUpdatesForSkill, impact, metadata, skill
     });
     if (
-      recentCheck?.sourceStatus === "removed" &&
-      recentCheck.metadataHash === metadataHash(metadata) &&
-      Date.now() - recentCheck.checkedAt <= RECENT_UPDATE_CHECK_TTL_MS
+      recentCheck?.sourceStatus === "removed"
     ) {
       return removedSourcePlan();
     }
@@ -2870,7 +2830,7 @@ export const createSkillLibraryStore = (
 
       const previewId = randomUUID();
       await discardPendingUpdatesForSkill(skill.id);
-      pendingUpdates.set(previewId, {
+      pendingUpdates.set({
         previewId,
         id: skill.id,
         candidateDir,
@@ -2930,7 +2890,7 @@ export const createSkillLibraryStore = (
           }
         }, revision);
       } catch (error) {
-        if (![...pendingUpdates.values()].some((pending) => pending.candidateDir === candidateDir)) {
+        if (!pendingUpdates.ownsCandidateDirectory(candidateDir)) {
           await rm(candidateDir, { recursive: true, force: true });
         }
         if (error instanceof RepositorySkillSourceMissingError) {
@@ -2965,7 +2925,7 @@ export const createSkillLibraryStore = (
           upstream: materialized.upstream
         }, materialized.contentRevision);
       } catch (error) {
-        if (![...pendingUpdates.values()].some((pending) => pending.candidateDir === candidateDir)) {
+        if (!pendingUpdates.ownsCandidateDirectory(candidateDir)) {
           await rm(candidateDir, { recursive: true, force: true });
         }
         throw error;
@@ -3012,7 +2972,7 @@ export const createSkillLibraryStore = (
         }
       }, sourceHashAfterCopy);
     } catch (error) {
-      if (![...pendingUpdates.values()].some((pending) => pending.candidateDir === candidateDir)) {
+      if (!pendingUpdates.ownsCandidateDirectory(candidateDir)) {
         await rm(candidateDir, { recursive: true, force: true });
       }
       throw error;
@@ -3124,7 +3084,7 @@ export const createSkillLibraryStore = (
     if (!pending || pending.id !== safeId) {
       throw new Error("Skill update preview is unavailable; review the update again");
     }
-    if (Date.now() - pending.createdAt > SKILL_UPDATE_PREVIEW_TTL_MS) {
+    if (pendingUpdates.isExpired(pending)) {
       await discardPendingUpdate(pending.previewId);
       throw new Error("Skill update preview expired; review the update again");
     }

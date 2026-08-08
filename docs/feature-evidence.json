@@ -355,6 +355,58 @@
           "skills-cleanup-review-920x620.png"
         ]
       }
+    },
+    {
+      "id": "architecture-hardening",
+      "summary": "Recover from uncaught Renderer failures and give large orchestration modules explicit internal owners without changing normal product behavior or persisted effects.",
+      "contract": {
+        "path": "docs/superpowers/specs/2026-08-08-architecture-hardening-design.md",
+        "anchor": "## Feature Admission Card"
+      },
+      "support": {
+        "opencode": "not-applicable",
+        "claude-code": "not-applicable",
+        "codex": "not-applicable",
+        "antigravity": "not-applicable",
+        "trae-cli": "not-applicable",
+        "pi": "not-applicable"
+      },
+      "states": {
+        "idle": "Normal workflows retain their existing commands, layout, IPC contracts, and persisted effects.",
+        "working": "Extracted controllers and registrars preserve operation-local progress and the existing central mutation and diagnostic wrappers.",
+        "success": "Normal results are unchanged; an uncaught render failure instead exposes Reload, Export diagnostics, and Quit.",
+        "error": "Domain errors keep their existing scoped feedback while an uncaught render error is recorded and replaces only the failed Renderer tree.",
+        "cancelled": "Existing cancellation and temporary-resource cleanup remain owned by the original workflow.",
+        "noOp": "Equivalent inputs retain the existing semantic no-op and create no new write, Backup, or history entry.",
+        "stale": "Existing request identity, preview freshness, and Target drift checks remain authoritative after extraction.",
+        "partial": "Internal extraction can ship by bounded owner while the unchanged facade continues to support every existing caller.",
+        "persisted": "No persistence schema changes; controllers hold transient UI state and service facades remain the source of truth.",
+        "rollback": "Existing Backup and compensating recovery paths are unchanged; the Renderer fallback itself performs no product mutation."
+      },
+      "evidence": {
+        "domain": [
+          "tests/main/activationPreviewSupport.test.ts",
+          "tests/main/skillUpdatePreviewStore.test.ts",
+          "tests/main/ipcRegistrars.test.ts"
+        ],
+        "renderer": [
+          "tests/renderer/RendererErrorBoundary.test.tsx",
+          "tests/renderer/useGitHubConnectionController.test.tsx",
+          "tests/renderer/useBackupRecoveryController.test.tsx",
+          "tests/renderer/useSettingsController.test.tsx",
+          "tests/renderer/SkillLibraryPanel.test.tsx"
+        ],
+        "desktop": [
+          "tests/e2e/startupRecovery.e2e.test.ts"
+        ],
+        "persistence": [
+          "tests/main/activationService.test.ts",
+          "tests/main/skillLibraryStore.test.ts"
+        ],
+        "visual": [
+          "startup-failure-920x620.png"
+        ]
+      }
     }
   ]
 }

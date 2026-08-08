@@ -1,13 +1,4 @@
-import {
-  BrowserWindow,
-  clipboard,
-  dialog,
-  ipcMain,
-  Menu,
-  shell,
-  type MenuItemConstructorOptions
-} from "electron";
-import { stat } from "node:fs/promises";
+import { ipcMain } from "electron";
 import { basename, dirname, join, resolve } from "node:path";
 import type { ActivationService } from "./activationService";
 import type { BackupMaintenanceService } from "./backupMaintenanceService";
@@ -26,19 +17,10 @@ import type { TargetDiscoveryService } from "./targetDiscovery";
 import type { TargetCaptureService } from "./targetCaptureService";
 import type { EvaluationService } from "./evaluations/evaluationService";
 import {
-  AddProjectSkillInputSchema,
-  CreateProjectInstructionInputSchema,
-  RemoveProjectSkillInputSchema,
   ResourceIconKeySchema,
-  SafeIdSchema,
-  SaveProjectResourceInputSchema,
-  UpdateProjectInputSchema
+  SafeIdSchema
 } from "../shared/schemas";
 import type {
-  CreateProfileInput,
-  CreateProfileFromTargetInput,
-  DeleteManagedBackupInput,
-  ForkProfileSkillsInput,
   GitHubSkillImportInput,
   RepositorySkillImportInput,
   RepositorySkillSourceInput,
@@ -52,29 +34,19 @@ import type {
   SkillMergeInput,
   SkillCollectionMemberDecisionUpdate,
   SkillSourceMergePreviewInput,
-  SaveProfileInput,
-  UpdateProfileMetadataInput,
-  UpdateProfileSkillsInput,
   SkillUpdateSettingsInput,
   SkillUpdateConfirmation,
   SkillAvailabilityInput,
   UnmanagedSkillLocationUpdate,
-  TargetCaptureScope,
-  TargetPaths,
-  OneShotEvaluationPreviewInput,
-  OneShotEvaluationStartInput
+  TargetPaths
 } from "../shared/types";
 import type { TargetRegistry } from "./targets/registry";
 import type { AgentEnvPaths } from "./paths";
-import { createDataBackup, inspectDataBackup, restoreDataBackup } from "./dataBackupService";
-import { parseExternalUrl } from "./externalUrl";
 import { isTargetInstalled } from "../shared/targetHealth";
 import { isSkillCollectionItemLibraryReady } from "../shared/skillCleanup";
 import type { MutationCoordinator } from "./mutationCoordinator";
 import { readAllProfilesForResourceMutation } from "./profileSafety";
-import { parseDesktopContextMenuItems } from "../shared/desktopContextMenu";
-import { pathEntryExists, readTextIfExists } from "./fileUtils";
-import { createSkillArchiveService } from "./skillArchiveService";
+import { pathEntryExists } from "./fileUtils";
 import { createSkillFileBrowser } from "./skillFileBrowser";
 import type { ConversationService } from "./conversations/conversationService";
 import {
@@ -86,6 +58,13 @@ import type { RuntimeDiagnostics } from "./runtimeDiagnostics";
 import type { AppUpdateService } from "./appUpdates/updateService";
 import type { TelemetryService } from "./telemetry/telemetryService";
 import { isPathInside, pathsEqual } from "./platformPaths";
+import { registerProfileIpc } from "./ipc/profileIpc";
+import { registerConversationIpc } from "./ipc/conversationIpc";
+import { registerProjectIpc } from "./ipc/projectIpc";
+import { registerRecoveryIpc } from "./ipc/recoveryIpc";
+import { registerSettingsIpc } from "./ipc/settingsIpc";
+import { registerTargetIpc } from "./ipc/targetIpc";
+import { registerDialogIpc } from "./ipc/dialogIpc";
 
 export interface IpcServices {
   profileStore: ProfileStore;
@@ -122,15 +101,6 @@ const parseId = (value: unknown, label: string): string => {
   return parsed.data;
 };
 
-const parseManagedBackupInput = (value: unknown): DeleteManagedBackupInput => {
-  if (!value || typeof value !== "object") throw new Error("Invalid backup selection");
-  const input = value as { id?: unknown; kind?: unknown };
-  if (input.kind !== "target-recovery" && input.kind !== "skill-cleanup" && input.kind !== "workspace-sync") {
-    throw new Error("Invalid backup kind");
-  }
-  return { id: parseId(input.id, "backup id"), kind: input.kind };
-};
-
 export const registerIpcHandlers = ({
   profileStore,
   projectStore,
@@ -157,7 +127,6 @@ export const registerIpcHandlers = ({
   telemetryService,
   cancelRepositoryOperations
 }: IpcServices) => {
-  const skillArchiveService = createSkillArchiveService();
   const skillFileBrowser = createSkillFileBrowser(paths, settingsStore);
   const diagnosticHandle = (
     channel: string,
@@ -272,294 +241,29 @@ export const registerIpcHandlers = ({
     });
   };
 
-  diagnosticHandle("clipboard:write-text", (_event, text: unknown) => {
-    clipboard.writeText(String(text));
-  });
-  diagnosticHandle("conversations:list", (_event, input: unknown) =>
-    conversationService.list(input && typeof input === "object" ? input : undefined)
+  registerConversationIpc(
+    { diagnosticHandle },
+    { conversationService }
   );
-  diagnosticHandle("conversations:search", (_event, input: unknown) => {
-    if (!input || typeof input !== "object") {
-      throw new Error("Conversation search requires a query");
+  registerDialogIpc(
+    { diagnosticHandle },
+    { targetRegistry }
+  );
+  registerProjectIpc(
+    { diagnosticHandle, handleMutation },
+    {
+      projectEnvironmentService,
+      projectLaunchService,
+      projectMutationService,
+      projectRecoveryStore,
+      projectStore,
+      targetDiscoveryService
     }
-    const value = input as { query?: unknown; limit?: unknown };
-    const query = String(value.query ?? "").trim().slice(0, 500);
-    if (!query) return [];
-    const requestedLimit = Number(value.limit);
-    const limit = Number.isFinite(requestedLimit)
-      ? Math.max(1, Math.min(20, Math.trunc(requestedLimit)))
-      : 6;
-    return conversationService.search({ query, limit });
-  });
-  diagnosticHandle("conversations:read", (_event, id: unknown, input: unknown) =>
-    conversationService.read(
-      String(id ?? ""),
-      input && typeof input === "object" ? input : undefined
-    )
   );
-  diagnosticHandle("conversations:refresh", () => conversationService.refresh());
-  diagnosticHandle("conversations:open-original", (_event, id: unknown) =>
-    conversationService.openOriginal(String(id ?? ""))
+  registerTargetIpc(
+    { diagnosticHandle },
+    { activationService, targetDiscoveryService, targetRegistry }
   );
-  diagnosticHandle("conversations:preview-continue", (_event, input: unknown) => {
-    if (!input || typeof input !== "object") {
-      throw new Error("Conversation continuation requires a source and target");
-    }
-    const value = input as { conversationId?: unknown; targetId?: unknown };
-    return conversationService.previewContinuation({
-      conversationId: String(value.conversationId ?? ""),
-      targetId: parseId(value.targetId, "target id")
-    });
-  });
-  diagnosticHandle("conversations:continue", (_event, previewId: unknown) =>
-    conversationService.continue(String(previewId ?? ""))
-  );
-  diagnosticHandle("menu:open-context", (event, value: unknown) => {
-    const window = BrowserWindow.fromWebContents(event.sender);
-    if (!window || window.isDestroyed()) return undefined;
-    const items = parseDesktopContextMenuItems(value);
-
-    return new Promise<string | undefined>((resolveSelection) => {
-      let resolved = false;
-      const finish = (selection?: string) => {
-        if (resolved) return;
-        resolved = true;
-        resolveSelection(selection);
-      };
-      const template: MenuItemConstructorOptions[] = items.map((item) =>
-        "type" in item
-          ? { type: "separator" }
-          : {
-              label: item.label,
-              enabled: item.enabled,
-              click: () => finish(item.id)
-            }
-      );
-      Menu.buildFromTemplate(template).popup({
-        window,
-        callback: () => setImmediate(() => finish())
-      });
-    });
-  });
-  diagnosticHandle("dialog:select-skill-folder", async (event) => {
-    const window = BrowserWindow.fromWebContents(event.sender);
-    const options = {
-      title: "Select skill folder",
-      properties: ["openDirectory"] as Array<"openDirectory">
-    };
-    const result = window
-      ? await dialog.showOpenDialog(window, options)
-      : await dialog.showOpenDialog(options);
-
-    return result.canceled ? undefined : result.filePaths[0];
-  });
-  diagnosticHandle("dialog:select-local-skill-source", async (event) => {
-    const window = BrowserWindow.fromWebContents(event.sender);
-    const options = {
-      title: "Select Skill folder or ZIP",
-      properties: ["openFile", "openDirectory"] as Array<"openFile" | "openDirectory">,
-      filters: [{ name: "Skill sources", extensions: ["zip"] }]
-    };
-    const result = window
-      ? await dialog.showOpenDialog(window, options)
-      : await dialog.showOpenDialog(options);
-    if (result.canceled || !result.filePaths[0]) return undefined;
-    const selectedPath = result.filePaths[0];
-    const selectedStats = await stat(selectedPath);
-    if (selectedStats.isDirectory()) {
-      const path = resolve(selectedPath);
-      return { kind: "folder", path, rootPath: path };
-    }
-    return skillArchiveService.prepare(selectedPath);
-  });
-  diagnosticHandle("skills:release-archive", (_event, token: unknown) =>
-    skillArchiveService.release(String(token))
-  );
-  diagnosticHandle("dialog:select-target-config-root", async (event, targetId: unknown) => {
-    const id = parseId(targetId, "target id");
-    const target = targetRegistry.get(id).descriptor;
-    const window = BrowserWindow.fromWebContents(event.sender);
-    const options = {
-      title: `Select ${target.name} configuration folder`,
-      properties: ["openDirectory", "createDirectory"] as Array<"openDirectory" | "createDirectory">
-    };
-    const result = window
-      ? await dialog.showOpenDialog(window, options)
-      : await dialog.showOpenDialog(options);
-    return result.canceled ? undefined : result.filePaths[0];
-  });
-  diagnosticHandle("dialog:select-comparison-workspace", async (event) => {
-    const window = BrowserWindow.fromWebContents(event.sender);
-    const options = {
-      title: "Select Workspace folder for comparison",
-      properties: ["openDirectory"] as Array<"openDirectory">
-    };
-    const result = window
-      ? await dialog.showOpenDialog(window, options)
-      : await dialog.showOpenDialog(options);
-    return result.canceled ? undefined : result.filePaths[0];
-  });
-  diagnosticHandle("dialog:select-project-folder", async (event) => {
-    const window = BrowserWindow.fromWebContents(event.sender);
-    const options = {
-      title: "Add Project folder",
-      buttonLabel: "Add Project",
-      properties: ["openDirectory"] as Array<"openDirectory">
-    };
-    const result = window
-      ? await dialog.showOpenDialog(window, options)
-      : await dialog.showOpenDialog(options);
-    return result.canceled ? undefined : result.filePaths[0];
-  });
-  diagnosticHandle("projects:list", () => projectStore.listProjects());
-  diagnosticHandle("projects:find-by-path", (_event, rootPath: unknown) =>
-    projectStore.findProjectByPath(String(rootPath))
-  );
-  diagnosticHandle("projects:inspect", async (_event, id: unknown) => {
-    const enabledAgentIds = (await targetDiscoveryService.listTargets()).map((target) => target.id);
-    return projectEnvironmentService.inspectProject(parseId(id, "Project id"), enabledAgentIds);
-  });
-  diagnosticHandle("projects:preview", async (_event, projectId: unknown, agentId: unknown) => {
-    const parsedAgentId = parseId(agentId, "Agent id");
-    const target = (await targetDiscoveryService.listTargets()).find(
-      (candidate) => candidate.id === parsedAgentId
-    );
-    if (!target) throw new Error("The selected Agent is not enabled or installed");
-    return projectEnvironmentService.previewProject(
-      parseId(projectId, "Project id"),
-      target
-    );
-  });
-  diagnosticHandle("projects:open", (_event, projectId: unknown, agentId: unknown) =>
-    projectLaunchService.openProject(
-      parseId(projectId, "Project id"),
-      parseId(agentId, "Agent id")
-    )
-  );
-  diagnosticHandle("projects:read-resource", (_event, projectId: unknown, resourceId: unknown) =>
-    projectMutationService.read(
-      parseId(projectId, "Project id"),
-      parseId(resourceId, "Project resource id")
-    )
-  );
-  diagnosticHandle("projects:prepare-instruction", (_event, projectId: unknown, agentId: unknown) =>
-    projectMutationService.prepareInstruction(
-      parseId(projectId, "Project id"),
-      parseId(agentId, "Agent id")
-    )
-  );
-  handleMutation("projects:save-resource", (_event, input: unknown) =>
-    projectMutationService.save(SaveProjectResourceInputSchema.parse(input))
-  );
-  handleMutation("projects:create-instruction", (_event, input: unknown) =>
-    projectMutationService.createInstruction(CreateProjectInstructionInputSchema.parse(input))
-  );
-  handleMutation("projects:add-skill", (_event, input: unknown) =>
-    projectMutationService.addSkill(AddProjectSkillInputSchema.parse(input))
-  );
-  handleMutation("projects:remove-skill", (_event, input: unknown) =>
-    projectMutationService.removeSkill(RemoveProjectSkillInputSchema.parse(input))
-  );
-  diagnosticHandle("projects:list-recovery", (_event, projectId: unknown) =>
-    projectRecoveryStore.list(
-      projectId === undefined ? undefined : parseId(projectId, "Project id")
-    )
-  );
-  handleMutation("projects:restore", (_event, receiptId: unknown) =>
-    projectMutationService.restore(parseId(receiptId, "Project recovery id"))
-  );
-  handleMutation("projects:add", (_event, rootPath: unknown) =>
-    projectStore.addProject(String(rootPath))
-  );
-  handleMutation("projects:update", (_event, input: unknown) =>
-    projectStore.updateProject(UpdateProjectInputSchema.parse(input))
-  );
-  handleMutation("projects:remove", (_event, id: unknown) =>
-    projectStore.removeProject(parseId(id, "Project id"))
-  );
-  diagnosticHandle("targets:list", (_event, forceRefresh: unknown) =>
-    targetDiscoveryService.listTargets({ forceRefresh: forceRefresh === true })
-  );
-  diagnosticHandle("targets:probe-supported", (_event, forceRefresh: unknown) =>
-    targetDiscoveryService.probeSupportedTargets({ forceRefresh: forceRefresh === true })
-  );
-  diagnosticHandle("targets:list-supported", () => targetRegistry.list());
-  diagnosticHandle("targets:list-states", () =>
-    activationService.listTargetStates()
-  );
-  diagnosticHandle("targets:list-native-mcps", async () => {
-    const targets = await targetDiscoveryService.listTargets();
-    const inspections = await Promise.all(
-      targets
-        .filter((target) => isTargetInstalled(target.health))
-        .map(async (target) => {
-          try {
-            const captured = await targetRegistry
-              .get(target.id)
-              .captureProfile(target.paths);
-            return { connections: captured.mcpConnections ?? [], issues: [] };
-          } catch (error) {
-            return {
-              connections: [],
-              issues: [{
-                targetId: target.id,
-                targetName: target.name,
-                sourcePath: target.paths.mcpConfigPath ?? target.paths.configPath,
-                message: error instanceof Error ? error.message : String(error)
-              }]
-            };
-          }
-        })
-    );
-    return {
-      connections: inspections
-        .flatMap((inspection) => inspection.connections)
-        .sort(
-        (left, right) =>
-          left.targetId.localeCompare(right.targetId) ||
-          left.name.localeCompare(right.name)
-        ),
-      issues: inspections.flatMap((inspection) => inspection.issues)
-    };
-  });
-  diagnosticHandle("targets:list-native-instructions", async () => {
-    const targets = await targetDiscoveryService.listTargets();
-    const inspections = await Promise.all(
-      targets
-        .filter((target) => isTargetInstalled(target.health))
-        .map(async (target) => {
-          try {
-            return {
-              snapshot: {
-                targetId: target.id,
-                targetName: target.name,
-                path: target.paths.instructionsPath,
-                content: await readTextIfExists(target.paths.instructionsPath)
-              },
-              issue: undefined
-            };
-          } catch (error) {
-            return {
-              snapshot: undefined,
-              issue: {
-                targetId: target.id,
-                targetName: target.name,
-                path: target.paths.instructionsPath,
-                message: error instanceof Error ? error.message : String(error)
-              }
-            };
-          }
-        })
-    );
-    return {
-      snapshots: inspections.flatMap((inspection) =>
-        inspection.snapshot ? [inspection.snapshot] : []
-      ),
-      issues: inspections.flatMap((inspection) =>
-        inspection.issue ? [inspection.issue] : []
-      )
-    };
-  });
   diagnosticHandle("skills:list-library", () => skillLibraryStore.listSkills());
   diagnosticHandle("skills:list-files", (_event, id: unknown) =>
     skillFileBrowser.list(parseId(id, "skill id"))
@@ -1185,250 +889,25 @@ export const registerIpcHandlers = ({
       previewId: input.previewId
     });
   });
-  handleMutation("settings:read", () => settingsStore.readSettings());
-  handleMutation("settings:update", async (_event, input: unknown) => {
-    const nextInput = input && typeof input === "object"
-      ? input as Partial<import("../shared/types").AgentEnvSettings>
-      : {};
-    if (nextInput.targetConfigRoots) {
-      const current = await settingsStore.readSettings();
-      const changedTargetIds = new Set([
-        ...Object.keys(current.targetConfigRoots ?? {}),
-        ...Object.keys(nextInput.targetConfigRoots)
-      ].filter((targetId) =>
-        current.targetConfigRoots?.[targetId] !== nextInput.targetConfigRoots?.[targetId]
-      ));
-      if (changedTargetIds.size > 0) {
-        const managed = (await activationService.listTargetStates({ includeDisabled: true })).find(
-          (state) => changedTargetIds.has(state.targetId) && state.lifecycleStatus !== "unmanaged"
-        );
-        if (managed) {
-          throw new Error(
-            `Stop managing ${targetRegistry.get(managed.targetId).descriptor.name} before changing its configuration folder`
-          );
-        }
-      }
-    }
-    return settingsStore.updateSettings(nextInput);
-  });
-  diagnosticHandle("app-updates:status", () => appUpdateService.readStatus());
-  diagnosticHandle("app-updates:check", () => appUpdateService.check({ manual: true }));
-  diagnosticHandle("app-updates:download", () => appUpdateService.download());
-  diagnosticHandle("app-updates:install", () =>
-    mutationCoordinator.runExclusive("Install AgentEnv update", () =>
-      appUpdateService.install({ restart: true })
-    )
-  );
-  diagnosticHandle("telemetry:preview", () => telemetryService.preview());
-  diagnosticHandle("workspace-sync:status", () => workspaceSyncService.readStatus());
-  handleWorkspaceSyncMutation("workspace-sync:connect", (_event, input: unknown) =>
-    workspaceSyncService.connect(input as import("../shared/workspaceSync").WorkspaceSyncConnectInput)
-  );
-  diagnosticHandle("workspace-sync:check", () => workspaceSyncService.check());
-  diagnosticHandle("workspace-sync:review", () => workspaceSyncService.review());
-  handleWorkspaceSyncMutation("workspace-sync:update", (_event, input: unknown) =>
-    workspaceSyncService.update(input as import("../shared/workspaceSync").WorkspaceSyncUpdateInput)
-  );
-  handleWorkspaceSyncMutation("workspace-sync:publish", () => workspaceSyncService.publish());
-  handleWorkspaceSyncMutation("workspace-sync:recover", () => workspaceSyncService.recover());
-  handleWorkspaceSyncMutation("workspace-sync:disconnect", () => workspaceSyncService.disconnect());
-  handleMutation("github:status", () => githubAuthService.readStatus());
-  diagnosticHandle("github:start-device-login", () => githubAuthService.startDeviceLogin());
-  handleMutation("github:poll-device-login", (_event, id: unknown) =>
-    githubAuthService.pollDeviceLogin(String(id))
-  );
-  handleMutation("github:sign-out", () => githubAuthService.signOut());
-  diagnosticHandle("github:open-device-page", (_event, url: unknown) =>
-    shell.openExternal(parseExternalUrl(url))
-  );
-  diagnosticHandle("external:open-url", (_event, url: unknown) =>
-    shell.openExternal(parseExternalUrl(url))
-  );
-  diagnosticHandle("profiles:list", () => profileStore.listProfiles());
-  diagnosticHandle("profiles:read", async (_event, id: unknown) => {
-    const profileId = parseId(id, "profile id");
-    const testDelayMs = Number(process.env.AGENTENV_TEST_PROFILE_READ_DELAY_MS ?? 0);
-    if (
-      process.env.AGENTENV_AUTOMATION === "1" &&
-      process.env.AGENTENV_TEST_PROFILE_READ_DELAY_ID === profileId &&
-      Number.isFinite(testDelayMs) &&
-      testDelayMs > 0
-    ) {
-      await new Promise((resolve) => setTimeout(resolve, testDelayMs));
-    }
-    return profileStore.readProfile(profileId);
-  });
-  handleMutation("profiles:save", (_event, input: SaveProfileInput) =>
-    profileStore.saveProfile(input)
-  );
-  handleMutation("profiles:update-skills", (_event, input: UpdateProfileSkillsInput) =>
-    profileStore.updateProfileSkills(input)
-  );
-  handleMutation("profiles:fork-skills", (_event, input: ForkProfileSkillsInput) =>
-    profileStore.forkProfileSkills(input)
-  );
-  handleMutation(
-    "profiles:update-metadata",
-    (_event, input: UpdateProfileMetadataInput) => profileStore.updateProfileMetadata(input)
-  );
-  handleMutation("profiles:create", (_event, input: CreateProfileInput | string) =>
-    profileStore.createProfile(
-      typeof input === "string" ? { preferredTargetId: parseId(input, "target id") } : input
-    )
-  );
-  diagnosticHandle(
-    "profiles:preview-create-from-target",
-    (_event, targetId: unknown, scope: TargetCaptureScope | undefined) => {
-      if (scope !== undefined && scope !== "all" && scope !== "skills") {
-        throw new Error("Invalid capture scope");
-      }
-      return targetCaptureService.previewTarget(
-        parseId(targetId, "target id"),
-        scope
-      );
+  registerSettingsIpc(
+    { diagnosticHandle, handleMutation, handleWorkspaceSyncMutation },
+    {
+      activationService,
+      appUpdateService,
+      githubAuthService,
+      mutationCoordinator,
+      settingsStore,
+      targetRegistry,
+      telemetryService,
+      workspaceSyncService
     }
   );
-  handleMutation("profiles:create-from-target", (_event, input: CreateProfileFromTargetInput) =>
-    targetCaptureService.createFromTarget(input)
+  registerProfileIpc(
+    { diagnosticHandle, handleMutation },
+    { activationService, evaluationService, profileStore, targetCaptureService }
   );
-  handleMutation("profiles:duplicate", (_event, id: unknown) =>
-    profileStore.duplicateProfile(parseId(id, "profile id"))
-  );
-  handleMutation("profiles:delete", async (_event, id: unknown) => {
-    const profileId = parseId(id, "profile id");
-    const activeTarget = (await activationService.listTargetStates()).find(
-      (state) => state.activeProfileId === profileId
-    );
-    if (activeTarget) {
-      throw new Error("Apply another profile before removing this active profile");
-    }
-    await profileStore.deleteProfile(profileId);
-  });
-  diagnosticHandle("activation:preview", (_event, profileId: unknown, targetId?: unknown) =>
-    activationService.previewProfile(
-      parseId(profileId, "profile id"),
-      targetId === undefined ? undefined : parseId(targetId, "target id")
-    )
-  );
-  diagnosticHandle("profile-comparisons:preview", (_event, input: unknown) => {
-    if (!input || typeof input !== "object") {
-      throw new Error("Profile comparison requires a Profile and Agent");
-    }
-    const value = input as Partial<OneShotEvaluationPreviewInput>;
-    let workspace: OneShotEvaluationPreviewInput["workspace"] = { kind: "empty" };
-    if (value.workspace !== undefined) {
-      if (!value.workspace || typeof value.workspace !== "object") {
-        throw new Error("Comparison Workspace is invalid");
-      }
-      if (value.workspace.kind === "folder") {
-        if (typeof value.workspace.path !== "string" || !value.workspace.path.trim()) {
-          throw new Error("Comparison Workspace folder is required");
-        }
-        workspace = { kind: "folder", path: value.workspace.path };
-      } else if (value.workspace.kind !== "empty") {
-        throw new Error("Comparison Workspace type is invalid");
-      }
-    }
-    return evaluationService.preview({
-      profileId: parseId(value.profileId, "profile id"),
-      targetId: parseId(value.targetId, "target id"),
-      workspace,
-      excludeMcp: value.excludeMcp === true
-    });
-  });
-  diagnosticHandle("profile-comparisons:start", (_event, input: unknown) => {
-    if (!input || typeof input !== "object") {
-      throw new Error("Profile comparison requires a reviewed Preview and task");
-    }
-    const value = input as Partial<OneShotEvaluationStartInput>;
-    if (typeof value.prompt !== "string") throw new Error("Evaluation task is required");
-    return evaluationService.start({
-      previewId: String(value.previewId ?? ""),
-      prompt: value.prompt
-    });
-  });
-  diagnosticHandle("profile-comparisons:read", (_event, input: unknown) => {
-    const value = input && typeof input === "object"
-      ? input as { runId?: unknown }
-      : undefined;
-    return evaluationService.read({
-      runId: typeof value?.runId === "string" ? value.runId : undefined
-    });
-  });
-  diagnosticHandle("profile-comparisons:cancel", (_event, runId: unknown) =>
-    evaluationService.cancel(String(runId ?? ""))
-  );
-  handleMutation(
-    "activation:apply",
-    (_event, profileId: unknown, previewId: unknown) =>
-      activationService.applyProfile(
-        parseId(profileId, "profile id"),
-        String(previewId)
-      )
-  );
-  diagnosticHandle("backups:list", () => backupStore.listBackups());
-  diagnosticHandle("backups:list-managed", () => backupMaintenanceService.listInventory());
-  diagnosticHandle("backups:preview-managed", (_event, input: unknown) =>
-    backupMaintenanceService.previewBackup(parseManagedBackupInput(input))
-  );
-  handleMutation("backups:delete-managed", (_event, input: unknown) =>
-    backupMaintenanceService.deleteBackup(parseManagedBackupInput(input))
-  );
-  handleMutation("backups:cleanup-managed", () => backupMaintenanceService.cleanup());
-  diagnosticHandle("rollback:preview", (_event, backupId: unknown) =>
-    activationService.previewRollback(String(backupId))
-  );
-  handleMutation("rollback:apply", (_event, backupId: unknown) =>
-    activationService.rollback(String(backupId))
-  );
-  diagnosticHandle("targets:preview-stop-managing", (_event, targetId: unknown, mode: unknown) =>
-    activationService.previewStopManaging(
-      parseId(targetId, "target id"),
-      mode === "restore-pre-takeover" ? "restore-pre-takeover" : "keep-current"
-    )
-  );
-  handleMutation("targets:stop-managing", (_event, previewId: unknown) =>
-    activationService.stopManaging(String(previewId))
-  );
-  diagnosticHandle("data:create-backup", async () => {
-    const owner = BrowserWindow.getFocusedWindow();
-    const options = {
-      title: "Choose AgentEnv backup location",
-      buttonLabel: "Create backup here",
-      properties: ["openDirectory", "createDirectory"] as Array<"openDirectory" | "createDirectory">
-    };
-    const result = owner
-      ? await dialog.showOpenDialog(owner, options)
-      : await dialog.showOpenDialog(options);
-    const destination = result.filePaths[0];
-    return result.canceled || !destination
-      ? undefined
-      : mutationCoordinator.runExclusive("data:create-backup", () =>
-          createDataBackup(paths, destination)
-        );
-  });
-  diagnosticHandle("data:root", () => paths.appDataRoot);
-  diagnosticHandle("data:open-folder", () => shell.openPath(paths.appDataRoot));
-  diagnosticHandle("data:select-restore", async () => {
-    const owner = BrowserWindow.getFocusedWindow();
-    const options = {
-      title: "Select AgentEnv backup",
-      buttonLabel: "Review backup",
-      properties: ["openDirectory"] as Array<"openDirectory">
-    };
-    const result = owner
-      ? await dialog.showOpenDialog(owner, options)
-      : await dialog.showOpenDialog(options);
-    const selected = result.filePaths[0];
-    return result.canceled || !selected ? undefined : inspectDataBackup(selected);
-  });
-  handleMutation("data:restore", (_event, path: unknown) =>
-    restoreDataBackup(paths, String(path))
-  );
-  handleMutation("targets:adopt-changes", (_event, profileId: unknown, targetId: unknown) =>
-    activationService.adoptTargetChanges(
-      parseId(profileId, "profile id"),
-      parseId(targetId, "target id")
-    )
+  registerRecoveryIpc(
+    { diagnosticHandle, handleMutation },
+    { activationService, backupMaintenanceService, backupStore, mutationCoordinator, paths }
   );
 };
