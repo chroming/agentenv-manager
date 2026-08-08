@@ -639,7 +639,7 @@ const capturePage = async (
   }
 };
 
-const captureRegion = async (page, locator, path) => {
+const captureRegion = async (page, locator, path, { widthLocator } = {}) => {
   await locator.scrollIntoViewIfNeeded();
   await page.evaluate(async () => {
     await document.fonts?.ready;
@@ -655,7 +655,26 @@ const captureRegion = async (page, locator, path) => {
     await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
   });
   await page.mouse.move(2, 2);
-  await locator.screenshot({ path, animations: "disabled" });
+  if (!widthLocator) {
+    await locator.screenshot({ path, animations: "disabled" });
+    return;
+  }
+  const widthBox = await widthLocator.boundingBox();
+  if (!widthBox) {
+    throw new Error(`Could not measure stable capture region for ${path}`);
+  }
+  const previousInlineSize = await locator.evaluate((element, width) => {
+    const previous = element.style.inlineSize;
+    element.style.inlineSize = `${width}px`;
+    return previous;
+  }, widthBox.width);
+  try {
+    await locator.screenshot({ path, animations: "disabled" });
+  } finally {
+    await locator.evaluate((element, previous) => {
+      element.style.inlineSize = previous;
+    }, previousInlineSize);
+  }
 };
 
 const fileExists = async (path) => {
@@ -1419,7 +1438,8 @@ try {
   await captureRegion(
     page,
     page.locator('[data-profile-composer-id="skills"]'),
-    join(outputDir, "profile-skills-region-920.png")
+    join(outputDir, "profile-skills-region-920.png"),
+    { widthLocator: page.locator(".profile-editor-surface") }
   );
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(
