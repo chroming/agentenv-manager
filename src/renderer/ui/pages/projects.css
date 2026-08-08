@@ -35,6 +35,7 @@
 .project-resource-groups {
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 .project-resource-section__list {
