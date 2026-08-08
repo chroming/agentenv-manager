@@ -62,7 +62,7 @@ const isSha256 = (value: unknown): value is string =>
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
-const sha256 = (value: string) =>
+const sha256 = (value: string | Uint8Array) =>
   createHash("sha256").update(value).digest("hex");
 
 const ensurePrivateDir = async (path: string, platform: NodeJS.Platform) => {
@@ -77,6 +77,7 @@ export const createBackupStore = (
   const now = options.now ?? (() => new Date());
   const platform = options.platform ?? process.platform;
   const copyPath = options.copyPath ?? copyPathVerified;
+  const invalidBackupWarnings = new Set<string>();
 
   const readBackup = async (id: string): Promise<BackupManifest> => {
     const safeId = SafeIdSchema.parse(id);
@@ -180,7 +181,11 @@ export const createBackupStore = (
       if (
         !contentHash ||
         (!legacy && (!isSha256(entry.sha256) || contentHash !== entry.sha256)) ||
-        (legacy && isSha256(entry.sha256) && contentHash !== entry.sha256)
+        (legacy &&
+          isSha256(entry.sha256) &&
+          ((entry.kind === "file" &&
+            sha256(await readFile(expectedBackupPath)) !== entry.sha256) ||
+            (entry.kind !== "file" && contentHash !== entry.sha256)))
       ) {
         throw new Error(`AgentEnv backup payload failed its integrity check: ${safeId}`);
       }
@@ -327,9 +332,11 @@ export const createBackupStore = (
             ) {
               return undefined;
             }
-            console.warn(
-              `[AgentEnv] Ignoring invalid backup ${entry.name}: ${errorMessage(error)}`
-            );
+            const warning = `${entry.name}: ${errorMessage(error)}`;
+            if (!invalidBackupWarnings.has(warning)) {
+              invalidBackupWarnings.add(warning);
+              console.warn(`[AgentEnv] Ignoring invalid backup ${warning}`);
+            }
             return undefined;
           }
         })

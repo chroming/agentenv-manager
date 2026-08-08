@@ -81,6 +81,7 @@ describe("backup store", () => {
         entries: [{
           sourcePath,
           backupPath,
+          sha256: createHash("sha256").update("# Legacy backup\n").digest("hex"),
           missing: false,
           kind: "file"
         }]
@@ -427,6 +428,8 @@ describe("backup store", () => {
     expect(warning).toHaveBeenCalledWith(
       expect.stringContaining(`Ignoring invalid backup ${invalidId}`)
     );
+    await store.listBackups();
+    expect(warning).toHaveBeenCalledTimes(1);
     warning.mockRestore();
   });
 
