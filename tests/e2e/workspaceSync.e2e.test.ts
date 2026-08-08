@@ -92,7 +92,7 @@ describe("Workspace Sync desktop flow", () => {
     await section.getByRole("button", { name: "Connect repository" }).click();
     await expect.poll(() => section.getByText("Changes to publish").count()).toBe(1);
 
-    await section.getByRole("button", { name: "Review changes" }).click();
+    await section.getByRole("button", { name: "Publish" }).click();
     const review = page.getByRole("dialog", { name: "Review Workspace changes" });
     await review.waitFor({ state: "visible" });
     await expectInViewport(page, review);

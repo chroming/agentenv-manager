@@ -33,6 +33,31 @@ describe("Workspace Sync settings", () => {
     expect(rows[1]?.direction).toBe("conflict");
   });
 
+  it.each([
+    ["local-changes", "Publish"],
+    ["remote-changes", "Update this device"],
+    ["review-required", "Resolve changes"]
+  ] as const)("names the %s action by its outcome", async (kind, action) => {
+    const status: WorkspaceSyncStatus = {
+      kind,
+      connection: { repository: "git@github.com:me/workspace.git", branch: "main" },
+      localChangeCount: kind === "remote-changes" ? 0 : 1,
+      remoteChangeCount: kind === "local-changes" ? 0 : 1,
+      conflictCount: kind === "review-required" ? 1 : 0,
+      immediateAgentCount: 0
+    };
+    const api = {
+      readWorkspaceSyncStatus: vi.fn().mockResolvedValue(status),
+      checkWorkspaceSync: vi.fn().mockResolvedValue(status)
+    } as unknown as AgentEnvApi;
+    Object.defineProperty(window, "agentEnv", { configurable: true, value: api });
+
+    render(<WorkspaceSyncSettings />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: action })).toBeEnabled());
+    expect(screen.queryByRole("button", { name: "Review changes" })).toBeNull();
+  });
+
   it("offers only recovery while an interrupted Workspace update is unresolved", async () => {
     const status: WorkspaceSyncStatus = {
       kind: "recovery-required",

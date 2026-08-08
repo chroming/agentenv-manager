@@ -183,10 +183,27 @@ describe("SkillsEditor v2", () => {
     );
 
     const checkButton = screen.getByRole("button", { name: "Check Profile Skill updates" });
-    expect(checkButton).toHaveClass("ui-icon-button", "ui-icon-button--ghost");
-    expect(screen.queryByText("Check updates")).not.toBeInTheDocument();
+    expect(checkButton).toHaveClass("ui-button", "ui-button--secondary");
+    expect(checkButton).toHaveTextContent("Check updates");
     fireEvent.click(checkButton);
     expect(onCheck).toHaveBeenCalledWith(["review"]);
+  });
+
+  it("does not show an unavailable update action when no Profile Skill is tracked", () => {
+    render(
+      <SkillsEditor
+        value={{
+          skills: [{ libraryId: "docs", targetName: "docs", enabled: true }],
+          mcpByTarget: {}
+        }}
+        librarySkills={skills}
+        onCheckSkillUpdates={vi.fn()}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: "Check Profile Skill updates" }))
+      .not.toBeInTheDocument();
   });
 
   it("opens the update preview for an available update", () => {

@@ -1715,7 +1715,7 @@ try {
     timeout: 15_000
   });
   await capturePage(page, join(outputDir, "settings-sync-local-changes-920x620.png"));
-  await workspaceSyncSection.getByRole("button", { name: "Review changes" }).click();
+  await workspaceSyncSection.getByRole("button", { name: "Publish" }).click();
   const workspaceSyncReview = page.getByRole("dialog", { name: "Review Workspace changes" });
   await workspaceSyncReview.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "settings-sync-review-920x620.png"));

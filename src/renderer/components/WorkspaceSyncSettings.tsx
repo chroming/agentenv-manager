@@ -177,6 +177,11 @@ export const WorkspaceSyncSettings = () => {
         : status.kind === "remote-changes"
           ? <ArrowDownToLine size={15} />
           : <TriangleAlert size={15} />;
+  const pendingActionLabel = status.kind === "local-changes"
+    ? t("Publish")
+    : status.kind === "remote-changes"
+      ? t("Update this device")
+      : t("Resolve changes");
   const resourceLabel = (value: "profile" | "skill" | "source") => ({
     profile: t("Profile"),
     skill: t("Skill"),
@@ -365,7 +370,7 @@ export const WorkspaceSyncSettings = () => {
             </Button> : null}
             {status.kind !== "up-to-date" && status.kind !== "error" && status.kind !== "recovery-required" ? (
               <Button ref={reviewButtonRef} variant="primary" busy={working === "review"} disabled={Boolean(working)} onClick={() => void openReview()}>
-                {t("Review changes")}
+                {pendingActionLabel}
               </Button>
             ) : null}
             {status.kind !== "recovery-required" ? (

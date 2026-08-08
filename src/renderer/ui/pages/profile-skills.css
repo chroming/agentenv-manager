@@ -24,10 +24,6 @@
   gap: var(--space-2);
 }
 
-.profile-skill-check {
-  color: var(--muted);
-}
-
 .profile-skill-list {
   display: grid;
   min-height: 0;

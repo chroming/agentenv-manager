@@ -18,7 +18,6 @@ import {
   DialogBody,
   DialogFooter,
   DialogHeader,
-  IconButton,
   ModalFrame,
   ResourcePanelToolbar,
   ResourceRow,
@@ -157,21 +156,21 @@ export const SkillsEditor = ({
           </span>
         </div>
         <div className="profile-skill-toolbar__actions">
-          <IconButton
-            className="profile-skill-check"
-            variant="ghost"
-            size="compact"
-            label={t("Check Profile Skill updates")}
-            disabled={disabled || !profileManagesSkills || checkingSkillUpdates || checkableIds.length === 0}
-            onClick={() => onCheckSkillUpdates?.(checkableIds)}
-          >
-            <RefreshCw
-              className={checkingSkillUpdates ? "is-spinning" : undefined}
-              size={14}
-              strokeWidth={2.2}
-              aria-hidden="true"
-            />
-          </IconButton>
+          {profileManagesSkills && onCheckSkillUpdates &&
+          (checkableIds.length > 0 || checkingSkillUpdates) ? (
+            <Button
+              aria-label={t("Check Profile Skill updates")}
+              busy={checkingSkillUpdates}
+              className="profile-skill-check"
+              disabled={disabled}
+              icon={<RefreshCw size={14} strokeWidth={2.2} aria-hidden="true" />}
+              size="compact"
+              variant="secondary"
+              onClick={() => onCheckSkillUpdates(checkableIds)}
+            >
+              {t("Check updates")}
+            </Button>
+          ) : null}
           <Button
             ref={pickerTriggerRef}
             variant="secondary"

@@ -5562,14 +5562,13 @@ describe("Electron UI profile switching e2e", () => {
       (element) => getComputedStyle(element).boxShadow
     )).toBe(collapsedInstructionsSurface.boxShadow);
     const skillManager = composer.getByRole("region", { name: "Profile Skills" });
-    const checkSkillUpdates = skillManager.getByRole("button", {
-      name: "Check Profile Skill updates"
-    });
     const addSkill = skillManager.getByRole("button", { name: "Add Skill", exact: true });
-    await expectTextFits(checkSkillUpdates);
+    expect(await skillManager.getByRole("button", {
+      name: "Check Profile Skill updates"
+    }).count()).toBe(0);
     await expectTextFits(addSkill);
     const compactControlBoxes = await Promise.all(
-      [skillsPolicy, checkSkillUpdates, addSkill].map((control) => control.boundingBox())
+      [skillsPolicy, addSkill].map((control) => control.boundingBox())
     );
     expect(compactControlBoxes.every(Boolean)).toBe(true);
     expect(
@@ -9869,6 +9868,21 @@ describe("Electron UI profile switching e2e", () => {
     await selectProfile(page, "UI OpenCode alpha");
     await previewAndApply(page, "OpenCode");
     await expandComposerSection(page, "Skills");
+
+    const skillManager = page.getByRole("region", { name: "Profile Skills" });
+    const checkSkillUpdates = skillManager.getByRole("button", {
+      name: "Check Profile Skill updates"
+    });
+    const addSkill = skillManager.getByRole("button", { name: "Add Skill", exact: true });
+    await expectTextFits(checkSkillUpdates);
+    await expectTextFits(addSkill);
+    const [checkBox, addBox] = await Promise.all([
+      checkSkillUpdates.boundingBox(),
+      addSkill.boundingBox()
+    ]);
+    expect(checkBox).not.toBeNull();
+    expect(addBox).not.toBeNull();
+    expect(Math.round(checkBox!.height)).toBe(Math.round(addBox!.height));
 
     const readyRow = page.getByRole("listitem", { name: "Profile Skill ui-alpha-skill" });
     const disabledRow = page.getByRole("listitem", { name: "Profile Skill layout-skill-2" });
