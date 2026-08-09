@@ -24,6 +24,7 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
     const dataRoot = join(root, "data");
     const homeRoot = join(root, "home");
     const agentBinRoot = join(root, "agent-bin");
+    const applicationDirectory = join(homeRoot, "Applications");
     const brewLog = join(root, "brew.log");
     const brewVersion = join(root, "brew-version");
     const brewPath = join(root, "brew");
@@ -61,6 +62,7 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
         AGENTENV_AUTOMATION: "1",
         AGENTENV_AUTOMATION_UPDATE_PACKAGED: "1",
         AGENTENV_AUTOMATION_APP_VERSION: "0.1.0",
+        AGENTENV_AUTOMATION_APP_DIR: applicationDirectory,
         AGENTENV_AUTOMATION_UPDATE_FIXTURE: releaseFixture,
         AGENTENV_AUTOMATION_BREW_PATH: brewPath,
         AGENTENV_AUTOMATION_TARGET_PATH: agentBinRoot,
@@ -113,7 +115,7 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
     });
     await page.getByRole("button", { name: "Restart and update" }).click();
     await expect.poll(() => readFile(brewLog, "utf8")).toContain(
-      "upgrade --cask chroming/tap/agentenv-manager"
+      `upgrade --cask --appdir=${applicationDirectory} chroming/tap/agentenv-manager`
     );
     await expect.poll(() => app?.windows().length ?? 0).toBe(0);
     app = undefined;

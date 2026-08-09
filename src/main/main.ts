@@ -102,7 +102,10 @@ import {
   type PersistedWindowState
 } from "./windowStateStore";
 import { createReleaseClient } from "./appUpdates/releaseClient";
-import { createHomebrewAdapter } from "./appUpdates/homebrewAdapter";
+import {
+  applicationDirectoryForExecutable,
+  createHomebrewAdapter
+} from "./appUpdates/homebrewAdapter";
 import {
   createAppUpdateService,
   type AppUpdateService
@@ -675,6 +678,9 @@ const createServices = async (
       installChannel: app.isPackaged ? "direct" : "development"
     }
   });
+  const currentApplicationDirectory = app.isPackaged
+    ? applicationDirectoryForExecutable(app.getPath("exe"))
+    : process.env.AGENTENV_AUTOMATION_APP_DIR;
   const appUpdateService = createAppUpdateService({
     currentVersion: currentAppVersion,
     packaged: app.isPackaged || updateAutomationEnabled,
@@ -686,6 +692,9 @@ const createServices = async (
     }),
     homebrew: createHomebrewAdapter({
       platform: process.platform,
+      ...(currentApplicationDirectory
+        ? { applicationDirectory: currentApplicationDirectory }
+        : {}),
       ...(updateAutomationEnabled && process.env.AGENTENV_AUTOMATION_BREW_PATH
         ? { executableCandidates: [process.env.AGENTENV_AUTOMATION_BREW_PATH] }
         : {})

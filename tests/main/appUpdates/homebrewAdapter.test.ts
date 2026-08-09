@@ -1,7 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
-import { createHomebrewAdapter } from "../../../src/main/appUpdates/homebrewAdapter";
+import {
+  applicationDirectoryForExecutable,
+  createHomebrewAdapter
+} from "../../../src/main/appUpdates/homebrewAdapter";
 
 describe("Homebrew update adapter", () => {
+  it("derives the containing Applications directory from a packaged executable", () => {
+    expect(applicationDirectoryForExecutable(
+      "/Users/example/Applications/AgentEnv Manager.app/Contents/MacOS/AgentEnv Manager"
+    )).toBe("/Users/example/Applications");
+    expect(applicationDirectoryForExecutable(
+      "/Applications/AgentEnv Manager.app/Contents/MacOS/AgentEnv Manager"
+    )).toBe("/Applications");
+  });
+
   it("discovers Homebrew outside a packaged app PATH and uses argument arrays", async () => {
     const run = vi.fn(async (_file: string, args: string[]) => ({
       exitCode: args[0] === "list" ? 0 : 0,
@@ -37,6 +49,33 @@ describe("Homebrew update adapter", () => {
     expect(run).toHaveBeenLastCalledWith(
       "/opt/homebrew/bin/brew",
       ["list", "--cask", "--versions", "agentenv-manager"],
+      expect.any(Object)
+    );
+  });
+
+  it("keeps a per-user Applications directory when upgrading", async () => {
+    const run = vi.fn(async (_file: string, args: string[]) => ({
+      exitCode: 0,
+      stdout: args[0] === "list" ? "agentenv-manager 0.2.0\n" : "",
+      stderr: ""
+    }));
+    const adapter = createHomebrewAdapter({
+      platform: "darwin",
+      applicationDirectory: "/Users/example/Applications",
+      canExecute: async () => true,
+      run
+    });
+
+    await adapter.install("0.2.0");
+
+    expect(run).toHaveBeenCalledWith(
+      "/opt/homebrew/bin/brew",
+      [
+        "upgrade",
+        "--cask",
+        "--appdir=/Users/example/Applications",
+        "chroming/tap/agentenv-manager"
+      ],
       expect.any(Object)
     );
   });

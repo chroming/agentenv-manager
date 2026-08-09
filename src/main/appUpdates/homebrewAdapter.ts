@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
 import { access } from "node:fs/promises";
+import { dirname } from "node:path";
 
 const CASK = "chroming/tap/agentenv-manager";
 const BREW_CANDIDATES = [
@@ -27,6 +28,15 @@ export interface HomebrewAdapter {
   download(): Promise<void>;
   install(expectedVersion: string): Promise<void>;
 }
+
+export const applicationDirectoryForExecutable = (executablePath: string) => {
+  let current = dirname(executablePath);
+  while (current !== dirname(current)) {
+    if (current.toLowerCase().endsWith(".app")) return dirname(current);
+    current = dirname(current);
+  }
+  return undefined;
+};
 
 const defaultCanExecute = async (path: string) => {
   try {
@@ -58,6 +68,7 @@ const defaultRun = (
 
 export const createHomebrewAdapter = (options: {
   platform?: NodeJS.Platform;
+  applicationDirectory?: string;
   executableCandidates?: string[];
   canExecute?: (path: string) => Promise<boolean>;
   run?: (file: string, args: string[], options: { timeoutMs: number }) => Promise<CommandResult>;
@@ -107,7 +118,14 @@ export const createHomebrewAdapter = (options: {
     inspect,
     download: () => runManaged(["fetch", "--cask", CASK], 5 * 60_000),
     install: async (expectedVersion) => {
-      await runManaged(["upgrade", "--cask", CASK], 10 * 60_000);
+      await runManaged([
+        "upgrade",
+        "--cask",
+        ...(options.applicationDirectory
+          ? [`--appdir=${options.applicationDirectory}`]
+          : []),
+        CASK
+      ], 10 * 60_000);
       inspection = undefined;
       const current = await inspect();
       if (!current.managed || !current.executablePath) {
