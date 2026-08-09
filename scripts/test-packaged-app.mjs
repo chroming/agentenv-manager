@@ -24,6 +24,7 @@ const executablePath =
       : join(process.cwd(), "release", "linux-unpacked", "agentenv-manager");
 const root = await mkdtemp(join(tmpdir(), "agentenv-packaged-e2e-"));
 const appDataRoot = join(root, "app-data");
+const diagnosticsRoot = join(root, "diagnostics");
 const homeDir = join(root, "home");
 const fakeHomeRoot = join(root, "fake-home");
 const opencodeDir = join(homeDir, ".config", "opencode");
@@ -190,6 +191,7 @@ const launchPackagedApplication = () =>
       AGENTENV_AUTOMATION: "1",
       AGENTENV_TEST_CLOSE_GUARD: "1",
       AGENTENV_DATA_ROOT: appDataRoot,
+      AGENTENV_LOG_ROOT: diagnosticsRoot,
       AGENTENV_CACHE_ROOT: join(root, "cache"),
       AGENTENV_FAKE_HOME: fakeHomeRoot,
       AGENTENV_HOME: homeDir,
@@ -546,6 +548,17 @@ try {
     `Packaged ${process.platform} six-Agent Apply, Project, restart, and Repository workflows passed\n`
   );
   packagedWorkflowCompleted = true;
+} catch (error) {
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  for (const name of ["startup.log", "runtime.jsonl"]) {
+    try {
+      const content = await readFile(join(diagnosticsRoot, name), "utf8");
+      process.stderr.write(`[packaged-e2e] ${name}\n${content}\n`);
+    } catch {
+      process.stderr.write(`[packaged-e2e] ${name} was not available\n`);
+    }
+  }
+  throw error;
 } finally {
   if (application) {
     const childProcess = applicationProcess;

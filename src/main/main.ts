@@ -1253,6 +1253,8 @@ if (!ownsSingleInstance) {
 
 if (ownsSingleInstance) void app.whenReady().then(() => {
   startupDataRoot = resolveStartupDataRoot();
+  const diagnosticsDirectory = process.env.AGENTENV_LOG_ROOT?.trim() ||
+    join(app.getPath("logs"), "diagnostics");
   const savedWindowState = readWindowState(join(startupDataRoot, "window-state.json"));
   if (savedWindowState) {
     lastWindowState = constrainWindowState(
@@ -1261,11 +1263,11 @@ if (ownsSingleInstance) void app.whenReady().then(() => {
     );
   }
   startupDiagnostics = createStartupDiagnostics({
-    directory: join(app.getPath("logs"), "diagnostics"),
+    directory: diagnosticsDirectory,
     homeDir: app.getPath("home")
   });
   runtimeDiagnostics = createRuntimeDiagnostics({
-    directory: join(app.getPath("logs"), "diagnostics"),
+    directory: diagnosticsDirectory,
     homeDir: app.getPath("home"),
     appVersion: app.getVersion(),
     buildCommit:
