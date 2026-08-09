@@ -2385,12 +2385,6 @@ summary {
   border-radius: var(--radius-surface);
 }
 
-.brand-lockup .muted {
-  color: #7b8495;
-  font-size: 12px;
-  margin-top: 2px;
-}
-
 .nav-section-label {
   color: #98a2b3;
   font-size: 11px;

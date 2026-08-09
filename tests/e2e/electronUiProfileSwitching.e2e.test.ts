@@ -19,7 +19,6 @@ import { delimiter, dirname, join } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import electronPath from "electron";
-import packageMetadata from "../../package.json";
 import {
   _electron as electron,
   type ElectronApplication,
@@ -10719,8 +10718,8 @@ describe("Electron UI profile switching e2e", () => {
     const { page } = await launchApp({ projectSkillFixture: true, workspaceFixture: true });
     await resizeAppWindow(page, 920, 620);
     const sidebar = page.locator(".global-sidebar");
-    expect(await sidebar.locator(".brand-lockup").textContent())
-      .toContain(`v${packageMetadata.version}`);
+    expect((await sidebar.locator(".brand-lockup").textContent())?.trim())
+      .toBe("AgentEnv Manager");
     const sharedSearchContracts: Array<{
       borderWidth: string;
       height: number;

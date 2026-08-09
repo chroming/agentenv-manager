@@ -9,7 +9,6 @@ import {
   act
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import packageMetadata from "../../package.json";
 import { App, AppFeedback } from "../../src/renderer/App";
 import { reconcileImportedSkillUpdates } from "../../src/renderer/skillUpdateSummary";
 import type {
@@ -887,7 +886,7 @@ describe("App", () => {
     render(<App />);
 
     const workspace = await screen.findByRole("region", { name: "Agents" });
-    expect(screen.getByText(`v${packageMetadata.version}`)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "AgentEnv Manager" })).toBeInTheDocument();
     expect(
       within(workspace).getByRole("article", { name: "Agent OpenCode" })
     ).toBeInTheDocument();

@@ -411,10 +411,6 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
   white-space: nowrap;
 }
 
-.brand-lockup .muted {
-  line-height: 1.2;
-}
-
 .workspace-nav {
   display: flex;
   flex: 1 1 auto;

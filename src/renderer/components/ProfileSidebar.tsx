@@ -23,7 +23,6 @@ import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { handleActionMenuKeyDown } from "./ui";
 import { ProductIcon, type ProductIconName } from "../productIcons";
-import packageMetadata from "../../../package.json";
 
 const appIconUrl = new URL("../assets/app-icon.png", import.meta.url).href;
 const antigravityIconUrl = new URL("../assets/target-icons/antigravity.png", import.meta.url).href;
@@ -448,7 +447,6 @@ export const ProfileSidebar = ({
           </div>
           <div>
             <h1>AgentEnv Manager</h1>
-            <p className="muted">v{packageMetadata.version}</p>
           </div>
         </div>
       </div>
