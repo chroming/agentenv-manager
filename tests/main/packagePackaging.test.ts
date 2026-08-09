@@ -290,6 +290,9 @@ describe("package metadata", () => {
     expect(workflow).toContain('shasum -a 256 --check SHA256SUMS');
     expect(workflow).not.toContain('sha256sum');
     expect(workflow).toContain('gh release create "$RELEASE_TAG" --draft');
+    expect(workflow).toContain('docs/releases/${RELEASE_TAG}.md');
+    expect(workflow).toContain('--notes-file "docs/releases/${RELEASE_TAG}.md"');
+    expect(workflow).not.toContain('--generate-notes');
     expect(workflow).toContain('gh release edit "$RELEASE_TAG" --draft=false');
     expect(workflow).toContain('HOMEBREW_TAP_DEPLOY_KEY');
     expect(workflow).toContain('brew tap-new --no-git agentenv-ci/release');

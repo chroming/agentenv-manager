@@ -179,6 +179,12 @@ verifying checksums, the release manifest, and the generated Cask. The final
 step updates `chroming/homebrew-tap` with the repository-scoped
 `HOMEBREW_TAP_DEPLOY_KEY`.
 
+Every tag must also include non-empty, user-facing notes at
+`docs/releases/vX.Y.Z.md`. Summarize observable fixes and improvements, call out
+important limitations, and include the update commands users need. The workflow
+publishes that file verbatim as the GitHub Release description and rejects tags
+that only provide generated commit links.
+
 The current macOS distribution is not notarized. Direct Release and local
 `dist:mac` builds are ad-hoc signed. Release jobs also produce a distinctly named
 Homebrew DMG with the fixed project-created certificate in

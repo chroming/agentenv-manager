@@ -30,6 +30,11 @@ jobs:
       - run: npm ci
       - name: Require tag and package version to match
         run: node -e 'import("./scripts/release-manifest.mjs").then(({ validateReleaseVersion }) => validateReleaseVersion(process.env.RELEASE_TAG, require("./package.json").version))'
+      - name: Require curated release notes
+        run: |
+          notes_file="docs/releases/${RELEASE_TAG}.md"
+          test -s "$notes_file" || { echo "::error::Missing release notes: $notes_file"; exit 1; }
+          grep -q '^## ' "$notes_file" || { echo "::error::Release notes need at least one section"; exit 1; }
       - run: npm run audit:dependencies
 
   build-macos:
@@ -227,7 +232,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$RELEASE_TAG" --draft --verify-tag --generate-notes --title "AgentEnv Manager $RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+          gh release create "$RELEASE_TAG" --draft --verify-tag --notes-file "docs/releases/${RELEASE_TAG}.md" --title "AgentEnv Manager $RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
           gh release upload "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY"
       - name: Verify uploaded draft assets
         env:
