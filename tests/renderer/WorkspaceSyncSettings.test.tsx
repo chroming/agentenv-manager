@@ -5,7 +5,12 @@ import {
   groupWorkspaceSyncChanges,
   WorkspaceSyncSettings
 } from "../../src/renderer/components/WorkspaceSyncSettings";
-import type { AgentEnvApi, WorkspaceSyncChange, WorkspaceSyncStatus } from "../../src/shared/types";
+import type {
+  AgentEnvApi,
+  WorkspaceSyncChange,
+  WorkspaceSyncReview,
+  WorkspaceSyncStatus
+} from "../../src/shared/types";
 
 afterEach(() => cleanup());
 
@@ -160,6 +165,59 @@ describe("Workspace Sync settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Check" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Could not check"));
     expect(screen.getByRole("alert")).toHaveTextContent("Remote unavailable");
+  });
+
+  it("keeps a conflict choice after the select event has been released", async () => {
+    const status: WorkspaceSyncStatus = {
+      kind: "review-required",
+      connection: { repository: "git@github.com:me/workspace.git", branch: "main" },
+      localChangeCount: 1,
+      remoteChangeCount: 1,
+      conflictCount: 1,
+      immediateAgentCount: 0
+    };
+    const review: WorkspaceSyncReview = {
+      baseRevision: "base",
+      remoteRevision: "remote",
+      changes: [{
+        key: "profile:daily:instructions",
+        resourceKind: "profile",
+        resourceId: "daily",
+        section: "instructions",
+        action: "update",
+        direction: "conflict",
+        title: "Daily",
+        detail: "instructions"
+      }],
+      liveSkillIds: [],
+      liveAgentIds: [],
+      canUpdate: true,
+      canPublish: true
+    };
+    const api = {
+      readWorkspaceSyncStatus: vi.fn().mockResolvedValue(status),
+      checkWorkspaceSync: vi.fn().mockResolvedValue(status),
+      reviewWorkspaceSync: vi.fn().mockResolvedValue(review),
+      updateWorkspaceFromSync: vi.fn().mockResolvedValue({
+        status: { ...status, kind: "up-to-date", localChangeCount: 0, remoteChangeCount: 0, conflictCount: 0 }
+      })
+    } as unknown as AgentEnvApi;
+    Object.defineProperty(window, "agentEnv", { configurable: true, value: api });
+
+    render(<WorkspaceSyncSettings />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Resolve changes" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Resolve changes" }));
+    const select = await screen.findByRole("combobox", { name: "Resolve Daily" });
+    fireEvent.change(select, { target: { value: "remote" } });
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Update this device" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Update this device" }));
+    await waitFor(() => expect(api.updateWorkspaceFromSync).toHaveBeenCalledWith({
+      expectedRemoteRevision: "remote",
+      conflictChoices: { "profile:daily:instructions": "remote" },
+      acceptLiveSkillUpdates: false
+    }));
   });
 
   it("shows a retryable unavailable state when Sync status cannot be loaded", async () => {

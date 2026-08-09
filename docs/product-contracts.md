@@ -176,6 +176,10 @@ Workspace Sync reuses portable environment intent across the user's devices thro
   and the Skill source registry. Executable bits are device-local because
   Windows checkouts cannot represent them consistently; they MUST NOT affect
   snapshot identity.
+- Complete portable Profiles sync independently of which Agents are installed or enabled on a
+  device. A missing Agent leaves its Profile policy dormant on that device; it MUST NOT make the
+  Profile invalid, create pending deployment work, or alter the device's Agent selection. Target
+  availability, active-Profile assignment, deployment receipts, and Apply state remain local.
 - Target states, credentials, GitHub tokens, settings, backups, trash, history, observations, caches, absolute local paths, and manager-evidence lock paths MUST NOT enter a snapshot.
 - Device-local Skill source records excluded from the portable snapshot remain untouched when this device receives remote source-registry changes. Exclusion from Sync MUST NOT delete local-only source intent.
 - Snapshot output MUST be deterministic. A workspace with unchanged portable content produces the same content hash and no Git commit.

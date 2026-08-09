@@ -282,7 +282,7 @@ export const WorkspaceSyncSettings = () => {
       <div className="settings-section-header">
         <div>
           <div className="resource-heading" id="workspace-sync-heading">{t("Workspace Sync")}</div>
-          <p className="settings-muted">{t("Reuse Profiles and Library Skills across your devices through a private Git repository.")}</p>
+          <p className="settings-muted">{t("Sync portable Profiles and Library Skills. Installed Agents and applied Profiles stay local to this device.")}</p>
         </div>
         {connected ? (
           <span className={`workspace-sync-status is-${status.kind}`} role="status">
@@ -410,7 +410,14 @@ export const WorkspaceSyncSettings = () => {
                     </span>
                     <span className={`workspace-sync-direction is-${row.direction}`}>{directionLabel(row.direction)}</span>
                     {row.direction === "conflict" ? (
-                      <select aria-label={t("Resolve {{name}}", { name: row.title })} value={choices[row.changes[0]!.key] ?? ""} onChange={(event) => setChoices((current) => ({ ...current, [row.changes[0]!.key]: event.currentTarget.value as WorkspaceSyncConflictChoice }))}>
+                      <select
+                        aria-label={t("Resolve {{name}}", { name: row.title })}
+                        value={choices[row.key] ?? ""}
+                        onChange={(event) => {
+                          const choice = event.currentTarget.value as WorkspaceSyncConflictChoice;
+                          setChoices((current) => ({ ...current, [row.key]: choice }));
+                        }}
+                      >
                         <option value="">{t("Choose version")}</option>
                         <option value="local">{t("Keep local version")}</option>
                         <option value="remote">{t("Use remote")}</option>

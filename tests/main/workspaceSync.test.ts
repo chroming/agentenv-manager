@@ -288,10 +288,12 @@ describe("Workspace Sync", () => {
     const paths = createPaths({ appDataRoot, homeDir: join(appDataRoot, "home") });
     await Promise.all([
       mkdir(join(paths.profilesDir, "old"), { recursive: true }),
-      mkdir(join(paths.skillsLibraryDir, "old"), { recursive: true })
+      mkdir(join(paths.skillsLibraryDir, "old"), { recursive: true }),
+      mkdir(paths.targetStatesDir, { recursive: true })
     ]);
     await writeFile(join(paths.profilesDir, "old", "marker"), "old");
     await writeFile(join(paths.skillsLibraryDir, "old", "SKILL.md"), "old");
+    await writeFile(join(paths.targetStatesDir, "opencode.json"), "device-local target state\n");
     await writeFile(paths.skillSourcesPath, canonicalJson({
       formatVersion: 1,
       sources: [{
@@ -323,6 +325,8 @@ describe("Workspace Sync", () => {
     expect(result.backupId).toBeTruthy();
     await expect(readFile(join(paths.profilesDir, "daily", "INSTRUCTIONS.md"), "utf8")).resolves.toBe("# Agent\n");
     await expect(readFile(join(paths.skillsLibraryDir, "review", "SKILL.md"), "utf8")).resolves.toContain("Review code");
+    await expect(readFile(join(paths.targetStatesDir, "opencode.json"), "utf8"))
+      .resolves.toBe("device-local target state\n");
     const sources = JSON.parse(await readFile(paths.skillSourcesPath, "utf8")).sources;
     expect(sources).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "source-local", repository: "/Users/me/private-skills" }),

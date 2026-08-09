@@ -93,7 +93,7 @@ Conversations 只读索引本机 Agent 的历史记录。可以搜索标题和�
 
 ## 其他功能
 
-- Workspace Sync 通过专用私有 Git 仓库同步可移植的 Profiles 和 Skill Library。拉取和发布都需要手动审核，不会自动 Apply 到本机 Agent。
+- Workspace Sync 通过专用私有 Git 仓库同步完整的可移植 Profiles 和 Skill Library。每台设备安装或启用的 Agent、当前应用关系和部署状态仍留在本机；拉取和发布都需要手动审核，不会自动 Apply。
 - Recovery 集中展示 Apply、Skill 清理和同步产生的恢复记录，可以预览文件后再恢复。
 - GitHub 登录为仓库导入和更新检查提供更高的 API 限额；普通 Git 和 SSH 仓库继续使用系统 Git 凭据。
 - 界面支持 English、简体中文和繁體中文。
