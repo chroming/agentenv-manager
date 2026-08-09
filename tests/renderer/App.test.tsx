@@ -4605,6 +4605,11 @@ describe("App", () => {
     expect(within(dialog).getByLabelText("Capture summary")).toHaveTextContent(
       "0Profile resources"
     );
+    expect(within(dialog).queryByText("opencode.jsonc.theme")).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", {
+      name: /2 items will remain outside AgentEnv/
+    }));
+    expect(within(dialog).getByText("opencode.jsonc.theme")).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Save Profile" }));
 
     await waitFor(() =>

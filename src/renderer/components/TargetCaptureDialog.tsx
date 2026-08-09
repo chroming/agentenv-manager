@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
   Copy,
   FileDown,
   GitCompareArrows,
@@ -93,6 +94,7 @@ export const TargetCaptureDialog = ({
   const [copiedIssueId, setCopiedIssueId] = useState<string>();
   const [exportingIssueId, setExportingIssueId] = useState<string>();
   const [diffCandidate, setDiffCandidate] = useState<TargetCaptureSkillCandidate>();
+  const [advisoryExpanded, setAdvisoryExpanded] = useState(false);
   const diffReturnFocusRef = useRef<HTMLButtonElement>(null);
   const isReview = Boolean(preview);
   const isBusy = activity !== "idle";
@@ -469,13 +471,21 @@ export const TargetCaptureDialog = ({
               ) : null}
 
               {preview && preview.warnings.length > 0 ? (
-                <details className="capture-advisory">
-                  <summary>
-                    <TriangleAlert size={16} strokeWidth={2.1} aria-hidden="true" />
-                    <span><strong>{t("{{count}} items will remain outside AgentEnv", { count: preview.warnings.length })}</strong><small>{t("These files may still be used by another installed Agent.")}</small></span>
-                  </summary>
-                  <ul>{preview.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
-                </details>
+                <section className="capture-advisory">
+                  <Button
+                    aria-expanded={advisoryExpanded}
+                    className="capture-advisory__toggle"
+                    icon={<TriangleAlert size={16} strokeWidth={2.1} aria-hidden="true" />}
+                    variant="ghost"
+                    onClick={() => setAdvisoryExpanded((current) => !current)}
+                  >
+                    <span className="capture-advisory__copy"><strong>{t("{{count}} items will remain outside AgentEnv", { count: preview.warnings.length })}</strong><small>{t("These files may still be used by another installed Agent.")}</small></span>
+                    <ChevronDown className="capture-advisory__chevron" size={15} aria-hidden="true" />
+                  </Button>
+                  {advisoryExpanded ? (
+                    <ul>{preview.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+                  ) : null}
+                </section>
               ) : null}
 
               <div className="capture-safety-note">
