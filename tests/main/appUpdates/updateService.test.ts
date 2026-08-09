@@ -9,8 +9,8 @@ const release = {
   publishedAt: "2026-08-03T00:00:00Z",
   notes: "Ready",
   asset: {
-    name: "AgentEnv-Manager-0.2.0-mac-arm64.dmg",
-    url: "https://github.com/chroming/agentenv-manager/releases/download/v0.2.0/AgentEnv-Manager-0.2.0-mac-arm64.dmg",
+    name: "AgentEnv-Manager-0.2.0-mac-arm64.zip",
+    url: "https://github.com/chroming/agentenv-manager/releases/download/v0.2.0/AgentEnv-Manager-0.2.0-mac-arm64.zip",
     sha256: "a".repeat(64),
     size: 123
   }
@@ -21,6 +21,12 @@ const settings = {
   appUpdateAutoDownloadEnabled: false,
   appUpdateInstallOnQuit: true
 };
+
+const unavailableDirect = () => ({
+  inspect: vi.fn().mockResolvedValue({ available: false, reason: "unsupported-platform" as const }),
+  download: vi.fn(),
+  install: vi.fn()
+});
 
 describe("app update service", () => {
   it("coalesces checks and reports a verified update without exposing arbitrary URLs", async () => {
@@ -45,6 +51,7 @@ describe("app update service", () => {
         download: vi.fn(),
         install: vi.fn()
       },
+      direct: unavailableDirect(),
       settingsStore: { readSettings: vi.fn().mockResolvedValue(settings) },
       onStatusChanged: (status) => changes.push(status.phase)
     });
@@ -74,6 +81,7 @@ describe("app update service", () => {
         download: vi.fn(),
         install: vi.fn()
       },
+      direct: unavailableDirect(),
       settingsStore: {
         readSettings: vi.fn().mockResolvedValue({ ...settings, appUpdateAutoCheckEnabled: false })
       }
@@ -101,6 +109,7 @@ describe("app update service", () => {
       arch: "arm64",
       releaseClient: { readLatest: vi.fn().mockResolvedValue(release), isNewer: () => true },
       homebrew,
+      direct: unavailableDirect(),
       settingsStore: {
         readSettings: vi.fn().mockResolvedValue({ ...settings, appUpdateAutoDownloadEnabled: true })
       },
@@ -111,7 +120,47 @@ describe("app update service", () => {
     await expect(service.install({ restart: true })).resolves.toMatchObject({ phase: "up-to-date" });
     expect(homebrew.download).toHaveBeenCalledTimes(1);
     expect(homebrew.install).toHaveBeenCalledTimes(1);
-    expect(onInstalled).toHaveBeenCalledWith(true);
+    expect(onInstalled).toHaveBeenCalledWith(true, "homebrew");
+  });
+
+  it("downloads and stages a verified direct Release update", async () => {
+    const onInstalled = vi.fn();
+    const direct = {
+      inspect: vi.fn().mockResolvedValue({ available: true }),
+      download: vi.fn().mockResolvedValue(undefined),
+      install: vi.fn().mockResolvedValue(undefined)
+    };
+    const service = createAppUpdateService({
+      currentVersion: "0.1.0",
+      packaged: true,
+      platform: "darwin",
+      arch: "arm64",
+      releaseClient: { readLatest: vi.fn().mockResolvedValue(release), isNewer: () => true },
+      homebrew: {
+        inspect: vi.fn().mockResolvedValue({ available: false, managed: false }),
+        download: vi.fn(),
+        install: vi.fn()
+      },
+      direct,
+      settingsStore: {
+        readSettings: vi.fn().mockResolvedValue({ ...settings, appUpdateAutoDownloadEnabled: true })
+      },
+      onInstalled
+    });
+
+    await expect(service.check()).resolves.toMatchObject({
+      phase: "ready",
+      installChannel: "direct",
+      automaticInstallSupported: true
+    });
+    expect(direct.download).toHaveBeenCalledWith(release);
+    await expect(service.install({ restart: true })).resolves.toMatchObject({
+      phase: "up-to-date",
+      installChannel: "direct"
+    });
+    expect(direct.install).toHaveBeenCalledWith("0.2.0");
+    expect(onInstalled).toHaveBeenCalledWith(true, "direct");
+    await expect(service.shouldInstallOnQuit()).resolves.toBe(false);
   });
 
   it("turns offline failures into non-blocking copyable state", async () => {
@@ -129,6 +178,7 @@ describe("app update service", () => {
         download: vi.fn(),
         install: vi.fn()
       },
+      direct: unavailableDirect(),
       settingsStore: { readSettings: vi.fn().mockResolvedValue(settings) }
     });
 
@@ -157,6 +207,7 @@ describe("app update service", () => {
         download: vi.fn(),
         install: vi.fn()
       },
+      direct: unavailableDirect(),
       settingsStore: { readSettings: vi.fn().mockResolvedValue(settings) }
     });
 

@@ -1,7 +1,12 @@
 import type { AppUpdateStatus } from "../../shared/appUpdates";
 import type { AgentEnvSettings } from "../../shared/types";
+import type { DirectUpdateAdapter } from "./directUpdateAdapter";
 import type { HomebrewAdapter } from "./homebrewAdapter";
-import { ReleaseClientError, type ReleaseClient } from "./releaseClient";
+import {
+  ReleaseClientError,
+  type ReleaseClient,
+  type TrustedRelease
+} from "./releaseClient";
 
 export interface AppUpdateService {
   readStatus(): Promise<AppUpdateStatus>;
@@ -21,13 +26,14 @@ export const createAppUpdateService = (options: {
   arch: string;
   releaseClient: ReleaseClient;
   homebrew: HomebrewAdapter;
+  direct: DirectUpdateAdapter;
   settingsStore: Pick<{
     readSettings(): Promise<Pick<AgentEnvSettings,
       "appUpdateAutoCheckEnabled" | "appUpdateAutoDownloadEnabled" | "appUpdateInstallOnQuit">>;
   }, "readSettings">;
   now?: () => Date;
   onStatusChanged?: (status: AppUpdateStatus) => void;
-  onInstalled?: (restart: boolean) => void;
+  onInstalled?: (restart: boolean, channel: "homebrew" | "direct") => void;
 }): AppUpdateService => {
   const now = options.now ?? (() => new Date());
   let status: AppUpdateStatus = {
@@ -37,6 +43,7 @@ export const createAppUpdateService = (options: {
     automaticInstallSupported: false
   };
   let currentCheck: Promise<AppUpdateStatus> | undefined;
+  let trustedRelease: TrustedRelease | undefined;
 
   const updateStatus = (next: AppUpdateStatus) => {
     status = next;
@@ -50,9 +57,12 @@ export const createAppUpdateService = (options: {
       return { installChannel: "unsupported" as const, supported: false };
     }
     const brew = await options.homebrew.inspect({ refresh });
-    return brew.managed
-      ? { installChannel: "homebrew" as const, supported: true }
-      : { installChannel: "direct" as const, supported: false };
+    if (brew.managed) return { installChannel: "homebrew" as const, supported: true };
+    const direct = await options.direct.inspect();
+    return {
+      installChannel: "direct" as const,
+      supported: direct.available
+    };
   };
 
   const readStatus = async () => {
@@ -68,12 +78,22 @@ export const createAppUpdateService = (options: {
   };
 
   const download = async () => {
-    if (status.phase !== "available" || status.installChannel !== "homebrew") {
-      throw new Error("No Homebrew update is ready to download");
+    if (
+      status.phase !== "available" ||
+      !status.automaticInstallSupported ||
+      !trustedRelease
+    ) {
+      throw new Error("No verified update is ready to download");
     }
     updateStatus({ ...status, phase: "downloading", message: undefined, failureCode: undefined });
     try {
-      await options.homebrew.download();
+      if (status.installChannel === "homebrew") {
+        await options.homebrew.download();
+      } else if (status.installChannel === "direct") {
+        await options.direct.download(trustedRelease);
+      } else {
+        throw new Error("This installation cannot be updated automatically");
+      }
       return updateStatus({ ...status, phase: "ready" });
     } catch (error) {
       return updateStatus({
@@ -116,8 +136,10 @@ export const createAppUpdateService = (options: {
           checkedAt: now().toISOString()
         };
         if (!options.releaseClient.isNewer(release.version, options.currentVersion)) {
+          trustedRelease = undefined;
           return updateStatus({ ...base, phase: "up-to-date" });
         }
+        trustedRelease = release;
         updateStatus({
           ...base,
           phase: "available",
@@ -149,20 +171,31 @@ export const createAppUpdateService = (options: {
   };
 
   const install = async (installOptions: { restart?: boolean } = {}) => {
-    if (status.phase !== "ready" || status.installChannel !== "homebrew") {
-      throw new Error("No verified Homebrew update is ready to install");
+    if (
+      status.phase !== "ready" ||
+      !status.automaticInstallSupported ||
+      !trustedRelease ||
+      (status.installChannel !== "homebrew" && status.installChannel !== "direct")
+    ) {
+      throw new Error("No verified update is ready to install");
     }
     updateStatus({ ...status, phase: "installing", message: undefined, failureCode: undefined });
     try {
-      await options.homebrew.install(status.release?.version ?? "");
+      const channel = status.installChannel;
+      if (channel === "homebrew") {
+        await options.homebrew.install(trustedRelease.version);
+      } else {
+        await options.direct.install(trustedRelease.version);
+      }
       const next = updateStatus({
         phase: "up-to-date",
-        currentVersion: status.release?.version ?? options.currentVersion,
-        installChannel: "homebrew",
+        currentVersion: trustedRelease.version,
+        installChannel: channel,
         automaticInstallSupported: true,
         checkedAt: now().toISOString()
       });
-      options.onInstalled?.(installOptions.restart === true);
+      trustedRelease = undefined;
+      options.onInstalled?.(installOptions.restart === true, channel);
       return next;
     } catch (error) {
       return updateStatus({
@@ -179,7 +212,10 @@ export const createAppUpdateService = (options: {
     check,
     download,
     install,
-    isReadyToInstall: () => status.phase === "ready" && status.installChannel === "homebrew",
+    isReadyToInstall: () =>
+      status.phase === "ready" &&
+      status.automaticInstallSupported &&
+      (status.installChannel === "homebrew" || status.installChannel === "direct"),
     shouldInstallOnQuit: async () =>
       status.phase === "ready" &&
       status.installChannel === "homebrew" &&

@@ -82,8 +82,30 @@ describe("App update settings", () => {
     render(<AppUpdateSettings busy={false} settings={settings} onChange={vi.fn()} />);
 
     expect(await screen.findByText("Version 0.2.0 is available")).toBeInTheDocument();
-    expect(screen.getByText(/Install with the official Homebrew Cask/)).toBeInTheDocument();
+    expect(screen.getByText(/application folder cannot be updated automatically/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Download" })).not.toBeInTheDocument();
+  });
+
+  it("offers verified in-app updates for a writable direct installation", async () => {
+    installApi({
+      phase: "available",
+      currentVersion: "0.1.0",
+      installChannel: "direct",
+      automaticInstallSupported: true,
+      release: {
+        version: "0.2.0",
+        tag: "v0.2.0",
+        releaseUrl: "https://github.com/chroming/agentenv-manager/releases/tag/v0.2.0",
+        publishedAt: "2026-08-03T00:00:00Z"
+      }
+    });
+    render(<AppUpdateSettings busy={false} settings={settings} onChange={vi.fn()} />);
+
+    expect(await screen.findByText("Installed directly")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Download" })).toBeInTheDocument();
+    expect(screen.getByText("Downloads and verifies the official update in the background."))
+      .toBeInTheDocument();
+    expect(screen.queryByText("Install when quitting")).not.toBeInTheDocument();
   });
 
   it("keeps failure detail selectable and retryable", async () => {

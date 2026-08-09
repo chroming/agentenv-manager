@@ -74,7 +74,9 @@ export const AppUpdateSettings = ({
               : status.phase === "installing"
                 ? t("Installing verified update…")
                 : status.phase === "failed"
-                  ? t("Update check failed")
+                  ? status.failureCode === "download-failed" || status.failureCode === "install-failed"
+                    ? t("Update failed")
+                    : t("Update check failed")
                   : t("Updates have not been checked yet");
 
   return (
@@ -90,7 +92,7 @@ export const AppUpdateSettings = ({
             <span>{channelCopy}</span>
             {status?.phase === "available" && !status.automaticInstallSupported ? (
               <span className="app-update-note">
-                {t("Install with the official Homebrew Cask to update automatically. Manual downloads remain checksum-verified on the official Release page.")}
+                {t("This application folder cannot be updated automatically. Install with Homebrew or move the app to a writable Applications folder.")}
               </span>
             ) : null}
             {status?.phase === "failed" && status.message ? (
@@ -158,7 +160,7 @@ export const AppUpdateSettings = ({
                 settings.appUpdateAutoCheckEnabled === false ? " is-disabled" : ""
               }`}
               label={t("Prepare updates")}
-              description={t("Homebrew downloads the checksum-bound package in the background.")}
+              description={t("Downloads and verifies the official update in the background.")}
               control={<Switch
                 checked={settings.appUpdateAutoDownloadEnabled !== false}
                 disabled={busy || settings.appUpdateAutoCheckEnabled === false}
@@ -168,18 +170,20 @@ export const AppUpdateSettings = ({
                 })}
               />}
             />
-            <SettingsPreferenceRow
-              label={t("Install when quitting")}
-              description={t("Installs only an already downloaded Homebrew update after AgentEnv work has stopped.")}
-              control={<Switch
-                checked={settings.appUpdateInstallOnQuit !== false}
-                disabled={busy}
-                label={t("Install ready update when quitting")}
-                onClick={() => onChange({
-                  appUpdateInstallOnQuit: settings.appUpdateInstallOnQuit === false
-                })}
-              />}
-            />
+            {status.installChannel === "homebrew" ? (
+              <SettingsPreferenceRow
+                label={t("Install when quitting")}
+                description={t("Installs only an already downloaded Homebrew update after AgentEnv work has stopped.")}
+                control={<Switch
+                  checked={settings.appUpdateInstallOnQuit !== false}
+                  disabled={busy}
+                  label={t("Install ready update when quitting")}
+                  onClick={() => onChange({
+                    appUpdateInstallOnQuit: settings.appUpdateInstallOnQuit === false
+                  })}
+                />}
+              />
+            ) : null}
           </>
         ) : null}
       </div>

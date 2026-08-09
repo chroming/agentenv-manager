@@ -1,26 +1,26 @@
 {
-  "generatedAt": "2026-08-09T05:54:34.943Z",
+  "generatedAt": "2026-08-09T12:36:52.075Z",
   "source": {
-    "commit": "99e7630e8bbd4006cb09d6d495bab35e097d66d2",
+    "commit": "5ae587b45e497116af25f0de622ae5d1b874e872",
     "dirty": true,
-    "fingerprint": "4d69b3465ac06356cc89c31dddf8866f54ae7b9dae0d9108a18ffb64bbc77c66",
-    "files": 802
+    "fingerprint": "d028b49f078ab8bc4a2f67230de7b0c3a4956b9383da33ac3488b7619c2092d1",
+    "files": 805
   },
   "build": {
-    "generatedAt": "2026-08-09T05:47:09.903Z",
-    "sourceFingerprint": "1f689bdc5081e44809331680d55393ce65fb925fc79fb647c979de533a60d842",
-    "sourceFiles": 423,
-    "artifactFingerprint": "e616a230589b080b6bff1e2fa65935a6521ff7e335f342c05ba3e6786bb2ca88",
+    "generatedAt": "2026-08-09T12:29:06.190Z",
+    "sourceFingerprint": "836dabc62a9af05083e5e215e7719b6b882f668cfb0b4a01e32b6d09f6c72c06",
+    "sourceFiles": 424,
+    "artifactFingerprint": "30a801a63476a51cb07d08895024675b63615627061b78f5a23be1c8661f7e84",
     "artifactFiles": 40
   },
   "tests": {
     "passed": true,
-    "files": 216,
-    "assertions": 1531,
+    "files": 217,
+    "assertions": 1543,
     "e2eFiles": 18,
-    "e2eAssertions": 195,
+    "e2eAssertions": 196,
     "desktopElectronFiles": 9,
-    "desktopElectronAssertions": 142,
+    "desktopElectronAssertions": 143,
     "electronUiFiles": 1,
     "electronUiAssertions": 129
   },
@@ -33,7 +33,7 @@
   },
   "captures": {
     "directory": "/var/folders/c4/vw8cxnvd7rv46sv4kq0lkg0h0000gn/T/agentenv-ui-captures/verification",
-    "artifactFingerprint": "e616a230589b080b6bff1e2fa65935a6521ff7e335f342c05ba3e6786bb2ca88",
+    "artifactFingerprint": "30a801a63476a51cb07d08895024675b63615627061b78f5a23be1c8661f7e84",
     "files": 175,
     "viewports": [
       "1180x728",
@@ -43,7 +43,7 @@
     "visualContract": {
       "passed": true,
       "files": 46,
-      "maxChangedPixelRatio": 0.009684431977559606
+      "maxChangedPixelRatio": 0.009670406732117812
     }
   },
   "packagedSmoke": "not-run"

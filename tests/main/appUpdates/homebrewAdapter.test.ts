@@ -1,11 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   applicationDirectoryForExecutable,
+  applicationPathForExecutable,
   createHomebrewAdapter
 } from "../../../src/main/appUpdates/homebrewAdapter";
 
 describe("Homebrew update adapter", () => {
   it("derives the containing Applications directory from a packaged executable", () => {
+    expect(applicationPathForExecutable(
+      "/Users/example/Applications/AgentEnv Manager.app/Contents/MacOS/AgentEnv Manager"
+    )).toBe("/Users/example/Applications/AgentEnv Manager.app");
     expect(applicationDirectoryForExecutable(
       "/Users/example/Applications/AgentEnv Manager.app/Contents/MacOS/AgentEnv Manager"
     )).toBe("/Users/example/Applications");

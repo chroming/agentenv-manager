@@ -204,6 +204,12 @@ downloads keep quarantine: documentation MUST tell users to copy the App to
 Applications and eject the DMG before approving that installed copy through both
 Open Anyway and the final Open confirmation. Managed-device policy may still forbid
 that exception, so this route MUST NOT be described as equally reliable to Homebrew.
+After first install, a direct App in a writable Applications folder can update in
+app from the official ZIP. The updater verifies the immutable Release URL, size,
+SHA-256, bundle ID, version, and complete resource seal before a detached helper
+replaces the bundle. The helper retains the old App until the new process confirms
+startup and rolls back automatically if confirmation fails. This does not change
+the first-install quarantine contract or grant administrator privileges.
 The pinned certificate SHA-256 is
 `2D7F57ABF24737A6880D98E9684ABF3B553EB95D896A4D31627B2626D6F09837`.
 Changing this certificate changes the macOS code identity and can cause Keychain

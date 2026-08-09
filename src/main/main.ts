@@ -104,8 +104,13 @@ import {
 import { createReleaseClient } from "./appUpdates/releaseClient";
 import {
   applicationDirectoryForExecutable,
+  applicationPathForExecutable,
   createHomebrewAdapter
 } from "./appUpdates/homebrewAdapter";
+import {
+  confirmDirectUpdateStartup,
+  createDirectUpdateAdapter
+} from "./appUpdates/directUpdateAdapter";
 import {
   createAppUpdateService,
   type AppUpdateService
@@ -280,6 +285,20 @@ let lastWindowState: PersistedWindowState | undefined;
 let windowStateSaveTimer: ReturnType<typeof setTimeout> | undefined;
 let activeAppUpdateService: AppUpdateService | undefined;
 let updateQuitInProgress = false;
+
+const resolveOperatingSystemCacheRoot = () => {
+  const homeDir = process.env.AGENTENV_HOME ?? app.getPath("home");
+  return process.platform === "darwin"
+    ? join(homeDir, "Library", "Caches")
+    : process.platform === "win32"
+      ? process.env.LOCALAPPDATA ?? app.getPath("sessionData")
+      : process.env.XDG_CACHE_HOME ?? join(homeDir, ".cache");
+};
+
+const resolveAppUpdateCacheDirectory = () => join(
+  process.env.AGENTENV_CACHE_ROOT ?? join(resolveOperatingSystemCacheRoot(), "agentenv-manager"),
+  "app-updates"
+);
 
 process.on("uncaughtExceptionMonitor", (error) => {
   void runtimeDiagnostics?.record("main:uncaught-exception", "failed", {
@@ -576,12 +595,7 @@ const createServices = async (
   reportPhase: (phase: Extract<StartupStatus, { state: "initializing" }>["phase"]) => void
 ) => {
   const homeDir = process.env.AGENTENV_HOME ?? app.getPath("home");
-  const operatingSystemCacheRoot =
-    process.platform === "darwin"
-      ? join(homeDir, "Library", "Caches")
-      : process.platform === "win32"
-        ? process.env.LOCALAPPDATA ?? app.getPath("sessionData")
-        : process.env.XDG_CACHE_HOME ?? join(homeDir, ".cache");
+  const operatingSystemCacheRoot = resolveOperatingSystemCacheRoot();
   const appDataRoot = startupDataRoot ?? resolveStartupDataRoot();
   const mutationCoordinator = createMutationCoordinator(appDataRoot);
   reportPhase("preparing-data");
@@ -638,15 +652,27 @@ const createServices = async (
   const updateFixturePath = updateAutomationEnabled
     ? process.env.AGENTENV_AUTOMATION_UPDATE_FIXTURE
     : undefined;
+  const updateAssetPath = updateAutomationEnabled
+    ? process.env.AGENTENV_AUTOMATION_UPDATE_ASSET
+    : undefined;
   const currentAppVersion = updateAutomationEnabled &&
     process.env.AGENTENV_AUTOMATION_APP_VERSION
     ? process.env.AGENTENV_AUTOMATION_APP_VERSION
     : app.getVersion();
   const updateFetch: typeof globalThis.fetch | undefined = updateFixturePath
-    ? async () => new Response(await readFile(updateFixturePath, "utf8"), {
-        status: 200,
-        headers: { "content-type": "application/json" }
-      })
+    ? async (input) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (updateAssetPath && url.endsWith(".zip")) {
+          return new Response(await readFile(updateAssetPath), {
+            status: 200,
+            headers: { "content-type": "application/zip" }
+          });
+        }
+        return new Response(await readFile(updateFixturePath, "utf8"), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
     : undefined;
   const githubAuthService = createGitHubAuthService({
     tokenStore: createFileGitHubTokenStore(paths, {
@@ -678,9 +704,14 @@ const createServices = async (
       installChannel: app.isPackaged ? "direct" : "development"
     }
   });
-  const currentApplicationDirectory = app.isPackaged
-    ? applicationDirectoryForExecutable(app.getPath("exe"))
-    : process.env.AGENTENV_AUTOMATION_APP_DIR;
+  const currentApplicationPath = app.isPackaged
+    ? applicationPathForExecutable(app.getPath("exe"))
+    : process.env.AGENTENV_AUTOMATION_APP_PATH;
+  const currentApplicationDirectory = currentApplicationPath
+    ? dirname(currentApplicationPath)
+    : process.env.AGENTENV_AUTOMATION_APP_DIR ?? (
+        app.isPackaged ? applicationDirectoryForExecutable(app.getPath("exe")) : undefined
+      );
   const appUpdateService = createAppUpdateService({
     currentVersion: currentAppVersion,
     packaged: app.isPackaged || updateAutomationEnabled,
@@ -699,6 +730,12 @@ const createServices = async (
         ? { executableCandidates: [process.env.AGENTENV_AUTOMATION_BREW_PATH] }
         : {})
     }),
+    direct: createDirectUpdateAdapter({
+      platform: process.platform,
+      cacheDirectory: resolveAppUpdateCacheDirectory(),
+      ...(currentApplicationPath ? { applicationPath: currentApplicationPath } : {}),
+      ...(updateFetch ? { fetch: updateFetch } : {})
+    }),
     settingsStore,
     onStatusChanged: (status) => {
       telemetryService.setInstallChannel(status.installChannel);
@@ -708,11 +745,11 @@ const createServices = async (
         }
       }
     },
-    onInstalled: (restart) => {
+    onInstalled: (restart, channel) => {
       if (!restart) return;
       updateQuitInProgress = true;
       setTimeout(() => {
-        app.relaunch();
+        if (channel === "homebrew") app.relaunch();
         app.quit();
       }, 150).unref();
     }
@@ -1260,7 +1297,7 @@ if (!ownsSingleInstance) {
   });
 }
 
-if (ownsSingleInstance) void app.whenReady().then(() => {
+if (ownsSingleInstance) void app.whenReady().then(async () => {
   startupDataRoot = resolveStartupDataRoot();
   const diagnosticsDirectory = process.env.AGENTENV_LOG_ROOT?.trim() ||
     join(app.getPath("logs"), "diagnostics");
@@ -1289,6 +1326,16 @@ if (ownsSingleInstance) void app.whenReady().then(() => {
     osVersion: process.getSystemVersion(),
     locale: app.getLocale()
   });
+  await confirmDirectUpdateStartup(process.argv, resolveAppUpdateCacheDirectory())
+    .then((confirmed) => confirmed
+      ? runtimeDiagnostics?.record("app-update:startup-confirmed", "completed", {
+          outcome: "completed"
+        })
+      : undefined)
+    .catch((error) => runtimeDiagnostics?.record("app-update:startup-confirmation", "failed", {
+      outcome: "failed",
+      error
+    }));
   Menu.setApplicationMenu(Menu.buildFromTemplate(createApplicationMenuTemplate({
     isDevelopment: Boolean(process.env.ELECTRON_RENDERER_URL),
     platform: process.platform,

@@ -168,7 +168,7 @@
     },
     {
       "id": "verified-macos-release-updates",
-      "summary": "Publish ad-hoc direct macOS assets and separate stable-identity Homebrew assets, then update Cask installations through exact checksums.",
+      "summary": "Publish verified macOS assets, preserve Homebrew install locations, and transactionally update writable direct installations with startup rollback.",
       "contract": {
         "path": "docs/superpowers/specs/2026-08-03-unsigned-release-distribution-design.md",
         "anchor": "## Release Contract"
@@ -184,20 +184,21 @@
       "states": {
         "idle": "Settings shows the install channel and current version without blocking startup.",
         "working": "Check, download, and install report their own progress.",
-        "success": "The stable official Release is current or a Homebrew update is ready or installed.",
+        "success": "The stable official Release is current or a verified Homebrew or direct update is ready or installed.",
         "error": "A copyable non-blocking failure remains in Settings with Retry.",
         "cancelled": "No background update process starts without a verified available release.",
         "noOp": "Equal and older versions are reported as up to date.",
         "stale": "A release asset that does not match the exact tag, architecture, URL, and SHA-256 is rejected.",
-        "partial": "Direct installations may check but cannot install automatically.",
+        "partial": "A direct installation in a read-only or invalid application location remains check-only with an official Release action.",
         "persisted": "Update preferences persist in device-local Settings.",
-        "rollback": "Homebrew remains the installer and AgentEnv data is outside the application bundle."
+        "rollback": "Homebrew owns Cask replacement; direct replacement retains the old App until the new process confirms startup. AgentEnv data remains outside both transactions."
       },
       "evidence": {
         "domain": [
           "tests/main/releasePackaging.test.ts",
           "tests/main/appUpdates/releaseClient.test.ts",
           "tests/main/appUpdates/homebrewAdapter.test.ts",
+          "tests/main/appUpdates/directUpdateAdapter.test.ts",
           "tests/main/appUpdates/updateService.test.ts"
         ],
         "renderer": [

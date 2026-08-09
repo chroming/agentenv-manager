@@ -29,13 +29,18 @@ export interface HomebrewAdapter {
   install(expectedVersion: string): Promise<void>;
 }
 
-export const applicationDirectoryForExecutable = (executablePath: string) => {
+export const applicationPathForExecutable = (executablePath: string) => {
   let current = dirname(executablePath);
   while (current !== dirname(current)) {
-    if (current.toLowerCase().endsWith(".app")) return dirname(current);
+    if (current.toLowerCase().endsWith(".app")) return current;
     current = dirname(current);
   }
   return undefined;
+};
+
+export const applicationDirectoryForExecutable = (executablePath: string) => {
+  const applicationPath = applicationPathForExecutable(executablePath);
+  return applicationPath ? dirname(applicationPath) : undefined;
 };
 
 const defaultCanExecute = async (path: string) => {

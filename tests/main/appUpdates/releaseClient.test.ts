@@ -10,9 +10,9 @@ const releaseResponse = (overrides: Record<string, unknown> = {}) => ({
   body: "Release notes",
   assets: [
     {
-      name: "AgentEnv-Manager-0.2.0-mac-arm64.dmg",
+      name: "AgentEnv-Manager-0.2.0-mac-arm64.zip",
       browser_download_url:
-        "https://github.com/chroming/agentenv-manager/releases/download/v0.2.0/AgentEnv-Manager-0.2.0-mac-arm64.dmg",
+        "https://github.com/chroming/agentenv-manager/releases/download/v0.2.0/AgentEnv-Manager-0.2.0-mac-arm64.zip",
       digest: `sha256:${"a".repeat(64)}`,
       size: 123
     }
@@ -28,13 +28,13 @@ const manifestResponse = (overrides: Record<string, unknown> = {}) => ({
   buildFingerprint: "b".repeat(64),
   generatedAt: "2026-08-03T00:00:00Z",
   assets: [{
-    name: "AgentEnv-Manager-0.2.0-mac-arm64.dmg",
+    name: "AgentEnv-Manager-0.2.0-mac-arm64.zip",
     platform: "mac",
     arch: "arm64",
     channel: "direct",
     size: 123,
     sha256: "a".repeat(64),
-    url: "https://github.com/chroming/agentenv-manager/releases/download/v0.2.0/AgentEnv-Manager-0.2.0-mac-arm64.dmg"
+    url: "https://github.com/chroming/agentenv-manager/releases/download/v0.2.0/AgentEnv-Manager-0.2.0-mac-arm64.zip"
   }],
   ...overrides
 });
@@ -52,7 +52,7 @@ describe("release client", () => {
       tag: "v0.2.0",
       releaseUrl: "https://github.com/chroming/agentenv-manager/releases/tag/v0.2.0",
       asset: {
-        name: "AgentEnv-Manager-0.2.0-mac-arm64.dmg",
+        name: "AgentEnv-Manager-0.2.0-mac-arm64.zip",
         sha256: "a".repeat(64)
       }
     });
@@ -125,7 +125,7 @@ describe("release client", () => {
     await expect(client.readLatest({ platform: "darwin", arch: "arm64" })).resolves.toMatchObject({
       version: "0.2.0",
       asset: {
-        name: "AgentEnv-Manager-0.2.0-mac-arm64.dmg",
+        name: "AgentEnv-Manager-0.2.0-mac-arm64.zip",
         sha256: "a".repeat(64)
       }
     });
@@ -142,7 +142,7 @@ describe("release client", () => {
         .mockResolvedValueOnce(new Response(JSON.stringify(manifestResponse({
           assets: [{
             ...manifestResponse().assets[0],
-            url: "https://example.test/AgentEnv-Manager.dmg"
+            url: "https://example.test/AgentEnv-Manager.zip"
           }]
         })), { status: 200 }))
     });

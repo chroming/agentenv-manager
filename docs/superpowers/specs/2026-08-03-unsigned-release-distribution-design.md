@@ -75,9 +75,10 @@ exact SHA-256 values, and package identity checks.
 - Update checks contact only `chroming/agentenv-manager`, ignore drafts and
   prereleases on the stable channel, reject downgrades, and validate expected
   asset identity before reporting an update.
-- Homebrew is the only macOS update installer in the first release. The app may
-  check for updates when installed directly, but automatic installation requires
-  a Homebrew-managed installation.
+- Homebrew installations update through the official Cask and preserve the
+  directory containing the running App by passing it as an explicit `--appdir`.
+  Direct installations in a writable Applications folder update from the exact
+  architecture-specific ZIP named in the trusted Release response or manifest.
 - A packaged GUI discovers Homebrew independently of shell `PATH` and invokes an
   absolute executable with argument arrays, never a constructed shell command.
 - The app may prefetch an update. Installation runs only when no mutating AgentEnv
@@ -86,6 +87,19 @@ exact SHA-256 values, and package identity checks.
   After upgrade, AgentEnv verifies that Homebrew reports the exact expected
   version before restarting. The canonical data directory is outside the bundle
   and is never part of the update transaction.
+- Direct updates stream to a private cache with a fixed size ceiling and SHA-256
+  verification, then verify the extracted bundle identifier, version, and complete
+  `codesign` resource seal. A detached helper preserves the current App, commits a
+  same-directory staged bundle, and removes the backup only after the new process
+  confirms startup. A failed launch or missing confirmation restores and relaunches
+  the previous App. The helper never touches AgentEnv data.
+- Browser-downloaded Release packages retain quarantine for their first install.
+  The in-app updater may clear quarantine only from the already hash-verified,
+  identity-verified replacement bundle. A read-only App location remains check-only
+  and links to the official Release instead of requesting administrator credentials.
+- Install-on-quit belongs only to Homebrew. Direct updates require the explicit
+  `Restart and update` action so the replacement helper can observe and verify the
+  complete process handoff.
 - Update states are `disabled`, `idle`, `checking`, `up-to-date`, `available`,
   `downloading`, `ready`, `installing`, and `failed`. Failures are selectable and
   copyable and never block normal application use.
@@ -118,10 +132,12 @@ exact SHA-256 values, and package identity checks.
 ## Evidence
 
 - Domain tests cover version matching, release asset validation, Homebrew path
-  discovery, update state transitions, downgrade rejection, telemetry allowlists,
+  discovery, direct ZIP size/hash/bundle validation, startup-confirmation path
+  containment, update state transitions, downgrade rejection, telemetry allowlists,
   opt-out, and network failure.
 - Renderer tests cover Settings controls and idle/working/result/error states.
 - Electron E2E covers update checks with a fake GitHub endpoint and fake Homebrew,
+  a generated signed direct-update ZIP through the ready-to-install boundary,
   persistence across restart, and update failure feedback.
 - Cask tests install into a temporary app directory, verify the checksum-bound
   artifact, assert quarantine is absent, launch the packaged app, and exercise an

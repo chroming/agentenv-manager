@@ -90,7 +90,7 @@ const isNewer = (candidate: string, current: string) => {
 const assetNameFor = (version: string, platform: NodeJS.Platform, arch: string) => {
   if (platform === "darwin") {
     if (arch !== "arm64" && arch !== "x64") throw new Error(`Unsupported macOS architecture: ${arch}`);
-    return `AgentEnv-Manager-${version}-mac-${arch}.dmg`;
+    return `AgentEnv-Manager-${version}-mac-${arch}.zip`;
   }
   if (platform === "win32") return `AgentEnv-Manager-${version}-windows-${arch}.exe`;
   if (platform === "linux") return `AgentEnv-Manager-${version}-linux-${arch}.AppImage`;

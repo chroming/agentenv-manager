@@ -28,7 +28,7 @@ brew upgrade --cask chroming/tap/agentenv-manager
 
 Homebrew downloads the official Release for your architecture, verifies its SHA-256, and removes quarantine. Installers for macOS, Windows, and Linux are also available from [GitHub Releases](https://github.com/chroming/agentenv-manager/releases/latest).
 
-Direct macOS downloads are ad-hoc signed, without a Developer ID or notarization. Copy the app to Applications and eject the DMG before following [Apple's instructions](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac) to choose Open Anyway. Direct downloads check for updates, but you install new versions manually.
+Direct macOS downloads are ad-hoc signed, without a Developer ID or notarization. Copy the app to Applications and eject the DMG before following [Apple's instructions](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac) to choose Open Anyway. After first install, both Homebrew and direct downloads can check, verify, and install updates from Settings when the application folder is writable. A failed direct-update launch restores the previous version automatically.
 
 ## First run
 
