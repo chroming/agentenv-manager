@@ -185,7 +185,10 @@ const writePackagedTargetProfile = async (target) => {
 const launchPackagedApplication = () =>
   electron.launch({
     executablePath,
-    args: [`--user-data-dir=${join(root, "electron-user-data")}`],
+    args: [
+      `--user-data-dir=${join(root, "electron-user-data")}`,
+      ...(process.platform === "win32" ? ["--enable-logging=stderr"] : [])
+    ],
     env: {
       ...process.env,
       AGENTENV_AUTOMATION: "1",
@@ -195,6 +198,7 @@ const launchPackagedApplication = () =>
       AGENTENV_CACHE_ROOT: join(root, "cache"),
       AGENTENV_FAKE_HOME: fakeHomeRoot,
       AGENTENV_HOME: homeDir,
+      ...(process.platform === "win32" ? { ELECTRON_ENABLE_LOGGING: "1" } : {}),
       PATH: process.platform === "win32"
         ? [
             process.env.SystemRoot ? join(process.env.SystemRoot, "System32") : "",
@@ -253,7 +257,7 @@ try {
   }
   reportPackagedStage("prepare migration fixtures");
   await writeFile(join(opencodeDir, "AGENTS.md"), "# Before packaged takeover\n", "utf8");
-  await writeFile(join(opencodeDir, "opencode.jsonc"), "{\"theme\":\"system\"}\n", "utf8");
+  await writeFile(join(opencodeDir, "opencode.jsonc"), "{}\n", "utf8");
   await mkdir(dirname(legacyOwnerSidecar), { recursive: true });
   await mkdir(dirname(legacyTargetState), { recursive: true });
   const legacyOwnerContent = "{\"owner\":\"agentenv-manager\"}\n";
@@ -346,6 +350,9 @@ try {
     launchPackagedApplication
   );
   applicationProcess = application.process();
+  applicationProcess.stderr?.on("data", (chunk) => {
+    process.stderr.write(`[packaged-app] ${String(chunk)}`);
+  });
   const page = await runPackagedStep(
     "open initial window",
     () => application.firstWindow()
@@ -373,7 +380,7 @@ try {
       assert.match((await agent.textContent()) ?? "", /Ready/);
     }
   });
-  await runPackagedStep("review OpenCode capture in packaged renderer", async () => {
+  const reviewOpenCodeCapture = async (expectedAdvisoryCount) => {
     await page.getByRole("button", { name: "Profiles", exact: true }).click();
     await page.getByRole("region", { name: "Profiles", exact: true })
       .waitFor({ state: "visible" });
@@ -387,9 +394,30 @@ try {
     await dialog.getByRole("button", { name: "Review", exact: true }).click();
     dialog = page.getByRole("dialog", { name: "Review OpenCode capture", exact: true });
     await dialog.waitFor({ state: "visible" });
-    assert.match((await dialog.textContent()) ?? "", /2 items will remain outside AgentEnv/);
+    if (expectedAdvisoryCount > 0) {
+      assert.match(
+        (await dialog.textContent()) ?? "",
+        new RegExp(`${expectedAdvisoryCount} items will remain outside AgentEnv`)
+      );
+    } else {
+      assert.doesNotMatch(
+        (await dialog.textContent()) ?? "",
+        /items will remain outside AgentEnv/
+      );
+    }
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await dialog.waitFor({ state: "hidden" });
+  };
+  await runPackagedStep("review OpenCode capture without advisories", async () => {
+    await reviewOpenCodeCapture(0);
+  });
+  await runPackagedStep("review OpenCode capture with advisories", async () => {
+    await writeFile(
+      join(opencodeDir, "opencode.jsonc"),
+      "{\"theme\":\"system\"}\n",
+      "utf8"
+    );
+    await reviewOpenCodeCapture(2);
   });
   const packagedProject = await runPackagedStep(
     "add and inspect packaged Project",
