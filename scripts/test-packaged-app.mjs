@@ -251,7 +251,7 @@ try {
   }
   reportPackagedStage("prepare migration fixtures");
   await writeFile(join(opencodeDir, "AGENTS.md"), "# Before packaged takeover\n", "utf8");
-  await writeFile(join(opencodeDir, "opencode.jsonc"), "{}\n", "utf8");
+  await writeFile(join(opencodeDir, "opencode.jsonc"), "{\"theme\":\"system\"}\n", "utf8");
   await mkdir(dirname(legacyOwnerSidecar), { recursive: true });
   await mkdir(dirname(legacyTargetState), { recursive: true });
   const legacyOwnerContent = "{\"owner\":\"agentenv-manager\"}\n";
@@ -370,6 +370,24 @@ try {
       await agent.waitFor({ state: "visible" });
       assert.match((await agent.textContent()) ?? "", /Ready/);
     }
+  });
+  await runPackagedStep("review OpenCode capture in packaged renderer", async () => {
+    await page.getByRole("button", { name: "Profiles", exact: true }).click();
+    await page.getByRole("region", { name: "Profiles", exact: true })
+      .waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Choose Profile", exact: true }).click();
+    const switcher = page.getByRole("dialog", { name: "Choose Profile", exact: true });
+    await switcher.getByRole("button", { name: "New Profile", exact: true }).click();
+    let dialog = page.getByRole("dialog", { name: "New Profile", exact: true });
+    await dialog.getByRole("button", { name: "From Agent", exact: true }).click();
+    dialog = page.getByRole("dialog", { name: "Create Profile from OpenCode", exact: true });
+    await dialog.getByLabel("Profile source Agent").selectOption("opencode");
+    await dialog.getByRole("button", { name: "Review", exact: true }).click();
+    dialog = page.getByRole("dialog", { name: "Review OpenCode capture", exact: true });
+    await dialog.waitFor({ state: "visible" });
+    assert.match((await dialog.textContent()) ?? "", /2 items will remain outside AgentEnv/);
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await dialog.waitFor({ state: "hidden" });
   });
   const packagedProject = await runPackagedStep(
     "add and inspect packaged Project",

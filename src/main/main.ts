@@ -509,9 +509,20 @@ const createWindow = () => {
   win.webContents.on("did-start-loading", () => {
     guardedWindowCloses.delete(win);
   });
-  win.webContents.on("render-process-gone", () => {
+  win.webContents.on("render-process-gone", (_event, details) => {
     guardedWindowCloses.delete(win);
-    void startupDiagnostics?.record("renderer-process-gone");
+    const context = {
+      reason: details.reason,
+      exitCode: details.exitCode
+    };
+    void startupDiagnostics?.record("renderer-process-gone", context);
+    void runtimeDiagnostics?.record("renderer:process-gone", "failed", {
+      outcome: "failed",
+      context,
+      error: new Error(
+        `Renderer process exited (${details.reason}, exit code ${details.exitCode})`
+      )
+    });
   });
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (event) => {

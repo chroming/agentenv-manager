@@ -4565,10 +4565,14 @@ describe("App", () => {
       suggestedName: "OpenCode",
       createdAt: "2026-07-24T00:00:00.000Z",
       resources: [],
-      warnings: [],
+      warnings: [
+        "OpenCode native settings remain Agent-owned",
+        "opencode.jsonc.theme"
+      ],
       errors: []
     };
     const api = installApi({
+      platform: "win32",
       listTargetStates: vi.fn().mockResolvedValue([]),
       previewCreateProfileFromTarget: vi.fn().mockResolvedValue(previewCapture),
       createProfileFromTarget: vi.fn().mockResolvedValue({
@@ -4597,6 +4601,10 @@ describe("App", () => {
       )
     );
     dialog = screen.getByRole("dialog", { name: "Review OpenCode capture" });
+    expect(dialog).toHaveTextContent("2 items will remain outside AgentEnv");
+    expect(within(dialog).getByLabelText("Capture summary")).toHaveTextContent(
+      "0Profile resources"
+    );
     fireEvent.click(within(dialog).getByRole("button", { name: "Save Profile" }));
 
     await waitFor(() =>

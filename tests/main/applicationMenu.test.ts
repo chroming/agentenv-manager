@@ -9,7 +9,7 @@ const allItems = (items: MenuItemConstructorOptions[]): MenuItemConstructorOptio
   ]);
 
 describe("application menu", () => {
-  it("keeps browser reload and developer tools out of production", () => {
+  it("keeps reload out of production while retaining diagnostic developer tools", () => {
     const openSettings = vi.fn();
     const exportDiagnostics = vi.fn();
     const items = allItems(createApplicationMenuTemplate({
@@ -21,7 +21,8 @@ describe("application menu", () => {
 
     expect(items.map((item) => item.role)).not.toContain("reload");
     expect(items.map((item) => item.role)).not.toContain("forceReload");
-    expect(items.map((item) => item.role)).not.toContain("toggleDevTools");
+    expect(items.find((item) => item.role === "toggleDevTools")?.accelerator)
+      .toBe("Alt+Command+I");
 
     const settings = items.find((item) => item.accelerator === "CmdOrCtrl+,");
     expect(settings?.label).toBe("Settings…");
@@ -33,7 +34,7 @@ describe("application menu", () => {
     expect(exportDiagnostics).toHaveBeenCalledTimes(1);
   });
 
-  it("retains reload and developer tools only for the development server", () => {
+  it("retains reload and developer tools for the development server", () => {
     const items = allItems(createApplicationMenuTemplate({
       isDevelopment: true,
       platform: "darwin",
@@ -61,5 +62,7 @@ describe("application menu", () => {
     expect(items.map((item) => item.role)).toContain("about");
     expect(items.find((item) => item.accelerator === "CmdOrCtrl+,")?.label)
       .toBe("Settings…");
+    expect(items.find((item) => item.role === "toggleDevTools")?.accelerator)
+      .toBe("Ctrl+Shift+I");
   });
 });

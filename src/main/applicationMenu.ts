@@ -17,12 +17,19 @@ export const createApplicationMenuTemplate = ({
   if (isDevelopment) {
     viewSubmenu.push(
       { role: "reload" },
-      { role: "forceReload" },
-      { role: "toggleDevTools" },
-      { type: "separator" }
+      { role: "forceReload" }
     );
   }
-  viewSubmenu.push({ role: "resetZoom" }, { role: "zoomIn" }, { role: "zoomOut" });
+  viewSubmenu.push(
+    {
+      role: "toggleDevTools",
+      accelerator: platform === "darwin" ? "Alt+Command+I" : "Ctrl+Shift+I"
+    },
+    { type: "separator" },
+    { role: "resetZoom" },
+    { role: "zoomIn" },
+    { role: "zoomOut" }
+  );
 
   const editMenu: MenuItemConstructorOptions = {
     role: "editMenu",
