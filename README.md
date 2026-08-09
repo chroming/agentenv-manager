@@ -22,6 +22,12 @@ brew install --cask chroming/tap/agentenv-manager
 
 Homebrew 会按架构下载官方 Release、验证 SHA-256，并移除 quarantine。以后可以在应用内直接安装更新。
 
+更新已安装版本：
+
+```bash
+brew upgrade --cask chroming/tap/agentenv-manager
+```
+
 macOS、Windows 和 Linux 安装包也可以从 [GitHub Releases](https://github.com/chroming/agentenv-manager/releases/latest) 下载。macOS 直接下载包使用 ad-hoc 签名，没有 Developer ID 和公证；请先把应用复制到“应用程序”并推出 DMG，再按 [Apple 的说明](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac)选择“仍要打开”。直接下载的版本可以检查更新，但需要手动安装新版本。
 
 ## 第一次使用
@@ -51,6 +57,8 @@ Compare 会消耗对应 Agent 的账号额度，但不会 Apply，也不会修�
 ## Workspaces
 
 Workspaces 保存常用本地目录的引用，并按所选 Agent 展示该目录会加载的 Instructions、Skills 和 MCP 名称。你可以编辑明确支持的 Workspace Instructions、把 Library Skill 复制为目录中的普通文件，也可以用已安装的 Agent 在该目录启动工作。
+
+![Workspace resources](docs/images/workspaces.png)
 
 目录中的文件始终是唯一事实源，不会绑定或 Apply Profile。AgentEnv 不会在 Workspace 中创建 Library 链接，也不会替你 stage 或 commit Git 变化。写入前会校验文件版本并创建独立恢复点；移除 Workspace 只删除应用内引用，不会删除目录。
 

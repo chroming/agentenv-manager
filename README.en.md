@@ -22,6 +22,12 @@ brew install --cask chroming/tap/agentenv-manager
 
 Homebrew downloads the official Release for your architecture, verifies its SHA-256, and removes quarantine. Future updates can be installed from inside the app.
 
+Upgrade an existing installation with:
+
+```bash
+brew upgrade --cask chroming/tap/agentenv-manager
+```
+
 Installers for macOS, Windows, and Linux are also available from [GitHub Releases](https://github.com/chroming/agentenv-manager/releases/latest). Direct macOS downloads are ad-hoc signed, without a Developer ID or notarization. Copy the app to Applications and eject the DMG before following [Apple's instructions](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac) to choose Open Anyway. Direct downloads can check for updates, but you install the new version manually.
 
 ## First run
@@ -51,6 +57,8 @@ Compare consumes quota from the selected Agent account. It does not Apply the Pr
 ## Workspaces
 
 Workspaces keeps references to frequently used local folders and shows the Instructions, Skills, and MCP names each selected Agent can load there. You can edit explicitly supported Instructions, copy Library Skills into ordinary folder-owned files, and open the folder with an installed Agent.
+
+![Workspace resources](docs/images/workspaces.png)
 
 The original folder remains the source of truth and is never bound to or overwritten by a Profile. AgentEnv does not create Library links in Workspaces or stage and commit Git changes. Writes verify the current file and create a separate recovery point first. Removing a Workspace deletes only the app reference, never the folder.
 
