@@ -6,9 +6,15 @@
 [![CI](https://github.com/chroming/agentenv-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/chroming/agentenv-manager/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/chroming/agentenv-manager)](LICENSE)
 
-AgentEnv Manager 是一个本地桌面应用，用来管理多个 coding agent 的 Profiles、Skills 和历史对话。你可以把一套工作方式保存为 Profile，在写入 Agent 前预览变化、隔离对比运行效果，并在需要时从恢复点还原。
+AgentEnv Manager 用来统一管理多个 coding agent 的工作环境，主要功能包括：
 
-应用只管理每个 Agent 明确支持的 Instructions、Skills 和 MCP 启停状态，不接管模型、账号、凭据或整份原生配置。
+- **Profile 切换：**保存不同的 Instructions、Skills 和 MCP 组合，并应用到 Codex、Claude Code、OpenCode 等 Agent。
+- **Skills 管理：**从本地、ZIP、GitHub 或 Git 仓库导入 Skills，集中启用、停用和更新，并持续检查来源变化。
+- **项目环境：**保存常用项目目录，管理项目自己的 Instructions 和 Skills，并直接用已安装的 Agent 打开。
+- **对话历史：**搜索多个 Agent 的本地历史对话，回到原对话，或交给另一个 Agent 继续。
+- **应用前试用：**预览 Profile 会带来的变化，用同一个任务对比当前环境和新 Profile，再决定是否应用。
+
+它不会接管模型、账号、凭据或整份配置文件，只处理各 Agent 明确支持的 Instructions、Skills 和 MCP 开关。
 
 ![Agents overview](docs/images/agents.png)
 

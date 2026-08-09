@@ -6,9 +6,15 @@ English | [简体中文](README.md)
 [![CI](https://github.com/chroming/agentenv-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/chroming/agentenv-manager/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/chroming/agentenv-manager)](LICENSE)
 
-AgentEnv Manager is a local desktop app for managing Profiles, Skills, and conversation history across coding agents. Save a working setup as a Profile, preview or compare it before writing to an Agent, and restore from a recovery point when needed.
+AgentEnv Manager keeps coding agent environments in one place. Its main features are:
 
-The app manages only the Instructions, Skills, and MCP enablement supported by each Agent integration. It does not take ownership of models, accounts, credentials, or entire native configuration files.
+- **Profile switching:** Save combinations of Instructions, Skills, and MCP servers, then apply them to Codex, Claude Code, OpenCode, and other supported Agents.
+- **Skills management:** Import Skills from local folders, ZIP archives, GitHub, or Git repositories, manage them in one Library, and keep checking their sources for updates.
+- **Project environments:** Save frequently used project folders, manage their Instructions and Skills, and open them with an installed Agent.
+- **Conversation history:** Search local conversations from multiple Agents, return to the original session, or continue with another Agent.
+- **Try before Apply:** Preview Profile changes and run the same task with the current setup and a proposed Profile before deciding whether to apply it.
+
+It does not take over models, accounts, credentials, or entire configuration files. It only manages the Instructions, Skills, and MCP switches explicitly supported by each Agent integration.
 
 ![Agents overview](docs/images/agents.png)
 
