@@ -46,6 +46,7 @@ Product ratings:
 - Product semantics, Profile data, Library identity, Preview, Apply, Backup, and recovery MUST remain platform-neutral. Operating-system branching belongs in main-process platform owners, never in Renderer workflows or Target-specific business rules.
 - macOS preserves the established `~/.config/agentenv-manager` data root. Linux follows `XDG_CONFIG_HOME` with the standard `~/.config` fallback. Windows stores product data under Electron userData. `AGENTENV_DATA_ROOT` remains the explicit development and recovery override everywhere.
 - Executable discovery MUST understand each platform's path delimiter and executable rules. Windows discovery includes `PATHEXT` plus common npm, pnpm, Scoop, Chocolatey, Volta, Bun, WindowsApps, and system locations; POSIX desktop launches may use a bounded login-shell fallback.
+- The Windows desktop application manages Windows-native Agent commands and Windows user data. WSL distributions are separate execution and filesystem domains and are not currently Target runtimes; finding `wsl.exe` or configuring a wrapper MUST NOT be presented as WSL support.
 - `auto` is the default Skill deployment strategy. It uses directory links on POSIX, directory junctions on Windows, and falls back to an owned copy only when link creation is unsupported. Explicit copy and explicit live-link choices retain their meaning.
 - Ordinary file writes use a same-directory temporary file, file sync, atomic
   rename, and bounded Windows lock retry; the previous file remains intact if

@@ -31,7 +31,10 @@ const assertRegularFile = async (path: string) => {
 const assertExactEntries = async (root: string, expected: string[]) => {
   const actual = (await readdir(root)).sort();
   if (actual.join("\0") !== [...expected].sort().join("\0")) {
-    throw new Error(`Portable Workspace directory has unexpected entries: ${root}`);
+    throw new Error(
+      `Portable Workspace directory has unexpected entries: ${root}. ` +
+      `Expected ${[...expected].sort().join(", ")}; found ${actual.join(", ") || "nothing"}`
+    );
   }
 };
 

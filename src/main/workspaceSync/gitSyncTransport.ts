@@ -92,6 +92,12 @@ export const createGitSyncTransport = (
       }
     }
     await rm(join(destination, ".git"), { recursive: true, force: true });
+    // Git does not preserve empty directories. Recreate the two required
+    // collection roots before the portable snapshot is validated.
+    await Promise.all([
+      mkdir(join(destination, "workspace", "profiles"), { recursive: true }),
+      mkdir(join(destination, "workspace", "skills"), { recursive: true })
+    ]);
     await assertSyncManifest(destination);
     return { revision, snapshotRoot: destination };
   },

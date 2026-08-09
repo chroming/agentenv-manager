@@ -79,14 +79,17 @@ describe("Workspace Sync settings", () => {
       recoverWorkspaceSync: vi.fn().mockResolvedValue({ ...status, kind: "up-to-date", message: undefined })
     } as unknown as AgentEnvApi;
     Object.defineProperty(window, "agentEnv", { configurable: true, value: api });
+    const onWorkspaceChanged = vi.fn();
 
-    render(<WorkspaceSyncSettings />);
+    render(<WorkspaceSyncSettings onWorkspaceChanged={onWorkspaceChanged} />);
 
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Recovery required"));
     expect(screen.getByRole("button", { name: "Recover Workspace" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Disconnect" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Check" })).toBeNull();
     await waitFor(() => expect(api.checkWorkspaceSync).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Recover Workspace" }));
+    await waitFor(() => expect(onWorkspaceChanged).toHaveBeenCalledTimes(1));
   });
 
   it("ends the startup checking state when a connected repository check fails", async () => {

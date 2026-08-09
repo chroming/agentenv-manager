@@ -806,6 +806,25 @@ const AppContent = ({
     return { ...core, ...enrichment };
   };
 
+  const refreshWorkspaceStateAfterSync = () => {
+    const profileId = selectedProfileId;
+    void refreshProfiles({ checkSkillUpdates: false })
+      .then(async ({ profileItems }) => {
+        const selectedSummary = (
+          profileId ? profileItems.find((item) => item.id === profileId) : undefined
+        ) ?? profileItems.find((item) => !item.loadError);
+        if (!selectedSummary || selectedSummary.loadError) {
+          clearSelectedProfile();
+          return;
+        }
+        acceptSelectedProfile(await window.agentEnv.readProfile(selectedSummary.id));
+        invalidateProfilePresentation();
+      })
+      .catch((unknownError) => {
+        setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      });
+  };
+
   const backupRecovery = useBackupRecoveryController({
     activeWorkspace,
     onBusyChange: setBusy,
@@ -4547,7 +4566,7 @@ const AppContent = ({
             ) : null}
             {settingsCategory === "connections" ? (
               <>
-                <WorkspaceSyncSettings />
+                <WorkspaceSyncSettings onWorkspaceChanged={refreshWorkspaceStateAfterSync} />
                 <GitHubConnectionSettings
                   authStatus={githubAuthStatus}
                   busy={busy}

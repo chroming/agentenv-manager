@@ -65,7 +65,13 @@ export const groupWorkspaceSyncChanges = (changes: WorkspaceSyncChange[]): Works
   return [...rows.values()];
 };
 
-export const WorkspaceSyncSettings = () => {
+interface WorkspaceSyncSettingsProps {
+  onWorkspaceChanged?(): void;
+}
+
+export const WorkspaceSyncSettings = ({
+  onWorkspaceChanged
+}: WorkspaceSyncSettingsProps = {}) => {
   const { t } = useI18n();
   const [status, setStatus] = useState(emptyStatus);
   const [loading, setLoading] = useState(true);
@@ -263,6 +269,7 @@ export const WorkspaceSyncSettings = () => {
     if (result) {
       setStatus(result.status);
       setReview(undefined);
+      onWorkspaceChanged?.();
     }
   };
   const disconnect = async () => {
@@ -274,7 +281,10 @@ export const WorkspaceSyncSettings = () => {
   };
   const recover = async () => {
     const next = await run("recover", () => window.agentEnv.recoverWorkspaceSync());
-    if (next) setStatus(next);
+    if (next) {
+      setStatus(next);
+      onWorkspaceChanged?.();
+    }
   };
 
   return (

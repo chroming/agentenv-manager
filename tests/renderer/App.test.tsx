@@ -2707,6 +2707,91 @@ describe("App", () => {
     expect(screen.getByText("Connected")).toBeInTheDocument();
   });
 
+  it("refreshes the Profile switcher after Workspace Sync updates this device", async () => {
+    let workspaceUpdated = false;
+    const syncedProfile: ProfileDetail = {
+      ...profile,
+      id: "synced-review",
+      profileDir: "/tmp/profiles/synced-review",
+      manifest: {
+        ...profile.manifest,
+        id: "synced-review",
+        name: "Synced Review"
+      },
+      contentHash: "synced-profile-hash"
+    };
+    const syncStatus = {
+      kind: "remote-changes" as const,
+      connection: { repository: "git@github.com:me/workspace.git", branch: "main" },
+      localChangeCount: 0,
+      remoteChangeCount: 1,
+      conflictCount: 0,
+      immediateAgentCount: 0
+    };
+    const api = installApi({
+      listProfiles: vi.fn(async () => [
+        {
+          id: profile.id,
+          preferredTargetId: profile.manifest.preferredTargetId,
+          name: profile.manifest.name,
+          description: profile.manifest.description,
+          contentHash: profile.contentHash
+        },
+        ...(workspaceUpdated
+          ? [{
+              id: syncedProfile.id,
+              preferredTargetId: syncedProfile.manifest.preferredTargetId,
+              name: syncedProfile.manifest.name,
+              description: syncedProfile.manifest.description,
+              contentHash: syncedProfile.contentHash
+            }]
+          : [])
+      ]),
+      readProfile: vi.fn(async (profileId) =>
+        profileId === syncedProfile.id ? syncedProfile : profile),
+      readWorkspaceSyncStatus: vi.fn().mockResolvedValue(syncStatus),
+      checkWorkspaceSync: vi.fn().mockResolvedValue(syncStatus),
+      reviewWorkspaceSync: vi.fn().mockResolvedValue({
+        baseRevision: "base",
+        remoteRevision: "remote",
+        changes: [{
+          key: "profile:synced-review:manifest",
+          resourceKind: "profile",
+          resourceId: syncedProfile.id,
+          section: "manifest",
+          action: "add",
+          direction: "remote",
+          title: syncedProfile.manifest.name
+        }],
+        liveSkillIds: [],
+        liveAgentIds: [],
+        canUpdate: true,
+        canPublish: false
+      }),
+      updateWorkspaceFromSync: vi.fn().mockImplementation(async () => {
+        workspaceUpdated = true;
+        return {
+          status: {
+            ...syncStatus,
+            kind: "up-to-date" as const,
+            remoteChangeCount: 0
+          }
+        };
+      })
+    });
+    render(<App />);
+
+    await openSettingsCategory("Connections");
+    fireEvent.click(await screen.findByRole("button", { name: "Update this device" }));
+    const review = await screen.findByRole("dialog", { name: "Review Workspace changes" });
+    fireEvent.click(within(review).getByRole("button", { name: "Update this device" }));
+    await waitFor(() => expect(api.updateWorkspaceFromSync).toHaveBeenCalledTimes(1));
+
+    await openProfiles();
+    const switcher = await openProfileSwitcher();
+    expect(within(switcher).getByText("Synced Review")).toBeInTheDocument();
+  });
+
   it("presents Live link as the default recommended Skill deployment mode", async () => {
     installApi();
     render(<App />);
