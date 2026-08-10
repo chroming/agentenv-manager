@@ -171,15 +171,13 @@ describe("ProjectsWorkspace", () => {
     expect(document.querySelector(".project-context-summary")).toBeNull();
     expect(screen.getByRole("heading", { name: "Example" }).closest(".ui-inspector-header"))
       .toBeInTheDocument();
-    const agentSwitcher = screen.getByRole("button", { name: "Choose Agent" });
+    const agentSwitcher = screen.getByRole("button", { name: "Current Agent OpenCode" });
     expect(agentSwitcher.closest(".project-agent-switcher")).not.toBeNull();
     expect(agentSwitcher.querySelector(".project-agent-switcher__logo")).not.toBeNull();
+    expect(agentSwitcher).toBeDisabled();
     fireEvent.click(agentSwitcher);
-    const agentDialog = await screen.findByRole("dialog", { name: "Choose Agent" });
-    const agentOption = within(agentDialog).getByRole("option", { name: /OpenCode/ });
-    expect(agentOption).toHaveClass("ui-selectable-row");
-    expect(agentOption.querySelector(".project-agent-switcher__logo")).not.toBeNull();
-    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Current Agent OpenCode" }))
+      .not.toBeInTheDocument();
     const skillsSection = await screen.findByRole("region", { name: "Skills" });
     expect(skillsSection).toHaveClass("ui-resource-disclosure");
     expect(within(skillsSection).getByText("Regular files copied into this folder"))
@@ -206,7 +204,8 @@ describe("ProjectsWorkspace", () => {
     expect(within(dialog).getByRole("combobox", { name: /Workspace location/ }).closest(".ui-field"))
       .toBeInTheDocument();
     expect(within(dialog).queryByRole("combobox", { name: "Agent" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose Agent" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Current Agent OpenCode" }))
+      .toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Preview environment" })).not.toBeInTheDocument();
   });
 
@@ -485,6 +484,10 @@ describe("ProjectsWorkspace", () => {
     expect(await screen.findByRole("heading", { name: "Second" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: "Choose Agent" }))
       .toHaveTextContent("Codex"));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Agent" }));
+    expect(within(await screen.findByRole("dialog", { name: "Choose Agent" }))
+      .getAllByRole("option")).toHaveLength(2);
+    fireEvent.keyDown(document, { key: "Escape" });
     fireEvent.click(screen.getByRole("button", { name: "Choose Workspace" }));
     const workspaceSwitcher = within(await screen.findByRole("dialog", { name: "Choose Workspace" }));
     const workspaceOptions = workspaceSwitcher.getAllByRole("option");
@@ -511,7 +514,7 @@ describe("ProjectsWorkspace", () => {
       <ProjectsWorkspace targets={[target]} uiState={uiState} />
     );
 
-    expect(await screen.findByRole("button", { name: "Choose Agent" }))
+    expect(await screen.findByRole("button", { name: "Current Agent OpenCode" }))
       .toHaveTextContent("OpenCode");
 
     rerender(

@@ -685,7 +685,9 @@ export const ProjectsWorkspace = ({
                       onRefresh={() => void refreshSelectedProject()}
                     />
                     <ObjectSwitcher
-                      ariaLabel={t("Choose Agent")}
+                      ariaLabel={availableTargets.length === 1 && selectedAgent
+                        ? t("Current Agent {{name}}", { name: selectedAgent.name })
+                        : t("Choose Agent")}
                       className="agent-context-switcher project-agent-switcher"
                       disabled={availableTargets.length === 0}
                       emptyMessage={t("No enabled Agents")}
@@ -696,6 +698,7 @@ export const ProjectsWorkspace = ({
                       searchLabel={t("Search Agents")}
                       searchPlaceholder={t("Search Agents")}
                       selectedId={selectedAgent?.id}
+                      static={availableTargets.length === 1}
                       onOpenChange={setAgentSwitcherOpen}
                       onQueryChange={setAgentQuery}
                       onSelect={(agentId) => {
