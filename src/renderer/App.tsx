@@ -127,8 +127,9 @@ import { ProfileActionsMenu } from "./components/ProfileActionsMenu";
 import { ProfileComposerSection } from "./components/ProfileComposerSection";
 import { GeneralSettingsSection, SettingsCategoryTabs, type SettingsCategory } from "./components/SettingsCategoryTabs";
 import {
-  appShellClassName, ProfileSidebar, targetIconFor, type AppWorkspace
+  appShellClassName, ProfileSidebar, type AppWorkspace
 } from "./components/ProfileSidebar";
+import { AgentContextSwitcher } from "./components/AgentContextSwitcher";
 import {
   SkillLibraryPanel
 } from "./components/SkillLibraryPanel";
@@ -3480,37 +3481,14 @@ const AppContent = ({
     setIsProfileActionsOpen(false);
     setProfileEvaluationOpen(true);
   };
-  const targetSwitcherItems = targets.map((target) => {
-    const icon = targetIconFor(target);
-    return {
-      id: target.id,
-      title: target.name,
-      searchText: target.name,
-      icon: icon.assetUrl ? (
-        <img
-          className={`agent-context-switcher__logo profile-target-logo--${icon.flavor}`}
-          src={icon.assetUrl}
-          alt=""
-        />
-      ) : <Monitor size={16} aria-hidden="true" />
-    };
-  });
-  const targetWorkspaceControl = targets.length === 0 ? null : (
-    <ObjectSwitcher
-      ariaLabel={installedTargets.length === 1 && selectedTarget
-        ? t("Current Agent {{name}}", { name: selectedTarget.name })
-        : t("Select apply Agent")}
-      className="agent-context-switcher profile-agent-switcher"
-      emptyMessage={t("No enabled Agents")}
-      fullWidth
-      items={targetSwitcherItems}
+  const targetWorkspaceControl = (
+    <AgentContextSwitcher
+      className="profile-agent-switcher"
       open={isTargetMenuOpen}
       query={targetMenuQuery}
-      searchLabel={t("Search Agents")}
-      searchPlaceholder={t("Search Agents")}
       selectedId={selectedTargetId}
-      static={installedTargets.length === 1}
-      showTriggerDescription={false}
+      selectionLabel={t("Select apply Agent")}
+      targets={targets}
       onOpenChange={(open) => {
         setIsProfileActionsOpen(false);
         setIsTargetMenuOpen(open);

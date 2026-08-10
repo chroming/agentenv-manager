@@ -61,6 +61,19 @@
   min-width: 0;
 }
 
+.agent-context-switcher {
+  flex: 0 0 150px;
+  min-width: 0;
+  width: 150px;
+}
+
+.agent-context-switcher__logo {
+  display: block;
+  height: 17px;
+  object-fit: contain;
+  width: 17px;
+}
+
 .ui-object-switcher__trigger {
   align-items: center;
   background: var(--surface);

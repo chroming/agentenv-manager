@@ -113,7 +113,7 @@ describe("Workspaces desktop workflow", () => {
       name: "Current Agent OpenCode",
       exact: true
     });
-    await expect.poll(() => agentSwitcher.locator(".project-agent-switcher__logo").count())
+    await expect.poll(() => agentSwitcher.locator(".agent-context-switcher__logo").count())
       .toBe(1);
     expect(await agentSwitcher.isDisabled()).toBe(true);
     expect(await page.getByRole("dialog", { name: "Current Agent OpenCode" }).count()).toBe(0);

@@ -249,6 +249,10 @@ AgentEnv-owned copy of the folder and does not require Git.
   Workspace root as `cwd`. The primary action uses the last-used installed Agent and its adjacent menu
   offers other installed Agents with launch capability. Open does not Save or Apply a Profile and
   does not mutate Workspace resources.
+- Profile and Workspace use one Agent-context selector contract. Each surface supplies only the
+  Agents eligible for its current task; the shared selector is disabled for zero candidates, shows
+  one candidate as static current context without a menu, and becomes searchable only when at least
+  two candidates offer a real choice. Pages MUST NOT redefine these count states independently.
 - The selected `Agent` is the context for Workspace inspection, supported edits, Preview, and Open;
   it MUST NOT be labelled as only an `Open with` preference. Changing it refreshes the visible
   resources before another Agent-scoped mutation can be reviewed. Resource identity remains plain

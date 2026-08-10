@@ -44,4 +44,20 @@ describe("public product model contract", () => {
     expect(gitService).toContain('["rev-parse", "--show-toplevel"]');
     expect(gitService).not.toMatch(/\["(?:add|commit|checkout|reset|clean|stash)"/);
   });
+
+  it("keeps Profile and Workspace Agent count behavior under one owner", async () => {
+    const [profileWorkspace, projectWorkspace, agentSwitcher, contract] = await Promise.all([
+      read("src/renderer/App.tsx"),
+      read("src/renderer/components/ProjectsWorkspace.tsx"),
+      read("src/renderer/components/AgentContextSwitcher.tsx"),
+      read("docs/product-contracts.md")
+    ]);
+
+    expect(profileWorkspace).toContain("<AgentContextSwitcher");
+    expect(projectWorkspace).toContain("<AgentContextSwitcher");
+    expect(profileWorkspace).not.toContain("static={installedTargets.length === 1}");
+    expect(projectWorkspace).not.toContain("static={availableTargets.length === 1}");
+    expect(agentSwitcher).toContain("const isStatic = targets.length === 1");
+    expect(contract).toContain("Pages MUST NOT redefine these count states independently.");
+  });
 });
