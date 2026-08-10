@@ -27,6 +27,7 @@
 @import "./pages/diagnostics.css" layer(pages);
 @import "./pages/profile-mcp.css" layer(pages);
 @import "./pages/profile-composer.css" layer(pages);
+@import "./pages/instructions.css" layer(pages);
 @import "./pages/profile-evaluation.css" layer(pages);
 @import "./pages/apply-preview.css" layer(pages);
 @import "./pages/diff-workspace.css" layer(pages);

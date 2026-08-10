@@ -189,6 +189,36 @@ describe("ObjectSwitcher", () => {
     expect(trigger.parentElement?.classList.contains("ui-object-switcher--icon-trigger")).toBe(true);
   });
 
+  it("renders a single Agent as static context with the same trigger geometry", () => {
+    const onOpenChange = vi.fn();
+    render(
+      <ObjectSwitcher
+        ariaLabel="Current Agent OpenCode"
+        className="agent-context-switcher"
+        fullWidth
+        items={[{ id: "opencode", title: "OpenCode", icon: <span>O</span> }]}
+        open={false}
+        query=""
+        searchLabel="Search Agents"
+        searchPlaceholder="Search Agents"
+        selectedId="opencode"
+        static
+        showTriggerDescription={false}
+        onOpenChange={onOpenChange}
+        onQueryChange={() => undefined}
+        onSelect={() => undefined}
+      />
+    );
+
+    const trigger = screen.getByRole("button", { name: "Current Agent OpenCode" });
+    expect(trigger).toBeDisabled();
+    expect(trigger).not.toHaveAttribute("aria-haspopup");
+    expect(trigger.querySelector(".ui-object-switcher__trigger-icon")).not.toBeNull();
+    expect(trigger.querySelector(":scope > svg")).toBeNull();
+    fireEvent.click(trigger);
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
   it("supports an inline title trigger for the current object header", () => {
     render(
       <ObjectSwitcher
@@ -211,5 +241,109 @@ describe("ObjectSwitcher", () => {
     expect(trigger.parentElement?.classList.contains("ui-object-switcher--inline-trigger")).toBe(true);
     expect(screen.getByText("Daily Coding")).toBeInTheDocument();
     expect(screen.queryByText("OpenCode · Active")).not.toBeInTheDocument();
+  });
+
+  it("reorders complete unfiltered lists by drag or keyboard", () => {
+    const onReorder = vi.fn();
+    const dataTransfer = {
+      dropEffect: "none",
+      effectAllowed: "none",
+      setData: vi.fn()
+    };
+    const { rerender } = render(
+      <ObjectSwitcher
+        ariaLabel="Choose Profile"
+        items={[
+          { id: "daily", title: "Daily Coding" },
+          { id: "review", title: "Code Review" }
+        ]}
+        open
+        query=""
+        searchLabel="Search Profiles"
+        searchPlaceholder="Search Profiles"
+        selectedId="daily"
+        onOpenChange={() => undefined}
+        onQueryChange={() => undefined}
+        onReorder={onReorder}
+        onSelect={() => undefined}
+      />
+    );
+
+    const daily = screen.getByRole("option", { name: /Daily Coding/ });
+    const review = screen.getByRole("option", { name: /Code Review/ });
+    vi.spyOn(review, "getBoundingClientRect").mockReturnValue({
+      bottom: 20,
+      height: 20,
+      left: 0,
+      right: 200,
+      top: 0,
+      width: 200,
+      x: 0,
+      y: 0,
+      toJSON: () => ({})
+    });
+    const handles = screen.getAllByRole("button", { name: "Reorder" });
+    expect(daily).not.toHaveAttribute("draggable");
+    expect(handles[0]).toHaveAttribute("draggable", "true");
+    fireEvent.dragStart(handles[0], { dataTransfer });
+    fireEvent.dragOver(review, { clientY: 15, dataTransfer });
+    fireEvent.drop(review, { clientY: 15, dataTransfer });
+    expect(onReorder).toHaveBeenCalledWith(["review", "daily"]);
+
+    onReorder.mockClear();
+    fireEvent.keyDown(handles[0], { altKey: true, key: "ArrowDown" });
+    expect(onReorder).toHaveBeenCalledWith(["review", "daily"]);
+
+    rerender(
+      <ObjectSwitcher
+        ariaLabel="Choose Profile"
+        items={[
+          { id: "daily", title: "Daily Coding" },
+          { id: "review", title: "Code Review" }
+        ]}
+        open
+        query="daily"
+        searchLabel="Search Profiles"
+        searchPlaceholder="Search Profiles"
+        selectedId="daily"
+        onOpenChange={() => undefined}
+        onQueryChange={() => undefined}
+        onReorder={onReorder}
+        onSelect={() => undefined}
+      />
+    );
+    expect(screen.getByRole("option", { name: /Daily Coding/ })).not.toHaveAttribute("draggable");
+    expect(screen.queryByRole("button", { name: "Reorder" })).not.toBeInTheDocument();
+  });
+
+  it("keeps selectable row copy independent from the reorder handle", () => {
+    const onSelect = vi.fn();
+    render(
+      <ObjectSwitcher
+        ariaLabel="Choose Workspace"
+        items={[
+          { id: "one", title: "AgentEnv", description: "/work/agentenv" },
+          { id: "two", title: "Examples", description: "/work/examples" }
+        ]}
+        open
+        query=""
+        searchLabel="Search Workspaces"
+        searchPlaceholder="Search Workspaces"
+        selectedId="one"
+        onOpenChange={() => undefined}
+        onQueryChange={() => undefined}
+        onReorder={() => undefined}
+        onSelect={onSelect}
+      />
+    );
+
+    const row = screen.getByRole("option", { name: /Examples/ });
+    expect(row.tagName).toBe("DIV");
+    expect(row.querySelector(".ui-selectable-row__identity")).toBeInTheDocument();
+    expect(row).not.toHaveAttribute("draggable");
+    fireEvent.click(screen.getAllByRole("button", { name: "Reorder" })[1]);
+    expect(onSelect).not.toHaveBeenCalled();
+    fireEvent.click(row);
+    expect(onSelect).toHaveBeenCalledWith("two");
   });
 });

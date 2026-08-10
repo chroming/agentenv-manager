@@ -1,6 +1,8 @@
 import type {
   ButtonHTMLAttributes,
   HTMLAttributes,
+  KeyboardEvent,
+  MouseEvent,
   ReactNode
 } from "react";
 
@@ -59,31 +61,41 @@ export const SingleObjectWorkspace = ({
 );
 
 interface SelectableListRowProps
-  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "title"> {
+  extends Omit<HTMLAttributes<HTMLElement>, "title" | "onClick" | "onKeyDown"> {
+  as?: "button" | "div";
   description?: ReactNode;
   descriptionClassName?: string;
+  disabled?: boolean;
   icon?: ReactNode;
   iconClassName?: string;
   identityClassName?: string;
   selected?: boolean;
   status?: ReactNode;
+  trailingAction?: ReactNode;
   title: ReactNode;
   titleClassName?: string;
   tooltip?: string;
+  type?: ButtonHTMLAttributes<HTMLButtonElement>["type"];
+  onClick?(event: MouseEvent<HTMLElement>): void;
+  onKeyDown?(event: KeyboardEvent<HTMLElement>): void;
   onSelect?(): void;
 }
 
 export const SelectableListRow = ({
+  as = "button",
   className = "",
   description,
   descriptionClassName = "",
+  disabled = false,
   icon,
   iconClassName = "",
   identityClassName = "",
   onClick,
+  onKeyDown,
   onSelect,
   selected = false,
   status,
+  trailingAction,
   title,
   titleClassName = "",
   tooltip,
@@ -93,25 +105,65 @@ export const SelectableListRow = ({
   const generatedLabel = [title, description]
     .filter((value): value is string | number => typeof value === "string" || typeof value === "number")
     .join(" ");
-  return (
-    <button
-      {...props}
-      aria-current={selected ? "page" : props["aria-current"]}
-      aria-label={props["aria-label"] ?? (generatedLabel || undefined)}
-      className={`ui-selectable-row${selected ? " is-selected" : ""} ${className}`.trim()}
-      onClick={(event) => {
-        onClick?.(event);
-        if (!event.defaultPrevented) onSelect?.();
-      }}
-      title={tooltip}
-      type={type}
-    >
+  const content = (
+    <>
       {icon ? <span className={`ui-selectable-row__icon ${iconClassName}`.trim()} aria-hidden="true">{icon}</span> : null}
       <span className={`ui-selectable-row__identity ${identityClassName}`.trim()}>
         <span className={`ui-selectable-row__title ${titleClassName}`.trim()}>{title}</span>
         {description ? <span className={`ui-selectable-row__description ${descriptionClassName}`.trim()}>{description}</span> : null}
       </span>
       {status ? <span className="ui-selectable-row__status">{status}</span> : null}
+      {trailingAction ? <span className="ui-selectable-row__trailing">{trailingAction}</span> : null}
+    </>
+  );
+  const handleClick = (event: MouseEvent<HTMLElement>) => {
+    if (disabled) return;
+    onClick?.(event);
+    if (!event.defaultPrevented) onSelect?.();
+  };
+  const classes = `ui-selectable-row${selected ? " is-selected" : ""}${
+    trailingAction ? " has-trailing-action" : ""
+  } ${className}`.trim();
+  const label = props["aria-label"] ?? (generatedLabel || undefined);
+
+  if (as === "div") {
+    return (
+      <div
+        {...props}
+        aria-current={selected ? "page" : props["aria-current"]}
+        aria-disabled={disabled || undefined}
+        aria-label={label}
+        className={classes}
+        onClick={handleClick}
+        onKeyDown={(event) => {
+          if (disabled) return;
+          onKeyDown?.(event);
+          if (!event.defaultPrevented && (event.key === "Enter" || event.key === " ")) {
+            event.preventDefault();
+            onSelect?.();
+          }
+        }}
+        tabIndex={disabled ? -1 : (props.tabIndex ?? 0)}
+        title={tooltip}
+      >
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      {...props}
+      aria-current={selected ? "page" : props["aria-current"]}
+      aria-label={label}
+      className={classes}
+      disabled={disabled}
+      onClick={handleClick}
+      onKeyDown={onKeyDown}
+      title={tooltip}
+      type={type}
+    >
+      {content}
     </button>
   );
 };

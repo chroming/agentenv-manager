@@ -6,6 +6,7 @@ export type ButtonSize = "compact" | "default" | "prominent";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   busy?: boolean;
+  busyLabel?: ReactNode;
   icon?: ReactNode;
   size?: ButtonSize;
   variant?: ButtonVariant;
@@ -16,6 +17,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     {
       children,
       busy = false,
+      busyLabel,
       className = "",
       icon,
       size = "default",
@@ -36,19 +38,25 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={props.disabled || effectiveBusy}
         type={type}
       >
-        <span className="ui-button__content">
-          {icon ? (
-            <span className="ui-button__icon" aria-hidden="true">
-              {icon}
+        <span className="ui-button__stack">
+          <span className="ui-button__content">
+            {icon ? (
+              <span className="ui-button__icon" aria-hidden="true">
+                {icon}
+              </span>
+            ) : null}
+            <span className="ui-button__label">{children}</span>
+          </span>
+          {effectiveBusy || busyLabel ? (
+            <span
+              className={`ui-button__busy${busyLabel ? " ui-button__busy--labeled" : ""}`}
+              aria-hidden="true"
+            >
+              <LoaderCircle className={effectiveBusy ? "is-spinning" : undefined} />
+              {busyLabel ? <span>{busyLabel}</span> : null}
             </span>
           ) : null}
-          <span className="ui-button__label">{children}</span>
         </span>
-        {effectiveBusy ? (
-          <span className="ui-button__busy" aria-hidden="true">
-            <LoaderCircle className="is-spinning" />
-          </span>
-        ) : null}
       </button>
     );
   }

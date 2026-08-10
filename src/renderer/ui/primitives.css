@@ -25,16 +25,57 @@
   animation: spin var(--motion-spinner) linear infinite;
 }
 
+@keyframes progress-indeterminate {
+  to {
+    transform: translateX(340%);
+  }
+}
+
+.ui-progress-bar {
+  background: var(--surface-pressed);
+  border-radius: var(--radius-pill);
+  display: block;
+  height: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.ui-progress-bar > span {
+  animation: progress-indeterminate 1.15s ease-in-out infinite;
+  background: var(--accent);
+  border-radius: inherit;
+  height: 100%;
+  left: -42%;
+  position: absolute;
+  width: 42%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-progress-bar > span {
+    animation: none;
+    left: 0;
+    opacity: 0.7;
+    width: 100%;
+  }
+}
+
 .ui-button {
   gap: var(--space-2);
   position: relative;
   width: auto;
 }
 
+.ui-button__stack {
+  align-items: center;
+  display: inline-grid;
+  min-width: 0;
+}
+
 .ui-button__content {
   align-items: center;
   display: inline-flex;
   gap: var(--space-2);
+  grid-area: 1 / 1;
   min-width: 0;
   opacity: 1;
 }
@@ -53,12 +94,60 @@
 .ui-button__busy {
   align-items: center;
   display: inline-flex;
-  inset: 0;
+  gap: var(--space-2);
+  grid-area: 1 / 1;
   justify-content: center;
-  position: absolute;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.ui-button[aria-busy="true"] .ui-button__busy {
+  opacity: 1;
+  visibility: visible;
 }
 
 .ui-button__busy > svg {
+  height: var(--icon-size-default);
+  width: var(--icon-size-default);
+}
+
+.ui-button__busy--labeled > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-disclosure-icon {
+  flex: 0 0 auto;
+  transform: rotate(0);
+  transition: transform var(--motion-fast);
+}
+
+.ui-disclosure-icon.is-open {
+  transform: rotate(90deg);
+}
+
+.ui-icon-button {
+  position: relative;
+}
+
+.ui-icon-button__content,
+.ui-icon-button__busy {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.ui-icon-button[aria-busy="true"] .ui-icon-button__content {
+  opacity: 0;
+}
+
+.ui-icon-button__busy {
+  inset: 0;
+  position: absolute;
+}
+
+.ui-icon-button__busy > svg {
   height: var(--icon-size-default);
   width: var(--icon-size-default);
 }
@@ -135,7 +224,7 @@
 }
 
 .ui-button__icon > svg,
-.ui-icon-button > svg {
+.ui-icon-button__content > svg {
   height: var(--icon-size-default);
   width: var(--icon-size-default);
 }
@@ -333,6 +422,11 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
 .ui-interactive-status__icon {
   display: inline-flex;
   flex: 0 0 auto;
+}
+
+.ui-interactive-status__icon > svg {
+  height: 13px;
+  width: 13px;
 }
 
 .ui-interactive-status__label {
@@ -663,9 +757,11 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   flex: 0 0 auto;
   font-size: var(--font-size-caption);
   font-variant-numeric: tabular-nums;
-  gap: 5px;
+  gap: 0;
+  height: 16px;
   line-height: 1;
   min-width: 0;
+  width: 16px;
   white-space: nowrap;
 }
 
@@ -679,6 +775,10 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
 
 .freshness-status--refreshing {
   color: var(--text-secondary);
+}
+
+.ui-refresh-action--issue {
+  color: var(--warning);
 }
 
 /* Resource rows own identity, state, and action tracks; pages only choose density. */

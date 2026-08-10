@@ -8,6 +8,7 @@ export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from ".
 export { ChoiceInput, type ChoiceInputProps } from "./ChoiceInput";
 export { ControlGroup } from "./ControlGroup";
 export { DialogBody, DialogFooter, DialogHeader } from "./DialogParts";
+export { DisclosureIcon } from "./DisclosureIcon";
 export { FilterPopover } from "./FilterPopover";
 export { SearchField, SelectField, TextAreaField, TextField } from "./FormFields";
 export { IconButton } from "./IconButton";
@@ -17,6 +18,8 @@ export { ModalFrame, type ModalDismissPolicy } from "./ModalFrame";
 export { Notice } from "./Notice";
 export { ObjectSwitcher, type ObjectSwitcherItem } from "./ObjectSwitcher";
 export { PageHeader } from "./PageHeader";
+export { ProgressBar } from "./ProgressBar";
+export { RefreshAction } from "./RefreshAction";
 export { ResourceRow } from "./ResourceRow";
 export {
   ResourceDisclosureSection,

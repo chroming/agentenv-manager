@@ -13,6 +13,7 @@ import {
   DialogBody,
   DialogFooter,
   DialogHeader,
+  DisclosureIcon,
   EmptyState,
   FilterPopover,
   InspectorHeader,
@@ -23,6 +24,7 @@ import {
   MasterListPane,
   ModalFrame,
   PageHeader,
+  RefreshAction,
   ResourceDisclosureSection,
   ResourcePanelToolbar,
   ResourceSection,
@@ -98,6 +100,118 @@ describe("renderer UI primitives", () => {
     expect(button.querySelector(".ui-button__label")).toBe(label);
     expect(button.querySelector(".ui-button__busy .is-spinning")).not.toBeNull();
     expect(button).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("keeps a named working state in the same button stack", () => {
+    const { rerender } = render(
+      <Button busy={false} busyLabel="Checking..." icon={<RefreshCw />}>
+        Check updates
+      </Button>
+    );
+    const button = screen.getByRole("button", { name: "Check updates" });
+    const busyContent = button.querySelector(".ui-button__busy");
+
+    expect(busyContent).toHaveTextContent("Checking...");
+    expect(busyContent).toHaveAttribute("aria-hidden", "true");
+    expect(busyContent?.querySelector(".is-spinning")).toBeNull();
+
+    rerender(
+      <Button busy busyLabel="Checking..." icon={<RefreshCw />}>
+        Check updates
+      </Button>
+    );
+    expect(button.querySelector(".ui-button__busy")).toBe(busyContent);
+    expect(button).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("uses one disclosure motion contract", () => {
+    const { rerender } = render(<DisclosureIcon open={false} />);
+    const icon = document.querySelector(".ui-disclosure-icon");
+    expect(icon).not.toHaveClass("is-open");
+
+    rerender(<DisclosureIcon open />);
+    expect(icon).toHaveClass("is-open");
+  });
+
+  it("gives icon buttons one stable local busy state", () => {
+    const { rerender } = render(
+      <IconButton busy={false} label="Refresh">
+        <RefreshCw />
+      </IconButton>
+    );
+    const button = screen.getByRole("button", { name: "Refresh" });
+
+    rerender(
+      <IconButton busy label="Refresh">
+        <RefreshCw />
+      </IconButton>
+    );
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("aria-busy", "true");
+    expect(button.querySelector(".ui-icon-button__busy .is-spinning")).not.toBeNull();
+    expect(button.querySelector(".ui-icon-button__content svg")).not.toBeNull();
+  });
+
+  it("keeps Refresh feedback on one stable initiating control", () => {
+    const onRefresh = vi.fn();
+    const { rerender } = render(
+      <RefreshAction
+        label="Refresh"
+        state={{ invalidated: false, status: "ready", lastSuccessAt: 1 }}
+        onRefresh={onRefresh}
+      />
+    );
+    const button = screen.getByRole("button", { name: "Refresh" });
+    const content = button.querySelector(".ui-button__content");
+
+    fireEvent.click(button);
+    expect(onRefresh).toHaveBeenCalledOnce();
+
+    rerender(
+      <RefreshAction
+        label="Refresh"
+        state={{ invalidated: false, status: "refreshing", lastSuccessAt: 1 }}
+        onRefresh={onRefresh}
+      />
+    );
+    expect(screen.getByRole("button", { name: "Refresh" })).toBe(button);
+    expect(button.querySelector(".ui-button__content")).toBe(content);
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("aria-busy", "true");
+    expect(button.querySelector(".is-spinning")).not.toBeNull();
+
+    rerender(
+      <RefreshAction
+        label="Refresh"
+        state={{
+          error: "One source could not be read",
+          invalidated: false,
+          lastSuccessAt: Date.parse("2026-08-10T08:00:00.000Z"),
+          status: "partial"
+        }}
+        onRefresh={onRefresh}
+      />
+    );
+    expect(button).not.toBeDisabled();
+    expect(button).toHaveClass("ui-refresh-action--issue");
+    expect(button).toHaveAttribute("title", expect.stringContaining("One source could not be read"));
+  });
+
+  it("shows progress on an interactive status without page-owned spinner markup", () => {
+    render(
+      <InteractiveStatus
+        busy
+        busyLabel="Preparing..."
+        label="Update available"
+        onReview={vi.fn()}
+        reviewLabel="Review update"
+      />
+    );
+    const status = screen.getByRole("button", { name: "Review update" });
+
+    expect(status).toBeDisabled();
+    expect(status).toHaveTextContent("Preparing...");
+    expect(status.querySelector(".is-spinning")).not.toBeNull();
   });
 
   it("uses one keyboard menu surface for contextual actions", () => {

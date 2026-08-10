@@ -93,5 +93,6 @@
   --z-drawer: 90;
   --z-popover: 120;
   --z-modal: 200;
+  --z-modal-popover: 240;
   --z-tooltip: 260;
 }

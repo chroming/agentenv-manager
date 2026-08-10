@@ -1,4 +1,6 @@
 import {
+  type DragEvent as ReactDragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
   type RefObject,
@@ -9,8 +11,10 @@ import {
   useState
 } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, Search } from "lucide-react";
+import { Check, ChevronDown, GripVertical, Search } from "lucide-react";
+import { useI18n } from "../../i18n";
 import { Button } from "./Button";
+import { IconButton } from "./IconButton";
 import { SearchField } from "./FormFields";
 import { SelectableListRow } from "./WorkspacePatterns";
 
@@ -24,7 +28,7 @@ export interface ObjectSwitcherItem {
   status?: ReactNode;
   disabled?: boolean;
   tooltip?: string;
-  onContextMenu?(event: ReactMouseEvent<HTMLButtonElement>): void;
+  onContextMenu?(event: ReactMouseEvent<HTMLElement>): void;
 }
 
 interface ObjectSwitcherProps {
@@ -44,6 +48,7 @@ interface ObjectSwitcherProps {
   searchLabel: string;
   searchPlaceholder: string;
   selectedId?: string;
+  static?: boolean;
   fullWidth?: boolean;
   showTriggerIcon?: boolean;
   showTriggerTitle?: boolean;
@@ -51,6 +56,7 @@ interface ObjectSwitcherProps {
   triggerVariant?: "default" | "icon" | "inline";
   onOpenChange(open: boolean): void;
   onQueryChange(query: string): void;
+  onReorder?(ids: string[]): void;
   onSelect(id: string): void;
 }
 
@@ -67,6 +73,7 @@ export const ObjectSwitcher = ({
   searchLabel,
   searchPlaceholder,
   selectedId,
+  static: staticTrigger = false,
   fullWidth = false,
   showTriggerIcon = true,
   showTriggerTitle = true,
@@ -74,15 +81,23 @@ export const ObjectSwitcher = ({
   triggerVariant = "default",
   onOpenChange,
   onQueryChange,
+  onReorder,
   onSelect
 }: ObjectSwitcherProps) => {
+  const { t } = useI18n();
   const Root = triggerVariant === "inline" ? "span" : "div";
   const popoverId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const fallbackSearchRef = useRef<HTMLInputElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ left: 12, top: 12, width: 320 });
+  const [dragState, setDragState] = useState<{
+    id: string;
+    overId?: string;
+    edge?: "before" | "after";
+  }>();
   const selected = items.find((item) => item.id === selectedId);
+  const hasTriggerIcon = Boolean(showTriggerIcon && selected?.icon);
   const normalizedQuery = query.trim().toLowerCase();
   const visibleItems = normalizedQuery
     ? items.filter((item) => {
@@ -95,6 +110,38 @@ export const ObjectSwitcher = ({
       })
     : items;
   const activeSearchRef = searchInputRef ?? fallbackSearchRef;
+  const canReorder = Boolean(onReorder && !normalizedQuery && items.length > 1);
+
+  const reorder = (draggedId: string, targetId: string, edge: "before" | "after") => {
+    if (!canReorder || draggedId === targetId) return;
+    const ids = items.map((item) => item.id);
+    const next = ids.filter((id) => id !== draggedId);
+    const targetIndex = next.indexOf(targetId);
+    if (targetIndex < 0) return;
+    next.splice(targetIndex + (edge === "after" ? 1 : 0), 0, draggedId);
+    onReorder?.(next);
+  };
+
+  const handleDragOver = (event: ReactDragEvent<HTMLElement>, targetId: string) => {
+    if (!dragState || !canReorder || targetId === dragState.id) return;
+    event.preventDefault();
+    const draggedIndex = items.findIndex((item) => item.id === dragState.id);
+    const targetIndex = items.findIndex((item) => item.id === targetId);
+    const edge = targetIndex > draggedIndex ? "after" : "before";
+    event.dataTransfer.dropEffect = "move";
+    setDragState((current) => current ? { ...current, overId: targetId, edge } : current);
+  };
+
+  const handleReorderKey = (event: ReactKeyboardEvent<HTMLButtonElement>, id: string) => {
+    if (!canReorder || !event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+    const index = items.findIndex((item) => item.id === id);
+    const nextIndex = event.key === "ArrowUp" ? index - 1 : index + 1;
+    if (index < 0 || nextIndex < 0 || nextIndex >= items.length) return;
+    event.preventDefault();
+    const ids = items.map((item) => item.id);
+    [ids[index], ids[nextIndex]] = [ids[nextIndex], ids[index]];
+    onReorder?.(ids);
+  };
 
   const close = (restoreFocus = true) => {
     onOpenChange(false);
@@ -157,27 +204,31 @@ export const ObjectSwitcher = ({
           : triggerVariant === "inline"
             ? " ui-object-switcher--inline-trigger"
             : ""
+      }${hasTriggerIcon ? " ui-object-switcher--with-icon" : ""}${
+        staticTrigger ? " ui-object-switcher--static" : ""
       } ${className}`.trim()}
     >
       <button
         aria-controls={open ? popoverId : undefined}
-        aria-expanded={open}
-        aria-haspopup="dialog"
+        aria-expanded={staticTrigger ? undefined : open}
+        aria-haspopup={staticTrigger ? undefined : "dialog"}
         aria-label={ariaLabel}
         className="ui-object-switcher__trigger"
-        disabled={disabled}
+        disabled={disabled || staticTrigger}
         ref={triggerRef}
         type="button"
-        onClick={() => onOpenChange(!open)}
+        onClick={() => {
+          if (!staticTrigger) onOpenChange(!open);
+        }}
         onKeyDown={(event) => {
-          if (!open && (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ")) {
+          if (!staticTrigger && !open && (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ")) {
             event.preventDefault();
             onOpenChange(true);
           }
         }}
       >
-        {showTriggerIcon && selected?.icon ? (
-          <span className="ui-object-switcher__trigger-icon" aria-hidden="true">{selected.icon}</span>
+        {hasTriggerIcon ? (
+          <span className="ui-object-switcher__trigger-icon" aria-hidden="true">{selected?.icon}</span>
         ) : null}
         {showTriggerTitle ? (
           <span className="ui-object-switcher__trigger-copy">
@@ -187,9 +238,11 @@ export const ObjectSwitcher = ({
             ) : null}
           </span>
         ) : null}
-        <ChevronDown className={open ? "is-open" : ""} size={15} strokeWidth={2.1} aria-hidden="true" />
+        {!staticTrigger ? (
+          <ChevronDown className={open ? "is-open" : ""} size={15} strokeWidth={2.1} aria-hidden="true" />
+        ) : null}
       </button>
-      {open ? createPortal(
+      {open && !staticTrigger ? createPortal(
         <div
           aria-label={ariaLabel}
           className="ui-object-switcher__popover"
@@ -215,9 +268,12 @@ export const ObjectSwitcher = ({
           >
             {visibleItems.length > 0 ? visibleItems.map((item) => (
               <SelectableListRow
+                as="div"
                 aria-label={item.ariaLabel}
                 aria-selected={item.id === selectedId}
-                className="ui-object-switcher__row"
+                className={`ui-object-switcher__row${
+                  dragState?.id === item.id ? " is-dragging" : ""
+                }${dragState?.overId === item.id ? ` is-drop-${dragState.edge}` : ""}`}
                 description={item.description}
                 disabled={item.disabled}
                 icon={item.icon}
@@ -225,9 +281,53 @@ export const ObjectSwitcher = ({
                 role="option"
                 selected={item.id === selectedId}
                 status={item.id === selectedId ? <Check size={15} strokeWidth={2.4} /> : item.status}
+                trailingAction={canReorder && !item.disabled ? (
+                  <IconButton
+                    className="ui-object-switcher__drag-handle"
+                    draggable
+                    label={t("Reorder")}
+                    size="compact"
+                    variant="ghost"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    onDragEnd={(event) => {
+                      event.stopPropagation();
+                      setDragState(undefined);
+                    }}
+                    onDragStart={(event) => {
+                      event.stopPropagation();
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", item.id);
+                      setDragState({ id: item.id });
+                    }}
+                    onKeyDown={(event) => {
+                      event.stopPropagation();
+                      handleReorderKey(event, item.id);
+                    }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    <GripVertical size={14} strokeWidth={2} aria-hidden="true" />
+                  </IconButton>
+                ) : undefined}
                 title={item.title}
                 tooltip={item.tooltip}
                 onContextMenu={item.onContextMenu}
+                onDragOver={(event) => handleDragOver(event, item.id)}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (dragState?.overId === item.id && dragState.edge) {
+                    reorder(dragState.id, item.id, dragState.edge);
+                  }
+                  setDragState(undefined);
+                }}
+                onClick={(event) => {
+                  const selection = window.getSelection();
+                  if (selection && !selection.isCollapsed && selection.toString()) {
+                    event.preventDefault();
+                  }
+                }}
                 onSelect={() => {
                   if (item.id !== selectedId) onSelect(item.id);
                   close();

@@ -1,5 +1,5 @@
-import { ChevronRight } from "lucide-react";
 import { useId, type HTMLAttributes, type ReactNode } from "react";
+import { DisclosureIcon } from "./DisclosureIcon";
 
 export interface ResourceDisclosureSectionProps
   extends Omit<HTMLAttributes<HTMLElement>, "title"> {
@@ -65,11 +65,10 @@ export const ResourceDisclosureSection = ({
           onClick={onToggle}
           type="button"
         >
-          <ChevronRight
-            aria-hidden="true"
+          <DisclosureIcon
             className="ui-resource-disclosure__chevron"
+            open={expanded}
             size={17}
-            strokeWidth={2.2}
           />
           {icon ? (
             <span

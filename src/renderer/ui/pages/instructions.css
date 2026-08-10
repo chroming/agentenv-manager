@@ -1,0 +1,189 @@
+.instruction-documents {
+  background: var(--surface-subtle);
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  padding-left: 28px;
+}
+
+.instruction-document {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.instruction-document__header {
+  align-items: center;
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: 28px minmax(0, 1fr) var(--icon-box-compact);
+  min-height: 46px;
+  padding: 7px 9px;
+}
+
+.instruction-document__icon {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.instruction-document__identity {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.instruction-document__identity strong {
+  color: var(--text);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  line-height: 18px;
+}
+
+.instruction-document__metadata {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-metadata);
+  font-weight: var(--font-weight-regular);
+  line-height: 17px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.instruction-document__open {
+  justify-self: end;
+}
+
+.instruction-document__preview {
+  background: var(--surface-subtle);
+  border-top: 1px solid var(--border-subtle);
+  max-height: 138px;
+  min-height: 70px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.instruction-document__preview .syntax-code-preview {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.instruction-document__state,
+.instruction-documents__empty {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: var(--font-size-metadata);
+  gap: var(--space-2);
+  justify-content: center;
+  min-height: 70px;
+  padding: var(--space-3);
+  text-align: center;
+}
+
+.instruction-documents__empty {
+  background: var(--surface-subtle);
+}
+
+.instruction-document__state.is-error {
+  color: var(--danger);
+}
+
+.instruction-document-dialog {
+  height: min(560px, calc(100vh - 64px));
+  max-width: none;
+  width: min(760px, calc(100vw - 64px));
+}
+
+.instruction-document-dialog.is-maximized {
+  height: calc(100vh - 24px);
+  width: calc(100vw - 24px);
+}
+
+.instruction-document-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.instruction-document-dialog__field,
+.instruction-document-dialog__preview {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.instruction-document-dialog__textarea {
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  resize: none;
+  white-space: pre-wrap;
+  width: 100%;
+}
+
+.instruction-document-dialog__preview {
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.instruction-document-dialog__preview .syntax-code-preview {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.65;
+  margin: 0;
+  padding: var(--space-4);
+  width: 100%;
+}
+
+.instruction-document-dialog__loading,
+.instruction-document-dialog__empty {
+  align-content: center;
+  color: var(--muted);
+  display: grid;
+  flex: 1;
+  min-height: 160px;
+  text-align: center;
+}
+
+.instruction-document-dialog .ui-dialog-description {
+  font-family: var(--font-mono);
+  max-width: min(560px, 64vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .instruction-document-dialog {
+    height: calc(100vh - 32px);
+    width: calc(100vw - 32px);
+  }
+}

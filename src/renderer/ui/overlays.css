@@ -116,7 +116,10 @@
   min-height: 0;
   padding: 0;
   box-shadow: none;
-  transition: background-color 140ms ease, box-shadow 140ms ease, color 140ms ease;
+  transition:
+    background-color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    color var(--motion-fast);
 }
 
 .resource-icon-trigger > svg,
@@ -263,6 +266,10 @@
   position: fixed;
   width: 224px;
   z-index: var(--z-popover);
+}
+
+.resource-icon-menu--modal {
+  z-index: var(--z-modal-popover);
 }
 
 .resource-icon-group + .resource-icon-group {

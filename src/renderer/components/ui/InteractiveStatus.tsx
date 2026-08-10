@@ -1,8 +1,10 @@
+import { LoaderCircle } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
 import type { SemanticStatusKind, SemanticStatusTone } from "./statusPresentation";
 
 interface InteractiveStatusProps {
   busy?: boolean;
+  busyLabel?: ReactNode;
   className?: string;
   disabled?: boolean;
   icon?: ReactNode;
@@ -15,6 +17,7 @@ interface InteractiveStatusProps {
 
 export const InteractiveStatus = ({
   busy = false,
+  busyLabel,
   className = "",
   disabled = false,
   icon,
@@ -32,8 +35,12 @@ export const InteractiveStatus = ({
   ].filter(Boolean).join(" ");
   const content = (
     <>
-      {icon ? <span className="ui-interactive-status__icon" aria-hidden="true">{icon}</span> : null}
-      <span className="ui-interactive-status__label">{label}</span>
+      {busy || icon ? (
+        <span className="ui-interactive-status__icon" aria-hidden="true">
+          {busy ? <LoaderCircle className="is-spinning" /> : icon}
+        </span>
+      ) : null}
+      <span className="ui-interactive-status__label">{busyLabel ?? label}</span>
     </>
   );
 
