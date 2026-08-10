@@ -2021,6 +2021,14 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.keyboard.press("Meta+s");
     await page.keyboard.press("Meta+s");
+    await expect
+      .poll(() =>
+        electronApp.evaluate(() =>
+          (globalThis as typeof globalThis & { __agentEnvShortcutSaveCalls?: number })
+            .__agentEnvShortcutSaveCalls
+        )
+      )
+      .toBe(1);
     await page.waitForTimeout(50);
     expect(
       await electronApp.evaluate(() =>
