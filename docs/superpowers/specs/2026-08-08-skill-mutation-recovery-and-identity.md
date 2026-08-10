@@ -53,6 +53,8 @@ resolved. Collection members retain both their member path and collection identi
 
 - Startup recovery is a semantic no-op when no unresolved manifest exists.
 - A completed manifest with a stale recovery marker is reconciled without touching user data.
+- Source-merge archives created before transactional journals existed remain historical backups;
+  they are not unresolved recovery work and never block later mutations.
 - An externally changed path never gets overwritten by automatic recovery.
 - Successful automatic recovery verifies restored hashes and leaves the existing recovery point
   available under the current retention policy.

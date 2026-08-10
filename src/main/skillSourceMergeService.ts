@@ -74,6 +74,10 @@ interface SkillSourceMergeJournal {
   sourceRegistry?: SkillSourceRecord[];
 }
 
+type SkillSourceMergeManifest =
+  | { kind: "journal"; journal: SkillSourceMergeJournal }
+  | { kind: "legacy-archive" };
+
 export interface SkillSourceMergeRecoveryResult {
   recoveredIds: string[];
   recoveryRequiredIds: string[];
@@ -95,13 +99,26 @@ const writeSourceMergeJournal = async (
   await syncPathTree(backupPath);
 };
 
-const readSourceMergeJournal = async (backupPath: string): Promise<SkillSourceMergeJournal> => {
+const readSourceMergeManifest = async (backupPath: string): Promise<SkillSourceMergeManifest> => {
   const parsed = JSON.parse(await readFile(sourceMergeJournalPath(backupPath), "utf8")) as
-    Partial<SkillSourceMergeJournal>;
+    Partial<SkillSourceMergeJournal> & Record<string, unknown>;
+  const hasBaseIdentity =
+    parsed.formatVersion === 1 &&
+    parsed.operation === "merge-skill-sources" &&
+    typeof parsed.createdAt === "string";
   if (
-    parsed.formatVersion !== 1 ||
-    parsed.operation !== "merge-skill-sources" ||
-    typeof parsed.createdAt !== "string" ||
+    hasBaseIdentity &&
+    parsed.status === undefined &&
+    parsed.transactionBackupId === undefined &&
+    parsed.preview !== null &&
+    typeof parsed.preview === "object" &&
+    !Array.isArray(parsed.preview) &&
+    Array.isArray(parsed.sourceRegistry)
+  ) {
+    return { kind: "legacy-archive" };
+  }
+  if (
+    !hasBaseIdentity ||
     typeof parsed.transactionBackupId !== "string" ||
     !["prepared", "complete", "rolled-back", "recovery-required"].includes(
       String(parsed.status)
@@ -119,7 +136,7 @@ const readSourceMergeJournal = async (backupPath: string): Promise<SkillSourceMe
       throw new Error("Invalid Skill source merge mutation receipt");
     }
   }
-  return parsed as SkillSourceMergeJournal;
+  return { kind: "journal", journal: parsed as SkillSourceMergeJournal };
 };
 
 const changedBackupPaths = async (backup: BackupManifest) => {
@@ -150,7 +167,9 @@ export const listPendingSkillSourceMerges = async (
     if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
     const backupPath = join(sourceMergeBackupRoot(appDataRoot), entry.name);
     try {
-      const journal = await readSourceMergeJournal(backupPath);
+      const manifest = await readSourceMergeManifest(backupPath);
+      if (manifest.kind === "legacy-archive") continue;
+      const { journal } = manifest;
       if (journal.status === "prepared" || journal.status === "recovery-required") {
         pending.push(entry.name);
       }
@@ -180,7 +199,9 @@ export const recoverInterruptedSkillSourceMerges = async (
     const backupPath = join(sourceMergeBackupRoot(appDataRoot), entry.name);
     let journal: SkillSourceMergeJournal;
     try {
-      journal = await readSourceMergeJournal(backupPath);
+      const manifest = await readSourceMergeManifest(backupPath);
+      if (manifest.kind === "legacy-archive") continue;
+      journal = manifest.journal;
     } catch {
       recoveryRequiredIds.push(entry.name);
       continue;

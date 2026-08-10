@@ -161,4 +161,51 @@ describe("Skill mutation recovery", () => {
     await expect(readFile(registryPath, "utf8")).resolves.toBe("original\n");
     await expect(listPendingSkillSourceMerges(paths.appDataRoot)).resolves.toEqual([]);
   });
+
+  it("keeps legacy source merge archives without treating them as recovery work", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-source-merge-legacy-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data") });
+    const backupStore = createBackupStore(paths, { now: () => new Date(0) });
+    const journalDir = join(
+      paths.appDataRoot,
+      "skill-source-merge-backups",
+      "skill-source-merge-2026-07-21T11-00-48-582Z-b013b748"
+    );
+    const manifestPath = join(journalDir, "manifest.json");
+    const legacyManifest = {
+      formatVersion: 1,
+      operation: "merge-skill-sources",
+      createdAt: "2026-07-21T11:00:48.582Z",
+      preview: { id: "legacy-preview" },
+      sourceRegistry: []
+    };
+    await mkdir(journalDir, { recursive: true });
+    await writeFile(manifestPath, `${JSON.stringify(legacyManifest, null, 2)}\n`);
+
+    await expect(listPendingSkillSourceMerges(paths.appDataRoot)).resolves.toEqual([]);
+    await expect(recoverInterruptedSkillSourceMerges(paths.appDataRoot, backupStore))
+      .resolves.toEqual({ recoveredIds: [], recoveryRequiredIds: [] });
+    await expect(readFile(manifestPath, "utf8"))
+      .resolves.toBe(`${JSON.stringify(legacyManifest, null, 2)}\n`);
+  });
+
+  it("continues to fail closed for an unknown source merge manifest", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-source-merge-invalid-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data") });
+    const backupStore = createBackupStore(paths, { now: () => new Date(0) });
+    const journalDir = join(paths.appDataRoot, "skill-source-merge-backups", "invalid-merge");
+    await mkdir(journalDir, { recursive: true });
+    await writeFile(join(journalDir, "manifest.json"), JSON.stringify({
+      formatVersion: 1,
+      operation: "merge-skill-sources",
+      createdAt: new Date(0).toISOString(),
+      preview: null,
+      sourceRegistry: []
+    }));
+
+    await expect(listPendingSkillSourceMerges(paths.appDataRoot))
+      .resolves.toEqual(["invalid-merge"]);
+    await expect(recoverInterruptedSkillSourceMerges(paths.appDataRoot, backupStore))
+      .resolves.toEqual({ recoveredIds: [], recoveryRequiredIds: ["invalid-merge"] });
+  });
 });
