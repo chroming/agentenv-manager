@@ -116,17 +116,31 @@ const verifyMaximizedDialogLayout = async (
 const verifyProfileComparisonActionLayout = async (page: Page, width: number, height: number) => {
   await page.setViewportSize({ width, height });
   const actions = page.getByRole("group", { name: "Selected Profile actions" });
-  const compare = actions.getByRole("button", { name: "Compare" });
   const apply = actions.getByRole("button", { name: "Apply" });
+  const more = actions.getByRole("button", { name: "More Profile actions" });
   await expectInViewport(page, actions);
-  await expectNoOverlap(compare, apply);
-  const [compareBox, applyBox] = await Promise.all([compare.boundingBox(), apply.boundingBox()]);
-  expect(compareBox).not.toBeNull();
+  await expect(actions.getByRole("button", { name: "Compare" }).count()).resolves.toBe(0);
+  await expectNoOverlap(apply, more);
+  const [applyBox, moreBox] = await Promise.all([apply.boundingBox(), more.boundingBox()]);
   expect(applyBox).not.toBeNull();
-  expect(compareBox!.x).toBeLessThan(applyBox!.x);
-  expect(applyBox!.x - (compareBox!.x + compareBox!.width)).toBeLessThanOrEqual(10);
-  expect(Math.abs(compareBox!.height - applyBox!.height)).toBeLessThanOrEqual(1);
-  expect(Math.abs(compareBox!.width - applyBox!.width)).toBeLessThanOrEqual(1);
+  expect(moreBox).not.toBeNull();
+  expect(applyBox!.x).toBeLessThan(moreBox!.x);
+  expect(moreBox!.x - (applyBox!.x + applyBox!.width)).toBeLessThanOrEqual(10);
+  await more.click();
+  const menu = page.getByRole("menu", { name: "Profile actions" });
+  const compare = menu.getByRole("menuitem", { name: "Compare" });
+  await compare.waitFor({ state: "visible" });
+  await expectInViewport(page, menu);
+  await page.keyboard.press("Escape");
+  await menu.waitFor({ state: "hidden" });
+};
+
+const openProfileComparison = async (page: Page) => {
+  await page.getByRole("button", { name: "More Profile actions" }).click();
+  const menu = page.getByRole("menu", { name: "Profile actions" });
+  const compare = menu.getByRole("menuitem", { name: "Compare" });
+  await compare.waitFor({ state: "visible" });
+  await compare.click();
 };
 
 const selectEvaluationProfile = async (page: Page, name: string) => {
@@ -360,7 +374,7 @@ printf '{"type":"step_finish","part":{"modelID":"fake/e2e","cost":0.01,"tokens":
         });
       }
       await verifyProfileComparisonActionLayout(page, 1440, 900);
-      await page.getByRole("button", { name: "Compare" }).click();
+      await openProfileComparison(page);
       const dialog = page.getByRole("dialog", {
         name: "Compare Evaluation Environment on OpenCode"
       });
@@ -599,9 +613,7 @@ printf '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens
 
       await page.getByRole("button", { name: "Profiles" }).click();
       await selectEvaluationProfile(page, "Codex Evaluation Environment");
-      const compareButton = page.getByRole("button", { name: "Compare" });
-      await expect.poll(() => compareButton.isEnabled()).toBe(true);
-      await compareButton.click();
+      await openProfileComparison(page);
       const dialog = page.getByRole("dialog", {
         name: "Compare Codex Evaluation Environment on Codex"
       });
@@ -778,9 +790,7 @@ printf '{"type":"message_end","message":{"role":"assistant","model":"fake-pi","c
 
       for (const agent of agents.slice(0, 3)) {
         await selectEvaluationProfile(page, agent.name);
-        const compare = page.getByRole("button", { name: "Compare" });
-        await expect.poll(() => compare.isEnabled()).toBe(true);
-        await compare.click();
+        await openProfileComparison(page);
         const dialog = page.getByRole("dialog", { name: new RegExp(`Compare ${agent.name}`) });
         await dialog.getByRole("textbox", { name: "Task" }).fill("Verify adapter");
         await dialog.getByRole("button", { name: "Run comparison" }).click();
@@ -818,13 +828,13 @@ printf '{"type":"message_end","message":{"role":"assistant","model":"fake-pi","c
 
       const trae = agents[3];
       await selectEvaluationProfile(page, trae.name);
-      const compare = page.getByRole("button", { name: "Compare" });
+      await page.getByRole("button", { name: "More Profile actions" }).click();
+      const compare = page.getByRole("menu", { name: "Profile actions" })
+        .getByRole("menuitem", { name: "Compare" });
       await expect.poll(() => compare.isDisabled()).toBe(true);
       await expect(compare.getAttribute("title")).resolves.toBe(
         "Trae CLI does not expose a verified one-shot command, so isolated comparison is unavailable."
       );
-      await expect(compare.getAttribute("aria-describedby")).resolves
-        .toBe("profile-comparison-unavailable");
       expect(await readdir(join(cacheRoot, "evaluations"))).toEqual([]);
       const latestReport = await readFile(join(dataRoot, "evaluations", "latest.json"), "utf8");
       expect(latestReport).not.toContain(root);

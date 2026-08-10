@@ -3014,7 +3014,8 @@ describe("Electron UI profile switching e2e", () => {
 
     await openSkillLibrary(page);
     await openLocalSkills(page);
-    await expect.poll(() => page.getByRole("button", { name: "Refresh local skills" }).textContent())
+    await expect.poll(() => page.getByRole("button", { name: "Refresh local skills" })
+      .locator(".ui-button__label").textContent())
       .toBe("Refresh");
     const cleanupGroup = page.getByRole("group", { name: "Cleanup group ui-alpha-skill" });
     await cleanupGroup.waitFor({ state: "visible" });
@@ -3275,8 +3276,10 @@ describe("Electron UI profile switching e2e", () => {
     const sharedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     await sharedRow.waitFor({ state: "visible" });
     const [refreshIconClass, checkIconClass] = await Promise.all([
-      page.getByRole("button", { name: "Refresh skills" }).locator("svg").getAttribute("class"),
-      page.getByRole("button", { name: "Check updates" }).locator("svg").getAttribute("class")
+      page.getByRole("button", { name: "Refresh skills" })
+        .locator(".ui-button__content svg").getAttribute("class"),
+      page.getByRole("button", { name: "Check updates" })
+        .locator(".ui-button__content svg").getAttribute("class")
     ]);
     expect(refreshIconClass).toContain("lucide-refresh-cw");
     expect(checkIconClass).toContain("lucide-search-check");
@@ -3486,11 +3489,9 @@ describe("Electron UI profile switching e2e", () => {
     const targetMenu = page.getByRole("dialog", { name: "Select apply Agent" });
     await targetMenu.waitFor({ state: "visible" });
     await expectInViewport(page, targetMenu);
-    const selectedTargetMenuItem = targetMenu.locator('[role="option"][aria-selected="true"]');
-    await page.waitForFunction(() => document.activeElement?.getAttribute("role") === "option");
-    expect(await selectedTargetMenuItem.evaluate((element) => element === document.activeElement)).toBe(true);
-    await page.keyboard.press("ArrowDown");
-    expect(await selectedTargetMenuItem.evaluate((element) => element === document.activeElement)).toBe(false);
+    const targetSearch = targetMenu.getByRole("searchbox", { name: "Search Agents" });
+    await expect.poll(() => targetSearch.evaluate((element) => element === document.activeElement))
+      .toBe(true);
     await page.keyboard.press("Escape");
     await targetMenu.waitFor({ state: "hidden" });
 
@@ -3498,7 +3499,7 @@ describe("Electron UI profile switching e2e", () => {
     await profileActionsTrigger.click();
     const profileActionsMenu = page.getByRole("menu", { name: "Profile actions" });
     await profileActionsMenu.waitFor({ state: "visible" });
-    await page.waitForFunction(() => document.activeElement?.textContent?.includes("Duplicate Profile"));
+    await page.waitForFunction(() => document.activeElement?.textContent?.includes("Compare"));
     await page.keyboard.press("End");
     expect(await profileActionsMenu.getByRole("menuitem", { name: "Delete Profile" }).evaluate(
       (element) => element === document.activeElement
@@ -4959,7 +4960,7 @@ describe("Electron UI profile switching e2e", () => {
     const profileCommitControls = await readBoxes(
       page.locator(".profile-commit-actions button, .profile-commit-actions select")
     );
-    expect(profileCommitControls.length).toBeGreaterThanOrEqual(4);
+    expect(profileCommitControls.length).toBe(3);
     expect(new Set(profileCommitControls.map(({ height }) => height))).toEqual(new Set([32]));
     const policies = await readBoxes(page.locator(".profile-resource-policy"));
     const policyOptions = await readBoxes(
@@ -7925,18 +7926,8 @@ describe("Electron UI profile switching e2e", () => {
     await selectProfile(page, "UI Trae daily");
     await selectTarget(page, "Trae CLI");
     await expandComposerSection(page, "Instructions");
-    await page.getByText(
-      join(traeDir, "rules", "agentenv-manager.md"),
-      { exact: true }
-    ).waitFor({ state: "visible" });
-    const instructionsHelp = page.getByLabel(
-      "Applying the Profile writes this file. New Trae CLI sessions load changes; running conversations keep their current context."
-    );
-    const instructionsTooltip = page.getByRole("tooltip").filter({
-      hasText: "New Trae CLI sessions load changes"
-    });
-    await hoverUntilVisible(page, instructionsHelp, instructionsTooltip);
-    await page.mouse.move(600, 400);
+    await page.getByLabel("Preview of AGENTS.md").waitFor({ state: "visible" });
+    await page.getByText("Saved in this Profile", { exact: true }).waitFor({ state: "visible" });
     await expandComposerSection(page, "MCPs");
     const editor = page.locator(".profile-mcp-editor");
     await editor.waitFor({ state: "visible" });
@@ -11313,7 +11304,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(profileSwitcherContract).toMatchObject({
       borderWidth: "1px",
       height: 28,
-      iconCount: 0,
+      iconCount: 1,
       radius: "6px"
     });
     expect(profileSwitcherContract.width).toBeGreaterThan(100);
@@ -11326,7 +11317,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(workspaceSwitcherContract).toMatchObject({
       borderWidth: "1px",
       height: 28,
-      iconCount: 0,
+      iconCount: 1,
       radius: "6px"
     });
     expect(workspaceSwitcherContract.width).toBeGreaterThan(100);

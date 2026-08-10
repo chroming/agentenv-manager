@@ -65,8 +65,9 @@
   gap: 8px;
 }
 
-.app-update-summary {
+.settings-preference-row.app-update-summary {
   min-height: 64px;
+  padding-block: 4px;
 }
 
 .app-update-actions {

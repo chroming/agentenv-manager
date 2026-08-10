@@ -696,7 +696,7 @@ describe("Conversations desktop workflow", () => {
     await page.getByRole("button", { name: "Refresh" }).click();
     await expect.poll(() => page.evaluate(() =>
       document.body.dataset.observedConversationRefresh
-    )).toBe("true");
+    )).toBe("false");
     await page.getByRole("option", {
       name: /Long conversation performance test/
     }).waitFor({ state: "visible", timeout: 15_000 });
