@@ -41,15 +41,17 @@ macOS 直接下载包使用 ad-hoc 签名，没有 Developer ID 和公证。请�
 1. 启动应用，确认自动检测到的 Agent。没有安装的 Agent 默认保持关闭。
 2. 在 Agents 中配置一个 Agent，把当前设置保存为 Profile，或从空 Profile 开始。
 3. 如果机器上已经有较多 Skills，先在 `Skills > Local Skills` 中处理重复副本、冲突、共享目录和失效链接。
-4. 保存 Profile，查看 Apply 预览，确认变化后再写入 Agent。AgentEnv 会先创建恢复点，并在写入失败时尝试自动回滚。
+4. 修改会自动保存到 Profile。查看 Apply 预览，确认变化后再写入 Agent。AgentEnv 会先创建恢复点，并在写入失败时尝试自动回滚。
 
 ## Profiles
 
-Profile 保存一套可复用的 Agent 工作方式，包括 Instructions、Library Skills，以及受支持 Agent 中已有 MCP 的启停选择。每类资源都可以使用 Profile 内容、关闭，或保留 Agent 当前状态。
+Profile 保存一套可复用的 Agent 工作方式，包括 Instructions、Library Skills，以及受支持 Agent 中已有 MCP 的启停选择。每类资源都可以使用 Profile 内容、关闭，或保留 Agent 当前状态。修改会自动保存到 AgentEnv，但不会自动写入 Agent。
 
 ![Profiles](docs/images/profiles.png)
 
 Apply 前，AgentEnv 会重新读取目标环境，列出将新增、替换、删除、保留或需要确认的资源。只有确认后才会写入，并在完成后验证结果。
+
+如果想放弃尚未 Apply 的修改，可以恢复到该 Agent 上次成功 Apply 的 Profile 版本。Profile 菜单中的 Recovery 也会保留最近的编辑历史。
 
 ### Apply 前对比
 
@@ -65,7 +67,7 @@ Workspaces 保存常用本地目录的引用，并展示所选 Agent 会在该�
 
 ![Workspace resources](docs/images/workspaces.png)
 
-目录中的文件始终是唯一事实源。Workspace 不绑定 Profile，不创建 Library 链接，也不会替你 stage 或 commit Git 变化。移除 Workspace 只会删除应用内引用。
+目录中的文件始终是唯一事实源。Workspace 不绑定 Profile，不创建 Library 链接，也不会替你 stage 或 commit Git 变化。移除 Workspace 只会删除应用内引用。明确修改 Workspace 资源时会保留恢复记录，可以撤销最近一次修改或从 Recovery 选择历史版本。
 
 ## Skill Library
 
@@ -97,7 +99,7 @@ Conversations 只读索引本机 Agent 的历史记录。可以搜索标题和�
 ## 其他功能
 
 - Workspace Sync 通过专用私有 Git 仓库同步可移植的 Profiles 和 Skill Library。拉取和发布都需要手动审核，不会自动 Apply。
-- Recovery 集中展示 Apply、Skill 清理和同步产生的恢复记录，可以预览文件后再恢复。
+- Recovery 包含 Apply、Profile 编辑、Workspace 修改、Skill 清理和同步产生的恢复记录，可以预览文件后再恢复。
 - GitHub 登录为仓库导入和更新检查提供更高的 API 限额；普通 Git 和 SSH 仓库使用系统 Git 凭据。
 - 界面支持 English、简体中文和繁體中文。
 

@@ -233,7 +233,7 @@ const prepareFixture = async (root) => {
   const binDir = join(root, "bin");
   const githubFixtureRoot = join(root, "github-fixtures");
   const projectSkillRoot = join(root, "project-workspace");
-  const workspaceRoot = join(root, "release-console");
+  const workspaceRoot = join(homeDir, "Projects", "release-console");
   const opencodeDir = join(homeDir, ".config", "opencode");
   const codexDir = join(homeDir, ".codex");
   await mkdir(appDataRoot, { recursive: true });
@@ -892,6 +892,12 @@ try {
   await page.getByRole("heading", { name: "Release Console", exact: true }).waitFor({
     state: "visible"
   });
+  await page
+    .locator(".project-detail__header .ui-inspector-header__copy > span")
+    .evaluate((element) => {
+      element.textContent = "~/Projects/release-console";
+      element.setAttribute("title", "~/Projects/release-console");
+    });
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "workspaces-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
@@ -1362,16 +1368,9 @@ try {
   await sparseSkillPicker.waitFor({ state: "hidden" });
   await page.getByRole("listitem", { name: "Profile Skill git-workflow" }).waitFor();
 
-  const sparseSaveButton = page.getByRole("button", { name: "Save", exact: true });
-  await sparseSaveButton.click();
-  await sparseSaveButton.waitFor({ state: "visible" });
-  await page.waitForFunction(() => {
-    const save = [...document.querySelectorAll("button")].find(
-      (button) => button.textContent?.trim() === "Save"
-    );
-    return save instanceof HTMLButtonElement && save.disabled;
-  });
-  await page.waitForTimeout(5_200);
+  await page.waitForTimeout(900);
+  await page.waitForFunction(() => !document.querySelector(".profile-row__dirty"));
+  await page.waitForTimeout(4_300);
   await capturePage(page, join(outputDir, "profile-skills-single-920x620.png"));
   await page.getByRole("button", { name: "More Profile actions" }).click();
   await page.getByRole("menuitem", { name: "Delete Profile" }).click();
@@ -1401,16 +1400,7 @@ try {
   await skillsPolicy.getByRole("radio", { name: "Keep Agent" }).click();
   await capturePage(page, join(outputDir, "profile-policy-keep-current-920x620.png"));
   await skillsPolicy.getByRole("radio", { name: "Use Profile" }).click();
-  const policySaveButton = page.getByRole("button", { name: "Save", exact: true });
-  if (await policySaveButton.isEnabled()) {
-    await policySaveButton.click();
-    await page.waitForFunction(() => {
-      const save = [...document.querySelectorAll("button")].find(
-        (button) => button.textContent?.trim() === "Save"
-      );
-      return save instanceof HTMLButtonElement && save.disabled;
-    });
-  }
+  await page.waitForTimeout(500);
   for (const sectionName of ["Instructions", "Skills", "MCPs"]) {
     await ensureComposerExpanded(sectionName);
     await capturePage(

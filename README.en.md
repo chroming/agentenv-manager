@@ -41,15 +41,17 @@ Direct macOS downloads are ad-hoc signed, without a Developer ID or notarization
 1. Launch the app and confirm the Agents it detected. Agents that are not installed stay disabled by default.
 2. Configure an Agent from the Agents page. Save its current setup as a Profile, or start with an empty Profile.
 3. If the machine already has many Skills, use `Skills > Local Skills` to handle duplicate copies, conflicts, shared directories, and broken links.
-4. Save the Profile and review the Apply preview before writing to the Agent. AgentEnv creates a recovery point first and attempts an automatic rollback after a failed write.
+4. Changes are saved to the Profile automatically. Review the Apply preview before writing to the Agent. AgentEnv creates a recovery point first and attempts an automatic rollback after a failed write.
 
 ## Profiles
 
-A Profile contains a reusable Agent setup: Instructions, Skills from the Library, and enablement choices for MCP servers already known to a supported Agent. Each resource type can use the Profile, be turned off, or keep the Agent's current state.
+A Profile contains a reusable Agent setup: Instructions, Skills from the Library, and enablement choices for MCP servers already known to a supported Agent. Each resource type can use the Profile, be turned off, or keep the Agent's current state. Changes are saved to AgentEnv automatically but are not written to an Agent until Apply.
 
 ![Profiles](docs/images/profiles.png)
 
 Before Apply, AgentEnv reads the target again and lists resources that will be added, replaced, removed, preserved, or need confirmation. It writes only after confirmation and verifies the result.
+
+To discard changes that have not been Applied, restore the Profile version from the last successful Apply to that Agent. Recovery in the Profile menu also keeps recent edit history.
 
 ### Compare before Apply
 
@@ -65,7 +67,7 @@ Workspaces keeps references to frequently used local folders and shows the Instr
 
 ![Workspace resources](docs/images/workspaces.png)
 
-The folder remains the source of truth. A Workspace is not bound to a Profile, does not contain Library links, and does not stage or commit Git changes. Removing a Workspace deletes only the app reference.
+The folder remains the source of truth. A Workspace is not bound to a Profile, does not contain Library links, and does not stage or commit Git changes. Removing a Workspace deletes only the app reference. Explicit Workspace resource changes keep recovery records, so you can undo the latest change or restore an earlier version from Recovery.
 
 ## Skill Library
 
@@ -97,7 +99,7 @@ Instructions, MCP, Conversations, and Compare support differs between Agents. Th
 ## More features
 
 - Workspace Sync uses a dedicated private Git repository for portable Profiles and Skill Library data. Pull and publish both require review, and sync never Applies changes to a local Agent.
-- Recovery collects recovery points created by Apply, Skill cleanup, and sync. You can inspect files before restoring them.
+- Recovery collects recovery points created by Apply, Profile edits, Workspace changes, Skill cleanup, and sync. You can inspect files before restoring them.
 - GitHub sign-in raises API limits for repository imports and update checks. Regular Git and SSH repositories use system Git credentials.
 - The interface supports English, Simplified Chinese, and Traditional Chinese.
 
