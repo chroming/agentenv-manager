@@ -109,16 +109,15 @@ describe("Workspaces desktop workflow", () => {
     const notNow = page.getByRole("button", { name: "Not now", exact: true });
     if (await notNow.isVisible().catch(() => false)) await notNow.click();
     await page.getByRole("button", { name: "Workspaces", exact: true }).click();
-    const agentSwitcher = page.getByRole("button", { name: "Choose Agent", exact: true });
+    const agentSwitcher = page.getByRole("button", {
+      name: "Current Agent OpenCode",
+      exact: true
+    });
     await expect.poll(() => agentSwitcher.locator(".project-agent-switcher__logo").count())
       .toBe(1);
-    await agentSwitcher.click();
-    const agentDialog = page.getByRole("dialog", { name: "Choose Agent", exact: true });
-    await agentDialog.getByRole("option", { name: "Agent OpenCode", exact: true }).waitFor();
-    expect(await agentDialog.getByRole("option", { name: "Agent OpenCode", exact: true })
-      .locator(".project-agent-switcher__logo").count()).toBe(1);
-    await page.keyboard.press("Escape");
-    await agentDialog.waitFor({ state: "hidden" });
+    expect(await agentSwitcher.isDisabled()).toBe(true);
+    expect(await page.getByRole("dialog", { name: "Current Agent OpenCode" }).count()).toBe(0);
+    expect(await agentSwitcher.locator(".lucide-chevron-down").count()).toBe(0);
     for (const viewport of [
       { width: 920, height: 620 },
       { width: 1180, height: 728 }
