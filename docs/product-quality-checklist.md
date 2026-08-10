@@ -78,6 +78,12 @@ Use one verdict for every audit or release:
 - [ ] No mutation proceeds from stale preview data or skips required backup,
   verification, and recovery.
 - [ ] No semantic no-op reports replacement or writes files.
+- [ ] Adopting content-identical Agent resources preserves their bytes, timestamps,
+  and topology; only the device-local deployment receipt changes.
+- [ ] New Agent and Workspace deployments create no ownership marker, sidecar,
+  or AgentEnv support file beside user resources.
+- [ ] First-run telemetry creates no installation identity and sends no request
+  until the user explicitly continues with telemetry enabled.
 - [ ] No refresh, navigation, or background enrichment flashes a false empty
   page.
 - [ ] No release claim uses stale renderer or Electron build output.

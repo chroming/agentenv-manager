@@ -17,6 +17,7 @@ export const SettingsSchema = z.object({
   appUpdateAutoDownloadEnabled: z.boolean().default(true),
   appUpdateInstallOnQuit: z.boolean().default(true),
   telemetryEnabled: z.boolean().default(true),
+  telemetryConsentVersion: z.literal(1).optional(),
   backupRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).default(null),
   enabledTargetIds: z.array(z.string().min(1)).optional(),
   agentDiscoveryVersion: z.number().int().positive().optional(),
@@ -199,6 +200,9 @@ export const createSettingsStore = (
     );
     const normalized: AgentEnvSettings = {
       ...settings,
+      ...(settings.telemetryEnabled === false && settings.telemetryConsentVersion === undefined
+        ? { telemetryConsentVersion: 1 as const }
+        : {}),
       ...(platform === "win32" && settings.conversationTerminal === "ghostty"
         ? { conversationTerminal: "default" as const }
         : {}),

@@ -109,6 +109,7 @@ export interface AgentEnvApi {
   installAppUpdate(): Promise<AppUpdateStatus>;
   onAppUpdateStatusChanged(callback: (status: AppUpdateStatus) => void): () => void;
   readTelemetryPreview(): Promise<TelemetryPreview>;
+  decideTelemetry(enabled: boolean): Promise<AgentEnvSettings>;
   reportRendererError(input: RendererDiagnosticError): void;
   quitApp(): void;
   onOpenSettingsRequested(callback: () => void): () => void;
@@ -1292,6 +1293,7 @@ export interface AgentEnvSettings {
   appUpdateAutoDownloadEnabled?: boolean;
   appUpdateInstallOnQuit?: boolean;
   telemetryEnabled?: boolean;
+  telemetryConsentVersion?: 1;
   backupRetentionDays: BackupRetentionDays;
   enabledTargetIds?: string[];
   agentDiscoveryVersion?: number;
@@ -1853,6 +1855,8 @@ export interface ManagedResourceSnapshot {
   contentHash: string;
   source?: string;
   paused?: boolean;
+  deploymentMode?: "adopted" | "linked" | "copied";
+  createdByAgentEnv?: boolean;
 }
 
 export type TargetHealthStatus = "ready" | "needs-setup" | "missing" | "guarded" | "unknown";
@@ -2069,6 +2073,13 @@ export interface ActivationPreview {
   targetId: string;
   targetState: TargetState;
   effectivePayload?: EffectiveProfilePayload;
+  localFootprint?: {
+    adopted: number;
+    modified: number;
+    created: number;
+    removed: number;
+    liveLinks: number;
+  };
   operation?: "apply" | "takeover";
   skillRootTransition?: {
     path: string;

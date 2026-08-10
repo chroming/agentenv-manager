@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -12,6 +12,15 @@ import { requireCurrentElectronBuild } from "./currentBuild";
 let root = "";
 let app: ElectronApplication | undefined;
 const run = promisify(execFile);
+
+const fileExists = async (path: string) => {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 requireCurrentElectronBuild();
 
@@ -64,6 +73,7 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
       env: {
         ...process.env,
         AGENTENV_AUTOMATION: "1",
+        AGENTENV_AUTOMATION_POSTHOG_PROJECT_TOKEN: "phc_e2e_consent_only",
         AGENTENV_AUTOMATION_UPDATE_PACKAGED: "1",
         AGENTENV_AUTOMATION_APP_VERSION: "0.1.0",
         AGENTENV_AUTOMATION_APP_DIR: applicationDirectory,
@@ -81,17 +91,26 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
       () => page.evaluate(() => window.agentEnv.readStartupStatus()),
       { timeout: 10_000 }
     ).toEqual({ state: "ready" });
+    const telemetryDialog = page.getByRole("dialog", { name: "Anonymous usage statistics" });
+    await telemetryDialog.waitFor({ state: "visible", timeout: 5_000 });
+    await expect(fileExists(join(dataRoot, "telemetry-state.json"))).resolves.toBe(false);
+    await telemetryDialog.getByRole("switch", { name: "Share anonymous usage statistics" }).click();
+    await telemetryDialog.getByRole("button", { name: "Continue" }).click();
+    await telemetryDialog.waitFor({ state: "hidden" });
+    await expect.poll(async () =>
+      JSON.parse(await readFile(join(dataRoot, "settings.json"), "utf8"))
+    ).toMatchObject({ telemetryEnabled: false, telemetryConsentVersion: 1 });
+    await expect(fileExists(join(dataRoot, "telemetry-state.json"))).resolves.toBe(false);
     await page.getByRole("complementary", { name: "Global navigation" })
       .getByRole("button", { name: "Settings" })
       .click({ timeout: 5_000 });
     await page.getByText("Installed with Homebrew").waitFor({ timeout: 5_000 });
     await page.getByRole("tab", { name: "Data" }).click();
-    await page.getByText("This build does not send anonymous usage statistics. Your preference is kept for future builds.")
+    await page.getByText("Shares one anonymous startup event per day. Turn it off at any time.")
       .waitFor({ timeout: 5_000 });
     await expect.poll(() =>
       page.getByRole("switch", { name: "Share anonymous usage statistics" }).isDisabled()
     ).toBe(false);
-    await page.getByRole("switch", { name: "Share anonymous usage statistics" }).click();
     await expect.poll(async () =>
       JSON.parse(await readFile(join(dataRoot, "settings.json"), "utf8"))
         .telemetryEnabled

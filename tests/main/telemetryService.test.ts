@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -46,6 +46,28 @@ describe("telemetry service", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("creates no identity and sends nothing before the user records a consent decision", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-telemetry-unresolved-"));
+    const statePath = join(root, "state.json");
+    const fetch = vi.fn();
+    const service = createTelemetryService({
+      statePath,
+      host: "https://us.i.posthog.com",
+      projectToken: "phc_test",
+      fetch,
+      settingsStore: { readSettings: vi.fn().mockResolvedValue({ telemetryEnabled: true }) },
+      context,
+      createInstallationId: () => "6b7ef3c8-b8a4-49a6-b947-cae90b935a25"
+    });
+
+    await expect(service.preview()).resolves.toEqual(expect.objectContaining({
+      willCreateInstallationId: true
+    }));
+    await expect(service.recordDailyStartup()).resolves.toEqual({ status: "disabled" });
+    expect(fetch).not.toHaveBeenCalled();
+    await expect(access(statePath)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("sends only the allowlisted daily payload and coalesces the same day", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-telemetry-"));
     await mkdir(root, { recursive: true });
@@ -55,7 +77,7 @@ describe("telemetry service", () => {
       host: "https://us.i.posthog.com",
       projectToken: "phc_test",
       fetch,
-      settingsStore: { readSettings: vi.fn().mockResolvedValue({ telemetryEnabled: true }) },
+      settingsStore: { readSettings: vi.fn().mockResolvedValue({ telemetryEnabled: true, telemetryConsentVersion: 1 }) },
       context,
       now: () => new Date(2026, 7, 3, 23, 30),
       createInstallationId: () => "6b7ef3c8-b8a4-49a6-b947-cae90b935a25"
@@ -111,7 +133,7 @@ describe("telemetry service", () => {
       host: "https://us.i.posthog.com",
       projectToken: "phc_test",
       fetch,
-      settingsStore: { readSettings: vi.fn().mockResolvedValue({ telemetryEnabled: true }) },
+      settingsStore: { readSettings: vi.fn().mockResolvedValue({ telemetryEnabled: true, telemetryConsentVersion: 1 }) },
       context,
       now: () => new Date(2026, 7, 3, 23, 45),
       createInstallationId: () => "31e27e20-a4ed-4a4a-96b1-c4213d2864eb"
@@ -132,7 +154,7 @@ describe("telemetry service", () => {
       host: "https://eu.i.posthog.com",
       projectToken: "phc_test",
       fetch: vi.fn().mockRejectedValue(new Error("offline")),
-      settingsStore: { readSettings: vi.fn().mockResolvedValue({ telemetryEnabled: true }) },
+      settingsStore: { readSettings: vi.fn().mockResolvedValue({ telemetryEnabled: true, telemetryConsentVersion: 1 }) },
       context,
       now: () => new Date(2026, 7, 3, 8, 0),
       createInstallationId: () => "2e5852b7-1ee3-48c8-a7ad-f9606dbcae1e"
@@ -141,9 +163,10 @@ describe("telemetry service", () => {
     await expect(service.preview()).resolves.toEqual(expect.objectContaining({
       enabledInBuild: true,
       destination: "PostHog Cloud",
-      installationId: "2e5852b7-1ee3-48c8-a7ad-f9606dbcae1e",
+      willCreateInstallationId: true,
       payload: expect.not.objectContaining({ outcome: expect.anything() })
     }));
+    await expect(access(join(root, "state.json"))).rejects.toMatchObject({ code: "ENOENT" });
     await expect(service.recordDailyStartup()).resolves.toEqual({ status: "failed" });
   });
 
@@ -159,7 +182,7 @@ describe("telemetry service", () => {
       host,
       projectToken: "phc_test",
       fetch,
-      settingsStore: { readSettings: vi.fn().mockResolvedValue({ telemetryEnabled: true }) },
+      settingsStore: { readSettings: vi.fn().mockResolvedValue({ telemetryEnabled: true, telemetryConsentVersion: 1 }) },
       context
     });
 

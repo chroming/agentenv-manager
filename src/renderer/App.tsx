@@ -101,6 +101,7 @@ import {
 } from "./components/AppFeedback";
 import { DiagnosticSettingsSection } from "./components/DiagnosticSettingsSection";
 import { AppUpdateSettings } from "./components/AppUpdateSettings";
+import { TelemetryConsentDialog } from "./components/TelemetryConsentDialog";
 import { TelemetrySettings } from "./components/TelemetrySettings";
 import { BackupManagerDialog } from "./components/BackupManagerDialog";
 import { DataSettingsSection } from "./components/DataSettingsSection";
@@ -201,6 +202,7 @@ import { useProfileActivationController } from "./hooks/useProfileActivationCont
 import { useGitHubConnectionController } from "./hooks/useGitHubConnectionController";
 import { useBackupRecoveryController } from "./hooks/useBackupRecoveryController";
 import { useSettingsController } from "./hooks/useSettingsController";
+import { useTelemetryConsent } from "./hooks/useTelemetryConsent";
 import { useSkillUpdateQueue } from "./hooks/useSkillUpdateQueue";
 import {
   projectSkillInventoryBoundary,
@@ -472,6 +474,12 @@ const AppContent = ({
   const skillSettings = settingsController.state.settings;
   const settingsSaveStatus = settingsController.state.status;
   const updateSkillSettings = settingsController.actions.update;
+  const telemetryConsent = useTelemetryConsent({
+    isLoading,
+    settings: skillSettings,
+    onAccepted: settingsController.actions.accept,
+    onError: setError
+  });
   const { activity: skillUpdateActivity, activityRef: skillUpdateActivityRef,
     begin: beginSkillUpdateActivity, finish: finishSkillUpdateActivity
   } = useSkillUpdateActivity(() => undefined);
@@ -1603,7 +1611,8 @@ const AppContent = ({
 
   const appModalOpen = Boolean(
     pendingSkillImport || pendingProfileAction || profileDialogMode || deleteProfileCandidateId ||
-    profileRecoveryMode || dataRestorePreview || backupManagerOpen
+    profileRecoveryMode || dataRestorePreview || backupManagerOpen ||
+    telemetryConsent.blocksAgentSuggestions
   );
   const {
     agentProbeComplete, allowSuggestionPreferences, detectedDisabledAgents,
@@ -4704,6 +4713,13 @@ const AppContent = ({
         <DiagnosticIssueDialog
           issue={diagnosticIssue}
           onDismiss={() => setDiagnosticIssue(undefined)}
+        />
+        <TelemetryConsentDialog
+          busy={telemetryConsent.saving}
+          open={telemetryConsent.open}
+          preview={telemetryConsent.preview}
+          onDismiss={telemetryConsent.dismiss}
+          onDecide={telemetryConsent.decide}
         />
         <AgentDiscoveryDialog
           agents={visibleAgentSuggestions}

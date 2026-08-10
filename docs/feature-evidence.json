@@ -218,7 +218,7 @@
     },
     {
       "id": "anonymous-usage-statistics",
-      "summary": "Send at most one allowlisted daily startup event from official builds unless the user opts out.",
+      "summary": "Ask before creating a telemetry identity, then send at most one allowlisted daily startup event from official builds when the user agrees.",
       "contract": {
         "path": "PRIVACY.md",
         "anchor": "## Network Access"
@@ -232,15 +232,15 @@
         "pi": "supported"
       },
       "states": {
-        "idle": "Reporting is on by default in configured official builds and the exact payload can be previewed.",
+        "idle": "A first-run decision is unresolved; previewing the allowlist creates no installation identity and sends no request.",
         "working": "The request runs asynchronously with a short timeout.",
         "success": "One daily allowlisted startup event is recorded locally as sent.",
         "error": "Failures are discarded without delaying or failing the app.",
-        "cancelled": "Disabling the setting prevents future requests and remains disabled after restart.",
-        "noOp": "No compiled project token, an explicit opt-out, or an already-sent date performs no request.",
+        "cancelled": "Not now, close, or Escape skips only this launch; an explicit opt-out remains disabled after restart.",
+        "noOp": "No consent decision, no compiled project token, an explicit opt-out, or an already-sent date performs no request.",
         "stale": "The payload is rebuilt from current bounded runtime facts.",
         "partial": "No partial payload or arbitrary extension fields are accepted.",
-        "persisted": "A random installation ID and the last successful local event date are stored locally.",
+        "persisted": "The consent decision is stored first; only an enabled decision may create a random installation ID and last-sent date.",
         "rollback": "An explicit opt-out is preserved when older settings are migrated; deleting only the daily receipt never changes the preference."
       },
       "evidence": {
@@ -248,7 +248,9 @@
           "tests/main/telemetryService.test.ts"
         ],
         "renderer": [
-          "tests/renderer/TelemetrySettings.test.tsx"
+          "tests/renderer/TelemetrySettings.test.tsx",
+          "tests/renderer/TelemetryConsentDialog.test.tsx",
+          "tests/renderer/App.test.tsx"
         ],
         "desktop": [
           "tests/e2e/electronAppUpdates.e2e.test.ts"
@@ -462,6 +464,55 @@
         "visual": [
           "skills-cleanup-review-920x620.png"
         ]
+      }
+    },
+    {
+      "id": "minimal-footprint-takeover",
+      "summary": "Apply a complete Profile while adopting equivalent Agent resources in place and keeping deployment receipts inside AgentEnv data.",
+      "contract": {
+        "path": "docs/superpowers/specs/2026-08-11-minimal-footprint-takeover-design.md",
+        "anchor": "## Feature admission"
+      },
+      "support": {
+        "opencode": "supported",
+        "claude-code": "supported",
+        "codex": "supported",
+        "antigravity": "supported",
+        "trae-cli": "supported",
+        "pi": "supported"
+      },
+      "states": {
+        "idle": "Preview reads the selected Agent and names the exact local footprint without writing.",
+        "working": "Apply protects only planned mutations and central Target state, then verifies each result.",
+        "success": "Equivalent resources remain byte-for-byte in place and new deployments have central receipts without Agent-side markers.",
+        "error": "A failed mutation restores every claimed path and prior Target state or enters recovery-required with the Backup preserved.",
+        "cancelled": "Closing Preview performs no Agent or Target-state mutation.",
+        "noOp": "A matching Profile and receipt create no Agent write or Backup.",
+        "stale": "Changed Profile, Library, receipt, runtime fact, or planned path rejects the Preview before mutation.",
+        "partial": "Leave-unmanaged and observe-only resources remain visible but outside AgentEnv authority.",
+        "persisted": "Path, hash, Library source, deployment mode, and creation provenance are stored in device-local Target state.",
+        "rollback": "Stop Managing can preserve current content or restore the pre-takeover Backup without relying on Agent-side markers."
+      },
+      "evidence": {
+        "domain": [
+          "tests/main/skillDeployment.test.ts",
+          "tests/main/activationService.test.ts",
+          "tests/main/skillLibraryStore.test.ts"
+        ],
+        "renderer": [
+          "tests/renderer/PreviewDialog.test.tsx"
+        ],
+        "desktop": [
+          "tests/e2e/targetConformance.e2e.test.ts",
+          "tests/e2e/electronUiProfileSwitching.e2e.test.ts"
+        ],
+        "persistence": [
+          "tests/main/targetState.test.ts",
+          "tests/main/activationService.test.ts"
+        ],
+    "visual": [
+      "apply-preview-920x620.png"
+    ]
       }
     }
   ]

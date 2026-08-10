@@ -51,6 +51,7 @@ describe("Workspaces desktop workflow", () => {
       skillAutoCheckEnabled: false,
       skillAutoCheckIntervalMinutes: 60,
       backupRetentionDays: null,
+      telemetryEnabled: false,
       enabledTargetIds: ["opencode"],
       agentDiscoveryVersion: 1,
       agentDiscoveryReviewedIds: [

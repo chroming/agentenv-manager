@@ -35,6 +35,7 @@ const api: AgentEnvApi = {
     return () => ipcRenderer.off("app-updates:status-changed", listener);
   },
   readTelemetryPreview: () => ipcRenderer.invoke("telemetry:preview"),
+  decideTelemetry: (enabled) => ipcRenderer.invoke("telemetry:decide", enabled),
   reportRendererError: (input) =>
     ipcRenderer.send("diagnostics:renderer-error", input),
   quitApp: () => ipcRenderer.send("startup:quit"),

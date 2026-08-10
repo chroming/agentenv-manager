@@ -10,11 +10,10 @@ import {
 } from "node:fs/promises";
 import { join } from "node:path";
 import type { AgentEnvSettings } from "../shared/types";
-import { isMissingFileError, replacePathAtomically, writeAtomic } from "./fileUtils";
+import { isMissingFileError, replacePathAtomically } from "./fileUtils";
 import { isPathInside } from "./platformPaths";
 import {
   isAgentEnvOwnedDir,
-  markerPathFor,
   markerPathForFile,
   type OwnedDirExpectation
 } from "./ownershipMarkers";
@@ -47,7 +46,6 @@ export const deploySkillDirectory = async (input: {
   sourceDir: string;
   targetDir: string;
   syncMethod: AgentEnvSettings["skillSyncMethod"];
-  markerContent: string;
   platform?: NodeJS.Platform;
   createSymlink?: typeof symlink;
 }) => {
@@ -70,14 +68,9 @@ export const deploySkillDirectory = async (input: {
       }
     }
     await copySkillEntries(input.sourceDir, stagingPath);
-    await writeAtomic(markerPathFor(stagingPath), input.markerContent);
   }, { platform });
 
-  if (deployedAs === "symlink") {
-    await writeAtomic(markerPathForFile(input.targetDir), input.markerContent);
-  } else {
-    await rm(markerPathForFile(input.targetDir), { force: true });
-  }
+  await rm(markerPathForFile(input.targetDir), { force: true });
   return deployedAs;
 };
 

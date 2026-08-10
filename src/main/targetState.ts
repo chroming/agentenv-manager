@@ -8,7 +8,9 @@ const ManagedResourceSchema = z.object({
   path: z.string().min(1),
   contentHash: z.string().min(1),
   source: z.string().optional(),
-  paused: z.boolean().optional()
+  paused: z.boolean().optional(),
+  deploymentMode: z.enum(["adopted", "linked", "copied"]).optional(),
+  createdByAgentEnv: z.boolean().optional()
 });
 
 const SharedSkillPreparationSchema = z.object({

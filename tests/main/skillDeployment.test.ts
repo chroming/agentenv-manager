@@ -16,7 +16,8 @@ import {
 } from "../../src/main/skillDeployment";
 import {
   createOwnerMarkerContent,
-  markerPathFor
+  markerPathFor,
+  markerPathForFile
 } from "../../src/main/ownershipMarkers";
 
 let root = "";
@@ -45,7 +46,6 @@ describe("Skill deployment", () => {
     const deployedAs = await deploySkillDirectory({
       ...fixture,
       syncMethod: "auto",
-      markerContent: "{}",
       createSymlink: async () => {
         throw codedError("ENOTSUP");
       }
@@ -54,6 +54,8 @@ describe("Skill deployment", () => {
     expect(deployedAs).toBe("copy");
     await expect(readFile(join(fixture.targetDir, "SKILL.md"), "utf8"))
       .resolves.toBe("# Review\n");
+    await expect(access(markerPathFor(fixture.targetDir))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(access(markerPathForFile(fixture.targetDir))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("uses a junction for live directory links on Windows", async () => {
@@ -64,7 +66,6 @@ describe("Skill deployment", () => {
       ...fixture,
       platform: "win32",
       syncMethod: "auto",
-      markerContent: "{}",
       createSymlink: async (_source, _target, type) => {
         requestedType = type;
         throw codedError("ENOTSUP");
@@ -80,7 +81,6 @@ describe("Skill deployment", () => {
     await expect(deploySkillDirectory({
       ...fixture,
       syncMethod: "auto",
-      markerContent: "{}",
       createSymlink: async () => {
         throw codedError("EACCES");
       }
@@ -93,7 +93,6 @@ describe("Skill deployment", () => {
     await expect(deploySkillDirectory({
       ...fixture,
       syncMethod: "symlink",
-      markerContent: "{}",
       createSymlink: async () => {
         throw codedError("ENOTSUP");
       }

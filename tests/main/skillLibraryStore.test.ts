@@ -1,4 +1,4 @@
-import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readlink, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { access, chmod, cp, lstat, mkdir, mkdtemp, readFile, readlink, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -1998,9 +1998,19 @@ description: >
     );
     expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);
     await expect(readlink(targetDir)).resolves.toBe(join(paths.skillsLibraryDir, "legacy"));
-    await expect(readFile(`${targetDir}.agentenv-owner.json`, "utf8")).resolves.toContain(
-      '"source": "skills-library/legacy"'
-    );
+    await expect(access(`${targetDir}.agentenv-owner.json`)).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+    await expect(
+      readFile(join(paths.targetStatesDir, "opencode.json"), "utf8")
+        .then((content) => JSON.parse(content))
+    ).resolves.toMatchObject({
+      managedResources: [expect.objectContaining({
+        kind: "skill",
+        path: targetDir,
+        source: "skills-library/legacy"
+      })]
+    });
 
     const inventory = await store.scanInventory([
       {
@@ -2314,9 +2324,9 @@ description: >
     );
     expect((await lstat(targetCopy)).isSymbolicLink()).toBe(true);
     await expect(readlink(targetCopy)).resolves.toBe(join(paths.skillsLibraryDir, "reviewer"));
-    await expect(readFile(`${targetCopy}.agentenv-owner.json`, "utf8")).resolves.toContain(
-      '"source": "skills-library/reviewer"'
-    );
+    await expect(access(`${targetCopy}.agentenv-owner.json`)).rejects.toMatchObject({
+      code: "ENOENT"
+    });
   });
 
   it("restores every changed location when a later cleanup deployment fails", async () => {
@@ -2768,7 +2778,7 @@ description: >
       linkedInstallCount: 1,
       linkedTargetIds: ["opencode"],
       copiedInstallCount: 1,
-      copiedTargetIds: ["claude-code", "opencode"]
+      copiedTargetIds: ["claude-code"]
     });
     const updated = await store.updateSkill({ id: "reviewer", previewId: plan.previewId! });
     await expect(
@@ -3491,11 +3501,13 @@ description: >
       configPath: "",
       skillsDir: join(paths.homeDir, ".config", "opencode", "skills")
     };
-    await store.deployLibrarySkill({
+    const targetSkillPath = join(targetPaths.skillsDir, "reviewer");
+    await mkdir(targetSkillPath, { recursive: true });
+    await writeFile(join(targetSkillPath, "SKILL.md"), "---\nname: reviewer\n---\n# Existing\n");
+    await store.manageTargetSkill({
       targetPaths,
       targetName: "reviewer",
-      libraryId: "reviewer-beta",
-      profileId: "daily-coding"
+      libraryId: "reviewer-beta"
     });
 
     const preview = await store.previewMerge("reviewer-alpha", [targetPaths]);
@@ -3548,8 +3560,13 @@ description: >
     ]);
     await expect(readlink(join(targetPaths.skillsDir, "reviewer"))).resolves.toBe(alphaDir);
     await expect(
-      readFile(`${join(targetPaths.skillsDir, "reviewer")}.agentenv-owner.json`, "utf8")
-    ).resolves.toContain('"source": "skills-library/reviewer-alpha"');
+      readFile(join(paths.targetStatesDir, "opencode.json"), "utf8")
+        .then((content) => JSON.parse(content))
+    ).resolves.toMatchObject({
+      managedResources: [expect.objectContaining({
+        source: "skills-library/reviewer-alpha"
+      })]
+    });
 
     await store.rollbackSkillCleanup(result.backupId);
     await expect(readFile(join(betaDir, "SKILL.md"), "utf8")).resolves.toContain("# Other content");

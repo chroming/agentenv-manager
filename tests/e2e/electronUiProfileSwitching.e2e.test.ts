@@ -126,6 +126,28 @@ const writeJson = async (path: string, value: unknown) => {
 const readJson = async <T,>(path: string): Promise<T> =>
   JSON.parse(await readFile(path, "utf8")) as T;
 
+const expectManagedSkillReceipt = async (
+  appDataRoot: string,
+  targetId: string,
+  skillPath: string,
+  expected?: { deploymentMode?: "adopted" | "linked" | "copied"; createdByAgentEnv?: boolean }
+) => {
+  const state = await readJson<{
+    managedResources: Array<{
+      kind: string;
+      path: string;
+      deploymentMode?: "adopted" | "linked" | "copied";
+      createdByAgentEnv?: boolean;
+    }>;
+  }>(join(appDataRoot, "target-states", `${targetId}.json`));
+  expect(state.managedResources).toContainEqual(expect.objectContaining({
+    kind: "skill",
+    path: skillPath,
+    ...expected
+  }));
+  await expect(fileExists(`${skillPath}.agentenv-owner.json`)).resolves.toBe(false);
+};
+
 const findProfileByName = async (appDataRoot: string, name: string) => {
   const profileIds = await readdir(join(appDataRoot, "profiles"));
   for (const profileId of profileIds) {
@@ -608,6 +630,7 @@ const launchApp = async (
     skillAutoCheckEnabled: true,
     skillAutoCheckIntervalMinutes: 60,
     backupRetentionDays: null,
+    telemetryEnabled: false,
     enabledTargetIds,
     ...(options.agentDiscoveryVersion === null
       ? {}
@@ -2042,7 +2065,7 @@ describe("Electron UI profile switching e2e", () => {
           .__agentEnvShortcutSaveCalls
       )
     ).toBe(1);
-    await page.getByRole("status").filter({ hasText: "Profile saved" }).waitFor();
+    await expect.poll(() => page.getByText("Saving...", { exact: true }).count()).toBe(0);
   }, standardElectronTestTimeout);
 
   it("keeps desktop shortcuts behind each real blocking modal category", async () => {
@@ -2955,12 +2978,11 @@ describe("Electron UI profile switching e2e", () => {
     await expect(
       readFile(join(appDataRoot, "skills-library", "target-only-reviewer", "SKILL.md"), "utf8")
     ).resolves.toContain("Migrate me into the shared library.");
-    await expect(
-      readFile(
-        `${join(opencodeDir, "skills", "target-only-reviewer")}.agentenv-owner.json`,
-        "utf8"
-      )
-    ).resolves.toContain('"source": "skills-library/target-only-reviewer"');
+    await expectManagedSkillReceipt(
+      appDataRoot,
+      "opencode",
+      join(opencodeDir, "skills", "target-only-reviewer")
+    );
 
     const managedRow = page.getByRole("group", { name: "Library item target-only-reviewer" });
     await managedRow
@@ -2983,9 +3005,11 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => page.getByRole("status").textContent(), { timeout: 5_000 })
       .toContain("Skill removal undone");
-    await expect(
-      fileExists(`${join(opencodeDir, "skills", "target-only-reviewer")}.agentenv-owner.json`)
-    ).resolves.toBe(true);
+    await expectManagedSkillReceipt(
+      appDataRoot,
+      "opencode",
+      join(opencodeDir, "skills", "target-only-reviewer")
+    );
     await expect(
       fileExists(join(appDataRoot, "skills-library", "target-only-reviewer", "SKILL.md"))
     ).resolves.toBe(true);
@@ -3265,7 +3289,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(join(targetSkill, "SKILL.md"), "utf8")).resolves.toContain(
       "Review code changes before applying them."
     );
-    await expect(fileExists(`${targetSkill}.agentenv-owner.json`)).resolves.toBe(true);
+    await expectManagedSkillReceipt(appDataRoot, "claude-code", targetSkill);
     const backupIds = await readdir(join(appDataRoot, "backups"));
     const backupManifests = await Promise.all(
       backupIds.map(async (id) => {
@@ -7026,8 +7050,16 @@ describe("Electron UI profile switching e2e", () => {
     await retirementDialog.waitFor({ state: "hidden" });
     await expect(fileExists(sharedSkillDir)).resolves.toBe(false);
     await expect(fileExists(join(appDataRoot, "skills-library", skillId, "SKILL.md"))).resolves.toBe(true);
-    await expect(fileExists(`${join(opencodeDir, "skills", skillId)}.agentenv-owner.json`)).resolves.toBe(true);
-    await expect(fileExists(`${join(codexDir, "skills", skillId)}.agentenv-owner.json`)).resolves.toBe(true);
+    await expectManagedSkillReceipt(
+      appDataRoot,
+      "opencode",
+      join(opencodeDir, "skills", skillId)
+    );
+    await expectManagedSkillReceipt(
+      appDataRoot,
+      "codex",
+      join(codexDir, "skills", skillId)
+    );
 
     const history = page.getByRole("region", { name: "Cleanup history" });
     await expect.poll(() => history.textContent()).toContain("Shared folder migration");
@@ -7083,7 +7115,14 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => fileExists(sharedSkillDir), { timeout: 15_000 }).toBe(false);
     const piSkillDir = join(piDir, "skills", skillId);
     await expect.poll(() => fileExists(join(piSkillDir, "SKILL.md"))).toBe(true);
-    await expect.poll(() => fileExists(`${piSkillDir}.agentenv-owner.json`)).toBe(true);
+    await expect.poll(async () => {
+      try {
+        await expectManagedSkillReceipt(appDataRoot, "pi", piSkillDir);
+        return true;
+      } catch {
+        return false;
+      }
+    }).toBe(true);
 
     const profileEntries = await readdir(join(appDataRoot, "profiles"));
     const piProfileDir = profileEntries.find((entry) => entry.startsWith("pi-"));
@@ -7357,12 +7396,15 @@ describe("Electron UI profile switching e2e", () => {
         return false;
       }
     }, { timeout: 10_000 }).toBe(false);
-    await expect
-      .poll(() => fileExists(`${openCodeDuplicate}.agentenv-owner.json`), { timeout: 10_000 })
-      .toBe(true);
-    await expect
-      .poll(() => fileExists(`${codexDuplicate}.agentenv-owner.json`), { timeout: 10_000 })
-      .toBe(true);
+    await expect.poll(async () => {
+      try {
+        await expectManagedSkillReceipt(appDataRoot, "opencode", openCodeDuplicate);
+        await expectManagedSkillReceipt(appDataRoot, "codex", codexDuplicate);
+        return true;
+      } catch {
+        return false;
+      }
+    }, { timeout: 10_000 }).toBe(true);
     await expect(
       fileExists(join(appDataRoot, "skills-library", "manual-conflict-reviewer"))
     ).resolves.toBe(false);
@@ -7987,7 +8029,7 @@ describe("Electron UI profile switching e2e", () => {
   }, standardElectronTestTimeout);
 
   it("installs a shared library skill into an OpenCode profile from the rendered app", async () => {
-    const { librarySkill, opencodeDir, page } = await launchApp();
+    const { appDataRoot, librarySkill, opencodeDir, page } = await launchApp();
 
     await selectProfile(page, "UI OpenCode alpha");
     await expandComposerSection(page, "Skills");
@@ -8009,12 +8051,10 @@ describe("Electron UI profile switching e2e", () => {
     );
     expect((await lstat(installedSkillDir)).isSymbolicLink()).toBe(true);
     await expect(readlink(installedSkillDir)).resolves.toBe(librarySkill.libraryDir);
-    await expect(
-      readFile(
-        `${installedSkillDir}.agentenv-owner.json`,
-        "utf8"
-      )
-    ).resolves.toContain('"source": "skills-library/shared-reviewer"');
+    await expectManagedSkillReceipt(appDataRoot, "opencode", installedSkillDir, {
+      deploymentMode: "linked",
+      createdByAgentEnv: true
+    });
   }, standardElectronTestTimeout);
 
   it("detects and applies updates after a library skill is installed on OpenCode", async () => {

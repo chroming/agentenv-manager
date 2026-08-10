@@ -116,7 +116,7 @@ describe("settings store", () => {
     );
 
     await expect(createSettingsStore(paths).readSettings()).resolves.toEqual(
-      expect.objectContaining({ telemetryEnabled: false })
+      expect.objectContaining({ telemetryEnabled: false, telemetryConsentVersion: 1 })
     );
   });
 

@@ -10,6 +10,7 @@ import type { TelemetryService } from "../telemetry/telemetryService";
 import type { WorkspaceSyncService } from "../workspaceSync/workspaceSyncService";
 import type { UiStateStore } from "../uiStateStore";
 import type { IpcRegistrationHandles } from "./registration";
+import { registerTelemetryIpc } from "./telemetryIpc";
 
 interface SettingsIpcServices {
   activationService: ActivationService;
@@ -83,7 +84,7 @@ export const registerSettingsIpc = (
       appUpdateService.install({ restart: true })
     )
   );
-  diagnosticHandle("telemetry:preview", () => telemetryService.preview());
+  registerTelemetryIpc(handles, settingsStore, telemetryService);
 
   diagnosticHandle("workspace-sync:status", () => workspaceSyncService.readStatus());
   handleWorkspaceSyncMutation("workspace-sync:connect", (_event, input: unknown) =>

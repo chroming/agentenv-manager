@@ -692,7 +692,11 @@ const createServices = async (
   const telemetryService = createTelemetryService({
     statePath: join(paths.appDataRoot, "telemetry-state.json"),
     host: __AGENTENV_POSTHOG_HOST__,
-    projectToken: app.isPackaged ? __AGENTENV_POSTHOG_PROJECT_TOKEN__ : "",
+    projectToken: app.isPackaged
+      ? __AGENTENV_POSTHOG_PROJECT_TOKEN__
+      : process.env.AGENTENV_AUTOMATION === "1"
+        ? process.env.AGENTENV_AUTOMATION_POSTHOG_PROJECT_TOKEN ?? ""
+        : "",
     settingsStore,
     context: {
       appVersion: __AGENTENV_APP_VERSION__,

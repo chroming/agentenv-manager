@@ -3,6 +3,7 @@ import type {
   ConversationDetail,
   ConversationDetailState,
   NativeMcpConnection,
+  ManagedResourceSnapshot,
   ProfileDetail,
   TargetActivationPreview,
   TargetDescriptor,
@@ -35,6 +36,8 @@ export interface TargetAssetInput {
   skillSyncMethod?: "symlink" | "copy" | "auto";
   approvedUnmanagedSkillHashes?: ReadonlyMap<string, string>;
   replaceablePaths?: ReadonlySet<string>;
+  managedResources?: readonly ManagedResourceSnapshot[];
+  plannedResourceWrites?: ReadonlySet<string>;
   plannedResourceRemovals?: ReadonlySet<string>;
   isolateSkillRoot?: boolean;
   claimMutationPath?: TargetMutationClaimer;

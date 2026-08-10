@@ -106,6 +106,8 @@ The Library is global to AgentEnv Manager and contains canonical reusable Skills
 - In Copy mode, updating the Library MUST NOT silently deploy changes to a Target.
 - Live link is the default deployment policy: an explicitly confirmed Library update immediately affects linked Target Skills. Copy remains available for filesystems or users that do not use links; AgentEnv refreshes clean managed copies in the same Library-update transaction instead of storing a pinned version in each Profile.
 - Auto deployment plans a Live link and MAY fall back to Copy only when the destination filesystem explicitly reports that directory links are unsupported. Permission failures, invalid paths, missing sources, storage failures, and unknown I/O errors MUST fail without fallback. The concrete result is verified after Apply. Changing the default deployment mode does not rewrite existing installs; it becomes an Apply precondition and takes effect only through a fresh Preview and Apply.
+- New Agent and Workspace deployments MUST NOT create ownership markers, sidecars, or AgentEnv support files beside user resources. Device-local Target state is the ownership source of truth. Legacy ownership markers are read-only migration evidence and MAY be removed only by an explicit backed-up Apply or Stop Managing operation after an equivalent central receipt is ready.
+- If an exact destination already has content equivalent to the requested Library Skill, Apply adopts that directory in place. Adoption writes only AgentEnv Target state, preserves the Agent resource bytes and timestamps, and records whether the result is adopted, linked, or copied. A topology-only change from a managed link to an equivalent regular directory refreshes the central receipt without rebuilding the directory.
 
 Source of truth: `~/.config/agentenv-manager` or the configured AgentEnv data root.
 
@@ -123,7 +125,7 @@ The active data root is a startup-owned location, not an ordinary live preferenc
 - Applying an OpenCode Profile MUST NOT change Codex or Claude Code Skill directories, and equivalent isolation applies to every Target pair.
 - Compatibility copies MAY be captured into a Profile, but MUST remain in place while any installed consumer lacks a current prepared Profile intent.
 - Importing a compatibility copy creates an independent Library copy and MUST NOT replace, link, or remove the compatibility location.
-- An exact Target-specific copy that already exists beside a compatibility copy MAY be adopted during Take over or a later Apply when its current canonical Skill hash matches the current Library hash. Adoption is previewed, backed up, verified again immediately before replacement, and MUST remain a no-op on the next Preview while shared migration is still pending.
+- An exact Target-specific copy that already exists beside a compatibility copy MAY be adopted during Take over or a later Apply when its current canonical Skill hash matches the current Library hash. Preview binds that hash and Apply revalidates it immediately before recording the device-local deployment receipt. Adoption does not replace or back up the resource itself and MUST remain a no-op on the next Preview while shared migration is still pending.
 - A compatibility copy is switched only through an explicit Scan local migration action after every installed consumer Target has applied a current preparation; Capture never removes it as a side effect.
 - Completing migration MUST create one restorable backup for the shared paths, every affected Target path, and every affected Target state. It removes the shared paths first, deploys or omits the Skill according to each prepared Profile, verifies the result, and restores the whole transaction on any failure.
 - AgentEnv MUST NOT edit per-Agent configuration to suppress duplicate discovery during this migration.
@@ -1134,6 +1136,8 @@ It MUST:
 7. Record one history entry only after success.
 8. Refresh visible Profile and Target state after completion.
 
+Preview MUST also summarize the local footprint as adopted existing resources, modified paths, created paths, removed paths, and live links. Zero-write adoption is distinct from replacement. Internal Target-state and Backup files remain under AgentEnv's data root and are not presented as extra Agent files.
+
 Apply executes the immutable Preview plan. It MAY re-read and hash the plan's bound preconditions, but MUST NOT rerun runtime conflict classification, asset ownership classification, backup-path discovery, or stale-resource discovery after confirmation. Newly discovered facts outside the reviewed plan remain untouched. A changed bound precondition returns `stale` before Backup or mutation.
 
 Switching Profiles MUST reconcile every writable Skill location declared by the selected Target adapter. Skills absent or disabled in the Profile are removed from managed locations; content outside AgentEnv is changed only when the fresh Preview names the exact backup-and-replace or backup-and-remove effect. Observe-only locations and locations covered by `Leave unmanaged` remain unchanged. MCP choices absent from the sparse policy remain Agent-controlled.
@@ -1154,6 +1158,8 @@ Takeover is the first Apply to an unmanaged Target. Preview MUST disclose:
 - Backup availability.
 
 Status: transactional backup, reviewed outside-path replacement, kept-path preservation, and automatic restore are `Implemented`.
+
+Minimal-footprint takeover, central deployment receipts, markerless new deployments, and first-run telemetry consent follow [the dedicated feature contract](superpowers/specs/2026-08-11-minimal-footprint-takeover-design.md).
 
 ## 12. Failure And Atomicity Contract
 
@@ -1221,7 +1227,7 @@ Two paths are required:
 
 - Back up current managed resources and state.
 - Materialize AgentEnv-managed Skill links as independent copies where possible.
-- Remove AgentEnv ownership markers and deployment state.
+- Remove AgentEnv deployment state and any validated legacy ownership markers.
 - Keep current Target behavior unchanged.
 - Mark Target `Unmanaged`.
 
@@ -1240,7 +1246,7 @@ Status: active Profile deletion is blocked; both Stop Managing paths, safety bac
 
 - Every mutating Apply, takeover, cleanup, Library deletion with installs, and Stop Managing action MUST have a recoverable Backup when feasible.
 - Rollback MUST be previewed before it writes.
-- Rollback MUST restore files, directories, links, permissions, ownership markers, deployment state, and originally absent managed directories consistently.
+- Rollback MUST restore files, directories, links, permissions, deployment state, validated legacy ownership markers, and originally absent managed directories consistently.
 - Rollback MUST detect live changes made after the Backup and require explicit confirmation before replacing them.
 - A Rollback Preview becomes stale when any affected live path changes after Preview. Rollback MUST reject the stale plan without writing and require a fresh Preview.
 - Confirming a fresh Rollback creates a second safety Backup of the current paths before restoring the requested Backup. Each destination is hash-checked against that safety snapshot immediately before its first mutation. If requested restoration fails, AgentEnv restores the safety Backup; if both restores fail, both Backup IDs remain protected in `Recovery required` rather than being hidden or removed.
@@ -1357,7 +1363,7 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 - Confirming Merge verifies the reviewed member set and every reviewed content hash. A new duplicate, removed entry, or changed content makes the preview stale and blocks mutation.
 - Merge migrates every Profile reference from removed IDs to the surviving ID. If a Profile already references the surviving ID, that existing reference and its target name and enabled state win, and references to removed IDs are dropped. Otherwise target names and enabled states are preserved while only the Library ID changes; references that collapse onto the same target name become one reference and remain enabled when any original reference was enabled.
 - Every AgentEnv-managed install derived from a removed ID is relinked or recopied to the surviving Library entry without waiting for another Apply. External and unmanaged locations are untouched.
-- Merge is one transaction covering all selected Library entries, affected Profile directories, managed installs, and ownership markers. Failure restores every backed-up path; success creates one History entry that can restore the pre-merge entries and references.
+- Merge is one transaction covering all selected Library entries, affected Profile directories, managed installs, and central deployment receipts. Failure restores every backed-up path; success creates one History entry that can restore the pre-merge entries and references.
 - The completion message names the surviving ID and reports updated Profile and managed-install counts. Success follows the global transient-feedback policy; failure remains dismissible and actionable.
 
 ### 16.2 Scan And Cleanup
@@ -1461,14 +1467,14 @@ Management-boundary and evidence contract:
 - Update Preview MUST show changed files and validation errors.
 - Update Preview MUST bind one immutable materialized candidate, the current Library content hash, and the current update metadata. Confirm applies that exact candidate; it MUST NOT fetch the source again. If Library content or metadata changes after Preview, Update fails stale and requires a new review.
 - Bulk Update Preview is owned by the main process. It groups Skills by normalized repository and ref, refreshes each source once, reuses that source snapshot for the remaining group, limits independent source work to two concurrent groups, and returns per-Skill failures without discarding successful previews.
-- Skill content identity uses a versioned, framed hash over entry type, normalized relative path, content length, and content. AgentEnv metadata files are excluded. Hash-format upgrades rehash Library metadata, existing managed Skill snapshots, applied Library versions, and Capture receipts before normal operation so an upgrade cannot create false Target drift. A malformed Target state or optional Capture receipt is retained byte-for-byte, recorded in startup diagnostics, and skipped without blocking healthy neighbors; a real read, permission, or atomic-write failure still fails startup closed. Ownership sidecars are backup and verification metadata, never managed Skill resources. Legacy state entries that misclassified `*.agentenv-owner.json` as a Skill are removed during the hash upgrade without changing or deleting the sidecar file.
+- Skill content identity uses a versioned, framed hash over entry type, normalized relative path, content length, and content. AgentEnv metadata files are excluded. Hash-format upgrades rehash Library metadata, existing managed Skill snapshots, applied Library versions, and Capture receipts before normal operation so an upgrade cannot create false Target drift. A malformed Target state or optional Capture receipt is retained byte-for-byte, recorded in startup diagnostics, and skipped without blocking healthy neighbors; a real read, permission, or atomic-write failure still fails startup closed. New deployment ownership is recorded only in device-local Target state. Legacy ownership sidecars remain migration and recovery evidence, never managed Skill resources. Legacy state entries that misclassified `*.agentenv-owner.json` as a Skill are removed during the hash upgrade without changing or deleting the sidecar file.
 - Update Preview MUST derive impact from persisted Profiles and observed managed installs. It names referencing Profiles and distinguishes live links from copied installs.
 - Applying a Library update changes canonical content only after Preview, Backup, validation, and atomic replacement. A check never modifies Library. Live links follow canonical content naturally; current AgentEnv-managed copies are refreshed in the same backup transaction.
 - The update transaction also advances each affected Target's applied Library version and managed-resource content hash. Completion requires the Library, every clean copied install, and every affected Target state file to verify; failure restores all three layers.
 - A managed copy whose content no longer matches the pre-update Library baseline is drift and blocks the Library update until reviewed. Unmanaged and observe-only locations never participate in propagation.
 - A Repository update never rewrites Profile intent. Related Profile references continue to resolve the current canonical Library version.
 - In default Live link mode, linked Target content changes immediately. The UI MUST disclose this behavior and MUST NOT represent the linked deployment as an immutable applied snapshot.
-- Live link installs link the complete Target Skill directory to the canonical Library directory. They MUST NOT construct a shadow directory made from per-file links. The ownership marker lives beside the directory link so Library contents remain clean and replacing or removing the link cannot touch the canonical directory.
+- Live link installs link the complete Target Skill directory to the canonical Library directory. They MUST NOT construct a shadow directory made from per-file links. Ownership is recorded in device-local Target state so Library contents and Agent directories remain free of AgentEnv support files; replacing or removing the link cannot touch the canonical directory.
 - Local imports without an explicit tracked source MUST NOT produce repeated update failures.
 - A Profile-scoped Check MUST inspect only enabled tracked Skills referenced by that Profile. Disabled, missing, and untracked references remain visible but MUST NOT trigger network or filesystem checks.
 
@@ -1808,7 +1814,7 @@ A new Target adapter MUST define:
   unavailable; capability declarations and adapter implementations MUST agree.
 - An exact allowlist for any MCP activation field the adapter may patch; no generic native-config payload is accepted.
 - Preview generation.
-- Managed-resource ownership markers.
+- Central managed-resource deployment receipts and read-only legacy-marker migration behavior.
 - Backup path enumeration.
 - Apply, drift, and rollback behavior.
 - Cross-Target capability declarations.

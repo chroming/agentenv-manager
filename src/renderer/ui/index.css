@@ -11,6 +11,7 @@
 @import "./pages/targets.css" layer(pages);
 @import "./pages/projects.css" layer(pages);
 @import "./pages/settings.css" layer(pages);
+@import "./pages/telemetry-consent.css" layer(pages);
 @import "./pages/settings-sync.css" layer(pages);
 @import "./pages/settings-backups.css" layer(pages);
 @import "./pages/library-import.css" layer(pages);
@@ -30,6 +31,7 @@
 @import "./pages/instructions.css" layer(pages);
 @import "./pages/profile-evaluation.css" layer(pages);
 @import "./pages/apply-preview.css" layer(pages);
+@import "./pages/apply-preview-footprint.css" layer(pages);
 @import "./pages/diff-workspace.css" layer(pages);
 @import "./pages/catalog-contract.css" layer(pages);
 @import "./pages/responsive.css" layer(pages);

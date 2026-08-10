@@ -1,4 +1,4 @@
-import { cp, lstat, mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
+import { access, cp, lstat, mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -179,7 +179,9 @@ describe("activation service v2", () => {
     const { paths, service, settingsStore } = await makeEnv();
     await writeCodexLiveFiles(paths);
     const preview = await service.previewProfile("daily-coding", "codex");
-    expect((await service.applyProfile("daily-coding", preview.id)).ok).toBe(true);
+    await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual(
+      expect.objectContaining({ ok: true })
+    );
     await settingsStore.updateSettings({ enabledTargetIds: ["opencode"] });
 
     await expect(service.listTargetStates()).resolves.toEqual([]);
@@ -563,12 +565,24 @@ describe("activation service v2", () => {
 
     expect(blockingMessages(preview.issues)).toEqual([]);
     expect(reviewMessages(preview.issues)).toEqual([]);
-    expect(preview.resourceChanges).toContainEqual(expect.objectContaining({
-      action: "replace",
-      path: targetSkill
-    }));
+    expect(preview.resourceChanges).toEqual([]);
     expect((await service.applyProfile("daily-coding", preview.id)).ok).toBe(true);
-    expect((await lstat(targetSkill)).isSymbolicLink()).toBe(true);
+    expect((await lstat(targetSkill)).isSymbolicLink()).toBe(false);
+    await expect(access(`${targetSkill}.agentenv-owner.json`)).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+    await expect(
+      readFile(join(paths.targetStatesDir, "codex.json"), "utf8")
+        .then((content) => JSON.parse(content))
+    ).resolves.toMatchObject({
+      managedResources: expect.arrayContaining([
+        expect.objectContaining({
+          path: targetSkill,
+          deploymentMode: "adopted",
+          createdByAgentEnv: false
+        })
+      ])
+    });
   });
 
   it("does not report managed drift when a live link matches the current Library Skill", async () => {

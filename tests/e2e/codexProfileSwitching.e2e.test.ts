@@ -12,6 +12,7 @@ import type { TargetDiscoveryService } from "../../src/main/targetDiscovery";
 import { createTargetRegistry } from "../../src/main/targets/registry";
 import type { TargetInfo } from "../../src/shared/types";
 import { createCaptureReceiptStore } from "../../src/main/captureReceiptStore";
+import { createTargetStateRepository } from "../../src/main/targetStateRepository";
 import { blockingMessages, reviewMessages } from "../helpers/applyIssues";
 
 let root = "";
@@ -156,14 +157,13 @@ describe("Codex Profile v2 switching e2e", () => {
 
     const applyPreview = await activationService.previewProfile(captured.profile.id, "codex");
     expect(blockingMessages(applyPreview.issues)).toEqual([]);
-    expect(applyPreview.resourceChanges).toContainEqual(
-      expect.objectContaining({
-        kind: "skill",
-        action: "replace",
-        name: skillId,
-        path: privateSkill
-      })
-    );
+    expect(applyPreview.resourceChanges).toEqual([]);
+    expect(applyPreview.localFootprint).toMatchObject({
+      adopted: 1,
+      modified: 0,
+      created: 0,
+      removed: 0
+    });
     const applied = await activationService.applyProfile(
       captured.profile.id,
       applyPreview.id
@@ -172,9 +172,24 @@ describe("Codex Profile v2 switching e2e", () => {
     await expect(captureReceiptStore.read(captured.profile.id, "codex"))
       .resolves.toBeUndefined();
 
-    expect((await lstat(privateSkill)).isSymbolicLink()).toBe(true);
+    expect((await lstat(privateSkill)).isDirectory()).toBe(true);
     await expect(readFile(`${privateSkill}.agentenv-owner.json`, "utf8"))
-      .resolves.toContain(`"source": "skills-library/${skillId}"`);
+      .rejects.toThrow();
+    await expect(createTargetStateRepository(paths).read("codex")).resolves.toEqual(
+      expect.objectContaining({
+        state: expect.objectContaining({
+          managedResources: expect.arrayContaining([
+            expect.objectContaining({
+              kind: "skill",
+              path: privateSkill,
+              source: `skills-library/${skillId}`,
+              deploymentMode: "adopted",
+              createdByAgentEnv: false
+            })
+          ])
+        })
+      })
+    );
     await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8"))
       .resolves.toBe(skillContent);
     await expect(readFile(join(sharedSkill, ".agentenv-owner.json"), "utf8"))

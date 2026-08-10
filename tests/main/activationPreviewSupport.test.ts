@@ -38,6 +38,9 @@ describe("activation preview support", () => {
       targetPathFingerprint: "paths",
       assetBackupPaths: [],
       missingAssetDirectories: [],
+      legacyOwnershipMarkerPaths: [],
+      adoptedResourcePaths: [],
+      legacyOwnedResourcePaths: [],
       resourceManagement: { instructions: true, skills: true, pausedSkillPaths: [] },
       skillDeployment: {} as InternalActivationPreview["skillDeployment"]
     } satisfies InternalActivationPreview;

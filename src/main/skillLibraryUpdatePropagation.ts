@@ -2,11 +2,6 @@ import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { SkillInventoryEntry, TargetState } from "../shared/types";
 import { writeAtomic, pathExists } from "./fileUtils";
-import {
-  createOwnerMarkerContent,
-  markerPathFor,
-  markerPathForFile
-} from "./ownershipMarkers";
 import { deploySkillDirectory } from "./skillDeployment";
 import { hashSkillContent } from "./skillContentHash";
 import { parseTargetState } from "./targetState";
@@ -18,7 +13,6 @@ export interface LibraryUpdateStateChange {
 
 export interface LibraryUpdatePropagation {
   copiedInstalls: SkillInventoryEntry[];
-  copiedMarkers: Map<string, string>;
   stateUpdates: LibraryUpdateStateChange[];
 }
 
@@ -49,24 +43,6 @@ export const prepareLibraryUpdatePropagation = async ({
     );
   }
 
-  const copiedMarkers = new Map(
-    await Promise.all(
-      copiedInstalls.map(async (entry) => {
-        const existing =
-          await readFile(markerPathFor(entry.path), "utf8").catch(() => undefined) ??
-          await readFile(markerPathForFile(entry.path), "utf8").catch(() => undefined);
-        return [
-          entry.path,
-          existing ?? createOwnerMarkerContent({
-            profileId: "library-update",
-            targetId: entry.foundIn[0] ?? "unknown",
-            kind: "skill",
-            source: `skills-library/${libraryId}`
-          })
-        ] as const;
-      })
-    )
-  );
   for (const install of copiedInstalls) {
     if (await hashSkillContent(install.path) !== currentContentHash) {
       throw new Error(
@@ -117,7 +93,7 @@ export const prepareLibraryUpdatePropagation = async ({
     }))
   ).filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 
-  return { copiedInstalls, copiedMarkers, stateUpdates };
+  return { copiedInstalls, stateUpdates };
 };
 
 export const applyLibraryUpdatePropagation = async ({
@@ -133,8 +109,7 @@ export const applyLibraryUpdatePropagation = async ({
     await deploySkillDirectory({
       sourceDir,
       targetDir: install.path,
-      syncMethod: "copy",
-      markerContent: propagation.copiedMarkers.get(install.path)!
+      syncMethod: "copy"
     });
     if (await hashSkillContent(install.path) !== nextContentHash) {
       throw new Error(`Updated Agent copy did not match Library: ${install.path}`);

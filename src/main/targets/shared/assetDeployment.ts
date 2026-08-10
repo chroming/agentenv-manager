@@ -14,7 +14,13 @@ import type { TargetAssetDriver } from "../contract";
 import type { TargetAssetInput } from "../types";
 import { isPathInside, pathsEqual } from "../../platformPaths";
 
-const isOwnedTargetSkill = (path: string, input: TargetAssetInput) =>
+const isOwnedTargetSkill = async (path: string, input: TargetAssetInput) =>
+  input.managedResources?.some(
+    (resource) =>
+      resource.kind === "skill" &&
+      !resource.paused &&
+      resolve(resource.path) === resolve(path)
+  ) === true ||
   isAgentEnvOwnedDir(path, {
     targetId: input.targetPaths.targetId,
     kind: "skill"

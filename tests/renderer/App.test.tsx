@@ -344,6 +344,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       enabledInBuild: false,
       destination: "PostHog Cloud",
       installationId: "31e27e20-a4ed-4a4a-96b1-c4213d2864eb",
+      willCreateInstallationId: false,
       payload: {
         schemaVersion: 2,
         event: "agentenv_daily_startup",
@@ -355,6 +356,17 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
         locale: "en",
         installChannel: "development"
       }
+    }),
+    decideTelemetry: vi.fn().mockResolvedValue({
+      locale: "system",
+      conversationTerminal: "default",
+      skillSyncMethod: "auto",
+      skillStorageLocation: "appData",
+      skillAutoCheckEnabled: true,
+      skillAutoCheckIntervalMinutes: 60,
+      telemetryEnabled: true,
+      telemetryConsentVersion: 1,
+      backupRetentionDays: null
     }),
     reportRendererError: vi.fn(),
     quitApp: vi.fn(),
@@ -878,6 +890,37 @@ afterEach(() => {
 });
 
 describe("App", () => {
+  it("asks for telemetry consent before any optional Agent suggestion", async () => {
+    const decideTelemetry = vi.fn();
+    installApi({
+      readTelemetryPreview: vi.fn().mockResolvedValue({
+        enabledInBuild: true,
+        destination: "PostHog Cloud",
+        willCreateInstallationId: true,
+        payload: {
+          schemaVersion: 2,
+          event: "agentenv_daily_startup",
+          date: "2026-08-11",
+          appVersion: "0.1.7",
+          platform: "darwin",
+          osMajor: "26",
+          arch: "arm64",
+          locale: "en",
+          installChannel: "homebrew"
+        }
+      }),
+      decideTelemetry
+    });
+
+    render(<App />);
+
+    const dialog = await screen.findByRole("dialog", { name: "Anonymous usage statistics" });
+    expect(dialog).toHaveTextContent("It never shares actions, results, paths");
+    expect(screen.queryByRole("dialog", { name: "Choose Agents" })).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Decide later" }));
+    expect(decideTelemetry).not.toHaveBeenCalled();
+  });
+
   it("opens Settings from the native menu event and marks active navigation", async () => {
     let requestSettings: (() => void) | undefined;
     installApi({
