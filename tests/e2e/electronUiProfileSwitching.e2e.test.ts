@@ -1102,12 +1102,16 @@ const setComposerResourcePolicy = async (
   policy: ComposerPolicyName
 ) => {
   const label = `${resource} application policy for ${target}`;
-  const control = page.getByRole("radiogroup", { name: label });
+  const control = page.getByRole("combobox", { name: label });
   await expectInViewport(page, control);
   await expectTopmost(control);
-  const option = control.getByRole("radio", { name: policy, exact: true });
-  if ((await option.getAttribute("aria-checked")) !== "true") {
-    await option.click();
+  const policyValue = policy === "Use Profile"
+    ? "manage"
+    : policy === "Turn off"
+      ? "disable"
+      : "ignore";
+  if ((await control.inputValue()) !== policyValue) {
+    await control.selectOption(policyValue);
   }
 };
 
@@ -1268,10 +1272,12 @@ const previewAndApply = async (
 
 const saveProfile = async (page: Page) => {
   await page.keyboard.press("Meta+s");
-  await page.getByRole("status").filter({ hasText: "Profile saved" }).waitFor({
-    state: "visible",
-    timeout: 5_000
-  });
+  await expect.poll(() => page.locator(".profile-row__dirty").count()).toBe(0);
+  await expect.poll(() =>
+    page.getByRole("status", { name: "Profile readiness" })
+      .getByText("Saving changes...", { exact: true })
+      .count()
+  ).toBe(0);
 };
 
 const openProfileSkillPicker = async (page: Page) => {
@@ -4995,12 +5001,8 @@ describe("Electron UI profile switching e2e", () => {
     expect(profileCommitControls.length).toBe(3);
     expect(new Set(profileCommitControls.map(({ height }) => height))).toEqual(new Set([32]));
     const policies = await readBoxes(page.locator(".profile-resource-policy"));
-    const policyOptions = await readBoxes(
-      page.locator(".profile-resource-policy .ui-segmented-control__option")
-    );
     expect(policies.length).toBe(3);
     expect(new Set(policies.map(({ height }) => height))).toEqual(new Set([28]));
-    expect(new Set(policyOptions.map(({ height }) => height))).toEqual(new Set([24]));
 
     const dialog = await openNewProfileDialog(page);
     const dialogFields = await readBoxes(dialog.locator("input, select"));
@@ -5622,10 +5624,9 @@ describe("Electron UI profile switching e2e", () => {
     await expectInViewport(page, sharedDocsControl);
     expect(
       await page
-        .getByRole("radiogroup", { name: "MCPs application policy for OpenCode" })
-        .getByRole("radio", { name: "Use Profile" })
-        .getAttribute("aria-checked")
-    ).toBe("true");
+        .getByRole("combobox", { name: "MCPs application policy for OpenCode" })
+        .inputValue()
+    ).toBe("manage");
     expect(await editor.getByRole("button", { name: /Add|Remove|Delete/ }).count()).toBe(0);
     await expectMcpConnectionMode(page, "ui-alpha-mcp", "On");
     await expectMcpConnectionMode(page, "ui-beta-mcp", "Off");
@@ -5649,27 +5650,19 @@ describe("Electron UI profile switching e2e", () => {
     const instructionsRow = composer.getByRole("button", { name: "Instructions", exact: true });
     const skillsRow = composer.getByRole("button", { name: "Skills", exact: true });
     const mcpRow = composer.getByRole("button", { name: "MCPs", exact: true });
-    const instructionsPolicy = composer.getByRole("radiogroup", {
+    const instructionsPolicy = composer.getByRole("combobox", {
       name: "Instructions application policy for OpenCode"
     });
-    const skillsPolicy = composer.getByRole("radiogroup", {
+    const skillsPolicy = composer.getByRole("combobox", {
       name: "Skills application policy for OpenCode"
     });
-    const mcpPolicy = composer.getByRole("radiogroup", {
+    const mcpPolicy = composer.getByRole("combobox", {
       name: "MCPs application policy for OpenCode"
     });
 
     for (const policy of [instructionsPolicy, skillsPolicy, mcpPolicy]) {
-      expect(
-        await policy
-          .getByRole("radio", { name: "Use Profile" })
-          .getAttribute("aria-checked")
-      ).toBe("true");
-      const options = policy.getByRole("radio");
-      await expectTextFits(options.nth(0));
-      await expectTextFits(options.nth(1));
-      await expectTextFits(options.nth(2));
-      await expectSegmentedControlGeometry(policy);
+      expect(await policy.inputValue()).toBe("manage");
+      await expectTextFits(policy);
     }
     const policyBoxes = await Promise.all(
       [instructionsPolicy, skillsPolicy, mcpPolicy].map((policy) => policy.boundingBox())
@@ -5831,12 +5824,8 @@ describe("Electron UI profile switching e2e", () => {
     expect(await skillsRow.locator('[title="0 of 1 enabled"]').count()).toBe(1);
     expect(await mcpRow.locator('[title="Saved 3 · Agent 4"]').count()).toBe(1);
     for (const policy of [instructionsPolicy, skillsPolicy, mcpPolicy]) {
-      expect(
-        await policy
-          .getByRole("radio", { name: "Turn off" })
-          .getAttribute("aria-checked")
-      ).toBe("true");
-      await expectSegmentedControlGeometry(policy);
+      expect(await policy.inputValue()).toBe("disable");
+      await expectTextFits(policy);
     }
     const disabledSectionSurface = await instructionsSection.evaluate((section) => {
       const header = section.querySelector<HTMLElement>(".ui-resource-disclosure__header");
@@ -5915,7 +5904,8 @@ describe("Electron UI profile switching e2e", () => {
     });
     expect(unmanagedResources.mcpByTarget.opencode.mode).toBe("ignore");
     for (const policy of [instructionsPolicy, skillsPolicy, mcpPolicy]) {
-      await expectSegmentedControlGeometry(policy);
+      expect(await policy.inputValue()).toBe("ignore");
+      await expectTextFits(policy);
     }
     const unmanagedPolicyBoxes = await Promise.all(
       [instructionsPolicy, skillsPolicy, mcpPolicy].map((policy) => policy.boundingBox())
@@ -5929,7 +5919,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await expandComposerSection(page, "MCPs");
     expect(
-      await composer.getByRole("radiogroup", {
+      await composer.getByRole("combobox", {
         name: "MCPs application policy for OpenCode"
       }).count()
     ).toBe(1);
@@ -9533,15 +9523,12 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("heading", { name: "UI OpenCode alpha" }).waitFor();
     await resizeAppWindow(page, 920, 620);
     const localizedPolicies = [
-      page.getByRole("radiogroup", { name: "OpenCode 的指令应用策略" }),
-      page.getByRole("radiogroup", { name: "OpenCode 的技能应用策略" }),
-      page.getByRole("radiogroup", { name: "OpenCode 的 MCP 应用策略" })
+      page.getByRole("combobox", { name: "OpenCode 的指令应用策略" }),
+      page.getByRole("combobox", { name: "OpenCode 的技能应用策略" }),
+      page.getByRole("combobox", { name: "OpenCode 的 MCP 应用策略" })
     ];
     for (const policy of localizedPolicies) {
-      for (const label of ["使用方案", "停用", "保留 Agent"]) {
-        await expectTextFits(policy.getByRole("radio", { name: label }));
-      }
-      await expectSegmentedControlGeometry(policy);
+      await expectTextFits(policy);
     }
     const localizedMcpScope = page.locator(
       '[data-profile-composer-id="mcp"] .profile-composer-section__count-scope'

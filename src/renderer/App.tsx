@@ -1903,20 +1903,28 @@ const AppContent = ({
           )
         : undefined,
     isDirty: isProfileDirty,
+    saveFailed: profileSaveStatus === "Profile save failed",
     localValidationErrors,
     preview
   };
   const readiness = deriveProfileReadiness(readinessInput);
   const applyActionLabel = deriveApplyActionLabel(readinessInput);
+  const profileSaveWorking = isProfileSaving || profileMetadataSavingId === draftProfile?.id;
   const ReadinessIcon =
-    readiness.status === "ready" || readiness.status === "unmanaged" || readiness.status === "applied"
+    profileSaveWorking
+      ? LoaderCircle
+      : readiness.status === "ready" || readiness.status === "unmanaged" || readiness.status === "applied"
       ? CheckCircle2
       : readiness.status === "dirty" || readiness.status === "apply-pending"
         ? RefreshCw
         : TriangleAlert;
   const readinessTargetName = selectedTarget?.name ?? t("Agent");
   const readinessActionText =
-    isProfilePreviewing
+    profileSaveWorking || readiness.status === "dirty"
+      ? t("Saving changes...")
+      : readiness.status === "save-failed"
+        ? t("Changes could not be saved")
+    : isProfilePreviewing
       ? t("Reviewing changes")
       : isProfileApplying
         ? t("Applying Profile")
@@ -1928,9 +1936,7 @@ const AppContent = ({
               ? t("Ready to take over {{name}}", { name: readinessTargetName })
               : readiness.status === "ready"
                 ? t("Ready for {{name}}", { name: readinessTargetName })
-                : readiness.status === "dirty"
-                  ? t("Save changes to continue")
-                  : readiness.status === "target-unavailable"
+                : readiness.status === "target-unavailable"
                     ? t("{{name}} unavailable", { name: readinessTargetName })
                     : readiness.status === "validation-error"
                       ? t("Profile configuration needs review")
@@ -1959,11 +1965,11 @@ const AppContent = ({
       ? t("Select an Agent before previewing changes")
       : busy
         ? t("An action is in progress")
-        : isProfileSaving
-          ? t("Saving Profile")
-        : profileMetadataSavingId === draftProfile.id
-          ? t("Saving Profile details")
-        : t(readiness.message);
+        : profileSaveWorking || readiness.status === "dirty"
+          ? t("Saving changes...")
+          : readiness.status === "save-failed"
+            ? t("Changes could not be saved")
+            : t(readiness.message);
   const previewHasBlockingIssues =
     preview?.issues.some((issue) => issue.disposition === "block") === true;
   const canApply = Boolean(
@@ -1994,7 +2000,7 @@ const AppContent = ({
       openWorkspaceNow("targets");
       return;
     }
-    if (readiness.remediationLabel === "Save now") {
+    if (readiness.remediationLabel === "Retry save") {
       void saveSelectedProfile();
       return;
     }
@@ -3409,26 +3415,24 @@ const AppContent = ({
                   : "success",
           title: skillUpdateCheckStatus.message
         }
-      : profileSaveStatus && activeWorkspace === "profiles"
+      : profileSaveStatus &&
+          activeWorkspace === "profiles" &&
+          ![
+            "Saving Profile",
+            "Saving Profile details",
+            "Profile saved",
+            "Profile details saved",
+            "Profile save failed"
+          ].includes(profileSaveStatus)
         ? {
-            kind:
-              profileSaveStatus === "Profile saved" ||
-              profileSaveStatus === "Profile details saved" ||
-              profileSaveStatus === "Profile restored"
-                ? "success"
-                : profileSaveStatus === "Profile save failed"
-                  ? "error"
-                : profileSaveStatus === "Saving Profile" ||
-                    profileSaveStatus === "Saving Profile details"
-                  ? "loading"
-                  : "info",
+            kind: "info",
             title: profileSaveStatus,
             message:
               profileSaveStatus === "The Agent changed while Preview was open. Preview refreshed."
                 ? profileApplyRefreshDetail
                 : undefined
           }
-        : dataBackupStatus && activeWorkspace === "settings"
+      : dataBackupStatus && activeWorkspace === "settings"
           ? {
               kind: dataBackupStatus === "Creating data export" ? "loading" : "success",
               title: dataBackupStatus
@@ -3982,7 +3986,12 @@ const AppContent = ({
                             aria-label={t("Profile readiness")}
                             title={t(readiness.message)}
                           >
-                            <ReadinessIcon size={13} strokeWidth={2.3} aria-hidden="true" />
+                            <ReadinessIcon
+                              className={profileSaveWorking ? "is-spinning" : undefined}
+                              size={13}
+                              strokeWidth={2.3}
+                              aria-hidden="true"
+                            />
                             <span
                               data-ui-overflow-detail="true"
                               title={t(readinessActionText)}
@@ -3990,7 +3999,7 @@ const AppContent = ({
                               {t(readinessActionText)}
                             </span>
                           </span>
-                          {readiness.remediationLabel && readiness.remediationLabel !== "Save now" ? (
+                          {readiness.remediationLabel ? (
                             <button
                               className="profile-action-status__action"
                               type="button"

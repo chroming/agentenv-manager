@@ -1555,12 +1555,10 @@ describe("App", () => {
     expect(profileInstructionPreview()).toHaveTextContent("# Agent");
     fireEvent.click(within(composer).getByRole("button", { name: "MCPs" }));
     expect(
-      within(
-        within(composer).getByRole("radiogroup", {
-          name: "MCPs application policy for OpenCode"
-        })
-      ).getByRole("radio", { name: "Keep Agent" })
-    ).toHaveAttribute("aria-checked", "true");
+      within(composer).getByRole("combobox", {
+        name: "MCPs application policy for OpenCode"
+      })
+    ).toHaveValue("ignore");
     expect(screen.getByTitle("Saved 0 · Agent 0")).toBeInTheDocument();
   });
 
@@ -3184,12 +3182,11 @@ describe("App", () => {
         screen.getByRole("region", { name: "Profile composer" })
       ).getByRole("button", { name: "MCPs" })
     );
-    fireEvent.click(
-      within(
-        await screen.findByRole("radiogroup", {
-          name: "MCPs application policy for OpenCode"
-        })
-      ).getByRole("radio", { name: "Use Profile" })
+    fireEvent.change(
+      await screen.findByRole("combobox", {
+        name: "MCPs application policy for OpenCode"
+      }),
+      { target: { value: "manage" } }
     );
     const toggle = await screen.findByRole("switch", { name: "Turn off context7" });
     expect(toggle).toBeChecked();
@@ -4916,7 +4913,8 @@ describe("App", () => {
         })
       })
     ));
-    expect(await screen.findByText("Profile saved")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("Saving...")).not.toBeInTheDocument());
+    expect(screen.queryByText("Profile saved")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
     expect(api.updateProfileMetadata).not.toHaveBeenCalled();
 
@@ -5247,6 +5245,9 @@ describe("App", () => {
 
     await editProfileInstructions("# Keep this draft\n");
     await screen.findByRole("alert");
+    const readiness = screen.getByRole("status", { name: "Profile readiness" });
+    expect(readiness).toHaveTextContent("Changes could not be saved");
+    expect(screen.getByRole("button", { name: "Retry save" })).toBeInTheDocument();
     await clickNewProfile();
     fireEvent.click(
       within(screen.getByRole("dialog", { name: "Unsaved changes" })).getByRole(

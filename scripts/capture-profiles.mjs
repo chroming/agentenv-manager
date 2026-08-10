@@ -439,23 +439,8 @@ const prepareFixture = async (root) => {
     skillStorageLocation: "appData",
     skillAutoCheckEnabled: false,
     skillAutoCheckIntervalMinutes: 60,
-    enabledTargetIds: [
-      "opencode",
-      "codex",
-      "claude-code",
-      "antigravity",
-      "trae-cli",
-      "pi"
-    ],
-    agentDiscoveryVersion: 1,
-    agentDiscoveryReviewedIds: [
-      "opencode",
-      "codex",
-      "claude-code",
-      "antigravity",
-      "trae-cli",
-      "pi"
-    ],
+    enabledTargetIds: [],
+    agentDiscoveryReviewedIds: [],
     projectSkillRoots: [projectSkillRoot]
   });
   const projectSkillDir = join(projectSkillRoot, "automation", "release-safety-review");
@@ -844,6 +829,19 @@ try {
   const page = await app.firstWindow();
   const windowHandle = await app.browserWindow(page);
   await page.waitForLoadState("domcontentloaded");
+  const agentDiscoveryDialog = page.getByRole("dialog", { name: "Choose Agents" });
+  await agentDiscoveryDialog.waitFor({ state: "visible" });
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "agents-first-run-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(page, join(outputDir, "agents-first-run-920x620.png"));
+  await agentDiscoveryDialog
+    .getByRole("button", { name: /^Enable \d+ Agents$/ })
+    .click();
+  const agentSetupDialog = page.getByRole("dialog", { name: "Agents enabled" });
+  await agentSetupDialog.waitFor({ state: "visible" });
+  await agentSetupDialog.getByRole("button", { name: "Set up later" }).click();
+  await agentSetupDialog.waitFor({ state: "hidden" });
   await setWindowSize(page, windowHandle, 1180, 728);
   const agentsWorkspace = page.getByRole("region", { name: "Agents", exact: true });
   await agentsWorkspace.waitFor({ state: "visible" });
@@ -865,10 +863,6 @@ try {
       .querySelector(".environment-status-strip")
       ?.classList.contains("environment-status-strip--checking")
   );
-  await setWindowSize(page, windowHandle, 1180, 728);
-  await capturePage(page, join(outputDir, "agents-first-run-1180x728.png"));
-  await setWindowSize(page, windowHandle, 920, 620);
-  await capturePage(page, join(outputDir, "agents-first-run-920x620.png"));
 
   const sharedSkillDir = join(
     homeDir,
@@ -970,7 +964,7 @@ try {
     state: "visible"
   });
   await setWindowSize(page, windowHandle, 920, 620);
-  await capturePage(page, join(outputDir, "agents-first-run-zh-cn-920x620.png"));
+  await capturePage(page, join(outputDir, "agents-ready-zh-cn-920x620.png"));
   await page.getByRole("button", { name: "设置", exact: true }).click();
   await page.getByLabel("界面语言").selectOption("zh_TW");
   await page.getByRole("heading", { name: "設定" }).waitFor({ state: "visible" });
@@ -978,7 +972,7 @@ try {
   await agentsWorkspace.getByText("1 個共享 Skill 需要檢查", { exact: true }).waitFor({
     state: "visible"
   });
-  await capturePage(page, join(outputDir, "agents-first-run-zh-tw-920x620.png"));
+  await capturePage(page, join(outputDir, "agents-ready-zh-tw-920x620.png"));
   await page.getByRole("button", { name: "設定", exact: true }).click();
   await page.getByLabel("介面語言").selectOption("en");
   await page.getByRole("heading", { name: "Settings" }).waitFor({ state: "visible" });
@@ -1318,6 +1312,19 @@ try {
     return section;
   };
 
+  const showOnlyComposerSection = async (name) => {
+    for (const candidate of ["Instructions", "Skills", "MCPs"]) {
+      const id = candidate === "MCPs" ? "mcp" : candidate.toLowerCase();
+      const section = page.locator(`[data-profile-composer-id="${id}"]`);
+      const trigger = section.getByRole("button", { name: candidate, exact: true });
+      const expanded = await trigger.getAttribute("aria-expanded") === "true";
+      if (candidate !== name && expanded) await trigger.click();
+    }
+    const section = await ensureComposerExpanded(name);
+    await section.scrollIntoViewIfNeeded();
+    return section;
+  };
+
   await captureWorkspace(
     "Profiles",
     "profiles",
@@ -1391,18 +1398,18 @@ try {
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
   await editProfileDialog.waitFor({ state: "hidden" });
-  const skillsPolicy = page.getByRole("radiogroup", {
+  const skillsPolicy = page.getByRole("combobox", {
     name: "Skills application policy for OpenCode"
   });
   await capturePage(page, join(outputDir, "profile-policy-use-profile-920x620.png"));
-  await skillsPolicy.getByRole("radio", { name: "Turn off" }).click();
+  await skillsPolicy.selectOption("disable");
   await capturePage(page, join(outputDir, "profile-policy-turn-off-920x620.png"));
-  await skillsPolicy.getByRole("radio", { name: "Keep Agent" }).click();
+  await skillsPolicy.selectOption("ignore");
   await capturePage(page, join(outputDir, "profile-policy-keep-current-920x620.png"));
-  await skillsPolicy.getByRole("radio", { name: "Use Profile" }).click();
+  await skillsPolicy.selectOption("manage");
   await page.waitForTimeout(500);
   for (const sectionName of ["Instructions", "Skills", "MCPs"]) {
-    await ensureComposerExpanded(sectionName);
+    await showOnlyComposerSection(sectionName);
     await capturePage(
       page,
       join(outputDir, `profile-${sectionName.toLowerCase().replace(" ", "-")}-920x620.png`)
@@ -1423,6 +1430,9 @@ try {
       await page.keyboard.press("Escape");
       await skillPicker.waitFor({ state: "hidden" });
     }
+  }
+  for (const sectionName of ["Instructions", "Skills", "MCPs"]) {
+    await ensureComposerExpanded(sectionName);
   }
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(

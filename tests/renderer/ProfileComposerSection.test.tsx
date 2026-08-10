@@ -214,18 +214,13 @@ describe("ProfileComposerSection", () => {
       </ProfileComposerSection>
     );
 
-    const policy = screen.getByRole("radiogroup", {
+    const policy = screen.getByRole("combobox", {
       name: "Skills application policy for OpenCode"
     });
-    expect(
-      within(policy).getByRole("radio", { name: "Keep Agent" })
-    ).toHaveAttribute("aria-checked", "true");
-    expect(
-      within(policy).getByRole("radio", { name: "Use Profile" })
-    ).toHaveAttribute("aria-checked", "false");
-    expect(within(policy).getByText("Profile")).toBeInTheDocument();
-    expect(within(policy).getByText("Off")).toBeInTheDocument();
-    expect(within(policy).getByText("Agent")).toBeInTheDocument();
+    expect(policy).toHaveValue("ignore");
+    expect(within(policy).getByRole("option", { name: "Use Profile" })).toBeInTheDocument();
+    expect(within(policy).getByRole("option", { name: "Turn off" })).toBeInTheDocument();
+    expect(within(policy).getByRole("option", { name: "Keep Agent" })).toBeInTheDocument();
     expect(policy).toHaveClass("is-ignore");
     expect(policy.closest(".profile-composer-section")).toHaveClass("is-unmanaged");
     const count = document.querySelector(".ui-resource-disclosure__summary");
@@ -234,9 +229,9 @@ describe("ProfileComposerSection", () => {
     const header = policy.closest(".ui-resource-disclosure__header");
     expect(header?.children[0]).toBe(screen.getByRole("button", { name: "Skills" }));
     expect(header?.children[1]).toContainElement(policy);
-    expect(header?.querySelectorAll("button")).toHaveLength(4);
+    expect(header?.querySelectorAll("button")).toHaveLength(1);
 
-    fireEvent.click(within(policy).getByRole("radio", { name: "Use Profile" }));
+    fireEvent.change(policy, { target: { value: "manage" } });
 
     expect(onPolicyChange).toHaveBeenCalledWith("manage");
     expect(onToggle).not.toHaveBeenCalled();
@@ -298,7 +293,7 @@ describe("ProfileComposerSection", () => {
     );
   });
 
-  it("uses arrow keys to move directly between policy choices", () => {
+  it("uses a native current-state selector for policy choices", () => {
     const onPolicyChange = vi.fn();
     render(
       <ProfileComposerSection
@@ -319,16 +314,13 @@ describe("ProfileComposerSection", () => {
       </ProfileComposerSection>
     );
 
-    const policy = screen.getByRole("radiogroup", {
+    const policy = screen.getByRole("combobox", {
       name: "Skills application policy for OpenCode"
     });
-    const apply = within(policy).getByRole("radio", { name: "Use Profile" });
-    const disable = within(policy).getByRole("radio", { name: "Turn off" });
-    apply.focus();
-
-    fireEvent.keyDown(policy, { key: "ArrowRight" });
+    policy.focus();
+    fireEvent.change(policy, { target: { value: "disable" } });
 
     expect(onPolicyChange).toHaveBeenCalledWith("disable");
-    expect(disable).toHaveFocus();
+    expect(policy).toHaveFocus();
   });
 });
