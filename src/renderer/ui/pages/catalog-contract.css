@@ -45,7 +45,7 @@
   grid-template-areas: "disclosure artwork identity counts checked status more";
   min-height: 62px;
   padding: 9px 12px;
-  transition: background-color 120ms ease;
+  transition: background-color var(--motion-fast);
 }
 
 .skill-source-list.can-merge .skill-source-group-row {
@@ -165,7 +165,7 @@
 .bulk-update-disclosure {
   flex: 0 0 auto;
   transform: rotate(-90deg);
-  transition: transform 120ms ease;
+  transition: transform var(--motion-fast);
 }
 
 .bulk-update-list details[open] .bulk-update-disclosure { transform: rotate(0); }

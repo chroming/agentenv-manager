@@ -8,46 +8,41 @@ import type {
   TargetManagementState
 } from "../../shared/types";
 import type { useFreshnessCoordinator } from "./useFreshnessCoordinator";
+import { orderByPreference } from "../../shared/uiState";
 
 type FreshnessRunner = ReturnType<typeof useFreshnessCoordinator>["run"];
 type AgentRefreshReason = "page-entry" | "focus" | "mutation" | "manual";
 
 export const useAgentRefresh = ({
   loadRecoveryHistory,
+  agentOrder,
   profiles,
   runFreshness,
-  setBusy,
   setError,
   setDiscoveredTargets,
   setMcpConnections,
   setMcpIssues,
   setSelectedTargetId,
   setSupportedTargets,
-  setTargetRefreshStatus,
   setTargetStates,
   setTargets
 }: {
   loadRecoveryHistory(): Promise<unknown>;
+  agentOrder: string[];
   profiles: ProfileSummary[];
   runFreshness: FreshnessRunner;
-  setBusy: Dispatch<SetStateAction<boolean>>;
   setError: Dispatch<SetStateAction<string | undefined>>;
   setDiscoveredTargets: Dispatch<SetStateAction<TargetInfo[]>>;
   setMcpConnections: Dispatch<SetStateAction<NativeMcpConnection[] | undefined>>;
   setMcpIssues: Dispatch<SetStateAction<NativeMcpInspectionIssue[]>>;
   setSelectedTargetId: Dispatch<SetStateAction<string | undefined>>;
   setSupportedTargets: Dispatch<SetStateAction<TargetDescriptor[]>>;
-  setTargetRefreshStatus: Dispatch<
-    SetStateAction<"refreshing" | "refreshed" | undefined>
-  >;
   setTargetStates: Dispatch<SetStateAction<TargetManagementState[]>>;
   setTargets: Dispatch<SetStateAction<TargetInfo[]>>;
 }) => async (reason: AgentRefreshReason = "manual") => {
   const announce = reason === "manual";
   if (announce) {
-    setBusy(true);
     setError(undefined);
-    setTargetRefreshStatus("refreshing");
   }
   try {
     await runFreshness("agents", reason, async () => {
@@ -70,9 +65,20 @@ export const useAgentRefresh = ({
         window.agentEnv.probeSupportedTargets(true),
         loadRecoveryHistory()
       ]);
-      setSupportedTargets(supportedTargets);
-      setTargets(targets);
-      setDiscoveredTargets(discoveredTargets);
+      const orderedSupportedTargets = orderByPreference(
+        supportedTargets,
+        agentOrder,
+        (target) => target.id
+      );
+      const orderedTargets = orderByPreference(targets, agentOrder, (target) => target.id);
+      const orderedDiscoveredTargets = orderByPreference(
+        discoveredTargets,
+        agentOrder,
+        (target) => target.id
+      );
+      setSupportedTargets(orderedSupportedTargets);
+      setTargets(orderedTargets);
+      setDiscoveredTargets(orderedDiscoveredTargets);
       if (nativeMcpResult.value) {
         setMcpConnections(nativeMcpResult.value.connections);
         setMcpIssues(nativeMcpResult.value.issues);
@@ -84,23 +90,19 @@ export const useAgentRefresh = ({
           state.activeProfileName
       })));
       setSelectedTargetId((current) =>
-        current && targets.some((target) => target.id === current)
+        current && orderedTargets.some((target) => target.id === current)
           ? current
-          : targets[0]?.id
+          : orderedTargets[0]?.id
       );
-      return { mcpError: nativeMcpResult.error, targets };
+      return { mcpError: nativeMcpResult.error, targets: orderedTargets };
     }, {
       partialError: (value) => (
         value as { mcpError?: string }
       ).mcpError
     });
-    if (announce) setTargetRefreshStatus("refreshed");
   } catch (unknownError) {
     if (announce) {
-      setTargetRefreshStatus(undefined);
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     }
-  } finally {
-    if (announce) setBusy(false);
   }
 };

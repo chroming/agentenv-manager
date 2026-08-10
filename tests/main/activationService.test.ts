@@ -210,6 +210,73 @@ describe("activation service v2", () => {
     });
   });
 
+  it("restores the selected Agent's last applied Profile baseline without changing live files", async () => {
+    const { paths, profileStore, service } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const preview = await service.previewProfile("daily-coding", "codex");
+    expect((await service.applyProfile("daily-coding", preview.id)).ok).toBe(true);
+    const liveInstructions = await readFile(paths.globalAgentsPath, "utf8");
+
+    const appliedState = (await service.listTargetStates())[0];
+    expect(appliedState.appliedProfileSnapshot).toMatchObject({
+      profileId: "daily-coding",
+      profileName: "Daily Coding",
+      contentHash: appliedState.appliedProfileHash,
+      skillCount: 1
+    });
+
+    const current = await profileStore.readProfile("daily-coding");
+    const edited = await profileStore.saveProfile({
+      manifest: { ...current.manifest, name: "Renamed Profile" },
+      instructions: "# Unapplied guidance\n",
+      resources: {
+        ...current.resources,
+        mcpByTarget: {
+          ...current.resources.mcpByTarget,
+          codex: { mode: "disable", selections: [{ name: "docs", enabled: false }] },
+          opencode: { mode: "manage", selections: [{ name: "browser", enabled: true }] }
+        }
+      },
+      expectedContentHash: current.contentHash
+    });
+
+    const restored = await service.restoreAppliedProfile(
+      edited.id,
+      "codex",
+      edited.contentHash ?? ""
+    );
+
+    expect(restored.manifest.name).toBe("Renamed Profile");
+    expect(restored.instructions).toBe("# New guidance\n");
+    expect(restored.resources.mcpByTarget.codex).toEqual({
+      mode: "manage",
+      selections: [{ name: "docs", enabled: true }]
+    });
+    expect(restored.resources.mcpByTarget.opencode).toEqual({
+      mode: "manage",
+      selections: [{ name: "browser", enabled: true }]
+    });
+    await expect(readFile(paths.globalAgentsPath, "utf8")).resolves.toBe(liveInstructions);
+  });
+
+  it("backfills an older Target receipt only while the Profile still matches its Apply", async () => {
+    const { paths, service } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const preview = await service.previewProfile("daily-coding", "codex");
+    expect((await service.applyProfile("daily-coding", preview.id)).ok).toBe(true);
+    const statePath = join(paths.targetStatesDir, "codex.json");
+    const legacyState = JSON.parse(await readFile(statePath, "utf8")) as Record<string, unknown>;
+    delete legacyState.appliedProfileSnapshot;
+    await writeFile(statePath, `${JSON.stringify(legacyState, null, 2)}\n`);
+
+    expect((await service.listTargetStates())[0].appliedProfileSnapshot).toMatchObject({
+      profileId: "daily-coding",
+      contentHash: legacyState.appliedProfileHash
+    });
+    const migrated = JSON.parse(await readFile(statePath, "utf8")) as Record<string, unknown>;
+    expect(migrated.appliedProfileSnapshot).toBeDefined();
+  });
+
   it("removes a managed Codex Skill after editing the active Profile and converges", async () => {
     const { paths, profile, profileStore, service } = await makeEnv();
     await writeCodexLiveFiles(paths);

@@ -14,11 +14,13 @@ import {
 } from "./ui";
 
 export const ProjectRecoveryDialog = ({
+  mode,
   open,
   projectId,
   onClose,
   onRestored
 }: {
+  mode: "latest" | "history";
   open: boolean;
   projectId: string;
   onClose(): void;
@@ -34,6 +36,7 @@ export const ProjectRecoveryDialog = ({
 
   const load = async () => {
     setLoading(true);
+    setItems([]);
     setError("");
     try {
       setItems(await window.agentEnv.listProjectRecovery(projectId));
@@ -62,7 +65,8 @@ export const ProjectRecoveryDialog = ({
     try {
       await window.agentEnv.restoreProjectRecovery(item.id);
       await onRestored();
-      await load();
+      if (mode === "latest") onClose();
+      else await load();
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -71,29 +75,37 @@ export const ProjectRecoveryDialog = ({
   };
 
   if (!open) return null;
+  const restorableItems = items.filter(
+    (item) => item.status !== "restored" && item.status !== "failed-restored"
+  );
+  const visibleItems = mode === "latest" ? restorableItems.slice(0, 1) : items;
+  const title = mode === "latest" ? t("Undo last Workspace change") : t("Workspace Recovery");
   return (
     <ModalFrame
-      ariaLabel={t("Workspace Recovery")}
+      ariaLabel={title}
       className="project-recovery-dialog ui-dialog-shell"
       dialogRef={dialogRef}
       dismissDisabled={Boolean(busyId)}
       onDismiss={onClose}
     >
       <DialogHeader
-        title={t("Workspace Recovery")}
-        description={t("Restore a Workspace file to a verified earlier version.")}
+        title={title}
+        description={mode === "latest"
+          ? t("Restore the file changed by AgentEnv's latest completed Workspace action.")
+          : t("Restore a Workspace file to a verified earlier version.")}
       />
       <DialogBody className="project-recovery-dialog__body">
         {error ? (
           <Notice tone="danger" role="alert" icon={<AlertTriangle size={15} />}>{error}</Notice>
         ) : null}
         {loading ? <div className="project-editor-loading">{t("Loading recovery points…")}</div> : null}
-        {!loading && items.length === 0 ? (
+        {!loading && visibleItems.length === 0 ? (
           <div className="project-recovery-empty">{t("No recovery points for this Workspace.")}</div>
         ) : null}
-        {items.map((item) => (
+        {visibleItems.map((item) => (
           <ResourceRow
             className="project-recovery-entry"
+            data-recovery-id={item.id}
             density="default"
             description={<span className="selectable" title={item.path}>{item.path}</span>}
             icon={item.kind === "skill" ? <BookOpen size={15} /> : <FileText size={15} />}

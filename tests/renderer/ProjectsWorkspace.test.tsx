@@ -23,6 +23,12 @@ const target = {
   health: { executablePath: "/usr/local/bin/opencode" }
 } as TargetInfo;
 
+const codexTarget = {
+  id: "codex",
+  name: "Codex",
+  health: { executablePath: "/usr/local/bin/codex" }
+} as TargetInfo;
+
 const installApi = () => {
   const api = {
     listProjects: vi.fn().mockResolvedValue([project]),
@@ -146,7 +152,7 @@ describe("ProjectsWorkspace", () => {
     const switcherTrigger = await screen.findByRole("button", { name: "Choose Workspace" });
     expect(screen.queryByRole("button", { name: "Add Workspace folder" }))
       .not.toBeInTheDocument();
-    expect(switcherTrigger.querySelector(".ui-object-switcher__trigger-icon")).toBeNull();
+    expect(switcherTrigger.querySelector(".ui-object-switcher__trigger-icon")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Rename Workspace" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Refresh Workspace" }).closest(
       ".ui-inspector-header__actions"
@@ -210,13 +216,64 @@ describe("ProjectsWorkspace", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Expand Instructions" }));
     expect(screen.getAllByText("AGENTS.md")).toHaveLength(1);
-    expect(await screen.findByRole("button", { name: "Edit AGENTS.md" })).toBeInTheDocument();
+    expect(await screen.findByLabelText("Preview of AGENTS.md")).toHaveTextContent("# Original");
+    expect(await screen.findByRole("button", { name: "Open AGENTS.md" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open in OpenCode" }));
     await waitFor(() => expect(api.openProject).toHaveBeenCalledWith("project-1", "opencode"));
 
     fireEvent.click(screen.getByRole("button", { name: "More Workspace actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Remove reference" }));
     expect(screen.getByText("The folder and its files will stay unchanged.")).toBeInTheDocument();
+  });
+
+  it("previews every detected Workspace instruction file", async () => {
+    const api = installApi();
+    const base = await api.inspectProject("project-1");
+    api.inspectProject.mockResolvedValue({
+      ...base,
+      resources: [
+        ...base.resources,
+        {
+          id: "instruction-2",
+          kind: "instructions",
+          name: "CLAUDE.md",
+          relativePath: ".claude/CLAUDE.md",
+          absolutePath: "/work/example/.claude/CLAUDE.md",
+          consumerAgentIds: ["opencode"],
+          state: "ready",
+          editable: true,
+          contentHash: "claude-hash"
+        }
+      ]
+    });
+    api.readProjectResource.mockImplementation(async (_projectId, resourceId) =>
+      resourceId === "instruction-2"
+        ? {
+            resourceId,
+            name: "CLAUDE.md",
+            path: "/work/example/.claude/CLAUDE.md",
+            content: "# Claude rules\n",
+            contentHash: "claude-hash",
+            modifiedAt: "2026-08-07T00:00:00.000Z",
+            editable: true
+          }
+        : {
+            resourceId: "instruction-1",
+            name: "AGENTS.md",
+            path: "/work/example/AGENTS.md",
+            content: "# Original\n",
+            contentHash: "hash",
+            modifiedAt: "2026-08-06T00:00:00.000Z",
+            editable: true
+          }
+    );
+    render(<ProjectsWorkspace targets={[target]} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Expand Instructions" }));
+    expect(await screen.findByLabelText("Preview of AGENTS.md")).toHaveTextContent("# Original");
+    expect(await screen.findByLabelText("Preview of CLAUDE.md")).toHaveTextContent("# Claude rules");
+    expect(api.readProjectResource).toHaveBeenCalledWith("project-1", "instruction-1");
+    expect(api.readProjectResource).toHaveBeenCalledWith("project-1", "instruction-2");
   });
 
   it("keeps resource groups independently expanded across Instructions, Skills, and MCPs", async () => {
@@ -239,13 +296,17 @@ describe("ProjectsWorkspace", () => {
       .toHaveLength(2);
   });
 
-  it("opens only explicit instruction edit actions as a safe editor", async () => {
+  it("opens instruction files in preview before entering the safe editor", async () => {
     installApi();
     render(<ProjectsWorkspace targets={[target]} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Expand Instructions" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Edit AGENTS.md" }));
-    expect(await screen.findByRole("dialog", { name: "Edit Workspace instruction" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Open AGENTS.md" }));
+    const dialog = await screen.findByRole("dialog", { name: "Workspace instruction" });
+    expect(await within(dialog).findByLabelText("Preview of AGENTS.md"))
+      .toHaveTextContent("# Original");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Edit" }));
+    expect(within(dialog).getByRole("textbox", { name: "Workspace instruction content" }))
       .toBeInTheDocument();
   });
 
@@ -288,7 +349,7 @@ describe("ProjectsWorkspace", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Expand Instructions" }));
     fireEvent.click(await screen.findByRole("button", { name: "Add instruction" }));
-    expect(await screen.findByRole("dialog", { name: "Edit Workspace instruction" }))
+    expect(await screen.findByRole("dialog", { name: "Workspace instruction" }))
       .toBeInTheDocument();
     expect(api.createProjectInstruction).not.toHaveBeenCalled();
   });
@@ -384,6 +445,83 @@ describe("ProjectsWorkspace", () => {
     expect(api.listProjects).not.toHaveBeenCalled();
   });
 
+  it("restores Workspace order, selection, and the Agent chosen for that folder", async () => {
+    const api = installApi();
+    const second = {
+      ...project,
+      id: "project-2",
+      name: "Second",
+      rootPath: "/work/second"
+    };
+    api.listProjects.mockResolvedValue([project, second]);
+    api.inspectProject.mockImplementation(async (id: string) => ({
+      ...(await Promise.resolve({
+        projectId: id,
+        projectRoot: id === second.id ? second.rootPath : project.rootPath,
+        resources: [],
+        skillLocations: [],
+        agentSupport: [],
+        issues: [],
+        partial: false,
+        git: { repository: "not-git", pathStates: {} }
+      }))
+    }));
+    const onUpdateUiState = vi.fn();
+    render(
+      <ProjectsWorkspace
+        targets={[target, codexTarget]}
+        uiState={{
+          version: 1,
+          selectedWorkspaceId: second.id,
+          profileOrder: [],
+          agentOrder: [],
+          workspaceOrder: [second.id, project.id],
+          workspaceAgentSelections: { [second.id]: codexTarget.id }
+        }}
+        onUpdateUiState={onUpdateUiState}
+      />
+    );
+
+    expect(await screen.findByRole("heading", { name: "Second" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Choose Agent" }))
+      .toHaveTextContent("Codex"));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Workspace" }));
+    const workspaceSwitcher = within(await screen.findByRole("dialog", { name: "Choose Workspace" }));
+    const workspaceOptions = workspaceSwitcher.getAllByRole("option");
+    expect(workspaceOptions.map((item) => item.textContent)).toEqual([
+      expect.stringContaining("Second"),
+      expect.stringContaining("Example")
+    ]);
+    expect(workspaceOptions.every((item) => !item.hasAttribute("draggable"))).toBe(true);
+    expect(workspaceSwitcher.getAllByRole("button", { name: "Reorder" }))
+      .toHaveLength(workspaceOptions.length);
+  });
+
+  it("restores the saved Workspace Agent when discovery finishes after the Workspace loads", async () => {
+    installApi();
+    const uiState = {
+      version: 1 as const,
+      selectedWorkspaceId: project.id,
+      profileOrder: [],
+      agentOrder: [],
+      workspaceOrder: [project.id],
+      workspaceAgentSelections: { [project.id]: codexTarget.id }
+    };
+    const { rerender } = render(
+      <ProjectsWorkspace targets={[target]} uiState={uiState} />
+    );
+
+    expect(await screen.findByRole("button", { name: "Choose Agent" }))
+      .toHaveTextContent("OpenCode");
+
+    rerender(
+      <ProjectsWorkspace targets={[target, codexTarget]} uiState={uiState} />
+    );
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Choose Agent" }))
+      .toHaveTextContent("Codex"));
+  });
+
   it("keeps a failed Project Skill add actionable inside its dialog", async () => {
     const api = installApi();
     api.addProjectSkill.mockRejectedValue(new Error("Project resource parent is not a regular directory"));
@@ -407,8 +545,10 @@ describe("ProjectsWorkspace", () => {
     const switcher = await screen.findByRole("dialog", { name: "Choose Workspace" });
     const row = within(switcher).getByRole("option", { name: /Example/ });
     fireEvent.contextMenu(row, { clientX: 40, clientY: 80 });
-    expect(screen.getByRole("menuitem", { name: "Rename" })).toBeInTheDocument();
-    fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("menuitem", { name: "Rename" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Undo last change" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Recovery" })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menuitem", { name: "Recovery" })).not.toBeInTheDocument();
   });
 });

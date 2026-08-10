@@ -157,6 +157,67 @@ describe("profile store v2", () => {
     expect(updated.resources.skills).toHaveLength(1);
   });
 
+  it("stores and restores verified Profile versions without changing another owner", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-history-"));
+    await writeProfile(root);
+    const store = createProfileStore({ appDataRoot: root });
+    const original = await store.readProfile("daily-coding");
+
+    const changed = await store.saveProfile({
+      manifest: original.manifest,
+      instructions: "# Changed\n",
+      resources: original.resources,
+      expectedContentHash: original.contentHash
+    });
+    const [recovery] = await store.listProfileRecovery(original.id);
+
+    expect(recovery).toMatchObject({
+      profileId: original.id,
+      profileName: original.manifest.name,
+      contentHash: original.contentHash,
+      skillCount: 1,
+      mcpCount: 1
+    });
+
+    const restored = await store.restoreProfileRecovery(original.id, recovery!.id);
+    expect(restored.instructions).toBe(original.instructions);
+    expect(restored.contentHash).toBe(original.contentHash);
+    expect(changed.contentHash).not.toBe(restored.contentHash);
+    expect(await store.listProfileRecovery(original.id)).toHaveLength(2);
+  });
+
+  it("rejects a modified Profile recovery snapshot and preserves the current Profile", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-history-integrity-"));
+    await writeProfile(root);
+    const store = createProfileStore({ appDataRoot: root });
+    const original = await store.readProfile("daily-coding");
+    const changed = await store.saveProfile({
+      manifest: original.manifest,
+      instructions: "# Current\n",
+      resources: original.resources,
+      expectedContentHash: original.contentHash
+    });
+    const [recovery] = await store.listProfileRecovery(original.id);
+    const recoveryManifestPath = join(
+      root,
+      "profile-recovery",
+      original.id,
+      recovery!.id,
+      "profile",
+      "profile.json"
+    );
+    const recoveryManifest = JSON.parse(await readFile(recoveryManifestPath, "utf8"));
+    await writeFile(recoveryManifestPath, JSON.stringify({
+      ...recoveryManifest,
+      name: "Tampered identity"
+    }));
+
+    await expect(store.restoreProfileRecovery(original.id, recovery!.id))
+      .rejects.toThrow("integrity check");
+    expect((await store.readProfile(original.id)).contentHash).toBe(changed.contentHash);
+    expect((await store.readProfile(original.id)).instructions).toBe("# Current\n");
+  });
+
   it("refuses to overwrite a Profile changed after it was loaded", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-profile-stale-save-"));
     await writeProfile(root);

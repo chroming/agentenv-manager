@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProjectResourceEditorDialog } from "../../src/renderer/components/ProjectResourceEditorDialog";
 import type { AgentEnvApi } from "../../src/shared/types";
@@ -62,7 +62,11 @@ describe("ProjectResourceEditorDialog", () => {
       />
     );
 
-    const editor = await screen.findByRole("textbox", { name: "Workspace instruction content" });
+    const dialog = await screen.findByRole("dialog", { name: "Workspace instruction" });
+    expect(await within(dialog).findByLabelText("Preview of AGENTS.md"))
+      .toHaveTextContent("# Original");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Edit" }));
+    const editor = within(dialog).getByRole("textbox", { name: "Workspace instruction content" });
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
     fireEvent.change(editor, { target: { value: "# Updated\n" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -74,6 +78,26 @@ describe("ProjectResourceEditorDialog", () => {
       content: "# Updated\n"
     }));
     expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ status: "saved" }));
+  });
+
+  it("uses the shared resizable editor window", async () => {
+    installApi();
+    render(
+      <ProjectResourceEditorDialog
+        open
+        projectId="project-1"
+        resourceId="instruction-1"
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "Workspace instruction" });
+    await within(dialog).findByLabelText("Preview of AGENTS.md");
+    fireEvent.click(screen.getByRole("button", { name: "Maximize preview" }));
+    expect(dialog).toHaveClass("instruction-document-dialog", "is-maximized");
+    fireEvent.click(screen.getByRole("button", { name: "Restore preview size" }));
+    expect(dialog).not.toHaveClass("is-maximized");
   });
 
   it("requires an explicit discard decision and exposes stale reload", async () => {
@@ -92,7 +116,10 @@ describe("ProjectResourceEditorDialog", () => {
       />
     );
 
-    const editor = await screen.findByRole("textbox", { name: "Workspace instruction content" });
+    const dialog = await screen.findByRole("dialog", { name: "Workspace instruction" });
+    await within(dialog).findByLabelText("Preview of AGENTS.md");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Edit" }));
+    const editor = await within(dialog).findByRole("textbox", { name: "Workspace instruction content" });
     fireEvent.change(editor, { target: { value: "# Updated\n" } });
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(await screen.findByText("Discard unsaved changes?")).toBeInTheDocument();
@@ -115,7 +142,8 @@ describe("ProjectResourceEditorDialog", () => {
       />
     );
 
-    const editor = await screen.findByRole("textbox", { name: "Workspace instruction content" });
+    const dialog = await screen.findByRole("dialog", { name: "Workspace instruction" });
+    const editor = await within(dialog).findByRole("textbox", { name: "Workspace instruction content" });
     expect(api.createProjectInstruction).not.toHaveBeenCalled();
     fireEvent.change(editor, { target: { value: "# New project rules\n" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -125,6 +153,8 @@ describe("ProjectResourceEditorDialog", () => {
       agentId: "opencode",
       content: "# New project rules\n"
     }));
-    expect(onClose).toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(within(dialog).getByLabelText("Preview of AGENTS.md"))
+      .toHaveTextContent("# New project rules");
   });
 });

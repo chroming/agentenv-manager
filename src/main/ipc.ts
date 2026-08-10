@@ -92,6 +92,7 @@ export interface IpcServices {
   diagnostics: RuntimeDiagnostics;
   appUpdateService: AppUpdateService;
   telemetryService: TelemetryService;
+  uiStateStore: import("./uiStateStore").UiStateStore;
   cancelRepositoryOperations(): void;
 }
 
@@ -128,6 +129,7 @@ export const registerIpcHandlers = ({
   diagnostics,
   appUpdateService,
   telemetryService,
+  uiStateStore,
   cancelRepositoryOperations
 }: IpcServices) => {
   const skillFileBrowser = createSkillFileBrowser(paths, settingsStore);
@@ -906,6 +908,7 @@ export const registerIpcHandlers = ({
       settingsStore,
       targetRegistry,
       telemetryService,
+      uiStateStore,
       workspaceSyncService
     }
   );

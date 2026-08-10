@@ -19,32 +19,6 @@
   padding: 8px;
 }
 
-.skill-file-browser__header {
-  border-bottom: 1px solid var(--border);
-}
-
-.skill-file-browser__header > div {
-  min-width: 0;
-}
-
-.skill-file-browser__header .section-title,
-.skill-file-browser__header .muted {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.skill-file-browser__header .muted {
-  margin: 2px 0 0;
-}
-
-.skill-file-browser__window-actions {
-  align-items: center;
-  display: flex;
-  flex: 0 0 auto;
-  gap: var(--space-2);
-}
-
 .skill-file-browser__body {
   display: grid;
   grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
@@ -136,7 +110,8 @@
 .skill-file-preview__content {
   background: var(--surface-subtle);
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .skill-file-preview__content pre {
@@ -144,13 +119,8 @@
   font-size: 12px;
   line-height: 1.65;
   margin: 0;
-  min-width: max-content;
   padding: var(--space-4);
-}
-
-.syntax-code-preview__line {
-  display: block;
-  min-height: 1.65em;
+  width: 100%;
 }
 
 .skill-file-browser__state {

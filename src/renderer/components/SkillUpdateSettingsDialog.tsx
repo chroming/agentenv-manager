@@ -1,4 +1,3 @@
-import { LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type {
   SkillLibraryEntry,
@@ -225,8 +224,8 @@ export const SkillUpdateSettingsDialog = ({
         <Button
           variant="primary"
           disabled={!canSave}
-          aria-busy={saving}
-          icon={saving ? <LoaderCircle className="is-spinning" size={14} /> : undefined}
+          busy={saving}
+          busyLabel={t("Saving...")}
           onClick={() => void save()}
         >
           {t("Save settings")}

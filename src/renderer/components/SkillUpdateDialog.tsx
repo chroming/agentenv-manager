@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
   CircleAlert,
@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import type { PlannedFileChange, SkillUpdatePlan } from "../../shared/types";
 import type { SkillUpdateRunItem } from "../skillUpdateQueue";
+import type { SkillUpdateActionResult } from "../skillLibraryContracts";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { DiffViewer } from "./DiffViewer";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
@@ -20,7 +21,7 @@ interface SkillUpdateDialogProps {
   busy?: boolean;
   progress?: SkillUpdateRunItem;
   onClose(): void;
-  onConfirm(plan: SkillUpdatePlan): void;
+  onConfirm(plan: SkillUpdatePlan): Promise<SkillUpdateActionResult>;
 }
 
 const SkillUpdateChange = ({
@@ -56,6 +57,29 @@ export const SkillUpdateDialog = ({
   const initialFocusRef = useRef<HTMLButtonElement>(null);
   const expandPreviewRef = useRef<HTMLButtonElement>(null);
   const [diffWorkspaceOpen, setDiffWorkspaceOpen] = useState(false);
+  const [commitResult, setCommitResult] = useState<SkillUpdateActionResult>();
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    setCommitResult(undefined);
+  }, [plan?.previewId]);
+
+  useEffect(() => {
+    if (
+      commitResult?.status !== "completed" ||
+      busy ||
+      diffWorkspaceOpen ||
+      progress?.status !== "updated"
+    ) {
+      return;
+    }
+    const timeout = window.setTimeout(() => onCloseRef.current(), 700);
+    return () => window.clearTimeout(timeout);
+  }, [busy, commitResult?.status, diffWorkspaceOpen, progress?.status]);
 
   useModalDialog({
     open: Boolean(plan),
@@ -96,7 +120,10 @@ export const SkillUpdateDialog = ({
       ? parts.join(" · ")
       : t("No Profiles or managed Agent installs currently use this Skill");
   })();
-  const progressLabel = progress?.status === "queued"
+  const completionError = commitResult?.status === "partial" ? commitResult.error : undefined;
+  const progressLabel = completionError
+    ? t("Updated with issues")
+    : progress?.status === "queued"
     ? t("Waiting")
     : progress?.status === "updating"
       ? t("Updating...")
@@ -130,14 +157,16 @@ export const SkillUpdateDialog = ({
             <p className="skill-update-impact">{impactSummary}</p>
             {progressLabel ? (
               <div
-                className={`skill-update-progress skill-update-progress--${progress!.status}`}
+                className={`skill-update-progress skill-update-progress--${completionError ? "failed" : progress!.status}`}
                 role="status"
                 aria-label={t("{{name}}: {{status}}", {
                   name: plan.name,
                   status: progressLabel
                 })}
               >
-                {progress!.status === "queued" ? (
+                {completionError ? (
+                  <CircleAlert size={15} aria-hidden="true" />
+                ) : progress!.status === "queued" ? (
                   <Clock3 size={15} aria-hidden="true" />
                 ) : progress!.status === "updating" ? (
                   <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
@@ -148,7 +177,9 @@ export const SkillUpdateDialog = ({
                 )}
                 <span>
                   <strong>{progressLabel}</strong>
-                  {progress?.error ? <small>{progress.error}</small> : null}
+                  {completionError || progress?.error ? (
+                    <small>{completionError ?? progress?.error}</small>
+                  ) : null}
                 </span>
               </div>
             ) : null}
@@ -190,18 +221,19 @@ export const SkillUpdateDialog = ({
                     : "Apply update {{id}}",
                 { id: plan.id }
               )}
-              aria-busy={running}
+              busy={running}
+              busyLabel={t("Updating...")}
               disabled={running || (busy && progress?.status !== "failed")}
-              icon={running
-                ? <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
-                : undefined}
               variant="primary"
-              onClick={() => onConfirm(plan)}
+              onClick={() => {
+                setCommitResult(undefined);
+                void Promise.resolve(onConfirm(plan)).then((result) => {
+                  if (result) setCommitResult(result);
+                });
+              }}
             >
               {t(
-                running
-                  ? "Updating..."
-                  : progress?.status === "failed"
+                progress?.status === "failed"
                     ? "Retry"
                     : "Update skill"
               )}

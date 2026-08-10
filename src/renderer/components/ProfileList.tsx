@@ -15,10 +15,7 @@ import type {
   TargetManagementState
 } from "../../shared/types";
 import { useI18n } from "../i18n";
-import {
-  compareProfilesByCreationTime,
-  listProfileApplications
-} from "../profileSummary";
+import { listProfileApplications } from "../profileSummary";
 import { ResourceIcon } from "./ResourceIconPicker";
 import { ProfileActionsMenu } from "./ProfileActionsMenu";
 import { defaultProfileIconKey } from "../productIcons";
@@ -39,6 +36,7 @@ interface ProfileListProps {
   selectedProfileId?: string;
   draftProfile?: ProfileDetail;
   isProfileDirty: boolean;
+  profileSaveStatus?: string;
   targets: TargetInfo[];
   targetStates: TargetManagementState[];
   actionsDisabled?: boolean;
@@ -49,6 +47,7 @@ interface ProfileListProps {
   onDelete(profileId: string, returnFocus: HTMLElement): void;
   onDuplicate(profileId: string): void;
   onSearchChange(value: string): void;
+  onReorder(profileIds: string[]): void;
   onSelect(profileId: string): void;
 }
 
@@ -60,6 +59,7 @@ export const ProfileList = ({
   selectedProfileId,
   draftProfile,
   isProfileDirty,
+  profileSaveStatus,
   targets,
   targetStates,
   actionsDisabled = false,
@@ -70,6 +70,7 @@ export const ProfileList = ({
   onDelete,
   onDuplicate,
   onSearchChange,
+  onReorder,
   onSelect
 }: ProfileListProps) => {
   const { t } = useI18n();
@@ -80,7 +81,6 @@ export const ProfileList = ({
   }>();
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const contextReturnFocusRef = useRef<HTMLElement>(null);
-  const orderedProfiles = [...profiles].sort(compareProfilesByCreationTime);
 
   useLayoutEffect(() => {
     if (!contextMenu || !contextMenuRef.current) return;
@@ -133,7 +133,7 @@ export const ProfileList = ({
     };
   }, [contextMenu]);
 
-  const switcherItems = orderedProfiles.map((profile) => {
+  const switcherItems = profiles.map((profile) => {
     const isBroken = Boolean(profile.loadError);
     const applications = listProfileApplications(profile.id, targetStates, targets);
     const isSelected = profile.id === selectedProfileId;
@@ -195,7 +195,9 @@ export const ProfileList = ({
         <>
           <span className="profile-row__name">{profile.name}</span>
           {isSelected && isProfileDirty ? (
-            <strong className="profile-row__dirty">{t("Unsaved")}</strong>
+            <strong className="profile-row__dirty">
+              {t(profileSaveStatus === "Profile save failed" ? "Save failed" : "Saving...")}
+            </strong>
           ) : null}
         </>
       ),
@@ -212,7 +214,7 @@ export const ProfileList = ({
         ),
       tooltip: profile.loadError,
       disabled: isLoading,
-      onContextMenu: (event: ReactMouseEvent<HTMLButtonElement>) => {
+      onContextMenu: (event: ReactMouseEvent<HTMLElement>) => {
         event.preventDefault();
         if (isBroken || actionsDisabled) return;
         contextReturnFocusRef.current = event.currentTarget;
@@ -244,11 +246,12 @@ export const ProfileList = ({
         searchPlaceholder={t("Search Profiles")}
         selectedId={selectedProfileId}
         triggerVariant={variant === "hero" ? "inline" : "default"}
-        showTriggerIcon={variant !== "hero"}
+        showTriggerIcon
         showTriggerTitle
         showTriggerDescription={variant !== "hero"}
         onOpenChange={onOpenChange}
         onQueryChange={onSearchChange}
+        onReorder={onReorder}
         onSelect={onSelect}
       />
       {contextMenu ? createPortal(

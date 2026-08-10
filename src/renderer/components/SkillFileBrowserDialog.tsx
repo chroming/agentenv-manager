@@ -1,12 +1,7 @@
 import { type RefObject, useEffect, useState } from "react";
 import {
-  ChevronDown,
-  ChevronRight,
   FileWarning,
-  LoaderCircle,
-  Maximize2,
-  Minimize2,
-  X
+  LoaderCircle
 } from "lucide-react";
 import type {
   SkillFileContent,
@@ -15,9 +10,10 @@ import type {
 } from "../../shared/types";
 import { languageForPath } from "../syntaxHighlighter";
 import { useI18n } from "../i18n";
+import { DocumentDialogFrame } from "./DocumentDialogFrame";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { SyntaxCodePreview } from "./SyntaxCodePreview";
-import { IconButton, ModalFrame } from "./ui";
+import { DisclosureIcon } from "./ui";
 
 interface SkillFileBrowserDialogProps {
   skill: SkillLibraryEntry;
@@ -62,11 +58,6 @@ export const SkillFileBrowserDialog = ({
   const [treeLoading, setTreeLoading] = useState(true);
   const [fileLoading, setFileLoading] = useState(false);
   const [error, setError] = useState("");
-  const [maximized, setMaximized] = useState(false);
-
-  useEffect(() => {
-    setMaximized(false);
-  }, [skill.id]);
 
   useEffect(() => {
     let active = true;
@@ -131,9 +122,7 @@ export const SkillFileBrowserDialog = ({
                 return next;
               })}
             >
-              {isExpanded
-                ? <ChevronDown size={13} strokeWidth={2.2} />
-                : <ChevronRight size={13} strokeWidth={2.2} />}
+              <DisclosureIcon open={isExpanded} size={13} />
               <FileTypeIcon expanded={isExpanded} kind="directory" path={node.path} />
               <span>{node.name}</span>
             </button>
@@ -159,33 +148,17 @@ export const SkillFileBrowserDialog = ({
     });
 
   return (
-    <ModalFrame
+    <DocumentDialogFrame
       ariaLabel={t("Files in {{name}}", { name: skill.name })}
       backdropClassName="skill-file-browser-backdrop"
-      className={`skill-file-browser${maximized ? " is-maximized" : ""}`}
+      className="skill-file-browser"
+      closeButtonRef={initialFocusRef}
+      description={t("Read-only Library files")}
       dialogRef={dialogRef}
-      onDismiss={onClose}
+      resetKey={skill.id}
+      title={skill.name}
+      onClose={onClose}
     >
-      <header className="profile-dialog-header skill-file-browser__header ui-dialog-header">
-        <div className="ui-dialog-header__copy">
-          <div className="section-title ui-dialog-title">{skill.name}</div>
-          <p className="muted ui-dialog-description">{t("Read-only Library files")}</p>
-        </div>
-        <div className="skill-file-browser__window-actions">
-          <IconButton
-            label={t(maximized ? "Restore preview size" : "Maximize preview")}
-            onClick={() => setMaximized((current) => !current)}
-            variant="ghost"
-          >
-            {maximized
-              ? <Minimize2 size={16} strokeWidth={2.2} />
-              : <Maximize2 size={16} strokeWidth={2.2} />}
-          </IconButton>
-          <IconButton ref={initialFocusRef} label={t("Close")} onClick={onClose} variant="ghost">
-            <X size={16} strokeWidth={2.2} />
-          </IconButton>
-        </div>
-      </header>
       <div className="skill-file-browser__body">
         <aside className="skill-file-tree" aria-label={t("Skill file tree")}>
           {treeLoading ? (
@@ -233,6 +206,6 @@ export const SkillFileBrowserDialog = ({
           </div>
         </section>
       </div>
-    </ModalFrame>
+    </DocumentDialogFrame>
   );
 };

@@ -4,7 +4,6 @@ import {
   Clock3,
   CopyPlus,
   MoreHorizontal,
-  RefreshCw,
   TerminalSquare
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
@@ -35,13 +34,13 @@ import {
   focusInitialActionMenuItem,
   IconButton,
   ModalFrame,
-  PageHeader
+  PageHeader,
+  RefreshAction
 } from "./ui";
 import { isTargetInstalled } from "../../shared/targetHealth";
 import type { EnvironmentReviewSummary } from "../environmentReview";
 import type { FreshnessState } from "../freshness";
 import { EnvironmentStatusStrip } from "./EnvironmentStatusStrip";
-import { FreshnessStatus } from "./FreshnessStatus";
 import { OverflowTooltip } from "./OverflowTooltip";
 
 interface TargetWorkspaceProps {
@@ -59,6 +58,7 @@ interface TargetWorkspaceProps {
   busy: boolean;
   freshness: FreshnessState;
   onRefresh(): Promise<void>;
+  onReorder?(targetIds: string[]): void;
   onChooseAgents(): void;
   onConfigure(targetId: string): void;
   onReviewEnvironment(): void;
@@ -249,6 +249,7 @@ export const TargetWorkspace = ({
   busy,
   freshness,
   onRefresh,
+  onReorder = () => undefined,
   onChooseAgents,
   onConfigure,
   onReviewEnvironment,
@@ -262,6 +263,8 @@ export const TargetWorkspace = ({
 }: TargetWorkspaceProps) => {
   const { localeTag, t } = useI18n();
   const [expandedTargetId, setExpandedTargetId] = useState<string>();
+  const [draggedTargetId, setDraggedTargetId] = useState<string>();
+  const [dragOverTargetId, setDragOverTargetId] = useState<string>();
   const [isRecoveryOpen, setIsRecoveryOpen] = useState(false);
   const [stopManagingTargetId, setStopManagingTargetId] = useState<string>();
   const [stopManagingMode, setStopManagingMode] = useState<StopManagingMode>("keep-current");
@@ -272,6 +275,12 @@ export const TargetWorkspace = ({
   const recoveryDialogRef = useRef<HTMLElement>(null);
   const recoveryCloseRef = useRef<HTMLButtonElement>(null);
   const statesByTarget = new Map(targetStates.map((state) => [state.targetId, state]));
+  const showEnvironmentStatus = [
+    "unavailable",
+    "shared-review",
+    "setup",
+    "agent-review"
+  ].includes(environmentReview.state);
 
   useModalDialog({
     open: Boolean(stopManagingTargetId),
@@ -299,7 +308,7 @@ export const TargetWorkspace = ({
         help={<InfoTip label={t("Inspect each Agent and apply a saved Profile only when you choose.")} />}
         actions={(
           <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
-            {environmentReview.state === "ready" ? (
+            {environmentReview.installedAgentCount > 0 ? (
               <span className="target-page-summary">
                 {t("{{agents}} Agents detected · {{profiles}} Profiles", {
                   agents: environmentReview.installedAgentCount,
@@ -307,7 +316,6 @@ export const TargetWorkspace = ({
                 })}
               </span>
             ) : null}
-            <FreshnessStatus state={freshness} verb="Refreshed" />
             {backups.length > 0 ? (
               <Button
                 ref={recoveryTriggerRef}
@@ -318,19 +326,17 @@ export const TargetWorkspace = ({
                 {t("Recovery")}
               </Button>
             ) : null}
-            <Button
-              busy={freshness.status === "refreshing"}
+            <RefreshAction
               disabled={busy || isLoading || freshness.status === "refreshing"}
-              icon={<RefreshCw size={15} strokeWidth={2.2} />}
-              onClick={() => { void onRefresh(); }}
-            >
-              {t("Refresh")}
-            </Button>
+              label={t("Refresh")}
+              state={freshness}
+              onRefresh={() => { void onRefresh(); }}
+            />
           </ControlGroup>
         )}
       />
 
-      {environmentReview.state !== "no-agents" && environmentReview.state !== "ready" ? (
+      {showEnvironmentStatus ? (
         <EnvironmentStatusStrip
           summary={environmentReview}
           targetNames={targetNames}
@@ -387,9 +393,44 @@ export const TargetWorkspace = ({
           const isExpanded = expandedTargetId === target.id;
           const icon = targetIconFor(target);
           return (
-            <article aria-label={t("Agent {{name}}", { name: target.name })} className="target-card target-card--workflow" key={target.id}>
+            <article
+              aria-label={t("Agent {{name}}", { name: target.name })}
+              className={`target-card target-card--workflow${
+                draggedTargetId === target.id ? " is-dragging" : ""
+              }${dragOverTargetId === target.id ? " is-drag-over" : ""}`}
+              key={target.id}
+              onDragOver={(event) => {
+                if (!draggedTargetId || draggedTargetId === target.id) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setDragOverTargetId(target.id);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                if (!draggedTargetId || draggedTargetId === target.id) return;
+                const next = targets.map((item) => item.id).filter((id) => id !== draggedTargetId);
+                const targetIndex = next.indexOf(target.id);
+                next.splice(targetIndex, 0, draggedTargetId);
+                onReorder(next);
+                setDraggedTargetId(undefined);
+                setDragOverTargetId(undefined);
+              }}
+            >
               <header className="target-workflow-header">
-                <span className={`target-workflow-icon target-workflow-icon--${icon.flavor}`} aria-hidden="true">
+                <span
+                  className={`target-workflow-icon target-workflow-icon--${icon.flavor}`}
+                  aria-hidden="true"
+                  draggable={targets.length > 1}
+                  onDragEnd={() => {
+                    setDraggedTargetId(undefined);
+                    setDragOverTargetId(undefined);
+                  }}
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", target.id);
+                    setDraggedTargetId(target.id);
+                  }}
+                >
                   {icon.assetUrl ? <img src={icon.assetUrl} alt="" /> : <TerminalSquare size={20} />}
                 </span>
                 <span className="target-workflow-title">

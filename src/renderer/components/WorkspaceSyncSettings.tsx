@@ -347,7 +347,7 @@ export const WorkspaceSyncSettings = ({
                 <span>{t("Branch")}</span>
                 <input value={branch} onChange={(event) => setBranch(event.currentTarget.value)} />
               </label>
-              <Button variant="primary" busy={working === "connect"} icon={<GitBranch />} disabled={!repository.trim() || !branch.trim() || Boolean(working)} onClick={() => void connect()}>
+              <Button variant="primary" busy={working === "connect"} busyLabel={t("Connecting...")} icon={<GitBranch />} disabled={!repository.trim() || !branch.trim() || Boolean(working)} onClick={() => void connect()}>
                 {t("Connect repository")}
               </Button>
             </div>
@@ -371,15 +371,15 @@ export const WorkspaceSyncSettings = ({
           </div>
           <div className="workspace-sync-actions settings-row-actions">
             {status.kind === "recovery-required" ? (
-              <Button variant="primary" busy={working === "recover"} icon={<RefreshCw />} disabled={Boolean(working)} onClick={() => void recover()}>
+              <Button variant="primary" busy={working === "recover"} busyLabel={t("Preparing...")} icon={<RefreshCw />} disabled={Boolean(working)} onClick={() => void recover()}>
                 {t("Recover Workspace")}
               </Button>
             ) : null}
-            {status.kind !== "recovery-required" ? <Button variant="secondary" busy={working === "check"} icon={<RefreshCw />} disabled={Boolean(working)} onClick={() => void check()}>
+            {status.kind !== "recovery-required" ? <Button variant="secondary" busy={working === "check"} busyLabel={t("Checking...")} icon={<RefreshCw />} disabled={Boolean(working)} onClick={() => void check()}>
               {t("Check")}
             </Button> : null}
             {status.kind !== "up-to-date" && status.kind !== "error" && status.kind !== "recovery-required" ? (
-              <Button ref={reviewButtonRef} variant="primary" busy={working === "review"} disabled={Boolean(working)} onClick={() => void openReview()}>
+              <Button ref={reviewButtonRef} variant="primary" busy={working === "review"} busyLabel={t("Preparing...")} disabled={Boolean(working)} onClick={() => void openReview()}>
                 {pendingActionLabel}
               </Button>
             ) : null}
@@ -446,8 +446,8 @@ export const WorkspaceSyncSettings = ({
             </div>
             <footer className="preview-actions workspace-sync-review-actions ui-dialog-footer">
               <Button variant="secondary" disabled={Boolean(working)} onClick={() => setReview(undefined)}>{t("Cancel")}</Button>
-              {review.canPublish && !review.canUpdate ? <Button variant="primary" busy={working === "publish"} disabled={Boolean(working)} onClick={() => void publish()}>{t("Publish")}</Button> : null}
-              {review.canUpdate ? <Button variant="primary" busy={working === "update"} disabled={Boolean(working) || !choicesComplete || (review.liveSkillIds.length > 0 && !acceptLive)} onClick={() => void update()}>{t("Update this device")}</Button> : null}
+              {review.canPublish && !review.canUpdate ? <Button variant="primary" busy={working === "publish"} busyLabel={t("Publishing...")} disabled={Boolean(working)} onClick={() => void publish()}>{t("Publish")}</Button> : null}
+              {review.canUpdate ? <Button variant="primary" busy={working === "update"} busyLabel={t("Updating...")} disabled={Boolean(working) || !choicesComplete || (review.liveSkillIds.length > 0 && !acceptLive)} onClick={() => void update()}>{t("Update this device")}</Button> : null}
             </footer>
         </ModalFrame>
       ) : null}

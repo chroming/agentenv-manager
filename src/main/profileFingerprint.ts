@@ -7,6 +7,24 @@ type ProfileFingerprintInput = Pick<
   "manifest" | "instructions" | "resources"
 >;
 
+const canonicalProfileValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(canonicalProfileValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => [key, canonicalProfileValue(item)])
+  );
+};
+
+export const createProfileSnapshotHash = (
+  profile: ProfileFingerprintInput
+): string => createHash("sha256").update(JSON.stringify(canonicalProfileValue({
+  manifest: profile.manifest,
+  instructions: profile.instructions,
+  resources: profile.resources
+}))).digest("hex");
+
 export const createProfileContentHash = (
   profile: ProfileFingerprintInput,
   targetId?: string

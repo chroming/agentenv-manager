@@ -3125,7 +3125,6 @@ summary {
 }
 
 .profile-row__icon,
-.profile-hero__icon,
 .resource-overview-icon,
 .compatibility-icon {
   align-items: center;
@@ -3377,10 +3376,6 @@ summary {
 @media (max-width: 1220px) {
   .profile-workbench {
     grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
-  }
-
-  .profile-hero {
-    grid-template-columns: 52px minmax(0, 1fr);
   }
 
   .resource-overview-grid {

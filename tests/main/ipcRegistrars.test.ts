@@ -113,6 +113,7 @@ describe("domain IPC registrars", () => {
       settingsStore: service(),
       targetRegistry: service(),
       telemetryService: service(),
+      uiStateStore: service(),
       workspaceSyncService: service()
     });
 

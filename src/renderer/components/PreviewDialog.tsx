@@ -32,9 +32,13 @@ interface PreviewDialogProps {
   confirmVariant?: ButtonVariant;
   cancelLabel?: string;
   errorMessage?: string;
+  compareDisabled?: boolean;
+  compareDescription?: string;
+  suspended?: boolean;
   targetNames?: TargetNameIndex;
   onOpenRecovery?(): void;
   onAdoptTargetChanges?(): void;
+  onCompare?(): void;
   onLeaveSkillUnmanaged?(issue: ApplyIssue): Promise<void> | void;
   onReviewSkillCollection?(issue: ApplyIssue): void;
   onCancel?(): void;
@@ -95,9 +99,13 @@ export const PreviewDialog = ({
   confirmVariant = "primary",
   cancelLabel = "Cancel",
   errorMessage,
+  compareDisabled = false,
+  compareDescription,
+  suspended = false,
   targetNames = {},
   onOpenRecovery,
   onAdoptTargetChanges,
+  onCompare,
   onLeaveSkillUnmanaged,
   onReviewSkillCollection,
   onCancel,
@@ -105,7 +113,7 @@ export const PreviewDialog = ({
 }: PreviewDialogProps) => {
   const { t } = useI18n();
   const hasActions = Boolean(onCancel || onConfirm);
-  const isModalOpen = Boolean(preview && hasActions);
+  const isModalOpen = Boolean(preview && hasActions && !suspended);
   const dialogRef = useRef<HTMLElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
@@ -348,9 +356,9 @@ export const PreviewDialog = ({
       className={`preview-dialog${hasActions ? " preview-dialog--modal apply-preview-dialog" : ""}`}
       role={hasActions ? "dialog" : undefined}
       aria-label={t("Preview")}
-      aria-hidden={hasActions && diffWorkspaceOpen ? true : undefined}
-      aria-modal={hasActions && !diffWorkspaceOpen ? true : undefined}
-      inert={hasActions && diffWorkspaceOpen ? true : undefined}
+      aria-hidden={hasActions && (diffWorkspaceOpen || suspended) ? true : undefined}
+      aria-modal={hasActions && !diffWorkspaceOpen && !suspended ? true : undefined}
+      inert={hasActions && (diffWorkspaceOpen || suspended) ? true : undefined}
       onClick={(event) => event.stopPropagation()}
     >
       <header className="preview-header ui-dialog-header">
@@ -515,7 +523,7 @@ export const PreviewDialog = ({
       </div>
 
       {hasActions ? (
-        <footer className="preview-actions ui-dialog-footer">
+        <footer className={`preview-actions ui-dialog-footer${onCompare ? " has-compare" : ""}`}>
           <p className={`apply-preview-footer-note apply-preview-footer-note--${status}`}>
             <ShieldCheck size={15} strokeWidth={2} aria-hidden="true" />
             <span>
@@ -538,6 +546,16 @@ export const PreviewDialog = ({
           >
             {t(isNoOp ? "Close" : cancelLabel)}
           </Button>
+          {!isNoOp && onCompare ? (
+            <Button
+              disabled={compareDisabled || confirmBusy}
+              title={compareDescription}
+              variant="secondary"
+              onClick={onCompare}
+            >
+              {t("Compare")}
+            </Button>
+          ) : null}
           {!isNoOp ? (
             <Button
               disabled={confirmDisabled}
@@ -566,9 +584,9 @@ export const PreviewDialog = ({
   return (
     <>
       <div
-        className={`preview-modal-backdrop apply-preview-backdrop${diffWorkspaceOpen ? " is-suspended" : ""}`}
+        className={`preview-modal-backdrop apply-preview-backdrop${diffWorkspaceOpen || suspended ? " is-suspended" : ""}`}
         data-dismiss-policy="standard"
-        onClick={diffWorkspaceOpen ? undefined : onCancel}
+        onClick={diffWorkspaceOpen || suspended ? undefined : onCancel}
       >
         {content}
       </div>

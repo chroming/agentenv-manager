@@ -211,6 +211,7 @@ export const ResourceIconPicker = ({
 }) => {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const [insideModal, setInsideModal] = useState(false);
   const [position, setPosition] = useState<CSSProperties>();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -255,6 +256,7 @@ export const ResourceIconPicker = ({
     }
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
+      setInsideModal(Boolean(triggerRef.current?.closest(".ui-modal-backdrop")));
       setPosition({
         left: Math.max(12, Math.min(rect.left, window.innerWidth - iconMenuWidth - 12)),
         top:
@@ -295,7 +297,7 @@ export const ResourceIconPicker = ({
         ? createPortal(
             <div
               ref={menuRef}
-              className="resource-icon-menu"
+              className={`resource-icon-menu${insideModal ? " resource-icon-menu--modal" : ""}`}
               role="menu"
               aria-label={t("Icons for {{name}}", { name: label })}
               style={position}

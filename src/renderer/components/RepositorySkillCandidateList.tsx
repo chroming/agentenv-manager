@@ -238,6 +238,8 @@ export const RepositorySkillCandidateList = ({
               </span>
               {selectable && (progressStatus === "failed" || progressStatus === "skipped" || retrying) ? (
                 <Button
+                  busy={retrying}
+                  busyLabel={t(progressStatus === "skipped" ? "Importing..." : "Preparing...")}
                   className="github-candidate-retry"
                   size="compact"
                   variant="secondary"
@@ -246,9 +248,7 @@ export const RepositorySkillCandidateList = ({
                     { name: candidate.name }
                   )}
                   disabled={Boolean(operation)}
-                  icon={retrying
-                    ? <LoaderCircle className="is-spinning" size={15} />
-                    : progressStatus === "skipped"
+                  icon={progressStatus === "skipped"
                       ? <Download size={15} strokeWidth={2.2} />
                       : <RotateCcw size={15} strokeWidth={2.2} />}
                   onClick={() => onRetry(candidate)}

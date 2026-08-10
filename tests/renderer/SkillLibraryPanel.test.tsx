@@ -1038,7 +1038,10 @@ describe("SkillLibraryPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
     expect(onCheckUpdates).toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Update all skills" }));
+    const updateAllButton = screen.getByRole("button", { name: "Update all skills" });
+    expect(within(updateAllButton).getAllByText("Update all")).toHaveLength(2);
+    expect(within(updateAllButton).queryByText("Preparing updates...")).not.toBeInTheDocument();
+    fireEvent.click(updateAllButton);
     expect(onPreviewAllLibrarySkillUpdates).toHaveBeenCalledWith([
       "github-reviewer",
       "shared-reviewer"

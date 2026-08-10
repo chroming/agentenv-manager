@@ -132,6 +132,14 @@ export const fingerprintTargetState = (state: TargetState): string => {
   return hashText(JSON.stringify({
     activeProfileId: state.activeProfileId ?? null,
     appliedProfileHash: state.appliedProfileHash ?? null,
+    appliedProfileSnapshot: state.appliedProfileSnapshot
+      ? {
+          profileId: state.appliedProfileSnapshot.profileId,
+          capturedAt: state.appliedProfileSnapshot.capturedAt,
+          contentHash: state.appliedProfileSnapshot.contentHash,
+          snapshotHash: state.appliedProfileSnapshot.snapshotHash
+        }
+      : null,
     appliedLibraryVersions: { skills: appliedSkillVersions },
     managedMcpNames: [...new Set(state.managedMcpNames)].sort(),
     managedResources,

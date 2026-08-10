@@ -41,6 +41,7 @@ interface UseProfileDraftControllerOptions {
   onBusyChange(busy: boolean): void;
   onError(error: string | undefined): void;
   onDraftInvalidated(): void;
+  onSelectionChange?(profileId?: string): void;
 }
 
 export const useProfileDraftController = ({
@@ -54,7 +55,8 @@ export const useProfileDraftController = ({
   setTargetStates,
   onBusyChange,
   onError,
-  onDraftInvalidated
+  onDraftInvalidated,
+  onSelectionChange
 }: UseProfileDraftControllerOptions) => {
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
   const [profileLoadingId, setProfileLoadingId] = useState<string>();
@@ -63,27 +65,28 @@ export const useProfileDraftController = ({
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState("");
   const flowRequestRef = useRef(0);
-  const saveInFlightRef = useRef(false);
+  const savePromiseRef = useRef<Promise<ProfileDetail | undefined> | undefined>(undefined);
+  const autoSaveTimerRef = useRef<number | undefined>(undefined);
   const draftProfileRef = useRef<ProfileDetail | undefined>(undefined);
   const savedProfileRef = useRef<ProfileDetail | undefined>(undefined);
-
   useEffect(() => {
-    if (status !== "Profile saved" && status !== "Profile details saved") {
+    if (
+      status !== "Profile saved" &&
+      status !== "Profile details saved" &&
+      status !== "Profile restored"
+    ) {
       return undefined;
     }
     const timeout = window.setTimeout(() => setStatus(""), 2400);
     return () => window.clearTimeout(timeout);
   }, [status]);
-
   const invalidateFlow = useCallback(() => {
     flowRequestRef.current += 1;
   }, []);
-
   const beginFlow = useCallback(() => {
     const requestId = ++flowRequestRef.current;
     return requestId;
   }, []);
-
   const isFlowCurrent = useCallback(
     (requestId: number) => requestId === flowRequestRef.current,
     []
@@ -96,7 +99,8 @@ export const useProfileDraftController = ({
     setDraftProfile(profile);
     setIsDirty(false);
     setStatus("");
-  }, []);
+    onSelectionChange?.(profile.id);
+  }, [onSelectionChange]);
 
   const replaceSavedProfile = useCallback((
     profile: ProfileDetail,
@@ -108,7 +112,8 @@ export const useProfileDraftController = ({
     setDraftProfile(profile);
     setIsDirty(false);
     setStatus(nextStatus);
-  }, []);
+    onSelectionChange?.(profile.id);
+  }, [onSelectionChange]);
 
   const clearProfile = useCallback(() => {
     invalidateFlow();
@@ -119,7 +124,8 @@ export const useProfileDraftController = ({
     setDraftProfile(undefined);
     setIsDirty(false);
     setStatus("");
-  }, [invalidateFlow]);
+    onSelectionChange?.(undefined);
+  }, [invalidateFlow, onSelectionChange]);
 
   const updateDraft = useCallback((profile: ProfileDetail) => {
     invalidateFlow();
@@ -187,27 +193,14 @@ export const useProfileDraftController = ({
     selectedProfileId
   ]);
 
-  const saveDraft = useCallback(async () => {
-    if (!draftProfile) {
-      return undefined;
-    }
-    if (profileDraftsEqual(draftProfile, savedProfileRef.current)) {
-      const savedProfile = savedProfileRef.current ?? draftProfile;
-      draftProfileRef.current = savedProfile;
-      setDraftProfile(savedProfile);
-      setIsDirty(false);
-      setStatus("");
-      return savedProfile;
-    }
-
-    const previousName =
-      profiles.find((profile) => profile.id === draftProfile.id)?.name ??
-      draftProfile.manifest.name;
-    const previousLibraryVersions = profileLibraryVersions[draftProfile.id];
-    setIsSaving(true);
-    setStatus("Saving environment");
-    try {
-      const saved = await window.agentEnv.saveProfile(profileSaveInput(draftProfile));
+  const publishSavedProfile = useCallback((
+    candidate: ProfileDetail,
+    saved: ProfileDetail
+  ) => {
+      const previousName =
+        profiles.find((profile) => profile.id === candidate.id)?.name ??
+        candidate.manifest.name;
+      const previousLibraryVersions = profileLibraryVersions[candidate.id];
       const summary: ProfileSummary = {
         id: saved.id,
         preferredTargetId: saved.manifest.preferredTargetId,
@@ -262,21 +255,8 @@ export const useProfileDraftController = ({
           };
         })
       );
-      draftProfileRef.current = saved;
-      savedProfileRef.current = saved;
-      setDraftProfile(saved);
-      setIsDirty(false);
-      setStatus("Profile saved");
       onDraftInvalidated();
-      return saved;
-    } catch (error) {
-      setStatus("");
-      throw error;
-    } finally {
-      setIsSaving(false);
-    }
   }, [
-    draftProfile,
     librarySkills,
     onDraftInvalidated,
     profileLibraryVersions,
@@ -288,20 +268,93 @@ export const useProfileDraftController = ({
     targets
   ]);
 
-  const saveSelectedProfile = useCallback(async () => {
-    if (saveInFlightRef.current) {
-      return;
+  const saveDraft = useCallback(async () => {
+    if (savePromiseRef.current) return savePromiseRef.current;
+
+    const run = async (): Promise<ProfileDetail | undefined> => {
+      setIsSaving(true);
+      setStatus("Saving Profile");
+      try {
+        while (true) {
+          const candidate = draftProfileRef.current;
+          const base = savedProfileRef.current;
+          if (!candidate) return undefined;
+          if (profileDraftsEqual(candidate, base)) {
+            draftProfileRef.current = base ?? candidate;
+            setDraftProfile(base ?? candidate);
+            setIsDirty(false);
+            setStatus("");
+            return base ?? candidate;
+          }
+          const input = profileSaveInput(candidate);
+          const saved = await window.agentEnv.saveProfile({
+            ...input,
+            expectedContentHash: base?.contentHash ?? input.expectedContentHash
+          });
+          publishSavedProfile(candidate, saved);
+          savedProfileRef.current = saved;
+          const latest = draftProfileRef.current;
+          if (!latest || latest.id !== saved.id) return saved;
+          if (profileDraftsEqual(latest, candidate)) {
+            draftProfileRef.current = saved;
+            setDraftProfile(saved);
+            setIsDirty(false);
+            setStatus("Profile saved");
+            return saved;
+          }
+
+          const rebased = {
+            ...latest,
+            contentHash: saved.contentHash,
+            targetContentHashes: saved.targetContentHashes
+          };
+          draftProfileRef.current = rebased;
+          setDraftProfile(rebased);
+          setIsDirty(true);
+        }
+      } catch (error) {
+        setStatus("Profile save failed");
+        throw error;
+      } finally {
+        setIsSaving(false);
+      }
+    };
+
+    const promise = run().finally(() => {
+      savePromiseRef.current = undefined;
+    });
+    savePromiseRef.current = promise;
+    return promise;
+  }, [publishSavedProfile]);
+
+  useEffect(() => {
+    if (!isDirty || isSaving || status === "Profile save failed") return undefined;
+    if (autoSaveTimerRef.current !== undefined) {
+      window.clearTimeout(autoSaveTimerRef.current);
     }
-    saveInFlightRef.current = true;
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      autoSaveTimerRef.current = undefined;
+      void saveDraft().catch((unknownError) => {
+        onError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      });
+    }, 180);
+    return () => {
+      if (autoSaveTimerRef.current !== undefined) {
+        window.clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = undefined;
+      }
+    };
+  }, [draftProfile, isDirty, isSaving, onError, saveDraft, status]);
+
+  const saveSelectedProfile = useCallback(async () => {
     onError(undefined);
     try {
-      await saveDraft();
+      return await saveDraft();
     } catch (unknownError) {
       onError(
         unknownError instanceof Error ? unknownError.message : String(unknownError)
       );
-    } finally {
-      saveInFlightRef.current = false;
+      return undefined;
     }
   }, [onError, saveDraft]);
 

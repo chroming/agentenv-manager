@@ -119,6 +119,24 @@ describe("Workspaces desktop workflow", () => {
       .locator(".project-agent-switcher__logo").count()).toBe(1);
     await page.keyboard.press("Escape");
     await agentDialog.waitFor({ state: "hidden" });
+    for (const viewport of [
+      { width: 920, height: 620 },
+      { width: 1180, height: 728 }
+    ]) {
+      await page.setViewportSize(viewport);
+      const geometry = await page
+        .locator(".project-agent-switcher .ui-object-switcher__trigger")
+        .evaluate((trigger) => {
+          const box = trigger.getBoundingClientRect();
+          return {
+            height: Math.round(box.height),
+            textFits: trigger.scrollWidth <= trigger.clientWidth + 1,
+            width: Math.round(box.width)
+          };
+        });
+      expect(geometry).toEqual({ height: 32, textFits: true, width: 150 });
+    }
+    await page.setViewportSize({ width: 920, height: 620 });
     const workspaceResources = page.locator(".project-resource-groups");
     const collapsedResourceHeaders = await readResourceDisclosureHeaders(workspaceResources);
     await page.getByRole("button", { name: "Expand Instructions", exact: true }).click();
@@ -144,14 +162,34 @@ describe("Workspaces desktop workflow", () => {
     }
 
     await page.getByRole("button", { name: "Add instruction", exact: true }).click();
+    const instructionDialog = page.getByRole("dialog", { name: "Workspace instruction" });
+    await instructionDialog.waitFor({ state: "visible" });
+    await instructionDialog.getByRole("button", { name: "Maximize preview" }).click();
+    expect(await instructionDialog.getAttribute("class")).toContain("is-maximized");
+    await instructionDialog.getByRole("button", { name: "Restore preview size" }).click();
     const editor = page.getByRole("textbox", { name: "Workspace instruction content" });
     if (captureDir) {
       await page.screenshot({ path: join(captureDir, "project-instruction-editor-920x620.png") });
     }
-    await editor.fill("# Project rules\n");
+    const workspaceInstruction = `# Project rules\n${"unbroken-workspace-rule-".repeat(32)}\n`;
+    await editor.fill(workspaceInstruction);
+    expect(await editor.evaluate((element: HTMLTextAreaElement) => ({
+      contained: element.scrollWidth <= element.clientWidth + 1,
+      overflowX: getComputedStyle(element).overflowX,
+      wrap: element.wrap
+    }))).toEqual({ contained: true, overflowX: "hidden", wrap: "soft" });
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect.poll(() => readFile(instructionsPath, "utf8"))
-      .toBe("# Project rules\n");
+      .toBe(workspaceInstruction);
+    const instructionPreview = instructionDialog.getByLabel("Preview of AGENTS.md");
+    await expect.poll(() => instructionPreview.textContent())
+      .toContain("# Project rules");
+    expect(await instructionPreview.evaluate((element: HTMLElement) => ({
+      contained: element.scrollWidth <= element.clientWidth + 1,
+      overflowX: getComputedStyle(element).overflowX
+    }))).toEqual({ contained: true, overflowX: "hidden" });
+    await instructionDialog.getByRole("button", { name: "Close", exact: true }).first().click();
+    await instructionDialog.waitFor({ state: "hidden" });
 
     await page.getByRole("button", { name: "Expand Skills", exact: true }).click();
     await expect.poll(() => page.getByRole("button", {
@@ -175,13 +213,10 @@ describe("Workspaces desktop workflow", () => {
       '[data-resource-disclosure-id="workspace-skill"] .project-resource-section__list'
     );
     await skillResourceList.locator(".project-resource-entry").waitFor();
-    const instructionResource = page.locator(
-      '[data-resource-disclosure-id="workspace-instructions"] .project-resource-entry'
-    ).first();
     const skillResource = skillResourceList.locator(".project-resource-entry").first();
     expectAlignedResourceRows(
       await readAlignedResourceRows(page.locator(".project-resource-entry")),
-      { minimumRows: 2 }
+      { minimumRows: 1 }
     );
     const resourceHierarchyGeometry = await skillResourceList.evaluate((list) => {
       const row = list.querySelector<HTMLElement>(".project-resource-entry")!;
@@ -258,22 +293,52 @@ describe("Workspaces desktop workflow", () => {
     }
 
     await page.getByRole("button", { name: "More Workspace actions" }).click();
+    await page.getByRole("menuitem", { name: "Undo last change" }).click();
+    const undoDialog = page.getByRole("dialog", { name: "Undo last Workspace change" });
+    const undoButton = undoDialog.getByRole("button", { name: "Restore", exact: true });
+    await undoButton.click();
+    await undoDialog.waitFor({ state: "hidden" });
+    await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
+      .toContain("# Testing");
+    await expect.poll(() => page.evaluate((projectId) =>
+      window.agentEnv.listProjectRecovery(projectId).then((items) =>
+        items.some((item) => item.kind === "skill" && item.status === "restored")
+      ), "project-release-tools")).toBe(true);
+    const remainingReceipts = await page.evaluate((projectId) =>
+      window.agentEnv.listProjectRecovery(projectId), "project-release-tools");
+    const addedSkillReceipt = remainingReceipts.find(
+      (item) => item.kind === "skill" && item.status === "committed"
+    );
+    const instructionReceipt = remainingReceipts.find(
+      (item) => item.kind === "instructions" && item.status === "committed"
+    );
+    expect(addedSkillReceipt).toBeDefined();
+    expect(instructionReceipt).toBeDefined();
+
+    await page.getByRole("button", { name: "More Workspace actions" }).click();
     await page.getByRole("menuitem", { name: "Recovery" }).click();
     if (captureDir) {
       await page.screenshot({ path: join(captureDir, "project-recovery-920x620.png") });
     }
-    const restoreButton = page.getByRole("button", { name: "Restore", exact: true }).first();
-    await restoreButton.click();
-    await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
-      .toContain("# Testing");
-    await expect.poll(() => restoreButton.isEnabled()).toBe(true);
-    await restoreButton.click();
+    await expect.poll(() => page.getByRole("dialog", { name: "Workspace Recovery" })
+      .locator("button")
+      .evaluateAll((buttons) => buttons.some((button) =>
+        button.textContent === "Restore" && !(button as HTMLButtonElement).disabled
+      ))).toBe(true);
+    const recoveryDialog = page.getByRole("dialog", { name: "Workspace Recovery" });
+    const skillRestoreButton = recoveryDialog
+      .locator(`[data-recovery-id="${addedSkillReceipt!.id}"]`)
+      .getByRole("button", { name: "Restore", exact: true });
+    await skillRestoreButton.click({ force: true });
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8").then(
       () => true,
       () => false
     )).toBe(false);
-    await expect.poll(() => restoreButton.isEnabled()).toBe(true);
-    await restoreButton.click();
+    const instructionRestoreButton = recoveryDialog
+      .locator(`[data-recovery-id="${instructionReceipt!.id}"]`)
+      .getByRole("button", { name: "Restore", exact: true });
+    await expect.poll(() => instructionRestoreButton.isEnabled()).toBe(true);
+    await instructionRestoreButton.click({ force: true });
     await expect.poll(() => readFile(instructionsPath, "utf8").then(
       () => true,
       () => false
@@ -283,6 +348,9 @@ describe("Workspaces desktop workflow", () => {
     await page.getByRole("button", { name: "Add instruction", exact: true }).click();
     await page.getByRole("textbox", { name: "Workspace instruction content" }).fill("# Project rules\n");
     await page.getByRole("button", { name: "Save", exact: true }).click();
+    const recreatedInstructionDialog = page.getByRole("dialog", { name: "Workspace instruction" });
+    await recreatedInstructionDialog.getByRole("button", { name: "Close", exact: true }).first().click();
+    await recreatedInstructionDialog.waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Copy from Library" }).click();
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))

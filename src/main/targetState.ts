@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { TargetState } from "../shared/types";
+import { ProfileManifestSchema, ProfileResourcesSchema, SafeIdSchema } from "../shared/schemas";
 
 const ManagedResourceSchema = z.object({
   kind: z.enum(["instructions", "config", "mcp", "skill", "agent", "file", "directory"]),
@@ -59,10 +60,22 @@ const LibraryResourceVersionsSchema = z.object({
   skills: z.record(z.string(), z.string())
 });
 
+const AppliedProfileSnapshotSchema = z.object({
+  profileId: SafeIdSchema,
+  profileName: z.string().min(1),
+  capturedAt: z.string().datetime(),
+  contentHash: z.string().min(1),
+  snapshotHash: z.string().min(1),
+  manifest: ProfileManifestSchema,
+  instructions: z.string(),
+  resources: ProfileResourcesSchema
+}).strict();
+
 const TargetStateBaseSchema = z.object({
   managedMcpNames: z.array(z.string()).default([]),
   activeProfileId: z.string().optional(),
   appliedProfileHash: z.string().optional(),
+  appliedProfileSnapshot: AppliedProfileSnapshotSchema.optional(),
   appliedLibraryVersions: LibraryResourceVersionsSchema.optional(),
   lastAppliedAt: z.string().optional(),
   managedResources: z.array(ManagedResourceSchema).default([]),

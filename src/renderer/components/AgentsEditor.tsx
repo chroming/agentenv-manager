@@ -1,7 +1,7 @@
-import { useId } from "react";
+import { useState } from "react";
 import { useI18n } from "../i18n";
-import { InfoTip } from "./InfoTip";
-import { OverflowTooltip } from "./OverflowTooltip";
+import { InstructionDocumentPreviewList } from "./InstructionDocumentPreviewList";
+import { InstructionDocumentDialog } from "./InstructionDocumentDialog";
 import type { ProfileResourcePolicy } from "./ProfileResourcePolicyControl";
 
 interface AgentsEditorProps {
@@ -12,70 +12,63 @@ interface AgentsEditorProps {
   value: string;
   currentValue?: string;
   currentValueAvailable?: boolean;
-  onChange(value: string): void;
+  onSave(value: string): Promise<void> | void;
 }
 
 export const AgentsEditor = ({
-  label,
   path,
   policy,
   targetName,
   value,
   currentValue,
   currentValueAvailable = false,
-  onChange
+  onSave
 }: AgentsEditorProps) => {
   const { t } = useI18n();
-  const editorId = useId();
-  const help = policy === "ignore"
-    ? t(
-        "This content stays in the Profile. Applying to {{name}} leaves its instruction file unchanged.",
-        { name: targetName }
-      )
-    : policy === "disable"
-      ? t(
-          "Applying the Profile clears this instruction file. New {{name}} sessions load the change; running conversations keep their current context.",
-          { name: targetName }
-        )
-      : t(
-          "Applying the Profile writes this file. New {{name}} sessions load changes; running conversations keep their current context.",
-          { name: targetName }
-      );
-  const showingAgentState = policy === "ignore";
-  const effectiveValue = policy === "manage"
-    ? value
-    : policy === "disable"
-      ? ""
-      : currentValue ?? "";
-  const agentStateUnavailable = showingAgentState && !currentValueAvailable;
+  const [open, setOpen] = useState(false);
+  const fileName = "AGENTS.md";
+  const documents = policy === "disable"
+    ? []
+    : policy === "ignore"
+      ? currentValueAvailable
+        ? [{
+            id: "current-agent-instructions",
+            name: fileName,
+            path,
+            content: currentValue ?? "",
+            metadata: t("Current {{name}} file", { name: targetName })
+          }]
+        : []
+      : [{
+          id: "profile-instructions",
+          name: fileName,
+          content: value,
+          metadata: t("Saved in this Profile"),
+          editable: true
+        }];
+  const emptyLabel = policy === "disable"
+    ? t("Instructions are turned off for this Agent")
+    : t("Current Agent instructions unavailable");
 
   return (
-    <div className="field-block instruction-editor">
-      <div className="instruction-editor__header">
-        <label htmlFor={editorId}>{label}</label>
-        {path ? (
-          <OverflowTooltip
-            className="instruction-editor__path"
-            focusable={false}
-            text={path}
-          />
-        ) : null}
-        <InfoTip label={help} />
-      </div>
-      {agentStateUnavailable ? (
-        <div className="instruction-editor__unavailable" role="status">
-          {t("Current Agent instructions unavailable")}
-        </div>
-      ) : (
-        <textarea
-          id={editorId}
-          aria-label={label}
-          readOnly={policy !== "manage"}
-          spellCheck={false}
-          value={effectiveValue}
-          onChange={(event) => onChange(event.currentTarget.value)}
-        />
-      )}
-    </div>
+    <>
+      <InstructionDocumentPreviewList
+        documents={documents}
+        emptyLabel={emptyLabel}
+        onOpen={documents.length > 0 ? () => setOpen(true) : undefined}
+      />
+      <InstructionDocumentDialog
+        open={open}
+        ariaLabel={t("Instruction document")}
+        editable={policy === "manage"}
+        editorLabel={t("Profile instruction content")}
+        fileName={fileName}
+        path={policy === "manage" ? t("Profile · AGENTS.md") : path}
+        resetKey={value}
+        value={policy === "manage" ? value : currentValue ?? ""}
+        onClose={() => setOpen(false)}
+        onSave={onSave}
+      />
+    </>
   );
 };

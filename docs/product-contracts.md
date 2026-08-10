@@ -320,10 +320,10 @@ settings outside an adapter's declared resource boundary. A Profile owns:
 
 Instructions, Skills, and MCPs each have an independent application policy for every Target. The policy is part of the saved Profile recipe, not a global application preference.
 
-- `Use Profile` includes that resource category in Save, Preview, Apply, drift detection, Backup, and verification for the selected Target. Its desired state comes from the saved Profile content and item-level choices.
+- `Use Profile` includes that resource category in Profile auto-save, Preview, Apply, drift detection, Backup, and verification for the selected Target. Its desired state comes from the saved Profile content and item-level choices.
 - `Turn off` remains an AgentEnv-managed policy but makes the selected Target's desired state empty or off without deleting the saved Profile recipe. Instructions are removed, every Profile Skill is treated as disabled, and every explicitly saved MCP selection is treated as `Off`. It MUST NOT remove unrelated Agent Skills, disable MCPs absent from the Profile selections, or delete MCP definitions.
 - `Keep current` preserves the saved Profile content and visible resource count but excludes that category from the selected Target's effective payload. In steady state, Apply MUST NOT inspect, fingerprint, validate, write, remove, or claim new ownership over the Target's corresponding resources.
-- Changing a category policy is a Profile edit and does not mutate the Target until Save, Preview, and Apply. Returning from `Turn off` or `Keep current` to `Use Profile` uses the same fresh Preview and explicit drift confirmation as any other managed replacement.
+- Changing a category policy is auto-saved to the Profile and does not mutate the Target until Preview and Apply. Returning from `Turn off` or `Keep current` to `Use Profile` uses the same fresh Preview and explicit drift confirmation as any other managed replacement.
 - The transition to `Keep current` MAY touch only resources already owned by AgentEnv when detachment is required. An already AgentEnv-managed Skill live link MUST first be materialized as a standalone copy of its current content. Preview names that transition and Backup protects it. This prevents later Library updates from changing an opted-out Target without Apply while retaining enough paused ownership evidence for safe drift review when management resumes.
 - Paused ownership evidence MUST NOT contribute to ordinary managed-resource counts or drift status. It is consulted only when management resumes, and a refreshed managed snapshot replaces it after a successful Apply.
 - Missing Instructions and Skills policies default to `Use Profile`; a missing MCP policy defaults to `Keep current`.
@@ -350,7 +350,7 @@ suite, a correctness score, or a generic Agent launcher.
 
 - Input is one saved Profile, the Agent currently selected beside Apply, one task prompt, and an
   optional Workspace. The Workspace may be empty or any local folder; Git is optional metadata,
-  not an eligibility requirement. A dirty Profile MUST be saved before Compare becomes available.
+  not an eligibility requirement. Pending Profile edits MUST finish auto-saving before Compare becomes available.
   A Profile already matching the selected Agent has no pending candidate and MUST NOT offer a
   redundant comparison run.
 - Compare MUST use the selected Apply Agent. It MUST NOT silently fall through to OpenCode, another
@@ -424,17 +424,16 @@ Source of truth: the saved Profile directory in AgentEnv data.
 
 A v2 Profile directory contains exactly `profile.json`, `INSTRUCTIONS.md`, and `resources.json`. It MUST NOT store arbitrary native configuration, credentials, private Skill copies, Agent definitions, hooks, environment variables, or disabled-path lists.
 
-Profile name, description, and icon are identity metadata rather than environment payload. Editing
-them MUST persist immediately and independently without saving a dirty Instructions, Skills, MCP activation,
-or resource draft, changing deployment readiness, or writing any Target. Profile content keeps
-the explicit whole-Profile Save contract below.
+Profile name, description, icon, Instructions, Skills, and MCP activation intent are all Profile-owned
+data. Semantic edits auto-save the complete Profile atomically without writing any Target. Apply remains
+the explicit boundary that may change an Agent.
 
 Each Library Skill reference has a Profile-scoped enabled state. Missing legacy state means enabled.
 
 - Turning a Skill off MUST preserve the reference and its Library content; it removes the Skill only from that Profile's effective payload.
 - Turning a Skill back on MUST restore the same reference without another Library import or picker flow.
 - A disabled Skill MUST NOT be deployed, validated as a desired Target resource, counted as an effective resource, or recorded in applied Library versions.
-- Enable and disable are Profile edits: they become durable on Save and affect a Target only after Preview and Apply.
+- Enable and disable are Profile edits: they auto-save to the Profile and affect a Target only after Preview and Apply.
 - An enabled reference whose Library Skill is missing blocks Apply. A disabled missing reference remains visible for repair but is an effective no-op.
 - Disabling a Skill removes AgentEnv-owned deployments automatically. A writable Target location outside AgentEnv MAY be removed only as a reviewed, backed-up Apply effect. A path covered by a `Leave unmanaged` boundary is preserved and reported as `External still active`; it is excluded from that Target's effective managed payload. Observe-only locations are reported but never mutated.
 
@@ -624,10 +623,19 @@ shared desktop contract rather than a collection of page-specific effects.
   network requests.
 - A successful mutation invalidates or refreshes every affected local projection. Unrelated
   projections remain intact. A semantic no-op does not churn freshness timestamps.
-- Automatic reads are non-blocking and do not emit routine success toasts. Their initiating page
-  shows compact `Refreshing`, last-success time, partial, or failure state. Failure preserves the
-  last-good data and last-success time; partial multi-Agent or multi-source results identify that
-  some sources failed without discarding successful results.
+- Automatic reads are non-blocking and do not emit routine success toasts. When usable content is
+  already present, Refresh progress belongs to the command that initiated it: that control keeps
+  its geometry, disables duplicate activation, and shows the shared spinner in place. The list,
+  selection, detail, filters, and page header remain mounted and do not move. Background reads are
+  silent unless they leave an actionable partial or failure state.
+- Initial loading with no usable content MAY use a content-scoped loading surface. A full-width
+  strip MUST NOT represent transient Refresh progress or routine success. Such strips are reserved
+  for persistent conditions that explain an unavailable capability or offer a concrete recovery
+  action.
+- Refresh success is expressed by the updated content and the control returning to idle, not by a
+  global success message. Failure preserves the last-good data and last-success time. Partial or
+  failed reads remain attached to the Refresh control through warning treatment and selectable
+  detail; a page-local error surface is used only when the user must act before continuing.
 - Monitored Skill sources use their persisted per-source `checkedAt` values. Startup checks only
   when at least one monitored source is due; while the app remains open, the next check is
   scheduled from the oldest monitored success, and returning to the foreground checks immediately
@@ -855,12 +863,12 @@ It MUST include enough information to distinguish:
 
 | Command | Contract |
 | --- | --- |
-| Save | Persist the entire Profile draft. It does not change any Target. |
+| Auto-save Profile | Persist the complete Profile after a semantic edit. It does not change any Agent. Explicit `Save` remains a document-editor or Capture-dialog command only. |
 | Import | Copy or ingest a resource into the canonical Library. Imported content no longer depends on the original path for normal use. |
 | Track source | Attach an explicit update source to a Library resource. It does not update immediately. |
 | Check update | Compare canonical Library content with its explicit tracked source. It does not write. |
 | Update | Replace canonical Library content after preview. It marks affected deployments pending; it does not deploy. |
-| Add to Profile | Add a Library reference to the Profile draft. Save is still required. |
+| Add to Profile | Add a Library reference and auto-save the complete Profile. It does not Apply the Profile to an Agent. |
 | Preview | Compute one fresh, complete deployment plan against current Profile, Library, and Target facts. It records the inventory fingerprint, approved transitions, expected content hashes, and backup scope without writing. |
 | Apply | Freshly reconcile one saved Profile against one Target, verify that the reviewed Profile, Library, inventory, native state, policies, and live paths still match Preview, then execute that exact plan transactionally. Apply MUST NOT reinterpret the same facts through a second ownership planner. Every approved outside-path replacement is hash-checked again immediately before execution, and a multi-path failure uses compensating rollback. |
 | Take over | First Apply to an unmanaged Target. It establishes ownership after previewing existing content. |
@@ -895,10 +903,9 @@ The Profile editor MUST distinguish these states:
 
 | State | Meaning | Primary action |
 | --- | --- | --- |
-| Clean | Draft equals saved Profile. | Edit or choose Target. |
-| Dirty | Draft differs from saved Profile. | Save. |
-| Saving | Whole Profile is being persisted. | Wait; duplicate Save is blocked. |
-| Save failed | Draft is preserved and persistence failed. | Retry Save. |
+| Saved | Visible Profile equals its durable AgentEnv copy. | Edit, choose Target, or Apply. |
+| Saving | A complete semantic Profile change is being persisted. | Wait; navigation and close await the same queue. |
+| Save failed | The latest edit is preserved in memory and persistence failed. | Retry or restore the last saved version. |
 | Saved, never applied | Profile is valid but has no deployment on selected Target. | Preview Apply. |
 | Saved, changes pending | Selected Target has an older Profile or Library version. | Preview Apply. |
 | Applied | Saved Profile, effective Library versions, and managed Target files match. | No Apply action. |
@@ -909,33 +916,37 @@ The Profile editor MUST distinguish these states:
 
 Rules:
 
-- Save MUST persist the complete Profile, not an individual accordion section.
-- Reverting every environment edit to the persisted intent MUST immediately return the editor to `Clean`, disable Save, and avoid a filesystem write. Explicit default resource policies are equal to their omitted representation. Button, keyboard shortcut, navigation guard, and programmatic Save paths share this semantic no-op rule.
-- Save MUST expose local working feedback immediately. Once persistence succeeds, the editor becomes clean and Apply availability is recalculated from the returned saved Profile without waiting for Target discovery, inventory scanning, update checks, usage aggregation, or a full-page refresh.
-- Save, Apply, and Target selection MUST appear as one compact action group in the selected Profile context. The Profile-scoped destination selector sits immediately before Apply, with Save in the same compact group. Page creation controls MUST NOT separate these lifecycle commands.
-- Save and Apply MUST keep stable labels and positions. A dirty Profile highlights Save and disables Apply; after Save, Save is disabled and Apply becomes the primary action.
+- Auto-save MUST persist the complete Profile, not an individual accordion section. A document editor's `Save` commits that document into the Profile and then joins the same complete-Profile persistence queue.
+- Reverting an edit to the persisted intent MUST cancel the pending write and avoid a filesystem mutation. Explicit default resource policies are equal to their omitted representation. Keyboard shortcut, navigation, Compare, Apply, and programmatic flush paths share this semantic no-op rule.
+- Auto-save MUST expose local working feedback immediately. Once persistence succeeds, Apply availability is recalculated from the returned saved Profile without waiting for Target discovery, inventory scanning, update checks, usage aggregation, or a full-page refresh.
+- Agent selection, Apply, and overflow MUST appear as one compact action group in the selected Profile context. Compare, Undo, Recovery, Duplicate, and Delete belong to overflow; Apply Preview may expose Compare beside the commit controls.
+- Apply keeps a stable label and position. It is disabled only while the Profile save queue is pending or failed, when no Target is available, when no change exists, or when validation prevents a truthful Preview.
 - The commit verb remains `Apply` in Ready, Review, drift, and protected-replacement states. Backup and replacement safeguards are disclosed inside Preview; they MUST NOT rename the commit command to `Apply with backup` or introduce a parallel apply workflow.
 - Readiness text describes the current state; it is not a second workflow. Only a condition that requires another product area exposes an inline remediation link: unavailable Target opens Agents and required recovery opens Recovery. Resource validation stays beside the affected Instructions, Skill, or MCP row. Preview blockers and drift do not expose a separate Review command because Apply already creates the authoritative fresh preview.
 - Readiness remediation links MUST show a visible verb and object. Icon-only arrows and backend phase labels such as `Review preview` are not executable product intents and MUST NOT appear as commands.
-- When no Target is selected, the visible Target selector remains the single selection entry point. When the Profile is dirty, the visible Save button remains the single persistence action.
-- Edit, Duplicate, Delete, Save, Target selection, and Apply are selected-Profile commands and MUST remain inside the selected Profile surface. Profile creation belongs to the Profile list header, beside the collection it changes; it MUST NOT be promoted into window chrome or mixed into the selected Profile lifecycle group.
-- Every Profile row is a stable two-line selector: Profile icon and name with only exceptional state such as `Unsaved` on the first line, then one compressed deployment summary on the second line. One Agent is shown as `Agent · Active`, `Agent · Pending`, or `Agent · Attention`; multiple Agents are summarized as `N Agents · State`, with the per-Agent states available from the row's accessible hover label. A Profile with no deployment shows only `Not applied`. Description, resource counts, preferred Target, provenance, and Agent artwork belong to the selected Profile detail, not the list. The deployment summary projects the canonical Target lifecycle state; the renderer MUST NOT independently recompute a competing current/pending result from a preferred-Target hash or version snapshot.
-- The Profile list is always ordered by persisted creation time, newest first. Selection, the chosen Apply Target, deployment state, Save, and Apply MUST NOT reorder it.
-- Selected-Target lifecycle status belongs beside Save and Apply inside the selected Profile surface. It MUST NOT be repeated as a separate page-level summary strip.
-- Unsaved changes MUST block Preview and Apply.
-- Switching Profile, Target, workspace, or closing the window with a dirty draft MUST offer Save, Discard, or Cancel.
-- Failed validation or Save MUST preserve all draft input.
+- When no Target is selected, the visible Target selector remains the single selection entry point.
+- Edit, Duplicate, Delete, Undo, Recovery, Target selection, Compare, and Apply are selected-Profile commands and MUST remain inside the selected Profile surface. Profile creation belongs to the Profile list header, beside the collection it changes; it MUST NOT be promoted into window chrome or mixed into the selected Profile lifecycle group.
+- Every Profile row is a stable two-line selector: Profile icon and name with only exceptional persistence state such as `Saving...` or `Save failed` on the first line, then one compressed deployment summary on the second line. One Agent is shown as `Agent · Active`, `Agent · Pending`, or `Agent · Attention`; multiple Agents are summarized as `N Agents · State`, with the per-Agent states available from the row's accessible hover label. A Profile with no deployment shows only `Not applied`. Description, resource counts, preferred Target, provenance, and Agent artwork belong to the selected Profile detail, not the list. The deployment summary projects the canonical Target lifecycle state; the renderer MUST NOT independently recompute a competing current/pending result from a preferred-Target hash or version snapshot.
+- The Profile list is always ordered by persisted creation time, newest first. Selection, the chosen Apply Agent, deployment state, auto-save, and Apply MUST NOT reorder it.
+- Selected-Target lifecycle status belongs beside Agent selection and Apply inside the selected Profile surface. It MUST NOT be repeated as a separate page-level summary strip.
+- Pending auto-save MUST delay Preview and Apply. A failed save blocks them while preserving the complete edit for Retry or restore.
+- Switching Profile, Target, workspace, or closing the window MUST await an ordinary pending Profile save without a confirmation dialog. A failed Profile save and an unsaved Workspace file edit remain explicit recovery decisions.
+- Failed validation or auto-save MUST preserve all draft input.
 - Applying a Profile MUST NOT rewrite Agent-native configuration outside explicitly managed MCP activation fields.
 - When exactly one installed Target is available, Profiles MUST show it as stable context instead of an option menu. When multiple installed Targets are available, Target selection remains available.
 - Target selection is scoped to the selected Profile rather than the Profiles page. During an app session, each Profile remembers its own selected Target; otherwise the most recent active Target for that Profile is preferred, followed by its persisted preferred Target. Choosing a Target for one Profile MUST NOT change another Profile's destination context.
 - A blank Profile is not created as Agent-bound. Its create dialog asks only for portable identity fields; the persisted preferred Target is an initial preview hint and is labelled `Preview Agent` when exposed after creation. `Source Agent` appears only when the user explicitly chooses Capture from Agent, and `createdFromTargetId` records provenance rather than compatibility.
 - An empty managed Instructions value is a valid complete Profile state. Preview MUST describe it as clearing the managed instruction file rather than blocking Apply.
 - On entry, Profiles SHOULD select the chosen Target's active Profile and open its Skills section for the common single-Target workflow. Selection MUST NOT add a redundant `Current` badge or pin and reorder the row; the row's Target deployment badges remain the source of application state.
-- Profile name, description, and icon changes auto-save as identity metadata. They MUST preserve any unsaved environment draft and MUST NOT enable the environment Save button by themselves.
+- Profile name, description, icon, Instructions, Skills, and MCP intent share one serialized auto-save owner. Rapid edits MUST preserve the newest semantic value and MUST NOT let an older completion overwrite it.
+- Before each non-no-op Profile replacement, AgentEnv stores a verified app-owned edit-history snapshot. `Profile Recovery` lists those earlier saved versions.
+- Every successful Apply also records an immutable, Agent-specific Profile baseline in local Target state. `Restore last applied` restores the shared Instructions and Skills plus that Agent's resource policies from this baseline, while preserving Profile identity and policies for other Agents. It changes only the Profile and never rewrites Agent files; a non-drifted Agent should match again immediately.
+- For pre-existing Target state without a baseline, AgentEnv may create one only when the current target-specific Profile hash and deployed Library versions still match the last successful Apply. It must never infer a baseline from a pending or drifted Profile.
+- A Workspace has no separate Apply phase. `Undo last change` restores the file or Skill changed by AgentEnv's most recent completed Workspace mutation; `Recovery` lists older mutation receipts.
 - Profile Skills MUST expose enabled and disabled Library references in one compact list. Each row has one identity line, one supporting line for version and source, one truthful state, one availability switch, and one overflow command. Full Library paths, applied revisions, alternate install names, and update details remain selectable through overflow detail or the row menu instead of becoming additional visible lanes. A mismatch, missing install, or pending removal is `Apply pending`. A matching device-local management boundary is shown as `External active` when it satisfies enabled intent, or `External still active` when it contradicts omit intent; neither state is presented as pending after a successful Apply. Ownership, update-source policy, source-check result, Profile availability, Target deployment, and local overrides are separate dimensions: the visible state shows only exceptional or currently actionable states. `Not tracked` MUST NOT be presented as an ownership or management state. Check updates checks only enabled tracked references in that Profile and appears only while at least one such reference is checkable or a check is already running; an unavailable check MUST NOT remain as a permanently disabled toolbar control. Add opens a searchable Library-only picker that identifies source, revision, and path and omits already attached or globally disabled Skills; Remove detaches a reference from the Profile without deleting Library content. A missing reference disables its availability control and offers Relink or Remove through the same overflow menu. Row menus MUST fit their longest localized command at the minimum viewport.
 - Updating from Profile Skills still updates the global Library copy. The update confirmation MUST disclose how many Profiles reference it and whether Copy or Live link mode changes installed Targets immediately.
 
-Status: v2 whole-Profile Save, dirty protection, per-Target applied hashes, active-Profile focus, Profile-scoped Skill enablement, and per-Target MCP policy are `Implemented`. Compatible live Instructions can be adopted. Native configuration, Agent definitions, hooks, environment variables, credentials, and MCP definitions remain Target-owned.
+Status: v2 whole-Profile auto-save, recovery history, per-Target applied hashes, active-Profile focus, Profile-scoped Skill enablement, and per-Target MCP policy are `Implemented`. Compatible live Instructions can be adopted. Native configuration, Agent definitions, hooks, environment variables, credentials, and MCP definitions remain Target-owned.
 
 ## 8. Target Lifecycle
 
@@ -1553,9 +1564,9 @@ Idle -> Pressed -> Working -> Success | Warning | Error | Partial failure
 - Completion updates visible persisted state, not only a message.
 - No visible command may appear to do nothing.
 - A conditional prerequisite is completed inside its parent workflow whenever AgentEnv can do so without broadening the confirmed mutation. An unrelated pending lifecycle state is not a blocker. Hard blocking is reserved for conditions where continuing would risk data loss, overwrite unreviewed external content, use stale reviewed input, or violate recovery ownership; every such stop names the affected object and keeps the recovery action in the same surface when possible.
-- Profile edits update the in-memory draft without filesystem scans. Save, Preview, and Apply each expose control-local working state for their complete asynchronous lifetime.
-- Profile dirty state stays attached to the Profile row, readiness line, and Save/Apply command group. It MUST NOT create a persistent or transient global feedback layer that duplicates those states or covers Composer content.
-- Profile identity metadata auto-save exposes immediate working and completion feedback while preserving any dirty environment draft.
+- Profile edits update the in-memory draft without filesystem scans. Auto-save, Preview, and Apply each expose owned working state for their complete asynchronous lifetime.
+- Profile saving state stays attached to the selected Profile context and Apply command group. It MUST NOT create a layout-shifting banner or cover Composer content.
+- Complete-Profile auto-save exposes immediate working and completion feedback while preserving the newest edit through overlapping input.
 - One Preview request MUST reuse one normalized Library and local-inventory snapshot rather than recursively scanning or hashing the same resource roots once per validation stage.
 - Repeated background Target reads MAY reuse recent executable discovery. The explicit Target `Refresh` command MUST bypass that cache.
 - Apply completion MUST update the visible verified Target state immediately; nonessential history, usage, and enrichment refreshes continue without holding the primary action in a working state.
@@ -1594,7 +1605,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - The sidebar defaults to the expanded `204px` rail and supports an explicit collapsed
   `64px` rail at every supported viewport. Collapse is a device-local presentation
   preference, persists without entering Workspace Sync, and MUST NOT change the active
-  workspace, selected resource, filters, owned scroll positions, or an unsaved Profile draft.
+  workspace, selected resource, filters, owned scroll positions, or a pending Profile save.
   Window width MUST NOT silently toggle this preference; the expanded rail remains a
   supported layout at `920 x 620`.
 - Expanded and collapsed rails share the same fixed navigation hit targets and active-state
@@ -1627,7 +1638,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Resource rows expose at most one direct contextual command plus a trailing overflow menu. Destructive, settings, and infrequent commands belong in that menu. Inline icon commands use shared `32px` hit targets and always have accessible names and tooltips.
 - Skill Library and Profile list rows expose their existing overflow command set through the same compact renderer action menu used by the trailing ellipsis. Right-click MUST target the row under the pointer without inventing commands, changing availability, bypassing dirty-state or destructive confirmation, or silently applying the command to the selected row. The shared menu owns viewport clamping, Escape and outside-click dismissal, initial focus, Arrow/Home/End navigation, focus return, icon lanes, and danger treatment. The same keyboard contract applies to Profile actions, Agent selection, cleanup actions, and icon selection menus.
 - Accent fill identifies only the current page-level primary command or the next commit action. Lists MUST NOT contain repeated primary-filled actions unless each row is an independent queued workflow.
-- A populated Profiles workspace keeps `New Profile` neutral because Save or Apply owns the commit emphasis; an empty Profiles workspace MAY promote `New Profile` to the primary action. Available Skill updates use a neutral compact `Update` action, while the update confirmation dialog owns the filled commit action.
+- A populated Profiles workspace keeps `New Profile` neutral because Apply owns the external commit emphasis; an empty Profiles workspace MAY promote `New Profile` to the primary action. Available Skill updates use a neutral compact `Update` action, while the update confirmation dialog owns the filled commit action.
 - The Library page uses `Skills` as its interactive page title; `Library` is neutral scope text and MUST NOT resemble a clickable breadcrumb.
 - Skills Library uses one stable semantic reading order: `Skill -> Source -> Usage -> Status -> More`. Its default row is a compact projection, not a detail view: Skill shows the icon and name; Source shows one concise source label; Usage shows one combined `Profiles · Agents` line; Status shows one current maintenance state; and More owns infrequent commands. Description, full source, version or revision, update time, and named Profile or Agent references remain available through selectable hover details. When a Status has exactly one obvious review step, the Status itself may be interactive so a separate Action column does not consume minimum-window space. At the supported minimum width Source and Usage share one two-line lane while Skill, Status, and More retain stable tracks. Header and rows MUST consume the same named column contract, identity MUST NOT be the widest flexible column by default, and missing values never move sibling lanes.
 - By Source preserves the same compact-table rule. At comfortable widths Last checked may use a
@@ -1671,14 +1682,14 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Settings is one continuous, restrained preference surface rather than a stack of feature cards. Its content width and control lane remain bounded so short controls stay close to their labels; account, data, and diagnostic commands use the same Button primitive and only the current continuation receives accent fill.
 - Settings MAY override one configuration root per Agent. The Adapter remains the sole owner of deriving Instructions, Skills, and native configuration paths below that root. Selecting a root performs no migration, does not move existing files, and performs no Agent write. All later reads and writes use the same resolved paths. An Agent with retained AgentEnv ownership state MUST be stopped before its root can change even when that Agent is disabled and hidden from ordinary active-state lists. Full custom paths use the shared selectable overflow-detail behavior, and Choose, Change, and Use default show progress on their owning row.
 - Truncated values and contextual explanations use one shared hover-detail primitive with two explicit interaction modes. Overflow and decision details open only when measurably clipped and remain selectable and pointer-enterable for copying. Brief `InfoTip` explanations are passive, non-interactive tooltips: they MUST NOT intercept a command underneath or prevent focus from moving to the next control. Both modes use regular body weight and neutral overlay styling, stay inside the viewport, close on Escape or owning-list scroll, and never rely on a browser `title` as the only readable copy. Wheel input at an interactive detail layer's scroll boundary continues scrolling the nearest owning list rather than making the interface appear frozen.
-- At narrow widths, Profile readiness is read before its Save and Apply command group. Secondary Profile commands MUST NOT duplicate a direct command already visible beside the selected Profile name, and expanded Skills and MCP resources share one flat list hierarchy rather than introducing resource-specific nested cards.
-- Comparable actions in one command group use the same control height; Profile Save and Apply also reserve the same width so lifecycle state changes do not shift surrounding content.
+- At narrow widths, Profile readiness is read before its Agent and Apply command group. Secondary Profile commands MUST NOT duplicate a direct command already visible beside the selected Profile name, and expanded Skills and MCP resources share one flat list hierarchy rather than introducing resource-specific nested cards.
+- Comparable actions in one command group use the same control height. Profile and Workspace Agent selectors use the same shared trigger width, icon slot, typography, and responsive variant rather than page-specific geometry.
 - Switch tracks and thumbs have non-shrinking primitive-owned geometry. On and Off states preserve equal optical inset between the thumb and the track edge at every supported viewport; a page grid MUST allocate the complete intrinsic switch width and MUST NOT rely on flex shrink to make the control fit.
 - A related command group MAY move below its heading at narrower supported widths, but its individual controls MUST remain together rather than orphan-wrapping one control onto another line.
 - Profile rows keep one stable hierarchy at default and minimum sizes: name, one-line description, resource counts, and optional deployment state. Responsive rules MAY truncate long values but MUST NOT remove these semantic layers.
 - Every Profile row shares fixed icon and content columns. Selection, dirty/current badges, hover, and long-name truncation MUST NOT move the icon, name, description, counts, or deployment text origin.
 - Profile list icons use one consistent compact, non-interactive slot and icon family. Decorative per-row icon colors MUST NOT imply unsupported categories or state.
-- Profile icons MAY use the shared built-in task-oriented icon set. Changing a Profile icon from the selected Profile detail auto-saves identity metadata, preserves any unsaved environment draft, and MUST NOT enable or bypass whole-Profile Save.
+- Profile icons MAY use the shared built-in task-oriented icon set. Changing a Profile icon from the selected Profile detail joins the same complete-Profile auto-save queue and MUST NOT write an Agent.
 - Icon pickers MUST use one shared component, expose the selected state without color alone, remain topmost inside the viewport, and close on selection, Escape, or safe outside click.
 - Lists and expanded editors own intentional internal scrolling. In Library/Skills, page chrome, metrics, tabs, filters, and table header stay fixed; only the Skill table body scrolls, with no document or editor-panel scrolling.
 - Visual verification pairs the same viewport and data immediately before and after an interaction. Numeric containment and computed geometry are necessary evidence, but optical shape, hierarchy, emphasis, and layout stability also require inspection of the rendered pixels. Zero, one, and many-resource captures MUST use the same build artifact as the corresponding Electron E2E.
@@ -1689,10 +1700,10 @@ Status: shared transient success, persistent error, background progress, GitHub 
   owning row.
 - Collapsed Profile Composer rows stay content-sized and compact; they MUST NOT expand merely to fill unused editor height. The resource rows themselves provide sufficient context, so the Composer MUST NOT add a redundant visible title block above them.
 - Target recovery history is a low-frequency safety workflow. Targets exposes it through a page-level Recovery command and a focused modal, rather than permanently consuming the primary Target list viewport.
-- Profile Save and Apply remain visible while the selected Profile's Composer owns internal scrolling.
-- The selected Profile header separates object identity from commit controls at widths where they cannot coexist without truncation. Save, Apply, Agent selection, and overflow remain one unbroken command group; readiness text receives its own line instead of shrinking into an unreadable fragment.
+- Profile Agent selection and Apply remain visible while the selected Profile's Composer owns internal scrolling.
+- The selected Profile header separates object identity from commit controls at widths where they cannot coexist without truncation. Agent selection, Apply, and overflow remain one unbroken command group; readiness text receives its own line instead of shrinking into an unreadable fragment.
 - At the minimum supported width, the selected Profile header preserves name, edit affordance,
-  readiness, Target selection, Save, Apply, and overflow while omitting the secondary description
+  readiness, Target selection, Apply, and overflow while omitting the secondary description
   from the painted surface. Loading and loaded headers keep the same compact height. The full
   description remains available through Profile editing; it MUST NOT displace readiness or commit
   controls in the minimum-width workbench.
@@ -1712,6 +1723,9 @@ Status: shared transient success, persistent error, background progress, GitHub 
   introducing a second persistent navigation pane. Detail headers and editors may draw semantic
   horizontal separators but MUST NOT redraw or cover the outer edge, add nested corner radii, or
   introduce a gap between the header and body.
+- A Profile or Workspace switcher presents the selected object's icon immediately before its name
+  inside one clickable trigger. Identity artwork is not a separate selection target; Profile icon
+  editing belongs to Profile details rather than competing with object switching.
 - Composite icon-and-input controls draw one border on the parent control. Their transparent borderless input remains inside the parent's content box and MUST NOT cover the parent edge at any supported width.
 - Editable single-line text fields and selects use the shared default control height, control radius, surface fill, strong border, and accent focus ring. Read-only and disabled fields remain selectable where appropriate but are visually distinct from editable fields. Search fields in workspaces and selection dialogs use the same composite-field geometry; Quick Open is the intentional command-palette exception.
 - Apply Preview keeps its header and footer stable. One modal body owns vertical scrolling; semantic resource groups never create another vertical scroll region, and long diff content owns only its code overflow.
@@ -1733,7 +1747,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Spinner motion is owned by the shared async primitive. Page styles MUST NOT define independent spinner keyframes, durations, or selectors; only the initiating operation appears busy. Under reduced motion, rotation becomes a gentle non-spatial pulse while state acknowledgement remains visible.
 - Peer actions with equal consequence use the same neutral treatment. Accent fill is reserved for the current primary commit or flow-advance action; Target `Capture` and `Profiles` are neutral peers.
 - Legacy and shared command implementations MUST resolve to the same semantic control states: secondary actions use the neutral control surface, while disabled primary, secondary, and destructive actions use the shared disabled surface, border, and text treatment. Component implementation history MUST NOT be visible through a different tint.
-- Each visible work surface exposes at most one accent-filled executable command. Profile emphasis moves from `Save` while dirty to `Apply` after saving, and promotes `New Profile` only when there is no current Profile work to commit. Opening a page-level tool demotes and disables competing page-header commands until that tool closes.
+- Each visible work surface exposes at most one accent-filled executable command. Profile edits auto-save with local working/error feedback, while `Apply` remains the explicit external commit action; `New Profile` is promoted only when there is no current Profile work to apply. Opening a page-level tool demotes and disables competing page-header commands until that tool closes.
 - Optional account and service setup starts as a neutral command. After the user enters that setup flow, its next explicit continuation MAY become the accent-filled primary action; unrelated sync or workspace actions keep their own emphasis only when that setup flow is not active.
 - Drawer and modal surfaces use the shared overlay edge, shadow, header divider, and header-control geometry. Feature-specific legacy borders, shadows, close buttons, or control heights MUST NOT leak into a shared overlay.
 - Settings switches sit beside the setting label they control, with supporting copy on the following line; they MUST NOT float as visually detached controls at the far edge of a wide row.
@@ -1764,7 +1778,7 @@ Status: supported viewport containment, topmost overlays, policy-based modal dis
 - A saved GitHub token has separate credential and verification state. Local decryption failure or an explicit GitHub `401` invalid-credential response clears it. Offline state, timeout, rate limiting, malformed non-auth responses, and GitHub service failure retain the token and report `Signed in, verification unavailable`. Sign out removes only the token and pending Device Flow state; it MUST NOT alter Library content, source metadata, repository cache, or system Git credentials.
 - On Linux, `safeStorage` is acceptable only with a real Secret Service or KWallet backend. The `basic_text` and pre-ready `unknown` backends are treated as unavailable, and AgentEnv MUST refuse to persist a GitHub token.
 - Secrets MUST NOT appear in renderer logs, main-process logs, Preview diff, screenshots, or global feedback.
-- Profile Save MUST reject literal credentials detected in Instructions and direct the user to environment references. Legacy native content is excluded during v2 migration, and every Preview is redacted before crossing the preload boundary.
+- Profile auto-save MUST reject literal credentials detected in Instructions and direct the user to environment references. Legacy native content is excluded during v2 migration, and every Preview is redacted before crossing the preload boundary.
 - Preview redaction MUST replace sensitive before/after values and regenerate the rendered diff from those redacted values while the main process retains the original internal plan only for the guarded Apply operation.
 - Managed Backup roots and individual Backup directories MUST be enforced as owner-only (`0700`) storage.
 - File writes use validated IDs and paths and MUST prevent path traversal.
@@ -1797,7 +1811,7 @@ A new Target adapter MUST define:
 
 Registration MUST occur in the Target registry. Renderer components MUST NOT require Target-specific branches for ordinary lifecycle behavior.
 
-Target Skill drivers report facts only. They MUST NOT import Library content, mutate Profile state, deploy files, remove legacy paths, or create backups. The core owns Save, Preview, Backup, atomic Apply, post-write verification, and Rollback through one Agent-neutral operation model. Agent-specific behavior belongs behind the adapter; Agent-specific buttons and Target ID branches do not belong in the renderer.
+Target Skill drivers report facts only. They MUST NOT import Library content, mutate Profile state, deploy files, remove legacy paths, or create backups. The core owns Profile persistence, Preview, Backup, atomic Apply, post-write verification, and Rollback through one Agent-neutral operation model. Agent-specific behavior belongs behind the adapter; Agent-specific buttons and Target ID branches do not belong in the renderer.
 
 Runtime snapshots are the single source for Skill discovery, runtime identity, availability, location role, and runtime issues. Library inventory MAY enrich those observations with Library relationships, device-local management boundaries, collection member decisions, content hashes, and manager-related evidence, but MUST NOT independently reinterpret Agent runtime behavior. Drivers only report broken links and unreadable manifests and never mutate them. Core Cleanup MAY classify an exact broken symbolic link as `Ready to clean up` only after path-capability and link-boundary verification; execution still requires the reviewed bulk confirmation and removes only the backed-up link itself. Unreadable real directories or manifests, observe-only links, and ambiguous paths remain review-only and MUST NOT enter automatic cleanup, replacement, or deletion plans.
 
@@ -1886,12 +1900,12 @@ provider session ID, the captured working directory, and the resolved Pi environ
 - Malformed native Skill or MCP state MUST surface an inspection error and block unsafe mutation. It MUST NOT be rendered or planned as a confirmed empty state.
 - AgentEnv permits only one application instance and one data-root mutation at a time. A lock outside the replaceable data root protects startup migration, writes, backup cleanup, and restore; dead owner locks MAY be recovered explicitly.
 - Canonical JSON/text writes use same-directory temporary files, preserve an existing file's mode, flush content, and atomically rename. Directory replacement prepares and recursively flushes a complete sibling staging path, records hashes and phase in a recovery journal, preserves the previous path until the swap succeeds, and repairs interrupted root-level and child-level swaps at startup. Recovery verifies current, previous, and staging artifacts before deleting any of them. Both an existing target hash and a reviewed missing target are bound preconditions: if another process changes or creates that path before commit, AgentEnv preserves it and fails stale. An unclaimed `.agentenv-previous` path is recovery evidence and MUST NOT be deleted. When the evidence cannot identify one safe state, recovery preserves all evidence and fails closed instead of guessing.
-- Saving an existing Profile requires the content hash returned by the read that produced the editor state. Whole-Profile Save, identity edits, Agent quick setup, Capture, Library reference rewrites, and drift adoption all use that same optimistic lock. A stale or changing Profile directory is rejected before replacement; creating a Profile requires its reviewed destination to remain absent through commit.
+- Persisting an existing Profile requires the content hash returned by the read that produced the editor state. Whole-Profile auto-save, Agent quick setup, Capture, Library reference rewrites, and drift adoption all use that same optimistic lock. A stale or changing Profile directory is rejected before replacement; creating a Profile requires its reviewed destination to remain absent through commit.
 - Private data directories use owner-only permissions where the platform supports them; canonical text and credential files are written with owner-only permissions by default.
 - Profile deletion moves the Profile into AgentEnv's private trash area rather than permanently removing it immediately. Skill cleanup, update, and deletion retain restorable backup data.
 - Backup manifests and IDs are validated before restore, and restore paths are limited to adapter-declared Target locations and AgentEnv-owned canonical locations. A malformed or tampered backup fails closed before any destination is modified.
 - Apply, Stop Managing, shared-folder and collection migration, Library import/cleanup/update/delete, source merge, Capture import rollback, Workspace restore, and whole-data restore bind every mutation path to a verified Backup made for that operation. Initial path absence is recorded only when the initial `lstat` is missing; a nested copy failure or source change aborts Backup rather than masquerading as an absent source. A path changed after Backup is rejected before AgentEnv writes it; a parent snapshot may cover descendants only after that exact parent passed its check. Before automatic rollback, AgentEnv creates a second verified safety Backup of current selected paths; restore writes are hash-bound and their results are verified. If restored content changes again, safety recovery preserves it and enters recovery-required instead of overwriting it. Cleanup recovery attempts every independent path and retains successful restores while preserving failed paths in its safety Backup. A concurrent change on an untouched sibling is preserved.
-- A clean application window closes without waiting for renderer acknowledgement. Only an unsaved Profile draft enables the close guard; Cancel keeps the window and draft intact, while Save or Discard completes the pending close explicitly.
+- A clean application window closes without waiting for renderer acknowledgement. A pending Profile auto-save is awaited before close without prompting. Only a failed Profile save or a dirty real Workspace document enables the close guard; Cancel keeps the window and draft intact, while Retry or Restore saved version resolves a failed Profile save explicitly.
 
 ## 23.2 First-Run Workflow
 
@@ -2015,7 +2029,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Enabling or disabling a Library Skill MUST expose row-local working feedback, lock duplicate availability commands, and update both the visible row and persisted metadata before reporting success.
 - A globally disabled Skill is omitted from effective Profile deployment. The next Apply removes only AgentEnv-owned Target installs; global disable itself MUST NOT silently rewrite Target environments.
 - A globally disabled Skill that remains active in a writable Target path is reconciled like any other absent Profile Skill: Preview offers reviewed backup-and-removal or `Leave unmanaged`. Observe-only and already-unmanaged paths remain unchanged. Global disable itself still performs no Target mutation.
-- Disabling a referenced Library Skill in a Profile is a normal Profile edit: it preserves the reference, marks the whole Profile dirty, and MUST require the same Save, Preview, and Apply flow as adding or removing a Skill.
+- Disabling a referenced Library Skill in a Profile is a normal Profile edit: it preserves the reference, joins the same whole-Profile auto-save queue, and requires the same Preview and Apply flow as adding or removing a Skill.
 - Applying a disabled Profile Skill previews and removes only its managed Target copy; re-enabling previews and restores it. The switch MUST NOT write to a Target before Apply succeeds.
 - Profile-scoped update Check excludes disabled and untracked references while a Library update discloses cross-Profile and Copy versus Live link impact.
 - Missing executable and missing directory are distinguished.
@@ -2090,6 +2104,8 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
   available display, and malformed or stale state never blocks startup.
 - Leaving and returning to Conversations preserves the current query, filters, selection,
   loaded page depth, detail, and list scroll while inactive page effects are unmounted.
+- Every Conversation row exposes its indexed last-activity date and time. Its accessible label and
+  hover text identify the value as the last reply time rather than a file-import timestamp.
 - Persistent warning and error feedback reserves workspace space and keeps long selectable
   detail internally scrollable; it must not cover the active page. Transient success and
   informational feedback remains non-blocking and expires automatically.
@@ -2109,7 +2125,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - First and last row menus are topmost and in viewport.
 - Escape, outside click, keyboard focus, focus restoration, and Arrow/Home/End navigation for renderer action menus.
 - Working, success, warning, error, no-op, drift, destructive, and recovery states are inspected visually.
-- Profile Skill toggles respond from the in-memory draft without a data reload; Save immediately shows working feedback and enables Apply after persistence; Preview immediately shows working feedback and opens without duplicate inventory scans.
+- Profile Skill toggles respond from the in-memory draft without a data reload; auto-save immediately shows local working feedback and enables Apply after persistence; Preview immediately shows working feedback and opens without duplicate inventory scans.
 - System locale detection, explicit `en`/`zh_CN`/`zh_TW` switching, persisted reload, and unsupported-locale fallback.
 - Default and minimum viewport containment in all supported interface languages, including long Traditional Chinese labels.
 - Profile switching at the minimum viewport preserves editor geometry through loading and never exposes a false empty state.
@@ -2122,7 +2138,7 @@ This matrix is the release-facing index. A capability may be `Implemented` only 
 
 | Capability | Status | Persisted effect and recovery evidence | Required automated layer |
 | --- | --- | --- | --- |
-| Whole-Profile Save and dirty navigation | `Implemented` | Atomic Profile replacement; draft never writes an Agent | Domain, renderer, Electron E2E |
+| Whole-Profile auto-save, recovery, and safe navigation | `Implemented` | Atomic Profile replacement plus verified prior version; Profile writes never touch an Agent | Domain, renderer, Electron E2E |
 | Preview, Apply, no-op, stale, drift, rollback | `Implemented` | Bound plan, Backup, verification, compensating restore | Domain, cross-adapter integration, Electron E2E |
 | Apply issue policy | `Implemented` | Stable code maps to one disposition and recovery; contract table is test-verified | Contract-policy and domain tests |
 | Skill import, duplicate review, update, disable, delete | `Implemented` | Canonical Library transaction and History/Backup where destructive | Domain, renderer, Electron E2E |
@@ -2172,7 +2188,7 @@ The current machine-readable totals, source commit, deterministic tracked-and-un
 - Skills, Profiles, Agents, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - The macOS inset hidden title bar, native-control safe area, full-width divider, quiet window chrome without page commands, draggable unoccupied region, and no-drag sidebar toggle passed main-process configuration and real Electron geometry assertions.
 - Shared page headers, vertically centered navigation rows, uninterrupted work-surface edges, contained composite search fields, `32px` resource identities, compact/default row heights, Profile commit controls, MCP rows, Cleanup state/action lanes, `220px` context menus, and Apply resource rows passed cross-workspace geometry and overflow assertions.
-- Dirty Profile navigation passed persisted Save, Discard, and Cancel outcomes; Stop Managing passed persisted file-retention and ownership-detachment checks.
+- Profile navigation passed queued auto-save, save-failure Retry, and Restore saved version outcomes; Stop Managing passed persisted file-retention and ownership-detachment checks.
 - System-picker data backup and restore, pre-takeover restoration, read-only and missing Targets, missing Skill sources, offline and rate-limited GitHub checks, and partial bulk updates passed Electron E2E coverage.
 - First-row and floating layers, modal Escape, outside click, focus trapping, focus restoration, and renderer-menu Arrow/Home/End navigation passed Electron E2E coverage.
 - Target-row capture preserves the Targets workspace until confirmation; setup, Back, local failure recovery, grouped capture review, and a 30-resource minimum-viewport stress case keep the action footer visible with one scrolling body.
@@ -2180,7 +2196,7 @@ The current machine-readable totals, source commit, deterministic tracked-and-un
 - Local imports remain usable after their original path is removed; per-Skill update-check defaults, opt-out persistence, and GitHub re-enable flows passed Store and Electron E2E coverage.
 - In-place Skill Refresh, sequential GitHub directory import with per-item progress and partial failure, source-default Skill icons, custom Skill icon persistence, and independently auto-saved Profile identity metadata passed Store, renderer, and Electron E2E coverage.
 - Skill Import source modes, compact row command menus, focused update settings, compact MCP rows, overflow-only MCP deletion, resource-first Apply Preview, and neutral Capture outcomes passed renderer, Electron E2E, and visual capture coverage.
-- Library Skill disable, picker exclusion, update-check isolation, re-enable, and Apply-time Target removal and restoration passed Store, renderer, and Electron E2E coverage; Profile Skill switches use the same Save and Apply contract as Add and Remove.
+- Library Skill disable, picker exclusion, update-check isolation, re-enable, and Apply-time Target removal and restoration passed Store, renderer, and Electron E2E coverage; Profile Skill switches use the same auto-save and Apply contract as Add and Remove.
 - Skill table headers, compact grouped headers, retained version metadata, mixed-action rows, aligned metadata, empty install states, update labels, action-to-detail clearance, compact non-truncating Cleanup badges, equal-width Cleanup actions, and status-tooltip clearance passed coordinate, overlap, and overflow assertions at both supported viewports.
 - Target-local import now creates an independent Library copy without changing the source path; shared managed paths deduplicate across Target scans, and auto-ready cleanup groups pass single, bulk, conflict-exclusion, persistence, backup, and responsive-layout coverage.
 - Codex Capture now reuses identical Library Skills and previews a stable alternate ID for different same-name content instead of failing during Save. Same-name writable OpenCode and Claude Code destinations become explicit Preview review items and pass Backup, atomic replacement, ownership, and recovery assertions; Skills CLI and plugin metadata remain read-only evidence.
@@ -2197,6 +2213,10 @@ The current machine-readable totals, source commit, deterministic tracked-and-un
 - The packaged arm64 macOS application completed an isolated OpenCode Profile takeover at `1180 x 728` without document overflow or writes to the real Agent environment.
 - The macOS release workflow builds ad-hoc direct DMG/ZIP assets and a separately named fixed-identity Homebrew DMG on native runners. It verifies both App resource seals and expected Gatekeeper rejection, pins the Homebrew certificate and designated requirement across architectures, assembles an isolated draft, verifies downloaded hashes, and only then updates the checksum-bound Cask to the `-homebrew.dmg` assets. Quarantine removal belongs to the Cask postflight after Homebrew verification. The in-app Homebrew updater derives the directory containing the running App and passes it as an explicit `--appdir`, preserving both `/Applications` and per-user `~/Applications` installations without relying on shell configuration. Browser-downloaded direct packages keep quarantine for first install: users copy the App to Applications, eject the DMG, and complete both Open Anyway and the final Open confirmation; managed-device policy may still reject that exception.
 - A directly installed macOS App in a writable Applications folder MAY update in app from the exact architecture-specific official Release ZIP. The main process streams the asset into a private cache, enforces the Release size and SHA-256, verifies the extracted bundle identifier, exact version, and complete `codesign` seal, then stages the App beside the current bundle. A detached helper preserves the current App, commits the staged bundle, and removes its quarantine only after those checks; the previous App remains recoverable until the replacement process writes a cache-contained startup confirmation. Failed launch or confirmation MUST restore and relaunch the previous App. Direct updates require explicit `Restart and update`, never install on quit, never request administrator credentials, and never include the data directory in the replacement transaction. A non-writable or invalid App location remains check-only with an official Release action.
+- App Updates always displays the installed version and the latest known official version. Check,
+  download, and install commands acknowledge the click immediately, retain animated local working
+  feedback for the complete operation, and name the current stage without fabricating a percentage
+  when the underlying installer cannot report byte progress.
 
 ## 26. Current Priority Gaps
 

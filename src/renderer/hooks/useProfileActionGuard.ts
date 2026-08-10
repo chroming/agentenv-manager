@@ -14,6 +14,7 @@ interface WindowGuardApi {
 }
 
 export const useProfileActionGuard = ({
+  autoSaveDirty = false,
   dirty,
   onBusyChange,
   onDiscard,
@@ -21,6 +22,7 @@ export const useProfileActionGuard = ({
   onSave,
   windowGuardApi = window.agentEnv
 }: {
+  autoSaveDirty?: boolean;
   dirty: boolean;
   onBusyChange(busy: boolean): void;
   onDiscard(): Promise<void>;
@@ -31,17 +33,34 @@ export const useProfileActionGuard = ({
   const actionRef = useRef<GuardedAction | null>(null);
   const pendingWindowCloseRef = useRef(false);
   const dirtyRef = useRef(dirty);
+  const autoSaveDirtyRef = useRef(autoSaveDirty);
   const [pendingAction, setPendingAction] = useState<PendingProfileAction>();
   dirtyRef.current = dirty;
+  autoSaveDirtyRef.current = autoSaveDirty;
 
   const guardAction = useCallback((label: string, action: GuardedAction) => {
     if (!dirtyRef.current) {
-      void action();
+      if (!autoSaveDirtyRef.current) {
+        void action();
+        return;
+      }
+      void (async () => {
+        onBusyChange(true);
+        onError(undefined);
+        try {
+          await onSave();
+          await action();
+        } catch (unknownError) {
+          onError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+        } finally {
+          onBusyChange(false);
+        }
+      })();
       return;
     }
     actionRef.current = action;
     setPendingAction({ label });
-  }, []);
+  }, [onBusyChange, onError, onSave]);
 
   const cancelPendingAction = useCallback(() => {
     if (pendingWindowCloseRef.current) {
@@ -81,21 +100,37 @@ export const useProfileActionGuard = ({
   }, [onBusyChange, onDiscard, onError, onSave]);
 
   useEffect(() => {
-    windowGuardApi.setWindowCloseGuard(dirty);
-  }, [dirty, windowGuardApi]);
+    windowGuardApi.setWindowCloseGuard(dirty || autoSaveDirty);
+  }, [autoSaveDirty, dirty, windowGuardApi]);
 
   useEffect(
     () =>
       windowGuardApi.onWindowCloseRequested(() => {
-        if (!dirtyRef.current) {
+        if (!dirtyRef.current && !autoSaveDirtyRef.current) {
           windowGuardApi.confirmWindowClose();
+          return;
+        }
+        if (!dirtyRef.current && autoSaveDirtyRef.current) {
+          void (async () => {
+            onBusyChange(true);
+            onError(undefined);
+            try {
+              await onSave();
+              windowGuardApi.confirmWindowClose();
+            } catch (unknownError) {
+              windowGuardApi.cancelWindowClose();
+              onError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+            } finally {
+              onBusyChange(false);
+            }
+          })();
           return;
         }
         pendingWindowCloseRef.current = true;
         actionRef.current = () => windowGuardApi.confirmWindowClose();
         setPendingAction({ label: "close AgentEnv Manager" });
       }),
-    [windowGuardApi]
+    [onBusyChange, onError, onSave, windowGuardApi]
   );
 
   return {

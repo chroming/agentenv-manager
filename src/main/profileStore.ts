@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { lstat, mkdir, readdir, readFile, rename } from "node:fs/promises";
 import { join } from "node:path";
+import { z } from "zod";
 import {
   ProfileManifestSchema,
   ProfileResourceModeSchema,
@@ -12,6 +14,7 @@ import type {
   CreateProfileInput,
   ForkProfileSkillsInput,
   ProfileDetail,
+  ProfileRecoverySummary,
   ProfileSummary,
   SaveProfileInput,
   UpdateProfileSkillsInput,
@@ -27,7 +30,7 @@ import {
 } from "./fileUtils";
 import { createPaths, type PathOverrides } from "./paths";
 import { createProfileContentHash } from "./profileFingerprint";
-import { hashPathEntry } from "./filesystemIntegrity";
+import { copyPathVerified, hashPathEntry } from "./filesystemIntegrity";
 import { findSecretWarnings } from "./secretWarnings";
 import { createTargetRegistry, type TargetRegistry } from "./targets/registry";
 
@@ -35,6 +38,8 @@ export interface ProfileStore {
   listProfiles(): Promise<ProfileSummary[]>;
   readProfile(id: string): Promise<ProfileDetail>;
   saveProfile(input: SaveProfileInput): Promise<ProfileDetail>;
+  listProfileRecovery(profileId: string): Promise<ProfileRecoverySummary[]>;
+  restoreProfileRecovery(profileId: string, recoveryId: string): Promise<ProfileDetail>;
   updateProfileSkills(input: UpdateProfileSkillsInput): Promise<UpdateProfileSkillsResult>;
   forkProfileSkills(input: ForkProfileSkillsInput): Promise<UpdateProfileSkillsResult>;
   updateProfileMetadata(input: UpdateProfileMetadataInput): Promise<ProfileDetail>;
@@ -46,6 +51,21 @@ export interface ProfileStore {
 const PROFILE_MANIFEST_FILE = "profile.json";
 const PROFILE_INSTRUCTIONS_FILE = "INSTRUCTIONS.md";
 const PROFILE_RESOURCES_FILE = "resources.json";
+const PROFILE_RECOVERY_METADATA_FILE = "recovery.json";
+const PROFILE_RECOVERY_SNAPSHOT_DIR = "profile";
+
+const ProfileRecoveryMetadataSchema = z.object({
+  formatVersion: z.literal(1),
+  id: SafeIdSchema,
+  profileId: SafeIdSchema,
+  profileName: z.string().min(1),
+  createdAt: z.string().datetime(),
+  contentHash: z.string().min(1),
+  storageHash: z.string().min(1),
+  instructionsLength: z.number().int().nonnegative(),
+  skillCount: z.number().int().nonnegative(),
+  mcpCount: z.number().int().nonnegative()
+}).strict();
 
 const readJson = async (path: string): Promise<unknown> =>
   JSON.parse(await readFile(path, "utf8"));
@@ -87,6 +107,44 @@ export const createProfileStore = (
   targetRegistry: TargetRegistry = createTargetRegistry()
 ): ProfileStore => {
   const paths = createPaths(overrides);
+
+  const recoveryEntryPath = (profileId: string, recoveryId: string) =>
+    join(paths.profileRecoveryDir, profileId, recoveryId);
+
+  const snapshotProfile = async (profile: ProfileDetail) => {
+    if (!profile.profileDir || !profile.contentHash) return;
+    const storageHash = await hashPathEntry(profile.profileDir);
+    if (!storageHash) {
+      throw new Error(`Profile ${profile.id} could not be verified before recovery snapshot`);
+    }
+    const id = `profile-recovery-${Date.now()}-${randomUUID()}`;
+    const entryPath = recoveryEntryPath(profile.id, id);
+    const metadata = ProfileRecoveryMetadataSchema.parse({
+      formatVersion: 1,
+      id,
+      profileId: profile.id,
+      profileName: profile.manifest.name,
+      createdAt: new Date().toISOString(),
+      contentHash: profile.contentHash,
+      storageHash,
+      instructionsLength: profile.instructions.length,
+      skillCount: profile.resources.skills.length,
+      mcpCount: Object.values(profile.resources.mcpByTarget)
+        .reduce((count, policy) => count + policy.selections.length, 0)
+    });
+    await replacePathAtomically(entryPath, async (stagingDir) => {
+      await mkdir(stagingDir, { recursive: true, mode: 0o700 });
+      await copyPathVerified(
+        profile.profileDir!,
+        join(stagingDir, PROFILE_RECOVERY_SNAPSHOT_DIR),
+        { recursive: true }
+      );
+      await writeAtomic(
+        join(stagingDir, PROFILE_RECOVERY_METADATA_FILE),
+        `${JSON.stringify(metadata, null, 2)}\n`
+      );
+    });
+  };
 
   const readProfile = async (id: string): Promise<ProfileDetail> => {
     const safeId = parseProfileId(id);
@@ -213,8 +271,9 @@ export const createProfileStore = (
     if (existing && !input.expectedContentHash) {
       throw new Error(`Profile ${parsedManifest.id} must be refreshed before it can be saved.`);
     }
+    let current: ProfileDetail | undefined;
     if (existing) {
-      const current = await readProfile(parsedManifest.id);
+      current = await readProfile(parsedManifest.id);
       if (current.contentHash !== input.expectedContentHash) {
         throw new Error(
           `Profile ${parsedManifest.id} changed outside this view. Refresh it before saving.`
@@ -251,6 +310,17 @@ export const createProfileStore = (
       }
     }
 
+    if (
+      current &&
+      JSON.stringify(current.manifest) === JSON.stringify(manifest) &&
+      current.instructions === input.instructions &&
+      JSON.stringify(current.resources) === JSON.stringify(resources)
+    ) {
+      return current;
+    }
+
+    if (current) await snapshotProfile(current);
+
     await replacePathAtomically(profileDir, async (stagingDir) => {
       await mkdir(stagingDir, { recursive: true, mode: 0o700 });
       await Promise.all([
@@ -268,6 +338,94 @@ export const createProfileStore = (
       ProfileResourcesSchema.parse(await readJson(join(stagingDir, PROFILE_RESOURCES_FILE)));
     }, { expectedTargetHash: existingPathHash });
     return readProfile(manifest.id);
+  };
+
+  const listProfileRecovery = async (
+    unsafeProfileId: string
+  ): Promise<ProfileRecoverySummary[]> => {
+    const profileId = parseProfileId(unsafeProfileId);
+    const root = join(paths.profileRecoveryDir, profileId);
+    let entries: string[];
+    try {
+      entries = (await readdir(root, { withFileTypes: true }))
+        .filter((entry) => entry.isDirectory() && !entry.isSymbolicLink())
+        .map((entry) => entry.name);
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+        return [];
+      }
+      throw error;
+    }
+    const summaries = await Promise.all(entries.map(async (entry) => {
+      try {
+        const recoveryId = parseProfileId(entry);
+        const metadata = ProfileRecoveryMetadataSchema.parse(
+          await readJson(join(recoveryEntryPath(profileId, recoveryId), PROFILE_RECOVERY_METADATA_FILE))
+        );
+        if (metadata.profileId !== profileId || metadata.id !== recoveryId) return undefined;
+        const {
+          formatVersion: _formatVersion,
+          storageHash: _storageHash,
+          ...summary
+        } = metadata;
+        return summary;
+      } catch {
+        return undefined;
+      }
+    }));
+    return summaries
+      .filter((summary): summary is ProfileRecoverySummary => summary !== undefined)
+      .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+  };
+
+  const restoreProfileRecovery = async (
+    unsafeProfileId: string,
+    unsafeRecoveryId: string
+  ): Promise<ProfileDetail> => {
+    const profileId = parseProfileId(unsafeProfileId);
+    const recoveryId = parseProfileId(unsafeRecoveryId);
+    const entryPath = recoveryEntryPath(profileId, recoveryId);
+    const metadata = ProfileRecoveryMetadataSchema.parse(
+      await readJson(join(entryPath, PROFILE_RECOVERY_METADATA_FILE))
+    );
+    if (metadata.profileId !== profileId || metadata.id !== recoveryId) {
+      throw new Error("Profile recovery entry does not match the requested Profile");
+    }
+    const snapshotDir = join(entryPath, PROFILE_RECOVERY_SNAPSHOT_DIR);
+    const [manifest, instructions, resources, current] = await Promise.all([
+      readJson(join(snapshotDir, PROFILE_MANIFEST_FILE)).then((value) =>
+        ProfileManifestSchema.parse(value)
+      ),
+      readFile(join(snapshotDir, PROFILE_INSTRUCTIONS_FILE), "utf8"),
+      readJson(join(snapshotDir, PROFILE_RESOURCES_FILE)).then((value) =>
+        ProfileResourcesSchema.parse(value)
+      ),
+      readProfile(profileId)
+    ]);
+    if (manifest.id !== profileId) {
+      throw new Error("Profile recovery snapshot belongs to another Profile");
+    }
+    const snapshotStorageHash = await hashPathEntry(snapshotDir);
+    if (!snapshotStorageHash) {
+      throw new Error("Profile recovery snapshot is unavailable");
+    }
+    if (snapshotStorageHash !== metadata.storageHash) {
+      throw new Error("Profile recovery snapshot failed its storage integrity check");
+    }
+    const snapshot = { manifest, instructions, resources };
+    const snapshotContentHash = createProfileContentHash(
+      snapshot,
+      manifest.preferredTargetId
+    );
+    if (snapshotContentHash !== metadata.contentHash) {
+      throw new Error("Profile recovery snapshot failed its integrity check");
+    }
+    return saveProfile({
+      manifest,
+      instructions,
+      resources,
+      expectedContentHash: current.contentHash
+    });
   };
 
   const createProfile = async (input: CreateProfileInput): Promise<ProfileDetail> => {
@@ -434,6 +592,8 @@ export const createProfileStore = (
     listProfiles,
     readProfile,
     saveProfile,
+    listProfileRecovery,
+    restoreProfileRecovery,
     updateProfileSkills,
     forkProfileSkills,
     updateProfileMetadata,

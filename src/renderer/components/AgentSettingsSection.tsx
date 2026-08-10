@@ -267,8 +267,9 @@ export const AgentSettingsSection = ({
                   </span>
                   <span className="settings-row-actions">
                     <Button
+                      busy={pendingAction === "choose"}
+                      busyLabel={t("Choosing...")}
                       disabled={busy || Boolean(pendingPathAction)}
-                      icon={pendingAction === "choose" ? <LoaderCircle className="is-spinning" size={14} /> : undefined}
                       onClick={() => void commitPathChange(agent.id, "choose")}
                     >
                       {pendingAction === "choose"
@@ -330,13 +331,14 @@ export const AgentSettingsSection = ({
                   <span className="settings-row-actions">
                     <Button
                       aria-label={t("Save {{name}} command", { name: agent.name })}
+                      busy={pending}
+                      busyLabel={t("Saving...")}
                       disabled={
                         busy ||
                         Boolean(pendingCommandAgentId) ||
                         !draft.trim() ||
                         draft.trim() === savedCommand
                       }
-                      icon={pending ? <LoaderCircle className="is-spinning" size={14} /> : undefined}
                       onClick={() => void commitCommandOverride(agent.id, draft.trim())}
                     >
                       {pending ? t("Saving...") : t("Save")}

@@ -70,7 +70,10 @@ import type {
   TargetPaths,
   TargetState
 } from "../shared/types";
-import { createProfileContentHash } from "./profileFingerprint";
+import {
+  createProfileContentHash,
+  createProfileSnapshotHash
+} from "./profileFingerprint";
 import {
   collectLibraryResourceVersions,
   libraryResourceVersionsEqual
@@ -156,6 +159,11 @@ export interface ActivationService {
     profileId: string,
     previewId: string
   ): Promise<ApplyResult>;
+  restoreAppliedProfile(
+    profileId: string,
+    targetId: string,
+    expectedContentHash: string
+  ): Promise<ProfileDetail>;
   completeSharedSkillMigration(input: {
     skillKey: string;
     libraryId: string;
@@ -387,7 +395,8 @@ export const createActivationService = ({
         .map(async (entry): Promise<TargetManagementState | undefined> => {
           const targetId = entry.name.replace(/\.json$/, "");
           try {
-            const { state } = await readTargetStateFile(targetId);
+            const stateFile = await readTargetStateFile(targetId);
+            const state = stateFile.state;
             if (
               !state.activeProfileId &&
               (state.managedResources ?? []).length === 0 &&
@@ -425,6 +434,7 @@ export const createActivationService = ({
             let lifecycleReason: string | undefined;
             let activeProfileName: string | undefined;
             let appliedLibraryVersions = state.appliedLibraryVersions;
+            let appliedProfileSnapshot = state.appliedProfileSnapshot;
             if (state.recoveryRequired) {
               lifecycleStatus = "recovery-required";
               lifecycleReason = state.recoveryRequired.error;
@@ -459,6 +469,28 @@ export const createActivationService = ({
                   Boolean(expectedHash) &&
                   expectedHash === state.appliedProfileHash &&
                   libraryResourceVersionsEqual(currentVersions, appliedLibraryVersions);
+                if (!appliedProfileSnapshot && isCurrent && state.appliedProfileHash) {
+                  const capturedAt = state.lastAppliedAt ?? new Date().toISOString();
+                  const snapshot = {
+                    profileId: activeProfile.id,
+                    profileName: activeProfile.manifest.name,
+                    capturedAt,
+                    contentHash: state.appliedProfileHash,
+                    snapshotHash: createProfileSnapshotHash(activeProfile),
+                    manifest: activeProfile.manifest,
+                    instructions: activeProfile.instructions,
+                    resources: activeProfile.resources
+                  };
+                  try {
+                    await writeTargetState(targetId, {
+                      ...state,
+                      appliedProfileSnapshot: snapshot
+                    }, { expectedPathHash: stateFile.pathHash });
+                    appliedProfileSnapshot = snapshot;
+                  } catch {
+                    // A concurrent read or Apply may have refreshed the receipt already.
+                  }
+                }
                 const localOverrideCount = (state.skillReceipts ?? []).filter(
                   (receipt) => receipt.localOverride
                 ).length;
@@ -484,6 +516,18 @@ export const createActivationService = ({
               activeProfileId: state.activeProfileId,
               activeProfileName,
               appliedProfileHash: state.appliedProfileHash,
+              appliedProfileSnapshot: appliedProfileSnapshot
+                ? {
+                    profileId: appliedProfileSnapshot.profileId,
+                    profileName: appliedProfileSnapshot.profileName,
+                    capturedAt: appliedProfileSnapshot.capturedAt,
+                    contentHash: appliedProfileSnapshot.contentHash,
+                    instructionsLength: appliedProfileSnapshot.instructions.length,
+                    skillCount: appliedProfileSnapshot.resources.skills.length,
+                    mcpCount: Object.values(appliedProfileSnapshot.resources.mcpByTarget)
+                      .reduce((count, policy) => count + policy.selections.length, 0)
+                  }
+                : undefined,
               appliedLibraryVersions,
               status: state.activeProfileId ? "managed" : "unmanaged",
               lifecycleStatus,
@@ -1511,12 +1555,23 @@ export const createActivationService = ({
           keptOutsideSkills: _legacyKeptOutsideSkills,
           ...currentTargetState
         } = preview.targetState;
+        const appliedAt = new Date().toISOString();
         await writeTargetState(preview.targetId, {
           ...currentTargetState,
           activeProfileId: profile.id,
           appliedProfileHash: currentProfileHash,
+          appliedProfileSnapshot: {
+            profileId: sourceProfile.id,
+            profileName: sourceProfile.manifest.name,
+            capturedAt: appliedAt,
+            contentHash: currentProfileHash,
+            snapshotHash: createProfileSnapshotHash(sourceProfile),
+            manifest: sourceProfile.manifest,
+            instructions: sourceProfile.instructions,
+            resources: sourceProfile.resources
+          },
           appliedLibraryVersions: currentLibraryVersions,
-          lastAppliedAt: new Date().toISOString(),
+          lastAppliedAt: appliedAt,
           managedResources,
           skillReceipts: preview.skillReceipts,
           sharedSkillPreparations: preview.skillDeployment.plan.sharedPreparations,
@@ -1581,6 +1636,68 @@ export const createActivationService = ({
     } finally {
       activeTargetOperations.delete(preview.targetId);
     }
+  };
+
+  const restoreAppliedProfile = async (
+    profileId: string,
+    targetId: string,
+    expectedContentHash: string
+  ): Promise<ProfileDetail> => {
+    targetRegistry.get(targetId);
+    const [{ state }, current] = await Promise.all([
+      readTargetStateFile(targetId),
+      profileStore.readProfile(profileId)
+    ]);
+    if (!expectedContentHash || current.contentHash !== expectedContentHash) {
+      throw new Error("Profile changed before its applied version could be restored");
+    }
+    const snapshot = state.appliedProfileSnapshot;
+    if (
+      state.activeProfileId !== profileId ||
+      !snapshot ||
+      snapshot.profileId !== profileId
+    ) {
+      throw new Error(`No applied version of this Profile is available for ${targetId}`);
+    }
+    if (snapshot.manifest.id !== profileId) {
+      throw new Error(`The saved applied version for ${targetId} belongs to another Profile`);
+    }
+    if (createProfileSnapshotHash(snapshot) !== snapshot.snapshotHash) {
+      throw new Error(`The saved applied version for ${targetId} failed its snapshot integrity check`);
+    }
+    if (createProfileContentHash(snapshot, targetId) !== snapshot.contentHash) {
+      throw new Error(`The saved applied version for ${targetId} failed its Profile integrity check`);
+    }
+    if (state.appliedProfileHash !== snapshot.contentHash) {
+      throw new Error(`The saved applied version for ${targetId} no longer matches Target state`);
+    }
+    const managementByTarget = {
+      ...(current.resources.managementByTarget ?? {})
+    };
+    const appliedManagement = snapshot.resources.managementByTarget?.[targetId];
+    if (appliedManagement) managementByTarget[targetId] = appliedManagement;
+    else delete managementByTarget[targetId];
+    const mcpByTarget = { ...current.resources.mcpByTarget };
+    const appliedMcp = snapshot.resources.mcpByTarget[targetId];
+    if (appliedMcp) mcpByTarget[targetId] = appliedMcp;
+    else delete mcpByTarget[targetId];
+    const resources = {
+      ...current.resources,
+      skills: snapshot.resources.skills,
+      managementByTarget:
+        Object.keys(managementByTarget).length > 0 ? managementByTarget : undefined,
+      mcpByTarget
+    };
+    const restored = {
+      manifest: current.manifest,
+      instructions: snapshot.instructions,
+      resources
+    };
+    if (createProfileSnapshotHash(current) === createProfileSnapshotHash(restored)) return current;
+    return profileStore.saveProfile({
+      ...restored,
+      expectedContentHash: current.contentHash
+    });
   };
 
   const claimTargetOperations = async (targetIds: string[]) => {
@@ -2315,6 +2432,7 @@ export const createActivationService = ({
     listTargetStates,
     previewProfile,
     applyProfile,
+    restoreAppliedProfile,
     completeSharedSkillMigration,
     completeSkillCollectionMigration,
     listSharedSkillMigrationBackups,

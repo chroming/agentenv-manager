@@ -156,6 +156,8 @@ const api: AgentEnvApi = {
   updateLibrarySkill: (input) => ipcRenderer.invoke("skills:update-library", input),
   readSettings: () => ipcRenderer.invoke("settings:read"),
   updateSettings: (input) => ipcRenderer.invoke("settings:update", input),
+  readUiState: () => ipcRenderer.invoke("ui-state:read"),
+  updateUiState: (input) => ipcRenderer.invoke("ui-state:update", input),
   readWorkspaceSyncStatus: () => ipcRenderer.invoke("workspace-sync:status"),
   connectWorkspaceSync: (input) => ipcRenderer.invoke("workspace-sync:connect", input),
   checkWorkspaceSync: () => ipcRenderer.invoke("workspace-sync:check"),
@@ -173,6 +175,16 @@ const api: AgentEnvApi = {
   listProfiles: () => ipcRenderer.invoke("profiles:list"),
   readProfile: (id) => ipcRenderer.invoke("profiles:read", id),
   saveProfile: (input) => ipcRenderer.invoke("profiles:save", input),
+  listProfileRecovery: (profileId) => ipcRenderer.invoke("profiles:recovery:list", profileId),
+  restoreProfileRecovery: (profileId, recoveryId) =>
+    ipcRenderer.invoke("profiles:recovery:restore", profileId, recoveryId),
+  restoreAppliedProfile: (profileId, targetId, expectedContentHash) =>
+    ipcRenderer.invoke(
+      "profiles:restore-applied",
+      profileId,
+      targetId,
+      expectedContentHash
+    ),
   updateProfileSkills: (input) => ipcRenderer.invoke("profiles:update-skills", input),
   forkProfileSkills: (input) => ipcRenderer.invoke("profiles:fork-skills", input),
   updateProfileMetadata: (input) => ipcRenderer.invoke("profiles:update-metadata", input),

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { AgentEnvSettings, AppUpdateStatus } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { SettingsPreferenceRow } from "./SettingsPreferenceRow";
-import { Button, Switch } from "./ui";
+import { Button, ProgressBar, Switch } from "./ui";
 
 interface AppUpdateSettingsProps {
   busy: boolean;
@@ -18,6 +18,8 @@ const workingPhases = new Set<AppUpdateStatus["phase"]>([
   "installing"
 ]);
 
+type PendingUpdateAction = "check" | "download" | "install";
+
 export const AppUpdateSettings = ({
   busy,
   settings,
@@ -26,6 +28,7 @@ export const AppUpdateSettings = ({
 }: AppUpdateSettingsProps) => {
   const { t } = useI18n();
   const [status, setStatus] = useState<AppUpdateStatus>();
+  const [pendingAction, setPendingAction] = useState<PendingUpdateAction>();
 
   useEffect(() => {
     let active = true;
@@ -41,11 +44,31 @@ export const AppUpdateSettings = ({
     };
   }, []);
 
-  const run = async (action: () => Promise<AppUpdateStatus>) => {
-    const next = await action();
-    setStatus(next);
+  const run = async (
+    actionName: PendingUpdateAction,
+    action: () => Promise<AppUpdateStatus>
+  ) => {
+    setPendingAction(actionName);
+    try {
+      const next = await action();
+      setStatus(next);
+    } finally {
+      setPendingAction(undefined);
+    }
   };
-  const working = status ? workingPhases.has(status.phase) : true;
+  const working = Boolean(pendingAction) || (status ? workingPhases.has(status.phase) : true);
+  const serviceWorkingPhase = status && workingPhases.has(status.phase)
+    ? status.phase
+    : undefined;
+  const effectivePhase = serviceWorkingPhase ?? (
+    pendingAction === "check"
+      ? "checking"
+      : pendingAction === "download"
+        ? "downloading"
+        : pendingAction === "install"
+          ? "installing"
+          : status?.phase
+  );
   const connectionIssue = status?.failureCode === "rate-limited" ||
     status?.failureCode === "authentication-required";
   const channelCopy = status?.installChannel === "homebrew"
@@ -57,10 +80,12 @@ export const AppUpdateSettings = ({
         : t("Automatic installation unavailable");
   const statusCopy = !status
     ? t("Reading update status…")
-    : status.phase === "checking"
+    : effectivePhase === "checking"
       ? t("Checking for updates…")
-      : status.phase === "downloading"
+      : effectivePhase === "downloading"
         ? t("Downloading verified update…")
+        : effectivePhase === "installing"
+          ? t("Installing verified update…")
         : status.phase === "ready"
           ? t("Version {{version}} is ready to install", {
               version: status.release?.version ?? ""
@@ -71,13 +96,17 @@ export const AppUpdateSettings = ({
               })
             : status.phase === "up-to-date"
               ? t("AgentEnv Manager is up to date")
-              : status.phase === "installing"
-                ? t("Installing verified update…")
-                : status.phase === "failed"
+              : status.phase === "failed"
                   ? status.failureCode === "download-failed" || status.failureCode === "install-failed"
                     ? t("Update failed")
                     : t("Update check failed")
                   : t("Updates have not been checked yet");
+  const latestVersion = status?.release?.version ?? (
+    status?.phase === "up-to-date" ? status.currentVersion : undefined
+  );
+  const latestVersionCopy = effectivePhase === "checking"
+    ? t("Checking…")
+    : latestVersion ?? t("Not checked");
 
   return (
     <section className="resource-section settings-section app-update-settings" aria-labelledby="app-updates-heading">
@@ -89,7 +118,14 @@ export const AppUpdateSettings = ({
           className="app-update-summary"
           label={statusCopy}
           description={<>
+            <span className="app-update-versions" aria-label={t("Application versions")}>
+              <span>{t("Current version")} <strong>{status?.currentVersion ?? "—"}</strong></span>
+              <span>{t("Latest version")} <strong>{latestVersionCopy}</strong></span>
+            </span>
             <span>{channelCopy}</span>
+            {working ? (
+              <ProgressBar className="app-update-progress" label={statusCopy} />
+            ) : null}
             {status?.phase === "available" && !status.automaticInstallSupported ? (
               <span className="app-update-note">
                 {t("This application folder cannot be updated automatically. Install with Homebrew or move the app to a writable Applications folder.")}
@@ -106,20 +142,25 @@ export const AppUpdateSettings = ({
           {status && ["available", "downloading"].includes(status.phase) &&
           status.automaticInstallSupported ? (
             <Button
-              busy={status.phase === "downloading"}
+              busy={pendingAction === "download" || (
+                !pendingAction && status.phase === "downloading"
+              )}
               disabled={busy || working}
               icon={<Download size={15} />}
-              onClick={() => void run(() => window.agentEnv.downloadAppUpdate())}
+              onClick={() => void run("download", () => window.agentEnv.downloadAppUpdate())}
             >
               {t("Download")}
             </Button>
           ) : null}
-          {status?.phase === "ready" ? (
+          {status && ["ready", "installing"].includes(status.phase) ? (
             <Button
               variant="primary"
+              busy={pendingAction === "install" || (
+                !pendingAction && status.phase === "installing"
+              )}
               disabled={busy}
               icon={<RotateCcw size={15} />}
-              onClick={() => void run(() => window.agentEnv.installAppUpdate())}
+              onClick={() => void run("install", () => window.agentEnv.installAppUpdate())}
             >
               {t("Restart and update")}
             </Button>
@@ -131,10 +172,12 @@ export const AppUpdateSettings = ({
           ) : null}
           {status?.phase !== "ready" ? (
             <Button
-              busy={status?.phase === "checking"}
+              busy={pendingAction === "check" || (
+                !pendingAction && status?.phase === "checking"
+              )}
               disabled={busy || working}
               icon={<RefreshCw size={15} />}
-              onClick={() => void run(() => window.agentEnv.checkAppUpdate())}
+              onClick={() => void run("check", () => window.agentEnv.checkAppUpdate())}
             >
               {status?.phase === "failed" ? t("Try again") : t("Check now")}
             </Button>

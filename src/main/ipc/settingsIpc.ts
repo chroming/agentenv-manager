@@ -8,6 +8,7 @@ import type { SettingsStore } from "../settingsStore";
 import type { TargetRegistry } from "../targets/registry";
 import type { TelemetryService } from "../telemetry/telemetryService";
 import type { WorkspaceSyncService } from "../workspaceSync/workspaceSyncService";
+import type { UiStateStore } from "../uiStateStore";
 import type { IpcRegistrationHandles } from "./registration";
 
 interface SettingsIpcServices {
@@ -19,6 +20,7 @@ interface SettingsIpcServices {
   targetRegistry: TargetRegistry;
   telemetryService: TelemetryService;
   workspaceSyncService: WorkspaceSyncService;
+  uiStateStore: UiStateStore;
 }
 
 export const registerSettingsIpc = (
@@ -34,6 +36,7 @@ export const registerSettingsIpc = (
     settingsStore,
     targetRegistry,
     telemetryService,
+    uiStateStore,
     workspaceSyncService
   } = services;
 
@@ -63,6 +66,14 @@ export const registerSettingsIpc = (
     }
     return settingsStore.updateSettings(nextInput);
   });
+  diagnosticHandle("ui-state:read", () => uiStateStore.read());
+  diagnosticHandle("ui-state:update", (_event, input: unknown) =>
+    uiStateStore.update(
+      input && typeof input === "object"
+        ? input as import("../../shared/uiState").UiStateUpdate
+        : {}
+    )
+  );
 
   diagnosticHandle("app-updates:status", () => appUpdateService.readStatus());
   diagnosticHandle("app-updates:check", () => appUpdateService.check({ manual: true }));

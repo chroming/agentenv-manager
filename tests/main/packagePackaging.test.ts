@@ -134,6 +134,23 @@ describe("package metadata", () => {
     expect(rendererHtml).toContain("prefers-reduced-motion: reduce");
   });
 
+  it("keeps async feedback visible without spatial motion when reduced motion is requested", async () => {
+    const accessibilityCss = await readFile(
+      join(process.cwd(), "src", "renderer", "ui", "accessibility.css"),
+      "utf8"
+    );
+    const primitivesCss = await readFile(
+      join(process.cwd(), "src", "renderer", "ui", "primitives.css"),
+      "utf8"
+    );
+
+    expect(accessibilityCss).toContain(".is-spinning");
+    expect(accessibilityCss).toContain("animation: reduced-motion-pulse");
+    expect(accessibilityCss).toContain("transform: none !important");
+    expect(primitivesCss).toContain(".ui-progress-bar > span");
+    expect(primitivesCss).toContain("animation: none");
+  });
+
   it("exposes Electron packaging entrypoints", async () => {
     const packageJson = JSON.parse(
       await readFile(join(process.cwd(), "package.json"), "utf8")

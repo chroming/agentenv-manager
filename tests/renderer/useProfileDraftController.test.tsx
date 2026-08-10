@@ -166,6 +166,61 @@ describe("useProfileDraftController", () => {
     expect(result.current.onDraftInvalidated).toHaveBeenCalled();
   });
 
+  it("auto-saves rapid edits through one serialized queue and keeps the newest value", async () => {
+    vi.useFakeTimers();
+    try {
+      const initial = profile("daily");
+      const firstSave = deferred<ProfileDetail>();
+      const saveProfile = vi.fn()
+        .mockReturnValueOnce(firstSave.promise)
+        .mockImplementationOnce(async (input) => ({
+          ...initial,
+          instructions: input.instructions,
+          contentHash: "second-hash",
+          targetContentHashes: { opencode: "second-hash" }
+        }));
+      installApi({ saveProfile });
+      const { result } = renderHook(() => useHarness(initial));
+
+      act(() => {
+        result.current.controller.acceptProfile(initial);
+        result.current.controller.updateDraft({ ...initial, instructions: "# First\n" });
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(180);
+      });
+      expect(saveProfile).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        result.current.controller.updateDraft({
+          ...result.current.controller.draftProfile!,
+          instructions: "# Latest\n"
+        });
+      });
+      await act(async () => {
+        firstSave.resolve({
+          ...initial,
+          instructions: "# First\n",
+          contentHash: "first-hash",
+          targetContentHashes: { opencode: "first-hash" }
+        });
+        await firstSave.promise;
+        await Promise.resolve();
+      });
+
+      expect(saveProfile).toHaveBeenCalledTimes(2);
+      expect(saveProfile.mock.calls[1]?.[0]).toMatchObject({
+        instructions: "# Latest\n",
+        expectedContentHash: "first-hash"
+      });
+      expect(result.current.controller.draftProfile?.instructions).toBe("# Latest\n");
+      expect(result.current.controller.draftProfile?.contentHash).toBe("second-hash");
+      expect(result.current.controller.isDirty).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("returns to clean when a Skill edit is reverted and skips a no-op Save", async () => {
     const initial = {
       ...profile("daily"),

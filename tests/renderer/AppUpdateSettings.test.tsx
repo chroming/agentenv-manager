@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppUpdateSettings } from "../../src/renderer/components/AppUpdateSettings";
 import type { AgentEnvApi, AgentEnvSettings } from "../../src/shared/types";
@@ -60,10 +60,50 @@ describe("App update settings", () => {
     const autoCheck = screen.getByRole("switch", { name: "Automatic update checks" });
     expect(statusRow).toHaveClass("app-update-summary");
     expect(statusRow?.parentElement).toBe(autoCheck.closest(".settings-preference-list"));
+    expect(statusRow).toHaveTextContent("Current version 0.1.0");
+    expect(statusRow).toHaveTextContent("Latest version 0.1.0");
     fireEvent.click(screen.getByRole("button", { name: "Check now" }));
     await waitFor(() => expect(api.checkAppUpdate).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole("switch", { name: "Automatic update checks" }));
     expect(onChange).toHaveBeenCalledWith({ appUpdateAutoCheckEnabled: false });
+  });
+
+  it("shows immediate working feedback before the update service publishes a phase", async () => {
+    let resolveCheck: ((status: Awaited<ReturnType<AgentEnvApi["checkAppUpdate"]>>) => void) | undefined;
+    const api = installApi({
+      phase: "up-to-date",
+      currentVersion: "0.1.0",
+      installChannel: "homebrew",
+      automaticInstallSupported: true
+    });
+    api.checkAppUpdate = vi.fn().mockReturnValue(new Promise((resolve) => {
+      resolveCheck = resolve;
+    }));
+    render(<AppUpdateSettings busy={false} settings={settings} onChange={vi.fn()} />);
+
+    const checkButton = await screen.findByRole("button", { name: "Check now" });
+    fireEvent.click(checkButton);
+
+    expect(checkButton).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByText("Checking for updates…")).toBeInTheDocument();
+    expect(screen.getByText("Checking…")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Checking for updates…" }))
+      .toBeInTheDocument();
+
+    await act(async () => resolveCheck?.({
+      phase: "available",
+      currentVersion: "0.1.0",
+      installChannel: "homebrew",
+      automaticInstallSupported: true,
+      release: {
+        version: "0.2.0",
+        tag: "v0.2.0",
+        releaseUrl: "https://github.com/chroming/agentenv-manager/releases/tag/v0.2.0",
+        publishedAt: "2026-08-03T00:00:00Z"
+      }
+    }));
+    expect(await screen.findByText("Version 0.2.0 is available")).toBeInTheDocument();
+    expect(screen.getByText("Latest version").parentElement).toHaveTextContent("0.2.0");
   });
 
   it("explains why a direct install cannot update automatically", async () => {

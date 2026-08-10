@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SkillUpdateDialog } from "../../src/renderer/components/SkillUpdateDialog";
 import type { SkillUpdatePlan } from "../../src/shared/types";
@@ -94,7 +94,7 @@ describe("SkillUpdateDialog", () => {
 
   it("keeps the dialog open and replaces Update with completion or retry state", () => {
     const onClose = vi.fn();
-    const onConfirm = vi.fn();
+    const onConfirm = vi.fn().mockResolvedValue({ status: "failed" as const });
     const plan = planWithChanges(1);
     const { rerender } = render(
       <SkillUpdateDialog
@@ -137,5 +137,86 @@ describe("SkillUpdateDialog", () => {
     expect(within(dialog).getByText("Source changed")).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Retry update claude-api" }));
     expect(onConfirm).toHaveBeenCalledWith(plan);
+  });
+
+  it("auto-closes only after the update and Library reconciliation both complete", async () => {
+    vi.useFakeTimers();
+    try {
+      const onClose = vi.fn();
+      const onConfirm = vi.fn().mockResolvedValue({ status: "completed" as const });
+      const plan = planWithChanges(1);
+      const { rerender } = render(
+        <SkillUpdateDialog
+          plan={plan}
+          onClose={onClose}
+          onConfirm={onConfirm}
+        />
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Apply update claude-api" }));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(1_000);
+      });
+      expect(onClose).not.toHaveBeenCalled();
+
+      rerender(
+        <SkillUpdateDialog
+          plan={plan}
+          progress={{ status: "updated" }}
+          onClose={onClose}
+          onConfirm={onConfirm}
+        />
+      );
+      await act(async () => {
+        vi.advanceTimersByTime(699);
+      });
+      expect(onClose).not.toHaveBeenCalled();
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a partially reconciled update open with its actionable error", async () => {
+    vi.useFakeTimers();
+    try {
+      const onClose = vi.fn();
+      const onConfirm = vi.fn().mockResolvedValue({
+        status: "partial" as const,
+        error: "Library view could not be refreshed"
+      });
+      const plan = planWithChanges(1);
+      const { rerender } = render(
+        <SkillUpdateDialog plan={plan} onClose={onClose} onConfirm={onConfirm} />
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Apply update claude-api" }));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      rerender(
+        <SkillUpdateDialog
+          plan={plan}
+          progress={{ status: "updated" }}
+          onClose={onClose}
+          onConfirm={onConfirm}
+        />
+      );
+
+      expect(screen.getByRole("status", { name: "claude-api: Updated with issues" }))
+        .toHaveTextContent("Library view could not be refreshed");
+      await act(async () => {
+        vi.advanceTimersByTime(1_000);
+      });
+      expect(onClose).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

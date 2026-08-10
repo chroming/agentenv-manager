@@ -1,12 +1,11 @@
-import { ArrowLeft, Plus, RefreshCw, ScanLine } from "lucide-react";
-import type { ReactNode } from "react";
+import { ArrowLeft, Plus, ScanLine } from "lucide-react";
+import type { FreshnessState } from "../freshness";
 import { useI18n } from "../i18n";
-import { Button, ControlGroup } from "./ui";
+import { Button, ControlGroup, RefreshAction } from "./ui";
 
 interface LibraryHeaderActionsProps {
   mode: "skills" | "sources";
-  refreshing: boolean;
-  freshness?: ReactNode;
+  freshness: FreshnessState;
   toolOpen?: boolean;
   returnTargetName?: string;
   onReturn?(): void;
@@ -17,7 +16,6 @@ interface LibraryHeaderActionsProps {
 
 export const LibraryHeaderActions = ({
   mode,
-  refreshing,
   freshness,
   toolOpen = false,
   returnTargetName,
@@ -38,7 +36,6 @@ export const LibraryHeaderActions = ({
           onClick={onReturn}
         />
       ) : null}
-      {freshness}
       <Button
         variant="secondary"
         aria-label={t("Import skills")}
@@ -57,20 +54,13 @@ export const LibraryHeaderActions = ({
           {t("Local Skills")}
         </Button>
       ) : null}
-      <Button
-        aria-label={t(mode === "sources" ? "Refresh sources" : "Refresh skills")}
-        disabled={refreshing || toolOpen}
-        icon={(
-          <RefreshCw
-            className={refreshing ? "is-spinning" : ""}
-            size={15}
-            strokeWidth={2.2}
-          />
-        )}
-        onClick={onRefresh}
-      >
-        {t("Refresh")}
-      </Button>
+      <RefreshAction
+        ariaLabel={t(mode === "sources" ? "Refresh sources" : "Refresh skills")}
+        disabled={toolOpen}
+        label={t("Refresh")}
+        state={freshness}
+        onRefresh={onRefresh}
+      />
     </ControlGroup>
   );
 };

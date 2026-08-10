@@ -1,4 +1,4 @@
-import { AlertTriangle, LoaderCircle, RefreshCw } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import type {
   NativeMcpConnection,
@@ -8,7 +8,7 @@ import type {
 } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
-import { Button, IconButton, ResourcePanelToolbar, Switch } from "./ui";
+import { Button, RefreshAction, ResourcePanelToolbar, Switch } from "./ui";
 import { ProductIcon } from "../productIcons";
 
 interface ProfileMcpEditorProps {
@@ -112,20 +112,14 @@ export const ProfileMcpEditor = ({
               {t("Remove override")}
             </Button>
           ) : null}
-          <IconButton
+          <RefreshAction
             label={t("Refresh MCP connections")}
+            presentation="icon"
             size="compact"
             variant="ghost"
-            aria-busy={refreshing}
-            disabled={refreshing}
-            onClick={() => void refresh()}
-          >
-            {refreshing ? (
-              <LoaderCircle className="is-spinning" aria-hidden="true" />
-            ) : (
-              <RefreshCw aria-hidden="true" />
-            )}
-          </IconButton>
+            busy={refreshing}
+            onRefresh={() => void refresh()}
+          />
         </span>
       </ResourcePanelToolbar>
 
@@ -138,14 +132,13 @@ export const ProfileMcpEditor = ({
             <strong>{t("Could not inspect MCP connections")}</strong>
             <small>{targetIssues.map((issue) => issue.message).join(" · ")}</small>
           </span>
-          <Button
+          <RefreshAction
             busy={refreshing}
+            label={t("Retry")}
             size="compact"
             variant="secondary"
-            onClick={() => void refresh()}
-          >
-            {t("Retry")}
-          </Button>
+            onRefresh={() => void refresh()}
+          />
         </div>
       ) : rows.length === 0 ? (
         <div className="profile-mcp-empty">

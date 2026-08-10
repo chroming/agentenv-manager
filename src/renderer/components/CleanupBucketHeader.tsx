@@ -1,7 +1,7 @@
-import { ChevronDown, ChevronRight, ListChecks } from "lucide-react";
+import { ListChecks } from "lucide-react";
 import type { SkillCleanupBucket } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
-import { Button } from "./ui";
+import { Button, DisclosureIcon } from "./ui";
 
 interface CleanupBucketHeaderProps {
   bucket: SkillCleanupBucket;
@@ -54,9 +54,7 @@ export const CleanupBucketHeader = ({
           <span>{count}</span>
         </span>
         <span className="cleanup-bucket-disclosure__icon" aria-hidden="true">
-          {expanded
-            ? <ChevronDown size={15} strokeWidth={2.2} />
-            : <ChevronRight size={15} strokeWidth={2.2} />}
+          <DisclosureIcon open={expanded} />
         </span>
       </button>
     );
@@ -74,6 +72,7 @@ export const CleanupBucketHeader = ({
           <Button
             aria-label={t("Clean up {{count}} ready Skills", { count: readyCleanupCount })}
             busy={actionWorking}
+            busyLabel={t("Cleaning up...")}
             className="cleanup-auto-action"
             disabled={actionDisabled}
             icon={<ListChecks size={15} strokeWidth={2.2} />}

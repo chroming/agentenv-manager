@@ -584,6 +584,10 @@
   position: static;
 }
 
+.apply-preview-dialog .preview-actions.has-compare {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+
 .apply-preview-footer-note {
   align-items: center;
   color: var(--muted);
@@ -643,5 +647,9 @@
 
   .apply-preview-dialog .preview-actions {
     grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .apply-preview-dialog .preview-actions.has-compare {
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
   }
 }

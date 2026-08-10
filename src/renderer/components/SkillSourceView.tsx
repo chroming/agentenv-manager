@@ -9,8 +9,6 @@ import {
 import { createPortal } from "react-dom";
 import {
   CheckCircle2,
-  ChevronDown,
-  ChevronRight,
   CircleAlert,
   Copy,
   EyeOff,
@@ -52,6 +50,7 @@ import {
   DialogBody,
   DialogFooter,
   DialogHeader,
+  DisclosureIcon,
   IconButton,
   InteractiveStatus,
   statusToneFor,
@@ -654,8 +653,9 @@ export const SkillSourceView = ({
         <Button
           aria-label={t("Check updates")}
           busy={activeCheckingAll}
+          busyLabel={t("Checking...")}
           className="library-toolbar-action"
-          icon={!activeCheckingAll ? <SearchCheck size={15} strokeWidth={2.2} /> : undefined}
+          icon={<SearchCheck size={15} strokeWidth={2.2} />}
           title={t("Check updates")}
           disabled={activeCheckingAll || checking.size > 0 || Boolean(activeCheckingSourceId) || Boolean(operation) || monitoredSourceCount === 0}
           onClick={() => void runCheckMonitored()}
@@ -887,7 +887,7 @@ export const SkillSourceView = ({
                   aria-expanded={isExpanded}
                   onClick={() => toggleExpanded(group.sourceId)}
                 >
-                  {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  <DisclosureIcon open={isExpanded} size={16} />
                 </button>
                 <span className="skill-source-artwork" aria-hidden="true">
                   <ResourceIconArtwork
@@ -959,6 +959,7 @@ export const SkillSourceView = ({
                 />
                 <div className="skill-source-more">
                   <IconButton
+                    busy={monitoringOperation === group.sourceId}
                     label={t("Source actions for {{name}}", { name: groupName })}
                     size="compact"
                     variant="ghost"
@@ -966,11 +967,7 @@ export const SkillSourceView = ({
                     aria-haspopup="menu"
                     onClick={(event) => toggleSourceMenu(group.sourceId, event.currentTarget)}
                   >
-                    {monitoringOperation === group.sourceId ? (
-                      <LoaderCircle className="is-spinning" />
-                    ) : (
-                      <MoreHorizontal />
-                    )}
+                    <MoreHorizontal />
                   </IconButton>
                   {sourceMenu?.sourceId === group.sourceId ? createPortal(
                     <ActionMenu
@@ -1096,21 +1093,17 @@ export const SkillSourceView = ({
                               </button>
                               {onSetCandidateIgnored ? (
                                 <IconButton
+                                  busy={isIgnoring}
                                   className="skill-source-ignore-action"
                                   label={t("Ignore {{name}} for this source", {
                                     name: candidate.name
                                   })}
                                   size="compact"
                                   variant="ghost"
-                                  aria-busy={isIgnoring}
                                   disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
                                   onClick={() => void setCandidateIgnored(group, candidate, true)}
                                 >
-                                  {isIgnoring ? (
-                                    <LoaderCircle className="is-spinning" />
-                                  ) : (
-                                    <EyeOff />
-                                  )}
+                                  <EyeOff />
                                 </IconButton>
                               ) : null}
                             </>
@@ -1234,8 +1227,10 @@ export const SkillSourceView = ({
             <Button disabled={mergeBusy} onClick={() => closeMerge()}>{t("Cancel")}</Button>
             <Button
               variant="primary"
+              busy={mergeBusy}
+              busyLabel={t("Preparing...")}
               disabled={mergeBusy || (mergePreviewIsCurrent && (mergePreview?.blockers.length ?? 0) > 0)}
-              icon={mergeBusy ? <LoaderCircle className="is-spinning" size={15} /> : <GitMerge size={15} />}
+              icon={<GitMerge size={15} />}
               onClick={() => void confirmMerge()}
             >
               {t("Confirm merge")}
@@ -1286,8 +1281,9 @@ export const SkillSourceView = ({
             <Button disabled={renameBusy} onClick={closeRename}>{t("Cancel")}</Button>
             <Button
               variant="primary"
+              busy={renameBusy}
+              busyLabel={t("Saving...")}
               disabled={renameBusy || renameValue.trim() === (renameSource.displayName ?? "")}
-              icon={renameBusy ? <LoaderCircle className="is-spinning" size={15} /> : undefined}
               onClick={() => void confirmRename()}
             >
               {t("Save")}

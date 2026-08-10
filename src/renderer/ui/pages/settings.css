@@ -83,6 +83,29 @@
   margin: 0;
 }
 
+.app-update-versions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.app-update-versions > span {
+  color: var(--muted);
+  display: inline-flex;
+  gap: 5px;
+}
+
+.app-update-versions strong {
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.app-update-progress {
+  margin-top: 3px;
+  width: min(260px, 100%);
+}
+
 .app-update-note {
   color: var(--muted);
   font-size: 12px;

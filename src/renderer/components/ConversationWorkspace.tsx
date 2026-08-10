@@ -12,7 +12,6 @@ import {
   LoaderCircle,
   MessagesSquare,
   MoreHorizontal,
-  RefreshCw,
   Search,
   TriangleAlert,
   UserRound
@@ -45,7 +44,6 @@ import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { AppFeedback, type AppFeedbackMessage } from "./AppFeedback";
 import { ConversationMarkdown } from "./ConversationMarkdown";
-import { FreshnessStatus } from "./FreshnessStatus";
 import { InfoTip } from "./InfoTip";
 import { targetIconFor } from "./ProfileSidebar";
 import { OverflowTooltip } from "./OverflowTooltip";
@@ -63,6 +61,7 @@ import {
   IconButton,
   ModalFrame,
   PageHeader,
+  RefreshAction,
   SearchField,
   SelectField
 } from "./ui";
@@ -980,8 +979,6 @@ export const ConversationWorkspace = ({
             return `${name}: ${failure.message}`;
           }).join("\n"));
         }
-      } else if (announce) {
-        setMessage(t("Conversations refreshed"));
       }
     } catch (unknownError) {
       if (announce) {
@@ -1289,17 +1286,19 @@ export const ConversationWorkspace = ({
   );
   const formatListTime = (value: string) => {
     const date = new Date(value);
-    const today = new Date();
-    if (date.toDateString() === today.toDateString()) {
-      return new Intl.DateTimeFormat(localeTag, {
-        hour: "2-digit",
-        minute: "2-digit"
-      }).format(date);
-    }
-    return new Intl.DateTimeFormat(localeTag, {
+    const time = new Intl.DateTimeFormat(localeTag, {
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(date);
+    const group = conversationDateGroup(value);
+    if (group === "Today") return time;
+    if (group === "Yesterday") return `${t("Yesterday")} · ${time}`;
+    const day = new Intl.DateTimeFormat(localeTag, {
+      year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
       month: "short",
       day: "numeric"
     }).format(date);
+    return `${day} · ${time}`;
   };
   const formatDetailTime = (value: string) => {
     const date = new Date(value);
@@ -1420,22 +1419,12 @@ export const ConversationWorkspace = ({
           }
           actions={
             <ControlGroup className="conversation-page-actions">
-              <FreshnessStatus
+              <RefreshAction
+                busy={refreshBusy}
+                label={t("Refresh")}
                 state={freshnessStates.conversations}
-                verb="Indexed"
+                onRefresh={() => void refresh()}
               />
-              <Button
-                icon={
-                  <RefreshCw
-                    className={refreshBusy ? "is-spinning" : undefined}
-                    size={15}
-                  />
-                }
-                disabled={refreshBusy}
-                onClick={() => void refresh()}
-              >
-                {t("Refresh")}
-              </Button>
             </ControlGroup>
           }
         />
@@ -1443,8 +1432,8 @@ export const ConversationWorkspace = ({
         <div className="conversation-layout-shell">
           <div
             className="conversation-layout ui-surface-frame"
-            inert={manualRefreshing}
-            aria-hidden={manualRefreshing || undefined}
+            inert={manualRefreshing && items.length === 0}
+            aria-hidden={manualRefreshing && items.length === 0 || undefined}
           >
           <aside className="conversation-list-pane" aria-label={t("Conversation list")}>
             <div className="conversation-list-toolbar">
@@ -1661,7 +1650,17 @@ export const ConversationWorkspace = ({
                             </>
                           ) : null}
                           <span aria-hidden="true">·</span>
-                          <time dateTime={item.updatedAt}>{formatListTime(item.updatedAt)}</time>
+                          <time
+                            aria-label={t("Last reply {{time}}", {
+                              time: formatDetailTime(item.updatedAt)
+                            })}
+                            dateTime={item.updatedAt}
+                            title={t("Last reply {{time}}", {
+                              time: formatDetailTime(item.updatedAt)
+                            })}
+                          >
+                            {formatListTime(item.updatedAt)}
+                          </time>
                           {item.sizeBytes !== undefined ? (
                             <>
                               <span aria-hidden="true">·</span>
@@ -1936,7 +1935,7 @@ export const ConversationWorkspace = ({
             )}
           </article>
           </div>
-          {manualRefreshing ? (
+          {manualRefreshing && items.length === 0 ? (
             <div className="conversation-refresh-overlay" role="status" aria-live="polite">
               <LoaderCircle className="is-spinning" size={22} aria-hidden="true" />
               <strong>{t("Refreshing conversations")}</strong>
@@ -2019,13 +2018,12 @@ export const ConversationWorkspace = ({
               </Button>
               <Button
                 variant="primary"
-                icon={busy ? <LoaderCircle className="is-spinning" size={14} /> : undefined}
+                busy={busy}
+                busyLabel={t("Opening…")}
                 disabled={busy}
                 onClick={() => void executeContinuation(review.previewId)}
               >
-                {busy
-                  ? t("Opening…")
-                  : reviewActionLabel}
+                {reviewActionLabel}
               </Button>
             </DialogFooter>
           </ModalFrame>

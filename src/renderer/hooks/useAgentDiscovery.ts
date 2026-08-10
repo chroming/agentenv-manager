@@ -5,6 +5,7 @@ import type {
   TargetInfo
 } from "../../shared/types";
 import { isTargetInstalled } from "../../shared/targetHealth";
+import { orderByPreference } from "../../shared/uiState";
 
 const dismissedAgentSuggestionsSessionKey = "agentenv:dismissed-agent-suggestions";
 export const currentAgentDiscoveryVersion = 1;
@@ -27,6 +28,7 @@ interface AgentDiscoveryOptions {
   isLoading: boolean;
   settings: AgentEnvSettings;
   supportedTargets: TargetDescriptor[];
+  agentOrder: string[];
   updateSettings(input: Partial<AgentEnvSettings>): Promise<AgentEnvSettings | undefined>;
 }
 
@@ -57,6 +59,7 @@ export const useAgentDiscovery = ({
   isLoading,
   settings,
   supportedTargets,
+  agentOrder,
   updateSettings
 }: AgentDiscoveryOptions): AgentDiscoveryController => {
   const [discoveredTargets, setDiscoveredTargets] = useState<TargetInfo[]>([]);
@@ -67,29 +70,33 @@ export const useAgentDiscovery = ({
     useState<string[]>([]);
   const [sessionDismissedAgentIds, setSessionDismissedAgentIds] =
     useState<string[]>(readDismissedAgentSuggestions);
+  const orderedDiscoveredTargets = useMemo(
+    () => orderByPreference(discoveredTargets, agentOrder, (target) => target.id),
+    [agentOrder, discoveredTargets]
+  );
 
   const enabledAgentIds = settings.enabledTargetIds ?? [];
   const initialReviewPending =
     settings.agentDiscoveryVersion !== currentAgentDiscoveryVersion;
   const detectedDisabledAgents = useMemo(() => {
     const enabled = new Set(enabledAgentIds);
-    return discoveredTargets.filter(
+    return orderedDiscoveredTargets.filter(
       (target) => isTargetInstalled(target.health) && !enabled.has(target.id)
     );
-  }, [discoveredTargets, enabledAgentIds]);
+  }, [orderedDiscoveredTargets, enabledAgentIds]);
   const automaticAgentSuggestions = useMemo(() => {
     const suppressed = new Set(settings.suppressedAgentSuggestionIds ?? []);
     const reviewed = new Set(settings.agentDiscoveryReviewedIds ?? []);
     const dismissed = new Set(sessionDismissedAgentIds);
-    const hasInstalledAgent = discoveredTargets.some((target) =>
+    const hasInstalledAgent = orderedDiscoveredTargets.some((target) =>
       isTargetInstalled(target.health)
     );
     if (initialReviewPending && hasInstalledAgent) {
-      return discoveredTargets.filter(
+      return orderedDiscoveredTargets.filter(
         (target) => !suppressed.has(target.id) && !dismissed.has(target.id)
       );
     }
-    return discoveredTargets.filter(
+    return orderedDiscoveredTargets.filter(
       (target) =>
         isTargetInstalled(target.health) &&
         !reviewed.has(target.id) &&
@@ -97,14 +104,14 @@ export const useAgentDiscovery = ({
         !dismissed.has(target.id)
     );
   }, [
-    discoveredTargets,
+    orderedDiscoveredTargets,
     initialReviewPending,
     sessionDismissedAgentIds,
     settings.agentDiscoveryReviewedIds,
     settings.suppressedAgentSuggestionIds
   ]);
   const visibleAgentSuggestions = agentSuggestionMode === "setup"
-    ? discoveredTargets.filter((target) => recentlyEnabledAgentIds.includes(target.id))
+    ? orderedDiscoveredTargets.filter((target) => recentlyEnabledAgentIds.includes(target.id))
     : agentSuggestionMode === "manual"
       ? detectedDisabledAgents
       : automaticAgentSuggestions;
@@ -259,7 +266,7 @@ export const useAgentDiscovery = ({
     detectedDisabledAgents,
     dialogPhase: agentSuggestionMode === "setup" ? "setup" : "choose",
     dialogOpen: Boolean(agentSuggestionMode),
-    discoveredTargets,
+    discoveredTargets: orderedDiscoveredTargets,
     enabledAgentIds,
     visibleAgentSuggestions,
     chooseTargetConfigRoot,

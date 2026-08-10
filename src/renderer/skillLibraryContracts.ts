@@ -5,6 +5,11 @@ export type SkillUpdateCheckStatus = {
   message: string;
 };
 
+export type SkillUpdateActionResult =
+  | { status: "completed" }
+  | { status: "failed"; error?: string }
+  | { status: "partial"; error: string };
+
 export type GitHubSkillImportItemStatus =
   | "waiting"
   | "reviewing"

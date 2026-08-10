@@ -74,12 +74,13 @@
   line-height: var(--line-height-body);
 }
 
-.project-agent-switcher {
+.agent-context-switcher {
   flex: 0 0 150px;
   min-width: 0;
   width: 150px;
 }
 
+.agent-context-switcher__logo,
 .project-agent-switcher__logo {
   display: block;
   height: 17px;
@@ -130,36 +131,6 @@
   max-height: min(680px, calc(100vh - 64px));
   max-width: none;
   width: min(820px, calc(100vw - 48px));
-}
-
-.project-editor-dialog {
-  height: min(680px, calc(100vh - 64px));
-  width: min(920px, calc(100vw - 64px));
-}
-
-.project-editor-dialog__body {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  min-height: 0;
-}
-
-.project-editor-textarea {
-  background: var(--surface-subtle);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.6;
-  min-height: 280px;
-  padding: 12px;
-  resize: none;
-  width: 100%;
-}
-
-.project-editor-field {
-  min-height: 0;
-  flex: 1;
 }
 
 .project-editor-loading,
@@ -288,13 +259,14 @@
   .project-detail__actions {
     align-items: stretch;
     display: grid;
-    grid-template-columns: minmax(150px, 1fr) auto auto;
+    grid-template-columns: 150px auto auto;
+    justify-content: end;
     width: 100%;
   }
 
   .project-agent-switcher {
     flex-basis: auto;
-    width: 100%;
+    width: 150px;
   }
 }
 

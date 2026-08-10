@@ -165,6 +165,16 @@ afterEach(() => {
 });
 
 describe("ConversationWorkspace", () => {
+  it("shows the latest reply date and time for every history row", async () => {
+    installApi();
+    render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);
+
+    const time = await screen.findByLabelText(/Last reply/);
+    expect(time).toHaveAttribute("datetime", detail.updatedAt);
+    expect(time.textContent).toContain("·");
+    expect(time).toHaveAttribute("title", expect.stringMatching(/^Last reply /));
+  });
+
   it("groups known Projects in the folder filter and opens a matching Project", async () => {
     const api = installApi();
     const project = {
@@ -619,10 +629,12 @@ describe("ConversationWorkspace", () => {
     expect(container.querySelector(".conversation-layout")).not.toHaveAttribute("inert");
     expect(screen.getByRole("searchbox", { name: "Search conversations" })).toBeEnabled();
     expect(screen.queryByText("Refreshing conversations")).toBeNull();
-    expect(screen.getByText("Refreshing…")).toBeInTheDocument();
+    const refresh = screen.getByRole("button", { name: "Refresh" });
+    expect(refresh).toHaveAttribute("aria-busy", "true");
+    expect(refresh.querySelector(".is-spinning")).not.toBeNull();
 
     await act(async () => finishRefresh());
-    await waitFor(() => expect(screen.getByText(/Indexed/)).toBeInTheDocument());
+    await waitFor(() => expect(refresh).toHaveAttribute("aria-busy", "false"));
   });
 
   it("refreshes on focus only after the indexed history becomes stale", async () => {
@@ -841,7 +853,7 @@ describe("ConversationWorkspace", () => {
     expect(await screen.findByText("Conversation copied")).toBeInTheDocument();
   });
 
-  it("keeps cached history visible behind an honest refresh overlay", async () => {
+  it("keeps cached history interactive while manual Refresh stays on its control", async () => {
     let finishRefresh: (() => void) | undefined;
     const api = installApi();
     api.refreshConversations.mockImplementation(() => new Promise((resolve) => {
@@ -858,14 +870,21 @@ describe("ConversationWorkspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
 
-    expect(await screen.findByText("Refreshing conversations")).toBeInTheDocument();
+    const refresh = screen.getByRole("button", { name: "Refresh" });
+    expect(refresh).toHaveAttribute("aria-busy", "true");
+    expect(refresh.querySelector(".is-spinning")).not.toBeNull();
+    expect(screen.queryByText("Refreshing conversations")).toBeNull();
     expect(
       container.querySelector(".conversation-list-item__agent img")
     ).not.toBeNull();
-    expect(container.querySelector(".conversation-layout")).toHaveAttribute("inert");
+    expect(container.querySelector(".conversation-layout")).not.toHaveAttribute("inert");
+    expect(screen.getByRole("searchbox", { name: "Search conversations" })).toBeEnabled();
     finishRefresh?.();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
     await waitFor(() =>
-      expect(screen.queryByText("Refreshing conversations")).toBeNull()
+      expect(refresh).toHaveAttribute("aria-busy", "false")
     );
   });
 

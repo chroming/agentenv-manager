@@ -330,15 +330,13 @@ export const SkillImportDialog = ({
       <footer className="preview-actions import-dialog-actions ui-dialog-footer">
         <Button
           variant={githubImportResult ? "primary" : "secondary"}
+          busy={importStopRequested}
+          busyLabel={t("Stopping...")}
           disabled={
             localImportOperation ||
-            dismissDisabled ||
-            importStopRequested
+            dismissDisabled
           }
           onClick={onClose}
-          icon={importStopRequested
-            ? <LoaderCircle className="is-spinning" size={15} />
-            : undefined}
         >
           {t(
             githubOperation === "importing"
@@ -349,7 +347,8 @@ export const SkillImportDialog = ({
         {source === "local" && selectedLocalInventory ? (
           <Button
             variant="primary"
-            aria-busy={localImportOperation}
+            busy={localImportOperation}
+            busyLabel={t("Importing...")}
             disabled={
               !localSkillPath.trim() ||
               localImportOperation ||
@@ -357,20 +356,15 @@ export const SkillImportDialog = ({
               localImportBlocked
             }
             onClick={onImportLocal}
-            icon={localImportOperation
-              ? <LoaderCircle className="is-spinning" size={15} />
-              : undefined}
           >
             {localImportOperation ? t("Importing...") : t("Import copy")}
           </Button>
         ) : source === "local" ? null : !githubScanResult ? (
           <Button
             variant="primary"
-            aria-busy={githubOperation === "scanning"}
+            busy={githubOperation === "scanning"}
+            busyLabel={t("Scanning...")}
             disabled={!githubUrl.trim() || Boolean(githubOperation) || localImportOperation}
-            icon={githubOperation === "scanning"
-              ? <LoaderCircle className="is-spinning" size={15} />
-              : undefined}
             onClick={onScanRepository}
           >
             {t(githubOperation === "scanning" ? "Scanning..." : "Scan")}
@@ -378,11 +372,9 @@ export const SkillImportDialog = ({
         ) : githubImportResult ? null : (
           <Button
             variant="primary"
-            aria-busy={githubOperation === "importing"}
+            busy={githubOperation === "importing"}
+            busyLabel={t("Importing...")}
             disabled={githubSelectedSources.length === 0 || Boolean(githubOperation)}
-            icon={githubOperation === "importing"
-              ? <LoaderCircle className="is-spinning" size={15} />
-              : undefined}
             onClick={onImportSelected}
           >
             {githubOperation === "importing"

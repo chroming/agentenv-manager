@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
-  LoaderCircle,
   RefreshCw,
   TriangleAlert
 } from "lucide-react";
@@ -150,10 +149,9 @@ export const ProjectSkillDiscoveryPanel = ({
         <div>
           {importableCount > 0 ? (
             <Button
+              busy={operation === "importing-all"}
+              busyLabel={t("Importing...")}
               disabled={Boolean(operation) || Boolean(importingPath)}
-              icon={operation === "importing-all"
-                ? <LoaderCircle className="is-spinning" size={15} />
-                : undefined}
               onClick={() => void importAll()}
               variant="primary"
             >
@@ -161,10 +159,10 @@ export const ProjectSkillDiscoveryPanel = ({
             </Button>
           ) : null}
           <Button
+            busy={operation === "scanning"}
+            busyLabel={t("Scanning...")}
             disabled={Boolean(operation) || Boolean(importingPath)}
-            icon={operation === "scanning"
-              ? <LoaderCircle className="is-spinning" size={15} />
-              : <RefreshCw size={15} strokeWidth={2.2} />}
+            icon={<RefreshCw size={15} strokeWidth={2.2} />}
             onClick={() => void scan()}
           >
             {t(operation === "scanning" ? "Scanning..." : "Scan")}
@@ -239,14 +237,12 @@ export const ProjectSkillDiscoveryPanel = ({
                   {importable ? (
                     <Button
                       size="compact"
-                      aria-busy={importing}
+                      busy={importing}
+                      busyLabel={t("Importing...")}
                       disabled={Boolean(operation) || Boolean(importingPath)}
-                      icon={importing ? <LoaderCircle className="is-spinning" size={14} /> : undefined}
                       onClick={() => void importCandidate(candidate.path, candidate.relativePath)}
                     >
-                      {importing
-                        ? t("Importing...")
-                        : failed
+                      {failed
                           ? t("Retry")
                           : candidate.status === "changed"
                             ? t("Review changes")

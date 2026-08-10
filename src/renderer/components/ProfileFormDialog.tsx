@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import type { TargetInfo } from "../../shared/types";
+import type { ResourceIconKey, TargetInfo } from "../../shared/types";
 import { useI18n } from "../i18n";
 import {
   Button,
@@ -12,6 +12,7 @@ import {
   TextAreaField,
   TextField
 } from "./ui";
+import { ResourceIconPicker } from "./ResourceIconPicker";
 
 interface ProfileFormDialogProps {
   open: boolean;
@@ -26,12 +27,14 @@ interface ProfileFormDialogProps {
     description: string;
   };
   error: string;
+  iconKey?: ResourceIconKey;
   dialogRef: RefObject<HTMLElement | null>;
   initialFocusRef: RefObject<HTMLButtonElement | null>;
   onSourceChange(source: "blank" | "target"): void;
   onTargetChange(targetId: string): void;
   onNameChange(name: string): void;
   onDescriptionChange(description: string): void;
+  onIconChange?(iconKey: ResourceIconKey): void;
   onClose(): void;
   onSubmit(): void;
 }
@@ -45,12 +48,14 @@ export const ProfileFormDialog = ({
   targets,
   form,
   error,
+  iconKey,
   dialogRef,
   initialFocusRef,
   onSourceChange,
   onTargetChange,
   onNameChange,
   onDescriptionChange,
+  onIconChange,
   onClose,
   onSubmit
 }: ProfileFormDialogProps) => {
@@ -108,6 +113,19 @@ export const ProfileFormDialog = ({
             value={form.name}
             onChange={(event) => onNameChange(event.currentTarget.value)}
           />
+          {mode === "edit" && onIconChange ? (
+            <div className="profile-icon-field">
+              <span>{t("Profile icon")}</span>
+              <ResourceIconPicker
+                iconKey={iconKey}
+                label={form.name || t("Profile")}
+                showAgentIcons
+                onChange={(nextIconKey) => {
+                  if (nextIconKey) onIconChange(nextIconKey);
+                }}
+              />
+            </div>
+          ) : null}
           {mode === "edit" || source === "blank" ? (
             <TextAreaField
               label={t("Description")}

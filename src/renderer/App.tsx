@@ -9,7 +9,6 @@ import {
 import {
   ArrowRight,
   CheckCircle2,
-  ChevronDown,
   History,
   LoaderCircle,
   Monitor,
@@ -76,6 +75,7 @@ import type {
   TargetCapturePreview,
   TargetManagementState,
 } from "../shared/types";
+import { completeOrder, orderByPreference } from "../shared/uiState";
 import { profileWithoutLocalSkillOverrides } from "../shared/effectiveProfile";
 import { I18nProvider, useI18n } from "./i18n";
 import { acceptAppliedProfileState } from "./appliedProfileState";
@@ -105,7 +105,6 @@ import { TelemetrySettings } from "./components/TelemetrySettings";
 import { BackupManagerDialog } from "./components/BackupManagerDialog";
 import { DataSettingsSection } from "./components/DataSettingsSection";
 import { DiagnosticIssueDialog } from "./components/DiagnosticIssueDialog";
-import { FreshnessStatus } from "./components/FreshnessStatus";
 import { GitHubConnectionSettings } from "./components/GitHubConnectionSettings";
 import { InfoTip } from "./components/InfoTip";
 import {
@@ -118,12 +117,14 @@ import { ProfileMcpEditor } from "./components/ProfileMcpEditor";
 import { ProfileDeleteDialog } from "./components/ProfileDeleteDialog";
 import { ProfileFormDialog } from "./components/ProfileFormDialog";
 import { ProfileEvaluationDialog } from "./components/ProfileEvaluationDialog";
-import { ProfileComparisonButton } from "./components/ProfileComparisonButton";
+import {
+  ProfileRecoveryDialog,
+  type ProfileRecoveryMode
+} from "./components/ProfileRecoveryDialog";
 import { QuickOpen } from "./components/QuickOpen";
 import { ProfileList } from "./components/ProfileList";
 import { ProfileActionsMenu } from "./components/ProfileActionsMenu";
 import { ProfileComposerSection } from "./components/ProfileComposerSection";
-import { ResourceIconPicker } from "./components/ResourceIconPicker";
 import { GeneralSettingsSection, SettingsCategoryTabs, type SettingsCategory } from "./components/SettingsCategoryTabs";
 import {
   appShellClassName, ProfileSidebar, targetIconFor, type AppWorkspace
@@ -135,6 +136,7 @@ import {
   repositoryImportProgressKey,
   type PreparedSkillTarget,
   type SkillImportQueueOptions,
+  type SkillUpdateActionResult,
   type SkillUpdateCheckStatus
 } from "./skillLibraryContracts";
 import { SkillUpdateDialog } from "./components/SkillUpdateDialog";
@@ -157,11 +159,11 @@ import {
 import { runSkillImportQueue } from "./skillImportQueue";
 import { useSkillUpdateActivity, type SkillUpdateActivity } from "./skillUpdateActivity";
 import {
-  ActionMenu,
   Button,
   ControlGroup,
   focusInitialActionMenuItem,
   IconButton,
+  ObjectSwitcher,
   PageHeader,
   SingleObjectWorkspace,
   useDisclosureSet
@@ -205,6 +207,8 @@ import {
 } from "./hooks/useSkillCleanupBoundaries";
 import { useNativeResourceInspection } from "./hooks/useNativeResourceInspection";
 import { useWindowChromeState } from "./hooks/useWindowChromeState";
+import { useDeviceUiState } from "./hooks/useDeviceUiState";
+import { loadProfileCoreData } from "./profileCoreLoader";
 import { WindowTitlebar } from "./components/WindowTitlebar";
 import {
   preferredTargetForProfile,
@@ -233,7 +237,6 @@ const emptyProfileResources: ProfileResources = {
   managementByTarget: {},
   mcpByTarget: {}
 };
-
 
 type ComposerSection = "instructions" | "skills" | "mcp";
 type ProfileDialogMode = "create" | "edit";
@@ -318,8 +321,6 @@ const AppContent = ({
     useState<"library" | "profiles" | "targets">("library");
   const [checkingProfileSkillUpdates, setCheckingProfileSkillUpdates] = useState(false);
   const [profileMetadataSavingId, setProfileMetadataSavingId] = useState<string>();
-  const [targetRefreshStatus, setTargetRefreshStatus] = useState<"refreshing" | "refreshed">();
-  const [skillRefreshStatus, setSkillRefreshStatus] = useState<"refreshing" | "refreshed">();
   const [profileSearch, setProfileSearch] = useState("");
   const [profileSwitcherOpen, setProfileSwitcherOpen] = useState(false);
   const {
@@ -330,7 +331,9 @@ const AppContent = ({
     toggleExpandedId: toggleComposerSection
   } = useDisclosureSet<ComposerSection>();
   const [isTargetMenuOpen, setIsTargetMenuOpen] = useState(false);
+  const [targetMenuQuery, setTargetMenuQuery] = useState("");
   const [isProfileActionsOpen, setIsProfileActionsOpen] = useState(false);
+  const [profileRecoveryMode, setProfileRecoveryMode] = useState<ProfileRecoveryMode>();
   const [profileDialogMode, setProfileDialogMode] = useState<ProfileDialogMode>();
   const [profileEvaluationOpen, setProfileEvaluationOpen] = useState(false);
   const [profileCreateSource, setProfileCreateSource] = useState<ProfileCreateSource>("blank");
@@ -353,6 +356,7 @@ const AppContent = ({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [diagnosticIssue, setDiagnosticIssue] = useState<DiagnosticIssueDetail>();
+  const { acceptUiState, currentUiState, persistUiState, uiState } = useDeviceUiState(setError);
   const {
     nativeMcpConnections,
     nativeMcpIssues,
@@ -366,10 +370,6 @@ const AppContent = ({
   useConversationIndexWarmup(!isLoading);
   const profileObjectActionsRef = useRef<HTMLDivElement>(null);
   const profileApplyControlRef = useRef<HTMLDivElement>(null);
-  const profileEvaluationButtonRef = useRef<HTMLButtonElement>(null);
-  const saveButtonRef = useRef<HTMLButtonElement>(null);
-  const targetMenuButtonRef = useRef<HTMLButtonElement>(null);
-  const targetMenuRef = useRef<HTMLDivElement>(null);
   const profileActionsButtonRef = useRef<HTMLButtonElement>(null);
   const profileActionsMenuRef = useRef<HTMLDivElement>(null);
   const profileSearchInputRef = useRef<HTMLInputElement>(null);
@@ -416,7 +416,12 @@ const AppContent = ({
     setTargetStates,
     onBusyChange: setBusy,
     onError: setError,
-    onDraftInvalidated: invalidateProfilePresentation
+    onDraftInvalidated: invalidateProfilePresentation,
+    onSelectionChange: (profileId) => {
+      if (currentUiState().selectedProfileId !== profileId) {
+        persistUiState({ selectedProfileId: profileId });
+      }
+    }
   });
   const {
     applyProfile: applyProfileActivation,
@@ -468,7 +473,7 @@ const AppContent = ({
   const updateSkillSettings = settingsController.actions.update;
   const { activity: skillUpdateActivity, activityRef: skillUpdateActivityRef,
     begin: beginSkillUpdateActivity, finish: finishSkillUpdateActivity
-  } = useSkillUpdateActivity(() => setSkillRefreshStatus(undefined));
+  } = useSkillUpdateActivity(() => undefined);
   const {
     states: freshnessStates,
     markFresh,
@@ -476,11 +481,13 @@ const AppContent = ({
   } = useFreshnessCoordinator();
   const activeLibraryView =
     activeWorkspace === "library" && skillLibraryMode === "skills" ? "skills" : undefined;
-  const refreshSkillSourceGroups = useCallback(async () => {
+  const refreshSkillSourceGroups = useCallback(async (): Promise<boolean> => {
     try {
       setSkillSourceGroups(await window.agentEnv.listSkillSourceGroups());
+      return true;
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      return false;
     }
   }, []);
   const libraryScroll = useLibraryScrollRestoration({
@@ -504,22 +511,6 @@ const AppContent = ({
     }
     rollbackReturnFocusRef.current = null;
   }, [busy, rollbackPreview]);
-
-  useEffect(() => {
-    if (targetRefreshStatus !== "refreshed") {
-      return undefined;
-    }
-    const timeout = window.setTimeout(() => setTargetRefreshStatus(undefined), 2400);
-    return () => window.clearTimeout(timeout);
-  }, [targetRefreshStatus]);
-
-  useEffect(() => {
-    if (skillRefreshStatus !== "refreshed") {
-      return undefined;
-    }
-    const timeout = window.setTimeout(() => setSkillRefreshStatus(undefined), 5000);
-    return () => window.clearTimeout(timeout);
-  }, [skillRefreshStatus]);
 
   useEffect(() => {
     if (!skillUpdateCheckStatus || !["success", "info"].includes(skillUpdateCheckStatus.state)) {
@@ -572,72 +563,38 @@ const AppContent = ({
     shouldApply: () => boolean = () => true,
     forceTargetRefresh = false
   ) => {
-    const skillItemsPromise = window.agentEnv.listSkillLibrary();
     loadForProfileCore(shouldApply);
     void loadSkillCleanupHistory(shouldApply);
     void loadTargetRecoveryHistory(shouldApply);
-    const corePromise = Promise.all([
-      window.agentEnv.listSupportedTargets(),
-      window.agentEnv.listTargets(forceTargetRefresh),
-      window.agentEnv.listTargetStates(),
-      window.agentEnv.listProfiles(),
-      skillItemsPromise,
-      settingsOverride ?? window.agentEnv.readSettings()
-    ]);
-
-    const skillItems = await skillItemsPromise;
-    if (shouldApply()) {
-      setLibrarySkills(skillItems);
-    }
-
-    const [
-      supportedTargetItems,
-      targetItems,
-      targetStateItems,
-      profileItems,
-      ,
-      settings
-    ] = await corePromise;
-
-    if (!shouldApply()) {
-      return {
-        supportedTargetItems,
-        targetItems,
-        targetStateItems,
-        profileItems,
-        skillItems,
-        settings
-      };
-    }
-
-    setSupportedTargets(supportedTargetItems);
-    setTargets(targetItems);
+    const core = await loadProfileCoreData({
+      forceTargetRefresh,
+      settingsOverride,
+      onSkillsLoaded: (items) => {
+        if (shouldApply()) setLibrarySkills(items);
+      }
+    });
+    if (!shouldApply()) return core;
+    acceptUiState(core.uiState);
+    setSupportedTargets(core.supportedTargetItems);
+    setTargets(core.targetItems);
     setTargetStates(
-      targetStateItems.map((targetState) => ({
+      core.targetStateItems.map((targetState) => ({
         ...targetState,
         activeProfileName:
-          profileItems.find((profile) => profile.id === targetState.activeProfileId)?.name ??
+          core.profileItems.find((profile) => profile.id === targetState.activeProfileId)?.name ??
           targetState.activeProfileName
       }))
     );
-    setProfiles(profileItems);
-    settingsController.actions.accept(settings);
+    setProfiles(core.profileItems);
+    settingsController.actions.accept(core.settings);
     markFresh("agents");
     markFresh("skill-library");
     setSelectedTargetId((current) =>
-      current && targetItems.some((target) => target.id === current)
+      current && core.targetItems.some((target) => target.id === current)
         ? current
-        : targetItems[0]?.id
+        : core.targetItems[0]?.id
     );
-
-    return {
-      supportedTargetItems,
-      targetItems,
-      targetStateItems,
-      profileItems,
-      skillItems,
-      settings
-    };
+    return core;
   };
 
   const loadProfileEnrichment = async (
@@ -875,10 +832,7 @@ const AppContent = ({
     reason: "page-entry" | "focus" | "mutation" | "manual" = "manual"
   ) => {
     const announce = reason === "manual";
-    if (announce) {
-      setError(undefined);
-      setSkillRefreshStatus("refreshing");
-    }
+    if (announce) setError(undefined);
     try {
       await runFreshness("skill-library", reason, async () => {
         setEnvironmentScanStatus("checking");
@@ -904,10 +858,8 @@ const AppContent = ({
         setSkillSourceGroups(sourceGroupItems);
         return skillItems;
       });
-      if (announce) setSkillRefreshStatus("refreshed");
     } catch (unknownError) {
       if (announce) {
-        setSkillRefreshStatus(undefined);
         setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       }
     }
@@ -1009,7 +961,7 @@ const AppContent = ({
           }
         });
 
-        const { profileItems, targetItems, targetStateItems } = core;
+        const { profileItems, targetItems, targetStateItems, uiState: loadedUiState } = core;
         const usableProfiles = profileItems.filter((profile) => !profile.loadError);
         if (usableProfiles.length === 0) {
           return;
@@ -1028,6 +980,7 @@ const AppContent = ({
           (state) => state.targetId === initialTargetId
         )?.activeProfileId;
         const initialProfile =
+          usableProfiles.find((profile) => profile.id === loadedUiState.selectedProfileId) ??
           usableProfiles.find((profile) => profile.id === activeProfileId) ??
           usableProfiles.find(
             (profile) => !initialTargetId || profile.preferredTargetId === initialTargetId
@@ -1082,11 +1035,20 @@ const AppContent = ({
     guardAction: guardProfileAction,
     pendingAction: pendingProfileAction
   } = useProfileActionGuard({
-    dirty: isProfileDirty || Boolean(projectEditorGuard?.dirty),
+    autoSaveDirty:
+      !projectEditorGuard?.dirty &&
+      profileSaveStatus !== "Profile save failed" &&
+      (isProfileDirty || isProfileSaving),
+    dirty:
+      Boolean(projectEditorGuard?.dirty) ||
+      (profileSaveStatus === "Profile save failed" && isProfileDirty),
     onBusyChange: setBusy,
     onDiscard: projectEditorGuard?.dirty ? projectEditorGuard.discard : discardProfileDraft,
     onError: setError,
-    onSave: projectEditorGuard?.dirty ? projectEditorGuard.save : saveDraft
+    onSave: async () => {
+      if (projectEditorGuard?.dirty) await projectEditorGuard.save();
+      if (isProfileDirty || isProfileSaving) await saveDraft();
+    }
   });
   const conversationQuickOpen = useConversationQuickOpen({
     targets, t, formatDate, guardAction: guardProfileAction,
@@ -1124,6 +1086,12 @@ const AppContent = ({
         }
       }
     });
+  };
+
+  const reorderProfiles = (profileIds: string[]) => {
+    const order = completeOrder(profileIds, profiles.map((profile) => profile.id));
+    setProfiles((current) => orderByPreference(current, order, (profile) => profile.id));
+    persistUiState({ profileOrder: order });
   };
 
   const selectWorkspace = useCallback((workspace: AppWorkspace) => {
@@ -1258,6 +1226,13 @@ const AppContent = ({
   };
 
   const changeProfileIconNow = async (profileId: string, iconKey: ResourceIconKey) => {
+    if (draftProfile?.id === profileId) {
+      updateDraftProfile({
+        ...draftProfile,
+        manifest: { ...draftProfile.manifest, iconKey }
+      });
+      return;
+    }
     if (profileMetadataSavingId === profileId) {
       return;
     }
@@ -1270,9 +1245,6 @@ const AppContent = ({
     }
     setError(undefined);
     setProfileMetadataSavingId(profileId);
-    if (draftProfile?.id === profileId) {
-      setProfileSaveStatus("Saving Profile details");
-    }
     try {
       const previousName =
         profiles.find((profile) => profile.id === profileId)?.name ??
@@ -1299,7 +1271,7 @@ const AppContent = ({
   useDesktopShortcuts({
     activeWorkspace,
     isProfileSaving,
-    onSaveProfile: saveSelectedProfile,
+    onSaveProfile: async () => { void await saveSelectedProfile(); },
     onRefreshSkills: refreshSkills,
     onOpenProfileSearch: () => {
       setProfileSwitcherOpen(true);
@@ -1460,7 +1432,13 @@ const AppContent = ({
               name,
               description
             });
-        await refreshProfiles();
+        const refreshed = await refreshProfiles();
+        const nextProfileOrder = [
+          saved.id,
+          ...refreshed.profileItems.map((profile) => profile.id).filter((id) => id !== saved.id)
+        ];
+        setProfiles(orderByPreference(refreshed.profileItems, nextProfileOrder, (profile) => profile.id));
+        persistUiState({ profileOrder: nextProfileOrder });
         setSelectedTargetId(saved.manifest.preferredTargetId ?? profileForm.targetId);
         setProfileTargetSelections((current) => ({
           ...current,
@@ -1477,17 +1455,15 @@ const AppContent = ({
           );
         }
       } else if (draftProfile) {
-        if (!draftProfile.contentHash) {
-          throw new Error("Refresh this Profile before saving its details.");
-        }
-        setProfileSaveStatus("Saving Profile details");
-        const saved = await window.agentEnv.updateProfileMetadata({
-          id: draftProfile.id,
-          expectedContentHash: draftProfile.contentHash,
-          name,
-          description
+        updateDraftProfile({
+          ...draftProfile,
+          manifest: {
+            ...draftProfile.manifest,
+            name,
+            description
+          }
         });
-        acceptProfileMetadata(saved, draftProfile.manifest.name);
+        await saveDraft();
       }
       clearComposerSections();
       openWorkspaceNow(
@@ -1524,7 +1500,13 @@ const AppContent = ({
     profileActionsButtonRef.current?.focus();
     try {
       const saved = await window.agentEnv.duplicateProfile(profileId);
-      await refreshProfiles();
+      const refreshed = await refreshProfiles();
+      const nextProfileOrder = [
+        saved.id,
+        ...refreshed.profileItems.map((profile) => profile.id).filter((id) => id !== saved.id)
+      ];
+      setProfiles(orderByPreference(refreshed.profileItems, nextProfileOrder, (profile) => profile.id));
+      persistUiState({ profileOrder: nextProfileOrder });
       setSelectedTargetId(saved.manifest.preferredTargetId ?? selectedTargetId);
       setProfileTargetSelections((current) => ({
         ...current,
@@ -1560,6 +1542,9 @@ const AppContent = ({
     try {
       await window.agentEnv.deleteProfile(deletedProfileId);
       const { profileItems } = await refreshProfiles();
+      persistUiState({
+        profileOrder: currentUiState().profileOrder.filter((id) => id !== deletedProfileId)
+      });
       if (deletingSelectedProfile) {
         const nextProfile = profileItems.find(
           (profile) => !profile.loadError && profile.preferredTargetId === deletedTargetId
@@ -1616,7 +1601,8 @@ const AppContent = ({
   };
 
   const appModalOpen = Boolean(
-    pendingSkillImport || pendingProfileAction || profileDialogMode || deleteProfileCandidateId || dataRestorePreview || backupManagerOpen
+    pendingSkillImport || pendingProfileAction || profileDialogMode || deleteProfileCandidateId ||
+    profileRecoveryMode || dataRestorePreview || backupManagerOpen
   );
   const {
     agentProbeComplete, allowSuggestionPreferences, detectedDisabledAgents,
@@ -1632,9 +1618,18 @@ const AppContent = ({
     isLoading,
     settings: skillSettings,
     supportedTargets,
+    agentOrder: uiState.agentOrder,
     updateSettings: updateSkillSettings
   });
   const agentSetupActions = deriveAgentSetupActions(visibleAgentSuggestions, profiles, targetStates);
+  const reorderAgents = (targetIds: string[]) => {
+    const allKnownIds = supportedTargets.map((target) => target.id);
+    const order = completeOrder(targetIds, allKnownIds);
+    setSupportedTargets((current) => orderByPreference(current, order, (target) => target.id));
+    setTargets((current) => orderByPreference(current, order, (target) => target.id));
+    setDiscoveredTargets((current) => orderByPreference(current, order, (target) => target.id));
+    persistUiState({ agentOrder: order });
+  };
   const dismissAppModal = () => {
     if (pendingSkillImport) {
       dismissSkillImport();
@@ -1684,7 +1679,6 @@ const AppContent = ({
 
   const selectTargetNow = (targetId: string) => {
     setIsTargetMenuOpen(false);
-    targetMenuButtonRef.current?.focus();
     if (targetId === selectedTargetId) {
       return;
     }
@@ -1727,10 +1721,6 @@ const AppContent = ({
         profileActionsButtonRef.current?.focus();
         return;
       }
-      if (isTargetMenuOpen) {
-        setIsTargetMenuOpen(false);
-        targetMenuButtonRef.current?.focus();
-      }
     };
 
     document.addEventListener("keydown", handleKeyDown);
@@ -1742,7 +1732,7 @@ const AppContent = ({
   ]);
 
   useEffect(() => {
-    if (!isTargetMenuOpen && !isProfileActionsOpen) {
+    if (!isProfileActionsOpen) {
       return undefined;
     }
 
@@ -1759,24 +1749,12 @@ const AppContent = ({
       }
       setIsTargetMenuOpen(false);
       setIsProfileActionsOpen(false);
-      if (isTargetMenuOpen) {
-        targetMenuButtonRef.current?.focus();
-      } else if (isProfileActionsOpen) {
-        profileActionsButtonRef.current?.focus();
-      }
+      profileActionsButtonRef.current?.focus();
     };
 
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [isProfileActionsOpen, isTargetMenuOpen]);
-
-  useEffect(() => {
-    if (!isTargetMenuOpen) return;
-    window.requestAnimationFrame(() => focusInitialActionMenuItem(
-      targetMenuRef.current,
-      '[role="menuitemradio"][aria-checked="true"]'
-    ));
-  }, [isTargetMenuOpen]);
+  }, [isProfileActionsOpen]);
 
   useEffect(() => {
     if (!isProfileActionsOpen) return;
@@ -1831,6 +1809,12 @@ const AppContent = ({
     ]
   );
   const selectedTargetState = targetStates.find((state) => state.targetId === selectedTarget?.id);
+  const selectedAppliedProfileSnapshot =
+    draftProfile &&
+    selectedTargetState?.activeProfileId === draftProfile.id &&
+    selectedTargetState.appliedProfileSnapshot?.profileId === draftProfile.id
+      ? selectedTargetState.appliedProfileSnapshot
+      : undefined;
   const deleteProfileCandidate = deleteProfileCandidateId
     ? profiles.find((profile) => profile.id === deleteProfileCandidateId)
     : undefined;
@@ -1929,7 +1913,6 @@ const AppContent = ({
       : readiness.status === "dirty" || readiness.status === "apply-pending"
         ? RefreshCw
         : TriangleAlert;
-  const selectedTargetIcon = selectedTarget ? targetIconFor(selectedTarget) : undefined;
   const readinessTargetName = selectedTarget?.name ?? t("Agent");
   const readinessActionText =
     isProfilePreviewing
@@ -1965,6 +1948,7 @@ const AppContent = ({
     !draftProfile ||
     !selectedTarget ||
     busy ||
+    isProfileSaving ||
     profileMetadataSavingId === draftProfile.id ||
     isProfileDirty ||
     readiness.status === "applied";
@@ -1974,6 +1958,8 @@ const AppContent = ({
       ? t("Select an Agent before previewing changes")
       : busy
         ? t("An action is in progress")
+        : isProfileSaving
+          ? t("Saving Profile")
         : profileMetadataSavingId === draftProfile.id
           ? t("Saving Profile details")
         : t(readiness.message);
@@ -1988,17 +1974,19 @@ const AppContent = ({
       (selectedTarget?.health.canWrite ?? false)
   );
 
-  const previewSelectedProfile = () =>
-    runProfilePreview({
-      profile: draftProfile,
+  const previewSelectedProfile = async () => {
+    const savedProfile = isProfileDirty || isProfileSaving
+      ? await saveDraft()
+      : draftProfile;
+    if (!savedProfile) return;
+    await runProfilePreview({
+      profile: savedProfile,
       target: selectedTarget,
-      dirty: isProfileDirty,
+      dirty: false,
       localValidationErrors,
-      onSaveRequired: () => {
-        setSkillUpdateCheckStatus(undefined);
-        saveButtonRef.current?.focus();
-      }
+      onSaveRequired: () => setSkillUpdateCheckStatus(undefined)
     });
+  };
 
   const runReadinessRemediation = () => {
     if (readiness.remediationLabel === "Open Agents") {
@@ -2267,17 +2255,40 @@ const AppContent = ({
     }
   };
 
-  const updateLibrarySkill = async (plan: SkillUpdatePlan) => {
+  const updateLibrarySkill = async (
+    plan: SkillUpdatePlan
+  ): Promise<SkillUpdateActionResult> => {
     if (!plan.previewId) {
-      setError("Skill update preview is unavailable; review the update again");
-      return;
+      const message = "Skill update preview is unavailable; review the update again";
+      setError(message);
+      return { status: "failed", error: message };
     }
     setBusy(true);
     setError(undefined);
     try {
       const result = await skillUpdateQueue.execute([plan], false);
       applyLibraryContentUpdatesLocally(result.updated);
-      await refreshSkillSourceGroups();
+      if (result.failed.length > 0) {
+        const message = result.failed[0]!.error;
+        setSkillUpdateCheckStatus({ state: "error", message: `Update ${plan.id} failed` });
+        setError(message);
+        return { status: "failed", error: message };
+      }
+      if (result.updated.length === 0) {
+        const message = `Update ${plan.id} did not change the Library`;
+        setSkillUpdateCheckStatus({ state: "error", message });
+        setError(message);
+        return { status: "failed", error: message };
+      }
+      const refreshed = await refreshSkillSourceGroups();
+      if (!refreshed) {
+        const message = t(
+          "The Skill was updated, but the Library view could not be refreshed. Close and reopen Skills, then try Refresh."
+        );
+        setSkillUpdateCheckStatus({ state: "error", message });
+        setError(message);
+        return { status: "partial", error: message };
+      }
       if (result.updated.length > 0) {
         setSkillUpdateCheckStatus(
           summarizeSkillUpdateResult(
@@ -2287,10 +2298,12 @@ const AppContent = ({
           )
         );
       }
-      if (result.failed.length > 0) {
-        setSkillUpdateCheckStatus({ state: "error", message: `Update ${plan.id} failed` });
-        setError(result.failed[0]!.error);
-      }
+      return { status: "completed" };
+    } catch (unknownError) {
+      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      setSkillUpdateCheckStatus({ state: "error", message: `Update ${plan.id} failed` });
+      setError(message);
+      return { status: "failed", error: message };
     } finally {
       setBusy(false);
     }
@@ -2522,13 +2535,6 @@ const AppContent = ({
     if (announce) setError(undefined);
     try {
       await runFreshness("local-skills", reason, async () => {
-        if (announce) {
-          setBusy(true);
-          setSkillUpdateCheckStatus({
-            state: "checking",
-            message: "Refreshing local skills..."
-          });
-        }
         setSkillInventoryRefreshing(true);
         setEnvironmentScanStatus("checking");
         try {
@@ -2538,21 +2544,13 @@ const AppContent = ({
           return inventory;
         } finally {
           setSkillInventoryRefreshing(false);
-          if (announce) setBusy(false);
         }
       });
-      if (announce) {
-        setSkillUpdateCheckStatus({
-          state: "success",
-          message: "Local skills refreshed"
-        });
-      }
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
       setEnvironmentScanStatus("error");
       if (announce) {
         setError(message);
-        setSkillUpdateCheckStatus({ state: "error", message: "Local skill refresh failed" });
       }
     }
   };
@@ -3253,17 +3251,16 @@ const AppContent = ({
   };
 
   const refreshTargets = useAgentRefresh({
+    agentOrder: uiState.agentOrder,
     loadRecoveryHistory: loadTargetRecoveryHistory,
     profiles,
     runFreshness,
-    setBusy,
     setError,
     setDiscoveredTargets,
     setMcpConnections: setNativeMcpConnections,
     setMcpIssues: setNativeMcpIssues,
     setSelectedTargetId,
     setSupportedTargets,
-    setTargetRefreshStatus,
     setTargetStates,
     setTargets
   });
@@ -3282,8 +3279,6 @@ const AppContent = ({
     setProfileSaveStatus("");
     clearProfileApplyRefreshDetail();
     settingsController.actions.clearStatus();
-    setTargetRefreshStatus(undefined);
-    setSkillRefreshStatus(undefined);
     setSkillCleanupResult(undefined);
     setProfileCaptureStatus("");
   };
@@ -3401,16 +3396,6 @@ const AppContent = ({
             onClick: () => void undoSkillCleanup()
           }
         }
-    : skillRefreshStatus && activeWorkspace === "library"
-      ? {
-          kind: skillRefreshStatus === "refreshing" ? "loading" : "success",
-          title: skillRefreshStatus === "refreshing" ? "Refreshing skills" : "Skills refreshed"
-        }
-    : targetRefreshStatus && activeWorkspace === "targets"
-      ? {
-          kind: targetRefreshStatus === "refreshing" ? "loading" : "success",
-          title: targetRefreshStatus === "refreshing" ? "Refreshing Agents" : "Agents refreshed"
-        }
     : skillUpdateCheckStatus && activeWorkspace === skillUpdateFeedbackWorkspace
       ? {
           kind:
@@ -3427,8 +3412,11 @@ const AppContent = ({
         ? {
             kind:
               profileSaveStatus === "Profile saved" ||
-              profileSaveStatus === "Profile details saved"
+              profileSaveStatus === "Profile details saved" ||
+              profileSaveStatus === "Profile restored"
                 ? "success"
+                : profileSaveStatus === "Profile save failed"
+                  ? "error"
                 : profileSaveStatus === "Saving Profile" ||
                     profileSaveStatus === "Saving Profile details"
                   ? "loading"
@@ -3485,88 +3473,51 @@ const AppContent = ({
   const evaluationDescription = t(evaluationControl.description, {
     target: selectedTarget?.name ?? t("the selected Agent")
   });
-  const openProfileEvaluation = () => {
+  const openProfileEvaluation = async () => {
     if (!draftProfile || !selectedTarget || evaluationControl.disabled) return;
-    if (isProfileDirty) {
-      setProfileSaveStatus("Save this Profile before comparing it");
-      window.requestAnimationFrame(() => saveButtonRef.current?.focus());
-      return;
-    }
+    if (isProfileDirty || isProfileSaving) await saveDraft();
     setIsTargetMenuOpen(false);
     setIsProfileActionsOpen(false);
     setProfileEvaluationOpen(true);
   };
-  const targetWorkspaceControl = targets.length === 0 ? null : installedTargets.length === 1 && selectedTarget ? (
-    <div
-      className="profile-target-workspace-button is-static"
-      aria-label={t("Current Agent {{name}}", { name: selectedTarget.name })}
-    >
-      {selectedTargetIcon?.assetUrl ? (
+  const targetSwitcherItems = targets.map((target) => {
+    const icon = targetIconFor(target);
+    return {
+      id: target.id,
+      title: target.name,
+      searchText: target.name,
+      icon: icon.assetUrl ? (
         <img
-          className={`profile-target-logo profile-target-logo--${selectedTargetIcon.flavor}`}
-          src={selectedTargetIcon.assetUrl}
+          className={`agent-context-switcher__logo profile-target-logo--${icon.flavor}`}
+          src={icon.assetUrl}
           alt=""
         />
-      ) : (
-        <Monitor size={16} aria-hidden="true" />
-      )}
-      <span>{selectedTarget.name}</span>
-    </div>
-  ) : (
-    <div className="profile-target-workspace-control">
-      <button
-        ref={targetMenuButtonRef}
-        className="profile-target-workspace-button"
-        type="button"
-        aria-expanded={isTargetMenuOpen}
-        aria-haspopup="menu"
-        aria-label={t("Select apply Agent")}
-        title={t("Select apply Agent")}
-        onClick={() => {
-          setIsProfileActionsOpen(false);
-          setIsTargetMenuOpen((current) => !current);
-        }}
-      >
-        {selectedTargetIcon?.assetUrl ? <img className={`profile-target-logo profile-target-logo--${selectedTargetIcon.flavor}`} src={selectedTargetIcon.assetUrl} alt="" /> : <Monitor size={16} aria-hidden="true" />}
-        <span>{selectedTarget?.name ?? t("Select")}</span>
-        <ChevronDown size={14} strokeWidth={2.2} aria-hidden="true" />
-      </button>
-      {isTargetMenuOpen ? (
-        <ActionMenu
-          ariaLabel={t("Apply Agents")}
-          className="profile-target-menu"
-          menuRef={targetMenuRef}
-        >
-          {targets.map((target) => {
-            const targetIcon = targetIconFor(target);
-            return (
-              <button
-                className={target.id === selectedTargetId ? "is-selected" : ""}
-                type="button"
-                role="menuitemradio"
-                aria-checked={target.id === selectedTargetId}
-                key={target.id}
-                onClick={() => selectTarget(target.id)}
-              >
-                {targetIcon.assetUrl ? (
-                  <img
-                    className={`profile-target-logo profile-target-logo--${targetIcon.flavor}`}
-                    src={targetIcon.assetUrl}
-                    alt=""
-                  />
-                ) : (
-                  <Monitor size={16} strokeWidth={2.2} aria-hidden="true" />
-                )}
-                <span>{target.name}</span>
-                {target.id === selectedTargetId ? (
-                  <CheckCircle2 size={15} strokeWidth={2.2} aria-hidden="true" />
-                ) : null}
-              </button>
-            );
-          })}
-        </ActionMenu>
-      ) : null}
-    </div>
+      ) : <Monitor size={16} aria-hidden="true" />
+    };
+  });
+  const targetWorkspaceControl = targets.length === 0 ? null : (
+    <ObjectSwitcher
+      ariaLabel={installedTargets.length === 1 && selectedTarget
+        ? t("Current Agent {{name}}", { name: selectedTarget.name })
+        : t("Select apply Agent")}
+      className="agent-context-switcher profile-agent-switcher"
+      emptyMessage={t("No enabled Agents")}
+      fullWidth
+      items={targetSwitcherItems}
+      open={isTargetMenuOpen}
+      query={targetMenuQuery}
+      searchLabel={t("Search Agents")}
+      searchPlaceholder={t("Search Agents")}
+      selectedId={selectedTargetId}
+      static={installedTargets.length === 1}
+      showTriggerDescription={false}
+      onOpenChange={(open) => {
+        setIsProfileActionsOpen(false);
+        setIsTargetMenuOpen(open);
+      }}
+      onQueryChange={setTargetMenuQuery}
+      onSelect={selectTarget}
+    />
   );
 
   const profileObjectActions = draftProfile && !profileLoadingId ? (
@@ -3575,29 +3526,7 @@ const AppContent = ({
       ref={profileObjectActionsRef}
       aria-label={t("Selected Profile actions")}
     >
-      <Button
-        ref={saveButtonRef}
-        className="save-button"
-        busy={isProfileSaving}
-        disabled={
-          busy ||
-          isProfileSaving ||
-          profileMetadataSavingId === draftProfile.id ||
-          !isProfileDirty
-        }
-        variant={isProfileDirty ? "primary" : "secondary"}
-        onClick={saveSelectedProfile}
-      >
-        {t(isProfileSaving ? "Saving..." : "Save")}
-      </Button>
       {targetWorkspaceControl}
-      <ProfileComparisonButton
-        buttonRef={profileEvaluationButtonRef}
-        control={evaluationControl}
-        description={evaluationDescription}
-        label={t("Compare")}
-        onClick={openProfileEvaluation}
-      />
       {profileApplyControl}
       <IconButton
         ref={profileActionsButtonRef}
@@ -3616,11 +3545,30 @@ const AppContent = ({
       {isProfileActionsOpen ? (
         <ProfileActionsMenu
           disabled={busy}
+          compareDisabled={evaluationControl.disabled}
+          compareDescription={evaluationDescription}
           menuRef={profileActionsMenuRef}
+          appliedRestoreAvailable={Boolean(selectedAppliedProfileSnapshot)}
+          appliedRestoreDescription={selectedAppliedProfileSnapshot
+            ? t("Restore the Profile version last applied to {{target}}.", {
+                target: selectedTarget?.name ?? t("this Agent")
+              })
+            : t("Apply this Profile to {{target}} once to create a restore point.", {
+                target: selectedTarget?.name ?? t("this Agent")
+              })}
+          onCompare={() => void openProfileEvaluation()}
           onDuplicate={() => duplicateProfile()}
           onDelete={() => {
             setIsProfileActionsOpen(false);
             openDeleteProfileDialog();
+          }}
+          onOpenRecovery={() => {
+            setIsProfileActionsOpen(false);
+            setProfileRecoveryMode("history");
+          }}
+          onRestoreLastApplied={() => {
+            setIsProfileActionsOpen(false);
+            setProfileRecoveryMode("applied");
           }}
         />
       ) : null}
@@ -3716,20 +3664,7 @@ const AppContent = ({
                 <LibraryHeaderActions
                   mode={skillLibraryMode}
                   toolOpen={Boolean(skillLibraryTool)}
-                  refreshing={
-                    skillRefreshStatus === "refreshing" ||
-                    freshnessStates["skill-library"].status === "refreshing"
-                  }
-                  freshness={(
-                    <FreshnessStatus
-                      state={
-                        skillLibraryMode === "sources"
-                          ? freshnessStates["skill-upstreams"]
-                          : freshnessStates["skill-library"]
-                      }
-                      verb={skillLibraryMode === "sources" ? "Checked" : "Refreshed"}
-                    />
-                  )}
+                  freshness={freshnessStates["skill-library"]}
                   onImport={() => setSkillLibraryTool("import")}
                   onScanLocal={() => {
                     void openSkillDiscoveries();
@@ -3961,9 +3896,6 @@ const AppContent = ({
                     })}
                   >
                     <header className="profile-hero profile-hero--loading">
-                      <span className="profile-hero__icon" aria-hidden="true">
-                        <ProductIcon name="profiles" size={19} strokeWidth={2.1} />
-                      </span>
                       <div className="profile-hero__body">
                         <h3
                           aria-label={loadingProfileSummary?.name ?? t("Profile")}
@@ -3977,6 +3909,7 @@ const AppContent = ({
                             selectedProfileId={profileLoadingId ?? selectedProfileId}
                             draftProfile={draftProfile}
                             isProfileDirty={isProfileDirty}
+                            profileSaveStatus={profileSaveStatus}
                             targets={targets}
                             targetStates={targetStates}
                             actionsDisabled={busy}
@@ -3989,6 +3922,7 @@ const AppContent = ({
                             }}
                             onDelete={openDeleteProfileDialog}
                             onDuplicate={duplicateProfile}
+                            onReorder={reorderProfiles}
                             onSearchChange={setProfileSearch}
                             onSelect={selectProfile}
                           />
@@ -4020,16 +3954,6 @@ const AppContent = ({
                 ) : draftProfile ? (
                   <>
                     <header className="profile-hero">
-                      <ResourceIconPicker
-                        className="profile-hero__icon"
-                        iconKey={draftProfile.manifest.iconKey ?? defaultProfileIconKey}
-                        label={draftProfile.manifest.name}
-                        showAgentIcons
-                        triggerLabel={t("Change icon for Profile {{id}}", { id: draftProfile.id })}
-                        onChange={(iconKey) => {
-                          if (iconKey) changeProfileIcon(draftProfile.id, iconKey);
-                        }}
-                      />
                       <div className="profile-hero__body">
                       <h3 aria-label={draftProfile.manifest.name} className="profile-hero__title">
                           <ProfileList
@@ -4040,6 +3964,7 @@ const AppContent = ({
                             selectedProfileId={profileLoadingId ?? selectedProfileId}
                             draftProfile={draftProfile}
                             isProfileDirty={isProfileDirty}
+                            profileSaveStatus={profileSaveStatus}
                             targets={targets}
                             targetStates={targetStates}
                             actionsDisabled={busy}
@@ -4052,6 +3977,7 @@ const AppContent = ({
                             }}
                             onDelete={openDeleteProfileDialog}
                             onDuplicate={duplicateProfile}
+                            onReorder={reorderProfiles}
                             onSearchChange={setProfileSearch}
                             onSelect={selectProfile}
                           />
@@ -4152,7 +4078,7 @@ const AppContent = ({
                           currentValue={currentTargetInstructions?.content}
                           currentValueAvailable={Boolean(currentTargetInstructions) &&
                             !nativeInstructionIssues.some((issue) => issue.targetId === selectedTarget?.id)}
-                          onChange={(instructions) => {
+                          onSave={(instructions) => {
                             updateDraftProfile({
                               ...draftProfile,
                               instructions
@@ -4297,6 +4223,9 @@ const AppContent = ({
                         confirmLabel={t("Apply")}
                         confirmDisabled={!canApply || busy}
                         confirmBusy={isProfileApplying}
+                        compareDisabled={evaluationControl.disabled}
+                        compareDescription={evaluationDescription}
+                        suspended={profileEvaluationOpen}
                         onOpenRecovery={() => {
           clearProfilePreview();
                           setSettingsCategory("data");
@@ -4313,6 +4242,7 @@ const AppContent = ({
                             );
                           })}
                         onReviewSkillCollection={reviewPreviewSkillCollection}
+                        onCompare={() => void openProfileEvaluation()}
                         onCancel={clearProfilePreview}
                         onConfirm={applySelectedProfile}
                       />
@@ -4327,7 +4257,7 @@ const AppContent = ({
                           setSelectedSkillUpdatePlan(undefined);
                           skillUpdateQueue.resetRun();
                         }}
-                        onConfirm={(plan) => void updateLibrarySkill(plan)}
+                        onConfirm={updateLibrarySkill}
                       />
                   </>
                 ) : (
@@ -4356,21 +4286,25 @@ const AppContent = ({
                   >
                     <header className="profile-dialog-header">
                       <div className="ui-dialog-header__copy">
-                        <div className="section-title ui-dialog-title">{t("Save changes?")}</div>
+                        <div className="section-title ui-dialog-title">
+                          {t(projectEditorGuard?.dirty ? "Save changes?" : "Profile could not be saved")}
+                        </div>
                         <p className="muted ui-dialog-description">
-                          {t("Save before you {{action}}, or discard the current draft.", { action: t(pendingProfileAction.label) })}
+                          {projectEditorGuard?.dirty
+                            ? t("Save before you {{action}}, or discard the current draft.", { action: t(pendingProfileAction.label) })
+                            : t("Retry saving before you {{action}}, or restore the last saved version.", { action: t(pendingProfileAction.label) })}
                         </p>
                       </div>
                     </header>
                     <footer className="preview-actions profile-dirty-actions">
                       <Button ref={appModalInitialFocusRef} disabled={busy} onClick={cancelPendingProfileAction}>
-                        {t("Cancel")}
+                        {t(projectEditorGuard?.dirty ? "Cancel" : "Keep editing")}
                       </Button>
                       <Button disabled={busy} onClick={() => void continuePendingProfileAction(false)}>
-                        {t("Discard changes")}
+                        {t(projectEditorGuard?.dirty ? "Discard changes" : "Restore saved version")}
                       </Button>
                       <Button variant="primary" disabled={busy} onClick={() => void continuePendingProfileAction(true)}>
-                        {t("Save and continue")}
+                        {t(projectEditorGuard?.dirty ? "Save and continue" : "Retry and continue")}
                       </Button>
                     </footer>
                   </section>
@@ -4388,6 +4322,7 @@ const AppContent = ({
                 targets={targets}
                 form={profileForm}
                 error={profileFormError}
+                iconKey={draftProfile?.manifest.iconKey ?? defaultProfileIconKey}
                 dialogRef={appModalDialogRef}
                 initialFocusRef={appModalInitialFocusRef}
                 onSourceChange={(source) => {
@@ -4419,6 +4354,9 @@ const AppContent = ({
                 }}
                 onDescriptionChange={(description) =>
                   setProfileForm({ ...profileForm, description })}
+                onIconChange={(iconKey) => {
+                  if (draftProfile) changeProfileIcon(draftProfile.id, iconKey);
+                }}
                 onClose={closeProfileDialog}
                 onSubmit={() => {
                   void submitProfileDialog();
@@ -4446,11 +4384,44 @@ const AppContent = ({
                   open
                   profile={draftProfile}
                   target={selectedTarget}
-                  returnFocusRef={profileEvaluationButtonRef}
+                  returnFocusRef={profileActionsButtonRef}
                   onClose={() => setProfileEvaluationOpen(false)}
                   onReviewApply={() => {
                     setProfileEvaluationOpen(false);
-                    window.requestAnimationFrame(previewSelectedProfile);
+                    window.requestAnimationFrame(() => void previewSelectedProfile());
+                  }}
+                />
+              ) : null}
+              {profileRecoveryMode && draftProfile ? (
+                <ProfileRecoveryDialog
+                  mode={profileRecoveryMode}
+                  open
+                  profileId={draftProfile.id}
+                  profileName={draftProfile.manifest.name}
+                  targetName={selectedTarget?.name}
+                  appliedSnapshot={selectedAppliedProfileSnapshot}
+                  onClose={() => setProfileRecoveryMode(undefined)}
+                  onRestored={async (restored) => {
+                    await refreshProfiles();
+                    replaceSavedProfile(restored, "Profile restored");
+                    clearProfilePreview();
+                    setRollbackPreview(undefined);
+                  }}
+                  onRestoreApplied={async () => {
+                    if (!draftProfile || !selectedTarget) return;
+                    const current = isProfileDirty || isProfileSaving
+                      ? await saveDraft()
+                      : draftProfile;
+                    if (!current) throw new Error("Profile is unavailable");
+                    const restored = await window.agentEnv.restoreAppliedProfile(
+                      current.id,
+                      selectedTarget.id,
+                      current.contentHash ?? ""
+                    );
+                    await refreshProfiles();
+                    replaceSavedProfile(restored, "Profile restored to last applied version");
+                    clearProfilePreview();
+                    setRollbackPreview(undefined);
                   }}
                 />
               ) : null}
@@ -4459,6 +4430,8 @@ const AppContent = ({
         ) : activeWorkspace === "projects" ? (
           <ProjectsWorkspace
             targets={targets}
+            uiState={uiState}
+            onUpdateUiState={persistUiState}
             onEditorGuardChange={setProjectEditorGuard}
             openRequest={projectOpenRequest}
             editorGuardPromptOpen={Boolean(pendingProfileAction && projectEditorGuard?.dirty)}
@@ -4491,6 +4464,7 @@ const AppContent = ({
               busy={busy}
               freshness={freshnessStates.agents}
               onRefresh={refreshTargets}
+              onReorder={reorderAgents}
               onChooseAgents={openAgentChooser}
               onConfigure={openAgentConfiguration}
               onReviewEnvironment={openEnvironmentReview}

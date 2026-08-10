@@ -12,12 +12,13 @@ import {
   Pencil,
   Plus,
   Plug,
-  RefreshCw,
+  RotateCcw,
   Trash2
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { ProjectSummary } from "../../shared/types";
+import type { ProjectSummary, UiState, UiStateUpdate } from "../../shared/types";
+import { completeOrder, defaultUiState, orderByPreference } from "../../shared/uiState";
 import type {
   ProjectEnvironmentPreview,
   ProjectEnvironmentSnapshot,
@@ -39,6 +40,7 @@ import {
   ProjectResourceEditorDialog,
   type ProjectEditorGuard
 } from "./ProjectResourceEditorDialog";
+import { WorkspaceInstructionPreviewList } from "./WorkspaceInstructionPreviewList";
 import {
   ActionMenu,
   ActionMenuItem,
@@ -56,6 +58,7 @@ import {
   Notice,
   ObjectSwitcher,
   PageHeader,
+  RefreshAction,
   ResourceDisclosureSection,
   ResourcePanelToolbar,
   SelectField,
@@ -70,11 +73,15 @@ type ProjectMenuState = { projectId: string; left: number; top: number };
 
 export const ProjectsWorkspace = ({
   targets,
+  uiState = defaultUiState(),
+  onUpdateUiState = () => undefined,
   onEditorGuardChange,
   openRequest,
   editorGuardPromptOpen = false
 }: {
   targets: TargetInfo[];
+  uiState?: UiState;
+  onUpdateUiState?(update: UiStateUpdate): void;
   onEditorGuardChange?(guard?: ProjectEditorGuard): void;
   openRequest?: { requestId: number; projectId: string };
   editorGuardPromptOpen?: boolean;
@@ -89,7 +96,7 @@ export const ProjectsWorkspace = ({
     isExpanded: resourceKindIsExpanded,
     toggleExpandedId: toggleResourceKind
   } = useDisclosureSet<ProjectResourceKind>();
-  const [selectedId, setSelectedId] = useState<string>();
+  const [selectedId, setSelectedId] = useState<string | undefined>(uiState.selectedWorkspaceId);
   const [operation, setOperation] = useState<ProjectOperation>();
   const [error, setError] = useState("");
   const [modalError, setModalError] = useState("");
@@ -104,7 +111,7 @@ export const ProjectsWorkspace = ({
     resourceId?: string;
     agentId?: string;
   }>();
-  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [recoveryMode, setRecoveryMode] = useState<"latest" | "history">();
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [skillDialogOpen, setSkillDialogOpen] = useState(false);
@@ -124,6 +131,10 @@ export const ProjectsWorkspace = ({
 
   const selected = projects.find((project) => project.id === selectedId) ?? projects[0];
   const availableTargets = targets.filter((target) => Boolean(target.health.executablePath));
+  const availableTargetIds = availableTargets.map((target) => target.id).join("|");
+  const persistedAgentId = selected
+    ? uiState.workspaceAgentSelections[selected.id]
+    : undefined;
   const selectedAgent = availableTargets.find((target) => target.id === selectedAgentId)
     ?? availableTargets[0];
   const agentSwitcherItems = availableTargets.map((target) => {
@@ -165,6 +176,14 @@ export const ProjectsWorkspace = ({
     existingProjectSkill.contentHash === selectedLibrarySkill.contentHash
   );
   const selectedSkillConflicts = Boolean(existingProjectSkill && !selectedSkillAlreadyMatches);
+  const orderProjects = (items: ProjectSummary[]) =>
+    orderByPreference(items, uiState.workspaceOrder, (project) => project.id);
+  const selectProject = (projectId: string | undefined) => {
+    setSelectedId(projectId);
+    if (uiState.selectedWorkspaceId !== projectId) {
+      onUpdateUiState({ selectedWorkspaceId: projectId });
+    }
+  };
   const gitStateLabel = (state?: ProjectGitPathState) => {
     if (state === "tracked-clean") return t("Tracked");
     if (state === "tracked-modified") return t("Modified");
@@ -188,12 +207,13 @@ export const ProjectsWorkspace = ({
     setOperation("refresh");
     setError("");
     try {
-      const next = await window.agentEnv.listProjects();
+      const next = orderProjects(await window.agentEnv.listProjects());
       setProjects(next);
-      const nextSelectedId = selectedId && next.some((project) => project.id === selectedId)
-        ? selectedId
+      const preferredSelectedId = selectedId ?? uiState.selectedWorkspaceId;
+      const nextSelectedId = preferredSelectedId && next.some((project) => project.id === preferredSelectedId)
+        ? preferredSelectedId
         : next[0]?.id;
-      setSelectedId(nextSelectedId);
+      selectProject(nextSelectedId);
       if (refreshEnvironment) {
         const nextSelected = next.find((project) => project.id === nextSelectedId);
         setSnapshot(nextSelected?.exists
@@ -213,21 +233,42 @@ export const ProjectsWorkspace = ({
 
   useEffect(() => {
     if (!openRequest) return;
-    setSelectedId(openRequest.projectId);
+    selectProject(openRequest.projectId);
   }, [openRequest?.requestId, openRequest?.projectId]);
+
+  useEffect(() => {
+    if (
+      uiState.selectedWorkspaceId &&
+      uiState.selectedWorkspaceId !== selectedId &&
+      projects.some((project) => project.id === uiState.selectedWorkspaceId)
+    ) {
+      setSelectedId(uiState.selectedWorkspaceId);
+    }
+  }, [projects, selectedId, uiState.selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!selected) {
+      setSelectedAgentId(undefined);
+      return;
+    }
+    setSelectedAgentId((current) =>
+      availableTargets.some(
+            (target) => target.id === persistedAgentId
+          )
+          ? persistedAgentId
+        : availableTargets.some((target) => target.id === selected.lastAgentId)
+          ? selected.lastAgentId
+          : availableTargets.some((target) => target.id === current)
+            ? current
+          : availableTargets[0]?.id
+    );
+  }, [availableTargetIds, persistedAgentId, selected?.id, selected?.lastAgentId]);
 
   useEffect(() => {
     if (!selected) {
       setSnapshot(undefined);
       return;
     }
-    setSelectedAgentId((current) =>
-      availableTargets.some((target) => target.id === current)
-        ? current
-        : availableTargets.some((target) => target.id === selected.lastAgentId)
-          ? selected.lastAgentId
-          : availableTargets[0]?.id
-    );
     if (!selected.exists) {
       setSnapshot(undefined);
       return;
@@ -317,9 +358,14 @@ export const ProjectsWorkspace = ({
       const path = await window.agentEnv.selectProjectFolder();
       if (!path) return;
       const added = await window.agentEnv.addProject(path);
-      const next = await window.agentEnv.listProjects();
-      setProjects(next);
+      const loaded = await window.agentEnv.listProjects();
+      const order = [
+        added.id,
+        ...loaded.map((project) => project.id).filter((id) => id !== added.id)
+      ];
+      setProjects(orderByPreference(loaded, order, (project) => project.id));
       setSelectedId(added.id);
+      onUpdateUiState({ workspaceOrder: order, selectedWorkspaceId: added.id });
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -333,8 +379,18 @@ export const ProjectsWorkspace = ({
     setModalError("");
     try {
       await window.agentEnv.removeProject(removeCandidate.id);
+      const removedIndex = projects.findIndex((project) => project.id === removeCandidate.id);
+      const loaded = await window.agentEnv.listProjects();
+      const order = completeOrder(
+        uiState.workspaceOrder.filter((id) => id !== removeCandidate.id),
+        loaded.map((project) => project.id)
+      );
+      const next = orderByPreference(loaded, order, (project) => project.id);
+      const nextSelected = next[Math.min(Math.max(removedIndex, 0), next.length - 1)];
+      setProjects(next);
+      setSelectedId(nextSelected?.id);
+      onUpdateUiState({ workspaceOrder: order, selectedWorkspaceId: nextSelected?.id });
       setRemoveCandidate(undefined);
-      await refresh();
     } catch (unknownError) {
       setModalError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       setOperation(undefined);
@@ -380,9 +436,10 @@ export const ProjectsWorkspace = ({
     top: number,
     returnFocus: HTMLElement
   ) => {
+    if (operation) return;
     const width = 184;
-    const estimatedHeight = 124;
-    setSelectedId(project.id);
+    const estimatedHeight = 160;
+    selectProject(project.id);
     menuReturnFocusRef.current = returnFocus;
     setProjectMenu({
       projectId: project.id,
@@ -393,22 +450,17 @@ export const ProjectsWorkspace = ({
 
   const runProjectMenuAction = (
     project: ProjectSummary,
-    action: "details" | "rename" | "recovery" | "remove"
+    action: "details" | "undo" | "recovery" | "remove"
   ) => {
     setProjectMenu(undefined);
     setModalError("");
-    setSelectedId(project.id);
+    selectProject(project.id);
     if (action === "details") {
       void openPreview(project.id);
       return;
     }
-    if (action === "rename") {
-      setRenameValue(project.name);
-      setRenameOpen(true);
-      return;
-    }
-    if (action === "recovery") {
-      setRecoveryOpen(true);
+    if (action === "undo" || action === "recovery") {
+      setRecoveryMode(action === "undo" ? "latest" : "history");
       return;
     }
     setRemoveCandidate(project);
@@ -460,7 +512,7 @@ export const ProjectsWorkspace = ({
     try {
       await window.agentEnv.openProject(selected.id, selectedAgent.id);
       const next = await window.agentEnv.listProjects();
-      setProjects(next);
+      setProjects(orderProjects(next));
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -516,7 +568,7 @@ export const ProjectsWorkspace = ({
       : project.lastAgentId
         ? targets.find((target) => target.id === project.lastAgentId)?.name ?? project.lastAgentId
         : undefined,
-    onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => {
+    onContextMenu: (event: React.MouseEvent<HTMLElement>) => {
       event.preventDefault();
       showProjectMenu(project, event.clientX, event.clientY, event.currentTarget);
     }
@@ -565,7 +617,6 @@ export const ProjectsWorkspace = ({
             <>
               <InspectorHeader
                 className="project-detail__header"
-                icon={<Folder size={20} strokeWidth={1.9} />}
                 responsive="stack"
                 titleLabel={selected.name}
                 title={(
@@ -589,11 +640,21 @@ export const ProjectsWorkspace = ({
                       searchLabel={t("Search Workspaces")}
                       searchPlaceholder={t("Search folders...")}
                       selectedId={selected.id}
-                      showTriggerIcon={false}
+                      showTriggerIcon
                       showTriggerDescription={false}
                       onOpenChange={setSwitcherOpen}
                       onQueryChange={setQuery}
-                      onSelect={setSelectedId}
+                      onReorder={(projectIds) => {
+                        const order = completeOrder(
+                          projectIds,
+                          projects.map((project) => project.id)
+                        );
+                        setProjects((current) =>
+                          orderByPreference(current, order, (project) => project.id)
+                        );
+                        onUpdateUiState({ workspaceOrder: order });
+                      }}
+                      onSelect={selectProject}
                       triggerVariant="inline"
                     />
                     <IconButton
@@ -613,20 +674,19 @@ export const ProjectsWorkspace = ({
                 description={<span className="selectable" title={selected.rootPath}>{selected.rootPath}</span>}
                 actions={(
                   <ControlGroup className="project-detail__actions">
-                    <IconButton
-                      aria-busy={operation === "inspect"}
+                    <RefreshAction
+                      busy={operation === "inspect"}
                       className="project-detail__refresh"
-                      disabled={!selected.exists || operation === "inspect"}
+                      disabled={!selected.exists}
                       label={t("Refresh Workspace")}
+                      presentation="icon"
                       size="compact"
                       variant="ghost"
-                      onClick={() => void refreshSelectedProject()}
-                    >
-                      <RefreshCw className={operation === "inspect" ? "is-spinning" : ""} size={15} />
-                    </IconButton>
+                      onRefresh={() => void refreshSelectedProject()}
+                    />
                     <ObjectSwitcher
                       ariaLabel={t("Choose Agent")}
-                      className="project-agent-switcher"
+                      className="agent-context-switcher project-agent-switcher"
                       disabled={availableTargets.length === 0}
                       emptyMessage={t("No enabled Agents")}
                       fullWidth
@@ -638,7 +698,15 @@ export const ProjectsWorkspace = ({
                       selectedId={selectedAgent?.id}
                       onOpenChange={setAgentSwitcherOpen}
                       onQueryChange={setAgentQuery}
-                      onSelect={setSelectedAgentId}
+                      onSelect={(agentId) => {
+                        setSelectedAgentId(agentId);
+                        onUpdateUiState({
+                          workspaceAgentSelections: {
+                            ...uiState.workspaceAgentSelections,
+                            [selected.id]: agentId
+                          }
+                        });
+                      }}
                     />
                     <Button
                       aria-label={selectedAgent
@@ -658,6 +726,7 @@ export const ProjectsWorkspace = ({
                         label={t("More Workspace actions")}
                         aria-expanded={projectMenu?.projectId === selected.id}
                         aria-haspopup="menu"
+                        disabled={Boolean(operation)}
                         onClick={(event) => {
                           if (projectMenu?.projectId === selected.id) {
                             setProjectMenu(undefined);
@@ -735,6 +804,13 @@ export const ProjectsWorkspace = ({
                             </Button>
                           </ResourcePanelToolbar>
                         ) : null}
+                        {kind === "instructions" ? (
+                  <WorkspaceInstructionPreviewList
+                    projectId={selected.id}
+                    resources={resources}
+                    onOpen={(resource) => setEditorRequest({ resourceId: resource.id })}
+                  />
+                        ) : (
                         <AlignedResourceList
                           actionTrack="compact"
                           className="project-resource-section__list"
@@ -771,16 +847,7 @@ export const ProjectsWorkspace = ({
                                 />
                               ) : undefined}
                               title={resource.name}
-                              actions={resource.kind === "instructions" && resource.editable ? (
-                                <IconButton
-                                  size="compact"
-                                  variant="ghost"
-                                  label={t("Edit {{name}}", { name: resource.name })}
-                                  onClick={() => setEditorRequest({ resourceId: resource.id })}
-                                >
-                                  <Pencil size={14} />
-                                </IconButton>
-                              ) : resource.kind === "skill" && resource.editable ? (
+                              actions={resource.kind === "skill" && resource.editable ? (
                                 <IconButton
                                   size="compact"
                                   label={t("Remove {{name}} from Workspace", { name: resource.name })}
@@ -804,6 +871,7 @@ export const ProjectsWorkspace = ({
                             <p className="project-resource-note">{t("No files detected")}</p>
                           ) : null}
                         </AlignedResourceList>
+                        )}
                       </ResourceDisclosureSection>
                     );
                   })}
@@ -845,9 +913,9 @@ export const ProjectsWorkspace = ({
               <Eye size={15} aria-hidden="true" />
               <span>{t("Loaded resource details")}</span>
             </ActionMenuItem>
-            <ActionMenuItem onClick={() => runProjectMenuAction(menuProject, "rename")}>
-              <Pencil size={15} aria-hidden="true" />
-              <span>{t("Rename")}</span>
+            <ActionMenuItem onClick={() => runProjectMenuAction(menuProject, "undo")}>
+              <RotateCcw size={15} aria-hidden="true" />
+              <span>{t("Undo last change")}</span>
             </ActionMenuItem>
             <ActionMenuItem onClick={() => runProjectMenuAction(menuProject, "recovery")}>
               <History size={15} aria-hidden="true" />
@@ -1056,9 +1124,10 @@ export const ProjectsWorkspace = ({
       ) : null}
       {selected ? (
         <ProjectRecoveryDialog
-          open={recoveryOpen}
+          mode={recoveryMode ?? "history"}
+          open={Boolean(recoveryMode)}
           projectId={selected.id}
-          onClose={() => setRecoveryOpen(false)}
+          onClose={() => setRecoveryMode(undefined)}
           onRestored={refreshSelectedProject}
         />
       ) : null}

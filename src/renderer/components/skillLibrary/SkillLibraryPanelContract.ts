@@ -44,7 +44,8 @@ import type { SkillUpdateRun } from "../../skillUpdateQueue";
 import type { TargetNameIndex } from "../../targetPresentation";
 import type {
   PreparedSkillTarget,
-  SkillImportQueueOptions
+  SkillImportQueueOptions,
+  SkillUpdateActionResult
 } from "../../skillLibraryContracts";
 import type { CollectionResolutionStrategy } from "../SkillCollectionCleanup";
 import type {
@@ -191,7 +192,7 @@ export interface SkillLibraryPanelActions {
   updates: {
     onPreviewLibrarySkillUpdate(id: string): Promise<void>;
     onCloseUpdatePreview(): void;
-    onUpdateLibrarySkill(plan: SkillUpdatePlan): void;
+    onUpdateLibrarySkill(plan: SkillUpdatePlan): Promise<SkillUpdateActionResult>;
     onUpdateAllLibrarySkills(plans: SkillUpdatePlan[]): void;
     onStopBulkLibrarySkillUpdates?(): void;
     onPreviewAllLibrarySkillUpdates(ids: string[]): Promise<void>;

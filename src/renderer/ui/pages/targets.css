@@ -188,7 +188,12 @@
   padding: 0 12px;
   width: 100%;
 }
-
+.target-card--workflow.is-dragging {
+  opacity: 0.45;
+}
+.target-card--workflow.is-drag-over {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
 .target-card--workflow + .target-card--workflow {
   border-top: 1px solid var(--border);
 }
@@ -274,7 +279,12 @@
   justify-content: center;
   width: 32px;
 }
-
+.target-workflow-icon[draggable="true"] {
+  cursor: grab;
+}
+.target-workflow-icon[draggable="true"]:active {
+  cursor: grabbing;
+}
 .target-workflow-icon img {
   height: 20px;
   object-fit: contain;

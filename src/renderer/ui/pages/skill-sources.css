@@ -353,7 +353,10 @@
   justify-content: center;
   opacity: 0;
   padding: 0;
-  transition: background-color 120ms ease, color 120ms ease, opacity 120ms ease;
+  transition:
+    background-color var(--motion-fast),
+    color var(--motion-fast),
+    opacity var(--motion-fast);
   width: 24px;
 }
 

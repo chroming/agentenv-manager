@@ -850,9 +850,10 @@ try {
   await agentsWorkspace.getByRole("article", { name: "Agent OpenCode" }).waitFor({
     state: "visible"
   });
-  await agentsWorkspace.getByText("Checking local Skills", { exact: true }).waitFor({
-    state: "visible"
-  });
+  await agentsWorkspace
+    .getByText("Checking local Skills", { exact: true })
+    .waitFor({ state: "visible", timeout: 5_000 })
+    .catch(() => undefined);
   await capturePage(page, join(outputDir, "agents-checking-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "agents-checking-920x620.png"));
@@ -1381,13 +1382,16 @@ try {
 
   await selectCaptureProfile("Code Review");
   await waitForProfileTitle("Code Review");
-  await page
-    .locator(".profile-hero")
-    .getByRole("button", { name: "Change icon for Profile code-review" })
+  await page.locator(".profile-hero").getByRole("button", { name: "Edit Profile" }).click();
+  const editProfileDialog = page.getByRole("dialog", { name: "Edit Profile" });
+  await editProfileDialog
+    .getByRole("button", { name: "Change icon for Code Review" })
     .click();
   await page.getByRole("menu", { name: "Icons for Code Review" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "profile-icon-picker-920x620.png"));
   await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await editProfileDialog.waitFor({ state: "hidden" });
   const skillsPolicy = page.getByRole("radiogroup", {
     name: "Skills application policy for OpenCode"
   });
@@ -1489,6 +1493,26 @@ try {
   await waitForProfileTitle("Code Review");
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "profiles-applied-920x620.png"));
+  await ensureComposerExpanded("Instructions");
+  await capturePage(page, join(outputDir, "profile-instructions-expanded-920x620.png"));
+  await page.getByRole("button", { name: "Open AGENTS.md", exact: true }).click();
+  const profileInstructionEditor = page.getByRole("dialog", {
+    name: "Instruction document"
+  });
+  await profileInstructionEditor.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "profile-instruction-preview-920x620.png"), {
+    preserveFocus: true
+  });
+  await profileInstructionEditor.getByRole("button", { name: "Edit", exact: true }).click();
+  await capturePage(page, join(outputDir, "profile-instruction-editor-920x620.png"), {
+    preserveFocus: true
+  });
+  await profileInstructionEditor.getByRole("button", { name: "Maximize preview" }).click();
+  await capturePage(page, join(outputDir, "profile-instruction-editor-maximized-920x620.png"), {
+    preserveFocus: true
+  });
+  await profileInstructionEditor.getByRole("button", { name: "Close" }).first().click();
+  await profileInstructionEditor.waitFor({ state: "hidden" });
   await ensureComposerExpanded("Skills");
   await capturePage(page, join(outputDir, "profile-skills-applied-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);

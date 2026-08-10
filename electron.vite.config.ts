@@ -1,10 +1,14 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "electron-vite";
+import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadEnv } from "vite";
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
+const appVersion = (JSON.parse(
+  readFileSync(resolve(rootDir, "package.json"), "utf8")
+) as { version: string }).version;
 
 type BuildEnvironment = Record<string, string | undefined>;
 
@@ -26,6 +30,7 @@ export const createElectronViteConfig = (
   return {
     main: {
       define: {
+        __AGENTENV_APP_VERSION__: JSON.stringify(appVersion),
         __AGENTENV_POSTHOG_HOST__: JSON.stringify(postHog.host),
         __AGENTENV_POSTHOG_PROJECT_TOKEN__: JSON.stringify(postHog.projectToken)
       },

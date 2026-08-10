@@ -14,10 +14,12 @@ export interface AgentEnvPaths {
   evaluationCacheDir: string;
   evaluationResultPath: string;
   projectsPath: string;
+  uiStatePath: string;
   skillSourcesPath: string;
   unmanagedSkillLocationsPath: string;
   skillCollectionDecisionsPath: string;
   profilesDir: string;
+  profileRecoveryDir: string;
   backupsDir: string;
   targetStatesDir: string;
   activationHistoryPath: string;
@@ -72,6 +74,8 @@ export const createPaths = (overrides: PathOverrides): AgentEnvPaths => {
       overrides.evaluationResultPath ?? join(overrides.appDataRoot, "evaluations", "latest.json"),
     projectsPath:
       overrides.projectsPath ?? join(overrides.appDataRoot, "projects.json"),
+    uiStatePath:
+      overrides.uiStatePath ?? join(overrides.appDataRoot, "ui-state.json"),
     skillSourcesPath:
       overrides.skillSourcesPath ?? join(overrides.appDataRoot, "skill-sources.json"),
     unmanagedSkillLocationsPath:
@@ -81,6 +85,8 @@ export const createPaths = (overrides: PathOverrides): AgentEnvPaths => {
       overrides.skillCollectionDecisionsPath ??
       join(overrides.appDataRoot, "skill-collection-decisions.json"),
     profilesDir: overrides.profilesDir ?? join(overrides.appDataRoot, "profiles"),
+    profileRecoveryDir:
+      overrides.profileRecoveryDir ?? join(overrides.appDataRoot, "profile-recovery"),
     backupsDir: overrides.backupsDir ?? join(overrides.appDataRoot, "backups"),
     targetStatesDir:
       overrides.targetStatesDir ?? join(overrides.appDataRoot, "target-states"),

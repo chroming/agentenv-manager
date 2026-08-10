@@ -116,6 +116,7 @@ import {
   type AppUpdateService
 } from "./appUpdates/updateService";
 import { createTelemetryService } from "./telemetry/telemetryService";
+import { createUiStateStore } from "./uiStateStore";
 
 const createGitHubFixtureFetch = (fixtureRoot: string) => {
   const fixtureTrees = new Map<string, string>();
@@ -658,7 +659,7 @@ const createServices = async (
   const currentAppVersion = updateAutomationEnabled &&
     process.env.AGENTENV_AUTOMATION_APP_VERSION
     ? process.env.AGENTENV_AUTOMATION_APP_VERSION
-    : app.getVersion();
+    : __AGENTENV_APP_VERSION__;
   const updateFetch: typeof globalThis.fetch | undefined = updateFixturePath
     ? async (input) => {
         const url = typeof input === "string" ? input : input.toString();
@@ -694,7 +695,7 @@ const createServices = async (
     projectToken: app.isPackaged ? __AGENTENV_POSTHOG_PROJECT_TOKEN__ : "",
     settingsStore,
     context: {
-      appVersion: app.getVersion(),
+      appVersion: __AGENTENV_APP_VERSION__,
       platform: process.platform as "darwin" | "win32" | "linux",
       osVersion: process.getSystemVersion(),
       arch: process.arch,
@@ -829,6 +830,7 @@ const createServices = async (
     appDataRoot: paths.appDataRoot,
     projectsPath: paths.projectsPath
   });
+  const uiStateStore = createUiStateStore(paths);
   let projectGitRunner: GitCommandRunner | undefined;
   const projectGitService = createProjectGitService({
     resolveRunner: async () => {
@@ -1081,6 +1083,7 @@ const createServices = async (
     paths,
     profileStore,
     projectStore,
+    uiStateStore,
     projectEnvironmentService,
     projectLaunchService,
     projectMutationService,
@@ -1315,7 +1318,7 @@ if (ownsSingleInstance) void app.whenReady().then(async () => {
   runtimeDiagnostics = createRuntimeDiagnostics({
     directory: diagnosticsDirectory,
     homeDir: app.getPath("home"),
-    appVersion: app.getVersion(),
+    appVersion: __AGENTENV_APP_VERSION__,
     buildCommit:
       process.env.AGENTENV_BUILD_COMMIT ??
       process.env.GITHUB_SHA ??

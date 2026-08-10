@@ -45,6 +45,9 @@ import type {
 } from "./evaluations";
 import type { AppUpdateStatus } from "./appUpdates";
 import type { TelemetryPreview } from "./telemetry";
+import type { UiState, UiStateUpdate } from "./uiState";
+
+export type { UiState, UiStateUpdate } from "./uiState";
 
 export type {
   AppInstallChannel,
@@ -204,6 +207,8 @@ export interface AgentEnvApi {
   updateLibrarySkill(input: SkillUpdateConfirmation): Promise<SkillLibraryEntry>;
   readSettings(): Promise<AgentEnvSettings>;
   updateSettings(input: Partial<AgentEnvSettings>): Promise<AgentEnvSettings>;
+  readUiState(): Promise<UiState>;
+  updateUiState(input: UiStateUpdate): Promise<UiState>;
   readWorkspaceSyncStatus(): Promise<WorkspaceSyncStatus>;
   connectWorkspaceSync(input: WorkspaceSyncConnectInput): Promise<WorkspaceSyncStatus>;
   checkWorkspaceSync(): Promise<WorkspaceSyncStatus>;
@@ -221,6 +226,13 @@ export interface AgentEnvApi {
   listProfiles(): Promise<ProfileSummary[]>;
   readProfile(id: string): Promise<ProfileDetail>;
   saveProfile(input: SaveProfileInput): Promise<ProfileDetail>;
+  listProfileRecovery(profileId: string): Promise<ProfileRecoverySummary[]>;
+  restoreProfileRecovery(profileId: string, recoveryId: string): Promise<ProfileDetail>;
+  restoreAppliedProfile(
+    profileId: string,
+    targetId: string,
+    expectedContentHash: string
+  ): Promise<ProfileDetail>;
   updateProfileSkills(input: UpdateProfileSkillsInput): Promise<UpdateProfileSkillsResult>;
   forkProfileSkills(input: ForkProfileSkillsInput): Promise<UpdateProfileSkillsResult>;
   updateProfileMetadata(input: UpdateProfileMetadataInput): Promise<ProfileDetail>;
@@ -1740,6 +1752,7 @@ export interface TargetState {
   managedMcpNames: string[];
   activeProfileId?: string;
   appliedProfileHash?: string;
+  appliedProfileSnapshot?: AppliedProfileSnapshot;
   appliedLibraryVersions?: LibraryResourceVersions;
   lastAppliedAt?: string;
   managedResources?: ManagedResourceSnapshot[];
@@ -1748,6 +1761,17 @@ export interface TargetState {
   keptOutsideSkills?: LegacyTargetKeptOutsideSkill[];
   sharedSkillPreparations?: SharedSkillPreparation[];
   recoveryRequired?: TargetRecoveryState;
+}
+
+export interface AppliedProfileSnapshot {
+  profileId: string;
+  profileName: string;
+  capturedAt: string;
+  contentHash: string;
+  snapshotHash: string;
+  manifest: ProfileManifest;
+  instructions: string;
+  resources: ProfileResources;
 }
 
 export interface LegacyTargetKeptOutsideSkill {
@@ -1789,6 +1813,7 @@ export interface TargetManagementState {
   activeProfileId?: string;
   activeProfileName?: string;
   appliedProfileHash?: string;
+  appliedProfileSnapshot?: AppliedProfileSnapshotSummary;
   appliedLibraryVersions?: LibraryResourceVersions;
   status: TargetManagementStatus;
   lifecycleStatus: TargetLifecycleStatus;
@@ -1800,6 +1825,16 @@ export interface TargetManagementState {
   sharedSkillPreparations?: SharedSkillPreparation[];
   warningCount: number;
   errorCount: number;
+}
+
+export interface AppliedProfileSnapshotSummary {
+  profileId: string;
+  profileName: string;
+  capturedAt: string;
+  contentHash: string;
+  instructionsLength: number;
+  skillCount: number;
+  mcpCount: number;
 }
 
 export type ManagedResourceKind =
@@ -1893,6 +1928,17 @@ export interface SaveProfileInput {
   instructions: string;
   resources: ProfileResources;
   expectedContentHash?: string;
+}
+
+export interface ProfileRecoverySummary {
+  id: string;
+  profileId: string;
+  profileName: string;
+  createdAt: string;
+  contentHash: string;
+  instructionsLength: number;
+  skillCount: number;
+  mcpCount: number;
 }
 
 export interface UpdateProfileSkillsInput {

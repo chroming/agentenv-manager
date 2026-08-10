@@ -389,6 +389,9 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     removeProjectSkill: vi.fn().mockRejectedValue(new Error("Project unavailable")),
     listProjectRecovery: vi.fn().mockResolvedValue([]),
     restoreProjectRecovery: vi.fn().mockRejectedValue(new Error("Project unavailable")),
+    listProfileRecovery: vi.fn().mockResolvedValue([]),
+    restoreProfileRecovery: vi.fn().mockRejectedValue(new Error("Profile unavailable")),
+    restoreAppliedProfile: vi.fn().mockRejectedValue(new Error("Applied Profile unavailable")),
     probeSupportedTargets: vi.fn().mockResolvedValue([target, codexTarget]),
     previewProfileComparison: vi.fn().mockRejectedValue(new Error("Comparison unavailable")),
     startProfileComparison: vi.fn().mockRejectedValue(new Error("Comparison unavailable")),
@@ -669,6 +672,22 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       agentDiscoveryVersion: input.agentDiscoveryVersion ?? 1,
       agentDiscoveryReviewedIds: input.agentDiscoveryReviewedIds ?? ["opencode", "codex"]
     })),
+    readUiState: vi.fn().mockResolvedValue({
+      version: 1,
+      profileOrder: [],
+      agentOrder: [],
+      workspaceOrder: [],
+      workspaceAgentSelections: {}
+    }),
+    updateUiState: vi.fn().mockImplementation(async (input) => ({
+      version: 1,
+      profileOrder: input.profileOrder ?? [],
+      agentOrder: input.agentOrder ?? [],
+      workspaceOrder: input.workspaceOrder ?? [],
+      workspaceAgentSelections: input.workspaceAgentSelections ?? {},
+      selectedProfileId: input.selectedProfileId,
+      selectedWorkspaceId: input.selectedWorkspaceId
+    })),
     readWorkspaceSyncStatus: vi.fn().mockResolvedValue({
       kind: "not-connected",
       localChangeCount: 0,
@@ -728,7 +747,13 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     saveProfile: vi.fn().mockImplementation(async (input) => ({
       ...profile,
       ...input,
-      id: input.manifest.id
+      id: input.manifest.id,
+      contentHash: "saved-profile-hash",
+      targetContentHashes: {
+        opencode: "saved-profile-hash",
+        codex: "saved-codex-profile-hash",
+        "claude-code": "saved-claude-profile-hash"
+      }
     })),
     updateProfileSkills: vi.fn().mockImplementation(async (input) => ({
       changed: true,
@@ -924,7 +949,9 @@ describe("App", () => {
     render(<App />);
 
     const workspace = await screen.findByRole("region", { name: "Agents" });
-    expect(within(workspace).getByText("Checking local Skills")).toBeInTheDocument();
+    expect(within(workspace).queryByText("Checking local Skills")).not.toBeInTheDocument();
+    expect(within(workspace).getByText("1 Agents detected · 1 Profiles"))
+      .toBeInTheDocument();
     expect(
       within(workspace).getByRole("button", { name: "OpenCode" })
     ).toBeEnabled();
@@ -1445,6 +1472,30 @@ describe("App", () => {
     return screen.findByRole("dialog", { name: "Choose Profile" });
   };
 
+  const expandProfileInstructions = () => {
+    const trigger = screen.getByRole("button", { name: "Instructions" });
+    if (trigger.getAttribute("aria-expanded") !== "true") fireEvent.click(trigger);
+  };
+
+  const profileInstructionPreview = () =>
+    screen.getByLabelText("Preview of AGENTS.md");
+
+  const editProfileInstructions = async (value: string) => {
+    expandProfileInstructions();
+    fireEvent.click(screen.getByRole("button", { name: "Open AGENTS.md" }));
+    const dialog = screen.getByRole("dialog", { name: "Instruction document" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Edit" }));
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Profile instruction content" }), {
+      target: { value }
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Edit" }))
+      .toBeInTheDocument());
+    expect(within(dialog).getByLabelText("Preview of AGENTS.md"))
+      .toHaveTextContent(value.trim());
+    fireEvent.click(within(dialog).getAllByRole("button", { name: "Close" })[0]!);
+  };
+
   const clickNewProfile = async () => {
     const switcher = await openProfileSwitcher();
     fireEvent.click(within(switcher).getByRole("button", { name: "New Profile" }));
@@ -1501,7 +1552,7 @@ describe("App", () => {
     }
 
     fireEvent.click(within(composer).getByRole("button", { name: "Instructions" }));
-    expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
+    expect(profileInstructionPreview()).toHaveTextContent("# Agent");
     fireEvent.click(within(composer).getByRole("button", { name: "MCPs" }));
     expect(
       within(
@@ -2170,8 +2221,8 @@ describe("App", () => {
     ];
     unrelatedReads.forEach((read) => vi.mocked(read).mockClear());
     fireEvent.click(screen.getByRole("button", { name: "Refresh skills" }));
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Skills refreshed"));
-    expect(listSkillLibrary).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(listSkillLibrary).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText("Skills refreshed")).not.toBeInTheDocument();
     expect(checkSkillLibraryUpdates).toHaveBeenCalledTimes(1);
     unrelatedReads.forEach((read) => expect(read).not.toHaveBeenCalled());
   });
@@ -2571,7 +2622,7 @@ describe("App", () => {
       await screen.findByRole("group", { name: "Cleanup group toolbar-reviewer" })
     ).toHaveTextContent("Found from the toolbar refresh");
     expect(api.scanSkillInventory).toHaveBeenCalledTimes(3);
-    expect(screen.getByRole("status")).toHaveTextContent("Local skills refreshed");
+    expect(screen.queryByText("Local skills refreshed")).not.toBeInTheDocument();
   });
 
   it("automatically rescans Local Skills on entry after the freshness window", async () => {
@@ -3056,7 +3107,8 @@ describe("App", () => {
       agentDiscoveryReviewedIds: ["opencode"],
       suppressedAgentSuggestionIds: []
     }));
-    expect(screen.getByText("Saving...")).toBeInTheDocument();
+    const agentStatus = document.querySelector(".agent-settings-status") as HTMLElement;
+    expect(within(agentStatus).getByText("Saving...")).toBeInTheDocument();
     act(() => settingsUpdate.resolve({
       locale: "system",
       conversationTerminal: "default",
@@ -3067,7 +3119,7 @@ describe("App", () => {
       backupRetentionDays: null,
       enabledTargetIds
     }));
-    await waitFor(() => expect(screen.queryByText("Saving...")).not.toBeInTheDocument());
+    await waitFor(() => expect(within(agentStatus).queryByText("Saving...")).not.toBeInTheDocument());
     await waitFor(() => expect(agentSwitch).toHaveFocus());
   });
 
@@ -3140,7 +3192,6 @@ describe("App", () => {
     );
     const toggle = await screen.findByRole("switch", { name: "Turn off context7" });
     expect(toggle).toBeChecked();
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(api.saveProfile).toHaveBeenCalled());
     expect(
       vi.mocked(api.saveProfile).mock.calls.at(-1)?.[0].resources.mcpByTarget.opencode
@@ -3148,8 +3199,6 @@ describe("App", () => {
     vi.mocked(api.saveProfile).mockClear();
 
     fireEvent.click(screen.getByRole("switch", { name: "Turn off context7" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
     await waitFor(() => expect(api.saveProfile).toHaveBeenCalled());
     expect(
       vi.mocked(api.saveProfile).mock.calls.at(-1)?.[0].resources.mcpByTarget.opencode
@@ -3306,11 +3355,12 @@ describe("App", () => {
         summary: "opencode CLI not found"
       }
     };
+    const refreshRequest = deferred<TargetInfo[]>();
     const api = installApi({
       listTargets: vi
         .fn()
         .mockResolvedValueOnce([target])
-        .mockResolvedValue([refreshedTarget]),
+        .mockReturnValueOnce(refreshRequest.promise),
       listNativeMcpConnections: vi.fn()
         .mockResolvedValueOnce({ connections: [], issues: [] })
         .mockRejectedValueOnce(new Error("Optional MCP diagnostics unavailable"))
@@ -3318,17 +3368,32 @@ describe("App", () => {
     render(<App />);
 
     await screen.findByRole("region", { name: "Agents" });
-    expect(await screen.findByRole("article", { name: "Agent OpenCode" })).toHaveTextContent("Ready");
+    const agent = await screen.findByRole("article", { name: "Agent OpenCode" });
+    expect(agent).toHaveTextContent("Ready");
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
 
     await waitFor(() => expect(api.listTargets).toHaveBeenCalledTimes(2));
     expect(api.listTargets).toHaveBeenLastCalledWith(true);
+    const refresh = screen.getByRole("button", { name: "Refresh" });
+    expect(refresh).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("article", { name: "Agent OpenCode" })).toBe(agent);
+    expect(agent).toHaveTextContent("Ready");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    await act(async () => {
+      refreshRequest.resolve([refreshedTarget]);
+      await refreshRequest.promise;
+    });
     await waitFor(() =>
       expect(screen.getByRole("article", { name: "Agent OpenCode" })).toHaveTextContent("Missing")
     );
-    expect(await screen.findByRole("status")).toHaveTextContent("Agents refreshed");
-    expect(screen.getByText("Updated with issues")).toBeInTheDocument();
+    expect(refresh).toHaveClass("ui-refresh-action--issue");
+    expect(refresh).toHaveAttribute(
+      "title",
+      expect.stringContaining("Optional MCP diagnostics unavailable")
+    );
+    expect(screen.queryByText("Agents refreshed")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Dismiss message" })).not.toBeInTheDocument();
   });
 
@@ -3524,10 +3589,8 @@ describe("App", () => {
     );
 
     fireEvent.click(within(skillsRegion).getByRole("switch", { name: "Disable Testing" }));
-    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
     expect(within(skillsRegion).getByRole("switch", { name: "Enable Testing" })).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(api.saveProfile).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -3577,14 +3640,10 @@ describe("App", () => {
     expect(document.querySelector(".profile-hero")).not.toHaveTextContent("Applied Jul 9");
     fireEvent.keyDown(document, { key: "Escape" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
-    fireEvent.change(screen.getByLabelText("AGENTS.md"), {
-      target: { value: "# Updated Agent\n" }
-    });
+    await editProfileInstructions("# Updated Agent\n");
     const dirtyRow = within(await openProfileSwitcher()).getByRole("option", { name: /Daily Coding/ });
-    expect(dirtyRow).toHaveTextContent("Unsaved");
-    expect(dirtyRow.querySelector(".profile-row__dirty")).toHaveTextContent("Unsaved");
-    expect(document.querySelector(".app-feedback")).toBeNull();
+    expect(dirtyRow.querySelector(".profile-row__dirty")).toHaveTextContent(/Saving|Save failed/);
+    await waitFor(() => expect(dirtyRow.querySelector(".profile-row__dirty")).toBeNull());
   });
 
   it("keeps the only New Profile action in the temporary Profile switcher", async () => {
@@ -3630,7 +3689,43 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
   });
 
-  it("keeps Compare with Apply in the selected Profile action group", async () => {
+  it("restores the last selected Profile and its device-local order", async () => {
+    const updateUiState = vi.fn().mockResolvedValue({
+      version: 1,
+      selectedProfileId: profileB.id,
+      profileOrder: [profileB.id, profile.id],
+      agentOrder: [],
+      workspaceOrder: [],
+      workspaceAgentSelections: {}
+    });
+    installApi({
+      listProfiles: vi.fn().mockResolvedValue([summaryOf(profile), summaryOf(profileB)]),
+      readProfile: vi.fn().mockImplementation(async (profileId) =>
+        profileId === profileB.id ? profileB : profile
+      ),
+      readUiState: vi.fn().mockResolvedValue({
+        version: 1,
+        selectedProfileId: profileB.id,
+        profileOrder: [profileB.id, profile.id],
+        agentOrder: [],
+        workspaceOrder: [],
+        workspaceAgentSelections: {}
+      }),
+      updateUiState
+    });
+    render(<App />);
+
+    await openProfiles();
+    expect(await screen.findByRole("heading", { name: "Profile B" })).toBeInTheDocument();
+    const switcher = await openProfileSwitcher();
+    expect(within(switcher).getAllByRole("option").map((item) => item.textContent)).toEqual([
+      expect.stringContaining("Profile B"),
+      expect.stringContaining("Daily Coding")
+    ]);
+    expect(updateUiState).not.toHaveBeenCalledWith({ selectedProfileId: profileB.id });
+  });
+
+  it("keeps Agent selection and Apply visible while secondary Profile actions stay in overflow", async () => {
     installApi();
     render(<App />);
 
@@ -3640,40 +3735,72 @@ describe("App", () => {
     const actions = within(document.querySelector(".profile-hero") as HTMLElement).getByRole("group", {
       name: "Selected Profile actions"
     });
-    const actionLabels = within(actions)
-      .getAllByRole("button")
-      .map((button) => button.textContent?.trim());
-
-    expect(actionLabels.slice(0, 3)).toEqual(["Save", "Compare", "Apply"]);
-    const saveButton = within(actions).getByRole("button", { name: "Save" });
-    const compareButton = within(actions).getByRole("button", { name: "Compare" });
     const applyButton = within(actions).getByRole("button", { name: "Apply" });
-    expect(compareButton.nextElementSibling?.contains(applyButton)).toBe(true);
-    expect(saveButton).toBeDisabled();
-    expect(saveButton).toHaveClass("ui-button--secondary");
     expect(applyButton).toBeEnabled();
-    expect(document.querySelector(".profile-hero .save-button")).not.toBeNull();
+    expect(within(actions).queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    expect(within(actions).queryByRole("button", { name: "Compare" })).not.toBeInTheDocument();
     expect(document.querySelector(".profile-hero [aria-label='More Profile actions']")).not.toBeNull();
+    fireEvent.click(within(actions).getByRole("button", { name: "More Profile actions" }));
+    expect(screen.getByRole("menuitem", { name: "Compare" })).toBeEnabled();
+    expect(screen.getByRole("menuitem", { name: "Restore last applied" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Profile Recovery" })).toBeEnabled();
   });
 
-  it("auto-saves profile icons without committing environment draft changes", async () => {
-    const metadataSave = deferred<ProfileDetail>();
-    const api = installApi({
-      updateProfileMetadata: vi.fn().mockReturnValue(metadataSave.promise)
+  it("restores the Profile baseline recorded by the selected Agent", async () => {
+    const restoreAppliedProfile = vi.fn().mockResolvedValue(profile);
+    installApi({
+      listTargetStates: vi.fn().mockResolvedValue([
+        managedState({
+          appliedProfileSnapshot: {
+            profileId: profile.id,
+            profileName: profile.manifest.name,
+            capturedAt: "2026-08-10T12:00:00.000Z",
+            contentHash: "profile-hash",
+            instructionsLength: profile.instructions.length,
+            skillCount: 0,
+            mcpCount: 0
+          }
+        })
+      ]),
+      restoreAppliedProfile
     });
     render(<App />);
 
     await openProfiles();
-    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
-    fireEvent.change(screen.getByLabelText("AGENTS.md"), {
-      target: { value: "# Unsaved instructions\n" }
+    fireEvent.click(screen.getByRole("button", { name: "More Profile actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Restore last applied" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Restore last applied Profile"
     });
+    expect(dialog).toHaveTextContent("last successfully applied to OpenCode");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Restore Profile" }));
+
+    await waitFor(() => expect(restoreAppliedProfile).toHaveBeenCalledWith(
+      profile.id,
+      "opencode",
+      "profile-hash"
+    ));
+  });
+
+  it("auto-saves Profile identity and environment edits through one persistence owner", async () => {
+    const api = installApi();
+    render(<App />);
+
+    await openProfiles();
+    await editProfileInstructions("# Unsaved instructions\n");
     const row = within(await openProfileSwitcher()).getByRole("option", { name: /Daily Coding/ });
     expect(within(row).queryByRole("button", {
       name: "Change icon for Profile daily-coding"
     })).not.toBeInTheDocument();
-    const icon = within(document.querySelector(".profile-hero") as HTMLElement).getByRole("button", {
-      name: "Change icon for Profile daily-coding"
+    fireEvent.keyDown(document, { key: "Escape" });
+    const profileTrigger = within(document.querySelector(".profile-hero") as HTMLElement)
+      .getByRole("button", { name: "Choose Profile" });
+    expect(profileTrigger.querySelector(".ui-object-switcher__trigger-icon"))
+      .not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Edit Profile" }));
+    const editDialog = await screen.findByRole("dialog", { name: "Edit Profile" });
+    const icon = within(editDialog).getByRole("button", {
+      name: "Change icon for Daily Coding"
     });
     expect(icon).toHaveAttribute("data-icon", "layers");
     fireEvent.click(icon);
@@ -3684,49 +3811,31 @@ describe("App", () => {
       )
     );
 
-    await waitFor(() =>
-      expect(api.updateProfileMetadata).toHaveBeenCalledWith({
-        id: "daily-coding",
-        expectedContentHash: "profile-hash",
-        iconKey: "palette"
-      })
-    );
-    expect(screen.getAllByText("Saving Profile details").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
-    act(() => metadataSave.resolve({
-      ...profile,
-      manifest: { ...profile.manifest, iconKey: "palette" }
-    }));
-    expect(await screen.findByText("Profile details saved")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
-    expect(row).toHaveTextContent("Unsaved");
-    expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Unsaved instructions\n");
-    expect(api.saveProfile).not.toHaveBeenCalled();
+    await waitFor(() => expect(api.saveProfile).toHaveBeenCalled());
+    expect(vi.mocked(api.saveProfile).mock.calls.at(-1)?.[0]).toMatchObject({
+      manifest: expect.objectContaining({ iconKey: "palette" }),
+      instructions: "# Unsaved instructions\n"
+    });
+    expect(api.updateProfileMetadata).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    expect(profileInstructionPreview()).toHaveTextContent("# Unsaved instructions");
   });
 
-  it("makes Save primary and disables Apply until profile changes are saved", async () => {
+  it("auto-saves Profile changes and enables Apply after persistence", async () => {
     const api = installApi();
     render(<App />);
 
     await openProfiles();
-    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
-    fireEvent.change(screen.getByLabelText("AGENTS.md"), {
-      target: { value: "# Updated Agent\n" }
-    });
+    await editProfileInstructions("# Updated Agent\n");
 
-    const saveButton = screen.getByRole("button", { name: "Save" });
     const applyButton = screen.getByRole("button", { name: "Apply" });
-    expect(saveButton).toBeEnabled();
-    expect(saveButton).toHaveClass("ui-button--primary");
     expect(applyButton).toBeDisabled();
     fireEvent.click(applyButton);
 
     expect(api.previewApply).not.toHaveBeenCalled();
-    fireEvent.click(saveButton);
     await waitFor(() => expect(api.saveProfile).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(saveButton).toBeDisabled());
-    expect(saveButton).toHaveClass("ui-button--secondary");
-    expect(applyButton).toBeEnabled();
+    await waitFor(() => expect(applyButton).toBeEnabled());
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
   });
 
   it("rechecks a cached unavailable Agent before blocking Apply", async () => {
@@ -3764,27 +3873,22 @@ describe("App", () => {
     expect(within(dialog).getByRole("button", { name: /^Apply$/ })).toBeEnabled();
   });
 
-  it("opens Compare only for a saved Profile and disables it while the draft is dirty", async () => {
-    installApi();
+  it("keeps Compare in overflow and gates it while Profile auto-save is pending", async () => {
+    const api = installApi();
     render(<App />);
 
     await openProfiles();
-    const compareButton = screen.getByRole("button", { name: "Compare" });
-    const applyButton = screen.getByRole("button", { name: "Apply" });
-    const profileActions = screen.getByRole("group", { name: "Selected Profile actions" });
-    expect(profileActions).toContainElement(compareButton);
-    expect(compareButton.nextElementSibling).toContainElement(applyButton);
+    fireEvent.click(screen.getByRole("button", { name: "More Profile actions" }));
+    let compareButton = screen.getByRole("menuitem", { name: "Compare" });
     expect(compareButton).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
-    fireEvent.change(screen.getByLabelText("AGENTS.md"), {
-      target: { value: "# Unsaved evaluation draft\n" }
-    });
+    fireEvent.keyDown(document, { key: "Escape" });
+    await editProfileInstructions("# Unsaved evaluation draft\n");
 
+    fireEvent.click(screen.getByRole("button", { name: "More Profile actions" }));
+    compareButton = screen.getByRole("menuitem", { name: "Compare" });
     expect(compareButton).toBeDisabled();
-    expect(compareButton).toHaveAttribute(
-      "title",
-      "Save this Profile before comparing it"
-    );
+    await waitFor(() => expect(api.saveProfile).toHaveBeenCalled());
+    await waitFor(() => expect(compareButton).toBeEnabled());
     expect(screen.queryByRole("dialog", { name: /Compare Daily Coding/ }))
       .not.toBeInTheDocument();
   });
@@ -3794,7 +3898,8 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    const compareButton = screen.getByRole("button", { name: "Compare" });
+    fireEvent.click(screen.getByRole("button", { name: "More Profile actions" }));
+    const compareButton = screen.getByRole("menuitem", { name: "Compare" });
     expect(compareButton).toBeDisabled();
     expect(compareButton).toHaveAttribute(
       "title",
@@ -3802,28 +3907,24 @@ describe("App", () => {
     );
   });
 
-  it("keeps dirty readiness informational and prevents duplicate saves", async () => {
+  it("keeps saving readiness informational and serializes duplicate save requests", async () => {
     const pendingSave = deferred<ProfileDetail>();
     const api = installApi({ saveProfile: vi.fn().mockReturnValue(pendingSave.promise) });
     render(<App />);
 
     await openProfiles();
-    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
-    fireEvent.change(screen.getByLabelText("AGENTS.md"), {
-      target: { value: "# Pending save\n" }
-    });
+    await editProfileInstructions("# Pending save\n");
 
     const readiness = screen.getByRole("status", { name: "Profile readiness" });
-    expect(readiness).toHaveTextContent("Save changes to continue");
+    await waitFor(() => expect(api.saveProfile).toHaveBeenCalledTimes(1));
+    expect(readiness).toHaveTextContent(/Save|Saving/);
     expect(within(readiness).queryByRole("button")).toBeNull();
-    const saveButton = screen.getByRole("button", { name: "Save" });
-    fireEvent.click(saveButton);
-    fireEvent.click(saveButton);
+    fireEvent.keyDown(document, { key: "s", metaKey: true });
+    fireEvent.keyDown(document, { key: "s", metaKey: true });
 
     expect(api.saveProfile).toHaveBeenCalledTimes(1);
-    expect(saveButton).toBeDisabled();
 
-    pendingSave.resolve(profile);
+    pendingSave.resolve({ ...profile, contentHash: "saved-profile-hash", targetContentHashes: { opencode: "saved-profile-hash" } });
     await waitFor(() => expect(readiness).toHaveTextContent("Ready to take over OpenCode"));
   });
 
@@ -3833,18 +3934,15 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
-    fireEvent.change(screen.getByLabelText("AGENTS.md"), {
-      target: { value: "# Pending shortcut save\n" }
-    });
+    await editProfileInstructions("# Pending shortcut save\n");
 
     fireEvent.keyDown(document, { key: "s", metaKey: true });
     fireEvent.keyDown(document, { key: "s", metaKey: true });
 
     expect(api.saveProfile).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: "Saving..." })).toBeDisabled();
-    pendingSave.resolve(profile);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeDisabled());
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    pendingSave.resolve({ ...profile, contentHash: "saved-profile-hash", targetContentHashes: { opencode: "saved-profile-hash" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled());
   });
 
   it("enables Apply as soon as Profile persistence finishes without a full refresh", async () => {
@@ -3852,10 +3950,7 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
-    fireEvent.change(screen.getByLabelText("AGENTS.md"), {
-      target: { value: "# Fast save\n" }
-    });
+    await editProfileInstructions("# Fast save\n");
     vi.mocked(api.listTargets).mockClear();
     vi.mocked(api.listTargetStates).mockClear();
     vi.mocked(api.listProfiles).mockClear();
@@ -3863,8 +3958,7 @@ describe("App", () => {
     vi.mocked(api.scanSkillInventory).mockClear();
     vi.mocked(api.checkSkillLibraryUpdates).mockClear();
 
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
+    await waitFor(() => expect(api.saveProfile).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled());
     expect(api.listTargets).not.toHaveBeenCalled();
     expect(api.listTargetStates).not.toHaveBeenCalled();
@@ -3881,16 +3975,14 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
-    const instructions = screen.getByLabelText("AGENTS.md");
-    fireEvent.change(instructions, { target: { value: "# Shortcut draft\n" } });
+    await editProfileInstructions("# Shortcut draft\n");
 
     fireEvent.keyDown(document, { key: "s", metaKey: true });
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Profile storage is read-only");
     expect(api.saveProfile).toHaveBeenCalledTimes(1);
-    expect(instructions).toHaveValue("# Shortcut draft\n");
-    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+    expect(profileInstructionPreview()).toHaveTextContent("# Shortcut draft");
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
   });
 
   it("ignores the whole-Profile save shortcut when the draft is clean", async () => {
@@ -3898,12 +3990,12 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: "s", metaKey: true });
 
     expect(api.saveProfile).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
   });
 
   it("keeps profiles available when selecting another apply target", async () => {
@@ -3930,15 +4022,15 @@ describe("App", () => {
     expect(menuButton).not.toHaveTextContent("Target:");
     menuButton.focus();
     fireEvent.click(menuButton);
-    let menu = screen.getByRole("menu", { name: "Apply Agents" });
-    const openCodeTarget = within(menu).getByRole("menuitemradio", { name: "OpenCode" });
-    const codexTargetItem = within(menu).getByRole("menuitemradio", { name: "Codex" });
+    let menu = screen.getByRole("dialog", { name: "Select apply Agent" });
+    const openCodeTarget = within(menu).getByRole("option", { name: "OpenCode" });
+    const codexTargetItem = within(menu).getByRole("option", { name: "Codex" });
     expect(openCodeTarget).toHaveAttribute(
-      "aria-checked",
+      "aria-selected",
       "true"
     );
     expect(codexTargetItem).toHaveAttribute(
-      "aria-checked",
+      "aria-selected",
       "false"
     );
     expect(openCodeTarget.querySelector("img")).toHaveClass("profile-target-logo--opencode");
@@ -3948,17 +4040,16 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Apply" }).querySelector("svg"))
       .not.toBeNull();
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("menu", { name: "Apply Agents" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Select apply Agent" })).not.toBeInTheDocument();
     expect(menuButton).toHaveFocus();
 
     fireEvent.click(menuButton);
     fireEvent.mouseDown(document.body);
-    expect(screen.queryByRole("menu", { name: "Apply Agents" })).not.toBeInTheDocument();
-    expect(menuButton).toHaveFocus();
+    expect(screen.queryByRole("dialog", { name: "Select apply Agent" })).not.toBeInTheDocument();
 
     fireEvent.click(menuButton);
-    menu = screen.getByRole("menu", { name: "Apply Agents" });
-    fireEvent.click(within(menu).getByRole("menuitemradio", { name: "Codex" }));
+    menu = screen.getByRole("dialog", { name: "Select apply Agent" });
+    fireEvent.click(within(menu).getByRole("option", { name: "Codex" }));
     expect(await screen.findByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
     profileList = await openProfileSwitcher();
@@ -3974,14 +4065,14 @@ describe("App", () => {
     menuButton = screen.getByRole("button", { name: "Select apply Agent" });
     fireEvent.click(menuButton);
     expect(
-      within(screen.getByRole("menu", { name: "Apply Agents" })).getByRole(
-        "menuitemradio",
+      within(screen.getByRole("dialog", { name: "Select apply Agent" })).getByRole(
+        "option",
         { name: "Codex" }
       )
-    ).toHaveAttribute("aria-checked", "true");
+    ).toHaveAttribute("aria-selected", "true");
     fireEvent.click(
-      within(screen.getByRole("menu", { name: "Apply Agents" })).getByRole(
-        "menuitemradio",
+      within(screen.getByRole("dialog", { name: "Select apply Agent" })).getByRole(
+        "option",
         { name: "OpenCode" }
       )
     );
@@ -3990,39 +4081,34 @@ describe("App", () => {
     menuButton = await screen.findByRole("button", { name: "Select apply Agent" });
     fireEvent.click(menuButton);
     expect(
-      within(screen.getByRole("menu", { name: "Apply Agents" })).getByRole(
-        "menuitemradio",
+      within(screen.getByRole("dialog", { name: "Select apply Agent" })).getByRole(
+        "option",
         { name: "Codex" }
       )
-    ).toHaveAttribute("aria-checked", "true");
+    ).toHaveAttribute("aria-selected", "true");
   });
 
   it("preserves a dirty draft when the checked target is re-selected", async () => {
-    installApi({
+    const api = installApi({
       listTargets: vi.fn().mockResolvedValue([target, codexTarget])
     });
     render(<App />);
 
     await openProfiles();
-    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
-    const instructions = screen.getByLabelText("AGENTS.md");
-    fireEvent.change(instructions, { target: { value: "# Unsaved target-safe draft\n" } });
+    await editProfileInstructions("# Unsaved target-safe draft\n");
 
     const targetButton = screen.getByRole("button", { name: "Select apply Agent" });
     targetButton.focus();
     fireEvent.click(targetButton);
-    const checkedTarget = screen.getByRole("menuitemradio", { name: "OpenCode" });
-    expect(checkedTarget).toHaveAttribute("aria-checked", "true");
+    const checkedTarget = screen.getByRole("option", { name: "OpenCode" });
+    expect(checkedTarget).toHaveAttribute("aria-selected", "true");
     fireEvent.click(checkedTarget);
 
-    expect(screen.queryByRole("menu", { name: "Apply Agents" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Select apply Agent" })).not.toBeInTheDocument();
     expect(targetButton).toHaveFocus();
     expect(await screen.findByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
-    expect(instructions).toHaveValue("# Unsaved target-safe draft\n");
-    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
-    expect(
-      within(await openProfileSwitcher()).getByRole("option", { name: /Daily Coding/ })
-    ).toHaveTextContent("Unsaved");
+    expect(profileInstructionPreview()).toHaveTextContent("# Unsaved target-safe draft");
+    await waitFor(() => expect(api.saveProfile).toHaveBeenCalled());
   });
 
   it("hides the previous editor while a different profile is loading", async () => {
@@ -4040,7 +4126,7 @@ describe("App", () => {
     await openProfiles();
     await screen.findByRole("heading", { name: "Daily Coding" });
     fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
-    expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
+    expect(profileInstructionPreview()).toHaveTextContent("# Agent");
 
     deferProfileB = true;
     const profileList = await openProfileSwitcher();
@@ -4048,7 +4134,7 @@ describe("App", () => {
 
     expect(screen.queryByRole("heading", { name: "Daily Coding" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Profile composer" })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("AGENTS.md")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Preview of AGENTS.md")).not.toBeInTheDocument();
 
     await act(async () => {
       profileBRead.resolve(profileB);
@@ -4057,7 +4143,7 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Profile B" })).toBeInTheDocument();
     const composer = screen.getByRole("region", { name: "Profile composer" });
     fireEvent.click(within(composer).getByRole("button", { name: "Instructions" }));
-    expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Profile B\n");
+    expect(profileInstructionPreview()).toHaveTextContent("# Profile B");
   });
 
   it("ignores profile reads that resolve out of selection order", async () => {
@@ -4099,7 +4185,7 @@ describe("App", () => {
       within(await openProfileSwitcher()).getByRole("option", { name: /Profile C/ })
     ).toHaveAttribute("aria-current", "page");
     fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
-    expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Profile C\n");
+    expect(profileInstructionPreview()).toHaveTextContent("# Profile C");
     expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
   });
 
@@ -4203,14 +4289,14 @@ describe("App", () => {
     const moreButton = screen.getByRole("button", { name: "More Profile actions" });
 
     fireEvent.click(targetButton);
-    expect(screen.getByRole("menu", { name: "Apply Agents" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Select apply Agent" })).toBeInTheDocument();
     fireEvent.click(moreButton);
-    expect(screen.queryByRole("menu", { name: "Apply Agents" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Select apply Agent" })).not.toBeInTheDocument();
     expect(screen.getByRole("menu", { name: "Profile actions" })).toBeInTheDocument();
 
     fireEvent.click(targetButton);
     expect(screen.queryByRole("menu", { name: "Profile actions" })).not.toBeInTheDocument();
-    expect(screen.getByRole("menu", { name: "Apply Agents" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Select apply Agent" })).toBeInTheDocument();
 
     fireEvent.click(moreButton);
     moreButton.focus();
@@ -4539,10 +4625,10 @@ describe("App", () => {
 
     await screen.findByRole("region", { name: "Profiles" });
     fireEvent.click(screen.getByRole("button", { name: "Select apply Agent" }));
-    const menu = screen.getByRole("menu", { name: "Apply Agents" });
+    const menu = screen.getByRole("dialog", { name: "Select apply Agent" });
     expect(
-      within(menu).getByRole("menuitemradio", { name: "Codex" })
-    ).toHaveAttribute("aria-checked", "true");
+      within(menu).getByRole("option", { name: "Codex" })
+    ).toHaveAttribute("aria-selected", "true");
   });
 
   it("starts an unmanaged Agent through complete Profile capture", async () => {
@@ -4816,17 +4902,17 @@ describe("App", () => {
       target: { value: "Review and quality checks" }
     });
     fireEvent.click(within(editDialog).getByRole("button", { name: "Done" }));
-    await waitFor(() =>
-      expect(api.updateProfileMetadata).toHaveBeenCalledWith({
-        id: "daily-coding",
-        expectedContentHash: "profile-hash",
-        name: "Review Focus",
-        description: "Review and quality checks"
+    await waitFor(() => expect(api.saveProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        manifest: expect.objectContaining({
+          name: "Review Focus",
+          description: "Review and quality checks"
+        })
       })
-    );
-    expect(await screen.findByText("Profile details saved")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
-    expect(api.saveProfile).not.toHaveBeenCalled();
+    ));
+    expect(await screen.findByText("Profile saved")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    expect(api.updateProfileMetadata).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "More Profile actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Duplicate Profile" }));
@@ -4938,7 +5024,7 @@ describe("App", () => {
       })
     );
     expect(await screen.findByText("OpenCode created. Agent unchanged.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
   });
 
@@ -5136,64 +5222,30 @@ describe("App", () => {
     expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("guards dirty profile drafts before context-changing actions", async () => {
-    installApi();
+  it("flushes Profile auto-save before context-changing actions without prompting", async () => {
+    const api = installApi();
     render(<App />);
     await openProfiles();
 
-    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "AGENTS.md" }), {
-      target: { value: "# Unsaved guard\n" }
-    });
+    await editProfileInstructions("# Auto-save guard\n");
     await clickNewProfile();
-
-    const guard = screen.getByRole("dialog", { name: "Unsaved changes" });
-    expect(guard).toHaveTextContent("create a new Profile");
-    expect(within(guard).getAllByRole("button").every((button) =>
-      button.classList.contains("ui-button")
-    )).toBe(true);
-    expect(within(guard).getByRole("button", { name: "Save and continue" }))
-      .toHaveClass("ui-button--primary");
-    fireEvent.click(within(guard).getByRole("button", { name: "Cancel" }));
-    expect(screen.getByRole("textbox", { name: "AGENTS.md" })).toHaveValue(
-      "# Unsaved guard\n"
-    );
-
-    fireEvent.click(
-      within(screen.getByRole("complementary", { name: "Global navigation" })).getByRole(
-        "button",
-        { name: "Skills" }
-      )
-    );
-    const navigationGuard = screen.getByRole("dialog", { name: "Unsaved changes" });
-    expect(navigationGuard).toHaveTextContent("open Skills");
-    fireEvent.click(within(navigationGuard).getByRole("button", { name: "Cancel" }));
-    expect(screen.getByRole("heading", { name: "Profiles" })).toBeInTheDocument();
-
-    await clickNewProfile();
-    fireEvent.click(
-      within(screen.getByRole("dialog", { name: "Unsaved changes" })).getByRole(
-        "button",
-        { name: "Discard changes" }
-      )
-    );
+    await waitFor(() => expect(api.saveProfile).toHaveBeenCalled());
     expect(await screen.findByRole("dialog", { name: "New Profile" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Unsaved changes" })).not.toBeInTheDocument();
   });
 
-  it("preserves a dirty draft when save-and-continue fails", async () => {
+  it("preserves a Profile edit and offers retry when auto-save fails", async () => {
     installApi({ saveProfile: vi.fn().mockRejectedValue(new Error("Save failed")) });
     render(<App />);
     await openProfiles();
 
-    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "AGENTS.md" }), {
-      target: { value: "# Keep this draft\n" }
-    });
+    await editProfileInstructions("# Keep this draft\n");
+    await screen.findByRole("alert");
     await clickNewProfile();
     fireEvent.click(
       within(screen.getByRole("dialog", { name: "Unsaved changes" })).getByRole(
         "button",
-        { name: "Save and continue" }
+        { name: "Retry and continue" }
       )
     );
 
@@ -5202,15 +5254,13 @@ describe("App", () => {
     fireEvent.click(
       within(screen.getByRole("dialog", { name: "Unsaved changes" })).getByRole(
         "button",
-        { name: "Cancel" }
+        { name: "Keep editing" }
       )
     );
-    expect(screen.getByRole("textbox", { name: "AGENTS.md" })).toHaveValue(
-      "# Keep this draft\n"
-    );
+    expect(profileInstructionPreview()).toHaveTextContent("# Keep this draft");
   });
 
-  it("uses the profile dirty guard when the Electron window requests close", async () => {
+  it("flushes Profile auto-save before an Electron window close", async () => {
     let requestClose = () => undefined;
     const api = installApi({
       onWindowCloseRequested: vi.fn().mockImplementation((callback) => {
@@ -5221,22 +5271,19 @@ describe("App", () => {
     render(<App />);
     await openProfiles();
 
-    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "AGENTS.md" }), {
-      target: { value: "# Unsaved before close\n" }
-    });
+    await editProfileInstructions("# Unsaved before close\n");
     await waitFor(() => expect(api.setWindowCloseGuard).toHaveBeenLastCalledWith(true));
     act(() => requestClose());
 
-    const guard = await screen.findByRole("dialog", { name: "Unsaved changes" });
-    expect(guard).toHaveTextContent("close AgentEnv Manager");
-    fireEvent.click(within(guard).getByRole("button", { name: "Discard changes" }));
+    await waitFor(() => expect(api.saveProfile).toHaveBeenCalled());
     await waitFor(() => expect(api.confirmWindowClose).toHaveBeenCalledOnce());
+    expect(screen.queryByRole("dialog", { name: "Unsaved changes" })).not.toBeInTheDocument();
   });
 
-  it("cancels an operating-system quit request when the dirty guard is dismissed", async () => {
+  it("cancels an operating-system quit request when failed Profile recovery is dismissed", async () => {
     let requestClose = () => undefined;
     const api = installApi({
+      saveProfile: vi.fn().mockRejectedValue(new Error("Storage unavailable")),
       onWindowCloseRequested: vi.fn().mockImplementation((callback) => {
         requestClose = callback;
         return () => undefined;
@@ -5245,15 +5292,13 @@ describe("App", () => {
     render(<App />);
     await openProfiles();
 
-    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "AGENTS.md" }), {
-      target: { value: "# Keep this draft open\n" }
-    });
+    await editProfileInstructions("# Keep this draft open\n");
+    await screen.findByRole("alert");
     act(() => requestClose());
     fireEvent.click(
       within(await screen.findByRole("dialog", { name: "Unsaved changes" })).getByRole(
         "button",
-        { name: "Cancel" }
+        { name: "Keep editing" }
       )
     );
 

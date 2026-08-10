@@ -15,10 +15,6 @@
       var(--window-content-inset-bottom, 14px);
   }
 
-  .profile-target-workspace-button {
-    max-width: 166px;
-  }
-
   .profile-apply-button {
     min-width: 0;
   }

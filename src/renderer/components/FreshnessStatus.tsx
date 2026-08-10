@@ -1,4 +1,4 @@
-import { CircleAlert, Clock3, LoaderCircle } from "lucide-react";
+import { CircleAlert, LoaderCircle } from "lucide-react";
 import type { FreshnessState } from "../freshness";
 import { useI18n } from "../i18n";
 
@@ -12,7 +12,7 @@ export const FreshnessStatus = ({
   verb?: FreshnessVerb;
 }) => {
   const { formatDate, localeTag, t } = useI18n();
-  if (state.status === "idle") return null;
+  if (state.status === "idle" || state.status === "ready") return null;
 
   const lastSuccess = state.lastSuccessAt
     ? new Date(state.lastSuccessAt).toISOString()
@@ -43,18 +43,16 @@ export const FreshnessStatus = ({
   return (
     <span
       className={`freshness-status freshness-status--${state.status}`}
+      aria-label={label}
       role={state.status === "refreshing" ? "status" : undefined}
       aria-live={state.status === "refreshing" ? "polite" : undefined}
       title={title || undefined}
     >
       {state.status === "refreshing" ? (
         <LoaderCircle className="is-spinning" size={13} aria-hidden="true" />
-      ) : state.status === "error" || state.status === "partial" ? (
-        <CircleAlert size={13} aria-hidden="true" />
       ) : (
-        <Clock3 size={13} aria-hidden="true" />
+        <CircleAlert size={13} aria-hidden="true" />
       )}
-      <span>{label}</span>
     </span>
   );
 };

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentsEditor } from "../../src/renderer/components/AgentsEditor";
 
@@ -14,18 +14,18 @@ describe("AgentsEditor", () => {
         policy="ignore"
         targetName="Codex"
         value="# Profile instructions"
-        onChange={vi.fn()}
+        onSave={vi.fn()}
       />
     );
 
-    expect(screen.queryByDisplayValue("# Profile instructions")).not.toBeInTheDocument();
+    expect(screen.queryByText("# Profile instructions")).not.toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(
       "Current Agent instructions unavailable"
     );
   });
 
-  it("shows the resolved instruction file and explains when changes load", () => {
-    const onChange = vi.fn();
+  it("previews the portable AGENTS.md and edits it in the shared dialog", async () => {
+    const onSave = vi.fn();
     render(
       <AgentsEditor
         label="agentenv-manager.md"
@@ -33,48 +33,62 @@ describe("AgentsEditor", () => {
         policy="manage"
         targetName="Trae CLI"
         value="# Guidance"
-        onChange={onChange}
+        onSave={onSave}
       />
     );
 
-    expect(screen.getByText("/Users/example/.trae/rules/agentenv-manager.md"))
-      .toBeInTheDocument();
-    const help = screen.getByLabelText(
-      "Applying the Profile writes this file. New Trae CLI sessions load changes; running conversations keep their current context."
-    );
-    fireEvent.focus(help);
-    expect(screen.getByRole("tooltip")).toHaveTextContent(
-      "New Trae CLI sessions load changes"
-    );
+    expect(screen.getByLabelText("Preview of AGENTS.md")).toHaveTextContent("# Guidance");
+    expect(screen.queryByText("/Users/example/.trae/rules/agentenv-manager.md"))
+      .not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open AGENTS.md" }));
+    const dialog = screen.getByRole("dialog", { name: "Instruction document" });
+    expect(within(dialog).getByLabelText("Preview of AGENTS.md")).toHaveTextContent("# Guidance");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Edit" }));
+    const editor = within(dialog).getByRole("textbox", { name: "Profile instruction content" });
+    fireEvent.change(editor, { target: { value: "# Updated" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
-    fireEvent.change(screen.getByRole("textbox", { name: "agentenv-manager.md" }), {
-      target: { value: "# Updated" }
-    });
-    expect(onChange).toHaveBeenCalledWith("# Updated");
+    expect(onSave).toHaveBeenCalledWith("# Updated");
+    await waitFor(() => expect(within(dialog).getByLabelText("Preview of AGENTS.md"))
+      .toHaveTextContent("# Updated"));
   });
 
-  it.each([
-    ["ignore", "leaves its instruction file unchanged"],
-    ["disable", "clears this instruction file"]
-  ] as const)("matches the %s policy in its help text", (policy, expected) => {
+  it("shows current Agent instructions as a read-only preview for Keep Agent", () => {
     render(
       <AgentsEditor
         label="AGENTS.md"
         path="/Users/example/.agent/AGENTS.md"
-        policy={policy}
+        policy="ignore"
         targetName="Example Agent"
         value="# Guidance"
         currentValue="# Current Agent guidance"
         currentValueAvailable
-        onChange={vi.fn()}
+        onSave={vi.fn()}
       />
     );
 
-    expect(screen.getByRole("textbox", { name: "AGENTS.md" })).toHaveAttribute(
-      "readonly"
+    expect(screen.getByText(/\/Users\/example\/\.agent\/AGENTS\.md/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Preview of AGENTS.md"))
+      .toHaveTextContent("# Current Agent guidance");
+    fireEvent.click(screen.getByRole("button", { name: "Open AGENTS.md" }));
+    expect(within(screen.getByRole("dialog", { name: "Instruction document" }))
+      .queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
+  it("shows an explicit effective empty state when instructions are turned off", () => {
+    render(
+      <AgentsEditor
+        label="AGENTS.md"
+        policy="disable"
+        targetName="Example Agent"
+        value="# Guidance"
+        onSave={vi.fn()}
+      />
     );
-    const help = screen.getByLabelText(new RegExp(expected));
-    fireEvent.focus(help);
-    expect(screen.getByRole("tooltip")).toHaveTextContent(expected);
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Instructions are turned off for this Agent"
+    );
+    expect(screen.queryByRole("button", { name: "Open AGENTS.md" })).not.toBeInTheDocument();
   });
 });

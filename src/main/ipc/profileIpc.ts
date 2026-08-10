@@ -44,6 +44,28 @@ export const registerProfileIpc = (
     return profileStore.readProfile(profileId);
   });
   handleMutation("profiles:save", (_event, input: SaveProfileInput) => profileStore.saveProfile(input));
+  diagnosticHandle("profiles:recovery:list", (_event, id: unknown) =>
+    profileStore.listProfileRecovery(parseId(id, "profile id"))
+  );
+  handleMutation("profiles:recovery:restore", (_event, id: unknown, recoveryId: unknown) =>
+    profileStore.restoreProfileRecovery(
+      parseId(id, "profile id"),
+      parseId(recoveryId, "profile recovery id")
+    )
+  );
+  handleMutation(
+    "profiles:restore-applied",
+    (_event, id: unknown, targetId: unknown, expectedContentHash: unknown) => {
+      if (typeof expectedContentHash !== "string" || !expectedContentHash) {
+        throw new Error("Restoring an applied Profile requires its current content hash");
+      }
+      return activationService.restoreAppliedProfile(
+        parseId(id, "profile id"),
+        parseId(targetId, "target id"),
+        expectedContentHash
+      );
+    }
+  );
   handleMutation("profiles:update-skills", (_event, input: UpdateProfileSkillsInput) =>
     profileStore.updateProfileSkills(input)
   );

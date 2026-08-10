@@ -99,7 +99,7 @@ import {
   type SkillCollectionLinkGroup
 } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
-import { ActionMenu, Button, IconButton, InteractiveStatus, ModalFrame, Switch } from "./ui";
+import { ActionMenu, Button, IconButton, InteractiveStatus, ModalFrame, RefreshAction, Switch } from "./ui";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { isExternalSkillImportable } from "../../shared/skillIdentity";
 import { sourceSubpathFor } from "../../shared/skillSourceGrouping";
@@ -1775,11 +1775,12 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
             aria-label={t("Check updates")}
             title={t("Check skill updates")}
             busy={checkingAllUpdates}
-            icon={checkingAllUpdates ? undefined : <SearchCheck size={15} strokeWidth={2.2} />}
+            busyLabel={t("Check updates")}
+            icon={<SearchCheck size={15} strokeWidth={2.2} />}
             disabled={updateActivityBusy}
             onClick={onCheckUpdates}
           >
-            {t(checkingAllUpdates ? "Checking..." : "Check updates")}
+            {t("Check updates")}
           </Button>
           {updateableSkillIds.length > 0 ? (
             <Button
@@ -1787,7 +1788,8 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               aria-label={t("Update all skills")}
               title={t("Update all skills")}
               busy={previewingAllUpdates}
-              icon={previewingAllUpdates ? undefined : <Sparkles size={15} strokeWidth={2.2} />}
+              busyLabel={t("Update all")}
+              icon={<Sparkles size={15} strokeWidth={2.2} />}
               disabled={updateActivityBusy}
               onClick={() => onPreviewAllLibrarySkillUpdates(updateableSkillIds)}
             >
@@ -3386,16 +3388,14 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               </strong>
             </div>
             <div className="library-drawer__actions">
-              <Button
+              <RefreshAction
                 className="library-drawer__refresh"
-                aria-label={t("Refresh local skills")}
+                ariaLabel={t("Refresh local skills")}
                 busy={isRefreshingInventory}
-                icon={isRefreshingInventory ? undefined : <RefreshCw size={14} strokeWidth={2.2} />}
                 disabled={Boolean(automaticCleanupKey) || isRefreshingInventory}
-                onClick={() => void onRefreshInventory()}
-              >
-                {t(isRefreshingInventory ? "Refreshing" : "Refresh")}
-              </Button>
+                label={t("Refresh")}
+                onRefresh={() => void onRefreshInventory()}
+              />
               <IconButton
                 label={t("Close library tool")}
                 disabled={Boolean(automaticCleanupKey) || isRefreshingInventory}

@@ -45,6 +45,29 @@ describe("useProfileActionGuard", () => {
     expect(result.current.pendingAction).toBeUndefined();
   });
 
+  it("flushes an ordinary auto-save before navigation without opening a prompt", async () => {
+    const action = vi.fn();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const windowGuard = createWindowGuardApi();
+    const { result } = renderHook(() =>
+      useProfileActionGuard({
+        autoSaveDirty: true,
+        dirty: false,
+        onBusyChange: vi.fn(),
+        onDiscard: vi.fn(),
+        onError: vi.fn(),
+        onSave,
+        windowGuardApi: windowGuard.api
+      })
+    );
+
+    await act(async () => result.current.guardAction("open Skills", action));
+
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(action).toHaveBeenCalledOnce();
+    expect(result.current.pendingAction).toBeUndefined();
+  });
+
   it("saves before continuing a guarded action", async () => {
     const action = vi.fn();
     const onBusyChange = vi.fn();
@@ -113,5 +136,26 @@ describe("useProfileActionGuard", () => {
 
     expect(windowGuard.api.cancelWindowClose).toHaveBeenCalledOnce();
     expect(result.current.pendingAction).toBeUndefined();
+  });
+
+  it("flushes auto-save before confirming an operating-system close", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const windowGuard = createWindowGuardApi();
+    renderHook(() =>
+      useProfileActionGuard({
+        autoSaveDirty: true,
+        dirty: false,
+        onBusyChange: vi.fn(),
+        onDiscard: vi.fn(),
+        onError: vi.fn(),
+        onSave,
+        windowGuardApi: windowGuard.api
+      })
+    );
+
+    await act(async () => windowGuard.requestClose());
+
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(windowGuard.api.confirmWindowClose).toHaveBeenCalledOnce();
   });
 });
