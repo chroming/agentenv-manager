@@ -10,6 +10,7 @@ export type ProfileReadinessStatus =
   | "no-profile"
   | "no-target"
   | "dirty"
+  | "save-failed"
   | "target-unavailable"
   | "validation-error"
   | "review-required"
@@ -21,9 +22,9 @@ export type ProfileReadinessStatus =
 
 export interface ProfileReadiness {
   status: ProfileReadinessStatus;
-  label: "No environment" | "No Agent" | "Unsaved" | "Agent unavailable" | "Needs review" | "Apply pending" | "Applied" | "Ready";
+  label: "No environment" | "No Agent" | "Saving" | "Save failed" | "Agent unavailable" | "Needs review" | "Apply pending" | "Applied" | "Ready";
   message: string;
-  remediationLabel?: "Open Agents" | "Save now" | "Open Recovery";
+  remediationLabel?: "Open Agents" | "Retry save" | "Open Recovery";
 }
 
 export interface ProfileReadinessInput {
@@ -34,6 +35,7 @@ export interface ProfileReadinessInput {
   localValidationErrors?: readonly string[];
   preview?: Pick<ActivationPreview, "issues">;
   dependenciesCurrent?: boolean;
+  saveFailed?: boolean;
 }
 
 export interface ProfileComparisonControlInput {
@@ -62,7 +64,8 @@ export const deriveProfileReadiness = ({
   isDirty,
   localValidationErrors = [],
   preview,
-  dependenciesCurrent
+  dependenciesCurrent,
+  saveFailed = false
 }: ProfileReadinessInput): ProfileReadiness => {
   if (!profile) {
     return {
@@ -80,12 +83,20 @@ export const deriveProfileReadiness = ({
     };
   }
 
+  if (saveFailed) {
+    return {
+      status: "save-failed",
+      label: "Save failed",
+      message: "Changes could not be saved",
+      remediationLabel: "Retry save"
+    };
+  }
+
   if (isDirty) {
     return {
       status: "dirty",
-      label: "Unsaved",
-      message: "Save this environment before previewing changes",
-      remediationLabel: "Save now"
+      label: "Saving",
+      message: "Saving changes..."
     };
   }
 
@@ -191,7 +202,9 @@ export const deriveProfileReadiness = ({
 };
 
 export const deriveApplyActionLabel = (input: ProfileReadinessInput): string => {
-  const { target, localValidationErrors = [], preview, targetState, isDirty } = input;
+  const {
+    target, localValidationErrors = [], preview, targetState, isDirty, saveFailed
+  } = input;
   if (!target) {
     return "Apply environment";
   }
@@ -200,8 +213,12 @@ export const deriveApplyActionLabel = (input: ProfileReadinessInput): string => 
     return `Review ${target.name} issues`;
   }
 
+  if (saveFailed) {
+    return "Retry saving before applying";
+  }
+
   if (isDirty) {
-    return "Save environment first";
+    return "Saving changes...";
   }
 
   const readiness = deriveProfileReadiness(input);

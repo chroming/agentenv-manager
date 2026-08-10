@@ -1,7 +1,7 @@
 import { LockKeyhole } from "lucide-react";
-import type { KeyboardEvent } from "react";
 import type { ProfileResourceMode } from "../../shared/types";
 import { useI18n } from "../i18n";
+import { SelectField } from "./ui";
 
 export type ProfileResourcePolicy = ProfileResourceMode;
 
@@ -19,25 +19,21 @@ const policyOptions: Array<{
     | "Remove this resource type from the Agent when applying"
     | "Leave this resource type exactly as it is in the Agent";
   label: "Use Profile" | "Turn off" | "Keep Agent";
-  visibleLabel: "Profile" | "Off" | "Agent";
   value: ProfileResourcePolicy;
 }> = [
   {
     description: "Apply this Profile's saved resources to the Agent",
     label: "Use Profile",
-    visibleLabel: "Profile",
     value: "manage"
   },
   {
     description: "Remove this resource type from the Agent when applying",
     label: "Turn off",
-    visibleLabel: "Off",
     value: "disable"
   },
   {
     description: "Leave this resource type exactly as it is in the Agent",
     label: "Keep Agent",
-    visibleLabel: "Agent",
     value: "ignore"
   }
 ];
@@ -50,39 +46,6 @@ export const ProfileResourcePolicyControl = ({
   onChange
 }: ProfileResourcePolicyControlProps) => {
   const { t } = useI18n();
-  const focusOption = (
-    event: KeyboardEvent<HTMLDivElement>,
-    nextValue: ProfileResourcePolicy
-  ) => {
-    const option = event.currentTarget.querySelector<HTMLButtonElement>(
-      `[data-policy-value="${nextValue}"]`
-    );
-    option?.focus();
-    if (nextValue !== value) onChange(nextValue);
-  };
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    let nextValue: ProfileResourcePolicy | undefined;
-    const currentIndex = policyOptions.findIndex((option) => option.value === value);
-    if (event.key === "Home") {
-      nextValue = policyOptions[0].value;
-    }
-    if (event.key === "End") {
-      nextValue = policyOptions.at(-1)?.value;
-    }
-    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-      nextValue =
-        policyOptions[(currentIndex - 1 + policyOptions.length) % policyOptions.length]
-          .value;
-    }
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-      nextValue = policyOptions[(currentIndex + 1) % policyOptions.length].value;
-    }
-    if (!nextValue) return;
-    event.preventDefault();
-    focusOption(event, nextValue);
-  };
-
   if (disabled) {
     return (
       <span
@@ -97,34 +60,20 @@ export const ProfileResourcePolicyControl = ({
     );
   }
 
+  const selectedOption = policyOptions.find((option) => option.value === value);
   return (
-    <div
-      className={`profile-resource-policy ui-segmented-control ui-segmented-control--compact is-${value}`}
-      role="radiogroup"
-      aria-label={label}
-      onKeyDown={handleKeyDown}
+    <SelectField
+      className={`profile-resource-policy is-${value}`}
+      fieldClassName="profile-resource-policy-field"
+      label={label}
+      labelHidden
+      title={selectedOption ? t(selectedOption.description) : undefined}
+      value={value}
+      onChange={(event) => onChange(event.currentTarget.value as ProfileResourcePolicy)}
     >
-      {policyOptions.map((option) => {
-        const selected = option.value === value;
-        return (
-          <button
-            className={`profile-resource-policy__option ui-segmented-control__option${selected ? " is-selected" : ""}`}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            aria-label={t(option.label)}
-            data-policy-value={option.value}
-            key={option.value}
-            tabIndex={selected ? 0 : -1}
-            title={t(option.description)}
-            onClick={() => {
-              if (!selected) onChange(option.value);
-            }}
-          >
-            {t(option.visibleLabel)}
-          </button>
-        );
-      })}
-    </div>
+      {policyOptions.map((option) => (
+        <option key={option.value} value={option.value}>{t(option.label)}</option>
+      ))}
+    </SelectField>
   );
 };

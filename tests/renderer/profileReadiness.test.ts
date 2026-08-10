@@ -278,7 +278,11 @@ describe("profile readiness", () => {
       },
       {
         input: { profile, target, isDirty: true },
-        expected: ["dirty", "Save this environment before previewing changes", "Save now"]
+        expected: ["dirty", "Saving changes...", undefined]
+      },
+      {
+        input: { profile, target, isDirty: true, saveFailed: true },
+        expected: ["save-failed", "Changes could not be saved", "Retry save"]
       },
       {
         input: { profile, target: unavailableTarget, isDirty: false },

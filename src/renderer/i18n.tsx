@@ -3864,6 +3864,9 @@ Object.assign(zhTW, {
 Object.assign(zhCN, {
   "Applying Profile": "正在应用 Profile",
   "Saving Profile": "正在保存 Profile",
+  "Changes could not be saved": "无法保存更改",
+  "Retry save": "重试保存",
+  "Retry saving before applying": "请先重试保存再应用",
   "Profile save failed": "Profile 保存失败",
   "Save failed": "保存失败",
   "Select a Profile before previewing changes": "请先选择 Profile，再预览变更",
@@ -3973,6 +3976,9 @@ Object.assign(zhCN, {
 Object.assign(zhTW, {
   "Applying Profile": "正在套用 Profile",
   "Saving Profile": "正在儲存 Profile",
+  "Changes could not be saved": "無法儲存變更",
+  "Retry save": "重試儲存",
+  "Retry saving before applying": "請先重試儲存再套用",
   "Profile save failed": "Profile 儲存失敗",
   "Save failed": "儲存失敗",
   "Select a Profile before previewing changes": "請先選擇 Profile，再預覽變更",

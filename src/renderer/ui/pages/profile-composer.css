@@ -1,53 +1,14 @@
+.profile-resource-policy-field {
+  justify-self: end;
+  width: 144px;
+}
+
 .profile-resource-policy {
-  background: var(--surface-muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  display: grid;
+  font-size: var(--font-size-metadata);
   height: var(--control-height-compact);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin: 0;
-  padding: 1px;
-  width: 192px;
-}
-
-.profile-resource-policy__option {
-  align-items: center;
-  display: inline-flex;
-  font-size: 11px;
-  height: 24px;
-  line-height: 16px;
-  min-height: 24px;
-  overflow: hidden;
-  padding: 0 6px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  width: 100%;
-}
-
-.profile-resource-policy__option:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.profile-resource-policy.is-manage
-  .profile-resource-policy__option.is-selected {
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgba(20, 36, 60, 0.1);
-  color: #155db5;
-}
-
-.profile-resource-policy.is-disable
-  .profile-resource-policy__option.is-selected {
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgba(20, 36, 60, 0.1);
-  color: #875b12;
-}
-
-.profile-resource-policy.is-ignore
-  .profile-resource-policy__option.is-selected {
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgba(20, 36, 60, 0.1);
-  color: #536174;
+  min-height: var(--control-height-compact);
+  padding-left: 10px;
+  padding-right: 31px;
 }
 
 .profile-resource-policy__status {
@@ -137,7 +98,7 @@
     min-height: 119px;
   }
 
-  .profile-resource-policy__option {
-    padding-inline: 4px;
+  .profile-resource-policy-field {
+    width: 132px;
   }
 }

@@ -85,7 +85,7 @@ export const useProfileActivationController = ({
       return;
     }
     if (dirty) {
-      onStatus("Save this environment before previewing changes");
+      onStatus("Saving changes...");
       onSaveRequired();
       return;
     }
