@@ -1,0 +1,17 @@
+.apply-preview-footprint {
+  padding: 0 2px;
+}
+
+.apply-preview-footprint > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.apply-preview-footprint > div strong {
+  color: var(--text);
+  font-weight: 600;
+}

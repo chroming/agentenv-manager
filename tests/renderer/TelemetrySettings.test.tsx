@@ -14,6 +14,7 @@ const settings: AgentEnvSettings = {
   skillAutoCheckEnabled: true,
   skillAutoCheckIntervalMinutes: 60,
   telemetryEnabled: true,
+  telemetryConsentVersion: 1,
   backupRetentionDays: null
 };
 
@@ -26,6 +27,7 @@ describe("Telemetry settings", () => {
           enabledInBuild: true,
           destination: "PostHog Cloud",
           installationId: "6b7ef3c8-b8a4-49a6-b947-cae90b935a25",
+          willCreateInstallationId: false,
           payload: {
             schemaVersion: 2,
             event: "agentenv_daily_startup",
@@ -70,6 +72,7 @@ describe("Telemetry settings", () => {
           enabledInBuild: false,
           destination: "PostHog Cloud",
           installationId: "31e27e20-a4ed-4a4a-96b1-c4213d2864eb",
+          willCreateInstallationId: false,
           payload: {
             schemaVersion: 2,
             event: "agentenv_daily_startup",

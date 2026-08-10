@@ -74,6 +74,7 @@ describe("Conversations desktop workflow", () => {
         skillAutoCheckEnabled: false,
         skillAutoCheckIntervalMinutes: 60,
         backupRetentionDays: null,
+        telemetryEnabled: false,
         enabledTargetIds: ["codex", "opencode", "antigravity", "trae-cli"],
         agentDiscoveryVersion: 1,
         agentDiscoveryReviewedIds: ["codex", "opencode", "antigravity", "trae-cli"]

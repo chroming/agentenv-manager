@@ -72,7 +72,9 @@ export const createTelemetryService = (options: {
   statePath: string;
   host: string;
   projectToken: string;
-  settingsStore: Pick<{ readSettings(): Promise<Pick<AgentEnvSettings, "telemetryEnabled">> }, "readSettings">;
+  settingsStore: Pick<{
+    readSettings(): Promise<Pick<AgentEnvSettings, "telemetryEnabled" | "telemetryConsentVersion">>;
+  }, "readSettings">;
   context: TelemetryContext;
   fetch?: typeof globalThis.fetch;
   now?: () => Date;
@@ -120,11 +122,12 @@ export const createTelemetryService = (options: {
   };
 
   const preview = async (): Promise<TelemetryPreview> => {
-    const state = await ensureState();
+    const state = await readState(options.statePath);
     return {
       enabledInBuild: Boolean(endpoint),
       destination: "PostHog Cloud",
-      installationId: state.installationId!,
+      ...(state.installationId ? { installationId: state.installationId } : {}),
+      willCreateInstallationId: !state.installationId,
       payload: payloadFor(
         { ...options.context, installChannel },
         localDateFor(now())
@@ -135,8 +138,15 @@ export const createTelemetryService = (options: {
   const recordDailyStartup = () => {
     if (inFlight) return inFlight;
     inFlight = (async (): Promise<TelemetrySendResult> => {
-      const settings = await options.settingsStore.readSettings().catch(() => ({ telemetryEnabled: false }));
-      if (!endpoint || settings.telemetryEnabled !== true) return { status: "disabled" };
+      const settings = await options.settingsStore.readSettings().catch(() => ({
+        telemetryEnabled: false,
+        telemetryConsentVersion: undefined
+      }));
+      if (
+        !endpoint ||
+        settings.telemetryEnabled !== true ||
+        settings.telemetryConsentVersion !== 1
+      ) return { status: "disabled" };
       try {
         const currentPreview = await preview();
         const payload = currentPreview.payload;
@@ -147,7 +157,7 @@ export const createTelemetryService = (options: {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             api_key: projectToken,
-            distinct_id: currentPreview.installationId,
+            distinct_id: state.installationId,
             event: payload.event,
             properties: {
               schemaVersion: payload.schemaVersion,
@@ -166,7 +176,7 @@ export const createTelemetryService = (options: {
         });
         if (!response.ok) return { status: "failed" };
         await persistState({
-          installationId: currentPreview.installationId,
+          installationId: state.installationId,
           lastSentDate: payload.date
         });
         return { status: "sent" };

@@ -460,6 +460,21 @@ export const PreviewDialog = ({
             </section>
           ) : null}
 
+          {isActivationPreview && preview.localFootprint && !isNoOp ? (
+            <section className="apply-preview-footprint" aria-label={t("Local footprint")}>
+              <header className="apply-preview-section-heading">
+                <strong>{t("Local footprint")}</strong>
+              </header>
+              <div>
+                <span>{t("Adopt existing")}: <strong>{preview.localFootprint.adopted}</strong></span>
+                <span>{t("Modify")}: <strong>{preview.localFootprint.modified}</strong></span>
+                <span>{t("Create")}: <strong>{preview.localFootprint.created}</strong></span>
+                <span>{t("Remove")}: <strong>{preview.localFootprint.removed}</strong></span>
+                <span>{t("Live links")}: <strong>{preview.localFootprint.liveLinks}</strong></span>
+              </div>
+            </section>
+          ) : null}
+
           <PreviewChangeList
             preview={preview}
             activation={isActivationPreview}

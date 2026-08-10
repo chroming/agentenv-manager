@@ -114,6 +114,33 @@ describe("PreviewDialog", () => {
     expect(within(plan).getByText("Instructions")).toBeInTheDocument();
   });
 
+  it("separates the local footprint from the final Profile payload", () => {
+    render(
+      <PreviewDialog
+        preview={{
+          ...preview,
+          effectivePayload: { instructions: 1, skills: 4, mcpServers: 0, total: 5 },
+          localFootprint: {
+            adopted: 3,
+            modified: 1,
+            created: 0,
+            removed: 1,
+            liveLinks: 2
+          }
+        }}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    const footprint = screen.getByRole("region", { name: "Local footprint" });
+    expect(footprint).toHaveTextContent("Adopt existing: 3");
+    expect(footprint).toHaveTextContent("Modify: 1");
+    expect(footprint).toHaveTextContent("Create: 0");
+    expect(footprint).toHaveTextContent("Remove: 1");
+    expect(footprint).toHaveTextContent("Live links: 2");
+  });
+
   it("describes shared Skill changes as migration preparation rather than immediate installs", () => {
     render(
       <PreviewDialog

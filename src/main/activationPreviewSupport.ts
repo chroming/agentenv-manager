@@ -2,36 +2,15 @@ import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import type {
   ActivationPreview,
-  ProfileDetail,
   SharedSkillPreparation,
   TargetPaths,
   TargetState
 } from "../shared/types";
 import { createUnifiedDiff } from "./diff";
 import { redactSensitiveValues } from "./secretWarnings";
-import type { SkillDeploymentPlan } from "./skillDeploymentPlanner";
 import { normalizeSkillReceipts } from "./skillReconciliationReceipts";
-
-export interface InternalActivationPreview extends ActivationPreview {
-  targetStateFingerprint: string;
-  targetPathFingerprint: string;
-  assetBackupPaths: string[];
-  missingAssetDirectories: string[];
-  resourceManagement: {
-    instructions: boolean;
-    skills: boolean;
-    pausedSkillPaths: string[];
-  };
-  skillDeployment: {
-    plan: SkillDeploymentPlan;
-    profile: ProfileDetail;
-    sourceSkills: ProfileDetail["resources"]["skills"];
-    inventoryPreconditionFingerprint: string;
-    runtimePreconditionFingerprint: string;
-    skillLibraryDir: string;
-    skillSyncMethod: "symlink" | "copy" | "auto";
-  };
-}
+import type { InternalActivationPreview } from "./internalActivationPreview";
+export type { InternalActivationPreview } from "./internalActivationPreview";
 
 export const toPublicActivationPreview = (
   preview: InternalActivationPreview
@@ -41,6 +20,9 @@ export const toPublicActivationPreview = (
     targetPathFingerprint: _targetPathFingerprint,
     assetBackupPaths: _assetBackupPaths,
     missingAssetDirectories: _missingAssetDirectories,
+    legacyOwnershipMarkerPaths: _legacyOwnershipMarkerPaths,
+    adoptedResourcePaths: _adoptedResourcePaths,
+    legacyOwnedResourcePaths: _legacyOwnedResourcePaths,
     resourceManagement: _resourceManagement,
     skillDeployment: _skillDeployment,
     ...publicValue

@@ -75,8 +75,12 @@ updates. Homebrew-managed macOS installations can also prefetch and install the
 checksum-bound Cask update. Update checks are independent from the anonymous
 usage statistics preference.
 
-Unless you disable anonymous usage statistics in Settings, an official build
-sends at most one startup event per local calendar day to PostHog Cloud. An information popover
+On the first eligible launch, an official build asks whether it may send anonymous usage
+statistics. AgentEnv creates no telemetry installation identifier and sends no telemetry request
+until you confirm that choice. `Not now`, closing the dialog, or pressing Escape skips only the
+current launch and asks again later. Choosing not to share is saved and remains off.
+
+When sharing is enabled, an official build sends at most one startup event per local calendar day to PostHog Cloud. An information popover
 and expandable preview show the shared fields, which contain only: schema
 version, event date, app version, operating-system
 family and major version, architecture, interface locale, and install channel.

@@ -5,7 +5,6 @@ import { profileManagesResource } from "../../shared/profileResources";
 import { pathEntryExists, pathExists } from "../fileUtils";
 import { hashSkillContent } from "../skillContentHash";
 import {
-  createOwnerMarkerContent,
   isAgentEnvOwnedDir,
   markerPathForFile
 } from "../ownershipMarkers";
@@ -15,7 +14,23 @@ import type { TargetAssetInput } from "./types";
 const librarySourceFor = (skillLibraryDir: string, libraryId: string) =>
   join(skillLibraryDir, libraryId);
 
-const isOwnedSkillDir = async (targetDir: string, targetPaths: TargetPaths) =>
+const hasManagedReceipt = (
+  targetDir: string,
+  managedResources: TargetAssetInput["managedResources"]
+) =>
+  managedResources?.some(
+    (resource) =>
+      resource.kind === "skill" &&
+      !resource.paused &&
+      resolve(resource.path) === resolve(targetDir)
+  ) === true;
+
+const isOwnedSkillDir = async (
+  targetDir: string,
+  targetPaths: TargetPaths,
+  managedResources: TargetAssetInput["managedResources"]
+) =>
+  hasManagedReceipt(targetDir, managedResources) ||
   isAgentEnvOwnedDir(targetDir, {
     targetId: targetPaths.targetId,
     kind: "skill"
@@ -36,7 +51,8 @@ export const validateSkillRefs = async ({
   skillLibraryDir,
   approvedUnmanagedSkillHashes,
   replaceablePaths,
-  isolateSkillRoot
+  isolateSkillRoot,
+  managedResources
 }: TargetAssetInput) => {
   const issues: ApplyIssue[] = [];
   if (!profileManagesResource(profile.resources, targetPaths.targetId, "skills")) {
@@ -65,7 +81,11 @@ export const validateSkillRefs = async ({
     const sourceDir = librarySourceFor(skillLibraryDir, skillRef.libraryId);
     const targetDir = join(targetPaths.skillsDir, skillRef.targetName);
     const targetExists = !isolateSkillRoot && await pathEntryExists(targetDir);
-    const owned = targetExists && await isOwnedSkillDir(targetDir, targetPaths);
+    const owned = targetExists && await isOwnedSkillDir(
+      targetDir,
+      targetPaths,
+      managedResources
+    );
     const replaceable = replaceablePaths?.has(resolve(targetDir)) === true;
     if (!skillRef.enabled) {
       if (targetExists && !owned && !replaceable) {
@@ -129,6 +149,8 @@ export const applySkillRefs = async ({
   skillSyncMethod = "symlink",
   approvedUnmanagedSkillHashes,
   replaceablePaths,
+  managedResources,
+  plannedResourceWrites,
   claimMutationPath
 }: TargetAssetInput) => {
   if (!profileManagesResource(profile.resources, targetPaths.targetId, "skills")) return;
@@ -153,7 +175,11 @@ export const applySkillRefs = async ({
     const sourceDir = librarySourceFor(skillLibraryDir, skillRef.libraryId);
     const targetDir = join(targetPaths.skillsDir, skillRef.targetName);
     const targetExists = await pathEntryExists(targetDir);
-    const owned = targetExists && await isOwnedSkillDir(targetDir, targetPaths);
+    const owned = targetExists && await isOwnedSkillDir(
+      targetDir,
+      targetPaths,
+      managedResources
+    );
     const approvedHash = approvedUnmanagedSkillHashes?.get(resolve(targetDir));
     const matchingUnmanaged = Boolean(
       targetExists &&
@@ -166,18 +192,15 @@ export const applySkillRefs = async ({
         `Skill target changed after preview and is not AgentEnv-owned: ${targetDir}`
       );
     }
+    if (plannedResourceWrites && !plannedResourceWrites.has(resolve(targetDir))) {
+      continue;
+    }
     await claimMutationPath?.(targetDir);
     await claimMutationPath?.(markerPathForFile(targetDir));
     await deploySkillDirectory({
       sourceDir,
       targetDir,
-      syncMethod: skillSyncMethod,
-      markerContent: createOwnerMarkerContent({
-        profileId: profile.id,
-        targetId: targetPaths.targetId,
-        kind: "skill",
-        source: `skills-library/${skillRef.libraryId}`
-      })
+      syncMethod: skillSyncMethod
     });
     await claimMutationPath?.recordMutation?.(
       targetDir,

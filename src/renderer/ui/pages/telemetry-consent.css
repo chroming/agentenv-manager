@@ -1,0 +1,33 @@
+.telemetry-consent-dialog {
+  max-width: min(540px, calc(100vw - 32px));
+  width: 100%;
+}
+
+.telemetry-consent-body {
+  display: grid;
+  gap: 14px;
+}
+
+.telemetry-consent-choice.settings-preference-row {
+  border-bottom: 1px solid var(--border);
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 58px;
+  padding: 0 0 12px;
+}
+
+.telemetry-consent-details {
+  display: grid;
+  gap: 8px;
+}
+
+.telemetry-consent-details p,
+.telemetry-consent-details small {
+  color: var(--text-secondary);
+  font-size: var(--font-size-metadata);
+  line-height: 18px;
+  margin: 0;
+}
+
+.telemetry-consent-details small {
+  color: var(--muted);
+}

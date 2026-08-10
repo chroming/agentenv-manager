@@ -15,7 +15,8 @@ export interface TelemetryDailyStartupPayload {
 export interface TelemetryPreview {
   enabledInBuild: boolean;
   destination: "PostHog Cloud";
-  installationId: string;
+  installationId?: string;
+  willCreateInstallationId: boolean;
   payload: TelemetryDailyStartupPayload;
 }
 

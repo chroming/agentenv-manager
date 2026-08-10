@@ -120,9 +120,10 @@ describe("OpenCode Profile v2 switching e2e", () => {
       expectedContentHash: (await profileStore.readProfile(manifest.id)).contentHash
     });
     const resumePreview = await service.previewProfile(manifest.id, "opencode");
-    expect(reviewMessages(resumePreview.issues)).toEqual([
-      expect.stringContaining("AgentEnv-managed Instructions changed outside AgentEnv")
-    ]);
+    expect(reviewMessages(resumePreview.issues)).toEqual(expect.arrayContaining([
+      expect.stringContaining("AgentEnv-managed Instructions changed outside AgentEnv"),
+      expect.stringContaining("Existing Skill reviewer will be backed up and brought under AgentEnv")
+    ]));
     const resumed = await service.applyProfile(manifest.id, resumePreview.id);
     expect(resumed.ok).toBe(true);
     await expect(readFile(join(targetDir, "AGENTS.md"), "utf8"))

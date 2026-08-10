@@ -61,7 +61,6 @@ import type {
 import { normalizeSkillKey } from "../shared/skillIdentity";
 import { pathEntryExists, pathExists, replacePathAtomically, writeAtomic } from "./fileUtils";
 import {
-  createOwnerMarkerContent,
   isAgentEnvOwnedDir,
   markerPathFor,
   markerPathForFile
@@ -71,8 +70,18 @@ import type { ProfileStore } from "./profileStore";
 import { resolveSkillsLibraryDir, type SettingsStore } from "./settingsStore";
 import { parseSkillFrontmatter } from "./skillFrontmatter";
 import { inspectSkillsCliLocks } from "./skillsCliInspector";
-import { deploySkillDirectory, removeSkillDeployment } from "./skillDeployment";
+import { removeSkillDeployment } from "./skillDeployment";
+import { createSkillLibraryTargetDeployer } from "./skillLibraryTargetDeployment";
 import { createTargetRegistry } from "./targets/registry";
+import { createTargetStateRepository } from "./targetStateRepository";
+import {
+  createManagedSkillResource,
+  readManagedSkillResourcesByTarget,
+  readTargetStateFiles,
+  updateConsolidatedSkillTargetStates,
+  updateMergedSkillTargetStates,
+  upsertManagedSkillResource
+} from "./skillLibraryTargetReceipts";
 import { targetPathInputFor } from "./targets/pathInput";
 import { createFilesystemSkillDriver } from "./targets/shared/skillRuntime";
 import { applyLibraryUpdatePropagation, prepareLibraryUpdatePropagation } from "./skillLibraryUpdatePropagation";
@@ -140,105 +149,24 @@ import {
   createRecentSkillUpdateCheckStore,
   createSkillUpdatePreviewStore
 } from "./skillUpdatePreviewStore";
-
-export interface ImportSkillStoreInput extends SkillImportInput {
-  sourceType?: SkillSourceType;
-}
-
-export interface ManageTargetSkillStoreInput {
-  targetPaths: TargetPaths;
-  targetName: string;
-  libraryId: string;
-}
-
-export interface DeployLibrarySkillStoreInput extends ManageTargetSkillStoreInput {
-  profileId: string;
-}
-
-export interface ConsolidateSkillGroupStoreInput {
-  skillKey: string;
-  libraryId: string;
-  canonicalPath: string;
-  replaceLibrary?: boolean;
-  locations: Array<{ targetPaths: TargetPaths; targetDir: string }>;
-}
-
-export interface ConsolidateSharedSkillGroupStoreInput {
-  skillKey: string;
-  libraryId: string;
-  canonicalPath: string;
-  replaceLibrary?: boolean;
-  sharedPaths: string[];
-  duplicatePaths: string[];
-}
-
-export interface RemoveUnavailableSkillLinksStoreInput {
-  skillKey: string;
-  locations: Array<{ targetPaths: TargetPaths; targetDir: string }>;
-}
-
-export interface SkillLibraryStore {
-  listSkills(): Promise<SkillLibraryEntry[]>;
-  scanInventory(
-    targetPaths: TargetPaths[],
-    librarySkills?: SkillLibraryEntry[]
-  ): Promise<SkillInventoryEntry[]>;
-  findManagedInstallPaths(libraryId: string, targetPaths: TargetPaths[]): Promise<string[]>;
-  listCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;
-  previewCleanupBackup(id: string): Promise<ManagedBackupFile[]>;
-  recoverInterruptedCleanupBackups(): Promise<SkillCleanupRecoveryResult>;
-  listPendingCleanupRecoveries(): Promise<string[]>;
-  setUnmanagedSkillLocations(
-    input: UnmanagedSkillLocationUpdate
-  ): Promise<UnmanagedSkillLocation[]>;
-  setSkillCollectionDecision(
-    input: SkillCollectionMemberDecisionUpdate
-  ): Promise<SkillCollectionMemberDecision[]>;
-  scanUnmanaged(targetPaths: TargetPaths[]): Promise<UnmanagedSkillEntry[]>;
-  scanLocalSkillSource(rootPath: string): Promise<ProjectSkillScanResult>;
-  previewImport(input: SkillImportPreviewInput): Promise<SkillImportPreview>;
-  previewMerge(id: string, targetPaths: TargetPaths[]): Promise<SkillMergePreview>;
-  mergeSkills(input: SkillMergeInput, targetPaths: TargetPaths[]): Promise<SkillMergeResult>;
-  importSkill(input: ImportSkillStoreInput): Promise<SkillLibraryEntry>;
-  importGitHubSkill(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
-  scanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
-  importGitHubSkills(inputs: GitHubSkillImportInput[]): Promise<GitHubSkillImportResult>;
-  scanRepositorySkills(input: RepositorySkillSourceInput): Promise<RepositorySkillScanResult>;
-  importRepositorySkill(input: RepositorySkillImportInput): Promise<SkillLibraryEntry>;
-  importRepositorySkills(inputs: RepositorySkillImportInput[]): Promise<RepositorySkillImportResult>;
-  listSourceGroups(): Promise<SkillSourceGroupView[]>;
-  checkSourceGroup(canonicalLink: string): Promise<SkillSourceGroupView>;
-  checkMonitoredSourceGroups(): Promise<SkillSourceCheckAllResult>;
-  setSourceName(input: import("../shared/types").SkillSourceNameInput): Promise<SkillSourceGroupView>;
-  setSourceMonitored(input: import("../shared/types").SkillSourceMonitoringInput): Promise<SkillSourceGroupView>;
-  setSourceCandidateIgnored(
-    input: import("../shared/types").SkillSourceCandidateIgnoreInput
-  ): Promise<SkillSourceGroupView>;
-  previewSourceMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
-  mergeSources(previewId: string): Promise<SkillSourceMergeResult>;
-  removeSkill(id: string, managedInstallPaths?: string[]): Promise<SkillCleanupResult>;
-  manageTargetSkill(input: ManageTargetSkillStoreInput): Promise<void>;
-  deployLibrarySkill(input: DeployLibrarySkillStoreInput): Promise<void>;
-  consolidateSkillGroup(input: ConsolidateSkillGroupStoreInput): Promise<SkillCleanupResult>;
-  removeUnavailableSkillLinks(
-    input: RemoveUnavailableSkillLinksStoreInput
-  ): Promise<SkillCleanupResult>;
-  consolidateSharedSkillGroup(
-    input: ConsolidateSharedSkillGroupStoreInput
-  ): Promise<SkillCleanupResult>;
-  setSharedSkillRetention(input: SharedSkillRetentionInput): Promise<void>;
-  rollbackSkillCleanup(backupId: string): Promise<void>;
-  deleteCleanupBackup(backupId: string): Promise<void>;
-  checkUpdates(ids?: string[]): Promise<SkillUpdateInfo[]>;
-  setUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
-  setUpdatePolicy(input: SkillUpdatePolicyInput): Promise<SkillLibraryEntry>;
-  setUpdateSettings(input: SkillUpdateSettingsInput): Promise<SkillLibraryEntry>;
-  setAvailability(input: SkillAvailabilityInput): Promise<SkillLibraryEntry>;
-  setIcon(input: SkillIconInput): Promise<SkillLibraryEntry>;
-  previewUpdate(id: string): Promise<SkillUpdatePlan>;
-  previewUpdates(ids: string[]): Promise<SkillUpdatePreviewBatchResult>;
-  updateSkill(input: SkillUpdateConfirmation): Promise<SkillLibraryEntry>;
-}
+import type {
+  ConsolidateSharedSkillGroupStoreInput,
+  ConsolidateSkillGroupStoreInput,
+  DeployLibrarySkillStoreInput,
+  ImportSkillStoreInput,
+  ManageTargetSkillStoreInput,
+  RemoveUnavailableSkillLinksStoreInput,
+  SkillLibraryStore
+} from "./skillLibraryStoreTypes";
+export type {
+  ConsolidateSharedSkillGroupStoreInput,
+  ConsolidateSkillGroupStoreInput,
+  DeployLibrarySkillStoreInput,
+  ImportSkillStoreInput,
+  ManageTargetSkillStoreInput,
+  RemoveUnavailableSkillLinksStoreInput,
+  SkillLibraryStore
+} from "./skillLibraryStoreTypes";
 
 interface SkillLibraryStoreOptions {
   authTokenProvider?: () => Promise<string | undefined>;
@@ -345,6 +273,7 @@ export const createSkillLibraryStore = (
   });
   const runtimeSnapshotProvider = options.runtimeSnapshotProvider ?? ((targetPaths) =>
     createFilesystemSkillDriver({ targetId: targetPaths.targetId }).inspectRuntime(targetPaths));
+  const targetStateRepository = createTargetStateRepository(paths);
   const pendingUpdates = createSkillUpdatePreviewStore();
   const safetyBackupStore = createBackupStore(paths);
   const {
@@ -893,6 +822,10 @@ export const createSkillLibraryStore = (
       await inspectSkillsCliLocks(paths.homeDir, options.skillsCliLockPaths)
     ).evidenceBySkillKey;
     const byKey = new Map<string, SkillInventoryEntry>();
+    const managedResourcesByTarget = await readManagedSkillResourcesByTarget(
+      targetPaths,
+      targetStateRepository
+    );
     const snapshots = await Promise.all(targetPaths.map(async (target) => ({
       target,
       snapshot: await runtimeSnapshotProvider(target)
@@ -924,6 +857,9 @@ export const createSkillLibraryStore = (
       for (const observation of snapshot.observations) {
         const deploymentName = observation.deploymentName;
         const skillDir = observation.path;
+        const managedResource = managedResourcesByTarget
+          .get(target.targetId)
+          ?.get(resolve(skillDir));
         const deploymentKey = normalizeSkillKey(deploymentName);
         const skillKey = normalizeSkillKey(observation.runtimeName);
         const evidence = skillsCliEvidence.get(skillKey) ?? skillsCliEvidence.get(deploymentKey);
@@ -944,7 +880,11 @@ export const createSkillLibraryStore = (
           const externalEvidence = evidence
             ? { ...evidence, confidence: "confirmed" as const, state: "broken-link" as const }
             : observation.externalEvidence;
-          const status = unmanagedLocation ? "left-unmanaged" : "outside";
+          const status = managedResource
+            ? "managed"
+            : unmanagedLocation
+              ? "left-unmanaged"
+              : "outside";
           const key = `${status}:${deploymentName}:${skillDir}`;
           const existing = byKey.get(key);
           if (existing) {
@@ -959,14 +899,24 @@ export const createSkillLibraryStore = (
             canonicalPath: resolve(skillDir),
             foundIn: [target.targetId],
             status,
-            libraryId: libraryIds.has(deploymentName) ? deploymentName : undefined,
+            libraryId:
+              managedResource?.source?.startsWith("skills-library/") &&
+              libraryIds.has(managedResource.source.slice("skills-library/".length))
+                ? managedResource.source.slice("skills-library/".length)
+                : libraryIds.has(deploymentName)
+                  ? deploymentName
+                  : undefined,
             skillKey,
             runtimeName: observation.runtimeName,
             deploymentName,
             version: observation.version,
             runtimeScope: observation.scope,
-            runtimeOwner: externalEvidence ? "external" : observation.owner,
-            managedByTarget: false,
+            runtimeOwner: managedResource
+              ? "agentenv"
+              : externalEvidence
+                ? "external"
+                : observation.owner,
+            managedByTarget: Boolean(managedResource),
             runtimeAvailability: observation.availability,
             runtimeConfidence: observation.confidence,
             runtimeIssues: observation.issues,
@@ -994,12 +944,19 @@ export const createSkillLibraryStore = (
         const content = await readFile(join(skillDir, "SKILL.md"), "utf8");
         const frontmatter = parseSkillFrontmatter(content);
         const ownedId = await ownedLibraryId(skillDir);
-        const markerId = ownedId && libraryIds.has(ownedId) ? ownedId : undefined;
+        const receiptLibraryId = managedResource?.source?.startsWith("skills-library/")
+          ? managedResource.source.slice("skills-library/".length)
+          : undefined;
+        const markerId = receiptLibraryId && libraryIds.has(receiptLibraryId)
+          ? receiptLibraryId
+          : ownedId && libraryIds.has(ownedId)
+            ? ownedId
+            : undefined;
         const agentEnvOwned = await isAgentEnvOwnedDir(skillDir, {
           targetId: target.targetId,
           kind: "skill"
         });
-        const managedByAgentEnv = agentEnvOwned || Boolean(markerId);
+        const managedByAgentEnv = Boolean(managedResource) || agentEnvOwned || Boolean(markerId);
         const unmanagedLocation = unmanagedLocationFor(
           target.targetId,
           skillDir,
@@ -1074,7 +1031,7 @@ export const createSkillLibraryStore = (
             : externalEvidence
               ? "external"
               : observation.owner,
-          managedByTarget: agentEnvOwned,
+          managedByTarget: Boolean(managedResource) || agentEnvOwned,
           runtimeAvailability: observation.availability,
           runtimeConfidence: observation.confidence,
           runtimeIssues: observation.issues,
@@ -1714,39 +1671,7 @@ export const createSkillLibraryStore = (
     listSourceGroups
   });
 
-  const deployLibrarySkill = async ({
-    targetPaths,
-    targetName,
-    libraryId,
-    profileId
-  }: DeployLibrarySkillStoreInput): Promise<void> => {
-    if (!targetPaths.skillsDir) {
-      throw new Error("Agent does not expose a Skills directory");
-    }
-    if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(targetName)) {
-      throw new Error(`Invalid target skill name: ${targetName}`);
-    }
-
-    const safeLibraryId = SafeIdSchema.parse(libraryId);
-    const sourceDir = join(await libraryDir(), safeLibraryId);
-    if (!(await pathExists(join(sourceDir, "SKILL.md")))) {
-      throw new Error(`Library skill does not exist: ${safeLibraryId}`);
-    }
-
-    const targetDir = join(targetPaths.skillsDir, targetName);
-    const settings = await readSettings();
-    await deploySkillDirectory({
-      sourceDir,
-      targetDir,
-      syncMethod: settings.skillSyncMethod,
-      markerContent: createOwnerMarkerContent({
-        profileId,
-        targetId: targetPaths.targetId,
-        kind: "skill",
-        source: `skills-library/${safeLibraryId}`
-      })
-    });
-  };
+  const deployLibrarySkill = createSkillLibraryTargetDeployer({ libraryDir, readSettings });
 
   const manageTargetSkill = async (input: ManageTargetSkillStoreInput): Promise<void> => {
     const targetDir = input.targetPaths.skillsDir
@@ -1758,7 +1683,12 @@ export const createSkillLibraryStore = (
     const backupId = `cleanup-${Date.now()}-${randomUUID().slice(0, 8)}`;
     const backupDir = join(cleanupBackupRoot(), backupId);
     const entries: SkillCleanupBackupManifest["entries"] = [];
-    for (const [index, sourcePath] of [targetDir, markerPathForFile(targetDir)].entries()) {
+    const stateFile = await targetStateRepository.read(input.targetPaths.targetId);
+    for (const [index, sourcePath] of [
+      targetDir,
+      markerPathForFile(targetDir),
+      stateFile.path
+    ].entries()) {
       if (!(await pathEntryExists(sourcePath))) continue;
       const backupPath = join(backupDir, "locations", `${index}-${basename(sourcePath)}`);
       await copyCleanupEntry(entries, sourcePath, backupPath);
@@ -1771,15 +1701,31 @@ export const createSkillLibraryStore = (
       operation: "cleanup",
       status: "prepared",
       createdAt: new Date().toISOString(),
-      expectedPaths: await snapshotCleanupPaths([targetDir, markerPathForFile(targetDir)]),
+      expectedPaths: await snapshotCleanupPaths([
+        targetDir,
+        markerPathForFile(targetDir),
+        stateFile.path
+      ]),
       entries
     };
     await writeCleanupManifest(manifest);
     try {
       const claimPath = createCleanupPathClaimer(manifest);
-      await claimPath(targetDir, markerPathForFile(targetDir));
-      await deployLibrarySkill({ ...input, profileId: "library-management" });
-      await claimPath.recordMutation(targetDir, markerPathForFile(targetDir));
+      await claimPath(targetDir, markerPathForFile(targetDir), stateFile.path);
+      await deployLibrarySkill(input);
+      const nextResource = await createManagedSkillResource({
+        id: input.targetName,
+        path: targetDir,
+        libraryId: SafeIdSchema.parse(input.libraryId),
+        contentHash: await computeContentHash(targetDir),
+        createdByAgentEnv: true
+      });
+      await targetStateRepository.write(
+        input.targetPaths.targetId,
+        upsertManagedSkillResource(stateFile.state, nextResource),
+        { expectedPathHash: stateFile.pathHash }
+      );
+      await claimPath.recordMutation(targetDir, markerPathForFile(targetDir), stateFile.path);
       await setCleanupStatus(manifest, "complete");
     } catch (error) {
       return failAfterCleanupRollback(
@@ -1788,30 +1734,6 @@ export const createSkillLibraryStore = (
         error
       );
     }
-  };
-
-  const replaceTargetSkill = async ({
-    libraryId,
-    targetDir,
-    targetId
-  }: {
-    libraryId: string;
-    targetDir: string;
-    targetId: string;
-  }) => {
-    const sourceDir = join(await libraryDir(), libraryId);
-    const settings = await readSettings();
-    await deploySkillDirectory({
-      sourceDir,
-      targetDir,
-      syncMethod: settings.skillSyncMethod,
-      markerContent: createOwnerMarkerContent({
-        profileId: "library-cleanup",
-        targetId,
-        kind: "skill",
-        source: `skills-library/${libraryId}`
-      })
-    });
   };
 
   const previewMerge = async (
@@ -1936,13 +1858,18 @@ export const createSkillLibraryStore = (
         Boolean(item.libraryId && removedIdSet.has(item.libraryId)) &&
         Boolean(item.foundIn[0])
     );
+    const stateFilesByTarget = await readTargetStateFiles(
+      targetStateRepository,
+      affectedInstalls.flatMap((install) => install.foundIn.slice(0, 1))
+    );
 
     const backupId = `merge-${Date.now()}-${randomUUID().slice(0, 8)}`;
     const backupDir = join(cleanupBackupRoot(), backupId);
     const protectedPaths = [
       ...requestedIds.map((id) => skillsById.get(id)!.path),
       ...affectedProfiles.map((profile) => profile.profileDir ?? join(paths.profilesDir, profile.id)),
-      ...affectedInstalls.flatMap((install) => [install.path, markerPathForFile(install.path)])
+      ...affectedInstalls.flatMap((install) => [install.path, markerPathForFile(install.path)]),
+      ...[...stateFilesByTarget.values()].map((stateFile) => stateFile.path)
     ];
     const entries: SkillCleanupBackupManifest["entries"] = [];
     await mkdir(join(backupDir, "locations"), { recursive: true });
@@ -2032,13 +1959,29 @@ export const createSkillLibraryStore = (
       }
       for (const install of affectedInstalls) {
         await claimPath(install.path, markerPathForFile(install.path));
-        await replaceTargetSkill({
+        const installTargetPaths = targetPaths.find(
+          (candidate) => candidate.targetId === install.foundIn[0]
+        );
+        if (!installTargetPaths) throw new Error(`Agent path is unavailable: ${install.foundIn[0]}`);
+        await deployLibrarySkill({
           libraryId: keepId,
-          targetDir: install.path,
-          targetId: install.foundIn[0]
+          targetName: basename(install.path),
+          targetPaths: installTargetPaths,
+          targetDir: install.path
         });
         await claimPath.recordMutation(install.path, markerPathForFile(install.path));
       }
+      const mergedContentHash = await computeContentHash(keepSkill.path);
+      for (const stateFile of stateFilesByTarget.values()) await claimPath(stateFile.path);
+      await updateMergedSkillTargetStates({
+        repository: targetStateRepository,
+        stateFiles: stateFilesByTarget,
+        installs: affectedInstalls,
+        removedIds,
+        keepId,
+        contentHash: mergedContentHash,
+        recordMutation: claimPath.recordMutation
+      });
       for (const removedId of removedIds) {
         await claimPath(skillsById.get(removedId)!.path);
         await rm(skillsById.get(removedId)!.path, { recursive: true, force: true });
@@ -2082,6 +2025,10 @@ export const createSkillLibraryStore = (
     }
 
     const uniqueLocations = [...new Map(locations.map((item) => [item.targetDir, item])).values()];
+    const stateFilesByTarget = await readTargetStateFiles(
+      targetStateRepository,
+      uniqueLocations.map((location) => location.targetPaths.targetId)
+    );
     const backupId = `cleanup-${Date.now()}-${randomUUID().slice(0, 8)}`;
     const backupDir = join(cleanupBackupRoot(), backupId);
     const entries: SkillCleanupBackupManifest["entries"] = [];
@@ -2110,6 +2057,14 @@ export const createSkillLibraryStore = (
         await copyCleanupEntry(entries, markerPath, markerBackupPath);
       }
     }
+    for (const [index, stateFile] of [...stateFilesByTarget.values()].entries()) {
+      if (!(await pathEntryExists(stateFile.path))) continue;
+      await copyCleanupEntry(
+        entries,
+        stateFile.path,
+        join(backupDir, "target-states", `${index}-${basename(stateFile.path)}`)
+      );
+    }
 
     const manifest: SkillCleanupBackupManifest = {
       formatVersion: 2,
@@ -2129,6 +2084,7 @@ export const createSkillLibraryStore = (
           location.targetDir,
           markerPathForFile(location.targetDir)
         ]),
+        ...[...stateFilesByTarget.values()].map((stateFile) => stateFile.path),
         ...(libraryCreated || replaceLibrary ? [targetLibraryDir] : [])
       ]),
       entries
@@ -2152,17 +2108,31 @@ export const createSkillLibraryStore = (
         await claimPath.recordMutation(targetLibraryDir);
       }
       for (const location of uniqueLocations) {
-        await claimPath(location.targetDir, markerPathForFile(location.targetDir));
-        await replaceTargetSkill({
+        const stateFile = stateFilesByTarget.get(location.targetPaths.targetId)!;
+        await claimPath(
+          location.targetDir,
+          markerPathForFile(location.targetDir),
+          stateFile.path
+        );
+        await deployLibrarySkill({
           libraryId: safeLibraryId,
-          targetDir: location.targetDir,
-          targetId: location.targetPaths.targetId
+          targetName: basename(location.targetDir),
+          targetPaths: location.targetPaths,
+          targetDir: location.targetDir
         });
         await claimPath.recordMutation(
           location.targetDir,
           markerPathForFile(location.targetDir)
         );
       }
+      await updateConsolidatedSkillTargetStates({
+        repository: targetStateRepository,
+        stateFiles: stateFilesByTarget,
+        locations: uniqueLocations,
+        libraryId: safeLibraryId,
+        computeContentHash,
+        recordMutation: claimPath.recordMutation
+      });
       await setCleanupStatus(manifest, "complete");
       return {
         backupId,

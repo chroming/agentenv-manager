@@ -200,6 +200,7 @@ describe.skipIf(process.platform !== "darwin" || !gitExecutable)(
         skillAutoCheckEnabled: false,
         skillAutoCheckIntervalMinutes: 60,
         backupRetentionDays: null,
+        telemetryEnabled: false,
         enabledTargetIds: ["opencode"],
         agentDiscoveryVersion: 1,
         agentDiscoveryReviewedIds: ["opencode"]
@@ -515,6 +516,7 @@ printf '{"type":"step_finish","part":{"modelID":"fake/e2e","cost":0.01,"tokens":
         skillAutoCheckEnabled: false,
         skillAutoCheckIntervalMinutes: 60,
         backupRetentionDays: null,
+        telemetryEnabled: false,
         enabledTargetIds: ["codex"],
         agentDiscoveryVersion: 1,
         agentDiscoveryReviewedIds: ["codex"]
@@ -685,6 +687,7 @@ printf '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens
         skillAutoCheckEnabled: false,
         skillAutoCheckIntervalMinutes: 60,
         backupRetentionDays: null,
+        telemetryEnabled: false,
         enabledTargetIds: ["claude-code", "antigravity", "pi", "trae-cli"],
         agentDiscoveryVersion: 1,
         agentDiscoveryReviewedIds: ["claude-code", "antigravity", "pi", "trae-cli"]

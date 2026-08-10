@@ -50,10 +50,7 @@ import type {
   ApplyIssue,
   ApplyResult,
   BackupManifest,
-  ManagedResourceKind,
-  ManagedResourceSnapshot,
   PlannedFileChange,
-  PlannedResourceChange,
   ProfileDetail,
   RollbackPreview,
   RollbackResult,
@@ -77,8 +74,6 @@ import {
   libraryResourceVersionsEqual
 } from "../shared/libraryVersions";
 import {
-  createOwnerMarkerContent,
-  markerPathFor,
   markerPathForFile
 } from "./ownershipMarkers";
 import { removeSkillDeployment } from "./skillDeployment";
@@ -136,9 +131,9 @@ import {
   fingerprintTargetState,
   normalizeSharedSkillPreparations,
   sharedSkillPreparationsEqual,
-  toPublicActivationPreview,
-  type InternalActivationPreview
+  toPublicActivationPreview
 } from "./activationPreviewSupport";
+import type { InternalActivationPreview } from "./internalActivationPreview";
 import {
   appendActivationHistory as appendHistory,
   applyLibrarySkillAvailability,
@@ -147,6 +142,12 @@ import {
   hashComparablePath,
   hashText
 } from "./activationProfileSupport";
+import {
+  desiredAssetResources,
+  planAssetResources,
+  resourceKindForPath,
+  snapshotManagedResources
+} from "./activationAssetPlanning";
 
 export interface ActivationServiceOptions {
   paths: AgentEnvPaths;
@@ -437,193 +438,6 @@ export const createActivationService = ({
 
   const writeTargetState = targetStateRepository.write;
 
-  const resourceKindForPath = (
-    path: string,
-    targetPaths: TargetPaths
-  ): { kind: ManagedResourceKind; id: string } => {
-    if (path === targetPaths.instructionsPath) {
-      return { kind: "instructions", id: "instructions" };
-    }
-    if (path === targetPaths.configPath || path === targetPaths.mcpConfigPath) {
-      return { kind: "config", id: "config" };
-    }
-    if (path.endsWith(".agentenv-owner.json")) {
-      return { kind: "file", id: basename(path) };
-    }
-    if (
-      [targetPaths.skillsDir, ...(targetPaths.skillLocations ?? []).map((location) => location.path)]
-        .filter((skillsRoot): skillsRoot is string => Boolean(skillsRoot))
-        .some((skillsRoot) => isPathInside(skillsRoot, path))
-    ) {
-      return { kind: "skill", id: basename(path) };
-    }
-    if (targetPaths.agentsDir && isPathInside(targetPaths.agentsDir, path)) {
-      return { kind: "agent", id: basename(path) };
-    }
-    return { kind: "file", id: basename(path) || path };
-  };
-
-  const snapshotManagedResources = async (
-    pathsToSnapshot: string[],
-    targetPaths: TargetPaths
-  ) => {
-    const snapshots: ManagedResourceSnapshot[] = [];
-    for (const path of [...new Set(pathsToSnapshot)]) {
-      if (path.endsWith(".agentenv-owner.json")) continue;
-      const identity = resourceKindForPath(path, targetPaths);
-      if (identity.kind === "config") continue;
-      const contentHash = await hashManagedResourcePath(path, identity.kind);
-      if (!contentHash) {
-        continue;
-      }
-      snapshots.push({
-        ...identity,
-        path,
-        contentHash,
-        source: "profile-apply"
-      });
-    }
-    return snapshots.sort((a, b) => a.path.localeCompare(b.path));
-  };
-
-  const desiredAssetResources = (
-    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
-    targetPaths: TargetPaths,
-    skillLibraryDir: string
-  ) => {
-    const desired = new Map<
-      string,
-      {
-        resource: Omit<PlannedResourceChange, "action" | "path">;
-        sourcePath: string;
-        markerSource: string;
-      }
-    >();
-    if (!profileManagesResource(profile.resources, targetPaths.targetId, "skills")) {
-      return desired;
-    }
-    for (const skillRef of profile.resources.skills.filter(
-      (reference) => reference.enabled
-    )) {
-      if (targetPaths.skillsDir) {
-        desired.set(join(targetPaths.skillsDir, skillRef.targetName), {
-          resource: {
-            kind: "skill",
-            name: skillRef.targetName,
-            source: `Library / ${skillRef.libraryId}`
-          },
-          sourcePath: join(skillLibraryDir, skillRef.libraryId),
-          markerSource: `skills-library/${skillRef.libraryId}`
-        });
-      }
-    }
-    return desired;
-  };
-
-  const planAssetResources = async (
-    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
-    targetPaths: TargetPaths,
-    assetPaths: string[],
-    skillLibraryDir: string,
-    topologyOnlyPaths: ReadonlySet<string>,
-    skillRootTransition?: SkillRootTransition
-  ) => {
-    if (!profileManagesResource(profile.resources, targetPaths.targetId, "skills")) {
-      return {
-        resourceChanges: [] as PlannedResourceChange[],
-        resourceFingerprints: {} as Record<string, string>,
-        sourceFingerprints: {} as Record<string, string>
-      };
-    }
-    const desired = desiredAssetResources(profile, targetPaths, skillLibraryDir);
-    const resourceChanges: PlannedResourceChange[] = skillRootTransition
-      ? [{
-          kind: "directory",
-          action: "replace",
-          name: "Skills folder",
-          path: skillRootTransition.path,
-          source: `Linked to ${skillRootTransition.resolvedPath}`
-        }]
-      : [];
-    const resourceFingerprints: Record<string, string> = {};
-    const sourceFingerprints: Record<string, string> = {};
-
-    await Promise.all(
-      [...desired.values()].map(async ({ sourcePath }) => {
-        sourceFingerprints[sourcePath] = (await hashComparablePath(sourcePath)) ?? "";
-      })
-    );
-
-    if (skillRootTransition) {
-      resourceFingerprints[skillRootTransition.path] =
-        (await hashPath(skillRootTransition.path)) ?? "";
-    }
-
-    for (const path of [...new Set([...assetPaths, ...desired.keys()])]) {
-      const behindTransitionedRoot = Boolean(
-        skillRootTransition &&
-        dirname(path) === skillRootTransition.path
-      );
-      if (!behindTransitionedRoot && !topologyOnlyPaths.has(resolve(path))) {
-        resourceFingerprints[path] = (await hashPath(path)) ?? "";
-      }
-      if (skillRootTransition && path === skillRootTransition.path) {
-        continue;
-      }
-      const resource = desired.get(path);
-      if (resource) {
-        const exists = !behindTransitionedRoot && await pathEntryExists(path);
-        const stats = exists ? await lstat(path) : undefined;
-        const markerPath = stats?.isDirectory() ? markerPathFor(path) : markerPathForFile(path);
-        const expectedMarker = createOwnerMarkerContent({
-          profileId: profile.id,
-          targetId: targetPaths.targetId,
-          kind: resource.resource.kind === "agent" ? "agent" : "skill",
-          source: resource.markerSource
-        });
-        const contentMatches =
-          exists &&
-          (await hashComparablePath(resource.sourcePath)) ===
-            (await hashComparablePath(path));
-        const markerMatches = exists && (await readTextIfExists(markerPath)) === expectedMarker;
-        if (contentMatches && markerMatches) {
-          continue;
-        }
-        resourceChanges.push({
-          ...resource.resource,
-          path,
-          action: exists ? "replace" : "install"
-        });
-        continue;
-      }
-      if (path.endsWith(".agentenv-owner.json")) {
-        continue;
-      }
-      const stats = (await pathEntryExists(path)) ? await lstat(path) : undefined;
-      if (!stats) {
-        continue;
-      }
-      const identity = resourceKindForPath(path, targetPaths);
-      resourceChanges.push({
-        kind:
-          identity.kind === "skill" || identity.kind === "agent"
-            ? identity.kind
-            : stats?.isDirectory()
-              ? "directory"
-              : "file",
-        action: "remove",
-        name: identity.id,
-        path
-      });
-    }
-
-    return {
-      resourceChanges: resourceChanges.sort((left, right) => left.path.localeCompare(right.path)),
-      resourceFingerprints,
-      sourceFingerprints
-    };
-  };
-
   const previewProfile = async (
     profileId: string,
     requestedTargetId?: string
@@ -750,7 +564,8 @@ export const createActivationService = ({
       skillSyncMethod: settings.skillSyncMethod,
       state: stateFile.state,
       approvedUnmanagedSkillHashes,
-      isolateSkillRoot: Boolean(skillRootTransition)
+      isolateSkillRoot: Boolean(skillRootTransition),
+      managedResources: stateFile.state.managedResources
     });
     const instructionRemovalBefore =
       instructionsMode === "disable" &&
@@ -807,7 +622,8 @@ export const createActivationService = ({
       skillLibraryDir,
       skillSyncMethod: settings.skillSyncMethod,
       approvedUnmanagedSkillHashes,
-      isolateSkillRoot: Boolean(skillRootTransition)
+      isolateSkillRoot: Boolean(skillRootTransition),
+      managedResources: stateFile.state.managedResources
     });
     if (skillRootTransition) {
       assetBackupPaths.push(skillRootTransition.path);
@@ -899,7 +715,8 @@ export const createActivationService = ({
       skillSyncMethod: settings.skillSyncMethod,
       approvedUnmanagedSkillHashes,
       replaceablePaths,
-      isolateSkillRoot: Boolean(skillRootTransition)
+      isolateSkillRoot: Boolean(skillRootTransition),
+      managedResources: stateFile.state.managedResources
     });
     const resolvedSkillsDir = targetPaths.skillsDir
       ? resolve(targetPaths.skillsDir)
@@ -918,19 +735,61 @@ export const createActivationService = ({
         })
       )
     ).filter((path): path is string => Boolean(path));
-    const assetPlan = await planAssetResources(
-      materializedProfile,
+    const assetPlan = await planAssetResources({
+      profile: materializedProfile,
       targetPaths,
-      assetBackupPaths,
+      assetPaths: assetBackupPaths,
       skillLibraryDir,
-      new Set(missingAssetDirectories),
-      skillRootTransition
-    );
+      topologyOnlyPaths: new Set(missingAssetDirectories),
+      skillRootTransition,
+      managedResources: stateFile.state.managedResources
+    });
+    assetBackupPaths.push(...assetPlan.legacyOwnershipMarkerPaths);
     const sharedFingerprints = Object.fromEntries(
       await Promise.all(
         skillDeploymentPlan.sharedPaths.map(async (path) => [path, (await hashPath(path)) ?? ""])
       )
     );
+    const resourceMutationPaths = new Set(
+      assetPlan.resourceChanges.flatMap((change) => [
+        resolve(change.path),
+        resolve(markerPathForFile(change.path))
+      ])
+    );
+    const alwaysProtectedAssetPaths = new Set([
+      ...(skillRootTransition ? [resolve(skillRootTransition.path)] : []),
+      ...pausedSkillPaths.flatMap((path) => [resolve(path), resolve(markerPathForFile(path))]),
+      ...legacySkillPaths.flatMap((path) => [resolve(path), resolve(markerPathForFile(path))]),
+      ...assetPlan.legacyOwnershipMarkerPaths.map((path) => resolve(path)),
+      ...missingAssetDirectories.map((path) => resolve(path))
+    ]);
+    const protectedAssetBackupPaths = assetBackupPaths.filter((path) =>
+      resourceMutationPaths.has(resolve(path)) || alwaysProtectedAssetPaths.has(resolve(path))
+    );
+    const desiredPaths = [...desiredAssetResources(
+      materializedProfile,
+      targetPaths,
+      skillLibraryDir
+    ).keys()];
+    const plannedWritePaths = new Set(
+      assetPlan.resourceChanges
+        .filter((change) => change.action === "install" || change.action === "replace")
+        .map((change) => resolve(change.path))
+    );
+    const liveLinks = (
+      await Promise.all(desiredPaths.map(async (path) => {
+        if (plannedWritePaths.has(resolve(path))) {
+          return settings.skillSyncMethod === "copy" ? 0 : 1;
+        }
+        return (await lstat(path).catch(() => undefined))?.isSymbolicLink() ? 1 : 0;
+      }))
+    ).reduce<number>((total, count) => total + count, 0);
+    const createdFiles = targetPreview.changes.filter(
+      (change) => change.action !== "remove" && change.before.length === 0
+    ).length;
+    const removedFiles = targetPreview.changes.filter(
+      (change) => change.action === "remove" || change.after.length === 0
+    ).length;
     const issues = dedupeApplyIssues([...preAssetIssues, ...assetIssues]);
     const skillReceipts = managesSkills
       ? skillReceiptsFor({
@@ -1008,13 +867,32 @@ export const createActivationService = ({
           stateFile.state.skillReceipts
         ) ||
         JSON.stringify([...new Set(stateFile.state.managedMcpNames)].sort()) !==
-          JSON.stringify([...new Set(targetPreview.targetState.managedMcpNames)].sort()),
+          JSON.stringify([...new Set(targetPreview.targetState.managedMcpNames)].sort()) ||
+        assetPlan.adoptedResourcePaths.length > 0 ||
+        assetPlan.legacyOwnedResourcePaths.length > 0,
       targetState: targetPreview.targetState,
       effectivePayload,
+      localFootprint: {
+        adopted:
+          assetPlan.adoptedResourcePaths.length + assetPlan.legacyOwnedResourcePaths.length,
+        modified:
+          targetPreview.changes.length - createdFiles - removedFiles +
+          assetPlan.resourceChanges.filter((change) => change.action === "replace").length,
+        created:
+          createdFiles +
+          assetPlan.resourceChanges.filter((change) => change.action === "install").length,
+        removed:
+          removedFiles +
+          assetPlan.resourceChanges.filter((change) => change.action === "remove").length,
+        liveLinks
+      },
       operation: isTakeover ? "takeover" : "apply",
       skillRootTransition,
       legacySkillPaths,
-      assetBackupPaths: [...new Set(assetBackupPaths)].sort(),
+      legacyOwnershipMarkerPaths: assetPlan.legacyOwnershipMarkerPaths,
+      adoptedResourcePaths: assetPlan.adoptedResourcePaths,
+      legacyOwnedResourcePaths: assetPlan.legacyOwnedResourcePaths,
+      assetBackupPaths: [...new Set(protectedAssetBackupPaths)].sort(),
       missingAssetDirectories: [...new Set(missingAssetDirectories)].sort(),
       resourceManagement: {
         instructions: managesInstructions,
@@ -1075,7 +953,8 @@ export const createActivationService = ({
       preview.changes.length === 0 &&
       preview.resourceChanges.length === 0 &&
       !preview.sharedSkillPreparationChanged &&
-      !preview.targetStateChanged
+      !preview.targetStateChanged &&
+      preview.legacyOwnershipMarkerPaths.length === 0
     ) {
       return { ok: false, kind: "no-op", errors: ["No changes to apply"] };
     }
@@ -1349,7 +1228,17 @@ export const createActivationService = ({
           await materializeManagedSkillLink(path);
           await claimMutationPath.recordMutation(path);
         }
+        for (const markerPath of preview.legacyOwnershipMarkerPaths) {
+          await claimMutationPath(markerPath);
+          await rm(markerPath, { force: true });
+          await claimMutationPath.recordMutation(markerPath);
+        }
         if (preview.resourceChanges.length > 0) {
+          const plannedResourceWrites = new Set(
+            preview.resourceChanges
+              .filter((change) => change.action === "install" || change.action === "replace")
+              .map((change) => resolve(change.path))
+          );
           await adapter.applyAssets({
             profile: materializedProfile,
             targetPaths,
@@ -1357,6 +1246,8 @@ export const createActivationService = ({
             skillSyncMethod: preview.skillDeployment.skillSyncMethod,
             approvedUnmanagedSkillHashes,
             replaceablePaths,
+            managedResources: preOperationState.managedResources,
+            plannedResourceWrites,
             plannedResourceRemovals: new Set(
               preview.resourceChanges
                 .filter((change) => change.action === "remove")
@@ -1391,17 +1282,35 @@ export const createActivationService = ({
             );
           }
         }
-        const managedAssetPaths = preview.skillRootTransition
-          ? [...desiredAssetResources(materializedProfile, targetPaths, skillLibraryDir).keys()]
-          : assetBackupPaths.filter(
-              (path) =>
-                !preview.resourceManagement.pausedSkillPaths.some(
-                  (skillPath) => path === markerPathForFile(skillPath)
-                )
-            );
+        const desiredAssets = desiredAssetResources(
+          materializedProfile,
+          targetPaths,
+          skillLibraryDir
+        );
+        const managedAssetPaths = [...desiredAssets.keys()];
+        const sourceByPath = new Map(
+          [...desiredAssets.entries()].map(([path, value]) => [
+            resolve(path),
+            value.markerSource
+          ])
+        );
+        const mutatedAssetPaths = new Set(
+          preview.resourceChanges
+            .filter((change) => change.action === "install" || change.action === "replace")
+            .map((change) => resolve(change.path))
+        );
         const refreshedManagedResources = await snapshotManagedResources(
           [...preview.changes.map((change) => change.path), ...managedAssetPaths],
-          targetPaths
+          targetPaths,
+          {
+            sourceByPath,
+            previousResources: preOperationState.managedResources,
+            mutatedPaths: mutatedAssetPaths,
+            adoptedPaths: new Set(preview.adoptedResourcePaths.map((path) => resolve(path))),
+            legacyOwnedPaths: new Set(
+              preview.legacyOwnedResourcePaths.map((path) => resolve(path))
+            )
+          }
         );
         const retainedManagedResources = (preOperationState.managedResources ?? [])
           .filter(
@@ -1833,23 +1742,10 @@ export const createActivationService = ({
           if ((await pathExists(join(context.targetPath, "SKILL.md"))) !== shouldExist) {
             throw new Error(`Agent Skill verification failed: ${context.targetPath}`);
           }
-          const targetStats = shouldExist
-            ? await lstat(context.targetPath).catch(() => undefined)
-            : undefined;
-          const ownershipMarkerPath = targetStats?.isSymbolicLink()
-            ? markerPathForFile(context.targetPath)
-            : markerPathFor(context.targetPath);
           if (
             shouldExist &&
-            ((await hashComparablePath(context.targetPath)) !==
-              (await hashComparablePath(librarySkill.path)) ||
-              (await readTextIfExists(ownershipMarkerPath)) !==
-                createOwnerMarkerContent({
-                  profileId: context.intent.profileId,
-                  targetId: context.targetId,
-                  kind: "skill",
-                  source: `skills-library/${libraryId}`
-                }))
+            (await hashComparablePath(context.targetPath)) !==
+              (await hashComparablePath(librarySkill.path))
           ) {
             throw new Error(`Agent Skill ownership verification failed: ${context.targetPath}`);
           }
@@ -2048,11 +1944,20 @@ export const createActivationService = ({
       return;
     }
     const stats = await lstat(path);
-    const resolvedStats = stats.isSymbolicLink() ? await stat(path) : stats;
-    if (resolvedStats.isDirectory()) {
-      await replacePathAtomically(path, (stagingPath) =>
-        cp(path, stagingPath, { recursive: true, dereference: true })
-      );
+    if (stats.isSymbolicLink()) {
+      const resolvedStats = await stat(path);
+      if (resolvedStats.isDirectory()) {
+        await replacePathAtomically(path, (stagingPath) =>
+          cp(path, stagingPath, { recursive: true, dereference: true })
+        );
+      } else {
+        await replacePathAtomically(path, (stagingPath) =>
+          cp(path, stagingPath, { dereference: true })
+        );
+      }
+    }
+    const currentStats = await lstat(path).catch(() => undefined);
+    if (currentStats?.isDirectory()) {
       const removeMarkers = async (directory: string): Promise<void> => {
         const entries = await readdir(directory, { withFileTypes: true });
         for (const entry of entries) {
@@ -2065,10 +1970,6 @@ export const createActivationService = ({
         }
       };
       await removeMarkers(path);
-    } else if (stats.isSymbolicLink()) {
-      await replacePathAtomically(path, (stagingPath) =>
-        cp(path, stagingPath, { dereference: true })
-      );
     }
     await rm(markerPathForFile(path), { force: true });
   };

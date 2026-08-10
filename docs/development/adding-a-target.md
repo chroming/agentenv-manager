@@ -32,7 +32,7 @@ Before enabling `realWritesEnabled`, cover:
 3. Capture that excludes credentials and unsupported native values.
 4. Preview with no filesystem writes, no-change behavior, drift, and conflicts.
 5. Full replacement Apply, backup, rollback, partial-failure recovery, and Stop Managing.
-6. Skills using copy and symlink, shared compatibility roots, ignored copies, and ownership markers.
+6. Skills using copy and symlink, shared compatibility roots, ignored copies, central deployment receipts, and read-only legacy-marker migration.
 7. MCP stdio/http/sse support, environment references, unsupported transports, and name conflicts.
 8. Generic icon fallback, Target name, Profile counts, Apply selector, and History labels in the UI.
 
