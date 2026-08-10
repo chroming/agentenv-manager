@@ -3063,6 +3063,7 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Profiles" }));
     await screen.findByRole("region", { name: "Profiles" });
+    expect(screen.getByRole("button", { name: "Select apply Agent" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Apply" })).not.toBeInTheDocument();
     expect(api.listSupportedTargets).toHaveBeenCalled();
   });
@@ -4033,8 +4034,12 @@ describe("App", () => {
       "aria-selected",
       "false"
     );
-    expect(openCodeTarget.querySelector("img")).toHaveClass("profile-target-logo--opencode");
-    expect(codexTargetItem.querySelector("img")).toHaveClass("profile-target-logo--codex");
+    expect(openCodeTarget.querySelector("img")).toHaveClass(
+      "agent-context-switcher__logo--opencode"
+    );
+    expect(codexTargetItem.querySelector("img")).toHaveClass(
+      "agent-context-switcher__logo--codex"
+    );
     expect(screen.getByRole("button", { name: "Apply" }).querySelector("img"))
       .toBeNull();
     expect(screen.getByRole("button", { name: "Apply" }).querySelector("svg"))
@@ -4369,6 +4374,7 @@ describe("App", () => {
     await openProfiles();
     readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("Select an Agent");
+    expect(screen.getByRole("button", { name: "Select apply Agent" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Open Agents" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Apply" })).not.toBeInTheDocument();
 

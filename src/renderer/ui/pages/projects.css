@@ -74,20 +74,6 @@
   line-height: var(--line-height-body);
 }
 
-.agent-context-switcher {
-  flex: 0 0 150px;
-  min-width: 0;
-  width: 150px;
-}
-
-.agent-context-switcher__logo,
-.project-agent-switcher__logo {
-  display: block;
-  height: 17px;
-  object-fit: contain;
-  width: 17px;
-}
-
 .project-detail__actions {
   align-items: center;
   flex-wrap: nowrap;

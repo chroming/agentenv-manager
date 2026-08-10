@@ -7,7 +7,6 @@ import {
   FilePlus2,
   Folder,
   History,
-  Monitor,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -35,7 +34,7 @@ import { LibrarySkillPicker } from "./LibrarySkillPicker";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ProjectEnvironmentPreviewDialog } from "./ProjectEnvironmentPreviewDialog";
 import { ProjectRecoveryDialog } from "./ProjectRecoveryDialog";
-import { targetIconFor } from "./ProfileSidebar";
+import { AgentContextSwitcher } from "./AgentContextSwitcher";
 import {
   ProjectResourceEditorDialog,
   type ProjectEditorGuard
@@ -137,24 +136,6 @@ export const ProjectsWorkspace = ({
     : undefined;
   const selectedAgent = availableTargets.find((target) => target.id === selectedAgentId)
     ?? availableTargets[0];
-  const agentSwitcherItems = availableTargets.map((target) => {
-    const icon = targetIconFor(target);
-    return {
-      id: target.id,
-      ariaLabel: t("Agent {{name}}", { name: target.name }),
-      icon: icon.assetUrl ? (
-        <img
-          className="project-agent-switcher__logo"
-          src={icon.assetUrl}
-          alt=""
-        />
-      ) : (
-        <Monitor size={17} strokeWidth={2.1} aria-hidden="true" />
-      ),
-      searchText: target.name,
-      title: target.name
-    };
-  });
   const selectedAgentSupport = snapshot?.agentSupport.find(
     (support) => support.agentId === selectedAgent?.id
   );
@@ -684,21 +665,13 @@ export const ProjectsWorkspace = ({
                       variant="ghost"
                       onRefresh={() => void refreshSelectedProject()}
                     />
-                    <ObjectSwitcher
-                      ariaLabel={availableTargets.length === 1 && selectedAgent
-                        ? t("Current Agent {{name}}", { name: selectedAgent.name })
-                        : t("Choose Agent")}
-                      className="agent-context-switcher project-agent-switcher"
-                      disabled={availableTargets.length === 0}
-                      emptyMessage={t("No enabled Agents")}
-                      fullWidth
-                      items={agentSwitcherItems}
+                    <AgentContextSwitcher
+                      className="project-agent-switcher"
                       open={agentSwitcherOpen}
                       query={agentQuery}
-                      searchLabel={t("Search Agents")}
-                      searchPlaceholder={t("Search Agents")}
                       selectedId={selectedAgent?.id}
-                      static={availableTargets.length === 1}
+                      selectionLabel={t("Choose Agent")}
+                      targets={availableTargets}
                       onOpenChange={setAgentSwitcherOpen}
                       onQueryChange={setAgentQuery}
                       onSelect={(agentId) => {

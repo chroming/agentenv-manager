@@ -173,7 +173,7 @@ describe("ProjectsWorkspace", () => {
       .toBeInTheDocument();
     const agentSwitcher = screen.getByRole("button", { name: "Current Agent OpenCode" });
     expect(agentSwitcher.closest(".project-agent-switcher")).not.toBeNull();
-    expect(agentSwitcher.querySelector(".project-agent-switcher__logo")).not.toBeNull();
+    expect(agentSwitcher.querySelector(".agent-context-switcher__logo")).not.toBeNull();
     expect(agentSwitcher).toBeDisabled();
     fireEvent.click(agentSwitcher);
     expect(screen.queryByRole("dialog", { name: "Current Agent OpenCode" }))

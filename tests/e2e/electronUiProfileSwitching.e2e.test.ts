@@ -4267,6 +4267,30 @@ describe("Electron UI profile switching e2e", () => {
     expect(dimensions.documentHeight).toBe(dimensions.viewportHeight);
   }, standardElectronTestTimeout);
 
+  it("uses one static single-Agent context in Profiles and Workspaces", async () => {
+    const { page } = await launchApp({
+      enabledTargetIds: ["opencode"],
+      workspaceFixture: true
+    });
+
+    await page.getByRole("button", { name: "Profiles", exact: true }).click();
+    const profileAgent = page
+      .getByRole("group", { name: "Selected Profile actions" })
+      .getByRole("button", { name: "Current Agent OpenCode" });
+    await profileAgent.waitFor({ state: "visible" });
+    expect(await profileAgent.isDisabled()).toBe(true);
+    expect(await profileAgent.locator(".lucide-chevron-down").count()).toBe(0);
+
+    await page.getByRole("button", { name: "Workspaces", exact: true }).click();
+    const workspaceAgent = page
+      .locator(".project-detail__actions")
+      .getByRole("button", { name: "Current Agent OpenCode" });
+    await workspaceAgent.waitFor({ state: "visible" });
+    expect(await workspaceAgent.isDisabled()).toBe(true);
+    expect(await workspaceAgent.locator(".lucide-chevron-down").count()).toBe(0);
+    expect(await page.getByRole("dialog", { name: "Current Agent OpenCode" }).count()).toBe(0);
+  }, standardElectronTestTimeout);
+
   it("keeps global chrome and page control scale stable across primary workspaces", async () => {
     const { page } = await launchApp();
     const navigation = page.getByRole("complementary", { name: "Global navigation" });
