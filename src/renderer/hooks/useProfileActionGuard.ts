@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  runGuardedProfileAction,
+  type ProfileActionGuardOptions
+} from "./profileActionGuardSupport";
 
 export interface PendingProfileAction {
   label: string;
 }
 
 type GuardedAction = () => void | Promise<void>;
-
-interface WindowGuardApi {
-  cancelWindowClose(): void;
-  confirmWindowClose(): void;
-  onWindowCloseRequested(callback: () => void): () => void;
-  setWindowCloseGuard(enabled: boolean): void;
-}
 
 export const useProfileActionGuard = ({
   autoSaveDirty = false,
@@ -21,15 +18,7 @@ export const useProfileActionGuard = ({
   onError,
   onSave,
   windowGuardApi = window.agentEnv
-}: {
-  autoSaveDirty?: boolean;
-  dirty: boolean;
-  onBusyChange(busy: boolean): void;
-  onDiscard(): Promise<void>;
-  onError(error: string | undefined): void;
-  onSave(): Promise<unknown>;
-  windowGuardApi?: WindowGuardApi;
-}) => {
+}: ProfileActionGuardOptions) => {
   const actionRef = useRef<GuardedAction | null>(null);
   const pendingWindowCloseRef = useRef(false);
   const dirtyRef = useRef(dirty);
@@ -44,18 +33,14 @@ export const useProfileActionGuard = ({
         void action();
         return;
       }
-      void (async () => {
-        onBusyChange(true);
-        onError(undefined);
-        try {
+      void runGuardedProfileAction({
+        onBusyChange,
+        onError,
+        action: async () => {
           await onSave();
           await action();
-        } catch (unknownError) {
-          onError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-        } finally {
-          onBusyChange(false);
         }
-      })();
+      });
       return;
     }
     actionRef.current = action;
@@ -78,25 +63,18 @@ export const useProfileActionGuard = ({
       return;
     }
 
-    onBusyChange(true);
-    onError(undefined);
-    try {
-      if (saveFirst) {
-        await onSave();
-      } else {
-        await onDiscard();
+    await runGuardedProfileAction({
+      onBusyChange,
+      onError,
+      action: async () => {
+        if (saveFirst) await onSave();
+        else await onDiscard();
+        actionRef.current = null;
+        pendingWindowCloseRef.current = false;
+        setPendingAction(undefined);
+        await action();
       }
-      actionRef.current = null;
-      pendingWindowCloseRef.current = false;
-      setPendingAction(undefined);
-      await action();
-    } catch (unknownError) {
-      onError(
-        unknownError instanceof Error ? unknownError.message : String(unknownError)
-      );
-    } finally {
-      onBusyChange(false);
-    }
+    });
   }, [onBusyChange, onDiscard, onError, onSave]);
 
   useEffect(() => {
@@ -111,19 +89,19 @@ export const useProfileActionGuard = ({
           return;
         }
         if (!dirtyRef.current && autoSaveDirtyRef.current) {
-          void (async () => {
-            onBusyChange(true);
-            onError(undefined);
-            try {
-              await onSave();
-              windowGuardApi.confirmWindowClose();
-            } catch (unknownError) {
-              windowGuardApi.cancelWindowClose();
-              onError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-            } finally {
-              onBusyChange(false);
+          void runGuardedProfileAction({
+            onBusyChange,
+            onError,
+            action: async () => {
+              try {
+                await onSave();
+                windowGuardApi.confirmWindowClose();
+              } catch (error) {
+                windowGuardApi.cancelWindowClose();
+                throw error;
+              }
             }
-          })();
+          });
           return;
         }
         pendingWindowCloseRef.current = true;
