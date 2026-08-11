@@ -63,25 +63,24 @@ export const SkillSettingsSection = ({
           label={t("Skill deployment")}
           description={
             <>
-              {settings.skillSyncMethod === "copy"
-                ? t("Library updates stay pending until installs are explicitly synchronized.")
-                : settings.skillSyncMethod === "auto"
-                  ? t("Uses live links when supported and falls back to copied installs.")
-                  : t("Library updates immediately change linked Agent Skills without another Apply preview.")}
+              {settings.skillSyncMethod === "symlink"
+                ? t("Library updates immediately change linked Agent Skills without another Apply preview.")
+                : t("Keeps Agent Skills as ordinary folders and synchronizes managed copies only after confirmation.")}
             </>
           }
           control={<select
             aria-label={t("Global skill deployment method")}
-            value={settings.skillSyncMethod}
+            value={settings.skillSyncMethod === "auto" ? "copy" : settings.skillSyncMethod}
             onChange={(event) =>
               onChange({
                 skillSyncMethod:
-                  event.currentTarget.value as AgentEnvSettings["skillSyncMethod"]
+                  event.currentTarget.value as AgentEnvSettings["skillSyncMethod"],
+                skillDeploymentPreferenceVersion: 1,
+                skillDeploymentReviewPending: false
               })}
           >
-            <option value="symlink">{t("Live link (recommended)")}</option>
-            <option value="copy">{t("Copy (apply-gated updates)")}</option>
-            <option value="auto">{t("Auto (live link when possible)")}</option>
+            <option value="copy">{t("Managed copy (recommended)")}</option>
+            <option value="symlink">{t("Live link (advanced)")}</option>
           </select>}
         />
         <SettingsPreferenceRow

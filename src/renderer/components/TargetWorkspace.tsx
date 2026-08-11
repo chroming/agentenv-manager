@@ -3,6 +3,7 @@ import {
   ArchiveRestore,
   Clock3,
   CopyPlus,
+  Layers3,
   MoreHorizontal,
   TerminalSquare
 } from "lucide-react";
@@ -26,6 +27,7 @@ import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import {
   ActionMenu,
+  ActionMenuItem,
   Button,
   ControlGroup,
   DialogBody,
@@ -63,6 +65,7 @@ interface TargetWorkspaceProps {
   onConfigure(targetId: string): void;
   onReviewEnvironment(): void;
   onCreateProfileFromTarget(targetId: string, returnFocus?: HTMLElement | null): void;
+  onManageSkills(targetId: string): void;
   onPreviewRollback(backupId: string): void;
   onCancelRollback(): void;
   onRestoreRollback(): void;
@@ -116,12 +119,14 @@ const TargetRowActions = ({
   busy,
   expanded,
   onCapture,
+  onManageSkills,
   onToggleDiagnostics
 }: {
   target: TargetInfo;
   busy: boolean;
   expanded: boolean;
   onCapture(returnFocus?: HTMLElement | null): void;
+  onManageSkills(): void;
   onToggleDiagnostics(): void;
 }) => {
   const { t } = useI18n();
@@ -208,25 +213,29 @@ const TargetRowActions = ({
           menuRef={menuRef}
           style={style}
         >
-          <button
-            type="button"
-            role="menuitem"
+          <ActionMenuItem
+            disabled={!installed}
+            title={installed ? undefined : t("{{name}} is not detected", { name: target.name })}
+            onClick={() => run(onManageSkills)}
+          >
+            <Layers3 size={15} strokeWidth={2.2} aria-hidden="true" />
+            <span>{t("Manage local Skills")}</span>
+          </ActionMenuItem>
+          <ActionMenuItem
             disabled={!installed}
             title={installed ? undefined : t("{{name}} is not detected", { name: target.name })}
             onClick={() => run(() => onCapture(triggerRef.current))}
           >
             <CopyPlus size={15} strokeWidth={2.2} aria-hidden="true" />
             <span>{t("Capture")}</span>
-          </button>
-          <button
-            type="button"
-            role="menuitem"
+          </ActionMenuItem>
+          <ActionMenuItem
             aria-expanded={expanded}
             onClick={() => run(onToggleDiagnostics, true)}
           >
             <Activity size={15} strokeWidth={2.2} aria-hidden="true" />
             <span>{t(expanded ? "Hide diagnostics" : "Diagnostics")}</span>
-          </button>
+          </ActionMenuItem>
         </ActionMenu>,
         document.body
       ) : null}
@@ -254,6 +263,7 @@ export const TargetWorkspace = ({
   onConfigure,
   onReviewEnvironment,
   onCreateProfileFromTarget,
+  onManageSkills,
   onPreviewRollback,
   onCancelRollback,
   onRestoreRollback,
@@ -466,6 +476,7 @@ export const TargetWorkspace = ({
                   expanded={isExpanded}
                   onCapture={(returnFocus) =>
                     onCreateProfileFromTarget(target.id, returnFocus)}
+                  onManageSkills={() => onManageSkills(target.id)}
                   onToggleDiagnostics={() => setExpandedTargetId(isExpanded ? undefined : target.id)}
                 />
               </header>

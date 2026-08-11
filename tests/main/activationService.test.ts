@@ -127,11 +127,18 @@ describe("activation service v2", () => {
       .resolves.toContain("# Review");
     const persistedState = JSON.parse(
       await readFile(join(paths.targetStatesDir, "codex.json"), "utf8")
-    ) as { managedResources?: Array<{ kind: string; path: string }> };
+    ) as { managedResources?: Array<{
+      kind: string;
+      path: string;
+      materialization?: string;
+      origin?: string;
+    }> };
     expect(persistedState.managedResources).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: "skill",
-        path: join(paths.codexHome, "skills", "review")
+        path: join(paths.codexHome, "skills", "review"),
+        materialization: "copy",
+        origin: "created"
       })
     ]));
     expect(persistedState.managedResources).not.toEqual(expect.arrayContaining([
@@ -560,6 +567,10 @@ describe("activation service v2", () => {
     const librarySkill = (await skillLibraryStore.listSkills()).find((skill) => skill.id === "review");
     if (!librarySkill) throw new Error("Expected review in the Skill Library");
     await cp(librarySkill.path, targetSkill, { recursive: true });
+    const statePath = join(paths.targetStatesDir, "codex.json");
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    state.managedResources = [];
+    await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 
     const preview = await service.previewProfile("daily-coding", "codex");
 
@@ -578,6 +589,8 @@ describe("activation service v2", () => {
       managedResources: expect.arrayContaining([
         expect.objectContaining({
           path: targetSkill,
+          materialization: "copy",
+          origin: "adopted",
           deploymentMode: "adopted",
           createdByAgentEnv: false
         })
@@ -586,7 +599,8 @@ describe("activation service v2", () => {
   });
 
   it("does not report managed drift when a live link matches the current Library Skill", async () => {
-    const { paths, service, skillLibraryStore } = await makeEnv();
+    const { paths, service, settingsStore, skillLibraryStore } = await makeEnv();
+    await settingsStore.updateSettings({ skillSyncMethod: "symlink" });
     await writeCodexLiveFiles(paths);
     const first = await service.previewProfile("daily-coding", "codex");
     expect((await service.applyProfile("daily-coding", first.id)).ok).toBe(true);
@@ -622,6 +636,35 @@ describe("activation service v2", () => {
     });
     expect(await readFile(join(paths.codexHome, "skills", "review", "SKILL.md"), "utf8"))
       .toContain("# Updated review");
+  });
+
+  it("previews and applies every explicit Live link and Managed copy conversion", async () => {
+    const { paths, service, settingsStore } = await makeEnv();
+    await settingsStore.updateSettings({ skillSyncMethod: "symlink" });
+    await writeCodexLiveFiles(paths);
+    const targetSkill = join(paths.codexHome, "skills", "review");
+
+    const linkedPreview = await service.previewProfile("daily-coding", "codex");
+    expect((await service.applyProfile("daily-coding", linkedPreview.id)).ok).toBe(true);
+    expect((await lstat(targetSkill)).isSymbolicLink()).toBe(true);
+
+    await settingsStore.updateSettings({ skillSyncMethod: "copy" });
+    const copyPreview = await service.previewProfile("daily-coding", "codex");
+    expect(copyPreview.resourceChanges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: targetSkill, action: "replace" })
+    ]));
+    expect(copyPreview.localFootprint).toMatchObject({ liveLinks: 0 });
+    expect((await service.applyProfile("daily-coding", copyPreview.id)).ok).toBe(true);
+    expect((await lstat(targetSkill)).isSymbolicLink()).toBe(false);
+
+    await settingsStore.updateSettings({ skillSyncMethod: "symlink" });
+    const relinkPreview = await service.previewProfile("daily-coding", "codex");
+    expect(relinkPreview.resourceChanges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: targetSkill, action: "replace" })
+    ]));
+    expect(relinkPreview.localFootprint).toMatchObject({ liveLinks: 1 });
+    expect((await service.applyProfile("daily-coding", relinkPreview.id)).ok).toBe(true);
+    expect((await lstat(targetSkill)).isSymbolicLink()).toBe(true);
   });
 
   it("names a genuinely changed managed Skill in the protected-change issue", async () => {
@@ -848,7 +891,7 @@ describe("activation service v2", () => {
     const enabled = await service.previewProfile(profile.id, "codex");
     expect((await service.applyProfile(profile.id, enabled.id)).ok).toBe(true);
     const installedPath = join(paths.codexHome, "skills", "review");
-    expect((await lstat(installedPath)).isSymbolicLink()).toBe(true);
+    expect((await lstat(installedPath)).isSymbolicLink()).toBe(false);
 
     await profileStore.saveProfile({
       manifest: profile.manifest,
@@ -1404,7 +1447,7 @@ describe("activation service v2", () => {
     const { paths, service, settingsStore } = await makeEnv();
     await writeCodexLiveFiles(paths);
     const preview = await service.previewProfile("daily-coding", "codex");
-    await settingsStore.updateSettings({ skillSyncMethod: "copy" });
+    await settingsStore.updateSettings({ skillSyncMethod: "symlink" });
 
     await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual({
       ok: false,

@@ -41,46 +41,48 @@ const createFixture = async () => {
 };
 
 describe("Skill deployment", () => {
-  it("falls back to a copy in Auto mode only when links are unsupported", async () => {
+  it("treats legacy Auto mode as a managed copy without attempting a link", async () => {
     const fixture = await createFixture();
+    let attemptedLink = false;
     const deployedAs = await deploySkillDirectory({
       ...fixture,
       syncMethod: "auto",
       createSymlink: async () => {
-        throw codedError("ENOTSUP");
+        attemptedLink = true;
       }
     });
 
     expect(deployedAs).toBe("copy");
+    expect(attemptedLink).toBe(false);
     await expect(readFile(join(fixture.targetDir, "SKILL.md"), "utf8"))
       .resolves.toBe("# Review\n");
     await expect(access(markerPathFor(fixture.targetDir))).rejects.toMatchObject({ code: "ENOENT" });
     await expect(access(markerPathForFile(fixture.targetDir))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  it("uses a junction for live directory links on Windows", async () => {
+  it("uses a junction for explicitly selected live directory links on Windows", async () => {
     const fixture = await createFixture();
     let requestedType: string | null | undefined;
 
     await deploySkillDirectory({
       ...fixture,
       platform: "win32",
-      syncMethod: "auto",
+      syncMethod: "symlink",
       createSymlink: async (_source, _target, type) => {
         requestedType = type;
-        throw codedError("ENOTSUP");
+        await symlink(_source, _target, "dir");
       }
     });
 
     expect(requestedType).toBe("junction");
   });
 
-  it("does not hide permission or filesystem failures behind Auto copy mode", async () => {
+  it("does not hide permission or filesystem failures for explicit Live link mode", async () => {
     const fixture = await createFixture();
 
     await expect(deploySkillDirectory({
       ...fixture,
-      syncMethod: "auto",
+      syncMethod: "symlink",
       createSymlink: async () => {
         throw codedError("EACCES");
       }

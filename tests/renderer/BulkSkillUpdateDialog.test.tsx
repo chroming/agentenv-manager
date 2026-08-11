@@ -24,6 +24,36 @@ const plan: SkillUpdatePlan = {
 };
 
 describe("BulkSkillUpdateDialog", () => {
+  it("applies one explicit Agent-copy choice to the whole update queue", () => {
+    const onUpdate = vi.fn();
+    const copiedPlan = {
+      ...plan,
+      impact: { ...plan.impact, copiedInstallCount: 3 }
+    };
+    render(
+      <BulkSkillUpdateDialog
+        plans={[copiedPlan]}
+        failures={[]}
+        updateRun={{}}
+        isBusy={false}
+        previewingAllUpdates={false}
+        updateActivityBusy={false}
+        stopRequested={false}
+        onClose={vi.fn()}
+        onPreview={vi.fn()}
+        onStop={vi.fn()}
+        onUpdate={onUpdate}
+      />
+    );
+
+    expect(screen.getByText("Off: 3 Agent copies will show Apply pending."))
+      .toBeInTheDocument();
+    fireEvent.click(screen.getByRole("switch", { name: "Also update Agent copies" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update 1 skill" }));
+
+    expect(onUpdate).toHaveBeenCalledWith([copiedPlan], true);
+  });
+
   it("uses the standard preview controls and can stop an active queue", () => {
     const onStop = vi.fn();
     render(

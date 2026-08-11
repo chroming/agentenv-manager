@@ -15,6 +15,23 @@ afterEach(async () => {
 });
 
 describe("settings store", () => {
+  it("migrates the legacy Auto deployment preference to Managed copy", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-settings-auto-"));
+    const appDataRoot = join(root, "app-data");
+    const paths = createPaths({ appDataRoot, homeDir: join(root, "home") });
+    await mkdir(appDataRoot, { recursive: true });
+    await writeFile(join(appDataRoot, "settings.json"), JSON.stringify({
+      skillSyncMethod: "auto"
+    }), "utf8");
+
+    const settings = await createSettingsStore(paths).readSettings();
+
+    expect(settings.skillSyncMethod).toBe("copy");
+    expect(settings.skillDeploymentReviewPending).toBe(true);
+    await expect(readFile(join(appDataRoot, "settings.json"), "utf8"))
+      .resolves.toContain('"skillSyncMethod": "copy"');
+  });
+
   it("persists project discovery roots without changing Library storage", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-settings-projects-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
@@ -33,7 +50,8 @@ describe("settings store", () => {
     expect(await store.readSettings()).toEqual({
       locale: "system",
       conversationTerminal: "default",
-      skillSyncMethod: "auto",
+      skillSyncMethod: "copy",
+      skillDeploymentPreferenceVersion: 1,
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
       skillAutoCheckIntervalMinutes: 60,
@@ -48,6 +66,7 @@ describe("settings store", () => {
       locale: "zh_TW",
       conversationTerminal: "ghostty",
       skillSyncMethod: "copy",
+      skillDeploymentPreferenceVersion: 1,
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: false,
       skillAutoCheckIntervalMinutes: 120,
@@ -62,6 +81,7 @@ describe("settings store", () => {
       locale: "zh_TW",
       conversationTerminal: "ghostty",
       skillSyncMethod: "copy",
+      skillDeploymentPreferenceVersion: 1,
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: false,
       skillAutoCheckIntervalMinutes: 120,
@@ -96,6 +116,7 @@ describe("settings store", () => {
       appUpdateInstallOnQuit: true,
       telemetryEnabled: true
     });
+    expect(settings.skillDeploymentReviewPending).toBe(true);
     expect(JSON.parse(await readFile(join(paths.appDataRoot, "settings.json"), "utf8")))
       .toMatchObject({
         appUpdateAutoCheckEnabled: true,

@@ -33,6 +33,21 @@ afterEach(() => {
 });
 
 describe("PreviewDialog", () => {
+  it("opens the shared Local Skills Manager from Apply preview", () => {
+    const onManageLocalSkills = vi.fn();
+    render(
+      <PreviewDialog
+        preview={preview}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+        onManageLocalSkills={onManageLocalSkills}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Manage Skills" }));
+    expect(onManageLocalSkills).toHaveBeenCalledOnce();
+  });
+
   it("presents a true no-op as current state with one Close action", () => {
     render(
       <PreviewDialog

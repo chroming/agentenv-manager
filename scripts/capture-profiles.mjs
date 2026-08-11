@@ -436,6 +436,7 @@ const prepareFixture = async (root) => {
   });
   await writeJson(join(appDataRoot, "settings.json"), {
     skillSyncMethod: "copy",
+    skillDeploymentPreferenceVersion: 1,
     skillStorageLocation: "appData",
     skillAutoCheckEnabled: false,
     skillAutoCheckIntervalMinutes: 60,
@@ -1221,7 +1222,7 @@ try {
     name: "Cleanup group cross-agent-review-workflow-with-a-long-name"
   });
   await cleanupGroup.waitFor({ state: "visible", timeout: 5_000 });
-  const cleanupAction = page.getByRole("button", { name: /Clean up \d+ ready Skills/ });
+  const cleanupAction = page.getByRole("button", { name: /Manage \d+ eligible Skills/ });
   await page
     .getByRole("group", { name: "Cleanup group ready-local-cleanup" })
     .waitFor({ state: "visible", timeout: 5_000 });
@@ -1236,7 +1237,7 @@ try {
   await sharedCleanupGroup.waitFor({ state: "visible", timeout: 5_000 });
   await cleanupAction.click();
   const sharedCleanupReview = page.getByRole("dialog", {
-    name: "Clean up local Skills"
+    name: "Manage eligible local Skills"
   });
   await sharedCleanupReview.waitFor({ state: "visible", timeout: 5_000 });
   await capturePage(page, join(outputDir, "skills-cleanup-shared-review-920x620.png"));
@@ -1268,7 +1269,7 @@ try {
   await page.keyboard.press("Escape");
   await cleanupDialog.waitFor({ state: "hidden", timeout: 5_000 });
   await page
-    .getByRole("region", { name: "Local Skill Cleanup" })
+    .getByRole("region", { name: "Local Skills Manager" })
     .waitFor({ state: "visible", timeout: 5_000 });
   await page.getByRole("button", { name: "Close library tool" }).click();
 
@@ -1750,7 +1751,7 @@ try {
   await capturePage(page, join(outputDir, "settings-connections-920x620.png"));
   await page.getByRole("button", { name: "Set up" }).click();
   await capturePage(page, join(outputDir, "settings-connections-setup-920x620.png"));
-  const workspaceSyncSection = page.getByRole("region", { name: "Workspace Sync" });
+  const workspaceSyncSection = page.getByRole("region", { name: "Device Sync" });
   await workspaceSyncSection.getByLabel("Private Git repository").fill(workspaceSyncRemote);
   await workspaceSyncSection.getByLabel("Branch").fill("main");
   await workspaceSyncSection.getByRole("button", { name: "Connect repository" }).click();
@@ -1760,7 +1761,7 @@ try {
   });
   await capturePage(page, join(outputDir, "settings-sync-local-changes-920x620.png"));
   await workspaceSyncSection.getByRole("button", { name: "Publish" }).click();
-  const workspaceSyncReview = page.getByRole("dialog", { name: "Review Workspace changes" });
+  const workspaceSyncReview = page.getByRole("dialog", { name: "Review Device Sync changes" });
   await workspaceSyncReview.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "settings-sync-review-920x620.png"));
   await page.keyboard.press("Escape");

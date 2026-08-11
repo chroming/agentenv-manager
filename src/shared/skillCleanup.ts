@@ -19,12 +19,12 @@ export type SkillCleanupBucket =
   | "unmanaged";
 
 export type SkillCleanupAutomaticEffect =
-  | "import-and-link"
+  | "import-and-manage"
   | "import-shared"
   | "move-shared-to-agents"
-  | "link-to-library"
-  | "archive-and-link"
-  | "repair-link"
+  | "adopt-managed-copy"
+  | "replace-with-managed-copy"
+  | "refresh-managed-copy"
   | "remove-broken-link";
 
 export type SkillCleanupDisplayState =
@@ -116,6 +116,24 @@ export interface SkillCleanupGroup {
   presentation: SkillCleanupPresentation;
   sharedMigration?: SharedSkillMigration;
 }
+
+export type SkillManagementScope =
+  | { kind: "all" }
+  | { kind: "shared" };
+
+export const skillInventoryMatchesManagementScope = (
+  item: SkillInventoryEntry,
+  scope: SkillManagementScope
+): boolean => {
+  if (scope.kind === "all") return true;
+  return Boolean(item.sharedLocation || item.collectionLink);
+};
+
+export const filterSkillInventoryForManagementScope = (
+  inventory: SkillInventoryEntry[],
+  scope: SkillManagementScope
+): SkillInventoryEntry[] =>
+  inventory.filter((item) => skillInventoryMatchesManagementScope(item, scope));
 
 export type SkillCollectionLinkState =
   | "needs-library"
@@ -368,6 +386,9 @@ export const buildSkillCleanupGroups = (
         hashes.size <= 1;
       const canNormalizeToLibrary =
         Boolean(hasLibraryCopy) &&
+        !libraryConflict &&
+        !staleManaged &&
+        hashes.size <= 1 &&
         !hasBlockingExternal &&
         !hasUnreadable &&
         !sharedSkillMigrationNeedsAction(sharedMigration) &&
@@ -396,7 +417,7 @@ export const buildSkillCleanupGroups = (
                 ? "automatic"
                 : sharedMigrationNeedsAction
                   ? "manual"
-                  : state === "outside" || state === "conflict" || state === "broken" || missingTarget
+                  : state === "outside" || state === "conflict" || state === "stale" || state === "broken" || missingTarget
                     ? "manual"
                     : "automatic";
       const automaticEffect: SkillCleanupAutomaticEffect | undefined =
@@ -409,12 +430,12 @@ export const buildSkillCleanupGroups = (
             : canImportSharedCopies
               ? "import-shared"
               : staleManaged
-                ? "repair-link"
+                ? "refresh-managed-copy"
                 : hasLibraryCopy
                   ? libraryConflict || hashes.size > 1
-                    ? "archive-and-link"
-                    : "link-to-library"
-                  : "import-and-link";
+                    ? "replace-with-managed-copy"
+                    : "adopt-managed-copy"
+                  : "import-and-manage";
       const bucket: SkillCleanupBucket =
         sharedCopyReplaceable
           ? "ready"
@@ -437,19 +458,21 @@ export const buildSkillCleanupGroups = (
             : resolution === "automatic"
               ? automaticEffect === "remove-broken-link"
                 ? "The unavailable symbolic link can be removed without touching its missing target."
-                : automaticEffect === "archive-and-link"
-                  ? "Library is canonical. Local differences will be backed up before the copies are linked to it."
+                : automaticEffect === "replace-with-managed-copy"
+                  ? "The managed version is canonical. Local differences will be backed up before copies are replaced."
                   : state === "stale"
-                    ? "Managed copies can be refreshed from Library without choosing content."
+                    ? "Managed copies can be refreshed without choosing content."
                     : state === "duplicate"
                       ? "All detected copies have identical content."
                       : state === "library"
                         ? "The local copy already matches the Library version."
-                        : "A single local copy can become the Library version."
+                        : "A single local copy can become the managed version."
               : state === "broken"
                 ? "The Skill path is unavailable and must be reviewed before any cleanup action."
                 : state === "outside"
                   ? "At least one copy is outside AgentEnv and needs a path decision."
+                  : state === "stale"
+                    ? "A managed copy changed locally and needs an explicit version decision."
                   : missingTarget
                     ? "A destination Agent could not be identified."
                     : "Detected copies differ and require a version choice.";

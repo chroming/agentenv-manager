@@ -1,4 +1,4 @@
-import { access, chmod, cp, lstat, mkdir, mkdtemp, readFile, readlink, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { access, chmod, cp, lstat, mkdir, mkdtemp, readFile, readlink, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -1996,8 +1996,7 @@ description: >
     await expect(readFile(join(targetDir, "SKILL.md"), "utf8")).resolves.toContain(
       "# From Library"
     );
-    expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);
-    await expect(readlink(targetDir)).resolves.toBe(join(paths.skillsLibraryDir, "legacy"));
+    expect((await lstat(targetDir)).isSymbolicLink()).toBe(false);
     await expect(access(`${targetDir}.agentenv-owner.json`)).rejects.toMatchObject({
       code: "ENOENT"
     });
@@ -2322,10 +2321,54 @@ description: >
     await expect(readFile(join(targetCopy, "SKILL.md"), "utf8")).resolves.toBe(
       "# Library source\n"
     );
-    expect((await lstat(targetCopy)).isSymbolicLink()).toBe(true);
-    await expect(readlink(targetCopy)).resolves.toBe(join(paths.skillsLibraryDir, "reviewer"));
+    expect((await lstat(targetCopy)).isSymbolicLink()).toBe(false);
     await expect(access(`${targetCopy}.agentenv-owner.json`)).rejects.toMatchObject({
       code: "ENOENT"
+    });
+  });
+
+  it("adopts an identical Agent copy without rewriting its directory", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const librarySource = join(root, "source", "reviewer");
+    const targetSkillsDir = join(root, "home", ".config", "opencode", "skills");
+    const targetCopy = join(targetSkillsDir, "reviewer");
+    await mkdir(librarySource, { recursive: true });
+    await mkdir(targetCopy, { recursive: true });
+    const content = "---\nname: reviewer\n---\n# Same content\n";
+    await writeFile(join(librarySource, "SKILL.md"), content, "utf8");
+    await writeFile(join(targetCopy, "SKILL.md"), content, "utf8");
+    const store = createSkillLibraryStore(paths);
+    await store.importSkill({ sourcePath: librarySource, id: "reviewer", sourceType: "local" });
+    const before = await stat(join(targetCopy, "SKILL.md"));
+
+    await store.consolidateSkillGroup({
+      skillKey: "reviewer",
+      libraryId: "reviewer",
+      canonicalPath: targetCopy,
+      locations: [{
+        targetPaths: {
+          targetId: "opencode",
+          configDir: dirname(targetSkillsDir),
+          instructionsPath: "",
+          configPath: "",
+          skillsDir: targetSkillsDir
+        },
+        targetDir: targetCopy
+      }]
+    });
+
+    expect((await stat(join(targetCopy, "SKILL.md"))).mtimeMs).toBe(before.mtimeMs);
+    await expect(
+      readFile(join(paths.targetStatesDir, "opencode.json"), "utf8")
+        .then((content) => JSON.parse(content))
+    ).resolves.toMatchObject({
+      managedResources: [expect.objectContaining({
+        path: targetCopy,
+        materialization: "copy",
+        origin: "adopted",
+        createdByAgentEnv: false
+      })]
     });
   });
 
@@ -2786,17 +2829,17 @@ description: >
     ).resolves.toContain("# v2");
     await expect(
       readFile(join(claudePaths.skillsDir!, "reviewer", "SKILL.md"), "utf8")
-    ).resolves.toContain("# v2");
+    ).resolves.toContain("# v1");
     await expect(
       readFile(join(paths.targetStatesDir, "claude-code.json"), "utf8")
         .then((content) => JSON.parse(content))
     ).resolves.toMatchObject({
-      appliedLibraryVersions: { skills: { reviewer: updated.contentHash } },
+      appliedLibraryVersions: { skills: { reviewer: initialLibrary.contentHash } },
       managedResources: [{
         kind: "skill",
         id: "reviewer",
         path: claudeInstallPath,
-        contentHash: updated.contentHash
+        contentHash: initialLibrary.contentHash
       }]
     });
     await expect(
@@ -2812,8 +2855,36 @@ description: >
       }]
     });
 
+    await rm(claudeInstallPath, { recursive: true, force: true });
+    await cp(updated.path, claudeInstallPath, { recursive: true });
+    await writeFile(join(paths.targetStatesDir, "claude-code.json"), JSON.stringify({
+      formatVersion: 3,
+      managedMcpNames: [],
+      activeProfileId: profile.id,
+      appliedProfileHash: "profile-hash",
+      appliedLibraryVersions: { skills: { reviewer: updated.contentHash } },
+      managedResources: [{
+        kind: "skill",
+        id: "reviewer",
+        path: claudeInstallPath,
+        contentHash: updated.contentHash
+      }],
+      skillReceipts: [],
+      sharedSkillPreparations: []
+    }));
     await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# v3\n", "utf8");
     const nextPlan = await store.previewUpdate("reviewer");
+    const synced = await store.updateSkill({
+      id: "reviewer",
+      previewId: nextPlan.previewId!,
+      syncCopiedInstalls: true
+    });
+    await expect(readFile(join(claudeInstallPath, "SKILL.md"), "utf8"))
+      .resolves.toContain("# v3");
+    expect(synced.contentHash).not.toBe(updated.contentHash);
+
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# v4\n", "utf8");
+    const driftPlan = await store.previewUpdate("reviewer");
     await writeFile(
       join(claudePaths.skillsDir!, "reviewer", "SKILL.md"),
       "---\nname: reviewer\n---\n# device edit\n",
@@ -2821,11 +2892,15 @@ description: >
     );
 
     await expect(
-      store.updateSkill({ id: "reviewer", previewId: nextPlan.previewId! })
-    ).rejects.toThrow("review that Agent copy before updating the Library");
+      store.updateSkill({
+        id: "reviewer",
+        previewId: driftPlan.previewId!,
+        syncCopiedInstalls: true
+      })
+    ).rejects.toThrow("turn off Agent copy updates or review that Agent before retrying");
     await expect(
       readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")
-    ).resolves.toContain("# v2");
+    ).resolves.toContain("# v3");
     await expect(
       readFile(join(claudePaths.skillsDir!, "reviewer", "SKILL.md"), "utf8")
     ).resolves.toContain("# device edit");
@@ -3558,7 +3633,8 @@ description: >
     expect(currentProfile.resources.skills).toEqual([
       { libraryId: "reviewer-alpha", targetName: "reviewer", enabled: true }
     ]);
-    await expect(readlink(join(targetPaths.skillsDir, "reviewer"))).resolves.toBe(alphaDir);
+    await expect(readFile(join(targetPaths.skillsDir, "reviewer", "SKILL.md"), "utf8"))
+      .resolves.toContain("# Keep this content");
     await expect(
       readFile(join(paths.targetStatesDir, "opencode.json"), "utf8")
         .then((content) => JSON.parse(content))
@@ -3570,7 +3646,9 @@ description: >
 
     await store.rollbackSkillCleanup(result.backupId);
     await expect(readFile(join(betaDir, "SKILL.md"), "utf8")).resolves.toContain("# Other content");
-    await expect(readlink(join(targetPaths.skillsDir, "reviewer"))).resolves.toBe(betaDir);
+    await expect(
+      readFile(join(targetPaths.skillsDir, "reviewer", "SKILL.md"), "utf8")
+    ).resolves.toContain("# Other content");
     await expect(readFile(join(profileDir, "profile-state.json"), "utf8")).resolves.toContain(
       '"libraryId":"reviewer-beta"'
     );

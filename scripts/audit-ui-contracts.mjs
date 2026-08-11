@@ -31,7 +31,9 @@ requireText(workspace, "<AlignedResourceList", "Workspace resources");
 requireText(workspace, 'actionTrack="compact"', "Workspace resources");
 requireText(primitiveStyles, ".ui-aligned-resource-list--compact-actions", "UI primitives");
 requireText(profileE2e, "readAlignedResourceRows", "Profile geometry evidence");
-requireText(profileE2e, "requireMixedActions: true", "Profile mixed-action evidence");
+requireText(profileE2e, 'toContain("Apply pending")', "Profile multi-state evidence");
+requireText(profileE2e, 'toContain("Ready")', "Profile multi-state evidence");
+requireText(profileE2e, 'getByRole("switch").count()', "Profile managed-action evidence");
 requireText(projectE2e, "readAlignedResourceRows", "Workspace geometry evidence");
 
 if (profileEditor.includes("ui-resource-children--aligned") ||

@@ -59,6 +59,7 @@ describe("Workspace Sync settings", () => {
 
     render(<WorkspaceSyncSettings />);
 
+    expect(screen.getByRole("region", { name: "Device Sync" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: action })).toBeEnabled());
     expect(screen.queryByRole("button", { name: "Review changes" })).toBeNull();
   });

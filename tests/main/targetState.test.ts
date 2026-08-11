@@ -47,6 +47,26 @@ describe("Target state schema", () => {
     });
   });
 
+  it("derives explicit materialization and origin from legacy managed resources", () => {
+    expect(parseTargetState({
+      formatVersion: 3,
+      managedMcpNames: [],
+      managedResources: [{
+        kind: "skill",
+        id: "reviewer",
+        path: "/target/skills/reviewer",
+        contentHash: "abc",
+        deploymentMode: "adopted",
+        createdByAgentEnv: false
+      }]
+    })).toMatchObject({
+      managedResources: [{
+        materialization: "copy",
+        origin: "adopted"
+      }]
+    });
+  });
+
   it("migrates legacy kept-outside entries into local override receipts", () => {
     const state = parseTargetState({
       formatVersion: 2,

@@ -742,7 +742,8 @@ export const createActivationService = ({
       skillLibraryDir,
       topologyOnlyPaths: new Set(missingAssetDirectories),
       skillRootTransition,
-      managedResources: stateFile.state.managedResources
+      managedResources: stateFile.state.managedResources,
+      skillSyncMethod: settings.skillSyncMethod
     });
     assetBackupPaths.push(...assetPlan.legacyOwnershipMarkerPaths);
     const sharedFingerprints = Object.fromEntries(
@@ -779,7 +780,7 @@ export const createActivationService = ({
     const liveLinks = (
       await Promise.all(desiredPaths.map(async (path) => {
         if (plannedWritePaths.has(resolve(path))) {
-          return settings.skillSyncMethod === "copy" ? 0 : 1;
+          return settings.skillSyncMethod === "symlink" ? 1 : 0;
         }
         return (await lstat(path).catch(() => undefined))?.isSymbolicLink() ? 1 : 0;
       }))
@@ -1299,6 +1300,30 @@ export const createActivationService = ({
             .filter((change) => change.action === "install" || change.action === "replace")
             .map((change) => resolve(change.path))
         );
+        const createdAssetPaths = new Set(
+          [
+            ...preview.resourceChanges
+              .filter((change) => change.action === "install")
+              .map((change) => change.path),
+            ...preview.changes
+              .filter((change) => change.action !== "remove" && change.before.length === 0)
+              .map((change) => change.path)
+          ].map((path) => resolve(path))
+        );
+        const replacedAssetPaths = new Set(
+          [
+            ...preview.resourceChanges
+              .filter((change) => change.action === "replace")
+              .map((change) => change.path),
+            ...preview.changes
+              .filter((change) =>
+                change.action !== "remove" &&
+                change.before.length > 0 &&
+                change.after.length > 0
+              )
+              .map((change) => change.path)
+          ].map((path) => resolve(path))
+        );
         const refreshedManagedResources = await snapshotManagedResources(
           [...preview.changes.map((change) => change.path), ...managedAssetPaths],
           targetPaths,
@@ -1306,6 +1331,8 @@ export const createActivationService = ({
             sourceByPath,
             previousResources: preOperationState.managedResources,
             mutatedPaths: mutatedAssetPaths,
+            createdPaths: createdAssetPaths,
+            replacedPaths: replacedAssetPaths,
             adoptedPaths: new Set(preview.adoptedResourcePaths.map((path) => resolve(path))),
             legacyOwnedPaths: new Set(
               preview.legacyOwnedResourcePaths.map((path) => resolve(path))

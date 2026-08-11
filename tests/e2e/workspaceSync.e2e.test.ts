@@ -84,7 +84,7 @@ describe("Workspace Sync desktop flow", () => {
     }).toEqual({ state: "ready" });
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("tab", { name: "Connections" }).click();
-    const section = page.getByRole("region", { name: "Workspace Sync" });
+    const section = page.getByRole("region", { name: "Device Sync" });
     await section.waitFor({ state: "visible" });
     await section.getByRole("button", { name: "Set up" }).click();
     await section.getByLabel("Private Git repository").fill(remote);
@@ -93,7 +93,7 @@ describe("Workspace Sync desktop flow", () => {
     await expect.poll(() => section.getByText("Changes to publish").count()).toBe(1);
 
     await section.getByRole("button", { name: "Publish" }).click();
-    const review = page.getByRole("dialog", { name: "Review Workspace changes" });
+    const review = page.getByRole("dialog", { name: "Review Device Sync changes" });
     await review.waitFor({ state: "visible" });
     await expectInViewport(page, review);
     await expectStructuredDialog(review);
@@ -130,7 +130,7 @@ describe("Workspace Sync desktop flow", () => {
     )).toEqual({ state: "ready" });
     await restartedPage.getByRole("button", { name: "Settings", exact: true }).click();
     await restartedPage.getByRole("tab", { name: "Connections" }).click();
-    const restartedSection = restartedPage.getByRole("region", { name: "Workspace Sync" });
+    const restartedSection = restartedPage.getByRole("region", { name: "Device Sync" });
     await expect.poll(() => restartedPage.evaluate(
       () => window.agentEnv.readWorkspaceSyncStatus()
     )).toMatchObject({
@@ -178,13 +178,13 @@ describe("Workspace Sync desktop flow", () => {
     )).resolves.toMatchObject({ kind: "remote-changes" });
     await receivingPage.getByRole("button", { name: "Settings", exact: true }).click();
     await receivingPage.getByRole("tab", { name: "Connections" }).click();
-    const receivingSection = receivingPage.getByRole("region", { name: "Workspace Sync" });
+    const receivingSection = receivingPage.getByRole("region", { name: "Device Sync" });
     await expect.poll(() => receivingSection.getByText("Changes to receive").count(), {
       timeout: 15_000
     }).toBe(1);
     await receivingSection.getByRole("button", { name: "Update this device" }).click();
     const updateReview = receivingPage.getByRole("dialog", {
-      name: "Review Workspace changes"
+      name: "Review Device Sync changes"
     });
     await updateReview.getByRole("button", { name: "Update this device" }).click();
     await expect.poll(() => receivingSection.getByText("Up to date").count(), {

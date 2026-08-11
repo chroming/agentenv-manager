@@ -18,6 +18,10 @@ import {
 } from "./ownershipMarkers";
 import { isPathInside } from "./platformPaths";
 import type { SkillRootTransition } from "./skillRootTopology";
+import {
+  managedResourceMaterialization,
+  managedResourceOrigin
+} from "../shared/managedResource";
 
 export const resourceKindForPath = (
   path: string,
@@ -48,6 +52,8 @@ export const snapshotManagedResources = async (
     sourceByPath?: ReadonlyMap<string, string>;
     previousResources?: readonly ManagedResourceSnapshot[];
     mutatedPaths?: ReadonlySet<string>;
+    createdPaths?: ReadonlySet<string>;
+    replacedPaths?: ReadonlySet<string>;
     adoptedPaths?: ReadonlySet<string>;
     legacyOwnedPaths?: ReadonlySet<string>;
   } = {}
@@ -64,25 +70,33 @@ export const snapshotManagedResources = async (
     );
     const stats = await lstat(path).catch(() => undefined);
     const mutated = options.mutatedPaths?.has(resolve(path)) === true;
+    const created = options.createdPaths?.has(resolve(path)) === true;
+    const replaced = options.replacedPaths?.has(resolve(path)) === true;
     const adopted = options.adoptedPaths?.has(resolve(path)) === true;
     const legacyOwned = options.legacyOwnedPaths?.has(resolve(path)) === true;
+    const materialization = stats?.isSymbolicLink() ? "link" as const : "copy" as const;
+    const origin = adopted
+      ? "adopted" as const
+      : previous
+        ? managedResourceOrigin(previous)
+        : created
+          ? "created" as const
+          : replaced || mutated || legacyOwned
+            ? "replaced" as const
+            : "unknown" as const;
     snapshots.push({
       ...identity,
       path,
       contentHash,
       source: options.sourceByPath?.get(resolve(path)) ?? previous?.source ?? "profile-apply",
-      deploymentMode: stats?.isSymbolicLink()
+      materialization,
+      origin,
+      deploymentMode: materialization === "link"
         ? "linked"
-        : adopted
+        : origin === "adopted"
           ? "adopted"
-          : mutated || legacyOwned
-            ? "copied"
-            : previous?.deploymentMode ?? "adopted",
-      createdByAgentEnv: adopted
-        ? false
-        : mutated || legacyOwned
-          ? true
-          : previous?.createdByAgentEnv ?? false
+          : "copied",
+      createdByAgentEnv: origin === "created"
     });
   }
   return snapshots.sort((left, right) => left.path.localeCompare(right.path));
@@ -122,6 +136,7 @@ export const planAssetResources = async (input: {
   topologyOnlyPaths: ReadonlySet<string>;
   skillRootTransition?: SkillRootTransition;
   managedResources?: readonly ManagedResourceSnapshot[];
+  skillSyncMethod: "symlink" | "copy" | "auto";
 }) => {
   const {
     profile,
@@ -130,7 +145,8 @@ export const planAssetResources = async (input: {
     skillLibraryDir,
     topologyOnlyPaths,
     skillRootTransition,
-    managedResources = []
+    managedResources = [],
+    skillSyncMethod
   } = input;
   if (!profileManagesResource(profile.resources, targetPaths.targetId, "skills")) {
     return {
@@ -194,6 +210,18 @@ export const planAssetResources = async (input: {
           ))).filter((markerPath): markerPath is string => Boolean(markerPath))
         : [];
       if (contentMatches) {
+        const shouldBeLinked = skillSyncMethod === "symlink";
+        const topologyMatchesPolicy = shouldBeLinked
+          ? stats?.isSymbolicLink() === true
+          : stats?.isSymbolicLink() !== true;
+        if (!topologyMatchesPolicy) {
+          resourceChanges.push({
+            ...resource.resource,
+            path,
+            action: "replace"
+          });
+          continue;
+        }
         legacyOwnershipMarkerPaths.push(...matchingMarkerPaths);
         const previous = managedResources.find(
           (item) => item.kind === "skill" && resolve(item.path) === resolve(path)
@@ -202,8 +230,8 @@ export const planAssetResources = async (input: {
           legacyOwnedResourcePaths.push(path);
         } else {
           const topologyMatches = previous && (stats?.isSymbolicLink()
-            ? previous.deploymentMode === "linked"
-            : previous.deploymentMode === "copied" || previous.deploymentMode === "adopted");
+            ? managedResourceMaterialization(previous) === "link"
+            : managedResourceMaterialization(previous) === "copy");
           if (!topologyMatches) adoptedResourcePaths.push(path);
         }
         continue;

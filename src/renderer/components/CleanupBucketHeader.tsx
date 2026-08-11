@@ -1,4 +1,4 @@
-import { ListChecks } from "lucide-react";
+import { Layers3 } from "lucide-react";
 import type { SkillCleanupBucket } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
 import { Button, DisclosureIcon } from "./ui";
@@ -17,7 +17,7 @@ interface CleanupBucketHeaderProps {
 
 const bucketLabel = (bucket: SkillCleanupBucket) => {
   if (bucket === "decision") return "Needs your decision";
-  if (bucket === "ready") return "Ready to clean up";
+  if (bucket === "ready") return "Ready to manage";
   if (bucket === "managed") return "Managed";
   return "Left unmanaged";
 };
@@ -70,17 +70,17 @@ export const CleanupBucketHeader = ({
       {showCleanup ? (
         <div className="cleanup-bucket-actions">
           <Button
-            aria-label={t("Clean up {{count}} ready Skills", { count: readyCleanupCount })}
+            aria-label={t("Manage {{count}} eligible Skills", { count: readyCleanupCount })}
             busy={actionWorking}
-            busyLabel={t("Cleaning up...")}
+            busyLabel={t("Managing...")}
             className="cleanup-auto-action"
             disabled={actionDisabled}
-            icon={<ListChecks size={15} strokeWidth={2.2} />}
+            icon={<Layers3 size={15} strokeWidth={2.2} />}
             size="compact"
             variant="primary"
             onClick={onReviewCleanup}
           >
-            {t(actionWorking ? "Cleaning up..." : "Clean up {{count}}", {
+            {t(actionWorking ? "Managing..." : "Manage {{count}}", {
               count: readyCleanupCount
             })}
           </Button>

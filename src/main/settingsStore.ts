@@ -9,7 +9,9 @@ import { pathEntryExists, replacePathAtomically, writeAtomic } from "./fileUtils
 export const SettingsSchema = z.object({
   locale: z.enum(["system", "en", "zh_CN", "zh_TW"]).default("system"),
   conversationTerminal: z.enum(["default", "ghostty"]).default("default"),
-  skillSyncMethod: z.enum(["symlink", "copy", "auto"]).default("auto"),
+  skillSyncMethod: z.enum(["symlink", "copy", "auto"]).default("copy"),
+  skillDeploymentPreferenceVersion: z.literal(1).optional(),
+  skillDeploymentReviewPending: z.boolean().optional(),
   skillStorageLocation: z.enum(["appData", "agents"]).default("appData"),
   skillAutoCheckEnabled: z.boolean().default(true),
   skillAutoCheckIntervalMinutes: z.number().int().min(5).max(1440).default(60),
@@ -33,7 +35,8 @@ export const parseSettingsData = (value: unknown): AgentEnvSettings =>
 const DEFAULT_SETTINGS: AgentEnvSettings = {
   locale: "system",
   conversationTerminal: "default",
-  skillSyncMethod: "auto",
+  skillSyncMethod: "copy",
+  skillDeploymentPreferenceVersion: 1,
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,
   skillAutoCheckIntervalMinutes: 60,
@@ -169,6 +172,7 @@ export const createSettingsStore = (
     return /^[A-Za-z0-9._+-]+$/.test(expanded) ? expanded : undefined;
   };
   const normalizeEnabledTargets = (settings: AgentEnvSettings): AgentEnvSettings => {
+    const legacySkillDeploymentPreference = settings.skillDeploymentPreferenceVersion !== 1;
     const enabledTargetIds =
       settings.enabledTargetIds ??
       (options.supportedTargetIds ? [...new Set(options.supportedTargetIds)] : undefined);
@@ -200,6 +204,15 @@ export const createSettingsStore = (
     );
     const normalized: AgentEnvSettings = {
       ...settings,
+      ...(settings.skillSyncMethod === "auto"
+        ? { skillSyncMethod: "copy" as const }
+        : {}),
+      ...(legacySkillDeploymentPreference
+        ? {
+            skillDeploymentPreferenceVersion: 1 as const,
+            skillDeploymentReviewPending: true
+          }
+        : {}),
       ...(settings.telemetryEnabled === false && settings.telemetryConsentVersion === undefined
         ? { telemetryConsentVersion: 1 as const }
         : {}),

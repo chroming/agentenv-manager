@@ -22,6 +22,7 @@ describe("OpenCode Profile v2 switching e2e", () => {
     const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
     const profileStore = createProfileStore({ appDataRoot: paths.appDataRoot, homeDir: paths.homeDir });
     const settingsStore = createSettingsStore(paths);
+    await settingsStore.updateSettings({ skillSyncMethod: "symlink" });
     const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
     const source = join(root, "sources", "reviewer");
     await mkdir(source, { recursive: true });

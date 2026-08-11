@@ -981,6 +981,7 @@ export interface SkillUpdateImpact {
 export interface SkillUpdateConfirmation {
   id: string;
   previewId: string;
+  syncCopiedInstalls?: boolean;
 }
 
 export type SkillInventoryStatus =
@@ -1286,6 +1287,8 @@ export interface AgentEnvSettings {
   locale: AppLocale;
   conversationTerminal: "default" | "ghostty";
   skillSyncMethod: SkillSyncMethod;
+  skillDeploymentPreferenceVersion?: 1;
+  skillDeploymentReviewPending?: boolean;
   skillStorageLocation: SkillStorageLocation;
   skillAutoCheckEnabled: boolean;
   skillAutoCheckIntervalMinutes: number;
@@ -1855,7 +1858,13 @@ export interface ManagedResourceSnapshot {
   contentHash: string;
   source?: string;
   paused?: boolean;
+  /** How the resource is materialized at the Agent path. */
+  materialization?: "copy" | "link";
+  /** How AgentEnv first obtained authority over the Agent path. */
+  origin?: "adopted" | "created" | "replaced" | "unknown";
+  /** @deprecated Read-only compatibility with Target state written before 0.1.7. */
   deploymentMode?: "adopted" | "linked" | "copied";
+  /** @deprecated Read-only compatibility with Target state written before 0.1.7. */
   createdByAgentEnv?: boolean;
 }
 

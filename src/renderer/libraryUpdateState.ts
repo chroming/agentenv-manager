@@ -8,18 +8,20 @@ import type {
 const updatesById = (updated: SkillLibraryEntry[]) =>
   new Map(updated.map((skill) => [skill.id, skill]));
 
-export const updateCopiedSkillInventory = (
+export const updateSkillInventoryAfterLibraryUpdate = (
   current: SkillInventoryEntry[],
   updated: SkillLibraryEntry[]
 ) => {
   const updates = updatesById(updated);
   return current.map((item) =>
-    item.installMethod === "copied" && item.libraryId && updates.has(item.libraryId)
+    item.libraryId && updates.has(item.libraryId) && item.installMethod === "linked"
       ? {
           ...item,
           contentHash: updates.get(item.libraryId)!.contentHash,
           contentMatchesLibrary: true
         }
+      : item.libraryId && updates.has(item.libraryId) && item.installMethod === "copied"
+        ? { ...item, contentMatchesLibrary: false }
       : item
   );
 };
@@ -47,7 +49,9 @@ export const updateProfileLibraryVersions = (
 
 export const updateAppliedTargetLibraryVersions = (
   current: TargetManagementState[],
-  updated: SkillLibraryEntry[]
+  updated: SkillLibraryEntry[],
+  inventory: SkillInventoryEntry[],
+  includeCopied = false
 ) => {
   const updates = updatesById(updated);
   return current.map((state) => {
@@ -62,7 +66,15 @@ export const updateAppliedTargetLibraryVersions = (
         skills: Object.fromEntries(
           Object.entries(appliedSkills).map(([id, version]) => [
             id,
-            updates.get(id)?.contentHash ?? version
+            inventory.some(
+              (install) =>
+                install.libraryId === id &&
+                (install.installMethod === "linked" ||
+                  (includeCopied && install.installMethod === "copied")) &&
+                install.foundIn.includes(state.targetId)
+            )
+              ? updates.get(id)?.contentHash ?? version
+              : version
           ])
         )
       }

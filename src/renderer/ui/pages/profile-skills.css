@@ -31,6 +31,10 @@
   overflow: visible;
 }
 
+.profile-skill-inventory-notice {
+  margin: var(--space-2) var(--space-3);
+}
+
 .profile-skill-detail,
 .profile-skill-name {
   display: block;
@@ -55,12 +59,6 @@
 
 .profile-skill-state.is-error {
   color: var(--danger);
-}
-
-.profile-skill-current-state {
-  color: var(--muted);
-  font-size: var(--font-size-metadata);
-  white-space: nowrap;
 }
 
 .profile-skill-empty {

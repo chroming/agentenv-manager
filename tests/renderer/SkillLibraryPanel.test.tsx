@@ -29,6 +29,7 @@ const LegacySkillLibraryPanel = (props: Record<string, any>) => (
         skillUpdates: props.skillUpdates,
         skillUsage: props.skillUsage,
         installedTargetIds: props.installedTargetIds,
+        activeProfileTargetIds: props.activeProfileTargetIds,
         targetNames: props.targetNames,
         preparedTargetsBySkill: props.preparedTargetsBySkill
       },
@@ -115,7 +116,6 @@ const LegacySkillLibraryPanel = (props: Record<string, any>) => (
         onSaveUpdateSettings: props.onSaveUpdateSettings,
         onSetAvailability: props.onSetAvailability,
         onSetIcon: props.onSetIcon,
-        onSyncSkillInstalls: props.onSyncSkillInstalls,
         onRemoveLibrarySkill: props.onRemoveLibrarySkill,
         onPreviewSkillMerge: props.onPreviewSkillMerge,
         onMergeLibrarySkills: props.onMergeLibrarySkills,
@@ -284,7 +284,6 @@ describe("SkillLibraryPanel", () => {
     const onUpdateAllLibrarySkills = vi.fn();
     const onPreviewAllLibrarySkillUpdates = vi.fn();
     const onCloseBulkUpdatePreview = vi.fn();
-    const onSyncSkillInstalls = vi.fn();
     const onRemoveLibrarySkill = vi.fn();
     const onReviewSkillUsage = vi.fn();
     const onCheckUpdates = vi.fn();
@@ -301,7 +300,10 @@ describe("SkillLibraryPanel", () => {
     const onManageTargetSkill = vi.fn();
     const onConsolidateSkillGroup = vi.fn().mockResolvedValue(true);
     const onAutoConsolidateSkillGroups = vi.fn().mockImplementation(
-      async (inputs: SkillCleanupRequest[]) => inputs.map((input) => input.skillKey)
+      async (inputs: SkillCleanupRequest[]) => ({
+        completedSkillKeys: inputs.map((input) => input.skillKey),
+        failures: {}
+      })
     );
     const onLeaveSkillGroupUnmanaged = vi.fn();
     const onManageSkillGroupWithAgentEnv = vi.fn();
@@ -792,6 +794,7 @@ describe("SkillLibraryPanel", () => {
         updateRun={updateRun}
         skillUsage={{ "shared-reviewer": ["Daily Coding"] }}
         installedTargetIds={["opencode", "codex"]}
+        activeProfileTargetIds={["opencode", "codex"]}
         preparedTargetsBySkill={visiblePreparedTargets}
         activeTool={activeTool}
         isRefreshingInventory={false}
@@ -814,7 +817,6 @@ describe("SkillLibraryPanel", () => {
         onUpdateAllLibrarySkills={onUpdateAllLibrarySkills}
         onPreviewAllLibrarySkillUpdates={onPreviewAllLibrarySkillUpdates}
         onCloseBulkUpdatePreview={onCloseBulkUpdatePreview}
-        onSyncSkillInstalls={onSyncSkillInstalls}
         onRemoveLibrarySkill={onRemoveLibrarySkill}
         onPreviewSkillMerge={onPreviewSkillMerge}
         onMergeLibrarySkills={onMergeLibrarySkills}
@@ -888,10 +890,10 @@ describe("SkillLibraryPanel", () => {
 
     expect(screen.getByRole("region", { name: "Skill library" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Import skills" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Local Skill Cleanup" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Local Skills Manager" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Library storage settings" })).not.toBeInTheDocument();
     const sharedRow = screen.getByRole("group", { name: "Library item shared-reviewer" });
-    expect(sharedRow).toHaveTextContent("1 Profile · 2 Agents");
+    expect(sharedRow).toHaveTextContent("1 Profile · 2 installs");
     expect(sharedRow).not.toHaveTextContent("Review code");
     const sharedIdentity = within(sharedRow).getByLabelText("Skill details for shared-reviewer");
     fireEvent.mouseEnter(sharedIdentity);
@@ -1016,18 +1018,17 @@ describe("SkillLibraryPanel", () => {
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     const copiedLocalRow = screen.getByRole("group", { name: "Library item copied-local" });
     expect(copiedLocalRow).toHaveTextContent("Local import");
-    expect(copiedLocalRow).toHaveTextContent("Needs sync");
-    expect(copiedLocalRow).toHaveTextContent("1 out of sync");
+    expect(copiedLocalRow).toHaveTextContent("1 Agent pending");
     expect(within(copiedLocalRow).queryByRole("button", { name: /Check update/ })).toBeNull();
     expect(within(copiedLocalRow).queryByRole("button", { name: "Sync install of copied-local" }))
       .not.toBeInTheDocument();
     fireEvent.click(within(copiedLocalRow).getByRole("button", { name: "More actions for copied-local" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Sync installs" }));
-    expect(onSyncSkillInstalls).toHaveBeenCalledWith("copied-local");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Review Profiles" }));
+    expect(onReviewSkillUsage).toHaveBeenCalledWith("copied-local");
 
     const localOnlyRow = screen.getByRole("group", { name: "Library item represented-external" });
-    expect(localOnlyRow).toHaveTextContent("Available");
-    expect(localOnlyRow).not.toHaveTextContent("Manual");
+    expect(localOnlyRow).toHaveTextContent("Local");
+    expect(localOnlyRow).not.toHaveTextContent("Available");
     fireEvent.click(
       within(copiedLocalRow).getByRole("button", { name: "More actions for copied-local" })
     );
@@ -1047,7 +1048,7 @@ describe("SkillLibraryPanel", () => {
       "shared-reviewer"
     ]);
 
-    expect(sharedRow).toHaveTextContent("1 Profile · 2 Agents");
+    expect(sharedRow).toHaveTextContent("1 Profile · 2 installs");
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.mouseDown(document.body);
     expect(screen.queryByLabelText("Update source for shared-reviewer")).not.toBeInTheDocument();
@@ -1311,14 +1312,17 @@ describe("SkillLibraryPanel", () => {
     expect(onCloseTool).toHaveBeenCalledTimes(2);
 
     rerender(renderPanel("discoveries"));
-    const discoveries = screen.getByRole("region", { name: "Local Skill Cleanup" });
+    const discoveries = screen.getByRole("region", { name: "Local Skills Manager" });
+    expect(discoveries).toHaveTextContent("All local Skills");
+    expect(within(discoveries).queryByRole("combobox", { name: "Management scope" }))
+      .not.toBeInTheDocument();
     fireEvent.click(within(discoveries).getByRole("button", { name: "Refresh local skills" }));
     expect(onRefreshInventory).toHaveBeenCalledTimes(2);
     fireEvent.mouseDown(document.body);
     expect(onCloseTool).toHaveBeenCalledTimes(3);
     expect(discoveries).toHaveTextContent("Managed");
     expect(discoveries).toHaveTextContent("Needs your decision");
-    expect(discoveries).toHaveTextContent("Ready to clean up");
+    expect(discoveries).toHaveTextContent("Ready to manage");
     expect(discoveries).toHaveTextContent("Left unmanaged");
     expect(discoveries).toHaveTextContent("External");
     expect(discoveries).toHaveTextContent("Shared: OpenCode + Codex");
@@ -1344,9 +1348,9 @@ describe("SkillLibraryPanel", () => {
         name: "Review Agents compat-reviewer"
       })
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Clean up \d+ ready Skills/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Manage \d+ eligible Skills/ }));
     const automaticCleanupDialog = screen.getByRole("dialog", {
-      name: "Clean up local Skills"
+      name: "Manage eligible local Skills"
     });
     expect(automaticCleanupDialog).toHaveTextContent("Codex");
     expect(automaticCleanupDialog).toHaveTextContent(
@@ -1354,7 +1358,7 @@ describe("SkillLibraryPanel", () => {
     );
     fireEvent.click(
       within(automaticCleanupDialog).getByRole("button", {
-        name: /Clean up \d+ skills/
+        name: /Manage \d+ skills/
       })
     );
     await waitFor(() =>
@@ -1364,7 +1368,10 @@ describe("SkillLibraryPanel", () => {
           libraryId: "compat-reviewer",
           paths: ["/tmp/home/.agents/skills/compat-reviewer"]
         },
-        ["codex"]
+        ["codex"],
+        {
+          blockedSkillKeys: expect.arrayContaining(["conflict-reviewer"])
+        }
       )
     );
 
@@ -1409,10 +1416,10 @@ describe("SkillLibraryPanel", () => {
       name: "Cleanup group copied-local"
     });
     expect(changedManagedGroup).toHaveTextContent("Library / copied-local · 1 managed installs");
-    expect(changedManagedGroup).toHaveTextContent("Ready");
+    expect(changedManagedGroup).toHaveTextContent("Changed");
     expect(
       within(changedManagedGroup).queryByRole("button", { name: "Review drift copied-local" })
-    ).not.toBeInTheDocument();
+    ).toBeInTheDocument();
     expect(
       within(changedManagedGroup).queryByRole("button", {
         name: "More cleanup actions for copied-local"
@@ -1424,17 +1431,23 @@ describe("SkillLibraryPanel", () => {
     })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
     let resolveAutoCleanup: (() => void) | undefined;
+    onAutoConsolidateSkillGroups.mockClear();
     onAutoConsolidateSkillGroups.mockImplementationOnce(
-      () => new Promise<string[]>((resolve) => {
-        resolveAutoCleanup = () => resolve([
-          "copied-local",
-          "legacy-reviewer",
-          "target-only-reviewer"
-        ]);
+      (inputs: SkillCleanupRequest[], options) => new Promise((resolve) => {
+        options?.onProgress?.({ skillKey: inputs[0].skillKey, status: "managing" });
+        resolveAutoCleanup = () => {
+          for (const input of inputs) {
+            options?.onProgress?.({ skillKey: input.skillKey, status: "managed" });
+          }
+          resolve({
+            completedSkillKeys: inputs.map((input) => input.skillKey),
+            failures: {}
+          });
+        };
       })
     );
     const takeOverAllButton = within(discoveries).getByRole("button", {
-      name: /Clean up \d+ ready Skills/
+      name: /Manage \d+ eligible Skills/
     });
     expect(takeOverAllButton.closest(".cleanup-bucket-heading--ready")).not.toBeNull();
     expect(takeOverAllButton.closest(".cleanup-bucket-actions")).not.toBeNull();
@@ -1443,30 +1456,40 @@ describe("SkillLibraryPanel", () => {
       "ui-button--compact",
       "ui-button--primary"
     );
-    expect(takeOverAllButton).toHaveTextContent(/Clean up \d+/);
+    expect(takeOverAllButton).toHaveTextContent(/Manage \d+/);
     fireEvent.click(takeOverAllButton);
-    const bulkCleanupDialog = screen.getByRole("dialog", { name: "Clean up local Skills" });
-    expect(bulkCleanupDialog).toHaveTextContent("Repair managed links");
-    expect(bulkCleanupDialog).toHaveTextContent("Add to Library and link copies");
-    expect(bulkCleanupDialog).toHaveTextContent("Copied Local");
+    const bulkCleanupDialog = screen.getByRole("dialog", { name: "Manage eligible local Skills" });
+    expect(bulkCleanupDialog).toHaveTextContent("Remove unavailable links");
+    expect(bulkCleanupDialog).toHaveTextContent("Save and manage existing copies");
+    expect(bulkCleanupDialog).not.toHaveTextContent("Copied Local");
     expect(bulkCleanupDialog).toHaveTextContent("Legacy Reviewer");
     expect(bulkCleanupDialog).toHaveTextContent("Move Skills out of shared folder");
     expect(bulkCleanupDialog).toHaveTextContent("compat-reviewer");
     fireEvent.click(
-      within(bulkCleanupDialog).getByRole("button", { name: /Clean up \d+ skills/ })
+      within(bulkCleanupDialog).getByRole("button", { name: /Manage \d+ skills/ })
     );
-    await waitFor(() =>
-      expect(onAutoConsolidateSkillGroups).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({ skillKey: "copied-local" }),
-          expect.objectContaining({ skillKey: "legacy-reviewer" }),
-          expect.objectContaining({ skillKey: "target-only-reviewer" })
-        ])
-      )
-    );
-    expect(takeOverAllButton).toHaveTextContent("Cleaning up...");
+    await waitFor(() => expect(onAutoConsolidateSkillGroups).toHaveBeenCalledTimes(1));
+    expect(within(bulkCleanupDialog).getByText("Managing...")).toBeInTheDocument();
+    expect(within(bulkCleanupDialog).getByRole("button", { name: "Stop after current" }))
+      .toBeInTheDocument();
+    expect(takeOverAllButton).toHaveTextContent("Managing...");
     expect(screen.getByRole("button", { name: "Close library tool" })).toBeDisabled();
     resolveAutoCleanup?.();
+    await waitFor(() => {
+      const cleanupRequests = onAutoConsolidateSkillGroups.mock.calls
+        .flatMap((call) => call[0] as SkillCleanupRequest[]);
+      expect(cleanupRequests).toEqual(expect.arrayContaining([
+        expect.objectContaining({ skillKey: "legacy-reviewer" }),
+        expect.objectContaining({ skillKey: "target-only-reviewer" })
+      ]));
+      expect(cleanupRequests).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ skillKey: "copied-local" })
+      ]));
+    });
+    await waitFor(() => expect(within(bulkCleanupDialog).getByRole("button", { name: "Close" }))
+      .toBeEnabled());
+    expect(bulkCleanupDialog).toHaveTextContent("Managed");
+    fireEvent.click(within(bulkCleanupDialog).getByRole("button", { name: "Close" }));
     const externalGroup = screen.getByRole("group", {
       name: "Cleanup group external-reviewer"
     });
@@ -1626,10 +1649,10 @@ describe("SkillLibraryPanel", () => {
     fireEvent.mouseDown(conflictLocationsTooltip);
     fireEvent.click(conflictLocationsTooltip);
     expect(onCloseTool).toHaveBeenCalledTimes(closeCountBeforeTooltipClick);
-    expect(screen.getByRole("region", { name: "Local Skill Cleanup" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Local Skills Manager" })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Local Skill Cleanup" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Local Skills Manager" })).toBeInTheDocument();
     fireEvent.click(
       within(conflictGroup).getByRole("button", { name: "Add to Library conflict-reviewer" })
     );
@@ -1742,9 +1765,10 @@ describe("SkillLibraryPanel", () => {
     const partialApply = within(bulkDialog).getByRole("button", { name: "Update 1 skill" });
     expect(partialApply).toBeEnabled();
     fireEvent.click(partialApply);
-    expect(onUpdateAllLibrarySkills).toHaveBeenCalledWith([
-      expect.objectContaining({ id: "shared-reviewer", previewId: "preview-shared-reviewer" })
-    ]);
+    expect(onUpdateAllLibrarySkills).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: "shared-reviewer", previewId: "preview-shared-reviewer" })],
+      false
+    );
 
     rerender(
       renderPanel(
@@ -1901,7 +1925,6 @@ describe("SkillLibraryPanel", () => {
         onUpdateAllLibrarySkills={noop}
         onPreviewAllLibrarySkillUpdates={noop}
         onCloseBulkUpdatePreview={noop}
-        onSyncSkillInstalls={noop}
         onRemoveLibrarySkill={noop}
         onPreviewSkillMerge={vi.fn()}
         onMergeLibrarySkills={vi.fn().mockResolvedValue(false)}
@@ -2090,7 +2113,6 @@ describe("SkillLibraryPanel", () => {
         onUpdateAllLibrarySkills={noop}
         onPreviewAllLibrarySkillUpdates={noop}
         onCloseBulkUpdatePreview={noop}
-        onSyncSkillInstalls={noop}
         onRemoveLibrarySkill={noop}
         onPreviewSkillMerge={onPreviewSkillMerge}
         onMergeLibrarySkills={onMergeLibrarySkills}

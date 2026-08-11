@@ -83,8 +83,15 @@ import { activationPreviewHasWork } from "./activationPreview";
 import { formatDiagnosticIssue, parseDiagnosticErrorMessage } from "./diagnostics";
 import { formatBytes } from "./formatBytes";
 import { moveSharedSkillToAgents } from "./sharedSkillMigration";
+import {
+  createSkillManagerNavigation,
+  type SkillManagerReturnContext
+} from "./skillManagerNavigation";
 import { runSkillCollectionMigration } from "./skillCollectionMigrationAction";
-import type { SkillCollectionLinkGroup } from "../shared/skillCleanup";
+import type {
+  SkillCollectionLinkGroup,
+  SkillManagementScope
+} from "../shared/skillCleanup";
 import { collectLibraryResourceVersions, libraryResourceVersionsEqual } from "../shared/libraryVersions";
 import { isTargetInstalled } from "../shared/targetHealth";
 import { isExternalSkillImportable } from "../shared/skillIdentity";
@@ -102,6 +109,7 @@ import {
 import { DiagnosticSettingsSection } from "./components/DiagnosticSettingsSection";
 import { AppUpdateSettings } from "./components/AppUpdateSettings";
 import { TelemetryConsentDialog } from "./components/TelemetryConsentDialog";
+import { SkillDeploymentUpgradeDialog } from "./components/SkillDeploymentUpgradeDialog";
 import { TelemetrySettings } from "./components/TelemetrySettings";
 import { BackupManagerDialog } from "./components/BackupManagerDialog";
 import { DataSettingsSection } from "./components/DataSettingsSection";
@@ -147,7 +155,7 @@ import {
   type PendingSkillImport
 } from "./components/SkillImportConflictDialog";
 import { SkillSettingsSection } from "./components/SkillSettingsSection";
-import { SkillsEditor } from "./components/SkillsEditor";
+import { ProfileSkillsEditor } from "./components/ProfileSkillsEditor";
 import { TargetCaptureDialog } from "./components/TargetCaptureDialog";
 import { TargetWorkspace } from "./components/TargetWorkspace";
 import { WorkspaceSyncSettings } from "./components/WorkspaceSyncSettings";
@@ -155,11 +163,12 @@ import { createValidationRows } from "./profileValidationRows";
 import { defaultProfileIconKey, ProductIcon } from "./productIcons";
 import {
   updateAppliedTargetLibraryVersions,
-  updateCopiedSkillInventory,
+  updateSkillInventoryAfterLibraryUpdate,
   updateProfileLibraryVersions
 } from "./libraryUpdateState";
 import { runSkillImportQueue } from "./skillImportQueue";
 import { useSkillUpdateActivity, type SkillUpdateActivity } from "./skillUpdateActivity";
+import { useSkillDeploymentUpgrade } from "./hooks/useSkillDeploymentUpgrade";
 import {
   Button,
   ControlGroup,
@@ -316,7 +325,8 @@ const AppContent = ({
   );
   const [skillLibraryTool, setSkillLibraryTool] = useState<"import" | "discoveries">();
   const [skillCleanupScope, setSkillCleanupScope] =
-    useState<"all" | "shared">("all");
+    useState<SkillManagementScope>({ kind: "all" });
+  const skillManagerReturnRef = useRef<SkillManagerReturnContext | undefined>(undefined);
   const [skillCollectionFocusPath, setSkillCollectionFocusPath] = useState<string>();
   const [skillUpdateCheckStatus, setSkillUpdateCheckStatus] =
     useState<SkillUpdateCheckStatus>();
@@ -479,6 +489,13 @@ const AppContent = ({
     settings: skillSettings,
     onAccepted: settingsController.actions.accept,
     onError: setError
+  });
+  const skillDeploymentUpgrade = useSkillDeploymentUpgrade({
+    inventory: skillInventory,
+    isLoading,
+    settings: skillSettings,
+    telemetryOpen: telemetryConsent.open,
+    updateSettings: updateSkillSettings
   });
   const { activity: skillUpdateActivity, activityRef: skillUpdateActivityRef,
     begin: beginSkillUpdateActivity, finish: finishSkillUpdateActivity
@@ -897,13 +914,26 @@ const AppContent = ({
     }
   };
 
-  const applyLibraryContentUpdatesLocally = (updatedSkills: SkillLibraryEntry[]) => {
+  const applyLibraryContentUpdatesLocally = (
+    updatedSkills: SkillLibraryEntry[],
+    syncCopiedInstalls: boolean
+  ) => {
     if (updatedSkills.length === 0) return;
     const updatesById = new Map(updatedSkills.map((skill) => [skill.id, skill]));
     setLibrarySkills((current) =>
       current.map((skill) => updatesById.get(skill.id) ?? skill)
     );
-    setSkillInventory((current) => updateCopiedSkillInventory(current, updatedSkills));
+    setSkillInventory((current) => {
+      const next = updateSkillInventoryAfterLibraryUpdate(current, updatedSkills);
+      return syncCopiedInstalls
+        ? next.map((item) => {
+          const updated = item.libraryId ? updatesById.get(item.libraryId) : undefined;
+          return updated && item.installMethod === "copied"
+            ? { ...item, contentHash: updated.contentHash, contentMatchesLibrary: true }
+            : item;
+        })
+        : next;
+    });
     commitSkillUpdates((current) => [
       ...current.filter((item) => !updatesById.has(item.id)),
       ...updatedSkills
@@ -921,7 +951,12 @@ const AppContent = ({
     setProfileLibraryVersions((current) =>
       updateProfileLibraryVersions(current, updatedSkills));
     setTargetStates((current) =>
-      updateAppliedTargetLibraryVersions(current, updatedSkills));
+      updateAppliedTargetLibraryVersions(
+        current,
+        updatedSkills,
+        skillInventory,
+        syncCopiedInstalls
+      ));
   };
 
   const refreshTrackedSkillUpdateLocally = (skill: SkillLibraryEntry) => {
@@ -1612,7 +1647,7 @@ const AppContent = ({
   const appModalOpen = Boolean(
     pendingSkillImport || pendingProfileAction || profileDialogMode || deleteProfileCandidateId ||
     profileRecoveryMode || dataRestorePreview || backupManagerOpen ||
-    telemetryConsent.blocksAgentSuggestions
+    telemetryConsent.blocksAgentSuggestions || skillDeploymentUpgrade.open
   );
   const {
     agentProbeComplete, allowSuggestionPreferences, detectedDisabledAgents,
@@ -1723,7 +1758,7 @@ const AppContent = ({
       }
       if (skillLibraryTool) {
         setSkillLibraryTool(undefined);
-        setSkillCleanupScope("all");
+        setSkillCleanupScope({ kind: "all" });
         return;
       }
       if (isProfileActionsOpen) {
@@ -1855,11 +1890,9 @@ const AppContent = ({
     draftProfile && profileTarget
       ? summarizeProfile(draftProfile, profileTarget, librarySkills)
       : undefined;
-  const currentTargetSkillStates = Object.fromEntries(
-    (selectedTargetState?.skillReceipts ?? [])
-      .filter((receipt) => receipt.outcome !== "absent")
-      .map((receipt) => [receipt.libraryId, receipt.outcome === "managed-active" || receipt.outcome === "external-active"])
-  );
+  const currentTargetSkills = selectedTargetId
+    ? skillInventory.filter((entry) => entry.foundIn.includes(selectedTargetId))
+    : [];
   const currentTargetInstructions = nativeInstructionSnapshots.find(
     (snapshot) => snapshot.targetId === selectedTarget?.id
   );
@@ -2272,7 +2305,8 @@ const AppContent = ({
   };
 
   const updateLibrarySkill = async (
-    plan: SkillUpdatePlan
+    plan: SkillUpdatePlan,
+    syncCopiedInstalls = false
   ): Promise<SkillUpdateActionResult> => {
     if (!plan.previewId) {
       const message = "Skill update preview is unavailable; review the update again";
@@ -2282,8 +2316,8 @@ const AppContent = ({
     setBusy(true);
     setError(undefined);
     try {
-      const result = await skillUpdateQueue.execute([plan], false);
-      applyLibraryContentUpdatesLocally(result.updated);
+      const result = await skillUpdateQueue.execute([plan], false, false, syncCopiedInstalls);
+      applyLibraryContentUpdatesLocally(result.updated, syncCopiedInstalls);
       if (result.failed.length > 0) {
         const message = result.failed[0]!.error;
         setSkillUpdateCheckStatus({ state: "error", message: `Update ${plan.id} failed` });
@@ -2396,7 +2430,10 @@ const AppContent = ({
     }
   };
 
-  const updateAllLibrarySkills = async (plans: SkillUpdatePlan[]) => {
+  const updateAllLibrarySkills = async (
+    plans: SkillUpdatePlan[],
+    syncCopiedInstalls = false
+  ) => {
     const applicablePlans = plans.filter((plan) => Boolean(plan.previewId));
     if (applicablePlans.length === 0) {
       return;
@@ -2406,9 +2443,14 @@ const AppContent = ({
     setBusy(true);
     setError(undefined);
     try {
-      const result = await skillUpdateQueue.execute(applicablePlans, true, true);
+      const result = await skillUpdateQueue.execute(
+        applicablePlans,
+        true,
+        true,
+        syncCopiedInstalls
+      );
       const updatedSkills = result.updated;
-      applyLibraryContentUpdatesLocally(updatedSkills);
+      applyLibraryContentUpdatesLocally(updatedSkills, syncCopiedInstalls);
       await refreshSkillSourceGroups();
       const updatedIds = new Set(updatedSkills.map((skill) => skill.id));
       const remainingUpdates = skillUpdates.filter(
@@ -2465,28 +2507,6 @@ const AppContent = ({
     } finally {
       finishSkillUpdateActivity(activity);
     }
-  };
-
-  const syncSkillInstalls = async (id: string) => {
-    const staleCopies = skillInventory.filter(
-      (item) =>
-        item.libraryId === id &&
-        item.installMethod === "copied" &&
-        item.contentMatchesLibrary === false
-    );
-    if (staleCopies.length === 0) {
-      return;
-    }
-    await consolidateSkillGroup({
-      skillKey: staleCopies[0].skillKey,
-      libraryId: id,
-      canonicalPath: staleCopies[0].path,
-      locations: staleCopies.map((item) => ({
-        targetId: item.foundIn[0] ?? "",
-        path: item.path,
-        contentHash: item.contentHash
-      }))
-    });
   };
 
   const checkSkillUpdates = async () => {
@@ -2571,37 +2591,29 @@ const AppContent = ({
     }
   };
 
-  const openSkillDiscoveries = async () => {
-    setSkillCleanupScope("all");
-    setSkillLibraryTool("discoveries");
-    await refreshSkillDiscoveries(false, "manual");
-  };
-
-  const openEnvironmentReview = () => {
-    guardProfileAction("review shared Skills", () => {
-      libraryScroll.captureScroll();
-      setSkillUpdateFeedbackWorkspace("library");
-      setSkillLibraryMode("skills");
-      setSkillCleanupScope("shared");
-      setSkillLibraryTool("discoveries");
-      openWorkspaceNow("library");
-      void refreshSkillDiscoveries(false, "page-entry");
-    });
-  };
-
-  const reviewPreviewSkillCollection = (issue: ApplyIssue) => {
-    const collectionPath = issue.path ?? issue.resourceId;
-    if (!collectionPath) return;
-    clearProfilePreview();
-    libraryScroll.captureScroll();
-    setSkillUpdateFeedbackWorkspace("library");
-    setSkillLibraryMode("skills");
-    setSkillCleanupScope("shared");
-    setSkillCollectionFocusPath(collectionPath);
-    setSkillLibraryTool("discoveries");
-    openWorkspaceNow("library");
-    void refreshSkillDiscoveries(false, "page-entry");
-  };
+  const skillManagerNavigation = createSkillManagerNavigation({
+    targets,
+    profile: draftProfile,
+    target: selectedTarget,
+    setReturnContext: (value) => { skillManagerReturnRef.current = value; },
+    setSelectedTargetId,
+    setFeedbackWorkspace: setSkillUpdateFeedbackWorkspace,
+    setLibraryMode: setSkillLibraryMode,
+    setScope: setSkillCleanupScope,
+    setCollectionFocusPath: setSkillCollectionFocusPath,
+    setActiveTool: setSkillLibraryTool,
+    openWorkspace: openWorkspaceNow,
+    captureLibraryScroll: libraryScroll.captureScroll,
+    clearProfilePreview,
+    refreshInventory: (reason) => refreshSkillDiscoveries(false, reason),
+    refreshProfilePreview,
+    guardProfileAction
+  });
+  const openSkillDiscoveries = skillManagerNavigation.openAll;
+  const openTargetSkillManager = skillManagerNavigation.openTarget;
+  const openEnvironmentReview = skillManagerNavigation.openShared;
+  const reviewPreviewSkillCollection = skillManagerNavigation.reviewCollection;
+  const reviewPreviewLocalSkills = skillManagerNavigation.reviewProfile;
 
   const {
     setUnmanagedSkillLocations,
@@ -2637,7 +2649,8 @@ const AppContent = ({
 
   const moveSharedSkillToAgentDirectories = async (
     input: RetireSharedSkillInput,
-    targetIds: string[]
+    targetIds: string[],
+    options?: { blockedSkillKeys?: string[] }
   ) => {
     const activeProfileIds = new Set(
       targetStates
@@ -2657,7 +2670,8 @@ const AppContent = ({
         api: window.agentEnv,
         migration: input,
         targetIds,
-        targetNames
+        targetNames,
+        blockedSkillNames: options?.blockedSkillKeys
       });
       setSkillCleanupResult(result);
       await refreshProfiles({ checkSkillUpdates: false });
@@ -2669,9 +2683,8 @@ const AppContent = ({
       });
       return true;
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       await refreshProfiles({ checkSkillUpdates: false }).catch(() => undefined);
-      return false;
+      throw unknownError;
     } finally {
       setBusy(false);
     }
@@ -3047,9 +3060,19 @@ const AppContent = ({
     }
   };
 
-  const autoConsolidateSkillGroups = async (inputs: SkillCleanupRequest[]) => {
+  const autoConsolidateSkillGroups = async (
+    inputs: SkillCleanupRequest[],
+    options?: {
+      onProgress?(event: {
+        skillKey: string;
+        status: "managing" | "managed" | "failed" | "skipped";
+        error?: string;
+      }): void;
+      shouldStop?(): boolean;
+    }
+  ) => {
     if (inputs.length === 0) {
-      return [];
+      return { completedSkillKeys: [], failures: {}, skippedSkillKeys: [] };
     }
     setBusy(true);
     setError(undefined);
@@ -3060,20 +3083,33 @@ const AppContent = ({
     });
     const completed: SkillCleanupResult[] = [];
     const completedSkillKeys: string[] = [];
-    const failures: string[] = [];
-    for (const input of inputs) {
+    const failures: Record<string, string> = {};
+    const skippedSkillKeys: string[] = [];
+    for (const [index, input] of inputs.entries()) {
+      if (options?.shouldStop?.()) {
+        const skipped = inputs.slice(index).map((item) => item.skillKey);
+        skippedSkillKeys.push(...skipped);
+        for (const skillKey of skipped) {
+          options.onProgress?.({ skillKey, status: "skipped" });
+        }
+        break;
+      }
+      options?.onProgress?.({ skillKey: input.skillKey, status: "managing" });
       try {
         completed.push(await window.agentEnv.consolidateSkillGroup(input));
         completedSkillKeys.push(input.skillKey);
+        options?.onProgress?.({ skillKey: input.skillKey, status: "managed" });
       } catch (unknownError) {
-        failures.push(
-          `${input.skillKey}: ${unknownError instanceof Error ? unknownError.message : String(unknownError)}`
-        );
+        const message = unknownError instanceof Error
+          ? unknownError.message
+          : String(unknownError);
+        failures[input.skillKey] = message;
+        options?.onProgress?.({ skillKey: input.skillKey, status: "failed", error: message });
       }
     }
     try {
       await refreshProfiles({ checkSkillUpdates: false });
-      if (failures.length === 0) {
+      if (Object.keys(failures).length === 0) {
         if (completed.length === 1) {
           setSkillCleanupResult(completed[0]);
           setSkillUpdateCheckStatus(undefined);
@@ -3086,9 +3122,9 @@ const AppContent = ({
       } else {
         setSkillUpdateCheckStatus({
           state: "error",
-          message: `${plural(completed.length, "skill")} managed · ${plural(failures.length, "skill")} need review`
-        });
-        setError(failures.join("\n"));
+            message: `${plural(completed.length, "skill")} managed · ${plural(Object.keys(failures).length, "skill")} need review`
+          });
+        setError(Object.entries(failures).map(([skillKey, message]) => `${skillKey}: ${message}`).join("\n"));
       }
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -3096,7 +3132,7 @@ const AppContent = ({
     } finally {
       setBusy(false);
     }
-    return completedSkillKeys;
+    return { completedSkillKeys, failures, skippedSkillKeys };
   };
 
   const undoSkillCleanup = async (backupId = skillCleanupResult?.backupId) => {
@@ -3680,6 +3716,9 @@ const AppContent = ({
                   installedTargetIds: targets
                     .filter((target) => isTargetInstalled(target.health))
                     .map((target) => target.id),
+                  activeProfileTargetIds: targetStates
+                    .filter((state) => Boolean(state.activeProfileId))
+                    .map((state) => state.targetId),
                   targetNames,
                   preparedTargetsBySkill: preparedSkillTargetsBySkill
                 },
@@ -3714,9 +3753,8 @@ const AppContent = ({
               actions={{
                 navigation: {
                   onCloseTool: () => {
-                    setSkillLibraryTool(undefined);
-                    setSkillCleanupScope("all");
-                    setSkillCollectionFocusPath(undefined);
+                    const returnContext = skillManagerReturnRef.current;
+                    skillManagerNavigation.close(returnContext);
                   },
                   onFocusCollectionHandled: () => setSkillCollectionFocusPath(undefined),
                   onLibraryModeChange: setSkillLibraryMode,
@@ -3818,7 +3856,6 @@ const AppContent = ({
                   onSaveUpdateSettings: saveSkillUpdateSettings,
                   onSetAvailability: setSkillAvailability,
                   onSetIcon: (input) => void setSkillIcon(input),
-                  onSyncSkillInstalls: (id) => void syncSkillInstalls(id),
                   onRemoveLibrarySkill: removeLibrarySkill,
                   onPreviewSkillMerge: previewSkillMerge,
                   onMergeLibrarySkills: mergeLibrarySkills,
@@ -4106,40 +4143,20 @@ const AppContent = ({
                           updateSelectedResourceManagement("skills", policy)
                         }
                       >
-                          <SkillsEditor
-                            value={draftProfile.resources ?? emptyProfileResources}
+                          <ProfileSkillsEditor
+                            profile={draftProfile}
                             librarySkills={librarySkills}
                             skillUpdates={skillUpdates}
                             checkingSkillUpdates={checkingProfileSkillUpdates}
                             policy={skillsPolicy}
-                            currentSkillStates={currentTargetSkillStates}
-                            currentStateAvailable={selectedTargetState?.skillReceipts !== undefined}
-                          appliedSkillVersions={
-                            selectedTargetState?.activeProfileId ===
-                            draftProfile.id
-                              ? selectedTargetState.appliedLibraryVersions
-                                  ?.skills
-                              : undefined
-                          }
-                          skillReceipts={
-                            selectedTargetState?.activeProfileId ===
-                            draftProfile.id
-                              ? selectedTargetState.skillReceipts
-                              : undefined
-                          }
-                          selectedTargetName={selectedTarget?.name}
-                          onCheckSkillUpdates={(ids) =>
-                            void checkProfileSkillUpdates(ids)
-                          }
-                          onPreviewSkillUpdate={(id) =>
-                            void previewLibrarySkillUpdate(id)
-                          }
-                          onChange={(resources) => {
-                            updateDraftProfile({
-                              ...draftProfile,
-                              resources
-                            });
-                          }}
+                            currentSkills={currentTargetSkills}
+                            environmentScanStatus={environmentScanStatus}
+                            targetState={selectedTargetState}
+                            selectedTargetId={selectedTarget?.id}
+                            onRefresh={() => { void refreshSkills("manual"); }}
+                            onCheckUpdates={(ids) => { void checkProfileSkillUpdates(ids); }}
+                            onPreviewUpdate={(id) => { void previewLibrarySkillUpdate(id); }}
+                            onChange={(resources) => updateDraftProfile({ ...draftProfile, resources })}
                         />
                       </ProfileComposerSection>
                       <ProfileComposerSection
@@ -4238,6 +4255,7 @@ const AppContent = ({
                             );
                           })}
                         onReviewSkillCollection={reviewPreviewSkillCollection}
+                        onManageLocalSkills={reviewPreviewLocalSkills}
                         onCompare={() => void openProfileEvaluation()}
                         onCancel={clearProfilePreview}
                         onConfirm={applySelectedProfile}
@@ -4466,6 +4484,7 @@ const AppContent = ({
               onReviewEnvironment={openEnvironmentReview}
               onCreateProfileFromTarget={(targetId, returnFocus) =>
                 openCreateFromTargetDialog(targetId, "all", returnFocus)}
+              onManageSkills={openTargetSkillManager}
               onPreviewRollback={previewSelectedRollback}
               onCancelRollback={() => {
                 setRollbackPreview(undefined);
@@ -4721,6 +4740,7 @@ const AppContent = ({
           onDismiss={telemetryConsent.dismiss}
           onDecide={telemetryConsent.decide}
         />
+        <SkillDeploymentUpgradeDialog busy={busy} {...skillDeploymentUpgrade} />
         <AgentDiscoveryDialog
           agents={visibleAgentSuggestions}
           allowSuggestionPreferences={allowSuggestionPreferences}

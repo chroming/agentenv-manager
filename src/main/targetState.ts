@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { TargetState } from "../shared/types";
 import { ProfileManifestSchema, ProfileResourcesSchema, SafeIdSchema } from "../shared/schemas";
+import { withManagedResourceSemantics } from "../shared/managedResource";
 
 const ManagedResourceSchema = z.object({
   kind: z.enum(["instructions", "config", "mcp", "skill", "agent", "file", "directory"]),
@@ -9,9 +10,11 @@ const ManagedResourceSchema = z.object({
   contentHash: z.string().min(1),
   source: z.string().optional(),
   paused: z.boolean().optional(),
+  materialization: z.enum(["copy", "link"]).optional(),
+  origin: z.enum(["adopted", "created", "replaced", "unknown"]).optional(),
   deploymentMode: z.enum(["adopted", "linked", "copied"]).optional(),
   createdByAgentEnv: z.boolean().optional()
-});
+}).transform(withManagedResourceSemantics);
 
 const SharedSkillPreparationSchema = z.object({
   skillKey: z.string().min(1),

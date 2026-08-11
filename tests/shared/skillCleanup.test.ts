@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   automaticSkillCleanupRequest,
   buildSkillCollectionLinkGroups,
-  buildSkillCleanupGroups
+  buildSkillCleanupGroups,
+  filterSkillInventoryForManagementScope
 } from "../../src/shared/skillCleanup";
 import type { SkillInventoryEntry } from "../../src/shared/types";
 
@@ -21,6 +22,62 @@ const inventoryItem = (
 });
 
 describe("skill cleanup groups", () => {
+  it("keeps Local Skills global while shared review remains a conditional subflow", () => {
+    const inventory = [
+      inventoryItem({
+        id: "profile-skill",
+        libraryId: "profile-skill",
+        deploymentName: "profile-skill",
+        foundIn: ["opencode"]
+      }),
+      inventoryItem({
+        id: "agent-only",
+        skillKey: "agent-only",
+        deploymentName: "agent-only",
+        foundIn: ["opencode"]
+      }),
+      inventoryItem({
+        id: "other-agent",
+        skillKey: "other-agent",
+        foundIn: ["codex"]
+      }),
+      inventoryItem({
+        id: "same-library-other-agent",
+        libraryId: "profile-skill",
+        deploymentName: "profile-skill",
+        foundIn: ["codex"]
+      }),
+      inventoryItem({
+        id: "shared-copy",
+        skillKey: "shared-copy",
+        sharedLocation: true,
+        foundIn: ["opencode", "codex"]
+      })
+    ];
+
+    expect(filterSkillInventoryForManagementScope(inventory, { kind: "all" }))
+      .toHaveLength(5);
+    expect(filterSkillInventoryForManagementScope(inventory, { kind: "shared" })
+      .map((item) => item.id)).toEqual(["shared-copy"]);
+  });
+
+  it("requires a decision when a managed copy changed locally", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        status: "managed",
+        libraryId: "reviewer",
+        contentMatchesLibrary: false
+      })
+    ]);
+
+    expect(group).toMatchObject({
+      state: "stale",
+      resolution: "manual",
+      bucket: "decision"
+    });
+    expect(automaticSkillCleanupRequest(group)).toBeUndefined();
+  });
+
   it("does not report two deployment aliases of one physical Skill as duplicate copies", () => {
     const [group] = buildSkillCleanupGroups([
       inventoryItem({
@@ -349,7 +406,7 @@ describe("skill cleanup groups", () => {
     ]);
   });
 
-  it("requires a decision without a canonical version but normalizes Library conflicts", () => {
+  it("requires a decision for content conflicts and automates only unambiguous imports", () => {
     const groups = buildSkillCleanupGroups([
       inventoryItem(),
       inventoryItem({ path: "/tmp/codex/skills/reviewer", foundIn: ["codex"], contentHash: "other" }),
@@ -375,9 +432,8 @@ describe("skill cleanup groups", () => {
         expect.objectContaining({
           skillKey: "library-copy",
           state: "conflict",
-          resolution: "automatic",
-          bucket: "ready",
-          automaticEffect: "archive-and-link"
+          resolution: "manual",
+          bucket: "decision"
         }),
         expect.objectContaining({ skillKey: "external", state: "outside", resolution: "automatic" })
       ])
@@ -396,10 +452,7 @@ describe("skill cleanup groups", () => {
     });
     expect(automaticSkillCleanupRequest(
       groups.find((group) => group.skillKey === "library-copy")!
-    )).toMatchObject({
-      libraryId: "library-copy",
-      libraryAction: "keep"
-    });
+    )).toBeUndefined();
   });
 
   it("treats an externally managed copy with matching Library content as represented", () => {
@@ -420,7 +473,7 @@ describe("skill cleanup groups", () => {
     });
   });
 
-  it("auto-refreshes stale managed copies and excludes resolved or kept groups", () => {
+  it("requires review for stale managed copies and excludes resolved or kept groups", () => {
     const groups = buildSkillCleanupGroups([
       inventoryItem({
         status: "managed",
@@ -447,12 +500,12 @@ describe("skill cleanup groups", () => {
 
     expect(groups.find((group) => group.skillKey === "reviewer")).toMatchObject({
       state: "stale",
-      resolution: "automatic",
+      resolution: "manual",
       presentation: { state: "managed-copy-changed", action: "review-drift" }
     });
     expect(
       automaticSkillCleanupRequest(groups.find((group) => group.skillKey === "reviewer")!)
-    ).toMatchObject({ libraryId: "reviewer" });
+    ).toBeUndefined();
     expect(groups.find((group) => group.skillKey === "current")?.resolution).toBe("resolved");
     expect(groups.find((group) => group.skillKey === "kept")?.resolution).toBe("resolved");
   });

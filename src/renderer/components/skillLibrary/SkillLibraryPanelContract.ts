@@ -37,7 +37,10 @@ import type {
   SkillUpstream,
   UnmanagedSkillLocationUpdate
 } from "../../../shared/types";
-import type { SkillCollectionLinkGroup } from "../../../shared/skillCleanup";
+import type {
+  SkillCollectionLinkGroup,
+  SkillManagementScope
+} from "../../../shared/skillCleanup";
 import type { SkillLibraryViewState } from "../../libraryViewState";
 import type { SkillUpdateActivity } from "../../skillUpdateActivity";
 import type { SkillUpdateRun } from "../../skillUpdateQueue";
@@ -64,6 +67,7 @@ export interface SkillLibraryPanelModel {
     skillUpdates: SkillUpdateInfo[];
     skillUsage: Record<string, string[]>;
     installedTargetIds?: string[];
+    activeProfileTargetIds?: string[];
     targetNames?: TargetNameIndex;
     preparedTargetsBySkill?: Record<string, PreparedSkillTarget[]>;
   };
@@ -75,7 +79,7 @@ export interface SkillLibraryPanelModel {
   cleanup: {
     skillInventory: SkillInventoryEntry[];
     cleanupBackups: SkillCleanupBackupSummary[];
-    cleanupScope?: "all" | "shared";
+    cleanupScope?: SkillManagementScope;
     focusCollectionPath?: string;
   };
   updates: {
@@ -127,7 +131,18 @@ export interface SkillLibraryPanelActions {
     onImportExternal(skill: SkillInventoryEntry): Promise<boolean>;
     onManageTargetSkill(input: ManageTargetSkillInput): void;
     onConsolidateSkillGroup(input: SkillCleanupRequest): Promise<boolean>;
-    onAutoConsolidateSkillGroups(inputs: SkillCleanupRequest[]): Promise<string[]>;
+    onAutoConsolidateSkillGroups(inputs: SkillCleanupRequest[], options?: {
+      onProgress?(event: {
+        skillKey: string;
+        status: "managing" | "managed" | "failed" | "skipped";
+        error?: string;
+      }): void;
+      shouldStop?(): boolean;
+    }): Promise<{
+      completedSkillKeys: string[];
+      failures: Record<string, string>;
+      skippedSkillKeys?: string[];
+    }>;
     onCopyCleanupDetails(details: string): Promise<boolean>;
     onLeaveSkillGroupUnmanaged(skillKey: string): void;
     onManageSkillGroupWithAgentEnv(skillKey: string): void;
@@ -141,7 +156,8 @@ export interface SkillLibraryPanelActions {
     onRetireSharedSkill(input: RetireSharedSkillInput): Promise<boolean>;
     onMoveSharedSkillToAgents(
       input: RetireSharedSkillInput,
-      targetIds: string[]
+      targetIds: string[],
+      options?: { blockedSkillKeys?: string[] }
     ): Promise<boolean>;
     onMoveSkillCollection?(
       collection: SkillCollectionLinkGroup,
@@ -181,7 +197,6 @@ export interface SkillLibraryPanelActions {
     onSaveUpdateSettings(change: SkillUpdateSettingsInput): Promise<boolean>;
     onSetAvailability(input: SkillAvailabilityInput): Promise<boolean>;
     onSetIcon(input: SkillIconInput): void;
-    onSyncSkillInstalls(id: string): void;
     onRemoveLibrarySkill(id: string): void;
     onPreviewSkillMerge(id: string): Promise<SkillMergePreview>;
     onMergeLibrarySkills(input: SkillMergeInput): Promise<boolean>;
@@ -192,8 +207,11 @@ export interface SkillLibraryPanelActions {
   updates: {
     onPreviewLibrarySkillUpdate(id: string): Promise<void>;
     onCloseUpdatePreview(): void;
-    onUpdateLibrarySkill(plan: SkillUpdatePlan): Promise<SkillUpdateActionResult>;
-    onUpdateAllLibrarySkills(plans: SkillUpdatePlan[]): void;
+    onUpdateLibrarySkill(
+      plan: SkillUpdatePlan,
+      syncCopiedInstalls?: boolean
+    ): Promise<SkillUpdateActionResult>;
+    onUpdateAllLibrarySkills(plans: SkillUpdatePlan[], syncCopiedInstalls?: boolean): void;
     onStopBulkLibrarySkillUpdates?(): void;
     onPreviewAllLibrarySkillUpdates(ids: string[]): Promise<void>;
     onCloseBulkUpdatePreview(): void;

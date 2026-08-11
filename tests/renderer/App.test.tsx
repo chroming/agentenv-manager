@@ -663,7 +663,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     readSettings: vi.fn().mockResolvedValue({
       locale: "system",
       conversationTerminal: "default",
-      skillSyncMethod: "symlink",
+      skillSyncMethod: "copy",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
       skillAutoCheckIntervalMinutes: 60,
@@ -675,7 +675,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     updateSettings: vi.fn().mockImplementation(async (input) => ({
       locale: input.locale ?? "system",
       conversationTerminal: input.conversationTerminal ?? "default",
-      skillSyncMethod: input.skillSyncMethod ?? "symlink",
+      skillSyncMethod: input.skillSyncMethod ?? "copy",
       skillStorageLocation: input.skillStorageLocation ?? "appData",
       skillAutoCheckEnabled: input.skillAutoCheckEnabled ?? true,
       skillAutoCheckIntervalMinutes: input.skillAutoCheckIntervalMinutes ?? 60,
@@ -1084,7 +1084,7 @@ describe("App", () => {
       within(environmentStatus).getByRole("button", { name: "Review Skills" })
     );
 
-    const drawer = await screen.findByRole("region", { name: "Local Skill Cleanup" });
+    const drawer = await screen.findByRole("region", { name: "Local Skills Manager" });
     expect(within(drawer).getByText("Shared Skill Review")).toBeInTheDocument();
     expect(
       within(drawer).getByRole("group", { name: "Cleanup group shared-review" })
@@ -2652,7 +2652,7 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Local Skills" }));
 
-    expect(await screen.findByRole("region", { name: "Local Skill Cleanup" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Local Skills Manager" })).toBeInTheDocument();
     expect(api.scanSkillInventory).toHaveBeenCalledTimes(2);
     expect(
       await screen.findByRole("group", { name: "Cleanup group refreshed-reviewer" })
@@ -2875,7 +2875,7 @@ describe("App", () => {
 
     await openSettingsCategory("Connections");
     fireEvent.click(await screen.findByRole("button", { name: "Update this device" }));
-    const review = await screen.findByRole("dialog", { name: "Review Workspace changes" });
+    const review = await screen.findByRole("dialog", { name: "Review Device Sync changes" });
     fireEvent.click(within(review).getByRole("button", { name: "Update this device" }));
     await waitFor(() => expect(api.updateWorkspaceFromSync).toHaveBeenCalledTimes(1));
 
@@ -2884,17 +2884,18 @@ describe("App", () => {
     expect(within(switcher).getByText("Synced Review")).toBeInTheDocument();
   });
 
-  it("presents Live link as the default recommended Skill deployment mode", async () => {
+  it("presents Managed copy as the default recommended Skill deployment mode", async () => {
     installApi();
     render(<App />);
 
     await openSettingsCategory("Skills");
 
     const syncMethod = screen.getByLabelText("Global skill deployment method");
-    expect(syncMethod).toHaveValue("symlink");
+    expect(syncMethod).toHaveValue("copy");
     expect(
-      within(syncMethod).getByRole("option", { name: "Live link (recommended)" })
+      within(syncMethod).getByRole("option", { name: "Managed copy (recommended)" })
     ).toBeInTheDocument();
+    expect(within(syncMethod).queryByRole("option", { name: /Auto/ })).toBeNull();
   });
 
   it("switches and persists the interface language from Settings", async () => {
@@ -4381,6 +4382,14 @@ describe("App", () => {
     let dialog = screen.getByRole("dialog", { name: "Preview" });
     expect(within(dialog).getByRole("button", { name: /^Apply$/ })).toBeEnabled();
     expect(readyApi.applyProfile).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Manage Skills" }));
+    const localSkills = await screen.findByRole("region", { name: "Local Skills Manager" });
+    expect(localSkills).toHaveTextContent("All local Skills");
+    expect(within(localSkills).queryByRole("combobox", { name: "Management scope" }))
+      .not.toBeInTheDocument();
+    fireEvent.click(within(localSkills).getByRole("button", { name: "Close library tool" }));
+    await waitFor(() => expect(readyApi.previewApply).toHaveBeenCalledTimes(2));
+    dialog = await screen.findByRole("dialog", { name: "Preview" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
 
     cleanup();
