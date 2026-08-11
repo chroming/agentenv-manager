@@ -5,7 +5,7 @@ const DEFAULT_SETTINGS: AgentEnvSettings = {
   locale: "system",
   conversationTerminal: "default",
   skillSyncMethod: "copy",
-  skillDeploymentPreferenceVersion: 1,
+  skillManagementFormatVersion: 1,
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,
   skillAutoCheckIntervalMinutes: 60,

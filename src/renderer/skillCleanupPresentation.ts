@@ -51,6 +51,7 @@ export const cleanupPresentationLabel = (state: SkillCleanupDisplayState) => {
   if (state === "copies-not-managed") return "Copies not managed";
   if (state === "local-changes-found") return "Local changes found";
   if (state === "managed-copy-changed") return "Managed copy changed";
+  if (state === "management-upgrade") return "Management upgrade";
   if (state === "outside-agentenv") return "Outside AgentEnv";
   if (state === "shared-copy-needs-decisions") return "Needs Agent choices";
   if (state === "shared-copy-ready-to-move") return "Ready to move out of shared folder";
@@ -65,6 +66,7 @@ export const cleanupPresentationCompactLabel = (state: SkillCleanupDisplayState)
   if (state === "unavailable") return "Unavailable";
   if (state === "multiple-versions") return "Multiple versions";
   if (state === "local-changes-found" || state === "managed-copy-changed") return "Changed";
+  if (state === "management-upgrade") return "Upgrade";
   if (state === "outside-agentenv") return "Outside";
   if (state === "shared-copy-needs-decisions") return "Needs choice";
   if (state === "shared-copy-ready-to-move") return "Ready";
@@ -83,6 +85,7 @@ export const cleanupPresentationChipClass = (state: SkillCleanupDisplayState) =>
   if (state === "outside-agentenv") return "outside";
   if (state === "multiple-versions" || state === "local-changes-found") return "conflict";
   if (state === "managed-copy-changed") return "stale";
+  if (state === "management-upgrade") return "pending";
   if (state === "shared-copy-needs-decisions") return "pending";
   if (state === "duplicate-copies") return "library";
   if (state === "unavailable") return "stale";
@@ -120,6 +123,7 @@ export const cleanupEffectLabel = (effect: SkillCleanupAutomaticEffect) => {
   if (effect === "import-shared") return "Save shared copy and remove duplicates";
   if (effect === "move-shared-to-agents") return "Move Skills out of shared folder";
   if (effect === "adopt-managed-copy") return "Adopt matching copies";
+  if (effect === "migrate-legacy-ownership") return "Move legacy ownership into AgentEnv data";
   if (effect === "replace-with-managed-copy") return "Back up and replace local copies";
   if (effect === "refresh-managed-copy") return "Refresh managed copies";
   return "Remove unavailable links";

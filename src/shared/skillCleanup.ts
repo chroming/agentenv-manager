@@ -23,6 +23,7 @@ export type SkillCleanupAutomaticEffect =
   | "import-shared"
   | "move-shared-to-agents"
   | "adopt-managed-copy"
+  | "migrate-legacy-ownership"
   | "replace-with-managed-copy"
   | "refresh-managed-copy"
   | "remove-broken-link";
@@ -34,6 +35,7 @@ export type SkillCleanupDisplayState =
   | "copies-not-managed"
   | "local-changes-found"
   | "managed-copy-changed"
+  | "management-upgrade"
   | "outside-agentenv"
   | "shared-copy-needs-decisions"
   | "shared-copy-ready-to-move"
@@ -252,6 +254,14 @@ export const buildSkillCleanupGroups = (
       const allLeftUnmanaged = activeItems.length === 0;
       const allManaged =
         activeItems.length > 0 && activeItems.every((item) => item.status === "managed");
+      const hasLegacyOwnershipMarkers = activeItems.some(
+        (item) => (item.legacyOwnershipMarkerPaths?.length ?? 0) > 0
+      );
+      const legacyOwnershipMigrationReady =
+        hasLegacyOwnershipMarkers &&
+        activeItems
+          .filter((item) => (item.legacyOwnershipMarkerPaths?.length ?? 0) > 0)
+          .every((item) => item.legacyOwnershipMigrationReady === true);
       const staleManaged = activeItems.some(
         (item) => item.status === "managed" && item.contentMatchesLibrary === false
       );
@@ -408,14 +418,18 @@ export const buildSkillCleanupGroups = (
       const resolution: SkillCleanupResolution =
         sharedCopyWaiting
           ? "automatic"
-          : state === "left-unmanaged" || state === "managed"
-            ? "resolved"
-            : canRemoveBrokenLinks ||
-                canImportSharedCopies ||
-                canNormalizeToLibrary ||
-                canImportStandalone
-                ? "automatic"
-                : sharedMigrationNeedsAction
+          : legacyOwnershipMigrationReady && canNormalizeToLibrary
+            ? "automatic"
+            : hasLegacyOwnershipMarkers
+              ? "manual"
+              : state === "left-unmanaged" || state === "managed"
+                ? "resolved"
+                : canRemoveBrokenLinks ||
+                    canImportSharedCopies ||
+                    canNormalizeToLibrary ||
+                    canImportStandalone
+                  ? "automatic"
+                  : sharedMigrationNeedsAction
                   ? "manual"
                   : state === "outside" || state === "conflict" || state === "stale" || state === "broken" || missingTarget
                     ? "manual"
@@ -425,6 +439,8 @@ export const buildSkillCleanupGroups = (
           ? undefined
           : sharedCopyWaiting
             ? "move-shared-to-agents"
+            : legacyOwnershipMigrationReady && hasLibraryCopy
+              ? "migrate-legacy-ownership"
             : canRemoveBrokenLinks
             ? "remove-broken-link"
             : canImportSharedCopies
@@ -449,6 +465,8 @@ export const buildSkillCleanupGroups = (
       const resolutionReason =
         sharedCopyWaiting
           ? "AgentEnv can preserve the current Skill use, prepare affected Agents, and move the shared copy in one reviewed cleanup."
+          : hasLegacyOwnershipMarkers && resolution === "automatic"
+            ? "AgentEnv can move legacy ownership records into private Target state and remove marker files without changing Skill content or deployment topology."
           : resolution === "resolved"
             ? state === "left-unmanaged"
               ? "AgentEnv will observe this location but will not change it."
@@ -510,6 +528,10 @@ export const buildSkillCleanupGroups = (
                             : { state: "not-in-library", action: "add-to-library" }
                         : staleManaged
                           ? { state: "managed-copy-changed", action: "review-drift" }
+                          : legacyOwnershipMigrationReady
+                            ? { state: "management-upgrade", action: "manage-copies" }
+                          : hasLegacyOwnershipMarkers
+                            ? { state: "outside-agentenv", action: "review-paths" }
                           : allManaged
                             ? { state: "managed", action: "none" }
                             : state === "conflict"
@@ -616,7 +638,11 @@ export const automaticSkillCleanupRequest = (
       !item.sharedLocation &&
       item.status !== "left-unmanaged" &&
       !isObserveOnlySkill(item) &&
-      (item.status !== "managed" || item.contentMatchesLibrary === false)
+      (
+        item.status !== "managed" ||
+        item.contentMatchesLibrary === false ||
+        (item.legacyOwnershipMarkerPaths?.length ?? 0) > 0
+      )
   );
   if (locations.length === 0 || locations.some((item) => !item.foundIn[0])) {
     return undefined;

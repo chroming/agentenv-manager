@@ -54,8 +54,11 @@ export const createSkillManagerNavigation = ({
   return {
     openAll: async () => {
       setReturnContext(undefined);
+      setFeedbackWorkspace("library");
+      setLibraryMode("skills");
       setScope({ kind: "all" });
       setActiveTool("discoveries");
+      openWorkspace("library");
       await refreshInventory("manual");
     },
     openTarget: (targetId: string) => {

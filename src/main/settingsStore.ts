@@ -10,8 +10,7 @@ export const SettingsSchema = z.object({
   locale: z.enum(["system", "en", "zh_CN", "zh_TW"]).default("system"),
   conversationTerminal: z.enum(["default", "ghostty"]).default("default"),
   skillSyncMethod: z.enum(["symlink", "copy", "auto"]).default("copy"),
-  skillDeploymentPreferenceVersion: z.literal(1).optional(),
-  skillDeploymentReviewPending: z.boolean().optional(),
+  skillManagementFormatVersion: z.literal(1).optional(),
   skillStorageLocation: z.enum(["appData", "agents"]).default("appData"),
   skillAutoCheckEnabled: z.boolean().default(true),
   skillAutoCheckIntervalMinutes: z.number().int().min(5).max(1440).default(60),
@@ -36,7 +35,7 @@ const DEFAULT_SETTINGS: AgentEnvSettings = {
   locale: "system",
   conversationTerminal: "default",
   skillSyncMethod: "copy",
-  skillDeploymentPreferenceVersion: 1,
+  skillManagementFormatVersion: 1,
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,
   skillAutoCheckIntervalMinutes: 60,
@@ -172,7 +171,7 @@ export const createSettingsStore = (
     return /^[A-Za-z0-9._+-]+$/.test(expanded) ? expanded : undefined;
   };
   const normalizeEnabledTargets = (settings: AgentEnvSettings): AgentEnvSettings => {
-    const legacySkillDeploymentPreference = settings.skillDeploymentPreferenceVersion !== 1;
+    const legacySkillManagementFormat = settings.skillManagementFormatVersion !== 1;
     const enabledTargetIds =
       settings.enabledTargetIds ??
       (options.supportedTargetIds ? [...new Set(options.supportedTargetIds)] : undefined);
@@ -207,10 +206,9 @@ export const createSettingsStore = (
       ...(settings.skillSyncMethod === "auto"
         ? { skillSyncMethod: "copy" as const }
         : {}),
-      ...(legacySkillDeploymentPreference
+      ...(legacySkillManagementFormat
         ? {
-            skillDeploymentPreferenceVersion: 1 as const,
-            skillDeploymentReviewPending: true
+            skillManagementFormatVersion: 1 as const
           }
         : {}),
       ...(settings.telemetryEnabled === false && settings.telemetryConsentVersion === undefined

@@ -152,6 +152,44 @@ describe("activation service v2", () => {
     await expect(createBackupStore(paths).listBackups()).resolves.toHaveLength(1);
   });
 
+  it("migrates legacy Skill ownership during Apply without converting its existing topology", async () => {
+    const { paths, service, skillLibraryStore } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const targetSkill = join(paths.codexHome, "skills", "review");
+    const librarySkill = (await skillLibraryStore.listSkills()).find((skill) => skill.id === "review");
+    if (!librarySkill) throw new Error("Expected review in the Skill Library");
+    await mkdir(join(paths.codexHome, "skills"), { recursive: true });
+    await symlink(librarySkill.path, targetSkill, "dir");
+    const sidecar = `${targetSkill}.agentenv-owner.json`;
+    await writeFile(sidecar, JSON.stringify({
+      owner: "agentenv-manager",
+      profileId: "older-profile",
+      targetId: "codex",
+      kind: "skill",
+      source: "skills-library/older-review"
+    }));
+
+    const preview = await service.previewProfile("daily-coding", "codex");
+
+    expect(preview.resourceChanges).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "skill", action: "replace", path: targetSkill })
+    ]));
+    expect((await service.applyProfile("daily-coding", preview.id)).ok).toBe(true);
+    expect((await lstat(targetSkill)).isSymbolicLink()).toBe(true);
+    await expect(readlink(targetSkill)).resolves.toBe(librarySkill.path);
+    await expect(access(sidecar)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      readFile(join(paths.targetStatesDir, "codex.json"), "utf8").then(JSON.parse)
+    ).resolves.toMatchObject({
+      managedResources: expect.arrayContaining([
+        expect.objectContaining({
+          path: targetSkill,
+          materialization: "link"
+        })
+      ])
+    });
+  });
+
   it("reviews and removes an unselected directory that declares the selected runtime Skill name", async () => {
     const { paths, service } = await makeEnv();
     await writeCodexLiveFiles(paths);

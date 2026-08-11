@@ -15,7 +15,7 @@ afterEach(async () => {
 });
 
 describe("settings store", () => {
-  it("migrates the legacy Auto deployment preference to Managed copy", async () => {
+  it("migrates legacy Auto to Managed copy and records the current management format", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-settings-auto-"));
     const appDataRoot = join(root, "app-data");
     const paths = createPaths({ appDataRoot, homeDir: join(root, "home") });
@@ -27,9 +27,24 @@ describe("settings store", () => {
     const settings = await createSettingsStore(paths).readSettings();
 
     expect(settings.skillSyncMethod).toBe("copy");
-    expect(settings.skillDeploymentReviewPending).toBe(true);
+    expect(settings.skillManagementFormatVersion).toBe(1);
     await expect(readFile(join(appDataRoot, "settings.json"), "utf8"))
       .resolves.toContain('"skillSyncMethod": "copy"');
+  });
+
+  it("preserves an existing Live link preference during management-format migration", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-settings-live-link-"));
+    const appDataRoot = join(root, "app-data");
+    const paths = createPaths({ appDataRoot, homeDir: join(root, "home") });
+    await mkdir(appDataRoot, { recursive: true });
+    await writeFile(join(appDataRoot, "settings.json"), JSON.stringify({
+      skillSyncMethod: "symlink"
+    }), "utf8");
+
+    const settings = await createSettingsStore(paths).readSettings();
+
+    expect(settings.skillSyncMethod).toBe("symlink");
+    expect(settings.skillManagementFormatVersion).toBe(1);
   });
 
   it("persists project discovery roots without changing Library storage", async () => {
@@ -51,7 +66,7 @@ describe("settings store", () => {
       locale: "system",
       conversationTerminal: "default",
       skillSyncMethod: "copy",
-      skillDeploymentPreferenceVersion: 1,
+      skillManagementFormatVersion: 1,
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
       skillAutoCheckIntervalMinutes: 60,
@@ -66,7 +81,7 @@ describe("settings store", () => {
       locale: "zh_TW",
       conversationTerminal: "ghostty",
       skillSyncMethod: "copy",
-      skillDeploymentPreferenceVersion: 1,
+      skillManagementFormatVersion: 1,
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: false,
       skillAutoCheckIntervalMinutes: 120,
@@ -81,7 +96,7 @@ describe("settings store", () => {
       locale: "zh_TW",
       conversationTerminal: "ghostty",
       skillSyncMethod: "copy",
-      skillDeploymentPreferenceVersion: 1,
+      skillManagementFormatVersion: 1,
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: false,
       skillAutoCheckIntervalMinutes: 120,
@@ -116,7 +131,7 @@ describe("settings store", () => {
       appUpdateInstallOnQuit: true,
       telemetryEnabled: true
     });
-    expect(settings.skillDeploymentReviewPending).toBe(true);
+    expect(settings.skillManagementFormatVersion).toBe(1);
     expect(JSON.parse(await readFile(join(paths.appDataRoot, "settings.json"), "utf8")))
       .toMatchObject({
         appUpdateAutoCheckEnabled: true,

@@ -1001,6 +1001,8 @@ export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   runtimeScope?: SkillRuntimeScope;
   runtimeOwner?: SkillRuntimeOwner;
   managedByTarget?: boolean;
+  legacyOwnershipMarkerPaths?: string[];
+  legacyOwnershipMigrationReady?: boolean;
   runtimeAvailability?: SkillRuntimeAvailability;
   runtimeConfidence?: SkillRuntimeConfidence;
   runtimeIssues?: SkillRuntimeIssue[];
@@ -1287,8 +1289,7 @@ export interface AgentEnvSettings {
   locale: AppLocale;
   conversationTerminal: "default" | "ghostty";
   skillSyncMethod: SkillSyncMethod;
-  skillDeploymentPreferenceVersion?: 1;
-  skillDeploymentReviewPending?: boolean;
+  skillManagementFormatVersion?: 1;
   skillStorageLocation: SkillStorageLocation;
   skillAutoCheckEnabled: boolean;
   skillAutoCheckIntervalMinutes: number;
