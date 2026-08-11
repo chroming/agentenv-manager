@@ -62,7 +62,7 @@ import { normalizeSkillKey } from "../shared/skillIdentity";
 import { managedResourceOrigin } from "../shared/managedResource";
 import { pathEntryExists, pathExists, replacePathAtomically, writeAtomic } from "./fileUtils";
 import {
-  isAgentEnvOwnedDir,
+  legacyOwnerMarkerPathsFor,
   markerPathFor,
   markerPathForFile
 } from "./ownershipMarkers";
@@ -146,6 +146,8 @@ import {
 } from "./githubSkillClient";
 import { isPathInside, pathsEqual } from "./platformPaths";
 import { mergeInventoryLocation } from "./skillInventoryLocation";
+import { canPreserveLegacySkillTopology, legacyOwnedLibraryId,
+  legacySkillOwnershipMigrationReady, protectedLegacySkillMarkerPaths } from "./skillLegacyOwnershipMigration";
 import { createSkillPolicyStore } from "./skillPolicyStore";
 import {
   createRecentSkillUpdateCheckStore,
@@ -807,22 +809,6 @@ export const createSkillLibraryStore = (
     return result;
   };
 
-  const ownedLibraryId = async (skillDir: string) => {
-    const skillStats = await lstat(skillDir).catch(() => undefined);
-    const marker = await readJsonIfExists<Record<string, unknown>>(
-      skillStats?.isSymbolicLink() ? markerPathForFile(skillDir) : markerPathFor(skillDir)
-    );
-    if (
-      marker?.owner === "agentenv-manager" &&
-      marker.kind === "skill" &&
-      typeof marker.source === "string" &&
-      marker.source.startsWith("skills-library/")
-    ) {
-      return marker.source.slice("skills-library/".length);
-    }
-    return undefined;
-  };
-
   const scanInventory = async (
     targetPaths: TargetPaths[],
     knownLibrarySkills?: SkillLibraryEntry[]
@@ -883,6 +869,10 @@ export const createSkillLibraryStore = (
         const location = target.skillLocations?.find(
           (item) => resolve(item.path) === resolve(observation.locationPath)
         );
+        const legacyOwnershipMarkerPaths = await legacyOwnerMarkerPathsFor(skillDir, {
+          targetId: target.targetId,
+          kind: "skill"
+        });
         const unreadable = observation.issues.some((issue) => issue.code === "unreadable-skill");
         if (unreadable) {
           const unmanagedLocation = unmanagedLocationFor(
@@ -897,7 +887,7 @@ export const createSkillLibraryStore = (
           const externalEvidence = evidence
             ? { ...evidence, confidence: "confirmed" as const, state: "broken-link" as const }
             : observation.externalEvidence;
-          const status = managedResource
+          const status = managedResource || legacyOwnershipMarkerPaths.length > 0
             ? "managed"
             : unmanagedLocation
               ? "left-unmanaged"
@@ -928,12 +918,13 @@ export const createSkillLibraryStore = (
             deploymentName,
             version: observation.version,
             runtimeScope: observation.scope,
-            runtimeOwner: managedResource
+            runtimeOwner: managedResource || legacyOwnershipMarkerPaths.length > 0
               ? "agentenv"
               : externalEvidence
                 ? "external"
                 : observation.owner,
-            managedByTarget: Boolean(managedResource),
+            managedByTarget: Boolean(managedResource) || legacyOwnershipMarkerPaths.length > 0,
+            legacyOwnershipMarkerPaths,
             runtimeAvailability: observation.availability,
             runtimeConfidence: observation.confidence,
             runtimeIssues: observation.issues,
@@ -960,7 +951,7 @@ export const createSkillLibraryStore = (
 
         const content = await readFile(join(skillDir, "SKILL.md"), "utf8");
         const frontmatter = parseSkillFrontmatter(content);
-        const ownedId = await ownedLibraryId(skillDir);
+        const ownedId = await legacyOwnedLibraryId(skillDir);
         const receiptLibraryId = managedResource?.source?.startsWith("skills-library/")
           ? managedResource.source.slice("skills-library/".length)
           : undefined;
@@ -969,10 +960,7 @@ export const createSkillLibraryStore = (
           : ownedId && libraryIds.has(ownedId)
             ? ownedId
             : undefined;
-        const agentEnvOwned = await isAgentEnvOwnedDir(skillDir, {
-          targetId: target.targetId,
-          kind: "skill"
-        });
+        const agentEnvOwned = legacyOwnershipMarkerPaths.length > 0;
         const managedByAgentEnv = Boolean(managedResource) || agentEnvOwned || Boolean(markerId);
         const unmanagedLocation = unmanagedLocationFor(
           target.targetId,
@@ -1029,6 +1017,13 @@ export const createSkillLibraryStore = (
         const skillDirStats = await lstat(skillDir);
         const skillFileLinkStats = await lstat(join(skillDir, "SKILL.md"));
         const skillFileStats = await stat(join(skillDir, "SKILL.md"));
+        const contentMatchesLibrary = libraryId
+          ? libraryById.get(libraryId)?.contentHash === contentHash
+          : undefined;
+        const linkedInstall = skillDirStats.isSymbolicLink() || skillFileLinkStats.isSymbolicLink();
+        const libraryCanonicalPath = libraryId
+          ? await realpath(libraryById.get(libraryId)?.path ?? "").catch(() => undefined)
+          : undefined;
         byKey.set(key, {
           id: deploymentName,
           name: observation.runtimeName,
@@ -1049,6 +1044,14 @@ export const createSkillLibraryStore = (
               ? "external"
               : observation.owner,
           managedByTarget: Boolean(managedResource) || agentEnvOwned,
+          legacyOwnershipMarkerPaths,
+          legacyOwnershipMigrationReady: legacySkillOwnershipMigrationReady({
+            markerPaths: legacyOwnershipMarkerPaths,
+            contentMatchesLibrary: contentMatchesLibrary === true,
+            linkedInstall,
+            canonicalPath,
+            libraryCanonicalPath
+          }),
           runtimeAvailability: observation.availability,
           runtimeConfidence: observation.confidence,
           runtimeIssues: observation.issues,
@@ -1064,15 +1067,11 @@ export const createSkillLibraryStore = (
           unmanagedCoverage: unmanagedLocation?.coverage,
           collectionDecision: collectionDecision?.decision,
           installMethod: managedByAgentEnv
-            ? skillDirStats.isSymbolicLink() || skillFileLinkStats.isSymbolicLink()
+            ? linkedInstall
               ? "linked"
               : "copied"
             : undefined,
-          contentMatchesLibrary: markerId
-            ? libraryById.get(markerId)?.contentHash === contentHash
-            : libraryId
-              ? libraryById.get(libraryId)?.contentHash === contentHash
-              : undefined,
+          contentMatchesLibrary,
           externalEvidence,
           locationRole: observation.locationRole,
           sharedLocation: observation.shared,
@@ -1106,7 +1105,7 @@ export const createSkillLibraryStore = (
             continue;
           }
           const skillDir = join(scanRoot, entry.name);
-          if ((await ownedLibraryId(skillDir)) === safeId) {
+          if ((await legacyOwnedLibraryId(skillDir)) === safeId) {
             matches.add(skillDir);
           }
         }
@@ -2059,6 +2058,8 @@ export const createSkillLibraryStore = (
     }
 
     const uniqueLocations = [...new Map(locations.map((item) => [item.targetDir, item])).values()];
+    const markerPathsFor = (location: typeof uniqueLocations[number]) =>
+      protectedLegacySkillMarkerPaths(location.targetDir, location.legacyOwnershipMarkerPaths);
     const stateFilesByTarget = await readTargetStateFiles(
       targetStateRepository,
       uniqueLocations.map((location) => location.targetPaths.targetId)
@@ -2085,10 +2086,18 @@ export const createSkillLibraryStore = (
       }
       const backupPath = join(backupDir, "locations", `${index}-${basename(location.targetDir)}`);
       await copyCleanupEntry(entries, location.targetDir, backupPath);
-      const markerPath = markerPathForFile(location.targetDir);
-      if (await pathEntryExists(markerPath)) {
-        const markerBackupPath = `${backupPath}.agentenv-owner.json`;
-        await copyCleanupEntry(entries, markerPath, markerBackupPath);
+      for (const [markerIndex, markerPath] of markerPathsFor(location).entries()) {
+        if (
+          isPathInside(location.targetDir, markerPath) ||
+          !(await pathEntryExists(markerPath))
+        ) {
+          continue;
+        }
+        await copyCleanupEntry(
+          entries,
+          markerPath,
+          `${backupPath}.agentenv-owner-${markerIndex}.json`
+        );
       }
     }
     for (const [index, stateFile] of [...stateFilesByTarget.values()].entries()) {
@@ -2116,7 +2125,7 @@ export const createSkillLibraryStore = (
       expectedPaths: await snapshotCleanupPaths([
         ...uniqueLocations.flatMap((location) => [
           location.targetDir,
-          markerPathForFile(location.targetDir)
+          ...markerPathsFor(location)
         ]),
         ...[...stateFilesByTarget.values()].map((stateFile) => stateFile.path),
         ...(libraryCreated || replaceLibrary ? [targetLibraryDir] : [])
@@ -2158,15 +2167,27 @@ export const createSkillLibraryStore = (
           ? stats.isSymbolicLink()
           : !stats.isSymbolicLink();
         const contentMatches = await computeContentHash(location.targetDir) === libraryContentHash;
-        if (contentMatches && topologyMatches) {
+        const preservesLegacyTopology = await canPreserveLegacySkillTopology(
+          location.targetDir,
+          targetLibraryDir,
+          location.legacyOwnershipMarkerPaths
+        );
+        if (contentMatches && (topologyMatches || preservesLegacyTopology)) {
           originsByPath.set(
             resolve(location.targetDir),
             previous ? managedResourceOrigin(previous) : "adopted"
           );
-          await claimPath(stateFile.path);
+          await claimPath(
+            stateFile.path,
+            ...markerPathsFor(location)
+          );
           continue;
         }
-        await claimPath(location.targetDir, markerPathForFile(location.targetDir), stateFile.path);
+        await claimPath(
+          location.targetDir,
+          ...markerPathsFor(location),
+          stateFile.path
+        );
         await deployLibrarySkill({
           libraryId: safeLibraryId,
           targetName: basename(location.targetDir),
@@ -2188,6 +2209,12 @@ export const createSkillLibraryStore = (
         originsByPath,
         recordMutation: claimPath.recordMutation
       });
+      for (const markerPath of uniqueLocations.flatMap(
+        (location) => location.legacyOwnershipMarkerPaths ?? []
+      )) {
+        await rm(markerPath, { force: true });
+        await claimPath.recordMutation(markerPath);
+      }
       await setCleanupStatus(manifest, "complete");
       return {
         backupId,

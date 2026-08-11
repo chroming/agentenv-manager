@@ -592,7 +592,8 @@ const launchApp = async (
     workspaceFixture?: boolean;
     sharedSkillFixture?: boolean;
     legacyUnmanagedSkillDecision?: boolean;
-    legacySkillDeploymentPreference?: boolean;
+    legacySkillManagementMarker?: boolean;
+    omitUnmanagedTargetSkill?: boolean;
     initialWorkspace?: "library" | "profiles" | "conversations" | "targets" | "settings" | null;
   } = {}
 ) => {
@@ -627,9 +628,9 @@ const launchApp = async (
     locale: "system",
     conversationTerminal: "default",
     skillSyncMethod: "symlink",
-    ...(options.legacySkillDeploymentPreference
+    ...(options.legacySkillManagementMarker
       ? {}
-      : { skillDeploymentPreferenceVersion: 1 }),
+      : { skillManagementFormatVersion: 1 }),
     skillStorageLocation: "appData",
     skillAutoCheckEnabled: true,
     skillAutoCheckIntervalMinutes: 60,
@@ -796,6 +797,18 @@ const launchApp = async (
     ].join("\n"), "utf8");
   }
   const librarySkill = await writeLibrarySkill(appDataRoot);
+  if (options.legacySkillManagementMarker) {
+    const legacySkillDir = join(opencodeDir, "skills", "shared-reviewer");
+    await mkdir(dirname(legacySkillDir), { recursive: true });
+    await symlink(librarySkill.libraryDir, legacySkillDir, "dir");
+    await writeJson(`${legacySkillDir}.agentenv-owner.json`, {
+      owner: "agentenv-manager",
+      profileId: "legacy-profile",
+      targetId: "opencode",
+      kind: "skill",
+      source: "skills-library/shared-reviewer"
+    });
+  }
   if (options.openCodeAlphaLibrarySkillCount) {
     await addOpenCodeAlphaLibrarySkills(appDataRoot, options.openCodeAlphaLibrarySkillCount);
   }
@@ -816,7 +829,9 @@ const launchApp = async (
     });
   }
   await writeGitHubFixtureSkill(githubFixtureRoot, "v1");
-  await writeUnmanagedTargetSkill(opencodeDir);
+  if (!options.omitUnmanagedTargetSkill) {
+    await writeUnmanagedTargetSkill(opencodeDir);
+  }
   if (options.legacyUnmanagedSkillDecision) {
     const legacySkillPath = join(
       opencodeDir,
@@ -1449,30 +1464,50 @@ describe("Electron UI profile switching e2e", () => {
     ).toEqual([]);
   }, standardElectronTestTimeout);
 
-  it("asks an upgraded device to choose a deployment default without changing Agent files", async () => {
-    const { appDataRoot, opencodeDir, page } = await launchApp({
+  it("routes validated legacy ownership into reversible cleanup without changing deployment topology", async () => {
+    const { appDataRoot, librarySkill, opencodeDir, page } = await launchApp({
       initialWorkspace: null,
-      legacySkillDeploymentPreference: true
+      legacySkillManagementMarker: true,
+      omitUnmanagedTargetSkill: true
     });
-    const beforeEntries = await readdir(opencodeDir);
-    const dialog = page.getByRole("dialog", { name: "Choose Skill deployment" });
+    const targetSkill = join(opencodeDir, "skills", "shared-reviewer");
+    const sidecar = `${targetSkill}.agentenv-owner.json`;
+    const before = await lstat(targetSkill);
+    const dialog = page.getByRole("dialog", { name: "Upgrade Skill management" });
     await dialog.waitFor({ state: "visible", timeout: 10_000 });
-    const managedCopy = dialog.getByRole("radio", { name: /Managed copy/ });
-    await managedCopy.waitFor({ state: "visible", timeout: 10_000 });
-    await managedCopy.click();
-    const confirm = dialog.getByRole("button", { name: "Use this deployment" });
-    await confirm.waitFor({ state: "visible", timeout: 10_000 });
-    await confirm.click();
+    await expect.poll(() => dialog.textContent()).toContain("1 legacy ownership files need review");
+    await dialog.getByRole("button", { name: "Review local Skills" }).click();
     await dialog.waitFor({ state: "hidden", timeout: 15_000 });
+    const manager = page.getByRole("region", { name: "Local Skills Manager" });
+    await manager.waitFor({ state: "visible" });
+    const group = manager.getByRole("group", { name: "Cleanup group shared-reviewer" });
+    await group.waitFor({ state: "visible" });
+    await expect.poll(() => group.textContent()).toContain("Ready");
+    await manager.getByRole("button", { name: /Manage 1 eligible Skill/ }).click();
+    const cleanupDialog = page.getByRole("dialog", { name: "Manage eligible local Skills" });
+    await expect.poll(() => cleanupDialog.textContent()).toContain("Move legacy ownership into AgentEnv data");
+    await cleanupDialog.getByRole("button", { name: /Manage 1 skill/ }).click();
+    await expect.poll(() => cleanupDialog.getByRole("button", { name: "Close" }).isEnabled())
+      .toBe(true);
+    await cleanupDialog.getByRole("button", { name: "Close" }).click();
 
-    await expect.poll(async () =>
-      JSON.parse(await readFile(join(appDataRoot, "settings.json"), "utf8"))
-    ).toMatchObject({
-      skillSyncMethod: "copy",
-      skillDeploymentPreferenceVersion: 1,
-      skillDeploymentReviewPending: false
+    await expect.poll(() => fileExists(sidecar)).toBe(false);
+    expect((await lstat(targetSkill)).isSymbolicLink()).toBe(true);
+    expect((await lstat(targetSkill)).mtimeMs).toBe(before.mtimeMs);
+    await expect(readlink(targetSkill)).resolves.toBe(librarySkill.libraryDir);
+    await expect(readFile(join(appDataRoot, "settings.json"), "utf8").then(JSON.parse))
+      .resolves.toMatchObject({
+        skillSyncMethod: "symlink",
+        skillManagementFormatVersion: 1
+      });
+    await expect(readFile(join(appDataRoot, "target-states", "opencode.json"), "utf8").then(JSON.parse))
+      .resolves.toMatchObject({
+        managedResources: [expect.objectContaining({
+          path: targetSkill,
+          materialization: "link",
+          origin: "adopted"
+        })]
     });
-    expect(await readdir(opencodeDir)).toEqual(beforeEntries);
   }, standardElectronTestTimeout);
 
   it("opens Agents first and routes shared environment review into its conditional cleanup", async () => {
@@ -7379,7 +7414,7 @@ describe("Electron UI profile switching e2e", () => {
       expect(geometry.actionLabelForeground).toBe(geometry.primaryForeground);
       expect(geometry.actionRightAligned).toBe(true);
       expect(geometry.actionVerticallyCentered).toBe(true);
-      expect(geometry.managedMarkerVisibility).toBe("hidden");
+      expect(geometry.managedMarkerVisibility).not.toBe("visible");
       expect(stacked ? geometry.actionBelowCopy : geometry.actionAfterCopy).toBe(true);
       expect(
         geometry.rows.every(

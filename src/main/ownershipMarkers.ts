@@ -53,19 +53,23 @@ const isAgentEnvOwnedMarker = async (
   }
 };
 
-export const isAgentEnvOwnedDir = async (
+export const legacyOwnerMarkerPathsFor = async (
   targetDir: string,
   expected: OwnedDirExpectation
 ) => {
   const stats = await lstat(targetDir).catch(() => undefined);
-  if (stats?.isSymbolicLink()) {
-    return isAgentEnvOwnedMarker(markerPathForFile(targetDir), expected);
-  }
-  return (
-    (await isAgentEnvOwnedMarker(markerPathFor(targetDir), expected)) ||
-    (await isAgentEnvOwnedMarker(markerPathForFile(targetDir), expected))
-  );
+  const candidates = stats?.isSymbolicLink()
+    ? [markerPathForFile(targetDir)]
+    : [markerPathFor(targetDir), markerPathForFile(targetDir)];
+  return (await Promise.all(candidates.map(async (path) =>
+    (await isAgentEnvOwnedMarker(path, expected)) ? path : undefined
+  ))).filter((path): path is string => Boolean(path));
 };
+
+export const isAgentEnvOwnedDir = async (
+  targetDir: string,
+  expected: OwnedDirExpectation
+) => (await legacyOwnerMarkerPathsFor(targetDir, expected)).length > 0;
 
 export const isAgentEnvOwnedFile = async (
   targetFile: string,

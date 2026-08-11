@@ -109,7 +109,7 @@ import {
 import { DiagnosticSettingsSection } from "./components/DiagnosticSettingsSection";
 import { AppUpdateSettings } from "./components/AppUpdateSettings";
 import { TelemetryConsentDialog } from "./components/TelemetryConsentDialog";
-import { SkillDeploymentUpgradeDialog } from "./components/SkillDeploymentUpgradeDialog";
+import { SkillManagementMigrationDialog } from "./components/SkillManagementMigrationDialog";
 import { TelemetrySettings } from "./components/TelemetrySettings";
 import { BackupManagerDialog } from "./components/BackupManagerDialog";
 import { DataSettingsSection } from "./components/DataSettingsSection";
@@ -168,7 +168,7 @@ import {
 } from "./libraryUpdateState";
 import { runSkillImportQueue } from "./skillImportQueue";
 import { useSkillUpdateActivity, type SkillUpdateActivity } from "./skillUpdateActivity";
-import { useSkillDeploymentUpgrade } from "./hooks/useSkillDeploymentUpgrade";
+import { useSkillManagementMigration } from "./hooks/useSkillManagementMigration";
 import {
   Button,
   ControlGroup,
@@ -490,12 +490,10 @@ const AppContent = ({
     onAccepted: settingsController.actions.accept,
     onError: setError
   });
-  const skillDeploymentUpgrade = useSkillDeploymentUpgrade({
+  const skillManagementMigration = useSkillManagementMigration({
     inventory: skillInventory,
-    isLoading,
-    settings: skillSettings,
-    telemetryOpen: telemetryConsent.open,
-    updateSettings: updateSkillSettings
+    isLoading: isLoading || environmentScanStatus === "checking",
+    telemetryOpen: telemetryConsent.open
   });
   const { activity: skillUpdateActivity, activityRef: skillUpdateActivityRef,
     begin: beginSkillUpdateActivity, finish: finishSkillUpdateActivity
@@ -1647,7 +1645,7 @@ const AppContent = ({
   const appModalOpen = Boolean(
     pendingSkillImport || pendingProfileAction || profileDialogMode || deleteProfileCandidateId ||
     profileRecoveryMode || dataRestorePreview || backupManagerOpen ||
-    telemetryConsent.blocksAgentSuggestions || skillDeploymentUpgrade.open
+    telemetryConsent.blocksAgentSuggestions || skillManagementMigration.open
   );
   const {
     agentProbeComplete, allowSuggestionPreferences, detectedDisabledAgents,
@@ -4740,7 +4738,11 @@ const AppContent = ({
           onDismiss={telemetryConsent.dismiss}
           onDecide={telemetryConsent.decide}
         />
-        <SkillDeploymentUpgradeDialog busy={busy} {...skillDeploymentUpgrade} />
+        <SkillManagementMigrationDialog
+          busy={busy}
+          {...skillManagementMigration}
+          onReview={() => { skillManagementMigration.onReview(); void openSkillDiscoveries(); }}
+        />
         <AgentDiscoveryDialog
           agents={visibleAgentSuggestions}
           allowSuggestionPreferences={allowSuggestionPreferences}

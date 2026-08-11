@@ -70,7 +70,7 @@ describe("Conversations desktop workflow", () => {
         locale: "en",
         conversationTerminal: "default",
         skillSyncMethod: "auto",
-        skillDeploymentPreferenceVersion: 1,
+        skillManagementFormatVersion: 1,
         skillStorageLocation: "appData",
         skillAutoCheckEnabled: false,
         skillAutoCheckIntervalMinutes: 60,

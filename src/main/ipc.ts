@@ -629,7 +629,11 @@ export const registerIpcHandlers = ({
           `${skillKey} is loaded through collection link ${current.collectionLink.path}. Review the collection instead of changing a child path.`
         );
       }
-      return { targetPaths: target.paths, targetDir };
+      return {
+        targetPaths: target.paths,
+        targetDir,
+        legacyOwnershipMarkerPaths: current.legacyOwnershipMarkerPaths ?? []
+      };
     });
     if (input.mode === "shared-compatibility") {
       const requestedShared = input.sharedLocations ?? [];

@@ -74,9 +74,7 @@ export const SkillSettingsSection = ({
             onChange={(event) =>
               onChange({
                 skillSyncMethod:
-                  event.currentTarget.value as AgentEnvSettings["skillSyncMethod"],
-                skillDeploymentPreferenceVersion: 1,
-                skillDeploymentReviewPending: false
+                  event.currentTarget.value as AgentEnvSettings["skillSyncMethod"]
               })}
           >
             <option value="copy">{t("Managed copy (recommended)")}</option>

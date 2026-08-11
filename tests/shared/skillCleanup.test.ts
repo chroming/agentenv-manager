@@ -78,6 +78,59 @@ describe("skill cleanup groups", () => {
     expect(automaticSkillCleanupRequest(group)).toBeUndefined();
   });
 
+  it("makes validated legacy ownership markers a safe management-format upgrade", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        status: "managed",
+        libraryId: "reviewer",
+        contentMatchesLibrary: true,
+        installMethod: "linked",
+        legacyOwnershipMarkerPaths: [
+          "/tmp/opencode/skills/reviewer.agentenv-owner.json"
+        ],
+        legacyOwnershipMigrationReady: true
+      })
+    ]);
+
+    expect(group).toMatchObject({
+      resolution: "automatic",
+      bucket: "ready",
+      automaticEffect: "migrate-legacy-ownership",
+      presentation: { state: "management-upgrade", action: "manage-copies" }
+    });
+    expect(automaticSkillCleanupRequest(group)).toMatchObject({
+      skillKey: "reviewer",
+      libraryId: "reviewer",
+      libraryAction: "keep",
+      locations: [{
+        targetId: "opencode",
+        path: "/tmp/opencode/skills/reviewer"
+      }]
+    });
+  });
+
+  it("keeps a legacy link outside the canonical Library path in explicit review", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        status: "managed",
+        libraryId: "reviewer",
+        contentMatchesLibrary: true,
+        installMethod: "linked",
+        legacyOwnershipMarkerPaths: [
+          "/tmp/opencode/skills/reviewer.agentenv-owner.json"
+        ],
+        legacyOwnershipMigrationReady: false
+      })
+    ]);
+
+    expect(group).toMatchObject({
+      resolution: "manual",
+      bucket: "decision",
+      presentation: { state: "outside-agentenv", action: "review-paths" }
+    });
+    expect(automaticSkillCleanupRequest(group)).toBeUndefined();
+  });
+
   it("does not report two deployment aliases of one physical Skill as duplicate copies", () => {
     const [group] = buildSkillCleanupGroups([
       inventoryItem({

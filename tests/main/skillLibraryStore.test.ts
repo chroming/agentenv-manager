@@ -2372,6 +2372,76 @@ description: >
     });
   });
 
+  it("migrates a legacy ownership sidecar into Target state without changing a live link", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-legacy-owner-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const librarySource = join(root, "source", "reviewer");
+    const targetSkillsDir = join(root, "home", ".config", "opencode", "skills");
+    const targetLink = join(targetSkillsDir, "reviewer");
+    const targetPaths = {
+      targetId: "opencode",
+      configDir: dirname(targetSkillsDir),
+      instructionsPath: "",
+      configPath: "",
+      skillsDir: targetSkillsDir
+    };
+    await mkdir(librarySource, { recursive: true });
+    await writeFile(
+      join(librarySource, "SKILL.md"),
+      "---\nname: reviewer\n---\n# Same content\n",
+      "utf8"
+    );
+    const store = createSkillLibraryStore(paths);
+    await store.importSkill({ sourcePath: librarySource, id: "reviewer", sourceType: "local" });
+    const libraryDir = join(paths.skillsLibraryDir, "reviewer");
+    await mkdir(targetSkillsDir, { recursive: true });
+    await symlink(libraryDir, targetLink, "dir");
+    const sidecar = `${targetLink}.agentenv-owner.json`;
+    await writeFile(sidecar, JSON.stringify({
+      owner: "agentenv-manager",
+      profileId: "legacy-profile",
+      targetId: "opencode",
+      kind: "skill",
+      source: "skills-library/reviewer"
+    }), "utf8");
+    const before = await lstat(targetLink);
+
+    const inventory = await store.scanInventory([targetPaths]);
+    expect(inventory[0]).toMatchObject({
+      status: "managed",
+      libraryId: "reviewer",
+      legacyOwnershipMarkerPaths: [sidecar],
+      legacyOwnershipMigrationReady: true
+    });
+
+    await store.consolidateSkillGroup({
+      skillKey: "reviewer",
+      libraryId: "reviewer",
+      canonicalPath: targetLink,
+      locations: [{
+        targetPaths,
+        targetDir: targetLink,
+        legacyOwnershipMarkerPaths: inventory[0].legacyOwnershipMarkerPaths
+      }]
+    });
+
+    expect((await lstat(targetLink)).isSymbolicLink()).toBe(true);
+    expect((await lstat(targetLink)).mtimeMs).toBe(before.mtimeMs);
+    await expect(readlink(targetLink)).resolves.toBe(libraryDir);
+    await expect(access(sidecar)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      readFile(join(paths.targetStatesDir, "opencode.json"), "utf8")
+        .then((content) => JSON.parse(content))
+    ).resolves.toMatchObject({
+      managedResources: [expect.objectContaining({
+        path: targetLink,
+        materialization: "link",
+        origin: "adopted",
+        createdByAgentEnv: false
+      })]
+    });
+  });
+
   it("restores every changed location when a later cleanup deployment fails", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

@@ -9,11 +9,10 @@ import type {
 } from "../shared/types";
 import { profileManagesResource } from "../shared/profileResources";
 import { hashComparablePath } from "./activationProfileSupport";
-import { pathEntryExists, readTextIfExists } from "./fileUtils";
+import { pathEntryExists } from "./fileUtils";
 import { hashManagedResourcePath, hashPath } from "./managedResourceHashes";
 import {
-  createOwnerMarkerContent,
-  markerPathFor,
+  legacyOwnerMarkerPathsFor,
   markerPathForFile
 } from "./ownershipMarkers";
 import { isPathInside } from "./platformPaths";
@@ -193,23 +192,20 @@ export const planAssetResources = async (input: {
     if (resource) {
       const exists = !behindTransitionedRoot && await pathEntryExists(path);
       const stats = exists ? await lstat(path) : undefined;
-      const markerPaths = stats?.isDirectory()
-        ? [markerPathFor(path), markerPathForFile(path)]
-        : [markerPathForFile(path)];
-      const expectedMarker = createOwnerMarkerContent({
-        profileId: profile.id,
-        targetId: targetPaths.targetId,
-        kind: resource.resource.kind === "agent" ? "agent" : "skill",
-        source: resource.markerSource
-      });
       const contentMatches = exists &&
         (await hashComparablePath(resource.sourcePath)) === (await hashComparablePath(path));
       const matchingMarkerPaths = exists
-        ? (await Promise.all(markerPaths.map(async (markerPath) =>
-            (await readTextIfExists(markerPath)) === expectedMarker ? markerPath : undefined
-          ))).filter((markerPath): markerPath is string => Boolean(markerPath))
+        ? await legacyOwnerMarkerPathsFor(path, {
+            targetId: targetPaths.targetId,
+            kind: resource.resource.kind === "agent" ? "agent" : "skill"
+          })
         : [];
       if (contentMatches) {
+        if (matchingMarkerPaths.length > 0) {
+          legacyOwnershipMarkerPaths.push(...matchingMarkerPaths);
+          legacyOwnedResourcePaths.push(path);
+          continue;
+        }
         const shouldBeLinked = skillSyncMethod === "symlink";
         const topologyMatchesPolicy = shouldBeLinked
           ? stats?.isSymbolicLink() === true
@@ -222,18 +218,13 @@ export const planAssetResources = async (input: {
           });
           continue;
         }
-        legacyOwnershipMarkerPaths.push(...matchingMarkerPaths);
         const previous = managedResources.find(
           (item) => item.kind === "skill" && resolve(item.path) === resolve(path)
         );
-        if (matchingMarkerPaths.length > 0) {
-          legacyOwnedResourcePaths.push(path);
-        } else {
-          const topologyMatches = previous && (stats?.isSymbolicLink()
-            ? managedResourceMaterialization(previous) === "link"
-            : managedResourceMaterialization(previous) === "copy");
-          if (!topologyMatches) adoptedResourcePaths.push(path);
-        }
+        const topologyMatches = previous && (stats?.isSymbolicLink()
+          ? managedResourceMaterialization(previous) === "link"
+          : managedResourceMaterialization(previous) === "copy");
+        if (!topologyMatches) adoptedResourcePaths.push(path);
         continue;
       }
       resourceChanges.push({

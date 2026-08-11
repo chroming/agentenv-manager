@@ -436,7 +436,7 @@ const prepareFixture = async (root) => {
   });
   await writeJson(join(appDataRoot, "settings.json"), {
     skillSyncMethod: "copy",
-    skillDeploymentPreferenceVersion: 1,
+    skillManagementFormatVersion: 1,
     skillStorageLocation: "appData",
     skillAutoCheckEnabled: false,
     skillAutoCheckIntervalMinutes: 60,

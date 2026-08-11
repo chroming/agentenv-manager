@@ -61,7 +61,11 @@ export interface ConsolidateSkillGroupStoreInput {
   libraryId: string;
   canonicalPath: string;
   replaceLibrary?: boolean;
-  locations: Array<{ targetPaths: TargetPaths; targetDir: string }>;
+  locations: Array<{
+    targetPaths: TargetPaths;
+    targetDir: string;
+    legacyOwnershipMarkerPaths?: string[];
+  }>;
 }
 
 export interface ConsolidateSharedSkillGroupStoreInput {

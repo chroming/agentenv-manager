@@ -313,7 +313,7 @@ try {
   }
   await writeJson(join(appDataRoot, "settings.json"), {
     enabledTargetIds: packagedTargets.map((target) => target.id),
-    skillDeploymentPreferenceVersion: 1,
+    skillManagementFormatVersion: 1,
     agentDiscoveryVersion: 1,
     agentDiscoveryReviewedIds: packagedTargets.map((target) => target.id)
   });
