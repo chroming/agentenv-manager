@@ -40,8 +40,8 @@ macOS 直接下载包使用 ad-hoc 签名，没有 Developer ID 和公证。请�
 
 1. 启动应用，确认自动检测到的 Agent。没有安装的 Agent 默认保持关闭。
 2. 在 Agents 中配置一个 Agent，把当前设置保存为 Profile，或从空 Profile 开始。
-3. 如果机器上已经有较多 Skills，先在 `Skills > Local Skills` 中处理重复副本、冲突、共享目录和失效链接。
-4. 修改会自动保存到 Profile。查看 Apply 预览，确认变化后再写入 Agent。AgentEnv 会先创建恢复点，并在写入失败时尝试自动回滚。
+3. 修改会自动保存到 Profile。查看 Apply 预览，确认变化后再写入 Agent。AgentEnv 会先创建恢复点，并在写入失败时尝试自动回滚。
+4. 只有 Capture 或 Apply 发现相关的本地 Skill 需要确认时，才进入 Local Skills Manager。需要整理整台设备时，也可以从 Skills 页面主动打开它。
 
 ## Profiles
 
@@ -83,7 +83,7 @@ Conversations 只读索引本机 Agent 的历史记录。可以搜索标题和�
 
 ![Conversation history](docs/images/conversations.png)
 
-原始会话仍归对应 Agent 所有。AgentEnv 不会修改会话数据库，也不会把对话加入 Profile、Backup 或 Workspace Sync。
+原始会话仍归对应 Agent 所有。AgentEnv 不会修改会话数据库，也不会把对话加入 Profile、Backup 或 Device Sync。
 
 ## 支持的 Agents
 
@@ -98,7 +98,7 @@ Conversations 只读索引本机 Agent 的历史记录。可以搜索标题和�
 
 ## 其他功能
 
-- Workspace Sync 通过专用私有 Git 仓库同步可移植的 Profiles 和 Skill Library。拉取和发布都需要手动审核，不会自动 Apply。
+- Device Sync 通过专用私有 Git 仓库同步可移植的 Profiles 和 Skill Library。拉取和发布都需要手动审核，不会自动 Apply。
 - Recovery 包含 Apply、Profile 编辑、Workspace 修改、Skill 清理和同步产生的恢复记录，可以预览文件后再恢复。
 - GitHub 登录为仓库导入和更新检查提供更高的 API 限额；普通 Git 和 SSH 仓库使用系统 Git 凭据。
 - 界面支持 English、简体中文和繁體中文。
@@ -107,7 +107,7 @@ Conversations 只读索引本机 Agent 的历史记录。可以搜索标题和�
 
 - Profile 写入遵循 Preview、Backup、Apply、Verify 流程；没有语义变化时不会写文件。
 - AgentEnv 只修改对应 Agent integration 明确声明可管理的文件或字段。MCP 定义和凭据仍由 Agent 保存。
-- Repository 扫描使用独立缓存，不会修改已有 checkout。Workspace Sync 不同步凭据、Agent 状态、Backup 或本机绝对路径。
+- Repository 扫描使用独立缓存，不会修改已有 checkout。Device Sync 不同步凭据、Agent 状态、Backup 或本机绝对路径。
 - 官方构建默认每天最多发送一次匿名安装信息，包括随机安装 ID、应用版本、操作系统类型及主版本、架构、界面语言和安装渠道。可以在 Settings 中关闭并预览完整字段。
 
 完整行为见 [产品契约](docs/product-contracts.md)，数据与网络访问说明见 [PRIVACY.md](PRIVACY.md)。

@@ -12,6 +12,7 @@ export interface LibraryUpdateStateChange {
 }
 
 export interface LibraryUpdatePropagation {
+  linkedInstalls: SkillInventoryEntry[];
   copiedInstalls: SkillInventoryEntry[];
   stateUpdates: LibraryUpdateStateChange[];
 }
@@ -21,13 +22,15 @@ export const prepareLibraryUpdatePropagation = async ({
   libraryId,
   currentContentHash,
   nextContentHash,
-  targetStatesDir
+  targetStatesDir,
+  syncCopiedInstalls
 }: {
   inventory: SkillInventoryEntry[];
   libraryId: string;
   currentContentHash: string;
   nextContentHash: string;
   targetStatesDir: string;
+  syncCopiedInstalls: boolean;
 }): Promise<LibraryUpdatePropagation> => {
   const managedInstalls = inventory.filter(
     (entry) =>
@@ -35,24 +38,30 @@ export const prepareLibraryUpdatePropagation = async ({
       entry.libraryId === libraryId &&
       (entry.installMethod === "copied" || entry.installMethod === "linked")
   );
-  const copiedInstalls = managedInstalls.filter((entry) => entry.installMethod === "copied");
-  const driftedInstall = managedInstalls.find((entry) => entry.contentMatchesLibrary !== true);
+  const linkedInstalls = managedInstalls.filter((entry) => entry.installMethod === "linked");
+  const copiedInstalls = syncCopiedInstalls
+    ? managedInstalls.filter((entry) => entry.installMethod === "copied")
+    : [];
+  const propagatedInstalls = [...linkedInstalls, ...copiedInstalls];
+  const driftedInstall = propagatedInstalls.find((entry) => entry.contentMatchesLibrary !== true);
   if (driftedInstall) {
     throw new Error(
-      `${driftedInstall.name} changed in ${driftedInstall.path}; review that Agent copy before updating the Library`
+      driftedInstall.installMethod === "copied"
+        ? `${driftedInstall.name} changed in ${driftedInstall.path}; turn off Agent copy updates or review that Agent before retrying`
+        : `${driftedInstall.name} changed in ${driftedInstall.path}; review that linked Agent Skill before updating the Library`
     );
   }
 
   for (const install of copiedInstalls) {
     if (await hashSkillContent(install.path) !== currentContentHash) {
       throw new Error(
-        `${install.name} changed in ${install.path}; review that Agent copy before updating the Library`
+        `${install.name} changed in ${install.path}; turn off Agent copy updates or review that Agent before retrying`
       );
     }
   }
 
   const targetIds = [...new Set(
-    managedInstalls
+    propagatedInstalls
       .map((entry) => entry.foundIn[0])
       .filter((targetId): targetId is string => Boolean(targetId))
   )];
@@ -62,7 +71,7 @@ export const prepareLibraryUpdatePropagation = async ({
       if (!(await pathExists(path))) return undefined;
       const state = parseTargetState(JSON.parse(await readFile(path, "utf8")));
       const installPaths = new Set(
-        managedInstalls
+        propagatedInstalls
           .filter((entry) => entry.foundIn[0] === targetId)
           .map((entry) => resolve(entry.path))
       );
@@ -93,7 +102,7 @@ export const prepareLibraryUpdatePropagation = async ({
     }))
   ).filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 
-  return { copiedInstalls, stateUpdates };
+  return { linkedInstalls, copiedInstalls, stateUpdates };
 };
 
 export const applyLibraryUpdatePropagation = async ({
@@ -113,6 +122,11 @@ export const applyLibraryUpdatePropagation = async ({
     });
     if (await hashSkillContent(install.path) !== nextContentHash) {
       throw new Error(`Updated Agent copy did not match Library: ${install.path}`);
+    }
+  }
+  for (const install of propagation.linkedInstalls) {
+    if (await hashSkillContent(install.path) !== nextContentHash) {
+      throw new Error(`Linked Agent Skill did not follow the Library update: ${install.path}`);
     }
   }
   for (const update of propagation.stateUpdates) {

@@ -895,7 +895,8 @@ export const registerIpcHandlers = ({
     }
     return skillLibraryStore.updateSkill({
       id: parseId(input.id, "skill id"),
-      previewId: input.previewId
+      previewId: input.previewId,
+      syncCopiedInstalls: input.syncCopiedInstalls === true
     });
   });
   registerSettingsIpc(

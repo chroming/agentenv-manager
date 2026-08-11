@@ -27,6 +27,7 @@ export interface MoveSharedSkillToAgentsInput {
   migration: RetireSharedSkillInput;
   targetIds: string[];
   targetNames?: Record<string, string>;
+  blockedSkillNames?: string[];
   onProgress?: (targetId: string) => void;
 }
 
@@ -136,6 +137,7 @@ export const moveSharedSkillToAgents = async ({
   migration,
   targetIds,
   targetNames,
+  blockedSkillNames = [],
   onProgress
 }: MoveSharedSkillToAgentsInput): Promise<SkillCleanupResult> => {
   const uniqueTargetIds = [...new Set(targetIds)].sort();
@@ -178,6 +180,20 @@ export const moveSharedSkillToAgents = async ({
       if (capture.errors.length > 0) {
         throw new Error(
           `${targetLabel(targetId, targetNames)} could not be captured: ${capture.errors.join("; ")}`
+        );
+      }
+      if (capture.issues.length > 0) {
+        throw new Error(
+          `${targetLabel(targetId, targetNames)} has unresolved Skill conflicts. Review them in Local Skills Manager before moving ${migration.skillKey}.`
+        );
+      }
+      const blocked = new Set(blockedSkillNames);
+      const blockedCapturedSkill = capture.resources.find(
+        (resource) => resource.kind === "skill" && blocked.has(resource.id)
+      );
+      if (blockedCapturedSkill) {
+        throw new Error(
+          `${targetLabel(targetId, targetNames)} still has unresolved ${blockedCapturedSkill.name}. Review that Skill before moving ${migration.skillKey}.`
         );
       }
       profile = (
@@ -244,6 +260,11 @@ export const moveSkillCollectionToAgents = async ({
       if (capture.errors.length > 0) {
         throw new Error(
           `${targetLabel(targetId, targetNames)} could not be captured: ${capture.errors.join("; ")}`
+        );
+      }
+      if (capture.issues.length > 0) {
+        throw new Error(
+          `${targetLabel(targetId, targetNames)} has unresolved Skill conflicts. Review them in Local Skills Manager before moving this collection.`
         );
       }
       profile = (

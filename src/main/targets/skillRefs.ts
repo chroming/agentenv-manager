@@ -146,7 +146,7 @@ export const applySkillRefs = async ({
   profile,
   targetPaths,
   skillLibraryDir,
-  skillSyncMethod = "symlink",
+  skillSyncMethod = "copy",
   approvedUnmanagedSkillHashes,
   replaceablePaths,
   managedResources,

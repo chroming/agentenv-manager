@@ -47,6 +47,7 @@ describe("Workspaces desktop workflow", () => {
       locale: "en",
       conversationTerminal: "default",
       skillSyncMethod: "copy",
+      skillDeploymentPreferenceVersion: 1,
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: false,
       skillAutoCheckIntervalMinutes: 60,

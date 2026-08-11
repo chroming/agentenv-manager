@@ -31,17 +31,6 @@ export const copySkillEntries = async (sourceDir: string, targetDir: string) => 
   }
 };
 
-export const isUnsupportedSkillLinkError = (error: unknown) =>
-  Boolean(
-    error &&
-      typeof error === "object" &&
-      "code" in error &&
-      (error.code === "EPERM" ||
-        error.code === "ENOTSUP" ||
-        error.code === "EOPNOTSUPP" ||
-        error.code === "EINVAL")
-  );
-
 export const deploySkillDirectory = async (input: {
   sourceDir: string;
   targetDir: string;
@@ -50,22 +39,17 @@ export const deploySkillDirectory = async (input: {
   createSymlink?: typeof symlink;
 }) => {
   const platform = input.platform ?? process.platform;
-  let deployedAs: "copy" | "symlink" = input.syncMethod === "copy" ? "copy" : "symlink";
+  const deployedAs: "copy" | "symlink" = input.syncMethod === "symlink"
+    ? "symlink"
+    : "copy";
   await replacePathAtomically(input.targetDir, async (stagingPath) => {
-    if (input.syncMethod !== "copy") {
-      try {
-        await (input.createSymlink ?? symlink)(
-          input.sourceDir,
-          stagingPath,
-          platform === "win32" ? "junction" : "dir"
-        );
-        return;
-      } catch (error) {
-        if (input.syncMethod === "symlink" || !isUnsupportedSkillLinkError(error)) {
-          throw error;
-        }
-        deployedAs = "copy";
-      }
+    if (deployedAs === "symlink") {
+      await (input.createSymlink ?? symlink)(
+        input.sourceDir,
+        stagingPath,
+        platform === "win32" ? "junction" : "dir"
+      );
+      return;
     }
     await copySkillEntries(input.sourceDir, stagingPath);
   }, { platform });

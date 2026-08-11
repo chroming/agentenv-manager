@@ -3947,6 +3947,18 @@ summary {
   padding: 0 10px;
 }
 
+.cleanup-scope-field {
+  flex: 0 1 220px;
+  margin-left: auto;
+  min-width: 150px;
+}
+
+.cleanup-scope-select {
+  height: var(--control-height-compact);
+  max-width: 220px;
+  width: 100%;
+}
+
 .library-drawer .target-discovery-section {
   border-top: 0;
 }

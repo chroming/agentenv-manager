@@ -9,6 +9,7 @@ import type {
   TargetStateFile,
   TargetStateRepository
 } from "./targetStateRepository";
+import { managedResourceOrigin } from "../shared/managedResource";
 
 export const readManagedSkillResourcesByTarget = async (
   targetPaths: readonly TargetPaths[],
@@ -37,15 +38,17 @@ export const createManagedSkillResource = async (input: {
   path: string;
   libraryId: string;
   contentHash: string;
-  createdByAgentEnv: boolean;
+  origin: "adopted" | "created" | "replaced" | "unknown";
 }): Promise<ManagedResourceSnapshot> => ({
   kind: "skill",
   id: input.id,
   path: input.path,
   contentHash: input.contentHash,
   source: `skills-library/${input.libraryId}`,
+  materialization: (await lstat(input.path)).isSymbolicLink() ? "link" : "copy",
+  origin: input.origin,
   deploymentMode: (await lstat(input.path)).isSymbolicLink() ? "linked" : "copied",
-  createdByAgentEnv: input.createdByAgentEnv
+  createdByAgentEnv: input.origin === "created"
 });
 
 export const upsertManagedSkillResource = (
@@ -87,10 +90,14 @@ export const updateMergedSkillTargetStates = async (input: {
               id: basename(resource.path),
               contentHash: input.contentHash,
               source: `skills-library/${input.keepId}`,
+              materialization: (await lstat(resource.path)).isSymbolicLink()
+                ? "link" as const
+                : "copy" as const,
+              origin: managedResourceOrigin(resource),
               deploymentMode: (await lstat(resource.path)).isSymbolicLink()
                 ? "linked" as const
                 : "copied" as const,
-              createdByAgentEnv: true
+              createdByAgentEnv: managedResourceOrigin(resource) === "created"
             }
           : resource
       )
@@ -117,6 +124,7 @@ export const updateConsolidatedSkillTargetStates = async (input: {
   locations: readonly { targetDir: string; targetPaths: TargetPaths }[];
   libraryId: string;
   computeContentHash(path: string): Promise<string>;
+  originsByPath?: ReadonlyMap<string, "adopted" | "created" | "replaced" | "unknown">;
   recordMutation(path: string): Promise<void>;
 }) => {
   for (const [targetId, stateFile] of input.stateFiles) {
@@ -130,7 +138,7 @@ export const updateConsolidatedSkillTargetStates = async (input: {
         path: location.targetDir,
         libraryId: input.libraryId,
         contentHash: await input.computeContentHash(location.targetDir),
-        createdByAgentEnv: true
+        origin: input.originsByPath?.get(resolve(location.targetDir)) ?? "unknown"
       }));
     }
     await input.repository.write(targetId, nextState, { expectedPathHash: stateFile.pathHash });

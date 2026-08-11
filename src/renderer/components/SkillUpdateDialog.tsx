@@ -12,7 +12,7 @@ import type { SkillUpdateActionResult } from "../skillLibraryContracts";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { DiffViewer } from "./DiffViewer";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
-import { Button, IconButton, ModalFrame } from "./ui";
+import { Button, IconButton, ModalFrame, Switch } from "./ui";
 import { useI18n } from "../i18n";
 
 interface SkillUpdateDialogProps {
@@ -21,7 +21,10 @@ interface SkillUpdateDialogProps {
   busy?: boolean;
   progress?: SkillUpdateRunItem;
   onClose(): void;
-  onConfirm(plan: SkillUpdatePlan): Promise<SkillUpdateActionResult>;
+  onConfirm(
+    plan: SkillUpdatePlan,
+    syncCopiedInstalls?: boolean
+  ): Promise<SkillUpdateActionResult>;
 }
 
 const SkillUpdateChange = ({
@@ -58,6 +61,7 @@ export const SkillUpdateDialog = ({
   const expandPreviewRef = useRef<HTMLButtonElement>(null);
   const [diffWorkspaceOpen, setDiffWorkspaceOpen] = useState(false);
   const [commitResult, setCommitResult] = useState<SkillUpdateActionResult>();
+  const [syncCopiedInstalls, setSyncCopiedInstalls] = useState(false);
   const onCloseRef = useRef(onClose);
 
   useEffect(() => {
@@ -66,6 +70,7 @@ export const SkillUpdateDialog = ({
 
   useEffect(() => {
     setCommitResult(undefined);
+    setSyncCopiedInstalls(false);
   }, [plan?.previewId]);
 
   useEffect(() => {
@@ -112,9 +117,12 @@ export const SkillUpdateDialog = ({
       }));
     }
     if (planImpact.copiedInstallCount > 0) {
-      parts.push(t("{{count}} copied Agent installs update with this Library change", {
-        count: planImpact.copiedInstallCount
-      }));
+      parts.push(t(
+        syncCopiedInstalls
+          ? "{{count}} copied Agent installs update with this Library change"
+          : "{{count}} copied Agent installs will need Apply",
+        { count: planImpact.copiedInstallCount }
+      ));
     }
     return parts.length > 0
       ? parts.join(" · ")
@@ -194,6 +202,28 @@ export const SkillUpdateDialog = ({
             <Maximize2 size={16} strokeWidth={2.2} />
           </IconButton>
         </header>
+        {planImpact.copiedInstallCount > 0 && progress?.status !== "updated" ? (
+          <div className="skill-update-copy-option">
+            <span className="skill-update-copy-option__copy">
+              <strong>{t("Also update Agent copies")}</strong>
+              <small>
+                {syncCopiedInstalls
+                  ? t("{{count}} clean managed copies will update in the same backed-up operation.", {
+                      count: planImpact.copiedInstallCount
+                    })
+                  : t("Off: {{count}} Agent copies will show Apply pending.", {
+                      count: planImpact.copiedInstallCount
+                    })}
+              </small>
+            </span>
+            <Switch
+              checked={syncCopiedInstalls}
+              disabled={busy || running}
+              label={t("Also update Agent copies")}
+              onClick={() => setSyncCopiedInstalls((current) => !current)}
+            />
+          </div>
+        ) : null}
         <div className="update-change-list ui-dialog-body">
           {plan.changes.map((change, index) => (
             <SkillUpdateChange
@@ -227,7 +257,7 @@ export const SkillUpdateDialog = ({
               variant="primary"
               onClick={() => {
                 setCommitResult(undefined);
-                void Promise.resolve(onConfirm(plan)).then((result) => {
+                void Promise.resolve(onConfirm(plan, syncCopiedInstalls)).then((result) => {
                   if (result) setCommitResult(result);
                 });
               }}

@@ -21,6 +21,7 @@
 @import "./pages/skill-sources.css" layer(pages);
 @import "./pages/skill-cleanup.css" layer(pages);
 @import "./pages/skills-dialogs.css" layer(pages);
+@import "./pages/skill-update-dialogs.css" layer(pages);
 @import "./pages/profiles.css" layer(pages);
 @import "./pages/profile-skills.css" layer(pages);
 @import "./pages/profile-skill-overlays.css" layer(pages);

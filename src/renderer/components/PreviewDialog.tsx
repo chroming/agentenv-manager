@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronDown,
   CircleAlert,
+  Layers3,
   ShieldCheck
 } from "lucide-react";
 import type {
@@ -41,6 +42,7 @@ interface PreviewDialogProps {
   onCompare?(): void;
   onLeaveSkillUnmanaged?(issue: ApplyIssue): Promise<void> | void;
   onReviewSkillCollection?(issue: ApplyIssue): void;
+  onManageLocalSkills?(): void;
   onCancel?(): void;
   onConfirm?(): void;
 }
@@ -108,6 +110,7 @@ export const PreviewDialog = ({
   onCompare,
   onLeaveSkillUnmanaged,
   onReviewSkillCollection,
+  onManageLocalSkills,
   onCancel,
   onConfirm
 }: PreviewDialogProps) => {
@@ -464,6 +467,18 @@ export const PreviewDialog = ({
             <section className="apply-preview-footprint" aria-label={t("Local footprint")}>
               <header className="apply-preview-section-heading">
                 <strong>{t("Local footprint")}</strong>
+                {onManageLocalSkills ? (
+                  <Button
+                    className="apply-preview-manage-skills"
+                    disabled={confirmBusy}
+                    icon={<Layers3 size={14} strokeWidth={2.1} />}
+                    size="compact"
+                    variant="secondary"
+                    onClick={onManageLocalSkills}
+                  >
+                    {t("Manage Skills")}
+                  </Button>
+                ) : null}
               </header>
               <div>
                 <span>{t("Adopt existing")}: <strong>{preview.localFootprint.adopted}</strong></span>
@@ -473,6 +488,21 @@ export const PreviewDialog = ({
                 <span>{t("Live links")}: <strong>{preview.localFootprint.liveLinks}</strong></span>
               </div>
             </section>
+          ) : null}
+
+          {isActivationPreview && !preview.localFootprint && !isNoOp && onManageLocalSkills ? (
+            <div className="apply-preview-secondary-actions">
+              <Button
+                className="apply-preview-manage-skills"
+                disabled={confirmBusy}
+                icon={<Layers3 size={14} strokeWidth={2.1} />}
+                size="compact"
+                variant="secondary"
+                onClick={onManageLocalSkills}
+              >
+                {t("Manage Skills")}
+              </Button>
+            </div>
           ) : null}
 
           <PreviewChangeList

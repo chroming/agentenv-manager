@@ -31,8 +31,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Trash2,
-  TriangleAlert,
-  X
+  TriangleAlert
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useModalDialog } from "../hooks/useModalDialog";
@@ -93,13 +92,15 @@ import {
   automaticSkillCleanupRequest,
   buildSkillCollectionLinkGroups,
   buildSkillCleanupGroups,
+  filterSkillInventoryForManagementScope,
   isSkillCleanupPreparationCurrent,
   sharedSkillMigrationNeedsAction,
   type SkillCleanupAutomaticEffect,
-  type SkillCollectionLinkGroup
+  type SkillCollectionLinkGroup,
+  type SkillManagementScope
 } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
-import { ActionMenu, Button, IconButton, InteractiveStatus, ModalFrame, RefreshAction, Switch } from "./ui";
+import { ActionMenu, Button, IconButton, InteractiveStatus, ModalFrame, RefreshAction, SelectField, Switch } from "./ui";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { isExternalSkillImportable } from "../../shared/skillIdentity";
 import { sourceSubpathFor } from "../../shared/skillSourceGrouping";
@@ -147,8 +148,18 @@ import type {
   SkillLibraryPanelActions,
   SkillLibraryPanelModel
 } from "./skillLibrary/SkillLibraryPanelContract";
+import {
+  SkillManagementScopeHeader,
+  SkillManagerDrawerHeader
+} from "./SkillManagerHeaders";
+import {
+  AutomaticSkillCleanupDialog,
+  buildAutomaticCleanupReviewItems,
+  type AutomaticCleanupProgress,
+  type AutomaticCleanupReviewItem
+} from "./AutomaticSkillCleanupDialog";
 
-type SkillMenuAction = "update" | "sync" | "availability" | "settings" | "merge" | "remove";
+type SkillMenuAction = "update" | "review" | "availability" | "settings" | "merge" | "remove";
 
 interface SkillLibraryPanelProps {
   model: SkillLibraryPanelModel;
@@ -187,6 +198,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     skillUpdates,
     skillUsage,
     installedTargetIds = [],
+    activeProfileTargetIds = [],
     targetNames = {},
     preparedTargetsBySkill = {}
   } = catalog;
@@ -198,7 +210,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   const {
     skillInventory,
     cleanupBackups,
-    cleanupScope = "all",
+    cleanupScope = { kind: "all" },
     focusCollectionPath
   } = cleanup;
   const {
@@ -262,7 +274,6 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     onSaveUpdateSettings,
     onSetAvailability,
     onSetIcon,
-    onSyncSkillInstalls,
     onRemoveLibrarySkill,
     onPreviewSkillMerge,
     onMergeLibrarySkills,
@@ -300,6 +311,14 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   const [githubRetrySourceUrl, setGithubRetrySourceUrl] = useState<string>();
   const [localImportOperation, setLocalImportOperation] = useState(false);
   const [automaticCleanupKey, setAutomaticCleanupKey] = useState<string>();
+  const [automaticCleanupProgress, setAutomaticCleanupProgress] = useState<
+    Record<string, AutomaticCleanupProgress>
+  >({});
+  const [automaticCleanupReviewSnapshot, setAutomaticCleanupReviewSnapshot] = useState<
+    AutomaticCleanupReviewItem[]
+  >([]);
+  const [automaticCleanupStopRequested, setAutomaticCleanupStopRequested] = useState(false);
+  const automaticCleanupStopRequestedRef = useRef(false);
   const [cleanupOperationKey, setCleanupOperationKey] = useState<string>();
   const [autoCleanupReviewOpen, setAutoCleanupReviewOpen] = useState(false);
   const [expandedCleanupBuckets, setExpandedCleanupBuckets] = useState<
@@ -348,9 +367,13 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   const [availabilityOperation, setAvailabilityOperation] = useState<SkillAvailabilityInput>();
   const [localPreviewingSkillId, setLocalPreviewingSkillId] = useState<string>();
   const [cleanupDetailsKey, setCleanupDetailsKey] = useState<string>();
+  const scopedSkillInventory = useMemo(
+    () => filterSkillInventoryForManagementScope(skillInventory, cleanupScope),
+    [cleanupScope, skillInventory]
+  );
   const collectionGroups = useMemo(
-    () => buildSkillCollectionLinkGroups(skillInventory, { installedTargetIds }),
-    [installedTargetIds, skillInventory]
+    () => buildSkillCollectionLinkGroups(scopedSkillInventory, { installedTargetIds }),
+    [installedTargetIds, scopedSkillInventory]
   );
   const [collectionDetailsPath, setCollectionDetailsPath, selectedCollection] =
     useSkillCollectionSelection(collectionGroups, focusCollectionPath, activeTool === "discoveries", onFocusCollectionHandled);
@@ -773,8 +796,8 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
 
     if (action === "update") {
       void runSkillUpdatePreview(skill.id);
-    } else if (action === "sync") {
-      onSyncSkillInstalls(skill.id);
+    } else if (action === "review") {
+      onReviewSkillUsage(skill.id);
     } else if (action === "availability") {
       if (skill.globallyEnabled !== false) {
         setDisableCandidate(skill);
@@ -790,18 +813,52 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     }
   };
   const allCleanupGroups = useMemo(
-    () => buildSkillCleanupGroups(skillInventory, {
-      installedTargetIds,
-      preparedTargetsBySkill
-    }),
-    [installedTargetIds, preparedTargetsBySkill, skillInventory]
+    () => {
+      const groups = buildSkillCleanupGroups(scopedSkillInventory, {
+        installedTargetIds,
+        preparedTargetsBySkill
+      });
+      const targetsWithDecisions = new Set(
+        groups
+          .filter((group) => group.bucket === "decision")
+          .flatMap((group) => group.activeItems.flatMap((item) => item.foundIn))
+      );
+      const targetsWithProfiles = new Set(activeProfileTargetIds);
+      const projected = groups.map((group) => {
+        if (group.automaticEffect === "remove-broken-link") return group;
+        const blockedConsumers = group.sharedMigration?.consumers.filter(
+          (targetId) =>
+            !targetsWithProfiles.has(targetId) && targetsWithDecisions.has(targetId)
+        ) ?? [];
+        if (group.bucket !== "ready" || blockedConsumers.length === 0) return group;
+        return {
+          ...group,
+          resolution: "manual" as const,
+          resolutionReason: "Resolve the other Skill decisions for affected Agents before moving this shared copy.",
+          bucket: "decision" as const,
+          automaticEffect: undefined,
+          presentation: {
+            state: "shared-copy-needs-decisions" as const,
+            action: "review-agents" as const
+          }
+        };
+      });
+      const bucketOrder = { decision: 0, ready: 1, managed: 2, unmanaged: 3 } as const;
+      return projected.sort((left, right) =>
+        bucketOrder[left.bucket] - bucketOrder[right.bucket] ||
+        (left.primary?.name ?? left.skillKey).localeCompare(
+          right.primary?.name ?? right.skillKey
+        )
+      );
+    },
+    [activeProfileTargetIds, installedTargetIds, preparedTargetsBySkill, scopedSkillInventory]
   );
   const cleanupGroups = useMemo(
     () =>
-      cleanupScope === "shared"
+      cleanupScope.kind === "shared"
         ? allCleanupGroups.filter((group) => Boolean(group.sharedMigration))
         : allCleanupGroups,
-    [allCleanupGroups, cleanupScope]
+    [allCleanupGroups, cleanupScope.kind]
   );
   const automaticCleanupRequests = useMemo(
     () =>
@@ -821,38 +878,6 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     }),
     [cleanupGroups]
   );
-  const cleanupRequestsByEffect = useMemo(() => {
-    const requests = new Map<
-      SkillCleanupAutomaticEffect,
-      Array<{
-        request: SkillCleanupRequest;
-        name: string;
-        paths: string[];
-        secondary?: string;
-      }>
-    >();
-    for (const request of automaticCleanupRequests) {
-      const group = cleanupGroups.find((item) => item.skillKey === request.skillKey);
-      if (!group?.automaticEffect) continue;
-      requests.set(group.automaticEffect, [
-        ...(requests.get(group.automaticEffect) ?? []),
-        {
-          request,
-          name: group.primary?.name ?? group.skillKey,
-          paths: [
-            ...(request.sharedLocations ?? []).map((location) => location.path),
-            ...request.locations.map((location) => location.path)
-          ],
-          secondary: group.sharedMigration?.state === "not-imported"
-            ? group.sharedMigration.consumers
-                .map((targetId) => targetNameFor(targetId, targetNames, targetId))
-                .join(", ")
-            : undefined
-        }
-      ]);
-    }
-    return requests;
-  }, [automaticCleanupRequests, cleanupGroups]);
   const collectionDecisionCount = collectionGroups.filter(
     (group) => group.state !== "unmanaged"
   ).length;
@@ -880,24 +905,36 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   ];
   const readyCleanupCount =
     automaticCleanupRequests.length + sharedCleanupCandidates.length;
+  const automaticCleanupReviewItems = useMemo(
+    () => buildAutomaticCleanupReviewItems(
+      automaticCleanupRequests,
+      cleanupGroups,
+      sharedCleanupCandidates,
+      targetNames
+    ),
+    [automaticCleanupRequests, cleanupGroups, sharedCleanupCandidates, targetNames]
+  );
+  const automaticCleanupDialogItems = automaticCleanupReviewSnapshot.length > 0
+    ? automaticCleanupReviewSnapshot
+    : automaticCleanupReviewItems;
   const migrationSummary = [
     manualCleanupCount > 0
       ? t(manualCleanupCount === 1 ? "1 needs your decision" : "{{count}} need your decision", { count: manualCleanupCount })
       : "",
     readyCleanupCount > 0
-      ? t(readyCleanupCount === 1 ? "1 ready to clean up" : "{{count}} ready to clean up", { count: readyCleanupCount })
+      ? t(readyCleanupCount === 1 ? "1 ready to manage" : "{{count}} ready to manage", { count: readyCleanupCount })
       : ""
   ].filter(Boolean).join(" · ");
   const cleanupToolTitle =
-    cleanupScope === "shared" ? t("Shared Skill Review") : t("Local Skill Cleanup");
+    cleanupScope.kind === "shared" ? t("Shared Skill Review") : t("Local Skills Manager");
   const cleanupToolHelp =
-    cleanupScope === "shared"
+    cleanupScope.kind === "shared"
       ? t("Review shared compatibility copies before Profiles can control them.")
       : t("Review local Skill copies, add a canonical version to Library, and remove redundant copies with a restorable backup.");
   const cleanupListTitle =
-    cleanupScope === "shared" ? t("Shared Skills on this device") : t("Skills on this device");
+    cleanupScope.kind === "shared" ? t("Shared Skills on this device") : t("All local Skills");
   const cleanupEmptyCopy =
-    cleanupScope === "shared"
+    cleanupScope.kind === "shared"
       ? t("No shared Skills need review.")
       : t("No Agent Skills detected. Install Skills for an enabled Agent and scan again.");
   const localSkillPath = localSkillSource?.path ?? "";
@@ -1437,54 +1474,102 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   ) => {
     if (
       automaticCleanupKey ||
-      (requests.length === 0 && sharedCleanupCandidates.length === 0)
+      automaticCleanupDialogItems.length === 0
     ) {
       return;
     }
+    automaticCleanupStopRequestedRef.current = false;
+    setAutomaticCleanupStopRequested(false);
+    setAutomaticCleanupProgress(Object.fromEntries(
+      automaticCleanupDialogItems.map((item) => [item.skillKey, { status: "waiting" }])
+    ));
     setAutomaticCleanupKey(key);
-    setAutoCleanupReviewOpen(false);
+    const updateProgress = (
+      skillKey: string,
+      progress: AutomaticCleanupProgress
+    ) => setAutomaticCleanupProgress((current) => ({
+      ...current,
+      [skillKey]: progress
+    }));
+    const skipWaiting = () => setAutomaticCleanupProgress((current) => ({
+      ...current,
+      ...Object.fromEntries(
+        automaticCleanupDialogItems
+          .filter((item) => (current[item.skillKey]?.status ?? "waiting") === "waiting")
+          .map((item) => [item.skillKey, { status: "skipped" as const }])
+      )
+    }));
+    const blockedSkillKeys = cleanupGroupsByBucket.decision.map((group) => group.skillKey);
     try {
-      for (const group of sharedPreparationCandidates) {
+      for (const group of [...sharedPreparationCandidates, ...sharedReplacementCandidates]) {
+        if (automaticCleanupStopRequestedRef.current) {
+          skipWaiting();
+          break;
+        }
         const migration = group.sharedMigration;
         if (!migration?.libraryId) continue;
-        setSharedOperation({ skillKey: group.skillKey, action: "prepare" });
-        const completed = await onMoveSharedSkillToAgents(
-          {
+        updateProgress(group.skillKey, { status: "managing" });
+        try {
+          const preparing = sharedPreparationCandidates.includes(group);
+          setSharedOperation({
             skillKey: group.skillKey,
-            libraryId: migration.libraryId,
-            paths: migration.paths
-          },
-          migration.pendingConsumers
-        );
-        if (!completed) return;
-      }
-      for (const group of sharedReplacementCandidates) {
-        const migration = group.sharedMigration;
-        if (!migration?.libraryId) continue;
-        setSharedOperation({ skillKey: group.skillKey, action: "retire" });
-        const completed = await onRetireSharedSkill({
-          skillKey: group.skillKey,
-          libraryId: migration.libraryId,
-          paths: migration.paths
-        });
-        if (!completed) return;
-      }
-      if (requests.length > 0) {
-        const completedSkillKeys = new Set(
-          await onAutoConsolidateSkillGroups(requests)
-        );
-        for (const group of sharedImportCandidates) {
-          const request = requests.find(
-            (item) => item.skillKey === group.skillKey
-          );
-          const migration = group.sharedMigration;
-          if (
-            !request ||
-            !migration ||
-            !completedSkillKeys.has(group.skillKey)
-          ) {
-            continue;
+            action: preparing ? "prepare" : "retire"
+          });
+          const completed = preparing
+            ? await onMoveSharedSkillToAgents({
+              skillKey: group.skillKey,
+              libraryId: migration.libraryId,
+              paths: migration.paths
+              }, migration.pendingConsumers, { blockedSkillKeys })
+            : await onRetireSharedSkill({
+                skillKey: group.skillKey,
+                libraryId: migration.libraryId,
+                paths: migration.paths
+              });
+          if (!completed) {
+            updateProgress(group.skillKey, {
+              status: "failed",
+              error: t("This Skill could not be managed. Review the diagnostic details and try again.")
+            });
+            skipWaiting();
+            return;
           }
+          updateProgress(group.skillKey, { status: "managed" });
+        } catch (unknownError) {
+          updateProgress(group.skillKey, {
+            status: "failed",
+            error: unknownError instanceof Error ? unknownError.message : String(unknownError)
+          });
+          skipWaiting();
+          return;
+        } finally {
+          setSharedOperation(undefined);
+        }
+      }
+      if (automaticCleanupStopRequestedRef.current) return;
+      const sharedImportKeys = new Set(sharedImportCandidates.map((group) => group.skillKey));
+      const outcome = await onAutoConsolidateSkillGroups(requests, {
+        shouldStop: () => automaticCleanupStopRequestedRef.current,
+        onProgress: (event) => updateProgress(event.skillKey, {
+          status: event.status === "managed" && sharedImportKeys.has(event.skillKey)
+            ? "managing"
+            : event.status,
+          error: event.error
+        })
+      });
+      const completedSkillKeys = new Set(
+        Array.isArray(outcome) ? outcome : outcome.completedSkillKeys
+      );
+      for (const group of sharedImportCandidates) {
+        if (!completedSkillKeys.has(group.skillKey)) continue;
+        if (automaticCleanupStopRequestedRef.current) {
+          updateProgress(group.skillKey, { status: "skipped" });
+          continue;
+        }
+        const request = requests.find((item) => item.skillKey === group.skillKey);
+        const migration = group.sharedMigration;
+        if (!request || !migration) continue;
+        try {
           setSharedOperation({ skillKey: group.skillKey, action: "prepare" });
           const retirement = {
             skillKey: group.skillKey,
@@ -1492,9 +1577,25 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
             paths: migration.paths
           };
           const completed = migration.consumers.length > 0
-            ? await onMoveSharedSkillToAgents(retirement, migration.consumers)
+            ? await onMoveSharedSkillToAgents(
+                retirement,
+                migration.consumers,
+                { blockedSkillKeys }
+              )
             : await onRetireSharedSkill(retirement);
-          if (!completed) return;
+          updateProgress(group.skillKey, completed
+            ? { status: "managed" }
+            : {
+                status: "failed",
+                error: t("This Skill could not be managed. Review the diagnostic details and try again.")
+              });
+        } catch (unknownError) {
+          updateProgress(group.skillKey, {
+            status: "failed",
+            error: unknownError instanceof Error ? unknownError.message : String(unknownError)
+          });
+        } finally {
+          setSharedOperation(undefined);
         }
       }
     } finally {
@@ -1515,14 +1616,31 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     setAutomaticCleanupKey(`details:${cleanupDetails.skillKey}`);
     try {
       const completed = await onAutoConsolidateSkillGroups([cleanupDetailsRequest]);
-      if (completed.includes(cleanupDetails.skillKey)) {
+      const completedSkillKeys = Array.isArray(completed)
+        ? completed
+        : completed.completedSkillKeys;
+      if (completedSkillKeys.includes(cleanupDetails.skillKey)) {
         setCleanupDetailsKey(undefined);
       }
     } finally {
       setAutomaticCleanupKey(undefined);
     }
   };
-
+  const closeAutomaticCleanupReview = () => {
+    if (automaticCleanupKey) return;
+    setAutoCleanupReviewOpen(false);
+    setAutomaticCleanupProgress({});
+    setAutomaticCleanupReviewSnapshot([]);
+    setAutomaticCleanupStopRequested(false);
+    automaticCleanupStopRequestedRef.current = false;
+  };
+  const openAutomaticCleanupReview = () => {
+    setAutomaticCleanupReviewSnapshot(automaticCleanupReviewItems);
+    setAutomaticCleanupProgress({});
+    setAutomaticCleanupStopRequested(false);
+    automaticCleanupStopRequestedRef.current = false;
+    setAutoCleanupReviewOpen(true);
+  };
   const changeSharedRetention = async (
     group: (typeof cleanupGroups)[number],
     retained: boolean
@@ -1910,7 +2028,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                 ? "Not checked"
                 : hasUpdateSource && skill.sourceType !== "local"
                   ? "Monitoring off"
-                  : "Available";
+                  : "Local";
             const usageCount = (skillUsage[skill.id] ?? []).length;
             const revisionLabel = shortSkillRevision(skill);
             const versionLabel = skill.version ?? skill.remoteRef ?? revisionLabel;
@@ -1947,13 +2065,15 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               t(usageCount === 1 ? "{{count}} Profile" : "{{count}} Profiles", {
                 count: usageCount
               }),
-              t(installedAgentCount === 1 ? "{{count}} Agent" : "{{count}} Agents", {
+              t(installedAgentCount === 1 ? "{{count}} install" : "{{count}} installs", {
                 count: installedAgentCount
               })
             ].join(" · ");
             const usageDetail = `${t("Profiles")}: ${(skillUsage[skill.id] ?? []).join(", ") || t("Not referenced")} · ${t("Agents")}: ${installedAgentNames.join(", ") || t("Not installed")}`;
             const staleInstallDetail = staleCopies.length > 0
-              ? t("{{count}} out of sync", { count: staleCopies.length })
+              ? staleCopies.length === 1
+                ? t("1 Agent pending")
+                : t("{{count}} Agents pending", { count: staleCopies.length })
               : undefined;
             const statusDetail = availabilityIsChanging
               ? t("Saving...")
@@ -2139,7 +2259,11 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                     <InteractiveStatus
                       className="library-primary-status is-warning"
                       icon={<CircleAlert size={13} strokeWidth={2.2} />}
-                      label={t("Needs sync")}
+                      label={
+                        staleCopies.length === 1
+                          ? t("1 Agent pending")
+                          : t("{{count}} Agents pending", { count: staleCopies.length })
+                      }
                       tone="warning"
                     />
                   ) : (
@@ -2202,10 +2326,10 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                               className="row-action-item"
                               type="button"
                               role="menuitem"
-                              onClick={() => runSkillMenuAction(skill, "sync")}
+                              onClick={() => runSkillMenuAction(skill, "review")}
                             >
-                              <RefreshCw size={14} strokeWidth={2.2} />
-                              <span>{t("Sync installs")}</span>
+                              <SearchCheck size={14} strokeWidth={2.2} />
+                              <span>{t("Review Profiles")}</span>
                             </button>
                           ) : null}
                           <button
@@ -2554,129 +2678,21 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         document.body
       ) : null}
 
-      {autoCleanupReviewOpen ? createPortal(
-        <div
-          className="preview-modal-backdrop"
-          data-dismiss-policy="standard"
-          onClick={() => setAutoCleanupReviewOpen(false)}
-        >
-          <section
-            ref={modalDialogRef}
-            className="profile-form-dialog profile-form-dialog--compact cleanup-bulk-dialog ui-dialog-shell"
-            role="dialog"
-            aria-label={t("Clean up local Skills")}
-            aria-modal="true"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="profile-dialog-header ui-dialog-header">
-              <div className="ui-dialog-header__copy">
-                <div className="section-title ui-dialog-title">{t("Clean up local Skills")}</div>
-                <p className="muted ui-dialog-description">
-                  {t("AgentEnv will run the safe actions below. Every changed path is backed up before cleanup starts.")}
-                </p>
-              </div>
-            </header>
-            <div className="cleanup-bulk-review-list ui-dialog-body">
-              {([...cleanupRequestsByEffect.entries()]).map(([effect, items]) => (
-                <section className="cleanup-bulk-effect" key={effect}>
-                  <div className="cleanup-bulk-effect__header">
-                    <strong>{t(cleanupEffectLabel(effect))}</strong>
-                    <span>{items.length}</span>
-                  </div>
-                  <div className="cleanup-bulk-items">
-                    {items.map((item) => (
-                      <div className="cleanup-bulk-item" key={item.request.skillKey}>
-                        <strong>{item.name}</strong>
-                        {item.secondary ? <small>{t(item.secondary)}</small> : null}
-                        <PreviewText
-                          ariaLabel={t("Full cleanup paths for {{id}}", {
-                            id: item.request.skillKey
-                          })}
-                          className="cleanup-bulk-item__path"
-                          displayText={
-                            item.paths.length > 1
-                              ? t("{{path}} and {{count}} more", {
-                                  path: item.paths[0],
-                                  count: item.paths.length - 1
-                                })
-                              : item.paths[0]
-                          }
-                          text={item.paths.join("\n")}
-                          tooltipClassName="library-source-tooltip"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ))}
-              {sharedCleanupCandidates.length > 0 ? (
-                <section className="cleanup-bulk-effect">
-                  <div className="cleanup-bulk-effect__header">
-                    <strong>{t("Move Skills out of shared folder")}</strong>
-                    <span>{sharedCleanupCandidates.length}</span>
-                  </div>
-                  <div className="cleanup-bulk-items">
-                    {sharedCleanupCandidates.map((group) => {
-                      const migration = group.sharedMigration;
-                      const decisions = migration?.state === "waiting"
-                        ? migration.pendingConsumers
-                            .map((targetId) =>
-                              t(targetNameFor(targetId, targetNames, targetId))
-                            )
-                            .join(", ")
-                        : preparedTargetsForCleanupGroup(group)
-                            .map((target) =>
-                              target.disposition === "install"
-                                ? `${targetNameFor(target.targetId, targetNames, target.targetId)}: ${t("Install as {{name}}", { name: target.targetName })}`
-                                : `${targetNameFor(target.targetId, targetNames, target.targetId)}: ${t("Do not install")}`
-                            )
-                            .join("; ");
-                      const paths = migration?.paths ?? [];
-                      return (
-                        <div className="cleanup-bulk-item" key={group.skillKey}>
-                          <strong>{group.primary?.name ?? group.skillKey}</strong>
-                          {decisions ? <small>{decisions}</small> : null}
-                          <PreviewText
-                            ariaLabel={t("Full cleanup paths for {{id}}", {
-                              id: group.skillKey
-                            })}
-                            className="cleanup-bulk-item__path"
-                            displayText={
-                              paths.length > 1
-                                ? t("{{path}} and {{count}} more", {
-                                    path: paths[0],
-                                    count: paths.length - 1
-                                  })
-                                : paths[0]
-                            }
-                            text={paths.join("\n")}
-                            tooltipClassName="library-source-tooltip"
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              ) : null}
-              <small>{t("Each Skill is backed up independently. A failure does not undo completed Skills.")}</small>
-            </div>
-            <footer className="preview-actions ui-dialog-footer">
-              <Button
-                ref={modalInitialFocusRef}
-                onClick={() => setAutoCleanupReviewOpen(false)}
-              >
-                {t("Cancel")}
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => void runAutomaticCleanup("all", automaticCleanupRequests)}
-              >
-                {t("Clean up {{count}} skills", { count: readyCleanupCount })}
-              </Button>
-            </footer>
-          </section>
-        </div>,
-        document.body
+      {autoCleanupReviewOpen ? (
+        <AutomaticSkillCleanupDialog
+          items={automaticCleanupDialogItems}
+          progress={automaticCleanupProgress}
+          running={Boolean(automaticCleanupKey)}
+          stopRequested={automaticCleanupStopRequested}
+          dialogRef={modalDialogRef}
+          initialFocusRef={modalInitialFocusRef}
+          onClose={closeAutomaticCleanupReview}
+          onRun={(requests) => { void runAutomaticCleanup("all", requests); }}
+          onStop={() => {
+            automaticCleanupStopRequestedRef.current = true;
+            setAutomaticCleanupStopRequested(true);
+          }}
+        />
       ) : null}
 
       <SkillCollectionDialog
@@ -3379,43 +3395,20 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
       ) : null}
 
       {activeTool === "discoveries" ? (
-        <section className="library-drawer" aria-label={t("Local Skill Cleanup")}>
-          <div className="library-drawer__header">
-            <div>
-              <strong>
-                {cleanupToolTitle}
-                <InfoTip label={cleanupToolHelp} />
-              </strong>
-            </div>
-            <div className="library-drawer__actions">
-              <RefreshAction
-                className="library-drawer__refresh"
-                ariaLabel={t("Refresh local skills")}
-                busy={isRefreshingInventory}
-                disabled={Boolean(automaticCleanupKey) || isRefreshingInventory}
-                label={t("Refresh")}
-                onRefresh={() => void onRefreshInventory()}
-              />
-              <IconButton
-                label={t("Close library tool")}
-                disabled={Boolean(automaticCleanupKey) || isRefreshingInventory}
-                onClick={onCloseTool}
-                variant="ghost"
-              >
-                <X size={16} strokeWidth={2.2} />
-              </IconButton>
-            </div>
-          </div>
+        <section className="library-drawer" aria-label={t("Local Skills Manager")}>
+          <SkillManagerDrawerHeader
+            title={cleanupToolTitle}
+            help={cleanupToolHelp}
+            busy={Boolean(automaticCleanupKey)}
+            refreshing={isRefreshingInventory}
+            onRefresh={() => void onRefreshInventory()}
+            onClose={() => onCloseTool?.()}
+          />
           <section className="resource-section target-discovery-section">
-            <div className="cleanup-section-heading">
-              <div>
-                <div className="resource-heading">
-                  {cleanupListTitle}
-                  <InfoTip label={t("Each group shows one Skill, its detected copies, and the next safe cleanup action.")} />
-                </div>
-                <small>{migrationSummary || t("No cleanup actions needed")}</small>
-              </div>
-            </div>
+            <SkillManagementScopeHeader
+              title={cleanupListTitle}
+              summary={migrationSummary}
+            />
             <div className="resource-list resource-list--unmanaged">
               {cleanupGroups.length === 0 && collectionGroups.length === 0 ? (
                 <p className="muted library-empty">
@@ -3553,7 +3546,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                         count={cleanupGroupsByBucket[group.bucket].length}
                         expanded={sectionExpanded}
                         readyCleanupCount={readyCleanupCount}
-                        onReviewCleanup={() => setAutoCleanupReviewOpen(true)}
+                        onReviewCleanup={openAutomaticCleanupReview}
                         onToggle={() => {
                           if (!collapsibleBucket) return;
                           setExpandedCleanupBuckets((current) => ({

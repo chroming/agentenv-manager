@@ -18,7 +18,7 @@ import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
-import { Button, IconButton, ModalFrame } from "./ui";
+import { Button, IconButton, ModalFrame, Switch } from "./ui";
 
 interface BulkSkillUpdateDialogProps {
   plans: SkillUpdatePlan[];
@@ -31,7 +31,7 @@ interface BulkSkillUpdateDialogProps {
   onClose(): void;
   onPreview(ids: string[]): void;
   onStop(): void;
-  onUpdate(plans: SkillUpdatePlan[]): void;
+  onUpdate(plans: SkillUpdatePlan[], syncCopiedInstalls?: boolean): void;
 }
 
 const isRunning = (item?: SkillUpdateRunItem) =>
@@ -58,6 +58,7 @@ export const BulkSkillUpdateDialog = ({
   const initialFocusRef = useRef<HTMLButtonElement>(null);
   const expandPreviewRef = useRef<HTMLButtonElement>(null);
   const [diffWorkspaceOpen, setDiffWorkspaceOpen] = useState(false);
+  const [syncCopiedInstalls, setSyncCopiedInstalls] = useState(false);
   const applicablePlans = plans.filter(
     (plan) => plan.changes.length > 0 && plan.errors.length === 0
   );
@@ -67,6 +68,10 @@ export const BulkSkillUpdateDialog = ({
   const failedPlans = applicablePlans.filter((plan) => updateRun[plan.id]?.status === "failed");
   const skippedPlans = applicablePlans.filter((plan) => updateRun[plan.id]?.status === "skipped");
   const finished = started && !running && completedCount === applicablePlans.length;
+  const copiedInstallCount = applicablePlans.reduce(
+    (total, plan) => total + (plan.impact?.copiedInstallCount ?? 0),
+    0
+  );
   const dismissDisabled = previewingAllUpdates || running || (isBusy && !finished);
   const workspaceChanges = useMemo(
     () => plans.flatMap((plan) => plan.changes.map((change) => ({
@@ -123,6 +128,28 @@ export const BulkSkillUpdateDialog = ({
             <Maximize2 size={16} strokeWidth={2.2} />
           </IconButton>
         </header>
+        {copiedInstallCount > 0 && !started ? (
+          <div className="skill-update-copy-option">
+            <span className="skill-update-copy-option__copy">
+              <strong>{t("Also update Agent copies")}</strong>
+              <small>
+                {syncCopiedInstalls
+                  ? t("{{count}} clean managed copies will update in the same backed-up operation.", {
+                      count: copiedInstallCount
+                    })
+                  : t("Off: {{count}} Agent copies will show Apply pending.", {
+                      count: copiedInstallCount
+                    })}
+              </small>
+            </span>
+            <Switch
+              checked={syncCopiedInstalls}
+              disabled={isBusy || updateActivityBusy}
+              label={t("Also update Agent copies")}
+              onClick={() => setSyncCopiedInstalls((current) => !current)}
+            />
+          </div>
+        ) : null}
         <div className="bulk-update-list ui-dialog-body">
           {failures.length > 0 ? (
             <section className="bulk-update-failures" aria-label={t("Preview failures")}>
@@ -185,7 +212,9 @@ export const BulkSkillUpdateDialog = ({
                 </summary>
                 {plan.impact ? (
                   <p className="skill-update-impact">
-                    {t("{{profiles}} Profiles · {{linked}} linked installs update now · {{copied}} copied installs update in this transaction", {
+                    {t(syncCopiedInstalls
+                      ? "{{profiles}} Profiles · {{linked}} linked installs update now · {{copied}} copied installs update now"
+                      : "{{profiles}} Profiles · {{linked}} linked installs update now · {{copied}} copied installs need Apply", {
                       profiles: plan.impact.profileNames.length,
                       linked: plan.impact.linkedInstallCount,
                       copied: plan.impact.copiedInstallCount
@@ -196,7 +225,7 @@ export const BulkSkillUpdateDialog = ({
                 {progress?.error ? (
                   <div className="bulk-update-run-error">
                     <PreviewText className="bulk-update-run-error__message" text={progress.error} />
-                    <Button disabled={isBusy || running} size="compact" onClick={() => onUpdate([plan])}>
+                    <Button disabled={isBusy || running} size="compact" onClick={() => onUpdate([plan], syncCopiedInstalls)}>
                       {t("Retry")}
                     </Button>
                   </div>
@@ -228,7 +257,7 @@ export const BulkSkillUpdateDialog = ({
             </Button>
           ) : null}
           {finished && failedPlans.length > 0 ? (
-            <Button disabled={isBusy} onClick={() => onUpdate(failedPlans)}>
+            <Button disabled={isBusy} onClick={() => onUpdate(failedPlans, syncCopiedInstalls)}>
               {t("Retry failed updates")}
             </Button>
           ) : null}
@@ -243,7 +272,7 @@ export const BulkSkillUpdateDialog = ({
             <Button
               variant="primary"
               disabled={isBusy || updateActivityBusy}
-              onClick={() => onUpdate(skippedPlans)}
+              onClick={() => onUpdate(skippedPlans, syncCopiedInstalls)}
             >
               {t("Continue updates")}
             </Button>
@@ -251,7 +280,7 @@ export const BulkSkillUpdateDialog = ({
             <Button
               variant="primary"
               disabled={isBusy || updateActivityBusy || applicablePlans.length === 0}
-              onClick={() => onUpdate(applicablePlans)}
+              onClick={() => onUpdate(applicablePlans, syncCopiedInstalls)}
             >
               {t(
                 applicablePlans.length === 1 ? "Update {{count}} skill" : "Update {{count}} skills",

@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SkillsEditor } from "../../src/renderer/components/SkillsEditor";
-import type { ProfileResources, SkillLibraryEntry } from "../../src/shared/types";
+import type { ProfileResources, SkillInventoryEntry, SkillLibraryEntry } from "../../src/shared/types";
 
 const skills: SkillLibraryEntry[] = [
   {
@@ -65,26 +65,75 @@ describe("SkillsEditor v2", () => {
     const skillSwitch = screen.getByRole("switch", { name: "Enable Code Review" });
     expect(skillSwitch).toBeDisabled();
     expect(skillSwitch).not.toBeChecked();
-    expect(screen.getByRole("button", { name: "Add Skill" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Add Skill" })).not.toBeInTheDocument();
     fireEvent.click(skillSwitch);
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("projects an Agent policy from the current target snapshot", () => {
+  it("projects an Agent policy from the complete current inventory", () => {
+    const currentSkills: SkillInventoryEntry[] = [{
+      id: "agent-only",
+      name: "Agent only",
+      description: "Only installed in the Agent",
+      path: "/target/skills/agent-only",
+      foundIn: ["codex"],
+      status: "outside",
+      skillKey: "agent-only",
+      runtimeName: "agent-only",
+      deploymentName: "agent-only",
+      runtimeAvailability: "enabled",
+      runtimeConfidence: "verified",
+      runtimeStates: [{
+        targetId: "codex",
+        availability: "enabled",
+        confidence: "verified",
+        issues: []
+      }],
+      contentHash: "agent-only-hash"
+    }];
     render(
       <SkillsEditor
         value={resources}
         librarySkills={skills}
         policy="ignore"
-        currentSkillStates={{ review: false }}
-        currentStateAvailable
+        currentSkills={currentSkills}
+        currentStateStatus="ready"
+        selectedTargetId="codex"
         onChange={vi.fn()}
       />
     );
 
-    const skillSwitch = screen.getByRole("switch", { name: "Enable Code Review" });
-    expect(skillSwitch).toBeDisabled();
-    expect(skillSwitch).not.toBeChecked();
+    expect(screen.getByRole("listitem", { name: "Agent Skill Agent only" }))
+      .toHaveTextContent("Agent only");
+    expect(screen.queryByText("Code Review")).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add Skill" })).not.toBeInTheDocument();
+  });
+
+  it("reports an unavailable Agent inventory once at group level", () => {
+    const onRefresh = vi.fn();
+    render(
+      <SkillsEditor
+        value={{
+          skills: [
+            { libraryId: "review", targetName: "review", enabled: true },
+            { libraryId: "docs", targetName: "docs", enabled: true }
+          ],
+          mcpByTarget: {}
+        }}
+        librarySkills={skills}
+        policy="ignore"
+        currentStateStatus="error"
+        onRefreshCurrentSkills={onRefresh}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getAllByText("Agent Skills unavailable")).toHaveLength(1);
+    expect(screen.queryByText("Current state unavailable")).not.toBeInTheDocument();
+    expect(screen.queryByText("Code Review")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
   it("shows only an authored version in the Profile row and toggles a Skill", () => {
@@ -258,7 +307,6 @@ describe("SkillsEditor v2", () => {
           requiresReview: false,
           localOverride: true
         }]}
-        selectedTargetName="Codex"
         onChange={vi.fn()}
       />
     );
@@ -289,7 +337,6 @@ describe("SkillsEditor v2", () => {
           requiresReview: false,
           localOverride: true
         }]}
-        selectedTargetName="Codex"
         onChange={vi.fn()}
       />
     );
@@ -297,5 +344,31 @@ describe("SkillsEditor v2", () => {
     const row = screen.getByRole("listitem", { name: "Profile Skill review" });
     expect(row).toHaveTextContent("External still active");
     expect(row).not.toHaveTextContent("Apply pending");
+  });
+
+  it("does not claim Turn off removed an unmanaged Agent Skill", () => {
+    render(
+      <SkillsEditor
+        value={resources}
+        librarySkills={skills}
+        policy="disable"
+        skillReceipts={[{
+          path: "/target/skills/review",
+          libraryId: "review",
+          targetName: "review",
+          desired: "omit",
+          observed: "external",
+          authority: "leave-unmanaged",
+          action: "preserve",
+          outcome: "external-remains",
+          requiresReview: false,
+          localOverride: true
+        }]}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("listitem", { name: "Profile Skill review" }))
+      .toHaveTextContent("External still active");
   });
 });

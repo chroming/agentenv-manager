@@ -80,6 +80,11 @@ Use one verdict for every audit or release:
 - [ ] No semantic no-op reports replacement or writes files.
 - [ ] Adopting content-identical Agent resources preserves their bytes, timestamps,
   and topology; only the device-local deployment receipt changes.
+- [ ] Managed copy is the default; only an explicit Live link choice may create
+  a new Skill link.
+- [ ] Library Update leaves copied Agent installs pending unless the user enables
+  the visible copy-update option; selected copies share Backup and rollback.
+- [ ] Changing deployment policy exposes each link/copy conversion in Preview.
 - [ ] New Agent and Workspace deployments create no ownership marker, sidecar,
   or AgentEnv support file beside user resources.
 - [ ] First-run telemetry creates no installation identity and sends no request
@@ -166,14 +171,14 @@ Allowed status labels include:
 - `Check failed`
 - `Monitoring off`
 - `Disabled`
-- `Needs sync`
+- `Apply pending`
 - `Source unavailable`
 
 Allowed current actions include:
 
 - `Review update`
 - `Retry check`
-- `Sync installs`
+- `Review Profiles`
 - `Resolve conflict`
 
 Rules:
@@ -481,7 +486,7 @@ Rules:
 - [ ] Global disable keeps a Skill in Library while removing it from Profile
   selection and update scopes.
 - [ ] Deleting an unreferenced Skill reports the correct deleted count.
-- [ ] Local Skill Cleanup shows only cleanup responsibilities, not unrelated
+- [ ] Local Skills Manager shows only local management responsibilities, not unrelated
   Library maintenance.
 - [ ] Auto-manage distinguishes automatic, decision-required, ignored, managed,
   and externally retained outcomes.
@@ -561,7 +566,7 @@ Rules:
 
 ### 6.6 Settings
 
-- [ ] Appearance, GitHub, updates, Workspace Sync, and storage settings use one
+- [ ] Appearance, GitHub, updates, Device Sync, and storage settings use one
   preference-row geometry.
 - [ ] Inputs, buttons, selects, and switches align within each section.
 - [ ] GitHub sign-in appears next to GitHub-dependent capabilities.

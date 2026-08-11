@@ -40,8 +40,8 @@ Direct macOS downloads are ad-hoc signed, without a Developer ID or notarization
 
 1. Launch the app and confirm the Agents it detected. Agents that are not installed stay disabled by default.
 2. Configure an Agent from the Agents page. Save its current setup as a Profile, or start with an empty Profile.
-3. If the machine already has many Skills, use `Skills > Local Skills` to handle duplicate copies, conflicts, shared directories, and broken links.
-4. Changes are saved to the Profile automatically. Review the Apply preview before writing to the Agent. AgentEnv creates a recovery point first and attempts an automatic rollback after a failed write.
+3. Changes are saved to the Profile automatically. Review the Apply preview before writing to the Agent. AgentEnv creates a recovery point first and attempts an automatic rollback after a failed write.
+4. Local Skills Manager appears only when Capture or Apply finds relevant local Skills that need confirmation. You can also open it from Skills when you want to organize the whole device.
 
 ## Profiles
 
@@ -83,7 +83,7 @@ Conversations maintains a read-only index of local Agent history. Search titles 
 
 ![Conversation history](docs/images/conversations.png)
 
-The source Agent still owns the original history. AgentEnv does not edit conversation databases or include conversations in Profiles, Backups, or Workspace Sync.
+The source Agent still owns the original history. AgentEnv does not edit conversation databases or include conversations in Profiles, Backups, or Device Sync.
 
 ## Supported Agents
 
@@ -98,7 +98,7 @@ Instructions, MCP, Conversations, and Compare support differs between Agents. Th
 
 ## More features
 
-- Workspace Sync uses a dedicated private Git repository for portable Profiles and Skill Library data. Pull and publish both require review, and sync never Applies changes to a local Agent.
+- Device Sync uses a dedicated private Git repository for portable Profiles and Skill Library data. Pull and publish both require review, and sync never Applies changes to a local Agent.
 - Recovery collects recovery points created by Apply, Profile edits, Workspace changes, Skill cleanup, and sync. You can inspect files before restoring them.
 - GitHub sign-in raises API limits for repository imports and update checks. Regular Git and SSH repositories use system Git credentials.
 - The interface supports English, Simplified Chinese, and Traditional Chinese.
@@ -107,7 +107,7 @@ Instructions, MCP, Conversations, and Compare support differs between Agents. Th
 
 - Profile writes follow Preview, Backup, Apply, and Verify. A semantic no-op does not write files.
 - AgentEnv changes only files or fields declared by each Agent integration. Agents continue to own MCP definitions and credentials.
-- Repository scans use a separate cache and never modify an existing checkout. Workspace Sync excludes credentials, Agent state, Backups, and local absolute paths.
+- Repository scans use a separate cache and never modify an existing checkout. Device Sync excludes credentials, Agent state, Backups, and local absolute paths.
 - Official builds send at most one anonymous installation event per day by default. It contains a random installation ID, app version, operating-system family and major version, architecture, interface language, and install channel. You can preview every field or disable reporting in Settings.
 
 See [Product contracts](docs/product-contracts.md) for exact behavior and [PRIVACY.md](PRIVACY.md) for local data and network access.

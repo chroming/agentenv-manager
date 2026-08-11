@@ -73,6 +73,12 @@ describe("useSettingsController", () => {
       await result.current.actions.update({ enabledTargetIds: ["opencode"] });
     });
     expect(onTargetSettingsChanged).toHaveBeenCalledWith(settings);
+
+    onTargetSettingsChanged.mockClear();
+    await act(async () => {
+      await result.current.actions.update({ skillSyncMethod: "copy" });
+    });
+    expect(onTargetSettingsChanged).toHaveBeenCalledWith(settings);
   });
 
   it("keeps failures scoped and auto-clears only successful save feedback", async () => {

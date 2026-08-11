@@ -38,6 +38,24 @@ const planWithChanges = (count: number): SkillUpdatePlan => ({
 });
 
 describe("SkillUpdateDialog", () => {
+  it("keeps Agent copy updates off by default and passes an explicit opt-in", () => {
+    const onConfirm = vi.fn().mockResolvedValue({ status: "completed" as const });
+    const plan = planWithChanges(1);
+    plan.impact.copiedInstallCount = 2;
+    render(
+      <SkillUpdateDialog plan={plan} onClose={vi.fn()} onConfirm={onConfirm} />
+    );
+
+    expect(screen.getByText("Off: 2 Agent copies will show Apply pending."))
+      .toBeInTheDocument();
+    fireEvent.click(screen.getByRole("switch", { name: "Also update Agent copies" }));
+    expect(screen.getByText("2 clean managed copies will update in the same backed-up operation."))
+      .toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Apply update claude-api" }));
+
+    expect(onConfirm).toHaveBeenCalledWith(plan, true);
+  });
+
   it("renders a large change set as a file list and mounts diffs on demand", () => {
     render(
       <SkillUpdateDialog
@@ -136,7 +154,7 @@ describe("SkillUpdateDialog", () => {
     );
     expect(within(dialog).getByText("Source changed")).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Retry update claude-api" }));
-    expect(onConfirm).toHaveBeenCalledWith(plan);
+    expect(onConfirm).toHaveBeenCalledWith(plan, false);
   });
 
   it("auto-closes only after the update and Library reconciliation both complete", async () => {

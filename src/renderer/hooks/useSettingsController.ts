@@ -4,7 +4,8 @@ import type { AgentEnvSettings, AppLocale } from "../../shared/types";
 const DEFAULT_SETTINGS: AgentEnvSettings = {
   locale: "system",
   conversationTerminal: "default",
-  skillSyncMethod: "auto",
+  skillSyncMethod: "copy",
+  skillDeploymentPreferenceVersion: 1,
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,
   skillAutoCheckIntervalMinutes: 60,
@@ -71,7 +72,8 @@ export const useSettingsController = ({
       if (
         "enabledTargetIds" in input ||
         "targetConfigRoots" in input ||
-        "targetCommandOverrides" in input
+        "targetCommandOverrides" in input ||
+        "skillSyncMethod" in input
       ) {
         await callbacksRef.current.onTargetSettingsChanged(nextSettings);
       }

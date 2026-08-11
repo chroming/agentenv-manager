@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from "react";
-import { Download, Link2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, Download, Link2, LoaderCircle, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type {
   AppliedSkillReceipt,
   ProfileResources,
+  SkillInventoryEntry,
   SkillLibraryEntry,
   SkillUpdateInfo
 } from "../../shared/types";
@@ -19,6 +20,7 @@ import {
   DialogFooter,
   DialogHeader,
   ModalFrame,
+  Notice,
   ResourcePanelToolbar,
   ResourceRow,
   ToolbarOverflowMenu,
@@ -33,13 +35,14 @@ interface SkillsEditorProps {
   disabled?: boolean;
   appliedSkillVersions?: Record<string, string>;
   skillReceipts?: AppliedSkillReceipt[];
-  selectedTargetName?: string;
+  selectedTargetId?: string;
   policy?: ProfileResourcePolicy;
-  currentSkillStates?: Record<string, boolean>;
-  currentStateAvailable?: boolean;
+  currentSkills?: SkillInventoryEntry[];
+  currentStateStatus?: "loading" | "ready" | "error";
   onCheckSkillUpdates?(ids: string[]): void;
   onImportNewSkill?(): void;
   onPreviewSkillUpdate?(id: string): void;
+  onRefreshCurrentSkills?(): void;
   onChange(value: ProfileResources): void;
 }
 
@@ -51,12 +54,14 @@ export const SkillsEditor = ({
   disabled = false,
   appliedSkillVersions,
   skillReceipts = [],
+  selectedTargetId,
   policy = "manage",
-  currentSkillStates = {},
-  currentStateAvailable = false,
+  currentSkills = [],
+  currentStateStatus = "ready",
   onCheckSkillUpdates,
   onImportNewSkill,
   onPreviewSkillUpdate,
+  onRefreshCurrentSkills,
   onChange
 }: SkillsEditorProps) => {
   const { t } = useI18n();
@@ -137,13 +142,15 @@ export const SkillsEditor = ({
     closePicker();
   };
 
+  const visibleSkillCount = agentOwnsSkills ? currentSkills.length : value.skills.length;
+
   return (
     <section
-      className={`profile-skill-manager${value.skills.length <= 1 ? " is-compact" : ""}`}
+      className={`profile-skill-manager${visibleSkillCount <= 1 ? " is-compact" : ""}`}
       aria-label={t("Profile Skills")}
       data-profile-skill-count={value.skills.length}
     >
-      <ResourcePanelToolbar
+      {profileManagesSkills ? <ResourcePanelToolbar
         aria-label={t("Profile Skill actions")}
         className="profile-skill-toolbar"
       >
@@ -175,37 +182,96 @@ export const SkillsEditor = ({
             ref={pickerTriggerRef}
             variant="secondary"
             size="compact"
-            disabled={disabled || !profileManagesSkills}
+            disabled={disabled}
             onClick={() => openPicker()}
             icon={<Plus size={14} strokeWidth={2.2} aria-hidden="true" />}
           >
             {t("Add Skill")}
           </Button>
         </div>
-      </ResourcePanelToolbar>
+      </ResourcePanelToolbar> : null}
+
+      {agentOwnsSkills && currentStateStatus === "loading" ? (
+        <Notice
+          className="profile-skill-inventory-notice"
+          icon={<LoaderCircle className="is-spinning" size={15} />}
+          role="status"
+        >
+          {t("Reading Agent Skills...")}
+        </Notice>
+      ) : null}
+      {agentOwnsSkills && currentStateStatus === "error" ? (
+        <Notice
+          actions={onRefreshCurrentSkills ? (
+            <Button size="compact" variant="secondary" onClick={onRefreshCurrentSkills}>
+              {t("Try again")}
+            </Button>
+          ) : undefined}
+          className="profile-skill-inventory-notice"
+          icon={<AlertTriangle size={15} />}
+          role="alert"
+          title={t("Agent Skills unavailable")}
+          tone="warning"
+        >
+          {t("AgentEnv could not read this Agent's current Skills. The saved Profile has not changed.")}
+        </Notice>
+      ) : null}
 
       <AlignedResourceList
         className="profile-skill-list"
         role="list"
       >
-        {value.skills.map((reference, index) => {
+        {agentOwnsSkills && currentStateStatus === "ready" ? currentSkills.map((entry, index) => {
+          const skill = entry.libraryId ? skillsById.get(entry.libraryId) : undefined;
+          const runtimeState = entry.runtimeStates?.find(
+            (state) => state.targetId === selectedTargetId
+          );
+          const availability = runtimeState?.availability ?? entry.runtimeAvailability ?? "unknown";
+          const enabled = availability === "enabled";
+          const status = availability === "enabled"
+            ? "On in Agent"
+            : availability === "disabled"
+              ? "Off in Agent"
+              : availability === "shadowed"
+                ? "Shadowed in Agent"
+                : "State unknown";
+          const skillName = entry.name || entry.runtimeName || entry.deploymentName || entry.id;
+          return (
+            <ResourceRow
+              className={`ui-resource-children__item profile-skill-row${enabled ? "" : " is-disabled"}`}
+              density="compact"
+              description={entry.version ? `v${entry.version}` : undefined}
+              icon={(
+                <ResourceIconArtwork
+                  fallbackIconKey={skill?.sourceType === "github" || skill?.sourceType === "git" ? "github" : "folder"}
+                  iconKey={skill?.iconKey}
+                  sourceUrl={skill?.sourceType === "github" || skill?.sourceType === "git" ? skill.source : undefined}
+                  size={16}
+                />
+              )}
+              key={`${entry.path}:${index}`}
+              role="listitem"
+              aria-label={t("Agent Skill {{name}}", { name: skillName })}
+              state={<span className="profile-skill-state is-neutral">{t(status)}</span>}
+              title={(
+                <OverflowTooltip
+                  className="profile-skill-name"
+                  displayText={skillName}
+                  text={`${skillName}\n${entry.path}`}
+                />
+              )}
+              tone={enabled ? "default" : "disabled"}
+            />
+          );
+        }) : null}
+        {!agentOwnsSkills ? value.skills.map((reference, index) => {
           const skill = skillsById.get(reference.libraryId);
           const update = updatesById.get(reference.libraryId);
           const profileEnabled = reference.enabled !== false;
           const globallyEnabled = skill?.globallyEnabled !== false;
-          const currentState = currentSkillStates[reference.libraryId] ??
-            currentSkillStates[reference.targetName];
-          const hasCurrentState = Object.prototype.hasOwnProperty.call(
-            currentSkillStates,
-            reference.libraryId
-          ) || Object.prototype.hasOwnProperty.call(currentSkillStates, reference.targetName);
           const enabled = profileDisablesSkills
             ? false
-            : agentOwnsSkills
-              ? Boolean(currentState)
-              : Boolean(skill && profileEnabled && globallyEnabled);
-          const effectiveStateKnown = profileManagesSkills || profileDisablesSkills ||
-            (currentStateAvailable && hasCurrentState);
+            : Boolean(skill && profileEnabled && globallyEnabled);
           const appliedRevision = appliedSkillVersions?.[reference.libraryId];
           const localOverride = skillReceipts.find(
             (entry) =>
@@ -220,16 +286,12 @@ export const SkillsEditor = ({
           );
           const status = !skill
             ? "Missing"
-            : profileDisablesSkills
-              ? "Off for Agent"
-              : agentOwnsSkills && !effectiveStateKnown
-                ? "Current state unavailable"
-                : agentOwnsSkills
-                  ? enabled ? "On in Agent" : "Off in Agent"
-                  : localOverride?.outcome === "external-active"
+            : localOverride?.outcome === "external-active"
                     ? "External active"
                     : localOverride?.outcome === "external-remains"
                       ? "External still active"
+                      : profileDisablesSkills
+                        ? "Off for Agent"
                       : !globallyEnabled
                         ? "Disabled in Library"
                         : !profileEnabled
@@ -313,8 +375,7 @@ export const SkillsEditor = ({
               tone={enabled ? "default" : "disabled"}
               actions={(
                 <>
-                  {effectiveStateKnown ? (
-                    <Switch
+                  <Switch
                       checked={enabled}
                       className="profile-skill-switch"
                       disabled={disabled || !profileManagesSkills || !skill || !globallyEnabled}
@@ -330,14 +391,6 @@ export const SkillsEditor = ({
                         )
                       })}
                     />
-                  ) : (
-                    <span
-                      className="profile-skill-current-state"
-                      title={t("Current state unavailable")}
-                    >
-                      {t("Unavailable")}
-                    </span>
-                  )}
                   <ToolbarOverflowMenu
                     disabled={disabled || !profileManagesSkills}
                     items={menuItems}
@@ -348,8 +401,14 @@ export const SkillsEditor = ({
               )}
             />
           );
-        })}
-        {value.skills.length === 0 ? (
+        }) : null}
+        {agentOwnsSkills && currentStateStatus === "ready" && currentSkills.length === 0 ? (
+          <div className="profile-skill-empty">
+            <strong>{t("No Skills detected in this Agent")}</strong>
+            <span>{t("This Profile will leave the Agent's Skill state unchanged.")}</span>
+          </div>
+        ) : null}
+        {!agentOwnsSkills && value.skills.length === 0 ? (
           <div className="profile-skill-empty">
             <strong>{t("No Skills in this Profile")}</strong>
             <span>{t("Add reusable skills from Library.")}</span>

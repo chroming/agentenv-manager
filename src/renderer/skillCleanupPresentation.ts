@@ -116,12 +116,12 @@ export const cleanupActionDisplayLabel = (action: SkillCleanupRecommendedAction)
 };
 
 export const cleanupEffectLabel = (effect: SkillCleanupAutomaticEffect) => {
-  if (effect === "import-and-link") return "Add to Library and link copies";
-  if (effect === "import-shared") return "Add shared copy to Library and remove duplicates";
+  if (effect === "import-and-manage") return "Save and manage existing copies";
+  if (effect === "import-shared") return "Save shared copy and remove duplicates";
   if (effect === "move-shared-to-agents") return "Move Skills out of shared folder";
-  if (effect === "link-to-library") return "Link copies to Library";
-  if (effect === "archive-and-link") return "Back up local changes and link to Library";
-  if (effect === "repair-link") return "Repair managed links";
+  if (effect === "adopt-managed-copy") return "Adopt matching copies";
+  if (effect === "replace-with-managed-copy") return "Back up and replace local copies";
+  if (effect === "refresh-managed-copy") return "Refresh managed copies";
   return "Remove unavailable links";
 };
 

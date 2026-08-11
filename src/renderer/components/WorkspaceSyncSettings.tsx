@@ -291,7 +291,7 @@ export const WorkspaceSyncSettings = ({
     <section className="resource-section settings-section workspace-sync-settings" aria-labelledby="workspace-sync-heading">
       <div className="settings-section-header">
         <div>
-          <div className="resource-heading" id="workspace-sync-heading">{t("Workspace Sync")}</div>
+          <div className="resource-heading" id="workspace-sync-heading">{t("Device Sync")}</div>
           <p className="settings-muted">{t("Sync portable Profiles and Library Skills. Installed Agents and applied Profiles stay local to this device.")}</p>
         </div>
         {connected ? (
@@ -395,7 +395,7 @@ export const WorkspaceSyncSettings = ({
 
       {review ? (
         <ModalFrame
-          ariaLabel={t("Review Workspace changes")}
+          ariaLabel={t("Review Device Sync changes")}
           className="workspace-sync-review ui-dialog-shell"
           dialogRef={dialogRef}
           dismissPolicy="intentional"
@@ -404,7 +404,7 @@ export const WorkspaceSyncSettings = ({
         >
             <header className="profile-dialog-header ui-dialog-header">
               <div className="ui-dialog-header__copy">
-                <div className="workspace-sync-review-title ui-dialog-title">{t("Review Workspace changes")}</div>
+                <div className="workspace-sync-review-title ui-dialog-title">{t("Review Device Sync changes")}</div>
                 <p className="muted ui-dialog-description">{t("Nothing is applied to an Agent by this step.")}</p>
               </div>
               <IconButton variant="ghost" label={t("Close")} disabled={Boolean(working)} onClick={() => setReview(undefined)}><X /></IconButton>

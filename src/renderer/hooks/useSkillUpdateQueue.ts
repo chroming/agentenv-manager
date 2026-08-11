@@ -22,7 +22,8 @@ export const useSkillUpdateQueue = () => {
   const execute = useCallback((
     plans: SkillUpdatePlan[],
     preserveExistingProgress: boolean,
-    allowStop = false
+    allowStop = false,
+    syncCopiedInstalls = false
   ) => {
     setRun((current) => {
       const next = preserveExistingProgress ? { ...current } : {};
@@ -34,7 +35,11 @@ export const useSkillUpdateQueue = () => {
     };
     return runSkillUpdateQueue(
       plans,
-      (plan) => window.agentEnv.updateLibrarySkill({ id: plan.id, previewId: plan.previewId! }),
+      (plan) => window.agentEnv.updateLibrarySkill({
+        id: plan.id,
+        previewId: plan.previewId!,
+        syncCopiedInstalls
+      }),
       updateProgress,
       allowStop ? () => stopRequestedRef.current : undefined
     );

@@ -1,0 +1,27 @@
+.skill-update-copy-option {
+  align-items: center;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  min-height: 58px;
+  padding: 10px 18px;
+}
+
+.skill-update-copy-option__copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.skill-update-copy-option__copy strong {
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+}
+
+.skill-update-copy-option__copy small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}

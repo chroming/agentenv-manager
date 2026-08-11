@@ -273,6 +273,7 @@ describe("moveSharedSkillToAgents", () => {
       suggestedName: "Pi",
       createdAt: "2026-07-28T00:00:00.000Z",
       resources: [],
+      issues: [],
       warnings: [],
       errors: []
     });
@@ -302,6 +303,82 @@ describe("moveSharedSkillToAgents", () => {
     expect(mockApi.updateProfileSkills).not.toHaveBeenCalled();
     expect(mockApi.applyProfile).toHaveBeenCalled();
     expect(mockApi.retireSharedSkill).toHaveBeenCalled();
+  });
+
+  it("leaves an unmanaged Agent conflict unresolved instead of choosing a copy", async () => {
+    const mockApi = api();
+    mockApi.listTargetStates.mockResolvedValue([]);
+    mockApi.previewCreateProfileFromTarget.mockResolvedValue({
+      id: "capture-conflict",
+      targetId: "pi",
+      targetName: "Pi",
+      scope: "skills",
+      suggestedName: "Pi",
+      createdAt: "2026-07-28T00:00:00.000Z",
+      resources: [],
+      issues: [{
+        id: "conflict-1",
+        code: "conflicting-skill-copies",
+        severity: "decision",
+        skillName: "manual-conflict-reviewer",
+        message: "Different copies were found.",
+        candidates: []
+      }],
+      warnings: [],
+      errors: []
+    });
+
+    await expect(moveSharedSkillToAgents({
+      api: mockApi as unknown as AgentEnvApi,
+      migration: {
+        skillKey: "operations-helper",
+        libraryId: "operations-helper",
+        paths: ["/home/.agents/skills/operations-helper"]
+      },
+      targetIds: ["pi"],
+      targetNames: { pi: "Pi" }
+    })).rejects.toThrow("Pi has unresolved Skill conflicts");
+
+    expect(mockApi.createProfileFromTarget).not.toHaveBeenCalled();
+    expect(mockApi.retireSharedSkill).not.toHaveBeenCalled();
+  });
+
+  it("does not absorb a cleanup decision from another Agent during automatic preparation", async () => {
+    const mockApi = api();
+    mockApi.listTargetStates.mockResolvedValue([]);
+    mockApi.previewCreateProfileFromTarget.mockResolvedValue({
+      id: "capture-other-agent-conflict",
+      targetId: "pi",
+      targetName: "Pi",
+      scope: "skills",
+      suggestedName: "Pi",
+      createdAt: "2026-07-28T00:00:00.000Z",
+      resources: [{
+        kind: "skill",
+        id: "manual-conflict-reviewer",
+        name: "Manual Conflict Reviewer",
+        sourcePath: "/home/.pi/agent/skills/manual-conflict-reviewer",
+        action: "import"
+      }],
+      issues: [],
+      warnings: [],
+      errors: []
+    });
+
+    await expect(moveSharedSkillToAgents({
+      api: mockApi as unknown as AgentEnvApi,
+      migration: {
+        skillKey: "operations-helper",
+        libraryId: "operations-helper",
+        paths: ["/home/.agents/skills/operations-helper"]
+      },
+      targetIds: ["pi"],
+      targetNames: { pi: "Pi" },
+      blockedSkillNames: ["manual-conflict-reviewer"]
+    })).rejects.toThrow("Pi still has unresolved Manual Conflict Reviewer");
+
+    expect(mockApi.createProfileFromTarget).not.toHaveBeenCalled();
+    expect(mockApi.retireSharedSkill).not.toHaveBeenCalled();
   });
 
   it("does not absorb unrelated pending Profile changes", async () => {
