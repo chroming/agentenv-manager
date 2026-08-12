@@ -186,7 +186,8 @@ describe("SkillSourceView", () => {
     fireEvent.change(screen.getByLabelText("Search sources and skills"), {
       target: { value: "testing" }
     });
-    expect(screen.getByText("acme/skills · /engineering")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "acme/skills · /engineering" }))
+      .toBeInTheDocument();
     rerender(
       <SkillSourceView
         active={false}
@@ -239,6 +240,18 @@ describe("SkillSourceView", () => {
       />
     );
 
+    const engineering = screen.getByRole("button", {
+      name: "acme/skills · /engineering"
+    });
+    const product = screen.getByRole("button", {
+      name: "acme/skills · /product"
+    });
+    expect(within(engineering).getByText("/engineering")).toHaveClass(
+      "skill-source-link-scope"
+    );
+    expect(within(product).getByText("/product")).toHaveClass(
+      "skill-source-link-scope"
+    );
     expect(screen.getByText("main · /engineering")).toBeInTheDocument();
     expect(screen.getByText("main · /product")).toBeInTheDocument();
   });
@@ -280,11 +293,13 @@ describe("SkillSourceView", () => {
       <SkillSourceView {...props} scopeFilter="monitored" />
     );
 
-    expect(screen.getByText("acme/skills · /engineering")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "acme/skills · /engineering" }))
+      .toBeInTheDocument();
     expect(screen.queryByText("Local project skills")).not.toBeInTheDocument();
 
     rerender(<SkillSourceView {...props} scopeFilter="manual" />);
-    expect(screen.queryByText("acme/skills · /engineering")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "acme/skills · /engineering" }))
+      .not.toBeInTheDocument();
     expect(screen.getByText("Local project skills")).toBeInTheDocument();
 
     rerender(
@@ -295,7 +310,8 @@ describe("SkillSourceView", () => {
         resultFilter="failed"
       />
     );
-    expect(screen.queryByText("acme/skills · /engineering")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "acme/skills · /engineering" }))
+      .not.toBeInTheDocument();
     expect(screen.getByText("Local project skills")).toBeInTheDocument();
   });
 

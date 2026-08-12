@@ -235,5 +235,11 @@
 
   .skill-source-group-row .skill-source-identity {
     align-self: stretch;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .skill-source-group-row .skill-source-checked {
+    line-height: 16px;
   }
 }

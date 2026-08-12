@@ -988,6 +988,44 @@ describe("App", () => {
     expect(window.localStorage.getItem("agentenv:last-workspace")).toBeNull();
   });
 
+  it("keeps a visible setup path when multiple enabled Agents have no Profiles", async () => {
+    const settings: AgentEnvSettings = {
+      locale: "system",
+      conversationTerminal: "default",
+      skillSyncMethod: "auto",
+      skillStorageLocation: "appData",
+      skillAutoCheckEnabled: true,
+      skillAutoCheckIntervalMinutes: 60,
+      backupRetentionDays: null,
+      enabledTargetIds: ["opencode", "codex"],
+      agentDiscoveryVersion: 1,
+      agentDiscoveryReviewedIds: ["opencode", "codex"],
+      suppressedAgentSuggestionIds: []
+    };
+    installApi({
+      listSupportedTargets: vi.fn().mockResolvedValue([target, codexTarget]),
+      probeSupportedTargets: vi.fn().mockResolvedValue([target, codexTarget]),
+      listTargets: vi.fn().mockResolvedValue([target, codexTarget]),
+      listProfiles: vi.fn().mockResolvedValue([]),
+      listTargetStates: vi.fn().mockResolvedValue([]),
+      readSettings: vi.fn().mockResolvedValue(settings)
+    });
+
+    render(<App />);
+
+    const workspace = await screen.findByRole("region", { name: "Agents" });
+    const status = await within(workspace).findByRole("region", { name: "Profile status" });
+    const chooseAgent = within(status).getByRole("button", { name: "Choose Agent" });
+    expect(chooseAgent).toBeEnabled();
+
+    fireEvent.click(chooseAgent);
+    const dialog = await screen.findByRole("dialog", { name: "Agents enabled" });
+    expect(within(dialog).getByText("OpenCode")).toBeInTheDocument();
+    expect(within(dialog).getByText("Codex")).toBeInTheDocument();
+    expect(within(dialog).getAllByRole("button", { name: "Review current setup" }))
+      .toHaveLength(2);
+  });
+
   it("keeps an unclaimed shared folder outside first Agent setup", async () => {
     installApi({
       listProfiles: vi.fn().mockResolvedValue([]),

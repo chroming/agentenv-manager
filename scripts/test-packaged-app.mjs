@@ -315,7 +315,9 @@ try {
     enabledTargetIds: packagedTargets.map((target) => target.id),
     skillManagementFormatVersion: 1,
     agentDiscoveryVersion: 1,
-    agentDiscoveryReviewedIds: packagedTargets.map((target) => target.id)
+    agentDiscoveryReviewedIds: packagedTargets.map((target) => target.id),
+    telemetryEnabled: false,
+    telemetryConsentVersion: 1
   });
 
   reportPackagedStage("discover system Git");

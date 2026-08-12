@@ -434,6 +434,26 @@ const prepareFixture = async (root) => {
       }
     ]
   });
+  const sharedMigrationBackupId = "cleanup-retire-shared-capture";
+  const sharedMigrationBackupDir = join(
+    appDataRoot,
+    "backups",
+    "skill-cleanup",
+    sharedMigrationBackupId
+  );
+  await mkdir(sharedMigrationBackupDir, { recursive: true });
+  await writeJson(join(sharedMigrationBackupDir, "manifest.json"), {
+    formatVersion: 2,
+    id: sharedMigrationBackupId,
+    libraryId: sharedSkillName,
+    libraryCreated: false,
+    createdAt: "2026-07-14T08:30:00.000Z",
+    operation: "retire",
+    status: "complete",
+    expectedPaths: [],
+    mutationHashes: [],
+    entries: []
+  });
   await writeJson(join(appDataRoot, "settings.json"), {
     skillSyncMethod: "copy",
     skillManagementFormatVersion: 1,
@@ -1279,6 +1299,29 @@ try {
   await capturePage(page, join(outputDir, "skills-shared-folder-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "skills-shared-folder-1180x728.png"));
+  await page.getByRole("button", { name: "Close library tool" }).click();
+
+  await page.evaluate(() => window.agentEnv.setSharedSkillAreaMode("profiles-only"));
+  await page.reload();
+  await page.getByRole("button", { name: "Skills", exact: true }).click();
+  await page.getByRole("button", { name: "Local Skills" }).click();
+  await page.getByRole("region", { name: "Local Skills Manager" })
+    .waitFor({ state: "visible", timeout: 5_000 });
+  await page.getByRole("button", { name: "Review shared folder" }).click();
+  await page.getByRole("region", { name: "Shared Skills" })
+    .waitFor({ state: "visible", timeout: 5_000 });
+  await page.getByRole("button", { name: "Restore shared setup…" })
+    .waitFor({ state: "visible", timeout: 5_000 });
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(
+    page,
+    join(outputDir, "skills-shared-folder-profiles-only-920x620.png")
+  );
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(
+    page,
+    join(outputDir, "skills-shared-folder-profiles-only-1180x728.png")
+  );
   await page.getByRole("button", { name: "Close library tool" }).click();
 
   const captureWorkspace = async (buttonName, filePrefix, readyLocator, prepare) => {

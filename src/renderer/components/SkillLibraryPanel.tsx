@@ -37,6 +37,7 @@ import { createPortal } from "react-dom";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useRepositoryImportDraft } from "../hooks/useRepositoryImportDraft";
 import { useSkillCollectionSelection } from "../hooks/useSkillCollectionSelection";
+import { useSharedSkillAreaController } from "../hooks/useSharedSkillAreaController";
 import type {
   GitHubSkillImportInput,
   GitHubSkillImportResult,
@@ -50,7 +51,6 @@ import type {
   ManageTargetSkillInput,
   RetireSharedSkillInput,
   SharedSkillAreaMode,
-  SharedSkillAreaState,
   SharedSkillRetentionInput,
   SkillCleanupBackupSummary,
   SkillCleanupRequest,
@@ -330,11 +330,8 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   const automaticCleanupStopRequestedRef = useRef(false);
   const [cleanupOperationKey, setCleanupOperationKey] = useState<string>();
   const [autoCleanupReviewOpen, setAutoCleanupReviewOpen] = useState(false);
-  const [automaticCleanupIntent, setAutomaticCleanupIntent] = useState<
-    "manage" | "profiles-only"
-  >("manage");
-  const [sharedAreaState, setSharedAreaState] = useState<SharedSkillAreaState>();
-  const [sharedAreaModeOperation, setSharedAreaModeOperation] = useState<SharedSkillAreaMode>();
+  const [automaticCleanupIntent, setAutomaticCleanupIntent] =
+    useState<"manage" | "profiles-only">("manage");
   const [expandedCleanupBuckets, setExpandedCleanupBuckets] = useState<
     Record<"managed" | "unmanaged", boolean>
   >({ managed: false, unmanaged: false });
@@ -382,14 +379,13 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   const [localPreviewingSkillId, setLocalPreviewingSkillId] = useState<string>();
   const [cleanupDetailsKey, setCleanupDetailsKey] = useState<string>();
   const cleanupHistoryRef = useRef<HTMLElement>(null);
-  useEffect(() => {
-    if (activeTool !== "discoveries" || cleanupScope.kind !== "shared") return;
-    let current = true;
-    void onReadSharedSkillAreaState().then((state) => {
-      if (current) setSharedAreaState(state);
-    });
-    return () => { current = false; };
-  }, [activeTool, cleanupScope.kind, onReadSharedSkillAreaState]);
+  const sharedArea = useSharedSkillAreaController({
+    active: activeTool === "discoveries" && cleanupScope.kind === "shared",
+    inventory: skillInventory,
+    historyRef: cleanupHistoryRef,
+    readState: onReadSharedSkillAreaState,
+    setMode: onSetSharedSkillAreaMode
+  });
   const scopedSkillInventory = useMemo(
     () => filterSkillInventoryForManagementScope(skillInventory, cleanupScope),
     [cleanupScope, skillInventory]
@@ -900,8 +896,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     : automaticCleanupIntent === "profiles-only"
       ? profilesOnlyReviewItems
       : automaticCleanupReviewItems;
-  const sharedAreaMode = sharedAreaState?.mode ??
-    skillInventory.find((item) => item.sharedLocation)?.sharedAreaMode;
+  const { mode: sharedAreaMode, operation: sharedAreaModeOperation } = sharedArea;
   const sharedScopeEntryCount = cleanupScope.kind === "all"
     ? allCleanupGroups.filter((group) => Boolean(group.sharedMigration)).length +
       collectionGroups.length
@@ -932,7 +927,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         ? t("Profiles only")
         : t("Choose how to manage this folder");
   const sharedModeLabel = sharedAreaMode && sharedAreaMode !== "keep" && sharedExceptionCount > 0
-    ? `${sharedModeBaseLabel} · ${t("{{count}} exceptions", { count: sharedExceptionCount })}`
+    ? `${sharedModeBaseLabel} · ${t(sharedExceptionCount === 1 ? "1 exception" : "{{count}} exceptions", { count: sharedExceptionCount })}`
     : sharedModeBaseLabel;
   const cleanupToolTitle =
     cleanupScope.kind === "shared" ? t("Shared Skills") : t("Local Skills Manager");
@@ -1519,8 +1514,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         automaticCleanupIntent === "manage" &&
         outcome.completedSkillKeys.length > 0
       ) {
-        const state = await onSetSharedSkillAreaMode("managed");
-        if (state) setSharedAreaState(state);
+        await sharedArea.changeMode("managed");
       }
       if (automaticCleanupStopRequestedRef.current) skipWaiting();
     } finally {
@@ -1552,8 +1546,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         moveCollection: onMoveSkillCollection
       });
       if (completed) {
-        const state = await onSetSharedSkillAreaMode("profiles-only");
-        if (state) setSharedAreaState(state);
+        await sharedArea.changeMode("profiles-only");
       }
     } finally {
       setAutomaticCleanupKey(undefined);
@@ -1601,35 +1594,14 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     automaticCleanupStopRequestedRef.current = false;
     setAutoCleanupReviewOpen(true);
   };
-  const changeSharedAreaMode = async (mode: SharedSkillAreaMode) => {
-    if (sharedAreaModeOperation || automaticCleanupKey) return;
-    if (mode === "managed" && automaticCleanupReviewItems.length > 0) {
-      openAutomaticCleanupReview("manage");
-      return;
-    }
-    if (mode === "profiles-only" && profilesOnlyReviewItems.length > 0) {
-      openAutomaticCleanupReview("profiles-only");
-      return;
-    }
-    setSharedAreaModeOperation(mode);
-    try {
-      const state = await onSetSharedSkillAreaMode(mode);
-      if (!state) return;
-      setSharedAreaState(state);
-    } finally {
-      setSharedAreaModeOperation(undefined);
-    }
-  };
-  const showSharedMigrationRestorePoints = () => {
-    const history = cleanupHistoryRef.current;
-    if (!history) return;
-    history.scrollIntoView({ behavior: "smooth", block: "start" });
-    window.requestAnimationFrame(() => {
-      history
-        .querySelector<HTMLButtonElement>('[data-cleanup-operation="retire"] button')
-        ?.focus({ preventScroll: true });
+  const changeSharedAreaMode = (mode: SharedSkillAreaMode) => sharedArea.requestMode({
+      mode,
+      blocked: Boolean(automaticCleanupKey),
+      reviewRequired: mode === "profiles-only"
+        ? profilesOnlyReviewItems.length > 0
+        : mode === "managed" && automaticCleanupReviewItems.length > 0,
+      onReview: () => openAutomaticCleanupReview(mode === "profiles-only" ? "profiles-only" : "manage")
     });
-  };
   const changeSharedRetention = async (
     group: (typeof cleanupGroups)[number],
     retained: boolean
@@ -3425,7 +3397,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                   canRestore={sharedMigrationRestorePoints.length > 0}
                   onChange={(mode) => void changeSharedAreaMode(mode)}
                   onMoveToProfiles={() => openAutomaticCleanupReview("profiles-only")}
-                  onShowRestorePoints={showSharedMigrationRestorePoints}
+                  onShowRestorePoints={sharedArea.showRestorePoints}
                 />
               ) : sharedScopeEntryCount > 0 && onCleanupScopeChange ? (
                 <Button

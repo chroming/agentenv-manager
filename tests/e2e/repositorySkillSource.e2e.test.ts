@@ -233,6 +233,8 @@ describe("Repository Skill source", () => {
         const sourceHeaderRange = document.createRange();
         sourceHeaderRange.selectNodeContents(sourceHeaderCell);
         const identity = row.querySelector<HTMLElement>(".skill-source-identity")!;
+        const identitySupport = row.querySelector<HTMLElement>(".skill-source-checked")!;
+        const identityScope = row.querySelector<HTMLElement>(".skill-source-link-scope")!;
         const counts = row.querySelector<HTMLElement>(".skill-source-counts")!;
         const checked = row.querySelector<HTMLElement>(".skill-source-last-checked")!;
         const status = row.querySelector<HTMLElement>(".skill-source-status")!;
@@ -251,6 +253,11 @@ describe("Repository Skill source", () => {
           countsFit: counts.scrollWidth <= counts.clientWidth + 1,
           documentWidth: document.documentElement.scrollWidth,
           identityLeft: identity.getBoundingClientRect().left,
+          identityScopeText: identityScope.textContent,
+          identityScopeVisible: identityScope.getBoundingClientRect().width > 0,
+          identitySupportClearsChecked:
+            identitySupport.getBoundingClientRect().bottom <=
+              checked.getBoundingClientRect().top + 1,
           identityTextLeft: row.querySelector<HTMLElement>(".skill-source-link-text")!
             .getBoundingClientRect().left,
           moreHeaderLeft: headerCells[4]!.getBoundingClientRect().left,
@@ -270,6 +277,8 @@ describe("Repository Skill source", () => {
       expect(geometry.documentWidth).toBe(geometry.viewportWidth);
       expect(geometry.rowScrollContained).toBe(true);
       expect(geometry.countsFit).toBe(true);
+      expect(geometry.identityScopeText).toBe("/engineering");
+      expect(geometry.identityScopeVisible).toBe(true);
       expect(Math.abs(geometry.identityTextLeft - geometry.sourceHeaderLeft)).toBeLessThanOrEqual(1);
       expect(geometry.statusFits).toBe(true);
       expect(Math.abs(geometry.countsLeft - geometry.countsHeaderLeft)).toBeLessThanOrEqual(1);
@@ -283,6 +292,7 @@ describe("Repository Skill source", () => {
         expect(geometry.checkedHeaderDisplay).toBe("none");
         expect(Math.abs(geometry.checkedLeft - geometry.identityLeft)).toBeLessThanOrEqual(1);
         expect(geometry.checkedBelowIdentityTitle).toBe(true);
+        expect(geometry.identitySupportClearsChecked).toBe(true);
       } else {
         expect(geometry.columnCount).toBe(7);
         expect(geometry.checkedHeaderDisplay).not.toBe("none");
