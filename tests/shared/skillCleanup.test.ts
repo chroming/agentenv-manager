@@ -586,7 +586,7 @@ describe("skill cleanup groups", () => {
     expect(automaticSkillCleanupRequest(group)).toBeUndefined();
   });
 
-  it("tracks a shared compatibility copy through import and Target migration", () => {
+  it("keeps shared Skills managed in place until Profiles-only migration is explicit", () => {
     const sharedCopy = inventoryItem({
       path: "/tmp/home/.agents/skills/reviewer",
       foundIn: ["opencode", "codex"],
@@ -596,22 +596,7 @@ describe("skill cleanup groups", () => {
       locationRole: "compatibility-runtime",
       sharedLocation: true
     });
-    const openCodeCopy = inventoryItem({
-      path: "/tmp/home/.config/opencode/skills/reviewer",
-      foundIn: ["opencode"],
-      status: "managed",
-      libraryId: "reviewer",
-      contentMatchesLibrary: true
-    });
-    const codexCopy = inventoryItem({
-      path: "/tmp/home/.codex/skills/reviewer",
-      foundIn: ["codex"],
-      status: "managed",
-      libraryId: "reviewer",
-      contentMatchesLibrary: true
-    });
-
-    const [waiting] = buildSkillCleanupGroups([sharedCopy, openCodeCopy], {
+    const [notManaged] = buildSkillCleanupGroups([sharedCopy], {
       installedTargetIds: ["opencode", "codex"],
       preparedTargetsBySkill: {
         reviewer: [{
@@ -621,64 +606,37 @@ describe("skill cleanup groups", () => {
         }]
       }
     });
-    expect(waiting.sharedMigration).toEqual({
-      state: "waiting",
+    expect(notManaged.sharedMigration).toEqual({
+      state: "not-managed",
       consumers: ["codex", "opencode"],
-      pendingConsumers: ["codex"],
+      pendingConsumers: ["codex", "opencode"],
       paths: ["/tmp/home/.agents/skills/reviewer"],
       libraryId: "reviewer"
     });
-    expect(waiting.presentation).toEqual({
-      state: "shared-copy-ready-to-move",
-      action: "move-from-shared"
+    expect(notManaged.presentation).toEqual({
+      state: "copies-not-managed",
+      action: "manage-copies"
     });
-    expect(waiting).toMatchObject({
+    expect(notManaged).toMatchObject({
       resolution: "automatic",
       bucket: "ready",
-      automaticEffect: "move-shared-to-agents"
+      automaticEffect: "import-shared"
     });
-    expect(automaticSkillCleanupRequest(waiting)).toBeUndefined();
+    expect(automaticSkillCleanupRequest(notManaged)).toMatchObject({
+      mode: "shared-compatibility",
+      libraryAction: "keep",
+      sharedLocations: [{ path: "/tmp/home/.agents/skills/reviewer" }]
+    });
 
-    const [ready] = buildSkillCleanupGroups([sharedCopy, openCodeCopy, codexCopy], {
-      installedTargetIds: ["opencode", "codex"],
-      preparedTargetsBySkill: {
-        reviewer: ["opencode", "codex"].map((targetId) => ({
-          targetId,
-          libraryId: "reviewer",
-          sharedPaths: ["/tmp/home/.agents/skills/reviewer"]
-        }))
-      }
-    });
-    expect(ready.sharedMigration).toMatchObject({ state: "ready", pendingConsumers: [] });
-    expect(ready.presentation).toEqual({
-      state: "shared-copy-ready-to-move",
-      action: "move-from-shared"
-    });
-    expect(ready).toMatchObject({ resolution: "manual", bucket: "ready" });
-
-    const [stale] = buildSkillCleanupGroups([sharedCopy, openCodeCopy, codexCopy], {
-      installedTargetIds: ["opencode", "codex"],
-      preparedTargetsBySkill: {
-        reviewer: ["opencode", "codex"].map((targetId) => ({
-          targetId,
-          libraryId: "reviewer",
-          sharedPaths: ["/tmp/home/.agents/skills/older-reviewer"]
-        }))
-      }
-    });
-    expect(stale.sharedMigration).toMatchObject({
-      state: "waiting",
-      pendingConsumers: ["codex", "opencode"]
-    });
-    expect(stale.presentation).toEqual({
-      state: "shared-copy-ready-to-move",
-      action: "move-from-shared"
-    });
-    expect(stale).toMatchObject({
-      resolution: "automatic",
-      bucket: "ready",
-      automaticEffect: "move-shared-to-agents"
-    });
+    const [managed] = buildSkillCleanupGroups([inventoryItem({
+      ...sharedCopy,
+      status: "managed",
+      managedAsShared: true
+    })]);
+    expect(managed.sharedMigration).toMatchObject({ state: "managed" });
+    expect(managed.presentation).toEqual({ state: "managed", action: "none" });
+    expect(managed).toMatchObject({ resolution: "resolved", bucket: "managed" });
+    expect(automaticSkillCleanupRequest(managed)).toBeUndefined();
   });
 
   it("distinguishes unimported, retained, external, and conflicting shared copies", () => {

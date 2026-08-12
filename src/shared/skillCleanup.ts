@@ -37,8 +37,6 @@ export type SkillCleanupDisplayState =
   | "managed-copy-changed"
   | "management-upgrade"
   | "outside-agentenv"
-  | "shared-copy-needs-decisions"
-  | "shared-copy-ready-to-move"
   | "shared-left-unmanaged"
   | "unavailable"
   | "managed"
@@ -50,8 +48,6 @@ export type SkillCleanupRecommendedAction =
   | "review-differences"
   | "review-drift"
   | "review-paths"
-  | "review-agents"
-  | "move-from-shared"
   | "review-details"
   | "none";
 
@@ -62,8 +58,8 @@ export interface SkillCleanupPresentation {
 
 export type SharedSkillMigrationState =
   | "not-imported"
-  | "waiting"
-  | "ready"
+  | "not-managed"
+  | "managed"
   | "unmanaged"
   | "outside"
   | "conflict";
@@ -79,7 +75,9 @@ export interface SharedSkillMigration {
 export const sharedSkillMigrationNeedsAction = (
   migration: SharedSkillMigration | undefined
 ): migration is SharedSkillMigration =>
-  Boolean(migration && migration.state !== "unmanaged");
+  Boolean(
+    migration && migration.state !== "unmanaged" && migration.state !== "managed"
+  );
 
 export interface SkillCleanupPreparedTarget {
   targetId: string;
@@ -317,20 +315,6 @@ export const buildSkillCleanupGroups = (
         (item) => item.libraryId && item.contentMatchesLibrary === true
       );
       const sharedPaths = [...new Set(sharedItems.map((item) => item.path))].sort();
-      const preparedTargets = new Set(
-        (options.preparedTargetsBySkill?.[skillKey] ?? [])
-          .filter((preparation) =>
-            isSkillCleanupPreparationCurrent(
-              preparation,
-              sharedLibraryItem?.libraryId,
-              sharedPaths
-            )
-          )
-          .map((preparation) => preparation.targetId)
-      );
-      const pendingConsumers = consumers.filter(
-        (targetId) => !preparedTargets.has(targetId)
-      );
       const sharedLeftUnmanaged =
         sharedItems.length > 0 &&
         sharedItems.every(
@@ -342,6 +326,11 @@ export const buildSkillCleanupGroups = (
         sharedItems.some(
           (item) => item.libraryId && item.contentMatchesLibrary === false
         ) || hashes.size > 1;
+      const sharedManaged =
+        sharedItems.length > 0 &&
+        sharedItems.every(
+          (item) => item.managedAsShared && item.contentMatchesLibrary === true
+        );
       const sharedMigration: SharedSkillMigration | undefined = sharedItems.length === 0
         ? undefined
         : {
@@ -351,13 +340,13 @@ export const buildSkillCleanupGroups = (
                 ? "outside"
                 : sharedConflict
                   ? "conflict"
+                  : sharedManaged
+                    ? "managed"
                   : !sharedLibraryItem
                     ? "not-imported"
-                    : pendingConsumers.length > 0
-                      ? "waiting"
-                      : "ready",
+                    : "not-managed",
             consumers,
-            pendingConsumers,
+            pendingConsumers: consumers,
             paths: sharedPaths,
             libraryId: sharedLibraryItem?.libraryId
           };
@@ -387,9 +376,9 @@ export const buildSkillCleanupGroups = (
         !hasOtherUnreadable &&
         removableBrokenLinkItems.length === brokenLinkItems.length &&
         removableBrokenLinkItems.every((item) => Boolean(item.foundIn[0]));
-      const canImportSharedCopies =
-        sharedMigration?.state === "not-imported" &&
-        !hasLibraryCopy &&
+      const canManageSharedCopies =
+        (sharedMigration?.state === "not-imported" ||
+          sharedMigration?.state === "not-managed") &&
         !hasBlockingExternal &&
         !hasUnreadable &&
         !missingTarget &&
@@ -410,13 +399,11 @@ export const buildSkillCleanupGroups = (
         !sharedSkillMigrationNeedsAction(sharedMigration) &&
         !missingTarget &&
         hashes.size <= 1;
-      const sharedCopyWaiting = sharedMigration?.state === "waiting";
-      const sharedCopyReplaceable = sharedMigration?.state === "ready";
       const sharedMigrationNeedsAction = sharedSkillMigrationNeedsAction(
         sharedMigration
       );
       const resolution: SkillCleanupResolution =
-        sharedCopyWaiting
+        canManageSharedCopies
           ? "automatic"
           : legacyOwnershipMigrationReady && canNormalizeToLibrary
             ? "automatic"
@@ -425,7 +412,7 @@ export const buildSkillCleanupGroups = (
               : state === "left-unmanaged" || state === "managed"
                 ? "resolved"
                 : canRemoveBrokenLinks ||
-                    canImportSharedCopies ||
+                    canManageSharedCopies ||
                     canNormalizeToLibrary ||
                     canImportStandalone
                   ? "automatic"
@@ -437,15 +424,13 @@ export const buildSkillCleanupGroups = (
       const automaticEffect: SkillCleanupAutomaticEffect | undefined =
         resolution !== "automatic"
           ? undefined
-          : sharedCopyWaiting
-            ? "move-shared-to-agents"
+          : canManageSharedCopies
+            ? "import-shared"
             : legacyOwnershipMigrationReady && hasLibraryCopy
               ? "migrate-legacy-ownership"
             : canRemoveBrokenLinks
             ? "remove-broken-link"
-            : canImportSharedCopies
-              ? "import-shared"
-              : staleManaged
+            : staleManaged
                 ? "refresh-managed-copy"
                 : hasLibraryCopy
                   ? libraryConflict || hashes.size > 1
@@ -453,9 +438,7 @@ export const buildSkillCleanupGroups = (
                     : "adopt-managed-copy"
                   : "import-and-manage";
       const bucket: SkillCleanupBucket =
-        sharedCopyReplaceable
-          ? "ready"
-          : resolution === "automatic"
+        resolution === "automatic"
               ? "ready"
               : resolution === "manual"
                 ? "decision"
@@ -463,8 +446,10 @@ export const buildSkillCleanupGroups = (
                   ? "managed"
                   : "unmanaged";
       const resolutionReason =
-        sharedCopyWaiting
-          ? "AgentEnv can preserve the current Skill use, prepare affected Agents, and move the shared copy in one reviewed cleanup."
+        sharedManaged
+          ? "The shared copy is managed from Library and remains available to every Agent that reads this directory."
+          : canManageSharedCopies
+            ? "AgentEnv can add the shared copy to Library and manage it without moving the shared path or changing Profiles."
           : hasLegacyOwnershipMarkers && resolution === "automatic"
             ? "AgentEnv can move legacy ownership records into private Target state and remove marker files without changing Skill content or deployment topology."
           : resolution === "resolved"
@@ -506,11 +491,11 @@ export const buildSkillCleanupGroups = (
                 state: "outside-agentenv",
                 action: "review-paths"
               }
-            : sharedMigration?.state === "ready"
-              ? { state: "shared-copy-ready-to-move", action: "move-from-shared" }
-              : sharedMigration?.state === "waiting"
-                ? { state: "shared-copy-ready-to-move", action: "move-from-shared" }
-                : sharedMigration?.state === "outside"
+            : sharedMigration?.state === "managed"
+              ? { state: "managed", action: "none" }
+              : sharedMigration?.state === "not-managed"
+                ? { state: "copies-not-managed", action: "manage-copies" }
+              : sharedMigration?.state === "outside"
                     ? { state: "outside-agentenv", action: "review-paths" }
                     : sharedMigrationNeedsAction
                       ? hasLibraryCopy
@@ -609,7 +594,8 @@ export const automaticSkillCleanupRequest = (
     const sharedItems = manageableItems.filter((item) => item.sharedLocation);
     const targetItems = manageableItems.filter((item) => !item.sharedLocation);
     if (
-      sharedMigration.state !== "not-imported" ||
+      (sharedMigration.state !== "not-imported" &&
+        sharedMigration.state !== "not-managed") ||
       sharedItems.length === 0 ||
       targetItems.some((item) => !item.foundIn[0])
     ) {
@@ -619,7 +605,7 @@ export const automaticSkillCleanupRequest = (
       skillKey: group.skillKey,
       libraryId: group.items.find((item) => item.libraryId)?.libraryId ?? group.skillKey,
       canonicalPath: manageableItems[0].path,
-      libraryAction: "create",
+      libraryAction: sharedMigration.state === "not-imported" ? "create" : "keep",
       mode: "shared-compatibility",
       sharedLocations: sharedItems.map((item) => ({
         path: item.path,

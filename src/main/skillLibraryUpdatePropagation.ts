@@ -62,6 +62,7 @@ export const prepareLibraryUpdatePropagation = async ({
 
   const targetIds = [...new Set(
     propagatedInstalls
+      .filter((entry) => !entry.managedAsShared)
       .map((entry) => entry.foundIn[0])
       .filter((targetId): targetId is string => Boolean(targetId))
   )];
@@ -73,6 +74,7 @@ export const prepareLibraryUpdatePropagation = async ({
       const installPaths = new Set(
         propagatedInstalls
           .filter((entry) => entry.foundIn[0] === targetId)
+          .filter((entry) => !entry.managedAsShared)
           .map((entry) => resolve(entry.path))
       );
       const managesVersion = Object.prototype.hasOwnProperty.call(

@@ -1831,7 +1831,7 @@ description: >
         role: "compatibility-runtime" as const,
         shared: true,
         scanDepth: "recursive" as const,
-        management: "migration-only" as const
+        management: "shared-runtime" as const
       }]
     };
 
@@ -2236,6 +2236,10 @@ description: >
     await expect(readFile(join(codexCopy, "SKILL.md"), "utf8"))
       .rejects.toMatchObject({ code: "ENOENT" });
     expect(result.managedLocations).toEqual([sharedCopy]);
+    await expect(store.readSharedSkillAreaState()).resolves.toMatchObject({
+      mode: "managed",
+      receipts: [{ path: sharedCopy, libraryId: "reviewer", materialization: "copied" }]
+    });
 
     await store.rollbackSkillCleanup(result.backupId);
     await expect(readFile(join(sharedCopy, "SKILL.md"), "utf8"))
@@ -2244,6 +2248,10 @@ description: >
       .resolves.toBe("# OpenCode older\n");
     await expect(readFile(join(codexCopy, "SKILL.md"), "utf8"))
       .resolves.toBe("# Chosen version\n");
+    await expect(store.readSharedSkillAreaState()).resolves.toEqual({
+      formatVersion: 1,
+      receipts: []
+    });
   });
 
   it("keeps an existing Library version while normalizing shared copies", async () => {

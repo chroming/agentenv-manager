@@ -1,6 +1,8 @@
 import { useCallback } from "react";
 import type {
   SharedSkillRetentionInput,
+  SharedSkillAreaMode,
+  SharedSkillAreaState,
   SkillCollectionMemberDecisionUpdate,
   SkillInventoryEntry,
   UnmanagedSkillLocationUpdate
@@ -178,11 +180,43 @@ export const useSkillCleanupBoundaries = ({
     }
   }, [setError, setSkillInventory, setSkillUpdateCheckStatus]);
 
+  const readSharedSkillAreaState = useCallback(
+    () => window.agentEnv.readSharedSkillAreaState(),
+    []
+  );
+
+  const setSharedSkillAreaMode = useCallback(async (
+    mode: SharedSkillAreaMode
+  ): Promise<SharedSkillAreaState | undefined> => {
+    setError(undefined);
+    setSkillUpdateCheckStatus({ state: "checking", message: "Saving shared Skill behavior..." });
+    try {
+      const state = await window.agentEnv.setSharedSkillAreaMode(mode);
+      const inventory = await window.agentEnv.scanSkillInventory();
+      setSkillInventory(() => inventory);
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: mode === "keep"
+          ? "Shared Skills will remain outside AgentEnv management"
+          : mode === "managed"
+            ? "Shared Skills are ready to manage in place"
+            : "Shared Skills are ready to move into Profiles"
+      });
+      return state;
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      setSkillUpdateCheckStatus({ state: "error", message: "Could not save shared Skill behavior" });
+      return undefined;
+    }
+  }, [setError, setSkillInventory, setSkillUpdateCheckStatus]);
+
   return {
     setUnmanagedSkillLocations,
     setSkillCollectionDecision,
     leaveSkillGroupUnmanaged: (skillKey: string) => setGroupBoundary(skillKey, true),
     manageSkillGroupWithAgentEnv: (skillKey: string) => setGroupBoundary(skillKey, false),
-    setSharedSkillRetention
+    setSharedSkillRetention,
+    readSharedSkillAreaState,
+    setSharedSkillAreaMode
   };
 };

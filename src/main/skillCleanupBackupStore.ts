@@ -213,6 +213,14 @@ export const createSkillCleanupBackupStore = ({
     }
 
     const allowedRoots = await trustedSkillRoots();
+    const allowedExactPaths = new Set([
+      canonicalPathKey(paths.sharedSkillAreaStatePath)
+    ]);
+    const sourcePathAllowed = (sourcePath: string) =>
+      allowedExactPaths.has(canonicalPathKey(sourcePath)) ||
+      allowedRoots.some(
+        (root) => pathsEqual(dirname(sourcePath), root) && isPathInside(root, sourcePath)
+      );
     const backupLocationsRoot = resolve(backupDir, "locations");
     if (manifest.entries.length > 0) {
       const locationsStats = await lstat(backupLocationsRoot);
@@ -233,9 +241,7 @@ export const createSkillCleanupBackupStore = ({
         throw new Error(`Invalid Skill cleanup expected path: ${safeId}`);
       }
       const sourcePath = resolve(entry.path);
-      const sourceAllowed = allowedRoots.some(
-        (root) => pathsEqual(dirname(sourcePath), root) && isPathInside(root, sourcePath)
-      );
+      const sourceAllowed = sourcePathAllowed(sourcePath);
       const key = canonicalPathKey(sourcePath);
       if (!sourceAllowed || seenExpectedPaths.has(key)) {
         throw new Error(`Skill cleanup backup contains an unsafe expected path: ${safeId}`);
@@ -272,9 +278,7 @@ export const createSkillCleanupBackupStore = ({
       }
       const sourcePath = resolve(entry.sourcePath);
       const backupPath = resolve(entry.backupPath);
-      const sourceAllowed = allowedRoots.some(
-        (root) => pathsEqual(dirname(sourcePath), root) && isPathInside(root, sourcePath)
-      );
+      const sourceAllowed = sourcePathAllowed(sourcePath);
       const backupPathKey = canonicalPathKey(backupPath);
       const expected = manifest.expectedPaths.find((item) => pathsEqual(item.path, sourcePath));
       const backupNameMatch = basename(backupPath).match(/^\d+-(.+)$/);

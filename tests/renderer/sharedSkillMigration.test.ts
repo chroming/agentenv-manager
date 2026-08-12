@@ -381,7 +381,7 @@ describe("moveSharedSkillToAgents", () => {
     expect(mockApi.retireSharedSkill).not.toHaveBeenCalled();
   });
 
-  it("does not absorb unrelated pending Profile changes", async () => {
+  it("prepares the saved pending Profile inside the reviewed migration", async () => {
     const mockApi = api();
     mockApi.listTargetStates.mockResolvedValue([
       {
@@ -395,21 +395,21 @@ describe("moveSharedSkillToAgents", () => {
       } satisfies TargetManagementState
     ]);
 
-    await expect(
-      moveSharedSkillToAgents({
-        api: mockApi as unknown as AgentEnvApi,
-        migration: {
-          skillKey: "operations-helper",
-          libraryId: "operations-helper",
-          paths: ["/home/.agents/skills/operations-helper"]
-        },
-        targetIds: ["pi"],
-        targetNames: { pi: "Pi" }
-      })
-    ).rejects.toThrow("Pi has pending or changed Profile resources");
-    expect(mockApi.updateProfileSkills).not.toHaveBeenCalled();
-    expect(mockApi.applyProfile).not.toHaveBeenCalled();
-    expect(mockApi.retireSharedSkill).not.toHaveBeenCalled();
+    await moveSharedSkillToAgents({
+      api: mockApi as unknown as AgentEnvApi,
+      migration: {
+        skillKey: "operations-helper",
+        libraryId: "operations-helper",
+        paths: ["/home/.agents/skills/operations-helper"]
+      },
+      targetIds: ["pi"],
+      targetNames: { pi: "Pi" }
+    });
+
+    expect(mockApi.updateProfileSkills).toHaveBeenCalled();
+    expect(mockApi.previewApply).toHaveBeenCalledWith("pi-profile", "pi");
+    expect(mockApi.applyProfile).toHaveBeenCalledWith("pi-profile", "preview-1");
+    expect(mockApi.retireSharedSkill).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the shared copy when Agent preparation fails", async () => {

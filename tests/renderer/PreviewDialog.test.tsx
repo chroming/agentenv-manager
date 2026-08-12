@@ -44,7 +44,7 @@ describe("PreviewDialog", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Manage Skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review local Skills" }));
     expect(onManageLocalSkills).toHaveBeenCalledOnce();
   });
 

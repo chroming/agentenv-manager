@@ -15,6 +15,7 @@ export const createSkillManagerNavigation = ({
   setFeedbackWorkspace,
   setLibraryMode,
   setScope,
+  setOriginTargetId,
   setCollectionFocusPath,
   setActiveTool,
   openWorkspace,
@@ -32,6 +33,7 @@ export const createSkillManagerNavigation = ({
   setFeedbackWorkspace(value: "library"): void;
   setLibraryMode(value: "skills"): void;
   setScope(value: SkillManagementScope): void;
+  setOriginTargetId(value?: string): void;
   setCollectionFocusPath(value?: string): void;
   setActiveTool(value?: "discoveries"): void;
   openWorkspace(value: "library" | "profiles"): void;
@@ -41,8 +43,13 @@ export const createSkillManagerNavigation = ({
   refreshProfilePreview(profileId: string, targetId: string): Promise<unknown>;
   guardProfileAction(label: string, action: () => void): void;
 }) => {
-  const open = (scope: SkillManagementScope, returnContext?: SkillManagerReturnContext) => {
+  const open = (
+    scope: SkillManagementScope,
+    returnContext?: SkillManagerReturnContext,
+    originTargetId?: string
+  ) => {
     setReturnContext(returnContext);
+    setOriginTargetId(originTargetId);
     setFeedbackWorkspace("library");
     setLibraryMode("skills");
     setScope(scope);
@@ -54,6 +61,7 @@ export const createSkillManagerNavigation = ({
   return {
     openAll: async () => {
       setReturnContext(undefined);
+      setOriginTargetId(undefined);
       setFeedbackWorkspace("library");
       setLibraryMode("skills");
       setScope({ kind: "all" });
@@ -65,7 +73,7 @@ export const createSkillManagerNavigation = ({
       const nextTarget = targets.find((candidate) => candidate.id === targetId);
       if (!nextTarget) return;
       setSelectedTargetId(targetId);
-      open({ kind: "all" });
+      open({ kind: "all" }, undefined, targetId);
     },
     openShared: () => guardProfileAction("review shared Skills", () => {
       captureLibraryScroll();
@@ -79,7 +87,8 @@ export const createSkillManagerNavigation = ({
       setCollectionFocusPath(collectionPath);
       open(
         { kind: "shared" },
-        profile && target ? { profileId: profile.id, targetId: target.id } : undefined
+        profile && target ? { profileId: profile.id, targetId: target.id } : undefined,
+        target?.id
       );
     },
     reviewProfile: () => {
@@ -89,10 +98,11 @@ export const createSkillManagerNavigation = ({
       open({ kind: "all" }, {
         profileId: profile.id,
         targetId: target.id
-      });
+      }, target.id);
     },
     close: (returnContext?: SkillManagerReturnContext) => {
       setReturnContext(undefined);
+      setOriginTargetId(undefined);
       setActiveTool(undefined);
       setScope({ kind: "all" });
       setCollectionFocusPath(undefined);

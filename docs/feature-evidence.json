@@ -510,9 +510,59 @@
           "tests/main/targetState.test.ts",
           "tests/main/activationService.test.ts"
         ],
-    "visual": [
-      "apply-preview-920x620.png"
-    ]
+        "visual": [
+          "apply-preview-920x620.png"
+        ]
+      }
+    },
+    {
+      "id": "shared-skill-area-intents",
+      "summary": "Leave the shared folder unchanged, manage it in place, or run a separate reviewed migration into Profile deployments.",
+      "contract": {
+        "path": "docs/product-contracts.md",
+        "anchor": "### 4.2 Shared Runtime Locations"
+      },
+      "support": {
+        "opencode": "supported",
+        "claude-code": "supported",
+        "codex": "supported",
+        "antigravity": "supported",
+        "trae-cli": "supported",
+        "pi": "supported"
+      },
+      "states": {
+        "idle": "Scan observes the shared directory without claiming it or interrupting first Agent setup; Local Skills exposes the optional folder review.",
+        "working": "A reviewed operation shows per-Skill progress and protects shared paths, Library content, central receipts, and affected Agent state.",
+        "success": "Manage in place preserves the shared runtime path with a central receipt; Move to Profiles removes it only after supported Agent destinations verify.",
+        "error": "The failed Skill remains available from its original shared path and reports a selectable reason in the same progress dialog.",
+        "cancelled": "Stop after current leaves waiting Skills untouched and keeps the previously selected stable folder policy.",
+        "noOp": "Leave unchanged and repeated matching management do not rewrite shared Skill content or Agent Profiles.",
+        "stale": "Changed shared content, Library content, Profile intent, or destination state is re-read before mutation and returns to review.",
+        "partial": "Completed independent Skills stay managed while failed or explicitly unmanaged paths remain visible exceptions.",
+        "persisted": "Area intent and path receipts are device-local under AgentEnv data and never written beside Skills or included in portable sync.",
+        "rollback": "Shared management and Profiles-only removal restore shared topology, Library content, Agent paths, state, and central receipts together; the migrated state links directly to those restore points."
+      },
+      "evidence": {
+        "domain": [
+          "tests/main/sharedSkillAreaStore.test.ts",
+          "tests/main/skillLibraryStore.test.ts",
+          "tests/shared/skillCleanup.test.ts"
+        ],
+        "renderer": [
+          "tests/renderer/SharedSkillAreaWorkflow.test.tsx",
+          "tests/renderer/SkillLibraryPanel.test.tsx"
+        ],
+        "desktop": [
+          "tests/e2e/electronUiProfileSwitching.e2e.test.ts"
+        ],
+        "persistence": [
+          "tests/main/sharedSkillAreaStore.test.ts",
+          "tests/main/skillLibraryStore.test.ts"
+        ],
+        "visual": [
+          "skills-shared-folder-920x620.png",
+          "skills-shared-folder-1180x728.png"
+        ]
       }
     }
   ]

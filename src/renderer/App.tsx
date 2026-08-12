@@ -326,6 +326,7 @@ const AppContent = ({
   const [skillLibraryTool, setSkillLibraryTool] = useState<"import" | "discoveries">();
   const [skillCleanupScope, setSkillCleanupScope] =
     useState<SkillManagementScope>({ kind: "all" });
+  const [skillManagerOriginTargetId, setSkillManagerOriginTargetId] = useState<string>();
   const skillManagerReturnRef = useRef<SkillManagerReturnContext | undefined>(undefined);
   const [skillCollectionFocusPath, setSkillCollectionFocusPath] = useState<string>();
   const [skillUpdateCheckStatus, setSkillUpdateCheckStatus] =
@@ -2598,6 +2599,7 @@ const AppContent = ({
     setFeedbackWorkspace: setSkillUpdateFeedbackWorkspace,
     setLibraryMode: setSkillLibraryMode,
     setScope: setSkillCleanupScope,
+    setOriginTargetId: setSkillManagerOriginTargetId,
     setCollectionFocusPath: setSkillCollectionFocusPath,
     setActiveTool: setSkillLibraryTool,
     openWorkspace: openWorkspaceNow,
@@ -2618,7 +2620,7 @@ const AppContent = ({
     setSkillCollectionDecision,
     leaveSkillGroupUnmanaged,
     manageSkillGroupWithAgentEnv,
-    setSharedSkillRetention
+    setSharedSkillRetention, readSharedSkillAreaState, setSharedSkillAreaMode
   } = useSkillCleanupBoundaries({
     skillInventory,
     setSkillInventory,
@@ -3729,6 +3731,7 @@ const AppContent = ({
                   skillInventory,
                   cleanupBackups: skillCleanupBackups,
                   cleanupScope: skillCleanupScope,
+                  originTargetId: skillManagerOriginTargetId,
                   focusCollectionPath: skillCollectionFocusPath
                 },
                 updates: {
@@ -3756,6 +3759,7 @@ const AppContent = ({
                   },
                   onFocusCollectionHandled: () => setSkillCollectionFocusPath(undefined),
                   onLibraryModeChange: setSkillLibraryMode,
+                  onCleanupScopeChange: setSkillCleanupScope,
                   onViewStateChange: (next) => {
                     libraryScroll.resetScrollNow();
                     setSkillLibraryViewState(next);
@@ -3825,6 +3829,8 @@ const AppContent = ({
                   onSetUnmanagedSkillLocations: setUnmanagedSkillLocations,
                   onSetSkillCollectionDecision: setSkillCollectionDecision,
                   onSetSharedSkillRetention: setSharedSkillRetention,
+                  onReadSharedSkillAreaState: readSharedSkillAreaState,
+                  onSetSharedSkillAreaMode: setSharedSkillAreaMode,
                   onRetireSharedSkill: retireSharedSkill,
                   onMoveSharedSkillToAgents: moveSharedSkillToAgentDirectories,
                   onMoveSkillCollection: moveSkillCollectionToAgentDirectories,

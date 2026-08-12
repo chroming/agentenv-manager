@@ -766,12 +766,41 @@
 }
 
 .cleanup-section-heading {
-  display: block;
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
   min-width: 0;
 }
 
-.cleanup-section-heading > div {
+.cleanup-section-heading > div:first-child {
+  flex: 1 1 auto;
   min-width: 0;
+}
+
+.cleanup-section-heading__actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.shared-area-mode-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  max-width: min(100%, 520px);
+}
+
+.shared-area-mode-policy {
+  flex: 1 1 auto;
+  min-width: 270px;
+}
+
+.shared-area-mode-policy > .ui-segmented-control__option {
+  flex: 1 1 0;
+  padding-inline: 10px;
 }
 
 .cleanup-section-heading > div > small {
@@ -783,6 +812,21 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.cleanup-section-heading--stacked {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cleanup-section-heading--stacked .cleanup-section-heading__actions {
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.cleanup-section-heading--stacked .shared-area-mode-actions {
+  max-width: none;
 }
 
 .skill-library-panel .library-drawer__refresh {
@@ -877,6 +921,27 @@
 }
 
 @container skill-library (max-width: 560px) {
+  .cleanup-section-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .shared-area-mode-actions {
+    flex-wrap: wrap;
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .shared-area-mode-policy {
+    flex: 1 1 240px;
+    min-width: 0;
+  }
+
+  .shared-area-mode-policy > .ui-segmented-control__option {
+    min-width: 0;
+  }
+
   .skill-library-panel .cleanup-group-row {
     align-items: start;
     gap: 8px;

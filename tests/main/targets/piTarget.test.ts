@@ -57,7 +57,7 @@ describe("Pi adapter", () => {
       expect.objectContaining({
         path: join(root, ".agents", "skills"),
         sharedLocationId: "agents-skills",
-        management: "migration-only"
+        management: "shared-runtime"
       })
     ]);
     expect(profile.manifest).toMatchObject({

@@ -52,7 +52,7 @@ export const buildAutomaticCleanupReviewItems = (
         ...(request.sharedLocations ?? []).map((location) => location.path),
         ...request.locations.map((location) => location.path)
       ],
-      secondary: group.sharedMigration?.state === "not-imported"
+      secondary: group.sharedMigration
         ? group.sharedMigration.consumers
             .map((targetId) => targetNameFor(targetId, targetNames, targetId))
             .join(", ")
@@ -69,8 +69,8 @@ export const buildAutomaticCleanupReviewItems = (
       skillKey: group.skillKey,
       name: group.primary?.name ?? group.skillKey,
       paths: migration?.paths ?? [],
-      secondary: migration?.state === "waiting"
-        ? migration.pendingConsumers
+      secondary: migration
+        ? migration.consumers
             .map((targetId) => targetNameFor(targetId, targetNames, targetId))
             .join(", ")
         : undefined
@@ -89,6 +89,9 @@ interface AutomaticSkillCleanupDialogProps {
   onClose(): void;
   onRun(requests: SkillCleanupRequest[]): void;
   onStop(): void;
+  title?: string;
+  description?: string;
+  runLabel?: string;
 }
 
 export const AutomaticSkillCleanupDialog = ({
@@ -100,7 +103,10 @@ export const AutomaticSkillCleanupDialog = ({
   initialFocusRef,
   onClose,
   onRun,
-  onStop
+  onStop,
+  title = "Manage eligible local Skills",
+  description = "AgentEnv will manage the eligible items below. Every changed path is backed up before the operation starts.",
+  runLabel
 }: AutomaticSkillCleanupDialogProps) => {
   const { t } = useI18n();
   const groups = new Map<SkillCleanupAutomaticEffect, AutomaticCleanupReviewItem[]>();
@@ -146,15 +152,15 @@ export const AutomaticSkillCleanupDialog = ({
         ref={dialogRef}
         className="profile-form-dialog profile-form-dialog--compact cleanup-bulk-dialog ui-dialog-shell"
         role="dialog"
-        aria-label={t("Manage eligible local Skills")}
+        aria-label={t(title)}
         aria-modal="true"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="profile-dialog-header ui-dialog-header">
           <div className="ui-dialog-header__copy">
-            <div className="section-title ui-dialog-title">{t("Manage eligible local Skills")}</div>
+            <div className="section-title ui-dialog-title">{t(title)}</div>
             <p className="muted ui-dialog-description">
-              {t("AgentEnv will manage the eligible items below. Every changed path is backed up before the operation starts.")}
+              {t(description)}
             </p>
           </div>
         </header>
@@ -210,7 +216,7 @@ export const AutomaticSkillCleanupDialog = ({
               variant="primary"
               onClick={() => onRun(items.flatMap((item) => item.request ? [item.request] : []))}
             >
-              {t("Manage {{count}} skills", { count: items.length })}
+              {runLabel ? t(runLabel) : t("Manage {{count}} skills", { count: items.length })}
             </Button>
           ) : null}
         </footer>

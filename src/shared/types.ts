@@ -197,6 +197,8 @@ export interface AgentEnvApi {
   consolidateSkillGroup(input: SkillCleanupRequest): Promise<SkillCleanupResult>;
   rollbackSkillCleanup(backupId: string): Promise<void>;
   setSharedSkillRetention(input: SharedSkillRetentionInput): Promise<void>;
+  readSharedSkillAreaState(): Promise<SharedSkillAreaState>;
+  setSharedSkillAreaMode(mode: SharedSkillAreaMode): Promise<SharedSkillAreaState>;
   retireSharedSkill(input: RetireSharedSkillInput): Promise<SkillCleanupResult>;
   retireSkillCollection(input: RetireSkillCollectionInput): Promise<SkillCleanupResult>;
   checkSkillLibraryUpdates(ids?: string[]): Promise<SkillUpdateInfo[]>;
@@ -1001,6 +1003,7 @@ export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   runtimeScope?: SkillRuntimeScope;
   runtimeOwner?: SkillRuntimeOwner;
   managedByTarget?: boolean;
+  managedAsShared?: boolean;
   legacyOwnershipMarkerPaths?: string[];
   legacyOwnershipMigrationReady?: boolean;
   runtimeAvailability?: SkillRuntimeAvailability;
@@ -1017,6 +1020,7 @@ export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   locationRole?: TargetSkillLocationRole;
   sharedLocation?: boolean;
   sharedLocationId?: SharedSkillLocationId;
+  sharedAreaMode?: SharedSkillAreaMode;
   legacyLocation?: boolean;
   locationManagement?: TargetSkillLocation["management"];
   collectionLink?: SkillCollectionLink;
@@ -1105,6 +1109,24 @@ export interface SharedSkillRetentionInput {
   skillKey: string;
   paths: string[];
   retained: boolean;
+}
+
+export type SharedSkillAreaMode = "keep" | "managed" | "profiles-only";
+
+export interface ManagedSharedSkillReceipt {
+  path: string;
+  sharedLocationId: SharedSkillLocationId;
+  libraryId: string;
+  adoptedContentHash: string;
+  materialization: "linked" | "copied";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SharedSkillAreaState {
+  formatVersion: 1;
+  mode?: SharedSkillAreaMode;
+  receipts: ManagedSharedSkillReceipt[];
 }
 
 export interface RetireSharedSkillInput {
@@ -1742,7 +1764,7 @@ export interface TargetSkillLocation {
   sharedLocationId?: SharedSkillLocationId;
   scope?: SkillRuntimeScope;
   scanDepth?: SkillScanDepth;
-  management?: "managed" | "observed" | "legacy" | "migration-only";
+  management?: "managed" | "observed" | "legacy" | "shared-runtime";
   externalContainerMarkers?: TargetSkillExternalContainerMarker[];
 }
 

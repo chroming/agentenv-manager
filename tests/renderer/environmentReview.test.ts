@@ -37,7 +37,7 @@ const sharedSkill = (
   contentHash: "hash",
   sharedLocation: true,
   sharedLocationId: "agents-skills",
-  locationManagement: "migration-only",
+  locationManagement: "shared-runtime",
   ...overrides
 });
 
@@ -60,7 +60,7 @@ describe("environment review", () => {
 
   it("prioritizes actionable shared compatibility Skills", () => {
     const result = derive({
-      inventory: [sharedSkill()],
+      inventory: [sharedSkill({ sharedAreaMode: "managed" })],
       installedTargetIds: ["opencode", "codex"]
     });
 
@@ -70,6 +70,31 @@ describe("environment review", () => {
       sharedAutomaticCount: 1,
       affectedTargetIds: ["codex", "opencode"]
     });
+  });
+
+  it("keeps unclaimed shared Skills outside the first-run critical path", () => {
+    expect(derive({ inventory: [sharedSkill()] })).toMatchObject({
+      state: "ready",
+      sharedSkillCount: 1
+    });
+    expect(derive({ inventory: [sharedSkill()], profiles: [] })).toMatchObject({
+      state: "setup",
+      sharedSkillCount: 1
+    });
+    expect(
+      derive({
+        inventory: [sharedSkill()],
+        installedTargetIds: [],
+        profiles: [],
+        targetStates: []
+      })
+    ).toMatchObject({ state: "no-agents", sharedSkillCount: 1 });
+  });
+
+  it("reopens shared review for residual copies after Profiles-only migration", () => {
+    expect(
+      derive({ inventory: [sharedSkill({ sharedAreaMode: "profiles-only" })] })
+    ).toMatchObject({ state: "shared-review", sharedSkillCount: 1 });
   });
 
   it("does not reopen review for a shared path left unmanaged", () => {

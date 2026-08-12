@@ -88,6 +88,7 @@ import {
   type SkillRootTransition
 } from "./skillRootTopology";
 import { createCaptureReceiptStore } from "./captureReceiptStore";
+import { createSharedSkillAreaStore } from "./sharedSkillAreaStore";
 import { targetPathInputFor } from "./targets/pathInput";
 import {
   completeSkillCollectionMigrationTransaction,
@@ -220,6 +221,7 @@ export const createActivationService = ({
 }: ActivationServiceOptions): ActivationService => {
   const backupStore = createBackupStore(paths);
   const captureReceiptStore = createCaptureReceiptStore(paths);
+  const sharedSkillAreaStore = createSharedSkillAreaStore(paths);
   const previews = new Map<string, InternalActivationPreview>();
   const stopManagingPreviews = new Map<string, StopManagingPreview>();
   const rollbackPreviewFingerprints = new Map<string, Record<string, string | undefined>>();
@@ -1527,9 +1529,6 @@ export const createActivationService = ({
     consumerTargetIds: string[];
   }): Promise<SkillCleanupResult> => {
     const targetIds = [...new Set(consumerTargetIds)].sort();
-    if (targetIds.length === 0) {
-      throw new Error(`${skillKey} has no installed Agent consumers to migrate.`);
-    }
     await claimTargetOperations(targetIds);
 
     try {
@@ -1649,7 +1648,8 @@ export const createActivationService = ({
             context.targetPath,
             markerPathForFile(context.targetPath),
             context.statePath
-          ])
+          ]),
+          sharedSkillAreaStore.path
         ].filter((path, index, all) => all.indexOf(path) === index),
         {
           operation: "shared-skill-migration",
@@ -1662,6 +1662,10 @@ export const createActivationService = ({
         changedMessage: (path) => `Shared Skill path changed after backup: ${path}`
       });
       const installedPaths: string[] = [];
+      const preparedContexts: Array<{
+        context: (typeof contexts)[number];
+        state: TargetState;
+      }> = [];
 
       try {
         for (const context of contexts) {
@@ -1676,13 +1680,6 @@ export const createActivationService = ({
             }
           }, { expectedPathHash: context.statePathHash });
           await claimPath.recordMutation(context.statePath);
-        }
-        for (const sharedPath of normalizedSharedPaths) {
-          await claimPath(sharedPath, markerPathForFile(sharedPath));
-          await removeSkillDeployment(sharedPath, {
-            allowedRoot: dirname(sharedPath)
-          });
-          await claimPath.recordMutation(sharedPath, markerPathForFile(sharedPath));
         }
         for (const context of contexts) {
           await claimPath(context.targetPath, markerPathForFile(context.targetPath));
@@ -1742,28 +1739,23 @@ export const createActivationService = ({
           } else {
             delete appliedSkillVersions[libraryId];
           }
-          await writeTargetState(context.targetId, {
-            ...context.state,
-            managedResources: retainedResources.concat(migratedResources),
-            appliedLibraryVersions: {
-              ...context.state.appliedLibraryVersions,
-              skills: appliedSkillVersions
-            },
-            skillReceipts,
-            sharedSkillPreparations: (context.state.sharedSkillPreparations ?? []).filter(
-              (item) => item.skillKey !== skillKey || item.libraryId !== libraryId
-            )
-          }, {
-            expectedPathHash: claimPath.mutationHashes.get(resolve(context.statePath))
+          preparedContexts.push({
+            context,
+            state: {
+              ...context.state,
+              managedResources: retainedResources.concat(migratedResources),
+              appliedLibraryVersions: {
+                ...context.state.appliedLibraryVersions,
+                skills: appliedSkillVersions
+              },
+              skillReceipts,
+              sharedSkillPreparations: (context.state.sharedSkillPreparations ?? []).filter(
+                (item) => item.skillKey !== skillKey || item.libraryId !== libraryId
+              )
+            }
           });
-          await claimPath.recordMutation(context.statePath);
         }
 
-        for (const sharedPath of normalizedSharedPaths) {
-          if (await pathExists(sharedPath)) {
-            throw new Error(`Shared Skill removal verification failed: ${sharedPath}`);
-          }
-        }
         for (const context of contexts) {
           const shouldExist = context.intent.disposition === "install";
           if ((await pathExists(join(context.targetPath, "SKILL.md"))) !== shouldExist) {
@@ -1775,6 +1767,27 @@ export const createActivationService = ({
               (await hashComparablePath(librarySkill.path))
           ) {
             throw new Error(`Agent Skill ownership verification failed: ${context.targetPath}`);
+          }
+        }
+        for (const sharedPath of normalizedSharedPaths) {
+          await claimPath(sharedPath, markerPathForFile(sharedPath));
+          await removeSkillDeployment(sharedPath, {
+            allowedRoot: dirname(sharedPath)
+          });
+          await claimPath.recordMutation(sharedPath, markerPathForFile(sharedPath));
+        }
+        await claimPath(sharedSkillAreaStore.path);
+        await sharedSkillAreaStore.removeManaged(normalizedSharedPaths);
+        await claimPath.recordMutation(sharedSkillAreaStore.path);
+        for (const prepared of preparedContexts) {
+          await writeTargetState(prepared.context.targetId, prepared.state, {
+            expectedPathHash: claimPath.mutationHashes.get(resolve(prepared.context.statePath))
+          });
+          await claimPath.recordMutation(prepared.context.statePath);
+        }
+        for (const sharedPath of normalizedSharedPaths) {
+          if (await pathExists(sharedPath)) {
+            throw new Error(`Shared Skill removal verification failed: ${sharedPath}`);
           }
         }
         await appendHistory(paths, {

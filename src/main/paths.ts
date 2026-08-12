@@ -18,6 +18,7 @@ export interface AgentEnvPaths {
   skillSourcesPath: string;
   unmanagedSkillLocationsPath: string;
   skillCollectionDecisionsPath: string;
+  sharedSkillAreaStatePath: string;
   profilesDir: string;
   profileRecoveryDir: string;
   backupsDir: string;
@@ -84,6 +85,9 @@ export const createPaths = (overrides: PathOverrides): AgentEnvPaths => {
     skillCollectionDecisionsPath:
       overrides.skillCollectionDecisionsPath ??
       join(overrides.appDataRoot, "skill-collection-decisions.json"),
+    sharedSkillAreaStatePath:
+      overrides.sharedSkillAreaStatePath ??
+      join(overrides.appDataRoot, "shared-skill-area.json"),
     profilesDir: overrides.profilesDir ?? join(overrides.appDataRoot, "profiles"),
     profileRecoveryDir:
       overrides.profileRecoveryDir ?? join(overrides.appDataRoot, "profile-recovery"),
