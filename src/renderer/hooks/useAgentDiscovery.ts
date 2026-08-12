@@ -45,6 +45,7 @@ interface AgentDiscoveryController {
   dismissAgentSuggestions(): void;
   enableSuggestedAgents(agentIds: string[]): Promise<void>;
   openAgentChooser(): void;
+  openAgentSetup(targetIds: string[]): void;
   probeSupportedAgents(forceRefresh?: boolean): Promise<void>;
   restoreAllAgentSuggestions(): Promise<void>;
   resetTargetConfigRoot(targetId: string): Promise<void>;
@@ -275,6 +276,15 @@ export const useAgentDiscovery = ({
     openAgentChooser: () => {
       setRecentlyEnabledAgentIds([]);
       setAgentSuggestionMode("manual");
+    },
+    openAgentSetup: (targetIds) => {
+      const requested = new Set(targetIds);
+      setRecentlyEnabledAgentIds(
+        orderedDiscoveredTargets
+          .filter((target) => requested.has(target.id) && isTargetInstalled(target.health))
+          .map((target) => target.id)
+      );
+      setAgentSuggestionMode("setup");
     },
     probeSupportedAgents,
     restoreAllAgentSuggestions,

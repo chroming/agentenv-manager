@@ -44,7 +44,6 @@ import type {
   RepositorySkillSourceInput,
   LibraryResourceVersions,
   ManageTargetSkillInput,
-  RetireSharedSkillInput,
   SkillInventoryEntry,
   SkillImportConflictResolution,
   SkillImportInput,
@@ -82,16 +81,12 @@ import { acceptAppliedProfileState } from "./appliedProfileState";
 import { activationPreviewHasWork } from "./activationPreview";
 import { formatDiagnosticIssue, parseDiagnosticErrorMessage } from "./diagnostics";
 import { formatBytes } from "./formatBytes";
-import { moveSharedSkillToAgents } from "./sharedSkillMigration";
+import { createSharedSkillMigrationActions } from "./sharedSkillMigrationActions";
 import {
   createSkillManagerNavigation,
   type SkillManagerReturnContext
 } from "./skillManagerNavigation";
-import { runSkillCollectionMigration } from "./skillCollectionMigrationAction";
-import type {
-  SkillCollectionLinkGroup,
-  SkillManagementScope
-} from "../shared/skillCleanup";
+import type { SkillManagementScope } from "../shared/skillCleanup";
 import { collectLibraryResourceVersions, libraryResourceVersionsEqual } from "../shared/libraryVersions";
 import { isTargetInstalled } from "../shared/targetHealth";
 import { isExternalSkillImportable } from "../shared/skillIdentity";
@@ -1654,7 +1649,7 @@ const AppContent = ({
     dialogOpen: agentDiscoveryDialogOpen,
     discoveredTargets, enabledAgentIds, visibleAgentSuggestions,
     chooseTargetConfigRoot, dismissAgentSuggestions, enableSuggestedAgents,
-    openAgentChooser, probeSupportedAgents, resetTargetConfigRoot,
+    openAgentChooser, openAgentSetup, probeSupportedAgents, resetTargetConfigRoot,
     restoreAllAgentSuggestions, setAgentEnabled, setDiscoveredTargets, setTargetCommandOverride,
     suppressAgentSuggestion
   } = useAgentDiscovery({
@@ -2630,83 +2625,21 @@ const AppContent = ({
     setSkillUpdateCheckStatus
   });
 
-  const retireSharedSkill = async (input: RetireSharedSkillInput) => {
-    setError(undefined);
-    try {
-      const result = await window.agentEnv.retireSharedSkill(input);
-      setSkillCleanupResult(result);
-      await refreshProfiles({ checkSkillUpdates: false });
-      setSkillUpdateCheckStatus({
-        state: "success",
-        message: `Completed shared migration for ${input.skillKey}`
-      });
-      return true;
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-      return false;
-    }
-  };
-
-  const moveSharedSkillToAgentDirectories = async (
-    input: RetireSharedSkillInput,
-    targetIds: string[],
-    options?: { blockedSkillKeys?: string[] }
-  ) => {
-    const activeProfileIds = new Set(
-      targetStates
-        .filter((state) => targetIds.includes(state.targetId))
-        .map((state) => state.activeProfileId)
-        .filter((id): id is string => Boolean(id))
-    );
-    if (isProfileDirty && draftProfile && activeProfileIds.has(draftProfile.id)) {
-      setError("Save or discard the open Profile changes before moving this shared Skill.");
-      return false;
-    }
-
-    setError(undefined);
-    setBusy(true);
-    try {
-      const result = await moveSharedSkillToAgents({
-        api: window.agentEnv,
-        migration: input,
-        targetIds,
-        targetNames,
-        blockedSkillNames: options?.blockedSkillKeys
-      });
-      setSkillCleanupResult(result);
-      await refreshProfiles({ checkSkillUpdates: false });
-      setSkillUpdateCheckStatus({
-        state: "success",
-        message: `Moved ${input.skillKey} to ${targetIds.length} ${
-          targetIds.length === 1 ? "Agent" : "Agents"
-        }`
-      });
-      return true;
-    } catch (unknownError) {
-      await refreshProfiles({ checkSkillUpdates: false }).catch(() => undefined);
-      throw unknownError;
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const moveSkillCollectionToAgentDirectories = (
-    collection: SkillCollectionLinkGroup,
-    options?: Parameters<typeof runSkillCollectionMigration>[1]
-  ) => {
-    return runSkillCollectionMigration({
-      api: window.agentEnv,
-      collection,
-      targetStates,
-      dirtyProfileId: isProfileDirty ? draftProfile?.id : undefined,
-      saveDirtyProfile: async () => void await saveDraft(),
-      targetNames,
-      setBusy,
-      setResult: setSkillCleanupResult,
-      setSuccess: (message) => setSkillUpdateCheckStatus({ state: "success", message }),
-      refresh: () => refreshProfiles({ checkSkillUpdates: false }).then(() => undefined)
-    }, options);
-  };
+  const {
+    retireSharedSkill,
+    moveSharedSkillToAgentDirectories,
+    moveSkillCollectionToAgentDirectories
+  } = createSharedSkillMigrationActions({
+    targetStates,
+    dirtyProfileId: isProfileDirty ? draftProfile?.id : undefined,
+    targetNames,
+    setBusy,
+    setError,
+    setResult: setSkillCleanupResult,
+    setSuccess: (message) => setSkillUpdateCheckStatus({ state: "success", message }),
+    refresh: () => refreshProfiles({ checkSkillUpdates: false }).then(() => undefined),
+    saveDirtyProfile: async () => void await saveDraft()
+  });
   const scanGitHubSkills = (url: string): Promise<GitHubSkillScanResult> =>
     window.agentEnv.scanGitHubSkills(url);
   const scanRepositorySkills = (
@@ -4484,6 +4417,7 @@ const AppContent = ({
               onRefresh={refreshTargets}
               onReorder={reorderAgents}
               onChooseAgents={openAgentChooser}
+              onChooseSetupAgent={openAgentSetup}
               onConfigure={openAgentConfiguration}
               onReviewEnvironment={openEnvironmentReview}
               onCreateProfileFromTarget={(targetId, returnFocus) =>

@@ -13,6 +13,7 @@ interface EnvironmentStatusStripProps {
   summary: EnvironmentReviewSummary;
   targetNames: Record<string, string>;
   busy: boolean;
+  onChooseSetupAgent(targetIds: string[]): void;
   onConfigure(targetId: string): void;
   onRefresh(): void;
   onReviewShared(): void;
@@ -93,6 +94,7 @@ export const EnvironmentStatusStrip = ({
   summary,
   targetNames,
   busy,
+  onChooseSetupAgent,
   onConfigure,
   onRefresh,
   onReviewShared
@@ -163,6 +165,15 @@ export const EnvironmentStatusStrip = ({
           onClick={() => onConfigure(firstSetupTargetId)}
         >
           {t("Configure Agent")}
+        </Button>
+      ) : summary.state === "setup" ? (
+        <Button
+          className="environment-status-strip__action"
+          size="compact"
+          disabled={busy}
+          onClick={() => onChooseSetupAgent(summary.installedTargetIds)}
+        >
+          {t("Choose Agent")}
         </Button>
       ) : reviewTargetId ? (
         <Button

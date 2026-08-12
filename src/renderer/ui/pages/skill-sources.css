@@ -326,6 +326,7 @@
   gap: 5px;
   justify-content: flex-start;
   min-width: 0;
+  max-width: 100%;
   padding: 0;
   text-align: left;
 }
@@ -375,6 +376,16 @@
 }
 
 .skill-source-link-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-source-link-scope {
+  color: var(--muted-strong);
+  flex: 0 1 48%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -118,6 +118,9 @@ const sourceDefaultLabel = (group: SkillSourceGroupView) => {
   return directory ? `${repository} · /${directory}` : repository;
 };
 
+const sourceDirectoryLeaf = (group: SkillSourceGroupView) =>
+  group.directory.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean).at(-1);
+
 const mergeErrorSummary = (message: string) => {
   if (/repository access failed|authentication failed|permission denied|publickey|host key verification/i.test(message)) {
     return "Could not access this repository. Check your Git credentials or SSH key.";
@@ -774,6 +777,12 @@ export const SkillSourceView = ({
           const isSelected = mergeSelection.has(group.sourceId);
           const hasAttention = group.counts.updates + group.counts.new + group.counts.removed > 0;
           const groupName = group.displayName ?? sourceDefaultLabel(group);
+          const repositoryLabel = sourceRepositoryLabel(group.repository);
+          const directoryLeaf = sourceDirectoryLeaf(group);
+          const primaryLabel = group.displayName ?? repositoryLabel;
+          const primaryScope = !group.displayName && directoryLeaf
+            ? `/${directoryLeaf}`
+            : undefined;
           const reviewableUpdateIds = group.candidates.flatMap((candidate) =>
             candidate.state === "update" &&
             candidate.libraryId &&
@@ -901,16 +910,22 @@ export const SkillSourceView = ({
                     <button
                       className="skill-source-link"
                       type="button"
+                      aria-label={groupName}
                       onClick={() => sourceIsOpenable(group.canonicalLink)
                         ? onOpenSource(group.canonicalLink)
                         : onCopySource(group.canonicalLink)}
                     >
                       <OverflowTooltip
                         className="skill-source-link-text"
-                        displayText={groupName}
+                        displayText={primaryLabel}
                         focusable={false}
                         text={group.canonicalLink}
                       />
+                      {primaryScope ? (
+                        <span className="skill-source-link-scope" aria-hidden="true">
+                          {primaryScope}
+                        </span>
+                      ) : null}
                       {sourceIsOpenable(group.canonicalLink) ? (
                         <ExternalLink size={12} strokeWidth={2.2} />
                       ) : (

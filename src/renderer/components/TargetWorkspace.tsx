@@ -62,6 +62,7 @@ interface TargetWorkspaceProps {
   onRefresh(): Promise<void>;
   onReorder?(targetIds: string[]): void;
   onChooseAgents(): void;
+  onChooseSetupAgent(targetIds: string[]): void;
   onConfigure(targetId: string): void;
   onReviewEnvironment(): void;
   onCreateProfileFromTarget(targetId: string, returnFocus?: HTMLElement | null): void;
@@ -260,6 +261,7 @@ export const TargetWorkspace = ({
   onRefresh,
   onReorder = () => undefined,
   onChooseAgents,
+  onChooseSetupAgent,
   onConfigure,
   onReviewEnvironment,
   onCreateProfileFromTarget,
@@ -351,6 +353,7 @@ export const TargetWorkspace = ({
           summary={environmentReview}
           targetNames={targetNames}
           busy={busy}
+          onChooseSetupAgent={onChooseSetupAgent}
           onConfigure={onConfigure}
           onRefresh={() => {
             void onRefresh();
