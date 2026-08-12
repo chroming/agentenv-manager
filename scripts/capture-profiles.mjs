@@ -953,6 +953,7 @@ try {
     join(appDataRoot, "skills-library", "shared-compatibility-reviewer", "SKILL.md"),
     join(sharedSkillDir, "SKILL.md")
   );
+  await page.evaluate(() => window.agentEnv.setSharedSkillAreaMode("managed"));
   await page.reload();
   await agentsWorkspace.getByText("1 shared Skill needs review", { exact: true }).waitFor({
     state: "visible"
@@ -1271,6 +1272,13 @@ try {
   await page
     .getByRole("region", { name: "Local Skills Manager" })
     .waitFor({ state: "visible", timeout: 5_000 });
+  await page.getByRole("button", { name: "Review shared folder" }).click();
+  const sharedSkillsManager = page.getByRole("region", { name: "Shared Skills" });
+  await sharedSkillsManager.waitFor({ state: "visible", timeout: 5_000 });
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(page, join(outputDir, "skills-shared-folder-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "skills-shared-folder-1180x728.png"));
   await page.getByRole("button", { name: "Close library tool" }).click();
 
   const captureWorkspace = async (buttonName, filePrefix, readyLocator, prepare) => {

@@ -769,7 +769,8 @@ describe("renderer UI primitives", () => {
           value="blank"
           options={[
             { value: "blank", label: "Blank" },
-            { value: "agent", label: "From Agent" }
+            { value: "agent", label: "From Agent" },
+            { value: "import", label: "Import", busy: true }
           ]}
           onChange={onChange}
         />
@@ -783,6 +784,9 @@ describe("renderer UI primitives", () => {
     expect(screen.getByRole("group", { name: "Profile source" }))
       .toHaveClass("ui-segmented-control");
     expect(screen.getByRole("button", { name: "Blank" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Import" }))
+      .toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "Import" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "From Agent" }));
     expect(onChange).toHaveBeenCalledWith("agent");
   });

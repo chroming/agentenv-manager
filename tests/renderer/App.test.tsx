@@ -592,6 +592,12 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       managedLocations: ["/tmp/skill"]
     }),
     setSharedSkillRetention: vi.fn().mockResolvedValue(undefined),
+    readSharedSkillAreaState: vi.fn().mockResolvedValue({ formatVersion: 1, receipts: [] }),
+    setSharedSkillAreaMode: vi.fn().mockImplementation(async (mode) => ({
+      formatVersion: 1,
+      mode,
+      receipts: []
+    })),
     retireSharedSkill: vi.fn().mockResolvedValue({
       backupId: "retire-backup",
       libraryId: "skill",
@@ -982,6 +988,37 @@ describe("App", () => {
     expect(window.localStorage.getItem("agentenv:last-workspace")).toBeNull();
   });
 
+  it("keeps an unclaimed shared folder outside first Agent setup", async () => {
+    installApi({
+      listProfiles: vi.fn().mockResolvedValue([]),
+      listTargetStates: vi.fn().mockResolvedValue([]),
+      scanSkillInventory: vi.fn().mockResolvedValue([{
+        id: "shared-onboarding",
+        name: "Shared Onboarding",
+        description: "Shared but not claimed",
+        path: "/tmp/home/.agents/skills/shared-onboarding",
+        foundIn: ["opencode"],
+        status: "outside",
+        skillKey: "shared-onboarding",
+        contentHash: "shared-hash",
+        sharedLocation: true,
+        sharedLocationId: "agents-skills",
+        locationManagement: "shared-runtime"
+      } satisfies SkillInventoryEntry])
+    });
+
+    render(<App />);
+
+    const workspace = await screen.findByRole("region", { name: "Agents" });
+    expect(await within(workspace).findByText("Set up your first Agent"))
+      .toBeInTheDocument();
+    expect(within(workspace).getByText(
+      "Save its current setup as a Profile. One shared Skill remains unchanged."
+    )).toBeInTheDocument();
+    expect(within(workspace).queryByRole("button", { name: "Review Skills" }))
+      .not.toBeInTheDocument();
+  });
+
   it("keeps Agent configuration available while the environment scan is pending", async () => {
     const inventoryRequest =
       deferred<Awaited<ReturnType<AgentEnvApi["scanSkillInventory"]>>>();
@@ -1049,7 +1086,8 @@ describe("App", () => {
         contentHash: "shared-hash",
         sharedLocation: true,
         sharedLocationId: "agents-skills",
-        locationManagement: "migration-only"
+        locationManagement: "shared-runtime",
+        sharedAreaMode: "managed"
       },
       {
         id: "agent-only",
@@ -1084,8 +1122,8 @@ describe("App", () => {
       within(environmentStatus).getByRole("button", { name: "Review Skills" })
     );
 
-    const drawer = await screen.findByRole("region", { name: "Local Skills Manager" });
-    expect(within(drawer).getByText("Shared Skill Review")).toBeInTheDocument();
+    const drawer = await screen.findByRole("region", { name: "Shared Skills" });
+    expect(within(drawer).getByText("Shared Skills")).toBeInTheDocument();
     expect(
       within(drawer).getByRole("group", { name: "Cleanup group shared-review" })
     ).toBeInTheDocument();
@@ -4382,9 +4420,10 @@ describe("App", () => {
     let dialog = screen.getByRole("dialog", { name: "Preview" });
     expect(within(dialog).getByRole("button", { name: /^Apply$/ })).toBeEnabled();
     expect(readyApi.applyProfile).not.toHaveBeenCalled();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Manage Skills" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Review local Skills" }));
     const localSkills = await screen.findByRole("region", { name: "Local Skills Manager" });
-    expect(localSkills).toHaveTextContent("All local Skills");
+    expect(localSkills).toHaveTextContent("All local Skills on this device");
+    expect(localSkills).toHaveTextContent("Opened from OpenCode");
     expect(within(localSkills).queryByRole("combobox", { name: "Management scope" }))
       .not.toBeInTheDocument();
     fireEvent.click(within(localSkills).getByRole("button", { name: "Close library tool" }));

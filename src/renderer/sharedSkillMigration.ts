@@ -3,8 +3,7 @@ import type {
   ProfileDetail,
   RetireSkillCollectionInput,
   RetireSharedSkillInput,
-  SkillCleanupResult,
-  TargetManagementState
+  SkillCleanupResult
 } from "../shared/types";
 import { activationPreviewHasWork } from "./activationPreview";
 
@@ -160,14 +159,6 @@ export const moveSharedSkillToAgents = async ({
     let profile: ProfileDetail;
 
     if (state?.activeProfileId) {
-      if (
-        state.lifecycleStatus !== "applied" &&
-        state.lifecycleStatus !== "applied-with-local-override"
-      ) {
-        throw new Error(
-          `${targetLabel(targetId, targetNames)} has pending or changed Profile resources. Review and Apply that Profile first.`
-        );
-      }
       profile = await ensureSkillInProfile(
         api,
         await api.readProfile(state.activeProfileId),

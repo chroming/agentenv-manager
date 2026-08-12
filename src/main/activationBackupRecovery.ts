@@ -28,6 +28,7 @@ export const createManagedBackupRestorer = ({
   const exactPaths = new Set<string>();
   const resourceRoots = new Set<string>();
   const resourceContainers = new Set<string>();
+  exactPaths.add(resolve(paths.sharedSkillAreaStatePath));
   const targetIds = [...new Set([backup.targetId, ...(backup.targetIds ?? [])])].filter(
     (id): id is string => Boolean(id)
   );

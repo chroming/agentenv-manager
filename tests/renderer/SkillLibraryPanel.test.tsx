@@ -42,6 +42,7 @@ const LegacySkillLibraryPanel = (props: Record<string, any>) => (
         skillInventory: props.skillInventory,
         cleanupBackups: props.cleanupBackups,
         cleanupScope: props.cleanupScope,
+        originTargetId: props.originTargetId,
         focusCollectionPath: props.focusCollectionPath
       },
       updates: {
@@ -66,6 +67,7 @@ const LegacySkillLibraryPanel = (props: Record<string, any>) => (
         onCloseTool: props.onCloseTool,
         onFocusCollectionHandled: props.onFocusCollectionHandled,
         onLibraryModeChange: props.onLibraryModeChange,
+        onCleanupScopeChange: props.onCleanupScopeChange,
         onViewStateChange: props.onViewStateChange,
         scrollOwnerRef: props.scrollOwnerRef
       },
@@ -87,6 +89,8 @@ const LegacySkillLibraryPanel = (props: Record<string, any>) => (
         onSetUnmanagedSkillLocations: props.onSetUnmanagedSkillLocations,
         onSetSkillCollectionDecision: props.onSetSkillCollectionDecision,
         onSetSharedSkillRetention: props.onSetSharedSkillRetention,
+        onReadSharedSkillAreaState: props.onReadSharedSkillAreaState,
+        onSetSharedSkillAreaMode: props.onSetSharedSkillAreaMode,
         onRetireSharedSkill: props.onRetireSharedSkill,
         onMoveSharedSkillToAgents: props.onMoveSharedSkillToAgents,
         onMoveSkillCollection: props.onMoveSkillCollection,
@@ -308,12 +312,19 @@ describe("SkillLibraryPanel", () => {
     const onLeaveSkillGroupUnmanaged = vi.fn();
     const onManageSkillGroupWithAgentEnv = vi.fn();
     const onSetSharedSkillRetention = vi.fn().mockResolvedValue(true);
+    const onReadSharedSkillAreaState = vi.fn().mockResolvedValue({ formatVersion: 1, receipts: [] });
+    const onSetSharedSkillAreaMode = vi.fn().mockImplementation(async (mode) => ({
+      formatVersion: 1 as const,
+      mode,
+      receipts: []
+    }));
     const onRetireSharedSkill = vi.fn().mockResolvedValue(true);
     const onMoveSharedSkillToAgents = vi.fn().mockResolvedValue(true);
     const onRestoreCleanup = vi.fn();
     const onPreviewSkillMerge = vi.fn();
     const onMergeLibrarySkills = vi.fn().mockResolvedValue(true);
     const onCloseTool = vi.fn();
+    const onCleanupScopeChange = vi.fn();
     const onRefreshInventory = vi.fn().mockResolvedValue(undefined);
     const onViewStateChange = vi.fn();
     const onListSkillFiles = vi.fn().mockResolvedValue([
@@ -370,12 +381,14 @@ describe("SkillLibraryPanel", () => {
       }>,
       showSelectedUpdatePlan = false,
       bulkUpdateFailures: Array<{ id: string; error: string }> = [],
-      updateRun: SkillUpdateRun = {}
+      updateRun: SkillUpdateRun = {},
+      cleanupScope: { kind: "all" } | { kind: "shared" } = { kind: "all" }
     ) => (
       <LegacySkillLibraryPanel
         sourceGroups={[]}
         libraryMode="skills"
         onLibraryModeChange={vi.fn()}
+        onCleanupScopeChange={onCleanupScopeChange}
         onCheckSourceGroup={vi.fn().mockResolvedValue(undefined)}
         onCheckMonitoredSourceGroups={vi.fn().mockResolvedValue(undefined)}
         onPreviewSourceMerge={vi.fn()}
@@ -738,6 +751,7 @@ describe("SkillLibraryPanel", () => {
             locationCount: 2
           }
         ]}
+        cleanupScope={cleanupScope}
         skillUpdates={[
           {
             id: "github-reviewer",
@@ -834,6 +848,8 @@ describe("SkillLibraryPanel", () => {
         onLeaveSkillGroupUnmanaged={onLeaveSkillGroupUnmanaged}
         onManageSkillGroupWithAgentEnv={onManageSkillGroupWithAgentEnv}
         onSetSharedSkillRetention={onSetSharedSkillRetention}
+        onReadSharedSkillAreaState={onReadSharedSkillAreaState}
+        onSetSharedSkillAreaMode={onSetSharedSkillAreaMode}
         onRetireSharedSkill={onRetireSharedSkill}
         onMoveSharedSkillToAgents={onMoveSharedSkillToAgents}
         onRestoreCleanup={onRestoreCleanup}
@@ -1335,11 +1351,8 @@ describe("SkillLibraryPanel", () => {
     expect(
       within(partiallyKeptGroup).getByLabelText("Full cleanup state external-cli-skill")
     ).not.toHaveTextContent("Kept");
-    visiblePreparedTargets = {
-      "compat-reviewer": preparedTargets["compat-reviewer"].slice(0, 1)
-    };
     rerender(renderPanel("discoveries"));
-    let sharedMigrationGroup = screen.getByRole("group", {
+    const sharedMigrationGroup = screen.getByRole("group", {
       name: "Cleanup group compat-reviewer"
     });
     expect(sharedMigrationGroup).toHaveTextContent("Ready");
@@ -1361,27 +1374,18 @@ describe("SkillLibraryPanel", () => {
         name: /Manage \d+ skills/
       })
     );
-    await waitFor(() =>
-      expect(onMoveSharedSkillToAgents).toHaveBeenCalledWith(
-        {
+    await waitFor(() => expect(onAutoConsolidateSkillGroups).toHaveBeenCalled());
+    expect(onAutoConsolidateSkillGroups.mock.calls[0]?.[0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
           skillKey: "compat-reviewer",
           libraryId: "compat-reviewer",
-          paths: ["/tmp/home/.agents/skills/compat-reviewer"]
-        },
-        ["codex"],
-        {
-          blockedSkillKeys: expect.arrayContaining(["conflict-reviewer"])
-        }
-      )
+          mode: "shared-compatibility"
+        })
+      ])
     );
-
-    visiblePreparedTargets = preparedTargets;
-    rerender(renderPanel("discoveries"));
-    sharedMigrationGroup = screen.getByRole("group", {
-      name: "Cleanup group compat-reviewer"
-    });
-    expect(sharedMigrationGroup).toHaveTextContent("Ready");
-    expect(sharedMigrationGroup).toHaveTextContent("All consumer Agents are ready");
+    expect(onMoveSharedSkillToAgents).not.toHaveBeenCalled();
+    fireEvent.click(within(automaticCleanupDialog).getByRole("button", { name: "Close" }));
     fireEvent.click(
       within(sharedMigrationGroup).getByRole("button", {
         name: "More cleanup actions for compat-reviewer"
@@ -1393,25 +1397,11 @@ describe("SkillLibraryPanel", () => {
       paths: ["/tmp/home/.agents/skills/compat-reviewer"],
       retained: true
     });
-    const removeSharedButton = within(sharedMigrationGroup).getByRole("button", {
-      name: "Move out of shared folder compat-reviewer"
-    });
-    await waitFor(() => expect(removeSharedButton).toBeEnabled());
-    fireEvent.click(removeSharedButton);
-    const retireDialog = screen.getByRole("dialog", { name: "Move Skill out of shared folder" });
-    expect(retireDialog).toHaveTextContent("The Library copy is kept");
-    expect(retireDialog).toHaveTextContent("OpenCodeInstall as compat-reviewer");
-    expect(retireDialog).toHaveTextContent("CodexDo not install");
-    expect(retireDialog).toHaveTextContent("/tmp/home/.agents/skills/compat-reviewer");
-    fireEvent.click(
-      within(retireDialog).getByRole("button", { name: "Move out of shared folder" })
-    );
-    await waitFor(() => expect(onRetireSharedSkill).toHaveBeenCalledWith({
-      skillKey: "compat-reviewer",
-      libraryId: "compat-reviewer",
-      paths: ["/tmp/home/.agents/skills/compat-reviewer"]
-    }));
-    onRetireSharedSkill.mockClear();
+    await waitFor(() => expect(
+      within(sharedMigrationGroup).getByRole("button", {
+        name: "More cleanup actions for compat-reviewer"
+      })
+    ).toBeEnabled());
     const changedManagedGroup = screen.getByRole("group", {
       name: "Cleanup group copied-local"
     });
@@ -1463,7 +1453,7 @@ describe("SkillLibraryPanel", () => {
     expect(bulkCleanupDialog).toHaveTextContent("Save and manage existing copies");
     expect(bulkCleanupDialog).not.toHaveTextContent("Copied Local");
     expect(bulkCleanupDialog).toHaveTextContent("Legacy Reviewer");
-    expect(bulkCleanupDialog).toHaveTextContent("Move Skills out of shared folder");
+    expect(bulkCleanupDialog).toHaveTextContent("Manage shared Skills in place");
     expect(bulkCleanupDialog).toHaveTextContent("compat-reviewer");
     fireEvent.click(
       within(bulkCleanupDialog).getByRole("button", { name: /Manage \d+ skills/ })
@@ -1490,6 +1480,28 @@ describe("SkillLibraryPanel", () => {
       .toBeEnabled());
     expect(bulkCleanupDialog).toHaveTextContent("Managed");
     fireEvent.click(within(bulkCleanupDialog).getByRole("button", { name: "Close" }));
+    fireEvent.click(within(discoveries).getByRole("button", { name: "Review shared folder" }));
+    expect(onCleanupScopeChange).toHaveBeenCalledWith({ kind: "shared" });
+
+    rerender(renderPanel("discoveries", undefined, false, [], {}, { kind: "shared" }));
+    const sharedSkills = await screen.findByRole("region", { name: "Shared Skills" });
+    expect(within(sharedSkills).getByRole("group", { name: "Shared folder policy" }))
+      .toBeInTheDocument();
+    expect(within(sharedSkills).queryByRole("button", { name: /Manage \d+ eligible Skills/ }))
+      .not.toBeInTheDocument();
+    fireEvent.click(within(sharedSkills).getByRole("button", { name: "Leave unchanged" }));
+    await waitFor(() => expect(onSetSharedSkillAreaMode).toHaveBeenCalledWith("keep"));
+    fireEvent.click(within(sharedSkills).getByRole("button", { name: "Manage in place" }));
+    const sharedManagementDialog = screen.getByRole("dialog", { name: "Manage shared Skills" });
+    expect(sharedManagementDialog).toHaveTextContent(
+      "Profiles and Agent-specific directories will not be changed."
+    );
+    fireEvent.click(within(sharedManagementDialog).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(within(sharedSkills).getByRole("button", { name: "Move to Profiles…" }));
+    const profilesOnlyDialog = screen.getByRole("dialog", { name: "Move to Profiles" });
+    expect(profilesOnlyDialog).toHaveTextContent("then remove shared copies");
+    fireEvent.click(within(profilesOnlyDialog).getByRole("button", { name: "Cancel" }));
+    rerender(renderPanel("discoveries"));
     const externalGroup = screen.getByRole("group", {
       name: "Cleanup group external-reviewer"
     });
@@ -1499,11 +1511,7 @@ describe("SkillLibraryPanel", () => {
         within(externalGroup).getByRole("button", { name: "Add to Library external-reviewer" })
       ).toBeEnabled()
     );
-    expect(onRetireSharedSkill).toHaveBeenCalledWith({
-      skillKey: "compat-reviewer",
-      libraryId: "compat-reviewer",
-      paths: ["/tmp/home/.agents/skills/compat-reviewer"]
-    });
+    expect(onRetireSharedSkill).not.toHaveBeenCalled();
     fireEvent.click(
       within(externalGroup).getByRole("button", { name: "Add to Library external-reviewer" })
     );

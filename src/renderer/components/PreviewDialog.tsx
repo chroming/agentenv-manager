@@ -476,7 +476,7 @@ export const PreviewDialog = ({
                     variant="secondary"
                     onClick={onManageLocalSkills}
                   >
-                    {t("Manage Skills")}
+                    {t("Review local Skills")}
                   </Button>
                 ) : null}
               </header>
@@ -500,7 +500,7 @@ export const PreviewDialog = ({
                 variant="secondary"
                 onClick={onManageLocalSkills}
               >
-                {t("Manage Skills")}
+                {t("Review local Skills")}
               </Button>
             </div>
           ) : null}

@@ -12,6 +12,8 @@ import type {
   RepositorySkillSourceInput,
   RetireSharedSkillInput,
   SharedSkillRetentionInput,
+  SharedSkillAreaMode,
+  SharedSkillAreaState,
   SkillAvailabilityInput,
   SkillCleanupBackupSummary,
   SkillCleanupRequest,
@@ -80,6 +82,7 @@ export interface SkillLibraryPanelModel {
     skillInventory: SkillInventoryEntry[];
     cleanupBackups: SkillCleanupBackupSummary[];
     cleanupScope?: SkillManagementScope;
+    originTargetId?: string;
     focusCollectionPath?: string;
   };
   updates: {
@@ -105,6 +108,7 @@ export interface SkillLibraryPanelActions {
     onCloseTool?(): void;
     onFocusCollectionHandled?(): void;
     onLibraryModeChange(mode: "skills" | "sources"): void;
+    onCleanupScopeChange?(scope: SkillManagementScope): void;
     onViewStateChange(next: SkillLibraryViewState): void;
     scrollOwnerRef?(node: HTMLDivElement | null): void;
   };
@@ -153,6 +157,8 @@ export interface SkillLibraryPanelActions {
       input: SkillCollectionMemberDecisionUpdate
     ): Promise<boolean>;
     onSetSharedSkillRetention(input: SharedSkillRetentionInput): Promise<boolean>;
+    onReadSharedSkillAreaState(): Promise<SharedSkillAreaState>;
+    onSetSharedSkillAreaMode(mode: SharedSkillAreaMode): Promise<SharedSkillAreaState | undefined>;
     onRetireSharedSkill(input: RetireSharedSkillInput): Promise<boolean>;
     onMoveSharedSkillToAgents(
       input: RetireSharedSkillInput,

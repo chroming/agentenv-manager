@@ -1,4 +1,5 @@
 import { X } from "lucide-react";
+import type { ReactNode } from "react";
 import { useI18n } from "../i18n";
 import { InfoTip } from "./InfoTip";
 import { IconButton, RefreshAction } from "./ui";
@@ -44,13 +45,17 @@ export const SkillManagerDrawerHeader = ({
 
 export const SkillManagementScopeHeader = ({
   title,
-  summary
+  summary,
+  actions,
+  stackedActions = false
 }: {
   title: string;
   summary: string;
+  actions?: ReactNode;
+  stackedActions?: boolean;
 }) => {
   const { t } = useI18n();
-  return <div className="cleanup-section-heading">
+  return <div className={`cleanup-section-heading${stackedActions ? " cleanup-section-heading--stacked" : ""}`}>
     <div>
       <div className="resource-heading">
         {title}
@@ -58,5 +63,6 @@ export const SkillManagementScopeHeader = ({
       </div>
       <small>{summary || t("No cleanup actions needed")}</small>
     </div>
+    {actions ? <div className="cleanup-section-heading__actions">{actions}</div> : null}
   </div>;
 };

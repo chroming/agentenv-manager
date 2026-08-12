@@ -23,7 +23,7 @@ const SHARED_SKILL_LOCATIONS: Record<
       shared: true,
       scope: "shared",
       scanDepth: "recursive",
-      management: "migration-only"
+      management: "shared-runtime"
     }
   }
 };
@@ -85,11 +85,11 @@ export const materializeSharedSkillLocations = (
   };
 };
 
-export const isMigrationOnlySharedSkillLocation = (
+export const isManagedSharedSkillLocation = (
   location: TargetSkillLocation | undefined
 ) =>
   location?.shared === true &&
-  location.management === "migration-only" &&
+  location.management === "shared-runtime" &&
   Boolean(location.sharedLocationId);
 
 export const sharedSkillLocationAuthority = (
@@ -109,7 +109,7 @@ export const sharedSkillLocationAuthority = (
     (location.shared === false ? 10 : 0) +
     roleRank[location.role] +
     (location.sharedLocationId ? 2 : 0) +
-    (location.management === "migration-only" ? 1 : 0)
+    (location.management === "shared-runtime" ? 1 : 0)
   );
 };
 
@@ -125,7 +125,7 @@ export const assertSharedSkillCleanupAuthority = (input: {
     !input.unavailableLinkCleanup
   ) {
     throw new Error(
-      `Shared Skill locations require the reviewed shared-location migration: ${input.path}`
+      `Shared Skill locations require a reviewed shared-location operation: ${input.path}`
     );
   }
 };

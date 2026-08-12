@@ -27,7 +27,6 @@ import type {
   RepositorySkillSourceInput,
   ManageTargetSkillInput,
   RetireSharedSkillInput,
-  SharedSkillRetentionInput,
   SkillCleanupRequest,
   SkillImportInput,
   SkillImportPreviewInput,
@@ -66,6 +65,7 @@ import { registerRecoveryIpc } from "./ipc/recoveryIpc";
 import { registerSettingsIpc } from "./ipc/settingsIpc";
 import { registerTargetIpc } from "./ipc/targetIpc";
 import { registerDialogIpc } from "./ipc/dialogIpc";
+import { registerSharedSkillAreaIpc } from "./ipc/sharedSkillAreaIpc";
 
 export interface IpcServices {
   profileStore: ProfileStore;
@@ -272,6 +272,10 @@ export const registerIpcHandlers = ({
   registerTargetIpc(
     { diagnosticHandle },
     { activationService, targetDiscoveryService, targetRegistry }
+  );
+  registerSharedSkillAreaIpc(
+    { diagnosticHandle, handleMutation, handleWorkspaceSyncMutation },
+    { skillLibraryStore, resolveSharedSkillPaths }
   );
   diagnosticHandle("skills:list-library", () => skillLibraryStore.listSkills());
   diagnosticHandle("skills:list-files", (_event, id: unknown) =>
@@ -686,18 +690,6 @@ export const registerIpcHandlers = ({
       locations
     });
   });
-  handleMutation(
-    "skills:set-shared-retention",
-    async (_event, input: SharedSkillRetentionInput) => {
-      const skillKey = parseId(input?.skillKey, "skill key");
-      const sharedPaths = await resolveSharedSkillPaths(input?.paths);
-      await skillLibraryStore.setSharedSkillRetention({
-        skillKey,
-        paths: sharedPaths,
-        retained: Boolean(input?.retained)
-      });
-    }
-  );
   handleMutation("skills:retire-shared", async (_event, input: RetireSharedSkillInput) => {
     const skillKey = parseId(input?.skillKey, "skill key");
     const libraryId = parseId(input?.libraryId, "skill library id");

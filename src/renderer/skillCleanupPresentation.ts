@@ -53,8 +53,6 @@ export const cleanupPresentationLabel = (state: SkillCleanupDisplayState) => {
   if (state === "managed-copy-changed") return "Managed copy changed";
   if (state === "management-upgrade") return "Management upgrade";
   if (state === "outside-agentenv") return "Outside AgentEnv";
-  if (state === "shared-copy-needs-decisions") return "Needs Agent choices";
-  if (state === "shared-copy-ready-to-move") return "Ready to move out of shared folder";
   if (state === "shared-left-unmanaged") return "Shared location left unmanaged";
   if (state === "left-unmanaged") return "Left unmanaged";
   if (state === "unavailable") return "Unavailable";
@@ -68,8 +66,6 @@ export const cleanupPresentationCompactLabel = (state: SkillCleanupDisplayState)
   if (state === "local-changes-found" || state === "managed-copy-changed") return "Changed";
   if (state === "management-upgrade") return "Upgrade";
   if (state === "outside-agentenv") return "Outside";
-  if (state === "shared-copy-needs-decisions") return "Needs choice";
-  if (state === "shared-copy-ready-to-move") return "Ready";
   if (state === "shared-left-unmanaged" || state === "left-unmanaged") {
     return "Unmanaged";
   }
@@ -78,7 +74,7 @@ export const cleanupPresentationCompactLabel = (state: SkillCleanupDisplayState)
 };
 
 export const cleanupPresentationChipClass = (state: SkillCleanupDisplayState) => {
-  if (state === "managed" || state === "shared-copy-ready-to-move") return "managed";
+  if (state === "managed") return "managed";
   if (state === "left-unmanaged" || state === "shared-left-unmanaged") {
     return "left-unmanaged";
   }
@@ -86,7 +82,6 @@ export const cleanupPresentationChipClass = (state: SkillCleanupDisplayState) =>
   if (state === "multiple-versions" || state === "local-changes-found") return "conflict";
   if (state === "managed-copy-changed") return "stale";
   if (state === "management-upgrade") return "pending";
-  if (state === "shared-copy-needs-decisions") return "pending";
   if (state === "duplicate-copies") return "library";
   if (state === "unavailable") return "stale";
   return "outside";
@@ -98,15 +93,11 @@ export const cleanupActionLabel = (action: SkillCleanupRecommendedAction) => {
   if (action === "review-differences") return "Review differences";
   if (action === "review-drift") return "Review drift";
   if (action === "review-paths") return "Review paths";
-  if (action === "review-agents") return "Review Agents";
-  if (action === "move-from-shared") return "Move out of shared folder";
   if (action === "review-details") return "Review details";
   return "";
 };
 
 export const cleanupActionDisplayLabel = (action: SkillCleanupRecommendedAction) => {
-  if (action === "review-agents") return "Review Agents";
-  if (action === "move-from-shared") return "Move";
   if (
     action === "review-differences" ||
     action === "review-drift" ||
@@ -120,8 +111,8 @@ export const cleanupActionDisplayLabel = (action: SkillCleanupRecommendedAction)
 
 export const cleanupEffectLabel = (effect: SkillCleanupAutomaticEffect) => {
   if (effect === "import-and-manage") return "Save and manage existing copies";
-  if (effect === "import-shared") return "Save shared copy and remove duplicates";
-  if (effect === "move-shared-to-agents") return "Move Skills out of shared folder";
+  if (effect === "import-shared") return "Manage shared Skills in place";
+  if (effect === "move-shared-to-agents") return "Replace shared copies with Profiles";
   if (effect === "adopt-managed-copy") return "Adopt matching copies";
   if (effect === "migrate-legacy-ownership") return "Move legacy ownership into AgentEnv data";
   if (effect === "replace-with-managed-copy") return "Back up and replace local copies";

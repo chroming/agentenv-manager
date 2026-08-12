@@ -54,6 +54,7 @@ export const deriveEnvironmentReview = ({
 }: EnvironmentReviewInput): EnvironmentReviewSummary => {
   const installedTargetSet = new Set(installedTargetIds);
   const usableProfileCount = profiles.filter((profile) => !profile.loadError).length;
+  const sharedAreaMode = inventory.find((item) => item.sharedLocation)?.sharedAreaMode;
   const sharedGroups = buildSkillCleanupGroups(inventory, {
     installedTargetIds,
     preparedTargetsBySkill
@@ -96,17 +97,20 @@ export const deriveEnvironmentReview = ({
   if (scanStatus === "error") {
     return { ...summary, state: "unavailable" };
   }
-  if (sharedGroups.length > 0) {
-    return { ...summary, state: "shared-review" };
-  }
-  if (attentionTargetIds.length > 0) {
-    return { ...summary, state: "agent-review" };
-  }
   if (installedTargetIds.length === 0) {
     return { ...summary, state: "no-agents" };
   }
   if (usableProfileCount === 0) {
     return { ...summary, state: "setup" };
+  }
+  if (
+    sharedGroups.length > 0 &&
+    (sharedAreaMode === "managed" || sharedAreaMode === "profiles-only")
+  ) {
+    return { ...summary, state: "shared-review" };
+  }
+  if (attentionTargetIds.length > 0) {
+    return { ...summary, state: "agent-review" };
   }
   return { ...summary, state: "ready" };
 };

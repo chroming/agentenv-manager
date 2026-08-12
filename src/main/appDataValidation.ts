@@ -16,6 +16,7 @@ import { createSkillLibraryStore } from "./skillLibraryStore";
 import { parseTargetState } from "./targetState";
 import { createTargetRegistry, type TargetRegistry } from "./targets/registry";
 import { parseWorkspaceSyncStateData } from "./workspaceSync/syncStateStore";
+import { parseSharedSkillAreaState } from "./sharedSkillAreaStore";
 
 const GitHubTokenFileSchema = z.object({ token: z.string().min(1) });
 const SkillMetadataFileSchema = z.object({
@@ -147,6 +148,8 @@ export const validateAppDataRoot = async (
   if (collectionDecisions !== undefined) {
     SkillCollectionDecisionsSchema.parse(collectionDecisions);
   }
+  const sharedSkillArea = await readJsonIfPresent(paths.sharedSkillAreaStatePath);
+  if (sharedSkillArea !== undefined) parseSharedSkillAreaState(sharedSkillArea);
 
   const workspaceSync = await readJsonIfPresent(paths.workspaceSyncStatePath);
   if (workspaceSync !== undefined) parseWorkspaceSyncStateData(workspaceSync);

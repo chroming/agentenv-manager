@@ -9,6 +9,8 @@ import type {
   RepositorySkillScanResult,
   RepositorySkillSourceInput,
   SharedSkillRetentionInput,
+  SharedSkillAreaMode,
+  SharedSkillAreaState,
   SkillAvailabilityInput,
   SkillCleanupBackupSummary,
   SkillCleanupResult,
@@ -119,6 +121,8 @@ export interface SkillLibraryStore {
   removeUnavailableSkillLinks(input: RemoveUnavailableSkillLinksStoreInput): Promise<SkillCleanupResult>;
   consolidateSharedSkillGroup(input: ConsolidateSharedSkillGroupStoreInput): Promise<SkillCleanupResult>;
   setSharedSkillRetention(input: SharedSkillRetentionInput): Promise<void>;
+  readSharedSkillAreaState(): Promise<SharedSkillAreaState>;
+  setSharedSkillAreaMode(mode: SharedSkillAreaMode): Promise<SharedSkillAreaState>;
   rollbackSkillCleanup(backupId: string): Promise<void>;
   deleteCleanupBackup(backupId: string): Promise<void>;
   checkUpdates(ids?: string[]): Promise<SkillUpdateInfo[]>;

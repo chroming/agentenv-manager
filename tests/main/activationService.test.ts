@@ -7,6 +7,7 @@ import { createBackupStore } from "../../src/main/backupStore";
 import { createPaths } from "../../src/main/paths";
 import { createProfileStore } from "../../src/main/profileStore";
 import { createSettingsStore } from "../../src/main/settingsStore";
+import { createSharedSkillAreaStore } from "../../src/main/sharedSkillAreaStore";
 import { createSkillLibraryStore } from "../../src/main/skillLibraryStore";
 import { blockingMessages, noticeMessages, reviewMessages } from "../helpers/applyIssues";
 
@@ -1144,6 +1145,14 @@ describe("activation service v2", () => {
     const targetSkill = join(paths.codexHome, "skills", "review");
     await mkdir(join(paths.homeDir, ".agents", "skills"), { recursive: true });
     await cp(librarySkill.path, sharedSkill, { recursive: true });
+    const sharedSkillAreaStore = createSharedSkillAreaStore(paths);
+    await sharedSkillAreaStore.recordManaged([{
+      path: sharedSkill,
+      sharedLocationId: "agents-skills",
+      libraryId: "review",
+      adoptedContentHash: librarySkill.contentHash,
+      materialization: "copied"
+    }]);
 
     const prepared = await service.previewProfile(profile.id, "codex");
     expect(prepared.sharedSkillPreparations).toContainEqual(expect.objectContaining({
@@ -1176,6 +1185,10 @@ describe("activation service v2", () => {
     expect(result.operation).toBe("retire");
     await expect(lstat(sharedSkill)).rejects.toThrow();
     await expect(lstat(targetSkill)).rejects.toThrow();
+    await expect(sharedSkillAreaStore.read()).resolves.toMatchObject({
+      mode: "managed",
+      receipts: []
+    });
     expect((await service.listTargetStates())[0]).toMatchObject({
       lifecycleStatus: "pending",
       appliedLibraryVersions: { skills: {} },
@@ -1190,6 +1203,14 @@ describe("activation service v2", () => {
 
     await service.rollbackSharedSkillMigration(result.backupId);
     await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8")).resolves.toContain("# Review");
+    await expect(sharedSkillAreaStore.read()).resolves.toMatchObject({
+      mode: "managed",
+      receipts: [expect.objectContaining({
+        path: sharedSkill,
+        libraryId: "review",
+        materialization: "copied"
+      })]
+    });
   });
 
   it("uses the current saved install intent when moving a previously omitted shared Skill", async () => {

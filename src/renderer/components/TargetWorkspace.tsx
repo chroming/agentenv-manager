@@ -219,7 +219,7 @@ const TargetRowActions = ({
             onClick={() => run(onManageSkills)}
           >
             <Layers3 size={15} strokeWidth={2.2} aria-hidden="true" />
-            <span>{t("Manage local Skills")}</span>
+            <span>{t("Review local Skills")}</span>
           </ActionMenuItem>
           <ActionMenuItem
             disabled={!installed}

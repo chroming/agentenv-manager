@@ -329,6 +329,46 @@
   min-width: 0;
 }
 
+.ui-segmented-control__stack {
+  align-items: center;
+  display: inline-grid;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.ui-segmented-control__label,
+.ui-segmented-control__busy {
+  grid-area: 1 / 1;
+}
+
+.ui-segmented-control__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-segmented-control__busy {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.ui-segmented-control__busy > svg {
+  height: var(--icon-size-default);
+  width: var(--icon-size-default);
+}
+
+.ui-segmented-control__option[aria-busy="true"] .ui-segmented-control__label {
+  opacity: 0;
+}
+
+.ui-segmented-control__option[aria-busy="true"] .ui-segmented-control__busy {
+  opacity: 1;
+  visibility: visible;
+}
+
 .ui-segmented-control--compact > .ui-segmented-control__option {
   height: 24px;
   min-height: 24px;

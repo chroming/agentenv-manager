@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   assertSharedSkillCleanupAuthority,
-  isMigrationOnlySharedSkillLocation,
+  isManagedSharedSkillLocation,
   materializeSharedSkillLocations,
   resolveSharedSkillLocation
 } from "../../../src/main/targets/sharedSkillLocations";
@@ -33,7 +33,7 @@ const basePaths = (homeDir: string): TargetPaths => {
 };
 
 describe("shared Skill location registry", () => {
-  it("materializes a shared consumer declaration with migration-only authority", () => {
+  it("materializes a managed shared runtime declaration", () => {
     const homeDir = "/tmp/agentenv-home";
     const materialized = materializeSharedSkillLocations(basePaths(homeDir), { homeDir });
     const shared = materialized.skillLocations?.find(
@@ -47,9 +47,9 @@ describe("shared Skill location registry", () => {
       sharedLocationId: "agents-skills",
       scope: "shared",
       scanDepth: "recursive",
-      management: "migration-only"
+      management: "shared-runtime"
     });
-    expect(isMigrationOnlySharedSkillLocation(shared)).toBe(true);
+    expect(isManagedSharedSkillLocation(shared)).toBe(true);
     expect(materialized.skillScanDirs).toEqual([
       join(homeDir, ".tool", "skills"),
       join(homeDir, ".agents", "skills")
@@ -80,7 +80,7 @@ describe("shared Skill location registry", () => {
       expect.objectContaining({
         sharedLocationId: "agents-skills",
         scanDepth: "recursive",
-        management: "migration-only"
+        management: "shared-runtime"
       })
     ]);
   });
@@ -122,7 +122,7 @@ describe("shared Skill location registry", () => {
 
     expect(() =>
       assertSharedSkillCleanupAuthority({ ...input, mode: "target-copies" })
-    ).toThrow("require the reviewed shared-location migration");
+    ).toThrow("require a reviewed shared-location operation");
     expect(() =>
       assertSharedSkillCleanupAuthority({ ...input, mode: "shared-compatibility" })
     ).not.toThrow();

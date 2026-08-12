@@ -53,7 +53,15 @@ const statusCopy = (
     case "setup":
       return {
         title: t("Set up your first Agent"),
-        detail: t("Save its current setup as a Profile. Agent files change only after Apply.")
+        detail: summary.sharedSkillCount > 0
+          ? t(
+              summary.sharedSkillCount === 1
+                ? "Save its current setup as a Profile. One shared Skill remains unchanged."
+                : "Save its current setup as a Profile. {{count}} shared Skills remain unchanged.", {
+              count: summary.sharedSkillCount
+              }
+            )
+          : t("Save its current setup as a Profile. Agent files change only after Apply.")
       };
     case "agent-review":
       return {
