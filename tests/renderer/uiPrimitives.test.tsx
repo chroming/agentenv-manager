@@ -30,6 +30,7 @@ import {
   ResourceSection,
   ResourceRow,
   SearchField,
+  SelectControl,
   SelectField,
   SelectableListRow,
   SegmentedControl,
@@ -751,6 +752,24 @@ describe("renderer UI primitives", () => {
     expect(dialog.querySelector(".ui-dialog-footer")).not.toBeNull();
     expect(screen.getByRole("combobox", { name: "Location" }).closest(".ui-field"))
       .toBeInTheDocument();
+  });
+
+  it("owns bounded Select widths instead of letting pages size native controls", () => {
+    render(
+      <>
+        <SelectControl aria-label="Filter status" controlWidth="compact" value="all" onChange={() => undefined}>
+          <option value="all">All statuses</option>
+        </SelectControl>
+        <SelectField controlWidth="standard" label="Language" value="en" onChange={() => undefined}>
+          <option value="en">English</option>
+        </SelectField>
+      </>
+    );
+
+    expect(screen.getByRole("combobox", { name: "Filter status" }))
+      .toHaveClass("ui-select-control", "ui-select-control--compact");
+    expect(screen.getByRole("combobox", { name: "Language" }))
+      .toHaveClass("ui-select-control", "ui-select-control--standard");
   });
 
   it("owns searchable fields and single-choice segmented controls", () => {

@@ -45,6 +45,7 @@ import type {
   LibraryResourceVersions,
   ManageTargetSkillInput,
   SkillInventoryEntry,
+  SkillRuntimeIssue,
   SkillImportConflictResolution,
   SkillImportInput,
   SkillImportPreviewInput,
@@ -282,6 +283,7 @@ const AppContent = ({
   const [skillLibraryMode, setSkillLibraryMode] = useState<"skills" | "sources">("skills");
   const [skillUpdates, setSkillUpdates] = useState<SkillUpdateInfo[]>([]);
   const [skillInventory, setSkillInventory] = useState<SkillInventoryEntry[]>([]);
+  const [skillInventoryIssues, setSkillInventoryIssues] = useState<SkillRuntimeIssue[]>([]);
   const [environmentScanStatus, setEnvironmentScanStatus] =
     useState<EnvironmentScanStatus>("checking");
   const [skillInventoryRefreshing, setSkillInventoryRefreshing] = useState(false);
@@ -676,7 +678,7 @@ const AppContent = ({
           "startup",
           () => window.agentEnv.scanSkillInventory(),
           { force: true }
-        ).then((outcome) => outcome.value ?? []),
+        ).then((outcome) => outcome.value ?? { entries: [], issues: [] }),
         window.agentEnv.readGitHubAuthStatus()
       ]);
     const sourceLoad = sourceChecksResult.status === "fulfilled"
@@ -724,7 +726,8 @@ const AppContent = ({
       if (loadedSourceGroups) setSkillSourceGroups(loadedSourceGroups);
     }
     if (skillInventoryResult.status === "fulfilled") {
-      setSkillInventory(skillInventoryResult.value);
+      setSkillInventory(skillInventoryResult.value.entries);
+      setSkillInventoryIssues(skillInventoryResult.value.issues);
       setEnvironmentScanStatus("ready");
       markFresh("local-skills");
     } else {
@@ -860,7 +863,10 @@ const AppContent = ({
           "local-skills",
           reason,
           () => window.agentEnv.scanSkillInventory()
-        ).then((outcome) => outcome.value ?? skillInventory);
+        ).then((outcome) => outcome.value ?? {
+          entries: skillInventory,
+          issues: skillInventoryIssues
+        });
         void inventoryPromise.then(
           () => setEnvironmentScanStatus("ready"),
           () => setEnvironmentScanStatus("error")
@@ -873,7 +879,8 @@ const AppContent = ({
             window.agentEnv.listSkillSourceGroups()
           ]);
         setLibrarySkills(skillItems);
-        setSkillInventory(inventoryItems);
+        setSkillInventory(inventoryItems.entries);
+        setSkillInventoryIssues(inventoryItems.issues);
         setEnvironmentScanStatus("ready");
         setSkillSourceGroups(sourceGroupItems);
         return skillItems;
@@ -2569,7 +2576,8 @@ const AppContent = ({
         setEnvironmentScanStatus("checking");
         try {
           const inventory = await window.agentEnv.scanSkillInventory();
-          setSkillInventory(inventory);
+          setSkillInventory(inventory.entries);
+          setSkillInventoryIssues(inventory.issues);
           setEnvironmentScanStatus("ready");
           return inventory;
         } finally {
@@ -3662,6 +3670,7 @@ const AppContent = ({
                 },
                 cleanup: {
                   skillInventory,
+                  scanIssues: skillInventoryIssues,
                   cleanupBackups: skillCleanupBackups,
                   cleanupScope: skillCleanupScope,
                   originTargetId: skillManagerOriginTargetId,

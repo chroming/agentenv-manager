@@ -43,7 +43,12 @@ import type {
 import type { TargetRegistry } from "./targets/registry";
 import type { AgentEnvPaths } from "./paths";
 import { isTargetInstalled } from "../shared/targetHealth";
-import { isSkillCollectionItemLibraryReady } from "../shared/skillCleanup";
+import {
+  buildSkillCleanupGroups,
+  isSkillCleanupManageable,
+  isSkillCollectionItemLibraryReady,
+  missingSkillCleanupMutationPaths
+} from "../shared/skillCleanup";
 import type { MutationCoordinator } from "./mutationCoordinator";
 import { readAllProfilesForResourceMutation } from "./profileSafety";
 import { pathEntryExists } from "./fileUtils";
@@ -58,6 +63,7 @@ import type { RuntimeDiagnostics } from "./runtimeDiagnostics";
 import type { AppUpdateService } from "./appUpdates/updateService";
 import type { TelemetryService } from "./telemetry/telemetryService";
 import { isPathInside, pathsEqual } from "./platformPaths";
+import { isSkillCleanupPathAllowed } from "./skillCleanupAuthority";
 import { registerProfileIpc } from "./ipc/profileIpc";
 import { registerConversationIpc } from "./ipc/conversationIpc";
 import { registerProjectIpc } from "./ipc/projectIpc";
@@ -296,16 +302,24 @@ export const registerIpcHandlers = ({
       throw new Error("Simulated local Skill inventory failure");
     }
     const targets = await targetDiscoveryService.listTargets();
-    const inventory = await skillLibraryStore.scanInventory(inventoryPathsFor(targets));
+    let issues: import("../shared/types").SkillRuntimeIssue[] = [];
+    const inventory = await skillLibraryStore.scanInventory(
+      inventoryPathsFor(targets),
+      undefined,
+      (scanIssues) => { issues = scanIssues; }
+    );
     const installedTargetIds = new Set(
       targets.filter((target) => isTargetInstalled(target.health)).map((target) => target.id)
     );
-    return inventory.map((item) => item.sharedLocation
-      ? {
-          ...item,
-          foundIn: item.foundIn.filter((targetId) => installedTargetIds.has(targetId))
-        }
-      : item);
+    return {
+      entries: inventory.map((item) => item.sharedLocation
+        ? {
+            ...item,
+            foundIn: item.foundIn.filter((targetId) => installedTargetIds.has(targetId))
+          }
+        : item),
+      issues
+    };
   });
   diagnosticHandle("skills:list-cleanup-backups", async () =>
     (await Promise.all([
@@ -577,6 +591,21 @@ export const registerIpcHandlers = ({
     const inventoryByPath = new Map(
       inventory.map((item) => [resolve(item.path), item])
     );
+    if ((input.mode ?? "target-copies") === "target-copies") {
+      const currentGroup = buildSkillCleanupGroups(inventory)
+        .find((group) => group.skillKey === skillKey);
+      if (currentGroup) {
+        const missingPaths = missingSkillCleanupMutationPaths(
+          currentGroup,
+          input.locations.map((location) => resolve(String(location.path)))
+        );
+        if (missingPaths.length > 0) {
+          throw new Error(
+            `Cleanup must include every unresolved managed location. Review these paths together: ${missingPaths.join(", ")}`
+          );
+        }
+      }
+    }
     const unavailableLinkCleanup =
       input.libraryAction === "keep" &&
       input.locations.length > 0 &&
@@ -600,15 +629,7 @@ export const registerIpcHandlers = ({
         throw new Error(`Agent not found: ${targetId}`);
       }
       const targetDir = resolve(String(location.path));
-      const allowedRoots = [target.paths.skillsDir, ...(target.paths.skillScanDirs ?? [])]
-        .filter((path): path is string => Boolean(path))
-        .map((path) => resolve(path));
-      const isAllowed = allowedRoots.some((root) => {
-        return (
-          isPathInside(root, targetDir) &&
-          pathsEqual(dirname(targetDir), root)
-        );
-      });
+      const isAllowed = isSkillCleanupPathAllowed(target.paths, targetDir);
       if (!isAllowed || !basename(targetDir)) {
         throw new Error(`Skill cleanup path is outside ${target.name}: ${targetDir}`);
       }
@@ -620,6 +641,11 @@ export const registerIpcHandlers = ({
       ) {
         throw new Error(
           `${skillKey} changed after the cleanup preview. Refresh and review it again.`
+        );
+      }
+      if (!isSkillCleanupManageable(current)) {
+        throw new Error(
+          `${skillKey} is loaded from an observed location that AgentEnv does not modify: ${targetDir}. Leave this path unmanaged or change the Agent integration before cleanup.`
         );
       }
       assertSharedSkillCleanupAuthority({

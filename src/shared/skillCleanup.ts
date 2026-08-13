@@ -3,6 +3,7 @@ import type { SkillCleanupRequest, SkillInventoryEntry } from "./types";
 export type SkillCleanupGroupState =
   | "left-unmanaged"
   | "managed"
+  | "orphaned"
   | "stale"
   | "outside"
   | "broken"
@@ -35,7 +36,8 @@ export type SkillCleanupDisplayState =
   | "copies-not-managed"
   | "local-changes-found"
   | "managed-copy-changed"
-  | "management-upgrade"
+  | "legacy-records"
+  | "management-record-missing"
   | "outside-agentenv"
   | "shared-left-unmanaged"
   | "unavailable"
@@ -88,10 +90,35 @@ export interface SkillCleanupPreparedTarget {
 const comparablePaths = (paths: readonly string[] = []) =>
   [...new Set(paths.map((path) => path.length > 1 ? path.replace(/[\\/]+$/, "") : path))].sort();
 
-const isObserveOnlySkill = (item: SkillInventoryEntry) =>
-  Boolean(item.collectionLink) ||
-  item.locationRole === "discovery-only" ||
-  (item.locationManagement === "observed" && !item.sharedLocation);
+const isCleanupCatalogExcluded = (item: SkillInventoryEntry) =>
+  Boolean(item.collectionLink) || item.locationRole === "discovery-only";
+
+export const isSkillCleanupManageable = (item: SkillInventoryEntry) =>
+  !item.collectionLink &&
+  item.status !== "left-unmanaged" &&
+  item.locationRole !== "discovery-only" &&
+  (item.locationManagement !== "observed" || item.sharedLocation === true);
+
+export const skillCleanupItemNeedsMutation = (item: SkillInventoryEntry) =>
+  isSkillCleanupManageable(item) &&
+  (
+    item.status !== "managed" ||
+    !item.libraryId ||
+    item.contentMatchesLibrary !== true ||
+    (item.legacyOwnershipMarkerPaths?.length ?? 0) > 0
+  );
+
+export const missingSkillCleanupMutationPaths = (
+  group: SkillCleanupGroup,
+  selectedPaths: readonly string[]
+) => {
+  const selected = new Set(comparablePaths(selectedPaths));
+  return comparablePaths(
+    group.activeItems
+      .filter(skillCleanupItemNeedsMutation)
+      .map((item) => item.path)
+  ).filter((path) => !selected.has(path));
+};
 
 export const isSkillCleanupPreparationCurrent = (
   preparation: SkillCleanupPreparedTarget,
@@ -232,7 +259,7 @@ export const buildSkillCleanupGroups = (
 ): SkillCleanupGroup[] => {
   const byKey = new Map<string, SkillInventoryEntry[]>();
   for (const skill of skillInventory) {
-    if (skill.collectionLink) continue;
+    if (isCleanupCatalogExcluded(skill)) continue;
     const key = skill.skillKey || skill.id;
     byKey.set(key, [...(byKey.get(key) ?? []), skill]);
   }
@@ -251,7 +278,17 @@ export const buildSkillCleanupGroups = (
       const statuses = new Set(activeItems.map((item) => item.status));
       const allLeftUnmanaged = activeItems.length === 0;
       const allManaged =
-        activeItems.length > 0 && activeItems.every((item) => item.status === "managed");
+        activeItems.length > 0 && activeItems.every(
+          (item) =>
+            item.status === "managed" &&
+            Boolean(item.libraryId) &&
+            item.contentMatchesLibrary === true
+        );
+      const orphanedManaged = activeItems.some(
+        (item) =>
+          item.status === "managed" &&
+          (!item.libraryId || item.contentMatchesLibrary === undefined)
+      );
       const hasLegacyOwnershipMarkers = activeItems.some(
         (item) => (item.legacyOwnershipMarkerPaths?.length ?? 0) > 0
       );
@@ -270,7 +307,7 @@ export const buildSkillCleanupGroups = (
           item.contentMatchesLibrary !== true
       );
       const hasBlockingExternal = activeItems.some(
-        (item) => item.status === "outside" && isObserveOnlySkill(item)
+        (item) => !isSkillCleanupManageable(item)
       );
       const hasUnreadable = activeItems.some((item) =>
         item.runtimeIssues?.some((issue) => issue.code === "unreadable-skill")
@@ -291,7 +328,7 @@ export const buildSkillCleanupGroups = (
       );
       const removableBrokenLinkItems = brokenLinkItems.filter(
         (item) =>
-          !isObserveOnlySkill(item) ||
+          isSkillCleanupManageable(item) ||
           item.externalEvidence?.state === "broken-link"
       );
       const hasOtherUnreadable = activeItems.some((item) =>
@@ -336,7 +373,7 @@ export const buildSkillCleanupGroups = (
         : {
             state: sharedLeftUnmanaged
               ? "unmanaged"
-              : sharedItems.some(isObserveOnlySkill)
+              : sharedItems.some((item) => !isSkillCleanupManageable(item))
                 ? "outside"
                 : sharedConflict
                   ? "conflict"
@@ -356,10 +393,14 @@ export const buildSkillCleanupGroups = (
         ? "left-unmanaged"
         : hasUnreadable
           ? "broken"
-          : allManaged && !staleManaged
-          ? "managed"
-          : libraryConflict || (!allManaged && hashes.size > 1)
-              ? "conflict"
+          : libraryConflict || hashes.size > 1
+            ? "conflict"
+            : orphanedManaged
+              ? "orphaned"
+              : hasBlockingExternal
+                ? "outside"
+              : allManaged && !staleManaged
+                ? "managed"
               : staleManaged
                 ? "stale"
                 : physicalItems.length > 1
@@ -385,6 +426,7 @@ export const buildSkillCleanupGroups = (
         hashes.size <= 1;
       const canNormalizeToLibrary =
         Boolean(hasLibraryCopy) &&
+        !orphanedManaged &&
         !libraryConflict &&
         !staleManaged &&
         hashes.size <= 1 &&
@@ -394,6 +436,7 @@ export const buildSkillCleanupGroups = (
         !missingTarget;
       const canImportStandalone =
         !hasLibraryCopy &&
+        !orphanedManaged &&
         !hasBlockingExternal &&
         !hasUnreadable &&
         !sharedSkillMigrationNeedsAction(sharedMigration) &&
@@ -405,7 +448,7 @@ export const buildSkillCleanupGroups = (
       const resolution: SkillCleanupResolution =
         canManageSharedCopies
           ? "automatic"
-          : legacyOwnershipMigrationReady && canNormalizeToLibrary
+          : legacyOwnershipMigrationReady && state !== "conflict" && canNormalizeToLibrary
             ? "automatic"
             : hasLegacyOwnershipMarkers
               ? "manual"
@@ -418,7 +461,7 @@ export const buildSkillCleanupGroups = (
                   ? "automatic"
                   : sharedMigrationNeedsAction
                   ? "manual"
-                  : state === "outside" || state === "conflict" || state === "stale" || state === "broken" || missingTarget
+                  : state === "outside" || state === "orphaned" || state === "conflict" || state === "stale" || state === "broken" || missingTarget
                     ? "manual"
                     : "automatic";
       const automaticEffect: SkillCleanupAutomaticEffect | undefined =
@@ -426,7 +469,7 @@ export const buildSkillCleanupGroups = (
           ? undefined
           : canManageSharedCopies
             ? "import-shared"
-            : legacyOwnershipMigrationReady && hasLibraryCopy
+            : legacyOwnershipMigrationReady && state !== "conflict" && hasLibraryCopy
               ? "migrate-legacy-ownership"
             : canRemoveBrokenLinks
             ? "remove-broken-link"
@@ -470,6 +513,8 @@ export const buildSkillCleanupGroups = (
                       : state === "library"
                         ? "The local copy already matches the Library version."
                         : "A single local copy can become the managed version."
+              : state === "orphaned"
+                ? "AgentEnv has a management record for this path, but its canonical Library Skill is missing."
               : state === "broken"
                 ? "The Skill path is unavailable and must be reviewed before any cleanup action."
                 : state === "outside"
@@ -486,11 +531,15 @@ export const buildSkillCleanupGroups = (
           : { state: "left-unmanaged", action: "none" }
         : hasUnreadable
           ? { state: "unavailable", action: "review-details" }
+        : orphanedManaged
+          ? { state: "management-record-missing", action: "review-paths" }
         : hasBlockingExternal
             ? {
                 state: "outside-agentenv",
                 action: "review-paths"
               }
+            : state === "conflict" && hasLibraryCopy
+              ? { state: "local-changes-found", action: "review-differences" }
             : sharedMigration?.state === "managed"
               ? { state: "managed", action: "none" }
               : sharedMigration?.state === "not-managed"
@@ -513,15 +562,13 @@ export const buildSkillCleanupGroups = (
                             : { state: "not-in-library", action: "add-to-library" }
                         : staleManaged
                           ? { state: "managed-copy-changed", action: "review-drift" }
-                          : legacyOwnershipMigrationReady
-                            ? { state: "management-upgrade", action: "manage-copies" }
+                          : legacyOwnershipMigrationReady && resolution === "automatic"
+                            ? { state: "legacy-records", action: "manage-copies" }
                           : hasLegacyOwnershipMarkers
                             ? { state: "outside-agentenv", action: "review-paths" }
                           : allManaged
                             ? { state: "managed", action: "none" }
-                            : state === "conflict"
-                              ? { state: "local-changes-found", action: "review-differences" }
-                              : { state: "copies-not-managed", action: "manage-copies" };
+                            : { state: "copies-not-managed", action: "manage-copies" };
 
       return {
         skillKey,
@@ -562,7 +609,7 @@ export const automaticSkillCleanupRequest = (
     const brokenLocations = group.activeItems.filter(
       (item) =>
         item.status !== "left-unmanaged" &&
-        (!isObserveOnlySkill(item) || item.externalEvidence?.state === "broken-link") &&
+        (isSkillCleanupManageable(item) || item.externalEvidence?.state === "broken-link") &&
         item.runtimeIssues?.some(
           (issue) =>
             issue.code === "unreadable-skill" &&
@@ -589,7 +636,7 @@ export const automaticSkillCleanupRequest = (
   if (sharedSkillMigrationNeedsAction(sharedMigration)) {
     const manageableItems = group.activeItems.filter(
       (item) =>
-        item.status !== "left-unmanaged" && !isObserveOnlySkill(item)
+        item.status !== "left-unmanaged" && isSkillCleanupManageable(item)
     );
     const sharedItems = manageableItems.filter((item) => item.sharedLocation);
     const targetItems = manageableItems.filter((item) => !item.sharedLocation);
@@ -623,7 +670,7 @@ export const automaticSkillCleanupRequest = (
     (item) =>
       !item.sharedLocation &&
       item.status !== "left-unmanaged" &&
-      !isObserveOnlySkill(item) &&
+      isSkillCleanupManageable(item) &&
       (
         item.status !== "managed" ||
         item.contentMatchesLibrary === false ||

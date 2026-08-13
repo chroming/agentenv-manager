@@ -1,4 +1,5 @@
 import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
+import type { Dirent, Stats } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import type {
   SkillExternalEvidence,
@@ -68,7 +69,8 @@ const targetSkillLocations = async (
 
 export const discoverSkillDirectories = async (
   root: string,
-  scanDepth: TargetSkillLocation["scanDepth"] = "direct"
+  scanDepth: TargetSkillLocation["scanDepth"] = "direct",
+  onIssue?: (issue: SkillRuntimeIssue) => void
 ): Promise<DiscoveredSkillDirectory[]> => {
   if (!(await pathExists(root))) return [];
 
@@ -81,7 +83,19 @@ export const discoverSkillDirectories = async (
     collectionLink?: SkillCollectionLink
   ): Promise<void> => {
     if (depth > 12) return;
-    const entryStats = await lstat(candidate).catch(() => undefined);
+    let entryStats: Stats;
+    try {
+      entryStats = await lstat(candidate);
+    } catch (error) {
+      if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) {
+        onIssue?.({
+          code: "unreadable-skill-location",
+          severity: "warning",
+          message: `Skill location could not be inspected: ${candidate}`
+        });
+      }
+      return;
+    }
     if (!entryStats || (!entryStats.isDirectory() && !entryStats.isSymbolicLink())) return;
 
     let resolvedCandidate: string;
@@ -91,6 +105,12 @@ export const discoverSkillDirectories = async (
     } catch {
       if (entryStats.isSymbolicLink()) {
         discovered.push({ path: candidate, deploymentName, brokenLink: true });
+      } else {
+        onIssue?.({
+          code: "unreadable-skill-location",
+          severity: "warning",
+          message: `Skill location could not be inspected: ${candidate}`
+        });
       }
       return;
     }
@@ -116,7 +136,17 @@ export const discoverSkillDirectories = async (
         : undefined
     );
 
-    const children = await readdir(candidate, { withFileTypes: true }).catch(() => []);
+    let children: Dirent[];
+    try {
+      children = await readdir(candidate, { withFileTypes: true });
+    } catch {
+      onIssue?.({
+        code: "unreadable-skill-location",
+        severity: "warning",
+        message: `Skill location could not be scanned: ${candidate}`
+      });
+      return;
+    }
     for (const child of children.sort((left, right) => left.name.localeCompare(right.name))) {
       if (child.name.startsWith(".")) continue;
       if (!child.isDirectory() && !child.isSymbolicLink()) continue;
@@ -130,7 +160,17 @@ export const discoverSkillDirectories = async (
     }
   };
 
-  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+  let entries: Dirent[];
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch {
+    onIssue?.({
+      code: "unreadable-skill-location",
+      severity: "warning",
+      message: `Skill location could not be scanned: ${root}`
+    });
+    return discovered;
+  }
   const rootAncestors = new Set([await realpath(root).catch(() => resolve(root))]);
   for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
     if (entry.name.startsWith(".")) continue;
@@ -200,7 +240,8 @@ export const createFilesystemSkillDriver = (
     for (const location of discoveredLocations.locations) {
       const candidates = await discoverSkillDirectories(
         location.path,
-        location.scanDepth ?? "direct"
+        location.scanDepth ?? "direct",
+        (issue) => snapshotIssues.push(issue)
       );
       for (const candidate of candidates) {
         if (candidate.brokenLink) {
@@ -221,6 +262,7 @@ export const createFilesystemSkillDriver = (
             availability: "unknown",
             confidence: "inferred",
             locationRole: location.role,
+            locationManagement: location.management,
             shared: location.shared,
             sharedLocationId: location.sharedLocationId,
             legacy: location.management === "legacy",
@@ -250,6 +292,7 @@ export const createFilesystemSkillDriver = (
             availability: "unknown",
             confidence: "inferred",
             locationRole: location.role,
+            locationManagement: location.management,
             shared: location.shared,
             sharedLocationId: location.sharedLocationId,
             legacy: location.management === "legacy",
@@ -322,6 +365,7 @@ export const createFilesystemSkillDriver = (
                 : "enabled",
           confidence: frontmatter.name ? "verified" : "inferred",
           locationRole: location.role,
+          locationManagement: location.management,
           shared: location.shared,
           sharedLocationId: location.sharedLocationId,
           legacy: location.management === "legacy",

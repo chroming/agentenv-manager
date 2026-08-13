@@ -18,11 +18,17 @@ import type {
   ApplyIssue,
   ProfileDetail,
   SkillInventoryEntry,
+  SkillRuntimeIssue,
   SkillLibraryEntry,
   SkillUpdateInfo,
   TargetInfo,
   TargetManagementState
 } from "../../src/shared/types";
+
+const inventoryScan = (
+  entries: SkillInventoryEntry[] = [],
+  issues: SkillRuntimeIssue[] = []
+) => ({ entries, issues });
 
 const profile: ProfileDetail = {
   id: "daily-coding",
@@ -441,7 +447,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       sizeBytes: 0,
       content: ""
     }),
-    scanSkillInventory: vi.fn().mockResolvedValue([]),
+    scanSkillInventory: vi.fn().mockResolvedValue(inventoryScan()),
     listSkillCleanupBackups: vi.fn().mockResolvedValue([]),
     setUnmanagedSkillLocations: vi.fn().mockResolvedValue([]),
     setSkillCollectionDecision: vi.fn().mockResolvedValue([]),
@@ -1030,7 +1036,7 @@ describe("App", () => {
     installApi({
       listProfiles: vi.fn().mockResolvedValue([]),
       listTargetStates: vi.fn().mockResolvedValue([]),
-      scanSkillInventory: vi.fn().mockResolvedValue([{
+      scanSkillInventory: vi.fn().mockResolvedValue(inventoryScan([{
         id: "shared-onboarding",
         name: "Shared Onboarding",
         description: "Shared but not claimed",
@@ -1042,7 +1048,7 @@ describe("App", () => {
         sharedLocation: true,
         sharedLocationId: "agents-skills",
         locationManagement: "shared-runtime"
-      } satisfies SkillInventoryEntry])
+      } satisfies SkillInventoryEntry]))
     });
 
     render(<App />);
@@ -1075,7 +1081,7 @@ describe("App", () => {
     ).toBeEnabled();
 
     await act(async () => {
-      inventoryRequest.resolve([]);
+      inventoryRequest.resolve(inventoryScan());
       await Promise.resolve();
     });
     expect(await within(workspace).findByText("1 Agents detected · 1 Profiles"))
@@ -1139,7 +1145,7 @@ describe("App", () => {
       }
     ];
     installApi({
-      scanSkillInventory: vi.fn().mockResolvedValue(inventory)
+      scanSkillInventory: vi.fn().mockResolvedValue(inventoryScan(inventory))
     });
 
     render(<App />);
@@ -2196,7 +2202,7 @@ describe("App", () => {
     );
 
     await act(async () => {
-      inventoryRequest.resolve([]);
+      inventoryRequest.resolve(inventoryScan());
       updateRequest.resolve({ groups: [], checked: 0, failed: 0 });
       await Promise.resolve();
     });
@@ -2691,34 +2697,40 @@ describe("App", () => {
 
   it("forces a local scan both when opening Local Skills and from its toolbar", async () => {
     const api = installApi({
-      scanSkillInventory: vi.fn().mockResolvedValueOnce([
+      scanSkillInventory: vi.fn().mockResolvedValueOnce(inventoryScan([
         {
           id: "target-only-reviewer",
           name: "Target Only Reviewer",
           description: "Found on disk",
           path: "/tmp/opencode/skills/target-only-reviewer",
           foundIn: ["opencode"],
-          status: "outside"
+          status: "outside",
+          skillKey: "target-only-reviewer",
+          contentHash: "target-only-hash"
         }
-      ]).mockResolvedValueOnce([
+      ])).mockResolvedValueOnce(inventoryScan([
         {
           id: "refreshed-reviewer",
           name: "Refreshed Reviewer",
           description: "Found after rescanning",
           path: "/tmp/opencode/skills/refreshed-reviewer",
           foundIn: ["opencode"],
-          status: "outside"
+          status: "outside",
+          skillKey: "refreshed-reviewer",
+          contentHash: "refreshed-hash"
         }
-      ]).mockResolvedValueOnce([
+      ])).mockResolvedValueOnce(inventoryScan([
         {
           id: "toolbar-reviewer",
           name: "Toolbar Reviewer",
           description: "Found from the toolbar refresh",
           path: "/tmp/opencode/skills/toolbar-reviewer",
           foundIn: ["opencode"],
-          status: "outside"
+          status: "outside",
+          skillKey: "toolbar-reviewer",
+          contentHash: "toolbar-hash"
         }
-      ])
+      ]))
     });
     render(<App />);
 
@@ -2742,20 +2754,55 @@ describe("App", () => {
     expect(screen.queryByText("Local skills refreshed")).not.toBeInTheDocument();
   });
 
+  it("shows partial Local Skills scan failures without hiding readable results", async () => {
+    installApi({
+      scanSkillInventory: vi.fn().mockResolvedValue(inventoryScan(
+        [{
+          id: "readable-reviewer",
+          name: "Readable Reviewer",
+          description: "Still available",
+          path: "/tmp/opencode/skills/readable-reviewer",
+          foundIn: ["opencode"],
+          status: "outside",
+          skillKey: "readable-reviewer",
+          contentHash: "readable-hash"
+        }],
+        [{
+          code: "unreadable-skill-location",
+          severity: "warning",
+          message: "Skill location could not be scanned: /tmp/codex/skills"
+        }]
+      ))
+    });
+    render(<App />);
+
+    await openLibrary();
+    fireEvent.click(screen.getByRole("button", { name: "Local Skills" }));
+
+    expect(await screen.findByText("Some Skill locations could not be scanned"))
+      .toBeInTheDocument();
+    expect(screen.getByText("Skill location could not be scanned: /tmp/codex/skills"))
+      .toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Cleanup group readable-reviewer" }))
+      .toBeInTheDocument();
+  });
+
   it("automatically rescans Local Skills on entry after the freshness window", async () => {
     let now = Date.parse("2026-07-29T10:00:00.000Z");
     vi.spyOn(Date, "now").mockImplementation(() => now);
     const api = installApi({
       scanSkillInventory: vi.fn()
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([{
+        .mockResolvedValueOnce(inventoryScan())
+        .mockResolvedValueOnce(inventoryScan([{
           id: "new-local-skill",
           name: "New Local Skill",
           description: "Appeared after startup",
           path: "/tmp/opencode/skills/new-local-skill",
           foundIn: ["opencode"],
-          status: "outside"
-        }])
+          status: "outside",
+          skillKey: "new-local-skill",
+          contentHash: "new-local-hash"
+        }]))
     });
     render(<App />);
 

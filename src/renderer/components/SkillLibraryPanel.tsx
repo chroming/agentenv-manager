@@ -95,13 +95,14 @@ import {
   buildSkillCollectionLinkGroups,
   buildSkillCleanupGroups,
   filterSkillInventoryForManagementScope,
+  missingSkillCleanupMutationPaths,
   sharedSkillMigrationNeedsAction,
   type SkillCleanupAutomaticEffect,
   type SkillCollectionLinkGroup,
   type SkillManagementScope
 } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
-import { ActionMenu, Button, IconButton, InteractiveStatus, ModalFrame, RefreshAction, SelectField, Switch } from "./ui";
+import { ActionMenu, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, SelectControl, Switch } from "./ui";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { isExternalSkillImportable } from "../../shared/skillIdentity";
 import { sourceSubpathFor } from "../../shared/skillSourceGrouping";
@@ -214,6 +215,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   } = sources;
   const {
     skillInventory,
+    scanIssues = [],
     cleanupBackups,
     cleanupScope = { kind: "all" },
     originTargetId: cleanupOriginTargetId,
@@ -426,6 +428,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     libraryAction: "create" | "keep" | "replace";
     selectedPaths: string[];
   }>();
+  const [cleanupSubmitFailed, setCleanupSubmitFailed] = useState(false);
   const [externalImport, setExternalImport] = useState<{
     skillKey: string;
     sourcePath: string;
@@ -1060,6 +1063,10 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   const cleanupHasActiveSharedMigration = sharedSkillMigrationNeedsAction(
     cleanupCandidate?.sharedMigration
   );
+  const cleanupMissingMutationPaths =
+    cleanupCandidate && cleanupDraft && !cleanupHasActiveSharedMigration
+      ? missingSkillCleanupMutationPaths(cleanupCandidate, cleanupDraft.selectedPaths)
+      : [];
   const cleanupLibrarySkill = cleanupDraft
     ? librarySkills.find((skill) => skill.id === cleanupDraft.libraryId)
     : undefined;
@@ -1097,6 +1104,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     if (!canonical) {
       return;
     }
+    setCleanupSubmitFailed(false);
     setCleanupDraft({
       skillKey: group.skillKey,
       libraryId,
@@ -1884,7 +1892,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
             <div className="library-filter-panel" role="group" aria-label={t("Skill filters")}>
               <label>
                 <span>{t("Source")}</span>
-                <select
+                <SelectControl controlWidth="compact"
                   aria-label={t("Skill source filter")}
                   value={sourceFilter}
                   onChange={(event) =>
@@ -1894,11 +1902,11 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                   <option value="all">{t("All sources")}</option>
                   <option value="online">{t("Online")}</option>
                   <option value="local">{t("Local")}</option>
-                </select>
+                </SelectControl>
               </label>
               <label>
                 <span>{t("Usage")}</span>
-                <select
+                <SelectControl controlWidth="compact"
                   aria-label={t("Skill usage filter")}
                   value={usageFilter}
                   onChange={(event) =>
@@ -1908,11 +1916,11 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                   <option value="all">{t("All usage")}</option>
                   <option value="referenced">{t("Referenced")}</option>
                   <option value="unreferenced">{t("Unreferenced")}</option>
-                </select>
+                </SelectControl>
               </label>
               <label>
                 <span>{t("Agents")}</span>
-                <select
+                <SelectControl controlWidth="compact"
                   aria-label={t("Skill Agent filter")}
                   value={targetFilter}
                   onChange={(event) =>
@@ -1925,7 +1933,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                   <option value="outside">{t("Unmanaged")}</option>
                   <option value="left-unmanaged">{t("Left unmanaged")}</option>
                   <option value="not-installed">{t("Not installed")}</option>
-                </select>
+                </SelectControl>
               </label>
               <Button
                 className="library-filter-reset"
@@ -3211,8 +3219,8 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                   {cleanupCandidate.items
                     .filter(
                       (item) =>
-                        item.status !== "managed" &&
-                        item.status !== "left-unmanaged"
+                        isCleanupManageable(item) &&
+                        item.status !== "managed"
                     )
                     .map((item) => (
                       <label className="cleanup-review-option" key={`canonical-${item.path}`}>
@@ -3263,7 +3271,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                       : "Selected copies are backed up, then replaced by the Library version.")}
                   </small>
                 </legend>
-                {cleanupCandidate.items.map((item) => (
+                {cleanupCandidate.items.filter(isCleanupManageable).map((item) => (
                   <label className="cleanup-review-option" key={`location-${item.path}`}>
                     <input
                       type="checkbox"
@@ -3313,19 +3321,37 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                 <strong>{t("Backup included")}</strong>
                 {" "}{t("All selected copies can be restored from History.")}
               </p>
+              {cleanupMissingMutationPaths.length > 0 ? (
+                <p className="cleanup-safety-note cleanup-safety-note--warning">
+                  <strong>{t("Select every unresolved location")}</strong>
+                  {" "}{t("Leave a location unmanaged from its details before excluding it from cleanup.")}
+                </p>
+              ) : null}
+              {cleanupSubmitFailed ? (
+                <Notice tone="warning" title={t("Local Skills changed during review")}>
+                  {t("Refresh Local Skills, then review the current copies before applying again.")}
+                </Notice>
+              ) : null}
             </div>
             <footer className="preview-actions ui-dialog-footer">
               <Button
                 ref={modalInitialFocusRef}
                 disabled={Boolean(cleanupOperationKey)}
-                onClick={() => setCleanupDraft(undefined)}
+                onClick={() => {
+                  setCleanupSubmitFailed(false);
+                  setCleanupDraft(undefined);
+                }}
               >
                 {t("Cancel")}
               </Button>
               <Button
                 variant="primary"
                 busy={cleanupOperationKey === cleanupDraft.skillKey}
-                disabled={cleanupDraft.selectedPaths.length === 0 || Boolean(cleanupOperationKey)}
+                disabled={
+                  cleanupDraft.selectedPaths.length === 0 ||
+                  cleanupMissingMutationPaths.length > 0 ||
+                  Boolean(cleanupOperationKey)
+                }
                 onClick={() => {
                   const request: SkillCleanupRequest = {
                     skillKey: cleanupDraft.skillKey,
@@ -3353,9 +3379,15 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                       }))
                   };
                   setCleanupOperationKey(cleanupDraft.skillKey);
-                  void onConsolidateSkillGroup(request).finally(() => {
+                  setCleanupSubmitFailed(false);
+                  void onConsolidateSkillGroup(request).then((completed) => {
+                    if (completed) {
+                      setCleanupDraft(undefined);
+                    } else {
+                      setCleanupSubmitFailed(true);
+                    }
+                  }).finally(() => {
                     setCleanupOperationKey(undefined);
-                    setCleanupDraft(undefined);
                   });
                 }}
               >
@@ -3383,6 +3415,15 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
             onRefresh={() => void onRefreshInventory()}
             onClose={() => onCloseTool?.()}
           />
+          {scanIssues.length > 0 ? (
+            <Notice
+              tone="warning"
+              icon={<TriangleAlert size={15} />}
+              title={t("Some Skill locations could not be scanned")}
+            >
+              {scanIssues.map((issue) => issue.message).join("\n")}
+            </Notice>
+          ) : null}
           <section className="resource-section target-discovery-section">
             <SkillManagementScopeHeader
               title={cleanupListTitle}
@@ -3464,7 +3505,11 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                         locations: group.items.length
                       })
                     : group.presentation.state === "local-changes-found" && linkedLibraryId
-                      ? t("Shared copy differs from Library")
+                      ? group.activeItems.some(
+                          (item) => item.sharedLocation && item.contentMatchesLibrary === false
+                        )
+                        ? t("Shared copy differs from Library")
+                        : t("Local copy differs from Library")
                       : group.presentation.state === "unavailable"
                         ? t("Skill content could not be read safely")
                         : undefined;

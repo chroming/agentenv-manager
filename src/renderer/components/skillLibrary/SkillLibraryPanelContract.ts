@@ -22,6 +22,7 @@ import type {
   SkillFileNode,
   SkillIconInput,
   SkillInventoryEntry,
+  SkillRuntimeIssue,
   SkillLibraryEntry,
   SkillMergeInput,
   SkillMergePreview,
@@ -80,6 +81,7 @@ export interface SkillLibraryPanelModel {
   };
   cleanup: {
     skillInventory: SkillInventoryEntry[];
+    scanIssues?: SkillRuntimeIssue[];
     cleanupBackups: SkillCleanupBackupSummary[];
     cleanupScope?: SkillManagementScope;
     originTargetId?: string;

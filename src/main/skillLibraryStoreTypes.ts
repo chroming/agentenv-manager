@@ -21,6 +21,7 @@ import type {
   SkillImportPreview,
   SkillImportPreviewInput,
   SkillInventoryEntry,
+  SkillRuntimeIssue,
   SkillLibraryEntry,
   SkillMergeInput,
   SkillMergePreview,
@@ -86,7 +87,11 @@ export interface RemoveUnavailableSkillLinksStoreInput {
 
 export interface SkillLibraryStore {
   listSkills(): Promise<SkillLibraryEntry[]>;
-  scanInventory(targetPaths: TargetPaths[], librarySkills?: SkillLibraryEntry[]): Promise<SkillInventoryEntry[]>;
+  scanInventory(
+    targetPaths: TargetPaths[],
+    librarySkills?: SkillLibraryEntry[],
+    onIssues?: (issues: SkillRuntimeIssue[]) => void
+  ): Promise<SkillInventoryEntry[]>;
   findManagedInstallPaths(libraryId: string, targetPaths: TargetPaths[]): Promise<string[]>;
   listCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;
   previewCleanupBackup(id: string): Promise<ManagedBackupFile[]>;

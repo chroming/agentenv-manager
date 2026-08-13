@@ -11,6 +11,15 @@ export const mergeInventoryLocation = (
   location: TargetSkillLocation | undefined,
   observation?: SkillRuntimeObservation
 ): void => {
+  const observedLocation = observation
+    ? {
+        role: observation.locationRole,
+        shared: observation.shared,
+        sharedLocationId: observation.sharedLocationId,
+        management: observation.locationManagement
+      }
+    : undefined;
+  const effectiveLocation = location ?? observedLocation;
   const existingLocation = entry.locationRole && entry.sharedLocation !== undefined
     ? {
         role: entry.locationRole,
@@ -20,15 +29,19 @@ export const mergeInventoryLocation = (
       }
     : undefined;
   const replacesLocation =
-    sharedSkillLocationAuthority(location) > sharedSkillLocationAuthority(existingLocation);
+    sharedSkillLocationAuthority(effectiveLocation) >
+    sharedSkillLocationAuthority(existingLocation);
 
   if (replacesLocation) {
-    entry.locationRole = location?.role;
-    entry.sharedLocation = location?.shared;
-    entry.sharedLocationId = location?.sharedLocationId;
-    entry.runtimeScope = location?.scope ?? (location?.shared ? "shared" : "user");
-    entry.legacyLocation = location?.management === "legacy";
-    entry.locationManagement = location?.management;
+    entry.locationRole = effectiveLocation?.role;
+    entry.sharedLocation = effectiveLocation?.shared;
+    entry.sharedLocationId = effectiveLocation?.sharedLocationId;
+    entry.runtimeScope =
+      location?.scope ??
+      observation?.scope ??
+      (effectiveLocation?.shared ? "shared" : "user");
+    entry.legacyLocation = effectiveLocation?.management === "legacy";
+    entry.locationManagement = effectiveLocation?.management;
     if (observation) {
       entry.runtimeAvailability = observation.availability;
       entry.runtimeConfidence = observation.confidence;

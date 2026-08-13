@@ -98,6 +98,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(({
 SearchField.displayName = "SearchField";
 
 interface SelectFieldProps extends SelectHTMLAttributes<HTMLSelectElement> {
+  controlWidth?: SelectControlWidth;
   description?: ReactNode;
   error?: ReactNode;
   fieldClassName?: string;
@@ -105,9 +106,33 @@ interface SelectFieldProps extends SelectHTMLAttributes<HTMLSelectElement> {
   labelHidden?: boolean;
 }
 
+export type SelectControlWidth = "compact" | "standard" | "wide" | "fill";
+
+interface SelectControlProps extends SelectHTMLAttributes<HTMLSelectElement> {
+  controlWidth?: SelectControlWidth;
+}
+
+export const SelectControl = forwardRef<HTMLSelectElement, SelectControlProps>(({
+  children,
+  className = "",
+  controlWidth = "fill",
+  ...props
+}, ref) => (
+  <select
+    ref={ref}
+    {...props}
+    className={`ui-select-control ui-select-control--${controlWidth} ${className}`.trim()}
+  >
+    {children}
+  </select>
+));
+
+SelectControl.displayName = "SelectControl";
+
 export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(({
   children,
   className = "",
+  controlWidth,
   description,
   error,
   fieldClassName,
@@ -120,9 +145,9 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(({
   const fieldId = id ?? generatedId;
   return (
     <FieldFrame className={fieldClassName} description={description} error={error} htmlFor={fieldId} label={label} labelHidden={labelHidden}>
-      <select ref={ref} {...props} aria-invalid={error ? true : props["aria-invalid"]} className={className} id={fieldId}>
+      <SelectControl ref={ref} {...props} aria-invalid={error ? true : props["aria-invalid"]} className={className} controlWidth={controlWidth} id={fieldId}>
         {children}
-      </select>
+      </SelectControl>
     </FieldFrame>
   );
 });

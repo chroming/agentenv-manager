@@ -3,7 +3,8 @@ import {
   automaticSkillCleanupRequest,
   buildSkillCollectionLinkGroups,
   buildSkillCleanupGroups,
-  filterSkillInventoryForManagementScope
+  filterSkillInventoryForManagementScope,
+  missingSkillCleanupMutationPaths
 } from "../../src/shared/skillCleanup";
 import type { SkillInventoryEntry } from "../../src/shared/types";
 
@@ -96,7 +97,7 @@ describe("skill cleanup groups", () => {
       resolution: "automatic",
       bucket: "ready",
       automaticEffect: "migrate-legacy-ownership",
-      presentation: { state: "management-upgrade", action: "manage-copies" }
+      presentation: { state: "legacy-records", action: "manage-copies" }
     });
     expect(automaticSkillCleanupRequest(group)).toMatchObject({
       skillKey: "reviewer",
@@ -150,6 +151,152 @@ describe("skill cleanup groups", () => {
       presentation: { state: "not-in-library", action: "add-to-library" }
     });
     expect(group.activeItems).toHaveLength(2);
+  });
+
+  it("ignores observed discovery-only plugin copies when deciding whether managed copies conflict", () => {
+    const groups = buildSkillCleanupGroups([
+      inventoryItem({
+        status: "managed",
+        libraryId: "dispatching-parallel-agents",
+        contentHash: "managed-hash",
+        contentMatchesLibrary: true,
+        path: "/tmp/opencode/skills/dispatching-parallel-agents"
+      }),
+      inventoryItem({
+        status: "library",
+        libraryId: "dispatching-parallel-agents",
+        contentHash: "plugin-hash",
+        contentMatchesLibrary: false,
+        path: "/tmp/claude/plugins/cache/superpowers/skills/dispatching-parallel-agents",
+        foundIn: ["claude-code"],
+        locationRole: "discovery-only",
+        locationManagement: "observed",
+        runtimeAvailability: "unknown",
+        externalEvidence: {
+          manager: "claude-plugin",
+          displayName: "Claude Code plugin",
+          canonicalPath: "/tmp/claude/plugins/cache/superpowers",
+          confidence: "confirmed",
+          state: "healthy",
+          importable: false
+        }
+      })
+    ]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      state: "managed",
+      resolution: "resolved",
+      bucket: "managed",
+      presentation: { state: "managed", action: "none" }
+    });
+    expect(groups[0].items).toHaveLength(1);
+    expect(groups[0].items[0].path).toBe(
+      "/tmp/opencode/skills/dispatching-parallel-agents"
+    );
+  });
+
+  it("does not list a discovery-only plugin Skill as a local cleanup task", () => {
+    expect(buildSkillCleanupGroups([
+      inventoryItem({
+        status: "outside",
+        path: "/tmp/claude/plugins/cache/superpowers/skills/brainstorming",
+        foundIn: ["claude-code"],
+        locationRole: "discovery-only",
+        locationManagement: "observed",
+        runtimeAvailability: "unknown"
+      })
+    ])).toEqual([]);
+  });
+
+  it("keeps an observed alternate runtime visible without offering automatic management", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        status: "library",
+        libraryId: "reviewer",
+        contentMatchesLibrary: true,
+        path: "/tmp/opencode/skill/reviewer",
+        locationRole: "alternate-runtime",
+        locationManagement: "observed"
+      })
+    ]);
+
+    expect(group).toMatchObject({
+      state: "outside",
+      resolution: "manual",
+      bucket: "decision",
+      presentation: { state: "outside-agentenv", action: "review-paths" }
+    });
+    expect(automaticSkillCleanupRequest(group)).toBeUndefined();
+  });
+
+  it("does not call an orphaned managed receipt healthy", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        status: "managed",
+        libraryId: undefined,
+        contentMatchesLibrary: undefined
+      })
+    ]);
+
+    expect(group).toMatchObject({
+      state: "orphaned",
+      resolution: "manual",
+      bucket: "decision",
+      presentation: { state: "management-record-missing", action: "review-paths" }
+    });
+  });
+
+  it("shows a content conflict before legacy-record migration", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        status: "managed",
+        libraryId: "reviewer",
+        contentHash: "library-content",
+        contentMatchesLibrary: true,
+        legacyOwnershipMarkerPaths: [
+          "/tmp/opencode/skills/reviewer.agentenv-owner.json"
+        ],
+        legacyOwnershipMigrationReady: true
+      }),
+      inventoryItem({
+        status: "library",
+        libraryId: "reviewer",
+        path: "/tmp/codex/skills/reviewer",
+        foundIn: ["codex"],
+        contentHash: "different-content",
+        contentMatchesLibrary: false
+      })
+    ]);
+
+    expect(group).toMatchObject({
+      state: "conflict",
+      resolution: "manual",
+      presentation: { state: "local-changes-found", action: "review-differences" }
+    });
+  });
+
+  it("requires every unresolved manageable location in one cleanup", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        status: "managed",
+        libraryId: "reviewer",
+        contentMatchesLibrary: true
+      }),
+      inventoryItem({
+        status: "library",
+        libraryId: "reviewer",
+        contentMatchesLibrary: false,
+        path: "/tmp/codex/skills/reviewer",
+        foundIn: ["codex"],
+        contentHash: "different-content"
+      })
+    ]);
+
+    expect(missingSkillCleanupMutationPaths(group, [group.activeItems[0].path]))
+      .toEqual(["/tmp/codex/skills/reviewer"]);
+    expect(missingSkillCleanupMutationPaths(group, group.activeItems.map((item) => item.path)))
+      .toEqual([]);
   });
 
   it("groups nested Skills by their collection link and removes them from per-Skill cleanup", () => {

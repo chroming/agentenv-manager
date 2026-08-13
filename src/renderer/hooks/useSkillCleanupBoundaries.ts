@@ -193,7 +193,7 @@ export const useSkillCleanupBoundaries = ({
     try {
       const state = await window.agentEnv.setSharedSkillAreaMode(mode);
       const inventory = await window.agentEnv.scanSkillInventory();
-      setSkillInventory(() => inventory);
+      setSkillInventory(() => inventory.entries);
       setSkillUpdateCheckStatus({
         state: "success",
         message: mode === "keep"

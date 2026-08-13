@@ -90,6 +90,28 @@ select {
   padding: 0 36px 0 11px;
 }
 
+.ui-select-control--compact {
+  flex: 0 1 var(--select-width-compact);
+  max-width: 100%;
+  width: var(--select-width-compact);
+}
+
+.ui-select-control--standard {
+  flex: 0 1 var(--select-width-standard);
+  max-width: 100%;
+  width: var(--select-width-standard);
+}
+
+.ui-select-control--wide {
+  flex: 0 1 var(--select-width-wide);
+  max-width: 100%;
+  width: var(--select-width-wide);
+}
+
+.ui-select-control--fill {
+  width: 100%;
+}
+
 textarea {
   font-family: var(--font-mono);
   font-size: var(--font-size-body);
