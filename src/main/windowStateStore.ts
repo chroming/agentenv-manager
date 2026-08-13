@@ -77,3 +77,13 @@ export const writeWindowState = (path: string, state: PersistedWindowState) => {
     rmSync(temporaryPath, { force: true });
   }
 };
+
+export const writeWindowStateWhenReady = (
+  path: string,
+  state: PersistedWindowState,
+  dataReady: boolean
+): boolean => {
+  if (!dataReady) return false;
+  writeWindowState(path, state);
+  return true;
+};
