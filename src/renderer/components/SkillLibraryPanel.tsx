@@ -165,6 +165,11 @@ import {
   runProfilesOnlySharedCleanup,
   SharedSkillAreaModeActions
 } from "./SharedSkillAreaWorkflow";
+import {
+  buildCleanupDetailVersions,
+  buildLocalSkillImportImpact,
+  buildSkillLibraryLookups
+} from "./skillLibrary/SkillLibraryPanelDerived";
 
 type SkillMenuAction = "update" | "review" | "availability" | "settings" | "merge" | "remove";
 
@@ -457,21 +462,8 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   const modalFallbackFocusRef = useRef<HTMLElement>(null);
   const actionReturnFocusRef = useRef<HTMLElement>(null);
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
-  const updatesById = new Map(skillUpdates.map((update) => [update.id, update]));
-  const skillsById = new Map(librarySkills.map((skill) => [skill.id, skill]));
-  const skillNameCounts = librarySkills.reduce((counts, skill) => {
-    const key = skill.name.normalize("NFKC").trim().toLowerCase();
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-    return counts;
-  }, new Map<string, number>());
-  const enabledSkillIds = new Set(
-    librarySkills.filter((skill) => skill.globallyEnabled !== false).map((skill) => skill.id)
-  );
-  const updateableSkillIds = skillUpdates
-    .filter((update) => update.updateAvailable && !update.error)
-    .filter((update) => enabledSkillIds.has(update.id))
-    .filter((update) => skillsById.get(update.id)?.updatePolicy === "tracked")
-    .map((update) => update.id);
+  const { updatesById, skillsById, skillNameCounts, updateableSkillIds } =
+    buildSkillLibraryLookups(librarySkills, skillUpdates);
   const availableUpdateCount = updateableSkillIds.length;
   const dismissModal = () => {
     if (browsingSkill) {
@@ -973,35 +965,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
       (selectedLocalInventory.status === "managed" ||
         !selectedLocalCanImport)
   );
-  const localImportImpact = !selectedLocalInventory
-    ? undefined
-    : selectedLocalInventory.status === "managed"
-      ? { message: "This Agent copy is already managed by AgentEnv and is present in Library." }
-      : selectedLocalInventory.status === "left-unmanaged"
-        ? { message: "AgentEnv will not change this path. Import creates an independent Library copy without changing that boundary." }
-        : selectedLocalInventory.status === "library" &&
-            selectedLocalInventory.contentMatchesLibrary !== true
-          ? {
-              message:
-                "This folder differs from the existing Library version. Import will open a comparison before making changes."
-            }
-          : selectedLocalInventory.status === "outside"
-            ? selectedLocalInventory.externalEvidence?.importable === false
-              ? {
-                  message: "This Skill is provided by {{manager}} and remains read-only here.",
-                  values: { manager: externalManagerLabel(selectedLocalInventory) }
-                }
-              : selectedLocalInventory.externalEvidence
-                ? {
-                  message:
-                    "AgentEnv found {{manager}} metadata. Import creates an independent Library copy and leaves this path unchanged.",
-                  values: { manager: externalManagerLabel(selectedLocalInventory) }
-                }
-                : {
-                  message:
-                    "Import creates an independent Library copy and leaves this Agent path unchanged."
-                }
-            : undefined;
+  const localImportImpact = buildLocalSkillImportImpact(selectedLocalInventory);
   const localImportLabel = "Import copy";
   const cleanupCandidate = cleanupDraft
     ? cleanupGroups.find((group) => group.skillKey === cleanupDraft.skillKey)
@@ -1020,18 +984,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
       ? cleanupPresentationLabel(cleanupDetails.presentation.state)
       : "";
   const cleanupDetailVersions = cleanupDetails
-    ? [...cleanupDetails.items.reduce((groups, item) => {
-        const unavailable = !item.contentHash || item.runtimeIssues?.some(
-          (issue) => issue.code === "unreadable-skill"
-        );
-        const key = unavailable ? "unavailable" : item.contentHash;
-        groups.set(key, [...(groups.get(key) ?? []), item]);
-        return groups;
-      }, new Map<string, SkillInventoryEntry[]>()).entries()]
-        .map(([key, items]) => ({ key, items }))
-        .sort((left, right) =>
-          left.key === "unavailable" ? 1 : right.key === "unavailable" ? -1 : left.key.localeCompare(right.key)
-        )
+    ? buildCleanupDetailVersions(cleanupDetails.items)
     : [];
   const cleanupDetailsText = cleanupDetails
     ? formatSkillCleanupDetails(cleanupDetails, targetNames)

@@ -72,6 +72,7 @@ import { registerSettingsIpc } from "./ipc/settingsIpc";
 import { registerTargetIpc } from "./ipc/targetIpc";
 import { registerDialogIpc } from "./ipc/dialogIpc";
 import { registerSharedSkillAreaIpc } from "./ipc/sharedSkillAreaIpc";
+import { scanSkillInventoryForRenderer } from "./skillInventoryResponse";
 
 export interface IpcServices {
   profileStore: ProfileStore;
@@ -302,24 +303,7 @@ export const registerIpcHandlers = ({
       throw new Error("Simulated local Skill inventory failure");
     }
     const targets = await targetDiscoveryService.listTargets();
-    let issues: import("../shared/types").SkillRuntimeIssue[] = [];
-    const inventory = await skillLibraryStore.scanInventory(
-      inventoryPathsFor(targets),
-      undefined,
-      (scanIssues) => { issues = scanIssues; }
-    );
-    const installedTargetIds = new Set(
-      targets.filter((target) => isTargetInstalled(target.health)).map((target) => target.id)
-    );
-    return {
-      entries: inventory.map((item) => item.sharedLocation
-        ? {
-            ...item,
-            foundIn: item.foundIn.filter((targetId) => installedTargetIds.has(targetId))
-          }
-        : item),
-      issues
-    };
+    return scanSkillInventoryForRenderer(skillLibraryStore, inventoryPathsFor(targets), targets);
   });
   diagnosticHandle("skills:list-cleanup-backups", async () =>
     (await Promise.all([

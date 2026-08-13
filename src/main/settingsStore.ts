@@ -31,7 +31,7 @@ export const SettingsSchema = z.object({
 export const parseSettingsData = (value: unknown): AgentEnvSettings =>
   SettingsSchema.parse(value);
 
-const DEFAULT_SETTINGS: AgentEnvSettings = {
+export const DEFAULT_SETTINGS: AgentEnvSettings = {
   locale: "system",
   conversationTerminal: "default",
   skillSyncMethod: "copy",
