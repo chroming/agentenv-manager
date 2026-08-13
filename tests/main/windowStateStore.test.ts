@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -6,7 +6,8 @@ import {
   constrainWindowState,
   parseWindowState,
   readWindowState,
-  writeWindowState
+  writeWindowState,
+  writeWindowStateWhenReady
 } from "../../src/main/windowStateStore";
 
 describe("window state store", () => {
@@ -54,5 +55,22 @@ describe("window state store", () => {
       height: 760,
       maximized: false
     });
+  });
+
+  it("does not write window state before persistent data is ready", () => {
+    const path = join(mkdtempSync(join(tmpdir(), "agentenv-window-")), "window.json");
+    const state = {
+      x: 20,
+      y: 30,
+      width: 1_180,
+      height: 760,
+      maximized: false
+    };
+
+    expect(writeWindowStateWhenReady(path, state, false)).toBe(false);
+    expect(existsSync(path)).toBe(false);
+
+    expect(writeWindowStateWhenReady(path, state, true)).toBe(true);
+    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(state);
   });
 });

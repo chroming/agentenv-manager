@@ -98,7 +98,7 @@ import {
 import {
   constrainWindowState,
   readWindowState,
-  writeWindowState,
+  writeWindowStateWhenReady,
   type PersistedWindowState
 } from "./windowStateStore";
 import { createReleaseClient } from "./appUpdates/releaseClient";
@@ -456,7 +456,7 @@ const saveWindowState = (win: BrowserWindow) => {
   if (!path || win.isDestroyed()) return;
   lastWindowState = captureWindowState(win);
   try {
-    writeWindowState(path, lastWindowState);
+    writeWindowStateWhenReady(path, lastWindowState, servicesInitialized);
   } catch (error) {
     console.warn(
       `[AgentEnv] Window state could not be saved: ${
