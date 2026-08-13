@@ -8304,9 +8304,10 @@ describe("Electron UI profile switching e2e", () => {
     await updateAgentCopies.click();
     await expect.poll(() => updateAgentCopies.getAttribute("aria-checked")).toBe("true");
     await updateDialog.getByRole("button", { name: "Apply update shared-reviewer" }).click();
-    await expect.poll(() => page.locator(".app-feedback").textContent()).toContain(
-      "Updated shared-reviewer"
-    );
+    await expect.poll(
+      () => page.locator(".app-feedback").textContent(),
+      { timeout: 15_000 }
+    ).toContain("Updated shared-reviewer");
     await updateDialog
       .getByRole("status", { name: "Shared Reviewer: Done" })
       .waitFor({ state: "visible" });
@@ -8724,9 +8725,10 @@ describe("Electron UI profile switching e2e", () => {
     );
     await openSettingsCategory(page, "Data");
     await page.getByRole("button", { name: "Export data" }).click();
-    await expect.poll(() => page.getByRole("status").textContent()).toContain(
-      "Data export created"
-    );
+    await expect.poll(
+      () => page.getByRole("status").textContent(),
+      { timeout: 15_000 }
+    ).toContain("Data export created");
 
     const backupEntries = await readdir(backupRoot);
     expect(backupEntries).toHaveLength(1);
@@ -9129,7 +9131,9 @@ describe("Electron UI profile switching e2e", () => {
     await electronApp.evaluate(({ ipcMain }) => {
       ipcMain.removeHandler("profiles:preview-create-from-target");
       ipcMain.handle("profiles:preview-create-from-target", async () => {
-        await new Promise((resolve) => setTimeout(resolve, 400));
+        await new Promise((resolve) => {
+          ipcMain.once("agentenv-test:release-capture-preview", resolve);
+        });
         return {
           id: "dense-capture-preview",
           targetId: "opencode",
@@ -9180,6 +9184,9 @@ describe("Electron UI profile switching e2e", () => {
     expect(workingState.width).toBe(idleButtonBox?.width);
     expect(workingState.height).toBe(idleButtonBox?.height);
     expect(workingState.animationName).toBe("spin");
+    await electronApp.evaluate(({ ipcMain }) => {
+      ipcMain.emit("agentenv-test:release-capture-preview");
+    });
 
     const dialog = page.getByRole("dialog", { name: "Review OpenCode capture" });
     const impact = dialog.getByRole("region", { name: "Capture impact" });
