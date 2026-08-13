@@ -4006,11 +4006,12 @@ describe("App", () => {
       )
     );
 
-    await waitFor(() => expect(api.saveProfile).toHaveBeenCalled());
-    expect(vi.mocked(api.saveProfile).mock.calls.at(-1)?.[0]).toMatchObject({
+    await waitFor(() => expect(
+      vi.mocked(api.saveProfile).mock.calls.at(-1)?.[0]
+    ).toMatchObject({
       manifest: expect.objectContaining({ iconKey: "palette" }),
       instructions: "# Unsaved instructions\n"
-    });
+    }));
     expect(api.updateProfileMetadata).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
     expect(profileInstructionPreview()).toHaveTextContent("# Unsaved instructions");
