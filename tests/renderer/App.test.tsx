@@ -3233,6 +3233,28 @@ describe("App", () => {
     expect(api.listSupportedTargets).toHaveBeenCalled();
   });
 
+  it("persists Agent order from Settings and applies it to the Agents workspace", async () => {
+    const api = installApi({
+      listSupportedTargets: vi.fn().mockResolvedValue([target, codexTarget]),
+      listTargets: vi.fn().mockResolvedValue([target, codexTarget])
+    });
+    render(<App />);
+
+    await openSettingsCategory("Agents");
+    fireEvent.keyDown(screen.getByRole("button", { name: "Reorder OpenCode" }), {
+      altKey: true,
+      key: "ArrowDown"
+    });
+
+    await waitFor(() => expect(api.updateUiState).toHaveBeenCalledWith({
+      agentOrder: ["codex", "opencode"]
+    }));
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    expect(await screen.findByRole("region", { name: "Agents" })).toBeInTheDocument();
+    expect([...document.querySelectorAll(".target-workflow-name-action")]
+      .map((item) => item.textContent)).toEqual(["Codex", "OpenCode"]);
+  });
+
   it("confirms before turning off a managed Agent", async () => {
     let enabledTargetIds = ["opencode"];
     const settingsUpdate = deferred<AgentEnvSettings>();

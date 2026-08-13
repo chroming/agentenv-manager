@@ -55,9 +55,73 @@ const agent: TargetInfo = {
   }
 };
 
+const opencodeDescriptor: TargetDescriptor = {
+  ...descriptor,
+  id: "opencode",
+  name: "OpenCode",
+  description: "Manage OpenCode.",
+  iconKey: "opencode",
+  executableName: "opencode",
+  executableCandidates: ["opencode"]
+};
+
+const opencodeAgent: TargetInfo = {
+  ...agent,
+  ...opencodeDescriptor,
+  paths: {
+    ...agent.paths,
+    targetId: "opencode",
+    configDir: "/Users/example/.config/opencode",
+    instructionsPath: "/Users/example/.config/opencode/AGENTS.md",
+    configPath: "/Users/example/.config/opencode/opencode.json",
+    skillsDir: "/Users/example/.config/opencode/skills"
+  }
+};
+
 afterEach(cleanup);
 
 describe("AgentSettingsSection", () => {
+  it("reorders Agents only from the shared drag handle or Alt+Arrow keys", () => {
+    const onReorder = vi.fn();
+    const dataTransfer = {
+      dropEffect: "none",
+      effectAllowed: "none",
+      setData: vi.fn()
+    };
+    render(
+      <AgentSettingsSection
+        supportedAgents={[descriptor, opencodeDescriptor]}
+        enabledAgentIds={["codex", "opencode"]}
+        agents={[agent, opencodeAgent]}
+        agentStates={[]}
+        suppressedAgentIds={[]}
+        busy={false}
+        onReorder={onReorder}
+        onSetEnabled={vi.fn().mockResolvedValue(undefined)}
+        onRestoreAgentSuggestions={vi.fn().mockResolvedValue(undefined)}
+        onOpenRecovery={vi.fn()}
+        configRoots={{}}
+        commandOverrides={{}}
+        onChooseConfigRoot={vi.fn().mockResolvedValue(undefined)}
+        onResetConfigRoot={vi.fn().mockResolvedValue(undefined)}
+        onSetCommandOverride={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    const codexHandle = screen.getByRole("button", { name: "Reorder Codex" });
+    const opencodeRow = screen.getByRole("button", { name: "Reorder OpenCode" })
+      .closest(".agent-settings-row");
+    expect(opencodeRow).not.toBeNull();
+    fireEvent.dragStart(codexHandle, { dataTransfer });
+    fireEvent.dragOver(opencodeRow!, { dataTransfer });
+    fireEvent.drop(opencodeRow!, { dataTransfer });
+    expect(onReorder).toHaveBeenLastCalledWith(["opencode", "codex"]);
+
+    fireEvent.keyDown(codexHandle, { altKey: true, key: "ArrowDown" });
+    expect(onReorder).toHaveBeenLastCalledWith(["opencode", "codex"]);
+    expect(codexHandle.closest(".agent-settings-row")).not.toHaveAttribute("draggable");
+  });
+
   it("uses the shared dialog button hierarchy when turning off a managed Agent", () => {
     render(
       <AgentSettingsSection
@@ -74,6 +138,7 @@ describe("AgentSettingsSection", () => {
         }]}
         suppressedAgentIds={[]}
         busy={false}
+        onReorder={vi.fn()}
         onSetEnabled={vi.fn().mockResolvedValue(undefined)}
         onRestoreAgentSuggestions={vi.fn().mockResolvedValue(undefined)}
         onOpenRecovery={vi.fn()}
@@ -106,6 +171,7 @@ describe("AgentSettingsSection", () => {
         agentStates={[]}
         suppressedAgentIds={[]}
         busy={false}
+        onReorder={vi.fn()}
         onSetEnabled={vi.fn().mockResolvedValue(undefined)}
         onRestoreAgentSuggestions={vi.fn().mockResolvedValue(undefined)}
         onOpenRecovery={vi.fn()}
@@ -141,6 +207,7 @@ describe("AgentSettingsSection", () => {
         agentStates={[]}
         suppressedAgentIds={[]}
         busy={false}
+        onReorder={vi.fn()}
         onSetEnabled={vi.fn().mockResolvedValue(undefined)}
         onRestoreAgentSuggestions={vi.fn().mockResolvedValue(undefined)}
         onOpenRecovery={vi.fn()}

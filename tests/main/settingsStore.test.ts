@@ -47,6 +47,22 @@ describe("settings store", () => {
     expect(settings.skillManagementFormatVersion).toBe(1);
   });
 
+  it("uses safer defaults without overwriting explicit existing schedules", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-settings-explicit-schedules-"));
+    const appDataRoot = join(root, "app-data");
+    const paths = createPaths({ appDataRoot, homeDir: join(root, "home") });
+    await mkdir(appDataRoot, { recursive: true });
+    await writeFile(join(appDataRoot, "settings.json"), JSON.stringify({
+      backupRetentionDays: null,
+      skillAutoCheckIntervalMinutes: 60
+    }), "utf8");
+
+    await expect(createSettingsStore(paths).readSettings()).resolves.toMatchObject({
+      backupRetentionDays: null,
+      skillAutoCheckIntervalMinutes: 60
+    });
+  });
+
   it("persists project discovery roots without changing Library storage", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-settings-projects-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
@@ -69,12 +85,12 @@ describe("settings store", () => {
       skillManagementFormatVersion: 1,
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
-      skillAutoCheckIntervalMinutes: 60,
+      skillAutoCheckIntervalMinutes: 1440,
       appUpdateAutoCheckEnabled: true,
       appUpdateAutoDownloadEnabled: true,
       appUpdateInstallOnQuit: true,
       telemetryEnabled: true,
-      backupRetentionDays: null
+      backupRetentionDays: 30
     });
 
     await store.updateSettings({

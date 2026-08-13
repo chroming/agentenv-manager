@@ -4483,6 +4483,7 @@ const AppContent = ({
               agentStates={targetStates}
               suppressedAgentIds={skillSettings.suppressedAgentSuggestionIds ?? []}
               busy={busy}
+              onReorder={reorderAgents}
               onSetEnabled={setAgentEnabled}
               onRestoreAgentSuggestions={restoreAllAgentSuggestions}
               onOpenRecovery={() => openWorkspaceNow("targets")}

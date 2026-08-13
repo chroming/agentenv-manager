@@ -172,17 +172,6 @@
   white-space: nowrap;
 }
 
-.skill-merge-diff select {
-  max-width: 240px;
-  height: 30px;
-  padding: 0 28px 0 9px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-control);
-  background: var(--surface);
-  color: var(--text);
-  font-size: 11px;
-}
-
 .skill-merge-diff .diff-list {
   flex: 1 1 auto;
   min-height: 0;

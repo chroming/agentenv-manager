@@ -8,8 +8,8 @@ const DEFAULT_SETTINGS: AgentEnvSettings = {
   skillManagementFormatVersion: 1,
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,
-  skillAutoCheckIntervalMinutes: 60,
-  backupRetentionDays: null
+  skillAutoCheckIntervalMinutes: 1440,
+  backupRetentionDays: 30
 };
 
 interface UseSettingsControllerOptions {

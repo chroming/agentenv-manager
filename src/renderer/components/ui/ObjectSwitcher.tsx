@@ -12,6 +12,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, GripVertical, Search } from "lucide-react";
+import { reorderPreferenceByDrop, reorderPreferenceByOffset } from "../../../shared/uiState";
 import { useI18n } from "../../i18n";
 import { Button } from "./Button";
 import { IconButton } from "./IconButton";
@@ -112,14 +113,10 @@ export const ObjectSwitcher = ({
   const activeSearchRef = searchInputRef ?? fallbackSearchRef;
   const canReorder = Boolean(onReorder && !normalizedQuery && items.length > 1);
 
-  const reorder = (draggedId: string, targetId: string, edge: "before" | "after") => {
+  const reorder = (draggedId: string, targetId: string) => {
     if (!canReorder || draggedId === targetId) return;
     const ids = items.map((item) => item.id);
-    const next = ids.filter((id) => id !== draggedId);
-    const targetIndex = next.indexOf(targetId);
-    if (targetIndex < 0) return;
-    next.splice(targetIndex + (edge === "after" ? 1 : 0), 0, draggedId);
-    onReorder?.(next);
+    onReorder?.(reorderPreferenceByDrop(ids, draggedId, targetId));
   };
 
   const handleDragOver = (event: ReactDragEvent<HTMLElement>, targetId: string) => {
@@ -138,9 +135,11 @@ export const ObjectSwitcher = ({
     const nextIndex = event.key === "ArrowUp" ? index - 1 : index + 1;
     if (index < 0 || nextIndex < 0 || nextIndex >= items.length) return;
     event.preventDefault();
-    const ids = items.map((item) => item.id);
-    [ids[index], ids[nextIndex]] = [ids[nextIndex], ids[index]];
-    onReorder?.(ids);
+    onReorder?.(reorderPreferenceByOffset(
+      items.map((item) => item.id),
+      id,
+      event.key === "ArrowUp" ? -1 : 1
+    ));
   };
 
   const close = (restoreFocus = true) => {
@@ -318,7 +317,7 @@ export const ObjectSwitcher = ({
                 onDrop={(event) => {
                   event.preventDefault();
                   if (dragState?.overId === item.id && dragState.edge) {
-                    reorder(dragState.id, item.id, dragState.edge);
+                    reorder(dragState.id, item.id);
                   }
                   setDragState(undefined);
                 }}

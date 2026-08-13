@@ -54,7 +54,8 @@ import {
   IconButton,
   InteractiveStatus,
   statusToneFor,
-  ModalFrame
+  ModalFrame,
+  SelectControl
 } from "./ui";
 
 interface SkillSourceViewProps {
@@ -696,7 +697,7 @@ export const SkillSourceView = ({
           >
             <label>
               <span>{t("Type")}</span>
-              <select
+              <SelectControl controlWidth="compact"
                 aria-label={t("Source type filter")}
                 value={sourceKindFilter}
                 onChange={(event) =>
@@ -707,11 +708,11 @@ export const SkillSourceView = ({
                 <option value="all">{t("All types")}</option>
                 <option value="online">{t("Online")}</option>
                 <option value="local">{t("Local")}</option>
-              </select>
+              </SelectControl>
             </label>
             <label>
               <span>{t("Result")}</span>
-              <select
+              <SelectControl controlWidth="compact"
                 aria-label={t("Source result filter")}
                 value={resultFilter}
                 onChange={(event) =>
@@ -723,7 +724,7 @@ export const SkillSourceView = ({
                 <option value="changes">{t("Changes")}</option>
                 <option value="failed">{t("Failed")}</option>
                 <option value="not-checked">{t("Not checked")}</option>
-              </select>
+              </SelectControl>
             </label>
             <Button
               className="library-filter-reset"

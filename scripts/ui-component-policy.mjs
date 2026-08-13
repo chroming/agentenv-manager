@@ -6,6 +6,9 @@ const RAW_INTERACTIVE_PATTERN = /<(button|select|input|textarea|dialog)\b/g;
 export const countRawInteractiveElements = (source) =>
   [...source.matchAll(RAW_INTERACTIVE_PATTERN)].length;
 
+export const countRawInteractiveElementsByTag = (source, tag) =>
+  [...source.matchAll(new RegExp(`<${tag}\\b`, "g"))].length;
+
 const listTsxFiles = async (directory) => {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = await Promise.all(entries.map((entry) => {
@@ -24,6 +27,19 @@ export const collectRendererRawInteractiveUsage = async (projectRoot) => {
     const projectPath = relative(projectRoot, file).split("\\").join("/");
     if (projectPath.includes("/components/ui/")) continue;
     const count = countRawInteractiveElements(await readFile(file, "utf8"));
+    if (count > 0) usage.set(projectPath, count);
+  }
+  return usage;
+};
+
+export const collectRendererRawInteractiveUsageByTag = async (projectRoot, tag) => {
+  const rendererRoot = resolve(projectRoot, "src/renderer");
+  const files = await listTsxFiles(rendererRoot);
+  const usage = new Map();
+  for (const file of files) {
+    const projectPath = relative(projectRoot, file).split("\\").join("/");
+    if (projectPath.includes("/components/ui/")) continue;
+    const count = countRawInteractiveElementsByTag(await readFile(file, "utf8"), tag);
     if (count > 0) usage.set(projectPath, count);
   }
   return usage;

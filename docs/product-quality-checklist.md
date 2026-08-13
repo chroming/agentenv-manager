@@ -352,6 +352,10 @@ Rules:
 - [ ] Clearing search or filters preserves the current view and selection where
   possible.
 - [ ] Option labels changing length do not move the control itself.
+- [ ] Selects use the shared compact, standard, wide, or fill width contract by
+  task role; pages do not size or redraw native selects.
+- [ ] A bounded Select fits the longest ordinary localized option in its role;
+  menus may be wider than their stable trigger when exceptional content needs it.
 
 ### 5.10 Popovers, menus, tooltips, and dialogs
 
@@ -488,6 +492,8 @@ Rules:
 - [ ] Deleting an unreferenced Skill reports the correct deleted count.
 - [ ] Local Skills Manager shows only local management responsibilities, not unrelated
   Library maintenance.
+- [ ] External `discovery-only` plugin caches inform runtime inspection without becoming
+  Library matches, cleanup conflicts, or mutation candidates.
 - [ ] Auto-manage distinguishes automatic, decision-required, ignored, managed,
   and externally retained outcomes.
 

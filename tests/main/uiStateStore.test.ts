@@ -4,6 +4,10 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import { createPaths } from "../../src/main/paths";
 import { createUiStateStore } from "../../src/main/uiStateStore";
+import {
+  reorderPreferenceByDrop,
+  reorderPreferenceByOffset
+} from "../../src/shared/uiState";
 
 const roots: string[] = [];
 
@@ -19,6 +23,17 @@ afterEach(async () => {
 });
 
 describe("uiStateStore", () => {
+  it("uses one stable reorder contract for drag and keyboard moves", () => {
+    expect(reorderPreferenceByDrop(["codex", "claude", "opencode"], "codex", "opencode"))
+      .toEqual(["claude", "opencode", "codex"]);
+    expect(reorderPreferenceByDrop(["codex", "claude", "opencode"], "opencode", "codex"))
+      .toEqual(["opencode", "codex", "claude"]);
+    expect(reorderPreferenceByOffset(["codex", "claude", "opencode"], "claude", -1))
+      .toEqual(["claude", "codex", "opencode"]);
+    expect(reorderPreferenceByOffset(["codex", "claude", "opencode"], "opencode", 1))
+      .toEqual(["codex", "claude", "opencode"]);
+  });
+
   it("starts with a stable versioned device-local state", async () => {
     const { store } = await createStore();
     await expect(store.read()).resolves.toEqual({

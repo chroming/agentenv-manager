@@ -633,8 +633,8 @@ const launchApp = async (
       : { skillManagementFormatVersion: 1 }),
     skillStorageLocation: "appData",
     skillAutoCheckEnabled: true,
-    skillAutoCheckIntervalMinutes: 60,
-    backupRetentionDays: null,
+    skillAutoCheckIntervalMinutes: 1440,
+    backupRetentionDays: 30,
     telemetryEnabled: false,
     enabledTargetIds,
     ...(options.agentDiscoveryVersion === null
@@ -1481,7 +1481,7 @@ describe("Electron UI profile switching e2e", () => {
     const targetSkill = join(opencodeDir, "skills", "shared-reviewer");
     const sidecar = `${targetSkill}.agentenv-owner.json`;
     const before = await lstat(targetSkill);
-    const dialog = page.getByRole("dialog", { name: "Upgrade Skill management" });
+    const dialog = page.getByRole("dialog", { name: "Move legacy Skill records" });
     await dialog.waitFor({ state: "visible", timeout: 10_000 });
     await expect.poll(() => dialog.textContent()).toContain("1 legacy ownership files need review");
     await dialog.getByRole("button", { name: "Review local Skills" }).click();
@@ -5005,6 +5005,7 @@ describe("Electron UI profile switching e2e", () => {
     await captureSettings("settings-general-920x620.png");
 
     await page.getByRole("tab", { name: "Agents", exact: true }).click();
+    await captureSettings("settings-agents-920x620.png");
     await page.getByText("Custom folders", { exact: true }).click();
     await page.getByText("Custom commands", { exact: true }).click();
     await expectNoHorizontalOverflow(page, [
@@ -5072,6 +5073,14 @@ describe("Electron UI profile switching e2e", () => {
     await captureSettings("settings-connections-920x620.png");
 
     await page.getByRole("tab", { name: "Data", exact: true }).click();
+    const dataLocation = page.locator(".settings-data-location");
+    expect(await dataLocation.locator("input").count()).toBe(0);
+    await dataLocation.getByText("Data folder", { exact: true }).waitFor({ state: "visible" });
+    await dataLocation.getByRole("button", { name: "Copy data folder path" }).waitFor({
+      state: "visible"
+    });
+    expect(await page.getByRole("combobox", { name: "Backup retention" }).inputValue())
+      .toBe("30");
     const dataHeaderAlignment = await page.locator(".settings-data-header").evaluate((header) => {
       const button = header.querySelector<HTMLElement>(".ui-button")!;
       const location = header.parentElement!.querySelector<HTMLElement>(".settings-data-location")!;
@@ -5613,6 +5622,54 @@ describe("Electron UI profile switching e2e", () => {
     const switcher = await openProfileSwitcher(page);
     expect(await switcher.locator(".profile-row__name").allTextContents())
       .toEqual(persisted.profileOrder);
+  }, 30_000);
+
+  it("reorders Agents from Settings and uses that order across the desktop app", async () => {
+    const { page } = await launchApp();
+    await openSettingsCategory(page, "Agents");
+
+    const rows = page.locator(".agent-settings-row");
+    const initialNames = await rows.locator(".agent-settings-copy > strong").allTextContents();
+    expect(initialNames.length).toBeGreaterThan(1);
+    const firstHandle = rows.nth(0).getByRole("button", {
+      name: `Reorder ${initialNames[0]}`
+    });
+    const handleGeometry = await firstHandle.evaluate((handle) => {
+      const row = handle.closest<HTMLElement>(".agent-settings-row")!;
+      const handleBox = handle.getBoundingClientRect();
+      const rowBox = row.getBoundingClientRect();
+      return {
+        centered: Math.abs(
+          (handleBox.top + handleBox.height / 2) - (rowBox.top + rowBox.height / 2)
+        ),
+        height: Math.round(handleBox.height),
+        rowDraggable: row.draggable,
+        width: Math.round(handleBox.width)
+      };
+    });
+    expect(handleGeometry.height).toBe(28);
+    expect(handleGeometry.width).toBe(28);
+    expect(handleGeometry.rowDraggable).toBe(false);
+    expect(handleGeometry.centered).toBeLessThanOrEqual(1);
+
+    await firstHandle.press("Alt+ArrowDown");
+    const expectedNames = [initialNames[1], initialNames[0], ...initialNames.slice(2)];
+    await expect.poll(() =>
+      rows.locator(".agent-settings-copy > strong").allTextContents()
+    ).toEqual(expectedNames);
+
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
+    const agents = page.getByRole("region", { name: "Agents", exact: true });
+    await agents.waitFor({ state: "visible" });
+    await expect.poll(() =>
+      agents.locator(".target-workflow-name-action").allTextContents()
+    ).toEqual(expectedNames);
+
+    await page.reload();
+    await agents.waitFor({ state: "visible" });
+    await expect.poll(() =>
+      agents.locator(".target-workflow-name-action").allTextContents()
+    ).toEqual(expectedNames);
   }, 30_000);
 
   it("stops managing OpenCode while keeping deployed files and clearing ownership", async () => {
@@ -6564,7 +6621,7 @@ describe("Electron UI profile switching e2e", () => {
     );
     const managedInventory = await page.evaluate(() => window.agentEnv.scanSkillInventory());
     expect(
-      managedInventory.filter((item) => item.skillKey === "managed-after-import")
+      managedInventory.entries.filter((item) => item.skillKey === "managed-after-import")
     ).toEqual([
       expect.objectContaining({
         status: "library",
@@ -7980,7 +8037,8 @@ describe("Electron UI profile switching e2e", () => {
     await dialog.waitFor({ state: "visible" });
     await writeFile(join(copies[1], "SKILL.md"), "# Target version changed after preview\n");
     await dialog.getByRole("button", { name: "Add to Library" }).click();
-    await dialog.waitFor({ state: "hidden" });
+    await expect.poll(() => dialog.textContent()).toContain("Local Skills changed during review");
+    await expect.poll(() => dialog.textContent()).toContain("Refresh Local Skills");
     await expect.poll(() => page.locator(".app-feedback").textContent()).toContain(
       "changed after the cleanup preview"
     );
@@ -7989,6 +8047,8 @@ describe("Electron UI profile switching e2e", () => {
     for (const path of copies) {
       await expect(fileExists(join(path, "SKILL.md"))).resolves.toBe(true);
     }
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await dialog.waitFor({ state: "hidden" });
   }, 45_000);
 
   it("refreshes Skills in place without clearing the current view", async () => {
@@ -9163,11 +9223,13 @@ describe("Electron UI profile switching e2e", () => {
 
     await openSettingsCategory(page, "Skills");
     const autoCheck = page.getByRole("switch", { name: "Skill auto update check" });
-    const interval = page.getByLabel("Skill auto check interval minutes");
+    const interval = page.getByRole("combobox", { name: "Skill auto check interval" });
     const assertAutoCheckLayout = async () => {
       const geometry = await autoCheck.evaluate((switchControl) => {
         const autoRow = switchControl.closest<HTMLElement>(".settings-preference-row")!;
-        const intervalControl = document.querySelector<HTMLElement>(".settings-interval-control")!;
+        const intervalControl = document.querySelector<HTMLElement>(
+          '[aria-label="Skill auto check interval"]'
+        )!;
         const intervalRow = intervalControl.closest<HTMLElement>(".settings-preference-row")!;
         const title = autoRow.querySelector<HTMLElement>(".settings-preference-copy strong")!;
         const copy = autoRow.querySelector<HTMLElement>(".settings-preference-copy")!;
@@ -9225,18 +9287,15 @@ describe("Electron UI profile switching e2e", () => {
     await autoCheck.click();
     await expect.poll(() => autoCheck.getAttribute("aria-checked")).toBe("true");
     await expect.poll(() => interval.isEnabled()).toBe(true);
-    await interval.click();
-    await interval.press("Meta+A");
-    await interval.pressSequentially("15");
-    await expect.poll(() => interval.inputValue()).toBe("15");
-    await interval.press("Tab");
+    await interval.selectOption("360");
+    await expect.poll(() => interval.inputValue()).toBe("360");
     await expect
       .poll(async () =>
         JSON.parse(await readFile(join(appDataRoot, "settings.json"), "utf8"))
       )
       .toMatchObject({
         skillAutoCheckEnabled: true,
-        skillAutoCheckIntervalMinutes: 15
+        skillAutoCheckIntervalMinutes: 360
       });
   }, standardElectronTestTimeout);
 
@@ -9606,8 +9665,8 @@ describe("Electron UI profile switching e2e", () => {
     await agentsNavigation.click();
     await page.getByText("No enabled Agents").waitFor({ state: "visible" });
     const inventory = await page.evaluate(() => window.agentEnv.scanSkillInventory());
-    expect(inventory.some((item) => item.id === "shared-scope-skill")).toBe(true);
-    expect(inventory.some((item) => item.id === "target-only-reviewer")).toBe(false);
+    expect(inventory.entries.some((item) => item.id === "shared-scope-skill")).toBe(true);
+    expect(inventory.entries.some((item) => item.id === "target-only-reviewer")).toBe(false);
 
     await page.reload();
     await page.getByRole("button", { name: "Settings", exact: true }).waitFor({
@@ -11654,7 +11713,7 @@ describe("Electron UI profile switching e2e", () => {
       rows.map((row) => {
         const copy = row.querySelector<HTMLElement>(".settings-preference-copy")!;
         const control = row.querySelector<HTMLElement>(
-          ".settings-preference-control > select, .settings-preference-control > .settings-readonly-value, .settings-preference-control > .settings-interval-field, .settings-preference-control > .ui-switch"
+          ".settings-preference-control > select, .settings-preference-control > .settings-readonly-value, .settings-preference-control > .ui-switch"
         )!;
         const rowBox = row.getBoundingClientRect();
         const copyBox = copy.getBoundingClientRect();
@@ -11689,10 +11748,9 @@ describe("Electron UI profile switching e2e", () => {
     }));
     expect(preferenceTypography).toEqual({ description: "400", label: "500" });
     const settingsFieldTypography = await page.evaluate(() => {
-      const controls = [
-        document.querySelector<HTMLSelectElement>(".settings-preference-control > select"),
-        document.querySelector<HTMLInputElement>(".settings-interval-control input")
-      ].filter((control): control is HTMLSelectElement | HTMLInputElement => Boolean(control));
+      const controls = Array.from(document.querySelectorAll<HTMLSelectElement>(
+        ".settings-preference-control > select"
+      ));
       return controls.map((control) => ({
         fontSize: getComputedStyle(control).fontSize,
         lineHeight: getComputedStyle(control).lineHeight

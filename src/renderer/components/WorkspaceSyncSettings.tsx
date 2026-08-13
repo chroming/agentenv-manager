@@ -18,7 +18,7 @@ import type {
 import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
-import { Button, IconButton, ModalFrame } from "./ui";
+import { Button, IconButton, ModalFrame, SelectControl } from "./ui";
 
 const emptyStatus: WorkspaceSyncStatus = {
   kind: "not-connected",
@@ -420,7 +420,7 @@ export const WorkspaceSyncSettings = ({
                     </span>
                     <span className={`workspace-sync-direction is-${row.direction}`}>{directionLabel(row.direction)}</span>
                     {row.direction === "conflict" ? (
-                      <select
+                      <SelectControl controlWidth="standard"
                         aria-label={t("Resolve {{name}}", { name: row.title })}
                         value={choices[row.key] ?? ""}
                         onChange={(event) => {
@@ -431,7 +431,7 @@ export const WorkspaceSyncSettings = ({
                         <option value="">{t("Choose version")}</option>
                         <option value="local">{t("Keep local version")}</option>
                         <option value="remote">{t("Use remote")}</option>
-                      </select>
+                      </SelectControl>
                     ) : null}
                   </div>
                 )) : <div className="workspace-sync-empty">{t("Workspace is up to date.")}</div>}
