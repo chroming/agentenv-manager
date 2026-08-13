@@ -90,6 +90,24 @@ describe("filesystem Skill runtime driver", () => {
     expect(recursive.observations.map((item) => item.runtimeName)).toEqual(["nested-skill"]);
   });
 
+  it("reports an unreadable Skill location instead of treating it as empty", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-runtime-"));
+    const skillsPath = join(root, "skills");
+    await writeFile(skillsPath, "not a directory", "utf8");
+
+    const snapshot = await createFilesystemSkillDriver({ targetId: "test" })
+      .inspectRuntime(pathsFor("test", skillsPath, "recursive"));
+
+    expect(snapshot.observations).toEqual([]);
+    expect(snapshot.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "unreadable-skill-location",
+        severity: "warning",
+        message: expect.stringContaining(skillsPath)
+      })
+    ]));
+  });
+
   it("discovers Skills below a collection directory symlink without losing its mutation boundary", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-runtime-"));
     const skillsDir = join(root, "skills");

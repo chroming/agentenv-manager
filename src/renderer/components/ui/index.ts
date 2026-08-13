@@ -10,7 +10,14 @@ export { ControlGroup } from "./ControlGroup";
 export { DialogBody, DialogFooter, DialogHeader } from "./DialogParts";
 export { DisclosureIcon } from "./DisclosureIcon";
 export { FilterPopover } from "./FilterPopover";
-export { SearchField, SelectField, TextAreaField, TextField } from "./FormFields";
+export {
+  SearchField,
+  SelectControl,
+  SelectField,
+  TextAreaField,
+  TextField,
+  type SelectControlWidth
+} from "./FormFields";
 export { IconButton } from "./IconButton";
 export { InteractiveStatus } from "./InteractiveStatus";
 export { statusToneFor, type SemanticStatusKind } from "./statusPresentation";

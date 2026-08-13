@@ -45,6 +45,7 @@ import type {
   SkillCollectionMemberDecision,
   SkillCollectionMemberDecisionUpdate,
   SkillRuntimeSnapshot,
+  SkillRuntimeIssue,
   SkillSourceCheckAllResult,
   SkillSourceCollectionRef,
   SkillSourceGroupView,
@@ -59,6 +60,7 @@ import type {
   SharedSkillRetentionInput
 } from "../shared/types";
 import { normalizeSkillKey } from "../shared/skillIdentity";
+import { buildSkillCleanupGroups } from "../shared/skillCleanup";
 import { managedResourceOrigin } from "../shared/managedResource";
 import { pathEntryExists, pathExists, replacePathAtomically, writeAtomic } from "./fileUtils";
 import {
@@ -145,6 +147,7 @@ import {
 } from "./githubSkillClient";
 import { isPathInside, pathsEqual } from "./platformPaths";
 import { mergeInventoryLocation } from "./skillInventoryLocation";
+import { resolveSkillInventoryLibraryMatch } from "./skillInventoryLibraryMatch";
 import { canPreserveLegacySkillTopology, legacyOwnedLibraryId,
   legacySkillOwnershipMigrationReady, protectedLegacySkillMarkerPaths } from "./skillLegacyOwnershipMigration";
 import { createSkillPolicyStore } from "./skillPolicyStore";
@@ -191,8 +194,8 @@ const DEFAULT_SETTINGS: AgentEnvSettings = {
   skillSyncMethod: "copy",
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,
-  skillAutoCheckIntervalMinutes: 60,
-  backupRetentionDays: null
+  skillAutoCheckIntervalMinutes: 1440,
+  backupRetentionDays: 30
 };
 
 const updatePolicyFor = (metadata: SkillMetadataFile): SkillUpdatePolicy => {
@@ -780,7 +783,8 @@ export const createSkillLibraryStore = (
 
   const scanInventory = async (
     targetPaths: TargetPaths[],
-    knownLibrarySkills?: SkillLibraryEntry[]
+    knownLibrarySkills?: SkillLibraryEntry[],
+    onIssues?: (issues: SkillRuntimeIssue[]) => void
   ): Promise<SkillInventoryEntry[]> => {
     const librarySkills = knownLibrarySkills ?? await listSkills();
     const libraryIds = new Set(librarySkills.map((skill) => skill.id));
@@ -802,6 +806,10 @@ export const createSkillLibraryStore = (
       target,
       snapshot: await runtimeSnapshotProvider(target)
     })));
+    onIssues?.(
+      snapshots.flatMap(({ snapshot }) => snapshot.issues)
+        .filter((issue) => issue.code === "unreadable-skill-location")
+    );
     await migrateLegacySkillPolicies(snapshots);
     const unmanagedLocations = await readUnmanagedSkillLocations();
     const collectionDecisions = await readSkillCollectionDecisions();
@@ -916,7 +924,7 @@ export const createSkillLibraryStore = (
             unmanagedLocationId: unmanagedLocation?.id,
             unmanagedCoverage: unmanagedLocation?.coverage,
             collectionDecision: collectionDecision?.decision,
-            locationManagement: location?.management,
+            locationManagement: observation.locationManagement ?? location?.management,
             locationRole: observation.locationRole,
             sharedLocation: observation.shared,
             sharedLocationId: observation.sharedLocationId,
@@ -979,21 +987,20 @@ export const createSkillLibraryStore = (
           ? librarySkills.find((skill) => skill.contentHash === contentHash)?.id
           : undefined;
         const runtimeLibraryCandidates = libraryBySkillKey.get(skillKey) ?? [];
-        const runtimeLibraryId =
-          runtimeLibraryCandidates.find((skill) => skill.contentHash === contentHash)?.id ??
-          (runtimeLibraryCandidates.length === 1 ? runtimeLibraryCandidates[0].id : undefined);
-        const localLibraryId = libraryIds.has(deploymentName)
-          ? deploymentName
-          : runtimeLibraryId;
+        const { localLibraryId, observedDiscovery } = resolveSkillInventoryLibraryMatch({
+          deploymentName, contentHash, libraryIds, runtimeLibraryCandidates, observation
+        });
         const status = sharedOwnership.kept
           ? "left-unmanaged"
           : managedByAgentEnv
             ? "managed"
             : unmanagedLocation
-            ? "left-unmanaged"
-            : localLibraryId
-              ? "library"
-              : "outside";
+              ? "left-unmanaged"
+              : observedDiscovery
+                ? "outside"
+                : localLibraryId
+                  ? "library"
+                  : "outside";
         const libraryId = markerId ?? externalLibraryId ?? localLibraryId;
         const key = `${status}:${libraryId ?? deploymentName}:${skillDir}`;
         const existing = byKey.get(key);
@@ -1066,7 +1073,7 @@ export const createSkillLibraryStore = (
           sharedLocationId: observation.sharedLocationId,
           sharedAreaMode: sharedOwnership.mode,
           legacyLocation: observation.legacy,
-          locationManagement: location?.management,
+          locationManagement: observation.locationManagement ?? location?.management,
           collectionLink: observation.collectionLink
         });
       }
@@ -2203,6 +2210,41 @@ export const createSkillLibraryStore = (
       )) {
         await rm(markerPath, { force: true });
         await claimPath.recordMutation(markerPath);
+      }
+      const verificationTargets = new Map<string, TargetPaths>();
+      for (const location of uniqueLocations) {
+        verificationTargets.set(location.targetPaths.targetId, location.targetPaths);
+      }
+      const verificationInventory = await scanInventory(
+        [...verificationTargets.values()],
+        await listSkills()
+      );
+      const verificationGroup = buildSkillCleanupGroups(verificationInventory)
+        .find((group) => group.skillKey === safeSkillKey);
+      const verifiedPaths = new Map(
+        verificationInventory.map((item) => [resolve(item.path), item])
+      );
+      const incompletePaths = uniqueLocations
+        .map((location) => resolve(location.targetDir))
+        .filter((path) => {
+          const item = verifiedPaths.get(path);
+          return !item ||
+            item.status !== "managed" ||
+            item.libraryId !== safeLibraryId ||
+            item.contentMatchesLibrary !== true;
+        });
+      if (
+        incompletePaths.length > 0 ||
+        !verificationGroup ||
+        verificationGroup.resolution !== "resolved" ||
+        verificationGroup.state !== "managed"
+      ) {
+        const remainingPaths = verificationGroup?.activeItems
+          .filter((item) => item.status !== "managed" || item.contentMatchesLibrary !== true)
+          .map((item) => item.path) ?? incompletePaths;
+        throw new Error(
+          `Cleanup did not reach a stable managed state. Review or leave these locations unmanaged, then retry: ${[...new Set([...incompletePaths, ...remainingPaths])].join(", ")}`
+        );
       }
       await setCleanupStatus(manifest, "complete");
       return {

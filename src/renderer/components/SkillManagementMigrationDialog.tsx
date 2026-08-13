@@ -32,14 +32,14 @@ export const SkillManagementMigrationDialog = ({
   if (!open) return null;
   return (
     <ModalFrame
-      ariaLabel={t("Upgrade Skill management")}
+      ariaLabel={t("Move legacy Skill records")}
       className="skill-management-migration-dialog ui-dialog-shell"
       dialogRef={dialogRef}
       dismissDisabled={busy}
       onDismiss={onDismiss}
     >
       <DialogHeader
-        title={t("Upgrade Skill management")}
+        title={t("Move legacy Skill records")}
         description={t("Move legacy ownership records into AgentEnv's private data and remove old marker files through the existing backup workflow.")}
       />
       <DialogBody>
@@ -47,7 +47,7 @@ export const SkillManagementMigrationDialog = ({
           {t("{{count}} legacy ownership files need review.", { count: legacyMarkerCount })}
         </p>
         <p className="muted ui-dialog-description">
-          {t("This upgrade does not change Skill content, timestamps, or whether an existing install is a link or copy. Your current deployment preference is preserved.")}
+          {t("This cleanup does not change Skill content, timestamps, or whether an existing install is a link or copy. Your current deployment preference is preserved.")}
         </p>
       </DialogBody>
       <DialogFooter>

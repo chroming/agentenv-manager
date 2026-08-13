@@ -1,9 +1,10 @@
 import type { SkillInventoryEntry } from "../shared/types";
-import type {
-  SkillCleanupAutomaticEffect,
-  SkillCleanupDisplayState,
-  SkillCleanupGroup,
-  SkillCleanupRecommendedAction
+import {
+  isSkillCleanupManageable,
+  type SkillCleanupAutomaticEffect,
+  type SkillCleanupDisplayState,
+  type SkillCleanupGroup,
+  type SkillCleanupRecommendedAction
 } from "../shared/skillCleanup";
 import { targetNameFor, type TargetNameIndex } from "./targetPresentation";
 
@@ -18,7 +19,7 @@ export const cleanupLocationLabel = (
 };
 
 const inventoryStatusLabel = (status: SkillInventoryEntry["status"]) => {
-  if (status === "library") return "Imported";
+  if (status === "library") return "Matches Library";
   if (status === "outside") return "Outside AgentEnv";
   if (status === "left-unmanaged") return "Left unmanaged";
   return "Managed";
@@ -38,11 +39,7 @@ export const externalManagerLabel = (skill: SkillInventoryEntry | undefined) =>
     ? "Skills CLI"
     : skill?.externalEvidence?.manager ?? "Detected source");
 
-export const isCleanupManageable = (item: SkillInventoryEntry) =>
-  !item.collectionLink &&
-  item.status !== "left-unmanaged" &&
-  item.locationRole !== "discovery-only" &&
-  (item.locationManagement !== "observed" || item.sharedLocation === true);
+export const isCleanupManageable = isSkillCleanupManageable;
 
 export const cleanupPresentationLabel = (state: SkillCleanupDisplayState) => {
   if (state === "not-in-library") return "Not in Library";
@@ -51,7 +48,8 @@ export const cleanupPresentationLabel = (state: SkillCleanupDisplayState) => {
   if (state === "copies-not-managed") return "Copies not managed";
   if (state === "local-changes-found") return "Local changes found";
   if (state === "managed-copy-changed") return "Managed copy changed";
-  if (state === "management-upgrade") return "Management upgrade";
+  if (state === "legacy-records") return "Legacy records";
+  if (state === "management-record-missing") return "Management record missing";
   if (state === "outside-agentenv") return "Outside AgentEnv";
   if (state === "shared-left-unmanaged") return "Shared location left unmanaged";
   if (state === "left-unmanaged") return "Left unmanaged";
@@ -64,7 +62,8 @@ export const cleanupPresentationCompactLabel = (state: SkillCleanupDisplayState)
   if (state === "unavailable") return "Unavailable";
   if (state === "multiple-versions") return "Multiple versions";
   if (state === "local-changes-found" || state === "managed-copy-changed") return "Changed";
-  if (state === "management-upgrade") return "Upgrade";
+  if (state === "legacy-records") return "Legacy records";
+  if (state === "management-record-missing") return "Needs repair";
   if (state === "outside-agentenv") return "Outside";
   if (state === "shared-left-unmanaged" || state === "left-unmanaged") {
     return "Unmanaged";
@@ -81,7 +80,7 @@ export const cleanupPresentationChipClass = (state: SkillCleanupDisplayState) =>
   if (state === "outside-agentenv") return "outside";
   if (state === "multiple-versions" || state === "local-changes-found") return "conflict";
   if (state === "managed-copy-changed") return "stale";
-  if (state === "management-upgrade") return "pending";
+  if (state === "legacy-records" || state === "management-record-missing") return "pending";
   if (state === "duplicate-copies") return "library";
   if (state === "unavailable") return "stale";
   return "outside";
@@ -98,14 +97,9 @@ export const cleanupActionLabel = (action: SkillCleanupRecommendedAction) => {
 };
 
 export const cleanupActionDisplayLabel = (action: SkillCleanupRecommendedAction) => {
-  if (
-    action === "review-differences" ||
-    action === "review-drift" ||
-    action === "review-paths" ||
-    action === "review-details"
-  ) {
-    return "Review";
-  }
+  if (action === "review-differences" || action === "review-drift") return "Compare";
+  if (action === "review-paths") return "Review paths";
+  if (action === "review-details") return "View details";
   return cleanupActionLabel(action);
 };
 

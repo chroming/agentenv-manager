@@ -161,7 +161,7 @@ export interface AgentEnvApi {
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
   listSkillFiles(id: string): Promise<SkillFileNode[]>;
   readSkillFile(input: SkillFileReadInput): Promise<SkillFileContent>;
-  scanSkillInventory(): Promise<SkillInventoryEntry[]>;
+  scanSkillInventory(): Promise<SkillInventoryScanResult>;
   listSkillCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;
   setUnmanagedSkillLocations(
     input: UnmanagedSkillLocationUpdate
@@ -1026,6 +1026,11 @@ export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   collectionLink?: SkillCollectionLink;
 }
 
+export interface SkillInventoryScanResult {
+  entries: SkillInventoryEntry[];
+  issues: SkillRuntimeIssue[];
+}
+
 export type SkillScanDepth = "direct" | "recursive";
 export type SkillRuntimeScope = "user" | "workspace" | "shared" | "builtin";
 export type SkillRuntimeOwner = "agentenv" | "user" | "agent" | "external";
@@ -1040,6 +1045,7 @@ export interface SkillRuntimeIssue {
     | "external-owner"
     | "collection-link"
     | "unreadable-skill"
+    | "unreadable-skill-location"
     | "unreadable-native-state";
   severity: "info" | "warning" | "error";
   message: string;
@@ -1064,6 +1070,7 @@ export interface SkillRuntimeObservation {
   availability: SkillRuntimeAvailability;
   confidence: SkillRuntimeConfidence;
   locationRole: TargetSkillLocationRole;
+  locationManagement?: TargetSkillLocation["management"];
   shared: boolean;
   sharedLocationId?: SharedSkillLocationId;
   legacy: boolean;

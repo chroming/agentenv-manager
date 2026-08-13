@@ -17,7 +17,7 @@ describe("SkillManagementMigrationDialog", () => {
       />
     );
 
-    const dialog = screen.getByRole("dialog", { name: "Upgrade Skill management" });
+    const dialog = screen.getByRole("dialog", { name: "Move legacy Skill records" });
     expect(dialog).toHaveTextContent("3 legacy ownership files need review");
     expect(dialog).toHaveTextContent("does not change Skill content, timestamps, or whether an existing install is a link or copy");
     expect(dialog.querySelectorAll('input[type="radio"]')).toHaveLength(0);

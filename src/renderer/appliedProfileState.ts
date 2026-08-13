@@ -73,6 +73,6 @@ export const acceptAppliedProfileState = ({
     .catch(() => undefined);
   void window.agentEnv
     .scanSkillInventory()
-    .then(setSkillInventory)
+    .then((result) => setSkillInventory(result.entries))
     .catch(() => undefined);
 };

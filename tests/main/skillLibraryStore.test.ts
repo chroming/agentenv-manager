@@ -12,6 +12,7 @@ import { hashPathEntry } from "../../src/main/filesystemIntegrity";
 import type { GitCliSkillSource } from "../../src/main/skillSources/contract";
 import { createClaudeCodeTargetAdapter } from "../../src/main/targets/claudeCodeTarget";
 import { createOpenCodeTargetAdapter } from "../../src/main/targets/opencodeTarget";
+import { createFilesystemSkillDriver } from "../../src/main/targets/shared/skillRuntime";
 import { buildSkillCleanupGroups } from "../../src/shared/skillCleanup";
 import type { ProfileDetail, SaveProfileInput } from "../../src/shared/types";
 import { createGitTestRepository } from "./skillSources/gitTestRepository";
@@ -639,6 +640,102 @@ description: >
           displayName: "Claude Code plugin",
           importable: false
         })
+      })
+    ]);
+  });
+
+  it("does not associate a different discovery-only plugin copy with a same-name Library Skill", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const homeDir = join(root, "home");
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir });
+    const librarySkill = join(paths.skillsLibraryDir, "dispatching-parallel-agents");
+    const pluginRoot = join(homeDir, ".claude", "plugins", "cache", "superpowers", "current");
+    const pluginSkill = join(pluginRoot, "skills", "dispatching-parallel-agents");
+    await mkdir(librarySkill, { recursive: true });
+    await mkdir(join(pluginRoot, ".claude-plugin"), { recursive: true });
+    await mkdir(pluginSkill, { recursive: true });
+    await writeFile(
+      join(librarySkill, "SKILL.md"),
+      "---\nname: dispatching-parallel-agents\n---\n# Managed version\n"
+    );
+    await writeFile(join(pluginRoot, ".claude-plugin", "plugin.json"), "{}\n");
+    await writeFile(
+      join(pluginSkill, "SKILL.md"),
+      "---\nname: dispatching-parallel-agents\n---\n# Plugin version\n"
+    );
+    const claudeAdapter = createClaudeCodeTargetAdapter();
+    const openCodeAdapter = createOpenCodeTargetAdapter();
+    const targetPaths = claudeAdapter.createTargetPaths({ homeDir });
+    const openCodePaths = openCodeAdapter.createTargetPaths({ homeDir });
+    const openCodeSkill = join(
+      openCodePaths.skillsDir!,
+      "dispatching-parallel-agents"
+    );
+    await mkdir(openCodeSkill, { recursive: true });
+    await writeFile(
+      join(openCodeSkill, "SKILL.md"),
+      "---\nname: dispatching-parallel-agents\n---\n# Managed version\n"
+    );
+    await mkdir(join(targetPaths.configDir, "plugins"), { recursive: true });
+    await writeFile(targetPaths.configPath, JSON.stringify({
+      enabledPlugins: { "superpowers@official": true }
+    }));
+    await writeFile(
+      join(targetPaths.configDir, "plugins", "installed_plugins.json"),
+      JSON.stringify({
+        plugins: {
+          "superpowers@official": [{
+            scope: "user",
+            installPath: pluginRoot,
+            lastUpdated: "2026-08-03T09:47:06.206Z"
+          }]
+        }
+      })
+    );
+    const store = createSkillLibraryStore(paths, undefined, {
+      runtimeSnapshotProvider: (target) =>
+        target.targetId === "claude-code"
+          ? claudeAdapter.skills.inspectRuntime(target)
+          : openCodeAdapter.skills.inspectRuntime(target)
+    });
+    await store.consolidateSkillGroup({
+      skillKey: "dispatching-parallel-agents",
+      libraryId: "dispatching-parallel-agents",
+      canonicalPath: openCodeSkill,
+      locations: [{
+        targetPaths: openCodePaths,
+        targetDir: openCodeSkill
+      }]
+    });
+
+    const inventory = await store.scanInventory([openCodePaths, targetPaths]);
+
+    expect(inventory).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: openCodeSkill,
+        status: "managed",
+        libraryId: "dispatching-parallel-agents",
+        contentMatchesLibrary: true
+      }),
+      expect.objectContaining({
+        path: pluginSkill,
+        status: "outside",
+        libraryId: undefined,
+        contentMatchesLibrary: undefined,
+        locationRole: "discovery-only",
+        locationManagement: "observed",
+        externalEvidence: expect.objectContaining({
+          manager: "claude-plugin",
+          importable: false
+        })
+      })
+    ]));
+    expect(buildSkillCleanupGroups(inventory)).toEqual([
+      expect.objectContaining({
+        state: "managed",
+        resolution: "resolved",
+        bucket: "managed",
+        items: [expect.objectContaining({ path: openCodeSkill })]
       })
     ]);
   });
@@ -2167,6 +2264,60 @@ description: >
     await expect(readFile(join(openCodeCopy, "SKILL.md"), "utf8")).resolves.toBe("# Canonical\n");
     await expect(readFile(join(codexCopy, "SKILL.md"), "utf8")).resolves.toBe("# Older copy\n");
     await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("rolls back when cleanup leaves an observed runtime location unresolved", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-convergence-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const preferredRoot = join(paths.homeDir, ".config", "opencode", "skills");
+    const observedRoot = join(paths.homeDir, ".config", "opencode", "skill");
+    const preferredCopy = join(preferredRoot, "reviewer");
+    const observedCopy = join(observedRoot, "reviewer");
+    const targetPaths = {
+      targetId: "opencode",
+      configDir: join(paths.homeDir, ".config", "opencode"),
+      instructionsPath: join(paths.homeDir, ".config", "opencode", "AGENTS.md"),
+      configPath: join(paths.homeDir, ".config", "opencode", "opencode.jsonc"),
+      skillsDir: preferredRoot,
+      skillLocations: [
+        {
+          path: preferredRoot,
+          role: "preferred-runtime" as const,
+          shared: false,
+          scanDepth: "recursive" as const,
+          management: "managed" as const
+        },
+        {
+          path: observedRoot,
+          role: "alternate-runtime" as const,
+          shared: false,
+          scanDepth: "recursive" as const,
+          management: "observed" as const
+        }
+      ]
+    };
+    for (const path of [preferredCopy, observedCopy]) {
+      await mkdir(path, { recursive: true });
+    }
+    await writeFile(join(preferredCopy, "SKILL.md"), "---\nname: reviewer\n---\n# Preferred\n");
+    await writeFile(join(observedCopy, "SKILL.md"), "---\nname: reviewer\n---\n# Observed\n");
+    const runtime = createFilesystemSkillDriver({ targetId: "opencode" });
+    const store = createSkillLibraryStore(paths, undefined, {
+      targetPathsProvider: () => [targetPaths],
+      runtimeSnapshotProvider: (target) => runtime.inspectRuntime(target)
+    });
+
+    await expect(store.consolidateSkillGroup({
+      skillKey: "reviewer",
+      libraryId: "reviewer",
+      canonicalPath: preferredCopy,
+      locations: [{ targetPaths, targetDir: preferredCopy }]
+    })).rejects.toThrow(/stable managed state/i);
+
+    await expect(readFile(join(preferredCopy, "SKILL.md"), "utf8"))
+      .resolves.toContain("# Preferred");
+    await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8"))
+      .rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("trusts cleanup roots supplied by a newly registered target", async () => {

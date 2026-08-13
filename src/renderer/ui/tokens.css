@@ -52,6 +52,9 @@
   --control-height-default: 32px;
   --control-height-prominent: 34px;
   --control-height-dialog: 34px;
+  --select-width-compact: 144px;
+  --select-width-standard: 184px;
+  --select-width-wide: 240px;
   --icon-size-default: 16px;
   --icon-box-compact: 28px;
   --icon-box-default: 32px;
