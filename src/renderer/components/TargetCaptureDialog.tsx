@@ -21,7 +21,7 @@ import type {
 import { targetIconFor } from "./ProfileSidebar";
 import { useI18n } from "../i18n";
 import { isTargetInstalled } from "../../shared/targetHealth";
-import { Button } from "./ui";
+import { Button, SelectControl } from "./ui";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
 
 type CaptureActivity = "idle" | "reviewing" | "creating";
@@ -224,7 +224,7 @@ export const TargetCaptureDialog = ({
               {origin === "profiles" ? (
                 <label className="capture-field">
                   <span>{t("Source Agent")}</span>
-                  <select
+                  <SelectControl
                     aria-label={t("Profile source Agent")}
                     value={target?.id ?? ""}
                     disabled={isBusy}
@@ -239,7 +239,7 @@ export const TargetCaptureDialog = ({
                         {candidate.name}{isTargetInstalled(candidate.health) ? "" : t(" (missing)")}
                       </option>
                     ))}
-                  </select>
+                  </SelectControl>
                 </label>
               ) : (
                 <div className="capture-target-row" aria-label={t("Source Agent")}>

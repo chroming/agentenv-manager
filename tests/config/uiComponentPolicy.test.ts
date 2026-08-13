@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error The policy is an executable JavaScript build script.
-import { compareRawInteractiveBaseline, countRawInteractiveElements } from "../../scripts/ui-component-policy.mjs";
+import { compareRawInteractiveBaseline, countRawInteractiveElements, countRawInteractiveElementsByTag } from "../../scripts/ui-component-policy.mjs";
 
 describe("renderer component policy", () => {
   it("counts raw interactive controls in feature markup", () => {
     expect(countRawInteractiveElements(`
       export const Feature = () => <><button>Save</button><select /><input /></>;
     `)).toBe(3);
+  });
+
+  it("can enforce a zero-raw-select contract independently of legacy inputs", () => {
+    expect(countRawInteractiveElementsByTag(
+      `export const Feature = () => <><select /><input /></>;`,
+      "select"
+    )).toBe(1);
   });
 
   it("rejects new files and growth beyond the recorded migration baseline", () => {

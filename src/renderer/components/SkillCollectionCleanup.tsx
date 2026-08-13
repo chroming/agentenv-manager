@@ -21,7 +21,7 @@ import type {
 import { useI18n } from "../i18n";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
-import { Button } from "./ui";
+import { Button, SelectControl } from "./ui";
 import type {
   MoveSkillCollectionOptions,
   MoveSkillCollectionOutcome
@@ -392,7 +392,7 @@ export const SkillCollectionDialog = ({
                   })}
                 </small>
               </span>
-              <select
+              <SelectControl controlWidth="standard"
                 aria-label={t("Collection version strategy")}
                 disabled={Boolean(operation)}
                 value={strategy}
@@ -402,7 +402,7 @@ export const SkillCollectionDialog = ({
               >
                 <option value="keep-library">{t("Keep Library versions")}</option>
                 <option value="use-collection">{t("Use collection versions")}</option>
-              </select>
+              </SelectControl>
               <Button
                 busy={operation === "import"}
                 disabled={Boolean(operation)}

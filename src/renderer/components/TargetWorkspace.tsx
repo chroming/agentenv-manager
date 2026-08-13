@@ -19,6 +19,7 @@ import type {
   TargetInfo,
   TargetManagementState
 } from "../../shared/types";
+import { reorderPreferenceByDrop } from "../../shared/uiState";
 import { HistoryView } from "./HistoryView";
 import { InfoTip } from "./InfoTip";
 import { PreviewDialog } from "./PreviewDialog";
@@ -421,10 +422,11 @@ export const TargetWorkspace = ({
               onDrop={(event) => {
                 event.preventDefault();
                 if (!draggedTargetId || draggedTargetId === target.id) return;
-                const next = targets.map((item) => item.id).filter((id) => id !== draggedTargetId);
-                const targetIndex = next.indexOf(target.id);
-                next.splice(targetIndex, 0, draggedTargetId);
-                onReorder(next);
+                onReorder(reorderPreferenceByDrop(
+                  targets.map((item) => item.id),
+                  draggedTargetId,
+                  target.id
+                ));
                 setDraggedTargetId(undefined);
                 setDragOverTargetId(undefined);
               }}

@@ -7,7 +7,7 @@ import type {
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { InfoTip } from "./InfoTip";
-import { Button, ModalFrame, Switch } from "./ui";
+import { Button, ModalFrame, SelectControl, Switch } from "./ui";
 
 interface SkillUpdateSettingsDialogProps {
   skill?: SkillLibraryEntry;
@@ -150,7 +150,7 @@ export const SkillUpdateSettingsDialog = ({
         <div className="skill-update-source-fields">
           <label>
             <span>{t("Source type")}</span>
-            <select
+            <SelectControl
               aria-label={t("Update source type for {{id}}", { id: skill.id })}
               value={draft.sourceType}
               onChange={(event) =>
@@ -162,7 +162,7 @@ export const SkillUpdateSettingsDialog = ({
               <option value="local">{t("Local folder")}</option>
               <option value="github">{t("GitHub directory")}</option>
               <option value="git">{t("Git repository")}</option>
-            </select>
+            </SelectControl>
           </label>
           <label>
             <span>{t("Update source")}</span>

@@ -13,13 +13,13 @@ export const SettingsSchema = z.object({
   skillManagementFormatVersion: z.literal(1).optional(),
   skillStorageLocation: z.enum(["appData", "agents"]).default("appData"),
   skillAutoCheckEnabled: z.boolean().default(true),
-  skillAutoCheckIntervalMinutes: z.number().int().min(5).max(1440).default(60),
+  skillAutoCheckIntervalMinutes: z.number().int().min(5).max(1440).default(1440),
   appUpdateAutoCheckEnabled: z.boolean().default(true),
   appUpdateAutoDownloadEnabled: z.boolean().default(true),
   appUpdateInstallOnQuit: z.boolean().default(true),
   telemetryEnabled: z.boolean().default(true),
   telemetryConsentVersion: z.literal(1).optional(),
-  backupRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).default(null),
+  backupRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).default(30),
   enabledTargetIds: z.array(z.string().min(1)).optional(),
   agentDiscoveryVersion: z.number().int().positive().optional(),
   agentDiscoveryReviewedIds: z.array(z.string().min(1)).optional(),
@@ -38,12 +38,12 @@ const DEFAULT_SETTINGS: AgentEnvSettings = {
   skillManagementFormatVersion: 1,
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,
-  skillAutoCheckIntervalMinutes: 60,
+  skillAutoCheckIntervalMinutes: 1440,
   appUpdateAutoCheckEnabled: true,
   appUpdateAutoDownloadEnabled: true,
   appUpdateInstallOnQuit: true,
   telemetryEnabled: true,
-  backupRetentionDays: null
+  backupRetentionDays: 30
 };
 
 export interface SettingsStoreOptions {

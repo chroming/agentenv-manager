@@ -17,13 +17,6 @@
   border-top: 1px solid var(--border);
 }
 
-.backup-settings-row > select {
-  height: var(--control-height-default);
-  min-height: var(--control-height-default);
-  min-width: 158px;
-  width: 158px;
-}
-
 .backup-settings-row > button {
   height: var(--control-height-default);
   min-height: var(--control-height-default);

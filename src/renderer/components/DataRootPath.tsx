@@ -1,4 +1,4 @@
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Folder } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
 import { IconButton } from "./ui";
@@ -22,9 +22,15 @@ export const DataRootPath = () => {
   }, []);
   return (
     <div className="settings-data-location">
-      <code className="settings-data-path" data-ui-overflow-detail="true" title={dataRoot}>
-        {dataRoot}
-      </code>
+      <span className="settings-data-location__icon" aria-hidden="true">
+        <Folder size={18} strokeWidth={2} />
+      </span>
+      <span className="settings-data-location__copy">
+        <strong>{t("Data folder")}</strong>
+        <code className="settings-data-path" data-ui-overflow-detail="true" title={dataRoot}>
+          {dataRoot}
+        </code>
+      </span>
       <IconButton
         size="compact"
         variant="ghost"

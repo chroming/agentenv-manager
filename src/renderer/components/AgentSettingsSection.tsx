@@ -1,4 +1,4 @@
-import { LoaderCircle, Monitor, TriangleAlert } from "lucide-react";
+import { GripVertical, LoaderCircle, Monitor, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type {
   TargetDescriptor,
@@ -9,7 +9,8 @@ import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { targetIconFor } from "./ProfileSidebar";
-import { Button, Switch } from "./ui";
+import { reorderPreferenceByDrop, reorderPreferenceByOffset } from "../../shared/uiState";
+import { Button, IconButton, Switch, TextField } from "./ui";
 
 interface AgentSettingsSectionProps {
   supportedAgents: TargetDescriptor[];
@@ -18,6 +19,7 @@ interface AgentSettingsSectionProps {
   agentStates: TargetManagementState[];
   suppressedAgentIds: string[];
   busy: boolean;
+  onReorder(agentIds: string[]): void;
   onSetEnabled(agentId: string, enabled: boolean): Promise<void>;
   onRestoreAgentSuggestions(): Promise<void>;
   onOpenRecovery(): void;
@@ -43,6 +45,7 @@ export const AgentSettingsSection = ({
   agentStates,
   suppressedAgentIds,
   busy,
+  onReorder,
   onSetEnabled,
   onRestoreAgentSuggestions,
   onOpenRecovery,
@@ -64,6 +67,8 @@ export const AgentSettingsSection = ({
   );
   const [pendingCommandAgentId, setPendingCommandAgentId] = useState<string>();
   const [restoringSuggestions, setRestoringSuggestions] = useState(false);
+  const [draggedAgentId, setDraggedAgentId] = useState<string>();
+  const [dragOverAgentId, setDragOverAgentId] = useState<string>();
   const dialogRef = useRef<HTMLElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -176,7 +181,29 @@ export const AgentSettingsSection = ({
             const recoveryRequired = state?.lifecycleStatus === "recovery-required";
             const icon = targetIconFor(agent);
             return (
-              <div className="agent-settings-row" key={agent.id}>
+              <div
+                className={`agent-settings-row${
+                  draggedAgentId === agent.id ? " is-dragging" : ""
+                }${dragOverAgentId === agent.id ? " is-drag-over" : ""}`}
+                key={agent.id}
+                onDragOver={(event) => {
+                  if (!draggedAgentId || draggedAgentId === agent.id) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  setDragOverAgentId(agent.id);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (!draggedAgentId || draggedAgentId === agent.id) return;
+                  onReorder(reorderPreferenceByDrop(
+                    supportedAgents.map((item) => item.id),
+                    draggedAgentId,
+                    agent.id
+                  ));
+                  setDraggedAgentId(undefined);
+                  setDragOverAgentId(undefined);
+                }}
+              >
                 <span className={`agent-settings-icon agent-settings-icon--${icon.flavor}`} aria-hidden="true">
                   {icon.assetUrl ? <img src={icon.assetUrl} alt="" /> : <Monitor size={18} />}
                 </span>
@@ -199,9 +226,9 @@ export const AgentSettingsSection = ({
                     )}
                   </span>
                   {recoveryRequired ? (
-                    <button className="text-action" type="button" onClick={onOpenRecovery}>
+                    <Button size="compact" variant="ghost" onClick={onOpenRecovery}>
                       {t("Open Recovery")}
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
                 <Switch
@@ -210,6 +237,38 @@ export const AgentSettingsSection = ({
                   label={t(enabled ? "Turn off {{name}}" : "Turn on {{name}}", { name: agent.name })}
                   onClick={() => requestChange(agent, !enabled)}
                 />
+                <IconButton
+                  className="agent-settings-reorder"
+                  draggable={supportedAgents.length > 1}
+                  disabled={busy || supportedAgents.length < 2}
+                  label={t("Reorder {{name}}", { name: agent.name })}
+                  size="compact"
+                  variant="ghost"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onDragEnd={() => {
+                    setDraggedAgentId(undefined);
+                    setDragOverAgentId(undefined);
+                  }}
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", agent.id);
+                    setDraggedAgentId(agent.id);
+                  }}
+                  onKeyDown={(event) => {
+                    if (!event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+                    event.preventDefault();
+                    onReorder(reorderPreferenceByOffset(
+                      supportedAgents.map((item) => item.id),
+                      agent.id,
+                      event.key === "ArrowUp" ? -1 : 1
+                    ));
+                  }}
+                >
+                  <GripVertical size={14} strokeWidth={2} aria-hidden="true" />
+                </IconButton>
               </div>
             );
           })}
@@ -279,9 +338,9 @@ export const AgentSettingsSection = ({
                           : t("Choose")}
                     </Button>
                     {customRoot ? (
-                      <button
-                        className="text-action agent-path-reset"
-                        type="button"
+                      <Button
+                        className="agent-path-reset"
+                        variant="ghost"
                         disabled={busy || Boolean(pendingPathAction)}
                         onClick={() => void commitPathChange(agent.id, "reset")}
                       >
@@ -289,7 +348,7 @@ export const AgentSettingsSection = ({
                           <LoaderCircle className="is-spinning" size={14} aria-hidden="true" />
                         ) : null}
                         {pendingAction === "reset" ? t("Saving...") : t("Use default")}
-                      </button>
+                      </Button>
                     ) : null}
                   </span>
                 </div>
@@ -309,17 +368,19 @@ export const AgentSettingsSection = ({
               const pending = pendingCommandAgentId === agent.id;
               return (
                 <div className="agent-command-row" key={agent.id} aria-busy={pending}>
-                  <label className="agent-command-copy" htmlFor={`agent-command-${agent.id}`}>
+                  <span className="agent-command-copy">
                     <strong>{agent.name}</strong>
                     <small>{t("Default: {{command}}", {
                       command: agent.executableCandidates[0] ?? agent.executableName ?? t("Unavailable")
                     })}</small>
-                  </label>
-                  <input
+                  </span>
+                  <TextField
                     id={`agent-command-${agent.id}`}
-                    aria-label={t("Command for {{name}}", { name: agent.name })}
                     autoComplete="off"
                     disabled={busy || Boolean(pendingCommandAgentId)}
+                    fieldClassName="agent-command-field"
+                    label={t("Command for {{name}}", { name: agent.name })}
+                    labelHidden
                     placeholder={agent.executableCandidates[0] ?? agent.executableName}
                     spellCheck={false}
                     value={draft}
@@ -344,15 +405,15 @@ export const AgentSettingsSection = ({
                       {pending ? t("Saving...") : t("Save")}
                     </Button>
                     {savedCommand ? (
-                      <button
-                        className="text-action agent-command-reset"
-                        type="button"
+                      <Button
+                        className="agent-command-reset"
+                        variant="ghost"
                         aria-label={t("Use default {{name}} command", { name: agent.name })}
                         disabled={busy || Boolean(pendingCommandAgentId)}
                         onClick={() => void commitCommandOverride(agent.id)}
                       >
                         {t("Use default")}
-                      </button>
+                      </Button>
                     ) : null}
                   </span>
                 </div>

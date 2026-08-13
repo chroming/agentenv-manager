@@ -8,7 +8,7 @@ import { useI18n } from "../i18n";
 import { DiffViewer } from "./DiffViewer";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
 import { FileTypeIcon } from "./FileTypeIcon";
-import { IconButton } from "./ui";
+import { IconButton, SelectControl } from "./ui";
 
 interface SkillMergeDiffSectionProps {
   comparison?: SkillMergeComparison;
@@ -47,7 +47,7 @@ export const SkillMergeDiffSection = ({
           </div>
           <div className="skill-merge-diff__actions">
             {compareEntries.length > 1 ? (
-              <select
+              <SelectControl controlWidth="standard"
                 aria-label={t("Compare with")}
                 value={compareId}
                 onChange={(event) => onCompareChange(event.target.value)}
@@ -55,7 +55,7 @@ export const SkillMergeDiffSection = ({
                 {compareEntries.map((entry) => (
                   <option key={entry.id} value={entry.id}>{entry.id}</option>
                 ))}
-              </select>
+              </SelectControl>
             ) : (
               <span>{compareId}</span>
             )}

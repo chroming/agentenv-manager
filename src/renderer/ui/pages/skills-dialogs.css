@@ -314,11 +314,6 @@
   line-height: 16px;
 }
 
-.skill-collection-strategy select {
-  min-width: 0;
-  width: 100%;
-}
-
 .skill-collection-member {
   display: grid;
   min-height: 50px;

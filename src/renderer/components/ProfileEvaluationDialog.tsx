@@ -36,7 +36,7 @@ import { useI18n } from "../i18n";
 import { ConversationMarkdown } from "./ConversationMarkdown";
 import { DiffViewer } from "./DiffViewer";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
-import { Button, IconButton, ModalFrame } from "./ui";
+import { Button, IconButton, ModalFrame, SelectControl } from "./ui";
 
 interface ProfileEvaluationDialogProps {
   open: boolean;
@@ -674,13 +674,13 @@ export const ProfileEvaluationDialog = ({
                     ) : null}
                     {changes.length > 0 ? (
                       <>
-                        <select
+                        <SelectControl
                           aria-label={t("Changed file")}
                           value={selectedChange?.path ?? ""}
                           onChange={(event) => setSelectedDiffPath(event.target.value)}
                         >
                           {changes.map((change) => <option key={change.path}>{change.path}</option>)}
-                        </select>
+                        </SelectControl>
                         {selectedChange ? <DiffViewer path={selectedChange.path} diff={selectedChange.diff} /> : null}
                       </>
                     ) : <p className="profile-comparison-empty">{t("No file changes.")}</p>}

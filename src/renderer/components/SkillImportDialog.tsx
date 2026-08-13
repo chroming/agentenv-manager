@@ -23,7 +23,7 @@ import type { GitHubSkillImportProgress } from "../skillLibraryContracts";
 import { InfoTip } from "./InfoTip";
 import { ProjectSkillDiscoveryPanel } from "./ProjectSkillDiscoveryPanel";
 import { RepositorySkillCandidateList } from "./RepositorySkillCandidateList";
-import { Button, IconButton, ModalFrame } from "./ui";
+import { Button, IconButton, ModalFrame, SelectControl } from "./ui";
 
 interface LocalImportImpact {
   message: string;
@@ -275,7 +275,7 @@ export const SkillImportDialog = ({
                 </label>
                 <label>
                   <span>{t("Connection")}</span>
-                  <select
+                  <SelectControl
                     aria-label={t("Repository connection")}
                     disabled={Boolean(githubOperation)}
                     value={repositoryConnection}
@@ -287,7 +287,7 @@ export const SkillImportDialog = ({
                   >
                     <option value="auto">{t("Automatic")}</option>
                     <option value="system-git">{t("System Git")}</option>
-                  </select>
+                  </SelectControl>
                 </label>
               </div>
             </details>

@@ -8,7 +8,7 @@ import { formatBytes } from "../formatBytes";
 import { useI18n } from "../i18n";
 import { DataRootPath } from "./DataRootPath";
 import { FreshnessStatus } from "./FreshnessStatus";
-import { Button } from "./ui";
+import { Button, SelectControl } from "./ui";
 
 interface DataSettingsSectionProps {
   backupRetentionDays: BackupRetentionDays;
@@ -84,7 +84,8 @@ export const DataSettingsSection = ({
             <strong>{t("Automatic cleanup")}</strong>
             <small>{t("Applies only to managed recovery backups.")}</small>
           </span>
-          <select
+          <SelectControl
+            controlWidth="standard"
             id="backup-retention-days"
             aria-label={t("Backup retention")}
             disabled={busy}
@@ -98,7 +99,7 @@ export const DataSettingsSection = ({
             <option value="7">{t("Keep for 7 days")}</option>
             <option value="30">{t("Keep for 30 days")}</option>
             <option value="90">{t("Keep for 90 days")}</option>
-          </select>
+          </SelectControl>
         </label>
       </div>
       <div className="settings-data-footer">

@@ -10,8 +10,8 @@ const settings: AgentEnvSettings = {
   skillSyncMethod: "copy",
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,
-  skillAutoCheckIntervalMinutes: 60,
-  backupRetentionDays: null
+  skillAutoCheckIntervalMinutes: 1440,
+  backupRetentionDays: 30
 };
 
 afterEach(cleanup);
@@ -55,34 +55,26 @@ describe("SkillSettingsSection", () => {
     ))).toEqual([true, true, true]);
   });
 
-  it("preserves a multi-keystroke interval draft and commits only after editing", () => {
+  it("uses a bounded interval menu and commits the selected schedule", () => {
     const onChange = vi.fn();
     render(<SkillSettingsSection busy={false} settings={settings} onChange={onChange} />);
 
-    const interval = screen.getByLabelText("Skill auto check interval minutes");
-    fireEvent.change(interval, { target: { value: "1" } });
-    expect(interval).toHaveValue(1);
-    expect(onChange).not.toHaveBeenCalled();
-
-    fireEvent.change(interval, { target: { value: "15" } });
-    expect(interval).toHaveValue(15);
-    expect(onChange).not.toHaveBeenCalled();
-
-    fireEvent.blur(interval);
-    expect(onChange).toHaveBeenCalledWith({ skillAutoCheckIntervalMinutes: 15 });
+    const interval = screen.getByRole("combobox", { name: "Skill auto check interval" });
+    expect(interval).toHaveValue("1440");
+    expect(screen.getByRole("option", { name: "Daily" })).toBeInTheDocument();
+    fireEvent.change(interval, { target: { value: "360" } });
+    expect(onChange).toHaveBeenCalledWith({ skillAutoCheckIntervalMinutes: 360 });
   });
 
-  it("keeps an invalid interval draft visible and explains the valid range", () => {
-    const onChange = vi.fn();
-    render(<SkillSettingsSection busy={false} settings={settings} onChange={onChange} />);
+  it("preserves an existing custom interval until the user chooses a standard schedule", () => {
+    render(<SkillSettingsSection
+      busy={false}
+      settings={{ ...settings, skillAutoCheckIntervalMinutes: 15 }}
+      onChange={vi.fn()}
+    />);
 
-    const interval = screen.getByLabelText("Skill auto check interval minutes");
-    fireEvent.change(interval, { target: { value: "1" } });
-    fireEvent.blur(interval);
-
-    expect(interval).toHaveValue(1);
-    expect(interval).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByText("Enter a value from 5 to 1440.")).toBeInTheDocument();
-    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("combobox", { name: "Skill auto check interval" }))
+      .toHaveValue("15");
+    expect(screen.getByRole("option", { name: "Every 15 minutes" })).toBeInTheDocument();
   });
 });

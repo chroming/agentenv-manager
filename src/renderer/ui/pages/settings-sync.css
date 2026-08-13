@@ -211,11 +211,6 @@
   color: #b45309;
 }
 
-.workspace-sync-change select {
-  min-width: 124px;
-  width: 100%;
-}
-
 .workspace-sync-live-warning {
   align-items: start;
   background: #fffaf0;

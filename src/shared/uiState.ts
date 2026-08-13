@@ -60,3 +60,31 @@ export const completeOrder = (
     ...availableIds
   ]);
 };
+
+export const reorderPreferenceByDrop = (
+  ids: readonly string[],
+  draggedId: string,
+  targetId: string
+): string[] => {
+  if (draggedId === targetId) return [...ids];
+  const draggedIndex = ids.indexOf(draggedId);
+  const targetIndex = ids.indexOf(targetId);
+  if (draggedIndex < 0 || targetIndex < 0) return [...ids];
+  const next = ids.filter((id) => id !== draggedId);
+  const nextTargetIndex = next.indexOf(targetId);
+  next.splice(nextTargetIndex + (targetIndex > draggedIndex ? 1 : 0), 0, draggedId);
+  return next;
+};
+
+export const reorderPreferenceByOffset = (
+  ids: readonly string[],
+  id: string,
+  offset: -1 | 1
+): string[] => {
+  const index = ids.indexOf(id);
+  const nextIndex = index + offset;
+  if (index < 0 || nextIndex < 0 || nextIndex >= ids.length) return [...ids];
+  const next = [...ids];
+  [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+  return next;
+};

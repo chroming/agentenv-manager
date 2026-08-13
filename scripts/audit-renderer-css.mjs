@@ -2,6 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import {
   collectRendererRawInteractiveUsage,
+  collectRendererRawInteractiveUsageByTag,
   compareRawInteractiveBaseline
 } from "./ui-component-policy.mjs";
 
@@ -393,6 +394,9 @@ result.architecture.rawInteractiveControlViolations = compareRawInteractiveBasel
   await collectRendererRawInteractiveUsage(projectRoot),
   rawControlBaseline
 );
+result.architecture.rawSelectControlViolations = [
+  ...(await collectRendererRawInteractiveUsageByTag(projectRoot, "select"))
+].map(([file, count]) => `${file} uses ${count} raw select element${count === 1 ? "" : "s"}`);
 
 process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 
@@ -446,6 +450,9 @@ if (shouldCheck) {
       : undefined,
     result.architecture.rawInteractiveControlViolations.length > 0
       ? `Feature markup must use shared UI components: ${result.architecture.rawInteractiveControlViolations.join("; ")}`
+      : undefined,
+    result.architecture.rawSelectControlViolations.length > 0
+      ? `Feature markup must use SelectControl instead of raw select elements: ${result.architecture.rawSelectControlViolations.join("; ")}`
       : undefined,
     result.architecture.unsupportedHiddenUtilityUsage.length > 0
       ? `Visually hidden content must use ui-visually-hidden: ${result.architecture.unsupportedHiddenUtilityUsage

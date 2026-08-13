@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
 import type { AgentEnvSettings } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { SettingsPreferenceRow } from "./SettingsPreferenceRow";
-import { Switch } from "./ui";
+import { SelectControl, Switch } from "./ui";
 
 interface SkillSettingsSectionProps {
   busy: boolean;
@@ -16,32 +15,8 @@ export const SkillSettingsSection = ({
   onChange
 }: SkillSettingsSectionProps) => {
   const { t } = useI18n();
-  const [intervalDraft, setIntervalDraft] = useState(
-    String(settings.skillAutoCheckIntervalMinutes)
-  );
-  const [intervalError, setIntervalError] = useState(false);
-
-  useEffect(() => {
-    setIntervalDraft(String(settings.skillAutoCheckIntervalMinutes));
-    setIntervalError(false);
-  }, [settings.skillAutoCheckIntervalMinutes]);
-
-  const commitInterval = () => {
-    const interval = Number(intervalDraft);
-    const valid =
-      intervalDraft.trim().length > 0 &&
-      Number.isInteger(interval) &&
-      interval >= 5 &&
-      interval <= 1440;
-    if (!valid) {
-      setIntervalError(true);
-      return;
-    }
-    setIntervalError(false);
-    if (interval !== settings.skillAutoCheckIntervalMinutes) {
-      onChange({ skillAutoCheckIntervalMinutes: interval });
-    }
-  };
+  const standardIntervals = [60, 360, 720, 1440];
+  const hasCustomInterval = !standardIntervals.includes(settings.skillAutoCheckIntervalMinutes);
 
   return (
     <section
@@ -68,7 +43,8 @@ export const SkillSettingsSection = ({
                 : t("Keeps Agent Skills as ordinary folders and synchronizes managed copies only after confirmation.")}
             </>
           }
-          control={<select
+          control={<SelectControl
+            controlWidth="wide"
             aria-label={t("Global skill deployment method")}
             value={settings.skillSyncMethod === "auto" ? "copy" : settings.skillSyncMethod}
             onChange={(event) =>
@@ -79,7 +55,7 @@ export const SkillSettingsSection = ({
           >
             <option value="copy">{t("Managed copy (recommended)")}</option>
             <option value="symlink">{t("Live link (advanced)")}</option>
-          </select>}
+          </SelectControl>}
         />
         <SettingsPreferenceRow
           label={t("Auto-check")}
@@ -100,41 +76,27 @@ export const SkillSettingsSection = ({
           }`}
           label={t("Check interval")}
           description={t("Used only while automatic checks are enabled.")}
-          control={<span className="settings-interval-field">
-            <span className="settings-interval-control">
-              <input
-                aria-describedby={intervalError ? "skill-check-interval-error" : undefined}
-                aria-invalid={intervalError}
-                aria-label={t("Skill auto check interval minutes")}
-                min={5}
-                max={1440}
-                step={5}
-                type="number"
-                disabled={!settings.skillAutoCheckEnabled || busy}
-                value={intervalDraft}
-                onBlur={commitInterval}
-                onChange={(event) => {
-                  setIntervalDraft(event.currentTarget.value);
-                  setIntervalError(false);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.currentTarget.blur();
-                  } else if (event.key === "Escape") {
-                    setIntervalDraft(String(settings.skillAutoCheckIntervalMinutes));
-                    setIntervalError(false);
-                    event.currentTarget.blur();
-                  }
-                }}
-              />
-              <span aria-hidden="true">{t("min")}</span>
-            </span>
-            {intervalError ? (
-              <small className="field-error" id="skill-check-interval-error">
-                {t("Enter a value from 5 to 1440.")}
-              </small>
+          control={<SelectControl
+            controlWidth="standard"
+            aria-label={t("Skill auto check interval")}
+            disabled={!settings.skillAutoCheckEnabled || busy}
+            value={settings.skillAutoCheckIntervalMinutes}
+            onChange={(event) => onChange({
+              skillAutoCheckIntervalMinutes: Number(event.currentTarget.value)
+            })}
+          >
+            {hasCustomInterval ? (
+              <option value={settings.skillAutoCheckIntervalMinutes}>
+                {t("Every {{minutes}} minutes", {
+                  minutes: settings.skillAutoCheckIntervalMinutes
+                })}
+              </option>
             ) : null}
-          </span>}
+            <option value="60">{t("Every hour")}</option>
+            <option value="360">{t("Every 6 hours")}</option>
+            <option value="720">{t("Every 12 hours")}</option>
+            <option value="1440">{t("Daily")}</option>
+          </SelectControl>}
         />
       </div>
     </section>

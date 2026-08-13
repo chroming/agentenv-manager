@@ -135,10 +135,6 @@ export const targetIconFor = (
   return { flavor: "generic" };
 };
 
-const targetDisplayRank = (target: TargetInfo) => {
-  return target.displayOrder ?? Number.MAX_SAFE_INTEGER;
-};
-
 const targetStatusMessage = (status: TargetHealthStatus) =>
   ({
     ready: "Ready",
@@ -396,8 +392,7 @@ export const ProfileSidebar = ({
   const quickOpenShortcut =
     window.agentEnv.platform === "darwin" ? "⌘K" : "Ctrl+K";
   const readyTargets = targets.filter((target) => target.health.status === "ready").length;
-  const orderedTargets = [...targets]
-    .sort((left, right) => targetDisplayRank(left) - targetDisplayRank(right));
+  const orderedTargets = targets;
   const statusTargets = orderedTargets.slice(0, 3);
   const hiddenTargets = orderedTargets.slice(statusTargets.length);
   const statusSummary = isLoading
