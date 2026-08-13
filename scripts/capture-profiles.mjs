@@ -356,7 +356,7 @@ const prepareFixture = async (root) => {
     );
   }
 
-  for (const command of ["opencode", "codex", "claude", "traecli"]) {
+  for (const command of ["opencode", "codex", "claude", "agy", "traecli", "pi"]) {
     const executable = join(binDir, command);
     await writeFile(executable, `#!/bin/sh\necho fake-${command}\n`, "utf8");
     await chmod(executable, 0o755);
