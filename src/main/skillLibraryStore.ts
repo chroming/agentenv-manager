@@ -70,7 +70,7 @@ import {
 } from "./ownershipMarkers";
 import type { AgentEnvPaths } from "./paths";
 import type { ProfileStore } from "./profileStore";
-import { resolveSkillsLibraryDir, type SettingsStore } from "./settingsStore";
+import { DEFAULT_SETTINGS, resolveSkillsLibraryDir, type SettingsStore } from "./settingsStore";
 import { parseSkillFrontmatter } from "./skillFrontmatter";
 import { inspectSkillsCliLocks } from "./skillsCliInspector";
 import { removeSkillDeployment } from "./skillDeployment";
@@ -148,6 +148,10 @@ import {
 import { isPathInside, pathsEqual } from "./platformPaths";
 import { mergeInventoryLocation } from "./skillInventoryLocation";
 import { resolveSkillInventoryLibraryMatch } from "./skillInventoryLibraryMatch";
+import {
+  findManagedSkillInstallPaths,
+  scanUnmanagedSkillInventory
+} from "./skillInventoryQueries";
 import { canPreserveLegacySkillTopology, legacyOwnedLibraryId,
   legacySkillOwnershipMigrationReady, protectedLegacySkillMarkerPaths } from "./skillLegacyOwnershipMigration";
 import { createSkillPolicyStore } from "./skillPolicyStore";
@@ -187,16 +191,6 @@ interface SkillLibraryStoreOptions {
   runtimeSnapshotProvider?: (targetPaths: TargetPaths) => Promise<SkillRuntimeSnapshot>;
   repositorySource?: GitCliSkillSource;
 }
-
-const DEFAULT_SETTINGS: AgentEnvSettings = {
-  locale: "system",
-  conversationTerminal: "default",
-  skillSyncMethod: "copy",
-  skillStorageLocation: "appData",
-  skillAutoCheckEnabled: true,
-  skillAutoCheckIntervalMinutes: 1440,
-  backupRetentionDays: 30
-};
 
 const updatePolicyFor = (metadata: SkillMetadataFile): SkillUpdatePolicy => {
   if (metadata.updatePolicy === "tracked" || metadata.updatePolicy === "untracked") {
@@ -1081,48 +1075,11 @@ export const createSkillLibraryStore = (
     return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
   };
 
-  const findManagedInstallPaths = async (
-    libraryId: string,
-    targetPaths: TargetPaths[]
-  ): Promise<string[]> => {
-    const safeId = SafeIdSchema.parse(libraryId);
-    const matches = new Set<string>();
-    for (const target of targetPaths) {
-      const scanRoots = [
-        ...new Set([target.skillsDir, ...(target.skillScanDirs ?? [])].filter(Boolean))
-      ];
-      for (const scanRoot of scanRoots) {
-        if (!scanRoot || !(await pathExists(scanRoot))) {
-          continue;
-        }
-        const entries = await readdir(scanRoot, { withFileTypes: true });
-        for (const entry of entries) {
-          if (!entry.isDirectory() || entry.name.startsWith(".")) {
-            continue;
-          }
-          const skillDir = join(scanRoot, entry.name);
-          if ((await legacyOwnedLibraryId(skillDir)) === safeId) {
-            matches.add(skillDir);
-          }
-        }
-      }
-    }
-    return [...matches].sort();
-  };
+  const findManagedInstallPaths = (libraryId: string, targetPaths: TargetPaths[]) =>
+    findManagedSkillInstallPaths(libraryId, targetPaths);
 
-  const scanUnmanaged = async (targetPaths: TargetPaths[]) => {
-    const inventory = await scanInventory(targetPaths);
-    return inventory
-      .filter((skill) => skill.status === "outside")
-      .map(({ id, name, description, path, foundIn, modifiedAt }) => ({
-        id,
-        name,
-        description,
-        path,
-        foundIn,
-        modifiedAt
-      }));
-  };
+  const scanUnmanaged = (targetPaths: TargetPaths[]) =>
+    scanUnmanagedSkillInventory(targetPaths, scanInventory);
 
   const scanLocalSkillSource = async (rootPath: string): Promise<ProjectSkillScanResult> => {
     const canonicalRoot = await realpath(rootPath).catch(() => resolve(rootPath));
