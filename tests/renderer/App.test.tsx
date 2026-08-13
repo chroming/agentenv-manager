@@ -3793,9 +3793,11 @@ describe("App", () => {
   });
 
   it("keeps profile rows focused on identity and deployment state", async () => {
-    installApi({
+    const pendingSave = deferred<ProfileDetail>();
+    const api = installApi({
       listTargets: vi.fn().mockResolvedValue([target, codexTarget]),
       readProfile: vi.fn().mockResolvedValue(richProfile),
+      saveProfile: vi.fn().mockReturnValue(pendingSave.promise),
       listTargetStates: vi.fn().mockResolvedValue([
         managedState({
           lastAppliedAt: "2026-07-09T08:00:00.000Z",
@@ -3828,8 +3830,14 @@ describe("App", () => {
     fireEvent.keyDown(document, { key: "Escape" });
 
     await editProfileInstructions("# Updated Agent\n");
+    await waitFor(() => expect(api.saveProfile).toHaveBeenCalledTimes(1));
     const dirtyRow = within(await openProfileSwitcher()).getByRole("option", { name: /Daily Coding/ });
-    expect(dirtyRow.querySelector(".profile-row__dirty")).toHaveTextContent(/Saving|Save failed/);
+    expect(dirtyRow.querySelector(".profile-row__dirty")).toHaveTextContent("Saving");
+    pendingSave.resolve({
+      ...richProfile,
+      contentHash: "saved-profile-hash",
+      targetContentHashes: richProfile.targetContentHashes
+    });
     await waitFor(() => expect(dirtyRow.querySelector(".profile-row__dirty")).toBeNull());
   });
 
