@@ -2105,7 +2105,6 @@ describe("Electron UI profile switching e2e", () => {
   it("prevents duplicate Meta saves while the Electron IPC is pending", async () => {
     const { app: electronApp, page } = await launchApp();
     await selectProfile(page, "UI OpenCode alpha");
-    await editProfileInstructions(page, "# Pending E2E save\n");
 
     await electronApp.evaluate(({ ipcMain }) => {
       const state = globalThis as typeof globalThis & { __agentEnvShortcutSaveCalls?: number };
@@ -2123,6 +2122,7 @@ describe("Electron UI profile switching e2e", () => {
       });
     });
 
+    await editProfileInstructions(page, "# Pending E2E save\n");
     await page.keyboard.press("Meta+s");
     await page.keyboard.press("Meta+s");
     await expect
