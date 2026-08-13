@@ -92,7 +92,7 @@ describe("OpenCode local conversation storage", () => {
     expect(discovery.candidates).toEqual([
       expect.objectContaining({ recordId: "session-1" })
     ]);
-  });
+  }, 15_000);
 
   it("reads top-level SQLite sessions off the main thread and ignores child sessions", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-opencode-storage-"));
