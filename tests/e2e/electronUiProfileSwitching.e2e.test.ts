@@ -6232,20 +6232,22 @@ describe("Electron UI profile switching e2e", () => {
     await skillManager.getByRole("switch", {
       name: "Enable ui-alpha-skill"
     }).click();
-    await page.waitForTimeout(250);
     expect(await applyButton.isDisabled()).toBe(true);
     expect(await page.getByRole("button", { name: "Save", exact: true }).count()).toBe(0);
 
-    const resources = await readJson<{
-      skills: Array<{ libraryId: string; targetName: string; enabled: boolean }>;
-    }>(join(appDataRoot, "profiles", "ui-opencode-alpha", "resources.json"));
-    expect(resources.skills).toEqual([
+    const expectedSkills = [
       {
         libraryId: "ui-alpha-skill",
         targetName: "ui-alpha-skill",
         enabled: true
       }
-    ]);
+    ];
+    await expect.poll(async () => {
+      const resources = await readJson<{
+        skills: Array<{ libraryId: string; targetName: string; enabled: boolean }>;
+      }>(join(appDataRoot, "profiles", "ui-opencode-alpha", "resources.json"));
+      return resources.skills;
+    }).toEqual(expectedSkills);
   }, standardElectronTestTimeout);
 
   it("restores the selected Agent's last applied Profile version without changing the Agent", async () => {
