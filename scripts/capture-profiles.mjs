@@ -460,7 +460,14 @@ const prepareFixture = async (root) => {
     skillStorageLocation: "appData",
     skillAutoCheckEnabled: false,
     skillAutoCheckIntervalMinutes: 60,
-    enabledTargetIds: [],
+    enabledTargetIds: [
+      "opencode",
+      "claude-code",
+      "codex",
+      "antigravity",
+      "trae-cli",
+      "pi"
+    ],
     agentDiscoveryReviewedIds: [],
     projectSkillRoots: [projectSkillRoot]
   });
