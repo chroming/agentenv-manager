@@ -7236,7 +7236,7 @@ describe("Electron UI profile switching e2e", () => {
     );
 
     const inventory = await page.evaluate(() => window.agentEnv.scanSkillInventory());
-    expect(inventory).toContainEqual(
+    expect(inventory.entries).toContainEqual(
       expect.objectContaining({
         skillKey: skillId,
         path: sharedSkillDir,
