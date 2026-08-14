@@ -4522,7 +4522,7 @@ describe("Electron UI profile switching e2e", () => {
 
       const workspaces = [
         {
-          actionSelector: ".profile-hero .ui-inspector-header__actions",
+          actionSelector: ".profile-hero .profile-apply-button",
           button: "Profiles",
           heading: "Profiles",
           action: undefined
@@ -8161,7 +8161,10 @@ describe("Electron UI profile switching e2e", () => {
     ).toBe(0);
     await page.keyboard.press("Escape");
     const profileSwitcher = page.getByRole("button", { name: "Choose Profile" });
-    expect(await profileSwitcher.locator(".ui-object-switcher__trigger-icon").count()).toBe(1);
+    expect(await profileSwitcher.locator(".ui-object-switcher__trigger-icon").count()).toBe(0);
+    expect(
+      await page.locator(".profile-hero .ui-inspector-header__icon .lucide-layers").count()
+    ).toBe(1);
     await page.locator(".profile-hero").getByRole("button", { name: "Edit Profile" }).click();
     const editProfileDialog = page.getByRole("dialog", { name: "Edit Profile" });
     await editProfileDialog
@@ -8177,6 +8180,9 @@ describe("Electron UI profile switching e2e", () => {
         join(appDataRoot, "profiles", "ui-opencode-alpha", "profile.json")
       )).iconKey
     ).toBe("claude");
+    await expect.poll(() =>
+      page.locator(".profile-hero .ui-inspector-header__icon .resource-agent-icon").count()
+    ).toBe(1);
   }, 60_000);
 
   it("shows Claude Code MCP definitions read-only and never rewrites them", async () => {

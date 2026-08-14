@@ -92,12 +92,6 @@
 }
 
 @container profile-workspace (max-width: 760px) {
-  .profile-hero--loading {
-    align-items: start;
-    height: 119px;
-    min-height: 119px;
-  }
-
   .profile-resource-policy-field {
     width: 132px;
   }
