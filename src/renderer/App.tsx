@@ -128,6 +128,7 @@ import {
 } from "./components/ProfileRecoveryDialog";
 import { QuickOpen } from "./components/QuickOpen";
 import { ProfileList } from "./components/ProfileList";
+import { ResourceIcon } from "./components/ResourceIconPicker";
 import { ProfileActionsMenu } from "./components/ProfileActionsMenu";
 import { ProfileComposerSection } from "./components/ProfileComposerSection";
 import { GeneralSettingsSection, SettingsCategoryTabs, type SettingsCategory } from "./components/SettingsCategoryTabs";
@@ -170,6 +171,7 @@ import {
   ControlGroup,
   focusInitialActionMenuItem,
   IconButton,
+  InspectorHeader,
   ObjectSwitcher,
   PageHeader,
   SingleObjectWorkspace,
@@ -220,6 +222,8 @@ import { loadProfileCoreData } from "./profileCoreLoader";
 import { WindowTitlebar } from "./components/WindowTitlebar";
 import {
   preferredTargetForProfile,
+  profileDeploymentStatusLabels,
+  summarizeProfileApplications,
   summarizeProfile
 } from "./profileSummary";
 import { buildQuickOpenItems } from "./quickOpenItems";
@@ -1994,6 +1998,22 @@ const AppContent = ({
                         : readiness.status === "no-target"
                           ? t("Select an Agent")
                           : t(readiness.message);
+  const selectedProfileDeployment = draftProfile
+    ? summarizeProfileApplications(draftProfile.id, targetStates, targets)
+    : undefined;
+  const selectedProfileDeploymentLabel =
+    selectedProfileDeployment && selectedProfileDeployment.items.length > 1
+      ? t("{{count}} Agents · {{status}}", {
+          count: selectedProfileDeployment.items.length,
+          status: t(profileDeploymentStatusLabels[selectedProfileDeployment.state])
+        })
+      : undefined;
+  const selectedProfileDeploymentTitle = selectedProfileDeployment?.items
+    .map((application) => t("{{name}} · {{status}}", {
+      name: application.name,
+      status: t(profileDeploymentStatusLabels[application.state])
+    }))
+    .join(", ");
   const applyDisabled =
     !draftProfile ||
     !selectedTarget ||
@@ -3439,14 +3459,13 @@ const AppContent = ({
   const profileApplyControl = targets.length > 0 ? (
     <div className="profile-apply-control" ref={profileApplyControlRef}>
       <Button
-        className="profile-apply-button"
+        className="profile-apply-button ui-inspector-header__command"
         aria-describedby="profile-apply-description"
         title={t(applyActionLabel)}
         disabled={applyDisabled}
         busy={isProfilePreviewing}
         variant="primary"
         onClick={previewSelectedProfile}
-        icon={<ArrowRight size={17} strokeWidth={2.2} />}
       >
         {t("Apply")}
       </Button>
@@ -3488,59 +3507,109 @@ const AppContent = ({
     />
   );
 
-  const profileObjectActions = draftProfile && !profileLoadingId ? (
-    <ControlGroup
-      className="profile-commit-actions"
-      ref={profileObjectActionsRef}
-      aria-label={t("Selected Profile actions")}
-    >
-      {targetWorkspaceControl}
-      {profileApplyControl}
-      <IconButton
-        ref={profileActionsButtonRef}
-        className="profile-more-button"
-        aria-expanded={isProfileActionsOpen}
-        aria-haspopup="menu"
-        disabled={busy || !draftProfile || draftProfile.id !== selectedProfileId}
-        label={t("More Profile actions")}
-        onClick={() => {
-          setIsTargetMenuOpen(false);
-          setIsProfileActionsOpen((current) => !current);
-        }}
+  const profileReadinessStatus = (
+    <span className={`profile-action-status profile-action-status--${readiness.status}`}>
+      <span
+        className="profile-action-status__copy"
+        role="status"
+        aria-label={t("Profile readiness")}
+        title={t(readiness.message)}
       >
-        <MoreHorizontal size={16} strokeWidth={2.2} />
-      </IconButton>
-      {isProfileActionsOpen ? (
-        <ProfileActionsMenu
-          disabled={busy}
-          compareDisabled={evaluationControl.disabled}
-          compareDescription={evaluationDescription}
-          menuRef={profileActionsMenuRef}
-          appliedRestoreAvailable={Boolean(selectedAppliedProfileSnapshot)}
-          appliedRestoreDescription={selectedAppliedProfileSnapshot
-            ? t("Restore the Profile version last applied to {{target}}.", {
-                target: selectedTarget?.name ?? t("this Agent")
-              })
-            : t("Apply this Profile to {{target}} once to create a restore point.", {
-                target: selectedTarget?.name ?? t("this Agent")
-              })}
-          onCompare={() => void openProfileEvaluation()}
-          onDuplicate={() => duplicateProfile()}
-          onDelete={() => {
-            setIsProfileActionsOpen(false);
-            openDeleteProfileDialog();
-          }}
-          onOpenRecovery={() => {
-            setIsProfileActionsOpen(false);
-            setProfileRecoveryMode("history");
-          }}
-          onRestoreLastApplied={() => {
-            setIsProfileActionsOpen(false);
-            setProfileRecoveryMode("applied");
-          }}
+        <ReadinessIcon
+          className={profileSaveWorking ? "is-spinning" : undefined}
+          size={13}
+          strokeWidth={2.3}
+          aria-hidden="true"
         />
+        <span
+          className="profile-action-status__primary"
+          data-ui-overflow-detail="true"
+          title={t(readinessActionText)}
+        >
+          {t(readinessActionText)}
+        </span>
+        {selectedProfileDeploymentLabel ? (
+          <>
+            <span className="profile-action-status__divider" aria-hidden="true">·</span>
+            <span
+              className="profile-action-status__applications"
+              title={selectedProfileDeploymentTitle}
+            >
+              {selectedProfileDeploymentLabel}
+            </span>
+          </>
+        ) : null}
+      </span>
+      {readiness.remediationLabel ? (
+        <button
+          className="profile-action-status__action"
+          type="button"
+          aria-label={t(readiness.remediationLabel)}
+          title={t(readiness.remediationLabel)}
+          disabled={busy}
+          onClick={runReadinessRemediation}
+        >
+          <span>{t(readiness.remediationLabel)}</span>
+          <ArrowRight size={12} strokeWidth={2.3} aria-hidden="true" />
+        </button>
       ) : null}
-    </ControlGroup>
+    </span>
+  );
+  const profileObjectActions = draftProfile && !profileLoadingId ? (
+    <div className="profile-object-actions" ref={profileObjectActionsRef}>
+      <ControlGroup
+        className="profile-commit-actions"
+        aria-label={t("Selected Profile actions")}
+      >
+        {targetWorkspaceControl}
+        {profileApplyControl}
+        <IconButton
+          ref={profileActionsButtonRef}
+          className="profile-more-button"
+          aria-expanded={isProfileActionsOpen}
+          aria-haspopup="menu"
+          disabled={busy || !draftProfile || draftProfile.id !== selectedProfileId}
+          label={t("More Profile actions")}
+          onClick={() => {
+            setIsTargetMenuOpen(false);
+            setIsProfileActionsOpen((current) => !current);
+          }}
+        >
+          <MoreHorizontal size={16} strokeWidth={2.2} />
+        </IconButton>
+        {isProfileActionsOpen ? (
+          <ProfileActionsMenu
+            disabled={busy}
+            compareDisabled={evaluationControl.disabled}
+            compareDescription={evaluationDescription}
+            menuRef={profileActionsMenuRef}
+            appliedRestoreAvailable={Boolean(selectedAppliedProfileSnapshot)}
+            appliedRestoreDescription={selectedAppliedProfileSnapshot
+              ? t("Restore the Profile version last applied to {{target}}.", {
+                  target: selectedTarget?.name ?? t("this Agent")
+                })
+              : t("Apply this Profile to {{target}} once to create a restore point.", {
+                  target: selectedTarget?.name ?? t("this Agent")
+                })}
+            onCompare={() => void openProfileEvaluation()}
+            onDuplicate={() => duplicateProfile()}
+            onDelete={() => {
+              setIsProfileActionsOpen(false);
+              openDeleteProfileDialog();
+            }}
+            onOpenRecovery={() => {
+              setIsProfileActionsOpen(false);
+              setProfileRecoveryMode("history");
+            }}
+            onRestoreLastApplied={() => {
+              setIsProfileActionsOpen(false);
+              setProfileRecoveryMode("applied");
+            }}
+          />
+        ) : null}
+      </ControlGroup>
+      {profileReadinessStatus}
+    </div>
   ) : null;
 
   const quickOpenItems = buildQuickOpenItems({
@@ -3869,12 +3938,18 @@ const AppContent = ({
                       name: loadingProfileSummary?.name ?? t("Profile")
                     })}
                   >
-                    <header className="profile-hero profile-hero--loading">
-                      <div className="profile-hero__body">
-                        <h3
-                          aria-label={loadingProfileSummary?.name ?? t("Profile")}
-                          className="profile-hero__title"
-                        >
+                    <InspectorHeader
+                      className="profile-hero profile-hero--loading"
+                      responsive="stack"
+                      titleLabel={loadingProfileSummary?.name ?? t("Profile")}
+                      icon={(
+                        <ResourceIcon
+                          iconKey={loadingProfileSummary?.iconKey ?? defaultProfileIconKey}
+                          size={18}
+                        />
+                      )}
+                      title={(
+                        <span className="profile-hero__title">
                           <ProfileList
                             isLoading={isLoading}
                             profiles={profiles}
@@ -3900,18 +3975,20 @@ const AppContent = ({
                             onSearchChange={setProfileSearch}
                             onSelect={selectProfile}
                           />
-                        </h3>
-                        <p className="profile-description">{t("Loading Profile...")}</p>
-                      </div>
-                      <div className="profile-hero__actions profile-hero__actions--loading">
+                        </span>
+                      )}
+                      description={(
+                        <span className="profile-description">{t("Loading Profile...")}</span>
+                      )}
+                      actions={(
                         <LoaderCircle
                           className="is-spinning profile-loading-indicator"
                           size={18}
                           strokeWidth={2.2}
                           aria-hidden="true"
                         />
-                      </div>
-                    </header>
+                      )}
+                    />
                     <div className="profile-composer profile-composer--loading" aria-hidden="true">
                       {["Instructions", "Skills", "MCPs"].map((section) => (
                         <div className="profile-loading-row" key={section}>
@@ -3927,9 +4004,18 @@ const AppContent = ({
                   </div>
                 ) : draftProfile ? (
                   <>
-                    <header className="profile-hero">
-                      <div className="profile-hero__body">
-                      <h3 aria-label={draftProfile.manifest.name} className="profile-hero__title">
+                    <InspectorHeader
+                      className="profile-hero"
+                      responsive="stack"
+                      titleLabel={draftProfile.manifest.name}
+                      icon={(
+                        <ResourceIcon
+                          iconKey={draftProfile.manifest.iconKey ?? defaultProfileIconKey}
+                          size={18}
+                        />
+                      )}
+                      title={(
+                        <span className="profile-hero__title">
                           <ProfileList
                             isLoading={isLoading}
                             profiles={profiles}
@@ -3965,51 +4051,15 @@ const AppContent = ({
                           >
                             <Pencil size={13} strokeWidth={2.1} />
                           </IconButton>
-                        </h3>
-                        <p className="profile-description">
+                        </span>
+                      )}
+                      description={(
+                        <span className="profile-description">
                           {draftProfile.manifest.description || t("No description")}
-                        </p>
-                        <div
-                          className={`profile-action-status profile-action-status--${readiness.status}`}
-                        >
-                          <span
-                            className="profile-action-status__copy"
-                            role="status"
-                            aria-label={t("Profile readiness")}
-                            title={t(readiness.message)}
-                          >
-                            <ReadinessIcon
-                              className={profileSaveWorking ? "is-spinning" : undefined}
-                              size={13}
-                              strokeWidth={2.3}
-                              aria-hidden="true"
-                            />
-                            <span
-                              data-ui-overflow-detail="true"
-                              title={t(readinessActionText)}
-                            >
-                              {t(readinessActionText)}
-                            </span>
-                          </span>
-                          {readiness.remediationLabel ? (
-                            <button
-                              className="profile-action-status__action"
-                              type="button"
-                              aria-label={t(readiness.remediationLabel)}
-                              title={t(readiness.remediationLabel)}
-                              disabled={busy}
-                              onClick={runReadinessRemediation}
-                            >
-                              <span>{t(readiness.remediationLabel)}</span>
-                              <ArrowRight size={12} strokeWidth={2.3} aria-hidden="true" />
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="profile-hero__actions">
-                        {profileObjectActions}
-                      </div>
-                    </header>
+                        </span>
+                      )}
+                      actions={profileObjectActions}
+                    />
                     <section
                       className="profile-composer"
                       aria-label={t("Profile composer")}

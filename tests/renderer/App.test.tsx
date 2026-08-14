@@ -3826,6 +3826,9 @@ describe("App", () => {
     expect(row).not.toHaveTextContent("Default developer environment");
     expect(within(row).getByLabelText("Codex · Active, OpenCode · Active")).toBeInTheDocument();
     expect(row).toHaveTextContent("2 Agents · Active");
+    expect(screen.getByRole("status", { name: "Profile readiness" })).toHaveTextContent(
+      "2 Agents · Active"
+    );
     expect(document.querySelector(".profile-hero")).not.toHaveTextContent("Applied Jul 9");
     fireEvent.keyDown(document, { key: "Escape" });
 
@@ -3990,7 +3993,8 @@ describe("App", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     const profileTrigger = within(document.querySelector(".profile-hero") as HTMLElement)
       .getByRole("button", { name: "Choose Profile" });
-    expect(profileTrigger.querySelector(".ui-object-switcher__trigger-icon"))
+    expect(profileTrigger.querySelector(".ui-object-switcher__trigger-icon")).toBeNull();
+    expect(document.querySelector(".profile-hero .ui-inspector-header__icon"))
       .not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Edit Profile" }));
     const editDialog = await screen.findByRole("dialog", { name: "Edit Profile" });
@@ -4238,7 +4242,9 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Apply" }).querySelector("img"))
       .toBeNull();
     expect(screen.getByRole("button", { name: "Apply" }).querySelector("svg"))
-      .not.toBeNull();
+      .toBeNull();
+    expect(screen.getByRole("button", { name: "Apply" }).querySelector(".ui-button__label"))
+      .toHaveTextContent("Apply");
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "Select apply Agent" })).not.toBeInTheDocument();
     expect(menuButton).toHaveFocus();

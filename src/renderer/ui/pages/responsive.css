@@ -15,10 +15,6 @@
       var(--window-content-inset-bottom, 14px);
   }
 
-  .profile-apply-button {
-    min-width: 0;
-  }
-
   .target-workflow-icon {
     height: 32px;
     width: 32px;

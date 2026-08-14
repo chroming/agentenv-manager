@@ -189,36 +189,6 @@ describe("ObjectSwitcher", () => {
     expect(trigger.parentElement?.classList.contains("ui-object-switcher--icon-trigger")).toBe(true);
   });
 
-  it("renders a single Agent as static context with the same trigger geometry", () => {
-    const onOpenChange = vi.fn();
-    render(
-      <ObjectSwitcher
-        ariaLabel="Current Agent OpenCode"
-        className="agent-context-switcher"
-        fullWidth
-        items={[{ id: "opencode", title: "OpenCode", icon: <span>O</span> }]}
-        open={false}
-        query=""
-        searchLabel="Search Agents"
-        searchPlaceholder="Search Agents"
-        selectedId="opencode"
-        static
-        showTriggerDescription={false}
-        onOpenChange={onOpenChange}
-        onQueryChange={() => undefined}
-        onSelect={() => undefined}
-      />
-    );
-
-    const trigger = screen.getByRole("button", { name: "Current Agent OpenCode" });
-    expect(trigger).toBeDisabled();
-    expect(trigger).not.toHaveAttribute("aria-haspopup");
-    expect(trigger.querySelector(".ui-object-switcher__trigger-icon")).not.toBeNull();
-    expect(trigger.querySelector(":scope > svg")).toBeNull();
-    fireEvent.click(trigger);
-    expect(onOpenChange).not.toHaveBeenCalled();
-  });
-
   it("supports an inline title trigger for the current object header", () => {
     render(
       <ObjectSwitcher

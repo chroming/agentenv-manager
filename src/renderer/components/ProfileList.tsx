@@ -15,18 +15,14 @@ import type {
   TargetManagementState
 } from "../../shared/types";
 import { useI18n } from "../i18n";
-import { listProfileApplications } from "../profileSummary";
+import {
+  profileDeploymentStatusLabels,
+  summarizeProfileApplications
+} from "../profileSummary";
 import { ResourceIcon } from "./ResourceIconPicker";
 import { ProfileActionsMenu } from "./ProfileActionsMenu";
 import { defaultProfileIconKey } from "../productIcons";
 import { ObjectSwitcher } from "./ui";
-
-const deploymentStatusLabels = {
-  attention: "Attention",
-  current: "Active",
-  pending: "Pending",
-  empty: "Not applied"
-} as const;
 
 interface ProfileListProps {
   isLoading: boolean;
@@ -135,52 +131,29 @@ export const ProfileList = ({
 
   const switcherItems = profiles.map((profile) => {
     const isBroken = Boolean(profile.loadError);
-    const applications = listProfileApplications(profile.id, targetStates, targets);
+    const deployment = summarizeProfileApplications(profile.id, targetStates, targets);
     const isSelected = profile.id === selectedProfileId;
     const iconKey =
       (isSelected ? draftProfile?.manifest.iconKey : undefined) ??
       profile.iconKey ??
       defaultProfileIconKey;
-    const applicationStates = applications.map((application) => {
-      const needsAttention =
-        application.state.lifecycleStatus === "drifted" ||
-        application.state.lifecycleStatus === "recovery-required" ||
-        (application.state.errorCount ?? 0) > 0;
-      const isCurrent =
-        !needsAttention &&
-        (
-          application.state.lifecycleStatus === "applied" ||
-          application.state.lifecycleStatus === "applied-with-local-override"
-        );
-      return {
-        name: application.target?.name ?? application.state.targetId,
-        state: needsAttention ? "attention" : isCurrent ? "current" : "pending"
-      } as const;
-    });
-    const deploymentState = applicationStates.length === 0
-      ? "empty"
-      : applicationStates.some((application) => application.state === "attention")
-        ? "attention"
-        : applicationStates.every((application) => application.state === "current")
-          ? "current"
-          : "pending";
-    const deploymentStatus = t(deploymentStatusLabels[deploymentState]);
-    const deploymentLabel = applicationStates.length > 1
+    const deploymentStatus = t(profileDeploymentStatusLabels[deployment.state]);
+    const deploymentLabel = deployment.items.length > 1
       ? t("{{count}} Agents · {{status}}", {
-          count: applicationStates.length,
+          count: deployment.items.length,
           status: deploymentStatus
         })
-      : applicationStates.length === 1
+      : deployment.items.length === 1
         ? t("{{name}} · {{status}}", {
-            name: applicationStates[0].name,
+            name: deployment.items[0].name,
             status: deploymentStatus
           })
         : deploymentStatus;
-    const deploymentTitle = applicationStates.length > 0
-      ? applicationStates
+    const deploymentTitle = deployment.items.length > 0
+      ? deployment.items
           .map((application) => t("{{name}} · {{status}}", {
             name: application.name,
-            status: t(deploymentStatusLabels[application.state])
+            status: t(profileDeploymentStatusLabels[application.state])
           }))
           .join(", ")
       : deploymentLabel;
@@ -205,7 +178,7 @@ export const ProfileList = ({
         ? t("Stored Profile data could not be loaded")
         : (
           <span
-            className={`profile-row__deployments profile-row__deployments--${deploymentState}`}
+            className={`profile-row__deployments profile-row__deployments--${deployment.state}`}
             aria-label={deploymentTitle}
             title={deploymentTitle}
           >
@@ -246,7 +219,7 @@ export const ProfileList = ({
         searchPlaceholder={t("Search Profiles")}
         selectedId={selectedProfileId}
         triggerVariant={variant === "hero" ? "inline" : "default"}
-        showTriggerIcon
+        showTriggerIcon={variant !== "hero"}
         showTriggerTitle
         showTriggerDescription={variant !== "hero"}
         onOpenChange={onOpenChange}

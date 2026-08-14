@@ -54,10 +54,15 @@ describe("public product model contract", () => {
     ]);
 
     expect(profileWorkspace).toContain("<AgentContextSwitcher");
+    expect(profileWorkspace).toContain("<InspectorHeader");
     expect(projectWorkspace).toContain("<AgentContextSwitcher");
+    expect(projectWorkspace).toContain("<InspectorHeader");
     expect(profileWorkspace).not.toContain("static={installedTargets.length === 1}");
     expect(projectWorkspace).not.toContain("static={availableTargets.length === 1}");
     expect(agentSwitcher).toContain("const isStatic = targets.length === 1");
-    expect(contract).toContain("Pages MUST NOT redefine these count states independently.");
+    expect(agentSwitcher).toContain("agent-context-switcher--static");
+    expect(agentSwitcher).not.toContain("static={isStatic}");
+    expect(contract).toMatch(/Pages\s+MUST NOT redefine these count states independently\./);
+    expect(contract).toContain("responsive layout MUST NOT move this action group to the left edge");
   });
 });

@@ -49,11 +49,24 @@ export const AgentContextSwitcher = ({
     };
   });
 
+  if (isStatic && selectedTarget) {
+    const selectedItem = items[0];
+    return (
+      <div
+        aria-label={t("Current Agent {{name}}", { name: selectedTarget.name })}
+        className={`agent-context-switcher agent-context-switcher--static ${className}`.trim()}
+      >
+        <span className="agent-context-switcher__static-icon" aria-hidden="true">
+          {selectedItem.icon}
+        </span>
+        <span className="agent-context-switcher__static-name">{selectedTarget.name}</span>
+      </div>
+    );
+  }
+
   return (
     <ObjectSwitcher
-      ariaLabel={isStatic && selectedTarget
-        ? t("Current Agent {{name}}", { name: selectedTarget.name })
-        : selectionLabel}
+      ariaLabel={selectionLabel}
       className={`agent-context-switcher ${className}`.trim()}
       disabled={targets.length === 0}
       emptyMessage={t("No enabled Agents")}
@@ -64,7 +77,6 @@ export const AgentContextSwitcher = ({
       searchLabel={t("Search Agents")}
       searchPlaceholder={t("Search Agents")}
       selectedId={selectedTarget?.id}
-      static={isStatic}
       showTriggerDescription={false}
       onOpenChange={onOpenChange}
       onQueryChange={onQueryChange}

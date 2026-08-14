@@ -275,6 +275,7 @@ const pagePrimitiveRedefinitions = reports.flatMap((report) => {
     .map((selector) => ({ file: report.file, selector }));
 });
 const protectedPrimitiveDescendants = [
+  ".ui-button__",
   ".ui-object-switcher__trigger",
   ".ui-resource-disclosure__",
   ".ui-resource-row__"

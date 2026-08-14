@@ -48,6 +48,26 @@ export interface RecentProfileApplication {
   target?: TargetInfo;
 }
 
+export type ProfileDeploymentState = "attention" | "current" | "pending" | "empty";
+
+export interface ProfileApplicationStatus {
+  name: string;
+  state: Exclude<ProfileDeploymentState, "empty">;
+}
+
+export interface ProfileDeploymentSummary {
+  applications: RecentProfileApplication[];
+  items: ProfileApplicationStatus[];
+  state: ProfileDeploymentState;
+}
+
+export const profileDeploymentStatusLabels = {
+  attention: "Attention",
+  current: "Active",
+  pending: "Pending",
+  empty: "Not applied"
+} as const;
+
 export const compareProfilesByCreationTime = (
   left: Pick<ProfileSummary, "id" | "name" | "createdAt">,
   right: Pick<ProfileSummary, "id" | "name" | "createdAt">
@@ -82,6 +102,38 @@ export const listProfileApplications = (
         right.target?.name ?? right.state.targetId
       );
     });
+
+export const summarizeProfileApplications = (
+  profileId: string,
+  targetStates: readonly TargetManagementState[],
+  targets: readonly TargetInfo[]
+): ProfileDeploymentSummary => {
+  const applications = listProfileApplications(profileId, targetStates, targets);
+  const items = applications.map((application) => {
+    const needsAttention =
+      application.state.lifecycleStatus === "drifted" ||
+      application.state.lifecycleStatus === "recovery-required" ||
+      (application.state.errorCount ?? 0) > 0;
+    const isCurrent =
+      !needsAttention &&
+      (
+        application.state.lifecycleStatus === "applied" ||
+        application.state.lifecycleStatus === "applied-with-local-override"
+      );
+    return {
+      name: application.target?.name ?? application.state.targetId,
+      state: needsAttention ? "attention" : isCurrent ? "current" : "pending"
+    } as const;
+  });
+  const state: ProfileDeploymentState = items.length === 0
+    ? "empty"
+    : items.some((application) => application.state === "attention")
+      ? "attention"
+      : items.every((application) => application.state === "current")
+        ? "current"
+        : "pending";
+  return { applications, items, state };
+};
 
 export const preferredTargetForProfile = (
   profileId: string,

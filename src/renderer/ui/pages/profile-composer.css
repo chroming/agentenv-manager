@@ -41,7 +41,7 @@
 
 .profile-hero--loading {
   align-items: center;
-  height: var(--profile-hero-height, 88px);
+  height: var(--profile-hero-height, 72px);
   min-height: var(--profile-hero-height);
 }
 

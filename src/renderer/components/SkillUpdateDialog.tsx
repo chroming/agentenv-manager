@@ -265,7 +265,7 @@ export const SkillUpdateDialog = ({
               {t(
                 progress?.status === "failed"
                     ? "Retry"
-                    : "Update skill"
+                    : "Update Skill"
               )}
             </Button>
           ) : null}

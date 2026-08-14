@@ -3,6 +3,7 @@ import {
   compareProfilesByCreationTime,
   listProfileApplications,
   preferredTargetForProfile,
+  summarizeProfileApplications,
   summarizeProfile
 } from "../../src/renderer/profileSummary";
 import type { ProfileDetail, TargetInfo, TargetManagementState } from "../../src/shared/types";
@@ -137,6 +138,31 @@ describe("Profile summaries", () => {
     ] as TargetManagementState[];
     expect(listProfileApplications("daily", states, targets).map(({ state }) => state.targetId))
       .toEqual(["codex", "opencode"]);
+  });
+
+  it("uses one deployment projection for Profile lists and details", () => {
+    const states = [
+      {
+        targetId: "opencode",
+        activeProfileId: "daily",
+        lifecycleStatus: "applied",
+        errorCount: 0
+      },
+      {
+        targetId: "codex",
+        activeProfileId: "daily",
+        lifecycleStatus: "pending",
+        errorCount: 0
+      }
+    ] as TargetManagementState[];
+
+    expect(summarizeProfileApplications("daily", states, targets)).toMatchObject({
+      state: "pending",
+      items: [
+        { name: "Codex", state: "pending" },
+        { name: "OpenCode", state: "current" }
+      ]
+    });
   });
 
   it("keeps Profile ordering stable by creation time", () => {

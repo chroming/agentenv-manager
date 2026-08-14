@@ -48,6 +48,8 @@ describe("SkillUpdateDialog", () => {
 
     expect(screen.getByText("Off: 2 Agent copies will show Apply pending."))
       .toBeInTheDocument();
+    expect(screen.getByText("Update Skill", { selector: ".ui-button__label" }))
+      .toBeInTheDocument();
     fireEvent.click(screen.getByRole("switch", { name: "Also update Agent copies" }));
     expect(screen.getByText("2 clean managed copies will update in the same backed-up operation."))
       .toBeInTheDocument();
@@ -142,7 +144,7 @@ describe("SkillUpdateDialog", () => {
     expect(within(dialog).getByRole("status", { name: "claude-api: Done" }))
       .toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Close" })).toBeEnabled();
-    expect(within(dialog).queryByRole("button", { name: "Update skill" })).toBeNull();
+    expect(within(dialog).queryByText("Update Skill", { selector: ".ui-button__label" })).toBeNull();
 
     rerender(
       <SkillUpdateDialog

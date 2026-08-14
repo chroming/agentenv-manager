@@ -61,6 +61,7 @@
 
 .ui-button {
   gap: var(--space-2);
+  line-height: var(--line-height-control);
   position: relative;
   width: auto;
 }
@@ -68,6 +69,8 @@
 .ui-button__stack {
   align-items: center;
   display: inline-grid;
+  justify-items: center;
+  line-height: inherit;
   min-width: 0;
 }
 
@@ -76,6 +79,8 @@
   display: inline-flex;
   gap: var(--space-2);
   grid-area: 1 / 1;
+  justify-content: center;
+  line-height: inherit;
   min-width: 0;
   opacity: 1;
 }
@@ -88,6 +93,8 @@
   align-items: center;
   display: inline-flex;
   gap: var(--space-2);
+  justify-content: center;
+  line-height: inherit;
   min-width: 0;
 }
 
@@ -97,6 +104,7 @@
   gap: var(--space-2);
   grid-area: 1 / 1;
   justify-content: center;
+  line-height: inherit;
   opacity: 0;
   visibility: hidden;
 }

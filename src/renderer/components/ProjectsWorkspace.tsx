@@ -598,6 +598,7 @@ export const ProjectsWorkspace = ({
             <>
               <InspectorHeader
                 className="project-detail__header"
+                icon={<Folder size={18} strokeWidth={2} />}
                 responsive="stack"
                 titleLabel={selected.name}
                 title={(
@@ -621,7 +622,7 @@ export const ProjectsWorkspace = ({
                       searchLabel={t("Search Workspaces")}
                       searchPlaceholder={t("Search folders...")}
                       selectedId={selected.id}
-                      showTriggerIcon
+                      showTriggerIcon={false}
                       showTriggerDescription={false}
                       onOpenChange={setSwitcherOpen}
                       onQueryChange={setQuery}
@@ -685,6 +686,7 @@ export const ProjectsWorkspace = ({
                       }}
                     />
                     <Button
+                      className="ui-inspector-header__command"
                       aria-label={selectedAgent
                         ? t("Open in {{name}}", { name: selectedAgent.name })
                         : t("No Agent available")}

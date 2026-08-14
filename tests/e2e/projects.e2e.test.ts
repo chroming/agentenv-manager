@@ -111,13 +111,10 @@ describe("Workspaces desktop workflow", () => {
     const notNow = page.getByRole("button", { name: "Not now", exact: true });
     if (await notNow.isVisible().catch(() => false)) await notNow.click();
     await page.getByRole("button", { name: "Workspaces", exact: true }).click();
-    const agentSwitcher = page.getByRole("button", {
-      name: "Current Agent OpenCode",
-      exact: true
-    });
+    const agentSwitcher = page.getByLabel("Current Agent OpenCode", { exact: true });
     await expect.poll(() => agentSwitcher.locator(".agent-context-switcher__logo").count())
       .toBe(1);
-    expect(await agentSwitcher.isDisabled()).toBe(true);
+    expect(await agentSwitcher.evaluate((element) => element.tagName)).toBe("DIV");
     expect(await page.getByRole("dialog", { name: "Current Agent OpenCode" }).count()).toBe(0);
     expect(await agentSwitcher.locator(".lucide-chevron-down").count()).toBe(0);
     for (const viewport of [
@@ -126,16 +123,18 @@ describe("Workspaces desktop workflow", () => {
     ]) {
       await page.setViewportSize(viewport);
       const geometry = await page
-        .locator(".project-agent-switcher .ui-object-switcher__trigger")
-        .evaluate((trigger) => {
-          const box = trigger.getBoundingClientRect();
+        .locator(".project-agent-switcher")
+        .evaluate((context) => {
+          const box = context.getBoundingClientRect();
           return {
             height: Math.round(box.height),
-            textFits: trigger.scrollWidth <= trigger.clientWidth + 1,
+            textFits: context.scrollWidth <= context.clientWidth + 1,
             width: Math.round(box.width)
           };
         });
-      expect(geometry).toEqual({ height: 32, textFits: true, width: 150 });
+      expect(geometry.height).toBe(32);
+      expect(geometry.textFits).toBe(true);
+      expect(geometry.width).toBeLessThanOrEqual(150);
     }
     await page.setViewportSize({ width: 920, height: 620 });
     const workspaceResources = page.locator(".project-resource-groups");

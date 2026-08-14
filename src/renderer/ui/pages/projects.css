@@ -241,21 +241,6 @@
   overflow-wrap: anywhere;
 }
 
-@container app-shell (max-width: 860px) {
-  .project-detail__actions {
-    align-items: stretch;
-    display: grid;
-    grid-template-columns: 150px auto auto;
-    justify-content: end;
-    width: 100%;
-  }
-
-  .project-agent-switcher {
-    flex-basis: auto;
-    width: 150px;
-  }
-}
-
 @container app-shell (max-width: 700px) {
   .projects-page-header {
     align-items: flex-start;

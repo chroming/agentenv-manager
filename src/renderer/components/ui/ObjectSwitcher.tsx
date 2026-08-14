@@ -49,7 +49,6 @@ interface ObjectSwitcherProps {
   searchLabel: string;
   searchPlaceholder: string;
   selectedId?: string;
-  static?: boolean;
   fullWidth?: boolean;
   showTriggerIcon?: boolean;
   showTriggerTitle?: boolean;
@@ -74,7 +73,6 @@ export const ObjectSwitcher = ({
   searchLabel,
   searchPlaceholder,
   selectedId,
-  static: staticTrigger = false,
   fullWidth = false,
   showTriggerIcon = true,
   showTriggerTitle = true,
@@ -203,24 +201,20 @@ export const ObjectSwitcher = ({
           : triggerVariant === "inline"
             ? " ui-object-switcher--inline-trigger"
             : ""
-      }${hasTriggerIcon ? " ui-object-switcher--with-icon" : ""}${
-        staticTrigger ? " ui-object-switcher--static" : ""
-      } ${className}`.trim()}
+      }${hasTriggerIcon ? " ui-object-switcher--with-icon" : ""} ${className}`.trim()}
     >
       <button
         aria-controls={open ? popoverId : undefined}
-        aria-expanded={staticTrigger ? undefined : open}
-        aria-haspopup={staticTrigger ? undefined : "dialog"}
+        aria-expanded={open}
+        aria-haspopup="dialog"
         aria-label={ariaLabel}
         className="ui-object-switcher__trigger"
-        disabled={disabled || staticTrigger}
+        disabled={disabled}
         ref={triggerRef}
         type="button"
-        onClick={() => {
-          if (!staticTrigger) onOpenChange(!open);
-        }}
+        onClick={() => onOpenChange(!open)}
         onKeyDown={(event) => {
-          if (!staticTrigger && !open && (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ")) {
+          if (!open && (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ")) {
             event.preventDefault();
             onOpenChange(true);
           }
@@ -237,11 +231,9 @@ export const ObjectSwitcher = ({
             ) : null}
           </span>
         ) : null}
-        {!staticTrigger ? (
-          <ChevronDown className={open ? "is-open" : ""} size={15} strokeWidth={2.1} aria-hidden="true" />
-        ) : null}
+        <ChevronDown className={open ? "is-open" : ""} size={15} strokeWidth={2.1} aria-hidden="true" />
       </button>
-      {open && !staticTrigger ? createPortal(
+      {open ? createPortal(
         <div
           aria-label={ariaLabel}
           className="ui-object-switcher__popover"

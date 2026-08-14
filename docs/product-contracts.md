@@ -266,8 +266,12 @@ AgentEnv-owned copy of the folder and does not require Git.
   does not mutate Workspace resources.
 - Profile and Workspace use one Agent-context selector contract. Each surface supplies only the
   Agents eligible for its current task; the shared selector is disabled for zero candidates, shows
-  one candidate as static current context without a menu, and becomes searchable only when at least
-  two candidates offer a real choice. Pages MUST NOT redefine these count states independently.
+  one candidate as plain non-interactive current context without button, border, chevron, or menu
+  affordances, and becomes searchable only when at least two candidates offer a real choice. Pages
+  MUST NOT redefine these count states independently. Both surfaces keep the current object on the
+  left and reserve the trailing lanes for Agent context, the primary command, and overflow actions;
+  responsive layout MUST NOT move this action group to the left edge. Profile readiness belongs to
+  that trailing Agent/action context and MUST NOT appear as Profile identity metadata below its name.
 - The selected `Agent` is the context for Workspace inspection, supported edits, Preview, and Open;
   it MUST NOT be labelled as only an `Open with` preference. Changing it refreshes the visible
   resources before another Agent-scoped mutation can be reviewed. Resource identity remains plain
@@ -953,7 +957,7 @@ Rules:
 - Edit, Duplicate, Delete, Undo, Recovery, Target selection, Compare, and Apply are selected-Profile commands and MUST remain inside the selected Profile surface. Profile creation belongs to the Profile list header, beside the collection it changes; it MUST NOT be promoted into window chrome or mixed into the selected Profile lifecycle group.
 - Every Profile row is a stable two-line selector: Profile icon and name with only exceptional persistence state such as `Saving...` or `Save failed` on the first line, then one compressed deployment summary on the second line. One Agent is shown as `Agent · Active`, `Agent · Pending`, or `Agent · Attention`; multiple Agents are summarized as `N Agents · State`, with the per-Agent states available from the row's accessible hover label. A Profile with no deployment shows only `Not applied`. Description, resource counts, preferred Target, provenance, and Agent artwork belong to the selected Profile detail, not the list. The deployment summary projects the canonical Target lifecycle state; the renderer MUST NOT independently recompute a competing current/pending result from a preferred-Target hash or version snapshot.
 - The Profile list is always ordered by persisted creation time, newest first. Selection, the chosen Apply Agent, deployment state, auto-save, and Apply MUST NOT reorder it.
-- Selected-Target lifecycle status belongs beside Agent selection and Apply inside the selected Profile surface. It MUST NOT be repeated as a separate page-level summary strip.
+- Selected-Target lifecycle status belongs beside Agent selection and Apply inside the selected Profile surface. It MUST NOT be repeated as a separate page-level summary strip. When the Profile is active on multiple Agents, the same compact deployment projection used by the Profile list MUST also remain visible beside the selected-Target status so selection does not hide the Profile-wide application scope.
 - Pending auto-save MUST delay Preview and Apply. A failed save blocks them while preserving the complete edit for Retry or restore.
 - Switching Profile, Target, workspace, or closing the window MUST await an ordinary pending Profile save without a confirmation dialog. A failed Profile save and an unsaved Workspace file edit remain explicit recovery decisions.
 - Failed validation or auto-save MUST preserve all draft input.
@@ -976,6 +980,10 @@ Status: v2 whole-Profile auto-save, recovery history, per-Target applied hashes,
 ## 8. Target Lifecycle
 
 Target lifecycle MUST be represented as an explicit state, not inferred only from `managed`, hashes, or error counts.
+
+Preview and lifecycle derivation MUST compare the same Target-materialized effective Profile: global Library availability, per-Target resource policy, local Skill boundaries, and shared-location preparations are resolved in the same order. A Preview with no file, resource, shared-preparation, or Target-state work MUST NOT coexist with `Changes pending` for the same Profile and Target facts.
+
+A pending shared-location migration does not make an already deployed Agent copy absent. Lifecycle derivation excludes a prepared shared Skill only when the Target lacks both an `appliedLibraryVersions` receipt for its Library ID and a non-override `managed-active` receipt for that concrete deployment name. This keeps shared-area cleanup progress separate from whether the selected Profile is already active on the Agent.
 
 ```text
 Missing
@@ -1022,6 +1030,8 @@ Canonical states:
 | Drifted | One or more managed Target resources differ from their applied snapshot. |
 | Apply failed | Apply failed and the automatic restore succeeded. |
 | Recovery required | Apply or rollback failed and AgentEnv cannot prove a consistent state. |
+
+The renderer consumes this canonical lifecycle as the authority for `Applied` versus `Changes pending`; a missing or delayed renderer-side hash MUST NOT downgrade an explicit `Applied` state. If an Apply reaches a semantic no-op, the client MUST refresh Target inventory and lifecycle state before presenting the reconciled result.
 
 Status: canonical persisted lifecycle derivation, operation locking, and `Recovery required` blocking are `Implemented`. Short-lived working and restored-failure feedback remains renderer state.
 
@@ -1758,6 +1768,16 @@ Status: shared transient success, persistent error, background progress, GitHub 
   controls in the minimum-width workbench.
 - Local Skills Manager is a review list, not a secondary resource library. Its rows show Skill identity, one compact state, the current safe next action, and overflow. Full paths, duplicate details, and alternate versions belong in Details or Review; History is an integrated list section rather than a visually unrelated card.
 - Buttons do not wrap at supported desktop widths.
+- Shared `Button` owns control height, padding, label line height, icon slot, icon-to-label gap,
+  busy-state replacement, and visual centering. Feature and page styles MAY set only the button's
+  placement or an explicitly reviewed outer width; they MUST NOT redraw those internals through a
+  feature class. Short self-explanatory commit verbs such as `Apply`, `Save`, `Update`, and `Delete`
+  do not carry a decorative icon. A dialog footer does not repeat the object name when the dialog
+  title already establishes an unambiguous target, except when the product noun is needed to
+  distinguish neighboring actions.
+- English commands use sentence case while the product nouns `Agent`, `Profile`, `Skill`,
+  `Workspace`, and `MCP` retain their established capitalization. For example, `Update Skill` is
+  valid and `Update skill` is not. Casing is a copy contract, not a page-local visual treatment.
 - Visible command, tab, status, badge, and count labels MUST fit their owning control in every supported locale. They MUST NOT use clipped overflow or ellipsis to conceal a sizing defect; shorten the visible label or change the owning layout while preserving the full accessible command name.
 - When a responsive table hides its shared column header, every remaining compact field MUST retain a visible semantic label. Raw revisions, dates, source values, and Library identities MUST NOT become unlabeled values merely to fit the minimum viewport.
 - Ellipsis is reserved for variable content such as names, descriptions, revisions, and paths. Every such truncation MUST declare the shared hover-detail contract so the complete selectable value remains available; generic `overflow: hidden` is not accepted as evidence of containment.

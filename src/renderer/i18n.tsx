@@ -1936,7 +1936,7 @@ Object.assign(zhCN, {
   "Update {{name}}": "更新 {{name}}",
   "Apply update {{id}}": "应用 {{id}} 更新",
   "Updating...": "正在更新...",
-  "Update skill": "更新技能",
+  "Update Skill": "更新 Skill",
   "Change icon for {{name}}": "更改 {{name}} 的图标",
   "Use source icon": "使用来源网站图标",
   Development: "开发",

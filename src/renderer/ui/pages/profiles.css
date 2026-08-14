@@ -77,16 +77,6 @@
   width: 36px;
 }
 
-.profile-apply-button {
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-control);
-  color: #fff;
-  justify-content: center;
-  min-width: 184px;
-  padding-inline: 14px;
-}
-
 .preview-drift-recovery {
   align-items: center;
   background: #fff9ed;
@@ -136,29 +126,6 @@
   }
 }
 
-.profile-apply-button strong {
-  color: #fff;
-  max-width: 154px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.profile-apply-button:hover:not(:disabled) {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
-}
-
-.profile-apply-button:disabled {
-  background: #e8edf5;
-  border-color: #e1e7f0;
-  color: #8b98aa;
-}
-
-.profile-apply-button:disabled strong {
-  color: #8b98aa;
-}
-
 .preview-dialog--modal .diff-list {
   min-height: 0;
   overflow: auto;
@@ -198,8 +165,7 @@
 /* Profiles owns one control and density contract across its supported window sizes. */
 .app-shell--profiles {
   --profile-control-height: var(--control-height-default);
-  --profile-hero-height: 88px;
-  --profile-hero-height-compact: 76px;
+  --profile-hero-height: 72px;
   --profile-icon-slot: 24px;
   --profile-policy-column-width: clamp(244px, 42%, 264px);
 }
@@ -214,7 +180,7 @@
 
 .profile-page {
   display: grid;
-  gap: var(--space-3);
+  gap: 0;
   grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   min-height: 0;
@@ -246,11 +212,6 @@
   min-width: 0;
   position: relative;
   z-index: var(--z-dropdown);
-}
-
-.profile-commit-actions .profile-apply-button {
-  height: var(--profile-control-height);
-  min-height: var(--profile-control-height);
 }
 
 .profile-readiness-strip {
@@ -457,32 +418,18 @@
 }
 
 .profile-hero {
-  align-items: center;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto;
-  grid-template-areas: "body actions";
   border: 0;
   border-bottom: 1px solid var(--border);
   border-radius: 0;
   min-height: var(--profile-hero-height);
-  padding: 12px 14px;
+  padding: 10px 14px;
   position: static;
   top: auto;
   z-index: auto;
 }
 
-.profile-hero__body {
-  gap: 5px;
-  grid-area: body;
-}
-
-.profile-hero__actions {
-  align-items: center;
-  display: flex;
-  grid-area: actions;
-  justify-content: flex-end;
-  min-width: 0;
+.profile-hero .ui-inspector-header__copy {
+  gap: 4px;
 }
 
 .profile-hero__title {
@@ -532,19 +479,28 @@
 }
 
 .profile-hero .profile-description {
-  display: -webkit-box;
+  display: block;
+  flex: 0 1 auto;
   font-size: 12px;
   line-height: 18px;
   max-width: 72ch;
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .profile-commit-actions {
   align-items: center;
   flex-wrap: nowrap;
   justify-content: flex-end;
+}
+
+.profile-object-actions {
+  align-items: end;
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  min-width: 0;
 }
 
 .profile-action-stack {
@@ -559,13 +515,6 @@
   width: auto;
 }
 
-.profile-commit-actions .profile-apply-button {
-  flex: 0 0 auto;
-  min-width: 92px;
-  padding-inline: 12px;
-  width: auto;
-}
-
 .profile-commit-actions .profile-apply-control {
   flex: 0 0 auto;
 }
@@ -574,6 +523,11 @@
   flex: 0 0 150px;
   min-width: 0;
   width: 150px;
+}
+
+.profile-commit-actions > .profile-agent-switcher--static {
+  flex: 0 1 auto;
+  width: auto;
 }
 
 .profile-commit-actions > .icon-action {
@@ -598,12 +552,13 @@
   font-size: 10px;
   font-weight: var(--font-weight-regular);
   gap: 5px;
-  justify-content: flex-start;
+  justify-content: flex-end;
   line-height: 16px;
   margin: 0;
   max-width: 100%;
   min-height: 18px;
-  padding: 0 2px;
+  padding: 0 2px 0 0;
+  width: 100%;
 }
 
 .profile-action-status__copy {
@@ -614,10 +569,24 @@
   min-width: 0;
 }
 
-.profile-action-status__copy > span {
+.profile-action-status__primary {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.profile-action-status__applications {
+  color: var(--text-tertiary);
+  flex: 0 1 auto;
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-action-status__divider {
+  color: var(--border-strong);
+  flex: 0 0 auto;
 }
 
 .profile-action-status__action {
@@ -1019,24 +988,8 @@
     --profile-policy-column-width: clamp(236px, 56%, 264px);
   }
 
-  .profile-hero {
-    grid-template-areas:
-      "body"
-      "actions";
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto;
-    height: auto;
-    min-height: var(--profile-hero-height-compact);
-    padding: 7px 12px;
-    row-gap: 4px;
-  }
-
   .profile-editor-surface {
     gap: 0;
-  }
-
-  .profile-hero__body {
-    gap: 3px;
   }
 
   .profile-action-status {
@@ -1056,34 +1009,6 @@
     white-space: nowrap;
   }
 
-  .profile-hero .profile-description {
-    display: -webkit-box;
-  }
-
-  .profile-hero--loading .profile-description {
-    display: block;
-  }
-
-  .profile-commit-actions {
-    flex-wrap: wrap;
-    min-width: 0;
-    width: 100%;
-  }
-
-  .profile-hero__actions {
-    justify-content: flex-end;
-    width: 100%;
-  }
-
-  .profile-commit-actions .profile-apply-control {
-    flex: 0 0 auto;
-  }
-
-  .profile-commit-actions .profile-apply-button {
-    flex: 0 0 92px;
-    min-width: 92px;
-    width: 92px;
-  }
 
   .profile-composer-section__count-scope {
     max-width: 120px;

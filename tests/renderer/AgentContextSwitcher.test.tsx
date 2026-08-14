@@ -52,12 +52,14 @@ describe("AgentContextSwitcher", () => {
       />
     );
 
-    const trigger = screen.getByRole("button", { name: "Current Agent OpenCode" });
-    expect(trigger).toBeDisabled();
-    expect(trigger).not.toHaveAttribute("aria-haspopup");
-    expect(trigger.querySelector(".agent-context-switcher__logo")).not.toBeNull();
-    expect(trigger.querySelector(".lucide-chevron-down")).toBeNull();
-    fireEvent.click(trigger);
+    const context = screen.getByLabelText("Current Agent OpenCode");
+    expect(context).toHaveClass("agent-context-switcher--static");
+    expect(context.tagName).toBe("DIV");
+    expect(context.querySelector(".agent-context-switcher__logo")).not.toBeNull();
+    expect(context.querySelector(".lucide-chevron-down")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Current Agent OpenCode" }))
+      .not.toBeInTheDocument();
+    fireEvent.click(context);
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });

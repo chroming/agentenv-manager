@@ -152,7 +152,9 @@ describe("ProjectsWorkspace", () => {
     const switcherTrigger = await screen.findByRole("button", { name: "Choose Workspace" });
     expect(screen.queryByRole("button", { name: "Add Workspace folder" }))
       .not.toBeInTheDocument();
-    expect(switcherTrigger.querySelector(".ui-object-switcher__trigger-icon")).not.toBeNull();
+    expect(switcherTrigger.querySelector(".ui-object-switcher__trigger-icon")).toBeNull();
+    expect(document.querySelector(".project-detail__header .ui-inspector-header__icon"))
+      .not.toBeNull();
     expect(screen.getByRole("button", { name: "Rename Workspace" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Refresh Workspace" }).closest(
       ".ui-inspector-header__actions"
@@ -171,10 +173,11 @@ describe("ProjectsWorkspace", () => {
     expect(document.querySelector(".project-context-summary")).toBeNull();
     expect(screen.getByRole("heading", { name: "Example" }).closest(".ui-inspector-header"))
       .toBeInTheDocument();
-    const agentSwitcher = screen.getByRole("button", { name: "Current Agent OpenCode" });
+    const agentSwitcher = screen.getByLabelText("Current Agent OpenCode");
     expect(agentSwitcher.closest(".project-agent-switcher")).not.toBeNull();
     expect(agentSwitcher.querySelector(".agent-context-switcher__logo")).not.toBeNull();
-    expect(agentSwitcher).toBeDisabled();
+    expect(agentSwitcher).toHaveClass("agent-context-switcher--static");
+    expect(agentSwitcher.tagName).toBe("DIV");
     fireEvent.click(agentSwitcher);
     expect(screen.queryByRole("dialog", { name: "Current Agent OpenCode" }))
       .not.toBeInTheDocument();
@@ -204,7 +207,7 @@ describe("ProjectsWorkspace", () => {
     expect(within(dialog).getByRole("combobox", { name: /Workspace location/ }).closest(".ui-field"))
       .toBeInTheDocument();
     expect(within(dialog).queryByRole("combobox", { name: "Agent" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Current Agent OpenCode" }))
+    expect(screen.getByLabelText("Current Agent OpenCode"))
       .toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Preview environment" })).not.toBeInTheDocument();
   });
@@ -514,7 +517,7 @@ describe("ProjectsWorkspace", () => {
       <ProjectsWorkspace targets={[target]} uiState={uiState} />
     );
 
-    expect(await screen.findByRole("button", { name: "Current Agent OpenCode" }))
+    expect(await screen.findByLabelText("Current Agent OpenCode"))
       .toHaveTextContent("OpenCode");
 
     rerender(

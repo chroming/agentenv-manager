@@ -539,7 +539,7 @@ export const generatedZhCN: Record<string, string> = {
   "Update preview for {{id}}": "{{id}} 的更新预览",
   "Update settings": "更新设置",
   "Update settings for {{id}}": "{{id}} 的更新设置",
-  "Update skill": "更新 Skill",
+  "Update Skill": "更新 Skill",
   "Update source": "更新源",
   "Update source directory for {{id}}": "更新 {{id}} 的源目录",
   "Update source for {{id}}": "更新 {{id}} 的来源",
