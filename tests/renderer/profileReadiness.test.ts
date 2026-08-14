@@ -242,6 +242,35 @@ describe("profile readiness", () => {
     ).toBe("Preview & apply to Codex");
   });
 
+  it("trusts the canonical applied lifecycle when renderer hashes are unavailable or stale", () => {
+    const canonicalAppliedState = {
+      ...managedState,
+      lifecycleStatus: "applied" as const
+    };
+
+    expect(
+      deriveProfileReadiness({
+        profile: { id: profile.id },
+        target,
+        targetState: canonicalAppliedState,
+        isDirty: false
+      })
+    ).toMatchObject({
+      status: "applied",
+      message: "Codex matches this environment"
+    });
+
+    expect(
+      deriveProfileReadiness({
+        profile,
+        target,
+        targetState: canonicalAppliedState,
+        dependenciesCurrent: false,
+        isDirty: false
+      })
+    ).toMatchObject({ status: "applied" });
+  });
+
   it("marks referenced library changes as pending apply", () => {
     expect(
       deriveProfileReadiness({

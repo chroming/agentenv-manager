@@ -410,6 +410,14 @@ describe("activation service v2", () => {
     await expect(readFile(join(installedPath, "SKILL.md"), "utf8")).resolves.toContain(
       "# Review"
     );
+    const stable = await service.previewProfile("daily-coding", "codex");
+    expect(stable.targetStateChanged).toBe(false);
+    expect(stable.changes).toEqual([]);
+    expect(stable.resourceChanges).toEqual([]);
+    expect((await service.listTargetStates())[0]).toMatchObject({
+      lifecycleStatus: "applied",
+      lifecycleReason: undefined
+    });
   });
 
   it("removes writable Trae copies of a globally disabled Library Skill without treating evidence as ownership", async () => {
@@ -591,6 +599,46 @@ describe("activation service v2", () => {
       ok: false,
       kind: "no-op",
       errors: ["No changes to apply"]
+    });
+  });
+
+  it("keeps a managed Agent copy current while its shared copy is still prepared", async () => {
+    const { paths, profile, service, skillLibraryStore } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const librarySkill = (await skillLibraryStore.listSkills()).find(
+      (skill) => skill.id === "review"
+    );
+    if (!librarySkill) throw new Error("Expected review in the Skill Library");
+    const sharedSkill = join(paths.userSkillsDir, "review");
+    const targetSkill = join(paths.codexHome, "skills", "review");
+    await mkdir(paths.userSkillsDir, { recursive: true });
+    await mkdir(join(paths.codexHome, "skills"), { recursive: true });
+    await cp(librarySkill.path, sharedSkill, { recursive: true });
+    await cp(librarySkill.path, targetSkill, { recursive: true });
+
+    const first = await service.previewProfile(profile.id, "codex");
+    expect(first.sharedSkillPreparations).toContainEqual(expect.objectContaining({
+      libraryId: "review",
+      targetName: "review",
+      disposition: "install"
+    }));
+    expect((await service.applyProfile(profile.id, first.id)).ok).toBe(true);
+
+    const stable = await service.previewProfile(profile.id, "codex");
+    expect(stable.changes).toEqual([]);
+    expect(stable.resourceChanges).toEqual([]);
+    expect(stable.sharedSkillPreparationChanged).toBe(false);
+    expect(stable.targetStateChanged).toBe(false);
+    expect((await service.listTargetStates())[0]).toMatchObject({
+      lifecycleStatus: "applied",
+      appliedLibraryVersions: {
+        skills: { review: librarySkill.contentHash }
+      },
+      skillReceipts: [expect.objectContaining({
+        libraryId: "review",
+        outcome: "managed-active",
+        localOverride: false
+      })]
     });
   });
 

@@ -193,6 +193,12 @@ export const useProfileActivationController = ({
         }
         if (result.kind === "no-op") {
           setPreview(undefined);
+          const [targetsResult, statesResult] = await Promise.allSettled([
+            window.agentEnv.listTargets(false),
+            window.agentEnv.listTargetStates()
+          ]);
+          if (targetsResult.status === "fulfilled") onTargetsRefresh(targetsResult.value);
+          if (statesResult.status === "fulfilled") onTargetStatesRefresh(statesResult.value);
           onStatus("This Agent already matches the Profile.");
           return;
         }
@@ -220,6 +226,8 @@ export const useProfileActivationController = ({
     onError,
     onRollbackClear,
     onStatus,
+    onTargetsRefresh,
+    onTargetStatesRefresh,
     preview,
     translate
   ]);

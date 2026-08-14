@@ -158,4 +158,27 @@ describe("useProfileActivationController", () => {
     );
     expect(callbacks.onApplied).not.toHaveBeenCalled();
   });
+
+  it("reconciles Agent lifecycle facts after a no-op Apply", async () => {
+    installApi({
+      applyProfile: vi.fn().mockResolvedValue({
+        ok: false,
+        kind: "no-op",
+        errors: ["No changes to apply"]
+      }),
+      listTargets: vi.fn().mockResolvedValue([target]),
+      listTargetStates: vi.fn().mockResolvedValue([])
+    });
+    const { callbacks, hook } = renderController();
+
+    act(() => hook.result.current.showPreview(preview()));
+    await act(() => hook.result.current.applyProfile(profile));
+
+    expect(callbacks.onTargetsRefresh).toHaveBeenCalledWith([target]);
+    expect(callbacks.onTargetStatesRefresh).toHaveBeenCalledWith([]);
+    expect(hook.result.current.preview).toBeUndefined();
+    expect(callbacks.onStatus).toHaveBeenCalledWith(
+      "This Agent already matches the Profile."
+    );
+  });
 });

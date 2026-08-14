@@ -158,8 +158,23 @@ export const deriveProfileReadiness = ({
     };
   }
 
+  const isActiveProfile = targetState.activeProfileId === profile.id;
+  const hasCanonicalAppliedLifecycle =
+    targetState.lifecycleStatus === "applied" ||
+    targetState.lifecycleStatus === "applied-with-local-override";
+
+  if (isActiveProfile && hasCanonicalAppliedLifecycle) {
+    return {
+      status: "applied",
+      label: "Applied",
+      message: targetState.lifecycleStatus === "applied-with-local-override"
+        ? targetState.lifecycleReason ?? `${target.name} uses this environment with local management boundaries`
+        : `${target.name} matches this environment`
+    };
+  }
+
   if (
-    targetState.activeProfileId === profile.id &&
+    isActiveProfile &&
     (targetState.lifecycleStatus === "pending" ||
       dependenciesCurrent === false ||
       !targetState.appliedProfileHash ||
@@ -177,10 +192,8 @@ export const deriveProfileReadiness = ({
   }
 
   if (
-    targetState.activeProfileId === profile.id &&
-    (targetState.lifecycleStatus === "applied" ||
-      targetState.lifecycleStatus === "applied-with-local-override" ||
-      !targetState.lifecycleStatus) &&
+    isActiveProfile &&
+    !targetState.lifecycleStatus &&
     Boolean(profile.contentHash) &&
     targetState.appliedProfileHash === profile.contentHash &&
     dependenciesCurrent !== false
@@ -188,9 +201,7 @@ export const deriveProfileReadiness = ({
     return {
       status: "applied",
       label: "Applied",
-      message: targetState.lifecycleStatus === "applied-with-local-override"
-        ? targetState.lifecycleReason ?? `${target.name} uses this environment with local management boundaries`
-        : `${target.name} matches this environment`
+      message: `${target.name} matches this environment`
     };
   }
 

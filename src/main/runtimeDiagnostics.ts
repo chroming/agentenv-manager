@@ -34,6 +34,7 @@ const contextKeys = new Set([
   "id",
   "profileId",
   "targetId",
+  "activeProfileId",
   "previewId",
   "sourceId",
   "libraryId",
@@ -56,6 +57,7 @@ const resultKeys = new Set([
   "id",
   "profileId",
   "targetId",
+  "activeProfileId",
   "previewId",
   "sourceId",
   "libraryId",
@@ -66,6 +68,9 @@ const resultKeys = new Set([
   "status",
   "state",
   "phase",
+  "operation",
+  "lifecycleStatus",
+  "lifecycleReason",
   "enabled",
   "changed",
   "ok",
@@ -76,6 +81,10 @@ const resultKeys = new Set([
   "items",
   "resources",
   "changes",
+  "resourceChanges",
+  "issues",
+  "targetStateChanged",
+  "sharedSkillPreparationChanged",
   "failed",
   "importedSkillCount",
   "importedMcpCount",
@@ -112,7 +121,17 @@ const summarizeArguments = (args: unknown[]): Record<string, unknown> | undefine
 
 const summarizeResult = (value: unknown, depth = 0): unknown => {
   if (depth > 3) return undefined;
-  if (Array.isArray(value)) return { count: value.length };
+  if (Array.isArray(value)) {
+    const targetStates = value.length > 0 && value.every(
+      (item) => item && typeof item === "object" && "targetId" in item && "lifecycleStatus" in item
+    );
+    return targetStates
+      ? {
+          count: value.length,
+          items: value.slice(0, 20).map((item) => summarizeResult(item, depth + 1))
+        }
+      : { count: value.length };
+  }
   if (typeof value === "string") {
     return depth === 0 ? { kind: "string", length: value.length } : value;
   }

@@ -169,6 +169,39 @@ describe("runtime diagnostics", () => {
     expect(content).not.toContain("private direct file result");
   });
 
+  it("keeps lifecycle and Preview work evidence in copyable diagnostics", async () => {
+    const diagnostics = await createDiagnostics();
+
+    await diagnostics.runIpcOperation("activation:preview", ["daily-coding", "opencode"], async () => ({
+      id: "preview-1",
+      profileId: "daily-coding",
+      targetId: "opencode",
+      operation: "apply",
+      changes: [],
+      resourceChanges: [],
+      issues: [],
+      targetStateChanged: false,
+      sharedSkillPreparationChanged: false
+    }));
+    await diagnostics.runIpcOperation("targets:list-states", [], async () => ([{
+      targetId: "opencode",
+      activeProfileId: "daily-coding",
+      lifecycleStatus: "pending",
+      lifecycleReason: "Referenced Library resources changed after the last Apply",
+      managedResourceCount: 3,
+      warningCount: 0,
+      errorCount: 0
+    }]));
+
+    await diagnostics.readRecentEvents();
+    const content = await readFile(diagnostics.logPath, "utf8");
+    expect(content).toContain('"targetStateChanged":false');
+    expect(content).toContain('"resourceChanges":{"count":0}');
+    expect(content).toContain('"activeProfileId":"daily-coding"');
+    expect(content).toContain('"lifecycleStatus":"pending"');
+    expect(content).toContain("Referenced Library resources changed after the last Apply");
+  });
+
   it("never records clipboard content", async () => {
     const diagnostics = await createDiagnostics();
     await expect(diagnostics.runIpcOperation(

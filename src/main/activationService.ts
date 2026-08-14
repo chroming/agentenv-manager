@@ -284,9 +284,24 @@ export const createActivationService = ({
               ? await profileStore.readProfile(state.activeProfileId).catch(() => undefined)
               : undefined;
             const activeTargetPaths = activeProfile ? await targetPathsFor(targetId) : undefined;
+            const activeDeploymentProfile = activeProfile
+              ? profileWithoutLocalSkillOverrides(
+                  materializeTargetResourcePolicy(
+                    applyLibrarySkillAvailability(activeProfile, skillLibrary),
+                    targetId
+                  ),
+                  state.skillReceipts,
+                  state.sharedSkillPreparations,
+                  state.appliedLibraryVersions
+                )
+              : undefined;
             const activeExpectedSkillHashes =
-              activeProfile && activeTargetPaths
-                ? expectedManagedSkillHashes(activeProfile, activeTargetPaths, skillLibrary)
+              activeDeploymentProfile && activeTargetPaths
+                ? expectedManagedSkillHashes(
+                    activeDeploymentProfile,
+                    activeTargetPaths,
+                    skillLibrary
+                  )
                 : new Map<string, string>();
             const driftChecks = await Promise.all(
               activeManagedResources
@@ -317,11 +332,7 @@ export const createActivationService = ({
             } else if (state.activeProfileId) {
               if (activeProfile) {
                 activeProfileName = activeProfile.manifest.name;
-                const deploymentProfile = profileWithoutLocalSkillOverrides(
-                  activeProfile,
-                  state.skillReceipts,
-                  state.sharedSkillPreparations
-                );
+                const deploymentProfile = activeDeploymentProfile ?? activeProfile;
                 const expectedHash =
                   activeProfile.targetContentHashes?.[targetId] ??
                   createProfileContentHash(activeProfile, targetId);
@@ -338,10 +349,13 @@ export const createActivationService = ({
                       state
                     })
                   : state.appliedLibraryVersions;
-                const isCurrent =
-                  Boolean(expectedHash) &&
-                  expectedHash === state.appliedProfileHash &&
-                  libraryResourceVersionsEqual(currentVersions, appliedLibraryVersions);
+                const profileHashCurrent =
+                  Boolean(expectedHash) && expectedHash === state.appliedProfileHash;
+                const libraryVersionsCurrent = libraryResourceVersionsEqual(
+                  currentVersions,
+                  appliedLibraryVersions
+                );
+                const isCurrent = profileHashCurrent && libraryVersionsCurrent;
                 if (!appliedProfileSnapshot && isCurrent && state.appliedProfileHash) {
                   const capturedAt = state.lastAppliedAt ?? new Date().toISOString();
                   const snapshot = {
@@ -373,7 +387,9 @@ export const createActivationService = ({
                     : "applied"
                   : "pending";
                 if (!isCurrent) {
-                  lifecycleReason = "Saved Profile or Library resources changed after the last Apply";
+                  lifecycleReason = !profileHashCurrent
+                    ? "The saved Profile changed after the last Apply"
+                    : "Referenced Library resources changed after the last Apply";
                 } else if (localOverrideCount > 0) {
                   lifecycleReason = `${localOverrideCount} local ${
                     localOverrideCount === 1 ? "management boundary is" : "management boundaries are"

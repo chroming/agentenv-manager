@@ -1,5 +1,6 @@
 import type {
   AppliedSkillReceipt,
+  LibraryResourceVersions,
   ProfileDetail,
   SharedSkillPreparation
 } from "./types";
@@ -7,8 +8,23 @@ import type {
 export const profileWithoutLocalSkillOverrides = (
   profile: ProfileDetail,
   skillReceipts: readonly AppliedSkillReceipt[] = [],
-  sharedPreparations: readonly SharedSkillPreparation[] = []
+  sharedPreparations: readonly SharedSkillPreparation[] = [],
+  appliedLibraryVersions?: LibraryResourceVersions
 ): ProfileDetail => {
+  const appliedLibraryIds = new Set(
+    Object.keys(appliedLibraryVersions?.skills ?? {})
+  );
+  const managedActive = new Set(
+    skillReceipts
+      .filter(
+        (receipt) =>
+          receipt.desired === "install" &&
+          receipt.outcome === "managed-active" &&
+          !receipt.localOverride &&
+          appliedLibraryIds.has(receipt.libraryId)
+      )
+      .map((receipt) => `${receipt.libraryId}:${receipt.targetName}`)
+  );
   const excluded = new Set([
     ...skillReceipts
       .filter(
@@ -19,7 +35,11 @@ export const profileWithoutLocalSkillOverrides = (
       )
       .map((entry) => `${entry.libraryId}:${entry.targetName}`),
     ...sharedPreparations
-      .filter((preparation) => preparation.profileId === profile.id)
+      .filter(
+        (preparation) =>
+          preparation.profileId === profile.id &&
+          !managedActive.has(`${preparation.libraryId}:${preparation.targetName}`)
+      )
       .map((preparation) => `${preparation.libraryId}:${preparation.targetName}`)
   ]);
   return excluded.size === 0

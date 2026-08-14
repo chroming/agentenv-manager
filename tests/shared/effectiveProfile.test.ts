@@ -52,4 +52,36 @@ describe("effective Profile", () => {
       { libraryId: "reviewer", targetName: "reviewer-copy", enabled: true }
     ]);
   });
+
+  it("keeps an active managed Skill while its shared copy still awaits migration", () => {
+    const effective = profileWithoutLocalSkillOverrides(
+      profile,
+      [{
+        path: "/target/tests",
+        libraryId: "tests",
+        targetName: "tests",
+        desired: "install",
+        observed: "managed",
+        authority: "agentenv",
+        action: "none",
+        outcome: "managed-active",
+        requiresReview: false,
+        localOverride: false
+      }],
+      [{
+        skillKey: "tests",
+        libraryId: "tests",
+        sharedPaths: ["/shared/tests"],
+        targetName: "tests",
+        disposition: "install",
+        profileId: "daily",
+        profileHash: "hash"
+      }],
+      { skills: { tests: "tests-hash" } }
+    );
+
+    expect(effective.resources.skills).toContainEqual(
+      { libraryId: "tests", targetName: "tests", enabled: true }
+    );
+  });
 });
