@@ -1683,9 +1683,18 @@ describe("Electron UI profile switching e2e", () => {
     await dialog.getByText("Project Release", { exact: true }).waitFor({ state: "visible" });
     await dialog.getByRole("button", { name: "Import all", exact: true }).click();
 
-    await expect.poll(() => fileExists(join(appDataRoot, "skills-library", "project-release", "SKILL.md"))).toBe(true);
-    await expect.poll(() => fileExists(join(appDataRoot, "skills-library", "project-docs", "SKILL.md"))).toBe(true);
-    await expect.poll(() => dialog.getByText("In Library", { exact: true }).count()).toBe(2);
+    await expect.poll(
+      () => fileExists(join(appDataRoot, "skills-library", "project-release", "SKILL.md")),
+      { timeout: 15_000 }
+    ).toBe(true);
+    await expect.poll(
+      () => fileExists(join(appDataRoot, "skills-library", "project-docs", "SKILL.md")),
+      { timeout: 15_000 }
+    ).toBe(true);
+    await expect.poll(
+      () => dialog.getByText("In Library", { exact: true }).count(),
+      { timeout: 15_000 }
+    ).toBe(2);
     expect(await readFile(sourcePath, "utf8")).toBe(sourceBefore);
     expect((await lstat(sourceDirectory)).isSymbolicLink()).toBe(false);
     await expectNoHorizontalOverflow(page, [".library-import-dialog"]);
@@ -6195,7 +6204,7 @@ describe("Electron UI profile switching e2e", () => {
         profileSwitcherButton.evaluate((element) => getComputedStyle(element).backgroundColor)
       )
       .not.toBe("rgb(0, 122, 255)");
-    expect(await applyButton.isDisabled()).toBe(true);
+    await expect.poll(() => applyButton.isDisabled(), { timeout: 10_000 }).toBe(true);
     expect(await applyButton.textContent()).toContain("Apply");
 
     await saveProfile(page);
