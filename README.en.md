@@ -63,7 +63,7 @@ Both runs use isolated temporary Homes and Workspaces. Compare does not Apply th
 
 ## Workspaces
 
-Workspaces keeps references to frequently used local folders and shows the Instructions, Skills, and MCP names a selected Agent can load there. You can edit supported Workspace Instructions, copy Library Skills into ordinary folder-owned files, or open the folder with an installed Agent.
+Workspaces keep references to frequently used local folders and show the Instructions, Skills, and MCP names a selected Agent can load there. You can edit supported Workspace Instructions, copy Library Skills into ordinary folder-owned files, or open the folder with an installed Agent.
 
 ![Workspace resources](docs/images/workspaces.png)
 

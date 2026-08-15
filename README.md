@@ -8,11 +8,11 @@
 
 AgentEnv Manager 用来统一管理多个 coding agent 的工作环境，主要功能包括：
 
-- **Profile 切换：**保存不同的 Instructions、Skills 和 MCP 组合，并应用到 Codex、Claude Code、OpenCode 等 Agent。
-- **Skills 管理：**从本地、ZIP、GitHub 或 Git 仓库导入 Skills，集中启用、停用和更新，并持续检查来源变化。
-- **项目环境：**保存常用项目目录，管理项目自己的 Instructions 和 Skills，并直接用已安装的 Agent 打开。
-- **对话历史：**搜索多个 Agent 的本地历史对话，回到原对话，或交给另一个 Agent 继续。
-- **应用前试用：**预览 Profile 会带来的变化，用同一个任务对比当前环境和新 Profile，再决定是否应用。
+- **Profile 切换**：保存不同的 Instructions、Skills 和 MCP 组合，并应用到 Codex、Claude Code、OpenCode 等 Agent。
+- **Skills 管理**：从本地、ZIP、GitHub 或 Git 仓库导入 Skills，集中启用、停用和更新，并持续检查来源变化。
+- **项目环境**：保存常用项目目录，管理项目自己的 Instructions 和 Skills，并直接用已安装的 Agent 打开。
+- **对话历史**：搜索多个 Agent 的本地历史对话，回到原对话，或交给另一个 Agent 继续。
+- **应用前试用**：预览 Profile 会带来的变化，用同一个任务对比当前环境和新 Profile，再决定是否应用。
 
 它不会接管模型、账号、凭据或整份配置文件，只处理各 Agent 明确支持的 Instructions、Skills 和 MCP 开关。
 
@@ -34,7 +34,7 @@ brew upgrade --cask chroming/tap/agentenv-manager
 
 Homebrew 会按架构下载官方 Release、验证 SHA-256 并移除 quarantine。macOS、Windows 和 Linux 安装包也可以从 [GitHub Releases](https://github.com/chroming/agentenv-manager/releases/latest) 下载。
 
-macOS 直接下载包使用 ad-hoc 签名，没有 Developer ID 和公证。请先把应用复制到“应用程序”并推出 DMG，再按 [Apple 的说明](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac)选择“仍要打开”。首次安装后，只要应用所在目录可写，Homebrew 和直接下载版本都可以在设置中检查、验证并安装更新；直接更新启动失败时会自动恢复旧版本。
+macOS 直接下载包使用 ad-hoc 签名，没有 Developer ID 和公证。请先把应用复制到“应用程序”并推出 DMG，再按 [Apple 的说明](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac) 选择“仍要打开”。首次安装后，只要应用所在目录可写，Homebrew 和直接下载版本都可以在设置中检查、验证并安装更新；直接更新启动失败时会自动恢复旧版本。
 
 ## 第一次使用
 
