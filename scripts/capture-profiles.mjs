@@ -588,6 +588,7 @@ const capturePage = async (
   path,
   { preserveFocus = false, preservePointer = false } = {}
 ) => {
+  const resetProfileScroll = /(?:^|\/)profiles?(?:-|\.)/.test(path);
   const expectedSize = path.match(/-(\d+)x(\d+)\.png$/);
   if (expectedSize) {
     const viewport = page.viewportSize();
@@ -600,7 +601,7 @@ const capturePage = async (
       );
     }
   }
-  await page.evaluate(async ({ shouldPreserveFocus }) => {
+  await page.evaluate(async ({ shouldPreserveFocus, shouldResetProfileScroll }) => {
     document.documentElement.dataset.agentenvCapture = "true";
     let captureStyle = document.getElementById("agentenv-capture-style");
     if (!captureStyle) {
@@ -627,9 +628,17 @@ const capturePage = async (
     if (!shouldPreserveFocus && document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
+    if (shouldResetProfileScroll) {
+      const profileComposer = document.querySelector(".profile-composer");
+      if (profileComposer instanceof HTMLElement) {
+        profileComposer.scrollTop = 0;
+        profileComposer.scrollLeft = 0;
+      }
+    }
     await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
   }, {
-    shouldPreserveFocus: preserveFocus
+    shouldPreserveFocus: preserveFocus,
+    shouldResetProfileScroll: resetProfileScroll
   });
   if (!preservePointer) {
     await page.mouse.move(2, 2);
