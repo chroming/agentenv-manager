@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { SafeIdSchema } from "../shared/schemas";
 import { writeAtomic } from "./fileUtils";
@@ -35,6 +35,7 @@ interface GitHubRepositoryResponse {
 }
 
 export interface GitHubCommitResponse {
+  sha?: string;
   commit?: {
     tree?: { sha?: string };
     author?: { date?: string };
@@ -72,7 +73,11 @@ interface GitHubContentDir extends GitHubContentBase {
 
 type GitHubContentItem = GitHubContentFile | GitHubContentDir;
 
-type GitHubRequestOptions = { refresh?: boolean; refreshFiles?: boolean };
+type GitHubRequestOptions = {
+  refresh?: boolean;
+  refreshFiles?: boolean;
+  reuseRoot?: string;
+};
 
 const RESPONSE_CACHE_TTL_MS = 2 * 60 * 1_000;
 const RESPONSE_CACHE_MAX_ENTRIES = 1_024;
@@ -172,6 +177,24 @@ const relativeGitHubPath = (rootPath: string, childPath: string) => {
   if (!rootPath) return childPath;
   if (childPath === rootPath) return "";
   return childPath.startsWith(`${rootPath}/`) ? childPath.slice(rootPath.length + 1) : childPath;
+};
+
+const reusableGitBlob = async (
+  rootPath: string | undefined,
+  relativePath: string,
+  expectedSha: string
+): Promise<Buffer | undefined> => {
+  if (!rootPath || !/^[a-f0-9]{40}$/i.test(expectedSha)) return undefined;
+  try {
+    const content = await readFile(join(rootPath, ...relativePath.split("/")));
+    const actualSha = createHash("sha1")
+      .update(`blob ${content.length}\0`)
+      .update(content)
+      .digest("hex");
+    return actualSha === expectedSha ? content : undefined;
+  } catch {
+    return undefined;
+  }
 };
 
 const assertGitHubContentItems = (value: unknown, url: string): GitHubContentItem[] => {
@@ -354,6 +377,8 @@ export const createGitHubSkillClient = ({
       const commit = await fetchJson(commitUrl, options) as GitHubCommitResponse;
       const treeSha = commit.commit?.tree?.sha;
       if (!treeSha) throw new Error(`GitHub commit could not be resolved: ${source.ref}`);
+      const immutableRef = commit.sha?.trim() || source.ref;
+      const immutableFiles = Boolean(commit.sha?.trim());
 
       const treeUrl = `https://api.github.com/repos/${source.owner}/${source.repo}/git/trees/${encodeURIComponent(treeSha)}?recursive=1`;
       const tree = await fetchJson(treeUrl, options) as GitHubTreeResponse;
@@ -395,12 +420,16 @@ export const createGitHubSkillClient = ({
         );
         await mapWithConcurrency(files, 8, async (item) => {
           const relativePath = relativeGitHubPath(root, item.path);
-          const rawUrl = `https://raw.githubusercontent.com/${source.owner}/${source.repo}/${encodeURIComponent(source.ref)}/${encodeGitHubPath(item.path)}`;
+          const rawUrl = `https://raw.githubusercontent.com/${source.owner}/${source.repo}/${encodeURIComponent(immutableRef)}/${encodeGitHubPath(item.path)}`;
           const filePath = join(writeRoot, ...relativePath.split("/"));
           await mkdir(dirname(filePath), { recursive: true });
-          await writeAtomic(filePath, await fetchText(rawUrl, {
-            refresh: options.refreshFiles ?? options.refresh
-          }));
+          const reusable = await reusableGitBlob(options.reuseRoot, relativePath, item.sha);
+          await writeAtomic(
+            filePath,
+            reusable ?? await fetchText(rawUrl, {
+              refresh: immutableFiles ? false : options.refreshFiles ?? options.refresh
+            })
+          );
         });
       }
       return { hasSkillMd, revision: githubContentsRevision(root, entries) };

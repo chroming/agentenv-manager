@@ -1,4 +1,5 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -113,6 +114,104 @@ describe("github skill client caching", () => {
     expect(fetchImpl.mock.calls.filter(([url]) => url === treeUrl)).toHaveLength(1);
     await expect(readFile(join(root, "SKILL.md"), "utf8")).resolves.toBe("# Review\n");
     await expect(readFile(join(root, "reference.md"), "utf8")).resolves.toBe("Reference\n");
+  });
+
+  it("reuses immutable commit files when the same preview is materialized again", async () => {
+    const firstRoot = await mkdtemp(join(tmpdir(), "agentenv-github-client-immutable-first-"));
+    const secondRoot = await mkdtemp(join(tmpdir(), "agentenv-github-client-immutable-second-"));
+    temporaryDirectories.push(firstRoot, secondRoot);
+    const commitUrl = "https://api.github.com/repos/example/skills/commits/main";
+    const treeUrl = "https://api.github.com/repos/example/skills/git/trees/root-tree?recursive=1";
+    const rawUrl = "https://raw.githubusercontent.com/example/skills/0123456789abcdef0123456789abcdef01234567/review/SKILL.md";
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url === commitUrl) {
+        return responseFor({
+          sha: "0123456789abcdef0123456789abcdef01234567",
+          commit: { tree: { sha: "root-tree" } }
+        });
+      }
+      if (url === treeUrl) {
+        return responseFor({
+          tree: [
+            { path: "review/SKILL.md", type: "blob", sha: "skill-blob", mode: "100644" }
+          ]
+        });
+      }
+      if (url === rawUrl) {
+        return {
+          ...responseFor("# Review\n"),
+          text: async () => "# Review\n"
+        };
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+    const client = createGitHubSkillClient({ fetchImpl });
+    const source = parseGitHubSkillUrl("https://github.com/example/skills/tree/main/review");
+
+    await client.readTree(source, firstRoot, { refresh: true, refreshFiles: true });
+    await client.readTree(source, secondRoot, { refresh: true, refreshFiles: true });
+
+    expect(fetchImpl.mock.calls.filter(([url]) => url === rawUrl)).toHaveLength(1);
+    await expect(readFile(join(secondRoot, "SKILL.md"), "utf8")).resolves.toBe("# Review\n");
+  });
+
+  it("downloads only files whose Git blob differs from the current Library copy", async () => {
+    const currentRoot = await mkdtemp(join(tmpdir(), "agentenv-github-client-current-"));
+    const nextRoot = await mkdtemp(join(tmpdir(), "agentenv-github-client-next-"));
+    temporaryDirectories.push(currentRoot, nextRoot);
+    const unchanged = "Reference\n";
+    const blobSha = (content: string) => createHash("sha1")
+      .update(`blob ${Buffer.byteLength(content)}\0`)
+      .update(content)
+      .digest("hex");
+    await mkdir(join(currentRoot, "docs"), { recursive: true });
+    await writeFile(join(currentRoot, "SKILL.md"), "# Old\n", "utf8");
+    await writeFile(join(currentRoot, "docs", "reference.md"), unchanged, "utf8");
+    const commitUrl = "https://api.github.com/repos/example/skills/commits/main";
+    const treeUrl = "https://api.github.com/repos/example/skills/git/trees/root-tree?recursive=1";
+    const changedRawUrl = "https://raw.githubusercontent.com/example/skills/0123456789abcdef0123456789abcdef01234567/review/SKILL.md";
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url === commitUrl) {
+        return responseFor({
+          sha: "0123456789abcdef0123456789abcdef01234567",
+          commit: { tree: { sha: "root-tree" } }
+        });
+      }
+      if (url === treeUrl) {
+        return responseFor({
+          tree: [
+            { path: "review/SKILL.md", type: "blob", sha: blobSha("# New\n"), mode: "100644" },
+            {
+              path: "review/docs/reference.md",
+              type: "blob",
+              sha: blobSha(unchanged),
+              mode: "100644"
+            }
+          ]
+        });
+      }
+      if (url === changedRawUrl) {
+        return {
+          ...responseFor("# New\n"),
+          text: async () => "# New\n"
+        };
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+    const client = createGitHubSkillClient({ fetchImpl });
+
+    await client.readTree(
+      parseGitHubSkillUrl("https://github.com/example/skills/tree/main/review"),
+      nextRoot,
+      { refresh: true, refreshFiles: true, reuseRoot: currentRoot }
+    );
+
+    expect(fetchImpl.mock.calls.filter(([url]) => String(url).startsWith(
+      "https://raw.githubusercontent.com/"
+    ))).toEqual([[changedRawUrl, undefined]]);
+    await expect(readFile(join(nextRoot, "SKILL.md"), "utf8")).resolves.toBe("# New\n");
+    await expect(readFile(join(nextRoot, "docs", "reference.md"), "utf8"))
+      .resolves.toBe(unchanged);
   });
 
   it("includes repository links in revision checks but requires safe materialization", async () => {

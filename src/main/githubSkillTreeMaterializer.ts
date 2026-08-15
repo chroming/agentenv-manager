@@ -25,7 +25,7 @@ export const createGitHubSkillTreeMaterializer = ({
 }: GitHubSkillTreeMaterializerOptions) => async (
   source: ParsedGitHubSkillSource,
   destination: string,
-  readOptions: { refresh?: boolean; refreshFiles?: boolean } = {}
+  readOptions: { refresh?: boolean; refreshFiles?: boolean; reuseRoot?: string } = {}
 ) => {
   try {
     return await readTree(source, destination, readOptions);

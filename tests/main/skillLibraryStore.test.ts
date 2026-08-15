@@ -3668,6 +3668,72 @@ description: >
     ]);
   });
 
+  it("materializes bulk GitHub update previews concurrently after one repository refresh", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-github-bulk-preview-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    for (const id of ["reviewer", "release"]) {
+      const skillDir = join(paths.skillsLibraryDir, id);
+      await mkdir(skillDir, { recursive: true });
+      await writeFile(join(skillDir, "SKILL.md"), `---\nname: ${id}\n---\n# Old ${id}\n`, "utf8");
+      await writeFile(join(skillDir, ".agentenv-skill.json"), JSON.stringify({
+        sourceType: "github",
+        source: `https://github.com/acme/agent-skills/tree/main/skills/${id}`,
+        remoteRef: "main",
+        remotePath: `skills/${id}`,
+        remoteRevision: `old-${id}`,
+        updatePolicy: "tracked"
+      }), "utf8");
+    }
+
+    let activeFileRequests = 0;
+    let maximumFileRequests = 0;
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith("/repos/acme/agent-skills/commits/main")) {
+        return new Response(JSON.stringify({
+          sha: "commit-v2",
+          commit: { tree: { sha: "repository-tree-v2" } }
+        }));
+      }
+      if (url.endsWith("/git/trees/repository-tree-v2?recursive=1")) {
+        return new Response(JSON.stringify({
+          tree: [
+            { type: "blob", mode: "100644", path: "skills/reviewer/SKILL.md", sha: "reviewer-v2" },
+            { type: "blob", mode: "100644", path: "skills/release/SKILL.md", sha: "release-v2" }
+          ]
+        }));
+      }
+      if (url.includes("/commits?")) {
+        return new Response(JSON.stringify([
+          { commit: { committer: { date: "2026-08-15T08:00:00Z" } } }
+        ]));
+      }
+      const raw = url.match(/raw\.githubusercontent\.com\/acme\/agent-skills\/(?:main|commit-v2)\/skills\/(reviewer|release)\/SKILL\.md$/);
+      if (raw) {
+        activeFileRequests += 1;
+        maximumFileRequests = Math.max(maximumFileRequests, activeFileRequests);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        activeFileRequests -= 1;
+        const id = raw[1]!;
+        return new Response(`---\nname: ${id}\n---\n# New ${id}\n`);
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    const store = createSkillLibraryStore(paths, undefined, {
+      fetch: fetchImpl,
+      targetPathsProvider: async () => []
+    });
+
+    const result = await store.previewUpdates(["reviewer", "release"]);
+
+    expect(result.failed).toEqual([]);
+    expect(result.plans).toHaveLength(2);
+    expect(maximumFileRequests).toBe(2);
+    expect(fetchImpl.mock.calls.filter(([url]) => String(url).endsWith("/commits/main")))
+      .toHaveLength(1);
+    expect(fetchImpl.mock.calls.filter(([url]) => String(url).includes("/git/trees/")))
+      .toHaveLength(1);
+  });
+
   it("previews GitHub-backed skill updates before applying them", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
@@ -3965,5 +4031,40 @@ description: >
       plans: [{ id: "reviewer", updateAvailable: false }],
       failed: [{ id: "missing", error: expect.stringContaining("does not exist") }]
     });
+  });
+
+  it("scans Profile and Agent impact only once for a bulk update preview", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-bulk-impact-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    for (const id of ["reviewer", "writer"]) {
+      const skillDir = join(paths.skillsLibraryDir, id);
+      await mkdir(skillDir, { recursive: true });
+      await writeFile(join(skillDir, "SKILL.md"), `---\nname: ${id}\n---\n# ${id}\n`, "utf8");
+      await writeFile(
+        join(skillDir, ".agentenv-skill.json"),
+        JSON.stringify({ sourceType: "local", updatePolicy: "untracked" }),
+        "utf8"
+      );
+    }
+    const listProfiles = vi.fn(async () => []);
+    const targetPathsProvider = vi.fn(async () => []);
+    const store = createSkillLibraryStore(paths, undefined, {
+      profileStore: {
+        listProfiles,
+        readProfile: async () => { throw new Error("unexpected profile read"); },
+        saveProfile: async () => { throw new Error("unexpected profile save"); }
+      },
+      targetPathsProvider
+    });
+
+    await expect(store.previewUpdates(["reviewer", "writer"])).resolves.toMatchObject({
+      plans: [
+        { id: "reviewer", updateAvailable: false },
+        { id: "writer", updateAvailable: false }
+      ],
+      failed: []
+    });
+    expect(listProfiles).toHaveBeenCalledTimes(1);
+    expect(targetPathsProvider).toHaveBeenCalledTimes(1);
   });
 });

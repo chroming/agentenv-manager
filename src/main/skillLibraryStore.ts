@@ -35,7 +35,6 @@ import type {
   SkillUpstream,
   SkillUpdateInfo,
   SkillUpdateConfirmation,
-  SkillUpdateImpact,
   SkillUpdatePolicy,
   SkillUpdatePolicyInput,
   SkillUpdatePlan,
@@ -163,6 +162,12 @@ import {
   createRecentSkillUpdateCheckStore,
   createSkillUpdatePreviewStore
 } from "./skillUpdatePreviewStore";
+import {
+  createSkillUpdateImpactIndex,
+  skillUpdateImpactFromIndex,
+  type SkillUpdateImpactIndex
+} from "./skillUpdateImpact";
+import { skillUpdateSourceGroupKey } from "./skillUpdateBatch";
 import type {
   ConsolidateSharedSkillGroupStoreInput,
   ConsolidateSkillGroupStoreInput,
@@ -2759,41 +2764,21 @@ export const createSkillLibraryStore = (
     return entryFor(safeId, targetDir);
   };
 
-  const skillUpdateImpact = async (id: string): Promise<SkillUpdateImpact> => {
-    const profileNames = profileStore
-      ? (await readAllProfilesForResourceMutation(
-          profileStore,
-          "Skill update preview"
-        )).flatMap((profile) =>
-          profile.resources.skills.some(
-            (reference) => reference.libraryId === id && reference.enabled !== false
-          )
-            ? [profile.manifest.name]
-            : []
-        )
-      : [];
-    const inventory = await scanInventory(await targetPathsProvider(), await listSkills());
-    const installs = inventory.filter(
-      (item) => item.status === "managed" && item.libraryId === id
-    );
-    const targetIdsFor = (method: "linked" | "copied") =>
-      [...new Set(
-        installs
-          .filter((item) => item.installMethod === method)
-          .flatMap((item) => item.foundIn)
-      )].sort((left, right) => left.localeCompare(right));
-    return {
-      profileNames: [...new Set(profileNames)].sort((left, right) => left.localeCompare(right)),
-      linkedInstallCount: installs.filter((item) => item.installMethod === "linked").length,
-      linkedTargetIds: targetIdsFor("linked"),
-      copiedInstallCount: installs.filter((item) => item.installMethod === "copied").length,
-      copiedTargetIds: targetIdsFor("copied")
-    };
+  const prepareSkillUpdateImpactIndex = async (): Promise<SkillUpdateImpactIndex> => {
+    const [profiles, inventory] = await Promise.all([
+      profileStore
+        ? readAllProfilesForResourceMutation(profileStore, "Skill update preview")
+        : Promise.resolve([]),
+      Promise.all([targetPathsProvider(), listSkills()]).then(([targetPaths, skills]) =>
+        scanInventory(targetPaths, skills)
+      )
+    ]);
+    return createSkillUpdateImpactIndex(profiles, inventory);
   };
-
-  const previewUpdate = async (
+  const previewUpdateWithImpact = async (
     id: string,
-    refreshSource?: boolean
+    refreshSource?: boolean,
+    impactIndex?: SkillUpdateImpactIndex
   ): Promise<SkillUpdatePlan> => {
     await discardExpiredPendingUpdates();
     const safeId = SafeIdSchema.parse(id);
@@ -2805,7 +2790,10 @@ export const createSkillLibraryStore = (
     const metadata = await readLibraryMetadata(targetDir);
     const recentCheck = recentUpdateChecks.getFresh(safeId, metadataHash(metadata));
     const shouldRefreshSource = refreshSource ?? !recentCheck;
-    const impact = await skillUpdateImpact(safeId);
+    const impact = skillUpdateImpactFromIndex(
+      safeId,
+      impactIndex ?? await prepareSkillUpdateImpactIndex()
+    );
     const removedSourcePlan = () => createRemovedSourceSkillUpdatePlan({
       discardPendingUpdates: discardPendingUpdatesForSkill, impact, metadata, skill
     });
@@ -2921,7 +2909,8 @@ export const createSkillLibraryStore = (
         const [{ hasSkillMd, revision }, sourceUpdatedAt] = await Promise.all([
           materializeGitHubSkillTree(source, candidateDir, {
             refresh: shouldRefreshSource,
-            refreshFiles: true
+            refreshFiles: true,
+            reuseRoot: targetDir
           }),
           readGitHubSkillUpdatedAt(source, { refresh: shouldRefreshSource }).catch(() => undefined)
         ]);
@@ -3035,44 +3024,57 @@ export const createSkillLibraryStore = (
     }
   };
 
+  const previewUpdate = (id: string): Promise<SkillUpdatePlan> =>
+    previewUpdateWithImpact(id);
+
   const previewUpdates = async (ids: string[]): Promise<SkillUpdatePreviewBatchResult> => {
     const uniqueIds = [...new Set(ids.map((id) => SafeIdSchema.parse(id)))];
+    if (uniqueIds.length === 0) return { plans: [], failed: [] };
+    const impactIndex = await prepareSkillUpdateImpactIndex();
     const groups = new Map<string, string[]>();
+    const metadataById = new Map<string, SkillMetadataFile>();
     for (const id of uniqueIds) {
       const metadata: SkillMetadataFile = await readLibraryMetadata(
         join(await libraryDir(), id)
       ).catch(() => ({}));
-      let key = `skill:${id}`;
-      if (metadata.sourceType === "git" && metadata.source) {
-        key = `git:${metadata.source}\0${metadata.remoteRef ?? ""}`;
-      } else if (metadata.sourceType === "github" && metadata.source) {
-        try {
-          const source = parseGitHubSkillUrl(metadata.source, {
-            ref: metadata.remoteRef,
-            remotePath: metadata.remotePath
-          });
-          key = `github:${source.owner}/${source.repo}\0${source.ref}`;
-        } catch {
-          key = `github:${metadata.source}\0${metadata.remoteRef ?? ""}`;
-        }
-      }
+      metadataById.set(id, metadata);
+      const key = skillUpdateSourceGroupKey(id, metadata);
       groups.set(key, [...(groups.get(key) ?? []), id]);
     }
     const groupedResults = await mapWithConcurrency([...groups.values()], 2, async (group) => {
-      const results: Array<
-        { ok: true; plan: SkillUpdatePlan } | { ok: false; id: string; error: string }
-      > = [];
-      for (const [index, id] of group.entries()) {
+      const firstMetadata = metadataById.get(group[0]!);
+      let sourcePrewarmed = false;
+      if (firstMetadata?.sourceType === "github" && firstMetadata.source) {
         try {
-          results.push({
-            ok: true,
-            plan: await previewUpdate(id, index === 0 ? undefined : false)
+          const source = parseGitHubSkillUrl(firstMetadata.source, {
+            ref: firstMetadata.remoteRef,
+            remotePath: firstMetadata.remotePath
           });
-        } catch (error) {
-          results.push({ ok: false, id, error: error instanceof Error ? error.message : String(error) });
+          await readGitHubTree(source, undefined, { refresh: true });
+          sourcePrewarmed = true;
+        } catch {
+          // Individual previews retain their normal error reporting if the
+          // shared preflight cannot resolve this repository.
         }
       }
-      return results;
+      return mapWithConcurrency(group, 2, async (id) => {
+        try {
+          return {
+            ok: true as const,
+            plan: await previewUpdateWithImpact(
+              id,
+              sourcePrewarmed ? false : undefined,
+              impactIndex
+            )
+          };
+        } catch (error) {
+          return {
+            ok: false as const,
+            id,
+            error: error instanceof Error ? error.message : String(error)
+          };
+        }
+      });
     });
     const results = groupedResults.flat();
     return {
