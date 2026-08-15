@@ -1,178 +1,217 @@
 {
+  "formatVersion": 1,
   "scenarios": [
     {
-      "id": "opencode-legacy-singular-directory",
-      "targetId": "opencode",
-      "entries": [
-        {
-          "type": "file",
-          "path": ".config/opencode/skill/tools/review/SKILL.md",
-          "content": "---\nname: legacy-review\nversion: 1.0.0\n---\n# Legacy review\n"
-        }
-      ],
-      "expected": {
-        "configPath": ".config/opencode/opencode.jsonc",
-        "runtimeName": "legacy-review",
-        "locationRole": "alternate-runtime",
-        "availability": "enabled"
-      }
+      "id": "opencode-current-directory", "description": "Current OpenCode Skill directory.", "targetId": "opencode",
+      "installation": { "state": "found", "command": "opencode" },
+      "entries": [{ "type": "file", "path": ".config/opencode/skills/review/SKILL.md", "content": "---\nname: review\nversion: 1.0.0\n---\n# Review\n" }],
+      "expected": { "configPath": ".config/opencode/opencode.jsonc", "observations": [{ "runtimeName": "review", "locationRole": "preferred-runtime", "availability": "enabled", "owner": "user" }] }
     },
     {
-      "id": "claude-plugin-owned-skill",
-      "targetId": "claude-code",
-      "entries": [
-        {
-          "type": "file",
-          "path": ".claude/plugins/cache/vendor/reviewer/.claude-plugin/plugin.json",
-          "content": "{\"name\":\"reviewer\"}\n"
-        },
-        {
-          "type": "file",
-          "path": ".claude/plugins/cache/vendor/reviewer/SKILL.md",
-          "content": "---\nname: plugin-reviewer\n---\n# Plugin reviewer\n"
-        },
-        {
-          "type": "symlink",
-          "path": ".claude/skills/reviewer",
-          "target": "../plugins/cache/vendor/reviewer"
-        }
-      ],
-      "expected": {
-        "configPath": ".claude/settings.json",
-        "runtimeName": "plugin-reviewer",
-        "locationRole": "preferred-runtime",
-        "owner": "external"
-      }
+      "id": "opencode-legacy-singular-directory", "description": "Legacy singular OpenCode Skill directory.", "targetId": "opencode",
+      "entries": [{ "type": "file", "path": ".config/opencode/skill/tools/review/SKILL.md", "content": "---\nname: legacy-review\nversion: 1.0.0\n---\n# Legacy review\n" }],
+      "expected": { "configPath": ".config/opencode/opencode.jsonc", "observations": [{ "runtimeName": "legacy-review", "locationRole": "alternate-runtime", "availability": "enabled" }] }
     },
     {
-      "id": "codex-shared-root-link",
-      "targetId": "codex",
-      "entries": [
-        {
-          "type": "file",
-          "path": ".agents/skills/shared-review/SKILL.md",
-          "content": "---\nname: shared-review\n---\n# Shared review\n"
-        },
-        {
-          "type": "symlink",
-          "path": ".codex/skills",
-          "target": "../.agents/skills"
-        }
-      ],
-      "expected": {
-        "configPath": ".codex/config.toml",
-        "runtimeName": "shared-review",
-        "locationRole": "preferred-runtime",
-        "availability": "enabled"
-      }
+      "id": "opencode-shared-agents-directory", "description": "OpenCode shared Agents Skill directory.", "targetId": "opencode",
+      "entries": [{ "type": "file", "path": ".agents/skills/shared-review/SKILL.md", "content": "---\nname: shared-review\n---\n# Shared review\n" }],
+      "expected": { "configPath": ".config/opencode/opencode.jsonc", "observations": [{ "runtimeName": "shared-review", "locationRole": "compatibility-runtime", "availability": "enabled" }] }
     },
     {
-      "id": "antigravity-legacy-discovery-directory",
-      "targetId": "antigravity",
-      "entries": [
-        {
-          "type": "file",
-          "path": ".gemini/config/skills/legacy-helper/SKILL.md",
-          "content": "---\nname: legacy-helper\n---\n# Legacy helper\n"
-        }
-      ],
-      "expected": {
-        "configPath": ".gemini/config/mcp_config.json",
-        "runtimeName": "legacy-helper",
-        "locationRole": "discovery-only",
-        "availability": "unknown"
-      }
+      "id": "opencode-claude-compatibility-directory", "description": "OpenCode Claude compatibility directory.", "targetId": "opencode",
+      "entries": [{ "type": "file", "path": ".claude/skills/compat-review/SKILL.md", "content": "---\nname: compat-review\n---\n# Compatible review\n" }],
+      "expected": { "configPath": ".config/opencode/opencode.jsonc", "observations": [{ "runtimeName": "compat-review", "locationRole": "compatibility-runtime", "availability": "enabled" }] }
     },
     {
-      "id": "trae-legacy-yaml-layout",
-      "targetId": "trae-cli",
-      "entries": [
-        {
-          "type": "file",
-          "path": ".trae/traecli.yaml",
-          "content": "model: legacy\n"
-        },
-        {
-          "type": "file",
-          "path": ".trae/skills/legacy-trae/SKILL.md",
-          "content": "---\nname: legacy-trae\n---\n# Legacy Trae\n"
-        }
-      ],
-      "expected": {
-        "configPath": ".trae/traecli.yaml",
-        "runtimeName": "legacy-trae",
-        "locationRole": "preferred-runtime",
-        "availability": "enabled"
-      }
+      "id": "opencode-recursive-nested-skill", "description": "Nested OpenCode Skill.", "targetId": "opencode",
+      "entries": [{ "type": "file", "path": ".config/opencode/skills/team/nested-review/SKILL.md", "content": "---\nname: nested-review\n---\n# Nested review\n" }],
+      "expected": { "configPath": ".config/opencode/opencode.jsonc", "observations": [{ "runtimeName": "nested-review", "locationRole": "preferred-runtime", "availability": "enabled" }] }
     },
     {
-      "id": "trae-v2-runtime-layout",
-      "targetId": "trae-cli",
-      "entries": [
-        {
-          "type": "file",
-          "path": ".trae/traecli.toml",
-          "content": "model = \"current\"\n"
-        },
-        {
-          "type": "file",
-          "path": ".trae/cli/sessions/2026/07/01/rollout.jsonl",
-          "content": "{\"type\":\"session_meta\"}\n"
-        },
-        {
-          "type": "file",
-          "path": ".trae/skills/current-trae/SKILL.md",
-          "content": "---\nname: current-trae\n---\n# Current Trae\n"
-        }
-      ],
-      "expected": {
-        "configPath": ".trae/traecli.toml",
-        "runtimeDir": ".trae/cli",
-        "runtimeName": "current-trae",
-        "locationRole": "preferred-runtime",
-        "availability": "enabled"
-      }
+      "id": "opencode-broken-skill-link", "description": "Broken OpenCode Skill link.", "targetId": "opencode", "platforms": ["darwin", "linux"],
+      "entries": [{ "type": "symlink", "path": ".config/opencode/skills/missing-review", "target": "../../../missing-review" }],
+      "expected": { "configPath": ".config/opencode/opencode.jsonc", "observations": [{ "runtimeName": "missing-review", "locationRole": "preferred-runtime", "availability": "unknown" }], "issueCodes": ["unreadable-skill"] }
     },
     {
-      "id": "pi-current-layout",
-      "targetId": "pi",
-      "entries": [
-        {
-          "type": "file",
-          "path": ".pi/agent/settings.json",
-          "content": "{\"theme\":\"dark\"}\n"
-        },
-        {
-          "type": "file",
-          "path": ".pi/agent/skills/pi-helper/SKILL.md",
-          "content": "---\nname: pi-helper\n---\n# Pi helper\n"
-        }
-      ],
-      "expected": {
-        "configPath": ".pi/agent/settings.json",
-        "runtimeDir": ".pi/agent/sessions",
-        "runtimeName": "pi-helper",
-        "locationRole": "preferred-runtime",
-        "availability": "enabled"
-      }
+      "id": "opencode-config-dir-override", "description": "Custom OpenCode configuration root.", "targetId": "opencode",
+      "environment": { "OPENCODE_CONFIG_DIR": "{{HOME}}/.custom/opencode" },
+      "entries": [{ "type": "file", "path": ".custom/opencode/skills/custom-review/SKILL.md", "content": "---\nname: custom-review\n---\n# Custom review\n" }],
+      "expected": { "configPath": ".custom/opencode/opencode.jsonc", "observations": [{ "runtimeName": "custom-review", "locationRole": "preferred-runtime", "availability": "enabled" }] }
     },
     {
-      "id": "pi-broken-skill-link",
-      "targetId": "pi",
+      "id": "opencode-collection-link", "description": "Shared nested Skill collection link.", "targetId": "opencode", "platforms": ["darwin", "linux"],
       "entries": [
-        {
-          "type": "symlink",
-          "path": ".pi/agent/skills/missing-helper",
-          "target": "../../../missing-helper"
-        }
+        { "type": "file", "path": ".collections/superpowers/skills/brainstorming/SKILL.md", "content": "---\nname: brainstorming\n---\n# Brainstorming\n" },
+        { "type": "symlink", "path": ".agents/skills/superpowers", "target": "{{HOME}}/.collections/superpowers/skills" }
       ],
-      "expected": {
-        "configPath": ".pi/agent/settings.json",
-        "runtimeName": "missing-helper",
-        "locationRole": "preferred-runtime",
-        "availability": "unknown",
-        "issueCode": "unreadable-skill"
-      }
+      "expected": { "configPath": ".config/opencode/opencode.jsonc", "observations": [{ "runtimeName": "brainstorming", "locationRole": "compatibility-runtime", "availability": "enabled", "issueCodes": ["collection-link"] }] }
+    },
+    {
+      "id": "claude-current-directory", "description": "Current Claude Code Skill directory.", "targetId": "claude-code",
+      "installation": { "state": "found", "command": "claude" },
+      "entries": [{ "type": "file", "path": ".claude/skills/reviewer/SKILL.md", "content": "---\nname: reviewer\n---\n# Reviewer\n" }],
+      "expected": { "configPath": ".claude/settings.json", "observations": [{ "runtimeName": "reviewer", "locationRole": "preferred-runtime", "availability": "enabled", "owner": "user" }] }
+    },
+    {
+      "id": "claude-plugin-owned-skill", "description": "Claude plugin-owned Skill.", "targetId": "claude-code", "platforms": ["darwin", "linux"],
+      "entries": [
+        { "type": "file", "path": ".claude/plugins/cache/vendor/reviewer/.claude-plugin/plugin.json", "content": "{\"name\":\"reviewer\"}\n" },
+        { "type": "file", "path": ".claude/plugins/cache/vendor/reviewer/SKILL.md", "content": "---\nname: plugin-reviewer\n---\n# Plugin reviewer\n" },
+        { "type": "symlink", "path": ".claude/skills/reviewer", "target": "../plugins/cache/vendor/reviewer" }
+      ],
+      "expected": { "configPath": ".claude/settings.json", "observations": [{ "runtimeName": "plugin-reviewer", "locationRole": "preferred-runtime", "owner": "external", "issueCodes": ["external-owner"] }] }
+    },
+    {
+      "id": "claude-missing-runtime-name", "description": "Claude Skill without a declared runtime name.", "targetId": "claude-code",
+      "entries": [{ "type": "file", "path": ".claude/skills/name-fallback/SKILL.md", "content": "---\ndescription: Missing name\n---\n# Fallback\n" }],
+      "expected": { "configPath": ".claude/settings.json", "observations": [{ "runtimeName": "name-fallback", "locationRole": "preferred-runtime", "issueCodes": ["missing-runtime-name"] }] }
+    },
+    {
+      "id": "claude-broken-skill-link", "description": "Broken Claude Code Skill link.", "targetId": "claude-code", "platforms": ["darwin", "linux"],
+      "entries": [{ "type": "symlink", "path": ".claude/skills/missing-claude", "target": "../../missing-claude" }],
+      "expected": { "configPath": ".claude/settings.json", "observations": [{ "runtimeName": "missing-claude", "locationRole": "preferred-runtime", "availability": "unknown" }], "issueCodes": ["unreadable-skill"] }
+    },
+    {
+      "id": "claude-duplicate-runtime-name", "description": "Duplicate Claude runtime names.", "targetId": "claude-code",
+      "entries": [
+        { "type": "file", "path": ".claude/skills/review-a/SKILL.md", "content": "---\nname: duplicate-review\n---\n# A\n" },
+        { "type": "file", "path": ".claude/skills/review-b/SKILL.md", "content": "---\nname: duplicate-review\n---\n# B\n" }
+      ],
+      "expected": { "configPath": ".claude/settings.json", "observations": [
+        { "runtimeName": "duplicate-review", "deploymentName": "review-a", "locationRole": "preferred-runtime", "issueCodes": ["duplicate-runtime-name"] },
+        { "runtimeName": "duplicate-review", "deploymentName": "review-b", "locationRole": "preferred-runtime", "issueCodes": ["duplicate-runtime-name"] }
+      ] }
+    },
+    {
+      "id": "codex-current-directory", "description": "Current Codex Skill directory.", "targetId": "codex",
+      "installation": { "state": "found", "command": "codex" },
+      "entries": [{ "type": "file", "path": ".codex/skills/codex-review/SKILL.md", "content": "---\nname: codex-review\n---\n# Codex review\n" }],
+      "expected": { "configPath": ".codex/config.toml", "observations": [{ "runtimeName": "codex-review", "locationRole": "preferred-runtime", "availability": "enabled" }] }
+    },
+    {
+      "id": "codex-shared-root-link", "description": "Codex Skill root links to shared Agents Skills.", "targetId": "codex", "platforms": ["darwin", "linux"],
+      "entries": [
+        { "type": "file", "path": ".agents/skills/shared-review/SKILL.md", "content": "---\nname: shared-review\n---\n# Shared review\n" },
+        { "type": "symlink", "path": ".codex/skills", "target": "../.agents/skills" }
+      ],
+      "expected": { "configPath": ".codex/config.toml", "observations": [{ "runtimeName": "shared-review", "locationRole": "preferred-runtime", "availability": "enabled" }] }
+    },
+    {
+      "id": "codex-shared-agents-directory", "description": "Codex shared Agents Skill directory.", "targetId": "codex",
+      "entries": [{ "type": "file", "path": ".agents/skills/shared-codex/SKILL.md", "content": "---\nname: shared-codex\n---\n# Shared Codex\n" }],
+      "expected": { "configPath": ".codex/config.toml", "observations": [{ "runtimeName": "shared-codex", "locationRole": "compatibility-runtime", "availability": "enabled" }] }
+    },
+    {
+      "id": "codex-broken-skill-link", "description": "Broken Codex Skill link.", "targetId": "codex", "platforms": ["darwin", "linux"],
+      "entries": [{ "type": "symlink", "path": ".codex/skills/missing-codex", "target": "../../missing-codex" }],
+      "expected": { "configPath": ".codex/config.toml", "observations": [{ "runtimeName": "missing-codex", "locationRole": "preferred-runtime", "availability": "unknown" }], "issueCodes": ["unreadable-skill"] }
+    },
+    {
+      "id": "codex-private-shared-duplicate", "description": "Duplicate Codex private and shared runtime names.", "targetId": "codex",
+      "entries": [
+        { "type": "file", "path": ".codex/skills/private-copy/SKILL.md", "content": "---\nname: duplicate-codex\n---\n# Private\n" },
+        { "type": "file", "path": ".agents/skills/shared-copy/SKILL.md", "content": "---\nname: duplicate-codex\n---\n# Shared\n" }
+      ],
+      "expected": { "configPath": ".codex/config.toml", "observations": [
+        { "runtimeName": "duplicate-codex", "deploymentName": "private-copy", "locationRole": "preferred-runtime", "issueCodes": ["duplicate-runtime-name"] },
+        { "runtimeName": "duplicate-codex", "deploymentName": "shared-copy", "locationRole": "compatibility-runtime", "issueCodes": ["duplicate-runtime-name"] }
+      ] }
+    },
+    {
+      "id": "codex-missing-runtime-name", "description": "Codex Skill without a declared runtime name.", "targetId": "codex",
+      "entries": [{ "type": "file", "path": ".codex/skills/codex-fallback/SKILL.md", "content": "# No frontmatter name\n" }],
+      "expected": { "configPath": ".codex/config.toml", "observations": [{ "runtimeName": "codex-fallback", "locationRole": "preferred-runtime", "issueCodes": ["missing-runtime-name"] }] }
+    },
+    {
+      "id": "antigravity-current-cli-directory", "description": "Current Antigravity CLI Skill directory.", "targetId": "antigravity",
+      "installation": { "state": "found", "command": "agy" },
+      "entries": [{ "type": "file", "path": ".gemini/antigravity-cli/skills/agy-review/SKILL.md", "content": "---\nname: agy-review\n---\n# Review\n" }],
+      "expected": { "configPath": ".gemini/config/mcp_config.json", "observations": [{ "runtimeName": "agy-review", "locationRole": "preferred-runtime", "availability": "enabled" }] }
+    },
+    {
+      "id": "antigravity-shared-compatibility-directory", "description": "Antigravity shared compatibility directory.", "targetId": "antigravity",
+      "entries": [{ "type": "file", "path": ".gemini/skills/shared-agy/SKILL.md", "content": "---\nname: shared-agy\n---\n# Shared\n" }],
+      "expected": { "configPath": ".gemini/config/mcp_config.json", "observations": [{ "runtimeName": "shared-agy", "locationRole": "compatibility-runtime", "availability": "enabled" }] }
+    },
+    {
+      "id": "antigravity-legacy-discovery-directory", "description": "Legacy Antigravity discovery directory.", "targetId": "antigravity",
+      "entries": [{ "type": "file", "path": ".gemini/config/skills/legacy-helper/SKILL.md", "content": "---\nname: legacy-helper\n---\n# Legacy helper\n" }],
+      "expected": { "configPath": ".gemini/config/mcp_config.json", "observations": [{ "runtimeName": "legacy-helper", "locationRole": "discovery-only", "availability": "unknown" }] }
+    },
+    {
+      "id": "antigravity-broken-private-link", "description": "Broken Antigravity private Skill link.", "targetId": "antigravity", "platforms": ["darwin", "linux"],
+      "entries": [{ "type": "symlink", "path": ".gemini/antigravity-cli/skills/missing-agy", "target": "../../../../missing-agy" }],
+      "expected": { "configPath": ".gemini/config/mcp_config.json", "observations": [{ "runtimeName": "missing-agy", "locationRole": "preferred-runtime", "availability": "unknown" }], "issueCodes": ["unreadable-skill"] }
+    },
+    {
+      "id": "antigravity-private-shared-duplicate", "description": "Duplicate Antigravity runtime names.", "targetId": "antigravity",
+      "entries": [
+        { "type": "file", "path": ".gemini/antigravity-cli/skills/private-agy/SKILL.md", "content": "---\nname: duplicate-agy\n---\n# Private\n" },
+        { "type": "file", "path": ".gemini/skills/shared-agy/SKILL.md", "content": "---\nname: duplicate-agy\n---\n# Shared\n" }
+      ],
+      "expected": { "configPath": ".gemini/config/mcp_config.json", "observations": [
+        { "runtimeName": "duplicate-agy", "deploymentName": "private-agy", "locationRole": "preferred-runtime", "issueCodes": ["duplicate-runtime-name"] },
+        { "runtimeName": "duplicate-agy", "deploymentName": "shared-agy", "locationRole": "compatibility-runtime", "issueCodes": ["duplicate-runtime-name"] }
+      ] }
+    },
+    {
+      "id": "trae-legacy-yaml-layout", "description": "Legacy Trae YAML layout.", "targetId": "trae-cli",
+      "entries": [
+        { "type": "file", "path": ".trae/traecli.yaml", "content": "model: legacy\n" },
+        { "type": "file", "path": ".trae/skills/legacy-trae/SKILL.md", "content": "---\nname: legacy-trae\n---\n# Legacy Trae\n" }
+      ],
+      "expected": { "configPath": ".trae/traecli.yaml", "observations": [{ "runtimeName": "legacy-trae", "locationRole": "preferred-runtime", "availability": "enabled" }] }
+    },
+    {
+      "id": "trae-v2-runtime-layout", "description": "Trae v2 TOML and runtime layout.", "targetId": "trae-cli",
+      "installation": { "state": "found", "command": "traecli" },
+      "entries": [
+        { "type": "file", "path": ".trae/traecli.toml", "content": "model = \"current\"\n" },
+        { "type": "file", "path": ".trae/cli/sessions/2026/07/01/rollout.jsonl", "content": "{\"type\":\"session_meta\"}\n" },
+        { "type": "file", "path": ".trae/skills/current-trae/SKILL.md", "content": "---\nname: current-trae\n---\n# Current Trae\n" }
+      ],
+      "expected": { "configPath": ".trae/traecli.toml", "runtimeDir": ".trae/cli", "observations": [{ "runtimeName": "current-trae", "locationRole": "preferred-runtime", "availability": "enabled" }] }
+    },
+    {
+      "id": "trae-environment-roots", "description": "Custom Trae configuration and runtime roots.", "targetId": "trae-cli",
+      "environment": { "TRAE_HOME": "{{HOME}}/.custom/trae", "TRAECLI_HOME": "{{HOME}}/.state/trae-cli" },
+      "entries": [{ "type": "file", "path": ".custom/trae/skills/custom-trae/SKILL.md", "content": "---\nname: custom-trae\n---\n# Custom Trae\n" }],
+      "expected": { "configPath": ".custom/trae/traecli.toml", "runtimeDir": ".state/trae-cli", "observations": [{ "runtimeName": "custom-trae", "locationRole": "preferred-runtime", "availability": "enabled" }] }
+    },
+    {
+      "id": "trae-broken-skill-link", "description": "Broken Trae Skill link.", "targetId": "trae-cli", "platforms": ["darwin", "linux"],
+      "entries": [{ "type": "symlink", "path": ".trae/skills/missing-trae", "target": "../../missing-trae" }],
+      "expected": { "configPath": ".trae/traecli.toml", "runtimeDir": ".trae/cli", "observations": [{ "runtimeName": "missing-trae", "locationRole": "preferred-runtime", "availability": "unknown" }], "issueCodes": ["unreadable-skill"] }
+    },
+    {
+      "id": "pi-current-layout", "description": "Current Pi Agent layout.", "targetId": "pi",
+      "installation": { "state": "found", "command": "pi" },
+      "entries": [
+        { "type": "file", "path": ".pi/agent/settings.json", "content": "{\"theme\":\"dark\"}\n" },
+        { "type": "file", "path": ".pi/agent/skills/pi-helper/SKILL.md", "content": "---\nname: pi-helper\n---\n# Pi helper\n" }
+      ],
+      "expected": { "configPath": ".pi/agent/settings.json", "runtimeDir": ".pi/agent/sessions", "observations": [{ "runtimeName": "pi-helper", "locationRole": "preferred-runtime", "availability": "enabled" }] }
+    },
+    {
+      "id": "pi-broken-skill-link", "description": "Broken Pi Skill link.", "targetId": "pi", "platforms": ["darwin", "linux"],
+      "entries": [{ "type": "symlink", "path": ".pi/agent/skills/missing-helper", "target": "../../../missing-helper" }],
+      "expected": { "configPath": ".pi/agent/settings.json", "runtimeDir": ".pi/agent/sessions", "observations": [{ "runtimeName": "missing-helper", "locationRole": "preferred-runtime", "availability": "unknown" }], "issueCodes": ["unreadable-skill"] }
+    },
+    {
+      "id": "pi-shared-agents-directory", "description": "Pi shared Agents Skill directory.", "targetId": "pi",
+      "entries": [{ "type": "file", "path": ".agents/skills/shared-pi/SKILL.md", "content": "---\nname: shared-pi\n---\n# Shared Pi\n" }],
+      "expected": { "configPath": ".pi/agent/settings.json", "runtimeDir": ".pi/agent/sessions", "observations": [{ "runtimeName": "shared-pi", "locationRole": "compatibility-runtime", "availability": "enabled" }] }
+    },
+    {
+      "id": "pi-recursive-nested-skill", "description": "Nested Pi Skill directory.", "targetId": "pi",
+      "entries": [{ "type": "file", "path": ".pi/agent/skills/team/pi-nested/SKILL.md", "content": "---\nname: pi-nested\n---\n# Nested Pi\n" }],
+      "expected": { "configPath": ".pi/agent/settings.json", "runtimeDir": ".pi/agent/sessions", "observations": [{ "runtimeName": "pi-nested", "locationRole": "preferred-runtime", "availability": "enabled" }] }
+    },
+    {
+      "id": "pi-custom-agent-root", "description": "Custom Pi Agent root.", "targetId": "pi",
+      "environment": { "PI_CODING_AGENT_DIR": "{{HOME}}/.custom/pi-agent" },
+      "entries": [{ "type": "file", "path": ".custom/pi-agent/skills/custom-pi/SKILL.md", "content": "---\nname: custom-pi\n---\n# Custom Pi\n" }],
+      "expected": { "configPath": ".custom/pi-agent/settings.json", "runtimeDir": ".custom/pi-agent/sessions", "observations": [{ "runtimeName": "custom-pi", "locationRole": "preferred-runtime", "availability": "enabled" }] }
     }
   ]
 }

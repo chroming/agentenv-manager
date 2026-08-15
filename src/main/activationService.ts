@@ -158,7 +158,16 @@ export interface ActivationServiceOptions {
   settingsStore?: SettingsStore;
   targetScope?: TargetScope;
   skillLibraryStore?: SkillLibraryStore;
+  failureInjector?: (phase: ActivationFailurePhase) => void | Promise<void>;
 }
+
+export type ActivationFailurePhase =
+  | "after-backup"
+  | "after-recovery-marker"
+  | "after-file-changes"
+  | "after-assets"
+  | "before-final-state"
+  | "after-final-state";
 
 export interface ActivationService {
   listTargetStates(options?: { includeDisabled?: boolean }): Promise<TargetManagementState[]>;
@@ -217,7 +226,8 @@ export const createActivationService = ({
     },
     runtimeSnapshotProvider: (targetPaths) =>
       targetRegistry.get(targetPaths.targetId).skills.inspectRuntime(targetPaths)
-  })
+  }),
+  failureInjector
 }: ActivationServiceOptions): ActivationService => {
   const backupStore = createBackupStore(paths);
   const captureReceiptStore = createCaptureReceiptStore(paths);
@@ -1211,6 +1221,7 @@ export const createActivationService = ({
       }
       const preOperationState = preOperationStateFile.state;
       try {
+        await failureInjector?.("after-backup");
         await writeTargetState(preview.targetId, {
           ...preOperationState,
           recoveryRequired: {
@@ -1221,6 +1232,7 @@ export const createActivationService = ({
           }
         }, { expectedPathHash: preOperationStateFile.pathHash });
         await claimMutationPath.recordMutation(statePath);
+        await failureInjector?.("after-recovery-marker");
         for (const change of preview.changes) {
           await claimMutationPath(change.path);
           const expectedPathHash = claimMutationPath.expectedHashes.get(resolve(change.path));
@@ -1236,6 +1248,7 @@ export const createActivationService = ({
           }
           await claimMutationPath.recordMutation(change.path);
         }
+        await failureInjector?.("after-file-changes");
 
         if (preview.skillRootTransition) {
           await claimMutationPath(preview.skillRootTransition.path);
@@ -1279,6 +1292,7 @@ export const createActivationService = ({
             ...assetBackupPaths.filter((path) => claimMutationPath.claimedPaths.has(resolve(path)))
           );
         }
+        await failureInjector?.("after-assets");
         for (const legacyPath of preview.legacySkillPaths ?? []) {
           await claimMutationPath(legacyPath);
           await claimMutationPath(markerPathForFile(legacyPath));
@@ -1380,6 +1394,7 @@ export const createActivationService = ({
           ...currentTargetState
         } = preview.targetState;
         const appliedAt = new Date().toISOString();
+        await failureInjector?.("before-final-state");
         await writeTargetState(preview.targetId, {
           ...currentTargetState,
           activeProfileId: profile.id,
@@ -1404,6 +1419,7 @@ export const createActivationService = ({
           expectedPathHash: claimMutationPath.mutationHashes.get(resolve(statePath))
         });
         await claimMutationPath.recordMutation(statePath);
+        await failureInjector?.("after-final-state");
       } catch (error) {
         try {
           await restoreRecordedMutations(backup, claimMutationPath);

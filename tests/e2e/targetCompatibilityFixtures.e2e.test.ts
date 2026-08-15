@@ -1,46 +1,19 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTargetRegistry } from "../../src/main/targets/registry";
-import type {
-  SkillRuntimeAvailability,
-  SkillRuntimeOwner,
-  TargetSkillLocationRole
-} from "../../src/shared/types";
 import { snapshotFilesystemTree } from "../helpers/filesystemSnapshot";
+import {
+  materializeMachineScenario,
+  scenarioEnvironment,
+  scenarioPath
+} from "../helpers/materializeMachineScenario";
+import { selectMachineScenarios } from "../machine-scenarios/catalog";
 
-interface FixtureEntry {
-  type: "file" | "symlink";
-  path: string;
-  content?: string;
-  target?: string;
-}
-
-interface CompatibilityScenario {
-  id: string;
-  targetId: string;
-  entries: FixtureEntry[];
-  expected: {
-    configPath: string;
-    runtimeDir?: string;
-    runtimeName: string;
-    locationRole: TargetSkillLocationRole;
-    availability?: SkillRuntimeAvailability;
-    owner?: SkillRuntimeOwner;
-    issueCode?: string;
-  };
-}
-
-const fixturePath = fileURLToPath(
-  new URL("../fixtures/target-homes/compatibility.json", import.meta.url)
-);
-const scenarios = (
-  JSON.parse(await readFile(fixturePath, "utf8")) as {
-    scenarios: CompatibilityScenario[];
-  }
-).scenarios;
+const scenarios = await selectMachineScenarios({
+  scenarioId: process.env.AGENTENV_MACHINE_SCENARIO
+});
 const roots: string[] = [];
 
 afterEach(async () => {
@@ -53,19 +26,6 @@ afterEach(async () => {
   roots.length = 0;
 });
 
-const materialize = async (homeDir: string, entries: FixtureEntry[]) => {
-  for (const entry of entries.filter((candidate) => candidate.type === "file")) {
-    const path = join(homeDir, entry.path);
-    await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, entry.content ?? "", "utf8");
-  }
-  for (const entry of entries.filter((candidate) => candidate.type === "symlink")) {
-    const path = join(homeDir, entry.path);
-    await mkdir(dirname(path), { recursive: true });
-    await symlink(entry.target ?? "", path, "dir");
-  }
-};
-
 describe.each(scenarios)(
   "Target machine fixture: $id",
   (scenario) => {
@@ -73,34 +33,63 @@ describe.each(scenarios)(
       const root = await mkdtemp(join(tmpdir(), `agentenv-${scenario.id}-`));
       roots.push(root);
       const homeDir = join(root, "home");
-      await materialize(homeDir, scenario.entries);
-      const before = await snapshotFilesystemTree(homeDir);
+      await materializeMachineScenario(homeDir, scenario);
+      const before = await snapshotFilesystemTree(homeDir, {
+        includeTimestamps: true
+      });
       const adapter = createTargetRegistry().get(scenario.targetId);
-      const paths = adapter.createTargetPaths({ homeDir });
+      const paths = adapter.createTargetPaths({
+        homeDir,
+        environment: scenarioEnvironment(scenario, homeDir)
+      });
 
-      expect(paths.configPath).toBe(resolve(homeDir, scenario.expected.configPath));
+      expect(paths.configPath).toBe(scenarioPath(homeDir, scenario.expected.configPath));
       if (scenario.expected.runtimeDir) {
-        expect(paths.runtimeDir).toBe(resolve(homeDir, scenario.expected.runtimeDir));
+        expect(paths.runtimeDir).toBe(scenarioPath(homeDir, scenario.expected.runtimeDir));
+      }
+      if (scenario.installation) {
+        const executablePath = scenario.installation.executablePath
+          ? scenarioPath(homeDir, scenario.installation.executablePath)
+          : scenarioPath(homeDir, `bin/${scenario.installation.command}`);
+        const detected = await adapter.detectInstallation({
+          platform: process.platform,
+          homeDir,
+          allowSystemApplicationLookup: false,
+          findExecutable: async (name) =>
+            scenario.installation?.state === "found" &&
+            name === scenario.installation.command
+              ? executablePath
+              : undefined,
+          pathExists: async () => false
+        });
+        expect(detected.found).toBe(scenario.installation.state === "found");
       }
       const snapshot = await adapter.skills.inspectRuntime(paths);
-      const observation = snapshot.observations.find(
-        (candidate) => candidate.runtimeName === scenario.expected.runtimeName
-      );
-
-      expect(observation).toMatchObject({
-        runtimeName: scenario.expected.runtimeName,
-        locationRole: scenario.expected.locationRole,
-        ...(scenario.expected.availability
-          ? { availability: scenario.expected.availability }
-          : {}),
-        ...(scenario.expected.owner ? { owner: scenario.expected.owner } : {})
-      });
-      if (scenario.expected.issueCode) {
-        expect(snapshot.issues).toContainEqual(
-          expect.objectContaining({ code: scenario.expected.issueCode })
+      for (const expected of scenario.expected.observations) {
+        const observation = snapshot.observations.find(
+          (candidate) =>
+            candidate.runtimeName === expected.runtimeName &&
+            (!expected.deploymentName || candidate.deploymentName === expected.deploymentName)
         );
+        expect(observation).toMatchObject({
+          runtimeName: expected.runtimeName,
+          locationRole: expected.locationRole,
+          ...(expected.deploymentName ? { deploymentName: expected.deploymentName } : {}),
+          ...(expected.availability ? { availability: expected.availability } : {}),
+          ...(expected.owner ? { owner: expected.owner } : {})
+        });
+        for (const issueCode of expected.issueCodes) {
+          expect(observation?.issues).toContainEqual(
+            expect.objectContaining({ code: issueCode })
+          );
+        }
       }
-      expect(await snapshotFilesystemTree(homeDir)).toEqual(before);
+      for (const issueCode of scenario.expected.issueCodes) {
+        expect(snapshot.issues).toContainEqual(expect.objectContaining({ code: issueCode }));
+      }
+      expect(await snapshotFilesystemTree(homeDir, {
+        includeTimestamps: true
+      })).toEqual(before);
     });
   }
 );

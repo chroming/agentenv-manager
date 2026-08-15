@@ -20,10 +20,32 @@ The suite snapshots file type, content hash, permissions, and symbolic-link
 target. An automatic rollback passes only when the complete Agent filesystem
 tree matches its pre-Apply state.
 
-Machine-layout fixtures in
-`tests/fixtures/target-homes/compatibility.json` cover current and legacy
-directories, shared root links, plugin-owned Skills, broken links, and Trae CLI
-TOML/YAML layout selection. Fixture inspection must remain read-only.
+The validated machine-scenario corpus in
+`tests/fixtures/target-homes/compatibility.json` covers current and legacy
+directories, shared roots, plugin-owned Skills, broken and collection links,
+duplicates, nested discovery, environment overrides, and alternate layouts.
+Fixture inspection compares bytes and timestamps and must remain read-only.
+Use `npm run test:scenario -- <scenario-id>` to reproduce one topology. The
+catalog contract and contribution workflow are documented in
+`docs/customer-environment-testing.md`.
+
+The same gate runs on macOS, Windows, and Linux. Platform-specific scenarios
+declare that boundary explicitly; every built-in Target retains at least three
+native scenarios on each supported platform.
+
+## Mutation and upgrade safety gate
+
+The Activation failure matrix injects failure at six transaction phases from
+backup creation through final state persistence. A failure passes only when the
+complete Agent tree and canonical Skill source match their pre-operation
+snapshots. Read-only and semantic no-op checks additionally compare size and
+modification time.
+
+The application-data upgrade matrix covers fresh, unversioned, v1, partially
+damaged, unsafe, and future-format roots. Failed migrations must restore the
+exact active tree. Startup recovery fixtures verify that interrupted Apply,
+rollback, and corrupt Target state remain fail-closed without touching live
+Agent files.
 
 ## Specialized integration tests
 
