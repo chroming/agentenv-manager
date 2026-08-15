@@ -24,19 +24,21 @@ const builder = resolve("node_modules", ".bin", "electron-builder");
 await run("npm", ["run", "icons:mac"]);
 await run("npm", ["run", "build"]);
 
-// Direct downloads retain quarantine, so use the conventional ad-hoc identity
-// that macOS can route through its explicit Open Anyway exception flow.
+// Every distributed App uses the same pinned identity so macOS can preserve
+// Keychain and privacy grants across reinstallations. Direct downloads still
+// retain quarantine and remain non-notarized; identity stability does not
+// bypass Gatekeeper.
 await run(builder, [
   "--mac",
   "dmg",
   "zip",
   "--publish",
   "never",
-  "--config.mac.identity=-"
+  `--config.mac.identity=${stableIdentity}`
 ]);
 
-// Homebrew removes quarantine only after checksum verification. Keep its App on
-// the fixed identity so Keychain and privacy grants stay stable across upgrades.
+// Homebrew removes quarantine only after checksum verification. Its separately
+// named DMG contains the same signed App as the direct-download channel.
 await run(builder, [
   "--mac",
   "dmg",

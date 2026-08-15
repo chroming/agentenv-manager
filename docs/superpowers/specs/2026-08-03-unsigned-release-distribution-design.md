@@ -9,10 +9,10 @@ checks and installs updates without terminal interaction, and optionally reports
 small allowlisted set of anonymous reliability facts.
 
 This release line does not use a Developer ID identity or Apple notarization.
-Direct-download macOS assets use an ad-hoc resource seal so quarantine can enter
-the ordinary explicit Open Anyway flow. The Homebrew-only DMG uses a fixed
-project-created identity so Keychain and privacy identity remain stable after
-the Cask verifies the checksum and removes quarantine. Neither signature provides
+Direct-download and Homebrew macOS assets use the same fixed project-created
+identity so Keychain and privacy grants remain stable across upgrades. Direct
+downloads retain quarantine and still enter the ordinary explicit Open Anyway
+flow. Neither signature provides
 Apple-verified publisher identity or Gatekeeper trust. The public fixed-identity
 certificate is pinned in the repository; its private key exists only in the
 release maintainer's protected backup and GitHub Actions secrets. The distribution trust boundary
@@ -27,12 +27,12 @@ exact SHA-256 values, and package identity checks.
 - macOS produces direct arm64/x64 DMG and ZIP artifacts plus a distinctly named
   `-homebrew.dmg` for each architecture. Windows produces NSIS and Linux produces
   AppImage and DEB artifacts.
-- Direct and local macOS builds use `mac.identity: "-"`. The Homebrew package uses
-  the fixed certificate in `build/macos-signing-certificate.pem`. Hardened runtime
-  and notarization remain disabled. Release jobs require `codesign --verify` for
-  both variants, require `Signature=adhoc` for direct assets, reject ad-hoc fallback
-  for Homebrew assets, pin the Homebrew designated requirement, and require
-  `spctl --assess` to reject both Apps.
+- Local development macOS builds use `mac.identity: "-"`. Every formal direct and
+  Homebrew package uses the fixed certificate in
+  `build/macos-signing-certificate.pem`. Hardened runtime and notarization remain
+  disabled. Release jobs require `codesign --verify` for every variant, reject
+  ad-hoc fallback, pin one certificate and designated requirement across channels
+  and architectures, and require `spctl --assess` to reject every App.
 - Every public asset is named with its version, platform, architecture, and the
   `homebrew` channel suffix where applicable.
 - The release includes `SHA256SUMS`, a CycloneDX SBOM, and

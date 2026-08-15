@@ -185,18 +185,19 @@ important limitations, and include the update commands users need. The workflow
 publishes that file verbatim as the GitHub Release description and rejects tags
 that only provide generated commit links.
 
-The current macOS distribution is not notarized. Direct Release and local
-`dist:mac` builds are ad-hoc signed. Release jobs also produce a distinctly named
-Homebrew DMG with the fixed project-created certificate in
-`build/macos-signing-certificate.pem`. They import the matching private identity
-from `MACOS_SIGNING_P12_BASE64` and `MACOS_SIGNING_P12_PASSWORD`, require both
-resource seals to pass `codesign --verify`, pin the Homebrew designated requirement,
-and require Gatekeeper to reject both variants through `spctl --assess`.
+The current macOS distribution is not notarized. Ordinary local `dist:mac` builds
+remain ad-hoc signed, while every formal direct and Homebrew Release asset uses the
+fixed project-created certificate in `build/macos-signing-certificate.pem`. Release
+jobs import the matching private identity from `MACOS_SIGNING_P12_BASE64` and
+`MACOS_SIGNING_P12_PASSWORD`, require every resource seal to pass
+`codesign --verify`, pin one certificate and designated requirement across both
+channels and architectures, and require Gatekeeper to reject every App through
+`spctl --assess`.
 For a locally shared package, run `npm run signing:mac:trust` once while at the
 Mac to approve the signing certificate, then use `npm run dist:mac:stable`.
 That command uses the persistent keychain under
 `~/.config/agentenv-manager/release-signing`, pins the same certificate as CI,
-and verifies the Homebrew variant does not fall back to ad-hoc signing.
+and verifies no formal variant falls back to ad-hoc signing.
 `dist:mac:release` is the low-level dual-asset CI entrypoint. The generated Cask binds
 each architecture to its immutable `-homebrew.dmg` URL and SHA-256, then removes
 quarantine only after Homebrew verifies the downloaded DMG. Direct GitHub Release
@@ -213,9 +214,9 @@ the first-install quarantine contract or grant administrator privileges.
 The pinned certificate SHA-256 is
 `2D7F57ABF24737A6880D98E9684ABF3B553EB95D896A4D31627B2626D6F09837`.
 Changing this certificate changes the macOS code identity and can cause Keychain
-or privacy permission prompts. Treat rotation as a deliberate migration. Users
-switching from a direct ad-hoc installation to the Homebrew channel may show one
-Keychain confirmation; subsequent Homebrew releases share the same designated requirement.
+or privacy permission prompts. Treat rotation as a deliberate migration. The first
+upgrade from an older ad-hoc direct installation may show one Keychain confirmation;
+subsequent direct and Homebrew releases share the same designated requirement.
 Never commit tokens, private certificates or keys, API keys, app-specific
 passwords, or private repository credentials. The public signing certificate is
 intentionally committed so Release verification can pin the expected signer.

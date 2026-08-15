@@ -92,9 +92,9 @@ macOS, Windows, and Linux before those platforms are described as packaged-app
 verified. This evidence does not prove compatibility with every real Agent
 version or exercise each graphical installer.
 
-The current macOS release is not notarized. Direct assets use an ad-hoc resource
-seal, while distinctly named Homebrew DMGs use the fixed project-created identity.
-Both complete App seals must pass `codesign --verify`, while `spctl --assess` must
+The current macOS release is not notarized. Direct and distinctly named Homebrew
+assets use the same fixed project-created identity so application grants remain
+stable across upgrades. Every complete App seal must pass `codesign --verify`, while `spctl --assess` must
 reject both because neither has Developer ID or notarization. The official Homebrew
 Cask pins its channel-specific immutable Release URLs and SHA-256 values, then removes quarantine only after
 Homebrew verifies the download. Direct GitHub Release downloads keep quarantine;

@@ -296,7 +296,7 @@ describe("package metadata", () => {
     expect(workflow).toContain('AGENTENV_POSTHOG_PROJECT_TOKEN');
     expect(workflow).not.toContain('AGENTENV_TELEMETRY_ENDPOINT');
     expect(workflow).toContain('npm run dist:mac:release');
-    expect(workflow).toContain('Verify direct-download ad-hoc signature');
+    expect(workflow).toContain('Verify direct-download stable signature');
     expect(workflow).toContain('AgentEnv-Manager-${version}-mac-arm64-homebrew.dmg');
     expect(workflow).toContain('AgentEnv-Manager-${version}-mac-x64-homebrew.dmg');
     expect(workflow).toContain('--certificate build/macos-signing-certificate.pem');
@@ -353,7 +353,8 @@ describe("package metadata", () => {
     expect(script).toContain('"/usr/sbin/spctl"');
     expect(script).toContain('"--assess"');
     expect(script).toContain("Gatekeeper unexpectedly accepted");
-    expect(releaseBuildScript).toContain('"--config.mac.identity=-"');
+    expect(releaseBuildScript).not.toContain('"--config.mac.identity=-"');
+    expect(releaseBuildScript.match(/--config\.mac\.identity=/g)).toHaveLength(2);
     expect(releaseBuildScript).toContain("-homebrew.${ext}");
     expect(releaseBuildScript).toContain("AGENTENV_MACOS_SIGNING_IDENTITY");
     expect(localBuildScript).toContain("AGENTENV_MACOS_SIGNING_KEYCHAIN");
@@ -375,10 +376,11 @@ describe("package metadata", () => {
       join(process.cwd(), "scripts", "verify-macos-release-identity.mjs"),
       "utf8"
     );
-    expect(pairVerifier).toContain("arm64.cdHash === x64.cdHash");
+    expect(pairVerifier).toContain('diskImageFor(arch, channel)');
+    expect(pairVerifier).toContain('variants["direct-arm64"].cdHash === variants["direct-x64"].cdHash');
     expect(pairVerifier).toContain('`--extract-certificates=${certificatePrefix}`');
-    expect(pairVerifier).toContain("arm64.requirement !== x64.requirement");
-    expect(pairVerifier).toContain('arm64.requirement.includes("cdhash")');
+    expect(pairVerifier).toContain("requirements.size !== 1");
+    expect(pairVerifier).toContain('result.requirement.includes("cdhash")');
   });
 
   it("compares macOS designated requirements without architecture-specific paths", () => {

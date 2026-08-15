@@ -152,7 +152,11 @@ try {
   });
   await runInteractive(
     process.execPath,
-    ["scripts/verify-macos-signature.mjs"],
+    [
+      "scripts/verify-macos-signature.mjs",
+      "--certificate",
+      certificatePath
+    ],
     process.env
   );
   await runInteractive(

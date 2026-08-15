@@ -15,11 +15,14 @@ if (process.platform !== "darwin") {
 }
 
 const files = await readdir(assetsRoot);
-const diskImageFor = (arch) => {
-  const matches = files.filter((name) => name.endsWith(`-mac-${arch}-homebrew.dmg`));
+const diskImageFor = (arch, channel) => {
+  const suffix = channel === "homebrew"
+    ? `-mac-${arch}-homebrew.dmg`
+    : `-mac-${arch}.dmg`;
+  const matches = files.filter((name) => name.endsWith(suffix));
   if (matches.length !== 1) {
     throw new Error(
-      `Expected one Homebrew macOS ${arch} DMG in ${assetsRoot}, found ${matches.length}`
+      `Expected one ${channel} macOS ${arch} DMG in ${assetsRoot}, found ${matches.length}`
     );
   }
   return join(assetsRoot, matches[0]);
@@ -73,37 +76,46 @@ const inspectDiskImage = async (diskImagePath, mountPoint) => {
 const temporaryRoot = await mkdtemp(join(tmpdir(), "agentenv-release-identity-"));
 try {
   const expectedCertificate = await readFile(certificatePath);
-  const arm64 = await inspectDiskImage(
-    diskImageFor("arm64"),
-    join(temporaryRoot, "arm64")
-  );
-  const x64 = await inspectDiskImage(
-    diskImageFor("x64"),
-    join(temporaryRoot, "x64")
-  );
-  const expectedFingerprint = fingerprint(expectedCertificate);
-  for (const [arch, result] of Object.entries({ arm64, x64 })) {
-    if (result.certificateFingerprint !== expectedFingerprint) {
-      throw new Error(`${arch} Release signer does not match the pinned certificate`);
+  const variants = {};
+  for (const channel of ["direct", "homebrew"]) {
+    for (const arch of ["arm64", "x64"]) {
+      const key = `${channel}-${arch}`;
+      variants[key] = await inspectDiskImage(
+        diskImageFor(arch, channel),
+        join(temporaryRoot, key)
+      );
     }
   }
-  if (arm64.cdHash === x64.cdHash) {
+  const expectedFingerprint = fingerprint(expectedCertificate);
+  for (const [variant, result] of Object.entries(variants)) {
+    if (result.certificateFingerprint !== expectedFingerprint) {
+      throw new Error(`${variant} Release signer does not match the pinned certificate`);
+    }
+    if (result.requirement.includes("cdhash")) {
+      throw new Error(`${variant} Release identity is tied to one build: ${result.requirement}`);
+    }
+  }
+  if (variants["direct-arm64"].cdHash === variants["direct-x64"].cdHash) {
     throw new Error("The architecture fixtures unexpectedly have the same CDHash");
   }
-  if (arm64.requirement !== x64.requirement) {
+  const requirements = new Set(
+    Object.values(variants).map((result) => result.requirement)
+  );
+  if (requirements.size !== 1) {
+    const details = Object.entries(variants)
+      .map(([variant, result]) => `${variant}: ${result.requirement}`)
+      .join("\n");
     throw new Error(
-      `macOS Release designated requirements differ by architecture:\n` +
-        `arm64: ${arm64.requirement}\n` +
-        `x64: ${x64.requirement}`
+      `macOS Release designated requirements differ by channel or architecture:\n${details}`
     );
   }
-  if (arm64.requirement.includes("cdhash")) {
-    throw new Error(`macOS Release identity is tied to one build: ${arm64.requirement}`);
-  }
+  const [stableRequirement] = requirements;
 
   process.stdout.write(`macOS Release signer: ${expectedFingerprint}\n`);
-  process.stdout.write(`stable designated requirement: ${arm64.requirement}\n`);
-  process.stdout.write(`distinct build CDHashes: ${arm64.cdHash} / ${x64.cdHash}\n`);
+  process.stdout.write(`stable designated requirement: ${stableRequirement}\n`);
+  for (const [variant, result] of Object.entries(variants)) {
+    process.stdout.write(`${variant} CDHash: ${result.cdHash}\n`);
+  }
 } finally {
   await rm(temporaryRoot, { recursive: true, force: true });
 }
