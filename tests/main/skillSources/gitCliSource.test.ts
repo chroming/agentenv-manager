@@ -169,7 +169,13 @@ describe("git CLI skill source", () => {
   });
 
   it("materializes a self-contained Skill without creating a worktree", async () => {
-    const { repository, source } = await setup();
+    const { repository } = await setup();
+    const executablePath = await findExecutable("git", { homeDir: root });
+    if (!executablePath) throw new Error("Git is required for repository source tests");
+    const runner = createGitCommandRunner({ executablePath });
+    const cache = createGitRepositoryCache({ cacheRoot: join(root, "materialize-cache"), runner });
+    const fetch = vi.fn(cache.fetch.bind(cache));
+    const source = createGitCliSkillSource({ cache: { fetch }, runner });
     const destination = join(root, "materialized-review");
 
     const materialized = await source.materialize(
@@ -186,6 +192,11 @@ describe("git CLI skill source", () => {
     );
     await expect(readFile(join(destination, "prompt.md"), "utf8")).resolves.toBe(
       "Review carefully.\n"
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      expect.any(Object),
+      undefined,
+      expect.objectContaining({ includeBlobs: false })
     );
   });
 
@@ -211,6 +222,35 @@ describe("git CLI skill source", () => {
     expect(unrelated.resolvedCommit).not.toBe(initial.resolvedCommit);
     expect(unrelated.contentRevision).toBe(initial.contentRevision);
     expect(changed.contentRevision).not.toBe(initial.contentRevision);
+  });
+
+  it("can resolve update identity without loading path history", async () => {
+    const { repository } = await setup();
+    const executablePath = await findExecutable("git", { homeDir: root });
+    if (!executablePath) throw new Error("Git is required for repository source tests");
+    const baseRunner = createGitCommandRunner({ executablePath });
+    const run = vi.fn(baseRunner.run.bind(baseRunner));
+    const runner = {
+      run,
+      cancelActive: baseRunner.cancelActive.bind(baseRunner),
+      dispose: baseRunner.dispose.bind(baseRunner)
+    };
+    const source = createGitCliSkillSource({
+      runner,
+      cache: createGitRepositoryCache({ cacheRoot: join(root, "identity-cache"), runner })
+    });
+
+    const resolved = await source.resolve({
+      repository: repository.remoteDir,
+      directory: "skills/engineering/review"
+    }, undefined, {
+      historyDepth: 1,
+      includeUpdatedAt: false
+    });
+
+    expect(resolved.contentRevision).toMatch(/^[a-f0-9]{40}$/);
+    expect(resolved.upstream.updatedAt).toBeUndefined();
+    expect(run.mock.calls.filter(([args]) => args.includes("log"))).toHaveLength(0);
   });
 
   it("reports each Skill subtree's verified last commit time instead of the repository HEAD time", async () => {

@@ -118,25 +118,34 @@ const resolvedSkill = async (
   repository: ResolvedGitRepository,
   directory: string,
   signal?: AbortSignal,
-  known?: { contentRevision?: string; shallowBoundary?: ReadonlySet<string> }
+  known?: {
+    contentRevision?: string;
+    includeUpdatedAt?: boolean;
+    shallowBoundary?: ReadonlySet<string>;
+  }
 ): Promise<ResolvedGitSkillSource> => {
   const contentRevision =
     known?.contentRevision ?? await readTreeOid(runner, repository, directory, signal);
-  const updated = await runner.run(
-    [
-      "--git-dir",
-      repository.cachePath,
-      "log",
-      "-1",
-      "--format=%H%x00%cI",
-      repository.resolvedCommit,
-      "--",
-      ...(directory ? [directory] : [])
-    ],
-    { signal, timeoutMs: 30_000 }
-  );
-  const [updatedCommit = "", updatedAt = ""] = updated.stdout.trim().split("\0");
-  const shallowBoundary = known?.shallowBoundary ?? await readShallowBoundary(repository);
+  const includeUpdatedAt = known?.includeUpdatedAt ?? true;
+  const updated = includeUpdatedAt
+    ? await runner.run(
+        [
+          "--git-dir",
+          repository.cachePath,
+          "log",
+          "-1",
+          "--format=%H%x00%cI",
+          repository.resolvedCommit,
+          "--",
+          ...(directory ? [directory] : [])
+        ],
+        { signal, timeoutMs: 30_000 }
+      )
+    : undefined;
+  const [updatedCommit = "", updatedAt = ""] = updated?.stdout.trim().split("\0") ?? [];
+  const shallowBoundary = includeUpdatedAt
+    ? known?.shallowBoundary ?? await readShallowBoundary(repository)
+    : new Set<string>();
   const hasVerifiedUpdatedAt =
     updatedAt &&
     !Number.isNaN(Date.parse(updatedAt)) &&
@@ -341,7 +350,9 @@ export const createGitCliSkillSource = (
     });
     const directory = normalizeDirectory(input.directory ?? repository.location.inferredDirectory);
     await assertSkillManifest(options.runner, repository, directory, signal);
-    return resolvedSkill(options.runner, repository, directory, signal);
+    return resolvedSkill(options.runner, repository, directory, signal, {
+      includeUpdatedAt: readOptions?.includeUpdatedAt
+    });
   };
 
   const scan = async (
@@ -561,7 +572,10 @@ export const createGitCliSkillSource = (
     }
     const source = await resolve(input, signal, {
       ...readOptions,
-      includeBlobs: true
+      // Keep the bare cache blobless. checkout-index hydrates only the blobs
+      // reachable from this Skill subtree instead of refetching every object in
+      // a large repository.
+      includeBlobs: false
     });
     await assertSafeTree(options.runner, source, signal);
     const indexPath = join(dirname(destination), `.agentenv-git-index-${randomUUID()}`);

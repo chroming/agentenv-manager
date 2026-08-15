@@ -21,6 +21,7 @@ export interface SkillSourceService {
   recordGitHubScan(scope: SkillSourceScope, result: GitHubSkillScanResult): Promise<void>;
   recordLocalScan(scope: SkillSourceScope, result: ProjectSkillScanResult): Promise<void>;
   checkGroup(sourceId: string, skills: SkillLibraryEntry[]): Promise<SkillSourceGroupView>;
+  checkGroups(groups: SkillSourceGroupView[], skills: SkillLibraryEntry[]): Promise<void>;
 }
 
 interface SkillSourceServiceOptions {
@@ -129,14 +130,10 @@ export const createSkillSourceService = (
     });
   };
 
-  const checkGroup = async (
-    sourceId: string,
+  const checkResolvedGroup = async (
+    group: SkillSourceGroupView,
     skills: SkillLibraryEntry[]
-  ): Promise<SkillSourceGroupView> => {
-    const group = (await listGroups(skills)).find((candidate) =>
-      candidate.sourceId === sourceId
-    );
-    if (!group) throw new Error("Skill source group no longer exists");
+  ): Promise<void> => {
     try {
       if (group.sourceKind === "local") {
         const result = await scanProjectSkillRoots([group.repository], skills);
@@ -164,6 +161,17 @@ export const createSkillSourceService = (
     } catch (error) {
       errors.set(group.canonicalLink, error instanceof Error ? error.message : String(error));
     }
+  };
+
+  const checkGroup = async (
+    sourceId: string,
+    skills: SkillLibraryEntry[]
+  ): Promise<SkillSourceGroupView> => {
+    const group = (await listGroups(skills)).find((candidate) =>
+      candidate.sourceId === sourceId
+    );
+    if (!group) throw new Error("Skill source group no longer exists");
+    await checkResolvedGroup(group, skills);
     const refreshed = (await listGroups(skills)).find((candidate) =>
       candidate.sourceId === sourceId
     );
@@ -171,5 +179,27 @@ export const createSkillSourceService = (
     return refreshed;
   };
 
-  return { listGroups, recordRepositoryScan, recordGitHubScan, recordLocalScan, checkGroup };
+  const checkGroups = async (
+    groups: SkillSourceGroupView[],
+    skills: SkillLibraryEntry[]
+  ): Promise<void> => {
+    let nextIndex = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(2, groups.length) }, async () => {
+        while (nextIndex < groups.length) {
+          const group = groups[nextIndex++];
+          if (group) await checkResolvedGroup(group, skills);
+        }
+      })
+    );
+  };
+
+  return {
+    listGroups,
+    recordRepositoryScan,
+    recordGitHubScan,
+    recordLocalScan,
+    checkGroup,
+    checkGroups
+  };
 };

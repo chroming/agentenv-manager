@@ -49,9 +49,11 @@ describe("skill source library", () => {
       candidates: []
     }));
     const checkGroup = vi.fn(async (sourceId: string) => groups.find((group) => group.sourceId === sourceId)!);
+    const checkGroups = vi.fn(async () => undefined);
     const service = {
       listGroups: vi.fn().mockResolvedValue(groups),
-      checkGroup
+      checkGroup,
+      checkGroups
     };
     const registry = {
       list: vi.fn().mockResolvedValue(groups.map((group) => ({
@@ -72,8 +74,9 @@ describe("skill source library", () => {
 
     const result = await store.checkMonitoredSourceGroups();
 
-    expect(checkGroup).toHaveBeenCalledTimes(1);
-    expect(checkGroup).toHaveBeenCalledWith("source-0", []);
+    expect(checkGroup).not.toHaveBeenCalled();
+    expect(checkGroups).toHaveBeenCalledTimes(1);
+    expect(checkGroups).toHaveBeenCalledWith([groups[0]], []);
     expect(result.checked).toBe(1);
   });
 

@@ -146,6 +146,32 @@ describe("skill source service", () => {
     }));
   });
 
+  it("checks resolved groups without re-deriving the complete source list", async () => {
+    const { store } = memoryStore(previousObservation);
+    const repositorySource = {
+      resolve: vi.fn(),
+      materialize: vi.fn(),
+      scan: vi.fn().mockResolvedValue({
+        repository: scope.repository,
+        ref: scope.ref,
+        directory: scope.directory,
+        transport: "system-git",
+        accessTransport: "https",
+        sourceScope: scope,
+        truncated: false,
+        candidates: []
+      })
+    } as unknown as GitCliSkillSource;
+    const service = createSkillSourceService({ observationStore: store, repositorySource });
+    const [group] = await service.listGroups([librarySkill]);
+    const readsBeforeCheck = vi.mocked(store.read).mock.calls.length;
+
+    await service.checkGroups([group!], [librarySkill]);
+
+    expect(repositorySource.scan).toHaveBeenCalledTimes(1);
+    expect(store.read).toHaveBeenCalledTimes(readsBeforeCheck);
+  });
+
   it("reuses a saved repository Skill index on later source checks", async () => {
     const indexedScope: SkillSourceScope = {
       ...scope,

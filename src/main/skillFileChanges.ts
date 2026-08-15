@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import type { PlannedFileChange } from "../shared/types";
 import { createUnifiedDiff } from "./diff";
 
@@ -41,9 +41,36 @@ const displayFileContent = (content: Buffer | undefined) => {
   }
 };
 
+interface SkillChangeSetOptions {
+  deferLargeContent?: boolean;
+  deferAfterBytes?: number;
+  deferAfterFiles?: number;
+}
+
+const changeFor = (
+  path: string,
+  current: Buffer | undefined,
+  next: Buffer | undefined,
+  deferred: boolean
+): PlannedFileChange => {
+  const before = deferred ? "" : displayFileContent(current);
+  const after = deferred ? "" : displayFileContent(next);
+  return {
+    path,
+    before,
+    after,
+    diff: deferred ? "" : createUnifiedDiff(path, before, after),
+    beforeBytes: current?.byteLength ?? 0,
+    afterBytes: next?.byteLength ?? 0,
+    contentDeferred: deferred || undefined,
+    action: next ? "write" : "remove"
+  };
+};
+
 export const createSkillChangeSet = async (
   currentDir: string,
-  nextDir: string
+  nextDir: string,
+  options: SkillChangeSetOptions = {}
 ): Promise<{ changes: PlannedFileChange[]; filePaths: string[] }> => {
   const currentFiles = await readSkillFiles(currentDir);
   const nextFiles = await readSkillFiles(nextDir);
@@ -53,18 +80,71 @@ export const createSkillChangeSet = async (
     return a.localeCompare(b);
   });
 
-  const changes = filePaths
+  const changedFiles = filePaths
     .map((path) => {
       const current = currentFiles.get(path);
       const next = nextFiles.get(path);
       if (current && next && current.equals(next)) return undefined;
-      const before = displayFileContent(current);
-      const after = displayFileContent(next);
-      return { path, before, after, diff: createUnifiedDiff(path, before, after) };
+      return { path, current, next };
     })
-    .filter((change): change is PlannedFileChange => Boolean(change));
+    .filter((change): change is {
+      path: string;
+      current: Buffer | undefined;
+      next: Buffer | undefined;
+    } => Boolean(change));
+  const changedBytes = changedFiles.reduce(
+    (total, file) => total + (file.current?.byteLength ?? 0) + (file.next?.byteLength ?? 0),
+    0
+  );
+  const deferContent = options.deferLargeContent === true && (
+    changedFiles.length > (options.deferAfterFiles ?? 20) ||
+    changedBytes > (options.deferAfterBytes ?? 512 * 1024)
+  );
+  const changes = changedFiles.map(({ path, current, next }) =>
+    changeFor(path, current, next, deferContent)
+  );
 
   return { changes, filePaths };
+};
+
+const safeChangePath = (root: string, requestedPath: string) => {
+  if (!requestedPath || isAbsolute(requestedPath) || requestedPath.includes("\0")) {
+    throw new Error("Invalid Skill update file path");
+  }
+  const normalized = requestedPath.replaceAll("\\", "/");
+  if (normalized.split("/").some((part) => part === ".." || part === "")) {
+    throw new Error("Invalid Skill update file path");
+  }
+  const selected = resolve(root, normalized);
+  const relativePath = relative(resolve(root), selected);
+  if (!relativePath || relativePath.startsWith("..") || isAbsolute(relativePath)) {
+    throw new Error("Skill update file path escapes the preview");
+  }
+  return selected;
+};
+
+const readOptionalFile = async (path: string): Promise<Buffer | undefined> => {
+  try {
+    return await readFile(path);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
+};
+
+export const readSkillFileChange = async (
+  currentDir: string,
+  nextDir: string,
+  requestedPath: string
+): Promise<PlannedFileChange> => {
+  const [current, next] = await Promise.all([
+    readOptionalFile(safeChangePath(currentDir, requestedPath)),
+    readOptionalFile(safeChangePath(nextDir, requestedPath))
+  ]);
+  if (!current && !next) throw new Error("Skill update file is no longer available");
+  return changeFor(requestedPath, current, next, false);
 };
 
 export const createSkillChanges = async (

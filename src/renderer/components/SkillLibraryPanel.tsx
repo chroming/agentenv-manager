@@ -2347,6 +2347,8 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         busy={isBusy}
         progress={selectedUpdatePlan ? updateRun[selectedUpdatePlan.id] : undefined}
         onClose={onCloseUpdatePreview}
+        onReadChange={(previewId, path) =>
+          window.agentEnv.readLibrarySkillUpdateChange({ previewId, path })}
         onConfirm={onUpdateLibrarySkill}
       />
 

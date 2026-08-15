@@ -21,6 +21,7 @@ interface SkillUpdateDialogProps {
   busy?: boolean;
   progress?: SkillUpdateRunItem;
   onClose(): void;
+  onReadChange?(previewId: string, path: string): Promise<PlannedFileChange>;
   onConfirm(
     plan: SkillUpdatePlan,
     syncCopiedInstalls?: boolean
@@ -29,12 +30,39 @@ interface SkillUpdateDialogProps {
 
 const SkillUpdateChange = ({
   change,
-  initiallyOpen
+  initiallyOpen,
+  onReadChange
 }: {
   change: PlannedFileChange;
   initiallyOpen: boolean;
+  onReadChange?(): Promise<PlannedFileChange>;
 }) => {
+  const { t } = useI18n();
   const [open, setOpen] = useState(initiallyOpen);
+  const [resolved, setResolved] = useState<PlannedFileChange>();
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const visibleChange = resolved ?? change;
+
+  useEffect(() => {
+    if (!open || !change.contentDeferred || resolved || !onReadChange) return;
+    let active = true;
+    setLoading(true);
+    setError("");
+    void onReadChange().then(
+      (next) => {
+        if (active) setResolved(next);
+      },
+      (nextError) => {
+        if (active) setError(nextError instanceof Error ? nextError.message : String(nextError));
+      }
+    ).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [change.contentDeferred, onReadChange, open, resolved]);
 
   return (
     <details
@@ -42,7 +70,16 @@ const SkillUpdateChange = ({
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary>{change.path}</summary>
-      {open ? <DiffViewer path={change.path} diff={change.diff} /> : null}
+      {open && loading ? (
+        <div className="inline-loading" role="status">
+          <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
+          <span>{t("Loading preview")}</span>
+        </div>
+      ) : null}
+      {open && error ? <p className="field-error">{error}</p> : null}
+      {open && !loading && !error ? (
+        <DiffViewer path={visibleChange.path} diff={visibleChange.diff} />
+      ) : null}
     </details>
   );
 };
@@ -53,6 +90,7 @@ export const SkillUpdateDialog = ({
   busy = false,
   progress,
   onClose,
+  onReadChange,
   onConfirm
 }: SkillUpdateDialogProps) => {
   const { t } = useI18n();
@@ -230,6 +268,9 @@ export const SkillUpdateDialog = ({
               change={change}
               initiallyOpen={index === 0}
               key={change.path}
+              onReadChange={plan.previewId && onReadChange
+                ? () => onReadChange(plan.previewId!, change.path)
+                : undefined}
             />
           ))}
         </div>
@@ -273,6 +314,9 @@ export const SkillUpdateDialog = ({
       </ModalFrame>
       <DiffWorkspaceDialog
         changes={plan.changes}
+        onReadChange={plan.previewId && onReadChange
+          ? (change) => onReadChange(plan.previewId!, change.path)
+          : undefined}
         open={diffWorkspaceOpen}
         returnFocusRef={expandPreviewRef}
         title={t("Update {{name}}", { name: plan.name })}

@@ -23,6 +23,7 @@ import { IconButton, ModalFrame } from "./ui";
 interface DiffWorkspaceDialogProps {
   changes: PlannedFileChange[];
   readonlyFiles?: Array<{ content: string; path: string }>;
+  onReadChange?(change: PlannedFileChange): Promise<PlannedFileChange>;
   open: boolean;
   returnFocusRef?: RefObject<HTMLElement | null>;
   title: string;
@@ -137,6 +138,7 @@ const treeFor = (
 export const DiffWorkspaceDialog = ({
   changes,
   readonlyFiles = [],
+  onReadChange,
   open,
   returnFocusRef,
   title,
@@ -150,6 +152,13 @@ export const DiffWorkspaceDialog = ({
   const [selectedIndex, setSelectedIndex] = useState(changes.length > 0 ? 0 : -1);
   const [selectedReadonlyPath, setSelectedReadonlyPath] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [loadedChanges, setLoadedChanges] = useState<Map<string, PlannedFileChange>>(new Map());
+  const [loadingPath, setLoadingPath] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const displayChanges = useMemo(
+    () => changes.map((change) => loadedChanges.get(change.path) ?? change),
+    [changes, loadedChanges]
+  );
   const changeSetKey = useMemo(
     () => [
       ...changes.map((change) => `${change.action ?? "replace"}:${change.path}`),
@@ -186,11 +195,11 @@ export const DiffWorkspaceDialog = ({
       indexedPaths,
       changedPathIndexes,
       new Set(readonlyFileByPath.keys()),
-      changes
+      displayChanges
     ),
-    [changedPathIndexes, changes, display.paths, indexedPaths, readonlyFileByPath]
+    [changedPathIndexes, displayChanges, display.paths, indexedPaths, readonlyFileByPath]
   );
-  const selected = selectedIndex >= 0 ? changes[selectedIndex] : undefined;
+  const selected = selectedIndex >= 0 ? displayChanges[selectedIndex] : undefined;
   const firstReadonlyPath = normalizePath(readonlyFiles[0]?.path ?? "");
   const selectedReadonly = selected
     ? undefined
@@ -210,7 +219,38 @@ export const DiffWorkspaceDialog = ({
     setSelectedIndex(changes.length > 0 ? 0 : -1);
     setSelectedReadonlyPath(firstReadonlyPath);
     setCollapsed(new Set());
+    setLoadedChanges(new Map());
+    setLoadingPath("");
+    setLoadError("");
   }, [changes.length, open, changeSetKey, firstReadonlyPath]);
+
+  useEffect(() => {
+    if (
+      !open ||
+      !selected?.contentDeferred ||
+      !onReadChange ||
+      Boolean(loadError)
+    ) {
+      return;
+    }
+    let active = true;
+    setLoadingPath(selected.path);
+    setLoadError("");
+    void onReadChange(selected).then(
+      (loaded) => {
+        if (!active) return;
+        setLoadedChanges((current) => new Map(current).set(loaded.path, loaded));
+      },
+      (error) => {
+        if (active) setLoadError(error instanceof Error ? error.message : String(error));
+      }
+    ).finally(() => {
+      if (active) setLoadingPath("");
+    });
+    return () => {
+      active = false;
+    };
+  }, [loadError, onReadChange, open, selected]);
 
   if (!open || (!selected && !selectedReadonly)) return null;
 
@@ -241,7 +281,10 @@ export const DiffWorkspaceDialog = ({
             aria-expanded={isFile ? undefined : !isCollapsed}
             onClick={() => {
               if (isFile) {
-                if (node.changeIndex !== undefined) setSelectedIndex(node.changeIndex);
+                if (node.changeIndex !== undefined) {
+                  setLoadError("");
+                  setSelectedIndex(node.changeIndex);
+                }
                 else if (node.readonlyPath) {
                   setSelectedIndex(-1);
                   setSelectedReadonlyPath(node.readonlyPath);
@@ -364,7 +407,11 @@ export const DiffWorkspaceDialog = ({
             ) : null}
           </header>
           <div className="diff-workspace__diff">
-            {selected ? (
+            {selected && loadingPath === selected.path ? (
+              <div className="inline-loading" role="status">{t("Loading preview")}</div>
+            ) : selected && loadError ? (
+              <p className="field-error">{loadError}</p>
+            ) : selected ? (
               <DiffViewer path={selected.path} diff={selected.diff} />
             ) : (
               <SyntaxCodePreview

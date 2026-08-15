@@ -196,15 +196,7 @@ export const createSkillSourceGroupStore = (
       const skills = await listSkills();
       const groups = await decorate(await service.listGroups(skills));
       const selected = groups.filter((group) => group.automaticChecks);
-      let nextIndex = 0;
-      await Promise.all(
-        Array.from({ length: Math.min(2, selected.length) }, async () => {
-          while (nextIndex < selected.length) {
-            const group = selected[nextIndex++];
-            await service.checkGroup(group!.sourceId, skills);
-          }
-        })
-      );
+      await service.checkGroups(selected, skills);
       const refreshed = await decorate(await service.listGroups(skills));
       return {
         groups: refreshed,

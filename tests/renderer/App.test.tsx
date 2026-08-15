@@ -662,6 +662,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       errors: []
     }),
     previewLibrarySkillUpdates: vi.fn().mockResolvedValue({ plans: [], failed: [] }),
+    readLibrarySkillUpdateChange: vi.fn().mockRejectedValue(new Error("No deferred preview")),
     updateLibrarySkill: vi.fn().mockResolvedValue({
       id: "skill",
       name: "skill",

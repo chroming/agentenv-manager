@@ -207,6 +207,7 @@ export interface AgentEnvApi {
   setSkillIcon(input: SkillIconInput): Promise<SkillLibraryEntry>;
   previewLibrarySkillUpdate(id: string): Promise<SkillUpdatePlan>;
   previewLibrarySkillUpdates(ids: string[]): Promise<SkillUpdatePreviewBatchResult>;
+  readLibrarySkillUpdateChange(input: SkillUpdateChangeReadInput): Promise<PlannedFileChange>;
   updateLibrarySkill(input: SkillUpdateConfirmation): Promise<SkillLibraryEntry>;
   readSettings(): Promise<AgentEnvSettings>;
   updateSettings(input: Partial<AgentEnvSettings>): Promise<AgentEnvSettings>;
@@ -984,6 +985,11 @@ export interface SkillUpdateConfirmation {
   id: string;
   previewId: string;
   syncCopiedInstalls?: boolean;
+}
+
+export interface SkillUpdateChangeReadInput {
+  previewId: string;
+  path: string;
 }
 
 export type SkillInventoryStatus =
@@ -2014,6 +2020,9 @@ export interface PlannedFileChange {
   before: string;
   after: string;
   diff: string;
+  beforeBytes?: number;
+  afterBytes?: number;
+  contentDeferred?: boolean;
   action?: "write" | "remove";
   category?: "instructions" | "mcp" | "configuration";
 }

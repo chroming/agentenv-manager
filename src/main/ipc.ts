@@ -35,7 +35,6 @@ import type {
   SkillCollectionMemberDecisionUpdate,
   SkillSourceMergePreviewInput,
   SkillUpdateSettingsInput,
-  SkillUpdateConfirmation,
   SkillAvailabilityInput,
   UnmanagedSkillLocationUpdate,
   TargetPaths
@@ -72,6 +71,7 @@ import { registerSettingsIpc } from "./ipc/settingsIpc";
 import { registerTargetIpc } from "./ipc/targetIpc";
 import { registerDialogIpc } from "./ipc/dialogIpc";
 import { registerSharedSkillAreaIpc } from "./ipc/sharedSkillAreaIpc";
+import { registerSkillUpdateIpc } from "./ipc/skillUpdateIpc";
 import { scanSkillInventoryForRenderer } from "./skillInventoryResponse";
 
 export interface IpcServices {
@@ -886,25 +886,11 @@ export const registerIpcHandlers = ({
           : ResourceIconKeySchema.parse(input.iconKey)
     })
   );
-  diagnosticHandle("skills:preview-update", async (_event, id: unknown) => {
-    await waitForAutomationBackgroundDelay();
-    return skillLibraryStore.previewUpdate(parseId(id, "skill id"));
-  });
-  diagnosticHandle("skills:preview-updates", async (_event, ids: unknown) => {
-    if (!Array.isArray(ids)) throw new Error("Skill update preview requires a list of Skill ids");
-    await waitForAutomationBackgroundDelay();
-    return skillLibraryStore.previewUpdates(ids.map((id) => parseId(id, "skill id")));
-  });
-  handleMutation("skills:update-library", (_event, input: SkillUpdateConfirmation) => {
-    if (!input || typeof input !== "object" || typeof input.previewId !== "string") {
-      throw new Error("Skill update confirmation requires a preview");
-    }
-    return skillLibraryStore.updateSkill({
-      id: parseId(input.id, "skill id"),
-      previewId: input.previewId,
-      syncCopiedInstalls: input.syncCopiedInstalls === true
-    });
-  });
+  registerSkillUpdateIpc(
+    { diagnosticHandle, handleMutation },
+    skillLibraryStore,
+    waitForAutomationBackgroundDelay
+  );
   registerSettingsIpc(
     { diagnosticHandle, handleMutation, handleWorkspaceSyncMutation },
     {

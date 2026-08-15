@@ -4267,6 +4267,8 @@ const AppContent = ({
                           setSelectedSkillUpdatePlan(undefined);
                           skillUpdateQueue.resetRun();
                         }}
+                        onReadChange={(previewId, path) =>
+                          window.agentEnv.readLibrarySkillUpdateChange({ previewId, path })}
                         onConfirm={updateLibrarySkill}
                       />
                   </>

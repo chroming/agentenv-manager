@@ -10,6 +10,7 @@ const pending = (overrides: Partial<PendingSkillUpdate> = {}): PendingSkillUpdat
   id: "skill-a",
   candidateDir: "/tmp/candidate-a",
   candidateContentHash: "candidate",
+  changePaths: ["SKILL.md"],
   expectedLibraryContentHash: "library",
   expectedMetadataHash: "metadata",
   createdAt: 100,

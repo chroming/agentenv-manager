@@ -84,6 +84,37 @@ describe("SkillUpdateDialog", () => {
     expect(document.querySelectorAll(".skill-update-dialog .diff-viewer")).toHaveLength(2);
   });
 
+  it("loads deferred file content only when its preview opens", async () => {
+    const plan = planWithChanges(21);
+    plan.changes = plan.changes.map((change) => ({
+      ...change,
+      before: "",
+      after: "",
+      diff: "",
+      contentDeferred: true
+    }));
+    const onReadChange = vi.fn(async (_previewId: string, path: string) => ({
+      ...plan.changes.find((change) => change.path === path)!,
+      before: "old loaded\n",
+      after: "new loaded\n",
+      diff: `--- ${path}\n+++ ${path}\n@@ -1,1 +1,1 @@\n-old loaded\n+new loaded`,
+      contentDeferred: undefined
+    }));
+    render(
+      <SkillUpdateDialog
+        plan={plan}
+        onClose={vi.fn()}
+        onConfirm={vi.fn()}
+        onReadChange={onReadChange}
+      />
+    );
+
+    expect(screen.getByText("Loading preview")).toBeInTheDocument();
+    expect(await screen.findByText("old loaded")).toBeInTheDocument();
+    expect(onReadChange).toHaveBeenCalledTimes(1);
+    expect(onReadChange).toHaveBeenCalledWith("preview-1", "SKILL.md");
+  });
+
   it("opens the shared diff workspace without dismissing the update preview", () => {
     const onClose = vi.fn();
     render(

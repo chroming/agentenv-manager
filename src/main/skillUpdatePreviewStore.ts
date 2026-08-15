@@ -7,6 +7,7 @@ export interface PendingSkillUpdate {
   id: string;
   candidateDir: string;
   candidateContentHash: string;
+  changePaths: string[];
   expectedLibraryContentHash: string;
   expectedMetadataHash: string;
   createdAt: number;

@@ -95,4 +95,35 @@ describe("DiffWorkspaceDialog", () => {
     expect(within(dialog).getByText("# Project notes")).toBeInTheDocument();
     expect(within(dialog).getByText("/tmp/project/README.md")).toBeInTheDocument();
   });
+
+  it("loads a deferred diff only after the file is selected", async () => {
+    const deferred = changes.map((change) => ({
+      ...change,
+      before: "",
+      after: "",
+      diff: "",
+      contentDeferred: true
+    }));
+    const onReadChange = vi.fn(async (change: PlannedFileChange) => ({
+      ...change,
+      before: "loaded before\n",
+      after: "loaded after\n",
+      diff: `--- ${change.path}\n+++ ${change.path}\n@@ -1,1 +1,1 @@\n-loaded before\n+loaded after`,
+      contentDeferred: undefined
+    }));
+    render(
+      <DiffWorkspaceDialog
+        changes={deferred}
+        onReadChange={onReadChange}
+        open
+        title="Skill update"
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Loading preview")).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "Full-screen preview" });
+    expect(await within(dialog).findByText("loaded before")).toBeInTheDocument();
+    expect(onReadChange).toHaveBeenCalledTimes(1);
+  });
 });

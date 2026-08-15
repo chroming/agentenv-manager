@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 export interface AgentEnvPaths {
   appDataRoot: string;
   repositoryCacheDir: string;
+  skillUpdateCacheDir: string;
   conversationIndexPath: string;
   conversationHandoffDir: string;
   skillSourceObservationsDir: string;
@@ -52,6 +53,9 @@ export const createPaths = (overrides: PathOverrides): AgentEnvPaths => {
     repositoryCacheDir:
       overrides.repositoryCacheDir ??
       join(cacheRoot, "repositories"),
+    skillUpdateCacheDir:
+      overrides.skillUpdateCacheDir ??
+      join(cacheRoot, "skill-update-candidates"),
     conversationIndexPath:
       overrides.conversationIndexPath ??
       join(cacheRoot, "conversations.sqlite"),

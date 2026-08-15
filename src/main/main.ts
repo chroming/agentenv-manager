@@ -893,6 +893,20 @@ const createServices = async (
               .inspectRuntime(targetPaths);
       },
       repositorySource,
+      performanceRecorder: async (sample) => {
+        await runtimeDiagnostics?.record(
+          "skills:performance",
+          sample.operation,
+          {
+            outcome: sample.outcome,
+            durationMs: sample.durationMs,
+            context: {
+              subject: sample.subject,
+              phases: sample.phases
+            }
+          }
+        );
+      },
       ...(process.env.AGENTENV_GITHUB_FIXTURE_ROOT
         ? { fetch: createGitHubFixtureFetch(process.env.AGENTENV_GITHUB_FIXTURE_ROOT) }
         : {})

@@ -34,6 +34,7 @@ import type {
   SkillSourceType,
   SkillUpstream,
   SkillUpdateInfo,
+  SkillUpdateChangeReadInput,
   SkillUpdateConfirmation,
   SkillUpdatePolicy,
   SkillUpdatePolicyInput,
@@ -97,7 +98,11 @@ import {
   indexedSkillFiles
 } from "./skillSources/skillIndexManifest";
 import { readAllProfilesForResourceMutation } from "./profileSafety";
-import { createSkillChanges, createSkillChangeSet } from "./skillFileChanges";
+import {
+  createSkillChanges,
+  createSkillChangeSet,
+  readSkillFileChange
+} from "./skillFileChanges";
 import { hashSkillContent, SKILL_CONTENT_HASH_VERSION } from "./skillContentHash";
 import { removeUnavailableSkillLinksTransaction } from "./skillUnavailableCleanup";
 import { createBackupStore } from "./backupStore";
@@ -162,12 +167,19 @@ import {
   createRecentSkillUpdateCheckStore,
   createSkillUpdatePreviewStore
 } from "./skillUpdatePreviewStore";
+import { createSkillUpdateCandidateCache } from "./skillUpdateCandidateCache";
+import { createSkillUpdateChecker } from "./skillUpdateChecker";
 import {
   createSkillUpdateImpactIndex,
   skillUpdateImpactFromIndex,
   type SkillUpdateImpactIndex
 } from "./skillUpdateImpact";
 import { skillUpdateSourceGroupKey } from "./skillUpdateBatch";
+import {
+  measureSkillPerformancePhase,
+  runSkillPerformanceTrace,
+  type SkillPerformanceRecorder
+} from "./skillPerformanceTrace";
 import type {
   ConsolidateSharedSkillGroupStoreInput,
   ConsolidateSkillGroupStoreInput,
@@ -195,6 +207,7 @@ interface SkillLibraryStoreOptions {
   targetPathsProvider?: () => TargetPaths[] | Promise<TargetPaths[]>;
   runtimeSnapshotProvider?: (targetPaths: TargetPaths) => Promise<SkillRuntimeSnapshot>;
   repositorySource?: GitCliSkillSource;
+  performanceRecorder?: SkillPerformanceRecorder;
 }
 
 const updatePolicyFor = (metadata: SkillMetadataFile): SkillUpdatePolicy => {
@@ -268,6 +281,7 @@ export const createSkillLibraryStore = (
   const authTokenProvider = options.authTokenProvider;
   const profileStore = options.profileStore;
   const repositorySource = options.repositorySource;
+  const recordPerformance = options.performanceRecorder;
   const requireRepositorySource = () => {
     if (!repositorySource) {
       throw new Error("System Git is unavailable. Install Git and retry the Repository operation.");
@@ -284,6 +298,9 @@ export const createSkillLibraryStore = (
     createFilesystemSkillDriver({ targetId: targetPaths.targetId }).inspectRuntime(targetPaths));
   const targetStateRepository = createTargetStateRepository(paths);
   const pendingUpdates = createSkillUpdatePreviewStore();
+  const updateCandidateCache = createSkillUpdateCandidateCache({
+    root: paths.skillUpdateCacheDir
+  });
   const safetyBackupStore = createBackupStore(paths);
   const {
     cleanupBackupRoot,
@@ -320,13 +337,14 @@ export const createSkillLibraryStore = (
     writeCleanupManifest
   });
   const recentUpdateChecks = createRecentSkillUpdateCheckStore();
+  const githubClient = createGitHubSkillClient({ fetchImpl, authTokenProvider });
   const {
     fetchJson: fetchGitHubJson,
     fetchText: fetchGitHubText,
     resolveLocation: resolveGitHubLocation,
     readTree: readGitHubTree,
     readSkillUpdatedAt: readGitHubSkillUpdatedAt
-  } = createGitHubSkillClient({ fetchImpl, authTokenProvider });
+  } = githubClient;
   const materializeGitHubSkillTree = createGitHubSkillTreeMaterializer({
     readTree: readGitHubTree, repositorySource, copySkillTree: removeAndCopy });
   const skillSourceRegistry = createSkillSourceRegistry(paths.skillSourcesPath);
@@ -1626,13 +1644,21 @@ export const createSkillLibraryStore = (
 
   const {
     listSourceGroups,
-    checkSourceGroup,
-    checkMonitoredSourceGroups,
+    checkSourceGroup: checkSourceGroupImpl,
+    checkMonitoredSourceGroups: checkMonitoredSourceGroupsImpl,
     setSourceName,
     setSourceMonitored,
     setSourceCandidateIgnored
   } =
     createSkillSourceGroupStore(skillSourceService, listSkills, skillSourceRegistry);
+  const checkSourceGroup = (sourceId: string) =>
+    runSkillPerformanceTrace("check-source-group", sourceId, recordPerformance, () =>
+      measureSkillPerformancePhase("source-scan", () => checkSourceGroupImpl(sourceId))
+    );
+  const checkMonitoredSourceGroups = () =>
+    runSkillPerformanceTrace("check-source-groups", undefined, recordPerformance, () =>
+      measureSkillPerformancePhase("source-scan", checkMonitoredSourceGroupsImpl)
+    );
   const { preview: previewSourceMerge, merge: mergeSources } = createSkillSourceMergeService({
     appDataRoot: paths.appDataRoot,
     backupStore: safetyBackupStore,
@@ -2416,174 +2442,23 @@ export const createSkillLibraryStore = (
     await rm(backupDir, { recursive: true, force: true });
   };
 
-  const checkUpdates = async (ids?: string[]): Promise<SkillUpdateInfo[]> => {
-    const skills = await listSkills();
-    const selectedIds = ids ? new Set(ids.map((id) => SafeIdSchema.parse(id))) : undefined;
-    const selectedSkills = skills.filter(
-      (item) =>
-        (!selectedIds || selectedIds.has(item.id)) &&
-        item.updatePolicy === "tracked" &&
-        item.globallyEnabled &&
-        Boolean(item.source)
+  const checkUpdatesImpl = createSkillUpdateChecker({
+    computeContentHash,
+    githubClient,
+    listSkills,
+    metadataHash,
+    pathExists,
+    readMetadata: readLibraryMetadata,
+    recentChecks: recentUpdateChecks,
+    repositorySource
+  });
+  const checkUpdates = (ids?: string[]): Promise<SkillUpdateInfo[]> =>
+    runSkillPerformanceTrace(
+      "check-updates",
+      ids ? `${ids.length} skills` : "all tracked skills",
+      recordPerformance,
+      () => measureSkillPerformancePhase("source-check", () => checkUpdatesImpl(ids))
     );
-    const githubManifests = new Map<string, Promise<Array<{
-      path: string;
-      type: "blob" | "tree";
-      sha: string;
-    }> | undefined>>();
-    const checkedMetadataHashes = new Map<string, string>();
-    const githubManifestFor = (source: ParsedGitHubSkillSource) => {
-      const key = `${source.owner}/${source.repo}\0${source.ref}`;
-      const existing = githubManifests.get(key);
-      if (existing) return existing;
-      const request = (async () => {
-        try {
-          const commitUrl = `https://api.github.com/repos/${source.owner}/${source.repo}/commits/${encodeURIComponent(source.ref)}`;
-          const commit = await fetchGitHubJson(commitUrl, { refresh: true }) as GitHubCommitResponse;
-          const treeSha = commit.commit?.tree?.sha;
-          if (!treeSha) return undefined;
-          const tree = await fetchGitHubJson(
-            `https://api.github.com/repos/${source.owner}/${source.repo}/git/trees/${encodeURIComponent(treeSha)}?recursive=1`,
-            { refresh: true }
-          ) as GitHubTreeResponse;
-          if (tree.truncated) return undefined;
-          return (tree.tree ?? []).filter((entry): entry is {
-            path: string;
-            type: "blob" | "tree";
-            sha: string;
-          } =>
-            (entry.type === "blob" || entry.type === "tree") &&
-            typeof entry.path === "string" &&
-            typeof entry.sha === "string"
-          );
-        } catch {
-          return undefined;
-        }
-      })();
-      githubManifests.set(key, request);
-      return request;
-    };
-    const results = await Promise.all(selectedSkills.map(async (skill): Promise<SkillUpdateInfo> => {
-      const metadata = await readLibraryMetadata(skill.path);
-      checkedMetadataHashes.set(skill.id, metadataHash(metadata));
-      if (!metadata.source) {
-        return {
-          id: skill.id,
-          name: skill.name,
-          sourceType: skill.sourceType,
-          currentRevision: metadata.remoteRevision,
-          updateAvailable: false,
-          error: "Missing update source"
-        };
-      }
-
-      try {
-        if (metadata.sourceType === "local") {
-          if (!(await pathExists(join(metadata.source, "SKILL.md")))) {
-            throw new Error(`Skill source is missing SKILL.md: ${metadata.source}`);
-          }
-          const latestRevision = await computeContentHash(metadata.source);
-          return {
-            id: skill.id,
-            name: skill.name,
-            sourceType: "local",
-            currentRevision: metadata.contentHash,
-            latestRevision,
-            updateAvailable: latestRevision !== metadata.contentHash
-          };
-        }
-        if (metadata.sourceType === "git") {
-          const latest = await requireRepositorySource().resolve({
-            repository: metadata.source,
-            ref: metadata.remoteRef,
-            directory: metadata.remotePath,
-            transport: "system-git"
-          }, undefined, { refresh: true });
-          return {
-            id: skill.id,
-            name: skill.name,
-            sourceType: "git",
-            currentRevision: metadata.remoteRevision,
-            latestRevision: latest.contentRevision,
-            latestUpdatedAt: latest.upstream.updatedAt,
-            updateAvailable: latest.contentRevision !== metadata.remoteRevision
-          };
-        }
-        if (metadata.sourceType !== "github") {
-          throw new Error(`Skill update source type is not supported: ${metadata.sourceType}`);
-        }
-        const source = parseGitHubSkillUrl(metadata.source, {
-          ref: metadata.remoteRef,
-          remotePath: metadata.remotePath
-        });
-        const manifest = await githubManifestFor(source);
-        const skillManifestPath = [source.remotePath, "SKILL.md"].filter(Boolean).join("/");
-        const githubTree = manifest
-          ? undefined
-          : await readGitHubTree(source, undefined, { refresh: true });
-        const hasSkillMd = manifest
-          ? manifest.some((entry) => entry.type === "blob" && entry.path === skillManifestPath)
-          : githubTree?.hasSkillMd === true;
-        if (!hasSkillMd) {
-          return {
-            id: skill.id,
-            name: skill.name,
-            sourceType: "github",
-            currentRevision: metadata.remoteRevision,
-            updateAvailable: false,
-            sourceStatus: "removed"
-          };
-        }
-        const latestRevision = manifest
-          ? githubContentsRevision(source.remotePath, manifest)
-          : githubTree!.revision;
-        const updateAvailable = latestRevision !== metadata.remoteRevision;
-        const latestUpdatedAt = updateAvailable
-          ? await readGitHubSkillUpdatedAt(source, { refresh: true })
-          : metadata.upstream?.updatedAt;
-        return {
-          id: skill.id,
-          name: skill.name,
-          sourceType: "github",
-          currentRevision: metadata.remoteRevision,
-          latestRevision,
-          latestUpdatedAt,
-          updateAvailable
-        };
-      } catch (error) {
-        if (error instanceof RepositorySkillSourceMissingError) {
-          return {
-            id: skill.id,
-            name: skill.name,
-            sourceType: metadata.sourceType ?? skill.sourceType,
-            currentRevision: metadata.remoteRevision ?? metadata.contentHash,
-            updateAvailable: false,
-            sourceStatus: "removed"
-          };
-        }
-        return {
-          id: skill.id,
-          name: skill.name,
-          sourceType: metadata.sourceType ?? skill.sourceType,
-          currentRevision: metadata.remoteRevision ?? metadata.contentHash,
-          updateAvailable: false,
-          error: error instanceof Error ? error.message : String(error)
-        };
-      }
-    }));
-    const checkedAt = Date.now();
-    for (const result of results) {
-      const checkedMetadataHash = checkedMetadataHashes.get(result.id);
-      if (!result.error && checkedMetadataHash) {
-        recentUpdateChecks.set(result.id, {
-          checkedAt,
-          metadataHash: checkedMetadataHash,
-          sourceStatus: result.sourceStatus
-        });
-      }
-    }
-    return results;
-  };
 
   const prepareUpdateSourceMetadata = async ({
     sourceType,
@@ -2765,17 +2640,19 @@ export const createSkillLibraryStore = (
   };
 
   const prepareSkillUpdateImpactIndex = async (): Promise<SkillUpdateImpactIndex> => {
-    const [profiles, inventory] = await Promise.all([
-      profileStore
-        ? readAllProfilesForResourceMutation(profileStore, "Skill update preview")
-        : Promise.resolve([]),
-      Promise.all([targetPathsProvider(), listSkills()]).then(([targetPaths, skills]) =>
-        scanInventory(targetPaths, skills)
-      )
-    ]);
+    const [profiles, inventory] = await measureSkillPerformancePhase("impact-scan", () =>
+      Promise.all([
+        profileStore
+          ? readAllProfilesForResourceMutation(profileStore, "Skill update preview")
+          : Promise.resolve([]),
+        Promise.all([targetPathsProvider(), listSkills()]).then(([targetPaths, skills]) =>
+          scanInventory(targetPaths, skills)
+        )
+      ])
+    );
     return createSkillUpdateImpactIndex(profiles, inventory);
   };
-  const previewUpdateWithImpact = async (
+  const previewUpdateWithImpactImpl = async (
     id: string,
     refreshSource?: boolean,
     impactIndex?: SkillUpdateImpactIndex
@@ -2790,12 +2667,18 @@ export const createSkillLibraryStore = (
     const metadata = await readLibraryMetadata(targetDir);
     const recentCheck = recentUpdateChecks.getFresh(safeId, metadataHash(metadata));
     const shouldRefreshSource = refreshSource ?? !recentCheck;
-    const impact = skillUpdateImpactFromIndex(
+    const impactIndexPromise = impactIndex
+      ? Promise.resolve(impactIndex)
+      : prepareSkillUpdateImpactIndex();
+    const readImpact = async () => skillUpdateImpactFromIndex(
       safeId,
-      impactIndex ?? await prepareSkillUpdateImpactIndex()
+      await impactIndexPromise
     );
-    const removedSourcePlan = () => createRemovedSourceSkillUpdatePlan({
-      discardPendingUpdates: discardPendingUpdatesForSkill, impact, metadata, skill
+    const removedSourcePlan = async () => createRemovedSourceSkillUpdatePlan({
+      discardPendingUpdates: discardPendingUpdatesForSkill,
+      impact: await readImpact(),
+      metadata,
+      skill
     });
     if (
       recentCheck?.sourceStatus === "removed"
@@ -2812,7 +2695,7 @@ export const createSkillLibraryStore = (
         updateAvailable: false,
         changes: [],
         errors: ["This skill is not tracked for updates"],
-        impact
+        impact: await readImpact()
       };
     }
     if (!metadata.source) {
@@ -2825,28 +2708,43 @@ export const createSkillLibraryStore = (
         updateAvailable: false,
         changes: [],
         errors: ["Skill has no update source configured"],
-        impact
+        impact: await readImpact()
       };
     }
 
     const finalizeCandidate = async (
       candidateDir: string,
       nextMetadata: SkillMetadataFile,
-      latestRevision?: string
+      latestRevision?: string,
+      candidateCacheKey?: string
     ): Promise<SkillUpdatePlan> => {
-      await validateSkillFrontmatter(candidateDir);
-      await rm(join(candidateDir, ".agentenv-skill.json"), { force: true });
-      await rm(join(candidateDir, ".agentenv-owner.json"), { force: true });
-      const expectedLibraryContentHash = await computeContentHash(targetDir);
-      const { changes } = await createSkillChangeSet(targetDir, candidateDir);
-      if (await computeContentHash(targetDir) !== expectedLibraryContentHash) {
+      const impact = await readImpact();
+      await measureSkillPerformancePhase("candidate-validate", async () => {
+        await validateSkillFrontmatter(candidateDir);
+        await rm(join(candidateDir, ".agentenv-skill.json"), { force: true });
+        await rm(join(candidateDir, ".agentenv-owner.json"), { force: true });
+      });
+      const expectedLibraryContentHash = await measureSkillPerformancePhase(
+        "library-hash",
+        () => computeContentHash(targetDir)
+      );
+      const { changes } = await measureSkillPerformancePhase(
+        "diff",
+        () => createSkillChangeSet(targetDir, candidateDir, { deferLargeContent: true })
+      );
+      if (await measureSkillPerformancePhase("stale-verify", () =>
+        computeContentHash(targetDir)
+      ) !== expectedLibraryContentHash) {
         throw new Error("Library skill changed while preparing the update preview; retry");
       }
       const currentMetadata = await readLibraryMetadata(targetDir);
       if (metadataHash(currentMetadata) !== metadataHash(metadata)) {
         throw new Error("Skill update settings changed while preparing the preview; retry");
       }
-      const candidateContentHash = await computeContentHash(candidateDir);
+      const candidateContentHash = await measureSkillPerformancePhase(
+        "candidate-hash",
+        () => computeContentHash(candidateDir)
+      );
       if (changes.length === 0) {
         // The source may use a different revision encoding (for example Git tree
         // versus GitHub Contents API) while the actual Skill files are identical.
@@ -2872,6 +2770,12 @@ export const createSkillLibraryStore = (
         };
       }
 
+      if (candidateCacheKey) {
+        await measureSkillPerformancePhase("candidate-cache-write", () =>
+          updateCandidateCache.save(candidateCacheKey, candidateDir, candidateContentHash)
+        );
+      }
+
       const previewId = randomUUID();
       await discardPendingUpdatesForSkill(skill.id);
       pendingUpdates.set({
@@ -2879,6 +2783,7 @@ export const createSkillLibraryStore = (
         id: skill.id,
         candidateDir,
         candidateContentHash,
+        changePaths: changes.map((change) => change.path),
         expectedLibraryContentHash,
         expectedMetadataHash: metadataHash(currentMetadata),
         createdAt: Date.now(),
@@ -2906,17 +2811,38 @@ export const createSkillLibraryStore = (
       });
       const candidateDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-update-"));
       try {
-        const [{ hasSkillMd, revision }, sourceUpdatedAt] = await Promise.all([
-          materializeGitHubSkillTree(source, candidateDir, {
-            refresh: shouldRefreshSource,
-            refreshFiles: true,
-            reuseRoot: targetDir
-          }),
-          readGitHubSkillUpdatedAt(source, { refresh: shouldRefreshSource }).catch(() => undefined)
-        ]);
-        if (!hasSkillMd) {
+        const [sourceSnapshot, sourceUpdatedAt] = await measureSkillPerformancePhase(
+          "source-resolve",
+          () => Promise.all([
+            readGitHubTree(source, undefined, { refresh: shouldRefreshSource }),
+            readGitHubSkillUpdatedAt(source, { refresh: shouldRefreshSource }).catch(() => undefined)
+          ])
+        );
+        if (!sourceSnapshot.hasSkillMd) {
           return await removedSourcePlan();
         }
+        const candidateCacheKey = [
+          "github",
+          source.owner,
+          source.repo,
+          source.ref,
+          source.remotePath,
+          sourceSnapshot.revision
+        ].join("\0");
+        const restored = await measureSkillPerformancePhase("candidate-cache-read", () =>
+          updateCandidateCache.restore(candidateCacheKey, candidateDir)
+        );
+        const materialized = restored
+          ? sourceSnapshot
+          : await measureSkillPerformancePhase("source-materialize", () =>
+              materializeGitHubSkillTree(source, candidateDir, {
+                refresh: false,
+                refreshFiles: true,
+                reuseRoot: targetDir
+              })
+            );
+        if (!materialized.hasSkillMd) return await removedSourcePlan();
+        const revision = materialized.revision;
         return await finalizeCandidate(candidateDir, {
           ...metadata,
           sourceType: "github",
@@ -2933,7 +2859,7 @@ export const createSkillLibraryStore = (
             revision,
             updatedAt: sourceUpdatedAt
           }
-        }, revision);
+        }, revision, restored ? undefined : candidateCacheKey);
       } catch (error) {
         if (!pendingUpdates.ownsCandidateDirectory(candidateDir)) {
           await rm(candidateDir, { recursive: true, force: true });
@@ -2946,19 +2872,44 @@ export const createSkillLibraryStore = (
     }
 
     if (metadata.sourceType === "git") {
+      const repository = metadata.source;
       const candidateDir = await mkdtemp(join(tmpdir(), "agentenv-repository-skill-update-"));
       try {
-        const materialized = await requireRepositorySource().materialize(
-          {
-            repository: metadata.source,
-            ref: metadata.remoteRef,
-            directory: metadata.remotePath,
-            transport: "system-git"
-          },
-          candidateDir,
-          undefined,
-          { refresh: shouldRefreshSource }
+        const repositoryInput = {
+          repository,
+          ref: metadata.remoteRef,
+          directory: metadata.remotePath,
+          transport: "system-git" as const
+        };
+        const resolved = await measureSkillPerformancePhase(
+          "source-resolve",
+          () => requireRepositorySource().resolve(
+            repositoryInput,
+            undefined,
+            { refresh: shouldRefreshSource }
+          )
         );
+        const candidateCacheKey = [
+          "git",
+          resolved.repository,
+          resolved.ref,
+          resolved.directory,
+          resolved.contentRevision
+        ].join("\0");
+        const restored = await measureSkillPerformancePhase("candidate-cache-read", () =>
+          updateCandidateCache.restore(candidateCacheKey, candidateDir)
+        );
+        const materialized = restored
+          ? { ...resolved, destination: candidateDir }
+          : await measureSkillPerformancePhase(
+              "source-materialize",
+              () => requireRepositorySource().materialize(
+                repositoryInput,
+                candidateDir,
+                undefined,
+                { refresh: false }
+              )
+            );
         return await finalizeCandidate(candidateDir, {
           ...metadata,
           sourceType: "git",
@@ -2968,7 +2919,7 @@ export const createSkillLibraryStore = (
           remoteRevision: materialized.contentRevision,
           updatePolicy: "tracked",
           upstream: materialized.upstream
-        }, materialized.contentRevision);
+        }, materialized.contentRevision, restored ? undefined : candidateCacheKey);
       } catch (error) {
         if (!pendingUpdates.ownsCandidateDirectory(candidateDir)) {
           await rm(candidateDir, { recursive: true, force: true });
@@ -2987,7 +2938,7 @@ export const createSkillLibraryStore = (
         updateAvailable: false,
         changes: [],
         errors: [`Skill update source type is not supported yet: ${metadata.sourceType}`],
-        impact
+        impact: await readImpact()
       };
     }
     if (!(await pathExists(join(metadata.source, "SKILL.md")))) {
@@ -3024,10 +2975,19 @@ export const createSkillLibraryStore = (
     }
   };
 
+  const previewUpdateWithImpact = (
+    id: string,
+    refreshSource?: boolean,
+    impactIndex?: SkillUpdateImpactIndex
+  ): Promise<SkillUpdatePlan> =>
+    runSkillPerformanceTrace("preview-update", id, recordPerformance, () =>
+      previewUpdateWithImpactImpl(id, refreshSource, impactIndex)
+    );
+
   const previewUpdate = (id: string): Promise<SkillUpdatePlan> =>
     previewUpdateWithImpact(id);
 
-  const previewUpdates = async (ids: string[]): Promise<SkillUpdatePreviewBatchResult> => {
+  const previewUpdatesImpl = async (ids: string[]): Promise<SkillUpdatePreviewBatchResult> => {
     const uniqueIds = [...new Set(ids.map((id) => SafeIdSchema.parse(id)))];
     if (uniqueIds.length === 0) return { plans: [], failed: [] };
     const impactIndex = await prepareSkillUpdateImpactIndex();
@@ -3081,6 +3041,31 @@ export const createSkillLibraryStore = (
       plans: results.flatMap((result) => result.ok ? [result.plan] : []),
       failed: results.flatMap((result) => result.ok ? [] : [{ id: result.id, error: result.error }])
     };
+  };
+  const previewUpdates = (ids: string[]): Promise<SkillUpdatePreviewBatchResult> =>
+    runSkillPerformanceTrace(
+      "preview-updates",
+      `${new Set(ids).size} skills`,
+      recordPerformance,
+      () => previewUpdatesImpl(ids)
+    );
+
+  const readUpdateChange = async ({
+    previewId,
+    path
+  }: SkillUpdateChangeReadInput): Promise<import("../shared/types").PlannedFileChange> => {
+    const pending = pendingUpdates.get(previewId);
+    if (!pending || pendingUpdates.isExpired(pending)) {
+      throw new Error("Skill update preview is unavailable; review the update again");
+    }
+    if (!pending.changePaths.includes(path)) {
+      throw new Error("Skill update file is not part of this preview");
+    }
+    return readSkillFileChange(
+      join(await libraryDir(), pending.id),
+      pending.candidateDir,
+      path
+    );
   };
 
   const updateSkill = async ({
@@ -3220,6 +3205,7 @@ export const createSkillLibraryStore = (
     setIcon,
     previewUpdate,
     previewUpdates,
+    readUpdateChange,
     updateSkill
   };
 };

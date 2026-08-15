@@ -33,6 +33,7 @@ import type {
   SkillSourceMergeResult,
   SkillSourceType,
   SkillUpdateConfirmation,
+  SkillUpdateChangeReadInput,
   SkillUpdateInfo,
   SkillUpdatePlan,
   SkillUpdatePolicyInput,
@@ -138,5 +139,6 @@ export interface SkillLibraryStore {
   setIcon(input: SkillIconInput): Promise<SkillLibraryEntry>;
   previewUpdate(id: string): Promise<SkillUpdatePlan>;
   previewUpdates(ids: string[]): Promise<SkillUpdatePreviewBatchResult>;
+  readUpdateChange(input: SkillUpdateChangeReadInput): Promise<import("../shared/types").PlannedFileChange>;
   updateSkill(input: SkillUpdateConfirmation): Promise<SkillLibraryEntry>;
 }
