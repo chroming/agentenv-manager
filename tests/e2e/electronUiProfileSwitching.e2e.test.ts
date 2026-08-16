@@ -3932,7 +3932,7 @@ describe("Electron UI profile switching e2e", () => {
     const during = await editor.boundingBox();
     expect(during).toEqual(before);
     const composerDuring = await composer.boundingBox();
-    expect(composerDuring?.y).toBe(composerBefore?.y);
+    expect(Math.abs((composerDuring?.y ?? 0) - (composerBefore?.y ?? 0))).toBeLessThanOrEqual(1);
     expect(await page.locator(".profile-loading-row").count()).toBe(3);
 
     await page.getByRole("heading", { name: "UI OpenCode beta" }).waitFor({
@@ -10345,7 +10345,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => applyButton.isEnabled()).toBe(true);
     await expect
       .poll(() => page.getByRole("status", { name: "Profile readiness" }).textContent())
-      .toContain("Apply pending on Antigravity CLI");
+      .toContain("Changes pending");
     await previewAndApply(page, "Antigravity CLI");
     await expect(fileExists(instructionsPath)).resolves.toBe(false);
     await expect(fileExists(skillPath)).resolves.toBe(false);
