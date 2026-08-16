@@ -34,7 +34,7 @@ brew upgrade --cask chroming/tap/agentenv-manager
 
 Homebrew 会按架构下载官方 Release、验证 SHA-256 并移除 quarantine。macOS、Windows 和 Linux 安装包也可以从 [GitHub Releases](https://github.com/chroming/agentenv-manager/releases/latest) 下载。
 
-macOS 正式安装包使用项目固定的自签名身份，但没有 Developer ID 和公证。固定身份可让系统在升级时持续识别同一个应用；从浏览器直接下载时，仍需先把应用复制到“应用程序”并推出 DMG，再按 [Apple 的说明](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac) 选择“仍要打开”。首次安装后，只要应用所在目录可写，Homebrew 和直接下载版本都可以在设置中检查、验证并安装更新；直接更新启动失败时会自动恢复旧版本。
+macOS 正式安装包使用项目固定的自签名身份，但没有 Developer ID 和公证。固定身份可让系统在升级时持续识别同一个应用；从浏览器直接下载时，仍需先把应用复制到“应用程序”并推出 DMG，再按 [Apple 的说明](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac) 选择“仍要打开”。安装或升级后，macOS 可能要求输入登录密码，以授权当前应用访问 AgentEnv Manager 保存在系统钥匙串中的安全存储；这是 macOS 的系统提示，密码不会提供给 AgentEnv Manager。首次安装后，只要应用所在目录可写，Homebrew 和直接下载版本都可以在设置中检查、验证并安装更新；直接更新启动失败时会自动恢复旧版本。
 
 ## 第一次使用
 
