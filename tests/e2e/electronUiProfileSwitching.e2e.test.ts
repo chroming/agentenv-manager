@@ -588,6 +588,7 @@ const launchApp = async (
     openCodeDesktopOnly?: boolean;
     omitOpenCodeProfiles?: boolean;
     omitAllProfiles?: boolean;
+    locale?: "system" | "en" | "zh_CN" | "zh_TW";
     projectSkillFixture?: boolean;
     workspaceFixture?: boolean;
     sharedSkillFixture?: boolean;
@@ -625,7 +626,7 @@ const launchApp = async (
   ];
   const enabledTargetIds = options.enabledTargetIds ?? supportedTargetIds;
   await writeJson(join(appDataRoot, "settings.json"), {
-    locale: "system",
+    locale: options.locale ?? "system",
     conversationTerminal: "default",
     skillSyncMethod: "symlink",
     ...(options.legacySkillManagementMarker
@@ -908,38 +909,34 @@ const launchApp = async (
 
   const waitForRequestedWorkspace = async (page: Page) => {
     if (initialWorkspace === "library") {
-      await page.getByRole("region", { name: "Library skills" }).waitFor({
-        state: "visible",
-        timeout: 10_000
-      });
-      await page.getByRole("group", { name: "Library item shared-reviewer" }).waitFor({
+      await page.locator(".skill-library-panel").waitFor({
         state: "visible",
         timeout: 10_000
       });
       return;
     }
     if (initialWorkspace === "profiles") {
-      await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({
+      await page.locator(".profile-page").waitFor({
         state: "visible",
         timeout: 10_000
       });
       return;
     }
     if (initialWorkspace === "conversations") {
-      await page.getByRole("heading", { name: "Conversations", exact: true }).waitFor({
+      await page.locator(".conversation-page").waitFor({
         state: "visible",
         timeout: 10_000
       });
       return;
     }
     if (initialWorkspace === "settings") {
-      await page.getByRole("heading", { name: "Settings", exact: true }).waitFor({
+      await page.locator(".settings-page").waitFor({
         state: "visible",
         timeout: 10_000
       });
       return;
     }
-    await page.getByRole("region", { name: "Agents", exact: true }).waitFor({
+    await page.locator(".target-page").waitFor({
       state: "visible",
       timeout: 10_000
     });
@@ -980,16 +977,15 @@ const launchApp = async (
         .getByRole("complementary", { name: "Global navigation" })
         .waitFor({ state: "visible", timeout: 10_000 });
       if (initialWorkspace) {
-        const labels: Record<NonNullable<typeof initialWorkspace>, string> = {
-          library: "Skills",
-          profiles: "Profiles",
-          conversations: "Conversations",
-          targets: "Agents",
-          settings: "Settings"
+        const workspaceIds: Record<NonNullable<typeof initialWorkspace>, string> = {
+          library: "library",
+          profiles: "profiles",
+          conversations: "conversations",
+          targets: "targets",
+          settings: "settings"
         };
         await launchedPage
-          .getByRole("complementary", { name: "Global navigation" })
-          .getByRole("button", { name: labels[initialWorkspace] })
+          .locator(`.workspace-button[data-workspace="${workspaceIds[initialWorkspace]}"]`)
           .click();
       }
       await waitForRequestedWorkspace(launchedPage);
@@ -4039,6 +4035,63 @@ describe("Electron UI profile switching e2e", () => {
     expect(shellScroll).toEqual({ document: 0, editor: 0, shell: 0 });
   }, standardElectronTestTimeout);
 
+  it.each([
+    {
+      enabledTargetIds: ["opencode", "codex"],
+      locale: "en" as const,
+      scenario: "multiple Agents in English"
+    },
+    {
+      enabledTargetIds: ["opencode"],
+      locale: "zh_CN" as const,
+      scenario: "one Agent in Simplified Chinese"
+    }
+  ])("keeps object context text columns aligned with $scenario", async ({
+    enabledTargetIds,
+    locale
+  }) => {
+    const { page } = await launchApp({ enabledTargetIds, locale, workspaceFixture: true });
+    const textLeft = (selector: string) => page.locator(selector).first().evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return range.getBoundingClientRect().left;
+    });
+    const expectTextOriginsAligned = async (first: string, second: string) => {
+      const [firstLeft, secondLeft] = await Promise.all([textLeft(first), textLeft(second)]);
+      expect(Math.abs(firstLeft - secondLeft), `${first}: ${firstLeft}; ${second}: ${secondLeft}`)
+        .toBeLessThanOrEqual(1);
+    };
+
+    for (const viewport of [
+      { width: 920, height: 620 },
+      { width: 1180, height: 728 },
+      { width: 1440, height: 960 }
+    ]) {
+      await resizeAppWindow(page, viewport.width, viewport.height);
+      await page.locator('.workspace-button[data-workspace="profiles"]').click();
+      await page.locator(".profile-hero").waitFor({ state: "visible" });
+      await expectTextOriginsAligned(
+        ".profile-hero .ui-object-switcher__trigger-title",
+        ".profile-hero .profile-description"
+      );
+      await expectTextOriginsAligned(
+        ".profile-agent-switcher .ui-object-switcher__trigger-title, .profile-agent-switcher .agent-context-switcher__static-name",
+        ".profile-action-status__primary"
+      );
+      await expectTextOriginsAligned(
+        ".system-status-card__summary strong",
+        ".system-status-card__summary .system-status-summary"
+      );
+
+      await page.locator('.workspace-button[data-workspace="projects"]').click();
+      await page.locator(".project-detail__header").waitFor({ state: "visible" });
+      await expectTextOriginsAligned(
+        ".project-detail__header .ui-object-switcher__trigger-title",
+        ".project-detail__header .ui-inspector-header__copy > span"
+      );
+    }
+  }, standardElectronTestTimeout);
+
   it("keeps core management actions usable at the minimum supported viewport", async () => {
     const { page } = await launchApp();
     await resizeAppWindow(page, 1180, 728);
@@ -6170,7 +6223,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(readProfileState).toContain("Active");
     await expect
       .poll(() => page.getByRole("status", { name: "Profile readiness" }).textContent())
-      .toContain("Up to date on OpenCode");
+      .toContain("Up to date");
 
     await page.reload();
     await page.getByRole("region", { name: "Agents", exact: true }).waitFor({
@@ -11094,7 +11147,7 @@ describe("Electron UI profile switching e2e", () => {
       .toBe("OpenCode · Active, Codex · Active");
     await expect
       .poll(() => page.getByRole("status", { name: "Profile readiness" }).textContent())
-      .toContain("Up to date on OpenCode");
+      .toContain("Up to date");
     await expect
       .poll(() => page.getByRole("status", { name: "Profile readiness" }).textContent())
       .toContain("2 Agents · Active");
@@ -11139,7 +11192,7 @@ describe("Electron UI profile switching e2e", () => {
     );
     await expect
       .poll(() => page.getByRole("status", { name: "Profile readiness" }).textContent())
-      .toContain("Up to date on OpenCode");
+      .toContain("Up to date");
     await expect
       .poll(() => applyActionButton(page, "OpenCode").isDisabled())
       .toBe(true);
@@ -11676,7 +11729,7 @@ describe("Electron UI profile switching e2e", () => {
     }, { titleSelector, metaSelector, moreLabel });
     const profileObjectHeaderGeometry = await readObjectHeaderGeometry(
       ".profile-hero",
-      ".profile-hero__title",
+      ".profile-hero__title .ui-object-switcher__trigger-title",
       ".profile-description",
       "More Profile actions"
     );
@@ -11803,7 +11856,7 @@ describe("Electron UI profile switching e2e", () => {
     }));
     const workspaceObjectHeaderGeometry = await readObjectHeaderGeometry(
       ".project-detail__header",
-      ".project-detail__title-control",
+      ".project-detail__title-control .ui-object-switcher__trigger-title",
       ".ui-inspector-header__copy > span",
       "More Workspace actions"
     );

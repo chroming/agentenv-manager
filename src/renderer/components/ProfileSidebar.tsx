@@ -512,11 +512,11 @@ export const ProfileSidebar = ({
           />
         ) : (
           <>
-            <div>
+            <div className="system-status-card__summary">
               <span className={`status-dot${isLoading ? " is-loading" : " is-ready"}`} />
               <strong>{t("Local Agents")}</strong>
+              <OverflowTooltip className="system-status-summary" text={statusSummary} />
             </div>
-            <OverflowTooltip className="system-status-summary" text={statusSummary} />
             <div className="agent-chip-row" aria-label={t("Enabled Agents")}>
               {isLoading ? (
                 <span className="agent-chip-row__loading" aria-hidden="true">

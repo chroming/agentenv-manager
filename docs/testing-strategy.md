@@ -149,6 +149,10 @@ replace geometry, keyboard, localization, overlay, or persistence assertions.
 
 The Electron UI E2E covers visible workflows, supported viewport geometry,
 feedback, dialogs, navigation, and persisted effects.
+Object-context geometry measures rendered text ranges rather than wrapper boxes for Profile and
+Workspace identity lines, Profile Agent and readiness lines, and the sidebar Agent summary. The
+text origins remain within `1px` at the supported minimum, default, and large widths in English
+and Chinese, including the static one-Agent and selectable multi-Agent variants.
 Each Electron E2E file or deterministic UI shard runs in a fresh Vitest process
 so Electron, Playwright, timers, and native handles cannot leak into another
 execution boundary. Smaller Electron files remain serial with each other; they

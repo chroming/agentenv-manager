@@ -1657,7 +1657,7 @@ describe("App", () => {
     expect(screen.queryByRole("status", { name: "Safe apply" })).not.toBeInTheDocument();
     expect(document.querySelector(".profile-readiness-strip")).toBeNull();
     expect(screen.getByRole("status", { name: "Profile readiness" })).toHaveTextContent(
-      "Ready to take over OpenCode"
+      "Ready to apply"
     );
     expect(within(composer).getByRole("button", { name: "Skills" })).toHaveAttribute(
       "aria-expanded",
@@ -4063,7 +4063,7 @@ describe("App", () => {
     await openProfiles();
     const applyButton = screen.getByRole("button", { name: "Apply" });
     expect(screen.getByRole("status", { name: "Profile readiness" }))
-      .toHaveTextContent("OpenCode unavailable");
+      .toHaveTextContent("Unavailable");
 
     fireEvent.click(applyButton);
 
@@ -4126,7 +4126,7 @@ describe("App", () => {
     expect(api.saveProfile).toHaveBeenCalledTimes(1);
 
     pendingSave.resolve({ ...profile, contentHash: "saved-profile-hash", targetContentHashes: { opencode: "saved-profile-hash" } });
-    await waitFor(() => expect(readiness).toHaveTextContent("Ready to take over OpenCode"));
+    await waitFor(() => expect(readiness).toHaveTextContent("Ready to apply"));
   });
 
   it("prevents duplicate shortcut saves while persistence is pending", async () => {
@@ -4535,7 +4535,7 @@ describe("App", () => {
     render(<App />);
     await openProfiles();
     let readiness = screen.getByRole("status", { name: "Profile readiness" });
-    expect(readiness).toHaveTextContent("Ready to take over OpenCode");
+    expect(readiness).toHaveTextContent("Ready to apply");
     let action = screen.getByRole("button", { name: "Apply" });
     expect(action).toHaveAttribute("title", "Take over OpenCode");
     fireEvent.click(action);
@@ -4566,7 +4566,7 @@ describe("App", () => {
     render(<App />);
     await openProfiles();
     readiness = screen.getByRole("status", { name: "Profile readiness" });
-    expect(readiness).toHaveTextContent("Ready for OpenCode");
+    expect(readiness).toHaveTextContent("Ready to apply");
     action = document.querySelector<HTMLButtonElement>(".profile-apply-button")!;
     expect(action).toHaveAttribute("title", "Preview & apply to OpenCode");
 
@@ -4596,7 +4596,7 @@ describe("App", () => {
     render(<App />);
     await openProfiles();
     readiness = screen.getByRole("status", { name: "Profile readiness" });
-    expect(readiness).toHaveTextContent("OpenCode unavailable");
+    expect(readiness).toHaveTextContent("Unavailable");
     action = screen.getByRole("button", { name: "Apply" });
     expect(action).toHaveAttribute("title", "Review OpenCode issues");
     fireEvent.click(action);
@@ -4614,7 +4614,7 @@ describe("App", () => {
     render(<App />);
     await openProfiles();
     readiness = screen.getByRole("status", { name: "Profile readiness" });
-    expect(readiness).toHaveTextContent("Ready to take over OpenCode");
+    expect(readiness).toHaveTextContent("Ready to apply");
     action = screen.getByRole("button", { name: "Apply" });
     fireEvent.click(action);
     await waitFor(() => expect(invalidApi.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
@@ -4646,7 +4646,7 @@ describe("App", () => {
     action = document.querySelector<HTMLButtonElement>(".profile-apply-button")!;
     expect(action).toHaveAttribute("title", "Preview & apply to OpenCode");
     readiness = screen.getByRole("status", { name: "Profile readiness" });
-    expect(readiness).toHaveTextContent("Review protected changes on OpenCode");
+    expect(readiness).toHaveTextContent("Needs review");
     expect(screen.queryByRole("button", { name: "Review preview" })).not.toBeInTheDocument();
     dialog = screen.getByRole("dialog", { name: "Preview" });
     expect(dialog).toHaveTextContent("Skill review changed outside AgentEnv");
@@ -4668,7 +4668,7 @@ describe("App", () => {
 
     await openProfiles();
     expect(screen.getByRole("status", { name: "Profile readiness" })).toHaveTextContent(
-      "Up to date on OpenCode"
+      "Up to date"
     );
     const action = screen.getByRole("button", { name: "Apply" });
     expect(action).toBeDisabled();
@@ -4730,7 +4730,7 @@ describe("App", () => {
 
     await openProfiles();
     expect(screen.getByRole("status", { name: "Profile readiness" })).toHaveTextContent(
-      "Recovery required on OpenCode"
+      "Needs review"
     );
     const openRecovery = screen.getByRole("button", { name: "Open Recovery" });
     expect(openRecovery).toHaveTextContent("Open Recovery");

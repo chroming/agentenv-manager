@@ -1965,39 +1965,23 @@ const AppContent = ({
       : readiness.status === "dirty" || readiness.status === "apply-pending"
         ? RefreshCw
         : TriangleAlert;
-  const readinessTargetName = selectedTarget?.name ?? t("Agent");
-  const readinessActionText =
-    profileSaveWorking || readiness.status === "dirty"
-      ? t("Saving changes...")
-      : readiness.status === "save-failed"
-        ? t("Changes could not be saved")
-    : isProfilePreviewing
-      ? t("Reviewing changes")
-      : isProfileApplying
-        ? t("Applying Profile")
-        : readiness.status === "applied"
-          ? t("Up to date on {{name}}", { name: readinessTargetName })
-          : readiness.status === "apply-pending"
-            ? t("Apply pending on {{name}}", { name: readinessTargetName })
-            : readiness.status === "unmanaged"
-              ? t("Ready to take over {{name}}", { name: readinessTargetName })
-              : readiness.status === "ready"
-                ? t("Ready for {{name}}", { name: readinessTargetName })
-                : readiness.status === "target-unavailable"
-                    ? t("{{name}} unavailable", { name: readinessTargetName })
-                    : readiness.status === "validation-error"
-                      ? t("Profile configuration needs review")
-                      : readiness.status === "review-required"
-                        ? t("Review protected changes on {{name}}", {
-                            name: readinessTargetName
-                          })
-                      : readiness.status === "preview-error"
-                        ? readiness.remediationLabel === "Open Recovery"
-                          ? t("Recovery required on {{name}}", { name: readinessTargetName })
-                          : t("Changes need review on {{name}}", { name: readinessTargetName })
-                        : readiness.status === "no-target"
-                          ? t("Select an Agent")
-                          : t(readiness.message);
+  const readinessActionText = (() => {
+    if (profileSaveWorking || readiness.status === "dirty") return t("Saving changes...");
+    if (readiness.status === "save-failed") return t("Changes could not be saved");
+    if (isProfilePreviewing) return t("Reviewing changes");
+    if (isProfileApplying) return t("Applying Profile");
+    if (readiness.status === "applied") return t("Up to date");
+    if (readiness.status === "apply-pending") return t("Changes pending");
+    if (readiness.status === "unmanaged" || readiness.status === "ready") {
+      return t("Ready to apply");
+    }
+    if (readiness.status === "target-unavailable") return t("Unavailable");
+    if (["validation-error", "review-required", "preview-error"].includes(readiness.status)) {
+      return t("Needs review");
+    }
+    if (readiness.status === "no-target") return t("Select an Agent");
+    return t(readiness.message);
+  })();
   const selectedProfileDeployment = draftProfile
     ? summarizeProfileApplications(draftProfile.id, targetStates, targets)
     : undefined;
@@ -3515,30 +3499,33 @@ const AppContent = ({
         aria-label={t("Profile readiness")}
         title={t(readiness.message)}
       >
-        <ReadinessIcon
-          className={profileSaveWorking ? "is-spinning" : undefined}
-          size={13}
-          strokeWidth={2.3}
-          aria-hidden="true"
-        />
-        <span
-          className="profile-action-status__primary"
-          data-ui-overflow-detail="true"
-          title={t(readinessActionText)}
-        >
-          {t(readinessActionText)}
+        <span className="profile-action-status__icon" aria-hidden="true">
+          <ReadinessIcon
+            className={profileSaveWorking ? "is-spinning" : undefined}
+            size={13}
+            strokeWidth={2.3}
+          />
         </span>
-        {selectedProfileDeploymentLabel ? (
-          <>
-            <span className="profile-action-status__divider" aria-hidden="true">·</span>
-            <span
-              className="profile-action-status__applications"
-              title={selectedProfileDeploymentTitle}
-            >
-              {selectedProfileDeploymentLabel}
-            </span>
-          </>
-        ) : null}
+        <span className="profile-action-status__text">
+          <span
+            className="profile-action-status__primary"
+            data-ui-overflow-detail="true"
+            title={t(readinessActionText)}
+          >
+            {t(readinessActionText)}
+          </span>
+          {selectedProfileDeploymentLabel ? (
+            <>
+              <span className="profile-action-status__divider" aria-hidden="true">·</span>
+              <span
+                className="profile-action-status__applications"
+                title={selectedProfileDeploymentTitle}
+              >
+                {selectedProfileDeploymentLabel}
+              </span>
+            </>
+          ) : null}
+        </span>
       </span>
       {readiness.remediationLabel ? (
         <button

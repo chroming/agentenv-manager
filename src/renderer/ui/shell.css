@@ -500,6 +500,35 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
   padding: 12px 8px 0;
 }
 
+.system-status-card__summary {
+  align-items: center;
+  display: grid;
+  gap: 0 8px;
+  grid-template-columns: 8px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  min-width: 0;
+}
+
+.system-status-card__summary .status-dot {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: center;
+}
+
+.system-status-card__summary strong,
+.system-status-card__summary .system-status-summary {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.system-status-card__summary strong {
+  grid-row: 1;
+}
+
+.system-status-card__summary .system-status-summary {
+  grid-row: 2;
+}
+
 .sidebar-agent-summary {
   height: 40px;
   position: relative;

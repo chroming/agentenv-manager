@@ -1798,6 +1798,11 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - A Profile or Workspace switcher presents the selected object's icon immediately before its name
   inside one clickable trigger. Identity artwork is not a separate selection target; Profile icon
   editing belongs to Profile details rather than competing with object switching.
+- The visible Profile or Workspace name and its supporting description share one text origin even
+  when the switcher keeps extra hover and click padding. Profile Agent identity and readiness use
+  one icon column and one text column; the visible readiness label does not repeat the Agent name
+  already shown directly above it. The expanded sidebar's Local Agents heading and summary share
+  the same text column beside their status marker.
 - Composite icon-and-input controls draw one border on the parent control. Their transparent borderless input remains inside the parent's content box and MUST NOT cover the parent edge at any supported width.
 - Editable single-line text fields and selects use the shared default control height, control radius, surface fill, strong border, and accent focus ring. Read-only and disabled fields remain selectable where appropriate but are visually distinct from editable fields. Search fields in workspaces and selection dialogs use the same composite-field geometry; Quick Open is the intentional command-palette exception.
 - Apply Preview keeps its header and footer stable. One modal body owns vertical scrolling; semantic resource groups never create another vertical scroll region, and long diff content owns only its code overflow.
