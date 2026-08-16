@@ -4,6 +4,10 @@ import { dirname } from "node:path";
 import type { AgentEnvPaths } from "./paths";
 import { isMissingFileError, pathExists } from "./fileUtils";
 import { createExecutableResolver } from "./executableDiscovery";
+import {
+  createMacApplicationDiscovery,
+  type MacApplicationDiscovery
+} from "./targets/macApplicationDiscovery";
 import type { TargetRegistry } from "./targets/registry";
 import { createTargetScope, type TargetScope } from "./targets/targetScope";
 import { createSettingsStore, type SettingsStore } from "./settingsStore";
@@ -11,6 +15,7 @@ import { targetPathInputFor } from "./targets/pathInput";
 import type {
   TargetHealth,
   TargetHealthStatus,
+  TargetExecutableSource,
   TargetConversationCapabilities,
   TargetInfo,
   TargetPathCheck,
@@ -26,6 +31,7 @@ export interface TargetDiscoveryOptions {
   shellPathLookup?: boolean;
   platform?: NodeJS.Platform;
   allowSystemApplicationLookup?: boolean;
+  macApplicationDiscovery?: MacApplicationDiscovery;
   settingsStore?: SettingsStore;
 }
 
@@ -117,9 +123,16 @@ const summarizeHealth = (
   status: TargetHealthStatus,
   targetName: string,
   installationFound: boolean,
-  missingRequiredPaths: number
+  missingRequiredPaths: number,
+  executableStatus: TargetHealth["executableStatus"]
 ) => {
   if (status === "ready") {
+    if (executableStatus === "unknown") {
+      return "Detected; runtime check failed";
+    }
+    if (executableStatus === "missing") {
+      return "Detected; runtime unavailable";
+    }
     if (missingRequiredPaths > 0) {
       return "Ready; setup files will be created";
     }
@@ -149,8 +162,8 @@ const conversationCapabilitiesFor = (
 ): TargetConversationCapabilities => {
   const conversations = adapter.conversations;
   const executableEvidence = health.executablePath
-    ? [`Command: ${health.executablePath}`]
-    : ["No compatible command was detected"];
+    ? [`Runtime: ${health.executablePath}`]
+    : ["No compatible runtime was detected"];
   const installationEvidence = health.installationEvidence.map(
     (evidence) => `${evidence.label}: ${evidence.path}`
   );
@@ -221,6 +234,13 @@ export const createTargetDiscoveryService = (
     string,
     { path?: string; checkedAt: number }
   >();
+  const bundledRuntimeCache = new Map<
+    string,
+    {
+      result: Awaited<ReturnType<MacApplicationDiscovery["probeExecutable"]>>;
+      checkedAt: number;
+    }
+  >();
   const executableCacheTtlMs = 30_000;
   const executableResolver = createExecutableResolver({
     pathEnv,
@@ -230,6 +250,8 @@ export const createTargetDiscoveryService = (
     systemPathLookup,
     shellPathLookup
   });
+  const macApplicationDiscovery =
+    options.macApplicationDiscovery ?? createMacApplicationDiscovery();
   const discoverExecutable = async (name: string, forceRefresh: boolean) => {
     const cached = executableCache.get(name);
     if (!forceRefresh && cached && Date.now() - cached.checkedAt < executableCacheTtlMs) {
@@ -246,6 +268,20 @@ export const createTargetDiscoveryService = (
     const path = await executableResolver.find(name);
     executableCache.set(name, { path, checkedAt: Date.now() });
     return path;
+  };
+  const probeBundledRuntime = async (
+    path: string,
+    args: string[] | undefined,
+    forceRefresh: boolean
+  ) => {
+    const key = `${path}\u0000${(args ?? ["--version"]).join("\u0000")}`;
+    const cached = bundledRuntimeCache.get(key);
+    if (!forceRefresh && cached && Date.now() - cached.checkedAt < executableCacheTtlMs) {
+      return cached.result;
+    }
+    const result = await macApplicationDiscovery.probeExecutable(path, args);
+    bundledRuntimeCache.set(key, { result, checkedAt: Date.now() });
+    return result;
   };
   const discoverAdapters = async (
     adapters: ReturnType<TargetRegistry["listAdapters"]>,
@@ -305,7 +341,13 @@ export const createTargetDiscoveryService = (
               if (probeCandidates.includes(name)) return undefined;
               return discoverExecutable(name, listOptions.forceRefresh === true);
             },
-            pathExists: pathExistsByStat
+            pathExists: pathExistsByStat,
+            findMacApplicationsByBundleIdentifier: (bundleIdentifier) =>
+              macApplicationDiscovery.findApplicationsByBundleIdentifier(bundleIdentifier),
+            readMacApplicationBundleIdentifier: (applicationPath) =>
+              macApplicationDiscovery.readBundleIdentifier(applicationPath),
+            probeExecutable: (path, args) =>
+              probeBundledRuntime(path, args, listOptions.forceRefresh === true)
           });
         } catch (error) {
           installationError = errorMessage(error);
@@ -329,12 +371,25 @@ export const createTargetDiscoveryService = (
         executableCandidate ??= commandEvidence
           ? probeCandidates.find((candidate) => candidate === executableName) ?? executableName
           : undefined;
-        const executableFound = Boolean(commandEvidence);
+        let executableSource: TargetExecutableSource | undefined = executablePath
+          ? executableCandidate === executableOverride
+            ? "override" as const
+            : "path" as const
+          : undefined;
+        let executableVersion: string | undefined;
+        if (!executablePath && installation.runtime?.status === "found") {
+          executablePath = installation.runtime.path;
+          executableSource = installation.runtime.source;
+          executableVersion = installation.runtime.version;
+        }
+        const executableFound = Boolean(executablePath);
         const installationFound = installation.found;
-        const executableError = executableProbeError ?? installationError;
+        const executableError = executablePath
+          ? undefined
+          : executableProbeError ?? installationError ?? installation.runtime?.error;
         const executableStatus = executablePath
           ? "found" as const
-          : executableError
+          : executableError || installation.runtime?.status === "unknown"
             ? "unknown" as const
             : "missing" as const;
         const checks = await createChecks(targetPaths);
@@ -365,13 +420,16 @@ export const createTargetDiscoveryService = (
           executableOverride,
           executableError,
           executablePath,
+          executableSource,
+          executableVersion,
           executableFound,
           canWrite,
           summary: summarizeHealth(
             status,
             adapter.descriptor.name,
             installationFound,
-            missingRequiredPaths
+            missingRequiredPaths,
+            executableStatus
           ),
           checks
         };

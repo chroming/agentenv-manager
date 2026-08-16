@@ -1908,6 +1908,8 @@ export type TargetHealthStatus = "ready" | "needs-setup" | "missing" | "guarded"
 
 export type TargetExecutableStatus = "found" | "missing" | "unknown";
 
+export type TargetExecutableSource = "override" | "path" | "bundled-runtime";
+
 export interface TargetPathCheck {
   id:
     | "configDir"
@@ -1935,6 +1937,8 @@ export interface TargetHealth {
   executableOverride?: string;
   executableError?: string;
   executablePath?: string;
+  executableSource?: TargetExecutableSource;
+  executableVersion?: string;
   executableFound: boolean;
   canWrite: boolean;
   summary: string;

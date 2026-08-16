@@ -281,8 +281,8 @@ export const deriveProfileComparisonControl = ({
   if (!target.health.executablePath) {
     return {
       disabled: true,
-      description: "Install the {{target}} command to compare this Profile",
-      unavailableReason: "Install the {{target}} command to compare this Profile"
+      description: "A compatible {{target}} runtime is required to compare this Profile",
+      unavailableReason: "A compatible {{target}} runtime is required to compare this Profile"
     };
   }
   return {

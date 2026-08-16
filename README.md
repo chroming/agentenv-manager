@@ -89,7 +89,7 @@ Conversations 只读索引本机 Agent 的历史记录。可以搜索标题和�
 
 - OpenCode
 - Claude Code
-- Codex
+- Codex（独立 CLI，或新版 ChatGPT 桌面端内置的 Codex）
 - Antigravity CLI
 - Trae CLI
 - Pi Coding Agent

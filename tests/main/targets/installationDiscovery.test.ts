@@ -125,14 +125,100 @@ describe("desktop-capable installation discovery", () => {
       homeDir: "/Users/test",
       allowSystemApplicationLookup: false,
       findExecutable: vi.fn().mockResolvedValue(undefined),
-      pathExists: vi.fn(async (path: string) => path === "/Users/test/Applications/Codex.app")
+      pathExists: vi.fn(async (path: string) => path === "/Users/test/Applications/Codex.app"),
+      readMacApplicationBundleIdentifier: vi.fn().mockResolvedValue("com.openai.codex"),
+      probeExecutable: vi.fn().mockResolvedValue({ status: "missing" })
     })).resolves.toEqual({
       found: true,
       evidence: [{
         kind: "desktop-app",
         label: "Codex app",
         path: "/Users/test/Applications/Codex.app"
-      }]
+      }],
+      runtime: {
+        source: "bundled-runtime",
+        label: "Bundled Codex",
+        path: "/Users/test/Applications/Codex.app/Contents/Resources/codex",
+        status: "missing"
+      }
+    });
+  });
+
+  it("detects Codex through a verified ChatGPT bundle and exposes its bundled runtime", async () => {
+    const applicationPath = "/Users/test/Applications/ChatGPT.app";
+    const runtimePath = `${applicationPath}/Contents/Resources/codex`;
+    const codex = createBuiltInTargetAdapters().find((adapter) => adapter.descriptor.id === "codex");
+
+    await expect(codex?.detectInstallation({
+      platform: "darwin",
+      homeDir: "/Users/test",
+      allowSystemApplicationLookup: false,
+      findExecutable: vi.fn().mockResolvedValue(undefined),
+      pathExists: vi.fn(async (path: string) => path === applicationPath),
+      findMacApplicationsByBundleIdentifier: vi.fn().mockResolvedValue([]),
+      readMacApplicationBundleIdentifier: vi.fn().mockResolvedValue("com.openai.codex"),
+      probeExecutable: vi.fn().mockResolvedValue({
+        status: "found",
+        version: "codex-cli 0.148.0-alpha.9"
+      })
+    })).resolves.toEqual({
+      found: true,
+      evidence: [{
+        kind: "desktop-app",
+        label: "ChatGPT app",
+        path: applicationPath
+      }],
+      runtime: {
+        source: "bundled-runtime",
+        label: "Bundled Codex",
+        path: runtimePath,
+        status: "found",
+        version: "codex-cli 0.148.0-alpha.9"
+      }
+    });
+  });
+
+  it("rejects a ChatGPT-named application with the wrong bundle identity", async () => {
+    const applicationPath = "/Users/test/Applications/ChatGPT.app";
+    const codex = createBuiltInTargetAdapters().find((adapter) => adapter.descriptor.id === "codex");
+
+    await expect(codex?.detectInstallation({
+      platform: "darwin",
+      homeDir: "/Users/test",
+      allowSystemApplicationLookup: false,
+      findExecutable: vi.fn().mockResolvedValue(undefined),
+      pathExists: vi.fn(async (path: string) => path === applicationPath),
+      findMacApplicationsByBundleIdentifier: vi.fn().mockResolvedValue([]),
+      readMacApplicationBundleIdentifier: vi.fn().mockResolvedValue("com.example.fake-chatgpt"),
+      probeExecutable: vi.fn()
+    })).resolves.toEqual({ found: false, evidence: [] });
+  });
+
+  it("finds a verified Codex application outside conventional application folders", async () => {
+    const applicationPath = "/Volumes/Tools/ChatGPT Preview.app";
+    const runtimePath = `${applicationPath}/Contents/Resources/codex`;
+    const codex = createBuiltInTargetAdapters().find((adapter) => adapter.descriptor.id === "codex");
+
+    await expect(codex?.detectInstallation({
+      platform: "darwin",
+      homeDir: "/Users/test",
+      allowSystemApplicationLookup: true,
+      findExecutable: vi.fn().mockResolvedValue(undefined),
+      pathExists: vi.fn(async (path: string) => path === applicationPath),
+      findMacApplicationsByBundleIdentifier: vi.fn().mockResolvedValue([applicationPath]),
+      readMacApplicationBundleIdentifier: vi.fn().mockResolvedValue("com.openai.codex"),
+      probeExecutable: vi.fn().mockResolvedValue({
+        status: "found",
+        version: "codex-cli spotlight"
+      })
+    })).resolves.toMatchObject({
+      found: true,
+      evidence: [{ kind: "desktop-app", path: applicationPath }],
+      runtime: {
+        path: runtimePath,
+        status: "found",
+        version: "codex-cli spotlight"
+      }
     });
   });
 });

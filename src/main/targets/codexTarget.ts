@@ -73,7 +73,26 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
   },
   detectInstallation: createInstallationDriver({
     commands: ["codex"],
-    macApplications: [{ bundleName: "Codex.app", label: "Codex app" }]
+    macApplications: [
+      {
+        bundleName: "ChatGPT.app",
+        label: "ChatGPT app",
+        bundleIdentifier: "com.openai.codex",
+        bundledExecutable: {
+          relativePath: "Contents/Resources/codex",
+          label: "Bundled Codex"
+        }
+      },
+      {
+        bundleName: "Codex.app",
+        label: "Codex app",
+        bundleIdentifier: "com.openai.codex",
+        bundledExecutable: {
+          relativePath: "Contents/Resources/codex",
+          label: "Bundled Codex"
+        }
+      }
+    ]
   }).detectInstallation,
   createTargetPaths: ({ homeDir, rootDirOverride }) => {
     const codexHome = rootDirOverride ?? join(homeDir, ".codex");

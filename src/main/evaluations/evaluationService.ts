@@ -288,7 +288,7 @@ export const createEvaluationService = (
     ]);
     const target = targets.find((candidate) => candidate.id === input.targetId);
     if (!target?.health.executablePath) {
-      throw new Error(`${adapter.descriptor.name} command was not found`);
+      throw new Error(`${adapter.descriptor.name} runtime was not found`);
     }
     const excludeMcp = true;
     const currentProfile = currentEnvironmentProfile(profile, input.targetId);

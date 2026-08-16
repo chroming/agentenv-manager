@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { TargetDiscoveryDriver } from "./contract";
 import type {
   TargetInstallationInput,
@@ -8,6 +8,12 @@ import type {
 interface MacApplicationProbe {
   bundleName: string;
   label: string;
+  bundleIdentifier?: string;
+  bundledExecutable?: {
+    relativePath: string;
+    label: string;
+    versionArgs?: string[];
+  };
 }
 
 interface InstallationDriverOptions {
@@ -29,23 +35,95 @@ export const createInstallationDriver = ({
       }
     }
 
+    let runtime: TargetInstallationResult["runtime"];
     if (input.platform === "darwin") {
-      for (const application of macApplications) {
-        const userPath = join(input.homeDir, "Applications", application.bundleName);
-        if (await input.pathExists(userPath)) {
-          evidence.push({ kind: "desktop-app", label: application.label, path: userPath });
-        }
-
+      const applicationCandidates: Array<{
+        path: string;
+        probe: MacApplicationProbe;
+      }> = [];
+      for (const probe of macApplications) {
+        applicationCandidates.push({
+          path: join(input.homeDir, "Applications", probe.bundleName),
+          probe
+        });
         if (input.allowSystemApplicationLookup) {
-          const systemPath = join("/Applications", application.bundleName);
-          if (await input.pathExists(systemPath)) {
-            evidence.push({ kind: "desktop-app", label: application.label, path: systemPath });
+          applicationCandidates.push({
+            path: join("/Applications", probe.bundleName),
+            probe
+          });
+        }
+      }
+      if (
+        input.allowSystemApplicationLookup &&
+        input.findMacApplicationsByBundleIdentifier
+      ) {
+        const bundleIdentifiers = [...new Set(macApplications
+          .map((probe) => probe.bundleIdentifier)
+          .filter((value): value is string => Boolean(value)))];
+        for (const bundleIdentifier of bundleIdentifiers) {
+          for (const path of await input.findMacApplicationsByBundleIdentifier(bundleIdentifier)) {
+            const probe = macApplications.find((candidate) =>
+              candidate.bundleIdentifier === bundleIdentifier &&
+              candidate.bundleName === basename(path)
+            ) ?? macApplications.find((candidate) =>
+              candidate.bundleIdentifier === bundleIdentifier
+            );
+            if (probe) applicationCandidates.push({ path, probe });
+          }
+        }
+      }
+
+      const verifiedApplications: typeof applicationCandidates = [];
+      const observedPaths = new Set<string>();
+      for (const candidate of applicationCandidates) {
+        if (observedPaths.has(candidate.path)) continue;
+        observedPaths.add(candidate.path);
+        if (!await input.pathExists(candidate.path)) continue;
+        if (candidate.probe.bundleIdentifier) {
+          const actualBundleIdentifier =
+            await input.readMacApplicationBundleIdentifier?.(candidate.path);
+          if (actualBundleIdentifier !== candidate.probe.bundleIdentifier) continue;
+        }
+        verifiedApplications.push(candidate);
+        evidence.push({
+          kind: "desktop-app",
+          label: candidate.probe.label,
+          path: candidate.path
+        });
+      }
+
+      const commandFound = evidence.some((item) => item.kind === "command");
+      if (!commandFound) {
+        for (const candidate of verifiedApplications) {
+          const bundledExecutable = candidate.probe.bundledExecutable;
+          if (!bundledExecutable) continue;
+          const path = join(candidate.path, bundledExecutable.relativePath);
+          const probeResult = input.probeExecutable
+            ? await input.probeExecutable(path, bundledExecutable.versionArgs)
+            : {
+                status: "unknown" as const,
+                error: "Bundled runtime could not be checked"
+              };
+          const candidateRuntime: NonNullable<TargetInstallationResult["runtime"]> = {
+            source: "bundled-runtime",
+            label: bundledExecutable.label,
+            path,
+            ...probeResult
+          };
+          runtime ??= candidateRuntime;
+          if (probeResult.status === "found") {
+            runtime = candidateRuntime;
+            break;
           }
         }
       }
     }
 
-    return { found: evidence.length > 0, evidence };
+    return {
+      found: evidence.length > 0,
+      evidence,
+      ...(runtime ? { runtime } : {})
+    };
   }
 });
 

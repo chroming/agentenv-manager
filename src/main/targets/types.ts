@@ -7,6 +7,7 @@ import type {
   ProfileDetail,
   TargetActivationPreview,
   TargetDescriptor,
+  TargetExecutableStatus,
   TargetInstallationEvidence,
   TargetPaths,
   SkillRuntimeNativeState,
@@ -62,11 +63,29 @@ export interface TargetInstallationInput {
   allowSystemApplicationLookup: boolean;
   findExecutable(name: string): Promise<string | undefined>;
   pathExists(path: string): Promise<boolean>;
+  findMacApplicationsByBundleIdentifier?(bundleIdentifier: string): Promise<string[]>;
+  readMacApplicationBundleIdentifier?(applicationPath: string): Promise<string | undefined>;
+  probeExecutable?(
+    executablePath: string,
+    args?: string[]
+  ): Promise<{
+    status: TargetExecutableStatus;
+    version?: string;
+    error?: string;
+  }>;
 }
 
 export interface TargetInstallationResult {
   found: boolean;
   evidence: TargetInstallationEvidence[];
+  runtime?: {
+    source: "bundled-runtime";
+    label: string;
+    path: string;
+    status: TargetExecutableStatus;
+    version?: string;
+    error?: string;
+  };
 }
 
 export interface AgentConversationCandidate {

@@ -99,7 +99,7 @@ const inspect = async (input: EvaluationProbeInput): Promise<EvaluationAvailabil
   if (!input.executablePath || !isAbsolute(input.executablePath)) {
     return {
       available: false,
-      reason: "Codex command was not found",
+      reason: "Codex runtime was not found",
       fidelity: "partial",
       mcpIncludedCount: 0,
       mcpOmittedCount: 0,

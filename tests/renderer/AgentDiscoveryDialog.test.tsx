@@ -80,4 +80,37 @@ describe("AgentDiscoveryDialog", () => {
     expect(within(dialog).getByRole("button", { name: "Enable 1 Agent" }))
       .toBeEnabled();
   });
+
+  it("identifies Codex through ChatGPT instead of presenting the bundled binary as the app", () => {
+    const codex = agent("codex", "Codex", true);
+    codex.health = {
+      ...codex.health,
+      installationEvidence: [{
+        kind: "desktop-app",
+        label: "ChatGPT app",
+        path: "/Applications/ChatGPT.app"
+      }],
+      executablePath: "/Applications/ChatGPT.app/Contents/Resources/codex",
+      executableSource: "bundled-runtime",
+      executableVersion: "codex-cli 0.148.0-alpha.9"
+    };
+
+    render(
+      <AgentDiscoveryDialog
+        agents={[codex]}
+        allowSuggestionPreferences={false}
+        busy={false}
+        open
+        phase="choose"
+        setupActions={{}}
+        onConfigure={vi.fn()}
+        onDismiss={vi.fn()}
+        onEnable={vi.fn().mockResolvedValue(undefined)}
+        onSuppress={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    expect(screen.getByText("/Applications/ChatGPT.app")).toBeInTheDocument();
+    expect(screen.queryByText(/Contents\/Resources\/codex/)).not.toBeInTheDocument();
+  });
 });

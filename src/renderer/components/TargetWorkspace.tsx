@@ -84,18 +84,23 @@ const targetStatusLabel: Record<TargetInfo["health"]["status"], string> = {
   unknown: "Check failed"
 };
 
-const executableStatusLabel: Record<TargetInfo["health"]["executableStatus"], string> = {
-  found: "Detected",
-  missing: "Not detected",
-  unknown: "Check failed"
-};
-
 const installationEvidenceName = (
   evidence: TargetInfo["health"]["installationEvidence"][number],
   t: ReturnType<typeof useI18n>["t"]
 ) => evidence.kind === "command"
   ? t("{{name}} command", { name: evidence.label.replace(/ command$/, "") })
   : t("{{name}} app", { name: evidence.label.replace(/ app$/, "") });
+
+const executableSourceLabel = (
+  health: TargetInfo["health"],
+  t: ReturnType<typeof useI18n>["t"]
+) => {
+  if (health.executableStatus === "unknown") return t("Check failed");
+  if (health.executableStatus === "missing") return t("Unavailable");
+  if (health.executableSource === "bundled-runtime") return t("Bundled with app");
+  if (health.executableSource === "override") return t("Custom command");
+  return t("Command detected");
+};
 
 const formatLastApplied = (value: string | undefined, locale: string, neverApplied: string) => {
   if (!value) return neverApplied;
@@ -505,11 +510,13 @@ export const TargetWorkspace = ({
                     </div>
                     <div className="target-check">
                       <div>
-                        <span>{t("Command")}</span>
+                        <span>{t("Runtime")}</span>
                         <OverflowTooltip
                           className="target-check-path"
                           displayText={
-                            target.health.executablePath ??
+                            target.health.executableVersion && target.health.executablePath
+                              ? `${target.health.executableVersion} · ${target.health.executablePath}`
+                              : target.health.executablePath ??
                             target.health.executableOverride ??
                             target.health.executableCandidates.join(" · ")
                           }
@@ -518,8 +525,14 @@ export const TargetWorkspace = ({
                               ? `Override: ${target.health.executableOverride}`
                               : undefined,
                             `Candidates: ${target.health.executableCandidates.join(", ")}`,
+                            target.health.executableSource
+                              ? `Source: ${target.health.executableSource}`
+                              : undefined,
                             target.health.executablePath
                               ? `Resolved: ${target.health.executablePath}`
+                              : undefined,
+                            target.health.executableVersion
+                              ? `Version: ${target.health.executableVersion}`
                               : undefined,
                             target.health.executableError
                               ? `Error: ${target.health.executableError}`
@@ -527,7 +540,7 @@ export const TargetWorkspace = ({
                           ].filter(Boolean).join("\n")}
                         />
                       </div>
-                      <strong>{t(executableStatusLabel[target.health.executableStatus])}</strong>
+                      <strong>{executableSourceLabel(target.health, t)}</strong>
                     </div>
                     {target.health.checks.map((check) => (
                       <div className="target-check" key={check.id}>

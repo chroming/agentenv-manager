@@ -97,8 +97,9 @@ export const AgentDiscoveryDialog = ({
         {agents.map((agent) => {
           const icon = targetIconFor(agent);
           const installed = isTargetInstalled(agent.health);
-          const evidence = agent.health.executablePath
-            ?? agent.health.installationEvidence[0]?.path;
+          const evidence = agent.health.executableSource === "bundled-runtime"
+            ? agent.health.installationEvidence[0]?.path ?? agent.health.executablePath
+            : agent.health.executablePath ?? agent.health.installationEvidence[0]?.path;
           const checked = selected.has(agent.id);
           const setupAction = setupActions[agent.id] ?? { kind: "review-current" as const };
           const setupCopy = setupAction.kind === "open-profile"

@@ -1203,6 +1203,8 @@ const initializeServices = () => {
                   executableOverride: target.health.executableOverride,
                   executableStatus: target.health.executableStatus,
                   executablePath: target.health.executablePath,
+                  executableSource: target.health.executableSource,
+                  executableVersion: target.health.executableVersion,
                   executableFound: target.health.executableFound,
                   executableError: target.health.executableError,
                   canWrite: target.health.canWrite,

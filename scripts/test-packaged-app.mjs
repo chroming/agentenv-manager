@@ -198,6 +198,7 @@ const launchPackagedApplication = () =>
       AGENTENV_CACHE_ROOT: join(root, "cache"),
       AGENTENV_FAKE_HOME: fakeHomeRoot,
       AGENTENV_HOME: homeDir,
+      AGENTENV_AUTOMATION_TARGET_PATH: join(homeDir, ".local", "bin"),
       ...(process.platform === "win32" ? { ELECTRON_ENABLE_LOGGING: "1" } : {}),
       PATH: process.platform === "win32"
         ? [
@@ -242,7 +243,25 @@ try {
   await mkdir(repositoryWork, { recursive: true });
   await mkdir(projectRoot, { recursive: true });
   await writeFile(join(projectRoot, "AGENTS.md"), "# Packaged Project\n", "utf8");
+  if (process.platform === "darwin") {
+    const chatGptApp = join(homeDir, "Applications", "ChatGPT.app");
+    const chatGptResources = join(chatGptApp, "Contents", "Resources");
+    await mkdir(chatGptResources, { recursive: true });
+    await writeFile(join(chatGptApp, "Contents", "Info.plist"), [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
+      '<plist version="1.0"><dict>',
+      '<key>CFBundleIdentifier</key><string>com.openai.codex</string>',
+      '<key>CFBundleName</key><string>ChatGPT</string>',
+      '</dict></plist>',
+      ''
+    ].join("\n"), "utf8");
+    const bundledCodex = join(chatGptResources, "codex");
+    await writeFile(bundledCodex, "#!/bin/sh\necho 'codex-cli packaged-bundled'\n", "utf8");
+    await chmod(bundledCodex, 0o755);
+  }
   for (const target of packagedTargets) {
+    if (process.platform === "darwin" && target.id === "codex") continue;
     await mkdir(dirname(target.executablePath), { recursive: true });
     await writeFile(
       target.executablePath,
@@ -381,6 +400,13 @@ try {
       const agent = page.getByRole("article", { name: `Agent ${target.name}` });
       await agent.waitFor({ state: "visible" });
       assert.match((await agent.textContent()) ?? "", /Ready/);
+    }
+    if (process.platform === "darwin") {
+      await page.getByRole("button", { name: "More actions for Codex" }).click();
+      await page.getByRole("menuitem", { name: "Diagnostics" }).click();
+      const diagnostics = page.getByRole("region", { name: "Codex diagnostics" });
+      assert.match((await diagnostics.textContent()) ?? "", /Bundled with app/);
+      assert.match((await diagnostics.textContent()) ?? "", /codex-cli packaged-bundled/);
     }
   });
   const reviewOpenCodeCapture = async (expectedAdvisoryCount) => {

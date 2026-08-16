@@ -183,12 +183,14 @@ This must not be described as Developer ID signed, notarized, or approved by Gat
 ## Installed Agent probe
 
 `npm run test:compat:installed` reports the locally installed command and
-version for every supported Agent without mutating its files. It is advisory by
-default. To require selected Agents:
+version for every supported Agent without mutating its files. On macOS it also
+verifies the Codex identity inside `ChatGPT.app` or the legacy `Codex.app`, then
+probes the bundled Codex runtime when no standalone command is available. It is
+advisory by default. To require selected Agents:
 
 ```bash
 AGENTENV_REQUIRE_REAL_AGENTS=codex,opencode npm run test:compat:installed
 ```
 
-This probe proves executable compatibility only. It does not replace isolated
-filesystem tests or packaged Apply verification.
+This probe proves application and executable compatibility only. It does not
+replace isolated filesystem tests or packaged Apply verification.

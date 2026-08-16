@@ -4938,7 +4938,8 @@ describe("App", () => {
     const diagnostics = screen.getByRole("region", { name: "OpenCode diagnostics" });
     expect(within(diagnostics).getByText("Detected via")).toBeInTheDocument();
     expect(within(diagnostics).getByText("opencode command")).toBeInTheDocument();
-    expect(within(diagnostics).getByText("Command")).toBeInTheDocument();
+    expect(within(diagnostics).getByText("Runtime")).toBeInTheDocument();
+    expect(within(diagnostics).getByText("Command detected")).toBeInTheDocument();
     expect(within(diagnostics).getByText("/usr/local/bin/opencode")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Stop managing OpenCode" }));
 
@@ -4957,6 +4958,41 @@ describe("App", () => {
     fireEvent.click(confirmButton);
 
     await waitFor(() => expect(api.stopManaging).toHaveBeenCalledWith("stop-managing-1"));
+  });
+
+  it("distinguishes a Codex runtime bundled with ChatGPT from a shell command", async () => {
+    const bundledCodexTarget: TargetInfo = {
+      ...codexTarget,
+      health: {
+        ...codexTarget.health,
+        installationEvidence: [{
+          kind: "desktop-app",
+          label: "ChatGPT app",
+          path: "/Applications/ChatGPT.app"
+        }],
+        executableName: "codex",
+        executableCandidates: ["codex"],
+        executableCandidate: undefined,
+        executablePath: "/Applications/ChatGPT.app/Contents/Resources/codex",
+        executableSource: "bundled-runtime",
+        executableVersion: "codex-cli 0.148.0-alpha.9"
+      }
+    };
+    installApi({
+      listTargets: vi.fn().mockResolvedValue([bundledCodexTarget]),
+      listSupportedTargets: vi.fn().mockResolvedValue([bundledCodexTarget]),
+      probeSupportedTargets: vi.fn().mockResolvedValue([bundledCodexTarget])
+    });
+    render(<App />);
+
+    await screen.findByRole("region", { name: "Agents" });
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Codex" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Diagnostics" }));
+    const diagnostics = screen.getByRole("region", { name: "Codex diagnostics" });
+
+    expect(within(diagnostics).getByText("ChatGPT app")).toBeInTheDocument();
+    expect(within(diagnostics).getByText("Bundled with app")).toBeInTheDocument();
+    expect(within(diagnostics).getByText(/codex-cli 0\.148\.0-alpha\.9/)).toBeInTheDocument();
   });
 
   it("previews, cancels, and restores an AgentEnv data backup from Settings", async () => {

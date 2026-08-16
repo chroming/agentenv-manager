@@ -1,12 +1,13 @@
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createPaths } from "../../src/main/paths";
 import { pathExists } from "../../src/main/fileUtils";
 import { createSettingsStore } from "../../src/main/settingsStore";
 import { createClaudeCodeTargetAdapter } from "../../src/main/targets/claudeCodeTarget";
 import { createTargetDiscoveryService } from "../../src/main/targetDiscovery";
+import type { MacApplicationDiscovery } from "../../src/main/targets/macApplicationDiscovery";
 import { createCodexTargetAdapter } from "../../src/main/targets/codexTarget";
 import { createOpenCodeTargetAdapter } from "../../src/main/targets/opencodeTarget";
 import { createTargetRegistry } from "../../src/main/targets/registry";
@@ -18,7 +19,10 @@ import { createFixtureAgentAdapter } from "../fixtures/targets/fixtureAgent";
 
 let root = "";
 
-const makeService = async (options: { platform?: NodeJS.Platform } = {}) => {
+const makeService = async (options: {
+  platform?: NodeJS.Platform;
+  macApplicationDiscovery?: MacApplicationDiscovery;
+} = {}) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-discovery-"));
   const binDir = join(root, "bin");
   await mkdir(binDir, { recursive: true });
@@ -46,10 +50,11 @@ const makeService = async (options: { platform?: NodeJS.Platform } = {}) => {
     targetRegistry,
     targetScope,
     pathEnv: binDir,
-    platform: options.platform
+    platform: options.platform,
+    macApplicationDiscovery: options.macApplicationDiscovery
   });
 
-  return { binDir, paths, service, settingsStore, targetScope };
+  return { binDir, paths, service, settingsStore, targetRegistry, targetScope };
 };
 
 afterEach(async () => {
@@ -419,8 +424,172 @@ describe("target discovery", () => {
     });
   });
 
+  it("uses the verified ChatGPT bundled Codex runtime when no command is in PATH", async () => {
+    const runtimeVersion = "codex-cli 0.148.0-alpha.9";
+    const macApplicationDiscovery: MacApplicationDiscovery = {
+      findApplicationsByBundleIdentifier: vi.fn().mockResolvedValue([]),
+      readBundleIdentifier: vi.fn().mockResolvedValue("com.openai.codex"),
+      probeExecutable: vi.fn().mockResolvedValue({
+        status: "found",
+        version: runtimeVersion
+      })
+    };
+    const { service, targetRegistry } = await makeService({
+      platform: "darwin",
+      macApplicationDiscovery
+    });
+    const applicationPath = join(root, "Applications", "ChatGPT.app");
+    const runtimePath = join(applicationPath, "Contents", "Resources", "codex");
+    await mkdir(applicationPath, { recursive: true });
+
+    const codex = (await service.listTargets({ forceRefresh: true }))
+      .find((target) => target.id === "codex");
+
+    expect(codex?.health).toMatchObject({
+      status: "ready",
+      installationFound: true,
+      executableStatus: "found",
+      executablePath: runtimePath,
+      executableSource: "bundled-runtime",
+      executableVersion: runtimeVersion,
+      executableFound: true,
+      canWrite: true
+    });
+    expect(codex?.health.executableCandidate).toBeUndefined();
+    expect(codex?.health.installationEvidence).toEqual([{
+      kind: "desktop-app",
+      label: "ChatGPT app",
+      path: applicationPath
+    }]);
+    expect(codex?.conversationCapabilities).toMatchObject({
+      openOriginal: { state: "available" },
+      continue: { state: "available", delivery: "context-file" }
+    });
+    const adapter = targetRegistry.get("codex");
+    expect(adapter.projects?.createLaunchSpec({
+      executablePath: codex?.health.executablePath,
+      projectRoot: "/workspace/example"
+    })).toEqual({
+      executablePath: runtimePath,
+      args: [],
+      cwd: "/workspace/example"
+    });
+    await expect(adapter.evaluations?.checkAvailability({
+      profile: adapter.createDefaultProfile("chatgpt-codex"),
+      targetPaths: codex!.paths,
+      sourceHomeDir: root,
+      executablePath: codex?.health.executablePath,
+      knownCliVersion: runtimeVersion,
+      excludeMcp: true,
+      platform: "darwin",
+      environment: {}
+    })).resolves.toMatchObject({
+      available: true,
+      cliVersion: runtimeVersion
+    });
+    await service.listTargets();
+    expect(macApplicationDiscovery.probeExecutable).toHaveBeenCalledTimes(1);
+    await service.listTargets({ forceRefresh: true });
+    expect(macApplicationDiscovery.probeExecutable).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps Codex resource management available when ChatGPT has no usable runtime", async () => {
+    const macApplicationDiscovery: MacApplicationDiscovery = {
+      findApplicationsByBundleIdentifier: vi.fn().mockResolvedValue([]),
+      readBundleIdentifier: vi.fn().mockResolvedValue("com.openai.codex"),
+      probeExecutable: vi.fn().mockResolvedValue({ status: "missing" })
+    };
+    const { service } = await makeService({
+      platform: "darwin",
+      macApplicationDiscovery
+    });
+    await mkdir(join(root, "Applications", "ChatGPT.app"), { recursive: true });
+
+    const codex = (await service.listTargets({ forceRefresh: true }))
+      .find((target) => target.id === "codex");
+
+    expect(codex?.health).toMatchObject({
+      status: "ready",
+      summary: "Detected; runtime unavailable",
+      installationFound: true,
+      executableStatus: "missing",
+      executableFound: false,
+      canWrite: true
+    });
+    expect(codex?.conversationCapabilities).toMatchObject({
+      openOriginal: { state: "unavailable" },
+      continue: { state: "degraded", delivery: "clipboard" }
+    });
+  });
+
+  it("reports a bounded bundled-runtime probe failure without hiding the Codex installation", async () => {
+    const macApplicationDiscovery: MacApplicationDiscovery = {
+      findApplicationsByBundleIdentifier: vi.fn().mockResolvedValue([]),
+      readBundleIdentifier: vi.fn().mockResolvedValue("com.openai.codex"),
+      probeExecutable: vi.fn().mockResolvedValue({
+        status: "unknown",
+        error: "Bundled runtime check timed out"
+      })
+    };
+    const { service } = await makeService({
+      platform: "darwin",
+      macApplicationDiscovery
+    });
+    await mkdir(join(root, "Applications", "ChatGPT.app"), { recursive: true });
+
+    const codex = (await service.listTargets({ forceRefresh: true }))
+      .find((target) => target.id === "codex");
+
+    expect(codex?.health).toMatchObject({
+      status: "ready",
+      summary: "Detected; runtime check failed",
+      installationFound: true,
+      executableStatus: "unknown",
+      executableError: "Bundled runtime check timed out",
+      executableFound: false,
+      canWrite: true
+    });
+  });
+
+  it("prefers a PATH Codex command over the ChatGPT bundled runtime", async () => {
+    const macApplicationDiscovery: MacApplicationDiscovery = {
+      findApplicationsByBundleIdentifier: vi.fn().mockResolvedValue([]),
+      readBundleIdentifier: vi.fn().mockResolvedValue("com.openai.codex"),
+      probeExecutable: vi.fn().mockResolvedValue({
+        status: "found",
+        version: "bundled-version"
+      })
+    };
+    const { binDir, service } = await makeService({
+      platform: "darwin",
+      macApplicationDiscovery
+    });
+    const executable = join(binDir, "codex");
+    await writeFile(executable, "#!/bin/sh\n");
+    await chmod(executable, 0o755);
+    await mkdir(join(root, "Applications", "ChatGPT.app"), { recursive: true });
+
+    const codex = (await service.listTargets({ forceRefresh: true }))
+      .find((target) => target.id === "codex");
+
+    expect(codex?.health).toMatchObject({
+      executablePath: executable,
+      executableSource: "path",
+      executableCandidate: "codex",
+      executableFound: true
+    });
+    expect(macApplicationDiscovery.probeExecutable).not.toHaveBeenCalled();
+  });
+
   it("marks desktop-capable Agents ready without a command in PATH", async () => {
-    const { service } = await makeService({ platform: "darwin" });
+    const { service } = await makeService({
+      platform: "darwin",
+      macApplicationDiscovery: {
+        findApplicationsByBundleIdentifier: vi.fn().mockResolvedValue([]),
+        readBundleIdentifier: vi.fn().mockResolvedValue("com.openai.codex"),
+        probeExecutable: vi.fn().mockResolvedValue({ status: "missing" })
+      }
+    });
     const applications = [
       ["OpenCode.app", "opencode", "OpenCode app"],
       ["Claude.app", "claude-code", "Claude app"],

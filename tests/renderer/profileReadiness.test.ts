@@ -93,7 +93,7 @@ describe("profile readiness", () => {
     });
   });
 
-  it("distinguishes a missing command from an unsupported comparison adapter", () => {
+  it("distinguishes a missing runtime from an unsupported comparison adapter", () => {
     const missingCommandTarget = {
       ...target,
       name: "Pi",
@@ -110,8 +110,8 @@ describe("profile readiness", () => {
       isSaving: false
     })).toEqual({
       disabled: true,
-      description: "Install the {{target}} command to compare this Profile",
-      unavailableReason: "Install the {{target}} command to compare this Profile"
+      description: "A compatible {{target}} runtime is required to compare this Profile",
+      unavailableReason: "A compatible {{target}} runtime is required to compare this Profile"
     });
   });
 
