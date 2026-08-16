@@ -4045,9 +4045,6 @@ Object.assign(zhCN, {
   "Shared folder policy": "共享目录策略",
   "Manage in place": "原地管理",
   "Left unchanged": "保持不变",
-  "Move to Profiles": "迁移到 Profiles",
-  "Move to Profiles…": "迁移到 Profiles…",
-  "Move new Skills to Profiles…": "将新增 Skills 迁移到 Profiles…",
   "Restore shared setup…": "恢复共享配置…",
   "Move this Skill to Profiles": "将此 Skill 迁移到 Profiles",
   "Review shared folder": "检查共享目录",
@@ -4171,9 +4168,6 @@ Object.assign(zhTW, {
   "Shared folder policy": "共享目錄策略",
   "Manage in place": "原地管理",
   "Left unchanged": "保持不變",
-  "Move to Profiles": "遷移到 Profiles",
-  "Move to Profiles…": "遷移到 Profiles…",
-  "Move new Skills to Profiles…": "將新增 Skills 遷移到 Profiles…",
   "Restore shared setup…": "還原共享設定…",
   "Move this Skill to Profiles": "將此 Skill 遷移到 Profiles",
   "Review shared folder": "檢查共享目錄",
@@ -4345,6 +4339,38 @@ export const resolveAppLocale = (
   }
   return /(?:hant|tw|hk|mo)(?:-|$)/i.test(language) ? "zh_TW" : "zh_CN";
 };
+
+Object.assign(zhCN, {
+  "Move and remove shared copies": "迁移并移除共享副本",
+  "Move and remove shared copies…": "迁移并移除共享副本…",
+  "Move and remove new shared copies…": "迁移并移除新的共享副本…",
+  "AgentEnv will add eligible Skills to Library, install each saved Profile's intended state in supported Agents, then remove the listed shared entries. Other tools that read the shared folder will stop receiving them.": "AgentEnv 会将符合条件的 Skills 加入 Library，按已保存的 Profile 在支持的 Agents 中安装预期状态，然后移除列出的共享条目。其他读取该共享目录的工具将不再获得这些 Skills。",
+  "Only the listed shared entries are removed. Linked source folders and the parent shared folder are never deleted.": "只会移除列出的共享条目，不会删除链接指向的源目录或共享父目录。",
+  "Shared folder active": "共享目录仍在生效",
+  "{{target}} loads Skills from a shared folder": "{{target}} 正从共享目录加载 Skills",
+  "Profile changes are saved for after shared copies are moved. Until then, the Agent controls Skill availability.": "Profile 的更改会保存为迁移共享副本后的目标状态；在此之前，Skills 的启用状态仍由 Agent 控制。",
+  "After move": "迁移后",
+  "Skills after move": "迁移后的 Skills",
+  "Shared Skill paths": "共享 Skill 路径",
+  "Shared Skills remain Agent controlled": "共享 Skills 仍由 Agent 控制",
+  "This Apply keeps shared copies active, so this Profile cannot control their availability.": "本次应用会保留共享副本，因此此 Profile 无法控制这些 Skills 的启用状态。"
+});
+
+Object.assign(zhTW, {
+  "Move and remove shared copies": "遷移並移除共享副本",
+  "Move and remove shared copies…": "遷移並移除共享副本…",
+  "Move and remove new shared copies…": "遷移並移除新的共享副本…",
+  "AgentEnv will add eligible Skills to Library, install each saved Profile's intended state in supported Agents, then remove the listed shared entries. Other tools that read the shared folder will stop receiving them.": "AgentEnv 會將符合條件的 Skills 加入 Library，依已儲存的 Profile 在支援的 Agents 中安裝預期狀態，然後移除列出的共享項目。其他讀取該共享目錄的工具將不再取得這些 Skills。",
+  "Only the listed shared entries are removed. Linked source folders and the parent shared folder are never deleted.": "只會移除列出的共享項目，不會刪除連結指向的來源目錄或共享父目錄。",
+  "Shared folder active": "共享目錄仍在生效",
+  "{{target}} loads Skills from a shared folder": "{{target}} 正從共享目錄載入 Skills",
+  "Profile changes are saved for after shared copies are moved. Until then, the Agent controls Skill availability.": "Profile 的變更會儲存為遷移共享副本後的目標狀態；在此之前，Skills 的啟用狀態仍由 Agent 控制。",
+  "After move": "遷移後",
+  "Skills after move": "遷移後的 Skills",
+  "Shared Skill paths": "共享 Skill 路徑",
+  "Shared Skills remain Agent controlled": "共享 Skills 仍由 Agent 控制",
+  "This Apply keeps shared copies active, so this Profile cannot control their availability.": "本次套用會保留共享副本，因此此 Profile 無法控制這些 Skills 的啟用狀態。"
+});
 
 export const localeTag = (locale: ResolvedAppLocale) =>
   locale === "zh_CN" ? "zh-CN" : locale === "zh_TW" ? "zh-TW" : "en-US";

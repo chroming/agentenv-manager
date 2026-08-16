@@ -1,5 +1,14 @@
 import { useMemo, useRef, useState } from "react";
-import { AlertTriangle, Download, Link2, LoaderCircle, Plus, RefreshCw, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  Download,
+  FolderInput,
+  Link2,
+  LoaderCircle,
+  Plus,
+  RefreshCw,
+  Trash2
+} from "lucide-react";
 import type {
   AppliedSkillReceipt,
   ProfileResources,
@@ -39,6 +48,11 @@ interface SkillsEditorProps {
   policy?: ProfileResourcePolicy;
   currentSkills?: SkillInventoryEntry[];
   currentStateStatus?: "loading" | "ready" | "error";
+  sharedRuntimeBoundary?: {
+    paths: string[];
+    targetName: string;
+    onReview(): void;
+  };
   onCheckSkillUpdates?(ids: string[]): void;
   onImportNewSkill?(): void;
   onPreviewSkillUpdate?(id: string): void;
@@ -58,6 +72,7 @@ export const SkillsEditor = ({
   policy = "manage",
   currentSkills = [],
   currentStateStatus = "ready",
+  sharedRuntimeBoundary,
   onCheckSkillUpdates,
   onImportNewSkill,
   onPreviewSkillUpdate,
@@ -68,6 +83,7 @@ export const SkillsEditor = ({
   const profileManagesSkills = policy === "manage";
   const profileDisablesSkills = policy === "disable";
   const agentOwnsSkills = policy === "ignore";
+  const sharedRuntimeControlsSkills = Boolean(sharedRuntimeBoundary);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [replacingIndex, setReplacingIndex] = useState<number>();
@@ -191,6 +207,42 @@ export const SkillsEditor = ({
         </div>
       </ResourcePanelToolbar> : null}
 
+      {sharedRuntimeBoundary ? (
+        <Notice
+          actions={(
+            <Button
+              icon={<FolderInput size={14} strokeWidth={2.1} aria-hidden="true" />}
+              size="compact"
+              variant="warning"
+              onClick={sharedRuntimeBoundary.onReview}
+            >
+              {t("Move and remove shared copies…")}
+            </Button>
+          )}
+          className="profile-skill-shared-notice"
+          icon={<AlertTriangle size={16} strokeWidth={2.1} aria-hidden="true" />}
+          title={t("{{target}} loads Skills from a shared folder", {
+            target: sharedRuntimeBoundary.targetName
+          })}
+          tone="warning"
+        >
+          <span>{t(
+            "Profile changes are saved for after shared copies are moved. Until then, the Agent controls Skill availability."
+          )}</span>
+          <OverflowTooltip
+            ariaLabel={t("Shared Skill paths")}
+            className="profile-skill-shared-path"
+            displayText={sharedRuntimeBoundary.paths.length > 1
+              ? t("{{path}} and {{count}} more", {
+                  path: sharedRuntimeBoundary.paths[0],
+                  count: sharedRuntimeBoundary.paths.length - 1
+                })
+              : sharedRuntimeBoundary.paths[0]}
+            text={sharedRuntimeBoundary.paths.join("\n")}
+          />
+        </Notice>
+      ) : null}
+
       {agentOwnsSkills && currentStateStatus === "loading" ? (
         <Notice
           className="profile-skill-inventory-notice"
@@ -280,13 +332,15 @@ export const SkillsEditor = ({
               entry.targetName === reference.targetName
           );
           const deploymentPending = Boolean(
-            profileManagesSkills && !localOverride && skill && appliedSkillVersions && (enabled
+            profileManagesSkills && !sharedRuntimeControlsSkills && !localOverride && skill && appliedSkillVersions && (enabled
               ? appliedRevision !== skill.contentHash
               : appliedRevision)
           );
-          const status = !skill
-            ? "Missing"
-            : localOverride?.outcome === "external-active"
+          const status = sharedRuntimeControlsSkills
+            ? "After move"
+            : !skill
+              ? "Missing"
+              : localOverride?.outcome === "external-active"
                     ? "External active"
                     : localOverride?.outcome === "external-remains"
                       ? "External still active"

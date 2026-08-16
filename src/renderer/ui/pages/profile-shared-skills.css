@@ -1,0 +1,60 @@
+.apply-preview-shared-boundary {
+  align-items: center;
+  background: var(--warning-bg);
+  border: 1px solid color-mix(in srgb, var(--warning) 28%, var(--border));
+  border-radius: var(--radius-control);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 10px 11px;
+}
+
+.apply-preview-shared-boundary__icon {
+  align-self: start;
+  color: var(--warning-strong);
+  display: inline-flex;
+  justify-content: center;
+  padding-top: 1px;
+}
+
+.apply-preview-shared-boundary__copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.apply-preview-shared-boundary__copy > strong {
+  color: var(--warning-strong);
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  line-height: 17px;
+}
+
+.apply-preview-shared-boundary__copy > small,
+.apply-preview-shared-boundary__path {
+  color: var(--muted-strong);
+  font-size: 11px;
+  font-weight: var(--font-weight-regular);
+  line-height: 16px;
+  min-width: 0;
+}
+
+.apply-preview-shared-boundary__path {
+  display: block;
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 680px) {
+  .apply-preview-shared-boundary {
+    grid-template-columns: 22px minmax(0, 1fr);
+  }
+
+  .apply-preview-shared-boundary__action {
+    grid-column: 2;
+    justify-self: start;
+  }
+}

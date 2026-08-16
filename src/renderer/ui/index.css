@@ -33,6 +33,7 @@
 @import "./pages/profile-evaluation.css" layer(pages);
 @import "./pages/apply-preview.css" layer(pages);
 @import "./pages/apply-preview-footprint.css" layer(pages);
+@import "./pages/profile-shared-skills.css" layer(pages);
 @import "./pages/diff-workspace.css" layer(pages);
 @import "./pages/catalog-contract.css" layer(pages);
 @import "./pages/responsive.css" layer(pages);

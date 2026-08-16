@@ -7191,9 +7191,61 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => preparationPreview.textContent()).toContain(
       `Keep enabled as ${skillId} after shared cleanup`
     );
+    const previewMigrationAction = preparationPreview.getByRole("button", {
+      name: "Move and remove shared copies…"
+    });
+    await previewMigrationAction.waitFor({ state: "visible" });
+    for (const viewport of [
+      { width: 1180, height: 728 },
+      { width: 920, height: 620 }
+    ]) {
+      await resizeAppWindow(page, viewport.width, viewport.height);
+      await expectInViewport(page, previewMigrationAction);
+      await expectNoHorizontalOverflow(page, [".apply-preview-shared-boundary"]);
+      const captureDir = process.env.AGENTENV_SHARED_SKILL_CAPTURE_DIR;
+      if (captureDir) {
+        await mkdir(captureDir, { recursive: true });
+        await page.screenshot({
+          path: join(captureDir, `apply-shared-boundary-${viewport.width}x${viewport.height}.png`)
+        });
+      }
+    }
+    await resizeAppWindow(page, 1180, 728);
     await preparationPreview.getByRole("button", { name: "Apply", exact: true }).click();
     await preparationPreview.waitFor({ state: "hidden" });
     await expect(fileExists(join(opencodeDir, "skills", skillId))).resolves.toBe(false);
+    const sharedBoundary = page.getByText("OpenCode loads Skills from a shared folder");
+    await sharedBoundary.waitFor({ state: "visible" });
+    const preparedSkillRow = page.getByRole("listitem", {
+      name: `Profile Skill ${skillId}`
+    });
+    await expect.poll(() => preparedSkillRow.textContent()).not.toContain("Apply pending");
+    await expect.poll(() => preparedSkillRow.textContent()).toContain("After move");
+    await expect.poll(() => preparedSkillRow.getByRole("switch").isEnabled()).toBe(true);
+    await expectInViewport(
+      page,
+      page.getByRole("button", { name: "Move and remove shared copies…" })
+    );
+    for (const viewport of [
+      { width: 1180, height: 728 },
+      { width: 920, height: 620 }
+    ]) {
+      await resizeAppWindow(page, viewport.width, viewport.height);
+      const geometry = await page.locator(".profile-skill-shared-notice").evaluate((notice) => ({
+        contained: notice.scrollWidth <= notice.clientWidth + 1,
+        buttonFits: Array.from(notice.querySelectorAll<HTMLElement>("button"))
+          .every((item) => item.scrollWidth <= item.clientWidth + 1)
+      }));
+      expect(geometry).toEqual({ contained: true, buttonFits: true });
+      const captureDir = process.env.AGENTENV_SHARED_SKILL_CAPTURE_DIR;
+      if (captureDir) {
+        await mkdir(captureDir, { recursive: true });
+        await page.screenshot({
+          path: join(captureDir, `profile-shared-boundary-${viewport.width}x${viewport.height}.png`)
+        });
+      }
+    }
+    await resizeAppWindow(page, 1180, 728);
 
     await selectTarget(page, "Codex");
     await selectProfile(page, "UI Codex alpha");
@@ -7228,10 +7280,24 @@ describe("Electron UI profile switching e2e", () => {
       });
       expect(geometry).toEqual({ contained: true, buttonsFit: true, visible: true });
     }
-    await page.getByRole("button", { name: "Move to Profiles…" }).click();
-    const profilesOnlyDialog = page.getByRole("dialog", { name: "Move to Profiles" });
+    await page.getByRole("button", { name: "Move and remove shared copies…" }).click();
+    const profilesOnlyDialog = page.getByRole("dialog", {
+      name: "Move and remove shared copies"
+    });
     await expect.poll(() => profilesOnlyDialog.textContent()).toContain(skillId);
-    await profilesOnlyDialog.getByRole("button", { name: "Move to Profiles" }).click();
+    await expect.poll(() => profilesOnlyDialog.textContent()).toContain(
+      "Linked source folders and the parent shared folder are never deleted."
+    );
+    await expectInViewport(page, profilesOnlyDialog);
+    const migrationCaptureDir = process.env.AGENTENV_SHARED_SKILL_CAPTURE_DIR;
+    if (migrationCaptureDir) {
+      await page.screenshot({
+        path: join(migrationCaptureDir, "shared-migration-confirm-920x620.png")
+      });
+    }
+    await profilesOnlyDialog.getByRole("button", {
+      name: "Move and remove shared copies"
+    }).click();
     const closeProfilesOnlyDialog = profilesOnlyDialog.getByRole("button", { name: "Close" });
     await expect.poll(
       async () =>
@@ -7308,11 +7374,15 @@ describe("Electron UI profile switching e2e", () => {
     const environmentSkills = page.getByRole("region", { name: "Shared Skills" });
     await environmentSkills.getByRole("button", { name: "Refresh local skills" }).click();
     await expect.poll(() => environmentSkills.textContent()).toContain(skillId);
-    await page.getByRole("button", { name: "Move to Profiles…" }).click();
-    const migrationDialog = page.getByRole("dialog", { name: "Move to Profiles" });
+    await page.getByRole("button", { name: "Move and remove shared copies…" }).click();
+    const migrationDialog = page.getByRole("dialog", {
+      name: "Move and remove shared copies"
+    });
     await expect.poll(() => migrationDialog.textContent()).toContain("Pi");
     await expect.poll(() => migrationDialog.textContent()).toContain(sharedSkillDir);
-    await migrationDialog.getByRole("button", { name: "Move to Profiles" }).click();
+    await migrationDialog.getByRole("button", {
+      name: "Move and remove shared copies"
+    }).click();
     const closeMigrationDialog = migrationDialog.getByRole("button", { name: "Close" });
     await expect.poll(
       async () =>

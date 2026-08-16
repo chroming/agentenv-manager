@@ -35,6 +35,42 @@
   margin: var(--space-2) var(--space-3);
 }
 
+.profile-skill-shared-notice {
+  margin: var(--space-2) var(--space-3);
+  overflow: hidden;
+}
+
+.profile-skill-shared-notice .ui-notice__copy,
+.profile-skill-shared-notice .ui-notice__copy > span {
+  display: block;
+  min-width: 0;
+}
+
+.profile-skill-shared-path {
+  color: var(--muted-strong);
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  margin-top: 4px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@container profile-workspace (max-width: 760px) {
+  .profile-skill-shared-notice {
+    align-items: start;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .profile-skill-shared-notice .ui-notice__actions {
+    grid-column: 2;
+    justify-self: start;
+    max-width: 100%;
+  }
+}
+
 .profile-skill-detail,
 .profile-skill-name {
   display: block;

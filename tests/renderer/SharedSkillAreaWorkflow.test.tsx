@@ -27,7 +27,9 @@ describe("SharedSkillAreaModeActions", () => {
       .toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", { name: "Leave unchanged" }));
     expect(onChange).toHaveBeenCalledWith("keep");
-    fireEvent.click(screen.getByRole("button", { name: "Move to Profiles…" }));
+    const moveButton = screen.getByRole("button", { name: "Move and remove shared copies…" });
+    expect(moveButton).toHaveClass("ui-button--warning");
+    fireEvent.click(moveButton);
     expect(onMoveToProfiles).toHaveBeenCalledTimes(1);
   });
 
@@ -49,7 +51,9 @@ describe("SharedSkillAreaModeActions", () => {
 
     expect(screen.queryByRole("group", { name: "Shared folder policy" }))
       .not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Move new Skills to Profiles…" }));
+    fireEvent.click(screen.getByRole("button", {
+      name: "Move and remove new shared copies…"
+    }));
     expect(onMoveToProfiles).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Restore shared setup…" }));
     expect(onShowRestorePoints).toHaveBeenCalledTimes(1);

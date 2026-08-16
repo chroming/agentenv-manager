@@ -195,6 +195,20 @@
   background: var(--surface-muted);
 }
 
+.ui-button--warning,
+.ui-icon-button--warning {
+  background: var(--warning-bg);
+  border-color: color-mix(in srgb, var(--warning) 38%, var(--border));
+  color: var(--warning-strong);
+}
+
+.ui-button--warning:hover:not(:disabled),
+.ui-icon-button--warning:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--warning) 14%, var(--surface));
+  border-color: color-mix(in srgb, var(--warning) 56%, var(--border));
+  color: var(--warning-strong);
+}
+
 .ui-button--ghost,
 .ui-icon-button--ghost {
   background: transparent;

@@ -19,6 +19,11 @@ interface ProfileSkillsEditorProps {
   environmentScanStatus: "checking" | "ready" | "error";
   targetState?: TargetManagementState;
   selectedTargetId?: string;
+  sharedRuntimeBoundary?: {
+    paths: string[];
+    targetName: string;
+    onReview(): void;
+  };
   onRefresh(): void;
   onCheckUpdates(ids: string[]): void;
   onPreviewUpdate(id: string): void;
@@ -46,6 +51,7 @@ export const ProfileSkillsEditor = (props: ProfileSkillsEditorProps) => (
     skillReceipts={props.targetState?.activeProfileId === props.profile.id
       ? props.targetState.skillReceipts
       : undefined}
+    sharedRuntimeBoundary={props.sharedRuntimeBoundary}
     selectedTargetId={props.selectedTargetId}
     onRefreshCurrentSkills={props.onRefresh}
     onCheckSkillUpdates={props.onCheckUpdates}

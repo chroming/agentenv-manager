@@ -163,6 +163,7 @@ import {
 import {
   buildProfilesOnlyReviewItems,
   runProfilesOnlySharedCleanup,
+  sharedSkillCleanupDialogCopy,
   SharedSkillAreaModeActions
 } from "./SharedSkillAreaWorkflow";
 import {
@@ -2615,21 +2616,10 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
           stopRequested={automaticCleanupStopRequested}
           dialogRef={modalDialogRef}
           initialFocusRef={modalInitialFocusRef}
-          title={automaticCleanupIntent === "profiles-only"
-            ? "Move to Profiles"
-            : cleanupScope.kind === "shared"
-              ? "Manage shared Skills"
-              : undefined}
-          description={automaticCleanupIntent === "profiles-only"
-            ? "AgentEnv will add eligible Skills to Library, prepare supported Agents from their saved Profiles, then remove shared copies. Other tools that read the shared folder will stop receiving them."
-            : cleanupScope.kind === "shared"
-              ? "AgentEnv will manage these Skills in the shared folder. Profiles and Agent-specific directories will not be changed."
-              : undefined}
-          runLabel={automaticCleanupIntent === "profiles-only"
-            ? "Move to Profiles"
-            : cleanupScope.kind === "shared"
-              ? "Manage shared Skills"
-              : undefined}
+          {...sharedSkillCleanupDialogCopy(
+            automaticCleanupIntent,
+            cleanupScope.kind === "shared"
+          )}
           onClose={closeAutomaticCleanupReview}
           onRun={(requests) => {
             if (automaticCleanupIntent === "profiles-only") void runProfilesOnlyCleanup();

@@ -316,6 +316,49 @@ describe("SkillsEditor v2", () => {
     expect(row).not.toHaveTextContent("Apply pending");
   });
 
+  it("keeps shared runtime Profile intent editable without claiming it is applied", () => {
+    const onReview = vi.fn();
+    render(
+      <SkillsEditor
+        value={resources}
+        librarySkills={skills}
+        appliedSkillVersions={{}}
+        currentSkills={[{
+          id: "shared-review",
+          name: "Code Review",
+          description: "Shared code review Skill",
+          path: "/home/test/.agents/skills/review",
+          foundIn: ["opencode"],
+          status: "managed",
+          skillKey: "review",
+          runtimeName: "review",
+          deploymentName: "review",
+          runtimeAvailability: "enabled",
+          runtimeConfidence: "verified",
+          contentHash: "abcdef123456",
+          sharedLocation: true,
+          libraryId: "review"
+        }]}
+        selectedTargetId="opencode"
+        sharedRuntimeBoundary={{
+          paths: ["/home/test/.agents/skills/review"],
+          targetName: "OpenCode",
+          onReview
+        }}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("OpenCode loads Skills from a shared folder")).toBeInTheDocument();
+    const row = screen.getByRole("listitem", { name: "Profile Skill review" });
+    expect(row).toHaveTextContent("After move");
+    expect(row).not.toHaveTextContent("Apply pending");
+    expect(within(row).getByRole("switch", { name: "Disable Code Review" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Add Skill" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Move and remove shared copies…" }));
+    expect(onReview).toHaveBeenCalledOnce();
+  });
+
   it("shows that a disabled Profile Skill remains active at an unmanaged path", () => {
     render(
       <SkillsEditor

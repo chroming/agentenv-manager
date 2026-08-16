@@ -43,6 +43,7 @@ interface PreviewDialogProps {
   onLeaveSkillUnmanaged?(issue: ApplyIssue): Promise<void> | void;
   onReviewSkillCollection?(issue: ApplyIssue): void;
   onManageLocalSkills?(): void;
+  onManageSharedSkills?(): void;
   onCancel?(): void;
   onConfirm?(): void;
 }
@@ -111,6 +112,7 @@ export const PreviewDialog = ({
   onLeaveSkillUnmanaged,
   onReviewSkillCollection,
   onManageLocalSkills,
+  onManageSharedSkills,
   onCancel,
   onConfirm
 }: PreviewDialogProps) => {
@@ -243,10 +245,16 @@ export const PreviewDialog = ({
     .map((issue) => ({ issue, id: issue.id, ...presentIssue(issue, targetName, t) }));
   const preservedItems = issues
     .filter((issue) => issue.disposition === "notice" && issue.resolution === "preserve")
-    .map((issue) => ({ id: issue.id, ...presentIssue(issue, targetName, t) }));
+    .map((issue) => ({ issue, id: issue.id, ...presentIssue(issue, targetName, t) }));
   const noteItems = issues
     .filter((issue) => issue.disposition === "notice" && issue.resolution !== "preserve")
     .map((issue) => ({ id: issue.id, ...presentIssue(issue, targetName, t) }));
+  const sharedSkillItems = preservedItems.filter(
+    (item) => item.issue.code === "shared-skill-deferred"
+  );
+  const sharedSkillPaths = [...new Set(
+    sharedSkillItems.flatMap((item) => item.issue.path ? [item.issue.path] : [])
+  )];
   const payload = isActivationPreview ? preview.effectivePayload : undefined;
   const isNoOp =
     isActivationPreview &&
@@ -432,6 +440,48 @@ export const PreviewDialog = ({
             </section>
           ) : null}
 
+          {sharedSkillItems.length > 0 ? (
+            <section
+              className="apply-preview-shared-boundary"
+              aria-label={t("Shared Skills remain Agent controlled")}
+            >
+              <span className="apply-preview-shared-boundary__icon" aria-hidden="true">
+                <AlertTriangle size={17} strokeWidth={2.1} />
+              </span>
+              <span className="apply-preview-shared-boundary__copy">
+                <strong>{t("Shared Skills remain Agent controlled")}</strong>
+                <small>{t(
+                  "This Apply keeps shared copies active, so this Profile cannot control their availability."
+                )}</small>
+                {sharedSkillPaths.length > 0 ? (
+                  <OverflowTooltip
+                    ariaLabel={t("Shared Skill paths")}
+                    className="apply-preview-shared-boundary__path"
+                    displayText={sharedSkillPaths.length > 1
+                      ? t("{{path}} and {{count}} more", {
+                          path: sharedSkillPaths[0],
+                          count: sharedSkillPaths.length - 1
+                        })
+                      : sharedSkillPaths[0]}
+                    text={sharedSkillPaths.join("\n")}
+                  />
+                ) : null}
+              </span>
+              {onManageSharedSkills ? (
+                <Button
+                  className="apply-preview-shared-boundary__action"
+                  disabled={confirmBusy}
+                  icon={<Layers3 size={14} strokeWidth={2.1} />}
+                  size="compact"
+                  variant="warning"
+                  onClick={onManageSharedSkills}
+                >
+                  {t("Move and remove shared copies…")}
+                </Button>
+              ) : null}
+            </section>
+          ) : null}
+
           {payload && !isNoOp ? (
             <section className="apply-preview-payload" aria-label={t("After applying")}>
               <header className="apply-preview-section-heading">
@@ -449,7 +499,7 @@ export const PreviewDialog = ({
                   <ProductIcon name="skills" size={18} strokeWidth={2} />
                   <span>
                     <strong>{payload.skills}</strong>
-                    <small>{t("Skills")}</small>
+                    <small>{t(sharedSkillItems.length > 0 ? "Skills after move" : "Skills")}</small>
                   </span>
                 </article>
                 <article>

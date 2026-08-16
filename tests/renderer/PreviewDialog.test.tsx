@@ -48,6 +48,43 @@ describe("PreviewDialog", () => {
     expect(onManageLocalSkills).toHaveBeenCalledOnce();
   });
 
+  it("makes a preserved shared runtime boundary directly actionable", () => {
+    const onManageSharedSkills = vi.fn();
+    render(
+      <PreviewDialog
+        preview={{
+          ...preview,
+          issues: [{
+            id: "shared-skill-deferred:review",
+            code: "shared-skill-deferred",
+            disposition: "notice",
+            resolution: "preserve",
+            resourceKind: "skill",
+            resourceId: "review",
+            path: "/home/test/.agents/skills/review",
+            message: "Shared Skill review remains active"
+          }],
+          sharedSkillPreparationChanged: true,
+          effectivePayload: { instructions: 1, skills: 1, mcpServers: 0, total: 2 }
+        }}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+        onManageSharedSkills={onManageSharedSkills}
+      />
+    );
+
+    const boundary = screen.getByRole("region", {
+      name: "Shared Skills remain Agent controlled"
+    });
+    expect(boundary).toHaveTextContent("/home/test/.agents/skills/review");
+    expect(screen.getByRole("region", { name: "After applying" }))
+      .toHaveTextContent("Skills after move");
+    fireEvent.click(within(boundary).getByRole("button", {
+      name: "Move and remove shared copies…"
+    }));
+    expect(onManageSharedSkills).toHaveBeenCalledOnce();
+  });
+
   it("presents a true no-op as current state with one Close action", () => {
     render(
       <PreviewDialog

@@ -1497,9 +1497,19 @@ describe("SkillLibraryPanel", () => {
       "Profiles and Agent-specific directories will not be changed."
     );
     fireEvent.click(within(sharedManagementDialog).getByRole("button", { name: "Cancel" }));
-    fireEvent.click(within(sharedSkills).getByRole("button", { name: "Move to Profiles…" }));
-    const profilesOnlyDialog = screen.getByRole("dialog", { name: "Move to Profiles" });
-    expect(profilesOnlyDialog).toHaveTextContent("then remove shared copies");
+    fireEvent.click(within(sharedSkills).getByRole("button", {
+      name: "Move and remove shared copies…"
+    }));
+    const profilesOnlyDialog = screen.getByRole("dialog", {
+      name: "Move and remove shared copies"
+    });
+    expect(profilesOnlyDialog).toHaveTextContent("then remove the listed shared entries");
+    expect(profilesOnlyDialog).toHaveTextContent(
+      "Linked source folders and the parent shared folder are never deleted."
+    );
+    expect(within(profilesOnlyDialog).getByRole("button", {
+      name: "Move and remove shared copies"
+    })).toHaveClass("ui-button--warning");
     fireEvent.click(within(profilesOnlyDialog).getByRole("button", { name: "Cancel" }));
     rerender(renderPanel("discoveries"));
     const externalGroup = screen.getByRole("group", {

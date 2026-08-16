@@ -76,6 +76,7 @@ export const createSkillManagerNavigation = ({
       open({ kind: "all" }, undefined, targetId);
     },
     openShared: () => guardProfileAction("review shared Skills", () => {
+      clearProfilePreview();
       captureLibraryScroll();
       open({ kind: "shared" });
     }),

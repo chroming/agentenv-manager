@@ -1,4 +1,4 @@
-import { ArrowRight, History } from "lucide-react";
+import { History, TriangleAlert } from "lucide-react";
 import type {
   RetireSharedSkillInput,
   SharedSkillAreaMode,
@@ -47,6 +47,35 @@ export const buildProfilesOnlyReviewItems = (
       .join(", ")
   }))
 ];
+
+export const sharedSkillCleanupDialogCopy = (
+  intent: "manage" | "profiles-only",
+  sharedScope: boolean
+) => {
+  if (intent === "profiles-only") {
+    return {
+      title: "Move and remove shared copies",
+      description:
+        "AgentEnv will add eligible Skills to Library, install each saved Profile's " +
+        "intended state in supported Agents, then remove the listed shared entries. Other " +
+        "tools that read the shared folder will stop receiving them.",
+      runLabel: "Move and remove shared copies",
+      runVariant: "warning" as const,
+      safetyNote:
+        "Only the listed shared entries are removed. Linked source folders and the parent " +
+        "shared folder are never deleted."
+    };
+  }
+  return sharedScope
+    ? {
+        title: "Manage shared Skills",
+        description:
+          "AgentEnv will manage these Skills in the shared folder. Profiles and " +
+          "Agent-specific directories will not be changed.",
+        runLabel: "Manage shared Skills"
+      }
+    : {};
+};
 
 interface RunProfilesOnlySharedCleanupInput {
   groups: SkillCleanupGroup[];
@@ -162,8 +191,8 @@ export const SharedSkillAreaModeActions = ({
   const { t } = useI18n();
   const policy = mode === "managed" ? "managed" : "keep";
   const moveToProfilesLabel = mode === "profiles-only"
-    ? t("Move new Skills to Profiles…")
-    : t("Move to Profiles…");
+    ? t("Move and remove new shared copies…")
+    : t("Move and remove shared copies…");
   return (
     <div className="shared-area-mode-actions">
       {mode !== "profiles-only" ? (
@@ -189,8 +218,9 @@ export const SharedSkillAreaModeActions = ({
         <Button
           busy={operation === "profiles-only"}
           disabled={disabled}
-          icon={<ArrowRight size={14} strokeWidth={2.2} />}
+          icon={<TriangleAlert size={14} strokeWidth={2.2} />}
           size="compact"
+          variant="warning"
           onClick={onMoveToProfiles}
         >
           {moveToProfilesLabel}

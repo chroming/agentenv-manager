@@ -104,6 +104,21 @@
   white-space: nowrap;
 }
 
+.cleanup-bulk-safety-note {
+  align-items: start;
+  background: var(--warning-bg);
+  border: 1px solid color-mix(in srgb, var(--warning) 28%, var(--border));
+  border-radius: var(--radius-control);
+  color: var(--warning-strong);
+  display: grid;
+  font-size: 11px;
+  gap: 7px;
+  grid-template-columns: 15px minmax(0, 1fr);
+  line-height: 16px;
+  margin-top: 4px;
+  padding: 8px 9px;
+}
+
 .cleanup-bucket-heading {
   align-items: center;
   background: var(--surface);

@@ -10,7 +10,7 @@ import { useI18n } from "../i18n";
 import { cleanupEffectLabel } from "../skillCleanupPresentation";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
-import { Button } from "./ui";
+import { Button, type ButtonVariant } from "./ui";
 
 export type AutomaticCleanupStatus =
   | "waiting"
@@ -92,6 +92,8 @@ interface AutomaticSkillCleanupDialogProps {
   title?: string;
   description?: string;
   runLabel?: string;
+  runVariant?: ButtonVariant;
+  safetyNote?: string;
 }
 
 export const AutomaticSkillCleanupDialog = ({
@@ -106,7 +108,9 @@ export const AutomaticSkillCleanupDialog = ({
   onStop,
   title = "Manage eligible local Skills",
   description = "AgentEnv will manage the eligible items below. Every changed path is backed up before the operation starts.",
-  runLabel
+  runLabel,
+  runVariant = "primary",
+  safetyNote
 }: AutomaticSkillCleanupDialogProps) => {
   const { t } = useI18n();
   const groups = new Map<SkillCleanupAutomaticEffect, AutomaticCleanupReviewItem[]>();
@@ -196,6 +200,12 @@ export const AutomaticSkillCleanupDialog = ({
               </div>
             </section>
           ))}
+          {safetyNote ? (
+            <div className="cleanup-bulk-safety-note" role="note">
+              <TriangleAlert size={15} strokeWidth={2.1} aria-hidden="true" />
+              <span>{t(safetyNote)}</span>
+            </div>
+          ) : null}
           <small>{t("Each Skill is backed up independently. A failure does not undo completed Skills.")}</small>
         </div>
         <footer className="preview-actions ui-dialog-footer">
@@ -213,7 +223,7 @@ export const AutomaticSkillCleanupDialog = ({
             </Button>
           ) : !runStarted ? (
             <Button
-              variant="primary"
+              variant={runVariant}
               onClick={() => onRun(items.flatMap((item) => item.request ? [item.request] : []))}
             >
               {runLabel ? t(runLabel) : t("Manage {{count}} skills", { count: items.length })}

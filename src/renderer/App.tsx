@@ -152,7 +152,7 @@ import {
   type PendingSkillImport
 } from "./components/SkillImportConflictDialog";
 import { SkillSettingsSection } from "./components/SkillSettingsSection";
-import { ProfileSkillsEditor } from "./components/ProfileSkillsEditor";
+import { ProfileSkillsComposerSection } from "./components/ProfileSkillsComposerSection";
 import { TargetCaptureDialog } from "./components/TargetCaptureDialog";
 import { TargetWorkspace } from "./components/TargetWorkspace";
 import { WorkspaceSyncSettings } from "./components/WorkspaceSyncSettings";
@@ -4115,46 +4115,31 @@ const AppContent = ({
                           }}
                         />
                       </ProfileComposerSection>
-                      <ProfileComposerSection
-                        id="skills"
-                        icon={<ProductIcon name="skills" size={18} />}
-                        title={t("Skills")}
-                        description={t("Reusable skills and workflows")}
-                        count={resourceSummary?.skills.total ?? 0}
-                        enabledCount={resourceSummary?.skills.count ?? 0}
-                        chipNames={resourceSummary?.skills.names ?? []}
-                        policy={resourceSummary?.skills.mode ?? "manage"}
-                        policyDisabled={!profileTarget?.capabilities.skills}
-                        policyLabel={t("Skills application policy for {{name}}", {
-                          name: activeTargetName
-                        })}
-                        policyStatus={
-                          profileTarget?.capabilities.skills
-                            ? undefined
-                            : t("Agent controlled")
-                        }
+                      <ProfileSkillsComposerSection
+                        profile={draftProfile}
+                        summary={resourceSummary?.skills ?? {
+                          count: 0, total: 0, names: [], mode: "manage"
+                        }}
+                        policy={skillsPolicy}
+                        capabilityAvailable={Boolean(profileTarget?.capabilities.skills)}
                         expanded={composerSectionIsExpanded("skills")}
+                        targetId={selectedTarget?.id}
+                        targetName={activeTargetName}
+                        targetState={selectedTargetState}
+                        currentSkills={currentTargetSkills}
+                        environmentScanStatus={environmentScanStatus}
+                        librarySkills={librarySkills}
+                        skillUpdates={skillUpdates}
+                        checkingSkillUpdates={checkingProfileSkillUpdates}
                         onToggle={() => toggleComposerSection("skills")}
                         onPolicyChange={(policy) =>
-                          updateSelectedResourceManagement("skills", policy)
-                        }
-                      >
-                          <ProfileSkillsEditor
-                            profile={draftProfile}
-                            librarySkills={librarySkills}
-                            skillUpdates={skillUpdates}
-                            checkingSkillUpdates={checkingProfileSkillUpdates}
-                            policy={skillsPolicy}
-                            currentSkills={currentTargetSkills}
-                            environmentScanStatus={environmentScanStatus}
-                            targetState={selectedTargetState}
-                            selectedTargetId={selectedTarget?.id}
-                            onRefresh={() => { void refreshSkills("manual"); }}
-                            onCheckUpdates={(ids) => { void checkProfileSkillUpdates(ids); }}
-                            onPreviewUpdate={(id) => { void previewLibrarySkillUpdate(id); }}
-                            onChange={(resources) => updateDraftProfile({ ...draftProfile, resources })}
-                        />
-                      </ProfileComposerSection>
+                          updateSelectedResourceManagement("skills", policy)}
+                        onReviewSharedSkills={openEnvironmentReview}
+                        onRefresh={() => { void refreshSkills("manual"); }}
+                        onCheckUpdates={(ids) => { void checkProfileSkillUpdates(ids); }}
+                        onPreviewUpdate={(id) => { void previewLibrarySkillUpdate(id); }}
+                        onChange={(resources) => updateDraftProfile({ ...draftProfile, resources })}
+                      />
                       <ProfileComposerSection
                         id="mcp"
                         icon={<ProductIcon name="mcps" size={18} />}
@@ -4252,6 +4237,7 @@ const AppContent = ({
                           })}
                         onReviewSkillCollection={reviewPreviewSkillCollection}
                         onManageLocalSkills={reviewPreviewLocalSkills}
+                        onManageSharedSkills={openEnvironmentReview}
                         onCompare={() => void openProfileEvaluation()}
                         onCancel={clearProfilePreview}
                         onConfirm={applySelectedProfile}
