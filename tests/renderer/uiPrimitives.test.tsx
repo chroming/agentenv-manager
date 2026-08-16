@@ -48,17 +48,51 @@ describe("renderer UI primitives", () => {
   it("applies stable button variants and sizes without changing native semantics", () => {
     render(
       <ControlGroup aria-label="Actions">
-        <Button variant="primary" size="prominent">Save</Button>
+        <Button variant="primary">Save</Button>
         <IconButton label="Refresh"><RefreshCw /></IconButton>
       </ControlGroup>
     );
 
     expect(screen.getByRole("button", { name: "Save" })).toHaveClass(
       "ui-button--primary",
-      "ui-button--prominent"
+      "ui-button--default"
     );
     expect(screen.getByRole("button", { name: "Refresh" })).toHaveAttribute("title", "Refresh");
     expect(screen.getByRole("group", { name: "Actions" })).toHaveClass("ui-control-group");
+  });
+
+  it("lets an action group own one control density for mixed button types", () => {
+    render(
+      <ControlGroup density="compact" aria-label="Row actions">
+        <Button>Review</Button>
+        <IconButton label="Refresh"><RefreshCw /></IconButton>
+        <RefreshAction label="Reload" onRefresh={vi.fn()} />
+      </ControlGroup>
+    );
+
+    const group = screen.getByRole("group", { name: "Row actions" });
+    expect(group).toHaveAttribute("data-control-density", "compact");
+    for (const button of within(group).getAllByRole("button")) {
+      expect(button).toHaveClass(
+        button.getAttribute("aria-label") === "Refresh"
+          ? "ui-icon-button--compact"
+          : "ui-button--compact"
+      );
+    }
+  });
+
+  it("prevents a child size override from breaking its action group", () => {
+    render(
+      <ControlGroup density="default" aria-label="Header actions">
+        <Button size="compact">Open Workspace</Button>
+        <IconButton size="compact" label="More"><RefreshCw /></IconButton>
+      </ControlGroup>
+    );
+
+    expect(screen.getByRole("button", { name: "Open Workspace" }))
+      .toHaveClass("ui-button--default");
+    expect(screen.getByRole("button", { name: "More" }))
+      .toHaveClass("ui-icon-button--default");
   });
 
   it("keeps async button geometry local while preventing duplicate submission", () => {

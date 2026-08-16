@@ -554,6 +554,7 @@ const ConversationActionsMenu = ({
         className="conversation-detail-more-button"
         label={t("Conversation actions")}
         disabled={busy}
+        variant="ghost"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => open ? setOpen(false) : show()}
@@ -1769,6 +1770,7 @@ export const ConversationWorkspace = ({
                       <IconButton
                         label={t("Copy conversation")}
                         disabled={busy}
+                        variant="ghost"
                         onClick={() => void copyConversation()}
                       >
                         {operation === "copy"
@@ -1779,6 +1781,7 @@ export const ConversationWorkspace = ({
                         <IconButton
                           label={t("Open original")}
                           disabled={busy}
+                          variant="ghost"
                           onClick={() => void openOriginal()}
                         >
                           {operation === "open-original"
@@ -1798,7 +1801,6 @@ export const ConversationWorkspace = ({
                     />
                     {detailProject ? (
                       <Button
-                        size="compact"
                         icon={<FolderGit2 size={14} />}
                         onClick={() => onOpenProject?.(detailProject)}
                       >

@@ -25,7 +25,7 @@ export const RefreshAction = ({
   disabled = false,
   label,
   presentation = "button",
-  size = "default",
+  size,
   state,
   variant = presentation === "icon" ? "ghost" : "secondary",
   onRefresh

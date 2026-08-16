@@ -643,6 +643,37 @@ const capturePage = async (
   if (!preservePointer) {
     await page.mouse.move(2, 2);
   }
+  const actionGroupDefects = await page.evaluate(() => (
+    [...document.querySelectorAll("[data-control-density]")].flatMap((group) => {
+      const groupBounds = group.getBoundingClientRect();
+      if (groupBounds.width <= 0 || groupBounds.height <= 0) return [];
+      const density = group.getAttribute("data-control-density");
+      const expectedHeight = density === "compact" ? 28 : 32;
+      const controls = [...group.querySelectorAll(".ui-button, .ui-icon-button")]
+        .filter((control) => {
+          const bounds = control.getBoundingClientRect();
+          const style = getComputedStyle(control);
+          return bounds.width > 0 && bounds.height > 0 && style.visibility !== "hidden";
+        });
+      const heightDefects = controls.flatMap((control) => {
+        const height = Math.round(control.getBoundingClientRect().height);
+        return Math.abs(height - expectedHeight) <= 1
+          ? []
+          : [`${control.getAttribute("aria-label") || control.textContent?.trim() || control.className}: ${height}px, expected ${expectedHeight}px`];
+      });
+      const primaryCount = controls.filter((control) => (
+        control.classList.contains("ui-button--primary") ||
+        control.classList.contains("ui-icon-button--primary")
+      )).length;
+      return [
+        ...heightDefects,
+        ...(primaryCount <= 1 ? [] : [`${primaryCount} primary actions in one control group`])
+      ];
+    })
+  ));
+  if (actionGroupDefects.length > 0) {
+    throw new Error(`Control group contract failed before ${path}:\n${actionGroupDefects.join("\n")}`);
+  }
   await page.bringToFront();
   const windowHandle = await app.browserWindow(page);
   await windowHandle.evaluate(async (browserWindow) => {

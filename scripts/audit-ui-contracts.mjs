@@ -7,6 +7,9 @@ const failures = [];
 const requireText = (content, expected, owner) => {
   if (!content.includes(expected)) failures.push(`${owner} is missing ${expected}`);
 };
+const requirePattern = (content, expected, owner) => {
+  if (!expected.test(content)) failures.push(`${owner} does not satisfy ${expected}`);
+};
 
 const [
   profileEditor,
@@ -15,6 +18,10 @@ const [
   primitiveStyles,
   profileE2e,
   projectE2e,
+  controlGroup,
+  conversationWorkspace,
+  targetWorkspace,
+  targetStyles,
   visualContractText
 ] = await Promise.all([
   read("src/renderer/components/SkillsEditor.tsx"),
@@ -23,6 +30,10 @@ const [
   read("src/renderer/ui/primitives.css"),
   read("tests/e2e/electronUiProfileSwitching.e2e.test.ts"),
   read("tests/e2e/projects.e2e.test.ts"),
+  read("src/renderer/components/ui/ControlGroup.tsx"),
+  read("src/renderer/components/ConversationWorkspace.tsx"),
+  read("src/renderer/components/TargetWorkspace.tsx"),
+  read("src/renderer/ui/pages/targets.css"),
   read("tests/visual/critical-captures.json")
 ]);
 
@@ -35,6 +46,18 @@ requireText(profileE2e, 'toContain("Apply pending")', "Profile multi-state evide
 requireText(profileE2e, 'toContain("Ready")', "Profile multi-state evidence");
 requireText(profileE2e, 'getByRole("switch").count()', "Profile managed-action evidence");
 requireText(projectE2e, "readAlignedResourceRows", "Workspace geometry evidence");
+requireText(controlGroup, "data-control-density", "Control group density contract");
+requirePattern(
+  conversationWorkspace,
+  /label=\{t\("Copy conversation"\)\}[\s\S]{0,160}variant="ghost"/,
+  "Conversation utility action hierarchy"
+);
+requireText(targetWorkspace, 'className="target-loading-state"', "Agent initial loading state");
+requirePattern(
+  targetStyles,
+  /\.target-loading-state\s*\{[^}]*width:\s*100%[^}]*\}/,
+  "Agent loading geometry"
+);
 
 if (profileEditor.includes("ui-resource-children--aligned") ||
     workspace.includes("ui-resource-children--aligned")) {

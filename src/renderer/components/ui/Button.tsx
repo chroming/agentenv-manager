@@ -1,5 +1,6 @@
 import { LoaderCircle } from "lucide-react";
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useControlDensity } from "./controlDensity";
 
 export type ButtonVariant = "primary" | "secondary" | "warning" | "danger" | "ghost";
 export type ButtonSize = "compact" | "default" | "prominent";
@@ -20,7 +21,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       busyLabel,
       className = "",
       icon,
-      size = "default",
+      size,
       type = "button",
       variant = "secondary",
       "aria-busy": ariaBusy,
@@ -28,13 +29,15 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref
   ) => {
+    const inheritedSize = useControlDensity();
+    const resolvedSize = inheritedSize ?? size ?? "default";
     const effectiveBusy = busy || ariaBusy === true || ariaBusy === "true";
     return (
       <button
         {...props}
         ref={ref}
         aria-busy={effectiveBusy}
-        className={`ui-button ui-button--${variant} ui-button--${size} ${className}`.trim()}
+        className={`ui-button ui-button--${variant} ui-button--${resolvedSize} ${className}`.trim()}
         disabled={props.disabled || effectiveBusy}
         type={type}
       >

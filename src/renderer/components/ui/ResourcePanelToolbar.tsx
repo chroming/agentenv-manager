@@ -1,4 +1,5 @@
 import type { HTMLAttributes } from "react";
+import { ControlDensityProvider } from "./controlDensity";
 
 export type ResourcePanelToolbarProps = HTMLAttributes<HTMLDivElement>;
 
@@ -7,11 +8,13 @@ export const ResourcePanelToolbar = ({
   className = "",
   ...props
 }: ResourcePanelToolbarProps) => (
-  <div
-    {...props}
-    className={`ui-resource-panel-toolbar ${className}`.trim()}
-    role="toolbar"
-  >
-    {children}
-  </div>
+  <ControlDensityProvider density="compact">
+    <div
+      {...props}
+      className={`ui-resource-panel-toolbar ${className}`.trim()}
+      role="toolbar"
+    >
+      {children}
+    </div>
+  </ControlDensityProvider>
 );

@@ -5,6 +5,7 @@ import type {
   MouseEvent,
   ReactNode
 } from "react";
+import { ControlDensityProvider } from "./controlDensity";
 
 type MasterDetailWidth = "compact" | "default" | "wide";
 
@@ -198,7 +199,11 @@ export const InspectorHeader = ({
         {description ? <span>{description}</span> : null}
       </div>
     </div>
-    {actions ? <div className="ui-inspector-header__actions">{actions}</div> : null}
+    {actions ? (
+      <ControlDensityProvider density="default">
+        <div className="ui-inspector-header__actions">{actions}</div>
+      </ControlDensityProvider>
+    ) : null}
   </header>
 );
 
@@ -229,7 +234,11 @@ export const ResourceSection = ({
         <strong>{title}</strong>
         {summary ? <span className="ui-resource-section__summary">{summary}</span> : null}
       </div>
-      {actions ? <div className="ui-resource-section__actions">{actions}</div> : null}
+      {actions ? (
+        <ControlDensityProvider density="compact">
+          <div className="ui-resource-section__actions">{actions}</div>
+        </ControlDensityProvider>
+      ) : null}
     </header>
     {children ? <div className="ui-resource-section__content">{children}</div> : null}
   </section>

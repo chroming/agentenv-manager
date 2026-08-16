@@ -4,6 +4,7 @@ import {
   Clock3,
   CopyPlus,
   Layers3,
+  LoaderCircle,
   MoreHorizontal,
   TerminalSquare
 } from "lucide-react";
@@ -199,12 +200,11 @@ const TargetRowActions = ({
   };
 
   return (
-    <ControlGroup className="target-workflow-actions" aria-label={t("Agent actions")}>
+    <ControlGroup density="compact" className="target-workflow-actions" aria-label={t("Agent actions")}>
       <IconButton
         ref={triggerRef}
         className="target-more-action"
         label={t("More actions for {{name}}", { name: target.name })}
-        size="compact"
         variant="ghost"
         aria-expanded={open}
         aria-haspopup="menu"
@@ -368,8 +368,8 @@ export const TargetWorkspace = ({
         />
       ) : null}
 
-      <div className="target-list">
-        {!isLoading && targets.length > 0 ? (
+      <div className="target-list" aria-busy={isLoading}>
+        {targets.length > 0 ? (
           <div className="target-list__header" aria-hidden="true">
             <span />
             <span>{t("Agent")}</span>
@@ -385,9 +385,9 @@ export const TargetWorkspace = ({
             <span>{t("Actions")}</span>
           </div>
         ) : null}
-        {isLoading ? (
-          <div className="inline-state inline-state--panel inline-state--loading" role="status">
-            <span className="inline-state__icon" aria-hidden="true" />
+        {isLoading && targets.length === 0 ? (
+          <div className="target-loading-state" role="status">
+            <LoaderCircle className="is-spinning" size={16} aria-hidden="true" />
             <span>{t("Detecting Agents")}</span>
           </div>
         ) : targets.length === 0 ? (
@@ -406,7 +406,7 @@ export const TargetWorkspace = ({
             <Button size="compact" onClick={onChooseAgents}>{t("Choose Agents")}</Button>
           </div>
         ) : null}
-        {!isLoading ? targets.map((target) => {
+        {targets.map((target) => {
           const state = statesByTarget.get(target.id);
           const isManaged = state?.status === "managed";
           const isExpanded = expandedTargetId === target.id;
@@ -610,7 +610,7 @@ export const TargetWorkspace = ({
               ) : null}
             </article>
           );
-        }) : null}
+        })}
       </div>
 
       {isRecoveryOpen ? (

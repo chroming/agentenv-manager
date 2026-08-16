@@ -3,6 +3,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  realpath,
   rm,
   utimes,
   writeFile
@@ -56,6 +57,7 @@ describe("Conversations desktop workflow", () => {
     const dataRoot = join(root, "data");
     const cacheRoot = join(root, "cache");
     const binDir = join(root, "bin");
+    const releaseWorkspacePath = join(root, "work", "release");
     const sessionDir = join(home, ".codex", "sessions", "2026", "07", "24");
     const sourcePath = join(
       sessionDir,
@@ -64,6 +66,21 @@ describe("Conversations desktop workflow", () => {
     await mkdir(sessionDir, { recursive: true });
     await mkdir(binDir, { recursive: true });
     await mkdir(dataRoot, { recursive: true });
+    await mkdir(releaseWorkspacePath, { recursive: true });
+    const releaseWorkspace = await realpath(releaseWorkspacePath);
+    await writeFile(
+      join(dataRoot, "projects.json"),
+      `${JSON.stringify({
+        formatVersion: 1,
+        projects: [{
+          id: "release-workspace",
+          name: "Release Workspace",
+          rootPath: releaseWorkspace,
+          createdAt: "2026-07-24T05:00:00.000Z"
+        }]
+      }, null, 2)}\n`,
+      "utf8"
+    );
     await writeFile(
       join(dataRoot, "settings.json"),
       `${JSON.stringify({
@@ -87,7 +104,7 @@ describe("Conversations desktop workflow", () => {
         type: "session_meta",
         payload: {
           id: "11111111-1111-4111-8111-111111111111",
-          cwd: "/work/release",
+          cwd: releaseWorkspace,
           timestamp: "2026-07-24T05:00:00.000Z"
         }
       }),
@@ -338,6 +355,9 @@ describe("Conversations desktop workflow", () => {
     await expect.poll(() => page.evaluate(() => window.agentEnv.readStartupStatus()), {
       timeout: 15_000
     }).toEqual({ state: "ready" });
+    await expect.poll(() => page.evaluate(async (path) => (
+      await window.agentEnv.findProjectByPath(path)
+    )?.id, releaseWorkspace)).toBe("release-workspace");
 
     await page.evaluate(() => {
       window.localStorage.setItem("agentenv:last-workspace", "conversations");
@@ -410,6 +430,8 @@ describe("Conversations desktop workflow", () => {
     await expect(page.locator(".conversation-date-group").count()).resolves.toBe(0);
     if (process.env.AGENTENV_CAPTURE_CONVERSATIONS) {
       await conversationSort.focus();
+      await page.mouse.move(1100, 40);
+      await page.keyboard.press("Escape");
       await page.getByRole("tooltip").waitFor({ state: "hidden" });
       await page.screenshot({
         path: process.env.AGENTENV_CAPTURE_CONVERSATIONS.replace(
@@ -544,6 +566,7 @@ describe("Conversations desktop workflow", () => {
       name: "Search conversations"
     }));
     await expectInViewport(page, page.getByRole("button", { name: "Continue" }));
+    await page.getByRole("button", { name: "Open Workspace" }).waitFor();
     const actionHeights = await page.locator(".conversation-detail-actions button").evaluateAll(
       (buttons) => buttons
         .map((button) => button.getBoundingClientRect())
@@ -551,6 +574,7 @@ describe("Conversations desktop workflow", () => {
         .map((bounds) => Math.round(bounds.height))
     );
     expect(new Set(actionHeights).size).toBe(1);
+    expect(actionHeights[0]).toBe(32);
     expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
     if (process.env.AGENTENV_CAPTURE_CONVERSATIONS) {
       await page.screenshot({
@@ -605,7 +629,7 @@ describe("Conversations desktop workflow", () => {
     await expectTopmost(continuationReview);
     await continuationReview.getByText("Paste prompt", { exact: true }).waitFor();
     await continuationReview.getByText("Needs attention", { exact: true }).waitFor();
-    await continuationReview.getByText("/work/release", { exact: true }).waitFor();
+    await continuationReview.getByText(releaseWorkspace, { exact: true }).waitFor();
     await continuationReview.getByText("Preserved", { exact: true }).waitFor();
     await expectInViewport(
       page,

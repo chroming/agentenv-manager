@@ -204,6 +204,35 @@ describe("ConversationWorkspace", () => {
     expect(onOpenProject).toHaveBeenCalledWith(project);
   });
 
+  it("keeps detail commands in one default-density action group", async () => {
+    const api = installApi();
+    api.listProjects.mockResolvedValue([{
+      id: "project-work",
+      name: "Release Tools",
+      rootPath: "/work/project",
+      createdAt: "2026-08-06T00:00:00.000Z",
+      exists: true
+    }]);
+    api.findProjectByPath.mockResolvedValue({
+      id: "project-work",
+      name: "Release Tools",
+      rootPath: "/work/project",
+      createdAt: "2026-08-06T00:00:00.000Z",
+      exists: true
+    });
+
+    render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);
+
+    const workspace = await screen.findByRole("button", { name: "Open Workspace" });
+    const actions = workspace.closest("[data-control-density]");
+    expect(actions).toHaveAttribute("data-control-density", "default");
+    expect(workspace).toHaveClass("ui-button--default", "ui-button--secondary");
+    expect(within(actions as HTMLElement).getByRole("button", { name: "Continue" }))
+      .toHaveClass("ui-button--default", "ui-button--primary");
+    expect(within(actions as HTMLElement).getByRole("button", { name: "Copy conversation" }))
+      .toHaveClass("ui-icon-button--default", "ui-icon-button--ghost");
+  });
+
   it("groups a canonical Project match even when the conversation uses a path alias", async () => {
     const api = installApi();
     const project = {

@@ -116,6 +116,18 @@
   width: 100%;
 }
 
+.target-loading-state {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex: 0 0 88px;
+  font-size: var(--font-size-metadata);
+  gap: var(--space-2);
+  min-height: 88px;
+  padding: 16px;
+  width: 100%;
+}
+
 .target-empty-state__icon {
   align-items: center;
   background: var(--surface-muted);
@@ -211,20 +223,6 @@
   align-items: center;
   display: flex;
   justify-self: end;
-  width: var(--control-height-compact);
-}
-
-.target-workflow-actions .ui-button {
-  height: var(--control-height-compact);
-  min-height: var(--control-height-compact);
-  min-width: 0;
-  white-space: nowrap;
-  width: 100%;
-}
-
-.target-workflow-actions .target-more-action {
-  height: var(--control-height-compact);
-  min-height: var(--control-height-compact);
   width: var(--control-height-compact);
 }
 

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ControlDensityProvider } from "./controlDensity";
 
 interface PageHeaderProps {
   actions?: ReactNode;
@@ -28,7 +29,11 @@ export const PageHeader = ({
         </h2>
         {description ? <p>{description}</p> : null}
       </div>
-      {actions ? <div className="ui-page-header__actions">{actions}</div> : null}
+      {actions ? (
+        <ControlDensityProvider density="default">
+          <div className="ui-page-header__actions">{actions}</div>
+        </ControlDensityProvider>
+      ) : null}
     </header>
   );
 };

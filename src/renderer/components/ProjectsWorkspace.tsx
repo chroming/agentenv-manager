@@ -662,7 +662,6 @@ export const ProjectsWorkspace = ({
                       disabled={!selected.exists}
                       label={t("Refresh Workspace")}
                       presentation="icon"
-                      size="compact"
                       variant="ghost"
                       onRefresh={() => void refreshSelectedProject()}
                     />

@@ -1,4 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
+import { ControlDensityProvider } from "./controlDensity";
 
 interface DialogHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   actions?: ReactNode;
@@ -18,7 +19,11 @@ export const DialogHeader = ({
       <div className="ui-dialog-title">{title}</div>
       {description ? <p className="ui-dialog-description">{description}</p> : null}
     </div>
-    {actions ? <div className="ui-dialog-header__actions">{actions}</div> : null}
+    {actions ? (
+      <ControlDensityProvider density="default">
+        <div className="ui-dialog-header__actions">{actions}</div>
+      </ControlDensityProvider>
+    ) : null}
   </header>
 );
 
@@ -37,7 +42,9 @@ export const DialogFooter = ({
   className = "",
   ...props
 }: HTMLAttributes<HTMLElement>) => (
-  <footer {...props} className={`ui-dialog-footer ${className}`.trim()}>
-    {children}
-  </footer>
+  <ControlDensityProvider density="default">
+    <footer {...props} className={`ui-dialog-footer ${className}`.trim()}>
+      {children}
+    </footer>
+  </ControlDensityProvider>
 );

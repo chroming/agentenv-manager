@@ -321,6 +321,14 @@
   min-width: 0;
 }
 
+.ui-control-group--compact {
+  min-height: var(--control-height-compact);
+}
+
+.ui-control-group--default {
+  min-height: var(--control-height-default);
+}
+
 .ui-segmented-control {
   align-items: center;
   background: var(--surface-muted);
@@ -803,12 +811,6 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   display: flex;
   flex: 0 0 auto;
   gap: var(--space-2);
-  min-height: var(--control-height-prominent);
-}
-
-.ui-page-header__actions .ui-button,
-.ui-page-header__actions .ui-icon-button {
-  height: var(--control-height-default);
   min-height: var(--control-height-default);
 }
 
