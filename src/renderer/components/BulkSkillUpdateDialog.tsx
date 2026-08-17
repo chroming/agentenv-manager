@@ -18,7 +18,15 @@ import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
-import { Button, IconButton, ModalFrame, Switch } from "./ui";
+import {
+  Button,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+  IconButton,
+  ModalFrame,
+  Switch
+} from "./ui";
 
 interface BulkSkillUpdateDialogProps {
   plans: SkillUpdatePlan[];
@@ -110,132 +118,131 @@ export const BulkSkillUpdateDialog = ({
         onDismiss={onClose}
         suspended={diffWorkspaceOpen}
       >
-        <header className="profile-dialog-header ui-dialog-header">
-          <div className="ui-dialog-header__copy">
-            <div className="section-title ui-dialog-title">{t("Update all skills")}</div>
-            <p className="muted ui-dialog-description">
-              {t("Review every tracked change before updating the shared library.")}
-            </p>
-          </div>
-          <IconButton
-            ref={expandPreviewRef}
-            label={t("Maximize preview")}
-            size="compact"
-            variant="ghost"
-            disabled={workspaceChanges.length === 0}
-            onClick={() => setDiffWorkspaceOpen(true)}
-          >
-            <Maximize2 size={16} strokeWidth={2.2} />
-          </IconButton>
-        </header>
-        {copiedInstallCount > 0 && !started ? (
-          <div className="skill-update-copy-option">
-            <span className="skill-update-copy-option__copy">
-              <strong>{t("Also update Agent copies")}</strong>
-              <small>
-                {syncCopiedInstalls
-                  ? t("{{count}} clean managed copies will update in the same backed-up operation.", {
-                      count: copiedInstallCount
-                    })
-                  : t("Off: {{count}} Agent copies will show Apply pending.", {
-                      count: copiedInstallCount
-                    })}
-              </small>
-            </span>
-            <Switch
-              checked={syncCopiedInstalls}
-              disabled={isBusy || updateActivityBusy}
-              label={t("Also update Agent copies")}
-              onClick={() => setSyncCopiedInstalls((current) => !current)}
-            />
-          </div>
-        ) : null}
-        <div className="bulk-update-list ui-dialog-body">
-          {failures.length > 0 ? (
-            <section className="bulk-update-failures" aria-label={t("Preview failures")}>
-              <div className="bulk-update-failures__heading">
-                <TriangleAlert size={15} aria-hidden="true" />
-                <strong>
-                  {t("{{count}} update previews could not be prepared", {
-                    count: failures.length
-                  })}
-                </strong>
-              </div>
-              {failures.map((failure) => (
-                <div className="bulk-update-failure" key={failure.id}>
-                  <strong>{failure.id}</strong>
-                  <PreviewText className="bulk-update-failure__error" text={failure.error} />
-                </div>
-              ))}
-            </section>
+        <DialogHeader
+          title={t("Update all skills")}
+          description={t("Review every tracked change before updating the shared library.")}
+          actions={(
+            <IconButton
+              ref={expandPreviewRef}
+              label={t("Maximize preview")}
+              variant="ghost"
+              disabled={workspaceChanges.length === 0}
+              onClick={() => setDiffWorkspaceOpen(true)}
+            >
+              <Maximize2 size={16} strokeWidth={2.2} />
+            </IconButton>
+          )}
+        />
+        <DialogBody className="bulk-update-body">
+          {copiedInstallCount > 0 && !started ? (
+            <div className="skill-update-copy-option">
+              <span className="skill-update-copy-option__copy">
+                <strong>{t("Also update Agent copies")}</strong>
+                <small>
+                  {syncCopiedInstalls
+                    ? t("{{count}} clean managed copies will update in the same backed-up operation.", {
+                        count: copiedInstallCount
+                      })
+                    : t("Off: {{count}} Agent copies will show Apply pending.", {
+                        count: copiedInstallCount
+                      })}
+                </small>
+              </span>
+              <Switch
+                checked={syncCopiedInstalls}
+                disabled={isBusy || updateActivityBusy}
+                label={t("Also update Agent copies")}
+                onClick={() => setSyncCopiedInstalls((current) => !current)}
+              />
+            </div>
           ) : null}
-          {plans.map((plan) => {
-            const progress = updateRun[plan.id];
-            const label = progressLabel(progress);
-            return (
-              <details
-                key={plan.id}
-                open={plan.errors.length > 0 || progress?.status === "failed"}
-              >
-                <summary>
-                  <span className="bulk-update-summary-identity">
-                    <ChevronDown className="bulk-update-disclosure" size={15} strokeWidth={2.2} />
-                    <strong>{plan.name}</strong>
-                  </span>
-                  <span className="bulk-update-summary-meta">
-                    <span>
-                      {plan.errors.length > 0
-                        ? t("Blocked")
-                        : t("{{count}} file changes", { count: plan.changes.length })}
-                    </span>
-                    {progress && label ? (
-                      <span
-                        className={`bulk-update-progress bulk-update-progress--${progress.status}`}
-                        role="status"
-                        aria-label={t("{{name}}: {{status}}", { name: plan.name, status: label })}
-                      >
-                        {progress.status === "queued" ? (
-                          <Clock3 size={13} aria-hidden="true" />
-                        ) : progress.status === "updating" ? (
-                          <LoaderCircle className="is-spinning" size={13} aria-hidden="true" />
-                        ) : progress.status === "updated" ? (
-                          <CheckCircle2 size={13} aria-hidden="true" />
-                        ) : progress.status === "skipped" ? (
-                          <MinusCircle size={13} aria-hidden="true" />
-                        ) : (
-                          <CircleAlert size={13} aria-hidden="true" />
-                        )}
-                        {label}
-                      </span>
-                    ) : null}
-                  </span>
-                </summary>
-                {plan.impact ? (
-                  <p className="skill-update-impact">
-                    {t(syncCopiedInstalls
-                      ? "{{profiles}} Profiles · {{linked}} linked installs update now · {{copied}} copied installs update now"
-                      : "{{profiles}} Profiles · {{linked}} linked installs update now · {{copied}} copied installs need Apply", {
-                      profiles: plan.impact.profileNames.length,
-                      linked: plan.impact.linkedInstallCount,
-                      copied: plan.impact.copiedInstallCount
+          <div className="bulk-update-list">
+            {failures.length > 0 ? (
+              <section className="bulk-update-failures" aria-label={t("Preview failures")}>
+                <div className="bulk-update-failures__heading">
+                  <TriangleAlert size={15} aria-hidden="true" />
+                  <strong>
+                    {t("{{count}} update previews could not be prepared", {
+                      count: failures.length
                     })}
-                  </p>
-                ) : null}
-                {plan.errors.map((error) => <p className="error" key={error}>{error}</p>)}
-                {progress?.error ? (
-                  <div className="bulk-update-run-error">
-                    <PreviewText className="bulk-update-run-error__message" text={progress.error} />
-                    <Button disabled={isBusy || running} size="compact" onClick={() => onUpdate([plan], syncCopiedInstalls)}>
-                      {t("Retry")}
-                    </Button>
+                  </strong>
+                </div>
+                {failures.map((failure) => (
+                  <div className="bulk-update-failure" key={failure.id}>
+                    <strong>{failure.id}</strong>
+                    <PreviewText className="bulk-update-failure__error" text={failure.error} />
                   </div>
-                ) : null}
-                {plan.changes.map((change) => <code key={change.path}>{change.path}</code>)}
-              </details>
-            );
-          })}
-        </div>
-        <footer className="preview-actions ui-dialog-footer">
+                ))}
+              </section>
+            ) : null}
+            {plans.map((plan) => {
+              const progress = updateRun[plan.id];
+              const label = progressLabel(progress);
+              return (
+                <details
+                  key={plan.id}
+                  open={plan.errors.length > 0 || progress?.status === "failed"}
+                >
+                  <summary>
+                    <span className="bulk-update-summary-identity">
+                      <ChevronDown className="bulk-update-disclosure" size={15} strokeWidth={2.2} />
+                      <strong>{plan.name}</strong>
+                    </span>
+                    <span className="bulk-update-summary-meta">
+                      <span>
+                        {plan.errors.length > 0
+                          ? t("Blocked")
+                          : t("{{count}} file changes", { count: plan.changes.length })}
+                      </span>
+                      {progress && label ? (
+                        <span
+                          className={`bulk-update-progress bulk-update-progress--${progress.status}`}
+                          role="status"
+                          aria-label={t("{{name}}: {{status}}", { name: plan.name, status: label })}
+                        >
+                          {progress.status === "queued" ? (
+                            <Clock3 size={13} aria-hidden="true" />
+                          ) : progress.status === "updating" ? (
+                            <LoaderCircle className="is-spinning" size={13} aria-hidden="true" />
+                          ) : progress.status === "updated" ? (
+                            <CheckCircle2 size={13} aria-hidden="true" />
+                          ) : progress.status === "skipped" ? (
+                            <MinusCircle size={13} aria-hidden="true" />
+                          ) : (
+                            <CircleAlert size={13} aria-hidden="true" />
+                          )}
+                          {label}
+                        </span>
+                      ) : null}
+                    </span>
+                  </summary>
+                  {plan.impact ? (
+                    <p className="skill-update-impact">
+                      {t(syncCopiedInstalls
+                        ? "{{profiles}} Profiles · {{linked}} linked installs update now · {{copied}} copied installs update now"
+                        : "{{profiles}} Profiles · {{linked}} linked installs update now · {{copied}} copied installs need Apply", {
+                        profiles: plan.impact.profileNames.length,
+                        linked: plan.impact.linkedInstallCount,
+                        copied: plan.impact.copiedInstallCount
+                      })}
+                    </p>
+                  ) : null}
+                  {plan.errors.map((error) => <p className="error" key={error}>{error}</p>)}
+                  {progress?.error ? (
+                    <div className="bulk-update-run-error">
+                      <PreviewText className="bulk-update-run-error__message" text={progress.error} />
+                      <Button disabled={isBusy || running} size="compact" onClick={() => onUpdate([plan], syncCopiedInstalls)}>
+                        {t("Retry")}
+                      </Button>
+                    </div>
+                  ) : null}
+                  {plan.changes.map((change) => <code key={change.path}>{change.path}</code>)}
+                </details>
+              );
+            })}
+          </div>
+        </DialogBody>
+        <DialogFooter className="preview-actions">
           <Button ref={initialFocusRef} disabled={dismissDisabled} onClick={onClose}>
             {t(started ? "Close" : "Cancel")}
           </Button>
@@ -288,7 +295,7 @@ export const BulkSkillUpdateDialog = ({
               )}
             </Button>
           ) : null}
-        </footer>
+        </DialogFooter>
       </ModalFrame>
       <DiffWorkspaceDialog
         changes={workspaceChanges}

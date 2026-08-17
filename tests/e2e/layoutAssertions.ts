@@ -84,7 +84,10 @@ export const expectAlignedResourceRows = (
     expect(Math.max(...actionLefts) - Math.min(...actionLefts)).toBeLessThanOrEqual(1);
   }
   expect(geometry.every(({ stateCenterOffset }) => stateCenterOffset <= 1)).toBe(true);
-  expect(geometry.every(({ contained, stateContentFits }) => contained && stateContentFits))
+  expect(
+    geometry.every(({ contained, stateContentFits }) => contained && stateContentFits),
+    `Aligned resource row containment failed:\n${JSON.stringify(geometry, null, 2)}`
+  )
     .toBe(true);
   if (requireMixedActions) {
     expect(new Set(geometry.map(({ actionKind }) => actionKind).filter((kind) => kind !== "none")).size)

@@ -8837,6 +8837,84 @@ describe("Electron UI profile switching e2e", () => {
     );
   }, standardElectronTestTimeout);
 
+  it("keeps rate-limit preview failures below the Agent-copy option", async () => {
+    const { librarySkill, page } = await launchApp();
+    await writeFile(
+      join(librarySkill.sourceDir, "SKILL.md"),
+      "---\nname: Shared Reviewer\ndescription: Updated content.\n---\n\n# Shared Reviewer\n",
+      "utf8"
+    );
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Check updates" }).click();
+    await page
+      .getByRole("group", { name: "Library item shared-reviewer" })
+      .getByRole("button", { name: "Review update shared-reviewer" })
+      .waitFor({ state: "visible" });
+
+    await app!.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler("skills:preview-updates");
+      ipcMain.handle("skills:preview-updates", () => ({
+        plans: [{
+          id: "shared-reviewer",
+          previewId: "preview-shared-reviewer",
+          name: "Shared Reviewer",
+          sourceType: "github",
+          updateAvailable: true,
+          changes: [{
+            action: "write",
+            path: "SKILL.md",
+            before: "old",
+            after: "new",
+            diff: ""
+          }],
+          errors: [],
+          impact: {
+            profileNames: ["Daily Coding"],
+            linkedInstallCount: 0,
+            linkedTargetIds: [],
+            copiedInstallCount: 2,
+            copiedTargetIds: ["codex", "opencode"]
+          }
+        }],
+        failed: [
+          {
+            id: "ljg-book",
+            error: "GitHub API rate limit reached (429 Too Many Requests)"
+          },
+          {
+            id: "yao-meta-skill",
+            error: "GitHub API rate limit reached (429 Too Many Requests)"
+          }
+        ]
+      }));
+    });
+
+    await page.getByRole("button", { name: "Update all skills" }).click();
+    const dialog = page.getByRole("dialog", { name: "Update all skills" });
+    await dialog.waitFor({ state: "visible" });
+    await expectStructuredDialog(dialog);
+    const geometry = await dialog.evaluate((element) => {
+      const option = element.querySelector<HTMLElement>(".skill-update-copy-option")!;
+      const failures = element.querySelector<HTMLElement>(".bulk-update-failures")!;
+      const body = element.querySelector<HTMLElement>(".bulk-update-body")!;
+      const optionBox = option.getBoundingClientRect();
+      const failuresBox = failures.getBoundingClientRect();
+      return {
+        bodyOverflowY: getComputedStyle(body).overflowY,
+        failuresTop: failuresBox.top,
+        optionBottom: optionBox.bottom,
+        failuresContained:
+          failuresBox.left >= body.getBoundingClientRect().left &&
+          failuresBox.right <= body.getBoundingClientRect().right
+      };
+    });
+    expect(geometry.bodyOverflowY).toBe("auto");
+    expect(geometry.failuresTop).toBeGreaterThanOrEqual(geometry.optionBottom);
+    expect(geometry.failuresContained).toBe(true);
+    expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+  }, standardElectronTestTimeout);
+
   it("applies reviewed bulk candidates when a source disappears after preview", async () => {
     const { appDataRoot, librarySkill, page } = await launchApp();
     const missingSourceSkill = await writeTrackedLibrarySkill(
@@ -10309,6 +10387,47 @@ describe("Electron UI profile switching e2e", () => {
     expect(reenabledResources.skills).toContainEqual(
       { libraryId: "layout-skill-1", targetName: "layout-skill-1", enabled: true }
     );
+  }, standardElectronTestTimeout);
+
+  it("opens a Skill update preview from the Profile status lane", async () => {
+    const { appDataRoot, librarySkill, page } = await launchApp();
+    const resourcesPath = join(
+      appDataRoot,
+      "profiles",
+      "ui-opencode-alpha",
+      "resources.json"
+    );
+    const resources = await readJson<{
+      skills: Array<{ libraryId: string; targetName: string; enabled: boolean }>;
+      mcpByTarget: Record<string, unknown>;
+    }>(resourcesPath);
+    await writeJson(resourcesPath, {
+      ...resources,
+      skills: [
+        ...resources.skills,
+        { libraryId: "shared-reviewer", targetName: "shared-reviewer", enabled: true }
+      ]
+    });
+    await writeFile(
+      join(librarySkill.sourceDir, "SKILL.md"),
+      "---\nname: Shared Reviewer\ndescription: Updated from Profile.\n---\n\n# Shared Reviewer\n",
+      "utf8"
+    );
+
+    await page.reload();
+    await page.waitForLoadState("domcontentloaded");
+    await selectProfile(page, "UI OpenCode alpha");
+    await expandComposerSection(page, "Skills");
+    const manager = page.getByRole("region", { name: "Profile Skills" });
+    await manager.getByRole("button", { name: "Check Profile Skill updates" }).click();
+    const row = manager.getByRole("listitem", { name: "Profile Skill shared-reviewer" });
+    const status = row.getByRole("button", { name: "Review update shared-reviewer" });
+    await status.waitFor({ state: "visible" });
+    await expectTextFits(status);
+    expect(await status.getAttribute("data-status-kind")).toBe("update-available");
+    await status.click();
+    await page.getByRole("dialog", { name: "Update preview for shared-reviewer" })
+      .waitFor({ state: "visible" });
   }, standardElectronTestTimeout);
 
   it("enables Antigravity Apply immediately after saving resource policy changes", async () => {

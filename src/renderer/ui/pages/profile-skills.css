@@ -93,6 +93,10 @@
   color: var(--accent-strong);
 }
 
+.profile-skill-state.ui-interactive-status {
+  max-width: 100%;
+}
+
 .profile-skill-state.is-error {
   color: var(--danger);
 }

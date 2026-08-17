@@ -71,11 +71,17 @@
   color: var(--muted);
 }
 
+.bulk-update-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 0;
+}
+
 .bulk-update-list {
   display: grid;
   gap: 8px;
   min-height: 0;
-  overflow: auto;
+  padding: 16px 18px;
 }
 
 .bulk-update-list details {

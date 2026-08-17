@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  Download,
+  CircleArrowUp,
   FolderInput,
   Link2,
   LoaderCircle,
@@ -28,6 +28,7 @@ import {
   DialogBody,
   DialogFooter,
   DialogHeader,
+  InteractiveStatus,
   ModalFrame,
   Notice,
   ResourcePanelToolbar,
@@ -370,12 +371,6 @@ export const SkillsEditor = ({
               label: t("Relink {{name}}", { name: reference.targetName }),
               onSelect: () => openPicker(index)
             }] : []),
-            ...(profileManagesSkills && skill && enabled && update?.updateAvailable ? [{
-              id: "update",
-              icon: <Download size={14} strokeWidth={2.2} aria-hidden="true" />,
-              label: t("Review update"),
-              onSelect: () => onPreviewSkillUpdate?.(reference.libraryId)
-            }] : []),
             {
               id: "remove",
               icon: <Trash2 size={14} strokeWidth={2.2} aria-hidden="true" />,
@@ -411,19 +406,29 @@ export const SkillsEditor = ({
               key={`${reference.libraryId}:${reference.targetName}:${index}`}
               role="listitem"
               aria-label={t("Profile Skill {{name}}", { name: reference.libraryId })}
-              state={(
+              state={status === "Update available" ? (
+                <InteractiveStatus
+                  className="profile-skill-state is-update"
+                  icon={<CircleArrowUp size={13} strokeWidth={2.2} />}
+                  label={t("Update available")}
+                  reviewLabel={t("Review update {{id}}", { id: reference.libraryId })}
+                  statusKind="update-available"
+                  tone="accent"
+                  onReview={onPreviewSkillUpdate
+                    ? () => onPreviewSkillUpdate(reference.libraryId)
+                    : undefined}
+                />
+              ) : (
                 <span
-                className={`profile-skill-state${
-                  status === "Ready" || localOverride ? " is-neutral" : ""
-                }${
-                  status === "Update available" || status === "Apply pending"
-                    ? " is-update"
-                    : ""
-                }${!skill || update?.error ? " is-error" : ""}`}
-                title={update?.error ?? status}
-              >
-                {t(status)}
-              </span>
+                  className={`profile-skill-state${
+                    status === "Ready" || localOverride ? " is-neutral" : ""
+                  }${status === "Apply pending" ? " is-update" : ""}${
+                    !skill || update?.error ? " is-error" : ""
+                  }`}
+                  title={update?.error ?? status}
+                >
+                  {t(status)}
+                </span>
               )}
               title={<OverflowTooltip className="profile-skill-name" text={skillName} />}
               tone={enabled ? "default" : "disabled"}

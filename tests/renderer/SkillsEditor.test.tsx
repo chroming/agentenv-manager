@@ -272,9 +272,15 @@ describe("SkillsEditor v2", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "More actions for Code Review" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Review update" }));
+    const row = screen.getByRole("listitem", { name: "Profile Skill review" });
+    const updateStatus = within(row).getByRole("button", { name: "Review update review" });
+    expect(updateStatus).toHaveAttribute("data-status-kind", "update-available");
+    expect(updateStatus).toHaveTextContent("Update available");
+    fireEvent.click(updateStatus);
     expect(onPreview).toHaveBeenCalledWith("review");
+
+    fireEvent.click(within(row).getByRole("button", { name: "More actions for Code Review" }));
+    expect(screen.queryByRole("menuitem", { name: "Review update" })).not.toBeInTheDocument();
   });
 
   it("keeps row actions behind one stable overflow control", () => {

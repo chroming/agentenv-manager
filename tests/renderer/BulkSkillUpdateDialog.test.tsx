@@ -54,6 +54,43 @@ describe("BulkSkillUpdateDialog", () => {
     expect(onUpdate).toHaveBeenCalledWith([copiedPlan], true);
   });
 
+  it("keeps multiple preview failures inside the scrolling body below the copy option", () => {
+    render(
+      <BulkSkillUpdateDialog
+        plans={[{
+          ...plan,
+          impact: { ...plan.impact, copiedInstallCount: 2 }
+        }]}
+        failures={[
+          { id: "ljg-book", error: "GitHub API rate limit reached (429 Too Many Requests)" },
+          { id: "yao-meta-skill", error: "GitHub API rate limit reached (429 Too Many Requests)" }
+        ]}
+        updateRun={{}}
+        isBusy={false}
+        previewingAllUpdates={false}
+        updateActivityBusy={false}
+        stopRequested={false}
+        onClose={vi.fn()}
+        onPreview={vi.fn()}
+        onStop={vi.fn()}
+        onUpdate={vi.fn()}
+      />
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Update all skills" });
+    const body = dialog.querySelector<HTMLElement>(".bulk-update-body");
+    const option = screen.getByText("Also update Agent copies")
+      .closest<HTMLElement>(".skill-update-copy-option");
+    const failures = screen.getByRole("region", { name: "Preview failures" });
+
+    expect(body).toContainElement(option);
+    expect(body).toContainElement(failures);
+    expect(option?.nextElementSibling).toContainElement(failures);
+    expect(failures).toHaveTextContent("2 update previews could not be prepared");
+    expect(failures).toHaveTextContent("ljg-book");
+    expect(failures).toHaveTextContent("yao-meta-skill");
+  });
+
   it("uses the standard preview controls and can stop an active queue", () => {
     const onStop = vi.fn();
     render(

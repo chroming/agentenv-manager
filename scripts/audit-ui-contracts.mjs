@@ -20,6 +20,7 @@ const [
   projectE2e,
   controlGroup,
   conversationWorkspace,
+  bulkSkillUpdateDialog,
   targetWorkspace,
   targetStyles,
   visualContractText
@@ -32,6 +33,7 @@ const [
   read("tests/e2e/projects.e2e.test.ts"),
   read("src/renderer/components/ui/ControlGroup.tsx"),
   read("src/renderer/components/ConversationWorkspace.tsx"),
+  read("src/renderer/components/BulkSkillUpdateDialog.tsx"),
   read("src/renderer/components/TargetWorkspace.tsx"),
   read("src/renderer/ui/pages/targets.css"),
   read("tests/visual/critical-captures.json")
@@ -51,6 +53,16 @@ requirePattern(
   conversationWorkspace,
   /label=\{t\("Copy conversation"\)\}[\s\S]{0,160}variant="ghost"/,
   "Conversation utility action hierarchy"
+);
+requirePattern(
+  bulkSkillUpdateDialog,
+  /<DialogBody className="bulk-update-body">[\s\S]*skill-update-copy-option[\s\S]*bulk-update-list[\s\S]*<\/DialogBody>/,
+  "Bulk Skill update body containment"
+);
+requirePattern(
+  profileEditor,
+  /status === "Update available"[\s\S]*<InteractiveStatus[\s\S]*statusKind="update-available"[\s\S]*onReview=/,
+  "Profile Skill update interaction"
 );
 requireText(targetWorkspace, 'className="target-loading-state"', "Agent initial loading state");
 requirePattern(
