@@ -47,7 +47,7 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
       mkdir(agentBinRoot, { recursive: true })
     ]);
     await writeFile(brewVersion, "0.1.0\n");
-    await writeFile(brewPath, `#!/bin/sh\necho "$@" >> "${brewLog}"\nif [ "$1" = "upgrade" ]; then echo "0.2.0" > "${brewVersion}"; fi\nif [ "$1" = "list" ]; then echo "agentenv-manager $(cat "${brewVersion}")"; fi\nexit 0\n`);
+    await writeFile(brewPath, `#!/bin/sh\necho "$@" >> "${brewLog}"\nif [ "$1" = "upgrade" ]; then sleep 2; echo "0.2.0" > "${brewVersion}"; fi\nif [ "$1" = "list" ]; then echo "agentenv-manager $(cat "${brewVersion}")"; fi\nexit 0\n`);
     await chmod(brewPath, 0o755);
     await writeFile(releaseFixture, JSON.stringify({
       tag_name: "v0.2.0",
@@ -64,7 +64,7 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
       }]
     }));
 
-    const launch = () => electron.launch({
+    const launch = (appVersion = "0.1.0") => electron.launch({
       executablePath: electronPath as unknown as string,
       args: [
         `--user-data-dir=${join(root, "electron-user-data")}`,
@@ -75,7 +75,7 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
         AGENTENV_AUTOMATION: "1",
         AGENTENV_AUTOMATION_POSTHOG_PROJECT_TOKEN: "phc_e2e_consent_only",
         AGENTENV_AUTOMATION_UPDATE_PACKAGED: "1",
-        AGENTENV_AUTOMATION_APP_VERSION: "0.1.0",
+        AGENTENV_AUTOMATION_APP_VERSION: appVersion,
         AGENTENV_AUTOMATION_APP_DIR: applicationDirectory,
         AGENTENV_AUTOMATION_UPDATE_FIXTURE: releaseFixture,
         AGENTENV_AUTOMATION_BREW_PATH: brewPath,
@@ -121,28 +121,29 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
       () => page.evaluate(() => window.agentEnv.readAppUpdateStatus()),
       { timeout: 5_000 }
     ).toMatchObject({ phase: "ready", release: { version: "0.2.0" } });
+    await expect.poll(() => app?.evaluate(({ Menu }) =>
+      Menu.getApplicationMenu()?.getMenuItemById("app.check-for-updates")?.label
+    )).toBe("Restart to Update to 0.2.0…");
     await page.getByText("Version 0.2.0 is ready to install").waitFor({ timeout: 5_000 });
     await expect.poll(() => readFile(brewLog, "utf8")).toContain(
       "fetch --cask chroming/tap/agentenv-manager"
     );
 
     await page.getByRole("switch", { name: "Automatic update checks" }).click();
-    await page.evaluate(() => window.agentEnv.updateSettings({ appUpdateInstallOnQuit: false }));
     await expect.poll(async () =>
       JSON.parse(await readFile(join(dataRoot, "settings.json"), "utf8"))
         .appUpdateAutoCheckEnabled
     ).toBe(false);
 
-    await app.evaluate(({ app: electronApp }) => {
-      (electronApp as unknown as { relaunch(): void }).relaunch = () => undefined;
-    });
-    await page.getByRole("button", { name: "Restart and update" }).click();
+    await app.evaluate(({ app: electronApp }) => electronApp.quit()).catch(() => undefined);
+    await expect.poll(() => app?.windows().length ?? 0, { timeout: 1_500 }).toBe(0);
+    await expect(readFile(brewVersion, "utf8")).resolves.toBe("0.1.0\n");
+    app = undefined;
     await expect.poll(() => readFile(brewLog, "utf8")).toContain(
       `upgrade --cask --appdir=${applicationDirectory} chroming/tap/agentenv-manager`
     );
-    await expect.poll(() => app?.windows().length ?? 0).toBe(0);
-    app = undefined;
-    app = await launch();
+    await expect.poll(() => readFile(brewVersion, "utf8"), { timeout: 5_000 }).toBe("0.2.0\n");
+    app = await launch("0.2.0");
     page = await app.firstWindow();
     await expect.poll(
       () => page.evaluate(() => window.agentEnv.readStartupStatus()),
@@ -155,6 +156,10 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
       page.getByRole("switch", { name: "Automatic update checks" })
         .getAttribute("aria-checked")
     ).toBe("false");
+    await page.getByText("Finish updates after quitting").waitFor({
+      state: "visible",
+      timeout: 5_000
+    });
     await page.getByRole("tab", { name: "Data" }).click();
     await expect.poll(() =>
       page.getByRole("switch", { name: "Share anonymous usage statistics" })
@@ -249,6 +254,6 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
       release: { version: "0.2.0" }
     });
     await page.getByText("Version 0.2.0 is ready to install").waitFor({ timeout: 5_000 });
-    await expect.poll(() => page.getByText("Install when quitting").count()).toBe(0);
+    await expect.poll(() => page.getByText("Finish updates after quitting").count()).toBe(0);
   }, 60_000);
 });

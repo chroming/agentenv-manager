@@ -14,7 +14,8 @@ export interface AppUpdateService {
   download(): Promise<AppUpdateStatus>;
   install(options?: { restart?: boolean }): Promise<AppUpdateStatus>;
   isReadyToInstall(): boolean;
-  shouldInstallOnQuit(): Promise<boolean>;
+  canScheduleInstallOnQuit(): boolean;
+  scheduleInstallOnQuit(): Promise<boolean>;
 }
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
@@ -32,15 +33,19 @@ export const createAppUpdateService = (options: {
       "appUpdateAutoCheckEnabled" | "appUpdateAutoDownloadEnabled" | "appUpdateInstallOnQuit">>;
   }, "readSettings">;
   now?: () => Date;
+  startupFailure?: string;
   onStatusChanged?: (status: AppUpdateStatus) => void;
   onInstalled?: (restart: boolean, channel: "homebrew" | "direct") => void;
 }): AppUpdateService => {
   const now = options.now ?? (() => new Date());
   let status: AppUpdateStatus = {
-    phase: options.packaged ? "idle" : "disabled",
+    phase: options.startupFailure ? "failed" : options.packaged ? "idle" : "disabled",
     currentVersion: options.currentVersion,
-    installChannel: options.packaged ? "direct" : "development",
-    automaticInstallSupported: false
+    installChannel: options.startupFailure ? "homebrew" : options.packaged ? "direct" : "development",
+    automaticInstallSupported: Boolean(options.startupFailure),
+    ...(options.startupFailure
+      ? { failureCode: "install-failed", message: options.startupFailure }
+      : {})
   };
   let currentCheck: Promise<AppUpdateStatus> | undefined;
   let trustedRelease: TrustedRelease | undefined;
@@ -207,6 +212,31 @@ export const createAppUpdateService = (options: {
     }
   };
 
+  const canScheduleInstallOnQuit = () =>
+    status.phase === "ready" &&
+    status.installChannel === "homebrew" &&
+    status.automaticInstallSupported &&
+    Boolean(trustedRelease);
+
+  const scheduleInstallOnQuit = async () => {
+    if (!canScheduleInstallOnQuit() || !trustedRelease) return false;
+    const settings = await options.settingsStore.readSettings();
+    if (settings.appUpdateInstallOnQuit === false) return false;
+    updateStatus({ ...status, phase: "installing", message: undefined, failureCode: undefined });
+    try {
+      await options.homebrew.scheduleInstallAfterQuit(trustedRelease.version);
+      return true;
+    } catch (error) {
+      updateStatus({
+        ...status,
+        phase: "failed",
+        failureCode: "install-failed",
+        message: errorMessage(error)
+      });
+      return false;
+    }
+  };
+
   return {
     readStatus,
     check,
@@ -216,9 +246,7 @@ export const createAppUpdateService = (options: {
       status.phase === "ready" &&
       status.automaticInstallSupported &&
       (status.installChannel === "homebrew" || status.installChannel === "direct"),
-    shouldInstallOnQuit: async () =>
-      status.phase === "ready" &&
-      status.installChannel === "homebrew" &&
-      (await options.settingsStore.readSettings()).appUpdateInstallOnQuit !== false
+    canScheduleInstallOnQuit,
+    scheduleInstallOnQuit
   };
 };

@@ -2294,6 +2294,17 @@ The current machine-readable totals, source commit, deterministic tracked-and-un
   download, and install commands acknowledge the click immediately, retain animated local working
   feedback for the complete operation, and name the current stage without fabricating a percentage
   when the underlying installer cannot report byte progress.
+- On macOS, the application menu exposes one stateful update command rather than separate check,
+  download, and install commands. Its label and availability are derived from the same update status
+  shown in Settings, and explicit installation continues to use the verified channel-specific flow.
+- A prepared Homebrew update MAY finish automatically after quit. Quitting schedules a detached,
+  cache-contained helper and exits without waiting for `brew upgrade`; the helper waits for the App
+  process to stop, upgrades the same Cask into the detected Applications directory, verifies the
+  expected installed version, and records a durable result. A launch during that operation shows a
+  blocking startup phase until the helper completes, then relaunches the installed version when
+  needed. A failed helper keeps the previous installation usable, surfaces a retryable update error
+  on the next launch, and never modifies AgentEnv data. Direct Release installations remain explicit
+  restart-and-update only.
 
 ## 26. Current Priority Gaps
 

@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { constants } from "node:fs";
 import { access } from "node:fs/promises";
 import { dirname } from "node:path";
+import { scheduleHomebrewUpdateAfterQuit } from "./homebrewUpdateHelper";
 
 const CASK = "chroming/tap/agentenv-manager";
 const BREW_CANDIDATES = [
@@ -27,6 +28,7 @@ export interface HomebrewAdapter {
   inspect(options?: { refresh?: boolean }): Promise<HomebrewInspection>;
   download(): Promise<void>;
   install(expectedVersion: string): Promise<void>;
+  scheduleInstallAfterQuit(expectedVersion: string): Promise<void>;
 }
 
 export const applicationPathForExecutable = (executablePath: string) => {
@@ -74,6 +76,8 @@ const defaultRun = (
 export const createHomebrewAdapter = (options: {
   platform?: NodeJS.Platform;
   applicationDirectory?: string;
+  cacheDirectory?: string;
+  parentPid?: number;
   executableCandidates?: string[];
   canExecute?: (path: string) => Promise<boolean>;
   run?: (file: string, args: string[], options: { timeoutMs: number }) => Promise<CommandResult>;
@@ -139,6 +143,24 @@ export const createHomebrewAdapter = (options: {
       if (current.installedVersion !== expectedVersion) {
         throw new Error(`Homebrew installed version does not match ${expectedVersion}`);
       }
+    },
+    scheduleInstallAfterQuit: async (expectedVersion) => {
+      const current = await inspect();
+      if (!current.available || !current.managed || !current.executablePath) {
+        throw new Error("AgentEnv Manager is not managed by Homebrew");
+      }
+      if (!options.cacheDirectory) {
+        throw new Error("Automatic Homebrew update cache is unavailable");
+      }
+      await scheduleHomebrewUpdateAfterQuit({
+        cacheDirectory: options.cacheDirectory,
+        brewPath: current.executablePath,
+        expectedVersion,
+        ...(options.applicationDirectory
+          ? { applicationDirectory: options.applicationDirectory }
+          : {}),
+        ...(options.parentPid ? { parentPid: options.parentPid } : {})
+      });
     }
   };
 };

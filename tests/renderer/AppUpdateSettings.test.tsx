@@ -62,6 +62,8 @@ describe("App update settings", () => {
     expect(statusRow?.parentElement).toBe(autoCheck.closest(".settings-preference-list"));
     expect(statusRow).toHaveTextContent("Current version 0.1.0");
     expect(statusRow).toHaveTextContent("Latest version 0.1.0");
+    expect(screen.getByText("Finish updates after quitting")).toBeInTheDocument();
+    expect(screen.getByText(/quitting is not delayed/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Check now" }));
     await waitFor(() => expect(api.checkAppUpdate).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole("switch", { name: "Automatic update checks" }));

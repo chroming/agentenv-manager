@@ -28,6 +28,13 @@ const unavailableDirect = () => ({
   install: vi.fn()
 });
 
+const unavailableHomebrew = () => ({
+  inspect: vi.fn().mockResolvedValue({ available: false, managed: false }),
+  download: vi.fn(),
+  install: vi.fn(),
+  scheduleInstallAfterQuit: vi.fn()
+});
+
 describe("app update service", () => {
   it("coalesces checks and reports a verified update without exposing arbitrary URLs", async () => {
     let resolveRelease!: (value: typeof release) => void;
@@ -49,7 +56,8 @@ describe("app update service", () => {
       homebrew: {
         inspect,
         download: vi.fn(),
-        install: vi.fn()
+        install: vi.fn(),
+        scheduleInstallAfterQuit: vi.fn()
       },
       direct: unavailableDirect(),
       settingsStore: { readSettings: vi.fn().mockResolvedValue(settings) },
@@ -76,11 +84,7 @@ describe("app update service", () => {
       platform: "darwin",
       arch: "arm64",
       releaseClient: { readLatest, isNewer: () => true },
-      homebrew: {
-        inspect: vi.fn().mockResolvedValue({ available: false, managed: false }),
-        download: vi.fn(),
-        install: vi.fn()
-      },
+      homebrew: unavailableHomebrew(),
       direct: unavailableDirect(),
       settingsStore: {
         readSettings: vi.fn().mockResolvedValue({ ...settings, appUpdateAutoCheckEnabled: false })
@@ -100,7 +104,8 @@ describe("app update service", () => {
     const homebrew = {
       inspect: vi.fn().mockResolvedValue({ available: true, managed: true, executablePath: "/opt/homebrew/bin/brew" }),
       download: vi.fn().mockResolvedValue(undefined),
-      install: vi.fn().mockResolvedValue(undefined)
+      install: vi.fn().mockResolvedValue(undefined),
+      scheduleInstallAfterQuit: vi.fn().mockResolvedValue(undefined)
     };
     const service = createAppUpdateService({
       currentVersion: "0.1.0",
@@ -136,11 +141,7 @@ describe("app update service", () => {
       platform: "darwin",
       arch: "arm64",
       releaseClient: { readLatest: vi.fn().mockResolvedValue(release), isNewer: () => true },
-      homebrew: {
-        inspect: vi.fn().mockResolvedValue({ available: false, managed: false }),
-        download: vi.fn(),
-        install: vi.fn()
-      },
+      homebrew: unavailableHomebrew(),
       direct,
       settingsStore: {
         readSettings: vi.fn().mockResolvedValue({ ...settings, appUpdateAutoDownloadEnabled: true })
@@ -160,7 +161,7 @@ describe("app update service", () => {
     });
     expect(direct.install).toHaveBeenCalledWith("0.2.0");
     expect(onInstalled).toHaveBeenCalledWith(true, "direct");
-    await expect(service.shouldInstallOnQuit()).resolves.toBe(false);
+    expect(service.canScheduleInstallOnQuit()).toBe(false);
   });
 
   it("turns offline failures into non-blocking copyable state", async () => {
@@ -173,11 +174,7 @@ describe("app update service", () => {
         readLatest: vi.fn().mockRejectedValue(new Error("network unavailable")),
         isNewer: () => true
       },
-      homebrew: {
-        inspect: vi.fn().mockResolvedValue({ available: false, managed: false }),
-        download: vi.fn(),
-        install: vi.fn()
-      },
+      homebrew: unavailableHomebrew(),
       direct: unavailableDirect(),
       settingsStore: { readSettings: vi.fn().mockResolvedValue(settings) }
     });
@@ -202,11 +199,7 @@ describe("app update service", () => {
         )),
         isNewer: () => true
       },
-      homebrew: {
-        inspect: vi.fn().mockResolvedValue({ available: false, managed: false }),
-        download: vi.fn(),
-        install: vi.fn()
-      },
+      homebrew: unavailableHomebrew(),
       direct: unavailableDirect(),
       settingsStore: { readSettings: vi.fn().mockResolvedValue(settings) }
     });
@@ -214,6 +207,59 @@ describe("app update service", () => {
     await expect(service.check({ manual: true })).resolves.toMatchObject({
       phase: "failed",
       failureCode: "rate-limited"
+    });
+  });
+
+  it("schedules a prepared Homebrew update without running the installer in the App process", async () => {
+    const homebrew = {
+      inspect: vi.fn().mockResolvedValue({
+        available: true,
+        managed: true,
+        executablePath: "/opt/homebrew/bin/brew"
+      }),
+      download: vi.fn().mockResolvedValue(undefined),
+      install: vi.fn().mockResolvedValue(undefined),
+      scheduleInstallAfterQuit: vi.fn().mockResolvedValue(undefined)
+    };
+    const service = createAppUpdateService({
+      currentVersion: "0.1.0",
+      packaged: true,
+      platform: "darwin",
+      arch: "arm64",
+      releaseClient: { readLatest: vi.fn().mockResolvedValue(release), isNewer: () => true },
+      homebrew,
+      direct: unavailableDirect(),
+      settingsStore: {
+        readSettings: vi.fn().mockResolvedValue({ ...settings, appUpdateAutoDownloadEnabled: true })
+      }
+    });
+
+    await expect(service.check()).resolves.toMatchObject({ phase: "ready" });
+    expect(service.canScheduleInstallOnQuit()).toBe(true);
+    await expect(service.scheduleInstallOnQuit()).resolves.toBe(true);
+    expect(homebrew.scheduleInstallAfterQuit).toHaveBeenCalledWith("0.2.0");
+    expect(homebrew.install).not.toHaveBeenCalled();
+    await expect(service.readStatus()).resolves.toMatchObject({ phase: "installing" });
+  });
+
+  it("surfaces a preserved automatic-install failure without replacing it during startup", async () => {
+    const service = createAppUpdateService({
+      currentVersion: "0.1.0",
+      packaged: true,
+      platform: "darwin",
+      arch: "arm64",
+      releaseClient: { readLatest: vi.fn(), isNewer: () => true },
+      homebrew: unavailableHomebrew(),
+      direct: unavailableDirect(),
+      settingsStore: { readSettings: vi.fn().mockResolvedValue(settings) },
+      startupFailure: "Homebrew retained the previous version"
+    });
+
+    await expect(service.readStatus()).resolves.toMatchObject({
+      phase: "failed",
+      installChannel: "homebrew",
+      failureCode: "install-failed",
+      message: "Homebrew retained the previous version"
     });
   });
 });

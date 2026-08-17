@@ -84,6 +84,7 @@ import { createWorkspaceSyncTransaction } from "./workspaceSync/workspaceSyncTra
 import { createGitSyncTransport, type GitSyncTransport } from "./workspaceSync/gitSyncTransport";
 import { createWorkspaceSyncService } from "./workspaceSync/workspaceSyncService";
 import type { StartupStatus } from "../shared/types";
+import type { AppUpdateStatus } from "../shared/appUpdates";
 import { classifyStartupFailure, createStartupDiagnostics } from "./startupDiagnostics";
 import {
   createRuntimeDiagnostics,
@@ -93,7 +94,8 @@ import {
 import { targetPathInputFor } from "./targets/pathInput";
 import {
   createApplicationMenuTemplate,
-  requestSettingsForWindow
+  requestSettingsForWindow,
+  updateApplicationMenuForAppUpdate
 } from "./applicationMenu";
 import {
   constrainWindowState,
@@ -115,6 +117,11 @@ import {
   createAppUpdateService,
   type AppUpdateService
 } from "./appUpdates/updateService";
+import {
+  consumeHomebrewUpdateStartup,
+  inspectHomebrewUpdateStartup,
+  waitForHomebrewUpdateStartup
+} from "./appUpdates/homebrewUpdateHelper";
 import { createTelemetryService } from "./telemetry/telemetryService";
 import { createUiStateStore } from "./uiStateStore";
 
@@ -285,6 +292,8 @@ let runtimeDiagnosticContextProvider:
 let lastWindowState: PersistedWindowState | undefined;
 let windowStateSaveTimer: ReturnType<typeof setTimeout> | undefined;
 let activeAppUpdateService: AppUpdateService | undefined;
+let installActiveAppUpdate: (() => Promise<AppUpdateStatus | undefined>) | undefined;
+let appUpdateStartupFailure: string | undefined;
 let updateQuitInProgress = false;
 
 const resolveOperatingSystemCacheRoot = () => {
@@ -300,6 +309,68 @@ const resolveAppUpdateCacheDirectory = () => join(
   process.env.AGENTENV_CACHE_ROOT ?? join(resolveOperatingSystemCacheRoot(), "agentenv-manager"),
   "app-updates"
 );
+
+const currentRuntimeVersion = () =>
+  process.env.AGENTENV_AUTOMATION === "1" && process.env.AGENTENV_AUTOMATION_APP_VERSION
+    ? process.env.AGENTENV_AUTOMATION_APP_VERSION
+    : __AGENTENV_APP_VERSION__;
+
+const showAppUpdateMessage = async (options: Electron.MessageBoxOptions) => {
+  const window = BrowserWindow.getFocusedWindow();
+  if (window) {
+    await dialog.showMessageBox(window, options);
+  } else {
+    await dialog.showMessageBox(options);
+  }
+};
+
+const showAppUpdateFailure = async (message: string) => {
+  await showAppUpdateMessage({
+    type: "error",
+    title: "AgentEnv Manager Update",
+    message: "The update could not be completed",
+    detail: message,
+    buttons: ["OK"],
+    defaultId: 0
+  });
+};
+
+const runAppUpdateFromMenu = async () => {
+  await initializeServices();
+  const service = activeAppUpdateService;
+  if (!service) return;
+  let status = await service.readStatus();
+  if (["checking", "downloading", "installing"].includes(status.phase)) return;
+  if (status.phase === "available") {
+    if (!status.automaticInstallSupported && status.release) {
+      await shell.openExternal(status.release.releaseUrl);
+      return;
+    }
+    status = await service.download();
+    if (status.phase === "failed") await showAppUpdateFailure(status.message ?? "Update failed");
+    return;
+  }
+  if (status.phase === "ready") {
+    const result = await installActiveAppUpdate?.();
+    if (result?.phase === "failed") {
+      await showAppUpdateFailure(result.message ?? "Update failed");
+    }
+    return;
+  }
+  status = await service.check({ manual: true });
+  if (status.phase === "up-to-date") {
+    await showAppUpdateMessage({
+      type: "info",
+      title: "AgentEnv Manager Update",
+      message: "AgentEnv Manager is up to date",
+      detail: `Current version: ${status.currentVersion}`,
+      buttons: ["OK"],
+      defaultId: 0
+    });
+  } else if (status.phase === "failed") {
+    await showAppUpdateFailure(status.message ?? "Update check failed");
+  }
+};
 
 process.on("uncaughtExceptionMonitor", (error) => {
   void runtimeDiagnostics?.record("main:uncaught-exception", "failed", {
@@ -717,6 +788,7 @@ const createServices = async (
     : process.env.AGENTENV_AUTOMATION_APP_DIR ?? (
         app.isPackaged ? applicationDirectoryForExecutable(app.getPath("exe")) : undefined
       );
+  const appUpdateCacheDirectory = resolveAppUpdateCacheDirectory();
   const appUpdateService = createAppUpdateService({
     currentVersion: currentAppVersion,
     packaged: app.isPackaged || updateAutomationEnabled,
@@ -728,6 +800,7 @@ const createServices = async (
     }),
     homebrew: createHomebrewAdapter({
       platform: process.platform,
+      cacheDirectory: appUpdateCacheDirectory,
       ...(currentApplicationDirectory
         ? { applicationDirectory: currentApplicationDirectory }
         : {}),
@@ -737,13 +810,15 @@ const createServices = async (
     }),
     direct: createDirectUpdateAdapter({
       platform: process.platform,
-      cacheDirectory: resolveAppUpdateCacheDirectory(),
+      cacheDirectory: appUpdateCacheDirectory,
       ...(currentApplicationPath ? { applicationPath: currentApplicationPath } : {}),
       ...(updateFetch ? { fetch: updateFetch } : {})
     }),
     settingsStore,
+    ...(appUpdateStartupFailure ? { startupFailure: appUpdateStartupFailure } : {}),
     onStatusChanged: (status) => {
       telemetryService.setInstallChannel(status.installChannel);
+      updateApplicationMenuForAppUpdate(Menu.getApplicationMenu(), status);
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.webContents.isDestroyed()) {
           window.webContents.send("app-updates:status-changed", status);
@@ -1157,6 +1232,15 @@ const initializeServices = () => {
         });
       });
       activeAppUpdateService = services.appUpdateService;
+      installActiveAppUpdate = async () => {
+        return services.mutationCoordinator.runExclusive("Install AgentEnv update", () =>
+          services.appUpdateService.install({ restart: true })
+        );
+      };
+      updateApplicationMenuForAppUpdate(
+        Menu.getApplicationMenu(),
+        await services.appUpdateService.readStatus()
+      );
       let removeWorkspaceSyncFocusListener: () => void = () => undefined;
       let removeAppUpdateFocusListener: () => void = () => undefined;
       runtimeDiagnosticContextProvider = async () => {
@@ -1238,7 +1322,7 @@ const initializeServices = () => {
         app.on("browser-window-focus", runWorkspaceCheck);
         removeWorkspaceSyncFocusListener = () => app.off("browser-window-focus", runWorkspaceCheck);
         runWorkspaceCheck();
-        let lastAppUpdateCheckAt = 0;
+        let lastAppUpdateCheckAt = appUpdateStartupFailure ? Date.now() : 0;
         const runAppUpdateCheck = () => {
           const now = Date.now();
           if (now - lastAppUpdateCheckAt < 6 * 60 * 60 * 1000) return;
@@ -1275,6 +1359,7 @@ const initializeServices = () => {
         removeAppUpdateFocusListener();
         services.dispose();
         activeAppUpdateService = undefined;
+        installActiveAppUpdate = undefined;
         runtimeDiagnosticContextProvider = undefined;
       };
       servicesInitialized = true;
@@ -1319,6 +1404,41 @@ if (!ownsSingleInstance) {
     window.focus();
   });
 }
+
+const finishScheduledHomebrewUpdate = async () => {
+  const cacheDirectory = resolveAppUpdateCacheDirectory();
+  let result = await inspectHomebrewUpdateStartup(cacheDirectory);
+  if (result.state === "none") return false;
+  if (result.state === "running") {
+    startupStatus = { state: "initializing", phase: "finishing-update" };
+    broadcastStartupStatus();
+    result = await waitForHomebrewUpdateStartup(cacheDirectory);
+  }
+  if (result.state === "completed") {
+    await consumeHomebrewUpdateStartup(cacheDirectory);
+    await runtimeDiagnostics?.record("app-update:automatic-install", "completed", {
+      outcome: "completed",
+      context: { expectedVersion: result.expectedVersion }
+    });
+    if (currentRuntimeVersion() !== result.expectedVersion) {
+      updateQuitInProgress = true;
+      app.relaunch();
+      app.quit();
+      return true;
+    }
+    return false;
+  }
+  if (result.state === "failed") {
+    appUpdateStartupFailure = result.message;
+    await runtimeDiagnostics?.record("app-update:automatic-install", "failed", {
+      outcome: "failed",
+      context: { expectedVersion: result.expectedVersion },
+      error: new Error(result.message)
+    });
+    await consumeHomebrewUpdateStartup(cacheDirectory);
+  }
+  return false;
+};
 
 if (ownsSingleInstance) void app.whenReady().then(async () => {
   startupDataRoot = resolveStartupDataRoot();
@@ -1365,6 +1485,11 @@ if (ownsSingleInstance) void app.whenReady().then(async () => {
     openSettings: () => requestSettingsForWindow(
       BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
     ),
+    requestAppUpdate: () => {
+      void runAppUpdateFromMenu().catch((error) =>
+        showAppUpdateFailure(error instanceof Error ? error.message : String(error))
+      );
+    },
     exportDiagnostics: () => {
       void exportRuntimeDiagnostics().catch((error) =>
         runtimeDiagnostics?.record("diagnostics:export", "failed", {
@@ -1375,6 +1500,7 @@ if (ownsSingleInstance) void app.whenReady().then(async () => {
     }
   })));
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  if (await finishScheduledHomebrewUpdate()) return;
   void initializeServices();
 });
 
@@ -1385,22 +1511,23 @@ app.on("activate", () => {
 });
 
 app.on("before-quit", (event) => {
-  if (!updateQuitInProgress && activeAppUpdateService?.isReadyToInstall()) {
+  if (!updateQuitInProgress && activeAppUpdateService?.canScheduleInstallOnQuit()) {
     event.preventDefault();
     updateQuitInProgress = true;
-    void activeAppUpdateService.shouldInstallOnQuit()
-      .then(async (shouldInstall) => {
-        if (shouldInstall) await activeAppUpdateService?.install({ restart: false });
+    void activeAppUpdateService.scheduleInstallOnQuit()
+      .catch((error) => {
+        console.error("Schedule install-on-quit update failed", error);
+        return false;
       })
-      .catch((error) => console.error("Install-on-quit update failed", error))
       .finally(() => {
         void runtimeDiagnostics?.record("app:shutdown", "completed", {
           outcome: "completed",
-          context: { reason: "install-update" }
+          context: { reason: "scheduled-update" }
         });
         disposeServices?.();
         disposeServices = undefined;
         activeAppUpdateService = undefined;
+        installActiveAppUpdate = undefined;
         app.exit(0);
       });
     return;

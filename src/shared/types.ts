@@ -315,6 +315,7 @@ export type StartupFailureKind =
   | "unknown";
 
 export type StartupPhase =
+  | "finishing-update"
   | "preparing-data"
   | "migrating-data"
   | "upgrading-skills"

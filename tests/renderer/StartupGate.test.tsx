@@ -64,6 +64,20 @@ describe("StartupGate", () => {
     expect(screen.getByRole("main")).toHaveAttribute("aria-busy", "true");
   });
 
+  it("explains when launch is waiting for an automatic update helper", async () => {
+    installApi({
+      readStartupStatus: vi.fn().mockResolvedValue({
+        state: "initializing",
+        phase: "finishing-update"
+      }),
+      onStatus: () => vi.fn()
+    });
+
+    render(<StartupGate />);
+    expect(await screen.findByText("Finishing the automatic update…")).toBeInTheDocument();
+    expect(screen.getByRole("main")).toHaveAttribute("aria-busy", "true");
+  });
+
   it("does not let an older status response overwrite a newer startup event", async () => {
     const initial = deferred<StartupStatus>();
     let listener: ((status: StartupStatus) => void) | undefined;

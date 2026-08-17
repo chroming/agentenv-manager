@@ -1,17 +1,70 @@
-import type { BrowserWindow, MenuItemConstructorOptions } from "electron";
+import type { AppUpdateStatus } from "../shared/appUpdates";
+import type { BrowserWindow, Menu, MenuItemConstructorOptions } from "electron";
+
+export const APP_UPDATE_MENU_ITEM_ID = "app.check-for-updates";
 
 export interface ApplicationMenuDependencies {
   isDevelopment: boolean;
   platform?: NodeJS.Platform;
   openSettings(): void;
   exportDiagnostics(): void;
+  requestAppUpdate?(): void;
 }
+
+export interface AppUpdateMenuPresentation {
+  enabled: boolean;
+  label: string;
+}
+
+export const appUpdateMenuPresentation = (
+  status?: AppUpdateStatus
+): AppUpdateMenuPresentation => {
+  if (!status) return { label: "Check for Updates…", enabled: false };
+  const version = status.release?.version;
+  switch (status.phase) {
+    case "checking":
+      return { label: "Checking for Updates…", enabled: false };
+    case "downloading":
+      return {
+        label: version ? `Preparing ${version}…` : "Preparing Update…",
+        enabled: false
+      };
+    case "installing":
+      return {
+        label: version ? `Installing ${version}…` : "Installing Update…",
+        enabled: false
+      };
+    case "available":
+      return status.automaticInstallSupported
+        ? { label: version ? `Update to ${version}…` : "Update…", enabled: true }
+        : { label: version ? `View ${version} Release…` : "View Release…", enabled: true };
+    case "ready":
+      return {
+        label: version ? `Restart to Update to ${version}…` : "Restart to Update…",
+        enabled: status.automaticInstallSupported
+      };
+    default:
+      return { label: "Check for Updates…", enabled: true };
+  }
+};
+
+export const updateApplicationMenuForAppUpdate = (
+  menu: Menu | null,
+  status?: AppUpdateStatus
+) => {
+  const item = menu?.getMenuItemById(APP_UPDATE_MENU_ITEM_ID);
+  if (!item) return;
+  const presentation = appUpdateMenuPresentation(status);
+  item.label = presentation.label;
+  item.enabled = presentation.enabled;
+};
 
 export const createApplicationMenuTemplate = ({
   isDevelopment,
   platform = process.platform,
   openSettings,
-  exportDiagnostics
+  exportDiagnostics,
+  requestAppUpdate
 }: ApplicationMenuDependencies): MenuItemConstructorOptions[] => {
   const viewSubmenu: MenuItemConstructorOptions[] = [];
   if (isDevelopment) {
@@ -84,6 +137,12 @@ export const createApplicationMenuTemplate = ({
       role: "appMenu",
       submenu: [
         { role: "about" },
+        ...(!isDevelopment ? [{
+          id: APP_UPDATE_MENU_ITEM_ID,
+          label: "Check for Updates…",
+          enabled: false,
+          click: () => requestAppUpdate?.()
+        } satisfies MenuItemConstructorOptions] : []),
         { type: "separator" },
         {
           label: "Settings…",

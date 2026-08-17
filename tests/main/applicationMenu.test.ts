@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { MenuItemConstructorOptions } from "electron";
-import { createApplicationMenuTemplate } from "../../src/main/applicationMenu";
+import {
+  APP_UPDATE_MENU_ITEM_ID,
+  appUpdateMenuPresentation,
+  createApplicationMenuTemplate
+} from "../../src/main/applicationMenu";
 
 const allItems = (items: MenuItemConstructorOptions[]): MenuItemConstructorOptions[] =>
   items.flatMap((item) => [
@@ -32,6 +36,45 @@ describe("application menu", () => {
     const diagnostics = items.find((item) => item.label === "Export Diagnostics…");
     diagnostics?.click?.({} as never, undefined, {} as never);
     expect(exportDiagnostics).toHaveBeenCalledTimes(1);
+  });
+
+  it("adds one native macOS update action and forwards clicks to the update service", () => {
+    const requestAppUpdate = vi.fn();
+    const items = allItems(createApplicationMenuTemplate({
+      isDevelopment: false,
+      platform: "darwin",
+      openSettings: vi.fn(),
+      exportDiagnostics: vi.fn(),
+      requestAppUpdate
+    }));
+    const update = items.find((item) => item.id === APP_UPDATE_MENU_ITEM_ID);
+
+    expect(update).toMatchObject({ label: "Check for Updates…", enabled: false });
+    update?.click?.({} as never, undefined, {} as never);
+    expect(requestAppUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses one stable menu item for every update phase", () => {
+    const base = {
+      currentVersion: "0.1.0",
+      installChannel: "homebrew" as const,
+      automaticInstallSupported: true,
+      release: {
+        version: "0.2.0",
+        tag: "v0.2.0",
+        releaseUrl: "https://example.test/releases/v0.2.0",
+        publishedAt: "2026-08-17T00:00:00Z"
+      }
+    };
+
+    expect(appUpdateMenuPresentation({ ...base, phase: "checking" }))
+      .toEqual({ label: "Checking for Updates…", enabled: false });
+    expect(appUpdateMenuPresentation({ ...base, phase: "downloading" }))
+      .toEqual({ label: "Preparing 0.2.0…", enabled: false });
+    expect(appUpdateMenuPresentation({ ...base, phase: "ready" }))
+      .toEqual({ label: "Restart to Update to 0.2.0…", enabled: true });
+    expect(appUpdateMenuPresentation({ ...base, phase: "installing" }))
+      .toEqual({ label: "Installing 0.2.0…", enabled: false });
   });
 
   it("retains reload and developer tools for the development server", () => {

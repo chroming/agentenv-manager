@@ -13,6 +13,7 @@ export const StartupGate = () => {
   const locale = resolveAppLocale("system");
   const t = (message: string) => translate(locale, message);
   const startupPhaseCopy: Record<StartupPhase, string> = {
+    "finishing-update": "Finishing the automatic update…",
     "preparing-data": "Preparing local data…",
     "migrating-data": "Checking data format…",
     "upgrading-skills": "Updating Skill metadata…",

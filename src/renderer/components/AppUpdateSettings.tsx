@@ -215,12 +215,12 @@ export const AppUpdateSettings = ({
             />
             {status.installChannel === "homebrew" ? (
               <SettingsPreferenceRow
-                label={t("Install when quitting")}
-                description={t("Installs only an already downloaded Homebrew update after AgentEnv work has stopped.")}
+                label={t("Finish updates after quitting")}
+                description={t("Starts an already prepared Homebrew update after AgentEnv Manager closes, so quitting is not delayed.")}
                 control={<Switch
                   checked={settings.appUpdateInstallOnQuit !== false}
                   disabled={busy}
-                  label={t("Install ready update when quitting")}
+                  label={t("Automatically finish prepared updates after quitting")}
                   onClick={() => onChange({
                     appUpdateInstallOnQuit: settings.appUpdateInstallOnQuit === false
                   })}
