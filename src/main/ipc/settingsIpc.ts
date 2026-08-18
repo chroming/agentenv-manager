@@ -9,6 +9,7 @@ import type { TargetRegistry } from "../targets/registry";
 import type { TelemetryService } from "../telemetry/telemetryService";
 import type { WorkspaceSyncService } from "../workspaceSync/workspaceSyncService";
 import type { UiStateStore } from "../uiStateStore";
+import type { AgentEnvSettings } from "../../shared/types";
 import type { IpcRegistrationHandles } from "./registration";
 import { registerTelemetryIpc } from "./telemetryIpc";
 
@@ -22,8 +23,8 @@ interface SettingsIpcServices {
   telemetryService: TelemetryService;
   workspaceSyncService: WorkspaceSyncService;
   uiStateStore: UiStateStore;
+  onSettingsUpdated?(settings: AgentEnvSettings): Promise<void> | void;
 }
-
 export const registerSettingsIpc = (
   handles: IpcRegistrationHandles,
   services: SettingsIpcServices
@@ -38,9 +39,9 @@ export const registerSettingsIpc = (
     targetRegistry,
     telemetryService,
     uiStateStore,
-    workspaceSyncService
+    workspaceSyncService,
+    onSettingsUpdated
   } = services;
-
   handleMutation("settings:read", () => settingsStore.readSettings());
   handleMutation("settings:update", async (_event, input: unknown) => {
     const nextInput = input && typeof input === "object"
@@ -65,7 +66,9 @@ export const registerSettingsIpc = (
         }
       }
     }
-    return settingsStore.updateSettings(nextInput);
+    const nextSettings = await settingsStore.updateSettings(nextInput);
+    await onSettingsUpdated?.(nextSettings);
+    return nextSettings;
   });
   diagnosticHandle("ui-state:read", () => uiStateStore.read());
   diagnosticHandle("ui-state:update", (_event, input: unknown) =>
@@ -75,7 +78,6 @@ export const registerSettingsIpc = (
         : {}
     )
   );
-
   diagnosticHandle("app-updates:status", () => appUpdateService.readStatus());
   diagnosticHandle("app-updates:check", () => appUpdateService.check({ manual: true }));
   diagnosticHandle("app-updates:download", () => appUpdateService.download());
@@ -85,7 +87,6 @@ export const registerSettingsIpc = (
     )
   );
   registerTelemetryIpc(handles, settingsStore, telemetryService);
-
   diagnosticHandle("workspace-sync:status", () => workspaceSyncService.readStatus());
   handleWorkspaceSyncMutation("workspace-sync:connect", (_event, input: unknown) =>
     workspaceSyncService.connect(input as import("../../shared/workspaceSync").WorkspaceSyncConnectInput)
@@ -98,7 +99,6 @@ export const registerSettingsIpc = (
   handleWorkspaceSyncMutation("workspace-sync:publish", () => workspaceSyncService.publish());
   handleWorkspaceSyncMutation("workspace-sync:recover", () => workspaceSyncService.recover());
   handleWorkspaceSyncMutation("workspace-sync:disconnect", () => workspaceSyncService.disconnect());
-
   handleMutation("github:status", () => githubAuthService.readStatus());
   diagnosticHandle("github:start-device-login", () => githubAuthService.startDeviceLogin());
   handleMutation("github:poll-device-login", (_event, id: unknown) =>

@@ -95,6 +95,8 @@ import { targetPathInputFor } from "./targets/pathInput";
 import {
   createApplicationMenuTemplate,
   requestSettingsForWindow,
+  resolveApplicationMenuLocale,
+  type ApplicationMenuLocale,
   updateApplicationMenuForAppUpdate
 } from "./applicationMenu";
 import {
@@ -295,6 +297,7 @@ let activeAppUpdateService: AppUpdateService | undefined;
 let installActiveAppUpdate: (() => Promise<AppUpdateStatus | undefined>) | undefined;
 let appUpdateStartupFailure: string | undefined;
 let updateQuitInProgress = false;
+let activeApplicationMenuLocale: ApplicationMenuLocale = "en";
 
 const resolveOperatingSystemCacheRoot = () => {
   const homeDir = process.env.AGENTENV_HOME ?? app.getPath("home");
@@ -370,6 +373,31 @@ const runAppUpdateFromMenu = async () => {
   } else if (status.phase === "failed") {
     await showAppUpdateFailure(status.message ?? "Update check failed");
   }
+};
+
+const rebuildApplicationMenu = (locale: ApplicationMenuLocale) => {
+  activeApplicationMenuLocale = locale;
+  Menu.setApplicationMenu(Menu.buildFromTemplate(createApplicationMenuTemplate({
+    isDevelopment: Boolean(process.env.ELECTRON_RENDERER_URL),
+    locale,
+    platform: process.platform,
+    openSettings: () => requestSettingsForWindow(
+      BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+    ),
+    requestAppUpdate: () => {
+      void runAppUpdateFromMenu().catch((error) =>
+        showAppUpdateFailure(error instanceof Error ? error.message : String(error))
+      );
+    },
+    exportDiagnostics: () => {
+      void exportRuntimeDiagnostics().catch((error) =>
+        runtimeDiagnostics?.record("diagnostics:export", "failed", {
+          outcome: "failed",
+          error
+        })
+      );
+    }
+  })));
 };
 
 process.on("uncaughtExceptionMonitor", (error) => {
@@ -818,7 +846,11 @@ const createServices = async (
     ...(appUpdateStartupFailure ? { startupFailure: appUpdateStartupFailure } : {}),
     onStatusChanged: (status) => {
       telemetryService.setInstallChannel(status.installChannel);
-      updateApplicationMenuForAppUpdate(Menu.getApplicationMenu(), status);
+      updateApplicationMenuForAppUpdate(
+        Menu.getApplicationMenu(),
+        status,
+        activeApplicationMenuLocale
+      );
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.webContents.isDestroyed()) {
           window.webContents.send("app-updates:status-changed", status);
@@ -1237,9 +1269,12 @@ const initializeServices = () => {
           services.appUpdateService.install({ restart: true })
         );
       };
+      const settings = await services.settingsStore.readSettings();
+      rebuildApplicationMenu(resolveApplicationMenuLocale(settings.locale, app.getLocale()));
       updateApplicationMenuForAppUpdate(
         Menu.getApplicationMenu(),
-        await services.appUpdateService.readStatus()
+        await services.appUpdateService.readStatus(),
+        activeApplicationMenuLocale
       );
       let removeWorkspaceSyncFocusListener: () => void = () => undefined;
       let removeAppUpdateFocusListener: () => void = () => undefined;
@@ -1308,7 +1343,21 @@ const initializeServices = () => {
             : { error: String(workspaceResult.reason) }
         };
       };
-      registerIpcHandlers({ ...services, diagnostics: runtimeDiagnostics! });
+      registerIpcHandlers({
+        ...services,
+        diagnostics: runtimeDiagnostics!,
+        onSettingsUpdated: async (nextSettings) => {
+          rebuildApplicationMenu(resolveApplicationMenuLocale(
+            nextSettings.locale,
+            app.getLocale()
+          ));
+          updateApplicationMenuForAppUpdate(
+            Menu.getApplicationMenu(),
+            await services.appUpdateService.readStatus(),
+            activeApplicationMenuLocale
+          );
+        }
+      });
       if (process.env.AGENTENV_AUTOMATION !== "1") {
         let lastWorkspaceCheckAt = 0;
         const runWorkspaceCheck = () => {
@@ -1479,26 +1528,7 @@ if (ownsSingleInstance) void app.whenReady().then(async () => {
       outcome: "failed",
       error
     }));
-  Menu.setApplicationMenu(Menu.buildFromTemplate(createApplicationMenuTemplate({
-    isDevelopment: Boolean(process.env.ELECTRON_RENDERER_URL),
-    platform: process.platform,
-    openSettings: () => requestSettingsForWindow(
-      BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
-    ),
-    requestAppUpdate: () => {
-      void runAppUpdateFromMenu().catch((error) =>
-        showAppUpdateFailure(error instanceof Error ? error.message : String(error))
-      );
-    },
-    exportDiagnostics: () => {
-      void exportRuntimeDiagnostics().catch((error) =>
-        runtimeDiagnostics?.record("diagnostics:export", "failed", {
-          outcome: "failed",
-          error
-        })
-      );
-    }
-  })));
+  rebuildApplicationMenu(resolveApplicationMenuLocale("system", app.getLocale()));
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
   if (await finishScheduledHomebrewUpdate()) return;
   void initializeServices();

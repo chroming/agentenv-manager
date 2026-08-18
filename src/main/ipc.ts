@@ -22,6 +22,7 @@ import {
   SafeIdSchema
 } from "../shared/schemas";
 import type {
+  AgentEnvSettings,
   GitHubSkillImportInput,
   RepositorySkillImportInput,
   RepositorySkillSourceInput,
@@ -100,6 +101,7 @@ export interface IpcServices {
   appUpdateService: AppUpdateService;
   telemetryService: TelemetryService;
   uiStateStore: import("./uiStateStore").UiStateStore;
+  onSettingsUpdated?(settings: AgentEnvSettings): Promise<void> | void;
   cancelRepositoryOperations(): void;
 }
 
@@ -137,6 +139,7 @@ export const registerIpcHandlers = ({
   appUpdateService,
   telemetryService,
   uiStateStore,
+  onSettingsUpdated,
   cancelRepositoryOperations
 }: IpcServices) => {
   const skillFileBrowser = createSkillFileBrowser(paths, settingsStore);
@@ -902,7 +905,8 @@ export const registerIpcHandlers = ({
       targetRegistry,
       telemetryService,
       uiStateStore,
-      workspaceSyncService
+      workspaceSyncService,
+      onSettingsUpdated
     }
   );
   registerProfileIpc(
