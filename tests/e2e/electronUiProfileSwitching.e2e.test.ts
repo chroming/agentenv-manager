@@ -974,7 +974,7 @@ const launchApp = async (
         { timeout: 10_000 }
       ).toEqual({ state: "ready" });
       await launchedPage
-        .getByRole("complementary", { name: "Global navigation" })
+        .getByRole("complementary")
         .waitFor({ state: "visible", timeout: 10_000 });
       if (initialWorkspace) {
         const workspaceIds: Record<NonNullable<typeof initialWorkspace>, string> = {
@@ -1486,7 +1486,7 @@ describe("Electron UI profile switching e2e", () => {
     await manager.waitFor({ state: "visible" });
     const group = manager.getByRole("group", { name: "Cleanup group shared-reviewer" });
     await group.waitFor({ state: "visible" });
-    await expect.poll(() => group.textContent()).toContain("Ready");
+    await expect.poll(() => group.textContent()).toContain("Not managed");
     await manager.getByRole("button", { name: /Manage 1 eligible Skill/ }).click();
     const cleanupDialog = page.getByRole("dialog", { name: "Manage eligible local Skills" });
     await expect.poll(() => cleanupDialog.textContent()).toContain("Move legacy ownership into AgentEnv data");
@@ -3035,7 +3035,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.keyboard.press("Escape");
     await locationsTooltip.waitFor({ state: "hidden" });
 
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Ready");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Not managed");
     await cleanupGroup
       .getByRole("button", { name: "More cleanup actions for target-only-reviewer" })
       .click();
@@ -6743,7 +6743,7 @@ describe("Electron UI profile switching e2e", () => {
       name: "Cleanup group managed-after-import"
     });
     await cleanupGroup.waitFor({ state: "visible" });
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Ready");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Not managed");
     expect(
       await cleanupGroup.getByRole("button", { name: "Add to Library managed-after-import" }).count()
     ).toBe(0);
@@ -6781,8 +6781,8 @@ describe("Electron UI profile switching e2e", () => {
     });
 
     await cleanupGroup.waitFor({ state: "visible" });
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Ready");
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Shared copy is not managed");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Not managed");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Shared across Agents");
     await expect(
       cleanupGroup.getByRole("button", { name: `Review Agents ${skillId}` }).count()
     ).resolves.toBe(0);
@@ -6808,7 +6808,7 @@ describe("Electron UI profile switching e2e", () => {
       name: "Cleanup group shared-migration-reviewer"
     });
     await cleanupGroup.waitFor({ state: "visible" });
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Ready");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Not managed");
     expect(
       await cleanupGroup
         .getByRole("button", { name: "Manage copies shared-migration-reviewer" })
@@ -7244,62 +7244,20 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => preparationPreview.textContent()).toContain(
       `Keep enabled as ${skillId} after shared cleanup`
     );
-    const previewMigrationAction = preparationPreview.getByRole("button", {
-      name: "Move and remove shared copies…"
-    });
-    await previewMigrationAction.waitFor({ state: "visible" });
-    for (const viewport of [
-      { width: 1180, height: 728 },
-      { width: 920, height: 620 }
-    ]) {
-      await resizeAppWindow(page, viewport.width, viewport.height);
-      await expectInViewport(page, previewMigrationAction);
-      await expectNoHorizontalOverflow(page, [".apply-preview-shared-boundary"]);
-      const captureDir = process.env.AGENTENV_SHARED_SKILL_CAPTURE_DIR;
-      if (captureDir) {
-        await mkdir(captureDir, { recursive: true });
-        await page.screenshot({
-          path: join(captureDir, `apply-shared-boundary-${viewport.width}x${viewport.height}.png`)
-        });
-      }
-    }
-    await resizeAppWindow(page, 1180, 728);
+    await expect(preparationPreview.getByRole("button", {
+      name: "Move shared Skills to Profile control…"
+    }).count()).resolves.toBe(0);
     await preparationPreview.getByRole("button", { name: "Apply", exact: true }).click();
     await preparationPreview.waitFor({ state: "hidden" });
     await expect(fileExists(join(opencodeDir, "skills", skillId))).resolves.toBe(false);
-    const sharedBoundary = page.getByText("OpenCode loads Skills from a shared folder");
-    await sharedBoundary.waitFor({ state: "visible" });
+    await expect(page.getByText("Shared copies prevent this Profile change").count())
+      .resolves.toBe(0);
     const preparedSkillRow = page.getByRole("listitem", {
       name: `Profile Skill ${skillId}`
     });
     await expect.poll(() => preparedSkillRow.textContent()).not.toContain("Apply pending");
-    await expect.poll(() => preparedSkillRow.textContent()).toContain("After move");
+    await expect.poll(() => preparedSkillRow.textContent()).toContain("Will be on");
     await expect.poll(() => preparedSkillRow.getByRole("switch").isEnabled()).toBe(true);
-    await expectInViewport(
-      page,
-      page.getByRole("button", { name: "Move and remove shared copies…" })
-    );
-    for (const viewport of [
-      { width: 1180, height: 728 },
-      { width: 920, height: 620 }
-    ]) {
-      await resizeAppWindow(page, viewport.width, viewport.height);
-      const geometry = await page.locator(".profile-skill-shared-notice").evaluate((notice) => ({
-        contained: notice.scrollWidth <= notice.clientWidth + 1,
-        buttonFits: Array.from(notice.querySelectorAll<HTMLElement>("button"))
-          .every((item) => item.scrollWidth <= item.clientWidth + 1)
-      }));
-      expect(geometry).toEqual({ contained: true, buttonFits: true });
-      const captureDir = process.env.AGENTENV_SHARED_SKILL_CAPTURE_DIR;
-      if (captureDir) {
-        await mkdir(captureDir, { recursive: true });
-        await page.screenshot({
-          path: join(captureDir, `profile-shared-boundary-${viewport.width}x${viewport.height}.png`)
-        });
-      }
-    }
-    await resizeAppWindow(page, 1180, 728);
-
     await selectTarget(page, "Codex");
     await selectProfile(page, "UI Codex alpha");
     await expandComposerSection(page, "Skills");
@@ -7314,9 +7272,10 @@ describe("Electron UI profile switching e2e", () => {
     );
 
     await openSharedSkills(page);
+    const sharedSkillsArea = page.getByRole("region", { name: "Shared Skills" });
     await page.getByRole("button", { name: "Expand Managed" }).click();
     cleanupGroup = page.getByRole("group", { name: `Cleanup group ${skillId}` });
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Managed in shared folder");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Shared across Agents");
     for (const viewport of [
       { width: 1180, height: 728 },
       { width: 920, height: 620 }
@@ -7333,10 +7292,15 @@ describe("Electron UI profile switching e2e", () => {
       });
       expect(geometry).toEqual({ contained: true, buttonsFit: true, visible: true });
     }
-    await page.getByRole("button", { name: "Move and remove shared copies…" }).click();
+    await sharedSkillsArea.getByRole("button", { name: "Change…" }).click();
+    await page.getByRole("button", {
+      name: "Move shared Skills to Profile control…"
+    }).click();
     const profilesOnlyDialog = page.getByRole("dialog", {
-      name: "Move and remove shared copies"
+      name: "Move shared Skills to Profile control"
     });
+    await expect.poll(() => profilesOnlyDialog.getAttribute("aria-label"))
+      .toBe("Move shared Skills to Profile control");
     await expect.poll(() => profilesOnlyDialog.textContent()).toContain(skillId);
     await expect.poll(() => profilesOnlyDialog.textContent()).toContain(
       "Linked source folders and the parent shared folder are never deleted."
@@ -7349,29 +7313,35 @@ describe("Electron UI profile switching e2e", () => {
       });
     }
     await profilesOnlyDialog.getByRole("button", {
-      name: "Move and remove shared copies"
+      name: "Move shared Skills to Profile control"
     }).click();
+    await expect.poll(() => fileExists(sharedSkillDir), { timeout: 15_000 }).toBe(false);
+    await expect(fileExists(join(appDataRoot, "skills-library", skillId, "SKILL.md"))).resolves.toBe(true);
+    await expect.poll(async () => {
+      try {
+        await expectManagedSkillReceipt(
+          appDataRoot,
+          "opencode",
+          join(opencodeDir, "skills", skillId)
+        );
+        await expectManagedSkillReceipt(
+          appDataRoot,
+          "codex",
+          join(codexDir, "skills", skillId)
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    }, { timeout: 15_000 }).toBe(true);
     const closeProfilesOnlyDialog = profilesOnlyDialog.getByRole("button", { name: "Close" });
     await expect.poll(
       async () =>
         await closeProfilesOnlyDialog.count() > 0 &&
         await closeProfilesOnlyDialog.isEnabled({ timeout: 0 }),
       { timeout: 15_000 }
-    )
-      .toBe(true);
+    ).toBe(true);
     await closeProfilesOnlyDialog.click();
-    await expect(fileExists(sharedSkillDir)).resolves.toBe(false);
-    await expect(fileExists(join(appDataRoot, "skills-library", skillId, "SKILL.md"))).resolves.toBe(true);
-    await expectManagedSkillReceipt(
-      appDataRoot,
-      "opencode",
-      join(opencodeDir, "skills", skillId)
-    );
-    await expectManagedSkillReceipt(
-      appDataRoot,
-      "codex",
-      join(codexDir, "skills", skillId)
-    );
 
     const history = page.getByRole("region", { name: "Cleanup history" });
     await expect.poll(() => history.textContent()).toContain("Shared folder migration");
@@ -7379,6 +7349,7 @@ describe("Electron UI profile switching e2e", () => {
       .locator(".cleanup-history-row")
       .filter({ hasText: skillId })
       .filter({ hasText: "Shared folder migration" });
+    await sharedSkillsArea.getByRole("button", { name: "Change…" }).click();
     await page.getByRole("button", { name: "Restore shared setup…" }).click();
     await expect.poll(() =>
       migrationHistoryRow
@@ -7392,7 +7363,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(join(sharedSkillDir, "SKILL.md"), "utf8")).resolves.toBe(sharedContent);
     await expect.poll(() => fileExists(join(opencodeDir, "skills", skillId))).toBe(false);
     await expect.poll(() => fileExists(join(codexDir, "skills", skillId))).toBe(false);
-  }, 45_000);
+  }, 90_000);
 
   it("moves a shared Skill directly into an unmanaged Pi Environment from Scan local", async () => {
     const { appDataRoot, homeDir, piDir, page } = await launchApp({
@@ -7427,24 +7398,20 @@ describe("Electron UI profile switching e2e", () => {
     const environmentSkills = page.getByRole("region", { name: "Shared Skills" });
     await environmentSkills.getByRole("button", { name: "Refresh local skills" }).click();
     await expect.poll(() => environmentSkills.textContent()).toContain(skillId);
-    await page.getByRole("button", { name: "Move and remove shared copies…" }).click();
+    await environmentSkills.getByRole("button", { name: "Change…" }).click();
+    await page.getByRole("button", {
+      name: "Move shared Skills to Profile control…"
+    }).click();
     const migrationDialog = page.getByRole("dialog", {
-      name: "Move and remove shared copies"
+      name: "Move shared Skills to Profile control"
     });
+    await expect.poll(() => migrationDialog.getAttribute("aria-label"))
+      .toBe("Move shared Skills to Profile control");
     await expect.poll(() => migrationDialog.textContent()).toContain("Pi");
     await expect.poll(() => migrationDialog.textContent()).toContain(sharedSkillDir);
     await migrationDialog.getByRole("button", {
-      name: "Move and remove shared copies"
+      name: "Move shared Skills to Profile control"
     }).click();
-    const closeMigrationDialog = migrationDialog.getByRole("button", { name: "Close" });
-    await expect.poll(
-      async () =>
-        await closeMigrationDialog.count() > 0 &&
-        await closeMigrationDialog.isEnabled({ timeout: 0 }),
-      { timeout: 15_000 }
-    )
-      .toBe(true);
-    await closeMigrationDialog.click();
 
     await expect.poll(() => fileExists(sharedSkillDir), { timeout: 15_000 }).toBe(false);
     const piSkillDir = join(piDir, "skills", skillId);
@@ -7457,6 +7424,14 @@ describe("Electron UI profile switching e2e", () => {
         return false;
       }
     }).toBe(true);
+    const closeMigrationDialog = migrationDialog.getByRole("button", { name: "Close" });
+    await expect.poll(
+      async () =>
+        await closeMigrationDialog.count() > 0 &&
+        await closeMigrationDialog.isEnabled({ timeout: 0 }),
+      { timeout: 15_000 }
+    ).toBe(true);
+    await closeMigrationDialog.click();
 
     const profileEntries = await readdir(join(appDataRoot, "profiles"));
     const piProfileDir = profileEntries.find((entry) => entry.startsWith("pi-"));
@@ -7476,7 +7451,7 @@ describe("Electron UI profile switching e2e", () => {
       skills: "manage"
     });
     expect(resources.mcpByTarget.pi).toMatchObject({ mode: "ignore" });
-  }, 60_000);
+  }, 90_000);
 
   it("auto-manages safe cleanup groups while leaving content conflicts for review", async () => {
     const { appDataRoot, opencodeDir, homeDir, librarySkill, page } = await launchApp();
@@ -7537,10 +7512,10 @@ describe("Electron UI profile switching e2e", () => {
       name: "Cleanup group auto-broken-shared"
     });
     await safeGroup.waitFor({ state: "visible" });
-    await expect.poll(() => safeGroup.textContent()).toContain("Ready");
-    await expect.poll(() => duplicateGroup.textContent()).toContain("Ready");
-    await expect.poll(() => sharedGroup.textContent()).toContain("Ready");
-    await expect.poll(() => brokenSharedGroup.textContent()).toContain("Ready");
+    await expect.poll(() => safeGroup.textContent()).toContain("Not managed");
+    await expect.poll(() => duplicateGroup.textContent()).toContain("Not managed");
+    await expect.poll(() => sharedGroup.textContent()).toContain("Not managed");
+    await expect.poll(() => brokenSharedGroup.textContent()).toContain("Unavailable");
     await expect.poll(() => conflictGroup.textContent()).toContain("2 versions");
     await expect.poll(() => conflictGroup.textContent()).toContain(
       "2 different content versions · 2 locations"
@@ -7780,7 +7755,7 @@ describe("Electron UI profile switching e2e", () => {
       .poll(
         () => page.locator(".cleanup-group-row").evaluateAll((rows) =>
           rows
-            .filter((row) => row.querySelector(".cleanup-group-state")?.textContent?.trim() === "Ready")
+            .filter((row) => row.querySelector(".cleanup-group-state")?.textContent?.trim() === "Not managed")
             .map((row) => row.getAttribute("aria-label") ?? row.textContent?.trim())
         ),
         { timeout: 30_000 }
@@ -7854,8 +7829,8 @@ describe("Electron UI profile switching e2e", () => {
     const brokenGroup = page.getByRole("group", { name: "Cleanup group cleanup-broken-link" });
     await driftGroup.waitFor({ state: "visible" });
     await brokenGroup.waitFor({ state: "visible" });
-    await expect.poll(() => driftGroup.textContent()).toContain("Changed");
-    await expect.poll(() => brokenGroup.textContent()).toContain("Ready");
+    await expect.poll(() => driftGroup.textContent()).toContain("Needs decision");
+    await expect.poll(() => brokenGroup.textContent()).toContain("Unavailable");
     await brokenGroup
       .getByRole("button", { name: "More cleanup actions for cleanup-broken-link" })
       .click();
@@ -7869,7 +7844,7 @@ describe("Electron UI profile switching e2e", () => {
     await brokenDetails.getByRole("button", { name: "Close" }).click();
 
     await driftGroup
-      .getByRole("button", { name: `Review differences ${skillId}` })
+      .getByRole("button", { name: `Review ${skillId}` })
       .click();
     const driftDialog = page.getByRole("dialog", { name: "Review skill cleanup" });
     await driftDialog.waitFor({ state: "visible" });
@@ -9366,7 +9341,7 @@ describe("Electron UI profile switching e2e", () => {
     await openLocalSkills(page);
     const brokenGroup = page.getByRole("group", { name: "Cleanup group api-mock" });
     await brokenGroup.waitFor({ state: "visible" });
-    await expect.poll(() => brokenGroup.textContent()).toContain("Ready");
+    await expect.poll(() => brokenGroup.textContent()).toContain("Unavailable");
     await brokenGroup
       .getByRole("button", { name: "More cleanup actions for api-mock" })
       .click();

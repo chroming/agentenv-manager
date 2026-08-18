@@ -1,12 +1,63 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SharedSkillAreaModeActions } from "../../src/renderer/components/SharedSkillAreaWorkflow";
+import {
+  buildProfilesOnlyReviewItems,
+  runProfilesOnlySharedCleanup,
+  SharedSkillAreaModeActions
+} from "../../src/renderer/components/SharedSkillAreaWorkflow";
+import type { SkillCollectionLinkGroup } from "../../src/shared/skillCleanup";
 
 afterEach(cleanup);
 
 describe("SharedSkillAreaModeActions", () => {
-  it("separates stable folder policy from the Profiles migration command", () => {
+  it("excludes retained shared collections from Profiles-only migration", () => {
+    const retainedCollection: SkillCollectionLinkGroup = {
+      path: "/home/test/.agents/skills/superpowers",
+      canonicalPath: "/external/superpowers",
+      name: "superpowers",
+      items: [],
+      consumerTargetIds: ["codex"],
+      state: "unmanaged",
+      libraryReadyCount: 0,
+      conflictCount: 0
+    };
+
+    expect(buildProfilesOnlyReviewItems(
+      [],
+      [retainedCollection],
+      { codex: "Codex" }
+    )).toEqual([]);
+  });
+
+  it("does not execute Profiles-only migration for a retained collection", async () => {
+    const moveCollection = vi.fn();
+    const retainedCollection: SkillCollectionLinkGroup = {
+      path: "/home/test/.agents/skills/superpowers",
+      canonicalPath: "/external/superpowers",
+      name: "superpowers",
+      items: [],
+      consumerTargetIds: ["codex"],
+      state: "unmanaged",
+      libraryReadyCount: 0,
+      conflictCount: 0
+    };
+
+    await expect(runProfilesOnlySharedCleanup({
+      groups: [],
+      collections: [retainedCollection],
+      blockedSkillKeys: [],
+      shouldStop: () => false,
+      updateProgress: vi.fn(),
+      consolidate: vi.fn(),
+      moveSkill: vi.fn(),
+      retireSkill: vi.fn(),
+      moveCollection
+    })).resolves.toBe(true);
+    expect(moveCollection).not.toHaveBeenCalled();
+  });
+
+  it("keeps folder behavior behind one Change action", () => {
     const onChange = vi.fn();
     const onMoveToProfiles = vi.fn();
 
@@ -21,13 +72,21 @@ describe("SharedSkillAreaModeActions", () => {
       />
     );
 
-    expect(screen.getByRole("group", { name: "Shared folder policy" }))
+    expect(screen.queryByRole("radiogroup", { name: "Shared Skills behavior" }))
+      .not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Change…" }));
+    expect(screen.getByRole("radiogroup", { name: "Shared Skills behavior" }))
       .toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Leave unchanged" }))
-      .toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(screen.getByRole("button", { name: "Leave unchanged" }));
-    expect(onChange).toHaveBeenCalledWith("keep");
-    const moveButton = screen.getByRole("button", { name: "Move and remove shared copies…" });
+    expect(screen.getByRole("radio", { name: /Leave as-is/ })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: /Manage shared Skills/ }));
+    expect(onChange).toHaveBeenCalledWith("managed");
+    expect(screen.queryByRole("dialog", { name: "Shared Skills behavior" }))
+      .not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Change…" }));
+    const moveButton = screen.getByRole("button", {
+      name: "Move shared Skills to Profile control…"
+    });
     expect(moveButton).toHaveClass("ui-button--warning");
     fireEvent.click(moveButton);
     expect(onMoveToProfiles).toHaveBeenCalledTimes(1);
@@ -49,13 +108,33 @@ describe("SharedSkillAreaModeActions", () => {
       />
     );
 
-    expect(screen.queryByRole("group", { name: "Shared folder policy" }))
-      .not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Change…" }));
+    expect(screen.getByText("Profiles control these Skills")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", {
-      name: "Move and remove new shared copies…"
+      name: "Move new shared Skills to Profile control…"
     }));
     expect(onMoveToProfiles).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Change…" }));
     fireEvent.click(screen.getByRole("button", { name: "Restore shared setup…" }));
     expect(onShowRestorePoints).toHaveBeenCalledTimes(1);
+  });
+
+  it("dismisses the behavior dialog with Escape", () => {
+    render(
+      <SharedSkillAreaModeActions
+        mode="keep"
+        disabled={false}
+        canMoveToProfiles={false}
+        canRestore={false}
+        onChange={vi.fn()}
+        onMoveToProfiles={vi.fn()}
+        onShowRestorePoints={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Change…" }));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Shared Skills behavior" }))
+      .not.toBeInTheDocument();
   });
 });

@@ -6,6 +6,12 @@ import {
   type SkillCleanupGroup,
   type SkillCleanupRecommendedAction
 } from "../shared/skillCleanup";
+import type {
+  SkillManagementNextAction,
+  SkillManagementProjection,
+  SkillManagementState,
+  SkillRuntimeControl
+} from "../shared/skillManagementProjection";
 import { targetNameFor, type TargetNameIndex } from "./targetPresentation";
 
 export const cleanupLocationLabel = (
@@ -101,6 +107,35 @@ export const cleanupActionDisplayLabel = (action: SkillCleanupRecommendedAction)
   if (action === "review-paths") return "Review paths";
   if (action === "review-details") return "View details";
   return cleanupActionLabel(action);
+};
+
+export const skillManagementStateLabel = (state: SkillManagementState) => {
+  if (state === "managed") return "Managed";
+  if (state === "not-managed") return "Not managed";
+  if (state === "needs-decision") return "Needs decision";
+  return "Unavailable";
+};
+
+export const skillManagementStateClass = (projection: SkillManagementProjection) => {
+  if (projection.state === "managed") return "managed";
+  if (projection.state === "not-managed") return "left-unmanaged";
+  if (projection.state === "unavailable") return "stale";
+  return projection.health === "different" ? "conflict" : "pending";
+};
+
+export const skillManagementActionLabel = (action: SkillManagementNextAction) => {
+  if (action === "manage") return "Manage";
+  if (action === "add-to-library") return "Add to Library";
+  if (action === "choose-version") return "Choose version";
+  if (action === "review") return "Review";
+  if (action === "repair") return "Repair";
+  return "";
+};
+
+export const skillRuntimeControlLabel = (control: SkillRuntimeControl) => {
+  if (control === "profile") return "Profile controlled";
+  if (control === "shared") return "Shared across Agents";
+  return "Outside AgentEnv";
 };
 
 export const cleanupEffectLabel = (effect: SkillCleanupAutomaticEffect) => {

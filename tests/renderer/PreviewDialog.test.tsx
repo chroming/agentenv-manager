@@ -74,13 +74,14 @@ describe("PreviewDialog", () => {
     );
 
     const boundary = screen.getByRole("region", {
-      name: "Shared Skills remain Agent controlled"
+      name: "Shared copies prevent Profile control"
     });
     expect(boundary).toHaveTextContent("/home/test/.agents/skills/review");
     expect(screen.getByRole("region", { name: "After applying" }))
       .toHaveTextContent("Skills after move");
+    expect(screen.queryByText("Preserved outside this Profile")).not.toBeInTheDocument();
     fireEvent.click(within(boundary).getByRole("button", {
-      name: "Move and remove shared copies…"
+      name: "Move shared Skills to Profile control…"
     }));
     expect(onManageSharedSkills).toHaveBeenCalledOnce();
   });

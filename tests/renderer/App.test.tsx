@@ -3008,7 +3008,7 @@ describe("App", () => {
     expect(within(switcher).getByText("Synced Review")).toBeInTheDocument();
   });
 
-  it("presents Managed copy as the default recommended Skill deployment mode", async () => {
+  it("presents Copy on Apply as the default recommended Skill deployment mode", async () => {
     installApi();
     render(<App />);
 
@@ -3017,7 +3017,7 @@ describe("App", () => {
     const syncMethod = screen.getByLabelText("Global skill deployment method");
     expect(syncMethod).toHaveValue("copy");
     expect(
-      within(syncMethod).getByRole("option", { name: "Managed copy (recommended)" })
+      within(syncMethod).getByRole("option", { name: "Copy on Apply (recommended)" })
     ).toBeInTheDocument();
     expect(within(syncMethod).queryByRole("option", { name: /Auto/ })).toBeNull();
   });

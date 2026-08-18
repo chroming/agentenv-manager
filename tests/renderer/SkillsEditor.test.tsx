@@ -347,7 +347,9 @@ describe("SkillsEditor v2", () => {
         }]}
         selectedTargetId="opencode"
         sharedRuntimeBoundary={{
+          libraryIds: ["review"],
           paths: ["/home/test/.agents/skills/review"],
+          requiresMigration: true,
           targetName: "OpenCode",
           onReview
         }}
@@ -355,14 +357,41 @@ describe("SkillsEditor v2", () => {
       />
     );
 
-    expect(screen.getByText("OpenCode loads Skills from a shared folder")).toBeInTheDocument();
+    expect(screen.getByText("Shared copies prevent this Profile change")).toBeInTheDocument();
     const row = screen.getByRole("listitem", { name: "Profile Skill review" });
-    expect(row).toHaveTextContent("After move");
+    expect(row).toHaveTextContent("Will be on");
     expect(row).not.toHaveTextContent("Apply pending");
     expect(within(row).getByRole("switch", { name: "Disable Code Review" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Add Skill" })).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "Move and remove shared copies…" }));
+    fireEvent.click(screen.getByRole("button", {
+      name: "Move shared Skills to Profile control…"
+    }));
     expect(onReview).toHaveBeenCalledOnce();
+  });
+
+  it("does not prompt for migration when a managed shared copy already satisfies the Profile", () => {
+    render(
+      <SkillsEditor
+        value={resources}
+        librarySkills={skills}
+        appliedSkillVersions={{}}
+        selectedTargetId="opencode"
+        sharedRuntimeBoundary={{
+          libraryIds: ["review"],
+          paths: ["/home/test/.agents/skills/review"],
+          requiresMigration: false,
+          targetName: "OpenCode",
+          onReview: vi.fn()
+        }}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("Shared copies prevent this Profile change")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", {
+      name: "Move shared Skills to Profile control…"
+    })).not.toBeInTheDocument();
+    expect(screen.getByRole("listitem", { name: "Profile Skill review" })).toHaveTextContent("Will be on");
   });
 
   it("shows that a disabled Profile Skill remains active at an unmanaged path", () => {

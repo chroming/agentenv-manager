@@ -13,12 +13,18 @@ import {
   isSkillCollectionItemLibraryReady,
   type SkillCollectionLinkGroup
 } from "../../shared/skillCleanup";
+import { projectSkillCollection } from "../../shared/skillManagementProjection";
 import type {
   SkillCollectionMemberDecisionUpdate,
   SkillInventoryEntry,
   UnmanagedSkillLocationUpdate
 } from "../../shared/types";
 import { useI18n } from "../i18n";
+import {
+  skillManagementActionLabel,
+  skillManagementStateClass,
+  skillManagementStateLabel
+} from "../skillCleanupPresentation";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
 import { Button, SelectControl } from "./ui";
@@ -225,25 +231,12 @@ export const SkillCollectionRows = ({
   const { t } = useI18n();
 
   return collections.map((collection) => {
-    const stateLabel =
-      collection.state === "ready"
-        ? t("Ready")
-        : collection.state === "unmanaged"
-          ? t("Unmanaged")
-          : collection.state === "conflict"
-            ? t("Needs review")
-            : t("{{count}} of {{total}} in Library", {
-                count: collection.libraryReadyCount,
-                total: collection.items.length
-              });
-    const stateClass =
-      collection.state === "ready"
-        ? "managed"
-        : collection.state === "unmanaged"
-          ? "left-unmanaged"
-          : collection.state === "conflict"
-            ? "conflict"
-            : "pending";
+    const projection = projectSkillCollection(collection);
+    const stateLabel = t(skillManagementStateLabel(projection.state));
+    const stateClass = skillManagementStateClass(projection);
+    const actionLabel = projection.nextAction === "none"
+      ? t("Details")
+      : t(skillManagementActionLabel(projection.nextAction));
     const agentNames = collection.consumerTargetIds
       .map((targetId) => targetNameFor(targetId, targetNames ?? {}, targetId))
       .join(" + ");
@@ -293,7 +286,7 @@ export const SkillCollectionRows = ({
             disabled={disabled}
             onClick={() => onReview(collection)}
           >
-            {t("Review")}
+            {actionLabel}
           </Button>
         </div>
       </div>

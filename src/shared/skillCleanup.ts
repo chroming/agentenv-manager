@@ -341,20 +341,22 @@ export const buildSkillCleanupGroups = (
       const missingTarget = activeItems.some(
         (item) => item.status !== "managed" && item.foundIn.length === 0
       );
-      const sharedItems = items.filter((item) => item.sharedLocation);
+      const allSharedItems = items.filter((item) => item.sharedLocation);
+      const sharedItems = activeItems.filter((item) => item.sharedLocation);
+      const migrationScopeItems = sharedItems.length > 0 ? sharedItems : allSharedItems;
       const installedTargets = options.installedTargetIds
         ? new Set(options.installedTargetIds)
         : undefined;
-      const consumers = [...new Set(sharedItems.flatMap((item) => item.foundIn))]
+      const consumers = [...new Set(migrationScopeItems.flatMap((item) => item.foundIn))]
         .filter((targetId) => !installedTargets || installedTargets.has(targetId))
         .sort();
       const sharedLibraryItem = sharedItems.find(
         (item) => item.libraryId && item.contentMatchesLibrary === true
       );
-      const sharedPaths = [...new Set(sharedItems.map((item) => item.path))].sort();
+      const sharedPaths = [...new Set(migrationScopeItems.map((item) => item.path))].sort();
       const sharedLeftUnmanaged =
-        sharedItems.length > 0 &&
-        sharedItems.every(
+        allSharedItems.length > 0 &&
+        allSharedItems.every(
           (item) =>
             item.status === "left-unmanaged" &&
             item.unmanagedCoverage === "exact"
@@ -368,10 +370,10 @@ export const buildSkillCleanupGroups = (
         sharedItems.every(
           (item) => item.managedAsShared && item.contentMatchesLibrary === true
         );
-      const sharedMigration: SharedSkillMigration | undefined = sharedItems.length === 0
+      const sharedMigration: SharedSkillMigration | undefined = allSharedItems.length === 0
         ? undefined
         : {
-            state: sharedLeftUnmanaged
+            state: sharedItems.length === 0
               ? "unmanaged"
               : sharedItems.some((item) => !isSkillCleanupManageable(item))
                 ? "outside"

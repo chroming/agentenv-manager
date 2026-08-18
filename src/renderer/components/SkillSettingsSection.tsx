@@ -53,7 +53,7 @@ export const SkillSettingsSection = ({
                   event.currentTarget.value as AgentEnvSettings["skillSyncMethod"]
               })}
           >
-            <option value="copy">{t("Managed copy (recommended)")}</option>
+            <option value="copy">{t("Copy on Apply (recommended)")}</option>
             <option value="symlink">{t("Live link (advanced)")}</option>
           </SelectControl>}
         />

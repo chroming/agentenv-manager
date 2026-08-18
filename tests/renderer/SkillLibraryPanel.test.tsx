@@ -1347,7 +1347,7 @@ describe("SkillLibraryPanel", () => {
     });
     expect(
       within(partiallyKeptGroup).getByLabelText("Full cleanup state external-cli-skill")
-    ).toHaveTextContent("Ready");
+    ).toHaveTextContent("Not managed");
     expect(
       within(partiallyKeptGroup).getByLabelText("Full cleanup state external-cli-skill")
     ).not.toHaveTextContent("Kept");
@@ -1355,7 +1355,7 @@ describe("SkillLibraryPanel", () => {
     const sharedMigrationGroup = screen.getByRole("group", {
       name: "Cleanup group compat-reviewer"
     });
-    expect(sharedMigrationGroup).toHaveTextContent("Ready");
+    expect(sharedMigrationGroup).toHaveTextContent("Not managed");
     expect(
       within(sharedMigrationGroup).queryByRole("button", {
         name: "Review Agents compat-reviewer"
@@ -1406,9 +1406,9 @@ describe("SkillLibraryPanel", () => {
       name: "Cleanup group copied-local"
     });
     expect(changedManagedGroup).toHaveTextContent("Library / copied-local · 1 managed installs");
-    expect(changedManagedGroup).toHaveTextContent("Changed");
+    expect(changedManagedGroup).toHaveTextContent("Needs decision");
     expect(
-      within(changedManagedGroup).queryByRole("button", { name: "Review drift copied-local" })
+      within(changedManagedGroup).queryByRole("button", { name: "Review copied-local" })
     ).toBeInTheDocument();
     expect(
       within(changedManagedGroup).queryByRole("button", {
@@ -1485,30 +1485,33 @@ describe("SkillLibraryPanel", () => {
 
     rerender(renderPanel("discoveries", undefined, false, [], {}, { kind: "shared" }));
     const sharedSkills = await screen.findByRole("region", { name: "Shared Skills" });
-    expect(within(sharedSkills).getByRole("group", { name: "Shared folder policy" }))
+    expect(within(sharedSkills).getByRole("button", { name: "Change…" }))
       .toBeInTheDocument();
     expect(within(sharedSkills).queryByRole("button", { name: /Manage \d+ eligible Skills/ }))
       .not.toBeInTheDocument();
-    fireEvent.click(within(sharedSkills).getByRole("button", { name: "Leave unchanged" }));
-    await waitFor(() => expect(onSetSharedSkillAreaMode).toHaveBeenCalledWith("keep"));
-    fireEvent.click(within(sharedSkills).getByRole("button", { name: "Manage in place" }));
+    fireEvent.click(within(sharedSkills).getByRole("button", { name: "Change…" }));
+    fireEvent.click(screen.getByRole("radio", { name: /Leave as-is/ }));
+    expect(onSetSharedSkillAreaMode).not.toHaveBeenCalledWith("keep");
+    fireEvent.click(within(sharedSkills).getByRole("button", { name: "Change…" }));
+    fireEvent.click(screen.getByRole("radio", { name: /Manage shared Skills/ }));
     const sharedManagementDialog = screen.getByRole("dialog", { name: "Manage shared Skills" });
     expect(sharedManagementDialog).toHaveTextContent(
       "Profiles and Agent-specific directories will not be changed."
     );
     fireEvent.click(within(sharedManagementDialog).getByRole("button", { name: "Cancel" }));
-    fireEvent.click(within(sharedSkills).getByRole("button", {
-      name: "Move and remove shared copies…"
+    fireEvent.click(within(sharedSkills).getByRole("button", { name: "Change…" }));
+    fireEvent.click(screen.getByRole("button", {
+      name: "Move shared Skills to Profile control…"
     }));
     const profilesOnlyDialog = screen.getByRole("dialog", {
-      name: "Move and remove shared copies"
+      name: "Move shared Skills to Profile control"
     });
     expect(profilesOnlyDialog).toHaveTextContent("then remove the listed shared entries");
     expect(profilesOnlyDialog).toHaveTextContent(
       "Linked source folders and the parent shared folder are never deleted."
     );
     expect(within(profilesOnlyDialog).getByRole("button", {
-      name: "Move and remove shared copies"
+      name: "Move shared Skills to Profile control"
     })).toHaveClass("ui-button--warning");
     fireEvent.click(within(profilesOnlyDialog).getByRole("button", { name: "Cancel" }));
     rerender(renderPanel("discoveries"));
@@ -1534,7 +1537,7 @@ describe("SkillLibraryPanel", () => {
     const representedExternalGroup = screen.getByRole("group", {
       name: "Cleanup group represented-external"
     });
-    expect(representedExternalGroup).toHaveTextContent("Ready");
+    expect(representedExternalGroup).toHaveTextContent("Not managed");
     fireEvent.click(representedExternalGroup);
     expect(screen.getByRole("dialog", {
       name: "Skill details represented-external"
@@ -1556,7 +1559,7 @@ describe("SkillLibraryPanel", () => {
       "2 locations"
     );
     const mixedGroup = screen.getByRole("group", { name: "Cleanup group target-only-reviewer" });
-    expect(mixedGroup).toHaveTextContent("Ready");
+    expect(mixedGroup).toHaveTextContent("Not managed");
     expect(within(mixedGroup).queryByText("Ignored", { exact: true })).not.toBeInTheDocument();
     expect(
       within(mixedGroup).queryByRole("button", { name: "Add to Library target-only-reviewer" })
@@ -1607,7 +1610,7 @@ describe("SkillLibraryPanel", () => {
     expect(conflictDetails).toHaveTextContent("Modified");
     fireEvent.click(within(conflictDetails).getByRole("button", { name: "Close" }));
     const unavailableGroup = screen.getByRole("group", { name: "Cleanup group debug-helper" });
-    expect(unavailableGroup).toHaveTextContent("Ready");
+    expect(unavailableGroup).toHaveTextContent("Unavailable");
     fireEvent.click(
       within(unavailableGroup).getByRole("button", {
         name: "More cleanup actions for debug-helper"

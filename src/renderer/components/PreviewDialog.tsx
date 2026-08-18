@@ -252,6 +252,9 @@ export const PreviewDialog = ({
   const sharedSkillItems = preservedItems.filter(
     (item) => item.issue.code === "shared-skill-deferred"
   );
+  const preservedDisclosureItems = preservedItems.filter(
+    (item) => item.issue.code !== "shared-skill-deferred"
+  );
   const sharedSkillPaths = [...new Set(
     sharedSkillItems.flatMap((item) => item.issue.path ? [item.issue.path] : [])
   )];
@@ -279,7 +282,9 @@ export const PreviewDialog = ({
             count: blockedItems.length
           })
       : status === "review"
-        ? t("Existing Agent resources need confirmation before they can be replaced.")
+        ? t("Choose what to do with {{count}} protected Agent resources before Apply.", {
+            count: reviewItems.length
+          })
         : isNoOp
           ? t("This Agent already matches the Profile.")
         : isActivationPreview
@@ -308,7 +313,7 @@ export const PreviewDialog = ({
           <AlertTriangle size={17} strokeWidth={2.1} aria-hidden="true" />
         )}
         <strong>
-          {kind === "blocked" ? t("Blocking issues") : t("Protected Agent changes")}
+          {kind === "blocked" ? t("Blocking issues") : t("Decisions needed")}
         </strong>
         <span className="apply-preview-count">{items.length}</span>
       </header>
@@ -443,15 +448,15 @@ export const PreviewDialog = ({
           {sharedSkillItems.length > 0 ? (
             <section
               className="apply-preview-shared-boundary"
-              aria-label={t("Shared Skills remain Agent controlled")}
+              aria-label={t("Shared copies prevent Profile control")}
             >
               <span className="apply-preview-shared-boundary__icon" aria-hidden="true">
-                <AlertTriangle size={17} strokeWidth={2.1} />
+                <Layers3 size={17} strokeWidth={2.1} />
               </span>
               <span className="apply-preview-shared-boundary__copy">
-                <strong>{t("Shared Skills remain Agent controlled")}</strong>
+                <strong>{t("Shared copies prevent Profile control")}</strong>
                 <small>{t(
-                  "This Apply keeps shared copies active, so this Profile cannot control their availability."
+                  "Move these Skills after preview and backup so the Profile can control whether they are on or off."
                 )}</small>
                 {sharedSkillPaths.length > 0 ? (
                   <OverflowTooltip
@@ -476,7 +481,7 @@ export const PreviewDialog = ({
                   variant="warning"
                   onClick={onManageSharedSkills}
                 >
-                  {t("Move and remove shared copies…")}
+                  {t("Move shared Skills to Profile control…")}
                 </Button>
               ) : null}
             </section>
@@ -579,14 +584,14 @@ export const PreviewDialog = ({
             </details>
           ) : null}
 
-          {preservedItems.length > 0 ? (
+          {preservedDisclosureItems.length > 0 ? (
             <details className="apply-preview-disclosure">
               <summary>
                 <span>{t("Preserved outside this Profile")}</span>
-                <strong>{preservedItems.length}</strong>
+                <strong>{preservedDisclosureItems.length}</strong>
               </summary>
               <div>
-                {preservedItems.map((item) => (
+                {preservedDisclosureItems.map((item) => (
                   <article key={item.id}>
                     <strong>{item.title}</strong>
                     {item.detail ? (

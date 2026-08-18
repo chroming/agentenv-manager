@@ -126,19 +126,21 @@ import type {
   MoveSkillCollectionOutcome
 } from "../skillCollectionMigrationAction";
 import {
-  cleanupActionDisplayLabel,
-  cleanupActionLabel,
   cleanupEffectLabel,
   formatSkillCleanupDetails,
   cleanupInventoryStatusClass,
   cleanupInventoryStatusLabel,
   cleanupLocationLabel,
   cleanupPresentationChipClass,
-  cleanupPresentationCompactLabel,
   cleanupPresentationLabel,
   externalManagerLabel,
-  isCleanupManageable
+  isCleanupManageable,
+  skillManagementActionLabel,
+  skillManagementStateClass,
+  skillManagementStateLabel,
+  skillRuntimeControlLabel
 } from "../skillCleanupPresentation";
+import { projectSkillCleanupGroup } from "../../shared/skillManagementProjection";
 import { shortSkillRevision, skillSourceLabel, skillSourceName } from "../skillLibrarySourcePresentation";
 import {
   repositoryImportProgressKey,
@@ -338,6 +340,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   const automaticCleanupStopRequestedRef = useRef(false);
   const [cleanupOperationKey, setCleanupOperationKey] = useState<string>();
   const [autoCleanupReviewOpen, setAutoCleanupReviewOpen] = useState(false);
+  const [sharedAreaBehaviorOpen, setSharedAreaBehaviorOpen] = useState(false);
   const [automaticCleanupIntent, setAutomaticCleanupIntent] =
     useState<"manage" | "profiles-only">("manage");
   const [expandedCleanupBuckets, setExpandedCleanupBuckets] = useState<
@@ -660,6 +663,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         activeTool !== "import" &&
         !githubOperation &&
         !modalOpen &&
+        !sharedAreaBehaviorOpen &&
         !target.closest(".library-drawer") &&
         !target.closest(".row-action-popover") &&
         !target.closest('[data-ui-hover-detail="true"]')
@@ -670,7 +674,14 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
 
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [activeTool, githubOperation, modalOpen, onCloseTool, openActionId]);
+  }, [
+    activeTool,
+    githubOperation,
+    modalOpen,
+    onCloseTool,
+    openActionId,
+    sharedAreaBehaviorOpen
+  ]);
 
   useEffect(() => {
     if (activeTool === "import") {
@@ -916,12 +927,12 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
       : ""
     ].filter(Boolean).join(" · ");
   const sharedModeBaseLabel = !sharedAreaMode || sharedAreaMode === "keep"
-    ? t("Left unchanged")
+    ? t("Left as-is")
     : sharedAreaMode === "managed"
-      ? t("Managed in shared folder")
+      ? t("Managed by Library · Shared across Agents")
       : sharedAreaMode === "profiles-only"
-        ? t("Profiles only")
-        : t("Choose how to manage this folder");
+        ? t("Controlled by Profiles")
+        : t("Choose shared Skills behavior");
   const sharedModeLabel = sharedAreaMode && sharedAreaMode !== "keep" && sharedExceptionCount > 0
     ? `${sharedModeBaseLabel} · ${t(sharedExceptionCount === 1 ? "1 exception" : "{{count}} exceptions", { count: sharedExceptionCount })}`
     : sharedModeBaseLabel;
@@ -929,7 +940,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     cleanupScope.kind === "shared" ? t("Shared Skills") : t("Local Skills Manager");
   const cleanupToolHelp =
     cleanupScope.kind === "shared"
-      ? t("Choose a stable shared-folder policy, or review the separate migration into Profile deployments.")
+      ? t("See who controls shared Skills and change that behavior when needed.")
       : t("Review local Skill copies, add a canonical version to Library, and remove redundant copies with a restorable backup.");
   const cleanupListTitle =
     cleanupScope.kind === "shared"
@@ -3384,6 +3395,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                   onChange={(mode) => void changeSharedAreaMode(mode)}
                   onMoveToProfiles={() => openAutomaticCleanupReview("profiles-only")}
                   onShowRestorePoints={sharedArea.showRestorePoints}
+                  onDialogOpenChange={setSharedAreaBehaviorOpen}
                 />
               ) : sharedScopeEntryCount > 0 && onCleanupScopeChange ? (
                 <Button
@@ -3471,19 +3483,17 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                   group.bucket === "decision" && contentVersionCount > 1 && !linkedLibraryId
                     ? t("{{count}} versions", { count: contentVersionCount })
                     : undefined;
-                const chipLabelKey = group.bucket === "ready"
-                  ? "Ready"
-                  : cleanupPresentationCompactLabel(group.presentation.state);
+                const managementProjection = projectSkillCleanupGroup(group);
                 const chipDetailKey = group.bucket === "ready" && group.automaticEffect
                   ? cleanupEffectLabel(group.automaticEffect)
                   : cleanupPresentationLabel(group.presentation.state);
-                const chipLabel = contentChoiceLabel ?? t(chipLabelKey);
+                const chipLabel = contentChoiceLabel ?? t(
+                  skillManagementStateLabel(managementProjection.state)
+                );
                 const chipDetail = decisionSummary ?? t(chipDetailKey);
-                const chipClass = group.bucket === "ready"
-                  ? "managed"
-                  : cleanupPresentationChipClass(group.presentation.state);
-                const actionLabel = t(cleanupActionLabel(group.presentation.action));
-                const actionDisplayLabel = t(cleanupActionDisplayLabel(group.presentation.action));
+                const chipClass = skillManagementStateClass(managementProjection);
+                const actionLabel = t(skillManagementActionLabel(managementProjection.nextAction));
+                const actionDisplayLabel = actionLabel;
                 const managedInstallCount = group.activeItems.filter(
                   (item) => item.status === "managed" && !item.sharedLocation
                 ).length;
@@ -3493,11 +3503,9 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                     : `${t("Library")} / ${linkedLibraryId}`
                   : undefined;
                 const groupIsWorking = sharedOperation?.skillKey === group.skillKey;
-                const sharedProgressText = sharedMigration?.state === "managed"
-                  ? t("Managed in shared folder")
-                  : sharedMigration?.state === "not-managed"
-                    ? t("Shared copy is not managed")
-                    : undefined;
+                const sharedProgressText = managementProjection.runtimeControl === "shared"
+                  ? t(skillRuntimeControlLabel(managementProjection.runtimeControl))
+                  : undefined;
                 const cleanupActionId = `cleanup:${group.skillKey}`;
                 const runPrimaryAction = () => {
                   if (
@@ -3619,7 +3627,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                       text={chipDetail}
                     />
                     <div className="cleanup-group-actions">
-                      {(group.bucket !== "ready" || !group.automaticEffect) && group.presentation.action !== "none" ? (
+                      {(group.bucket !== "ready" || !group.automaticEffect) && managementProjection.nextAction !== "none" ? (
                         <Button
                           className="cleanup-current-action"
                           size="compact"

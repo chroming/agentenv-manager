@@ -908,6 +908,40 @@ describe("skill cleanup groups", () => {
     });
   });
 
+  it("excludes a retained shared path from migration when another shared copy stays managed", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        path: "/tmp/home/.agents/skills/reviewer",
+        foundIn: ["codex"],
+        status: "left-unmanaged",
+        libraryId: "reviewer",
+        skillKey: "reviewer",
+        sharedLocation: true,
+        locationRole: "compatibility-runtime",
+        unmanagedLocationId: "unmanaged-reviewer",
+        unmanagedCoverage: "exact",
+        contentMatchesLibrary: true
+      }),
+      inventoryItem({
+        path: "/tmp/home/.shared/skills/reviewer",
+        foundIn: ["opencode"],
+        status: "managed",
+        managedAsShared: true,
+        libraryId: "reviewer",
+        skillKey: "reviewer",
+        sharedLocation: true,
+        locationRole: "compatibility-runtime",
+        contentMatchesLibrary: true
+      })
+    ]);
+
+    expect(group.sharedMigration).toMatchObject({
+      state: "managed",
+      consumers: ["opencode"],
+      paths: ["/tmp/home/.shared/skills/reviewer"]
+    });
+  });
+
   it("keeps version choice inside Add to Library for conflicting shared and Target copies", () => {
     const [group] = buildSkillCleanupGroups([
       inventoryItem({

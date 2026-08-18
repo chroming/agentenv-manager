@@ -210,6 +210,32 @@ describe("skill deployment planner", () => {
       })
     ]);
     expect(result.decisions[0]).toMatchObject({ action: "defer" });
+    expect(result.issues).not.toContainEqual(expect.objectContaining({
+      code: "shared-skill-deferred"
+    }));
+  });
+
+  it("requires shared migration when the Profile wants the shared Skill turned off", () => {
+    const shared = inventoryEntry({
+      path: "/home/.agents/skills/reviewer",
+      locationRole: "compatibility-runtime",
+      sharedLocation: true
+    });
+    const result = plan({
+      inventory: [shared],
+      selectedProfile: profile({ enabled: false })
+    });
+
+    expect(result.sharedPreparations).toEqual([
+      expect.objectContaining({
+        libraryId: "reviewer",
+        disposition: "omit",
+        sharedPaths: ["/home/.agents/skills/reviewer"]
+      })
+    ]);
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      code: "shared-skill-deferred"
+    }));
   });
 
   it("uses an unmanaged shared copy instead of installing a duplicate Target copy", () => {

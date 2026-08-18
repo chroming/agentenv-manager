@@ -6,6 +6,7 @@ import type {
   SkillUpdateInfo,
   TargetManagementState
 } from "../../shared/types";
+import { profileSharedSkillBoundary } from "../../shared/sharedSkillBoundary";
 import type { ProfileResourceSummary } from "../profileSummary";
 import { useI18n } from "../i18n";
 import { ProductIcon } from "../productIcons";
@@ -59,18 +60,18 @@ export const ProfileSkillsComposerSection = ({
   onChange
 }: ProfileSkillsComposerSectionProps) => {
   const { t } = useI18n();
-  const activeSharedSkills = currentSkills.filter((entry) => {
-    if (!entry.sharedLocation && !entry.collectionLink) return false;
-    const runtimeState = entry.runtimeStates?.find((state) => state.targetId === targetId);
-    const availability = runtimeState?.availability ?? entry.runtimeAvailability ?? "unknown";
-    return availability !== "disabled" && availability !== "shadowed";
+  const sharedBoundary = profileSharedSkillBoundary({
+    profile,
+    targetId,
+    policy,
+    inventory: currentSkills,
+    librarySkills
   });
-  const sharedRuntimePaths = [...new Set([
-    ...activeSharedSkills.map((entry) => entry.collectionLink?.path ?? entry.path),
-    ...(targetState?.activeProfileId === profile.id
-      ? (targetState.sharedSkillPreparations ?? []).flatMap((item) => item.sharedPaths)
-      : [])
-  ])].sort();
+  const sharedRuntimeSummary = sharedBoundary.migrationPaths.length > 0
+    ? t("Needs review")
+    : sharedBoundary.activePaths.length > 0
+      ? t("Shared across Agents")
+        : undefined;
 
   return (
     <ProfileComposerSection
@@ -80,7 +81,7 @@ export const ProfileSkillsComposerSection = ({
       description={t("Reusable skills and workflows")}
       count={summary.total}
       enabledCount={summary.count}
-      countSummary={sharedRuntimePaths.length > 0 ? t("Shared folder active") : undefined}
+      countSummary={sharedRuntimeSummary}
       chipNames={summary.names}
       policy={summary.mode}
       policyDisabled={!capabilityAvailable}
@@ -100,8 +101,12 @@ export const ProfileSkillsComposerSection = ({
         environmentScanStatus={environmentScanStatus}
         targetState={targetState}
         selectedTargetId={targetId}
-        sharedRuntimeBoundary={sharedRuntimePaths.length > 0 ? {
-          paths: sharedRuntimePaths,
+        sharedRuntimeBoundary={sharedBoundary.activePaths.length > 0 ? {
+          libraryIds: sharedBoundary.activeLibraryIds,
+          paths: sharedBoundary.migrationPaths.length > 0
+            ? sharedBoundary.migrationPaths
+            : sharedBoundary.activePaths,
+          requiresMigration: sharedBoundary.migrationPaths.length > 0,
           targetName,
           onReview: onReviewSharedSkills
         } : undefined}

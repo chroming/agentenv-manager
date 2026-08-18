@@ -1,4 +1,5 @@
-import { History, TriangleAlert } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { History, Settings2, TriangleAlert } from "lucide-react";
 import type {
   RetireSharedSkillInput,
   SharedSkillAreaMode,
@@ -10,13 +11,22 @@ import {
   type SkillCollectionLinkGroup
 } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
+import { useModalDialog } from "../hooks/useModalDialog";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import type { MoveSkillCollectionOutcome } from "../skillCollectionMigrationAction";
 import type {
   AutomaticCleanupProgress,
   AutomaticCleanupReviewItem
 } from "./AutomaticSkillCleanupDialog";
-import { Button, SegmentedControl } from "./ui";
+import {
+  Button,
+  ChoiceInput,
+  DialogBody,
+  DialogFooter,
+  DialogHeader,
+  ModalFrame,
+  Notice
+} from "./ui";
 
 export const buildProfilesOnlyReviewItems = (
   groups: SkillCleanupGroup[],
@@ -37,7 +47,7 @@ export const buildProfilesOnlyReviewItems = (
         .join(", ")
     }];
   }),
-  ...collections.map((collection) => ({
+  ...collections.filter((collection) => collection.state !== "unmanaged").map((collection) => ({
     effect: "move-shared-to-agents" as const,
     skillKey: `collection:${collection.path}`,
     name: collection.name,
@@ -54,12 +64,12 @@ export const sharedSkillCleanupDialogCopy = (
 ) => {
   if (intent === "profiles-only") {
     return {
-      title: "Move and remove shared copies",
+      title: "Move shared Skills to Profile control",
       description:
         "AgentEnv will add eligible Skills to Library, install each saved Profile's " +
         "intended state in supported Agents, then remove the listed shared entries. Other " +
         "tools that read the shared folder will stop receiving them.",
-      runLabel: "Move and remove shared copies",
+      runLabel: "Move shared Skills to Profile control",
       runVariant: "warning" as const,
       safetyNote:
         "Only the listed shared entries are removed. Linked source folders and the parent " +
@@ -142,7 +152,7 @@ export const runProfilesOnlySharedCleanup = async ({
       });
     }
   }
-  for (const collection of collections) {
+  for (const collection of collections.filter((item) => item.state !== "unmanaged")) {
     const key = `collection:${collection.path}`;
     if (shouldStop()) {
       updateProgress(key, { status: "skipped" });
@@ -176,6 +186,7 @@ interface SharedSkillAreaModeActionsProps {
   onChange(mode: "keep" | "managed"): void;
   onMoveToProfiles(): void;
   onShowRestorePoints(): void;
+  onDialogOpenChange?(open: boolean): void;
 }
 
 export const SharedSkillAreaModeActions = ({
@@ -186,55 +197,141 @@ export const SharedSkillAreaModeActions = ({
   canRestore,
   onChange,
   onMoveToProfiles,
-  onShowRestorePoints
+  onShowRestorePoints,
+  onDialogOpenChange
 }: SharedSkillAreaModeActionsProps) => {
   const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const dialogRef = useRef<HTMLElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   const policy = mode === "managed" ? "managed" : "keep";
   const moveToProfilesLabel = mode === "profiles-only"
-    ? t("Move and remove new shared copies…")
-    : t("Move and remove shared copies…");
+    ? t("Move new shared Skills to Profile control…")
+    : t("Move shared Skills to Profile control…");
+
+  const setDialogOpen = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    onDialogOpenChange?.(nextOpen);
+  };
+
+  useEffect(() => () => onDialogOpenChange?.(false), [onDialogOpenChange]);
+
+  useModalDialog({
+    open,
+    dialogRef,
+    initialFocusRef: closeRef,
+    dismissDisabled: disabled,
+    onDismiss: () => setDialogOpen(false)
+  });
+
+  const selectMode = (nextMode: "keep" | "managed") => {
+    if (nextMode !== mode) onChange(nextMode);
+    setDialogOpen(false);
+  };
+
   return (
     <div className="shared-area-mode-actions">
-      {mode !== "profiles-only" ? (
-        <SegmentedControl<"keep" | "managed">
-          className="shared-area-mode-policy ui-segmented-control--compact"
-          label={t("Shared folder policy")}
-          value={policy}
-          disabled={disabled}
-          options={[
-            { value: "keep", label: t("Leave unchanged"), busy: operation === "keep" },
-            {
-              value: "managed",
-              label: t("Manage in place"),
-              busy: operation === "managed"
-            }
-          ]}
-          onChange={(value) => {
-            if (value !== mode) onChange(value);
-          }}
-        />
-      ) : null}
-      {canMoveToProfiles ? (
-        <Button
-          busy={operation === "profiles-only"}
-          disabled={disabled}
-          icon={<TriangleAlert size={14} strokeWidth={2.2} />}
-          size="compact"
-          variant="warning"
-          onClick={onMoveToProfiles}
+      <Button
+        busy={Boolean(operation)}
+        disabled={disabled}
+        icon={<Settings2 size={14} strokeWidth={2.1} />}
+        size="compact"
+        variant="secondary"
+        onClick={() => setDialogOpen(true)}
+      >
+        {t("Change…")}
+      </Button>
+      {open ? (
+        <ModalFrame
+          ariaLabel={t("Shared Skills behavior")}
+          className="shared-skill-behavior-dialog ui-dialog-shell"
+          dialogRef={dialogRef}
+          dismissDisabled={disabled}
+          onDismiss={() => setDialogOpen(false)}
         >
-          {moveToProfilesLabel}
-        </Button>
-      ) : null}
-      {mode === "profiles-only" && canRestore ? (
-        <Button
-          disabled={disabled}
-          icon={<History size={14} strokeWidth={2.2} />}
-          size="compact"
-          onClick={onShowRestorePoints}
-        >
-          {t("Restore shared setup…")}
-        </Button>
+          <DialogHeader
+            title={t("Shared Skills behavior")}
+            description={t("Choose who controls Skills in the shared folder.")}
+          />
+          <DialogBody className="shared-skill-behavior-dialog__body">
+            {mode !== "profiles-only" ? (
+              <div className="ui-choice-list" role="radiogroup" aria-label={t("Shared Skills behavior") }>
+                <label className={`ui-choice-card${policy === "keep" ? " is-selected" : ""}`}>
+                  <ChoiceInput
+                    checked={policy === "keep"}
+                    disabled={disabled}
+                    name="shared-skill-behavior"
+                    type="radio"
+                    onChange={() => selectMode("keep")}
+                  />
+                  <span>
+                    <strong>{t("Leave as-is")}</strong>
+                    <small>{t("AgentEnv observes this folder but does not change its Skills.")}</small>
+                  </span>
+                </label>
+                <label className={`ui-choice-card${policy === "managed" ? " is-selected" : ""}`}>
+                  <ChoiceInput
+                    checked={policy === "managed"}
+                    disabled={disabled}
+                    name="shared-skill-behavior"
+                    type="radio"
+                    onChange={() => selectMode("managed")}
+                  />
+                  <span>
+                    <strong>{t("Manage shared Skills")}</strong>
+                    <small>{t("Library manages the shared copies used by every Agent that reads this folder.")}</small>
+                  </span>
+                </label>
+              </div>
+            ) : (
+              <Notice
+                title={t("Profiles control these Skills")}
+                tone="info"
+              >
+                {t("Shared copies were removed after a reviewed migration. Restore them from recovery history if needed.")}
+              </Notice>
+            )}
+            {canMoveToProfiles ? (
+              <section className="shared-skill-behavior-dialog__migration">
+                <span>
+                  <strong>{t("Use Profile control instead")}</strong>
+                  <small>{t("Moves the listed Skills out of the shared folder after preview and backup.")}</small>
+                </span>
+                <Button
+                  busy={operation === "profiles-only"}
+                  disabled={disabled}
+                  icon={<TriangleAlert size={14} strokeWidth={2.2} />}
+                  size="compact"
+                  variant="warning"
+                  onClick={() => {
+                    setDialogOpen(false);
+                    onMoveToProfiles();
+                  }}
+                >
+                  {moveToProfilesLabel}
+                </Button>
+              </section>
+            ) : null}
+            {mode === "profiles-only" && canRestore ? (
+              <Button
+                disabled={disabled}
+                icon={<History size={14} strokeWidth={2.2} />}
+                size="compact"
+                onClick={() => {
+                  setDialogOpen(false);
+                  onShowRestorePoints();
+                }}
+              >
+                {t("Restore shared setup…")}
+              </Button>
+            ) : null}
+          </DialogBody>
+          <DialogFooter>
+            <Button ref={closeRef} disabled={disabled} onClick={() => setDialogOpen(false)}>
+              {t("Close")}
+            </Button>
+          </DialogFooter>
+        </ModalFrame>
       ) : null}
     </div>
   );

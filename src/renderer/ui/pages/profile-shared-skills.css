@@ -1,7 +1,7 @@
 .apply-preview-shared-boundary {
   align-items: center;
-  background: var(--warning-bg);
-  border: 1px solid color-mix(in srgb, var(--warning) 28%, var(--border));
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
   border-radius: var(--radius-control);
   display: grid;
   gap: 10px;
@@ -12,7 +12,7 @@
 
 .apply-preview-shared-boundary__icon {
   align-self: start;
-  color: var(--warning-strong);
+  color: var(--accent);
   display: inline-flex;
   justify-content: center;
   padding-top: 1px;
@@ -25,7 +25,7 @@
 }
 
 .apply-preview-shared-boundary__copy > strong {
-  color: var(--warning-strong);
+  color: var(--text);
   font-size: 12px;
   font-weight: var(--font-weight-medium);
   line-height: 17px;

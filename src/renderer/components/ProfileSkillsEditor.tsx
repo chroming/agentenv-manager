@@ -20,7 +20,9 @@ interface ProfileSkillsEditorProps {
   targetState?: TargetManagementState;
   selectedTargetId?: string;
   sharedRuntimeBoundary?: {
+    libraryIds: string[];
     paths: string[];
+    requiresMigration: boolean;
     targetName: string;
     onReview(): void;
   };

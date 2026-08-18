@@ -1342,6 +1342,12 @@ try {
   await page.getByRole("button", { name: "Review shared folder" }).click();
   const sharedSkillsManager = page.getByRole("region", { name: "Shared Skills" });
   await sharedSkillsManager.waitFor({ state: "visible", timeout: 5_000 });
+  await sharedSkillsManager.getByRole("button", { name: "Change…" }).click();
+  await page.getByRole("dialog", { name: "Shared Skills behavior" })
+    .waitFor({ state: "visible", timeout: 5_000 });
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(page, join(outputDir, "skills-shared-folder-behavior-920x620.png"));
+  await page.keyboard.press("Escape");
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "skills-shared-folder-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
@@ -1357,8 +1363,12 @@ try {
   await page.getByRole("button", { name: "Review shared folder" }).click();
   await page.getByRole("region", { name: "Shared Skills" })
     .waitFor({ state: "visible", timeout: 5_000 });
+  await page.getByRole("region", { name: "Shared Skills" })
+    .getByRole("button", { name: "Change…" })
+    .click();
   await page.getByRole("button", { name: "Restore shared setup…" })
     .waitFor({ state: "visible", timeout: 5_000 });
+  await page.keyboard.press("Escape");
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(
     page,

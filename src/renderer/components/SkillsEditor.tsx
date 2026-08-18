@@ -50,7 +50,9 @@ interface SkillsEditorProps {
   currentSkills?: SkillInventoryEntry[];
   currentStateStatus?: "loading" | "ready" | "error";
   sharedRuntimeBoundary?: {
+    libraryIds: string[];
     paths: string[];
+    requiresMigration: boolean;
     targetName: string;
     onReview(): void;
   };
@@ -84,7 +86,7 @@ export const SkillsEditor = ({
   const profileManagesSkills = policy === "manage";
   const profileDisablesSkills = policy === "disable";
   const agentOwnsSkills = policy === "ignore";
-  const sharedRuntimeControlsSkills = Boolean(sharedRuntimeBoundary);
+  const sharedRuntimeLibraryIds = new Set(sharedRuntimeBoundary?.libraryIds ?? []);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [replacingIndex, setReplacingIndex] = useState<number>();
@@ -208,7 +210,7 @@ export const SkillsEditor = ({
         </div>
       </ResourcePanelToolbar> : null}
 
-      {sharedRuntimeBoundary ? (
+      {sharedRuntimeBoundary?.requiresMigration ? (
         <Notice
           actions={(
             <Button
@@ -217,18 +219,17 @@ export const SkillsEditor = ({
               variant="warning"
               onClick={sharedRuntimeBoundary.onReview}
             >
-              {t("Move and remove shared copies…")}
+              {t("Move shared Skills to Profile control…")}
             </Button>
           )}
           className="profile-skill-shared-notice"
-          icon={<AlertTriangle size={16} strokeWidth={2.1} aria-hidden="true" />}
-          title={t("{{target}} loads Skills from a shared folder", {
-            target: sharedRuntimeBoundary.targetName
-          })}
-          tone="warning"
+          icon={<FolderInput size={16} strokeWidth={2.1} aria-hidden="true" />}
+          title={t("Shared copies prevent this Profile change")}
+          tone="info"
         >
           <span>{t(
-            "Profile changes are saved for after shared copies are moved. Until then, the Agent controls Skill availability."
+            "{{target}} still loads these Skills from a shared folder. Move them after preview and backup so this Profile can control whether they are on or off.",
+            { target: sharedRuntimeBoundary.targetName }
           )}</span>
           <OverflowTooltip
             ariaLabel={t("Shared Skill paths")}
@@ -332,13 +333,14 @@ export const SkillsEditor = ({
               entry.libraryId === reference.libraryId &&
               entry.targetName === reference.targetName
           );
+          const sharedRuntimeControlsSkill = sharedRuntimeLibraryIds.has(reference.libraryId);
           const deploymentPending = Boolean(
-            profileManagesSkills && !sharedRuntimeControlsSkills && !localOverride && skill && appliedSkillVersions && (enabled
+            profileManagesSkills && !sharedRuntimeControlsSkill && !localOverride && skill && appliedSkillVersions && (enabled
               ? appliedRevision !== skill.contentHash
               : appliedRevision)
           );
-          const status = sharedRuntimeControlsSkills
-            ? "After move"
+          const status = sharedRuntimeControlsSkill
+            ? enabled ? "Will be on" : "Will be off"
             : !skill
               ? "Missing"
               : localOverride?.outcome === "external-active"

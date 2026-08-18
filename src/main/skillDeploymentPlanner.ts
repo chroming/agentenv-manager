@@ -480,24 +480,15 @@ export const buildSkillDeploymentPlan = ({
         reason: "shared-compatible"
       });
     }
-    const message = adoptTargetCopy
-        ? `Shared Skill ${shared.skillKey} stays active from its compatibility directory; Apply will adopt the matching Agent copy before shared migration is completed.`
-        : keepManagedTargetCopy
-          ? `Shared Skill ${shared.skillKey} and its AgentEnv-managed Agent copy remain active until shared migration removes the compatibility copy.`
-          : replaceTargetCopy
-            ? `Shared Skill ${shared.skillKey} stays active from its compatibility directory while Apply replaces the Agent copy.`
-          : replaceManagedTargetCopy
-            ? `Shared Skill ${shared.skillKey} stays active while Apply switches the Agent copy to this Library Skill.`
-          : reference
-            ? `Shared Skill ${shared.skillKey} stays active from its compatibility directory until shared migration installs the Agent-specific copy.`
-            : `Shared Skill ${shared.skillKey} stays active until shared migration removes the compatibility copy; this Profile will omit it afterward.`;
-    issues.push(createApplyIssue({
-      code: "shared-skill-deferred",
-      resourceKind: "skill",
-      resourceId: shared.skillKey,
-      path: groupPaths[0],
-      message
-    }));
+    if (!reference) {
+      issues.push(createApplyIssue({
+        code: "shared-skill-deferred",
+        resourceKind: "skill",
+        resourceId: shared.skillKey,
+        path: groupPaths[0],
+        message: `Shared Skill ${shared.skillKey} stays active until shared migration removes the compatibility copy; this Profile will omit it afterward.`
+      }));
+    }
   }
 
   for (const reference of enabledReferences) {
