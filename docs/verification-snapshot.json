@@ -1,28 +1,28 @@
 {
-  "generatedAt": "2026-08-12T16:07:56.803Z",
+  "generatedAt": "2026-08-18T03:13:48.806Z",
   "source": {
-    "commit": "74445abd76e7fd4d64a3ca6ff4a822259a64e142",
+    "commit": "cb380866c6ee9273e6ac27e05ee93be9b801aa06",
     "dirty": true,
-    "fingerprint": "f44d95ef1342a97360745e00ccaefeae7e7a36a2d9c562ba165d720087a90e69",
-    "files": 866
+    "fingerprint": "890815febce88f71b9e023727b88ddcdcb424f309f2a1299053013b86dbc1479",
+    "files": 904
   },
   "build": {
-    "generatedAt": "2026-08-12T16:03:56.004Z",
-    "sourceFingerprint": "d52d2749666e65a8fce96b9fd986f5c0a01233b8818580249ad36d617c63773f",
-    "sourceFiles": 469,
-    "artifactFingerprint": "705d1fb718d1b1c07e9eeb8d6eb91f25441cb015b0586f371953e04590b31c28",
+    "generatedAt": "2026-08-18T03:05:31.662Z",
+    "sourceFingerprint": "285b267d35175212a75a9c3dec37b679d113af3d2493a426b139762595360051",
+    "sourceFiles": 485,
+    "artifactFingerprint": "0604835c1646f1e1480836f4f09bb30f2849d01b2ba8a3f4348479a38358d921",
     "artifactFiles": 40
   },
   "tests": {
     "passed": true,
-    "files": 224,
-    "assertions": 1618,
-    "e2eFiles": 18,
-    "e2eAssertions": 199,
+    "files": 234,
+    "assertions": 1740,
+    "e2eFiles": 21,
+    "e2eAssertions": 251,
     "desktopElectronFiles": 9,
-    "desktopElectronAssertions": 146,
+    "desktopElectronAssertions": 152,
     "electronUiFiles": 1,
-    "electronUiAssertions": 132
+    "electronUiAssertions": 138
   },
   "audits": {
     "styles": "passed",
@@ -33,7 +33,7 @@
   },
   "captures": {
     "directory": "/var/folders/c4/vw8cxnvd7rv46sv4kq0lkg0h0000gn/T/agentenv-ui-captures/verification",
-    "artifactFingerprint": "705d1fb718d1b1c07e9eeb8d6eb91f25441cb015b0586f371953e04590b31c28",
+    "artifactFingerprint": "0604835c1646f1e1480836f4f09bb30f2849d01b2ba8a3f4348479a38358d921",
     "files": 183,
     "viewports": [
       "1180x728",
@@ -43,8 +43,8 @@
     "visualContract": {
       "passed": true,
       "files": 52,
-      "maxChangedPixelRatio": 0.010671458625525947
+      "maxChangedPixelRatio": 0.011693548387096775
     }
   },
-  "packagedSmoke": "passed"
+  "packagedSmoke": "not-run"
 }
