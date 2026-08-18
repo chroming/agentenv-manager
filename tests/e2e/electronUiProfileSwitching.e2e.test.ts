@@ -6889,11 +6889,11 @@ describe("Electron UI profile switching e2e", () => {
       name: "Skill collection superpowers"
     });
     await collectionRow.waitFor({ state: "visible" });
-    const state = collectionRow.getByText("0 of 14 in Library", { exact: true });
-    const review = collectionRow.getByRole("button", { name: "Review" });
-    await expectNoOverlap(state, review);
+    const state = collectionRow.getByText("Needs decision", { exact: true });
+    const nextAction = collectionRow.getByRole("button", { name: "Add to Library" });
+    await expectNoOverlap(state, nextAction);
     await expectTextFits(state);
-    await expectTextFits(review);
+    await expectTextFits(nextAction);
     await expectNoHorizontalOverflow(page, [".cleanup-collection-row"]);
   }, standardElectronTestTimeout);
 
@@ -6972,7 +6972,7 @@ describe("Electron UI profile switching e2e", () => {
     const focusedCollectionRow = page.getByRole("group", {
       name: "Skill collection superpowers"
     });
-    await focusedCollectionRow.getByRole("button", { name: "Review" }).click();
+    await focusedCollectionRow.getByRole("button", { name: "Choose version" }).click();
     dialog = page.getByRole("dialog", {
       name: "Review Skill collection superpowers"
     });
@@ -7160,7 +7160,7 @@ describe("Electron UI profile switching e2e", () => {
     await openSkillLibrary(page);
     await openLocalSkills(page);
     const row = page.getByRole("group", { name: "Skill collection collection-error" });
-    await row.getByRole("button", { name: "Review" }).click();
+    await row.getByRole("button", { name: "Details" }).click();
     const dialog = page.getByRole("dialog", {
       name: "Review Skill collection collection-error"
     });
@@ -7844,7 +7844,7 @@ describe("Electron UI profile switching e2e", () => {
     await brokenDetails.getByRole("button", { name: "Close" }).click();
 
     await driftGroup
-      .getByRole("button", { name: `Review ${skillId}` })
+      .getByRole("button", { name: `Choose version ${skillId}` })
       .click();
     const driftDialog = page.getByRole("dialog", { name: "Review skill cleanup" });
     await driftDialog.waitFor({ state: "visible" });

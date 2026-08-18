@@ -1684,18 +1684,18 @@
 }
 
 .skill-library-panel .cleanup-collection-row {
-  grid-template-columns: 32px minmax(0, 1fr) minmax(124px, max-content) 84px;
+  grid-template-columns: 32px minmax(0, 1fr) minmax(124px, max-content) 116px;
 }
 
 .skill-library-panel .cleanup-collection-row > .cleanup-group-actions {
   display: flex;
   justify-content: flex-end;
-  width: 84px;
+  width: 116px;
 }
 
 .skill-library-panel .cleanup-collection-row .cleanup-current-action {
-  min-width: 76px;
-  width: 76px;
+  min-width: 108px;
+  width: 108px;
 }
 
 .skill-library-panel .cleanup-history-row {
@@ -1745,6 +1745,6 @@
   .skill-library-panel .cleanup-collection-row > .cleanup-group-actions {
     grid-column: 2 / -1;
     grid-row: 2;
-    width: 84px;
+    width: 116px;
   }
 }
