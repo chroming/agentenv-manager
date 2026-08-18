@@ -10520,15 +10520,16 @@ describe("Electron UI profile switching e2e", () => {
 
     const saveStartedAt = await page.evaluate(() => performance.now());
     await saveProfile(page);
-    await page.getByRole("button", { name: "Apply", exact: true }).waitFor({ state: "visible" });
-    await expect.poll(() => page.getByRole("button", { name: "Apply", exact: true }).isEnabled())
+    const applyButton = page.locator(".profile-apply-button");
+    await applyButton.waitFor({ state: "visible" });
+    await expect.poll(() => applyButton.isEnabled())
       .toBe(true);
     const saveDuration = (await page.evaluate(() => performance.now())) - saveStartedAt;
     expect(saveDuration).toBeLessThan(1_200);
 
     const previewStartedAt = await page.evaluate(() => performance.now());
-    await page.getByRole("button", { name: "Apply", exact: true }).click();
-    expect(await page.getByRole("button", { name: "Apply", exact: true }).getAttribute("aria-busy"))
+    await applyButton.click();
+    expect(await applyButton.getAttribute("aria-busy"))
       .toBe("true");
     await page.getByRole("dialog", { name: "Preview" }).waitFor({ state: "visible" });
     const previewDuration = (await page.evaluate(() => performance.now())) - previewStartedAt;
