@@ -70,6 +70,46 @@
       "expected": { "outcome": "success", "migrated": true, "profileCount": 0, "retainedProfileCount": 0, "manifestVersion": 2, "jsonMatches": [{ "path": "target-states/codex.json", "value": { "formatVersion": 3, "managedMcpNames": ["docs"] } }] }
     },
     {
+      "id": "v1-production-shaped-workspace",
+      "description": "A production-shaped root migrates legacy Profiles and Target state while preserving current Profiles, Library metadata, settings, source records, and unrelated recovery data.",
+      "entries": [
+        { "path": "agentenv-data.json", "content": "{\"formatVersion\":1}\n" },
+        { "path": "settings.json", "content": "{\"locale\":\"zh_CN\",\"skillSyncMethod\":\"copy\",\"enabledTargetIds\":[\"codex\",\"opencode\"],\"telemetryEnabled\":false}\n" },
+        { "path": "skill-sources.json", "content": "{\"formatVersion\":2,\"sources\":[]}\n" },
+        { "path": "profiles/daily/profile.json", "content": "{\"id\":\"daily\",\"targetId\":\"codex\",\"name\":\"Daily Coding\",\"description\":\"Legacy working profile\",\"version\":1,\"managed\":{\"agents\":true,\"mcp\":true,\"skills\":true}}\n" },
+        { "path": "profiles/daily/AGENTS.md", "content": "# Daily instructions\n" },
+        { "path": "profiles/daily/assets.json", "content": "{\"ownedDirs\":[{\"kind\":\"skill\",\"source\":\"skills/reviewer\",\"targetName\":\"reviewer\"}],\"mcpSelections\":[{\"targetId\":\"codex\",\"name\":\"docs\",\"enabled\":true}]}\n" },
+        { "path": "profiles/daily/skills/reviewer/SKILL.md", "content": "---\nname: reviewer\ndescription: Review changes safely.\n---\n# Reviewer\n" },
+        { "path": "profiles/current/profile.json", "content": "{\"id\":\"current\",\"name\":\"Current Review\",\"description\":\"Already current\",\"version\":2}\n" },
+        { "path": "profiles/current/INSTRUCTIONS.md", "content": "# Current review\n" },
+        { "path": "profiles/current/resources.json", "content": "{\"skills\":[],\"managementByTarget\":{},\"mcpByTarget\":{}}\n" },
+        { "path": "skills-library/existing/SKILL.md", "content": "---\nname: existing\ndescription: Existing Library Skill.\n---\n# Existing\n" },
+        { "path": "skills-library/existing/.agentenv-skill.json", "content": "{\"sourceType\":\"local\",\"updatePolicy\":\"untracked\"}\n" },
+        { "path": "target-states/codex.json", "content": "{\"formatVersion\":1,\"managedMcpNames\":[\"docs\"],\"activeProfileId\":\"daily\",\"managedResources\":[{\"kind\":\"instructions\",\"id\":\"AGENTS.md\",\"path\":\"/tmp/home/.codex/AGENTS.md\",\"contentHash\":\"instructions-hash\"},{\"kind\":\"skill\",\"id\":\"reviewer\",\"path\":\"/tmp/home/.codex/skills/reviewer\",\"contentHash\":\"skill-hash\"}]}\n" },
+        { "path": "backups/user-note.txt", "content": "preserve unrelated recovery data\n" }
+      ],
+      "expected": {
+        "outcome": "success",
+        "migrated": true,
+        "profileCount": 1,
+        "retainedProfileCount": 0,
+        "manifestVersion": 2,
+        "preserved": [
+          { "path": "settings.json", "content": "{\"locale\":\"zh_CN\",\"skillSyncMethod\":\"copy\",\"enabledTargetIds\":[\"codex\",\"opencode\"],\"telemetryEnabled\":false}\n" },
+          { "path": "skill-sources.json", "content": "{\"formatVersion\":2,\"sources\":[]}\n" },
+          { "path": "profiles/current/INSTRUCTIONS.md", "content": "# Current review\n" },
+          { "path": "skills-library/existing/SKILL.md", "content": "---\nname: existing\ndescription: Existing Library Skill.\n---\n# Existing\n" },
+          { "path": "skills-library/reviewer/SKILL.md", "content": "---\nname: reviewer\ndescription: Review changes safely.\n---\n# Reviewer\n" },
+          { "path": "backups/user-note.txt", "content": "preserve unrelated recovery data\n" }
+        ],
+        "absent": ["profiles/daily/AGENTS.md", "profiles/daily/assets.json", "profiles/daily/skills"],
+        "jsonMatches": [
+          { "path": "profiles/daily/profile.json", "value": { "id": "daily", "preferredTargetId": "codex", "createdFromTargetId": "codex", "version": 2 } },
+          { "path": "target-states/codex.json", "value": { "formatVersion": 3, "activeProfileId": "daily", "managedMcpNames": ["docs"] } }
+        ]
+      }
+    },
+    {
       "id": "v1-unsafe-profile-rolls-back",
       "description": "An unsafe legacy asset path restores the complete original root.",
       "entries": [

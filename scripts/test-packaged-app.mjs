@@ -33,6 +33,8 @@ const repositoryWork = join(root, "repository-work");
 const projectRoot = join(root, "project-workspace");
 const legacyOwnerSidecar = join(homeDir, ".claude", "skills", "operations-helper.agentenv-owner.json");
 const legacyTargetState = join(appDataRoot, "target-states", "claude-code.json");
+const legacyProfileDir = join(appDataRoot, "profiles", "packaged-legacy");
+const legacyProfileSkillDir = join(legacyProfileDir, "skills", "packaged-legacy-skill");
 const unsafeCleanupBackupId = "cleanup-1784603431398-4571ea80";
 const unsafeCleanupBackupDir = join(
   appDataRoot,
@@ -275,6 +277,28 @@ try {
     }
   }
   reportPackagedStage("prepare migration fixtures");
+  await writeJson(join(appDataRoot, "agentenv-data.json"), { formatVersion: 1 });
+  await writeJson(join(legacyProfileDir, "profile.json"), {
+    id: "packaged-legacy",
+    targetId: "opencode",
+    name: "Packaged Legacy",
+    version: 1,
+    managed: { agents: true, mcp: true, skills: true }
+  });
+  await writeFile(join(legacyProfileDir, "AGENTS.md"), "# Migrated packaged instructions\n", "utf8");
+  await writeJson(join(legacyProfileDir, "assets.json"), {
+    ownedDirs: [{
+      kind: "skill",
+      source: "skills/packaged-legacy-skill",
+      targetName: "packaged-legacy-skill"
+    }]
+  });
+  await mkdir(legacyProfileSkillDir, { recursive: true });
+  await writeFile(
+    join(legacyProfileSkillDir, "SKILL.md"),
+    "---\nname: packaged-legacy-skill\ndescription: Packaged migration fixture.\n---\n# Legacy Skill\n",
+    "utf8"
+  );
   await writeFile(join(opencodeDir, "AGENTS.md"), "# Before packaged takeover\n", "utf8");
   await writeFile(join(opencodeDir, "opencode.jsonc"), "{}\n", "utf8");
   await mkdir(dirname(legacyOwnerSidecar), { recursive: true });
@@ -390,6 +414,31 @@ try {
       .waitFor({ state: "visible" });
   });
   assert.equal(await page.getByText("Action failed").count(), 0);
+  assert.deepEqual(
+    JSON.parse(await readFile(join(appDataRoot, "agentenv-data.json"), "utf8")),
+    { formatVersion: 2 }
+  );
+  assert.equal(
+    await readFile(join(legacyProfileDir, "INSTRUCTIONS.md"), "utf8"),
+    "# Migrated packaged instructions\n"
+  );
+  assert.match(
+    await readFile(join(legacyProfileDir, "resources.json"), "utf8"),
+    /packaged-legacy-skill/
+  );
+  assert.match(
+    await readFile(
+      join(appDataRoot, "skills-library", "packaged-legacy-skill", "SKILL.md"),
+      "utf8"
+    ),
+    /Packaged migration fixture/
+  );
+  await assert.rejects(readFile(join(legacyProfileDir, "AGENTS.md"), "utf8"), {
+    code: "ENOENT"
+  });
+  await assert.rejects(readFile(join(legacyProfileDir, "assets.json"), "utf8"), {
+    code: "ENOENT"
+  });
   assert.match(await readFile(unsafeCleanupBackupManifest, "utf8"), /outside-reviewer/);
   const migratedTargetState = JSON.parse(await readFile(legacyTargetState, "utf8"));
   assert.deepEqual(migratedTargetState.managedResources, []);
