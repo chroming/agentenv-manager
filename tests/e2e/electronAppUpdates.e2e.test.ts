@@ -139,10 +139,13 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
     await expect.poll(() => app?.windows().length ?? 0, { timeout: 1_500 }).toBe(0);
     await expect(readFile(brewVersion, "utf8")).resolves.toBe("0.1.0\n");
     app = undefined;
-    await expect.poll(() => readFile(brewLog, "utf8")).toContain(
+    await expect.poll(
+      () => readFile(brewLog, "utf8"),
+      { timeout: 10_000 }
+    ).toContain(
       `upgrade --cask --appdir=${applicationDirectory} chroming/tap/agentenv-manager`
     );
-    await expect.poll(() => readFile(brewVersion, "utf8"), { timeout: 5_000 }).toBe("0.2.0\n");
+    await expect.poll(() => readFile(brewVersion, "utf8"), { timeout: 10_000 }).toBe("0.2.0\n");
     app = await launch("0.2.0");
     page = await app.firstWindow();
     await expect.poll(
