@@ -494,6 +494,8 @@ Rules:
   Library maintenance.
 - [ ] External `discovery-only` plugin caches inform runtime inspection without becoming
   Library matches, cleanup conflicts, or mutation candidates.
+- [ ] Ordered Agent Skill roots keep lower-priority compatibility copies visible as
+  shadowed evidence without producing Profile pending or shared-migration actions.
 - [ ] Auto-manage distinguishes automatic, decision-required, ignored, managed,
   and externally retained outcomes.
 

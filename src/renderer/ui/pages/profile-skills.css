@@ -25,6 +25,8 @@
 }
 
 .profile-skill-list {
+  --resource-row-actions-standard: 72px;
+  --resource-row-state-track: 132px;
   display: grid;
   min-height: 0;
   min-width: 0;

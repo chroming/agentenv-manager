@@ -1,3 +1,14 @@
+.skill-update-dialog__body {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.skill-update-dialog__body > .update-change-list {
+  grid-row: 2;
+}
+
 .skill-update-copy-option {
   align-items: center;
   background: var(--surface-muted);

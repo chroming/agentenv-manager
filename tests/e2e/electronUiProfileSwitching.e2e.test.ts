@@ -6892,6 +6892,13 @@ describe("Electron UI profile switching e2e", () => {
     const state = collectionRow.getByText("Needs decision", { exact: true });
     const nextAction = collectionRow.getByRole("button", { name: "Add to Library" });
     await expectNoOverlap(state, nextAction);
+    const [stateBox, actionBox] = await Promise.all([
+      state.boundingBox(),
+      nextAction.boundingBox()
+    ]);
+    expect(stateBox).not.toBeNull();
+    expect(actionBox).not.toBeNull();
+    expect(actionBox!.x - (stateBox!.x + stateBox!.width)).toBeGreaterThanOrEqual(16);
     await expectTextFits(state);
     await expectTextFits(nextAction);
     await expectNoHorizontalOverflow(page, [".cleanup-collection-row"]);
@@ -7831,6 +7838,21 @@ describe("Electron UI profile switching e2e", () => {
     await brokenGroup.waitFor({ state: "visible" });
     await expect.poll(() => driftGroup.textContent()).toContain("Needs decision");
     await expect.poll(() => brokenGroup.textContent()).toContain("Unavailable");
+    const decisionState = driftGroup.getByText("Needs decision", { exact: true });
+    const chooseVersion = driftGroup.getByRole("button", {
+      name: `Choose version ${skillId}`
+    });
+    await expectNoOverlap(decisionState, chooseVersion);
+    const [decisionBox, chooseVersionBox] = await Promise.all([
+      decisionState.boundingBox(),
+      chooseVersion.boundingBox()
+    ]);
+    expect(decisionBox).not.toBeNull();
+    expect(chooseVersionBox).not.toBeNull();
+    expect(chooseVersionBox!.x - (decisionBox!.x + decisionBox!.width))
+      .toBeGreaterThanOrEqual(16);
+    await expectTextFits(decisionState);
+    await expectTextFits(chooseVersion);
     await brokenGroup
       .getByRole("button", { name: "More cleanup actions for cleanup-broken-link" })
       .click();
@@ -7843,9 +7865,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => brokenDetails.textContent()).not.toContain("External");
     await brokenDetails.getByRole("button", { name: "Close" }).click();
 
-    await driftGroup
-      .getByRole("button", { name: `Choose version ${skillId}` })
-      .click();
+    await chooseVersion.click();
     const driftDialog = page.getByRole("dialog", { name: "Review skill cleanup" });
     await driftDialog.waitFor({ state: "visible" });
     await expect.poll(() => driftDialog.textContent()).toContain("Keep Library version");
@@ -8457,6 +8477,30 @@ describe("Electron UI profile switching e2e", () => {
     const updateAgentCopies = updateDialog.getByRole("switch", {
       name: "Also update Agent copies"
     });
+    const updateDialogGeometry = await updateDialog.evaluate((dialog) => {
+      const header = dialog.querySelector<HTMLElement>(".ui-dialog-header")!;
+      const copyOption = dialog.querySelector<HTMLElement>(".skill-update-copy-option")!;
+      const changes = dialog.querySelector<HTMLElement>(".update-change-list")!;
+      const firstFile = changes.querySelector<HTMLElement>("details")!;
+      const headerBox = header.getBoundingClientRect();
+      const copyBox = copyOption.getBoundingClientRect();
+      const changesBox = changes.getBoundingClientRect();
+      const fileBox = firstFile.getBoundingClientRect();
+      return {
+        copyAfterHeader: copyBox.top >= headerBox.bottom - 1,
+        fileAfterCopyOption: fileBox.top >= copyBox.bottom - 1,
+        fileInsideBody: fileBox.top >= changesBox.top - 1,
+        changesOwnsRemainingHeight: changesBox.height > 80,
+        dialogOverflow: dialog.scrollHeight - dialog.clientHeight
+      };
+    });
+    expect(updateDialogGeometry).toMatchObject({
+      copyAfterHeader: true,
+      fileAfterCopyOption: true,
+      fileInsideBody: true,
+      changesOwnsRemainingHeight: true
+    });
+    expect(updateDialogGeometry.dialogOverflow).toBeLessThanOrEqual(1);
     await updateAgentCopies.click();
     await expect.poll(() => updateAgentCopies.getAttribute("aria-checked")).toBe("true");
     await updateDialog.getByRole("button", { name: "Apply update shared-reviewer" }).click();
@@ -10398,7 +10442,14 @@ describe("Electron UI profile switching e2e", () => {
     const row = manager.getByRole("listitem", { name: "Profile Skill shared-reviewer" });
     const status = row.getByRole("button", { name: "Review update shared-reviewer" });
     await status.waitFor({ state: "visible" });
-    await expectTextFits(status);
+    for (const viewport of [
+      { width: 1180, height: 728 },
+      { width: 920, height: 620 }
+    ]) {
+      await resizeAppWindow(page, viewport.width, viewport.height);
+      await expectTextFits(status);
+      await expectTextFits(status.locator(".ui-interactive-status__label"));
+    }
     expect(await status.getAttribute("data-status-kind")).toBe("update-available");
     await status.click();
     await page.getByRole("dialog", { name: "Update preview for shared-reviewer" })

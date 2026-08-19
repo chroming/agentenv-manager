@@ -240,39 +240,41 @@ export const SkillUpdateDialog = ({
             <Maximize2 size={16} strokeWidth={2.2} />
           </IconButton>
         </header>
-        {planImpact.copiedInstallCount > 0 && progress?.status !== "updated" ? (
-          <div className="skill-update-copy-option">
-            <span className="skill-update-copy-option__copy">
-              <strong>{t("Also update Agent copies")}</strong>
-              <small>
-                {syncCopiedInstalls
-                  ? t("{{count}} clean managed copies will update in the same backed-up operation.", {
-                      count: planImpact.copiedInstallCount
-                    })
-                  : t("Off: {{count}} Agent copies will show Apply pending.", {
-                      count: planImpact.copiedInstallCount
-                    })}
-              </small>
-            </span>
-            <Switch
-              checked={syncCopiedInstalls}
-              disabled={busy || running}
-              label={t("Also update Agent copies")}
-              onClick={() => setSyncCopiedInstalls((current) => !current)}
-            />
+        <div className="skill-update-dialog__body">
+          {planImpact.copiedInstallCount > 0 && progress?.status !== "updated" ? (
+            <div className="skill-update-copy-option">
+              <span className="skill-update-copy-option__copy">
+                <strong>{t("Also update Agent copies")}</strong>
+                <small>
+                  {syncCopiedInstalls
+                    ? t("{{count}} clean managed copies will update in the same backed-up operation.", {
+                        count: planImpact.copiedInstallCount
+                      })
+                    : t("Off: {{count}} Agent copies will show Apply pending.", {
+                        count: planImpact.copiedInstallCount
+                      })}
+                </small>
+              </span>
+              <Switch
+                checked={syncCopiedInstalls}
+                disabled={busy || running}
+                label={t("Also update Agent copies")}
+                onClick={() => setSyncCopiedInstalls((current) => !current)}
+              />
+            </div>
+          ) : null}
+          <div className="update-change-list ui-dialog-body">
+            {plan.changes.map((change, index) => (
+              <SkillUpdateChange
+                change={change}
+                initiallyOpen={index === 0}
+                key={change.path}
+                onReadChange={plan.previewId && onReadChange
+                  ? () => onReadChange(plan.previewId!, change.path)
+                  : undefined}
+              />
+            ))}
           </div>
-        ) : null}
-        <div className="update-change-list ui-dialog-body">
-          {plan.changes.map((change, index) => (
-            <SkillUpdateChange
-              change={change}
-              initiallyOpen={index === 0}
-              key={change.path}
-              onReadChange={plan.previewId && onReadChange
-                ? () => onReadChange(plan.previewId!, change.path)
-                : undefined}
-            />
-          ))}
         </div>
         <footer className="preview-actions ui-dialog-footer">
           <Button

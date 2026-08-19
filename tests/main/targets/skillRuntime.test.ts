@@ -77,6 +77,37 @@ describe("filesystem Skill runtime driver", () => {
     );
   });
 
+  it("marks lower-priority compatibility copies as shadowed", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-runtime-"));
+    const preferredDir = join(root, "preferred");
+    const compatibilityDir = join(root, "compatibility");
+    await writeSkill(join(preferredDir, "reviewer"), "reviewer");
+    await writeSkill(join(compatibilityDir, "reviewer"), "reviewer");
+    const targetPaths = pathsFor("opencode", preferredDir);
+    targetPaths.skillLocations!.push({
+      path: compatibilityDir,
+      role: "compatibility-runtime",
+      shared: true,
+      scope: "shared",
+      scanDepth: "direct",
+      management: "observed"
+    });
+
+    const snapshot = await createFilesystemSkillDriver({ targetId: "opencode" })
+      .inspectRuntime(targetPaths);
+    const preferred = snapshot.observations.find((item) => item.path.startsWith(preferredDir));
+    const compatibility = snapshot.observations.find(
+      (item) => item.path.startsWith(compatibilityDir)
+    );
+
+    expect(preferred?.availability).toBe("enabled");
+    expect(compatibility?.availability).toBe("shadowed");
+    expect(snapshot.observations.flatMap((item) => item.issues))
+      .not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "duplicate-runtime-name" })
+      ]));
+  });
+
   it("honors direct versus recursive discovery and safely stops symlink cycles", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-runtime-"));
     const skillsDir = join(root, "skills");

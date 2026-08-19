@@ -901,8 +901,9 @@
 .skill-library-panel .cleanup-group-row {
   align-items: start;
   cursor: pointer;
-  gap: 14px;
-  grid-template-columns: minmax(0, 1fr) 88px 176px;
+  column-gap: 16px;
+  row-gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(112px, max-content) 176px;
   padding-block: 10px;
 }
 
@@ -1630,8 +1631,9 @@
   border-bottom: 1px solid var(--border);
   border-radius: 0;
   box-shadow: none;
-  gap: 10px;
-  grid-template-columns: 32px minmax(0, 1fr) 88px 170px;
+  column-gap: 16px;
+  row-gap: 10px;
+  grid-template-columns: 32px minmax(0, 1fr) minmax(112px, max-content) 170px;
   min-height: 76px;
   padding: 8px 10px;
 }
@@ -1724,7 +1726,7 @@
 
 @container skill-library (max-width: 560px) {
   .skill-library-panel .cleanup-group-row {
-    grid-template-columns: 32px minmax(0, 1fr) 88px;
+    grid-template-columns: 32px minmax(0, 1fr) minmax(112px, max-content);
   }
 
   .skill-library-panel .cleanup-collection-row {

@@ -126,4 +126,30 @@ describe("profileSharedSkillBoundary", () => {
       retainedPaths: ["/home/test/.agents/skills/review"]
     });
   });
+
+  it("does not ask the Profile to migrate a compatibility copy shadowed by its Target", () => {
+    expect(profileSharedSkillBoundary({
+      profile: profile(false),
+      targetId: "opencode",
+      policy: "manage",
+      inventory: [sharedSkill({
+        path: "/home/test/.claude/skills/review",
+        status: "left-unmanaged",
+        managedAsShared: false,
+        runtimeStates: [{
+          targetId: "opencode",
+          availability: "shadowed",
+          confidence: "verified",
+          issues: []
+        }]
+      })],
+      librarySkills: [librarySkill]
+    })).toEqual({
+      activeLibraryIds: [],
+      activePaths: [],
+      allActiveManaged: false,
+      migrationPaths: [],
+      retainedPaths: []
+    });
+  });
 });

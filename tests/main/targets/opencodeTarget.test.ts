@@ -37,6 +37,33 @@ describe("OpenCode Profile v2 adapter", () => {
     expect(profile.resources).toEqual({ skills: [], mcpByTarget: {} });
   });
 
+  it("treats lower-priority Claude compatibility Skills as shadowed", async () => {
+    const { adapter, paths } = await setup();
+    expect(paths.skillsDir).toBeTruthy();
+    const privateSkill = join(paths.skillsDir!, "reviewer");
+    const compatibilitySkill = join(root, ".claude", "skills", "reviewer");
+    await mkdir(privateSkill, { recursive: true });
+    await mkdir(compatibilitySkill, { recursive: true });
+    await writeFile(
+      join(privateSkill, "SKILL.md"),
+      "---\nname: reviewer\ndescription: OpenCode private copy.\n---\n"
+    );
+    await writeFile(
+      join(compatibilitySkill, "SKILL.md"),
+      "---\nname: reviewer\ndescription: Claude compatibility copy.\n---\n"
+    );
+
+    const runtime = await adapter.skills.inspectRuntime(paths);
+    expect(runtime.observations.find(({ path }) => path === privateSkill)?.availability)
+      .toBe("enabled");
+    expect(runtime.observations.find(({ path }) => path === compatibilitySkill)?.availability)
+      .toBe("shadowed");
+    expect(runtime.observations.flatMap(({ issues }) => issues))
+      .not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "duplicate-runtime-name" })
+      ]));
+  });
+
   it("ignores MCP configuration without parsing or fingerprinting it", async () => {
     const { adapter, paths, profile } = await setup();
     await writeFile(paths.configPath, "{ broken jsonc");

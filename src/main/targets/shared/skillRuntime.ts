@@ -17,6 +17,7 @@ import {
 import { pathExists } from "../../fileUtils";
 import { isAgentEnvOwnedDir } from "../../ownershipMarkers";
 import { parseSkillFrontmatter } from "../../skillFrontmatter";
+import { sharedSkillLocationAuthority } from "../sharedSkillLocations";
 import type { TargetSkillDriver } from "../contract";
 
 export interface DiscoveredSkillDirectory {
@@ -383,9 +384,25 @@ export const createFilesystemSkillDriver = (
       byRuntimeName.set(key, [...(byRuntimeName.get(key) ?? []), observation]);
     }
     for (const duplicates of byRuntimeName.values()) {
-      if (duplicates.length < 2) continue;
-      const paths = duplicates.map((item) => item.path).join(", ");
-      for (const observation of duplicates) {
+      const enabled = duplicates.filter((item) => item.availability === "enabled");
+      if (enabled.length < 2) continue;
+      const authorityFor = (observation: SkillRuntimeObservation) =>
+        sharedSkillLocationAuthority({
+          role: observation.locationRole,
+          shared: observation.shared,
+          sharedLocationId: observation.sharedLocationId,
+          management: observation.locationManagement
+        });
+      const highestAuthority = Math.max(...enabled.map(authorityFor));
+      const effective = enabled.filter((item) => authorityFor(item) === highestAuthority);
+      for (const observation of enabled) {
+        if (authorityFor(observation) < highestAuthority) {
+          observation.availability = "shadowed";
+        }
+      }
+      if (effective.length < 2) continue;
+      const paths = effective.map((item) => item.path).join(", ");
+      for (const observation of effective) {
         observation.issues.push({
           code: "duplicate-runtime-name",
           severity: "warning",
