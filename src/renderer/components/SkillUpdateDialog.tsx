@@ -240,7 +240,7 @@ export const SkillUpdateDialog = ({
             <Maximize2 size={16} strokeWidth={2.2} />
           </IconButton>
         </header>
-        <div className="skill-update-dialog__body">
+        <div className="skill-update-dialog__body ui-dialog-body">
           {planImpact.copiedInstallCount > 0 && progress?.status !== "updated" ? (
             <div className="skill-update-copy-option">
               <span className="skill-update-copy-option__copy">
@@ -263,7 +263,7 @@ export const SkillUpdateDialog = ({
               />
             </div>
           ) : null}
-          <div className="update-change-list ui-dialog-body">
+          <div className="update-change-list">
             {plan.changes.map((change, index) => (
               <SkillUpdateChange
                 change={change}

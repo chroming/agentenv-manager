@@ -41,7 +41,7 @@ const ExpectedObservationSchema = z.object({
     "compatibility-runtime",
     "discovery-only"
   ]),
-  availability: z.enum(["enabled", "disabled", "unknown"]).optional(),
+  availability: z.enum(["enabled", "disabled", "shadowed", "unknown"]).optional(),
   owner: z.enum(["agentenv", "agent", "external", "user"]).optional(),
   issueCodes: z.array(z.string().min(1)).default([])
 });

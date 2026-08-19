@@ -113,8 +113,8 @@
         { "type": "file", "path": ".agents/skills/shared-copy/SKILL.md", "content": "---\nname: duplicate-codex\n---\n# Shared\n" }
       ],
       "expected": { "configPath": ".codex/config.toml", "observations": [
-        { "runtimeName": "duplicate-codex", "deploymentName": "private-copy", "locationRole": "preferred-runtime", "issueCodes": ["duplicate-runtime-name"] },
-        { "runtimeName": "duplicate-codex", "deploymentName": "shared-copy", "locationRole": "compatibility-runtime", "issueCodes": ["duplicate-runtime-name"] }
+        { "runtimeName": "duplicate-codex", "deploymentName": "private-copy", "locationRole": "preferred-runtime", "availability": "enabled" },
+        { "runtimeName": "duplicate-codex", "deploymentName": "shared-copy", "locationRole": "compatibility-runtime", "availability": "shadowed" }
       ] }
     },
     {
@@ -150,8 +150,8 @@
         { "type": "file", "path": ".gemini/skills/shared-agy/SKILL.md", "content": "---\nname: duplicate-agy\n---\n# Shared\n" }
       ],
       "expected": { "configPath": ".gemini/config/mcp_config.json", "observations": [
-        { "runtimeName": "duplicate-agy", "deploymentName": "private-agy", "locationRole": "preferred-runtime", "issueCodes": ["duplicate-runtime-name"] },
-        { "runtimeName": "duplicate-agy", "deploymentName": "shared-agy", "locationRole": "compatibility-runtime", "issueCodes": ["duplicate-runtime-name"] }
+        { "runtimeName": "duplicate-agy", "deploymentName": "private-agy", "locationRole": "preferred-runtime", "availability": "enabled" },
+        { "runtimeName": "duplicate-agy", "deploymentName": "shared-agy", "locationRole": "compatibility-runtime", "availability": "shadowed" }
       ] }
     },
     {
