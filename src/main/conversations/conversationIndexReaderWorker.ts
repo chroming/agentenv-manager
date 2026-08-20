@@ -220,11 +220,13 @@ const selectRows = (input, maximumLimit) => {
 
 const list = (input) => {
   const { context, rows } = selectRows(input, 500);
-  const total = Number(
-    database.prepare(
-      "SELECT count(*) AS count " + context.from + " " + context.where
-    ).get(...context.parameters).count
-  );
+  const aggregate = database.prepare(
+    "SELECT count(*) AS count, " +
+    "COALESCE(sum(c.size_bytes), 0) AS total_size_bytes " +
+    context.from + " " + context.where
+  ).get(...context.parameters);
+  const total = Number(aggregate.count);
+  const totalSizeBytes = Number(aggregate.total_size_bytes);
 
   const workspaceConditions = ["workspace_path IS NOT NULL", "workspace_path <> ''"];
   const workspaceParameters = [];
@@ -252,6 +254,7 @@ const list = (input) => {
   return {
     items: rows.map(summaryFromRow),
     total,
+    totalSizeBytes,
     workspacePaths: availableWorkspacePaths,
     agentCounts
   };

@@ -468,6 +468,7 @@ export interface ConversationSearchInput {
 export interface ConversationListResult {
   items: ConversationSummary[];
   total: number;
+  totalSizeBytes?: number;
   workspacePaths?: string[];
   agentCounts?: Record<string, number>;
   refreshRequired?: boolean;

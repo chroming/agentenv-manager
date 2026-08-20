@@ -171,7 +171,12 @@ describe("conversation index store", () => {
       }
     });
 
-    expect((await index.list()).items[0]).toMatchObject({ sizeBytes: 24_576 });
+    expect(await index.list()).toMatchObject({
+      items: [expect.objectContaining({ sizeBytes: 24_576 })],
+      totalSizeBytes: 24_576
+    });
+    expect((await index.list({ query: "release" })).totalSizeBytes).toBe(24_576);
+    expect((await index.list({ query: "missing conversation" })).totalSizeBytes).toBe(0);
     expect(await index.read(detail.id)).toMatchObject({ sizeBytes: 24_576 });
 
     index.upsert({ ...detail, id: "opencode:database" }, {
@@ -186,6 +191,7 @@ describe("conversation index store", () => {
       (await index.list()).items.find((item) => item.id === "opencode:database")
         ?.sizeBytes
     ).toBeUndefined();
+    expect((await index.list()).totalSizeBytes).toBe(24_576);
   });
 
   it("sorts the complete filtered index by size or message count before pagination", async () => {
@@ -352,6 +358,7 @@ describe("conversation index store", () => {
     expect(await store.list()).toEqual({
       items: [],
       total: 0,
+      totalSizeBytes: 0,
       workspacePaths: [],
       agentCounts: {}
     });

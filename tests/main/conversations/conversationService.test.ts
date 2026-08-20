@@ -201,6 +201,7 @@ describe("conversation service", () => {
     expect(await service.list({ agentIds: ["disabled-agent"] })).toEqual({
       items: [],
       total: 0,
+      totalSizeBytes: 0,
       workspacePaths: [],
       agentCounts: { codex: 1 },
       refreshRequired: false,

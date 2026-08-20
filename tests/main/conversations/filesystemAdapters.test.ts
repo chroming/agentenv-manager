@@ -247,4 +247,88 @@ describe("filesystem conversation adapters", () => {
       replacementText.trim()
     ]);
   });
+
+  it("uses the latest Codex native title and refreshes only the renamed session", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-codex-native-titles-"));
+    const configDir = join(root, ".codex");
+    const sessionsDir = join(configDir, "sessions");
+    const sessionId = "019f0000-0000-7000-8000-000000000001";
+    const historyPath = join(
+      sessionsDir,
+      `rollout-2026-07-24T05-00-00-${sessionId}.jsonl`
+    );
+    const titleIndexPath = join(configDir, "session_index.jsonl");
+    await mkdir(sessionsDir, { recursive: true });
+    await writeFile(historyPath, [
+      JSON.stringify({
+        type: "session_meta",
+        payload: {
+          id: sessionId,
+          cwd: "/work/project",
+          timestamp: "2026-07-24T05:00:00.000Z"
+        }
+      }),
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          id: "user-1",
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: "A much longer first user message" }]
+        }
+      })
+    ].join("\n") + "\n", "utf8");
+    await writeFile(titleIndexPath, [
+      "{malformed-json",
+      JSON.stringify({
+        id: sessionId,
+        thread_name: "Initial native title"
+      }),
+      JSON.stringify({
+        id: sessionId,
+        thread_name: "Latest native title"
+      })
+    ].join("\n") + "\n", "utf8");
+
+    const context: AgentConversationContext = {
+      homeDir: root,
+      targetPaths: {
+        targetId: "codex",
+        configDir,
+        instructionsPath: join(configDir, "AGENTS.md"),
+        configPath: join(configDir, "config.toml"),
+        skillsDir: join(configDir, "skills")
+      }
+    };
+    const capability = createCodexConversationCapability();
+    const initialCandidate = (await capability.discover(context)).candidates[0];
+    const initial = await capability.read(context, initialCandidate);
+
+    expect(initialCandidate.title).toBe("Latest native title");
+    expect(initial.title).toBe("Latest native title");
+
+    await appendFile(titleIndexPath, `${JSON.stringify({
+      id: "019f0000-0000-7000-8000-000000000002",
+      thread_name: "Another conversation"
+    })}\n`, "utf8");
+    const unrelatedCandidate = (await capability.discover(context)).candidates[0];
+    expect(unrelatedCandidate.source.version).toBe(initialCandidate.source.version);
+
+    await appendFile(titleIndexPath, `${JSON.stringify({
+      id: sessionId,
+      thread_name: "Renamed in Codex"
+    })}\n`, "utf8");
+    const renamedCandidate = (await capability.discover(context)).candidates[0];
+    const renamed = await capability.read(context, renamedCandidate, {
+      detail: initial,
+      sourceVersion: initialCandidate.source.version
+    });
+
+    expect(renamedCandidate.title).toBe("Renamed in Codex");
+    expect(renamedCandidate.source.version).not.toBe(initialCandidate.source.version);
+    expect(renamed.title).toBe("Renamed in Codex");
+    expect(renamed.messages.map((message) => message.text)).toEqual([
+      "A much longer first user message"
+    ]);
+  });
 });

@@ -594,6 +594,7 @@ const ConversationActionsMenu = ({
 export interface ConversationWorkspaceViewState {
   items: ConversationSummary[];
   total: number;
+  totalSizeBytes?: number;
   query: string;
   agentFilter: string;
   workspaceFilter: string;
@@ -632,6 +633,9 @@ export const ConversationWorkspace = ({
     () => initialViewState?.items ?? []
   );
   const [total, setTotal] = useState(() => initialViewState?.total ?? 0);
+  const [totalSizeBytes, setTotalSizeBytes] = useState(
+    () => initialViewState?.totalSizeBytes ?? 0
+  );
   const [query, setQuery] = useState(() => initialViewState?.query ?? "");
   const [agentFilter, setAgentFilter] = useState(
     () => initialViewState?.agentFilter ?? ""
@@ -707,6 +711,7 @@ export const ConversationWorkspace = ({
   const viewStateRef = useRef<ConversationWorkspaceViewState>({
     items,
     total,
+    totalSizeBytes,
     query,
     agentFilter,
     workspaceFilter,
@@ -726,6 +731,7 @@ export const ConversationWorkspace = ({
   viewStateRef.current = {
     items,
     total,
+    totalSizeBytes,
     query,
     agentFilter,
     workspaceFilter,
@@ -887,6 +893,10 @@ export const ConversationWorkspace = ({
         : result.items;
       setItems(nextItems);
       setTotal(Math.max(result.total, nextItems.length));
+      setTotalSizeBytes(
+        result.totalSizeBytes ??
+        nextItems.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0)
+      );
       if (result.workspacePaths) setWorkspacePaths(result.workspacePaths);
       if (result.agentCounts) setAgentCounts(result.agentCounts);
       if (result.lastRefreshedAt) {
@@ -931,6 +941,9 @@ export const ConversationWorkspace = ({
         return [...current, ...result.items.filter((item) => !seen.has(item.id))];
       });
       setTotal(result.total);
+      if (result.totalSizeBytes !== undefined) {
+        setTotalSizeBytes(result.totalSizeBytes);
+      }
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -1066,6 +1079,7 @@ export const ConversationWorkspace = ({
     setSelectedId(openRequest.summary.id);
     setItems([openRequest.summary]);
     setTotal(1);
+    setTotalSizeBytes(openRequest.summary.sizeBytes ?? 0);
     scrollTopRef.current = 0;
     if (conversationListRef.current) conversationListRef.current.scrollTop = 0;
     setSearching(true);
@@ -1523,6 +1537,7 @@ export const ConversationWorkspace = ({
                     })
                   : t("{{count}} conversations", { count: total })}
               </span>
+              <span>{t("Total")} {formatConversationSize(totalSizeBytes)}</span>
             </div>
             <div
               className="conversation-list"

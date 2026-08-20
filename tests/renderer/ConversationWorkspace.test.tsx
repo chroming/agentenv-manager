@@ -103,6 +103,7 @@ const installApi = (
     listConversations: vi.fn().mockResolvedValue({
       items: [{ ...detail, messages: undefined }],
       total: 1,
+      totalSizeBytes: 24_576,
       workspacePaths: ["/work/project"],
       agentCounts: { codex: 1, opencode: 2 },
       lastRefreshedAt: new Date().toISOString()
@@ -327,6 +328,8 @@ describe("ConversationWorkspace", () => {
     expect(option).toHaveTextContent("24 KB");
     expect(within(option).getByText("Repair release workflow"))
       .toHaveClass("conversation-list-item__title");
+    expect(document.querySelector(".conversation-list-meta"))
+      .toHaveTextContent("Total 24 KB");
   });
 
   it("restores its local view context after the workspace is remounted", async () => {
