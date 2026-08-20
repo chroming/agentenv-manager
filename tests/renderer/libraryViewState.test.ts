@@ -13,6 +13,7 @@ describe("library view state", () => {
       search: "",
       sourceFilter: "all",
       statusFilter: "enabled",
+      tagFilter: "all",
       targetFilter: "all",
       usageFilter: "all",
       scrollTop: 0

@@ -114,7 +114,7 @@ export const buildQuickOpenItems = ({
     group: t("Skills"),
     label: skill.name,
     description: skill.description || skill.id,
-    keywords: [skill.id, skill.source ?? ""],
+    keywords: [skill.id, skill.source ?? "", ...(skill.tags ?? [])],
     icon: <ProductIcon name="skills" />,
     onSelect: () => onOpenSkill(skill)
   })),

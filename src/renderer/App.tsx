@@ -51,6 +51,7 @@ import type {
   SkillImportPreviewInput,
   SkillAvailabilityInput,
   SkillIconInput,
+  SkillTagsInput,
   SkillCleanupRequest,
   SkillCleanupBackupSummary,
   SkillCleanupResult,
@@ -3169,6 +3170,22 @@ const AppContent = ({
     }
   };
 
+  const setSkillTags = async (input: SkillTagsInput) => {
+    setError(undefined);
+    try {
+      const updated = await window.agentEnv.setSkillTags(input);
+      replaceLibrarySkillLocally(updated);
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: t("Tags saved for {{name}}", { name: updated.name })
+      });
+      return true;
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      return false;
+    }
+  };
+
   const previewLibrarySkillUpdate = async (id: string) => {
     const activity: SkillUpdateActivity = { kind: "preview-skill", skillId: id };
     if (!beginSkillUpdateActivity(activity)) return;
@@ -3858,6 +3875,7 @@ const AppContent = ({
                   onSaveUpdateSettings: saveSkillUpdateSettings,
                   onSetAvailability: setSkillAvailability,
                   onSetIcon: (input) => void setSkillIcon(input),
+                  onSetTags: setSkillTags,
                   onRemoveLibrarySkill: removeLibrarySkill,
                   onPreviewSkillMerge: previewSkillMerge,
                   onMergeLibrarySkills: mergeLibrarySkills,

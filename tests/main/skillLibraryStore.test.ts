@@ -58,6 +58,7 @@ describe("skill library store", () => {
     await writeFile(join(incomingDir, "SKILL.md"), incomingContent);
     const store = createSkillLibraryStore(paths);
     await store.importSkill({ sourcePath: existingDir, id: "reviewer" });
+    await store.setTags({ id: "reviewer", tags: ["Code Review"] });
 
     const preview = await store.previewImport({
       kind: "local",
@@ -142,7 +143,11 @@ describe("skill library store", () => {
       expectedContentHash: duplicatePreview.incoming.contentHash,
       conflictResolution: { action: "replace", existingId: "reviewer" }
     });
-    expect(replaced).toMatchObject({ id: "reviewer", version: "2.0.0" });
+    expect(replaced).toMatchObject({
+      id: "reviewer",
+      version: "2.0.0",
+      tags: ["Code Review"]
+    });
     await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8"))
       .resolves.toContain("# Incoming");
     expect((await store.listCleanupBackups()).some((backup) => backup.libraryId === "reviewer"))
@@ -1294,18 +1299,32 @@ description: >
     await store.importSkill({ sourcePath: sourceDir, id: "reviewer", sourceType: "local" });
 
     await store.setIcon({ id: "reviewer", iconKey: "shield" });
+    await store.setTags({ id: "reviewer", tags: ["Code Review", "quality"] });
     await store.setUpdateSource({ id: "reviewer", sourceType: "local", source: sourceDir });
     await writeFile(join(sourceDir, "SKILL.md"), "---\nname: Reviewer\n---\n\n# v2\n", "utf8");
     const updatePlan = await store.previewUpdate("reviewer");
     const updated = await store.updateSkill({ id: "reviewer", previewId: updatePlan.previewId! });
 
     expect(updated.iconKey).toBe("shield");
+    expect(updated.tags).toEqual(["Code Review", "quality"]);
     await expect(store.listSkills()).resolves.toEqual([
-      expect.objectContaining({ id: "reviewer", iconKey: "shield" })
+      expect.objectContaining({
+        id: "reviewer",
+        iconKey: "shield",
+        tags: ["Code Review", "quality"]
+      })
     ]);
     await expect(
       readFile(join(paths.skillsLibraryDir, "reviewer", ".agentenv-skill.json"), "utf8")
     ).resolves.toContain('"iconKey": "shield"');
+
+    const metadataPath = join(paths.skillsLibraryDir, "reviewer", ".agentenv-skill.json");
+    const beforeNoOp = await stat(metadataPath);
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 20));
+    const sameTags = await store.setTags({ id: "reviewer", tags: ["code review", "QUALITY"] });
+    const afterNoOp = await stat(metadataPath);
+    expect(sameTags.tags).toEqual(["Code Review", "quality"]);
+    expect(afterNoOp.mtimeMs).toBe(beforeNoOp.mtimeMs);
 
     const automatic = await store.setIcon({ id: "reviewer", iconKey: undefined });
     expect(automatic.iconKey).toBeUndefined();
@@ -3804,7 +3823,12 @@ description: >
     );
     await writeFile(
       join(alphaDir, ".agentenv-skill.json"),
-      JSON.stringify({ sourceType: "local", source: "/original/alpha", updatePolicy: "untracked" }),
+      JSON.stringify({
+        sourceType: "local",
+        source: "/original/alpha",
+        updatePolicy: "untracked",
+        tags: ["Review"]
+      }),
       "utf8"
     );
     await writeFile(
@@ -3821,6 +3845,7 @@ description: >
         remotePath: "skill",
         remoteRevision: "abcdef123456",
         updatePolicy: "tracked",
+        tags: ["Quality", "review"],
         upstream: {
           kind: "github",
           locator: "https://github.com/acme/reviewer/tree/main/skill",
@@ -3919,7 +3944,8 @@ description: >
         id: "reviewer-alpha",
         sourceType: "github",
         source: "https://github.com/acme/reviewer/tree/main/skill",
-        updatePolicy: "tracked"
+        updatePolicy: "tracked",
+        tags: ["Review", "Quality"]
       })
     ]);
     await expect(readFile(join(alphaDir, "SKILL.md"), "utf8")).resolves.toContain(

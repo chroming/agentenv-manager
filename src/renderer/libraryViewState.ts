@@ -12,6 +12,7 @@ export interface SkillLibraryViewState {
   search: string;
   sourceFilter: SkillSourceKindFilter;
   statusFilter: "enabled" | "updates" | "disabled";
+  tagFilter: "all" | string;
   targetFilter: "all" | SkillInventoryEntry["status"] | "not-installed";
   usageFilter: "all" | "referenced" | "unreferenced";
   scrollTop: number;
@@ -21,10 +22,18 @@ export const defaultSkillLibraryViewState: SkillLibraryViewState = {
   search: "",
   sourceFilter: "all",
   statusFilter: "enabled",
+  tagFilter: "all",
   targetFilter: "all",
   usageFilter: "all",
   scrollTop: 0
 };
+
+export const resetSkillLibraryFilterPatch = {
+  sourceFilter: "all",
+  tagFilter: "all",
+  targetFilter: "all",
+  usageFilter: "all"
+} as const satisfies Partial<Omit<SkillLibraryViewState, "scrollTop">>;
 
 export const updateSkillLibraryControls = (
   current: SkillLibraryViewState,

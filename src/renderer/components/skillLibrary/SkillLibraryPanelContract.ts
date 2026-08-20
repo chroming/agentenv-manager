@@ -33,6 +33,7 @@ import type {
   SkillSourceMergePreviewInput,
   SkillSourceMergeResult,
   SkillSourceNameInput,
+  SkillTagsInput,
   SkillUpdateInfo,
   SkillUpdatePlan,
   SkillUpdatePreviewBatchResult,
@@ -205,6 +206,7 @@ export interface SkillLibraryPanelActions {
     onSaveUpdateSettings(change: SkillUpdateSettingsInput): Promise<boolean>;
     onSetAvailability(input: SkillAvailabilityInput): Promise<boolean>;
     onSetIcon(input: SkillIconInput): void;
+    onSetTags(input: SkillTagsInput): Promise<boolean>;
     onRemoveLibrarySkill(id: string): void;
     onPreviewSkillMerge(id: string): Promise<SkillMergePreview>;
     onMergeLibrarySkills(input: SkillMergeInput): Promise<boolean>;

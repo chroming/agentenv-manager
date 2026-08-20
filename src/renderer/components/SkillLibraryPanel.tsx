@@ -30,6 +30,7 @@ import {
   Settings2,
   SlidersHorizontal,
   Sparkles,
+  Tags,
   Trash2,
   TriangleAlert
 } from "lucide-react";
@@ -65,6 +66,7 @@ import type {
   SkillSourceGroupView,
   SkillSourceCollectionRef,
   SkillSourceNameInput,
+  SkillTagsInput,
   SkillSourceMergePreview,
   SkillSourceMergePreviewInput,
   SkillSourceMergeResult,
@@ -77,6 +79,7 @@ import type {
   SkillUpdatePreviewBatchResult,
   SkillUpdateSettingsInput
 } from "../../shared/types";
+import { collectSkillTags, skillTagKey } from "../../shared/skillTags";
 import { InfoTip } from "./InfoTip";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
 import { ResourceIconPicker } from "./ResourceIconPicker";
@@ -85,6 +88,7 @@ import { SkillMergeDiffSection } from "./SkillMergeDiffSection";
 import {
   matchesSkillStatusFilter,
   matchesSkillUsageFilter,
+  resetSkillLibraryFilterPatch,
   type SkillLibraryViewState,
   type SkillSourceResultFilter,
   type SkillSourceScopeFilter,
@@ -102,7 +106,7 @@ import {
   type SkillManagementScope
 } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
-import { ActionMenu, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, SelectControl, Switch } from "./ui";
+import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, Switch } from "./ui";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { isExternalSkillImportable } from "../../shared/skillIdentity";
 import { sourceSubpathFor } from "../../shared/skillSourceGrouping";
@@ -112,6 +116,8 @@ import type { SkillUpdateRun } from "../skillUpdateQueue";
 import { SkillFileBrowserDialog } from "./SkillFileBrowserDialog";
 import { SkillCleanupDetailsFooter } from "./SkillCleanupDetailsFooter";
 import { SkillUpdateSettingsDialog } from "./SkillUpdateSettingsDialog";
+import { SkillTagEditorDialog, SkillTagList } from "./SkillTags";
+import { SkillLibraryFilters } from "./skillLibrary/SkillLibraryFilters";
 import { CleanupBucketHeader } from "./CleanupBucketHeader";
 import { BulkSkillUpdateDialog } from "./BulkSkillUpdateDialog";
 import { SkillImportDialog } from "./SkillImportDialog";
@@ -174,7 +180,7 @@ import {
   buildSkillLibraryLookups
 } from "./skillLibrary/SkillLibraryPanelDerived";
 
-type SkillMenuAction = "update" | "review" | "availability" | "settings" | "merge" | "remove";
+type SkillMenuAction = "update" | "review" | "availability" | "tags" | "settings" | "merge" | "remove";
 
 interface SkillLibraryPanelProps {
   model: SkillLibraryPanelModel;
@@ -293,6 +299,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     onSaveUpdateSettings,
     onSetAvailability,
     onSetIcon,
+    onSetTags,
     onRemoveLibrarySkill,
     onPreviewSkillMerge,
     onMergeLibrarySkills,
@@ -366,7 +373,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     Record<string, RepositorySkillImportInput>
   >({});
   const [githubApiRetryAvailable, setGithubApiRetryAvailable] = useState(false);
-  const { search, sourceFilter, statusFilter, targetFilter, usageFilter } = viewState;
+  const { search, sourceFilter, statusFilter, tagFilter, targetFilter, usageFilter } = viewState;
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sourceScopeFilter, setSourceScopeFilter] =
     useState<SkillSourceScopeFilter>("monitored");
@@ -380,6 +387,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   const [deleteCandidate, setDeleteCandidate] = useState<SkillLibraryEntry>();
   const [disableCandidate, setDisableCandidate] = useState<SkillLibraryEntry>();
   const [sourceCandidate, setSourceCandidate] = useState<SkillLibraryEntry>();
+  const [tagCandidate, setTagCandidate] = useState<SkillLibraryEntry>();
   const [mergePreview, setMergePreview] = useState<SkillMergePreview>();
   const [mergeKeepId, setMergeKeepId] = useState("");
   const [mergeSourceId, setMergeSourceId] = useState("");
@@ -468,7 +476,16 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
   const { updatesById, skillsById, skillNameCounts, updateableSkillIds } =
     buildSkillLibraryLookups(librarySkills, skillUpdates);
+  const availableTags = useMemo(() => collectSkillTags(librarySkills), [librarySkills]);
   const availableUpdateCount = updateableSkillIds.length;
+  useEffect(() => {
+    if (
+      tagFilter !== "all" &&
+      !availableTags.some((tag) => skillTagKey(tag) === skillTagKey(tagFilter))
+    ) {
+      updateControls({ tagFilter: "all" });
+    }
+  }, [availableTags, tagFilter]);
   const dismissModal = () => {
     if (browsingSkill) {
       setBrowsingSkill(undefined);
@@ -480,6 +497,8 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
       setDisableCandidate(undefined);
     } else if (sourceCandidate) {
       setSourceCandidate(undefined);
+    } else if (tagCandidate) {
+      setTagCandidate(undefined);
     } else if (mergePreview) {
       setMergePreview(undefined);
     } else if (cleanupDetailsKey) {
@@ -501,6 +520,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
       deleteCandidate ||
       disableCandidate ||
       sourceCandidate ||
+      tagCandidate ||
       mergePreview ||
       browsingSkill ||
       externalImport ||
@@ -714,6 +734,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     const matchesSearch =
       query.length === 0 ||
       [skill.id, skill.name, skill.description, skillSourceLabel(skill)]
+        .concat(skill.tags ?? [])
         .filter(Boolean)
         .some((value) => value?.toLowerCase().includes(query));
     const matchesSource =
@@ -721,6 +742,9 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
       (sourceFilter === "local"
         ? skill.sourceType === "local"
         : skill.sourceType === "github" || skill.sourceType === "git");
+    const matchesTag =
+      tagFilter === "all" ||
+      (skill.tags ?? []).some((tag) => skillTagKey(tag) === skillTagKey(tagFilter));
     const matchesTarget =
       targetFilter === "all" ||
       (targetFilter === "not-installed"
@@ -729,6 +753,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     return (
       matchesSearch &&
       matchesSource &&
+      matchesTag &&
       matchesSkillStatusFilter(
         statusFilter,
         skill,
@@ -742,14 +767,6 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
       matchesTarget
     );
   });
-  const resetAdvancedFilters = () => {
-    updateControls({
-      sourceFilter: "all",
-      targetFilter: "all",
-      usageFilter: "all"
-    });
-  };
-
   const toggleActionMenu = (skillId: string, button: HTMLButtonElement) => {
     if (openActionId === skillId) {
       setOpenAction(undefined);
@@ -759,7 +776,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     actionReturnFocusRef.current = button;
     const rect = button.getBoundingClientRect();
     const popoverWidth = Math.min(220, window.innerWidth - 32);
-    const estimatedHeight = 190;
+    const estimatedHeight = 226;
     const left = Math.min(window.innerWidth - popoverWidth - 16, Math.max(16, rect.right - popoverWidth));
     const belowTop = rect.bottom + 8;
     const top =
@@ -777,7 +794,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     actionReturnFocusRef.current = returnFocus;
     setOpenAction({ id: skillId, left, top });
   };
-  const advancedFilterCount = [sourceFilter, targetFilter, usageFilter].filter(
+  const advancedFilterCount = [sourceFilter, tagFilter, targetFilter, usageFilter].filter(
     (value) => value !== "all"
   ).length;
   const disabledSkillCount = librarySkills.filter(
@@ -832,6 +849,8 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
       }
     } else if (action === "settings") {
       setSourceCandidate(skill);
+    } else if (action === "tags") {
+      setTagCandidate(skill);
     } else if (action === "merge") {
       void openMergePreview(skill);
     } else {
@@ -1854,61 +1873,16 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
             </Button>
           ) : null}
           {filtersOpen ? (
-            <div className="library-filter-panel" role="group" aria-label={t("Skill filters")}>
-              <label>
-                <span>{t("Source")}</span>
-                <SelectControl controlWidth="compact"
-                  aria-label={t("Skill source filter")}
-                  value={sourceFilter}
-                  onChange={(event) =>
-                    updateControls({ sourceFilter: event.currentTarget.value as typeof sourceFilter })
-                  }
-                >
-                  <option value="all">{t("All sources")}</option>
-                  <option value="online">{t("Online")}</option>
-                  <option value="local">{t("Local")}</option>
-                </SelectControl>
-              </label>
-              <label>
-                <span>{t("Usage")}</span>
-                <SelectControl controlWidth="compact"
-                  aria-label={t("Skill usage filter")}
-                  value={usageFilter}
-                  onChange={(event) =>
-                    updateControls({ usageFilter: event.currentTarget.value as typeof usageFilter })
-                  }
-                >
-                  <option value="all">{t("All usage")}</option>
-                  <option value="referenced">{t("Referenced")}</option>
-                  <option value="unreferenced">{t("Unreferenced")}</option>
-                </SelectControl>
-              </label>
-              <label>
-                <span>{t("Agents")}</span>
-                <SelectControl controlWidth="compact"
-                  aria-label={t("Skill Agent filter")}
-                  value={targetFilter}
-                  onChange={(event) =>
-                    updateControls({ targetFilter: event.currentTarget.value as typeof targetFilter })
-                  }
-                >
-                  <option value="all">{t("All Agents")}</option>
-                  <option value="managed">{t("Managed")}</option>
-                  <option value="library">{t("Imported")}</option>
-                  <option value="outside">{t("Unmanaged")}</option>
-                  <option value="left-unmanaged">{t("Left unmanaged")}</option>
-                  <option value="not-installed">{t("Not installed")}</option>
-                </SelectControl>
-              </label>
-              <Button
-                className="library-filter-reset"
-                icon={<RotateCcw size={15} strokeWidth={2.2} />}
-                disabled={advancedFilterCount === 0}
-                onClick={resetAdvancedFilters}
-              >
-                {t("Reset")}
-              </Button>
-            </div>
+            <SkillLibraryFilters
+              availableTags={availableTags}
+              activeCount={advancedFilterCount}
+              sourceFilter={sourceFilter}
+              tagFilter={tagFilter}
+              targetFilter={targetFilter}
+              usageFilter={usageFilter}
+              onChange={updateControls}
+              onReset={() => updateControls(resetSkillLibraryFilterPatch)}
+            />
           ) : null}
         </div>
       </div>
@@ -2064,20 +2038,28 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                       ariaLabel={t("Skill details for {{id}}", { id: skill.id })}
                       className="skill-title-preview"
                       displayContent={(
-                        <span className="skill-title-line">
-                          <button
-                            className="library-skill-name-button"
-                            type="button"
-                            onClick={(event) => {
-                              modalFallbackFocusRef.current = event.currentTarget;
-                              setBrowsingSkill(skill);
-                            }}
-                          >
-                            <strong className="skill-title">{skill.name}</strong>
-                          </button>
-                          {(skillNameCounts.get(skill.name.normalize("NFKC").trim().toLowerCase()) ?? 0) > 1 ? (
-                            <span className="library-duplicate-id">{skill.id}</span>
-                          ) : null}
+                        <span className="skill-title-content">
+                          <span className="skill-title-line">
+                            <button
+                              className="library-skill-name-button"
+                              type="button"
+                              onClick={(event) => {
+                                modalFallbackFocusRef.current = event.currentTarget;
+                                setBrowsingSkill(skill);
+                              }}
+                            >
+                              <strong className="skill-title">{skill.name}</strong>
+                            </button>
+                            {(skillNameCounts.get(skill.name.normalize("NFKC").trim().toLowerCase()) ?? 0) > 1 ? (
+                              <span className="library-duplicate-id">{skill.id}</span>
+                            ) : null}
+                          </span>
+                          <SkillTagList
+                            className="library-skill-tags"
+                            maxVisible={2}
+                            tags={skill.tags}
+                            onSelect={(tag) => updateControls({ tagFilter: tag })}
+                          />
                         </span>
                       )}
                       focusable={false}
@@ -2281,6 +2263,13 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                             <Power size={14} strokeWidth={2.2} />
                             <span>{t(globallyEnabled ? "Disable globally" : "Enable globally")}</span>
                           </button>
+                          <ActionMenuItem
+                            className="row-action-item"
+                            onClick={() => runSkillMenuAction(skill, "tags")}
+                          >
+                            <Tags size={14} strokeWidth={2.2} />
+                            <span>{t("Edit tags")}</span>
+                          </ActionMenuItem>
                           <button
                             className="row-action-item"
                             type="button"
@@ -2514,6 +2503,14 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         busy={isBusy}
         onDismiss={() => setSourceCandidate(undefined)}
         onSave={onSaveUpdateSettings}
+      />
+
+      <SkillTagEditorDialog
+        availableTags={availableTags}
+        fallbackFocusRef={modalFallbackFocusRef}
+        skill={tagCandidate}
+        onDismiss={() => setTagCandidate(undefined)}
+        onSave={onSetTags}
       />
 
       {deleteCandidate ? createPortal(

@@ -205,6 +205,7 @@ export interface AgentEnvApi {
   setSkillUpdateSettings(input: SkillUpdateSettingsInput): Promise<SkillLibraryEntry>;
   setSkillAvailability(input: SkillAvailabilityInput): Promise<SkillLibraryEntry>;
   setSkillIcon(input: SkillIconInput): Promise<SkillLibraryEntry>;
+  setSkillTags(input: SkillTagsInput): Promise<SkillLibraryEntry>;
   previewLibrarySkillUpdate(id: string): Promise<SkillUpdatePlan>;
   previewLibrarySkillUpdates(ids: string[]): Promise<SkillUpdatePreviewBatchResult>;
   readLibrarySkillUpdateChange(input: SkillUpdateChangeReadInput): Promise<PlannedFileChange>;
@@ -543,6 +544,7 @@ export interface SkillLibraryEntry {
   upstream?: SkillUpstream;
   provenance?: SkillProvenance;
   sourceCollection?: SkillSourceCollectionRef;
+  tags?: string[];
 }
 
 export interface SkillUpstream {
@@ -947,6 +949,11 @@ export interface SkillAvailabilityInput {
 export interface SkillIconInput {
   id: string;
   iconKey?: ResourceIconKey;
+}
+
+export interface SkillTagsInput {
+  id: string;
+  tags: string[];
 }
 
 export interface ManageTargetSkillInput {

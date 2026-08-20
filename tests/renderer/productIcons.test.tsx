@@ -38,7 +38,12 @@ describe("product icon semantics", () => {
     const noop = vi.fn();
     const items = buildQuickOpenItems({
       profiles: [{ id: "daily", name: "Daily", description: "" } as ProfileSummary],
-      skills: [{ id: "review", name: "Review", description: "" } as SkillLibraryEntry],
+      skills: [{
+        id: "review",
+        name: "Review",
+        description: "",
+        tags: ["Code Review"]
+      } as SkillLibraryEntry],
       targets: [{
         id: "codex",
         name: "Codex",
@@ -55,6 +60,8 @@ describe("product icon semantics", () => {
     });
     expect(items.find((candidate) => candidate.id === "action:local-skills"))
       .toMatchObject({ label: "Local Skills" });
+    expect(items.find((candidate) => candidate.id === "skill:review")?.keywords)
+      .toContain("Code Review");
     const expected = new Map([
       ["workspace:targets", "agents"],
       ["workspace:profiles", "profiles"],

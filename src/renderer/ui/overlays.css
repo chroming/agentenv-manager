@@ -450,6 +450,96 @@
   max-height: none;
   overflow: visible;
 }
+
+.skill-tag-editor-dialog {
+  max-width: 560px;
+  width: min(560px, calc(100vw - 48px));
+}
+
+.skill-tag-editor-dialog__body {
+  display: grid;
+  gap: 16px;
+}
+
+.skill-tag-editor-selection {
+  display: grid;
+  gap: 9px;
+}
+
+.skill-tag-editor-section-title {
+  align-items: center;
+  color: var(--text-secondary);
+  display: grid;
+  font-size: var(--font-size-caption);
+  gap: 7px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.skill-tag-editor-section-title small,
+.skill-tag-suggestions__label,
+.skill-tag-editor-empty {
+  color: var(--muted);
+  font-size: var(--font-size-caption);
+}
+
+.skill-tag-editor-chips,
+.skill-tag-suggestions__list {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-height: 28px;
+}
+
+.skill-tag-editor-chip,
+.skill-tag-suggestion {
+  align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: inherit;
+  font-size: var(--font-size-caption);
+  gap: 5px;
+  height: 28px;
+  max-width: 220px;
+  min-width: 0;
+  padding: 0 10px;
+}
+
+.skill-tag-editor-chip span,
+.skill-tag-suggestion {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-tag-editor-chip:hover,
+.skill-tag-editor-chip:focus-visible,
+.skill-tag-suggestion:hover,
+.skill-tag-suggestion:focus-visible {
+  background: var(--surface-pressed);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.skill-tag-editor-chip:focus-visible,
+.skill-tag-suggestion:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.skill-tag-suggestions {
+  display: grid;
+  gap: 8px;
+}
+
+.skill-tag-suggestion.is-create {
+  color: var(--accent-strong);
+}
+
 /* Global quick search stays a read-only navigation and safe-action overlay. */
 .quick-open-dialog {
   gap: 0;

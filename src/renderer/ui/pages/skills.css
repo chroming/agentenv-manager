@@ -91,7 +91,7 @@
   display: grid;
   gap: 10px;
   grid-column: 1 / -1;
-  grid-template-columns: repeat(3, minmax(120px, 144px)) auto;
+  grid-template-columns: repeat(4, minmax(112px, 144px)) auto;
   justify-content: start;
   margin: 2px -12px -10px;
   padding: 10px 12px 12px;
@@ -218,6 +218,12 @@
   min-width: 0;
 }
 
+.skill-title-content {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
 .skill-library-panel .skill-title-preview {
   display: block;
   min-width: 0;
@@ -242,6 +248,10 @@
   overflow: hidden;
   padding: 1px 2px;
   text-align: left;
+}
+
+.skill-library-panel .library-skill-tags {
+  max-width: 100%;
 }
 
 .library-skill-name-button:hover:not(:disabled),
@@ -584,7 +594,7 @@
   }
 
   .skill-library-panel .library-filter-panel {
-    grid-template-columns: repeat(3, minmax(110px, 144px)) auto;
+    grid-template-columns: repeat(4, minmax(100px, 132px)) auto;
   }
 }
 

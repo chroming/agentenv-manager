@@ -51,6 +51,7 @@ const writeSnapshot = async (root: string, input: {
   profileName?: string;
   instructions?: string;
   skillContent?: string;
+  skillTags?: string[];
   sources?: Array<{
     formatVersion: 1;
     id: string;
@@ -77,6 +78,7 @@ const writeSnapshot = async (root: string, input: {
     formatVersion: 1 as const,
     id: "review",
     globallyEnabled: true,
+    ...(input.skillTags ? { tags: input.skillTags } : {}),
     updatePolicy: "untracked" as const,
     sourceType: "local" as const
   };
@@ -308,6 +310,7 @@ describe("Workspace Sync", () => {
       }]
     }));
     const snapshot = await writeSnapshot(await tempRoot("agentenv-sync-candidate-"), {
+      skillTags: ["  Code   Review  ", "code review", "quality"],
       sources: [{
         formatVersion: 1,
         id: "source-remote",
@@ -325,6 +328,10 @@ describe("Workspace Sync", () => {
     expect(result.backupId).toBeTruthy();
     await expect(readFile(join(paths.profilesDir, "daily", "INSTRUCTIONS.md"), "utf8")).resolves.toBe("# Agent\n");
     await expect(readFile(join(paths.skillsLibraryDir, "review", "SKILL.md"), "utf8")).resolves.toContain("Review code");
+    await expect(
+      readFile(join(paths.skillsLibraryDir, "review", ".agentenv-skill.json"), "utf8")
+        .then((content) => JSON.parse(content).tags)
+    ).resolves.toEqual(["Code Review", "quality"]);
     await expect(readFile(join(paths.targetStatesDir, "opencode.json"), "utf8"))
       .resolves.toBe("device-local target state\n");
     const sources = JSON.parse(await readFile(paths.skillSourcesPath, "utf8")).sources;

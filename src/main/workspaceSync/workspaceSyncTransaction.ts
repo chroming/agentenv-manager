@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { cp, lstat, mkdir, readFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { parseSkillTags } from "../../shared/skillTags";
 import type { SkillSourceRecord } from "../../shared/types";
 import type { BackupStore } from "../backupStore";
 import { isMissingFileError, pathEntryExists, replacePathAtomically, writeAtomic } from "../fileUtils";
@@ -54,6 +55,7 @@ const readJournal = async (path: string): Promise<WorkspaceSyncJournal | undefin
 
 const metadataForLocalStore = async (skillRoot: string, portablePath: string): Promise<SkillMetadataFile> => {
   const portable = PortableSkillMetadataSchema.parse(JSON.parse(await readFile(portablePath, "utf8")));
+  const tags = parseSkillTags(portable.tags);
   return {
     sourceType: portable.sourceType,
     source: portable.source,
@@ -61,6 +63,7 @@ const metadataForLocalStore = async (skillRoot: string, portablePath: string): P
     remoteRevision: portable.remoteRevision,
     updatePolicy: portable.updatePolicy,
     globallyEnabled: portable.globallyEnabled,
+    ...(tags.length > 0 ? { tags } : {}),
     iconKey: portable.iconKey,
     contentHash: await hashSkillContent(skillRoot),
     upstream: portable.upstream,

@@ -1369,6 +1369,15 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 - Update and install-repair facts MUST remain in `Status`, while their one current direct command appears in the adjacent `Action` lane. The trailing `More` lane is reserved for the overflow menu and MUST NOT absorb or displace that labelled direct command.
 - Row actions and their secondary revision or install state MUST occupy independent vertical tracks. A control's rendered height MUST fit inside its track, with at least `4px` clear space before secondary text; child overflow MUST NOT be used to compress the row.
 
+### 16.1.2 Tags
+
+- Tags are optional user-owned Library metadata used to organize Skills by task. They are stored only in AgentEnv metadata, never written to `SKILL.md`, Profile references, Workspace copies, or Agent directories.
+- A Skill may have at most 12 tags of at most 32 characters. Input is Unicode-normalized, trimmed, whitespace-collapsed, and deduplicated case-insensitively while preserving the user's canonical spelling.
+- Skill content updates and reimports preserve existing tags. Merging Library Skills produces the case-insensitive union of their tags. A semantic no-op tag save performs no metadata write.
+- Portable Workspace Sync includes tags because they describe the reusable Library object; Target deployment and Profile Apply ignore them.
+- The Skill List keeps tags with the Skill identity rather than adding a table column. Selecting a tag applies one exact filter, and the Filters panel exposes the same exact tag set. By Source remains a source-health projection and does not duplicate tag filtering.
+- The shared Library Skill picker used by Profiles and Workspaces and global Quick Open match tag text. Tags do not change Skill availability, update policy, source grouping, Profile membership, or deployment state.
+
 ### 16.1.2 Source view
 
 - `Skill list` remains the canonical Library resource view. `By source` is a peer view inside Skills, not a separate navigation area, source subscription system, or replacement for per-Skill management.

@@ -23,14 +23,12 @@ import type {
   SkillImportPreview,
   SkillImportPreviewInput,
   SkillImportSnapshot,
-  SkillIconInput,
   SkillLibraryEntry,
   SkillMergeInput,
   SkillMergePreview,
   SkillMergeResult,
   ManagedBackupFile,
   SkillProvenance,
-  ResourceIconKey,
   SkillSourceType,
   SkillUpstream,
   SkillUpdateInfo,
@@ -59,6 +57,7 @@ import type {
   UnmanagedSkillLocationUpdate,
   SharedSkillRetentionInput
 } from "../shared/types";
+import { parseSkillTags } from "../shared/skillTags";
 import { normalizeSkillKey } from "../shared/skillIdentity";
 import { buildSkillCleanupGroups } from "../shared/skillCleanup";
 import { managedResourceOrigin } from "../shared/managedResource";
@@ -127,6 +126,10 @@ import {
   validateRepositoryImportCollection
 } from "./skillSourceLibrary";
 import { readSkillLibraryEntry, type SkillMetadataFile } from "./skillLibraryMetadata";
+import {
+  createSkillLibraryMetadataMutations,
+  type SkillMetadataWriteInput
+} from "./skillLibraryMetadataMutations";
 import { bindSkillSourceCollection, createSkillSourceRegistry } from "./skillSourceRegistry";
 import {
   createLocalSkillSourceCollection,
@@ -559,22 +562,7 @@ export const createSkillLibraryStore = (
 
   const writeMetadata = async (
     skillDir: string,
-    metadata: Pick<
-      SkillMetadataFile,
-      | "sourceType"
-      | "source"
-      | "remoteRef"
-      | "remotePath"
-      | "remoteRevision"
-      | "updatePolicy"
-      | "updateCheckEnabled"
-      | "globallyEnabled"
-      | "upstream"
-      | "provenance"
-    > & {
-      iconKey?: ResourceIconKey | null;
-      sourceCollection?: SkillSourceCollectionRef | null;
-    }
+    metadata: SkillMetadataWriteInput
   ) => {
     const current = await readLibraryMetadata(skillDir);
     const sourceType = metadata.sourceType ?? "local";
@@ -583,6 +571,9 @@ export const createSkillLibraryStore = (
       skillSourceRegistry,
       resolveSkillSourceCollection(metadata.sourceCollection, current.sourceCollection)
     );
+    const tags = metadata.tags === undefined
+      ? parseSkillTags(current.tags, { strict: false })
+      : parseSkillTags(metadata.tags);
     await writeAtomic(
       join(skillDir, ".agentenv-skill.json"),
       `${JSON.stringify(
@@ -597,6 +588,7 @@ export const createSkillLibraryStore = (
           sourceCollection,
           iconKey: metadata.iconKey === null ? undefined : metadata.iconKey ?? current.iconKey,
           globallyEnabled: metadata.globallyEnabled ?? current.globallyEnabled ?? true,
+          tags: tags.length > 0 ? tags : undefined,
           updatePolicy:
             metadata.updatePolicy ??
             (typeof metadata.updateCheckEnabled === "boolean"
@@ -1237,6 +1229,7 @@ export const createSkillLibraryStore = (
       updatePolicy: githubSource ? "tracked" as const : "untracked" as const,
       iconKey: previousMetadata?.iconKey,
       globallyEnabled: previousMetadata?.globallyEnabled,
+      tags: previousMetadata?.tags,
       upstream: upstream ?? {
         kind: "local" as const,
         locator: persistedLocalSource,
@@ -1424,6 +1417,7 @@ export const createSkillLibraryStore = (
             updatePolicy: "tracked",
             iconKey: previousMetadata?.iconKey,
             globallyEnabled: previousMetadata?.globallyEnabled,
+            tags: previousMetadata?.tags,
             upstream: {
               kind: "github",
               locator: source.sourceUrl,
@@ -1458,6 +1452,7 @@ export const createSkillLibraryStore = (
             updatePolicy: "tracked",
             iconKey: previousMetadata?.iconKey,
             globallyEnabled: previousMetadata?.globallyEnabled,
+            tags: previousMetadata?.tags,
             upstream: {
               kind: "github",
               locator: source.sourceUrl,
@@ -1557,20 +1552,7 @@ export const createSkillLibraryStore = (
       const previousMetadata = plan.replace || plan.sourceOnly
         ? await readLibraryMetadata(targetDir)
         : undefined;
-      const metadata: Pick<
-        SkillMetadataFile,
-        | "sourceType"
-        | "source"
-        | "remoteRef"
-        | "remotePath"
-        | "remoteRevision"
-        | "updatePolicy"
-        | "globallyEnabled"
-        | "iconKey"
-        | "upstream"
-        | "provenance"
-        | "sourceCollection"
-      > = {
+      const metadata: SkillMetadataWriteInput = {
         sourceType: "git",
         source: materialized.repository,
         remoteRef: materialized.ref,
@@ -1579,6 +1561,7 @@ export const createSkillLibraryStore = (
         updatePolicy: "tracked",
         iconKey: previousMetadata?.iconKey,
         globallyEnabled: previousMetadata?.globallyEnabled,
+        tags: previousMetadata?.tags,
         upstream: materialized.upstream,
         provenance: previousMetadata?.provenance ?? { importedVia: "agentenv" },
         sourceCollection: validatedSourceCollection
@@ -1859,6 +1842,9 @@ export const createSkillLibraryStore = (
     if (!keepSkill || !sourceSkill) {
       throw new Error("A selected Library skill no longer exists");
     }
+    const mergedTags = parseSkillTags(
+      requestedIds.flatMap((id) => skillsById.get(id)?.tags ?? [])
+    );
     const removedIds = requestedIds.filter((id) => id !== keepId);
     const removedIdSet = new Set(removedIds);
     const profileDetails = await readAllProfilesForResourceMutation(
@@ -1930,7 +1916,8 @@ export const createSkillLibraryStore = (
         contentHash: await computeContentHash(keepSkill.path),
         updatedAt: new Date().toISOString(),
         upstream: sourceMetadata.upstream,
-        provenance: sourceMetadata.provenance
+        provenance: sourceMetadata.provenance,
+        tags: mergedTags
       };
       await writeAtomic(
         join(keepSkill.path, ".agentenv-skill.json"),
@@ -2129,6 +2116,7 @@ export const createSkillLibraryStore = (
           updatePolicy: "untracked",
           iconKey: previousLibraryMetadata?.iconKey,
           globallyEnabled: previousLibraryMetadata?.globallyEnabled,
+          tags: previousLibraryMetadata?.tags,
           upstream: { kind: "local", locator: canonicalPath },
           provenance: { importedVia: "local-scan" }
         });
@@ -2286,6 +2274,9 @@ export const createSkillLibraryStore = (
     }
     const targetLibraryDir = join(await libraryDir(), safeLibraryId);
     const libraryCreated = !(await pathExists(join(targetLibraryDir, "SKILL.md")));
+    const previousLibraryMetadata = replaceLibrary
+      ? await readLibraryMetadata(targetLibraryDir)
+      : undefined;
     if (libraryCreated || replaceLibrary) {
       await validateSkillFrontmatter(canonicalPath);
     }
@@ -2348,6 +2339,9 @@ export const createSkillLibraryStore = (
           sourceType: "local",
           source: canonicalPath,
           updatePolicy: "untracked",
+          iconKey: previousLibraryMetadata?.iconKey,
+          globallyEnabled: previousLibraryMetadata?.globallyEnabled,
+          tags: previousLibraryMetadata?.tags,
           upstream: { kind: "local", locator: canonicalPath },
           provenance: { importedVia: "local-scan" }
         });
@@ -2620,24 +2614,14 @@ export const createSkillLibraryStore = (
     return entryFor(safeId, targetDir);
   };
 
-  const setIcon = async ({ id, iconKey }: SkillIconInput): Promise<SkillLibraryEntry> => {
-    const safeId = SafeIdSchema.parse(id);
-    const targetDir = join(await libraryDir(), safeId);
-    if (!(await pathExists(join(targetDir, "SKILL.md")))) {
-      throw new Error(`Library skill does not exist: ${safeId}`);
-    }
-    const metadata = await readLibraryMetadata(targetDir);
-    await writeMetadata(targetDir, {
-      sourceType: metadata.sourceType ?? "local",
-      source: metadata.source,
-      remoteRef: metadata.remoteRef,
-      remotePath: metadata.remotePath,
-      remoteRevision: metadata.remoteRevision,
-      updatePolicy: updatePolicyFor(metadata),
-      iconKey: iconKey ?? null
-    });
-    return entryFor(safeId, targetDir);
-  };
+  const { setIcon, setTags } = createSkillLibraryMetadataMutations({
+    entryFor,
+    libraryDir,
+    listSkills,
+    readMetadata: readLibraryMetadata,
+    updatePolicyFor,
+    writeMetadata
+  });
 
   const prepareSkillUpdateImpactIndex = async (): Promise<SkillUpdateImpactIndex> => {
     const [profiles, inventory] = await measureSkillPerformancePhase("impact-scan", () =>
@@ -3203,6 +3187,7 @@ export const createSkillLibraryStore = (
     setUpdateSettings,
     setAvailability,
     setIcon,
+    setTags,
     previewUpdate,
     previewUpdates,
     readUpdateChange,

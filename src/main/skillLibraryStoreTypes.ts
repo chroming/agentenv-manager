@@ -17,6 +17,7 @@ import type {
   SkillCollectionMemberDecision,
   SkillCollectionMemberDecisionUpdate,
   SkillIconInput,
+  SkillTagsInput,
   SkillImportInput,
   SkillImportPreview,
   SkillImportPreviewInput,
@@ -137,6 +138,7 @@ export interface SkillLibraryStore {
   setUpdateSettings(input: SkillUpdateSettingsInput): Promise<SkillLibraryEntry>;
   setAvailability(input: SkillAvailabilityInput): Promise<SkillLibraryEntry>;
   setIcon(input: SkillIconInput): Promise<SkillLibraryEntry>;
+  setTags(input: SkillTagsInput): Promise<SkillLibraryEntry>;
   previewUpdate(id: string): Promise<SkillUpdatePlan>;
   previewUpdates(ids: string[]): Promise<SkillUpdatePreviewBatchResult>;
   readUpdateChange(input: SkillUpdateChangeReadInput): Promise<import("../shared/types").PlannedFileChange>;

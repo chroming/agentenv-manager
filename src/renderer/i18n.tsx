@@ -4449,6 +4449,46 @@ Object.assign(zhTW, {
   "Move these Skills after preview and backup so the Profile can control whether they are on or off.": "預覽並備份後遷移這些 Skills，Profile 才能控制其開啟或關閉。"
 });
 
+Object.assign(zhCN, {
+  "Tags": "标签",
+  "All tags": "所有标签",
+  "Skill tag filter": "Skill 标签筛选",
+  "Edit tags": "编辑标签",
+  "Edit tags for {{id}}": "编辑 {{id}} 的标签",
+  "Selected tags": "已选标签",
+  "No tags yet": "暂无标签",
+  "Add a tag": "添加标签",
+  "Type a tag and press Enter": "输入标签后按 Enter",
+  "Tag suggestions": "标签建议",
+  "Suggestions": "建议",
+  "Create {{tag}}": "创建“{{tag}}”",
+  "Remove tag {{tag}}": "移除标签 {{tag}}",
+  "Filter by tag {{tag}}": "按标签 {{tag}} 筛选",
+  "Search skills or tags...": "搜索 Skill 或标签...",
+  "Tags saved for {{name}}": "已保存 {{name}} 的标签",
+  "Tags could not be saved. Try again.": "标签无法保存，请重试。"
+});
+
+Object.assign(zhTW, {
+  "Tags": "標籤",
+  "All tags": "所有標籤",
+  "Skill tag filter": "Skill 標籤篩選",
+  "Edit tags": "編輯標籤",
+  "Edit tags for {{id}}": "編輯 {{id}} 的標籤",
+  "Selected tags": "已選標籤",
+  "No tags yet": "尚無標籤",
+  "Add a tag": "新增標籤",
+  "Type a tag and press Enter": "輸入標籤後按 Enter",
+  "Tag suggestions": "標籤建議",
+  "Suggestions": "建議",
+  "Create {{tag}}": "建立「{{tag}}」",
+  "Remove tag {{tag}}": "移除標籤 {{tag}}",
+  "Filter by tag {{tag}}": "依標籤 {{tag}} 篩選",
+  "Search skills or tags...": "搜尋 Skill 或標籤...",
+  "Tags saved for {{name}}": "已儲存 {{name}} 的標籤",
+  "Tags could not be saved. Try again.": "標籤無法儲存，請重試。"
+});
+
 export const localeTag = (locale: ResolvedAppLocale) =>
   locale === "zh_CN" ? "zh-CN" : locale === "zh_TW" ? "zh-TW" : "en-US";
 

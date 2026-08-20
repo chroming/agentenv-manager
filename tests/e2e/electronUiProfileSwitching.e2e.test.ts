@@ -10587,6 +10587,53 @@ describe("Electron UI profile switching e2e", () => {
     expect(previewDuration).toBeLessThan(2_000);
   }, standardElectronTestTimeout);
 
+  it("persists custom Skill tags and filters the Library without adding a table column", async () => {
+    const { appDataRoot, page } = await launchApp({ openCodeAlphaLibrarySkillCount: 2 });
+    await resizeAppWindow(page, 920, 620);
+    await openSkillLibrary(page);
+    const initialRowCount = await page.getByRole("group", { name: /^Library item / }).count();
+    const taggedRow = page.getByRole("group", { name: "Library item layout-skill-1" });
+    await taggedRow.getByRole("button", { name: "More actions for layout-skill-1" }).click();
+    await page.getByRole("menuitem", { name: "Edit tags" }).click();
+    const dialog = page.getByRole("dialog", { name: "Edit tags for layout-skill-1" });
+    expect(await dialog.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      return box.left >= 0 && box.right <= window.innerWidth && box.top >= 0 && box.bottom <= window.innerHeight;
+    })).toBe(true);
+    await dialog.getByRole("textbox", { name: "Add a tag" }).fill("Frontend");
+    await dialog.getByRole("textbox", { name: "Add a tag" }).press("Enter");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    await dialog.waitFor({ state: "hidden" });
+
+    await expect.poll(async () =>
+      (await readJson<{ tags?: string[] }>(
+        join(appDataRoot, "skills-library", "layout-skill-1", ".agentenv-skill.json")
+      )).tags
+    ).toEqual(["Frontend"]);
+    await taggedRow.getByRole("button", { name: "Filter by tag Frontend" }).click();
+    await expect.poll(() => page.getByRole("group", { name: /^Library item / }).count()).toBe(1);
+    await expect.poll(() => taggedRow.count()).toBe(1);
+    expect(await taggedRow.evaluate((row) => {
+      const name = row.querySelector<HTMLElement>(".library-skill-name-button")!;
+      const tag = row.querySelector<HTMLElement>(".library-skill-tags")!;
+      const nameBox = name.getBoundingClientRect();
+      const tagBox = tag.getBoundingClientRect();
+      return name.scrollWidth <= name.clientWidth + 1 && nameBox.bottom <= tagBox.top + 1;
+    })).toBe(true);
+
+    await page.getByRole("button", { name: /^Filters/ }).click();
+    const filterPanel = page.getByRole("group", { name: "Skill filters" });
+    expect(await filterPanel.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      return box.left >= 0 && box.right <= window.innerWidth && element.scrollWidth <= element.clientWidth + 1;
+    })).toBe(true);
+    const tagFilter = page.getByRole("combobox", { name: "Skill tag filter" });
+    await expect.poll(() => tagFilter.inputValue()).toBe("Frontend");
+    await tagFilter.selectOption("all");
+    await expect.poll(() => page.getByRole("group", { name: /^Library item / }).count())
+      .toBe(initialRowCount);
+  }, standardElectronTestTimeout);
+
   it("globally disables a Library skill, hides it from Environment selection, and removes it on Apply", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp({
       openCodeAlphaLibrarySkillCount: 1

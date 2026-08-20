@@ -16,6 +16,7 @@ import {
   bindSkillSourceCollection,
   type SkillSourceRegistry
 } from "./skillSourceRegistry";
+import { parseSkillTags } from "../shared/skillTags";
 
 export interface SkillMetadataFile {
   sourceType?: SkillSourceType;
@@ -33,6 +34,7 @@ export interface SkillMetadataFile {
   upstream?: SkillUpstream;
   provenance?: SkillProvenance;
   sourceCollection?: SkillSourceCollectionRef;
+  tags?: string[];
 }
 
 export const readSkillLibraryEntry = async (
@@ -54,6 +56,7 @@ export const readSkillLibraryEntry = async (
   }
   const contentHash = await hashSkillContent(skillDir);
   const stats = await stat(join(skillDir, "SKILL.md"));
+  const tags = parseSkillTags(metadata.tags, { strict: false });
   return {
     id,
     name: frontmatter.name || id,
@@ -78,6 +81,7 @@ export const readSkillLibraryEntry = async (
     sourceCollection: await bindSkillSourceCollection(
       sourceRegistry,
       legacySkillSourceCollectionFor(metadata)
-    )
+    ),
+    ...(tags.length > 0 ? { tags } : {})
   };
 };

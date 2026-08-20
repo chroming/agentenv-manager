@@ -650,6 +650,17 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       contentHash: "hash",
       updatedAt: "2026-07-02T00:00:00.000Z"
     })),
+    setSkillTags: vi.fn().mockImplementation(async (input) => ({
+      id: input.id,
+      name: input.id,
+      description: "",
+      tags: input.tags,
+      path: "/tmp/skill",
+      sourceType: "local",
+      updatePolicy: "untracked",
+      contentHash: "hash",
+      updatedAt: "2026-07-02T00:00:00.000Z"
+    })),
     previewLibrarySkillUpdate: vi.fn().mockResolvedValue({
       id: "skill",
       name: "skill",
@@ -2685,6 +2696,18 @@ describe("App", () => {
     );
     await waitFor(() =>
       expect(api.checkSkillLibraryUpdates).toHaveBeenCalledWith(["local-reviewer"])
+    );
+    fireEvent.click(within(localRow).getByRole("button", { name: "More actions for local-reviewer" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit tags" }));
+    const tagInput = screen.getByRole("textbox", { name: "Add a tag" });
+    fireEvent.change(tagInput, { target: { value: "Code Review" } });
+    fireEvent.keyDown(tagInput, { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(api.setSkillTags).toHaveBeenCalledWith({
+        id: "local-reviewer",
+        tags: ["Code Review"]
+      })
     );
     fireEvent.click(
       screen.getByRole("button", { name: "Change icon for local-reviewer" })

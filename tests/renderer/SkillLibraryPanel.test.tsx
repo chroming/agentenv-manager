@@ -120,6 +120,7 @@ const LegacySkillLibraryPanel = (props: Record<string, any>) => (
         onSaveUpdateSettings: props.onSaveUpdateSettings,
         onSetAvailability: props.onSetAvailability,
         onSetIcon: props.onSetIcon,
+        onSetTags: props.onSetTags,
         onRemoveLibrarySkill: props.onRemoveLibrarySkill,
         onPreviewSkillMerge: props.onPreviewSkillMerge,
         onMergeLibrarySkills: props.onMergeLibrarySkills,
@@ -301,6 +302,7 @@ describe("SkillLibraryPanel", () => {
       () => new Promise<boolean>((resolve) => (resolveAvailability = resolve))
     );
     const onSetIcon = vi.fn();
+    const onSetTags = vi.fn().mockResolvedValue(true);
     const onManageTargetSkill = vi.fn();
     const onConsolidateSkillGroup = vi.fn().mockResolvedValue(true);
     const onAutoConsolidateSkillGroups = vi.fn().mockImplementation(
@@ -410,7 +412,8 @@ describe("SkillLibraryPanel", () => {
             source: "/tmp/source/shared-reviewer",
             updatePolicy: "tracked",
             contentHash: "abc123",
-            updatedAt: "2026-07-02T00:00:00.000Z"
+            updatedAt: "2026-07-02T00:00:00.000Z",
+            tags: ["Code Review"]
           },
           {
             id: "github-reviewer",
@@ -842,6 +845,7 @@ describe("SkillLibraryPanel", () => {
         onSaveUpdateSettings={onSaveUpdateSettings}
         onSetAvailability={onSetAvailability}
         onSetIcon={onSetIcon}
+        onSetTags={onSetTags}
         onManageTargetSkill={onManageTargetSkill}
         onConsolidateSkillGroup={onConsolidateSkillGroup}
         onAutoConsolidateSkillGroups={onAutoConsolidateSkillGroups}
@@ -910,6 +914,12 @@ describe("SkillLibraryPanel", () => {
     expect(screen.queryByRole("region", { name: "Library storage settings" })).not.toBeInTheDocument();
     const sharedRow = screen.getByRole("group", { name: "Library item shared-reviewer" });
     expect(sharedRow).toHaveTextContent("1 Profile · 2 installs");
+    fireEvent.click(within(sharedRow).getByRole("button", { name: "Filter by tag Code Review" }));
+    expect(onViewStateChange).toHaveBeenCalledWith({
+      ...defaultSkillLibraryViewState,
+      tagFilter: "Code Review",
+      scrollTop: 0
+    });
     expect(sharedRow).not.toHaveTextContent("Review code");
     const sharedIdentity = within(sharedRow).getByLabelText("Skill details for shared-reviewer");
     fireEvent.mouseEnter(sharedIdentity);
