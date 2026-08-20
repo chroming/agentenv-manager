@@ -248,6 +248,8 @@ describe("conversation index store", () => {
       .toEqual(["codex:unknown"]);
     expect((await index.list({ sort: "messages-desc" })).items.map((item) => item.id))
       .toEqual(["codex:unknown", "codex:small", "codex:large"]);
+    expect((await index.list({ sort: "last-active-desc" })).items.map((item) => item.id))
+      .toEqual(["codex:unknown", "codex:small", "codex:large"]);
   });
 
   it("persists the Agent discovery version without changing indexed history", async () => {

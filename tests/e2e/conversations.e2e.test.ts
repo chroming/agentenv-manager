@@ -420,7 +420,7 @@ describe("Conversations desktop workflow", () => {
     expect(sortedConversationTitles.largest).toBeTruthy();
     expect(sortedConversationTitles.recent).toBeTruthy();
     const conversationSort = page.getByRole("button", { name: /Sort conversations:/ });
-    const chooseConversationSort = async (label: "Recent" | "Largest") => {
+    const chooseConversationSort = async (label: "Recent" | "Last activity" | "Largest") => {
       await conversationSort.click();
       await page.getByRole("menuitemradio", { name: label }).click();
     };
@@ -444,8 +444,28 @@ describe("Conversations desktop workflow", () => {
     await expect.poll(() => page.locator(".conversation-list-item__title").first().textContent())
       .toBe(sortedConversationTitles.recent);
     const historySearch = page.getByRole("searchbox", { name: "Search conversations" });
-    await historySearch.fill("Older indexed task 197");
-    await page.getByRole("option", { name: /Older indexed task 197/ }).waitFor();
+    await historySearch.fill("Older indexed task");
+    const latestMatchingTitle = await page.evaluate(async () => {
+      const result = await window.agentEnv.listConversations({
+        query: "Older indexed task",
+        sort: "last-active-desc",
+        limit: 1
+      });
+      return result.items[0]?.title;
+    });
+    expect(latestMatchingTitle).toBeTruthy();
+    await chooseConversationSort("Last activity");
+    await expect.poll(() => page.locator(".conversation-list-item__title").first().textContent())
+      .toBe(latestMatchingTitle);
+
+    const firstSearchResult = page.locator(".conversation-list-item").first();
+    await firstSearchResult.click({ button: "right" });
+    const rowMenu = page.getByRole("menu", { name: "Conversation actions" });
+    await rowMenu.waitFor({ state: "visible" });
+    await rowMenu.getByRole("menuitem", { name: /Open in / }).waitFor();
+    await expectInViewport(page, rowMenu);
+    await page.keyboard.press("Escape");
+
     await historySearch.fill("");
     await page.getByText("200 of 201 conversations", { exact: true }).waitFor();
     await expect.poll(() => page.getByRole("button", { name: "Load 1 more" }).count()).toBe(0);

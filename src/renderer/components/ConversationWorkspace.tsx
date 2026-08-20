@@ -117,12 +117,20 @@ type ConversationOperation = "copy" | "open-original" | "continue";
 
 const conversationSortOptions: Array<{
   value: ConversationSortOrder;
-  label: "Recent" | "Largest" | "Most messages";
+  label: "Recent" | "Last activity" | "Largest" | "Most messages";
+  searchOnly?: boolean;
 }> = [
   { value: "recent", label: "Recent" },
+  { value: "last-active-desc", label: "Last activity", searchOnly: true },
   { value: "size-desc", label: "Largest" },
   { value: "messages-desc", label: "Most messages" }
 ];
+
+const normalizeConversationSort = (
+  query: string | undefined,
+  sort: ConversationSortOrder | undefined
+): ConversationSortOrder =>
+  !query?.trim() && sort === "last-active-desc" ? "recent" : sort ?? "recent";
 
 const workspaceName = (path?: string) => {
   const normalized = path?.replace(/[\\/]+$/, "");
@@ -267,7 +275,7 @@ const ConversationSortMenu = ({
           menuRef={menuRef}
           style={style}
         >
-          {conversationSortOptions.map((option) => {
+          {conversationSortOptions.filter((option) => queryActive || !option.searchOnly).map((option) => {
             const checked = option.value === sort;
             const label = option.value === "recent" && queryActive
               ? t("Best match")
@@ -476,15 +484,45 @@ const TargetMenu = ({
   );
 };
 
+const ConversationActionItems = ({
+  agentName,
+  canOpenOriginal,
+  onCopy,
+  onOpenOriginal
+}: {
+  agentName: string;
+  canOpenOriginal: boolean;
+  onCopy(): void;
+  onOpenOriginal(): void;
+}) => {
+  const { t } = useI18n();
+  return (
+    <>
+      {canOpenOriginal ? (
+        <ActionMenuItem role="menuitem" onClick={onOpenOriginal}>
+          <ExternalLink size={15} aria-hidden="true" />
+          <span>{t("Open in {{name}}", { name: agentName })}</span>
+        </ActionMenuItem>
+      ) : null}
+      <ActionMenuItem role="menuitem" onClick={onCopy}>
+        <Copy size={15} aria-hidden="true" />
+        <span>{t("Copy conversation")}</span>
+      </ActionMenuItem>
+    </>
+  );
+};
+
 const ConversationActionsMenu = ({
   busy,
   operation,
+  agentName,
   canOpenOriginal,
   onCopy,
   onOpenOriginal
 }: {
   busy: boolean;
   operation?: ConversationOperation;
+  agentName: string;
   canOpenOriginal: boolean;
   onCopy(): Promise<void>;
   onOpenOriginal(): Promise<void>;
@@ -570,20 +608,12 @@ const ConversationActionsMenu = ({
           className="conversation-detail-overflow-menu"
           style={style}
         >
-          <button type="button" role="menuitem" onClick={() => run(onCopy)}>
-            <Copy size={15} aria-hidden="true" />
-            <span>{t("Copy conversation")}</span>
-          </button>
-          {canOpenOriginal ? (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => run(onOpenOriginal)}
-            >
-              <ExternalLink size={15} aria-hidden="true" />
-              <span>{t("Open original")}</span>
-            </button>
-          ) : null}
+          <ConversationActionItems
+            agentName={agentName}
+            canOpenOriginal={canOpenOriginal}
+            onCopy={() => run(onCopy)}
+            onOpenOriginal={() => run(onOpenOriginal)}
+          />
         </ActionMenu>,
         document.body
       ) : null}
@@ -644,7 +674,7 @@ export const ConversationWorkspace = ({
     () => initialViewState?.workspaceFilter ?? ""
   );
   const [sort, setSort] = useState<ConversationSortOrder>(
-    () => initialViewState?.sort ?? "recent"
+    () => normalizeConversationSort(initialViewState?.query, initialViewState?.sort)
   );
   const [workspacePaths, setWorkspacePaths] = useState<string[]>(
     () => initialViewState?.workspacePaths ?? []
@@ -667,6 +697,11 @@ export const ConversationWorkspace = ({
   const [loadingMore, setLoadingMore] = useState(false);
   const [conversationListAtEnd, setConversationListAtEnd] = useState(false);
   const [operation, setOperation] = useState<ConversationOperation>();
+  const [contextMenu, setContextMenu] = useState<{
+    conversationId: string;
+    left: number;
+    top: number;
+  }>();
   const [message, setMessage] = useState("");
   const [warning, setWarning] = useState("");
   const [error, setError] = useState("");
@@ -688,6 +723,8 @@ export const ConversationWorkspace = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const conversationListRef = useRef<HTMLDivElement>(null);
   const conversationTranscriptRef = useRef<HTMLDivElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const contextReturnFocusRef = useRef<HTMLElement>(null);
   const selectedSearchFocusRef = useRef<{
     conversationId: string;
     query: string;
@@ -696,7 +733,9 @@ export const ConversationWorkspace = ({
   const queryRef = useRef("");
   const agentFilterRef = useRef("");
   const workspaceFilterRef = useRef("");
-  const sortRef = useRef<ConversationSortOrder>(initialViewState?.sort ?? "recent");
+  const sortRef = useRef<ConversationSortOrder>(
+    normalizeConversationSort(initialViewState?.query, initialViewState?.sort)
+  );
   const listRequestRef = useRef(0);
   const refreshRef = useRef<
     (reason?: Extract<FreshnessReason, "page-entry" | "focus" | "manual">, force?: boolean) =>
@@ -754,6 +793,59 @@ export const ConversationWorkspace = ({
   const otherWorkspacePaths = workspacePaths.filter((path) =>
     !projectWorkspacePaths.includes(path)
   );
+
+  useLayoutEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) return;
+    const rect = contextMenuRef.current.getBoundingClientRect();
+    const margin = 12;
+    const left = Math.min(
+      Math.max(margin, contextMenu.left),
+      Math.max(margin, window.innerWidth - rect.width - margin)
+    );
+    const top = Math.min(
+      Math.max(margin, contextMenu.top),
+      Math.max(margin, window.innerHeight - rect.height - margin)
+    );
+    if (left !== contextMenu.left || top !== contextMenu.top) {
+      setContextMenu((current) => current ? { ...current, left, top } : current);
+      return;
+    }
+    focusInitialActionMenuItem(contextMenuRef.current);
+  }, [contextMenu]);
+
+  useEffect(() => {
+    if (!contextMenu) return undefined;
+    const dismiss = (restoreFocus = false) => {
+      setContextMenu(undefined);
+      if (restoreFocus) {
+        window.requestAnimationFrame(() => contextReturnFocusRef.current?.focus());
+      }
+    };
+    const dismissOutside = (event: MouseEvent) => {
+      if (
+        event.target instanceof Element &&
+        !event.target.closest(".conversation-row-context-menu")
+      ) {
+        dismiss();
+      }
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      dismiss(true);
+    };
+    const dismissForViewportChange = () => dismiss();
+    document.addEventListener("mousedown", dismissOutside);
+    document.addEventListener("keydown", dismissOnEscape);
+    window.addEventListener("resize", dismissForViewportChange);
+    window.addEventListener("scroll", dismissForViewportChange, true);
+    return () => {
+      document.removeEventListener("mousedown", dismissOutside);
+      document.removeEventListener("keydown", dismissOnEscape);
+      window.removeEventListener("resize", dismissForViewportChange);
+      window.removeEventListener("scroll", dismissForViewportChange, true);
+    };
+  }, [contextMenu]);
 
   useEffect(() => {
     let current = true;
@@ -1376,12 +1468,12 @@ export const ConversationWorkspace = ({
     }
   };
 
-  const openOriginal = async (): Promise<boolean> => {
-    if (!detail) return false;
+  const openOriginal = async (conversationId = detail?.id): Promise<boolean> => {
+    if (!conversationId) return false;
     setOperation("open-original");
     setError("");
     try {
-      const result = await window.agentEnv.openOriginalConversation(detail.id);
+      const result = await window.agentEnv.openOriginalConversation(conversationId);
       setMessage(result.message);
       return true;
     } catch (unknownError) {
@@ -1392,14 +1484,15 @@ export const ConversationWorkspace = ({
     }
   };
 
-  const copyConversation = async () => {
-    if (!detail) return;
+  const copyConversation = async (conversationId = detail?.id) => {
+    if (!conversationId) return;
     setOperation("copy");
     setError("");
     try {
-      const completeDetail = detail.messages.length < detail.messageCount
-        ? await window.agentEnv.readConversation(detail.id)
-        : detail;
+      const completeDetail = detail?.id === conversationId &&
+        detail.messages.length >= detail.messageCount
+        ? detail
+        : await window.agentEnv.readConversation(conversationId);
       await window.agentEnv.copyText(continuationText(completeDetail));
       setMessage(t("Conversation copied"));
     } catch (unknownError) {
@@ -1463,7 +1556,14 @@ export const ConversationWorkspace = ({
                   value={query}
                   placeholder={t("Search")}
                   title={t("Searches all indexed conversations and message text.")}
-                  onChange={(event) => setQuery(event.target.value)}
+                  onChange={(event) => {
+                    const nextQuery = event.target.value;
+                    if (!nextQuery.trim() && sortRef.current === "last-active-desc") {
+                      sortRef.current = "recent";
+                      setSort("recent");
+                    }
+                    setQuery(nextQuery);
+                  }}
                 />
                 <ConversationSortMenu
                   queryActive={Boolean(query.trim())}
@@ -1614,7 +1714,37 @@ export const ConversationWorkspace = ({
                       aria-selected={selectedId === item.id}
                       id={`conversation-option-${index}`}
                       onClick={() => selectConversation(item.id)}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        if (busy) return;
+                        contextReturnFocusRef.current = event.currentTarget;
+                        selectedSearchFocusRef.current = queryRef.current.trim()
+                          ? { conversationId: item.id, query: queryRef.current.trim() }
+                          : undefined;
+                        setSelectedId(item.id);
+                        setContextMenu({
+                          conversationId: item.id,
+                          left: event.clientX,
+                          top: event.clientY
+                        });
+                      }}
                       onKeyDown={(event) => {
+                        if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+                          event.preventDefault();
+                          if (busy) return;
+                          const bounds = event.currentTarget.getBoundingClientRect();
+                          contextReturnFocusRef.current = event.currentTarget;
+                          selectedSearchFocusRef.current = queryRef.current.trim()
+                            ? { conversationId: item.id, query: queryRef.current.trim() }
+                            : undefined;
+                          setSelectedId(item.id);
+                          setContextMenu({
+                            conversationId: item.id,
+                            left: bounds.left + 28,
+                            top: bounds.top + 28
+                          });
+                          return;
+                        }
                         let nextIndex: number | undefined;
                         if (event.key === "ArrowDown") {
                           nextIndex = Math.min(index + 1, items.length - 1);
@@ -1808,8 +1938,9 @@ export const ConversationWorkspace = ({
                     <ConversationActionsMenu
                       busy={busy}
                       operation={operation}
+                      agentName={detail.agentName}
                       canOpenOriginal={sourceCanOpenOriginal}
-                      onCopy={copyConversation}
+                      onCopy={async () => copyConversation()}
                       onOpenOriginal={async () => {
                         await openOriginal();
                       }}
@@ -2046,6 +2177,32 @@ export const ConversationWorkspace = ({
           </ModalFrame>
         ) : null}
       </section>
+      {contextMenu ? (() => {
+        const item = items.find((candidate) => candidate.id === contextMenu.conversationId);
+        if (!item) return null;
+        const canOpenOriginal = targets.find((target) => target.id === item.agentId)
+          ?.conversationCapabilities.openOriginal.state === "available";
+        const closeAndRun = (action: () => Promise<unknown>) => {
+          setContextMenu(undefined);
+          void action();
+        };
+        return createPortal(
+          <ActionMenu
+            ariaLabel={t("Conversation actions")}
+            className="conversation-detail-overflow-menu conversation-row-context-menu"
+            menuRef={contextMenuRef}
+            style={{ left: contextMenu.left, top: contextMenu.top, width: 220 }}
+          >
+            <ConversationActionItems
+              agentName={item.agentName}
+              canOpenOriginal={Boolean(canOpenOriginal)}
+              onCopy={() => closeAndRun(() => copyConversation(item.id))}
+              onOpenOriginal={() => closeAndRun(() => openOriginal(item.id))}
+            />
+          </ActionMenu>,
+          document.body
+        );
+      })() : null}
       <AppFeedback
         feedback={feedback}
         onDismiss={() => {

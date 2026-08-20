@@ -735,6 +735,13 @@ an archive, or a native-session database migration tool.
 - A list row MAY show the source transcript's byte size when it is already available from the
   indexed file fingerprint. Database-wide sizes and values that require reopening or reparsing the
   source are omitted rather than presented as per-conversation estimates.
+- Search defaults to relevance ranking and offers an explicit `Last activity` order based on the
+  indexed conversation `updatedAt` value. Changing or extending the query MUST preserve an
+  explicitly selected order; clearing the query returns the equivalent ordinary `Recent` order.
+- A row context menu is a secondary projection of the existing conversation actions. `Open in
+  <Agent>` MUST call the same adapter-backed `Open original` command used by the detail view, and
+  `Copy conversation` MUST read the same indexed detail. Right-click never introduces a separate
+  resume path or directly rewrites the source history.
 - A discovered record identity, source locator/version, and provider session identity are separate
   values. File names MUST NOT overwrite a provider session ID parsed from the source, and native
   resume MUST use the provider identity and source runtime home.

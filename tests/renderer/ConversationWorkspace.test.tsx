@@ -150,7 +150,9 @@ const installApi = (
   return api;
 };
 
-const chooseConversationSort = (label: "Recent" | "Largest" | "Most messages") => {
+const chooseConversationSort = (
+  label: "Recent" | "Best match" | "Last activity" | "Largest" | "Most messages"
+) => {
   fireEvent.click(screen.getByRole("button", { name: /Sort conversations:/ }));
   fireEvent.click(screen.getByRole("menuitemradio", { name: label }));
 };
@@ -1008,6 +1010,8 @@ describe("ConversationWorkspace", () => {
         ? [{ ...conversationSummary, id: "codex:large", title: "Large conversation" }]
         : input?.sort === "messages-desc"
           ? [{ ...conversationSummary, id: "codex:long", title: "Long conversation" }]
+          : input?.sort === "last-active-desc"
+            ? [{ ...conversationSummary, id: "codex:latest", title: "Latest conversation" }]
           : [conversationSummary],
       total: 1,
       workspacePaths: ["/work/project"],
@@ -1033,6 +1037,37 @@ describe("ConversationWorkspace", () => {
       sort: "messages-desc",
       limit: 200
     });
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search conversations" }), {
+      target: { value: "release" }
+    });
+    await waitFor(() => expect(screen.getByRole("button", {
+      name: "Sort conversations: Most messages"
+    })).toBeInTheDocument());
+    chooseConversationSort("Last activity");
+    expect(await screen.findByText("Latest conversation")).toBeInTheDocument();
+    expect(api.listConversations).toHaveBeenLastCalledWith({
+      query: "release",
+      sort: "last-active-desc",
+      limit: 200
+    });
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search conversations" }), {
+      target: { value: "release workflow" }
+    });
+    await waitFor(() => expect(api.listConversations).toHaveBeenLastCalledWith({
+      query: "release workflow",
+      sort: "last-active-desc",
+      limit: 200
+    }));
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search conversations" }), {
+      target: { value: "" }
+    });
+    await waitFor(() => expect(screen.getByRole("button", {
+      name: "Sort conversations: Recent"
+    })).toHaveAttribute("aria-pressed", "false"));
+    await waitFor(() => expect(api.listConversations).toHaveBeenLastCalledWith({ limit: 200 }));
   });
 
   it("uses one compact sort menu beside search and restores focus on Escape", async () => {
@@ -1051,6 +1086,34 @@ describe("ConversationWorkspace", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("menu", { name: "Sort conversations" })).toBeNull();
     expect(trigger).toHaveFocus();
+  });
+
+  it("opens a row context menu and reuses the original Agent action", async () => {
+    const api = installApi();
+    render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);
+
+    const row = await screen.findByRole("option", { name: /Repair release workflow/ });
+    fireEvent.contextMenu(row, { clientX: 240, clientY: 180 });
+
+    const menu = await screen.findByRole("menu", { name: "Conversation actions" });
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Open in Codex" }));
+    await waitFor(() => expect(api.openOriginalConversation).toHaveBeenCalledWith(detail.id));
+    expect(await screen.findByText("Opened in Codex")).toBeInTheDocument();
+  });
+
+  it("opens the row context menu from the keyboard and restores focus on Escape", async () => {
+    installApi();
+    render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);
+
+    const row = await screen.findByRole("option", { name: /Repair release workflow/ });
+    row.focus();
+    fireEvent.keyDown(row, { key: "F10", shiftKey: true });
+    expect(await screen.findByRole("menu", { name: "Conversation actions" }))
+      .toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menu", { name: "Conversation actions" })).toBeNull();
+    await waitFor(() => expect(row).toHaveFocus());
   });
 
   it("shows message count and source size in the conversation detail summary", async () => {

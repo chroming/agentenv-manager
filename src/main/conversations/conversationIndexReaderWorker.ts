@@ -192,6 +192,8 @@ const selectRows = (input, maximumLimit) => {
     ? "c.size_bytes IS NULL ASC, c.size_bytes DESC, c.updated_at DESC, c.id ASC"
     : input.sort === "messages-desc"
       ? "c.message_count DESC, c.updated_at DESC, c.id ASC"
+      : input.sort === "last-active-desc"
+        ? "c.updated_at DESC, c.id ASC"
       : "title_rank ASC, relevance ASC, c.updated_at DESC, c.id ASC";
   const rows = database.prepare(
     "SELECT " + visibleColumns + ", " + matchSnippet + " AS match_snippet" +

@@ -459,7 +459,11 @@ export interface ConversationListInput {
   offset?: number;
 }
 
-export type ConversationSortOrder = "recent" | "size-desc" | "messages-desc";
+export type ConversationSortOrder =
+  | "recent"
+  | "last-active-desc"
+  | "size-desc"
+  | "messages-desc";
 
 export interface ConversationSearchInput {
   query: string;
