@@ -65,10 +65,13 @@ export const createPortableWorkspaceCodec = (input: {
     const profilesRoot = join(destination, "workspace", "profiles");
     const skillsRoot = join(destination, "workspace", "skills");
     const instructionsRoot = join(destination, "workspace", "instructions");
+    const instructionBlocks = await input.instructionLibraryStore?.list() ?? [];
     await Promise.all([
       mkdir(profilesRoot, { recursive: true }),
       mkdir(skillsRoot, { recursive: true }),
-      mkdir(instructionsRoot, { recursive: true })
+      ...(instructionBlocks.length > 0
+        ? [mkdir(instructionsRoot, { recursive: true })]
+        : [])
     ]);
 
     const profileHashes: PortableWorkspaceManifest["profileHashes"] = {};
@@ -105,7 +108,7 @@ export const createPortableWorkspaceCodec = (input: {
     }
 
     const instructionHashes: NonNullable<PortableWorkspaceManifest["instructionHashes"]> = {};
-    for (const block of await input.instructionLibraryStore?.list() ?? []) {
+    for (const block of instructionBlocks) {
       const root = join(instructionsRoot, block.id);
       await mkdir(root, { recursive: true });
       const metadata = PortableInstructionMetadataSchema.parse({
@@ -155,7 +158,7 @@ export const createPortableWorkspaceCodec = (input: {
       workspaceId,
       profileHashes,
       skillHashes,
-      instructionHashes,
+      ...(Object.keys(instructionHashes).length > 0 ? { instructionHashes } : {}),
       sourcesHash
     };
     const manifest: PortableWorkspaceManifest = { ...unsigned, snapshotHash: snapshotHashFor(unsigned) };

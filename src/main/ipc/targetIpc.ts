@@ -13,7 +13,11 @@ interface TargetIpcServices {
 
 export const registerTargetIpc = (
   { diagnosticHandle }: Pick<IpcRegistrationHandles, "diagnosticHandle">,
-  { activationService, targetDiscoveryService, targetRegistry }: TargetIpcServices
+  {
+    activationService,
+    targetDiscoveryService,
+    targetRegistry
+  }: TargetIpcServices
 ) => {
   diagnosticHandle("targets:list", (_event, forceRefresh: unknown) =>
     targetDiscoveryService.listTargets({ forceRefresh: forceRefresh === true })

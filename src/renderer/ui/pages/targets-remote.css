@@ -1,0 +1,123 @@
+.target-page__context {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.remote-device-section {
+  background: var(--surface);
+  border-block: 1px solid var(--border-subtle);
+}
+
+.remote-device-section__header,
+.remote-device-row {
+  align-items: center;
+  display: grid;
+  min-width: 0;
+}
+
+.remote-device-section__header {
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 52px;
+  padding: 8px 14px;
+}
+
+.remote-device-section__title {
+  align-items: center;
+  color: var(--text);
+  display: grid;
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  gap: 8px;
+  grid-template-columns: 20px auto minmax(0, 1fr);
+  min-width: 0;
+}
+
+.remote-device-section__title small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-device-section__actions,
+.remote-device-row__actions {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.remote-device-list {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.remote-device-row {
+  gap: 12px;
+  grid-template-columns: minmax(180px, .8fr) minmax(180px, 1.2fr) auto;
+  min-height: 50px;
+  padding: 7px 14px 7px 42px;
+}
+
+.remote-device-row + .remote-device-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.remote-device-row__identity {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.remote-device-row__identity strong,
+.remote-device-row__identity small,
+.remote-device-row__agents {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-device-row__identity strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+}
+
+.remote-device-row__identity small,
+.remote-device-row__agents,
+.remote-device-section__empty {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.remote-device-section__empty {
+  margin: 0;
+  padding: 0 14px 12px 42px;
+}
+
+.remote-device-dialog {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.remote-device-dialog__form {
+  display: grid;
+  gap: 14px;
+}
+
+.remote-device-dialog__optional {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 120px;
+}
+
+@media (max-width: 1020px) {
+  .remote-device-section__title small {
+    display: none;
+  }
+
+  .remote-device-row {
+    grid-template-columns: minmax(150px, 1fr) minmax(120px, .8fr) auto;
+  }
+}

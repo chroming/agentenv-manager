@@ -35,6 +35,23 @@ describe("AgentEnv data validation", () => {
     await expect(validateAppDataRoot(root)).rejects.toThrow();
   });
 
+  it("rejects malformed SSH device descriptors and remote endpoint state", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-data-validation-"));
+    await writeFile(
+      join(root, "remote-devices.json"),
+      '{"formatVersion":1,"devices":[{"name":"Server","host":"server"}]}\n'
+    );
+    await expect(validateAppDataRoot(root)).rejects.toThrow();
+
+    await writeFile(join(root, "remote-devices.json"), '{"formatVersion":1,"devices":[]}\n');
+    await mkdir(join(root, "remote-endpoint-states"), { recursive: true });
+    await writeFile(
+      join(root, "remote-endpoint-states", "invalid.json"),
+      '{"formatVersion":1,"endpointId":"ssh:fixture:opencode"}\n'
+    );
+    await expect(validateAppDataRoot(root)).rejects.toThrow();
+  });
+
   it("rejects a Skill Library entry without a valid SKILL.md", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-data-validation-"));
     await mkdir(join(root, "skills-library", "broken-skill"), { recursive: true });

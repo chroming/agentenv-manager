@@ -69,7 +69,7 @@ import { registerConversationIpc } from "./ipc/conversationIpc";
 import { registerProjectIpc } from "./ipc/projectIpc";
 import { registerRecoveryIpc } from "./ipc/recoveryIpc";
 import { registerSettingsIpc } from "./ipc/settingsIpc";
-import { registerTargetIpc } from "./ipc/targetIpc";
+import { registerAgentIpc } from "./ipc/agentIpc";
 import { registerDialogIpc } from "./ipc/dialogIpc";
 import { registerSharedSkillAreaIpc } from "./ipc/sharedSkillAreaIpc";
 import { registerSkillUpdateIpc } from "./ipc/skillUpdateIpc";
@@ -86,6 +86,7 @@ export interface IpcServices {
   projectMutationService: ProjectMutationService;
   projectRecoveryStore: ProjectRecoveryStore;
   activationService: ActivationService;
+  remoteActivationService: import("./remoteDevices/remoteActivationService").RemoteActivationService;
   backupStore: BackupStore;
   backupMaintenanceService: BackupMaintenanceService;
   githubAuthService: GitHubAuthService;
@@ -125,6 +126,7 @@ export const registerIpcHandlers = ({
   projectMutationService,
   projectRecoveryStore,
   activationService,
+  remoteActivationService,
   backupStore,
   backupMaintenanceService,
   githubAuthService,
@@ -283,9 +285,9 @@ export const registerIpcHandlers = ({
       targetDiscoveryService
     }
   );
-  registerTargetIpc(
-    { diagnosticHandle },
-    { activationService, targetDiscoveryService, targetRegistry }
+  registerAgentIpc(
+    { diagnosticHandle, handleMutation },
+    { activationService, remoteActivationService, targetDiscoveryService, targetRegistry }
   );
   registerSharedSkillAreaIpc(
     { diagnosticHandle, handleMutation, handleWorkspaceSyncMutation },
@@ -919,7 +921,7 @@ export const registerIpcHandlers = ({
   );
   registerProfileIpc(
     { diagnosticHandle, handleMutation },
-    { activationService, evaluationService, profileStore, targetCaptureService }
+    { activationService, remoteActivationService, evaluationService, profileStore, targetCaptureService }
   );
   registerRecoveryIpc(
     { diagnosticHandle, handleMutation },

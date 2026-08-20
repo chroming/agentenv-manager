@@ -32,7 +32,7 @@ export function SkillLibraryFilters({
       <label>
         <span>{t("Source")}</span>
         <SelectControl
-          controlWidth="compact"
+          controlWidth="fill"
           aria-label={t("Skill source filter")}
           value={sourceFilter}
           onChange={(event) => onChange({
@@ -47,7 +47,7 @@ export function SkillLibraryFilters({
       <label>
         <span>{t("Usage")}</span>
         <SelectControl
-          controlWidth="compact"
+          controlWidth="fill"
           aria-label={t("Skill usage filter")}
           value={usageFilter}
           onChange={(event) => onChange({
@@ -62,7 +62,7 @@ export function SkillLibraryFilters({
       <label>
         <span>{t("Tags")}</span>
         <SelectControl
-          controlWidth="compact"
+          controlWidth="fill"
           aria-label={t("Skill tag filter")}
           value={tagFilter}
           onChange={(event) => onChange({ tagFilter: event.currentTarget.value })}
@@ -76,7 +76,7 @@ export function SkillLibraryFilters({
       <label>
         <span>{t("Agents")}</span>
         <SelectControl
-          controlWidth="compact"
+          controlWidth="fill"
           aria-label={t("Skill Agent filter")}
           value={targetFilter}
           onChange={(event) => onChange({

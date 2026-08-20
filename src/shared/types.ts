@@ -147,6 +147,13 @@ export interface AgentEnvApi {
   probeSupportedTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
   listTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
   listTargetStates(): Promise<TargetManagementState[]>;
+  listRemoteDevices?(): Promise<RemoteDevice[]>;
+  addRemoteDevice?(input: CreateRemoteDeviceInput): Promise<RemoteDevice>;
+  updateRemoteDevice?(input: UpdateRemoteDeviceInput): Promise<RemoteDevice>;
+  removeRemoteDevice?(id: string): Promise<void>;
+  probeRemoteDevice?(id: string): Promise<RemoteDeviceProbe>;
+  listRemoteEndpoints?(forceRefresh?: boolean): Promise<RemoteAgentEndpoint[]>;
+  listRemoteTargetStates?(): Promise<TargetManagementState[]>;
   listConversations(input?: ConversationListInput): Promise<ConversationListResult>;
   searchConversations(input: ConversationSearchInput): Promise<ConversationSummary[]>;
   readConversation(id: string, input?: ConversationReadInput): Promise<ConversationDetail>;
@@ -1975,6 +1982,58 @@ export interface TargetInfo extends TargetDescriptor {
   paths: TargetPaths;
   health: TargetHealth;
   conversationCapabilities: TargetConversationCapabilities;
+}
+
+export interface RemoteDevice {
+  id: string;
+  name: string;
+  host: string;
+  user?: string;
+  port?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateRemoteDeviceInput {
+  name: string;
+  host: string;
+  user?: string;
+  port?: number;
+}
+
+export interface UpdateRemoteDeviceInput extends CreateRemoteDeviceInput {
+  id: string;
+}
+
+export interface RemoteDeviceProbe {
+  deviceId: string;
+  status: "ready" | "unavailable" | "unsupported";
+  homeDir?: string;
+  platform?: string;
+  architecture?: string;
+  deviceFingerprint?: string;
+  agentExecutables: Record<string, string>;
+  checkedAt: string;
+  error?: string;
+}
+
+export interface RemoteAgentEndpoint {
+  id: string;
+  deviceId: string;
+  deviceName: string;
+  agentId: string;
+  agentName: string;
+  homeDir: string;
+  executablePath: string;
+  deviceFingerprint: string;
+  checkedAt: string;
+  capabilities: {
+    apply: true;
+    capture: false;
+    conversations: false;
+    workspaceOpen: false;
+    comparison: false;
+  };
 }
 
 export interface TargetActivationPreview {

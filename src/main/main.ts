@@ -127,6 +127,7 @@ import {
 } from "./appUpdates/homebrewUpdateHelper";
 import { createTelemetryService } from "./telemetry/telemetryService";
 import { createUiStateStore } from "./uiStateStore";
+import { createRemoteActivationService } from "./remoteDevices/remoteActivationService";
 
 const createGitHubFixtureFetch = (fixtureRoot: string) => {
   const fixtureTrees = new Map<string, string>();
@@ -1047,6 +1048,12 @@ const createServices = async (
     settingsStore,
     skillLibraryStore
   });
+  const remoteActivationService = createRemoteActivationService({
+    paths,
+    profileStore,
+    skillLibraryStore,
+    targetRegistry
+  });
   const targetDiscoveryService = createTargetDiscoveryService({
     paths,
     targetRegistry,
@@ -1232,6 +1239,7 @@ const createServices = async (
     instructionLibraryStore,
     skillMutationRecoveryGate,
     activationService,
+    remoteActivationService,
     targetCaptureService,
     evaluationService,
     targetRegistry,

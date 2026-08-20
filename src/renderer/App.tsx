@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type SetStateAction
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -92,10 +85,6 @@ import type { SkillManagementScope } from "../shared/skillCleanup";
 import { collectLibraryResourceVersions, libraryResourceVersionsEqual } from "../shared/libraryVersions";
 import { isTargetInstalled } from "../shared/targetHealth";
 import { isExternalSkillImportable } from "../shared/skillIdentity";
-import {
-  setProfileResourceMode,
-  type ManagedProfileResource
-} from "../shared/profileResources";
 import { AgentDiscoveryDialog } from "./components/AgentDiscoveryDialog";
 import { AgentSettingsSection } from "./components/AgentSettingsSection";
 import {
@@ -218,9 +207,11 @@ import {
   useSkillCleanupBoundaries
 } from "./hooks/useSkillCleanupBoundaries";
 import { useNativeResourceInspection } from "./hooks/useNativeResourceInspection";
+import { useRemoteEndpoints } from "./hooks/useRemoteEndpoints";
 import { useWindowChromeState } from "./hooks/useWindowChromeState";
 import { useDeviceUiState } from "./hooks/useDeviceUiState";
 import { loadProfileCoreData } from "./profileCoreLoader";
+import { deriveProfileEndpointContext } from "./profileEndpointContext";
 import { WindowTitlebar } from "./components/WindowTitlebar";
 import {
   preferredTargetForProfile,
@@ -235,7 +226,6 @@ import {
   summarizeSkillUpdateResult,
   updatesFromSourceGroups
 } from "./skillUpdateSummary";
-import { createTargetNameIndex } from "./targetPresentation";
 import {
   monitoredSkillSourcesDue,
   oldestMonitoredSkillCheckAt
@@ -277,13 +267,6 @@ const AppContent = ({
   const windowChromeFullScreen = useWindowChromeState();
   const [supportedTargets, setSupportedTargets] = useState<TargetDescriptor[]>([]);
   const [targets, setTargets] = useState<TargetInfo[]>([]);
-  const targetNames = useMemo(
-    () => ({
-      ...createTargetNameIndex(supportedTargets),
-      "shared-compatibility": t("Shared Skills")
-    }),
-    [supportedTargets, t]
-  );
   const [targetStates, setTargetStates] = useState<TargetManagementState[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [librarySkills, setLibrarySkills] = useState<SkillLibraryEntry[]>([]);
@@ -375,6 +358,11 @@ const AppContent = ({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [diagnosticIssue, setDiagnosticIssue] = useState<DiagnosticIssueDetail>();
+  const remote = useRemoteEndpoints({
+    targets, supportedTargets, setTargetStates, enabled: !isLoading,
+    sharedSkillsLabel: t("Shared Skills"), onError: setError
+  });
+  const { profileTargets, targetNames } = remote;
   const { acceptUiState, currentUiState, persistUiState, uiState } = useDeviceUiState(setError);
   const {
     nativeMcpConnections,
@@ -468,7 +456,10 @@ const AppContent = ({
     onRollbackClear: () => setRollbackPreview(undefined),
     onStatus: setProfileSaveStatus,
     onTargetsRefresh: setTargets,
-    onTargetStatesRefresh: setTargetStates,
+    onTargetStatesRefresh: (states) => setTargetStates((current) => [
+      ...states,
+      ...current.filter((state) => state.targetId.startsWith("ssh:"))
+    ]),
     translate: t
   });
   resetProfileActivationRef.current = resetProfileActivation;
@@ -1775,7 +1766,7 @@ const AppContent = ({
       setIsTargetMenuOpen(false);
       return;
     }
-    const targetName = targets.find((target) => target.id === targetId)?.name ?? "Agent";
+    const targetName = profileTargets.find((target) => target.id === targetId)?.name ?? "Agent";
     guardProfileAction(`apply to ${targetName}`, () => selectTargetNow(targetId));
   };
 
@@ -1837,14 +1828,33 @@ const AppContent = ({
     window.requestAnimationFrame(() => focusInitialActionMenuItem(profileActionsMenuRef.current));
   }, [isProfileActionsOpen]);
 
-  const selectedTarget = targets.find((target) => target.id === selectedTargetId);
+  const {
+    selectedTarget,
+    selectedRemoteEndpoint,
+    selectedAgentId,
+    selectedPolicyTarget,
+    profileTarget,
+    resourceSummary,
+    currentTargetSkills,
+    currentTargetInstructions,
+    instructionsPolicy,
+    skillsPolicy,
+    updateResourceManagement: updateSelectedResourceManagement
+  } = deriveProfileEndpointContext({
+    selectedTargetId,
+    profileTargets,
+    remoteEndpoints: remote.endpoints,
+    supportedTargets,
+    draftProfile,
+    librarySkills,
+    skillInventory,
+    nativeInstructionSnapshots,
+    updateDraftProfile
+  });
   const loadingProfileSummary = profileLoadingId
     ? profiles.find((profile) => profile.id === profileLoadingId)
     : undefined;
   const installedTargets = targets.filter((target) => isTargetInstalled(target.health));
-  const profileTarget = supportedTargets.find(
-    (target) => target.id === selectedTargetId
-  );
   const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.preferredTargetId ?? "Agent";
   const targetStateById = new Map(targetStates.map((state) => [state.targetId, state]));
   const preparedSkillTargetsBySkill = useMemo(
@@ -1908,7 +1918,7 @@ const AppContent = ({
         .filter((state) => state.activeProfileId === deleteProfileCandidateId)
         .map(
           (state) =>
-            targets.find((target) => target.id === state.targetId)?.name ?? state.targetId
+            profileTargets.find((target) => target.id === state.targetId)?.name ?? state.targetId
         )
     : [];
   const validationRows = draftProfile
@@ -1917,40 +1927,9 @@ const AppContent = ({
   const localValidationErrors = validationRows
     .filter((row) => row.level === "error" && row.source !== "access" && row.source !== "conflicts")
     .map((row) => row.detail ?? `${row.label} is invalid`);
-  const resourceSummary =
-    draftProfile && profileTarget
-      ? summarizeProfile(draftProfile, profileTarget, librarySkills)
-      : undefined;
-  const currentTargetSkills = selectedTargetId
-    ? skillInventory.filter((entry) => entry.foundIn.includes(selectedTargetId))
-    : [];
-  const currentTargetInstructions = nativeInstructionSnapshots.find(
-    (snapshot) => snapshot.targetId === selectedTarget?.id
-  );
-  const instructionsPolicy = profileTarget?.capabilities.instructions
-    ? resourceSummary?.instructions.mode ?? "manage"
-    : "ignore";
-  const skillsPolicy = profileTarget?.capabilities.skills
-    ? resourceSummary?.skills.mode ?? "manage"
-    : "ignore";
-  const updateSelectedResourceManagement = (
-    resource: ManagedProfileResource,
-    mode: ProfileResourceMode
-  ) => {
-    if (!draftProfile || !selectedTargetId) return;
-    updateDraftProfile({
-      ...draftProfile,
-      resources: setProfileResourceMode(
-        draftProfile.resources ?? emptyProfileResources,
-        selectedTargetId,
-        resource,
-        mode
-      )
-    });
-  };
   const selectedTargetProfileHash =
     selectedTarget && draftProfile
-      ? draftProfile.targetContentHashes?.[selectedTarget.id]
+      ? draftProfile.targetContentHashes?.[selectedAgentId ?? selectedTarget.id]
       : undefined;
   const readinessInput = {
     profile: draftProfile
@@ -1970,7 +1949,7 @@ const AppContent = ({
                     selectedTargetState?.sharedSkillPreparations
                   ),
                   librarySkills,
-                  selectedTarget?.id
+                  selectedAgentId
                 )
               : undefined
           )
@@ -2009,7 +1988,7 @@ const AppContent = ({
     return t(readiness.message);
   })();
   const selectedProfileDeployment = draftProfile
-    ? summarizeProfileApplications(draftProfile.id, targetStates, targets)
+    ? summarizeProfileApplications(draftProfile.id, targetStates, profileTargets)
     : undefined;
   const selectedProfileDeploymentLabel =
     selectedProfileDeployment && selectedProfileDeployment.items.length > 1
@@ -3304,6 +3283,13 @@ const AppContent = ({
     setTargets
   });
 
+  const removeRemoteDevice = async (id: string) => {
+    await remote.remove(id);
+    if (selectedTargetId?.startsWith(`ssh:${id}:`)) {
+      setSelectedTargetId(targets[0]?.id);
+    }
+  };
+
   useWorkspaceFreshness({
     activeWorkspace,
     isLoading,
@@ -3482,7 +3468,7 @@ const AppContent = ({
         : undefined;
   const hasPersistentAppFeedback =
     appFeedback?.kind === "error" || appFeedback?.kind === "warning";
-  const profileApplyControl = targets.length > 0 ? (
+  const profileApplyControl = profileTargets.length > 0 ? (
     <div className="profile-apply-control" ref={profileApplyControlRef}>
       <Button
         className="profile-apply-button ui-inspector-header__command"
@@ -3523,7 +3509,7 @@ const AppContent = ({
       query={targetMenuQuery}
       selectedId={selectedTargetId}
       selectionLabel={t("Select apply Agent")}
-      targets={targets}
+      targets={profileTargets}
       onOpenChange={(open) => {
         setIsProfileActionsOpen(false);
         setIsTargetMenuOpen(open);
@@ -3612,7 +3598,7 @@ const AppContent = ({
             compareDisabled={evaluationControl.disabled}
             compareDescription={evaluationDescription}
             menuRef={profileActionsMenuRef}
-            appliedRestoreAvailable={Boolean(selectedAppliedProfileSnapshot)}
+            appliedRestoreAvailable={!selectedRemoteEndpoint && Boolean(selectedAppliedProfileSnapshot)}
             appliedRestoreDescription={selectedAppliedProfileSnapshot
               ? t("Restore the Profile version last applied to {{target}}.", {
                   target: selectedTarget?.name ?? t("this Agent")
@@ -3630,7 +3616,7 @@ const AppContent = ({
               setIsProfileActionsOpen(false);
               setProfileRecoveryMode("history");
             }}
-            onRestoreLastApplied={() => {
+            onRestoreLastApplied={selectedRemoteEndpoint ? undefined : () => {
               setIsProfileActionsOpen(false);
               setProfileRecoveryMode("applied");
             }}
@@ -4001,7 +3987,7 @@ const AppContent = ({
                             draftProfile={draftProfile}
                             isProfileDirty={isProfileDirty}
                             profileSaveStatus={profileSaveStatus}
-                            targets={targets}
+                            targets={profileTargets}
                             targetStates={targetStates}
                             actionsDisabled={busy}
                             variant="hero"
@@ -4067,7 +4053,7 @@ const AppContent = ({
                             draftProfile={draftProfile}
                             isProfileDirty={isProfileDirty}
                             profileSaveStatus={profileSaveStatus}
-                            targets={targets}
+                            targets={profileTargets}
                             targetStates={targetStates}
                             actionsDisabled={busy}
                             variant="hero"
@@ -4134,7 +4120,7 @@ const AppContent = ({
                         policy={skillsPolicy}
                         capabilityAvailable={Boolean(profileTarget?.capabilities.skills)}
                         expanded={composerSectionIsExpanded("skills")}
-                        targetId={selectedTarget?.id}
+                        targetId={selectedAgentId}
                         targetName={activeTargetName}
                         targetState={selectedTargetState}
                         currentSkills={currentTargetSkills}
@@ -4173,7 +4159,9 @@ const AppContent = ({
                           name: activeTargetName
                         })}
                         policyStatus={
-                          profileTarget?.capabilities.mcpActivation
+                          selectedRemoteEndpoint
+                            ? t("Keep Agent for SSH Apply")
+                            : profileTarget?.capabilities.mcpActivation
                             ? undefined
                             : t("Agent controlled")
                         }
@@ -4184,9 +4172,9 @@ const AppContent = ({
                         }
                       >
                         <ProfileMcpEditor
-                          target={selectedTarget}
-                          connections={nativeMcpConnections}
-                          issues={nativeMcpIssues}
+                          target={selectedPolicyTarget}
+                          connections={selectedRemoteEndpoint ? [] : nativeMcpConnections}
+                          issues={selectedRemoteEndpoint ? [] : nativeMcpIssues}
                           value={draftProfile.resources ?? emptyProfileResources}
                           onChange={(resources) =>
                             updateDraftProfile({ ...draftProfile, resources })
@@ -4231,14 +4219,14 @@ const AppContent = ({
                         compareDisabled={evaluationControl.disabled}
                         compareDescription={evaluationDescription}
                         suspended={profileEvaluationOpen}
-                        onOpenRecovery={() => {
-          clearProfilePreview();
+                        onOpenRecovery={selectedRemoteEndpoint ? undefined : () => {
+                          clearProfilePreview();
                           setSettingsCategory("data");
                           openWorkspaceNow("settings");
                           backupRecovery.actions.revealManager();
                         }}
-                        onAdoptTargetChanges={adoptCompatibleTargetChanges}
-                        onLeaveSkillUnmanaged={(issue) =>
+                        onAdoptTargetChanges={selectedRemoteEndpoint ? undefined : adoptCompatibleTargetChanges}
+                        onLeaveSkillUnmanaged={selectedRemoteEndpoint ? undefined : (issue) =>
                           leavePreviewSkillUnmanaged(issue, preview.targetId, async () => {
                             if (!draftProfile) return;
                             await refreshProfilePreview(
@@ -4246,9 +4234,9 @@ const AppContent = ({
                               preview.targetId
                             );
                           })}
-                        onReviewSkillCollection={reviewPreviewSkillCollection}
-                        onManageLocalSkills={reviewPreviewLocalSkills}
-                        onManageSharedSkills={openEnvironmentReview}
+                        onReviewSkillCollection={selectedRemoteEndpoint ? undefined : reviewPreviewSkillCollection}
+                        onManageLocalSkills={selectedRemoteEndpoint ? undefined : reviewPreviewLocalSkills}
+                        onManageSharedSkills={selectedRemoteEndpoint ? undefined : openEnvironmentReview}
                         onCompare={() => void openProfileEvaluation()}
                         onCancel={clearProfilePreview}
                         onConfirm={applySelectedProfile}
@@ -4460,6 +4448,9 @@ const AppContent = ({
         ) : activeWorkspace === "targets" ? (
             <TargetWorkspace
               targets={targets}
+              remoteDevices={remote.devices}
+              remoteEndpoints={remote.endpoints}
+              remoteDevicesBusy={remote.busy}
               detectedDisabledAgentCount={detectedDisabledAgents.length}
               targetStates={targetStates}
               environmentReview={environmentReview}
@@ -4472,7 +4463,13 @@ const AppContent = ({
               isLoading={isLoading}
               busy={busy}
               freshness={freshnessStates.agents}
-              onRefresh={refreshTargets}
+              onRefresh={async () => {
+                await Promise.all([refreshTargets(), remote.refresh(true)]);
+              }}
+              onRefreshRemoteDevices={() => remote.refresh(true)}
+              onAddRemoteDevice={remote.add}
+              onUpdateRemoteDevice={remote.update}
+              onRemoveRemoteDevice={removeRemoteDevice}
               onReorder={reorderAgents}
               onChooseAgents={openAgentChooser}
               onChooseSetupAgent={openAgentSetup}

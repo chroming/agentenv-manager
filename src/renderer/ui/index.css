@@ -9,6 +9,7 @@
 @import "./patterns.css" layer(patterns);
 @import "./shell.css" layer(shell);
 @import "./pages/targets.css" layer(pages);
+@import "./pages/targets-remote.css" layer(pages);
 @import "./pages/projects.css" layer(pages);
 @import "./pages/settings.css" layer(pages);
 @import "./pages/telemetry-consent.css" layer(pages);

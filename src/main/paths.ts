@@ -25,6 +25,9 @@ export interface AgentEnvPaths {
   backupsDir: string;
   targetStatesDir: string;
   activationHistoryPath: string;
+  remoteDevicesPath: string;
+  remoteEndpointStatesDir: string;
+  remotePreviewCacheDir: string;
   skillsLibraryDir: string;
   instructionsLibraryDir: string;
   homeDir: string;
@@ -102,6 +105,12 @@ export const createPaths = (overrides: PathOverrides): AgentEnvPaths => {
     activationHistoryPath:
       overrides.activationHistoryPath ??
       join(overrides.appDataRoot, "activation-history.jsonl"),
+    remoteDevicesPath:
+      overrides.remoteDevicesPath ?? join(overrides.appDataRoot, "remote-devices.json"),
+    remoteEndpointStatesDir:
+      overrides.remoteEndpointStatesDir ?? join(overrides.appDataRoot, "remote-endpoint-states"),
+    remotePreviewCacheDir:
+      overrides.remotePreviewCacheDir ?? join(cacheRoot, "remote-previews"),
     skillsLibraryDir:
       overrides.skillsLibraryDir ?? join(overrides.appDataRoot, "skills-library"),
     instructionsLibraryDir:

@@ -5,6 +5,7 @@ import { registerProjectIpc } from "../../src/main/ipc/projectIpc";
 import { registerRecoveryIpc } from "../../src/main/ipc/recoveryIpc";
 import { registerSettingsIpc } from "../../src/main/ipc/settingsIpc";
 import { registerTargetIpc } from "../../src/main/ipc/targetIpc";
+import { registerRemoteDeviceIpc } from "../../src/main/ipc/remoteDeviceIpc";
 import { registerDialogIpc } from "../../src/main/ipc/dialogIpc";
 import type { IpcHandler, IpcRegistrationHandles } from "../../src/main/ipc/registration";
 
@@ -138,6 +139,29 @@ describe("domain IPC registrars", () => {
     expect(registrations).toContainEqual({ channel: "activation:apply", kind: "mutation" });
   });
 
+  it("does not delete a Profile that is still active on an SSH endpoint", async () => {
+    const { handles, handlers } = collectChannels();
+    const profileStore = { deleteProfile: vi.fn() } as any;
+    registerProfileIpc(handles, {
+      activationService: {
+        listTargetStates: vi.fn().mockResolvedValue([])
+      } as any,
+      remoteActivationService: {
+        listTargetStates: vi.fn().mockResolvedValue([
+          { targetId: "ssh:device:opencode", activeProfileId: "daily" }
+        ])
+      } as any,
+      evaluationService: service(),
+      profileStore,
+      targetCaptureService: service()
+    });
+
+    await expect(handlers.get("profiles:delete")!(event, "daily")).rejects.toThrow(
+      "Apply another profile"
+    );
+    expect(profileStore.deleteProfile).not.toHaveBeenCalled();
+  });
+
   it("keeps recovery and data mutations behind the mutation handle", () => {
     const { handles, registrations } = collectChannels();
     registerRecoveryIpc(handles, {
@@ -169,6 +193,16 @@ describe("domain IPC registrars", () => {
       channel: "targets:list-native-instructions",
       kind: "diagnostic"
     });
+  });
+
+  it("registers SSH device and endpoint channels only when the remote capability is present", () => {
+    const { handles, registrations } = collectChannels();
+    registerRemoteDeviceIpc(handles, { remoteActivationService: service() });
+
+    expect(registrations).toContainEqual({ channel: "remote-devices:list", kind: "diagnostic" });
+    expect(registrations).toContainEqual({ channel: "remote-devices:add", kind: "mutation" });
+    expect(registrations).toContainEqual({ channel: "remote-endpoints:list", kind: "diagnostic" });
+    expect(registrations).toContainEqual({ channel: "remote-endpoints:list-states", kind: "diagnostic" });
   });
 
   it("keeps desktop pickers and temporary Skill archives in one dialog registrar", () => {

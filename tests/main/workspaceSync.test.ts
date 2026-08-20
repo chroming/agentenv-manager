@@ -339,6 +339,11 @@ describe("Workspace Sync", () => {
     await codec.exportSnapshot(destination, "11111111-1111-4111-8111-111111111111");
 
     await expect(validatePortableWorkspace(destination)).resolves.toBeDefined();
+    const manifest = JSON.parse(await readFile(join(destination, "agentenv-sync.json"), "utf8"));
+    expect(manifest).not.toHaveProperty("instructionHashes");
+    await expect(lstat(join(destination, "workspace", "instructions"))).rejects.toMatchObject({
+      code: "ENOENT"
+    });
     const sourceData = JSON.parse(
       await readFile(join(destination, "workspace", "skill-sources.json"), "utf8")
     );

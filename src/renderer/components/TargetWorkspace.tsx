@@ -18,7 +18,11 @@ import type {
   StopManagingMode,
   StopManagingPreview,
   TargetInfo,
-  TargetManagementState
+  TargetManagementState,
+  RemoteAgentEndpoint,
+  RemoteDevice,
+  CreateRemoteDeviceInput,
+  UpdateRemoteDeviceInput
 } from "../../shared/types";
 import { reorderPreferenceByDrop } from "../../shared/uiState";
 import { HistoryView } from "./HistoryView";
@@ -46,9 +50,13 @@ import type { EnvironmentReviewSummary } from "../environmentReview";
 import type { FreshnessState } from "../freshness";
 import { EnvironmentStatusStrip } from "./EnvironmentStatusStrip";
 import { OverflowTooltip } from "./OverflowTooltip";
+import { RemoteDeviceManager } from "./RemoteDeviceManager";
 
 interface TargetWorkspaceProps {
   targets: TargetInfo[];
+  remoteDevices: RemoteDevice[];
+  remoteEndpoints: RemoteAgentEndpoint[];
+  remoteDevicesBusy: boolean;
   detectedDisabledAgentCount: number;
   targetStates: TargetManagementState[];
   environmentReview: EnvironmentReviewSummary;
@@ -62,6 +70,10 @@ interface TargetWorkspaceProps {
   busy: boolean;
   freshness: FreshnessState;
   onRefresh(): Promise<void>;
+  onRefreshRemoteDevices(): Promise<void>;
+  onAddRemoteDevice(input: CreateRemoteDeviceInput): Promise<void>;
+  onUpdateRemoteDevice(input: UpdateRemoteDeviceInput): Promise<void>;
+  onRemoveRemoteDevice(id: string): Promise<void>;
   onReorder?(targetIds: string[]): void;
   onChooseAgents(): void;
   onChooseSetupAgent(targetIds: string[]): void;
@@ -252,6 +264,9 @@ const TargetRowActions = ({
 
 export const TargetWorkspace = ({
   targets,
+  remoteDevices,
+  remoteEndpoints,
+  remoteDevicesBusy,
   detectedDisabledAgentCount,
   targetStates,
   environmentReview,
@@ -265,6 +280,10 @@ export const TargetWorkspace = ({
   busy,
   freshness,
   onRefresh,
+  onRefreshRemoteDevices,
+  onAddRemoteDevice,
+  onUpdateRemoteDevice,
+  onRemoveRemoteDevice,
   onReorder = () => undefined,
   onChooseAgents,
   onChooseSetupAgent,
@@ -354,19 +373,31 @@ export const TargetWorkspace = ({
         )}
       />
 
-      {showEnvironmentStatus ? (
-        <EnvironmentStatusStrip
-          summary={environmentReview}
-          targetNames={targetNames}
-          busy={busy}
-          onChooseSetupAgent={onChooseSetupAgent}
-          onConfigure={onConfigure}
-          onRefresh={() => {
-            void onRefresh();
-          }}
-          onReviewShared={onReviewEnvironment}
+      <div className="target-page__context">
+        {showEnvironmentStatus ? (
+          <EnvironmentStatusStrip
+            summary={environmentReview}
+            targetNames={targetNames}
+            busy={busy}
+            onChooseSetupAgent={onChooseSetupAgent}
+            onConfigure={onConfigure}
+            onRefresh={() => {
+              void onRefresh();
+            }}
+            onReviewShared={onReviewEnvironment}
+          />
+        ) : null}
+
+        <RemoteDeviceManager
+          devices={remoteDevices}
+          endpoints={remoteEndpoints}
+          busy={remoteDevicesBusy}
+          onRefresh={onRefreshRemoteDevices}
+          onAdd={onAddRemoteDevice}
+          onUpdate={onUpdateRemoteDevice}
+          onRemove={onRemoveRemoteDevice}
         />
-      ) : null}
+      </div>
 
       <div className="target-list" aria-busy={isLoading}>
         {targets.length > 0 ? (

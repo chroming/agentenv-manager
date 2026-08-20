@@ -162,6 +162,7 @@ export const ProfileInstructionsComposerSection = ({
         <AlignedResourceList actionTrack="standard">
           {policy === "ignore" && currentValueAvailable ? (
             <ResourceRow
+              className="ui-resource-children__item"
               icon={<FileText size={15} />}
               title={fileName}
               description={t("Current {{name}} file", { name: targetName })}
@@ -173,6 +174,7 @@ export const ProfileInstructionsComposerSection = ({
             const name = block?.name ?? reference.libraryId;
             return (
               <ResourceRow
+                className="ui-resource-children__item"
                 key={reference.libraryId}
                 tone={!reference.enabled || policy !== "manage" ? "disabled" : "default"}
                 icon={<FileText size={15} />}
@@ -239,6 +241,7 @@ export const ProfileInstructionsComposerSection = ({
           }) : null}
           {policy !== "ignore" ? (
             <ResourceRow
+              className="ui-resource-children__item"
               icon={<FileText size={15} />}
               title={(
                 <TextAction

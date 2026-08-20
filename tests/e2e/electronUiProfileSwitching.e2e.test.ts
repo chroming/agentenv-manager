@@ -1537,6 +1537,7 @@ describe("Electron UI profile switching e2e", () => {
       "projects",
       "conversations",
       "library",
+      "instructions",
       "settings"
     ]);
 
@@ -2373,11 +2374,18 @@ describe("Electron UI profile switching e2e", () => {
                 other.bottom <= rect.top
             )
           ),
-          noHorizontalOverflow: panel.scrollWidth <= panel.clientWidth
+          noHorizontalOverflow: panel.scrollWidth <= panel.clientWidth,
+          controls: controls.map((control, index) => ({
+            name: control.getAttribute("aria-label") ?? control.textContent?.trim(),
+            x: Math.round(rects[index]!.x),
+            y: Math.round(rects[index]!.y),
+            width: Math.round(rects[index]!.width),
+            height: Math.round(rects[index]!.height)
+          }))
         };
       });
       expect(filterGeometry.controlsInsidePanel).toBe(true);
-      expect(filterGeometry.controlsDoNotOverlap).toBe(true);
+      expect(filterGeometry.controlsDoNotOverlap, JSON.stringify(filterGeometry)).toBe(true);
       expect(filterGeometry.noHorizontalOverflow).toBe(true);
       const sourceFilter = page.getByRole("combobox", { name: "Skill source filter" });
       await sourceFilter.selectOption("online");
@@ -4841,7 +4849,7 @@ describe("Electron UI profile switching e2e", () => {
       documentContained: true,
       editorLeft: 64,
       feedbackInset: 18,
-      groupCount: 3,
+      groupCount: 4,
       sidebarTop: 38,
       sidebarWidth: 64
     });
@@ -4858,6 +4866,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(collapsedGeometry.collapseButtonBox.bottom - collapsedGeometry.collapseButtonBox.top)
       .toBe(28);
     expect(collapsedGeometry.groupSeparators).toEqual([
+      { borderTopWidth: "1px", width: 40 },
       { borderTopWidth: "1px", width: 40 },
       { borderTopWidth: "1px", width: 40 }
     ]);
@@ -6047,7 +6056,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(expandedDisclosureStyle).toEqual(collapsedInstructionsSurface);
     const instructionHierarchy = await instructionsSection.evaluate((section) => {
       const parent = section.querySelector<HTMLElement>(".ui-resource-disclosure__title")!;
-      const child = section.querySelector<HTMLElement>(".instruction-document__identity strong")!;
+      const child = section.querySelector<HTMLElement>(".ui-resource-row__identity strong")!;
       return {
         childLeft: Math.round(child.getBoundingClientRect().left),
         parentLeft: Math.round(parent.getBoundingClientRect().left)
@@ -8365,8 +8374,9 @@ describe("Electron UI profile switching e2e", () => {
     await selectProfile(page, "UI Trae daily");
     await selectTarget(page, "Trae CLI");
     await expandComposerSection(page, "Instructions");
-    await page.getByLabel("Preview of AGENTS.md").waitFor({ state: "visible" });
-    await page.getByText("Saved in this Profile", { exact: true }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Open agentenv-manager.md" }).waitFor({
+      state: "visible"
+    });
     await expandComposerSection(page, "MCPs");
     const editor = page.locator(".profile-mcp-editor");
     await editor.waitFor({ state: "visible" });

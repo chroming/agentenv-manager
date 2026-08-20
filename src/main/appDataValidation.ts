@@ -18,6 +18,8 @@ import { parseTargetState } from "./targetState";
 import { createTargetRegistry, type TargetRegistry } from "./targets/registry";
 import { parseWorkspaceSyncStateData } from "./workspaceSync/syncStateStore";
 import { parseSharedSkillAreaState } from "./sharedSkillAreaStore";
+import { parseRemoteDeviceData } from "./remoteDevices/remoteDeviceStore";
+import { parseRemoteEndpointStateData } from "./remoteDevices/remoteEndpointStateRepository";
 
 const GitHubTokenFileSchema = z.object({ token: z.string().min(1) });
 const SkillMetadataFileSchema = z.object({
@@ -158,6 +160,23 @@ export const validateAppDataRoot = async (
 
   const projects = await readJsonIfPresent(paths.projectsPath);
   if (projects !== undefined) ProjectReferenceFileSchema.parse(projects);
+
+  const remoteDevices = await readJsonIfPresent(paths.remoteDevicesPath);
+  if (remoteDevices !== undefined) parseRemoteDeviceData(remoteDevices);
+
+  for (const entry of await listDirectoriesIfPresent(paths.remoteEndpointStatesDir)) {
+    if (
+      !entry.isFile() ||
+      entry.isSymbolicLink() ||
+      !entry.name.endsWith(".json") ||
+      !/^[A-Za-z0-9_-]+\.json$/.test(entry.name)
+    ) {
+      throw new Error(`Invalid remote Agent state entry: ${entry.name}`);
+    }
+    parseRemoteEndpointStateData(
+      JSON.parse(await readFile(join(paths.remoteEndpointStatesDir, entry.name), "utf8"))
+    );
+  }
 
   const instructionLibraryStore = createInstructionLibraryStore(paths);
   await instructionLibraryStore.list();

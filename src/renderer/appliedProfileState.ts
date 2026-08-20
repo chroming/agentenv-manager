@@ -66,7 +66,12 @@ export const acceptAppliedProfileState = ({
       setTargetStates((current) =>
         current.find((state) => state.targetId === preview.targetId)
           ?.appliedProfileHash === appliedProfileHash
-          ? refreshedStates
+          ? [
+              ...refreshedStates,
+              ...current.filter((state) => state.targetId.startsWith("ssh:"))
+            ].filter((state, index, states) =>
+              states.findIndex((candidate) => candidate.targetId === state.targetId) === index
+            )
           : current
       );
     })

@@ -2130,6 +2130,51 @@ class, and requires the missing invariant or executable gate to be added before
 closure. A semantic or policy change MUST update this contract in the same
 commit as its implementation.
 
+## 23.5 SSH Linux Endpoint Contract
+
+An Agent endpoint is the combination of an Agent adapter and a device. Local Agents and
+SSH Linux Agents share the same portable Profile, but deployment state and recovery
+receipts are device-local.
+
+- SSH devices store only a display name, host or SSH-config alias, optional user, and
+  optional port. Passwords, private keys, access tokens, and host-key bypasses are never
+  stored by AgentEnv.
+- Connections use the system `ssh` executable with the user's SSH config, SSH Agent, and
+  `known_hosts`. Non-interactive operations use Batch Mode and never open a password prompt.
+- A remote device is supported only when it reports Linux and provides `sh`, `tar`,
+  `sha256sum`, a HOME directory, and a supported Agent executable.
+- Profile identity and resource policy remain keyed by the underlying Agent adapter. An
+  SSH endpoint ID is deployment context and MUST NOT be persisted into portable Profile
+  resource policy.
+- P0 remote Apply supports Instructions and managed-copy Skills. It does not create live
+  Library links across machines.
+- Native MCP definitions and credentials remain remote-Agent owned. A Profile that asks
+  AgentEnv to manage MCPs on an SSH endpoint is blocked with a direct `Keep Agent`
+  remediation; no MCP file is created or rewritten remotely.
+- Preview reads only adapter-declared paths under the remote HOME. Apply rechecks Profile,
+  Library, device identity, and the exact remote snapshot before any write.
+- Existing identical files are adopted without rewriting them. Existing different files
+  require explicit review and are included in the remote recovery point before replacement.
+- Shared Skill locations are never silently removed over SSH. A matching shared copy is a
+  blocking, path-specific issue until the user reviews that remote shared area.
+- Apply uploads an immutable staged payload, creates a private recovery point under
+  `~/.local/state/agentenv-manager`, mutates exact planned paths, verifies every resulting
+  file hash, and rolls back all planned paths when any step fails.
+- If the SSH connection ends during commit, AgentEnv reads the durable remote operation
+  status. Confirmed `committed` finalizes local state, confirmed `rolled-back` restores the
+  prior local receipt, and an unknown result enters Recovery required without attempting a
+  second write.
+- Removing an SSH device removes only its saved connection descriptor. It never changes
+  files on that Linux device.
+- Remote Capture, Conversations, Workspace Open, Profile Compare, native MCP editing, and
+  local recovery actions remain unavailable until each capability has its own verified
+  remote implementation.
+
+Required evidence includes Store validation, command quoting and timeout tests, fake SSH
+Preview/Apply/stale/rollback/reconciliation tests, Docker OpenSSH integration on Linux, and
+Electron coverage for add, edit, remove, endpoint selection, Preview, Apply, and unsupported
+capability states.
+
 ## 24. Required Acceptance Matrix
 
 Every release that changes Profile, Library, Target, or Apply behavior MUST verify these scenarios:
@@ -2293,6 +2338,7 @@ This matrix is the release-facing index. A capability may be `Implemented` only 
 | Verified direct and Homebrew macOS release | `Implemented` | One pinned fixed identity across direct and Homebrew assets; valid App seals, expected Gatekeeper rejection, exact-tag SHA-256, manifest, SBOM, draft verification, official Tap | Release generation, native package jobs, cross-channel signature gate, Cask and packaged Electron tests |
 | App update checks and installation | `Implemented` | Official stable Release only; Homebrew preserves the active appdir; writable direct installs verify ZIP size, hash, bundle identity, version, seal, startup, and rollback; settings persist locally | Domain, renderer, Electron E2E |
 | Anonymous usage statistics | `Implemented` | Default-on official builds; persistent opt-out; random installation ID; one basic-information event per local day; no action or result data; network failure is non-blocking | Domain, renderer, and Electron E2E |
+| SSH Linux Profile Apply | `Partial` | Device-local endpoint receipt plus remote staged recovery and hash verification | Store and transport tests implemented; fake SSH, Docker OpenSSH, and Electron E2E required before release |
 
 ## 25. Production Release Gate
 

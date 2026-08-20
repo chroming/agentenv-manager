@@ -2,6 +2,7 @@ import type { ActivationService } from "../activationService";
 import type { EvaluationService } from "../evaluations/evaluationService";
 import type { ProfileStore } from "../profileStore";
 import type { TargetCaptureService } from "../targetCaptureService";
+import type { RemoteActivationService } from "../remoteDevices/remoteActivationService";
 import type {
   CreateProfileFromTargetInput,
   CreateProfileInput,
@@ -16,6 +17,7 @@ import { parseId, type IpcRegistrationHandles } from "./registration";
 
 interface ProfileIpcServices {
   activationService: ActivationService;
+  remoteActivationService?: RemoteActivationService;
   evaluationService: EvaluationService;
   profileStore: ProfileStore;
   targetCaptureService: TargetCaptureService;
@@ -26,7 +28,13 @@ export const registerProfileIpc = (
   services: ProfileIpcServices
 ) => {
   const { diagnosticHandle, handleMutation } = handles;
-  const { activationService, evaluationService, profileStore, targetCaptureService } = services;
+  const {
+    activationService,
+    remoteActivationService,
+    evaluationService,
+    profileStore,
+    targetCaptureService
+  } = services;
 
   diagnosticHandle("profiles:list", () => profileStore.listProfiles());
   diagnosticHandle("profiles:read", async (_event, id: unknown) => {
@@ -93,21 +101,34 @@ export const registerProfileIpc = (
   );
   handleMutation("profiles:delete", async (_event, id: unknown) => {
     const profileId = parseId(id, "profile id");
-    const activeTarget = (await activationService.listTargetStates()).find(
+    const activeTarget = [
+      ...await activationService.listTargetStates(),
+      ...(remoteActivationService ? await remoteActivationService.listTargetStates() : [])
+    ].find(
       (state) => state.activeProfileId === profileId
     );
     if (activeTarget) throw new Error("Apply another profile before removing this active profile");
     await profileStore.deleteProfile(profileId);
   });
-  diagnosticHandle("activation:preview", (_event, profileId: unknown, targetId?: unknown) =>
-    activationService.previewProfile(
-      parseId(profileId, "profile id"),
-      targetId === undefined ? undefined : parseId(targetId, "target id")
-    )
-  );
-  handleMutation("activation:apply", (_event, profileId: unknown, previewId: unknown) =>
-    activationService.applyProfile(parseId(profileId, "profile id"), String(previewId))
-  );
+  diagnosticHandle("activation:preview", (_event, profileId: unknown, targetId?: unknown) => {
+    const parsedProfileId = parseId(profileId, "profile id");
+    const requestedTargetId = targetId === undefined ? undefined : String(targetId);
+    return requestedTargetId && remoteActivationService?.isEndpointId(requestedTargetId)
+      ? remoteActivationService.previewProfile(parsedProfileId, requestedTargetId)
+      : activationService.previewProfile(
+          parsedProfileId,
+          requestedTargetId === undefined
+            ? undefined
+            : parseId(requestedTargetId, "target id")
+        );
+  });
+  handleMutation("activation:apply", (_event, profileId: unknown, previewId: unknown) => {
+    const parsedProfileId = parseId(profileId, "profile id");
+    const parsedPreviewId = String(previewId);
+    return remoteActivationService?.hasPreview(parsedPreviewId)
+      ? remoteActivationService.applyProfile(parsedProfileId, parsedPreviewId)
+      : activationService.applyProfile(parsedProfileId, parsedPreviewId);
+  });
 
   registerProfileComparisonIpc(handles, evaluationService);
 };
