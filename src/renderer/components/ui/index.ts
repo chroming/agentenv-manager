@@ -37,6 +37,7 @@ export {
   type ResourcePanelToolbarProps
 } from "./ResourcePanelToolbar";
 export { Switch } from "./Switch";
+export { TextAction } from "./TextAction";
 export { TagChip } from "./TagChip";
 export { TabBar } from "./TabBar";
 export { SegmentedControl } from "./SegmentedControl";

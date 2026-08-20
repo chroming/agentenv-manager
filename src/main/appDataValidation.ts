@@ -10,6 +10,7 @@ import { readAppDataManifest } from "./appDataFormat";
 import { isMissingFileError } from "./fileUtils";
 import { createPaths } from "./paths";
 import { createProfileStore } from "./profileStore";
+import { createInstructionLibraryStore } from "./instructionLibraryStore";
 import { parseSettingsData } from "./settingsStore";
 import { parseSkillFrontmatter } from "./skillFrontmatter";
 import { createSkillLibraryStore } from "./skillLibraryStore";
@@ -158,11 +159,13 @@ export const validateAppDataRoot = async (
   const projects = await readJsonIfPresent(paths.projectsPath);
   if (projects !== undefined) ProjectReferenceFileSchema.parse(projects);
 
+  const instructionLibraryStore = createInstructionLibraryStore(paths);
+  await instructionLibraryStore.list();
   const profileStore = createProfileStore({
     appDataRoot,
     homeDir: paths.homeDir,
     fakeHomeRoot: paths.fakeHomeRoot
-  }, targetRegistry);
+  }, targetRegistry, instructionLibraryStore);
   for (const entry of await listDirectoriesIfPresent(paths.profilesDir)) {
     if (entry.name.startsWith(".") || entry.name.includes(".agentenv-")) continue;
     if (!entry.isDirectory() || entry.isSymbolicLink()) {

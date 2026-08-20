@@ -22,6 +22,7 @@ import type {
   OneShotEvaluationWorkspaceSummary
 } from "../../shared/evaluations";
 import { profileResourceMode } from "../../shared/profileResources";
+import { profileEffectiveInstructions } from "../../shared/profileInstructions";
 import type {
   ProfileDetail,
   SkillLibraryEntry,
@@ -669,8 +670,9 @@ export const createEvaluationWorkspace = (
       );
 
       let includedInstructions = 0;
-      if (instructionsMode === "manage" && input.profile.instructions) {
-        await writeAtomic(targetPaths.instructionsPath, input.profile.instructions, {
+      const profileInstructions = profileEffectiveInstructions(input.profile);
+      if (instructionsMode === "manage" && profileInstructions) {
+        await writeAtomic(targetPaths.instructionsPath, profileInstructions, {
           mode: 0o600,
           platform
         });

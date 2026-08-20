@@ -86,7 +86,9 @@ const sourceRecordForLocalStore = (
 export const createWorkspaceSyncTransaction = (input: {
   paths: AgentEnvPaths;
   backupStore: BackupStore;
-  failureInjector?: (phase: "profiles" | "skills" | "sources" | "verify") => void | Promise<void>;
+  failureInjector?: (
+    phase: "profiles" | "skills" | "instructions" | "sources" | "verify"
+  ) => void | Promise<void>;
 }): WorkspaceSyncTransaction => {
   const rollback = async (
     backupId: string,
@@ -140,7 +142,12 @@ export const createWorkspaceSyncTransaction = (input: {
 
   const restore = async (backupId: string) => {
     const safetyBackup = await input.backupStore.createBackup(
-      [input.paths.profilesDir, input.paths.skillsLibraryDir, input.paths.skillSourcesPath],
+      [
+        input.paths.profilesDir,
+        input.paths.skillsLibraryDir,
+        input.paths.instructionsLibraryDir,
+        input.paths.skillSourcesPath
+      ],
       { operation: "rollback-safety", profileName: "Workspace before restore" }
     );
     const journal: WorkspaceSyncJournal = {
@@ -182,7 +189,12 @@ export const createWorkspaceSyncTransaction = (input: {
   const apply = async (snapshotRoot: string) => {
     await validatePortableWorkspace(snapshotRoot);
     const backup = await input.backupStore.createBackup(
-      [input.paths.profilesDir, input.paths.skillsLibraryDir, input.paths.skillSourcesPath],
+      [
+        input.paths.profilesDir,
+        input.paths.skillsLibraryDir,
+        input.paths.instructionsLibraryDir,
+        input.paths.skillSourcesPath
+      ],
       { operation: "workspace-sync", profileName: "Workspace Sync" }
     );
     const journal: WorkspaceSyncJournal = {
@@ -213,7 +225,13 @@ export const createWorkspaceSyncTransaction = (input: {
       await rm(stagingRoot, { recursive: true, force: true });
       const stagedProfiles = join(stagingRoot, "profiles");
       const stagedSkills = join(stagingRoot, "skills-library");
+      const stagedInstructions = join(stagingRoot, "instructions-library");
       await cp(join(snapshotRoot, "workspace", "profiles"), stagedProfiles, { recursive: true });
+      const portableInstructionsRoot = join(snapshotRoot, "workspace", "instructions");
+      const portableInstructionsPresent = await pathEntryExists(portableInstructionsRoot);
+      if (portableInstructionsPresent) {
+        await cp(portableInstructionsRoot, stagedInstructions, { recursive: true });
+      }
       await mkdir(stagedSkills, { recursive: true });
       const portableSkillsRoot = join(snapshotRoot, "workspace", "skills");
       for (const entry of await import("node:fs/promises").then(({ readdir }) => readdir(portableSkillsRoot, { withFileTypes: true }))) {
@@ -270,6 +288,22 @@ export const createWorkspaceSyncTransaction = (input: {
         claimPath.mutationHashes.get(resolve(input.paths.skillsLibraryDir)) ?? null;
       await writeAtomic(input.paths.workspaceSyncJournalPath, `${JSON.stringify(journal, null, 2)}\n`);
       await input.failureInjector?.("skills");
+      if (portableInstructionsPresent) {
+        await claimPath(input.paths.instructionsLibraryDir);
+        await replacePathAtomically(
+          input.paths.instructionsLibraryDir,
+          (path) => cp(stagedInstructions, path, { recursive: true }),
+          { expectedTargetHash: expectedHashes.get(resolve(input.paths.instructionsLibraryDir)) }
+        );
+        await claimPath.recordMutation(input.paths.instructionsLibraryDir);
+        journal.mutationHashes![resolve(input.paths.instructionsLibraryDir)] =
+          claimPath.mutationHashes.get(resolve(input.paths.instructionsLibraryDir)) ?? null;
+        await writeAtomic(
+          input.paths.workspaceSyncJournalPath,
+          `${JSON.stringify(journal, null, 2)}\n`
+        );
+        await input.failureInjector?.("instructions");
+      }
       await claimPath(input.paths.skillSourcesPath);
       await replacePathAtomically(
         input.paths.skillSourcesPath,
@@ -283,11 +317,15 @@ export const createWorkspaceSyncTransaction = (input: {
       await input.failureInjector?.("sources");
       journal.phase = "verifying";
       await writeAtomic(input.paths.workspaceSyncJournalPath, `${JSON.stringify(journal, null, 2)}\n`);
-      await Promise.all([
+      const verificationPaths = [
         lstat(input.paths.profilesDir),
         lstat(input.paths.skillsLibraryDir),
         lstat(input.paths.skillSourcesPath)
-      ]);
+      ];
+      if (portableInstructionsPresent) {
+        verificationPaths.push(lstat(input.paths.instructionsLibraryDir));
+      }
+      await Promise.all(verificationPaths);
       await input.failureInjector?.("verify");
       await rm(input.paths.workspaceSyncJournalPath, { force: true });
       await rm(stagingRoot, { recursive: true, force: true });

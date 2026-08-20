@@ -30,17 +30,27 @@ describe("ProfileSidebar", () => {
     const quickOpen = within(navigation).getByRole("button", { name: "Quick open" });
     const destinations = within(navigation).getAllByRole("button")
       .map((button) => button.getAttribute("aria-label"))
-      .filter((label) => ["Agents", "Profiles", "Workspaces", "Conversations", "Skills"].includes(label ?? ""));
+      .filter((label) => ["Agents", "Profiles", "Workspaces", "Conversations", "Skills", "Instructions"].includes(label ?? ""));
 
-    expect(destinations).toEqual(["Agents", "Profiles", "Workspaces", "Conversations", "Skills"]);
+    expect(destinations).toEqual([
+      "Agents",
+      "Profiles",
+      "Workspaces",
+      "Conversations",
+      "Skills",
+      "Instructions"
+    ]);
     expect(quickOpen.parentElement).not.toBe(
       within(navigation).getByRole("button", { name: "Agents" }).parentElement
     );
     expect(within(navigation).getByRole("button", { name: "Profiles" }).parentElement).toBe(
       within(navigation).getByRole("button", { name: "Agents" }).parentElement
     );
-    expect(within(navigation).getByRole("button", { name: "Skills" }).parentElement).toBe(
+    expect(within(navigation).getByRole("button", { name: "Skills" }).parentElement).not.toBe(
       within(navigation).getByRole("button", { name: "Agents" }).parentElement
+    );
+    expect(within(navigation).getByRole("button", { name: "Instructions" }).parentElement).toBe(
+      within(navigation).getByRole("button", { name: "Skills" }).parentElement
     );
     expect(within(navigation).queryByText("Library", { selector: ".nav-section-label" }))
       .not.toBeInTheDocument();

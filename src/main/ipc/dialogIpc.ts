@@ -1,6 +1,6 @@
 import { BrowserWindow, dialog } from "electron";
-import { stat } from "node:fs/promises";
-import { resolve } from "node:path";
+import { readFile, stat } from "node:fs/promises";
+import { basename, extname, resolve } from "node:path";
 import { createSkillArchiveService } from "../skillArchiveService";
 import type { TargetRegistry } from "../targets/registry";
 import { parseId, type IpcRegistrationHandles } from "./registration";
@@ -45,6 +45,25 @@ export const registerDialogIpc = (
       return { kind: "folder", path, rootPath: path };
     }
     return skillArchiveService.prepare(selectedPath);
+  });
+  diagnosticHandle("dialog:select-instruction-file", async (event) => {
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    const options: Electron.OpenDialogOptions = {
+      title: "Import Instruction file",
+      properties: ["openFile"],
+      filters: [{ name: "Markdown and text", extensions: ["md", "markdown", "txt"] }]
+    };
+    const result = owner
+      ? await dialog.showOpenDialog(owner, options)
+      : await dialog.showOpenDialog(options);
+    if (result.canceled || !result.filePaths[0]) return undefined;
+    const path = resolve(result.filePaths[0]);
+    const stats = await stat(path);
+    if (!stats.isFile() || stats.size > 2_000_000) {
+      throw new Error("Instruction file must be a text file smaller than 2 MB");
+    }
+    const base = basename(path, extname(path));
+    return { name: base || "Imported instructions", path, content: await readFile(path, "utf8") };
   });
   diagnosticHandle("skills:release-archive", (_event, token: unknown) =>
     skillArchiveService.release(String(token))

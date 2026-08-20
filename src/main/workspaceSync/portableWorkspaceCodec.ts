@@ -2,11 +2,13 @@ import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AgentEnvPaths } from "../paths";
 import type { ProfileStore } from "../profileStore";
+import type { InstructionLibraryStore } from "../instructionLibraryStore";
 import type { SkillLibraryStore } from "../skillLibraryStore";
 import { createSkillSourceRegistry } from "../skillSourceRegistry";
 import { writeAtomic } from "../fileUtils";
 import {
   PortableSkillMetadataSchema,
+  PortableInstructionMetadataSchema,
   PortableSkillSourcesSchema,
   type PortableSkillMetadata,
   type PortableWorkspaceManifest
@@ -56,12 +58,18 @@ export const createPortableWorkspaceCodec = (input: {
   paths: AgentEnvPaths;
   profileStore: ProfileStore;
   skillLibraryStore: SkillLibraryStore;
+  instructionLibraryStore?: InstructionLibraryStore;
 }): PortableWorkspaceCodec => ({
   exportSnapshot: async (destination, workspaceId) => {
     await rm(destination, { recursive: true, force: true });
     const profilesRoot = join(destination, "workspace", "profiles");
     const skillsRoot = join(destination, "workspace", "skills");
-    await Promise.all([mkdir(profilesRoot, { recursive: true }), mkdir(skillsRoot, { recursive: true })]);
+    const instructionsRoot = join(destination, "workspace", "instructions");
+    await Promise.all([
+      mkdir(profilesRoot, { recursive: true }),
+      mkdir(skillsRoot, { recursive: true }),
+      mkdir(instructionsRoot, { recursive: true })
+    ]);
 
     const profileHashes: PortableWorkspaceManifest["profileHashes"] = {};
     for (const summary of await input.profileStore.listProfiles()) {
@@ -96,6 +104,31 @@ export const createPortableWorkspaceCodec = (input: {
       skillHashes[skill.id] = { content, metadata: metadataHash, total: hashJson({ content, metadata: metadataHash }) };
     }
 
+    const instructionHashes: NonNullable<PortableWorkspaceManifest["instructionHashes"]> = {};
+    for (const block of await input.instructionLibraryStore?.list() ?? []) {
+      const root = join(instructionsRoot, block.id);
+      await mkdir(root, { recursive: true });
+      const metadata = PortableInstructionMetadataSchema.parse({
+        formatVersion: 1,
+        id: block.id,
+        name: block.name,
+        description: block.description,
+        createdAt: block.createdAt,
+        updatedAt: block.updatedAt
+      });
+      await Promise.all([
+        writeFile(join(root, "instruction.json"), canonicalJson(metadata), { mode: 0o600 }),
+        writeFile(join(root, "CONTENT.md"), block.content, { mode: 0o600 })
+      ]);
+      const content = hashJson(block.content);
+      const metadataHash = hashJson(metadata);
+      instructionHashes[block.id] = {
+        content,
+        metadata: metadataHash,
+        total: hashJson({ content, metadata: metadataHash })
+      };
+    }
+
     const sourceRegistry = createSkillSourceRegistry(input.paths.skillSourcesPath);
     const sourceData = PortableSkillSourcesSchema.parse({
       formatVersion: 1,
@@ -117,7 +150,14 @@ export const createPortableWorkspaceCodec = (input: {
     });
     await writeFile(join(destination, "workspace", "skill-sources.json"), canonicalJson(sourceData), { mode: 0o600 });
     const sourcesHash = hashJson(sourceData);
-    const unsigned = { formatVersion: 1 as const, workspaceId, profileHashes, skillHashes, sourcesHash };
+    const unsigned = {
+      formatVersion: 1 as const,
+      workspaceId,
+      profileHashes,
+      skillHashes,
+      instructionHashes,
+      sourcesHash
+    };
     const manifest: PortableWorkspaceManifest = { ...unsigned, snapshotHash: snapshotHashFor(unsigned) };
     await writeAtomic(join(destination, "agentenv-sync.json"), canonicalJson(manifest));
     return manifest;

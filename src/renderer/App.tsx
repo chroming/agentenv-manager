@@ -96,7 +96,6 @@ import {
   setProfileResourceMode,
   type ManagedProfileResource
 } from "../shared/profileResources";
-import { AgentsEditor } from "./components/AgentsEditor";
 import { AgentDiscoveryDialog } from "./components/AgentDiscoveryDialog";
 import { AgentSettingsSection } from "./components/AgentSettingsSection";
 import {
@@ -132,11 +131,13 @@ import { ProfileList } from "./components/ProfileList";
 import { ResourceIcon } from "./components/ResourceIconPicker";
 import { ProfileActionsMenu } from "./components/ProfileActionsMenu";
 import { ProfileComposerSection } from "./components/ProfileComposerSection";
+import { ProfileInstructionsComposerSection } from "./components/ProfileInstructionsComposerSection";
 import { GeneralSettingsSection, SettingsCategoryTabs, type SettingsCategory } from "./components/SettingsCategoryTabs";
 import {
   appShellClassName, ProfileSidebar, type AppWorkspace
 } from "./components/ProfileSidebar";
 import { AgentContextSwitcher } from "./components/AgentContextSwitcher";
+import { InstructionsWorkspace } from "./components/InstructionsWorkspace";
 import {
   SkillLibraryPanel
 } from "./components/SkillLibraryPanel";
@@ -244,8 +245,10 @@ import {
   type EnvironmentScanStatus
 } from "./environmentReview";
 import { deriveAgentSetupAction, deriveAgentSetupActions } from "./agentSetup";
+import { useInstructionLibrary } from "./hooks/useInstructionLibrary";
 
 const emptyProfileResources: ProfileResources = {
+  instructions: [],
   skills: [],
   managementByTarget: {},
   mcpByTarget: {}
@@ -791,6 +794,22 @@ const AppContent = ({
     return { ...core, ...enrichment };
   };
 
+  const refreshInstructionDependents = async () => {
+    const profileId = selectedProfileId;
+    await refreshProfiles({ checkSkillUpdates: false });
+    if (profileId) {
+      await loadSelectedProfile(profileId);
+    }
+  };
+  const {
+    blocks: instructionBlocks,
+    loading: instructionBlocksLoading,
+    refresh: refreshInstructionBlocks,
+    create: createInstructionBlock,
+    update: updateInstructionBlock,
+    remove: removeInstructionBlock
+  } = useInstructionLibrary(refreshInstructionDependents);
+
   const refreshWorkspaceStateAfterSync = () => {
     const profileId = selectedProfileId;
     void refreshProfiles({ checkSkillUpdates: false })
@@ -1004,6 +1023,11 @@ const AppContent = ({
         }
 
         setIsLoading(false);
+        void refreshInstructionBlocks().catch((unknownError) => {
+          if (shouldApply()) {
+            setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+          }
+        });
         void probeSupportedAgents();
         void loadProfileEnrichment(core, true, shouldApply).catch((unknownError) => {
           if (shouldApply()) {
@@ -1150,6 +1174,7 @@ const AppContent = ({
     }
     const label = {
       library: "open Skills",
+      instructions: "open Instructions",
       projects: "open Projects",
       profiles: "open Profiles",
       conversations: "open Conversations",
@@ -3677,6 +3702,8 @@ const AppContent = ({
         aria-label={
           activeWorkspace === "library"
             ? t("Library workspace")
+            : activeWorkspace === "instructions"
+              ? t("Instructions workspace")
             : activeWorkspace === "profiles"
               ? t("Profile editor")
               : activeWorkspace === "projects"
@@ -3917,6 +3944,16 @@ const AppContent = ({
               }}
             />
           </>
+        ) : activeWorkspace === "instructions" ? (
+          <InstructionsWorkspace
+            blocks={instructionBlocks}
+            loading={instructionBlocksLoading}
+            onRefresh={async () => { await refreshInstructionBlocks(); }}
+            onImport={() => window.agentEnv.selectInstructionFile()}
+            onCreate={createInstructionBlock}
+            onUpdate={updateInstructionBlock}
+            onRemove={removeInstructionBlock}
+          />
         ) : activeWorkspace === "profiles" ? (
           <section className="profile-page">
               <PageHeader
@@ -4069,57 +4106,26 @@ const AppContent = ({
                       className="profile-composer"
                       aria-label={t("Profile composer")}
                     >
-                      <ProfileComposerSection
-                        id="instructions"
-                        icon={<ProductIcon name="instructions" size={18} />}
-                        title={t("Instructions")}
-                        description={t("Agent instructions and rule files")}
-                        count={resourceSummary?.instructions.total ?? 0}
-                        enabledCount={resourceSummary?.instructions.count ?? 0}
-                        chipNames={
-                          resourceSummary?.instructions.count
-                            ? [
-                                profileTarget?.instructionsLabel ??
-                                  t("Instructions")
-                              ]
-                            : []
-                        }
-                        policy={resourceSummary?.instructions.mode ?? "manage"}
-                        policyDisabled={!profileTarget?.capabilities.instructions}
-                        policyLabel={t("Instructions application policy for {{name}}", {
-                          name: activeTargetName
-                        })}
-                        policyStatus={
-                          profileTarget?.capabilities.instructions
-                            ? undefined
-                            : t("Agent controlled")
-                        }
+                      <ProfileInstructionsComposerSection
+                        profile={draftProfile}
+                        blocks={instructionBlocks}
+                        summary={resourceSummary?.instructions ?? {
+                          count: 0, total: 0, mode: "manage"
+                        }}
+                        policy={instructionsPolicy}
+                        capabilityAvailable={Boolean(profileTarget?.capabilities.instructions)}
                         expanded={composerSectionIsExpanded("instructions")}
+                        targetName={activeTargetName}
+                        fileName={profileTarget?.instructionsLabel ?? t("Instructions")}
+                        currentValue={currentTargetInstructions?.content}
+                        currentValueAvailable={Boolean(currentTargetInstructions) &&
+                          !nativeInstructionIssues.some((issue) => issue.targetId === selectedTarget?.id)}
                         onToggle={() => toggleComposerSection("instructions")}
                         onPolicyChange={(policy) =>
-                          updateSelectedResourceManagement("instructions", policy)
-                        }
-                      >
-                        <AgentsEditor
-                          label={
-                            profileTarget?.instructionsLabel ??
-                            t("Instructions")
-                          }
-                          path={selectedTarget?.paths.instructionsPath}
-                          policy={instructionsPolicy}
-                          targetName={activeTargetName}
-                          value={draftProfile.instructions}
-                          currentValue={currentTargetInstructions?.content}
-                          currentValueAvailable={Boolean(currentTargetInstructions) &&
-                            !nativeInstructionIssues.some((issue) => issue.targetId === selectedTarget?.id)}
-                          onSave={(instructions) => {
-                            updateDraftProfile({
-                              ...draftProfile,
-                              instructions
-                            });
-                          }}
-                        />
-                      </ProfileComposerSection>
+                          updateSelectedResourceManagement("instructions", policy)}
+                        onChange={(instructions, resources) =>
+                          updateDraftProfile({ ...draftProfile, instructions, resources })}
+                      />
                       <ProfileSkillsComposerSection
                         profile={draftProfile}
                         summary={resourceSummary?.skills ?? {

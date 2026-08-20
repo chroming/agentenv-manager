@@ -187,3 +187,132 @@
     width: calc(100vw - 32px);
   }
 }
+
+.instructions-workspace {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.instructions-catalog {
+  flex: 1;
+  min-height: 0;
+}
+
+.instructions-list-pane,
+.instructions-detail-pane {
+  min-height: 0;
+}
+
+.instructions-list-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.instructions-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.instructions-detail-pane {
+  display: flex;
+  flex-direction: column;
+}
+
+.instructions-detail-description {
+  min-width: 0;
+}
+
+.instructions-detail-meta {
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--font-size-metadata);
+  gap: var(--space-3);
+  min-height: 34px;
+  padding: 6px var(--space-4);
+}
+
+.instructions-detail-pane > .instruction-documents {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+
+.instruction-block-editor {
+  height: min(620px, calc(100vh - 48px));
+  max-width: none;
+  width: min(760px, calc(100vw - 48px));
+}
+
+.instruction-block-editor.is-maximized {
+  height: calc(100vh - 24px);
+  width: calc(100vw - 24px);
+}
+
+.instruction-block-editor__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.instruction-block-editor__content {
+  display: flex;
+  flex: 1;
+  min-height: 220px;
+}
+
+.instruction-block-editor__content textarea {
+  flex: 1;
+  min-height: 220px;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.instruction-delete-dialog {
+  width: min(440px, calc(100vw - 48px));
+}
+
+.profile-instructions-editor {
+  min-width: 0;
+}
+
+.profile-instructions-editor__summary {
+  color: var(--muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-instructions-editor__toolbar-actions {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-2);
+}
+
+.profile-instruction-drag {
+  cursor: grab;
+}
+
+.profile-instruction-drag:active {
+  cursor: grabbing;
+}
+
+@media (max-width: 920px) {
+  .instruction-block-editor {
+    height: calc(100vh - 32px);
+    width: calc(100vw - 32px);
+  }
+}

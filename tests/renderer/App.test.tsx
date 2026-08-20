@@ -439,6 +439,11 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       message: "Started"
     }),
     listNativeMcpConnections: vi.fn().mockResolvedValue({ connections: [], issues: [] }),
+    listInstructionBlocks: vi.fn().mockResolvedValue([]),
+    createInstructionBlock: vi.fn().mockRejectedValue(new Error("Instructions unavailable")),
+    updateInstructionBlock: vi.fn().mockRejectedValue(new Error("Instructions unavailable")),
+    removeInstructionBlock: vi.fn().mockRejectedValue(new Error("Instructions unavailable")),
+    selectInstructionFile: vi.fn().mockResolvedValue(undefined),
     listSkillLibrary: vi.fn().mockResolvedValue([]),
     listSkillFiles: vi.fn().mockResolvedValue([]),
     readSkillFile: vi.fn().mockResolvedValue({
@@ -1610,12 +1615,20 @@ describe("App", () => {
   };
 
   const expandProfileInstructions = () => {
-    const trigger = screen.getByRole("button", { name: "Instructions" });
+    const composer = screen.getByRole("region", { name: "Profile composer" });
+    const trigger = within(composer).getByRole("button", { name: "Instructions" });
     if (trigger.getAttribute("aria-expanded") !== "true") fireEvent.click(trigger);
   };
 
-  const profileInstructionPreview = () =>
-    screen.getByLabelText("Preview of AGENTS.md");
+  const profileInstructionPreview = () => {
+    expandProfileInstructions();
+    const composer = screen.getByRole("region", { name: "Profile composer" });
+    fireEvent.click(within(composer).getByRole("button", { name: "Open AGENTS.md" }));
+    const dialog = screen.getByRole("dialog", { name: "Instruction document" });
+    const preview = within(dialog).getByLabelText("Preview of AGENTS.md");
+    fireEvent.click(within(dialog).getAllByRole("button", { name: "Close" })[0]!);
+    return preview;
+  };
 
   const editProfileInstructions = async (value: string) => {
     expandProfileInstructions();
@@ -3680,7 +3693,7 @@ describe("App", () => {
     const skills = within(composer).getByRole("button", { name: "Skills" });
     const mcp = within(composer).getByRole("button", { name: "MCPs" });
 
-    expect(instructions).toHaveAccessibleDescription(/1.*AGENTS\.md/);
+    expect(instructions).toHaveAccessibleDescription(/1 of 1 enabled/);
     expect(skills).toHaveAccessibleDescription(
       /2.*library-testing.*library-docs/
     );
@@ -4355,7 +4368,8 @@ describe("App", () => {
 
     await openProfiles();
     await screen.findByRole("heading", { name: "Daily Coding" });
-    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
+    fireEvent.click(within(screen.getByRole("region", { name: "Profile composer" }))
+      .getByRole("button", { name: "Instructions" }));
     expect(profileInstructionPreview()).toHaveTextContent("# Agent");
 
     deferProfileB = true;
@@ -4414,7 +4428,8 @@ describe("App", () => {
     expect(
       within(await openProfileSwitcher()).getByRole("option", { name: /Profile C/ })
     ).toHaveAttribute("aria-current", "page");
-    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
+    fireEvent.click(within(screen.getByRole("region", { name: "Profile composer" }))
+      .getByRole("button", { name: "Instructions" }));
     expect(profileInstructionPreview()).toHaveTextContent("# Profile C");
     expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
   });

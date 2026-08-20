@@ -45,6 +45,7 @@ import { createProjectRecoveryStore } from "./projects/projectRecoveryStore";
 import { createProjectGitService } from "./projects/projectGitService";
 import { createSettingsStore } from "./settingsStore";
 import { createSkillLibraryStore } from "./skillLibraryStore";
+import { createInstructionLibraryStore } from "./instructionLibraryStore";
 import { createSkillMutationRecoveryGate } from "./skillMutationRecoveryGate";
 import { createTargetDiscoveryService } from "./targetDiscovery";
 import { createTargetCaptureService } from "./targetCaptureService";
@@ -915,7 +916,11 @@ const createServices = async (
     materialize: async (input, destination, signal, options) =>
       (await loadRepositorySource()).materialize(input, destination, signal, options)
   };
-  const replacementRoots = new Set([paths.profilesDir, paths.skillsLibraryDir]);
+  const replacementRoots = new Set([
+    paths.profilesDir,
+    paths.skillsLibraryDir,
+    paths.instructionsLibraryDir
+  ]);
   for (const adapter of targetRegistry.listAdapters()) {
     const targetPaths = adapter.createTargetPaths(
       targetPathInputFor(paths, settings, adapter.descriptor.id)
@@ -933,10 +938,11 @@ const createServices = async (
     }
   });
   const targetScope = createTargetScope(targetRegistry, settingsStore);
+  const instructionLibraryStore = createInstructionLibraryStore(paths);
   const profileStore = createProfileStore({
     appDataRoot: paths.appDataRoot,
     fakeHomeRoot: paths.fakeHomeRoot
-  }, targetRegistry);
+  }, targetRegistry, instructionLibraryStore);
   const projectStore = createProjectStore({
     appDataRoot: paths.appDataRoot,
     projectsPath: paths.projectsPath
@@ -1189,7 +1195,12 @@ const createServices = async (
   };
   const workspaceSyncService = createWorkspaceSyncService({
     paths,
-    codec: createPortableWorkspaceCodec({ paths, profileStore, skillLibraryStore }),
+    codec: createPortableWorkspaceCodec({
+      paths,
+      profileStore,
+      skillLibraryStore,
+      instructionLibraryStore
+    }),
     stateStore: createWorkspaceSyncStateStore(paths),
     transaction: workspaceSyncTransaction,
     loadTransport: loadSyncTransport,
@@ -1218,6 +1229,7 @@ const createServices = async (
     githubAuthService,
     settingsStore,
     skillLibraryStore,
+    instructionLibraryStore,
     skillMutationRecoveryGate,
     activationService,
     targetCaptureService,

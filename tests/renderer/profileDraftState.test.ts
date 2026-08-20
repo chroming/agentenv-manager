@@ -61,6 +61,13 @@ describe("profileDraftsEqual", () => {
       ...saved,
       resources: {
         ...saved.resources,
+        instructions: [{ libraryId: "shared-rules", enabled: true }]
+      }
+    })).toBe(false);
+    expect(profileDraftsEqual(saved, {
+      ...saved,
+      resources: {
+        ...saved.resources,
         skills: [{ ...saved.resources.skills[0]!, enabled: false }]
       }
     })).toBe(false);

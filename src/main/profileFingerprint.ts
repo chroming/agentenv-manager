@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ProfileDetail } from "../shared/types";
 import { profileResourceMode } from "../shared/profileResources";
+import { profileEffectiveInstructions } from "../shared/profileInstructions";
 
 type ProfileFingerprintInput = Pick<
   ProfileDetail,
@@ -21,7 +22,7 @@ export const createProfileSnapshotHash = (
   profile: ProfileFingerprintInput
 ): string => createHash("sha256").update(JSON.stringify(canonicalProfileValue({
   manifest: profile.manifest,
-  instructions: profile.instructions,
+  instructions: profileEffectiveInstructions(profile),
   resources: profile.resources
 }))).digest("hex");
 
@@ -44,7 +45,7 @@ export const createProfileContentHash = (
       skills: skillsMode,
       mcp: mcpPolicy?.mode ?? "ignore"
     },
-    instructions: instructionsMode === "manage" ? profile.instructions : null,
+    instructions: instructionsMode === "manage" ? profileEffectiveInstructions(profile) : null,
     skills: skillsMode !== "ignore"
       ? [...profile.resources.skills]
           .map((reference) => ({

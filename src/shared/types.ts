@@ -158,6 +158,11 @@ export interface AgentEnvApi {
   continueConversation(previewId: string): Promise<ConversationLaunchResult>;
   listNativeMcpConnections(): Promise<NativeMcpInspection>;
   listNativeInstructions?(): Promise<NativeInstructionsInspection>;
+  listInstructionBlocks(): Promise<InstructionBlock[]>;
+  createInstructionBlock(input: CreateInstructionBlockInput): Promise<InstructionBlock>;
+  updateInstructionBlock(input: UpdateInstructionBlockInput): Promise<InstructionBlock>;
+  removeInstructionBlock(input: RemoveInstructionBlockInput): Promise<void>;
+  selectInstructionFile(): Promise<InstructionFileSelection | undefined>;
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
   listSkillFiles(id: string): Promise<SkillFileNode[]>;
   readSkillFile(input: SkillFileReadInput): Promise<SkillFileContent>;
@@ -1984,9 +1989,44 @@ export interface ProfileDetail {
   profileDir?: string;
   manifest: ProfileManifest;
   instructions: string;
+  resolvedInstructions?: string;
   resources: ProfileResources;
   contentHash?: string;
   targetContentHashes?: Record<string, string>;
+}
+
+export interface InstructionBlock {
+  id: string;
+  name: string;
+  description: string;
+  content: string;
+  contentHash: string;
+  createdAt: string;
+  updatedAt: string;
+  path: string;
+  usedByProfiles?: string[];
+}
+
+export interface CreateInstructionBlockInput {
+  name: string;
+  description?: string;
+  content: string;
+}
+
+export interface UpdateInstructionBlockInput extends CreateInstructionBlockInput {
+  id: string;
+  expectedContentHash: string;
+}
+
+export interface RemoveInstructionBlockInput {
+  id: string;
+  expectedContentHash: string;
+}
+
+export interface InstructionFileSelection {
+  name: string;
+  path: string;
+  content: string;
 }
 
 export interface SaveProfileInput {

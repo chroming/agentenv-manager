@@ -44,6 +44,25 @@ const sectionsFor = (snapshot: WorkspaceSnapshotDescriptor | undefined): Map<str
       result.set(key, { key, resourceKind: "skill", resourceId: id, section, hash: hashes[section], path: join(snapshot.root, "workspace", "skills", id, section === "content" ? "content" : "metadata.json") });
     }
   }
+  for (const [id, hashes] of Object.entries(snapshot.manifest.instructionHashes ?? {})) {
+    for (const section of ["content", "metadata"] as const) {
+      const key = `instruction:${id}:${section}`;
+      result.set(key, {
+        key,
+        resourceKind: "instruction",
+        resourceId: id,
+        section,
+        hash: hashes[section],
+        path: join(
+          snapshot.root,
+          "workspace",
+          "instructions",
+          id,
+          section === "content" ? "CONTENT.md" : "instruction.json"
+        )
+      });
+    }
+  }
   result.set("source:registry:sources", {
     key: "source:registry:sources",
     resourceKind: "source",
@@ -163,6 +182,15 @@ export const materializeMergedWorkspace = async (input: {
       if (source.resourceKind === "skill") {
         return join(input.local.root, "workspace", "skills", source.resourceId, source.section === "content" ? "content" : "metadata.json");
       }
+      if (source.resourceKind === "instruction") {
+        return join(
+          input.local.root,
+          "workspace",
+          "instructions",
+          source.resourceId,
+          source.section === "content" ? "CONTENT.md" : "instruction.json"
+        );
+      }
       return join(input.local.root, "workspace", "skill-sources.json");
     })();
     const relativePath = relative(resolve(input.local.root), resolve(localPath));
@@ -203,6 +231,30 @@ export const materializeMergedWorkspace = async (input: {
     if (!content || !metadata) throw new Error(`Merged Skill ${id} is incomplete`);
     skillHashes[id] = { content, metadata, total: hashJson({ content, metadata }) };
   }
+  const instructionHashes: NonNullable<PortableWorkspaceManifest["instructionHashes"]> = {};
+  const instructionIds = new Set(
+    [...selected.keys()]
+      .filter((key) => key.startsWith("instruction:"))
+      .map((key) => key.split(":")[1]!)
+  );
+  for (const id of instructionIds) {
+    const content = selected.get(`instruction:${id}:content`)?.hash;
+    const metadata = selected.get(`instruction:${id}:metadata`)?.hash;
+    if (!content && !metadata) {
+      await rm(join(input.destination, "workspace", "instructions", id), {
+        recursive: true,
+        force: true
+      });
+      continue;
+    }
+    if (!content || !metadata) throw new Error(`Merged Instruction ${id} is incomplete`);
+    instructionHashes[id] = {
+      content,
+      metadata,
+      total: hashJson({ content, metadata })
+    };
+  }
+  await mkdir(join(input.destination, "workspace", "instructions"), { recursive: true });
   const sourcesHash = selected.get("source:registry:sources")?.hash;
   if (!sourcesHash) throw new Error("Merged Workspace is missing its Skill source registry");
   const unsigned = {
@@ -210,6 +262,7 @@ export const materializeMergedWorkspace = async (input: {
     workspaceId: input.local.manifest.workspaceId,
     profileHashes,
     skillHashes,
+    instructionHashes,
     sourcesHash
   };
   const manifest = { ...unsigned, snapshotHash: snapshotHashFor(unsigned) };

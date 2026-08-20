@@ -28,7 +28,7 @@ export interface WorkspaceSyncStatus {
   immediateAgentCount: number;
 }
 
-export type WorkspaceSyncResourceKind = "profile" | "skill" | "source";
+export type WorkspaceSyncResourceKind = "profile" | "skill" | "instruction" | "source";
 export type WorkspaceSyncChangeDirection = "local" | "remote" | "both" | "conflict";
 export type WorkspaceSyncChangeAction = "add" | "update" | "delete";
 

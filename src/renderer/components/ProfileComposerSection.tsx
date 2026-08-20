@@ -75,7 +75,7 @@ export const ProfileComposerSection = ({
       icon={icon}
       id={id}
       onToggle={onToggle}
-      nested={id === "skills" || id === "mcp"}
+      nested={id === "instructions" || id === "skills" || id === "mcp"}
       muted={policyDisabled || policy !== "manage"}
       summary={countSummary ? (
         <span className="profile-composer-section__count-scope" aria-hidden="true">

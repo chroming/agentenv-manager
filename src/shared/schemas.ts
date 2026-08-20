@@ -131,6 +131,20 @@ export const ProfileSkillSchema = z.object({
   enabled: z.boolean().default(true)
 });
 
+export const ProfileInstructionReferenceSchema = z.object({
+  libraryId: SafeIdSchema,
+  enabled: z.boolean().default(true)
+});
+
+export const InstructionBlockMetadataSchema = z.object({
+  formatVersion: z.literal(1),
+  id: SafeIdSchema,
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(500).default(""),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime()
+}).strict();
+
 export const ProfileMcpSelectionSchema = z.object({
   name: z.string().trim().min(1),
   enabled: z.boolean()
@@ -149,12 +163,24 @@ export const ProfileTargetResourcePolicySchema = z.object({
 });
 
 export const ProfileResourcesSchema = z.object({
+  instructions: z.array(ProfileInstructionReferenceSchema).optional(),
   skills: z.array(ProfileSkillSchema).default([]),
   managementByTarget: z
     .record(SafeIdSchema, ProfileTargetResourcePolicySchema)
     .optional(),
   mcpByTarget: z.record(SafeIdSchema, ProfileMcpPolicySchema).default({})
 }).superRefine((resources, context) => {
+  const instructionIds = new Set<string>();
+  (resources.instructions ?? []).forEach((instruction, index) => {
+    if (instructionIds.has(instruction.libraryId)) {
+      context.addIssue({
+        code: "custom",
+        path: ["instructions", index, "libraryId"],
+        message: `Instruction Block ${instruction.libraryId} is referenced more than once`
+      });
+    }
+    instructionIds.add(instruction.libraryId);
+  });
   const libraryIds = new Set<string>();
   const targetNames = new Set<string>();
   resources.skills.forEach((skill, index) => {
@@ -192,6 +218,8 @@ export const ProfileResourcesSchema = z.object({
 });
 
 export type ProfileManifest = z.infer<typeof ProfileManifestSchema>;
+export type InstructionBlockMetadata = z.infer<typeof InstructionBlockMetadataSchema>;
+export type ProfileInstructionReference = z.infer<typeof ProfileInstructionReferenceSchema>;
 export type ProfileSkill = z.infer<typeof ProfileSkillSchema>;
 export type ProfileMcpSelection = z.infer<typeof ProfileMcpSelectionSchema>;
 export type ProfileMcpPolicy = z.infer<typeof ProfileMcpPolicySchema>;

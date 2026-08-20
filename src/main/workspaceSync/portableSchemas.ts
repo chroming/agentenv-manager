@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  InstructionBlockMetadataSchema,
   ProfileManifestSchema,
   ProfileResourcesSchema,
   ResourceIconKeySchema,
@@ -86,17 +87,25 @@ const SkillHashesSchema = z.object({
   total: z.string().regex(/^[a-f0-9]{64}$/)
 });
 
+const InstructionHashesSchema = z.object({
+  content: z.string().regex(/^[a-f0-9]{64}$/),
+  metadata: z.string().regex(/^[a-f0-9]{64}$/),
+  total: z.string().regex(/^[a-f0-9]{64}$/)
+});
+
 export const PortableWorkspaceManifestSchema = z.object({
   formatVersion: z.literal(1),
   workspaceId: SafeIdSchema,
   snapshotHash: z.string().regex(/^[a-f0-9]{64}$/),
   profileHashes: z.record(SafeIdSchema, SectionHashesSchema),
   skillHashes: z.record(SafeIdSchema, SkillHashesSchema),
+  instructionHashes: z.record(SafeIdSchema, InstructionHashesSchema).optional(),
   sourcesHash: z.string().regex(/^[a-f0-9]{64}$/)
 });
 
 export const PortableProfileManifestSchema = ProfileManifestSchema;
 export const PortableProfileResourcesSchema = ProfileResourcesSchema;
+export const PortableInstructionMetadataSchema = InstructionBlockMetadataSchema;
 
 export type PortableSkillMetadata = z.infer<typeof PortableSkillMetadataSchema>;
 export type PortableSkillSource = z.infer<typeof PortableSkillSourceSchema>;

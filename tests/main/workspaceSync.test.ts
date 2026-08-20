@@ -51,6 +51,7 @@ const writeSnapshot = async (root: string, input: {
   profileName?: string;
   instructions?: string;
   skillContent?: string;
+  instructionContent?: string;
   skillTags?: string[];
   sources?: Array<{
     formatVersion: 1;
@@ -72,7 +73,13 @@ const writeSnapshot = async (root: string, input: {
     createdAt: "2026-07-20T00:00:00.000Z",
     version: 2 as const
   };
-  const resources = { skills: [{ libraryId: "review", targetName: "review", enabled: true }], mcpByTarget: {} };
+  const resources = {
+    ...(input.instructionContent
+      ? { instructions: [{ libraryId: "shared-rules", enabled: true }] }
+      : {}),
+    skills: [{ libraryId: "review", targetName: "review", enabled: true }],
+    mcpByTarget: {}
+  };
   const instructions = input.instructions ?? "# Agent\n";
   const metadata = {
     formatVersion: 1 as const,
@@ -83,13 +90,27 @@ const writeSnapshot = async (root: string, input: {
     sourceType: "local" as const
   };
   const sourceData = { formatVersion: 1 as const, sources: input.sources ?? [] };
+  const instructionMetadata = input.instructionContent ? {
+    formatVersion: 1 as const,
+    id: "shared-rules",
+    name: "Shared rules",
+    description: "Portable instructions",
+    createdAt: "2026-07-20T00:00:00.000Z",
+    updatedAt: "2026-07-20T00:00:00.000Z"
+  } : undefined;
+  const instructionRoot = join(root, "workspace", "instructions", "shared-rules");
+  if (instructionMetadata) await mkdir(instructionRoot, { recursive: true });
   await Promise.all([
     writeFile(join(profileRoot, "profile.json"), canonicalJson(profile)),
     writeFile(join(profileRoot, "INSTRUCTIONS.md"), instructions),
     writeFile(join(profileRoot, "resources.json"), canonicalJson(resources)),
     writeFile(join(skillRoot, "SKILL.md"), input.skillContent ?? "---\nname: review\ndescription: Review code\n---\n"),
     writeFile(join(root, "workspace", "skills", "review", "metadata.json"), canonicalJson(metadata)),
-    writeFile(join(root, "workspace", "skill-sources.json"), canonicalJson(sourceData))
+    writeFile(join(root, "workspace", "skill-sources.json"), canonicalJson(sourceData)),
+    ...(instructionMetadata ? [
+      writeFile(join(instructionRoot, "instruction.json"), canonicalJson(instructionMetadata)),
+      writeFile(join(instructionRoot, "CONTENT.md"), input.instructionContent!)
+    ] : [])
   ]);
   const profileSections = {
     manifest: hashJson(profile),
@@ -100,11 +121,23 @@ const writeSnapshot = async (root: string, input: {
     content: await hashPortableTree(skillRoot),
     metadata: hashJson(metadata)
   };
+  const instructionSections = instructionMetadata ? {
+    content: hashJson(input.instructionContent),
+    metadata: hashJson(instructionMetadata)
+  } : undefined;
   const unsigned = {
     formatVersion: 1 as const,
     workspaceId: input.workspaceId ?? "11111111-1111-4111-8111-111111111111",
     profileHashes: { daily: { ...profileSections, total: hashJson(profileSections) } },
     skillHashes: { review: { ...skillSections, total: hashJson(skillSections) } },
+    ...(instructionSections ? {
+      instructionHashes: {
+        "shared-rules": {
+          ...instructionSections,
+          total: hashJson(instructionSections)
+        }
+      }
+    } : {}),
     sourcesHash: hashJson(sourceData)
   };
   const manifest: PortableWorkspaceManifest = { ...unsigned, snapshotHash: snapshotHashFor(unsigned) };
@@ -165,6 +198,38 @@ describe("Workspace Sync", () => {
       remote,
       destination: await tempRoot("agentenv-sync-conflict-")
     })).rejects.toThrow("needs a choice");
+  });
+
+  it("treats reusable Instruction content as an independently mergeable resource", async () => {
+    const base = await writeSnapshot(await tempRoot("agentenv-sync-instruction-base-"), {
+      instructionContent: "# Base rules\n"
+    });
+    const local = await writeSnapshot(await tempRoot("agentenv-sync-instruction-local-"), {
+      instructionContent: "# Local rules\n"
+    });
+    const remote = await writeSnapshot(await tempRoot("agentenv-sync-instruction-remote-"), {
+      instructionContent: "# Remote rules\n"
+    });
+    const plan = planWorkspaceSync({ base, local, remote });
+
+    expect(plan.review.changes).toContainEqual(expect.objectContaining({
+      key: "instruction:shared-rules:content",
+      resourceKind: "instruction",
+      direction: "conflict"
+    }));
+
+    const merged = await materializeMergedWorkspace({
+      plan,
+      local,
+      remote,
+      destination: await tempRoot("agentenv-sync-instruction-merged-"),
+      conflictChoices: { "instruction:shared-rules:content": "remote" }
+    });
+    await expect(validatePortableWorkspace(merged.root)).resolves.toBeDefined();
+    await expect(readFile(
+      join(merged.root, "workspace", "instructions", "shared-rules", "CONTENT.md"),
+      "utf8"
+    )).resolves.toBe("# Remote rules\n");
   });
 
   it("rejects symbolic links before importing a remote snapshot", async () => {

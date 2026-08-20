@@ -53,7 +53,6 @@ import {
 import type { MutationCoordinator } from "./mutationCoordinator";
 import { readAllProfilesForResourceMutation } from "./profileSafety";
 import { pathEntryExists } from "./fileUtils";
-import { createSkillFileBrowser } from "./skillFileBrowser";
 import type { ConversationService } from "./conversations/conversationService";
 import {
   assertSharedSkillCleanupAuthority,
@@ -74,6 +73,9 @@ import { registerTargetIpc } from "./ipc/targetIpc";
 import { registerDialogIpc } from "./ipc/dialogIpc";
 import { registerSharedSkillAreaIpc } from "./ipc/sharedSkillAreaIpc";
 import { registerSkillUpdateIpc } from "./ipc/skillUpdateIpc";
+import { registerInstructionIpc } from "./ipc/instructionIpc";
+import { registerSkillLibraryBrowserIpc } from "./ipc/skillLibraryBrowserIpc";
+import type { InstructionLibraryStore } from "./instructionLibraryStore";
 import { scanSkillInventoryForRenderer } from "./skillInventoryResponse";
 
 export interface IpcServices {
@@ -89,6 +91,7 @@ export interface IpcServices {
   githubAuthService: GitHubAuthService;
   settingsStore: SettingsStore;
   skillLibraryStore: SkillLibraryStore;
+  instructionLibraryStore: InstructionLibraryStore;
   skillMutationRecoveryGate: SkillMutationRecoveryGate;
   targetRegistry: TargetRegistry;
   targetDiscoveryService: TargetDiscoveryService;
@@ -127,6 +130,7 @@ export const registerIpcHandlers = ({
   githubAuthService,
   settingsStore,
   skillLibraryStore,
+  instructionLibraryStore,
   skillMutationRecoveryGate,
   targetRegistry,
   targetDiscoveryService,
@@ -143,7 +147,6 @@ export const registerIpcHandlers = ({
   onSettingsUpdated,
   cancelRepositoryOperations
 }: IpcServices) => {
-  const skillFileBrowser = createSkillFileBrowser(paths, settingsStore);
   const diagnosticHandle = (
     channel: string,
     handler: (event: Electron.IpcMainInvokeEvent, ...args: any[]) => any
@@ -159,7 +162,7 @@ export const registerIpcHandlers = ({
     diagnosticHandle(channel, (event, ...args) =>
       mutationCoordinator.runExclusive(channel, async () => {
         return skillMutationRecoveryGate.run(channel, async () => {
-          const changesWorkspace = /^(skills|profiles|activation|targets|data|settings|workspace-sync):/.test(channel);
+          const changesWorkspace = /^(skills|instructions|profiles|activation|targets|data|settings|workspace-sync):/.test(channel);
           if (
             changesWorkspace &&
             channel !== "workspace-sync:recover" &&
@@ -288,16 +291,11 @@ export const registerIpcHandlers = ({
     { diagnosticHandle, handleMutation, handleWorkspaceSyncMutation },
     { skillLibraryStore, resolveSharedSkillPaths }
   );
-  diagnosticHandle("skills:list-library", () => skillLibraryStore.listSkills());
-  diagnosticHandle("skills:list-files", (_event, id: unknown) =>
-    skillFileBrowser.list(parseId(id, "skill id"))
+  registerInstructionIpc({ diagnosticHandle, handleMutation }, { instructionLibraryStore, profileStore });
+  registerSkillLibraryBrowserIpc(
+    { diagnosticHandle },
+    { paths, settingsStore, skillLibraryStore }
   );
-  diagnosticHandle("skills:read-file", (_event, input: unknown) => {
-    if (!input || typeof input !== "object") throw new Error("Invalid Skill file selection");
-    const candidate = input as { id?: unknown; path?: unknown };
-    if (typeof candidate.path !== "string") throw new Error("Invalid Skill file path");
-    return skillFileBrowser.read(parseId(candidate.id, "skill id"), candidate.path);
-  });
   diagnosticHandle("skills:scan-inventory", async () => {
     await waitForAutomationBackgroundDelay();
     if (

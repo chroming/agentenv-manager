@@ -38,7 +38,7 @@ import { profileResourceMode } from "../shared/profileResources";
 import type { ProfileResourceMode } from "../shared/types";
 
 export interface ProfileResourceSummary {
-  instructions: { count: 0 | 1; total: 0 | 1; mode: ProfileResourceMode };
+  instructions: { count: number; total: number; mode: ProfileResourceMode };
   skills: { count: number; total: number; names: string[]; mode: ProfileResourceMode };
   mcp: { count: number; total: number; names: string[]; mode: ProfileResourceMode };
 }
@@ -186,7 +186,11 @@ export const summarizeProfile = (
       .map((selection) => selection.name) ?? []
   );
   const allMcpNames = unique(mcpPolicy?.selections.map((selection) => selection.name) ?? []);
-  const hasInstructions = profile.instructions.trim().length > 0;
+  const hasInlineInstructions = profile.instructions.trim().length > 0;
+  const instructionReferences = profile.resources.instructions ?? [];
+  const enabledInstructionCount = instructionReferences.filter((reference) => reference.enabled).length +
+    Number(hasInlineInstructions);
+  const totalInstructionCount = instructionReferences.length + Number(hasInlineInstructions);
   const instructionsMode = profileResourceMode(
     profile.resources,
     target.id,
@@ -197,8 +201,8 @@ export const summarizeProfile = (
 
   return {
     instructions: {
-      count: hasInstructions && instructionsMode !== "disable" ? 1 : 0,
-      total: hasInstructions ? 1 : 0,
+      count: instructionsMode === "disable" ? 0 : enabledInstructionCount,
+      total: totalInstructionCount,
       mode: instructionsMode
     },
     skills: {

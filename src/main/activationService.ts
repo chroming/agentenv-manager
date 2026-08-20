@@ -32,6 +32,7 @@ import {
   type SkillLibraryStore
 } from "./skillLibraryStore";
 import { normalizeSkillKey } from "../shared/skillIdentity";
+import { profileEffectiveInstructions } from "../shared/profileInstructions";
 import {
   materializeTargetResourcePolicy,
   profileManagesResource,
@@ -1406,7 +1407,7 @@ export const createActivationService = ({
             contentHash: currentProfileHash,
             snapshotHash: createProfileSnapshotHash(sourceProfile),
             manifest: sourceProfile.manifest,
-            instructions: sourceProfile.instructions,
+            instructions: profileEffectiveInstructions(sourceProfile),
             resources: sourceProfile.resources
           },
           appliedLibraryVersions: currentLibraryVersions,
@@ -2213,8 +2214,9 @@ export const createActivationService = ({
       let instructions = profile.instructions;
       let resources = profile.resources;
 
-      if (captured.instructions !== profile.instructions) {
+      if (captured.instructions !== profileEffectiveInstructions(profile)) {
         instructions = captured.instructions;
+        resources = { ...resources, instructions: [] };
         adopted.push("instructions");
       }
       const currentMcpPolicy = profile.resources.mcpByTarget[targetId];

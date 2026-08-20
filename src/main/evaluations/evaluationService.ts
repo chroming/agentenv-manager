@@ -15,6 +15,7 @@ import type {
 } from "../../shared/evaluations";
 import { oneShotEvaluationIsActive } from "../../shared/evaluations";
 import { profileResourceMode } from "../../shared/profileResources";
+import { profileEffectiveInstructions } from "../../shared/profileInstructions";
 import type { ProfileDetail, SkillLibraryEntry, TargetPaths } from "../../shared/types";
 import { createProfileContentHash } from "../profileFingerprint";
 import type { ProfileStore } from "../profileStore";
@@ -225,7 +226,7 @@ export const createEvaluationService = (
     const skillsMode = profileResourceMode(profile.resources, targetId, "skills");
     const mcpMode = profileResourceMode(profile.resources, targetId, "mcp");
     const instructionsIncluded = instructionsMode === "manage"
-      ? Number(Boolean(profile.instructions))
+      ? Number(Boolean(profileEffectiveInstructions(profile)))
       : instructionsMode === "ignore"
         ? Number(Boolean(await hashPathEntry(targetPaths.instructionsPath)))
         : 0;

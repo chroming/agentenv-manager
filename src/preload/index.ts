@@ -106,6 +106,11 @@ const api: AgentEnvApi = {
     ipcRenderer.invoke("targets:list-native-mcps"),
   listNativeInstructions: () =>
     ipcRenderer.invoke("targets:list-native-instructions"),
+  listInstructionBlocks: () => ipcRenderer.invoke("instructions:list"),
+  createInstructionBlock: (input) => ipcRenderer.invoke("instructions:create", input),
+  updateInstructionBlock: (input) => ipcRenderer.invoke("instructions:update", input),
+  removeInstructionBlock: (input) => ipcRenderer.invoke("instructions:remove", input),
+  selectInstructionFile: () => ipcRenderer.invoke("dialog:select-instruction-file"),
   listSkillLibrary: () => ipcRenderer.invoke("skills:list-library"),
   listSkillFiles: (id) => ipcRenderer.invoke("skills:list-files", id),
   readSkillFile: (input) => ipcRenderer.invoke("skills:read-file", input),

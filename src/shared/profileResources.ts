@@ -4,6 +4,7 @@ import type {
   ProfileTargetResourcePolicy
 } from "./schemas";
 import type { ProfileDetail } from "./types";
+import { profileEffectiveInstructions } from "./profileInstructions";
 
 export type ManagedProfileResource = "instructions" | "skills" | "mcp";
 
@@ -83,12 +84,19 @@ export const materializeTargetResourcePolicy = (
     "skills"
   );
   const mcpDisabled = profileDisablesResource(profile.resources, targetId, "mcp");
-  if (!instructionsDisabled && !skillsDisabled && !mcpDisabled) return profile;
+  const effectiveInstructions = instructionsDisabled ? "" : profileEffectiveInstructions(profile);
+  if (
+    !instructionsDisabled &&
+    !skillsDisabled &&
+    !mcpDisabled &&
+    profile.instructions === effectiveInstructions
+  ) return profile;
 
   const mcpPolicy = profile.resources.mcpByTarget[targetId];
   return {
     ...profile,
-    instructions: instructionsDisabled ? "" : profile.instructions,
+    instructions: effectiveInstructions,
+    resolvedInstructions: effectiveInstructions,
     resources: {
       ...profile.resources,
       skills: skillsDisabled

@@ -1559,6 +1559,47 @@ Management-boundary and evidence contract:
 
 Status: local, read-only Workspace, recursive GitHub, and System Git Repository import/update; in-place Refresh; per-Skill update policy; YAML frontmatter runtime identity; direct and recursive Agent scanning; read-only Skills CLI and Claude plugin evidence detection with malformed-inventory isolation; independent copy import; scan; cleanup; device-local management boundaries; icon metadata; duplicate runtime-name blocking; reference blocking; managed-install removal; and undo are `Implemented`.
 
+### 16.5 Instruction Library Contract
+
+An Instruction Block is a global, reusable text resource owned by AgentEnv. It is
+not a native Agent file and it is not named `AGENTS.md`, `CLAUDE.md`, or another
+Target-specific filename. The Instruction Library stores one stable Block id,
+name, description, content, and revision hash per real directory under
+`instructions-library/`.
+
+- Instructions has its own global navigation destination beside Skills. The
+  catalog supports search, import from a local text or Markdown file, create,
+  preview, edit, and guarded delete. Import copies content into AgentEnv and
+  never changes the source file.
+- A Profile stores an ordered list of Instruction Block references plus its
+  existing Profile-specific instruction content. Each reference may be enabled
+  or disabled without removing it. The same Block may be reused by many
+  Profiles.
+- Effective Profile Instructions are deterministic: enabled Blocks are
+  normalized and concatenated in saved order, followed by Profile-specific
+  content, with one blank line between non-empty sections and one final newline.
+  The effective output is preview-only; users edit its owning Blocks or the
+  Profile-specific content rather than a generated file.
+- Apply materializes the effective output to the selected Target's adapter-
+  declared native instruction path. Library edits and reference changes update
+  saved Profile hashes but never write an Agent until the ordinary Preview and
+  Apply flow runs.
+- A Block referenced by any Profile cannot be deleted. An unreferenced delete
+  moves the verified directory to AgentEnv Trash instead of erasing it in
+  place. Stale content hashes stop edit and delete mutations.
+- Portable Workspace Sync includes Block metadata and content as independent
+  resources. Profiles with missing Block references are invalid. Sync Update
+  backs up and atomically replaces Profiles, Skills, Instruction Blocks, and
+  source metadata as one recoverable operation. Older snapshots without an
+  Instruction section preserve local Instruction Blocks during merge.
+- Workspace project instruction files remain Workspace-owned and are not
+  silently converted into global Blocks. A future explicit import may copy
+  project content into the Library, but project files never become live links.
+
+Status: Instruction Library persistence, ordered Profile composition, Target-
+native compilation, guarded deletion, and portable sync are `Implemented`.
+Project-to-Library import remains intentionally out of scope.
+
 ## 17. Native MCP Contract
 
 - Each Agent is the source of truth for MCP definitions, installation, sign-in, authentication, and credentials.
@@ -2239,6 +2280,7 @@ This matrix is the release-facing index. A capability may be `Implemented` only 
 | Preview, Apply, no-op, stale, drift, rollback | `Implemented` | Bound plan, Backup, verification, compensating restore | Domain, cross-adapter integration, Electron E2E |
 | Apply issue policy | `Implemented` | Stable code maps to one disposition and recovery; contract table is test-verified | Contract-policy and domain tests |
 | Skill import, duplicate review, update, disable, delete | `Implemented` | Canonical Library transaction and History/Backup where destructive | Domain, renderer, Electron E2E |
+| Instruction Library and ordered Profile composition | `Implemented` | Atomic Block storage, Trash deletion, compiled target hash, transactional Workspace Sync | Domain, renderer, Electron E2E |
 | Local Skills Manager and shared migration | `Implemented` | Reviewed filesystem normalization; source evidence and device-local management boundaries preserved | Domain, fake-home E2E |
 | Native MCP sparse activation | `Implemented` | Managed activation fields only; definitions and credentials preserved | Adapter matrix and fake-home E2E |
 | Conversation search and cross-Agent continuation | `Implemented` | Read-only source histories, disposable cache, reviewed redaction/size fallback, private handoff artifacts | Adapter, service, renderer, and Electron E2E |

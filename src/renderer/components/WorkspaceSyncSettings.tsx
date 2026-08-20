@@ -188,8 +188,9 @@ export const WorkspaceSyncSettings = ({
     : status.kind === "remote-changes"
       ? t("Update this device")
       : t("Resolve changes");
-  const resourceLabel = (value: "profile" | "skill" | "source") => ({
+  const resourceLabel = (value: WorkspaceSyncReviewRow["resourceKind"]) => ({
     profile: t("Profile"),
+    instruction: t("Instruction"),
     skill: t("Skill"),
     source: t("Source")
   })[value];

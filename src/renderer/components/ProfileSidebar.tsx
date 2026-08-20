@@ -54,6 +54,7 @@ export const agentIconUrlFor = (iconKey: ResourceIconKey) =>
 
 export type AppWorkspace =
   | "library"
+  | "instructions"
   | "projects"
   | "profiles"
   | "conversations"
@@ -412,7 +413,7 @@ export const ProfileSidebar = ({
         ? "ready"
         : "attention";
 
-  const workspaceItems: Array<{
+  const primaryWorkspaceItems: Array<{
     id: AppWorkspace;
     label: string;
     detail: string;
@@ -427,8 +428,40 @@ export const ProfileSidebar = ({
       detail: t("Continue across Agents"),
       icon: "conversations"
     },
-    { id: "library", label: t("Skills"), detail: t("Skill library"), icon: "skills" }
   ];
+  const resourceWorkspaceItems: Array<{
+    id: AppWorkspace;
+    label: string;
+    detail: string;
+    icon: ProductIconName;
+  }> = [
+    { id: "library", label: t("Skills"), detail: t("Skill library"), icon: "skills" },
+    {
+      id: "instructions",
+      label: t("Instructions"),
+      detail: t("Reusable instruction blocks"),
+      icon: "instructions"
+    }
+  ];
+
+  const renderWorkspaceItem = (item: (typeof primaryWorkspaceItems)[number]) => (
+    <button
+      aria-label={item.label}
+      aria-current={activeWorkspace === item.id ? "page" : undefined}
+      className={`workspace-button${activeWorkspace === item.id ? " is-active" : ""}`}
+      data-workspace={item.id}
+      type="button"
+      title={collapsed ? item.label : undefined}
+      key={item.id}
+      onClick={() => onWorkspaceSelect(item.id)}
+    >
+      <span className="workspace-button__icon" aria-hidden="true">
+        <ProductIcon name={item.icon} />
+      </span>
+      <span>{item.label}</span>
+      <small>{item.detail}</small>
+    </button>
+  );
 
   return (
     <aside
@@ -460,26 +493,10 @@ export const ProfileSidebar = ({
           </button>
         </div>
         <div className="workspace-nav__group workspace-nav__group--destinations">
-          {workspaceItems.map((item) => {
-            return (
-              <button
-                aria-label={item.label}
-                aria-current={activeWorkspace === item.id ? "page" : undefined}
-                className={`workspace-button${activeWorkspace === item.id ? " is-active" : ""}`}
-                data-workspace={item.id}
-                type="button"
-                title={collapsed ? item.label : undefined}
-                key={item.id}
-                onClick={() => onWorkspaceSelect(item.id)}
-              >
-                <span className="workspace-button__icon" aria-hidden="true">
-                  <ProductIcon name={item.icon} />
-                </span>
-                <span>{item.label}</span>
-                <small>{item.detail}</small>
-              </button>
-            );
-          })}
+          {primaryWorkspaceItems.map(renderWorkspaceItem)}
+        </div>
+        <div className="workspace-nav__group workspace-nav__group--resources">
+          {resourceWorkspaceItems.map(renderWorkspaceItem)}
         </div>
         <div className="workspace-nav__group workspace-nav__group--settings">
           <button

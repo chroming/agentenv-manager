@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   PortableProfileManifestSchema,
   PortableProfileResourcesSchema,
+  PortableInstructionMetadataSchema,
   PortableSkillMetadataSchema,
   PortableSkillSourcesSchema,
   PortableWorkspaceManifestSchema,
@@ -18,6 +19,7 @@ import { hashJson, hashPortableTree, inspectPortableTree, snapshotHashFor } from
 const MAX_WORKSPACE_BYTES = 500 * 1024 * 1024;
 const MAX_SKILLS = 5_000;
 const MAX_PROFILES = 1_000;
+const MAX_INSTRUCTIONS = 5_000;
 
 const readJson = async (path: string): Promise<unknown> => JSON.parse(await readFile(path, "utf8"));
 
@@ -108,9 +110,14 @@ export const validatePortableWorkspace = async (root: string): Promise<Validated
   if (!workspaceStats.isDirectory() || workspaceStats.isSymbolicLink()) {
     throw new Error("Portable Workspace payload must be a real directory");
   }
-  await assertExactEntries(join(root, "workspace"), ["profiles", "skills", "skill-sources.json"]);
-  await assertRegularFile(join(root, "workspace", "skill-sources.json"));
   const manifest = PortableWorkspaceManifestSchema.parse(await readJson(join(root, "agentenv-sync.json")));
+  await assertExactEntries(
+    join(root, "workspace"),
+    manifest.instructionHashes
+      ? ["profiles", "skills", "instructions", "skill-sources.json"]
+      : ["profiles", "skills", "skill-sources.json"]
+  );
+  await assertRegularFile(join(root, "workspace", "skill-sources.json"));
   const { snapshotHash: _snapshotHash, ...unsigned } = manifest;
   if (snapshotHashFor(unsigned) !== manifest.snapshotHash) {
     throw new Error("Portable Workspace manifest hash does not match its contents");
@@ -118,13 +125,22 @@ export const validatePortableWorkspace = async (root: string): Promise<Validated
 
   const profilesRoot = join(root, "workspace", "profiles");
   const skillsRoot = join(root, "workspace", "skills");
+  const instructionsRoot = join(root, "workspace", "instructions");
   const profileIds = await listRealDirectories(profilesRoot);
   const skillIds = await listRealDirectories(skillsRoot);
-  if (profileIds.length > MAX_PROFILES || skillIds.length > MAX_SKILLS) {
+  const instructionIds = manifest.instructionHashes
+    ? await listRealDirectories(instructionsRoot)
+    : [];
+  if (
+    profileIds.length > MAX_PROFILES ||
+    skillIds.length > MAX_SKILLS ||
+    instructionIds.length > MAX_INSTRUCTIONS
+  ) {
     throw new Error("Portable Workspace contains too many resources");
   }
   if (profileIds.join("\0") !== Object.keys(manifest.profileHashes).sort().join("\0") ||
-    skillIds.join("\0") !== Object.keys(manifest.skillHashes).sort().join("\0")) {
+    skillIds.join("\0") !== Object.keys(manifest.skillHashes).sort().join("\0") ||
+    instructionIds.join("\0") !== Object.keys(manifest.instructionHashes ?? {}).sort().join("\0")) {
     throw new Error("Portable Workspace manifest resource list does not match its directories");
   }
 
@@ -156,7 +172,37 @@ export const validatePortableWorkspace = async (root: string): Promise<Validated
     maxBytes: 50 * 1024 * 1024
   });
 
-  let totalBytes = profileEntries.reduce((sum, entry) => sum + entry.size, 0);
+  const instructionIdsSet = new Set(instructionIds);
+  let instructionBytes = 0;
+  for (const id of instructionIds) {
+    const rootPath = join(instructionsRoot, id);
+    await assertExactEntries(rootPath, ["instruction.json", "CONTENT.md"]);
+    await Promise.all([
+      assertRegularFile(join(rootPath, "instruction.json")),
+      assertRegularFile(join(rootPath, "CONTENT.md"))
+    ]);
+    const metadata = PortableInstructionMetadataSchema.parse(
+      await readJson(join(rootPath, "instruction.json"))
+    );
+    const content = await readFile(join(rootPath, "CONTENT.md"), "utf8");
+    if (metadata.id !== id) {
+      throw new Error(`Portable Instruction id does not match its directory: ${id}`);
+    }
+    const expected = manifest.instructionHashes?.[id];
+    const hashes = { content: hashJson(content), metadata: hashJson(metadata) };
+    if (
+      !expected ||
+      hashes.content !== expected.content ||
+      hashes.metadata !== expected.metadata ||
+      hashJson(hashes) !== expected.total
+    ) {
+      throw new Error(`Portable Instruction hash mismatch: ${id}`);
+    }
+    instructionBytes += Buffer.byteLength(content, "utf8");
+    await assertNoHighConfidenceSecret(rootPath, { maxFiles: 2, maxBytes: 2_100_000 });
+  }
+
+  let totalBytes = profileEntries.reduce((sum, entry) => sum + entry.size, 0) + instructionBytes;
   const skillIdsSet = new Set(skillIds);
   for (const id of skillIds) {
     const rootPath = join(skillsRoot, id);
@@ -212,6 +258,13 @@ export const validatePortableWorkspace = async (root: string): Promise<Validated
     for (const skill of resources.skills) {
       if (!skillIdsSet.has(skill.libraryId)) {
         throw new Error(`Portable Profile ${profileId} references missing Skill ${skill.libraryId}`);
+      }
+    }
+    for (const instruction of resources.instructions ?? []) {
+      if (!instructionIdsSet.has(instruction.libraryId)) {
+        throw new Error(
+          `Portable Profile ${profileId} references missing Instruction ${instruction.libraryId}`
+        );
       }
     }
   }

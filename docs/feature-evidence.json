@@ -516,6 +516,59 @@
       }
     },
     {
+      "id": "instruction-library-composition",
+      "summary": "Create reusable Instruction Blocks, arrange enabled Blocks in Profiles, preview the compiled Agent file, and sync the portable source content without touching an Agent until Apply.",
+      "contract": {
+        "path": "docs/product-contracts.md",
+        "anchor": "### 16.5 Instruction Library Contract"
+      },
+      "support": {
+        "opencode": "supported",
+        "claude-code": "supported",
+        "codex": "supported",
+        "antigravity": "supported",
+        "trae-cli": "supported",
+        "pi": "supported"
+      },
+      "states": {
+        "idle": "Instructions lists reusable Blocks separately from Profiles; each Profile shows its ordered references and Profile-specific content.",
+        "working": "The initiating create, edit, import, delete, refresh, or Profile save control reports local progress without moving the surrounding work surface.",
+        "success": "Saved Blocks are available to every Profile and enabled content is compiled in the visible order before Profile-specific instructions.",
+        "error": "Validation, stale content, storage, and Profile save failures remain in the initiating dialog or global failure surface without reporting a false save.",
+        "cancelled": "Escape, outside dismissal, or Cancel closes non-destructive editors and pickers without changing the Library or Profile.",
+        "noOp": "Unchanged editors cannot save, disabled references contribute no compiled content, and preview performs no write.",
+        "stale": "Edits and deletes carry the opened content hash; a changed Block must be reloaded before mutation.",
+        "partial": "A Profile may combine reusable Blocks with its own inline instructions, and unsupported Agent instruction capabilities remain Agent controlled.",
+        "persisted": "Blocks use stable Library IDs and portable content; Profile references and Workspace Sync preserve order, enabled state, metadata, and hashes.",
+        "rollback": "Delete moves an unreferenced Block to AgentEnv Trash, Profile saves remain atomic, and Workspace Sync restores Instructions with the rest of its transaction."
+      },
+      "evidence": {
+        "domain": [
+          "tests/main/instructionLibraryStore.test.ts",
+          "tests/e2e/opencodeProfileSwitching.e2e.test.ts",
+          "tests/main/workspaceSync.test.ts"
+        ],
+        "renderer": [
+          "tests/renderer/InstructionsWorkspace.test.tsx",
+          "tests/renderer/ProfileInstructionsComposerSection.test.tsx",
+          "tests/renderer/profileDraftState.test.ts"
+        ],
+        "desktop": [
+          "tests/e2e/instructions.e2e.test.ts"
+        ],
+        "persistence": [
+          "tests/main/instructionLibraryStore.test.ts",
+          "tests/main/workspaceSync.test.ts",
+          "tests/e2e/instructions.e2e.test.ts"
+        ],
+        "visual": [
+          "instructions-920x620.png",
+          "instructions-1180x728.png",
+          "instructions-1440x900.png"
+        ]
+      }
+    },
+    {
       "id": "shared-skill-area-intents",
       "summary": "Leave the shared folder unchanged, manage it in place, or run a separate reviewed migration into Profile deployments.",
       "contract": {

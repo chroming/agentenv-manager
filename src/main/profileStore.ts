@@ -33,6 +33,7 @@ import { createProfileContentHash } from "./profileFingerprint";
 import { copyPathVerified, hashPathEntry } from "./filesystemIntegrity";
 import { findSecretWarnings } from "./secretWarnings";
 import { createTargetRegistry, type TargetRegistry } from "./targets/registry";
+import type { InstructionLibraryStore } from "./instructionLibraryStore";
 
 export interface ProfileStore {
   listProfiles(): Promise<ProfileSummary[]>;
@@ -104,7 +105,8 @@ const createdAtFromProfile = (
 
 export const createProfileStore = (
   overrides: PathOverrides,
-  targetRegistry: TargetRegistry = createTargetRegistry()
+  targetRegistry: TargetRegistry = createTargetRegistry(),
+  instructionLibraryStore?: Pick<InstructionLibraryStore, "compile">
 ): ProfileStore => {
   const paths = createPaths(overrides);
 
@@ -173,11 +175,25 @@ export const createProfileStore = (
         profileStats
       )
     };
+    const instructionReferences = resources.instructions ?? [];
+    const resolvedInstructions = instructionReferences.length > 0
+      ? instructionLibraryStore
+        ? await instructionLibraryStore.compile(
+            instructionReferences
+              .filter((reference) => reference.enabled)
+              .map((reference) => reference.libraryId),
+            instructions
+          )
+        : (() => {
+            throw new Error(`Profile ${safeId} references Instruction Library content that is unavailable`);
+          })()
+      : instructions;
     const base: ProfileDetail = {
       id: safeId,
       profileDir,
       manifest,
       instructions,
+      resolvedInstructions,
       resources
     };
     const targetContentHashes = Object.fromEntries(
@@ -254,7 +270,20 @@ export const createProfileStore = (
   };
 
   const saveProfile = async (input: SaveProfileInput): Promise<ProfileDetail> => {
-    const secretWarnings = findSecretWarnings(input.instructions);
+    const instructionReferences = input.resources.instructions ?? [];
+    const resolvedInstructions = instructionReferences.length > 0
+      ? instructionLibraryStore
+        ? await instructionLibraryStore.compile(
+            instructionReferences
+              .filter((reference) => reference.enabled)
+              .map((reference) => reference.libraryId),
+            input.instructions
+          )
+        : (() => {
+            throw new Error(`Profile ${input.manifest.id} references Instruction Library content that is unavailable`);
+          })()
+      : input.instructions;
+    const secretWarnings = findSecretWarnings(resolvedInstructions);
     if (secretWarnings.length > 0) {
       const keys = [...new Set(secretWarnings.map((warning) => warning.split(": ").at(-1)))]
         .filter(Boolean)

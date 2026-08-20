@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { parse } from "jsonc-parser";
 import { afterEach, describe, expect, it } from "vitest";
 import { createActivationService } from "../../src/main/activationService";
+import { createInstructionLibraryStore } from "../../src/main/instructionLibraryStore";
 import { createPaths } from "../../src/main/paths";
 import { createProfileStore } from "../../src/main/profileStore";
 import { createSettingsStore } from "../../src/main/settingsStore";
@@ -17,6 +18,60 @@ afterEach(async () => {
 });
 
 describe("OpenCode Profile v2 switching e2e", () => {
+  it("compiles ordered Instruction Blocks before Profile-specific instructions", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-instructions-e2e-"));
+    const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
+    const instructionLibraryStore = createInstructionLibraryStore(paths);
+    const profileStore = createProfileStore(paths, undefined, instructionLibraryStore);
+    const settingsStore = createSettingsStore(paths);
+    const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
+    const first = await instructionLibraryStore.create({
+      name: "Core behavior",
+      description: "Shared baseline",
+      content: "# Core\n\nAlways verify changes.\n"
+    });
+    const second = await instructionLibraryStore.create({
+      name: "Review behavior",
+      description: "Review workflow",
+      content: "# Review\n\nExplain important findings.\n"
+    });
+    const disabled = await instructionLibraryStore.create({
+      name: "Disabled behavior",
+      description: "Not included in this Profile",
+      content: "# Disabled\n\nThis must not be applied.\n"
+    });
+    await profileStore.saveProfile({
+      manifest: {
+        id: "opencode-composed-instructions",
+        name: "Composed instructions",
+        description: "",
+        preferredTargetId: "opencode",
+        version: 2
+      },
+      instructions: "# Profile\n\nUse concise language.\n",
+      resources: {
+        instructions: [
+          { libraryId: second.id, enabled: true },
+          { libraryId: disabled.id, enabled: false },
+          { libraryId: first.id, enabled: true }
+        ],
+        skills: [],
+        mcpByTarget: {}
+      }
+    });
+    const targetDir = join(paths.homeDir, ".config", "opencode");
+    await mkdir(targetDir, { recursive: true });
+    await writeFile(join(targetDir, "AGENTS.md"), "# Before\n");
+    const service = createActivationService({ paths, profileStore, settingsStore, skillLibraryStore });
+
+    const preview = await service.previewProfile("opencode-composed-instructions", "opencode");
+    expect(blockingMessages(preview.issues)).toEqual([]);
+    expect((await service.applyProfile("opencode-composed-instructions", preview.id)).ok).toBe(true);
+    await expect(readFile(join(targetDir, "AGENTS.md"), "utf8")).resolves.toBe(
+      "# Review\n\nExplain important findings.\n\n# Core\n\nAlways verify changes.\n\n# Profile\n\nUse concise language.\n"
+    );
+  });
+
   it("pauses and resumes Instructions, Skills, and MCP management without losing Profile data", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-opencode-resource-policy-e2e-"));
     const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });

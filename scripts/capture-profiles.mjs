@@ -480,6 +480,32 @@ const prepareFixture = async (root) => {
   );
   await Promise.all(profileFixtures.map((profile) => writeProfile(appDataRoot, profile)));
   await writeLibrary(appDataRoot);
+  for (const block of [
+    {
+      id: "engineering-baseline",
+      name: "Engineering baseline",
+      description: "Shared review and verification rules.",
+      content: "# Engineering baseline\n\nVerify behavior and report the strongest evidence.\n"
+    },
+    {
+      id: "release-writing",
+      name: "Release writing",
+      description: "Concise release communication guidance.",
+      content: "# Release writing\n\nLead with user-visible changes and known limitations.\n"
+    }
+  ]) {
+    const blockDir = join(appDataRoot, "instructions-library", block.id);
+    await mkdir(blockDir, { recursive: true });
+    await writeJson(join(blockDir, "instruction.json"), {
+      formatVersion: 1,
+      id: block.id,
+      name: block.name,
+      description: block.description,
+      createdAt: captureFixtureTimestamp.toISOString(),
+      updatedAt: captureFixtureTimestamp.toISOString()
+    });
+    await writeFile(join(blockDir, "CONTENT.md"), block.content, "utf8");
+  }
   await writeJson(join(appDataRoot, "skill-sources.json"), {
     formatVersion: 1,
     sources: Object.values(repositorySourceScopes).map((source) => ({
@@ -1143,6 +1169,21 @@ try {
   await skillSearch.fill("no-such-skill");
   await capturePage(page, join(outputDir, "skills-empty-920x620.png"));
   await skillSearch.fill("");
+  await page.getByRole("button", { name: "Instructions", exact: true }).click();
+  await page.getByRole("heading", { name: "Instructions", exact: true }).waitFor({
+    state: "visible"
+  });
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(page, join(outputDir, "instructions-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "instructions-1180x728.png"));
+  await setWindowSize(page, windowHandle, 1440, 900);
+  await capturePage(page, join(outputDir, "instructions-1440x900.png"));
+  await page.getByRole("button", { name: "Skills", exact: true }).click();
+  await page.getByRole("heading", { name: "Skills", exact: true }).waitFor({
+    state: "visible"
+  });
+  await setWindowSize(page, windowHandle, 920, 620);
   const githubSource = page.getByLabel("Full source for react-best-practices");
   await githubSource.scrollIntoViewIfNeeded();
   await githubSource.hover();

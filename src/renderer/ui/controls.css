@@ -5,6 +5,35 @@ textarea {
   font: inherit;
 }
 
+.ui-text-action {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  margin: 0;
+  max-width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-text-action:hover {
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ui-text-action:disabled {
+  color: var(--muted);
+  cursor: default;
+  text-decoration: none;
+}
+
 button {
   align-items: center;
   appearance: none;
