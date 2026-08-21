@@ -1,28 +1,28 @@
 {
-  "generatedAt": "2026-08-19T16:33:25.502Z",
+  "generatedAt": "2026-08-21T01:33:09.039Z",
   "source": {
-    "commit": "9760f29f7e507f7cc23e207df5aea6977a53f4c1",
+    "commit": "e0aaaa35a9243db9c65e824d2ff2c4498c1eb82c",
     "dirty": true,
-    "fingerprint": "2e8fb1b7ebc8234526248e09201025a206e3e717a578ecb8ffef8099131564a6",
-    "files": 914
+    "fingerprint": "3ef088275ddfa93ee7e742c8ee80fb2e9490f74438d7bb8d2764aaf312c67e09",
+    "files": 957
   },
   "build": {
-    "generatedAt": "2026-08-19T16:29:21.628Z",
-    "sourceFingerprint": "bf56616ddbfe1aeeb53a802feb24aa41796a6b170e0cb7d11f0594640d2c3ce4",
-    "sourceFiles": 487,
-    "artifactFingerprint": "14f02ad50bcf4d83582de0ec036bfb116c725d49ba5689c222dac8d8ec90b935",
+    "generatedAt": "2026-08-21T01:24:10.929Z",
+    "sourceFingerprint": "cace27a5acae4d66bb41c1a2c292c28ae3ec007123fa7f7f32942cccf6ba3838",
+    "sourceFiles": 513,
+    "artifactFingerprint": "2d21414d93a125c9e5620169880380e83b59b02a3b2a3f5a7f1edf9d35573d9a",
     "artifactFiles": 40
   },
   "tests": {
     "passed": true,
-    "files": 237,
-    "assertions": 1759,
-    "e2eFiles": 21,
-    "e2eAssertions": 251,
-    "desktopElectronFiles": 9,
-    "desktopElectronAssertions": 152,
+    "files": 251,
+    "assertions": 1807,
+    "e2eFiles": 23,
+    "e2eAssertions": 255,
+    "desktopElectronFiles": 11,
+    "desktopElectronAssertions": 155,
     "electronUiFiles": 1,
-    "electronUiAssertions": 138
+    "electronUiAssertions": 139
   },
   "audits": {
     "styles": "passed",
@@ -33,8 +33,8 @@
   },
   "captures": {
     "directory": "/var/folders/c4/vw8cxnvd7rv46sv4kq0lkg0h0000gn/T/agentenv-ui-captures/verification",
-    "artifactFingerprint": "14f02ad50bcf4d83582de0ec036bfb116c725d49ba5689c222dac8d8ec90b935",
-    "files": 185,
+    "artifactFingerprint": "2d21414d93a125c9e5620169880380e83b59b02a3b2a3f5a7f1edf9d35573d9a",
+    "files": 188,
     "viewports": [
       "1180x728",
       "920x620"
@@ -42,9 +42,9 @@
     "includesProfileLoadingState": true,
     "visualContract": {
       "passed": true,
-      "files": 53,
-      "maxChangedPixelRatio": 0.0116882889200561
+      "files": 56,
+      "maxChangedPixelRatio": 0.010946704067321178
     }
   },
-  "packagedSmoke": "passed"
+  "packagedSmoke": "not-run"
 }

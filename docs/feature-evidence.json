@@ -569,6 +569,112 @@
       }
     },
     {
+      "id": "profile-skill-groups",
+      "summary": "Organize reusable Skills into Library Groups, add saved group snapshots to Profiles, and gate the whole group without losing member choices.",
+      "contract": {
+        "path": "docs/product-contracts.md",
+        "anchor": "## 7. Profile Lifecycle"
+      },
+      "support": {
+        "opencode": "supported",
+        "claude-code": "supported",
+        "codex": "supported",
+        "antigravity": "supported",
+        "trae-cli": "supported",
+        "pi": "supported"
+      },
+      "states": {
+        "idle": "Groups is a dedicated Library view with searchable manual groups and stable member counts.",
+        "working": "Create, edit, remove, synchronize, and Profile gate actions report progress on their initiating dialog or control.",
+        "success": "A Profile saves a group snapshot and applies only members enabled by both the group gate and member choice.",
+        "error": "Invalid members, stale Library state, and persistence failures leave the previous Library and Profile state intact.",
+        "cancelled": "Closing a group editor or picker does not change Library or Profile data.",
+        "noOp": "Adding an existing group or saving unchanged membership performs no duplicate mutation.",
+        "stale": "Library membership changes are shown as a group state and require an explicit sync into the Profile snapshot.",
+        "partial": "Source-backed groups are selection recipes; they do not transfer source ownership or create deployable directories.",
+        "persisted": "Manual groups sync portably, while each Profile keeps its own group gate and member snapshot.",
+        "rollback": "Profile autosave recovery and Workspace Sync rollback restore group references with the rest of the Profile transaction."
+      },
+      "evidence": {
+        "domain": [
+          "tests/main/skillGroupStore.test.ts",
+          "tests/shared/profileSkillGroups.test.ts"
+        ],
+        "renderer": [
+          "tests/renderer/SkillGroupView.test.tsx",
+          "tests/renderer/SkillsEditor.test.tsx"
+        ],
+        "desktop": [
+          "tests/e2e/electronUiProfileSwitching.e2e.test.ts"
+        ],
+        "persistence": [
+          "tests/main/skillGroupStore.test.ts",
+          "tests/main/workspaceSync.test.ts"
+        ],
+        "visual": [
+          "skills-groups-920x620.png",
+          "skills-groups-expanded-920x620.png",
+          "skills-groups-expanded-1180x728.png",
+          "profile-skill-group-on-920x620.png",
+          "profile-skill-group-off-920x620.png",
+          "profile-skill-group-picker-920x620.png"
+        ]
+      }
+    },
+    {
+      "id": "ssh-linux-profile-endpoints",
+      "summary": "Apply saved Profiles to supported Agent runtimes on user-approved Linux devices through system OpenSSH without changing the local Agent.",
+      "contract": {
+        "path": "docs/product-contracts.md",
+        "anchor": "## 23.5 SSH Linux Endpoint Contract"
+      },
+      "support": {
+        "opencode": "partial",
+        "claude-code": "partial",
+        "codex": "partial",
+        "antigravity": "partial",
+        "trae-cli": "partial",
+        "pi": "partial"
+      },
+      "states": {
+        "idle": "Agents groups local and SSH Agent endpoints by location; SSH device setup stays in the page action menu and remote Profile choices carry a device badge.",
+        "working": "Only the initiating device refresh, connection, or Apply control reports progress while the rest of the Agent catalog remains stable and usable.",
+        "success": "The selected remote Agent matches the saved Profile receipt and confirmed temporary remote operation data is removed.",
+        "error": "Connection, compatibility, replacement, verification, and transport failures remain attached to the SSH device or Apply preview without reporting a false deployment.",
+        "cancelled": "Closing connection editors or Apply preview performs no remote write; interrupted commit remains recovery-required until its durable status is reconciled.",
+        "noOp": "A matching remote Profile returns No changes to apply, performs no remote write, and releases its local preview cache.",
+        "stale": "Profile, Library, remote snapshot, or device identity changes after Preview require a new Preview before any write.",
+        "partial": "Instructions and managed-copy Skills are supported; MCP, Capture, Conversations, Workspace Open, and Compare stay explicitly unavailable over SSH.",
+        "persisted": "Only connection descriptors and local endpoint receipts persist; credentials remain in system SSH and offline applied endpoints remain visible.",
+        "rollback": "Apply verifies exact paths and hashes, rolls every planned path back together on failure, and retains the remote checkpoint only when the result is uncertain."
+      },
+      "evidence": {
+        "domain": [
+          "tests/main/remoteDevices/remoteActivationService.test.ts",
+          "tests/main/remoteDevices/sshConfigDiscovery.test.ts",
+          "tests/main/remoteDevices/systemSshTransport.test.ts"
+        ],
+        "renderer": [
+          "tests/renderer/RemoteDeviceManager.test.tsx",
+          "tests/renderer/targetStateSlices.test.ts"
+        ],
+        "desktop": [
+          "tests/e2e/remoteProfileEndpoint.e2e.test.ts"
+        ],
+        "persistence": [
+          "tests/main/remoteDevices/remoteDeviceStore.test.ts",
+          "tests/main/remoteDevices/remoteEndpointStateRepository.test.ts"
+        ],
+        "visual": [
+          "agents-setup-920x620.png",
+          "agents-setup-1180x728.png",
+          "agents-add-ssh-device-920x620.png",
+          "agents-ready-920x620.png",
+          "agents-ready-1180x728.png"
+        ]
+      }
+    },
+    {
       "id": "shared-skill-area-intents",
       "summary": "Leave the shared folder unchanged, manage it in place, or run a separate reviewed migration into Profile deployments.",
       "contract": {

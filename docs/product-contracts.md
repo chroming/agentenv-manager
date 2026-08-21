@@ -985,6 +985,8 @@ Rules:
 - For pre-existing Target state without a baseline, AgentEnv may create one only when the current target-specific Profile hash and deployed Library versions still match the last successful Apply. It must never infer a baseline from a pending or drifted Profile.
 - A Workspace has no separate Apply phase. `Undo last change` restores the file or Skill changed by AgentEnv's most recent completed Workspace mutation; `Recovery` lists older mutation receipts.
 - Profile Skills MUST expose enabled and disabled Library references in one compact list. Each row has one identity line, one supporting line for version and source, one truthful state, one availability switch, and one overflow command. Full Library paths, applied revisions, alternate install names, and update details remain selectable through overflow detail or the row menu instead of becoming additional visible lanes. A mismatch, missing install, or pending removal is `Apply pending`. A matching device-local management boundary is shown as `External active` when it satisfies enabled intent, or `External still active` when it contradicts omit intent; neither state is presented as pending after a successful Apply. Ownership, update-source policy, source-check result, Profile availability, Target deployment, and local overrides are separate dimensions: the visible state shows only exceptional or currently actionable states. `Not tracked` MUST NOT be presented as an ownership or management state. Check updates checks only enabled tracked references in that Profile and appears only while at least one such reference is checkable or a check is already running; an unavailable check MUST NOT remain as a permanently disabled toolbar control. Add opens a searchable Library-only picker that identifies source, revision, and path and omits already attached or globally disabled Skills; Remove detaches a reference from the Profile without deleting Library content. A missing reference disables its availability control and offers Relink or Remove through the same overflow menu. Row menus MUST fit their longest localized command at the minimum viewport.
+- Library Skill Groups are reusable selection recipes, not deployable folders or a second ownership layer. Library owns manually named groups; an existing By source collection may also be selected as a source-backed group. Adding a group stores a Profile-local snapshot of its name and member Library IDs so a later Library or source edit cannot silently change the Profile. The user explicitly synchronizes changed membership.
+- A Profile Skill Group has one independent On/Off gate. When the group is Off, every member is omitted from the effective Profile regardless of its saved member switch; member switches remain visible, retain their values, and are read-only. Turning the group On restores those saved member choices. Apply, Compare, evaluation, deployment fingerprints, update checks, and summaries MUST consume the same flattened effective Skill set. A grouped member cannot be detached from that group individually; removing the group removes group-only references while preserving Skills that were also added directly or belong to another group.
 - Updating from Profile Skills still updates the global Library copy. The update confirmation MUST disclose how many Profiles reference it and whether Copy or Live link mode changes installed Targets immediately.
 
 Status: v2 whole-Profile auto-save, recovery history, per-Target applied hashes, active-Profile focus, Profile-scoped Skill enablement, and per-Target MCP policy are `Implemented`. Compatible live Instructions can be adopted. Native configuration, Agent definitions, hooks, environment variables, credentials, and MCP definitions remain Target-owned.
@@ -1381,7 +1383,7 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 - Tags are optional user-owned Library metadata used to organize Skills by task. They are stored only in AgentEnv metadata, never written to `SKILL.md`, Profile references, Workspace copies, or Agent directories.
 - A Skill may have at most 12 tags of at most 32 characters. Input is Unicode-normalized, trimmed, whitespace-collapsed, and deduplicated case-insensitively while preserving the user's canonical spelling.
 - Skill content updates and reimports preserve existing tags. Merging Library Skills produces the case-insensitive union of their tags. A semantic no-op tag save performs no metadata write.
-- Portable Workspace Sync includes tags because they describe the reusable Library object; Target deployment and Profile Apply ignore them.
+- Portable Workspace Sync includes tags and manual Skill Groups because they describe reusable Library organization; Target deployment and Profile Apply ignore tags and materialize Profile group gates into the effective Skill list.
 - The Skill List keeps tags with the Skill identity rather than adding a table column. Selecting a tag applies one exact filter, and the Filters panel exposes the same exact tag set. By Source remains a source-health projection and does not duplicate tag filtering.
 - The shared Library Skill picker used by Profiles and Workspaces and global Quick Open match tag text. Tags do not change Skill availability, update policy, source grouping, Profile membership, or deployment state.
 
@@ -1571,15 +1573,22 @@ name, description, content, and revision hash per real directory under
   catalog supports search, import from a local text or Markdown file, create,
   preview, edit, and guarded delete. Import copies content into AgentEnv and
   never changes the source file.
-- A Profile stores an ordered list of Instruction Block references plus its
-  existing Profile-specific instruction content. Each reference may be enabled
-  or disabled without removing it. The same Block may be reused by many
-  Profiles.
+- A Profile stores only an ordered list of Instruction Block references. Each
+  reference may be enabled or disabled without removing it, and the same Block
+  may be reused by many Profiles. A generated native filename such as
+  `AGENTS.md` or `CLAUDE.md` is output, never a second editable source.
 - Effective Profile Instructions are deterministic: enabled Blocks are
-  normalized and concatenated in saved order, followed by Profile-specific
-  content, with one blank line between non-empty sections and one final newline.
-  The effective output is preview-only; users edit its owning Blocks or the
-  Profile-specific content rather than a generated file.
+  normalized and concatenated in saved order, with one blank line between
+  non-empty sections and one final newline. The compiled output is preview-only;
+  users edit its owning Blocks rather than the generated file.
+- Legacy Profile-specific content is migrated to one ordinary Library Block at
+  the end of that Profile's saved order. Migration is idempotent, leaves the
+  Agent untouched, and verifies that the effective deployment payload is
+  preserved. The legacy Profile instruction file remains only as an empty
+  compatibility placeholder until the next whole-data format revision.
+- Editing a Block from either Instructions or a Profile uses the same editor and
+  names every referencing Profile before Save. Saving changes Library and the
+  affected Profile deployment hashes, but never writes an Agent until Apply.
 - Apply materializes the effective output to the selected Target's adapter-
   declared native instruction path. Library edits and reference changes update
   saved Profile hashes but never write an Agent until the ordinary Preview and
@@ -1596,8 +1605,9 @@ name, description, content, and revision hash per real directory under
   silently converted into global Blocks. A future explicit import may copy
   project content into the Library, but project files never become live links.
 
-Status: Instruction Library persistence, ordered Profile composition, Target-
-native compilation, guarded deletion, and portable sync are `Implemented`.
+Status: Instruction Library persistence, ordered Profile composition, legacy
+inline-content migration, shared impact-aware editing, Target-native
+compilation, guarded deletion, and portable sync are `Implemented`.
 Project-to-Library import remains intentionally out of scope.
 
 ## 17. Native MCP Contract
@@ -2139,6 +2149,24 @@ receipts are device-local.
 - SSH devices store only a display name, host or SSH-config alias, optional user, and
   optional port. Passwords, private keys, access tokens, and host-key bypasses are never
   stored by AgentEnv.
+- A device is a connection location; an Agent endpoint is an Agent detected on that
+  location. The Agents workspace lists local and SSH endpoints in location groups. SSH
+  device setup is a low-frequency page action, not a persistent empty management panel.
+- Remote refresh is device-local. Only the initiating device reports progress, a failed
+  refresh keeps its last-known endpoints visible, and the failure reason and retry action
+  remain attached to that device without shifting the rest of the Agent list.
+- Agent selectors group local endpoints under This Mac and remote endpoints under their
+  device. The Agent product icon remains primary and a secondary SSH badge identifies the
+  location; unavailable previously known endpoints remain visible with their reason.
+- Add SSH Device reads concrete named `Host` entries from the current user's
+  `~/.ssh/config` and its `Include` files. Wildcard and negated patterns are not presented
+  as devices. Missing or unreadable configuration falls back to manual entry without
+  blocking the workflow.
+- Selecting a named Host stores its alias, not the resolved hostname. A local `ssh -G`
+  probe may show the effective hostname, user, and port before saving, but AgentEnv does
+  not persist those preview values or expose identity-file and proxy settings. Keeping the
+  alias lets system OpenSSH continue to apply `ProxyJump`, `IdentityFile`, and later config
+  changes.
 - Connections use the system `ssh` executable with the user's SSH config, SSH Agent, and
   `known_hosts`. Non-interactive operations use Batch Mode and never open a password prompt.
 - A remote device is supported only when it reports Linux and provides `sh`, `tar`,
@@ -2154,26 +2182,30 @@ receipts are device-local.
 - Preview reads only adapter-declared paths under the remote HOME. Apply rechecks Profile,
   Library, device identity, and the exact remote snapshot before any write.
 - Existing identical files are adopted without rewriting them. Existing different files
-  require explicit review and are included in the remote recovery point before replacement.
+  require explicit review and are included in the remote transaction checkpoint before replacement.
 - Shared Skill locations are never silently removed over SSH. A matching shared copy is a
   blocking, path-specific issue until the user reviews that remote shared area.
-- Apply uploads an immutable staged payload, creates a private recovery point under
+- Apply uploads an immutable staged payload, creates a private transaction checkpoint under
   `~/.local/state/agentenv-manager`, mutates exact planned paths, verifies every resulting
-  file hash, and rolls back all planned paths when any step fails.
+  file hash, and rolls back all planned paths when any step fails. The checkpoint is removed
+  after AgentEnv confirms either commit or rollback; it is retained only while the result is
+  uncertain and recovery is required.
 - If the SSH connection ends during commit, AgentEnv reads the durable remote operation
   status. Confirmed `committed` finalizes local state, confirmed `rolled-back` restores the
-  prior local receipt, and an unknown result enters Recovery required without attempting a
-  second write.
-- Removing an SSH device removes only its saved connection descriptor. It never changes
-  files on that Linux device.
+  prior local receipt, and a missing or unknown result stays Recovery required without
+  attempting a second write.
+- Removing an SSH device removes its saved connection descriptor and local endpoint status.
+  It never changes files on that Linux device. Removal is blocked while an endpoint has an
+  unresolved recovery receipt so the only evidence needed to reconcile a remote write cannot
+  be discarded.
 - Remote Capture, Conversations, Workspace Open, Profile Compare, native MCP editing, and
   local recovery actions remain unavailable until each capability has its own verified
   remote implementation.
 
 Required evidence includes Store validation, command quoting and timeout tests, fake SSH
 Preview/Apply/stale/rollback/reconciliation tests, Docker OpenSSH integration on Linux, and
-Electron coverage for add, edit, remove, endpoint selection, Preview, Apply, and unsupported
-capability states.
+Electron coverage for add, visible connection failure, per-device refresh, local/remote
+Agent grouping, endpoint selection, Preview, Apply, and unsupported capability states.
 
 ## 24. Required Acceptance Matrix
 
