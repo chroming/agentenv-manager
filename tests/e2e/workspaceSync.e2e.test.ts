@@ -98,7 +98,7 @@ describe("Workspace Sync desktop flow", () => {
     await expectInViewport(page, review);
     await expectStructuredDialog(review);
     await expectTopmost(review);
-    expect(await review.locator(".workspace-sync-change").count()).toBe(1);
+    expect(await review.locator(".workspace-sync-change").count()).toBe(3);
     expect(await review.getByRole("button", { name: "Publish" }).getAttribute("class")).toContain("ui-button--primary");
     await review.getByRole("button", { name: "Publish" }).click();
     await expect.poll(() => section.getByText("Up to date").count(), { timeout: 15_000 }).toBe(1);

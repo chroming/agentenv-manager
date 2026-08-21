@@ -4535,7 +4535,7 @@ describe("Electron UI profile switching e2e", () => {
       height: 28
     });
     expect(await page.getByRole("button", { name: "Recovery" }).count()).toBe(0);
-    expect(await page.getByRole("button", { name: "More Agent actions" }).count()).toBe(0);
+    expect(await page.getByRole("button", { name: "More Agent actions" }).count()).toBe(1);
     expect(await page.getByRole("dialog", { name: "Recovery" }).count()).toBe(0);
 
     const dimensions = await page.evaluate(() => ({
@@ -5766,7 +5766,7 @@ describe("Electron UI profile switching e2e", () => {
 
     expect(await page.getByRole("button", { name: "Activity", exact: true }).count()).toBe(0);
     expect(await page.getByRole("button", { name: "Recovery" }).count()).toBe(0);
-    expect(await page.getByRole("button", { name: "More Agent actions" }).count()).toBe(0);
+    expect(await page.getByRole("button", { name: "More Agent actions" }).count()).toBe(1);
 
     await codexCard.getByRole("button", { name: "Codex", exact: true }).click();
     await page.getByRole("region", { name: "Profiles" }).waitFor({ state: "visible" });
@@ -8443,7 +8443,7 @@ describe("Electron UI profile switching e2e", () => {
     await selectProfile(page, "UI Trae daily");
     await selectTarget(page, "Trae CLI");
     await expandComposerSection(page, "Instructions");
-    await page.getByRole("button", { name: "Open agentenv-manager.md" }).waitFor({
+    await page.getByRole("button", { name: "UI Trae daily instructions", exact: true }).waitFor({
       state: "visible"
     });
     await expandComposerSection(page, "MCPs");

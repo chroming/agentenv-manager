@@ -112,7 +112,7 @@ describe("Workspaces desktop workflow", () => {
     if (await notNow.isVisible().catch(() => false)) await notNow.click();
     await page.getByRole("button", { name: "Workspaces", exact: true }).click();
     const agentSwitcher = page.getByLabel("Current Agent OpenCode", { exact: true });
-    await expect.poll(() => agentSwitcher.locator(".agent-context-switcher__logo").count())
+    await expect.poll(() => agentSwitcher.locator(".agent-endpoint-icon").count())
       .toBe(1);
     expect(await agentSwitcher.evaluate((element) => element.tagName)).toBe("DIV");
     expect(await page.getByRole("dialog", { name: "Current Agent OpenCode" }).count()).toBe(0);

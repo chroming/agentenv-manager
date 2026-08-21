@@ -175,7 +175,7 @@ describe("ProjectsWorkspace", () => {
       .toBeInTheDocument();
     const agentSwitcher = screen.getByLabelText("Current Agent OpenCode");
     expect(agentSwitcher.closest(".project-agent-switcher")).not.toBeNull();
-    expect(agentSwitcher.querySelector(".agent-context-switcher__logo")).not.toBeNull();
+    expect(agentSwitcher.querySelector(".agent-endpoint-icon")).not.toBeNull();
     expect(agentSwitcher).toHaveClass("agent-context-switcher--static");
     expect(agentSwitcher.tagName).toBe("DIV");
     fireEvent.click(agentSwitcher);
