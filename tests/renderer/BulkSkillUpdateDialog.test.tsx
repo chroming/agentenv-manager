@@ -89,6 +89,8 @@ describe("BulkSkillUpdateDialog", () => {
     expect(failures).toHaveTextContent("2 update previews could not be prepared");
     expect(failures).toHaveTextContent("ljg-book");
     expect(failures).toHaveTextContent("yao-meta-skill");
+    expect(screen.getByRole("status", { name: "1 Skills ready to update" }))
+      .toHaveAttribute("data-tone", "neutral");
   });
 
   it("uses the standard preview controls and can stop an active queue", () => {
@@ -110,10 +112,37 @@ describe("BulkSkillUpdateDialog", () => {
     );
 
     expect(screen.getByRole("button", { name: "Maximize preview" })).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Updating 0 of 1" }))
+      .toHaveAttribute("data-tone", "accent");
     const stopButton = screen.getByRole("button", { name: "Stop" });
     fireEvent.click(stopButton);
     expect(onStop).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("status", { name: "Reviewer: Updating..." })).toBeInTheDocument();
+  });
+
+  it("keeps preview-only failures actionable instead of reporting an empty success", () => {
+    render(
+      <BulkSkillUpdateDialog
+        plans={[]}
+        failures={[{ id: "missing", error: "Source no longer contains SKILL.md" }]}
+        updateRun={{}}
+        isBusy={false}
+        previewingAllUpdates={false}
+        updateActivityBusy={false}
+        stopRequested={false}
+        onClose={vi.fn()}
+        onPreview={vi.fn()}
+        onStop={vi.fn()}
+        onUpdate={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("status", { name: "Update previews need attention" }))
+      .toHaveAttribute("data-tone", "warning");
+    expect(screen.getByRole("button", { name: "Retry failed previews" }))
+      .toHaveClass("ui-button--primary");
+    expect(screen.getByRole("button", { name: "Cancel" }))
+      .toHaveClass("ui-button--secondary");
   });
 
   it("shows skipped items with the same progress grammar", () => {
@@ -134,6 +163,31 @@ describe("BulkSkillUpdateDialog", () => {
     );
 
     expect(screen.getByRole("status", { name: "Reviewer: Skipped" })).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Updates finished with issues" }))
+      .toHaveAttribute("data-tone", "warning");
     expect(screen.getByRole("button", { name: "Close" })).toBeEnabled();
+  });
+
+  it("makes the completed result and its only exit visually decisive", () => {
+    render(
+      <BulkSkillUpdateDialog
+        plans={[plan]}
+        failures={[]}
+        updateRun={{ reviewer: { status: "updated" } }}
+        isBusy={false}
+        previewingAllUpdates={false}
+        updateActivityBusy={false}
+        stopRequested={false}
+        onClose={vi.fn()}
+        onPreview={vi.fn()}
+        onStop={vi.fn()}
+        onUpdate={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("status", { name: "All 1 Skills updated" }))
+      .toHaveAttribute("data-tone", "success");
+    expect(screen.getByRole("button", { name: "Close" }))
+      .toHaveClass("ui-button--primary");
   });
 });

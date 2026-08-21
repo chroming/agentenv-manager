@@ -445,6 +445,10 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     removeInstructionBlock: vi.fn().mockRejectedValue(new Error("Instructions unavailable")),
     selectInstructionFile: vi.fn().mockResolvedValue(undefined),
     listSkillLibrary: vi.fn().mockResolvedValue([]),
+    listSkillGroups: vi.fn().mockResolvedValue([]),
+    createSkillGroup: vi.fn(),
+    updateSkillGroup: vi.fn(),
+    removeSkillGroup: vi.fn(),
     listSkillFiles: vi.fn().mockResolvedValue([]),
     readSkillFile: vi.fn().mockResolvedValue({
       path: "SKILL.md",
@@ -1623,16 +1627,16 @@ describe("App", () => {
   const profileInstructionPreview = () => {
     expandProfileInstructions();
     const composer = screen.getByRole("region", { name: "Profile composer" });
-    fireEvent.click(within(composer).getByRole("button", { name: "Open AGENTS.md" }));
+    fireEvent.click(within(composer).getByRole("button", { name: "Profile instructions" }));
     const dialog = screen.getByRole("dialog", { name: "Instruction document" });
-    const preview = within(dialog).getByLabelText("Preview of AGENTS.md");
+    const preview = within(dialog).getByLabelText("Preview of Profile instructions");
     fireEvent.click(within(dialog).getAllByRole("button", { name: "Close" })[0]!);
     return preview;
   };
 
   const editProfileInstructions = async (value: string) => {
     expandProfileInstructions();
-    fireEvent.click(screen.getByRole("button", { name: "Open AGENTS.md" }));
+    fireEvent.click(screen.getByRole("button", { name: "Profile instructions" }));
     const dialog = screen.getByRole("dialog", { name: "Instruction document" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Edit" }));
     fireEvent.change(within(dialog).getByRole("textbox", { name: "Profile instruction content" }), {
@@ -1641,7 +1645,7 @@ describe("App", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(within(dialog).getByRole("button", { name: "Edit" }))
       .toBeInTheDocument());
-    expect(within(dialog).getByLabelText("Preview of AGENTS.md"))
+    expect(within(dialog).getByLabelText("Preview of Profile instructions"))
       .toHaveTextContent(value.trim());
     fireEvent.click(within(dialog).getAllByRole("button", { name: "Close" })[0]!);
   };
@@ -4271,10 +4275,10 @@ describe("App", () => {
       "false"
     );
     expect(openCodeTarget.querySelector("img")).toHaveClass(
-      "agent-context-switcher__logo--opencode"
+      "agent-endpoint-icon__logo--opencode"
     );
     expect(codexTargetItem.querySelector("img")).toHaveClass(
-      "agent-context-switcher__logo--codex"
+      "agent-endpoint-icon__logo--codex"
     );
     expect(screen.getByRole("button", { name: "Apply" }).querySelector("img"))
       .toBeNull();

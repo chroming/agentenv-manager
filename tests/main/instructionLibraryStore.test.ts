@@ -63,7 +63,7 @@ describe("Instruction Library", () => {
       .resolves.toBe("Temporary guidance\n");
   });
 
-  it("compiles enabled Blocks in Profile order before Profile-specific content", async () => {
+  it("moves Profile-specific content into a final ordered Library Block", async () => {
     const { paths, store } = await setup();
     const first = await store.create({ name: "First", content: "# First\n\nDo A.\n" });
     const second = await store.create({ name: "Second", content: "# Second\nDo B.\n" });
@@ -83,7 +83,12 @@ describe("Instruction Library", () => {
       expectedContentHash: profile.contentHash
     });
 
-    expect(saved.instructions).toBe("# Local\nDo C.\n");
+    expect(saved.instructions).toBe("");
     expect(saved.resolvedInstructions).toBe("# Second\nDo B.\n\n# Local\nDo C.\n");
+    expect(saved.resources.instructions).toEqual([
+      { libraryId: second.id, enabled: true },
+      { libraryId: first.id, enabled: false },
+      { libraryId: expect.stringMatching(/^profile-[a-f0-9]{12}-[a-f0-9]{12}$/), enabled: true }
+    ]);
   });
 });

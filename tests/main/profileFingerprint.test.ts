@@ -115,4 +115,36 @@ describe("Profile target fingerprint", () => {
     expect(createProfileContentHash(disabled, "codex"))
       .not.toBe(createProfileContentHash(renamed, "codex"));
   });
+
+  it("changes when a managed Skill Group gate changes", () => {
+    const enabled = profile("ignore", true);
+    enabled.resources.skills = [{
+      libraryId: "reviewer",
+      targetName: "reviewer",
+      enabled: true,
+      direct: false,
+      groupIds: ["manual-group-review"]
+    }];
+    enabled.resources.skillGroups = [{
+      id: "manual-group-review",
+      kind: "manual",
+      groupId: "group-review",
+      name: "Review",
+      enabled: true,
+      memberIds: ["reviewer"]
+    }];
+    enabled.resources.managementByTarget = {
+      codex: { instructions: "manage", skills: "manage" }
+    };
+    const disabled = {
+      ...enabled,
+      resources: {
+        ...enabled.resources,
+        skillGroups: enabled.resources.skillGroups.map((group) => ({ ...group, enabled: false }))
+      }
+    };
+
+    expect(createProfileContentHash(enabled, "codex"))
+      .not.toBe(createProfileContentHash(disabled, "codex"));
+  });
 });

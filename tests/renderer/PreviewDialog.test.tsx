@@ -33,6 +33,21 @@ afterEach(() => {
 });
 
 describe("PreviewDialog", () => {
+  it("describes SSH Apply protection as a temporary transaction checkpoint", () => {
+    render(
+      <PreviewDialog
+        preview={{ ...preview, targetId: "ssh:device-a:opencode" }}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("A temporary rollback checkpoint protects this remote Apply."))
+      .toBeInTheDocument();
+    expect(screen.queryByText("A recovery point will be created before changes."))
+      .not.toBeInTheDocument();
+  });
+
   it("opens the shared Local Skills Manager from Apply preview", () => {
     const onManageLocalSkills = vi.fn();
     render(

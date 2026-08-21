@@ -58,7 +58,7 @@ describe("App update settings", () => {
     const channel = await screen.findByText("Installed with Homebrew");
     const statusRow = channel.closest(".settings-preference-row");
     const autoCheck = screen.getByRole("switch", { name: "Automatic update checks" });
-    expect(statusRow).toHaveClass("app-update-summary");
+    expect(statusRow).toHaveClass("app-update-summary", "is-success");
     expect(statusRow?.parentElement).toBe(autoCheck.closest(".settings-preference-list"));
     expect(statusRow).toHaveTextContent("Current version 0.1.0");
     expect(statusRow).toHaveTextContent("Latest version 0.1.0");
@@ -105,6 +105,8 @@ describe("App update settings", () => {
       }
     }));
     expect(await screen.findByText("Version 0.2.0 is available")).toBeInTheDocument();
+    expect(screen.getByText("Version 0.2.0 is available").closest(".settings-preference-row"))
+      .toHaveClass("is-available");
     expect(screen.getByText("Latest version").parentElement).toHaveTextContent("0.2.0");
   });
 
@@ -164,6 +166,8 @@ describe("App update settings", () => {
     expect(await screen.findByText("Update service returned HTTP 503")).toHaveClass(
       "app-update-error"
     );
+    expect(screen.getByText("Update check failed").closest(".settings-preference-row"))
+      .toHaveClass("is-error");
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 

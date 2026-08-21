@@ -200,6 +200,14 @@ describe("domain IPC registrars", () => {
     registerRemoteDeviceIpc(handles, { remoteActivationService: service() });
 
     expect(registrations).toContainEqual({ channel: "remote-devices:list", kind: "diagnostic" });
+    expect(registrations).toContainEqual({
+      channel: "remote-devices:list-ssh-config-hosts",
+      kind: "diagnostic"
+    });
+    expect(registrations).toContainEqual({
+      channel: "remote-devices:resolve-ssh-config-host",
+      kind: "diagnostic"
+    });
     expect(registrations).toContainEqual({ channel: "remote-devices:add", kind: "mutation" });
     expect(registrations).toContainEqual({ channel: "remote-endpoints:list", kind: "diagnostic" });
     expect(registrations).toContainEqual({ channel: "remote-endpoints:list-states", kind: "diagnostic" });

@@ -153,7 +153,8 @@ describe("Instruction Library desktop workflow", () => {
     await expect.poll(async () => {
       const resources = JSON.parse(await readFile(join(profileDir, "resources.json"), "utf8"));
       return resources.instructions?.length ?? 0;
-    }).toBe(2);
+    }).toBe(3);
+    await expect(readFile(join(profileDir, "INSTRUCTIONS.md"), "utf8")).resolves.toBe("");
     await expectNoHorizontalOverflow(page);
     if (process.env.AGENTENV_CAPTURE_INSTRUCTIONS_DIR) {
       await page.screenshot({
@@ -168,6 +169,12 @@ describe("Instruction Library desktop workflow", () => {
     expect(previewText).toContain("# Baseline");
     expect(previewText).toContain("# Profile");
     await preview.getByRole("button", { name: "Close", exact: true }).first().click();
+
+    await instructions.getByRole("button", { name: "Daily Coding instructions", exact: true }).click();
+    const sharedEditor = page.getByRole("dialog", { name: "Edit Instruction Block" });
+    await sharedEditor.getByText("Used by 1 Profile", { exact: true }).waitFor();
+    await sharedEditor.getByText(/Daily Coding/).waitFor({ state: "visible" });
+    await sharedEditor.getByRole("button", { name: "Cancel", exact: true }).click();
 
     await app.close();
     app = await launch();

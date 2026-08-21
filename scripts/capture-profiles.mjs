@@ -149,12 +149,26 @@ const writeProfile = async (appDataRoot, fixture) => {
     `# ${fixture.name}\n\nUse the shared AgentEnv resources for this workflow.\n`,
     "utf8"
   );
+  const groupedSkillIds = fixture.id === "code-review"
+    ? new Set(["git-workflow", "testing-strategies", "security-checklist"])
+    : new Set();
   await writeJson(join(profileDir, "resources.json"), {
     skills: fixture.skills.map((name) => ({
       libraryId: name,
       targetName: name,
-      enabled: true
+      enabled: true,
+      ...(groupedSkillIds.has(name) ? { direct: false, groupIds: ["manual-review-pack"] } : {})
     })),
+    ...(groupedSkillIds.size > 0 ? {
+      skillGroups: [{
+        id: "manual-review-pack",
+        kind: "manual",
+        groupId: "review-pack",
+        name: "Review pack",
+        enabled: true,
+        memberIds: [...groupedSkillIds]
+      }]
+    } : {}),
     mcpByTarget: {
       opencode: {
         mode: "manage",
@@ -361,6 +375,32 @@ const prepareFixture = async (root) => {
     await writeFile(executable, `#!/bin/sh\necho fake-${command}\n`, "utf8");
     await chmod(executable, 0o755);
   }
+  const sshExecutable = join(binDir, "ssh");
+  await writeFile(sshExecutable, [
+    "#!/bin/sh",
+    "if [ \"$1\" = \"-G\" ]; then",
+    "  printf 'hostname 10.20.30.40\\nuser deploy\\nport 2202\\n'",
+    "  exit 0",
+    "fi",
+    "case \"$*\" in",
+    "  *offline-fixture*) echo 'Fixture device is offline' >&2; exit 1 ;;",
+    "esac",
+    "printf 'HOME\\t/home/fixture\\n'",
+    "printf 'OS\\tLinux\\n'",
+    "printf 'ARCH\\tarm64\\n'",
+    "printf 'MACHINE\\tagentenv-capture\\n'",
+    "printf 'CMD\\topencode\\t/usr/local/bin/opencode\\n'",
+    "printf 'CMD\\tcodex\\t/usr/local/bin/codex\\n'",
+    ""
+  ].join("\n"), "utf8");
+  await chmod(sshExecutable, 0o755);
+  await mkdir(join(homeDir, ".ssh"), { recursive: true });
+  await writeFile(join(homeDir, ".ssh", "config"), [
+    "Host staging-build",
+    "  HostName 10.20.30.40",
+    "  User deploy",
+    "  Port 2202"
+  ].join("\n"), "utf8");
 
   await writeFile(join(opencodeDir, "AGENTS.md"), "# Existing OpenCode environment\n", "utf8");
   await writeJson(join(opencodeDir, "opencode.jsonc"), {
@@ -480,6 +520,43 @@ const prepareFixture = async (root) => {
   );
   await Promise.all(profileFixtures.map((profile) => writeProfile(appDataRoot, profile)));
   await writeLibrary(appDataRoot);
+  await writeJson(join(appDataRoot, "skill-groups.json"), {
+    formatVersion: 1,
+    groups: [{
+      formatVersion: 1,
+      id: "review-pack",
+      name: "Review pack",
+      description: "Core checks for reviewing product changes.",
+      skillIds: ["git-workflow", "testing-strategies", "security-checklist"],
+      createdAt: captureFixtureTimestamp.toISOString(),
+      updatedAt: captureFixtureTimestamp.toISOString()
+    }, {
+      formatVersion: 1,
+      id: "release-pack",
+      name: "Release pack",
+      description: "Reusable release verification workflow.",
+      skillIds: ["docs-review", "testing-strategies"],
+      createdAt: captureFixtureTimestamp.toISOString(),
+      updatedAt: captureFixtureTimestamp.toISOString()
+    }]
+  });
+  await writeJson(join(appDataRoot, "remote-devices.json"), {
+    formatVersion: 1,
+    devices: [{
+      id: "11111111-2222-4333-8444-555555555555",
+      name: "Build Linux",
+      host: "build-fixture",
+      user: "builder",
+      createdAt: captureFixtureTimestamp.toISOString(),
+      updatedAt: captureFixtureTimestamp.toISOString()
+    }, {
+      id: "66666666-7777-4888-8999-000000000000",
+      name: "Offline lab",
+      host: "offline-fixture",
+      createdAt: captureFixtureTimestamp.toISOString(),
+      updatedAt: captureFixtureTimestamp.toISOString()
+    }]
+  });
   for (const block of [
     {
       id: "engineering-baseline",
@@ -925,6 +1002,13 @@ try {
   await page.waitForLoadState("domcontentloaded");
   const agentDiscoveryDialog = page.getByRole("dialog", { name: "Choose Agents" });
   await agentDiscoveryDialog.waitFor({ state: "visible" });
+  const firstRunAgentsWorkspace = page.getByRole("region", { name: "Agents", exact: true });
+  await firstRunAgentsWorkspace.locator(".target-list[aria-busy='false']").waitFor({
+    state: "visible"
+  });
+  await firstRunAgentsWorkspace.getByText("Not managed", { exact: true }).first().waitFor({
+    state: "visible"
+  });
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "agents-first-run-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
@@ -968,6 +1052,15 @@ try {
   await page.reload();
   await agentsWorkspace.locator(".target-page-summary").waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "agents-ready-920x620.png"));
+  await page.getByRole("button", { name: "More Agent actions" }).click();
+  await page.getByRole("menuitem", { name: "Add SSH device" }).click();
+  const addSshDeviceDialog = page.getByRole("dialog", { name: "Add SSH device" });
+  await addSshDeviceDialog.getByRole("combobox", { name: "SSH config host" }).selectOption("staging-build");
+  await addSshDeviceDialog.getByText("deploy@10.20.30.40:2202", { exact: false }).waitFor({
+    state: "visible"
+  });
+  await capturePage(page, join(outputDir, "agents-add-ssh-device-920x620.png"));
+  await page.keyboard.press("Escape");
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "agents-ready-1180x728.png"));
   await setWindowSize(page, windowHandle, 1440, 900);
@@ -1161,6 +1254,14 @@ try {
   await capturePage(page, join(outputDir, "skills-source-merge-920x620.png"));
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Exit merge selection" }).click();
+  await page.getByRole("tab", { name: "Groups" }).click();
+  await page.getByRole("region", { name: "Skill Groups" }).waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "skills-groups-920x620.png"));
+  await page.getByRole("button", { name: "Toggle Review pack" }).click();
+  await capturePage(page, join(outputDir, "skills-groups-expanded-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "skills-groups-expanded-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("tab", { name: "Skill list" }).click();
   await page.getByRole("tab", { name: /Disabled/ }).click();
   await capturePage(page, join(outputDir, "skills-disabled-920x620.png"));
@@ -1263,6 +1364,19 @@ try {
     state: "hidden",
     timeout: 8_000
   });
+
+  await page.getByRole("button", { name: "Update all skills" }).click();
+  const bulkUpdateDialog = page.getByRole("dialog", { name: "Update all skills" });
+  await bulkUpdateDialog.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "skills-bulk-update-ready-920x620.png"));
+  await bulkUpdateDialog.getByRole("button", { name: /Update \d+ skills?/ }).click();
+  await bulkUpdateDialog.getByRole("status", { name: /All \d+ Skills updated/ }).waitFor({
+    state: "visible",
+    timeout: 15_000
+  });
+  await capturePage(page, join(outputDir, "skills-bulk-update-complete-920x620.png"));
+  await bulkUpdateDialog.getByRole("button", { name: "Close" }).click();
+  await bulkUpdateDialog.waitFor({ state: "hidden" });
 
   await page.getByRole("button", { name: "Import skills" }).click();
   const importDialog = page.getByRole("dialog", { name: "Import skills" });
@@ -1570,6 +1684,12 @@ try {
       await setWindowSize(page, windowHandle, 920, 620);
     }
     if (sectionName === "Skills") {
+      const groupToggle = page.getByRole("button", { name: "Toggle Review pack" });
+      await groupToggle.click();
+      await capturePage(page, join(outputDir, "profile-skill-group-on-920x620.png"));
+      await page.getByRole("switch", { name: "Turn off Review pack" }).click();
+      await capturePage(page, join(outputDir, "profile-skill-group-off-920x620.png"));
+      await page.getByRole("switch", { name: "Turn on Review pack" }).click();
       await page
         .getByRole("region", { name: "Profile Skills" })
         .getByRole("button", { name: "Add Skill", exact: true })
@@ -1577,6 +1697,8 @@ try {
       const skillPicker = page.getByRole("dialog", { name: "Add library skills" });
       await skillPicker.waitFor({ state: "visible" });
       await capturePage(page, join(outputDir, "profile-skill-picker-920x620.png"));
+      await skillPicker.getByRole("button", { name: "Groups", exact: true }).click();
+      await capturePage(page, join(outputDir, "profile-skill-group-picker-920x620.png"));
       await page.keyboard.press("Escape");
       await skillPicker.waitFor({ state: "hidden" });
     }
@@ -1645,7 +1767,7 @@ try {
   await capturePage(page, join(outputDir, "profiles-applied-920x620.png"));
   await ensureComposerExpanded("Instructions");
   await capturePage(page, join(outputDir, "profile-instructions-expanded-920x620.png"));
-  await page.getByRole("button", { name: "Open AGENTS.md", exact: true }).click();
+  await page.getByRole("button", { name: "Preview output", exact: true }).click();
   const profileInstructionEditor = page.getByRole("dialog", {
     name: "Instruction document"
   });
@@ -1653,15 +1775,21 @@ try {
   await capturePage(page, join(outputDir, "profile-instruction-preview-920x620.png"), {
     preserveFocus: true
   });
-  await profileInstructionEditor.getByRole("button", { name: "Edit", exact: true }).click();
+  await profileInstructionEditor.getByRole("button", { name: "Close" }).first().click();
+  await profileInstructionEditor.waitFor({ state: "hidden" });
+  await page.getByRole("button", { name: "Code Review instructions", exact: true }).click();
+  const profileInstructionBlockEditor = page.getByRole("dialog", {
+    name: "Edit Instruction Block"
+  });
+  await profileInstructionBlockEditor.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "profile-instruction-editor-920x620.png"), {
     preserveFocus: true
   });
-  await profileInstructionEditor.getByRole("button", { name: "Maximize preview" }).click();
+  await profileInstructionBlockEditor.getByRole("button", { name: "Maximize preview" }).click();
   await capturePage(page, join(outputDir, "profile-instruction-editor-maximized-920x620.png"), {
     preserveFocus: true
   });
-  await profileInstructionEditor.getByRole("button", { name: "Close" }).first().click();
+  await profileInstructionBlockEditor.getByRole("button", { name: "Close" }).first().click();
   await profileInstructionEditor.waitFor({ state: "hidden" });
   await ensureComposerExpanded("Skills");
   await capturePage(page, join(outputDir, "profile-skills-applied-920x620.png"));
@@ -1700,6 +1828,10 @@ try {
   await page.getByRole("button", { name: "Profiles", exact: true }).click();
   await selectCaptureProfile("Code Review");
   await ensureComposerExpanded("Skills");
+  const localOverrideGroupToggle = page.getByRole("button", { name: "Toggle Review pack" });
+  if (await localOverrideGroupToggle.getAttribute("aria-expanded") !== "true") {
+    await localOverrideGroupToggle.click();
+  }
   await page
     .getByRole("listitem", { name: "Profile Skill git-workflow" })
     .scrollIntoViewIfNeeded();

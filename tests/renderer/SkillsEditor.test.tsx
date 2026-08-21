@@ -51,6 +51,76 @@ afterEach(() => {
 });
 
 describe("SkillsEditor v2", () => {
+  it("treats a Group switch as a gate and preserves member switches", () => {
+    const onChange = vi.fn();
+    const groupedResources: ProfileResources = {
+      skills: [
+        { libraryId: "review", targetName: "review", enabled: true, direct: false, groupIds: ["manual-group-review"] },
+        { libraryId: "docs", targetName: "docs", enabled: false, direct: false, groupIds: ["manual-group-review"] }
+      ],
+      skillGroups: [{
+        id: "manual-group-review",
+        kind: "manual",
+        groupId: "group-review",
+        name: "Review pack",
+        enabled: false,
+        memberIds: ["review", "docs"]
+      }],
+      mcpByTarget: {}
+    };
+    render(<SkillsEditor value={groupedResources} librarySkills={skills} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle Review pack" }));
+    expect(screen.getAllByText("Group off").length).toBeGreaterThan(0);
+    expect(screen.getByRole("switch", { name: "Enable the Group to change Code Review" }))
+      .toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("switch", { name: "Enable the Group to change Docs" }))
+      .toHaveAttribute("aria-checked", "false");
+    expect(screen.getAllByRole("switch", { name: /Enable the Group/ }).every((control) => control.hasAttribute("disabled")))
+      .toBe(true);
+
+    fireEvent.click(screen.getByRole("switch", { name: "Turn on Review pack" }));
+    expect(onChange).toHaveBeenCalledWith({
+      ...groupedResources,
+      skillGroups: [{ ...groupedResources.skillGroups![0], enabled: true }]
+    });
+  });
+
+  it("adds a reusable manual Group from the shared resource picker", () => {
+    const onChange = vi.fn();
+    render(
+      <SkillsEditor
+        value={{ skills: [], mcpByTarget: {} }}
+        librarySkills={skills}
+        skillGroups={[{
+          formatVersion: 1,
+          id: "group-review",
+          name: "Review pack",
+          description: "Review and docs",
+          skillIds: ["review", "docs"],
+          createdAt: "2026-08-21T00:00:00.000Z",
+          updatedAt: "2026-08-21T00:00:00.000Z"
+        }]}
+        onChange={onChange}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Skill" }));
+    fireEvent.click(screen.getByRole("button", { name: "Groups" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Review pack/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Add 1" }));
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      skillGroups: [expect.objectContaining({
+        kind: "manual",
+        groupId: "group-review",
+        name: "Review pack",
+        enabled: true,
+        memberIds: ["docs", "review"]
+      })]
+    }));
+  });
+
   it("projects an Off policy as disabled switches without allowing child edits", () => {
     const onChange = vi.fn();
     render(

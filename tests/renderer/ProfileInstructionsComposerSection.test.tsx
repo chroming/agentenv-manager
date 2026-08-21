@@ -21,7 +21,8 @@ const block: InstructionBlock = {
   contentHash: "hash",
   createdAt: "2026-08-20T00:00:00.000Z",
   updatedAt: "2026-08-20T00:00:00.000Z",
-  path: "/data/instructions/review-rules/CONTENT.md"
+  path: "/data/instructions/review-rules/CONTENT.md",
+  usedByProfiles: ["Daily", "Code Review"]
 };
 const baselineBlock: InstructionBlock = {
   ...block,
@@ -46,6 +47,7 @@ describe("ProfileInstructionsComposerSection", () => {
         onToggle={vi.fn()}
         onPolicyChange={vi.fn()}
         onChange={onChange}
+        onUpdateBlock={vi.fn()}
       />
     );
 
@@ -85,6 +87,7 @@ describe("ProfileInstructionsComposerSection", () => {
         onToggle={vi.fn()}
         onPolicyChange={vi.fn()}
         onChange={onChange}
+        onUpdateBlock={vi.fn()}
       />
     );
 
@@ -100,6 +103,49 @@ describe("ProfileInstructionsComposerSection", () => {
         { libraryId: "baseline-rules", enabled: false },
         { libraryId: "review-rules", enabled: true }
       ]
+    });
+  });
+
+  it("edits a referenced Library Instruction in the shared editor and names affected Profiles", async () => {
+    const onUpdateBlock = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ProfileInstructionsComposerSection
+        profile={{
+          ...profile,
+          instructions: "",
+          resources: {
+            ...profile.resources,
+            instructions: [{ libraryId: block.id, enabled: true }]
+          }
+        }}
+        blocks={[block]}
+        summary={{ count: 1, total: 1, mode: "manage" }}
+        policy="manage"
+        capabilityAvailable
+        expanded
+        targetName="Codex"
+        fileName="AGENTS.md"
+        onToggle={vi.fn()}
+        onPolicyChange={vi.fn()}
+        onChange={vi.fn()}
+        onUpdateBlock={onUpdateBlock}
+      />
+    );
+
+    expect(screen.queryByText("This Profile")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Review rules" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit Instruction Block" });
+    expect(dialog).toHaveTextContent("Used by 2 Profiles");
+    expect(dialog).toHaveTextContent("Daily, Code Review");
+    fireEvent.change(screen.getByRole("textbox", { name: "Instruction content" }), {
+      target: { value: "# Updated review\n" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onUpdateBlock).toHaveBeenCalledWith(block, {
+      name: "Review rules",
+      description: "Review guidance",
+      content: "# Updated review\n"
     });
   });
 });

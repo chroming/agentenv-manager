@@ -53,6 +53,12 @@ const writeSnapshot = async (root: string, input: {
   skillContent?: string;
   instructionContent?: string;
   skillTags?: string[];
+  skillGroups?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    skillIds: string[];
+  }>;
   sources?: Array<{
     formatVersion: 1;
     id: string;
@@ -90,6 +96,16 @@ const writeSnapshot = async (root: string, input: {
     sourceType: "local" as const
   };
   const sourceData = { formatVersion: 1 as const, sources: input.sources ?? [] };
+  const skillGroupData = input.skillGroups ? {
+    formatVersion: 1 as const,
+    groups: input.skillGroups.map((group) => ({
+      ...group,
+      formatVersion: 1 as const,
+      description: group.description ?? "",
+      createdAt: "2026-07-20T00:00:00.000Z",
+      updatedAt: "2026-07-20T00:00:00.000Z"
+    }))
+  } : undefined;
   const instructionMetadata = input.instructionContent ? {
     formatVersion: 1 as const,
     id: "shared-rules",
@@ -107,6 +123,9 @@ const writeSnapshot = async (root: string, input: {
     writeFile(join(skillRoot, "SKILL.md"), input.skillContent ?? "---\nname: review\ndescription: Review code\n---\n"),
     writeFile(join(root, "workspace", "skills", "review", "metadata.json"), canonicalJson(metadata)),
     writeFile(join(root, "workspace", "skill-sources.json"), canonicalJson(sourceData)),
+    ...(skillGroupData ? [
+      writeFile(join(root, "workspace", "skill-groups.json"), canonicalJson(skillGroupData))
+    ] : []),
     ...(instructionMetadata ? [
       writeFile(join(instructionRoot, "instruction.json"), canonicalJson(instructionMetadata)),
       writeFile(join(instructionRoot, "CONTENT.md"), input.instructionContent!)
@@ -138,6 +157,7 @@ const writeSnapshot = async (root: string, input: {
         }
       }
     } : {}),
+    ...(skillGroupData ? { skillGroupsHash: hashJson(skillGroupData) } : {}),
     sourcesHash: hashJson(sourceData)
   };
   const manifest: PortableWorkspaceManifest = { ...unsigned, snapshotHash: snapshotHashFor(unsigned) };
@@ -230,6 +250,39 @@ describe("Workspace Sync", () => {
       join(merged.root, "workspace", "instructions", "shared-rules", "CONTENT.md"),
       "utf8"
     )).resolves.toBe("# Remote rules\n");
+  });
+
+  it("syncs manual Skill Groups and requires a choice for competing edits", async () => {
+    const base = await writeSnapshot(await tempRoot("agentenv-sync-group-base-"), {
+      skillGroups: [{ id: "review-tools", name: "Review tools", skillIds: ["review"] }]
+    });
+    const local = await writeSnapshot(await tempRoot("agentenv-sync-group-local-"), {
+      skillGroups: [{ id: "review-tools", name: "Local review tools", skillIds: ["review"] }]
+    });
+    const remote = await writeSnapshot(await tempRoot("agentenv-sync-group-remote-"), {
+      skillGroups: [{ id: "review-tools", name: "Remote review tools", skillIds: ["review"] }]
+    });
+    const plan = planWorkspaceSync({ base, local, remote });
+
+    expect(plan.review.changes).toContainEqual(expect.objectContaining({
+      key: "group:registry:groups",
+      resourceKind: "group",
+      direction: "conflict"
+    }));
+
+    const merged = await materializeMergedWorkspace({
+      plan,
+      local,
+      remote,
+      destination: await tempRoot("agentenv-sync-group-merged-"),
+      conflictChoices: { "group:registry:groups": "remote" }
+    });
+    await expect(validatePortableWorkspace(merged.root)).resolves.toBeDefined();
+    const groups = JSON.parse(await readFile(
+      join(merged.root, "workspace", "skill-groups.json"),
+      "utf8"
+    ));
+    expect(groups.groups[0].name).toBe("Remote review tools");
   });
 
   it("rejects symbolic links before importing a remote snapshot", async () => {
@@ -893,6 +946,55 @@ describe("Workspace Sync", () => {
     })).rejects.toThrow("read-only");
 
     expect(restored).toBe(true);
+    expect((await service.readStatus()).working).toBeUndefined();
+    service.dispose();
+  });
+
+  it("restores Workspace content when post-update normalization fails", async () => {
+    const root = await tempRoot("agentenv-sync-normalization-failure-");
+    const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
+    const remote = await writeSnapshot(join(root, "remote"), { instructions: "# Remote\n" });
+    const stateStore = createWorkspaceSyncStateStore(paths);
+    let restoredBackupId = "";
+    const service = createWorkspaceSyncService({
+      paths,
+      codec: {
+        exportSnapshot: async (destination, workspaceId) =>
+          (await writeSnapshot(destination, { workspaceId, instructions: "# Local\n" })).manifest
+      },
+      stateStore,
+      transaction: {
+        recover: async () => undefined,
+        isRecoveryRequired: async () => false,
+        apply: async () => ({ backupId: "workspace-normalization-backup" }),
+        restore: async (backupId) => {
+          restoredBackupId = backupId;
+        }
+      },
+      afterApply: async () => {
+        throw new Error("Profile Instruction migration failed");
+      },
+      loadTransport: async () => ({
+        fetch: async () => ({ revision: "remote-revision", snapshotRoot: remote.root }),
+        publish: async () => "unused",
+        cancel: () => undefined,
+        dispose: () => undefined
+      }),
+      targetPathsProvider: async () => [],
+      findManagedInstallPaths: async () => []
+    });
+
+    await service.connect({ repository: "/tmp/remote.git", branch: "main" });
+    const review = await service.review();
+    const conflict = review.changes.find((change) => change.direction === "conflict");
+    expect(conflict).toBeDefined();
+
+    await expect(service.update({
+      expectedRemoteRevision: review.remoteRevision,
+      conflictChoices: { [conflict!.key]: "remote" }
+    })).rejects.toThrow("Profile Instruction migration failed");
+
+    expect(restoredBackupId).toBe("workspace-normalization-backup");
     expect((await service.readStatus()).working).toBeUndefined();
     service.dispose();
   });

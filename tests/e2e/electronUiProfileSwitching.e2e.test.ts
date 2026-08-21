@@ -592,6 +592,7 @@ const launchApp = async (
     projectSkillFixture?: boolean;
     workspaceFixture?: boolean;
     sharedSkillFixture?: boolean;
+    skillGroupFixture?: boolean;
     legacyUnmanagedSkillDecision?: boolean;
     legacySkillManagementMarker?: boolean;
     omitUnmanagedTargetSkill?: boolean;
@@ -798,6 +799,49 @@ const launchApp = async (
     ].join("\n"), "utf8");
   }
   const librarySkill = await writeLibrarySkill(appDataRoot);
+  if (options.skillGroupFixture) {
+    const groupId = "manual-review-pack";
+    const libraryId = "shared-reviewer";
+    const memberIds = ["ui-alpha-skill", libraryId];
+    await writeJson(join(appDataRoot, "skill-groups.json"), {
+      formatVersion: 1,
+      groups: [{
+        formatVersion: 1,
+        id: "review-pack",
+        name: "Review pack",
+        description: "Profile Group fixture",
+        skillIds: memberIds,
+        createdAt: "2026-08-21T00:00:00.000Z",
+        updatedAt: "2026-08-21T00:00:00.000Z"
+      }]
+    });
+    const resourcesPath = join(appDataRoot, "profiles", "ui-opencode-alpha", "resources.json");
+    const resources = await readJson<{
+      skills: Array<{ libraryId: string; targetName: string; enabled: boolean }>;
+      mcpByTarget: Record<string, unknown>;
+    }>(resourcesPath);
+    await writeJson(resourcesPath, {
+      ...resources,
+      skillGroups: [{
+        id: groupId,
+        kind: "manual",
+        groupId: "review-pack",
+        name: "Review pack",
+        enabled: true,
+        memberIds
+      }],
+      skills: [
+        ...resources.skills.map((skill) => ({ ...skill, direct: false, groupIds: [groupId] })),
+        {
+          libraryId,
+          targetName: libraryId,
+          enabled: true,
+          direct: false,
+          groupIds: [groupId]
+        }
+      ]
+    });
+  }
   if (options.legacySkillManagementMarker) {
     const legacySkillDir = join(opencodeDir, "skills", "shared-reviewer");
     await mkdir(dirname(legacySkillDir), { recursive: true });
@@ -1107,11 +1151,14 @@ const expandComposerSection = async (page: Page, name: ComposerSectionName) => {
 
 const editProfileInstructions = async (page: Page, value: string) => {
   await expandComposerSection(page, "Instructions");
-  await page.getByRole("button", { name: "Open AGENTS.md", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Instruction document" });
+  const profileName = (await page
+    .locator(".profile-switcher--hero .ui-object-switcher__trigger-title")
+    .textContent())?.trim();
+  if (!profileName) throw new Error("The selected Profile name is unavailable");
+  await page.getByRole("button", { name: `${profileName} instructions`, exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit Instruction Block" });
   await dialog.waitFor({ state: "visible" });
-  await dialog.getByRole("button", { name: "Edit", exact: true }).click();
-  const editor = dialog.getByRole("textbox", { name: "Profile instruction content" });
+  const editor = dialog.getByRole("textbox", { name: "Instruction content" });
   await editor.fill(value);
   expect(await editor.evaluate((element: HTMLTextAreaElement) => ({
     contained: element.scrollWidth <= element.clientWidth + 1,
@@ -1119,15 +1166,33 @@ const editProfileInstructions = async (page: Page, value: string) => {
     wrap: element.wrap
   }))).toEqual({ contained: true, overflowX: "hidden", wrap: "soft" });
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
-  const preview = dialog.getByLabel("Preview of AGENTS.md");
+  await dialog.waitFor({ state: "hidden" });
+  const instructions = page
+    .getByRole("region", { name: "Profile composer" })
+    .locator('[data-profile-composer-id="instructions"]');
+  await instructions.getByRole("button", { name: "Preview output", exact: true }).click();
+  const previewDialog = page.getByRole("dialog", { name: "Instruction document" });
+  const preview = previewDialog.getByLabel("Preview of AGENTS.md");
   await expect.poll(async () => (await preview.textContent())?.replace(/\s/g, ""))
     .toContain(value.replace(/\s/g, ""));
   expect(await preview.evaluate((element: HTMLElement) => ({
     contained: element.scrollWidth <= element.clientWidth + 1,
     overflowX: getComputedStyle(element).overflowX
   }))).toEqual({ contained: true, overflowX: "hidden" });
-  await dialog.getByRole("button", { name: "Close", exact: true }).first().click();
-  await dialog.waitFor({ state: "hidden" });
+  await previewDialog.getByRole("button", { name: "Close", exact: true }).first().click();
+  await previewDialog.waitFor({ state: "hidden" });
+};
+
+const readMigratedProfileInstruction = async (
+  appDataRoot: string,
+  profileId: string
+) => {
+  const resources = await readJson<{
+    instructions?: Array<{ libraryId: string; enabled: boolean }>;
+  }>(join(appDataRoot, "profiles", profileId, "resources.json"));
+  const libraryId = resources.instructions?.[0]?.libraryId;
+  if (!libraryId) throw new Error(`Profile ${profileId} has no Instruction Library reference`);
+  return readFile(join(appDataRoot, "instructions-library", libraryId, "CONTENT.md"), "utf8");
 };
 
 type ComposerResourceName = "Instructions" | "Skills" | "MCPs";
@@ -1318,11 +1383,15 @@ const previewAndApply = async (
 
 const saveProfile = async (page: Page) => {
   await page.keyboard.press("Meta+s");
-  await expect.poll(() => page.locator(".profile-row__dirty").count()).toBe(0);
-  await expect.poll(() =>
-    page.getByRole("status", { name: "Profile readiness" })
+  await expect.poll(
+    () => page.locator(".profile-row__dirty").count(),
+    { timeout: 10_000 }
+  ).toBe(0);
+  await expect.poll(
+    () => page.getByRole("status", { name: "Profile readiness" })
       .getByText("Saving changes...", { exact: true })
-      .count()
+      .count(),
+    { timeout: 10_000 }
   ).toBe(0);
 };
 
@@ -2071,9 +2140,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await editProfileInstructions(page, "# Shortcut E2E\n");
     await expect
-      .poll(() =>
-        readFile(join(appDataRoot, "profiles", "ui-opencode-alpha", "INSTRUCTIONS.md"), "utf8")
-      )
+      .poll(() => readMigratedProfileInstruction(appDataRoot, "ui-opencode-alpha"))
       .toContain("Shortcut E2E");
     const dirtySwitcher = await openProfileSwitcher(page);
     await dirtySwitcher.getByRole("button", { name: "New Profile", exact: true }).click();
@@ -2085,9 +2152,8 @@ describe("Electron UI profile switching e2e", () => {
     await page.keyboard.press("Control+s");
     await page.waitForTimeout(50);
     expect(await page.getByRole("button", { name: "Save", exact: true }).count()).toBe(0);
-    expect(
-      await readFile(join(appDataRoot, "profiles", "ui-opencode-alpha", "INSTRUCTIONS.md"), "utf8")
-    ).toContain("Shortcut E2E");
+    expect(await readMigratedProfileInstruction(appDataRoot, "ui-opencode-alpha"))
+      .toContain("Shortcut E2E");
 
     await navigation.getByRole("button", { name: "Skills", exact: true }).click();
     await page.keyboard.press("Meta+f");
@@ -2128,7 +2194,10 @@ describe("Electron UI profile switching e2e", () => {
       });
     });
 
-    await editProfileInstructions(page, "# Pending E2E save\n");
+    await expandComposerSection(page, "Skills");
+    await page.getByRole("region", { name: "Profile Skills" }).getByRole("switch", {
+      name: "Disable ui-alpha-skill"
+    }).click();
     await page.keyboard.press("Meta+s");
     await page.keyboard.press("Meta+s");
     await expect
@@ -2257,21 +2326,22 @@ describe("Electron UI profile switching e2e", () => {
         const actions = header.querySelector<HTMLElement>(".ui-page-header__actions")!;
         const copyRect = copy.getBoundingClientRect();
         const actionsRect = actions.getBoundingClientRect();
-        const viewportWidth = window.innerWidth;
         return {
           headerFits: header.scrollWidth <= header.clientWidth,
           actionsFit: actions.scrollWidth <= actions.clientWidth,
           actionsInsideHeader: actionsRect.left >= headerRect.left - 1 &&
             actionsRect.right <= headerRect.right + 1,
-          narrowActionsBelowTitle: viewportWidth <= 980
-            ? actionsRect.top >= copyRect.bottom - 1
-            : true
+          actionsBesideTitle: actionsRect.left >= copyRect.right - 1,
+          centerDelta: Math.abs(
+            copyRect.top + copyRect.height / 2 - (actionsRect.top + actionsRect.height / 2)
+          )
         };
       });
       expect(libraryHeaderGeometry.headerFits).toBe(true);
       expect(libraryHeaderGeometry.actionsFit).toBe(true);
       expect(libraryHeaderGeometry.actionsInsideHeader).toBe(true);
-      expect(libraryHeaderGeometry.narrowActionsBelowTitle).toBe(true);
+      expect(libraryHeaderGeometry.actionsBesideTitle).toBe(true);
+      expect(libraryHeaderGeometry.centerDelta).toBeLessThanOrEqual(1);
       const toolbarActions = [
         page.getByRole("button", { name: "Check updates" }),
         page.getByRole("button", { name: "Update all skills" })
@@ -6244,7 +6314,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(readProfileState).toContain("Active");
   }, 45_000);
 
-  it("edits and persists Instructions from the default-collapsed Composer", async () => {
+  it("edits a shared Instruction from the default-collapsed Composer", async () => {
     const { appDataRoot, page } = await launchApp();
     await page.setViewportSize({ width: 1180, height: 728 });
     await selectProfile(page, "UI OpenCode alpha");
@@ -6266,12 +6336,10 @@ describe("Electron UI profile switching e2e", () => {
         profileSwitcherButton.evaluate((element) => getComputedStyle(element).backgroundColor)
       )
       .not.toBe("rgb(0, 122, 255)");
-    await expect.poll(() => applyButton.isDisabled(), { timeout: 10_000 }).toBe(true);
+    await expect.poll(() => applyButton.isEnabled(), { timeout: 10_000 }).toBe(true);
     expect(await applyButton.textContent()).toContain("Apply");
 
-    await saveProfile(page);
     expect(await page.getByRole("button", { name: "Save", exact: true }).count()).toBe(0);
-    await expect.poll(() => applyButton.isEnabled()).toBe(true);
     await expect
       .poll(() =>
         applyButton.evaluate((element) => getComputedStyle(element).backgroundColor)
@@ -6303,17 +6371,13 @@ describe("Electron UI profile switching e2e", () => {
 
     await expect(
       readFile(join(appDataRoot, "profiles", "ui-opencode-alpha", "INSTRUCTIONS.md"), "utf8")
-    ).resolves.toBe(instructionContent);
+    ).resolves.toBe("");
+    await expect(readMigratedProfileInstruction(appDataRoot, "ui-opencode-alpha"))
+      .resolves.toBe(instructionContent);
   }, standardElectronTestTimeout);
 
-  it("auto-saves a changed Profile before leaving its workspace", async () => {
+  it("persists a shared Instruction before leaving its Profile workspace", async () => {
     const { appDataRoot, page } = await launchApp();
-    const instructionsPath = join(
-      appDataRoot,
-      "profiles",
-      "ui-opencode-alpha",
-      "INSTRUCTIONS.md"
-    );
     const savedDraft = "# Saved before navigation\n";
     const navigation = page.getByRole("complementary", { name: "Global navigation" });
 
@@ -6325,7 +6389,8 @@ describe("Electron UI profile switching e2e", () => {
       timeout: 5_000
     });
     expect(await page.getByRole("dialog", { name: "Unsaved changes" }).count()).toBe(0);
-    await expect(readFile(instructionsPath, "utf8")).resolves.toBe(savedDraft);
+    await expect(readMigratedProfileInstruction(appDataRoot, "ui-opencode-alpha"))
+      .resolves.toBe(savedDraft);
   }, standardElectronTestTimeout);
 
   it("cancels a reverted Profile Skill edit before persistence", async () => {
@@ -6366,21 +6431,21 @@ describe("Electron UI profile switching e2e", () => {
 
   it("restores the selected Agent's last applied Profile version without changing the Agent", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
-    const instructionsPath = join(
-      appDataRoot,
-      "profiles",
-      "ui-opencode-alpha",
-      "INSTRUCTIONS.md"
-    );
-    const originalInstructions = await readFile(instructionsPath, "utf8");
     const targetInstructionsPath = join(opencodeDir, "AGENTS.md");
-    const changedInstructions = "# Recover this Profile version\n";
 
     await selectProfile(page, "UI OpenCode alpha");
     await previewAndApply(page, "OpenCode");
     const originalTargetInstructions = await readFile(targetInstructionsPath, "utf8");
-    await editProfileInstructions(page, changedInstructions);
-    await expect.poll(() => readFile(instructionsPath, "utf8")).toBe(changedInstructions);
+    await expandComposerSection(page, "Skills");
+    await page.getByRole("region", { name: "Profile Skills" }).getByRole("switch", {
+      name: "Disable ui-alpha-skill"
+    }).click();
+    await expect.poll(async () => {
+      const resources = await readJson<{
+        skills: Array<{ libraryId: string; enabled: boolean }>;
+      }>(join(appDataRoot, "profiles", "ui-opencode-alpha", "resources.json"));
+      return resources.skills[0]?.enabled;
+    }).toBe(false);
 
     await page.getByRole("button", { name: "More Profile actions" }).click();
     const undo = page.getByRole("menuitem", { name: "Restore last applied" });
@@ -6390,7 +6455,12 @@ describe("Electron UI profile switching e2e", () => {
     await recovery.getByRole("button", { name: "Restore Profile" }).click();
     await recovery.waitFor({ state: "hidden" });
 
-    await expect(readFile(instructionsPath, "utf8")).resolves.toBe(originalInstructions);
+    await expect.poll(async () => {
+      const resources = await readJson<{
+        skills: Array<{ libraryId: string; enabled: boolean }>;
+      }>(join(appDataRoot, "profiles", "ui-opencode-alpha", "resources.json"));
+      return resources.skills[0]?.enabled;
+    }).toBe(true);
     await expect(readFile(targetInstructionsPath, "utf8")).resolves.toBe(originalTargetInstructions);
   }, standardElectronTestTimeout);
 
@@ -6405,23 +6475,22 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => app!.windows().length).toBe(0);
   }, standardElectronTestTimeout);
 
-  it("waits for Profile auto-save before closing Electron", async () => {
+  it("waits for Profile resource auto-save before closing Electron", async () => {
     const { appDataRoot, page } = await launchApp({ testCloseGuard: true });
-    const instructionsPath = join(
-      appDataRoot,
-      "profiles",
-      "ui-opencode-alpha",
-      "INSTRUCTIONS.md"
-    );
-    const changedInstructions = "# Save before close\n";
     await selectProfile(page, "UI OpenCode alpha");
-    await editProfileInstructions(page, changedInstructions);
+    await expandComposerSection(page, "Skills");
+    await page.getByRole("region", { name: "Profile Skills" }).getByRole("switch", {
+      name: "Disable ui-alpha-skill"
+    }).click();
     const windowHandle = await app!.browserWindow(page);
     const closed = page.waitForEvent("close");
     await windowHandle.evaluate((browserWindow) => browserWindow.close());
     await closed;
 
-    await expect(readFile(instructionsPath, "utf8")).resolves.toBe(changedInstructions);
+    const resources = await readJson<{
+      skills: Array<{ libraryId: string; enabled: boolean }>;
+    }>(join(appDataRoot, "profiles", "ui-opencode-alpha", "resources.json"));
+    expect(resources.skills[0]?.enabled).toBe(false);
   }, standardElectronTestTimeout);
 
   it("imports a local skill folder from the Import dialog", async () => {
@@ -10560,6 +10629,47 @@ describe("Electron UI profile switching e2e", () => {
     );
   }, standardElectronTestTimeout);
 
+  it("applies a Profile Skill Group gate and restores its saved member choices", async () => {
+    const { appDataRoot, page } = await launchApp({ skillGroupFixture: true });
+    await selectProfile(page, "UI OpenCode alpha");
+    await expandComposerSection(page, "Skills");
+    const group = page.getByRole("region", { name: "Review pack" });
+    await group.getByRole("button", { name: "Toggle Review pack" }).click();
+    await resizeAppWindow(page, 920, 620);
+    await expectNoHorizontalOverflow(page, [".profile-skill-manager"]);
+
+    await group.getByRole("switch", { name: "Turn off Review pack" }).click();
+    const memberSwitches = group.getByRole("switch", { name: /Enable the Group to change/ });
+    await expect.poll(() => memberSwitches.count()).toBe(2);
+    for (const control of await memberSwitches.all()) {
+      expect(await control.getAttribute("aria-checked")).toBe("true");
+      expect(await control.isDisabled()).toBe(true);
+    }
+    await saveProfile(page);
+    await expect.poll(async () => {
+      const profile = await page.evaluate(() => window.agentEnv.readProfile("ui-opencode-alpha"));
+      return profile.resources.skillGroups?.[0]?.enabled;
+    }).toBe(false);
+    await previewAndApply(page, "OpenCode");
+    const targetSkills = join(root, "home", ".config", "opencode", "skills");
+    await expect(fileExists(join(targetSkills, "ui-alpha-skill"))).resolves.toBe(false);
+    await expect(fileExists(join(targetSkills, "shared-reviewer"))).resolves.toBe(false);
+
+    await group.getByRole("switch", { name: "Turn on Review pack" }).click();
+    await saveProfile(page);
+    await previewAndApply(page, "OpenCode");
+    await expect(readFile(join(targetSkills, "ui-alpha-skill", "SKILL.md"), "utf8"))
+      .resolves.toContain("alpha skill prompt");
+    await expect(readFile(join(targetSkills, "shared-reviewer", "SKILL.md"), "utf8"))
+      .resolves.toContain("Shared Reviewer");
+    const persisted = await readJson<{
+      skillGroups: Array<{ enabled: boolean }>;
+      skills: Array<{ enabled: boolean }>;
+    }>(join(appDataRoot, "profiles", "ui-opencode-alpha", "resources.json"));
+    expect(persisted.skillGroups[0]?.enabled).toBe(true);
+    expect(persisted.skills.every((skill) => skill.enabled)).toBe(true);
+  }, standardElectronTestTimeout);
+
   it("keeps Profile Skill edits, auto-save, and Preview responsive with many Skills", async () => {
     const { page } = await launchApp({ openCodeAlphaLibrarySkillCount: 30 });
     await selectProfile(page, "UI OpenCode alpha");
@@ -11487,11 +11597,6 @@ describe("Electron UI profile switching e2e", () => {
               })()
             : undefined,
           titleCenter: titleBox.top + titleBox.height / 2,
-          actionsBelowTitle: Boolean(
-            element.querySelector<HTMLElement>(".ui-page-header__actions button") &&
-            element.querySelector<HTMLElement>(".ui-page-header__actions button")!.getBoundingClientRect().top >=
-              titleBox.bottom - 1
-          ),
           fontSize: getComputedStyle(title).fontSize,
           left: Math.round(titleBox.left),
           top: Math.round(titleBox.top),
@@ -11505,7 +11610,7 @@ describe("Electron UI profile switching e2e", () => {
         ),
         JSON.stringify({ workspace, metrics })
       ).toBe(true);
-      if (metrics.actionCenter !== undefined && !(workspace === "Skills" && metrics.actionsBelowTitle)) {
+      if (metrics.actionCenter !== undefined) {
         expect(
           Math.abs(metrics.titleCenter - metrics.actionCenter),
           JSON.stringify({ workspace, metrics })

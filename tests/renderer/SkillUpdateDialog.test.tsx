@@ -174,7 +174,8 @@ describe("SkillUpdateDialog", () => {
       .toBeInTheDocument();
     expect(within(dialog).getByRole("status", { name: "claude-api: Done" }))
       .toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Close" })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: "Close" }))
+      .toHaveClass("ui-button--primary");
     expect(within(dialog).queryByText("Update Skill", { selector: ".ui-button__label" })).toBeNull();
 
     rerender(

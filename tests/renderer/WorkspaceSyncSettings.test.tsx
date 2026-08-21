@@ -42,7 +42,7 @@ describe("Workspace Sync settings", () => {
     ["local-changes", "Publish"],
     ["remote-changes", "Update this device"],
     ["review-required", "Resolve changes"]
-  ] as const)("names the %s action by its outcome", async (kind, action) => {
+  ] as const)("names and tones the %s action by its outcome", async (kind, action) => {
     const status: WorkspaceSyncStatus = {
       kind,
       connection: { repository: "git@github.com:me/workspace.git", branch: "main" },
@@ -61,6 +61,7 @@ describe("Workspace Sync settings", () => {
 
     expect(screen.getByRole("region", { name: "Device Sync" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: action })).toBeEnabled());
+    expect(screen.getByRole("status")).toHaveClass(`is-${kind}`);
     expect(screen.queryByRole("button", { name: "Review changes" })).toBeNull();
   });
 
@@ -111,6 +112,7 @@ describe("Workspace Sync settings", () => {
     render(<WorkspaceSyncSettings />);
 
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Could not check"));
+    expect(screen.getByRole("status")).toHaveClass("is-error");
     expect(screen.getByRole("alert")).toHaveTextContent("Network unavailable");
     expect(screen.queryByText("Checking")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Check" })).toBeEnabled();

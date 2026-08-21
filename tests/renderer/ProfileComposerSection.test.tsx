@@ -97,6 +97,33 @@ describe("ProfileComposerSection", () => {
       .toHaveTextContent("1 Profile override · 6 in OpenCode");
   });
 
+  it("uses the shared warning presentation for a review-required summary", () => {
+    render(
+      <ProfileComposerSection
+        id="profile-skills"
+        icon={<BookOpen />}
+        title="Skills"
+        description="Choose reusable capabilities"
+        count={2}
+        enabledCount={2}
+        countSummary="Needs review"
+        countStatusKind="warning"
+        chipNames={[]}
+        policy="manage"
+        policyLabel="Skills application policy for OpenCode"
+        expanded={false}
+        onToggle={() => undefined}
+        onPolicyChange={() => undefined}
+      >
+        <div>Skill editor</div>
+      </ProfileComposerSection>
+    );
+
+    expect(screen.getByText("Needs review", { selector: ".ui-interactive-status__label" })
+      .closest(".ui-interactive-status"))
+      .toHaveAttribute("data-tone", "warning");
+  });
+
   it("keeps duplicate caller ids from cross-wiring relationships", () => {
     render(
       <>

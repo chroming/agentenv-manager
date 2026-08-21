@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProfileDetail } from "../../src/shared/types";
 import { setProfileResourceMode } from "../../src/shared/profileResources";
+import { setProfileSkillGroupEnabled } from "../../src/shared/profileSkillGroups";
 import { profileDraftsEqual } from "../../src/renderer/profileDraftState";
 
 const profile = (): ProfileDetail => ({
@@ -80,5 +81,41 @@ describe("profileDraftsEqual", () => {
         "disable"
       )
     })).toBe(false);
+  });
+
+  it("detects a Skill Group gate change without changing member preferences", () => {
+    const saved = profile();
+    saved.resources = {
+      ...saved.resources,
+      skills: [{
+        ...saved.resources.skills[0]!,
+        direct: false,
+        groupIds: ["manual-review-tools"]
+      }],
+      skillGroups: [{
+        id: "manual-review-tools",
+        kind: "manual",
+        groupId: "review-tools",
+        name: "Review tools",
+        enabled: true,
+        memberIds: ["reviewer"]
+      }]
+    };
+
+    const disabled = setProfileSkillGroupEnabled(
+      saved.resources,
+      "manual-review-tools",
+      false
+    );
+    expect(disabled.skills[0]?.enabled).toBe(true);
+    expect(profileDraftsEqual(saved, { ...saved, resources: disabled })).toBe(false);
+
+    const restored = setProfileSkillGroupEnabled(
+      disabled,
+      "manual-review-tools",
+      true
+    );
+    expect(restored.skills[0]?.enabled).toBe(true);
+    expect(profileDraftsEqual(saved, { ...saved, resources: restored })).toBe(true);
   });
 });

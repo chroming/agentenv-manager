@@ -34,8 +34,9 @@ describe("InstructionsWorkspace", () => {
 
     expect(screen.getAllByText("Review rules").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Consistent review guidance")).toHaveLength(2);
-    expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Delete" }))
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Review rules" }));
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Delete" }))
       .toHaveAttribute("title", "Remove this Block from its Profiles before deleting it");
   });
 

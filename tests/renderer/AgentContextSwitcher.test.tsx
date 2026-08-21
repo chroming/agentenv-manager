@@ -55,7 +55,7 @@ describe("AgentContextSwitcher", () => {
     const context = screen.getByLabelText("Current Agent OpenCode");
     expect(context).toHaveClass("agent-context-switcher--static");
     expect(context.tagName).toBe("DIV");
-    expect(context.querySelector(".agent-context-switcher__logo")).not.toBeNull();
+    expect(context.querySelector(".agent-endpoint-icon")).not.toBeNull();
     expect(context.querySelector(".lucide-chevron-down")).toBeNull();
     expect(screen.queryByRole("button", { name: "Current Agent OpenCode" }))
       .not.toBeInTheDocument();
@@ -88,5 +88,47 @@ describe("AgentContextSwitcher", () => {
     expect(within(menu).getAllByRole("option")).toHaveLength(2);
     fireEvent.click(within(menu).getByRole("option", { name: "Codex" }));
     expect(onSelect).toHaveBeenCalledWith(codex.id);
+  });
+
+  it("groups remote endpoints by device and marks them with an SSH badge", () => {
+    const remoteOpenCode = {
+      ...openCode,
+      id: "ssh:build-server:opencode",
+      name: "OpenCode · Build server",
+      health: {
+        ...openCode.health,
+        status: "ready",
+        summary: "Ready on Build server"
+      },
+      location: {
+        kind: "ssh",
+        deviceId: "build-server",
+        deviceName: "Build server",
+        agentName: "OpenCode",
+        host: "build.internal"
+      }
+    } as TargetInfo;
+    render(
+      <AgentContextSwitcher
+        open
+        query=""
+        selectedId={openCode.id}
+        selectionLabel="Choose Agent"
+        targets={[openCode, remoteOpenCode]}
+        onOpenChange={() => undefined}
+        onQueryChange={() => undefined}
+        onSelect={() => undefined}
+      />
+    );
+
+    const menu = screen.getByRole("dialog", { name: "Choose Agent" });
+    expect(within(menu).getByText("This Mac")).toBeInTheDocument();
+    expect(within(menu).getByText("Build server", { selector: ".ui-object-switcher__group-label" }))
+      .toBeInTheDocument();
+    const remoteOption = within(menu).getByRole("option", {
+      name: "OpenCode · Build server · SSH"
+    });
+    expect(remoteOption.querySelector(".agent-endpoint-icon__remote-badge")).not.toBeNull();
+    expect(remoteOption).toHaveTextContent("Build server · SSH");
   });
 });

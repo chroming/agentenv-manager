@@ -79,4 +79,31 @@ describe("Profile resource management", () => {
     expect(profile.instructions).toBe("# Saved instructions\n");
     expect(profile.resources.skills[0].enabled).toBe(true);
   });
+
+  it("materializes a disabled Skill Group without changing member preferences", () => {
+    const profile: ProfileDetail = {
+      id: "grouped",
+      manifest: { id: "grouped", name: "Grouped", description: "", version: 2 },
+      instructions: "",
+      resources: {
+        skills: [
+          { libraryId: "alpha", targetName: "alpha", enabled: true, direct: false, groupIds: ["manual-group-review"] },
+          { libraryId: "beta", targetName: "beta", enabled: false, direct: false, groupIds: ["manual-group-review"] }
+        ],
+        skillGroups: [{
+          id: "manual-group-review",
+          kind: "manual",
+          groupId: "group-review",
+          name: "Review",
+          enabled: false,
+          memberIds: ["alpha", "beta"]
+        }],
+        mcpByTarget: {}
+      }
+    };
+
+    expect(materializeTargetResourcePolicy(profile, "opencode").resources.skills
+      .map((skill) => skill.enabled)).toEqual([false, false]);
+    expect(profile.resources.skills.map((skill) => skill.enabled)).toEqual([true, false]);
+  });
 });

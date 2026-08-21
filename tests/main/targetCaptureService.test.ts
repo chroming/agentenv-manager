@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createPaths } from "../../src/main/paths";
+import { createInstructionLibraryStore } from "../../src/main/instructionLibraryStore";
 import { createProfileStore } from "../../src/main/profileStore";
 import { createSettingsStore } from "../../src/main/settingsStore";
 import { createSkillLibraryStore } from "../../src/main/skillLibraryStore";
@@ -33,7 +34,12 @@ const setup = async (targetId: string, installed = true) => {
   const paths = createPaths({ appDataRoot, homeDir });
   const targetRegistry = createTargetRegistry();
   const settingsStore = createSettingsStore(paths);
-  const profileStore = createProfileStore({ appDataRoot, homeDir }, targetRegistry);
+  const instructionLibraryStore = createInstructionLibraryStore(paths);
+  const profileStore = createProfileStore(
+    { appDataRoot, homeDir },
+    targetRegistry,
+    instructionLibraryStore
+  );
   const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
   const diagnostics = createRuntimeDiagnostics({
     directory: join(root, "logs"),
@@ -616,7 +622,11 @@ describe("target capture service v2", () => {
       preferredTargetId: "pi",
       createdFromTargetId: "pi"
     });
-    expect(result.profile.instructions).toBe("# Pi instructions\n");
+    expect(result.profile.instructions).toBe("");
+    expect(result.profile.resolvedInstructions).toBe("# Pi instructions\n");
+    expect(result.profile.resources.instructions).toEqual([
+      { libraryId: expect.any(String), enabled: true }
+    ]);
     expect(result.profile.resources.skills).toEqual([
       { libraryId: "review-workflow", targetName: "review-workflow", enabled: true }
     ]);

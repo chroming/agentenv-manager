@@ -26,6 +26,7 @@ const LegacySkillLibraryPanel = (props: Record<string, any>) => (
       },
       catalog: {
         librarySkills: props.librarySkills,
+        skillGroups: props.skillGroups ?? [],
         skillUpdates: props.skillUpdates,
         skillUsage: props.skillUsage,
         installedTargetIds: props.installedTargetIds,
@@ -117,6 +118,9 @@ const LegacySkillLibraryPanel = (props: Record<string, any>) => (
         onMergeSources: props.onMergeSources
       },
       catalog: {
+        onCreateGroup: props.onCreateGroup ?? vi.fn(),
+        onUpdateGroup: props.onUpdateGroup ?? vi.fn(),
+        onRemoveGroup: props.onRemoveGroup ?? vi.fn(),
         onSaveUpdateSettings: props.onSaveUpdateSettings,
         onSetAvailability: props.onSetAvailability,
         onSetIcon: props.onSetIcon,

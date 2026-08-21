@@ -23,6 +23,7 @@ import {
   MasterDetailPane,
   MasterListPane,
   ModalFrame,
+  OperationStatusBar,
   PageHeader,
   RefreshAction,
   ResourceDisclosureSection,
@@ -79,6 +80,26 @@ describe("renderer UI primitives", () => {
           : "ui-button--compact"
       );
     }
+  });
+
+  it("owns semantic operation feedback and derives tones from shared status kinds", () => {
+    render(
+      <>
+        <OperationStatusBar
+          icon={<RefreshCw />}
+          label="Updated all Skills"
+          detail="3 updated"
+          statusKind="success"
+        />
+        <InteractiveStatus label="Needs review" size="metadata" statusKind="warning" />
+      </>
+    );
+
+    expect(screen.getByRole("status", { name: "Updated all Skills" }))
+      .toHaveAttribute("data-tone", "success");
+    const reviewStatus = screen.getByText("Needs review").closest(".ui-interactive-status");
+    expect(reviewStatus).toHaveAttribute("data-tone", "warning");
+    expect(reviewStatus).toHaveClass("ui-interactive-status--metadata");
   });
 
   it("prevents a child size override from breaking its action group", () => {
@@ -720,6 +741,7 @@ describe("renderer UI primitives", () => {
     const onToggle = vi.fn();
     render(
       <ResourceDisclosureSection
+        density="compact"
         id="workspace-skills"
         icon={<RefreshCw />}
         title="Skills"
@@ -737,7 +759,7 @@ describe("renderer UI primitives", () => {
     );
 
     const section = screen.getByRole("region", { name: "Skills" });
-    expect(section).toHaveClass("ui-resource-disclosure", "is-expanded", "is-nested", "is-muted");
+    expect(section).toHaveClass("ui-resource-disclosure", "is-compact", "is-expanded", "is-nested", "is-muted");
     expect(within(section).getByRole("button", { name: "Collapse Skills" }))
       .toHaveAttribute("aria-expanded", "true");
     expect(within(section).getByText("Project-owned Skill files"))
@@ -873,6 +895,30 @@ describe("renderer UI primitives", () => {
       key: "ArrowRight"
     });
     expect(onChange).toHaveBeenCalledWith("agents");
+  });
+
+  it("moves segmented tabs with horizontal arrow keys", () => {
+    const onChange = vi.fn();
+    render(
+      <SegmentedControl
+        label="Skill view"
+        semantics="tabs"
+        value="list"
+        options={[
+          { value: "list", label: "List" },
+          { value: "source", label: "By source" },
+          { value: "groups", label: "Groups" }
+        ]}
+        onChange={onChange}
+      />
+    );
+
+    const list = screen.getByRole("tab", { name: "List" });
+    const source = screen.getByRole("tab", { name: "By source" });
+    list.focus();
+    fireEvent.keyDown(list, { key: "ArrowRight" });
+    expect(source).toHaveFocus();
+    expect(onChange).toHaveBeenCalledWith("source");
   });
 
   it("uses a truthful status label as the review entry without adding an action column", () => {

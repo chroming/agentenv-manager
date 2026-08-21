@@ -72,6 +72,67 @@ describe("OpenCode Profile v2 switching e2e", () => {
     );
   });
 
+  it("restores saved member choices when a Profile Skill Group is turned back on", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-skill-group-e2e-"));
+    const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
+    const profileStore = createProfileStore({ appDataRoot: paths.appDataRoot, homeDir: paths.homeDir });
+    const settingsStore = createSettingsStore(paths);
+    const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
+    const source = join(root, "sources", "reviewer");
+    await mkdir(source, { recursive: true });
+    await writeFile(join(source, "SKILL.md"), "---\nname: reviewer\ndescription: Review\n---\n# Review\n");
+    await skillLibraryStore.importSkill({ sourcePath: source, id: "reviewer" });
+    const groupId = "manual-review-tools";
+    const saved = await profileStore.saveProfile({
+      manifest: {
+        id: "opencode-grouped",
+        name: "Grouped Skills",
+        description: "",
+        preferredTargetId: "opencode",
+        version: 2
+      },
+      instructions: "",
+      resources: {
+        skillGroups: [{
+          id: groupId,
+          kind: "manual",
+          groupId: "review-tools",
+          name: "Review tools",
+          enabled: false,
+          memberIds: ["reviewer"]
+        }],
+        skills: [{
+          libraryId: "reviewer",
+          targetName: "reviewer",
+          enabled: true,
+          direct: false,
+          groupIds: [groupId]
+        }],
+        mcpByTarget: {}
+      }
+    });
+    const service = createActivationService({ paths, profileStore, settingsStore, skillLibraryStore });
+    const targetSkill = join(paths.homeDir, ".config", "opencode", "skills", "reviewer");
+
+    const offPreview = await service.previewProfile(saved.id, "opencode");
+    expect((await service.applyProfile(saved.id, offPreview.id)).ok).toBe(true);
+    await expect(lstat(targetSkill)).rejects.toMatchObject({ code: "ENOENT" });
+
+    const current = await profileStore.readProfile(saved.id);
+    await profileStore.saveProfile({
+      manifest: current.manifest,
+      instructions: current.instructions,
+      resources: {
+        ...current.resources,
+        skillGroups: current.resources.skillGroups?.map((group) => ({ ...group, enabled: true }))
+      },
+      expectedContentHash: current.contentHash
+    });
+    const onPreview = await service.previewProfile(saved.id, "opencode");
+    expect((await service.applyProfile(saved.id, onPreview.id)).ok).toBe(true);
+    await expect(readFile(join(targetSkill, "SKILL.md"), "utf8")).resolves.toContain("# Review");
+  });
+
   it("pauses and resumes Instructions, Skills, and MCP management without losing Profile data", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-opencode-resource-policy-e2e-"));
     const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });

@@ -153,6 +153,67 @@ describe("activation service v2", () => {
     await expect(createBackupStore(paths).listBackups()).resolves.toHaveLength(1);
   });
 
+  it("treats a disabled Skill Group as a gate without changing member preferences", async () => {
+    const { paths, profileStore, service } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const current = await profileStore.readProfile("daily-coding");
+    const groupId = "manual-review-tools";
+    const groupOff = await profileStore.saveProfile({
+      manifest: current.manifest,
+      instructions: current.instructions,
+      resources: {
+        ...current.resources,
+        skillGroups: [{
+          id: groupId,
+          kind: "manual",
+          groupId: "review-tools",
+          name: "Review tools",
+          enabled: false,
+          memberIds: ["review"]
+        }],
+        skills: current.resources.skills.map((skill) => ({
+          ...skill,
+          enabled: true,
+          direct: false,
+          groupIds: [groupId]
+        }))
+      },
+      expectedContentHash: current.contentHash
+    });
+
+    const offPreview = await service.previewProfile(groupOff.id, "codex");
+    expect(offPreview.resourceChanges).not.toContainEqual(expect.objectContaining({
+      kind: "skill",
+      action: "install",
+      name: "review"
+    }));
+    expect((await service.applyProfile(groupOff.id, offPreview.id)).ok).toBe(true);
+    await expect(access(join(paths.codexHome, "skills", "review"))).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+    expect((await profileStore.readProfile(groupOff.id)).resources.skills[0]?.enabled).toBe(true);
+
+    const savedOff = await profileStore.readProfile(groupOff.id);
+    const groupOn = await profileStore.saveProfile({
+      manifest: savedOff.manifest,
+      instructions: savedOff.instructions,
+      resources: {
+        ...savedOff.resources,
+        skillGroups: savedOff.resources.skillGroups?.map((group) => ({ ...group, enabled: true }))
+      },
+      expectedContentHash: savedOff.contentHash
+    });
+    const onPreview = await service.previewProfile(groupOn.id, "codex");
+    expect(onPreview.resourceChanges).toContainEqual(expect.objectContaining({
+      kind: "skill",
+      action: "install",
+      name: "review"
+    }));
+    expect((await service.applyProfile(groupOn.id, onPreview.id)).ok).toBe(true);
+    await expect(readFile(join(paths.codexHome, "skills", "review", "SKILL.md"), "utf8"))
+      .resolves.toContain("# Review");
+  });
+
   it("migrates legacy Skill ownership during Apply without converting its existing topology", async () => {
     const { paths, service, skillLibraryStore } = await makeEnv();
     await writeCodexLiveFiles(paths);

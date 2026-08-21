@@ -3,6 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createProfileStore } from "../../src/main/profileStore";
+import { createInstructionLibraryStore } from "../../src/main/instructionLibraryStore";
+import { createPaths } from "../../src/main/paths";
+import { createTargetRegistry } from "../../src/main/targets/registry";
 
 let root = "";
 
@@ -37,6 +40,65 @@ afterEach(async () => {
 });
 
 describe("profile store v2", () => {
+  it("moves legacy inline Instructions into one reusable Library reference without changing deployment", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-instruction-migration-"));
+    await writeProfile(root);
+    const paths = createPaths({ appDataRoot: root });
+    const instructionLibrary = createInstructionLibraryStore(paths);
+    const store = createProfileStore(
+      { appDataRoot: root },
+      createTargetRegistry(),
+      instructionLibrary
+    );
+    const before = await store.readProfile("daily-coding");
+
+    await expect(store.migrateInlineInstructions()).resolves.toEqual({ migrated: 1, skipped: [] });
+
+    const migrated = await store.readProfile("daily-coding");
+    expect(migrated.instructions).toBe("");
+    expect(migrated.resolvedInstructions).toBe("# Agent\n");
+    expect(migrated.targetContentHashes).toEqual(before.targetContentHashes);
+    expect(migrated.resources.instructions).toEqual([
+      { libraryId: expect.stringMatching(/^profile-[a-f0-9]{12}-[a-f0-9]{12}$/), enabled: true }
+    ]);
+    const [block] = await instructionLibrary.list();
+    expect(block).toMatchObject({
+      name: "Daily Coding instructions",
+      content: "# Agent\n"
+    });
+    await expect(readFile(join(migrated.profileDir!, "INSTRUCTIONS.md"), "utf8"))
+      .resolves.toBe("");
+    await expect(store.migrateInlineInstructions()).resolves.toEqual({ migrated: 0, skipped: [] });
+    await expect(instructionLibrary.list()).resolves.toHaveLength(1);
+  });
+
+  it("keeps an unsafe legacy Instruction visible when it cannot enter Library", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-instruction-skip-"));
+    await writeProfile(root);
+    const profileDir = join(root, "profiles", "daily-coding");
+    await writeFile(
+      join(profileDir, "INSTRUCTIONS.md"),
+      "api_key: sk-1234567890abcdefghijklmnop\n"
+    );
+    const paths = createPaths({ appDataRoot: root });
+    const instructionLibrary = createInstructionLibraryStore(paths);
+    const store = createProfileStore(
+      { appDataRoot: root },
+      createTargetRegistry(),
+      instructionLibrary
+    );
+
+    const result = await store.migrateInlineInstructions();
+
+    expect(result).toMatchObject({
+      migrated: 0,
+      skipped: [{ profileId: "daily-coding", error: expect.stringContaining("credentials") }]
+    });
+    expect((await store.readProfile("daily-coding")).instructions)
+      .toContain("sk-1234567890");
+    await expect(instructionLibrary.list()).resolves.toEqual([]);
+  });
+
   it("creates a blank Profile without adopting native Agent resources", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-profile-create-"));
 

@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -191,6 +192,11 @@ describe("OpenCode evaluation capability", () => {
     const homeDir = join(root, "home");
     const adapter = createOpenCodeTargetAdapter();
     const capability = createOpenCodeEvaluationCapability();
+    const sandboxAvailable = spawnSync("/usr/bin/sandbox-exec", [
+      "-p",
+      "(version 1) (allow default) (deny file-write*)",
+      "/usr/bin/true"
+    ], { stdio: "ignore" }).status === 0;
 
     const availability = await capability.checkAvailability({
       profile: profile({ mode: "disable", selections: [] }),
@@ -202,7 +208,7 @@ describe("OpenCode evaluation capability", () => {
       environment: {}
     });
 
-    expect(availability.cliVersion).toBe("9.9.9");
+    expect(availability.cliVersion).toBe(sandboxAvailable ? "9.9.9" : undefined);
     expect(existsSync(markerPath)).toBe(false);
   });
 });

@@ -62,4 +62,32 @@ describe("library resource versions", () => {
       skills: {}
     });
   });
+
+  it("does not track Library revisions hidden by a disabled Skill Group", () => {
+    const profile = {
+      resources: {
+        skills: [{
+          libraryId: "enabled",
+          targetName: "enabled",
+          enabled: true,
+          direct: false,
+          groupIds: ["manual-group-review"]
+        }],
+        skillGroups: [{
+          id: "manual-group-review",
+          kind: "manual",
+          groupId: "group-review",
+          name: "Review",
+          enabled: false,
+          memberIds: ["enabled"]
+        }],
+        mcpByTarget: {}
+      }
+    } as Pick<ProfileDetail, "resources">;
+
+    expect(collectLibraryResourceVersions(profile, [{
+      id: "enabled",
+      contentHash: "enabled-hash"
+    } as SkillLibraryEntry])).toEqual({ skills: {} });
+  });
 });

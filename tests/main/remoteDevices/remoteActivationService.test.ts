@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -59,7 +59,8 @@ const createLocalSshFixture = (remoteHome: string): SshTransport => ({
 });
 
 const createFixture = async (
-  transportFactory: (remoteHome: string) => SshTransport = createLocalSshFixture
+  transportFactory: (remoteHome: string) => SshTransport = createLocalSshFixture,
+  extraSkillFiles = 0
 ) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-remote-activation-"));
   const appDataRoot = join(root, "data");
@@ -83,6 +84,9 @@ const createFixture = async (
     "# Review",
     ""
   ].join("\n"));
+  await Promise.all(Array.from({ length: extraSkillFiles }, (_, index) =>
+    writeFile(join(source, `reference-${String(index).padStart(3, "0")}.md`), `Reference ${index}\n`)
+  ));
   await skillLibraryStore.importSkill({ sourcePath: source, id: "review" });
   const created = await profileStore.createProfile({
     preferredTargetId: "opencode",
@@ -126,8 +130,44 @@ const createFixture = async (
 };
 
 describe("remote Profile activation", () => {
+  it("keeps an unavailable SSH device saved so the user can reconnect later", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-remote-offline-"));
+    const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
+    const service = createRemoteActivationService({
+      paths,
+      profileStore: createProfileStore(paths),
+      skillLibraryStore: createSkillLibraryStore(paths),
+      targetRegistry: createTargetRegistry([createOpenCodeTargetAdapter()]),
+      transport: {
+        execute: async () => {
+          throw new Error("device is offline");
+        }
+      }
+    });
+
+    const device = await service.addDevice({ name: "Offline Linux", host: "offline" });
+
+    await expect(service.listDevices()).resolves.toContainEqual(device);
+    await expect(service.probeDevice(device.id)).resolves.toMatchObject({
+      status: "unavailable",
+      error: "device is offline"
+    });
+  });
+
+  it("rejects remote snapshot symlinks before preview reads their local targets", async () => {
+    const fixture = await createFixture();
+    const localSecret = join(root, "local-secret.txt");
+    const instructionPath = join(fixture.remoteHome, ".config", "opencode", "AGENTS.md");
+    await writeFile(localSecret, "local-only-secret\n");
+    await mkdir(join(fixture.remoteHome, ".config", "opencode"), { recursive: true });
+    await symlink(localSecret, instructionPath);
+
+    await expect(fixture.service.previewProfile(fixture.profile.manifest.id, fixture.endpoint.id))
+      .rejects.toThrow(/symbolic link/i);
+  });
+
   it("applies Instructions and managed-copy Skills without changing the local Agent", async () => {
-    const { endpoint, profile, remoteHome, service } = await createFixture();
+    const { endpoint, paths, profile, remoteHome, service } = await createFixture();
 
     const preview = await service.previewProfile(profile.manifest.id, endpoint.id);
     expect(preview.issues).toEqual([]);
@@ -142,6 +182,13 @@ describe("remote Profile activation", () => {
       .resolves.toBe("# Remote instructions\n");
     await expect(readFile(join(remoteHome, ".config", "opencode", "skills", "review", "SKILL.md"), "utf8"))
       .resolves.toContain("# Review");
+    await expect(readdir(join(
+      remoteHome,
+      ".local",
+      "state",
+      "agentenv-manager",
+      "operations"
+    ))).resolves.toEqual([]);
     expect(await service.listTargetStates()).toEqual([
       expect.objectContaining({
         targetId: endpoint.id,
@@ -154,6 +201,11 @@ describe("remote Profile activation", () => {
     expect(noOp.changes).toEqual([]);
     expect(noOp.resourceChanges).toEqual([]);
     expect(noOp.targetStateChanged).toBe(false);
+    await expect(service.applyProfile(profile.manifest.id, noOp.id)).resolves.toMatchObject({
+      ok: false,
+      kind: "no-op"
+    });
+    await expect(readdir(paths.remotePreviewCacheDir)).resolves.toEqual([]);
   });
 
   it("rejects Apply when the remote Agent changed after Preview", async () => {
@@ -170,12 +222,36 @@ describe("remote Profile activation", () => {
     await expect(readFile(instructionPath, "utf8")).resolves.toBe("# External change\n");
   });
 
+  it("sends a bounded SSH bootstrap command for Skills with many files", async () => {
+    let applyCommandLength = 0;
+    const fixture = await createFixture((remoteHome) => {
+      const local = createLocalSshFixture(remoteHome);
+      return {
+        execute: async (device, command, options) => {
+          if (command.includes("printf receiving") || command.includes("printf staging")) {
+            applyCommandLength = command.length;
+          }
+          return local.execute(device, command, options);
+        }
+      };
+    }, 80);
+    const preview = await fixture.service.previewProfile(
+      fixture.profile.manifest.id,
+      fixture.endpoint.id
+    );
+
+    await expect(fixture.service.applyProfile(fixture.profile.manifest.id, preview.id))
+      .resolves.toMatchObject({ ok: true });
+    expect(applyCommandLength).toBeGreaterThan(0);
+    expect(applyCommandLength).toBeLessThan(2_048);
+  });
+
   it("never removes an untouched remote resource when a later backup fails", async () => {
     const fixture = await createFixture((remoteHome) => {
       const local = createLocalSshFixture(remoteHome);
       return {
         execute: async (device, command, options) => {
-          if (!command.includes("printf staging")) {
+          if (!command.includes("printf receiving")) {
             return local.execute(device, command, options);
           }
           const failBin = join(root, "fail-bin");
@@ -281,7 +357,7 @@ describe("remote Profile activation", () => {
       const local = createLocalSshFixture(remoteHome);
       return {
         execute: async (device, command, options) => {
-          if (command.includes("printf staging")) {
+          if (command.includes("printf receiving")) {
             await local.execute(device, command, options);
             throw new Error("connection dropped after commit");
           }
@@ -300,6 +376,9 @@ describe("remote Profile activation", () => {
 
     await expect(fixture.service.applyProfile(fixture.profile.manifest.id, preview.id))
       .resolves.toMatchObject({ ok: false, kind: "recovery-required" });
+    await expect(fixture.service.removeDevice(fixture.device.id))
+      .rejects.toThrow(/finish recovery/i);
+    await expect(fixture.service.listDevices()).resolves.toContainEqual(fixture.device);
 
     const restarted = createRemoteActivationService({
       paths: fixture.paths,
@@ -315,5 +394,81 @@ describe("remote Profile activation", () => {
         lifecycleStatus: "applied"
       })
     ]);
+  });
+
+  it("keeps recovery required when the remote operation receipt is missing", async () => {
+    let hideStatus = true;
+    const fixture = await createFixture((remoteHome) => {
+      const local = createLocalSshFixture(remoteHome);
+      return {
+        execute: async (device, command, options) => {
+          if (command.includes("printf receiving")) {
+            await local.execute(device, command, options);
+            throw new Error("connection dropped after commit");
+          }
+          if (command.includes("/status") && hideStatus) {
+            hideStatus = false;
+            throw new Error("device temporarily offline");
+          }
+          return local.execute(device, command, options);
+        }
+      };
+    });
+    const preview = await fixture.service.previewProfile(
+      fixture.profile.manifest.id,
+      fixture.endpoint.id
+    );
+    await expect(fixture.service.applyProfile(fixture.profile.manifest.id, preview.id))
+      .resolves.toMatchObject({ ok: false, kind: "recovery-required" });
+
+    await rm(join(
+      fixture.remoteHome,
+      ".local",
+      "state",
+      "agentenv-manager",
+      "operations"
+    ), { recursive: true, force: true });
+    const restarted = createRemoteActivationService({
+      paths: fixture.paths,
+      profileStore: fixture.profileStore,
+      skillLibraryStore: fixture.skillLibraryStore,
+      targetRegistry: fixture.targetRegistry,
+      transport: createLocalSshFixture(fixture.remoteHome)
+    });
+
+    await expect(restarted.listTargetStates()).resolves.toContainEqual(expect.objectContaining({
+      targetId: fixture.endpoint.id,
+      lifecycleStatus: "recovery-required"
+    }));
+  });
+
+  it("keeps the last applied endpoint and state visible while its device is offline", async () => {
+    const fixture = await createFixture();
+    const preview = await fixture.service.previewProfile(
+      fixture.profile.manifest.id,
+      fixture.endpoint.id
+    );
+    await fixture.service.applyProfile(fixture.profile.manifest.id, preview.id);
+    const offline = createRemoteActivationService({
+      paths: fixture.paths,
+      profileStore: fixture.profileStore,
+      skillLibraryStore: fixture.skillLibraryStore,
+      targetRegistry: fixture.targetRegistry,
+      transport: {
+        execute: async () => {
+          throw new Error("device is offline");
+        }
+      }
+    });
+
+    await expect(offline.listEndpoints()).resolves.toContainEqual(expect.objectContaining({
+      id: fixture.endpoint.id,
+      availability: "unavailable"
+    }));
+    await expect(offline.listTargetStates()).resolves.toContainEqual(expect.objectContaining({
+      targetId: fixture.endpoint.id,
+      activeProfileId: fixture.profile.manifest.id,
+      lifecycleStatus: "applied"
+    }));
   });
 });
