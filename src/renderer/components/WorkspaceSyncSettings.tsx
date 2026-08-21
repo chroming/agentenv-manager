@@ -188,10 +188,12 @@ export const WorkspaceSyncSettings = ({
     : status.kind === "remote-changes"
       ? t("Update this device")
       : t("Resolve changes");
+  const statusClass = status.working === "checking" ? "checking" : status.kind;
   const resourceLabel = (value: WorkspaceSyncReviewRow["resourceKind"]) => ({
     profile: t("Profile"),
     instruction: t("Instruction"),
     skill: t("Skill"),
+    group: t("Group"),
     source: t("Source")
   })[value];
   const sectionLabel = (value: string) => ({
@@ -200,6 +202,7 @@ export const WorkspaceSyncSettings = ({
     resources: t("Resources"),
     content: t("Content"),
     metadata: t("Update settings"),
+    groups: t("Groups"),
     sources: t("Sources")
   })[value] ?? value;
   const sectionSummary = (row: WorkspaceSyncReviewRow) => {
@@ -209,6 +212,7 @@ export const WorkspaceSyncSettings = ({
       resources: 2,
       content: 0,
       metadata: 1,
+      groups: 0,
       sources: 0
     };
     return [...row.changes]
@@ -296,7 +300,7 @@ export const WorkspaceSyncSettings = ({
           <p className="settings-muted">{t("Sync portable Profiles and Library Skills. Installed Agents and applied Profiles stay local to this device.")}</p>
         </div>
         {connected ? (
-          <span className={`workspace-sync-status is-${status.kind}`} role="status">
+          <span className={`workspace-sync-status is-${statusClass}`} role="status">
             {statusIcon}
             {statusLabel}
           </span>

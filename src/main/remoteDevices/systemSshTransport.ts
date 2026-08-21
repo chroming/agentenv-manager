@@ -114,4 +114,11 @@ export const remoteDeviceFingerprint = (input: {
   platform: string;
   architecture: string;
   machineId?: string;
-}) => createHash("sha256").update(JSON.stringify(input)).digest("hex");
+  connectionIdentity?: string;
+}) => createHash("sha256").update(JSON.stringify({
+  homeDir: input.homeDir,
+  platform: input.platform,
+  architecture: input.architecture,
+  machineId: input.machineId,
+  connectionIdentity: input.machineId ? undefined : input.connectionIdentity
+})).digest("hex");

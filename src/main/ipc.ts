@@ -51,7 +51,6 @@ import {
   missingSkillCleanupMutationPaths
 } from "../shared/skillCleanup";
 import type { MutationCoordinator } from "./mutationCoordinator";
-import { readAllProfilesForResourceMutation } from "./profileSafety";
 import { pathEntryExists } from "./fileUtils";
 import type { ConversationService } from "./conversations/conversationService";
 import {
@@ -75,7 +74,10 @@ import { registerSharedSkillAreaIpc } from "./ipc/sharedSkillAreaIpc";
 import { registerSkillUpdateIpc } from "./ipc/skillUpdateIpc";
 import { registerInstructionIpc } from "./ipc/instructionIpc";
 import { registerSkillLibraryBrowserIpc } from "./ipc/skillLibraryBrowserIpc";
+import { registerSkillGroupIpc } from "./ipc/skillGroupIpc";
+import { registerSkillRemovalIpc } from "./ipc/skillRemovalIpc";
 import type { InstructionLibraryStore } from "./instructionLibraryStore";
+import type { SkillGroupStore } from "./skillGroupStore";
 import { scanSkillInventoryForRenderer } from "./skillInventoryResponse";
 
 export interface IpcServices {
@@ -92,6 +94,7 @@ export interface IpcServices {
   githubAuthService: GitHubAuthService;
   settingsStore: SettingsStore;
   skillLibraryStore: SkillLibraryStore;
+  skillGroupStore: SkillGroupStore;
   instructionLibraryStore: InstructionLibraryStore;
   skillMutationRecoveryGate: SkillMutationRecoveryGate;
   targetRegistry: TargetRegistry;
@@ -132,6 +135,7 @@ export const registerIpcHandlers = ({
   githubAuthService,
   settingsStore,
   skillLibraryStore,
+  skillGroupStore,
   instructionLibraryStore,
   skillMutationRecoveryGate,
   targetRegistry,
@@ -294,6 +298,13 @@ export const registerIpcHandlers = ({
     { skillLibraryStore, resolveSharedSkillPaths }
   );
   registerInstructionIpc({ diagnosticHandle, handleMutation }, { instructionLibraryStore, profileStore });
+  registerSkillGroupIpc({ diagnosticHandle, handleMutation }, skillGroupStore);
+  registerSkillRemovalIpc({ handleMutation }, {
+    profileStore,
+    skillGroupStore,
+    skillLibraryStore,
+    targetDiscoveryService
+  });
   registerSkillLibraryBrowserIpc(
     { diagnosticHandle },
     { paths, settingsStore, skillLibraryStore }
@@ -518,30 +529,6 @@ export const registerIpcHandlers = ({
   );
   diagnosticHandle("skills:cancel-repository", () => {
     cancelRepositoryOperations();
-  });
-  handleMutation("skills:remove-library", async (_event, id: unknown) => {
-    const skillId = parseId(id, "skill id");
-    const profiles = await readAllProfilesForResourceMutation(
-      profileStore,
-      "Skill removal"
-    );
-    const references = [] as string[];
-    for (const profile of profiles) {
-      if (profile.resources.skills.some((reference) => reference.libraryId === skillId)) {
-        references.push(profile.manifest.name);
-      }
-    }
-    if (references.length > 0) {
-      throw new Error(
-        `Library skill ${skillId} is used by ${references.join(", ")}. Remove it from those profiles first.`
-      );
-    }
-    const targets = await targetDiscoveryService.listTargets();
-    const managedInstallPaths = await skillLibraryStore.findManagedInstallPaths(
-      skillId,
-      targets.map((target) => target.paths)
-    );
-    return skillLibraryStore.removeSkill(skillId, managedInstallPaths);
   });
   handleMutation("skills:manage-target", async (_event, input: ManageTargetSkillInput) => {
     const targetId = parseId(input.targetId, "target id");

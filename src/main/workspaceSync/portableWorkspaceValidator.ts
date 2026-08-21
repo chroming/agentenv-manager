@@ -6,6 +6,7 @@ import {
   PortableInstructionMetadataSchema,
   PortableSkillMetadataSchema,
   PortableSkillSourcesSchema,
+  PortableSkillGroupsSchema,
   PortableWorkspaceManifestSchema,
   type PortableWorkspaceManifest
 } from "./portableSchemas";
@@ -113,9 +114,13 @@ export const validatePortableWorkspace = async (root: string): Promise<Validated
   const manifest = PortableWorkspaceManifestSchema.parse(await readJson(join(root, "agentenv-sync.json")));
   await assertExactEntries(
     join(root, "workspace"),
-    manifest.instructionHashes
-      ? ["profiles", "skills", "instructions", "skill-sources.json"]
-      : ["profiles", "skills", "skill-sources.json"]
+    [
+      "profiles",
+      "skills",
+      ...(manifest.instructionHashes ? ["instructions"] : []),
+      "skill-sources.json",
+      ...(manifest.skillGroupsHash ? ["skill-groups.json"] : [])
+    ]
   );
   await assertRegularFile(join(root, "workspace", "skill-sources.json"));
   const { snapshotHash: _snapshotHash, ...unsigned } = manifest;
@@ -250,6 +255,23 @@ export const validatePortableWorkspace = async (root: string): Promise<Validated
     assertPortableOnlineLocator(source.canonicalLink);
   }
   if (hashJson(sourceData) !== manifest.sourcesHash) throw new Error("Portable Skill sources hash mismatch");
+
+  if (manifest.skillGroupsHash) {
+    await assertRegularFile(join(root, "workspace", "skill-groups.json"));
+    const groupData = PortableSkillGroupsSchema.parse(
+      await readJson(join(root, "workspace", "skill-groups.json"))
+    );
+    if (hashJson(groupData) !== manifest.skillGroupsHash) {
+      throw new Error("Portable Skill Groups hash mismatch");
+    }
+    for (const group of groupData.groups) {
+      for (const skillId of group.skillIds) {
+        if (!skillIdsSet.has(skillId)) {
+          throw new Error(`Portable Skill Group ${group.id} references missing Skill ${skillId}`);
+        }
+      }
+    }
+  }
 
   for (const profileId of profileIds) {
     const resources = PortableProfileResourcesSchema.parse(

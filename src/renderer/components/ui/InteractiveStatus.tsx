@@ -1,6 +1,10 @@
 import { LoaderCircle } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
-import type { SemanticStatusKind, SemanticStatusTone } from "./statusPresentation";
+import {
+  statusToneFor,
+  type SemanticStatusKind,
+  type SemanticStatusTone
+} from "./statusPresentation";
 
 interface InteractiveStatusProps {
   busy?: boolean;
@@ -11,6 +15,7 @@ interface InteractiveStatusProps {
   label: ReactNode;
   onReview?(event: MouseEvent<HTMLButtonElement>): void;
   reviewLabel?: string;
+  size?: "body" | "metadata";
   statusKind?: SemanticStatusKind;
   tone?: SemanticStatusTone;
 }
@@ -24,12 +29,15 @@ export const InteractiveStatus = ({
   label,
   onReview,
   reviewLabel,
+  size = "body",
   statusKind,
-  tone = "neutral"
+  tone
 }: InteractiveStatusProps) => {
+  const effectiveTone = tone ?? statusToneFor(statusKind ?? "neutral");
   const classes = [
     "ui-interactive-status",
-    `ui-interactive-status--${tone}`,
+    `ui-interactive-status--${effectiveTone}`,
+    `ui-interactive-status--${size}`,
     onReview ? "is-interactive" : "",
     className
   ].filter(Boolean).join(" ");
@@ -51,7 +59,7 @@ export const InteractiveStatus = ({
         aria-label={reviewLabel}
         className={classes}
         data-status-kind={statusKind}
-        data-tone={tone}
+        data-tone={effectiveTone}
         disabled={disabled || busy}
         type="button"
         onClick={onReview}
@@ -61,5 +69,5 @@ export const InteractiveStatus = ({
     );
   }
 
-  return <strong className={classes} data-status-kind={statusKind} data-tone={tone}>{content}</strong>;
+  return <strong className={classes} data-status-kind={statusKind} data-tone={effectiveTone}>{content}</strong>;
 };

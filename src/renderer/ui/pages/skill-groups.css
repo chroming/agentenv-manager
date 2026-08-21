@@ -1,0 +1,65 @@
+.skill-group-view {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.skill-group-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  justify-content: stretch;
+  min-height: 52px;
+  padding-block: var(--space-2);
+}
+
+.skill-group-search {
+  max-width: 360px;
+}
+
+.skill-group-list {
+  align-content: start;
+  display: grid;
+  min-height: 0;
+  overflow: auto;
+}
+
+.skill-group-card {
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.skill-group-card:last-child {
+  border-bottom: 0;
+}
+
+.skill-group-members {
+  --resource-row-actions-standard: 0px;
+  --resource-row-state-track: 0px;
+}
+
+.skill-group-empty {
+  min-height: 220px;
+}
+
+.skill-group-dialog {
+  width: min(680px, calc(100vw - 32px));
+}
+
+.skill-group-dialog__body {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-rows: auto minmax(260px, 1fr);
+  min-height: min(540px, calc(100vh - 190px));
+}
+
+.skill-group-fields {
+  display: grid;
+  gap: var(--space-3);
+}
+
+@media (max-width: 760px) {
+  .skill-group-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}

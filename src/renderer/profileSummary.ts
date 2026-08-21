@@ -6,6 +6,7 @@ import type {
   TargetInfo,
   TargetManagementState
 } from "../shared/types";
+import { profileSkillEnabled } from "../shared/profileSkillGroups";
 
 export const reconcileProfileUsage = (
   current: Record<string, string[]>,
@@ -174,7 +175,7 @@ export const summarizeProfile = (
   const skillNames = unique(
     profile.resources.skills
       .filter(
-        (skill) => skill.enabled !== false && !globallyDisabledIds.has(skill.libraryId)
+        (skill) => profileSkillEnabled(profile.resources, skill) && !globallyDisabledIds.has(skill.libraryId)
       )
       .map((skill) => skill.targetName)
   );
@@ -186,11 +187,11 @@ export const summarizeProfile = (
       .map((selection) => selection.name) ?? []
   );
   const allMcpNames = unique(mcpPolicy?.selections.map((selection) => selection.name) ?? []);
-  const hasInlineInstructions = profile.instructions.trim().length > 0;
   const instructionReferences = profile.resources.instructions ?? [];
+  const legacyInstructionCount = Number(profile.instructions.trim().length > 0);
   const enabledInstructionCount = instructionReferences.filter((reference) => reference.enabled).length +
-    Number(hasInlineInstructions);
-  const totalInstructionCount = instructionReferences.length + Number(hasInlineInstructions);
+    legacyInstructionCount;
+  const totalInstructionCount = instructionReferences.length + legacyInstructionCount;
   const instructionsMode = profileResourceMode(
     profile.resources,
     target.id,

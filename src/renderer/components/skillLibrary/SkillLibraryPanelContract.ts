@@ -24,6 +24,9 @@ import type {
   SkillInventoryEntry,
   SkillRuntimeIssue,
   SkillLibraryEntry,
+  SkillGroup,
+  CreateSkillGroupInput,
+  UpdateSkillGroupInput,
   SkillMergeInput,
   SkillMergePreview,
   SkillSourceCandidateIgnoreInput,
@@ -68,6 +71,7 @@ export interface SkillLibraryPanelModel {
   };
   catalog: {
     librarySkills: SkillLibraryEntry[];
+    skillGroups: SkillGroup[];
     skillUpdates: SkillUpdateInfo[];
     skillUsage: Record<string, string[]>;
     installedTargetIds?: string[];
@@ -78,7 +82,7 @@ export interface SkillLibraryPanelModel {
   sources: {
     sourceGroups: SkillSourceGroupView[];
     sourceGroupsLoading?: boolean;
-    libraryMode: "skills" | "sources";
+    libraryMode: "skills" | "sources" | "groups";
   };
   cleanup: {
     skillInventory: SkillInventoryEntry[];
@@ -110,7 +114,7 @@ export interface SkillLibraryPanelActions {
   navigation: {
     onCloseTool?(): void;
     onFocusCollectionHandled?(): void;
-    onLibraryModeChange(mode: "skills" | "sources"): void;
+    onLibraryModeChange(mode: "skills" | "sources" | "groups"): void;
     onCleanupScopeChange?(scope: SkillManagementScope): void;
     onViewStateChange(next: SkillLibraryViewState): void;
     scrollOwnerRef?(node: HTMLDivElement | null): void;
@@ -203,6 +207,9 @@ export interface SkillLibraryPanelActions {
     onMergeSources(previewId: string): Promise<SkillSourceMergeResult>;
   };
   catalog: {
+    onCreateGroup(input: CreateSkillGroupInput): Promise<boolean>;
+    onUpdateGroup(input: UpdateSkillGroupInput): Promise<boolean>;
+    onRemoveGroup(id: string): Promise<boolean>;
     onSaveUpdateSettings(change: SkillUpdateSettingsInput): Promise<boolean>;
     onSetAvailability(input: SkillAvailabilityInput): Promise<boolean>;
     onSetIcon(input: SkillIconInput): void;

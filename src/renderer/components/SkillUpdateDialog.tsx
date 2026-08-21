@@ -279,6 +279,7 @@ export const SkillUpdateDialog = ({
         <footer className="preview-actions ui-dialog-footer">
           <Button
             ref={initialFocusRef}
+            variant={finished ? "primary" : "secondary"}
             disabled={running || (busy && !finished)}
             onClick={onClose}
           >

@@ -2,7 +2,9 @@ import type {
   ProfileDetail,
   ProfileResources,
   SkillInventoryEntry,
+  SkillGroup,
   SkillLibraryEntry,
+  SkillSourceGroupView,
   SkillUpdateInfo,
   TargetManagementState
 } from "../../shared/types";
@@ -26,6 +28,8 @@ interface ProfileSkillsComposerSectionProps {
   currentSkills: SkillInventoryEntry[];
   environmentScanStatus: "checking" | "ready" | "error";
   librarySkills: SkillLibraryEntry[];
+  skillGroups?: SkillGroup[];
+  sourceGroups?: SkillSourceGroupView[];
   skillUpdates: SkillUpdateInfo[];
   checkingSkillUpdates: boolean;
   onToggle(): void;
@@ -49,6 +53,8 @@ export const ProfileSkillsComposerSection = ({
   currentSkills,
   environmentScanStatus,
   librarySkills,
+  skillGroups = [],
+  sourceGroups = [],
   skillUpdates,
   checkingSkillUpdates,
   onToggle,
@@ -82,6 +88,7 @@ export const ProfileSkillsComposerSection = ({
       count={summary.total}
       enabledCount={summary.count}
       countSummary={sharedRuntimeSummary}
+      countStatusKind={sharedBoundary.migrationPaths.length > 0 ? "warning" : undefined}
       chipNames={summary.names}
       policy={summary.mode}
       policyDisabled={!capabilityAvailable}
@@ -94,6 +101,8 @@ export const ProfileSkillsComposerSection = ({
       <ProfileSkillsEditor
         profile={profile}
         librarySkills={librarySkills}
+        skillGroups={skillGroups}
+        sourceGroups={sourceGroups}
         skillUpdates={skillUpdates}
         checkingSkillUpdates={checkingSkillUpdates}
         policy={policy}

@@ -17,6 +17,7 @@ export const StartupGate = () => {
     "preparing-data": "Preparing local data…",
     "migrating-data": "Checking data format…",
     "upgrading-skills": "Updating Skill metadata…",
+    "upgrading-profile-instructions": "Organizing Profile instructions…",
     "recovering-writes": "Recovering interrupted changes…",
     "recovering-sync": "Checking Workspace recovery…"
   };

@@ -1,4 +1,5 @@
 import {
+  Fragment,
   type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -29,6 +30,7 @@ export interface ObjectSwitcherItem {
   status?: ReactNode;
   disabled?: boolean;
   tooltip?: string;
+  groupLabel?: ReactNode;
   onContextMenu?(event: ReactMouseEvent<HTMLElement>): void;
 }
 
@@ -257,8 +259,14 @@ export const ObjectSwitcher = ({
             id={popoverId}
             role="listbox"
           >
-            {visibleItems.length > 0 ? visibleItems.map((item) => (
-              <SelectableListRow
+            {visibleItems.length > 0 ? visibleItems.map((item, index) => (
+              <Fragment key={item.id}>
+                {item.groupLabel && item.groupLabel !== visibleItems[index - 1]?.groupLabel ? (
+                  <div className="ui-object-switcher__group-label" role="presentation">
+                    {item.groupLabel}
+                  </div>
+                ) : null}
+                <SelectableListRow
                 as="div"
                 aria-label={item.ariaLabel}
                 aria-selected={item.id === selectedId}
@@ -268,7 +276,6 @@ export const ObjectSwitcher = ({
                 description={item.description}
                 disabled={item.disabled}
                 icon={item.icon}
-                key={item.id}
                 role="option"
                 selected={item.id === selectedId}
                 status={item.id === selectedId ? <Check size={15} strokeWidth={2.4} /> : item.status}
@@ -323,7 +330,8 @@ export const ObjectSwitcher = ({
                   if (item.id !== selectedId) onSelect(item.id);
                   close();
                 }}
-              />
+                />
+              </Fragment>
             )) : (
               <div className="ui-object-switcher__empty">{emptyMessage}</div>
             )}

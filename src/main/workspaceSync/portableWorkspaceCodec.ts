@@ -4,12 +4,14 @@ import type { AgentEnvPaths } from "../paths";
 import type { ProfileStore } from "../profileStore";
 import type { InstructionLibraryStore } from "../instructionLibraryStore";
 import type { SkillLibraryStore } from "../skillLibraryStore";
+import type { SkillGroupStore } from "../skillGroupStore";
 import { createSkillSourceRegistry } from "../skillSourceRegistry";
 import { writeAtomic } from "../fileUtils";
 import {
   PortableSkillMetadataSchema,
   PortableInstructionMetadataSchema,
   PortableSkillSourcesSchema,
+  PortableSkillGroupsSchema,
   type PortableSkillMetadata,
   type PortableWorkspaceManifest
 } from "./portableSchemas";
@@ -59,6 +61,7 @@ export const createPortableWorkspaceCodec = (input: {
   profileStore: ProfileStore;
   skillLibraryStore: SkillLibraryStore;
   instructionLibraryStore?: InstructionLibraryStore;
+  skillGroupStore?: SkillGroupStore;
 }): PortableWorkspaceCodec => ({
   exportSnapshot: async (destination, workspaceId) => {
     await rm(destination, { recursive: true, force: true });
@@ -133,6 +136,16 @@ export const createPortableWorkspaceCodec = (input: {
     }
 
     const sourceRegistry = createSkillSourceRegistry(input.paths.skillSourcesPath);
+    const skillGroupData = PortableSkillGroupsSchema.parse({
+      formatVersion: 1,
+      groups: await input.skillGroupStore?.list() ?? []
+    });
+    await writeFile(
+      join(destination, "workspace", "skill-groups.json"),
+      canonicalJson(skillGroupData),
+      { mode: 0o600 }
+    );
+    const skillGroupsHash = hashJson(skillGroupData);
     const sourceData = PortableSkillSourcesSchema.parse({
       formatVersion: 1,
       sources: (await sourceRegistry.list())
@@ -159,6 +172,7 @@ export const createPortableWorkspaceCodec = (input: {
       profileHashes,
       skillHashes,
       ...(Object.keys(instructionHashes).length > 0 ? { instructionHashes } : {}),
+      skillGroupsHash,
       sourcesHash
     };
     const manifest: PortableWorkspaceManifest = { ...unsigned, snapshotHash: snapshotHashFor(unsigned) };

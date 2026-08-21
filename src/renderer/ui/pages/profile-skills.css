@@ -33,6 +33,30 @@
   overflow: visible;
 }
 
+.profile-skill-group__members {
+  --resource-row-actions-standard: 72px;
+  --resource-row-state-track: 132px;
+}
+
+.profile-skill-row.is-group-member {
+  background: var(--surface);
+}
+
+.profile-skill-picker-mode {
+  justify-self: start;
+}
+
+.resource-picker-dialog--skills .resource-picker-dialog__body:has(.profile-skill-picker-mode) {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.library-skill-group-picker {
+  align-content: start;
+  display: grid;
+  gap: var(--space-3);
+  min-height: 0;
+}
+
 .profile-skill-inventory-notice {
   margin: var(--space-2) var(--space-3);
 }

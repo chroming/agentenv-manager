@@ -6,6 +6,7 @@ import {
   Layers3,
   LoaderCircle,
   MoreHorizontal,
+  Server,
   TerminalSquare
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
@@ -21,6 +22,9 @@ import type {
   TargetManagementState,
   RemoteAgentEndpoint,
   RemoteDevice,
+  RemoteDeviceProbe,
+  SshConfigHost,
+  SshConfigHostResolution,
   CreateRemoteDeviceInput,
   UpdateRemoteDeviceInput
 } from "../../shared/types";
@@ -43,20 +47,27 @@ import {
   IconButton,
   ModalFrame,
   PageHeader,
-  RefreshAction
+  RefreshAction,
+  ToolbarOverflowMenu
 } from "./ui";
 import { isTargetInstalled } from "../../shared/targetHealth";
 import type { EnvironmentReviewSummary } from "../environmentReview";
 import type { FreshnessState } from "../freshness";
 import { EnvironmentStatusStrip } from "./EnvironmentStatusStrip";
 import { OverflowTooltip } from "./OverflowTooltip";
-import { RemoteDeviceManager } from "./RemoteDeviceManager";
+import {
+  RemoteDeviceManager,
+  type RemoteDeviceManagerHandle
+} from "./RemoteDeviceManager";
 
 interface TargetWorkspaceProps {
   targets: TargetInfo[];
   remoteDevices: RemoteDevice[];
   remoteEndpoints: RemoteAgentEndpoint[];
+  remoteTargets: TargetInfo[];
+  remoteDeviceProbes: RemoteDeviceProbe[];
   remoteDevicesBusy: boolean;
+  remoteBusyDeviceIds: string[];
   detectedDisabledAgentCount: number;
   targetStates: TargetManagementState[];
   environmentReview: EnvironmentReviewSummary;
@@ -70,10 +81,18 @@ interface TargetWorkspaceProps {
   busy: boolean;
   freshness: FreshnessState;
   onRefresh(): Promise<void>;
-  onRefreshRemoteDevices(): Promise<void>;
-  onAddRemoteDevice(input: CreateRemoteDeviceInput): Promise<void>;
-  onUpdateRemoteDevice(input: UpdateRemoteDeviceInput): Promise<void>;
+  onAddRemoteDevice(input: CreateRemoteDeviceInput): Promise<{
+    device: RemoteDevice;
+    probe?: RemoteDeviceProbe;
+  } | void>;
+  onListSshConfigHosts(): Promise<SshConfigHost[]>;
+  onResolveSshConfigHost(alias: string): Promise<SshConfigHostResolution>;
+  onUpdateRemoteDevice(input: UpdateRemoteDeviceInput): Promise<{
+    device: RemoteDevice;
+    probe?: RemoteDeviceProbe;
+  } | void>;
   onRemoveRemoteDevice(id: string): Promise<void>;
+  onRefreshRemoteDevice(id: string): Promise<void>;
   onReorder?(targetIds: string[]): void;
   onChooseAgents(): void;
   onChooseSetupAgent(targetIds: string[]): void;
@@ -266,7 +285,10 @@ export const TargetWorkspace = ({
   targets,
   remoteDevices,
   remoteEndpoints,
+  remoteTargets,
+  remoteDeviceProbes,
   remoteDevicesBusy,
+  remoteBusyDeviceIds,
   detectedDisabledAgentCount,
   targetStates,
   environmentReview,
@@ -280,10 +302,12 @@ export const TargetWorkspace = ({
   busy,
   freshness,
   onRefresh,
-  onRefreshRemoteDevices,
   onAddRemoteDevice,
+  onListSshConfigHosts,
+  onResolveSshConfigHost,
   onUpdateRemoteDevice,
   onRemoveRemoteDevice,
+  onRefreshRemoteDevice,
   onReorder = () => undefined,
   onChooseAgents,
   onChooseSetupAgent,
@@ -311,6 +335,7 @@ export const TargetWorkspace = ({
   const recoveryTriggerRef = useRef<HTMLButtonElement>(null);
   const recoveryDialogRef = useRef<HTMLElement>(null);
   const recoveryCloseRef = useRef<HTMLButtonElement>(null);
+  const remoteManagerRef = useRef<RemoteDeviceManagerHandle>(null);
   const statesByTarget = new Map(targetStates.map((state) => [state.targetId, state]));
   const showEnvironmentStatus = [
     "unavailable",
@@ -318,6 +343,8 @@ export const TargetWorkspace = ({
     "setup",
     "agent-review"
   ].includes(environmentReview.state);
+  const detectedAgentCount = environmentReview.installedAgentCount
+    + remoteEndpoints.filter((endpoint) => endpoint.availability === "ready").length;
 
   useModalDialog({
     open: Boolean(stopManagingTargetId),
@@ -345,10 +372,10 @@ export const TargetWorkspace = ({
         help={<InfoTip label={t("Inspect each Agent and apply a saved Profile only when you choose.")} />}
         actions={(
           <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
-            {environmentReview.installedAgentCount > 0 ? (
+            {detectedAgentCount > 0 ? (
               <span className="target-page-summary">
                 {t("{{agents}} Agents detected · {{profiles}} Profiles", {
-                  agents: environmentReview.installedAgentCount,
+                  agents: detectedAgentCount,
                   profiles: environmentReview.usableProfileCount
                 })}
               </span>
@@ -369,12 +396,25 @@ export const TargetWorkspace = ({
               state={freshness}
               onRefresh={() => { void onRefresh(); }}
             />
+            <ToolbarOverflowMenu
+              disabled={busy || isLoading}
+              items={[
+                {
+                  id: "add-ssh-device",
+                  icon: <Server size={14} strokeWidth={2.1} aria-hidden="true" />,
+                  label: t("Add SSH device"),
+                  onSelect: (trigger) => remoteManagerRef.current?.openAdd(trigger)
+                }
+              ]}
+              label={t("More Agent actions")}
+              menuLabel={t("Agent actions")}
+            />
           </ControlGroup>
         )}
       />
 
-      <div className="target-page__context">
-        {showEnvironmentStatus ? (
+      {showEnvironmentStatus ? (
+        <div className="target-page__context">
           <EnvironmentStatusStrip
             summary={environmentReview}
             targetNames={targetNames}
@@ -386,21 +426,11 @@ export const TargetWorkspace = ({
             }}
             onReviewShared={onReviewEnvironment}
           />
-        ) : null}
-
-        <RemoteDeviceManager
-          devices={remoteDevices}
-          endpoints={remoteEndpoints}
-          busy={remoteDevicesBusy}
-          onRefresh={onRefreshRemoteDevices}
-          onAdd={onAddRemoteDevice}
-          onUpdate={onUpdateRemoteDevice}
-          onRemove={onRemoveRemoteDevice}
-        />
-      </div>
+        </div>
+      ) : null}
 
       <div className="target-list" aria-busy={isLoading}>
-        {targets.length > 0 ? (
+        {targets.length > 0 || remoteDevices.length > 0 ? (
           <div className="target-list__header" aria-hidden="true">
             <span />
             <span>{t("Agent")}</span>
@@ -416,12 +446,12 @@ export const TargetWorkspace = ({
             <span>{t("Actions")}</span>
           </div>
         ) : null}
-        {isLoading && targets.length === 0 ? (
+        {isLoading && targets.length === 0 && remoteDevices.length === 0 ? (
           <div className="target-loading-state" role="status">
             <LoaderCircle className="is-spinning" size={16} aria-hidden="true" />
             <span>{t("Detecting Agents")}</span>
           </div>
-        ) : targets.length === 0 ? (
+        ) : targets.length === 0 && remoteDevices.length === 0 ? (
           <div className="target-empty-state">
             <span className="target-empty-state__icon" aria-hidden="true"><ProductIcon name="agents" size={18} /></span>
             <span className="target-empty-state__copy">
@@ -435,6 +465,12 @@ export const TargetWorkspace = ({
               </small>
             </span>
             <Button size="compact" onClick={onChooseAgents}>{t("Choose Agents")}</Button>
+          </div>
+        ) : null}
+        {remoteDevices.length > 0 && targets.length > 0 ? (
+          <div className="target-location-divider">
+            <span>{t("This Mac")}</span>
+            <span>{t("{{count}} Agents", { count: targets.length })}</span>
           </div>
         ) : null}
         {targets.map((target) => {
@@ -642,6 +678,23 @@ export const TargetWorkspace = ({
             </article>
           );
         })}
+        <RemoteDeviceManager
+          ref={remoteManagerRef}
+          devices={remoteDevices}
+          endpoints={remoteEndpoints}
+          probes={remoteDeviceProbes}
+          remoteTargets={remoteTargets}
+          targetStates={targetStates}
+          busy={remoteDevicesBusy}
+          busyDeviceIds={remoteBusyDeviceIds}
+          onListSshConfigHosts={onListSshConfigHosts}
+          onResolveSshConfigHost={onResolveSshConfigHost}
+          onAdd={onAddRemoteDevice}
+          onUpdate={onUpdateRemoteDevice}
+          onRemove={onRemoveRemoteDevice}
+          onRefreshDevice={onRefreshRemoteDevice}
+          onOpenProfile={onConfigure}
+        />
       </div>
 
       {isRecoveryOpen ? (

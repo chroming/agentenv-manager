@@ -46,6 +46,7 @@ import { createProjectGitService } from "./projects/projectGitService";
 import { createSettingsStore } from "./settingsStore";
 import { createSkillLibraryStore } from "./skillLibraryStore";
 import { createInstructionLibraryStore } from "./instructionLibraryStore";
+import { createSkillGroupStore } from "./skillGroupStore";
 import { createSkillMutationRecoveryGate } from "./skillMutationRecoveryGate";
 import { createTargetDiscoveryService } from "./targetDiscovery";
 import { createTargetCaptureService } from "./targetCaptureService";
@@ -944,6 +945,15 @@ const createServices = async (
     appDataRoot: paths.appDataRoot,
     fakeHomeRoot: paths.fakeHomeRoot
   }, targetRegistry, instructionLibraryStore);
+  reportPhase("upgrading-profile-instructions");
+  const instructionMigration = await mutationCoordinator.runExclusive("Move Profile Instructions into Library", () =>
+    profileStore.migrateInlineInstructions()
+  );
+  for (const skipped of instructionMigration.skipped) {
+    console.warn(
+      `[AgentEnv] Profile ${skipped.profileId} Instructions were left unchanged: ${skipped.error}`
+    );
+  }
   const projectStore = createProjectStore({
     appDataRoot: paths.appDataRoot,
     projectsPath: paths.projectsPath
@@ -1031,6 +1041,10 @@ const createServices = async (
     backupStore,
     skillLibraryStore
   });
+  const skillGroupStore = createSkillGroupStore(
+    paths.skillGroupsPath,
+    () => skillLibraryStore.listSkills()
+  );
   await mutationCoordinator.runExclusive("Recover interrupted Skill mutations", () =>
     skillMutationRecoveryGate.recover()
   );
@@ -1206,10 +1220,12 @@ const createServices = async (
       paths,
       profileStore,
       skillLibraryStore,
-      instructionLibraryStore
+      instructionLibraryStore,
+      skillGroupStore
     }),
     stateStore: createWorkspaceSyncStateStore(paths),
     transaction: workspaceSyncTransaction,
+    afterApply: () => profileStore.migrateInlineInstructions().then(() => undefined),
     loadTransport: loadSyncTransport,
     targetPathsProvider: async () => {
       const currentSettings = await settingsStore.readSettings();
@@ -1236,6 +1252,7 @@ const createServices = async (
     githubAuthService,
     settingsStore,
     skillLibraryStore,
+    skillGroupStore,
     instructionLibraryStore,
     skillMutationRecoveryGate,
     activationService,

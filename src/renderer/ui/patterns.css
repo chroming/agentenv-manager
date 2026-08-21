@@ -98,6 +98,20 @@
   white-space: nowrap;
 }
 
+.agent-context-switcher__static-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.agent-context-switcher__static-location {
+  color: var(--muted);
+  font-size: var(--font-size-metadata);
+  line-height: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .agent-context-switcher__logo {
   display: block;
   height: 17px;
@@ -333,6 +347,45 @@
   min-height: 54px;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+.ui-object-switcher__group-label {
+  color: var(--muted);
+  font-size: var(--font-size-metadata);
+  line-height: 16px;
+  padding: 9px 12px 5px;
+}
+
+.ui-object-switcher__group-label:not(:first-child) {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.agent-endpoint-icon {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  position: relative;
+}
+
+.agent-endpoint-icon__logo {
+  display: block;
+  object-fit: contain;
+}
+
+.agent-endpoint-icon__remote-badge {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  bottom: -4px;
+  color: var(--text-secondary);
+  display: inline-flex;
+  height: 12px;
+  justify-content: center;
+  position: absolute;
+  right: -5px;
+  width: 12px;
 }
 
 .ui-object-switcher__row:last-child {
@@ -633,6 +686,19 @@
   border-bottom: 1px solid var(--border-subtle);
   flex: 0 0 auto;
   min-width: 0;
+}
+
+.ui-resource-disclosure.is-compact {
+  --resource-disclosure-header-height: 46px;
+}
+
+.ui-resource-disclosure.is-compact .ui-resource-disclosure__trigger {
+  grid-template-columns: 18px 24px minmax(0, 1fr) auto;
+  padding-inline: 10px;
+}
+
+.ui-resource-disclosure.is-compact .ui-resource-disclosure__actions {
+  padding-right: 10px;
 }
 
 .ui-resource-disclosure__header {
@@ -942,6 +1008,16 @@
   height: 28px;
   justify-content: center;
   width: 28px;
+}
+
+.resource-picker-option__title,
+.resource-picker-option__description-text,
+.resource-picker-option__metadata-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .skill-tag-list {

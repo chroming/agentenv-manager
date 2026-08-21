@@ -202,12 +202,14 @@ import { useBackupRecoveryController } from "./hooks/useBackupRecoveryController
 import { useSettingsController } from "./hooks/useSettingsController";
 import { useTelemetryConsent } from "./hooks/useTelemetryConsent";
 import { useSkillUpdateQueue } from "./hooks/useSkillUpdateQueue";
+import { useSkillGroups } from "./hooks/useSkillGroups";
 import {
   projectSkillInventoryBoundary,
   useSkillCleanupBoundaries
 } from "./hooks/useSkillCleanupBoundaries";
 import { useNativeResourceInspection } from "./hooks/useNativeResourceInspection";
 import { useRemoteEndpoints } from "./hooks/useRemoteEndpoints";
+import { mergeLocalTargetStates, preserveSelectedTarget } from "./targetStateSlices";
 import { useWindowChromeState } from "./hooks/useWindowChromeState";
 import { useDeviceUiState } from "./hooks/useDeviceUiState";
 import { loadProfileCoreData } from "./profileCoreLoader";
@@ -243,14 +245,11 @@ const emptyProfileResources: ProfileResources = {
   managementByTarget: {},
   mcpByTarget: {}
 };
-
 type ComposerSection = "instructions" | "skills" | "mcp";
 type ProfileDialogMode = "create" | "edit";
 type ProfileCreateSource = "blank" | "target";
-
 type ProfileCaptureOrigin = "profiles" | "targets";
 type ProfileCaptureActivity = "idle" | "reviewing" | "creating";
-
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
 export { AppFeedback };
@@ -271,7 +270,7 @@ const AppContent = ({
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [librarySkills, setLibrarySkills] = useState<SkillLibraryEntry[]>([]);
   const [skillSourceGroups, setSkillSourceGroups] = useState<SkillSourceGroupView[]>([]);
-  const [skillLibraryMode, setSkillLibraryMode] = useState<"skills" | "sources">("skills");
+  const [skillLibraryMode, setSkillLibraryMode] = useState<"skills" | "sources" | "groups">("skills");
   const [skillUpdates, setSkillUpdates] = useState<SkillUpdateInfo[]>([]);
   const [skillInventory, setSkillInventory] = useState<SkillInventoryEntry[]>([]);
   const [skillInventoryIssues, setSkillInventoryIssues] = useState<SkillRuntimeIssue[]>([]);
@@ -357,6 +356,8 @@ const AppContent = ({
   const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const skillGroupController = useSkillGroups(setError);
+  const skillGroups = skillGroupController.groups;
   const [diagnosticIssue, setDiagnosticIssue] = useState<DiagnosticIssueDetail>();
   const remote = useRemoteEndpoints({
     targets, supportedTargets, setTargetStates, enabled: !isLoading,
@@ -456,10 +457,8 @@ const AppContent = ({
     onRollbackClear: () => setRollbackPreview(undefined),
     onStatus: setProfileSaveStatus,
     onTargetsRefresh: setTargets,
-    onTargetStatesRefresh: (states) => setTargetStates((current) => [
-      ...states,
-      ...current.filter((state) => state.targetId.startsWith("ssh:"))
-    ]),
+    onTargetStatesRefresh: (states) => setTargetStates((current) =>
+      mergeLocalTargetStates(current, states)),
     translate: t
   });
   resetProfileActivationRef.current = resetProfileActivation;
@@ -587,34 +586,34 @@ const AppContent = ({
     loadForProfileCore(shouldApply);
     void loadSkillCleanupHistory(shouldApply);
     void loadTargetRecoveryHistory(shouldApply);
-    const core = await loadProfileCoreData({
-      forceTargetRefresh,
-      settingsOverride,
-      onSkillsLoaded: (items) => {
-        if (shouldApply()) setLibrarySkills(items);
-      }
-    });
+    const [core] = await Promise.all([
+      loadProfileCoreData({
+        forceTargetRefresh,
+        settingsOverride,
+        onSkillsLoaded: (items) => {
+          if (shouldApply()) setLibrarySkills(items);
+        }
+      }),
+      skillGroupController.load(shouldApply)
+    ]);
     if (!shouldApply()) return core;
     acceptUiState(core.uiState);
     setSupportedTargets(core.supportedTargetItems);
     setTargets(core.targetItems);
-    setTargetStates(
+    setTargetStates((current) => mergeLocalTargetStates(
+      current,
       core.targetStateItems.map((targetState) => ({
         ...targetState,
         activeProfileName:
           core.profileItems.find((profile) => profile.id === targetState.activeProfileId)?.name ??
           targetState.activeProfileName
       }))
-    );
+    ));
     setProfiles(core.profileItems);
     settingsController.actions.accept(core.settings);
     markFresh("agents");
     markFresh("skill-library");
-    setSelectedTargetId((current) =>
-      current && core.targetItems.some((target) => target.id === current)
-        ? current
-        : core.targetItems[0]?.id
-    );
+    setSelectedTargetId((current) => preserveSelectedTarget(current, core.targetItems));
     return core;
   };
 
@@ -1226,7 +1225,15 @@ const AppContent = ({
 
   const openAgentConfiguration = (targetId: string) => {
     const targetName =
-      targets.find((target) => target.id === targetId)?.name ?? "Agent";
+      profileTargets.find((target) => target.id === targetId)?.name ?? "Agent";
+    if (targetId.startsWith("ssh:")) {
+      const activeProfileId = targetStates.find((state) => state.targetId === targetId)?.activeProfileId;
+      const profileId = activeProfileId ?? selectedProfileId ?? profiles[0]?.id;
+      setSelectedTargetId(targetId);
+      if (profileId) selectProfile(profileId, undefined, targetId);
+      else openWorkspaceNow("profiles");
+      return;
+    }
     const setupAction = deriveAgentSetupAction(targetId, profiles, targetStates);
 
     if (setupAction.kind !== "review-current") {
@@ -3738,6 +3745,7 @@ const AppContent = ({
                 },
                 catalog: {
                   librarySkills,
+                  skillGroups,
                   skillUpdates,
                   skillUsage,
                   installedTargetIds: targets
@@ -3885,6 +3893,9 @@ const AppContent = ({
                   onMergeSources: mergeSkillSources
                 },
                 catalog: {
+                  onCreateGroup: skillGroupController.create,
+                  onUpdateGroup: skillGroupController.update,
+                  onRemoveGroup: skillGroupController.remove,
                   onSaveUpdateSettings: saveSkillUpdateSettings,
                   onSetAvailability: setSkillAvailability,
                   onSetIcon: (input) => void setSkillIcon(input),
@@ -4088,10 +4099,7 @@ const AppContent = ({
                       )}
                       actions={profileObjectActions}
                     />
-                    <section
-                      className="profile-composer"
-                      aria-label={t("Profile composer")}
-                    >
+                    <section className="profile-composer" aria-label={t("Profile composer")}>
                       <ProfileInstructionsComposerSection
                         profile={draftProfile}
                         blocks={instructionBlocks}
@@ -4111,6 +4119,7 @@ const AppContent = ({
                           updateSelectedResourceManagement("instructions", policy)}
                         onChange={(instructions, resources) =>
                           updateDraftProfile({ ...draftProfile, instructions, resources })}
+                        onUpdateBlock={updateInstructionBlock}
                       />
                       <ProfileSkillsComposerSection
                         profile={draftProfile}
@@ -4126,6 +4135,8 @@ const AppContent = ({
                         currentSkills={currentTargetSkills}
                         environmentScanStatus={environmentScanStatus}
                         librarySkills={librarySkills}
+                        skillGroups={skillGroups}
+                        sourceGroups={skillSourceGroups}
                         skillUpdates={skillUpdates}
                         checkingSkillUpdates={checkingProfileSkillUpdates}
                         onToggle={() => toggleComposerSection("skills")}
@@ -4450,7 +4461,10 @@ const AppContent = ({
               targets={targets}
               remoteDevices={remote.devices}
               remoteEndpoints={remote.endpoints}
+              remoteTargets={profileTargets.filter((target) => target.location?.kind === "ssh")}
+              remoteDeviceProbes={remote.probes}
               remoteDevicesBusy={remote.busy}
+              remoteBusyDeviceIds={remote.busyDeviceIds}
               detectedDisabledAgentCount={detectedDisabledAgents.length}
               targetStates={targetStates}
               environmentReview={environmentReview}
@@ -4466,10 +4480,11 @@ const AppContent = ({
               onRefresh={async () => {
                 await Promise.all([refreshTargets(), remote.refresh(true)]);
               }}
-              onRefreshRemoteDevices={() => remote.refresh(true)}
               onAddRemoteDevice={remote.add}
+              onListSshConfigHosts={remote.listSshConfigHosts} onResolveSshConfigHost={remote.resolveSshConfigHost}
               onUpdateRemoteDevice={remote.update}
               onRemoveRemoteDevice={removeRemoteDevice}
+              onRefreshRemoteDevice={remote.refreshDevice}
               onReorder={reorderAgents}
               onChooseAgents={openAgentChooser}
               onChooseSetupAgent={openAgentSetup}

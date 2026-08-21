@@ -116,6 +116,7 @@ export const createWorkspaceSyncService = (input: {
   codec: PortableWorkspaceCodec;
   stateStore: WorkspaceSyncStateStore;
   transaction: WorkspaceSyncTransaction;
+  afterApply?(): Promise<void>;
   loadTransport(): Promise<GitSyncTransport>;
   targetPathsProvider(): Promise<TargetPaths[]>;
   findManagedInstallPaths(libraryId: string, targetPaths: TargetPaths[]): Promise<string[]>;
@@ -316,7 +317,15 @@ export const createWorkspaceSyncService = (input: {
         lastCheckedRevision: checked.remoteRevision,
         lastCheckedAt: new Date().toISOString()
       };
+      let appliedLocal = merged;
       try {
+        await input.afterApply?.();
+        if (input.afterApply) {
+          appliedLocal = await exportLocal(
+            checked.state,
+            join(checked.operationRoot, "post-update-local")
+          );
+        }
         await replacePathAtomically(baseRoot, (path) => cp(checked!.remote!.root, path, { recursive: true }));
         await input.stateStore.write(state);
       } catch (stateError) {
@@ -336,8 +345,21 @@ export const createWorkspaceSyncService = (input: {
         await input.stateStore.write(checked.state).catch(() => undefined);
         throw stateError;
       }
-      const postUpdatePlan = planWorkspaceSync({ base: checked.remote, local: merged, remote: checked.remote });
-      lastStatus = { ...statusFor({ ...checked, state, local: merged, base: checked.remote, plan: postUpdatePlan }), working: undefined };
+      const postUpdatePlan = planWorkspaceSync({
+        base: checked.remote,
+        local: appliedLocal,
+        remote: checked.remote
+      });
+      lastStatus = {
+        ...statusFor({
+          ...checked,
+          state,
+          local: appliedLocal,
+          base: checked.remote,
+          plan: postUpdatePlan
+        }),
+        working: undefined
+      };
       return { status: lastStatus, backupId: result.backupId, revision: checked.remoteRevision };
     } catch (error) {
       lastStatus = { ...lastStatus, working: undefined };

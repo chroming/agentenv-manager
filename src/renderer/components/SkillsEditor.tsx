@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   CircleArrowUp,
   FolderInput,
+  FolderTree,
   Link2,
   LoaderCircle,
   Plus,
@@ -12,15 +13,30 @@ import {
 import type {
   AppliedSkillReceipt,
   ProfileResources,
+  SkillGroup,
   SkillInventoryEntry,
   SkillLibraryEntry,
+  SkillSourceGroupView,
   SkillUpdateInfo
 } from "../../shared/types";
+import {
+  addProfileSkillGroup,
+  manualProfileSkillGroup,
+  profileSkillEnabled,
+  profileSkillGroupChanged,
+  profileSkillGroupGateOpen,
+  removeProfileSkillGroup,
+  setProfileSkillGroupEnabled,
+  sourceProfileSkillGroup,
+  syncProfileSkillGroup,
+  type AvailableProfileSkillGroup
+} from "../../shared/profileSkillGroups";
 import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
 import { LibrarySkillPicker } from "./LibrarySkillPicker";
+import { LibrarySkillGroupPicker } from "./LibrarySkillGroupPicker";
 import type { ProfileResourcePolicy } from "./ProfileResourcePolicyControl";
 import {
   AlignedResourceList,
@@ -32,7 +48,9 @@ import {
   ModalFrame,
   Notice,
   ResourcePanelToolbar,
+  ResourceDisclosureSection,
   ResourceRow,
+  SegmentedControl,
   ToolbarOverflowMenu,
   Switch
 } from "./ui";
@@ -40,6 +58,8 @@ import {
 interface SkillsEditorProps {
   value: ProfileResources;
   librarySkills?: SkillLibraryEntry[];
+  skillGroups?: SkillGroup[];
+  sourceGroups?: SkillSourceGroupView[];
   skillUpdates?: SkillUpdateInfo[];
   checkingSkillUpdates?: boolean;
   disabled?: boolean;
@@ -66,6 +86,8 @@ interface SkillsEditorProps {
 export const SkillsEditor = ({
   value,
   librarySkills = [],
+  skillGroups = [],
+  sourceGroups = [],
   skillUpdates = [],
   checkingSkillUpdates = false,
   disabled = false,
@@ -89,6 +111,9 @@ export const SkillsEditor = ({
   const sharedRuntimeLibraryIds = new Set(sharedRuntimeBoundary?.libraryIds ?? []);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedGroupKeys, setSelectedGroupKeys] = useState<string[]>([]);
+  const [pickerMode, setPickerMode] = useState<"skills" | "groups">("skills");
+  const [expandedGroupIds, setExpandedGroupIds] = useState<string[]>([]);
   const [replacingIndex, setReplacingIndex] = useState<number>();
   const pickerDialogRef = useRef<HTMLElement>(null);
   const pickerCancelRef = useRef<HTMLButtonElement>(null);
@@ -101,13 +126,21 @@ export const SkillsEditor = ({
     () => new Map(skillUpdates.map((update) => [update.id, update])),
     [skillUpdates]
   );
+  const availableGroups = useMemo<AvailableProfileSkillGroup[]>(() => [
+    ...skillGroups.map(manualProfileSkillGroup),
+    ...sourceGroups.map(sourceProfileSkillGroup)
+  ], [skillGroups, sourceGroups]);
+  const availableGroupsByKey = useMemo(
+    () => new Map(availableGroups.map((group) => [`${group.kind}:${group.groupId}`, group])),
+    [availableGroups]
+  );
   const attachedIds = new Set(value.skills.map((skill) => skill.libraryId));
   const enabledCount = value.skills.filter((reference) => {
     const skill = skillsById.get(reference.libraryId);
-    return Boolean(skill && reference.enabled !== false && skill.globallyEnabled !== false);
+    return Boolean(skill && profileSkillEnabled(value, reference) && skill.globallyEnabled !== false);
   }).length;
   const checkableIds = value.skills
-    .filter((reference) => profileManagesSkills && reference.enabled !== false)
+    .filter((reference) => profileManagesSkills && profileSkillEnabled(value, reference))
     .map((reference) => skillsById.get(reference.libraryId))
     .filter((skill): skill is SkillLibraryEntry => Boolean(skill))
     .filter((skill) => skill.globallyEnabled !== false && skill.updatePolicy === "tracked")
@@ -118,10 +151,18 @@ export const SkillsEditor = ({
       .filter((_, index) => index !== replacingIndex)
       .map((reference) => reference.libraryId)
   );
+  const attachedGroupKeys = new Set(
+    (value.skillGroups ?? []).map((group) => `${group.kind}:${group.groupId}`)
+  );
+  const pickerGroups = availableGroups.filter((group) =>
+    !attachedGroupKeys.has(`${group.kind}:${group.groupId}`) && group.memberIds.length > 0
+  );
 
   const closePicker = () => {
     setPickerOpen(false);
     setSelectedIds([]);
+    setSelectedGroupKeys([]);
+    setPickerMode("skills");
     setReplacingIndex(undefined);
   };
   useModalDialog({
@@ -136,6 +177,8 @@ export const SkillsEditor = ({
   const openPicker = (replaceIndex?: number) => {
     setReplacingIndex(replaceIndex);
     setSelectedIds([]);
+    setSelectedGroupKeys([]);
+    setPickerMode("skills");
     setPickerOpen(true);
   };
   const commitPicker = () => {
@@ -153,6 +196,15 @@ export const SkillsEditor = ({
       closePicker();
       return;
     }
+    if (pickerMode === "groups") {
+      const next = selectedGroupKeys.reduce((resources, key) => {
+        const group = availableGroupsByKey.get(key);
+        return group ? addProfileSkillGroup(resources, group, librarySkills) : resources;
+      }, value);
+      if (next !== value) onChange(next);
+      closePicker();
+      return;
+    }
     const additions = selectedIds
       .filter((id) => !attachedIds.has(id))
       .map((id) => ({ libraryId: id, targetName: skillsById.get(id)?.id ?? id, enabled: true }));
@@ -162,6 +214,166 @@ export const SkillsEditor = ({
   };
 
   const visibleSkillCount = agentOwnsSkills ? currentSkills.length : value.skills.length;
+
+  const renderProfileSkill = (
+    reference: ProfileResources["skills"][number],
+    index: number,
+    options: { groupEnabled?: boolean; grouped?: boolean } = {}
+  ) => {
+    const skill = skillsById.get(reference.libraryId);
+    const update = updatesById.get(reference.libraryId);
+    const preferenceEnabled = reference.enabled !== false;
+    const groupEnabled = options.groupEnabled !== false;
+    const globallyEnabled = skill?.globallyEnabled !== false;
+    const effectiveEnabled = profileDisablesSkills
+      ? false
+      : Boolean(skill && profileSkillEnabled(value, reference) && globallyEnabled);
+    const switchChecked = !profileDisablesSkills && !groupEnabled
+      ? preferenceEnabled
+      : effectiveEnabled;
+    const appliedRevision = appliedSkillVersions?.[reference.libraryId];
+    const localOverride = skillReceipts.find(
+      (entry) =>
+        entry.localOverride &&
+        entry.libraryId === reference.libraryId &&
+        entry.targetName === reference.targetName
+    );
+    const sharedRuntimeControlsSkill = sharedRuntimeLibraryIds.has(reference.libraryId);
+    const deploymentPending = Boolean(
+      profileManagesSkills && !sharedRuntimeControlsSkill && !localOverride && skill && appliedSkillVersions && (effectiveEnabled
+        ? appliedRevision !== skill.contentHash
+        : appliedRevision)
+    );
+    const status = !groupEnabled
+      ? "Group off"
+      : sharedRuntimeControlsSkill
+        ? effectiveEnabled ? "Will be on" : "Will be off"
+        : !skill
+          ? "Missing"
+          : localOverride?.outcome === "external-active"
+            ? "External active"
+            : localOverride?.outcome === "external-remains"
+              ? "External still active"
+              : profileDisablesSkills
+                ? "Off for Agent"
+                : !globallyEnabled
+                  ? "Disabled in Library"
+                  : !preferenceEnabled
+                    ? deploymentPending ? "Apply pending" : "Disabled"
+                    : update?.error
+                      ? "Check failed"
+                      : update?.updateAvailable
+                        ? "Update available"
+                        : deploymentPending
+                          ? "Apply pending"
+                          : "Ready";
+    const visibleDetail = skill?.version
+      ? `v${skill.version}`
+      : !skill
+        ? t("Library skill {{id}} is missing", { id: reference.libraryId })
+        : undefined;
+    const skillName = skill?.name ?? reference.targetName;
+    const menuItems = options.grouped ? [] : [
+      ...(!skill ? [{
+        id: "relink",
+        icon: <Link2 size={14} strokeWidth={2.2} aria-hidden="true" />,
+        label: t("Relink {{name}}", { name: reference.targetName }),
+        onSelect: () => openPicker(index)
+      }] : []),
+      {
+        id: "remove",
+        icon: <Trash2 size={14} strokeWidth={2.2} aria-hidden="true" />,
+        label: t("Remove from Profile"),
+        onSelect: () => onChange({
+          ...value,
+          skills: value.skills.filter((_, currentIndex) => currentIndex !== index)
+        })
+      }
+    ];
+    return (
+      <ResourceRow
+        className={`ui-resource-children__item profile-skill-row${effectiveEnabled ? "" : " is-disabled"}${
+          options.grouped ? " is-group-member" : ""
+        }${localOverride ? " has-local-override" : ""}`}
+        density="compact"
+        description={visibleDetail ? (
+          <OverflowTooltip
+            ariaLabel={t("Full skill detail {{id}}", { id: reference.libraryId })}
+            className="profile-skill-detail"
+            displayText={visibleDetail}
+            text={visibleDetail}
+          />
+        ) : undefined}
+        icon={(
+          <ResourceIconArtwork
+            fallbackIconKey={skill?.sourceType === "github" || skill?.sourceType === "git" ? "github" : "folder"}
+            iconKey={skill?.iconKey}
+            sourceUrl={skill?.sourceType === "github" || skill?.sourceType === "git" ? skill.source : undefined}
+            size={16}
+          />
+        )}
+        key={`${reference.libraryId}:${reference.targetName}:${index}`}
+        role="listitem"
+        aria-label={t("Profile Skill {{name}}", { name: reference.libraryId })}
+        state={status === "Update available" ? (
+          <InteractiveStatus
+            className="profile-skill-state is-update"
+            icon={<CircleArrowUp size={13} strokeWidth={2.2} />}
+            label={t("Update available")}
+            reviewLabel={t("Review update {{id}}", { id: reference.libraryId })}
+            statusKind="update-available"
+            tone="accent"
+            onReview={onPreviewSkillUpdate
+              ? () => onPreviewSkillUpdate(reference.libraryId)
+              : undefined}
+          />
+        ) : (
+          <span
+            className={`profile-skill-state${
+              status === "Ready" || localOverride ? " is-neutral" : ""
+            }${status === "Apply pending" ? " is-update" : ""}${
+              !skill || update?.error ? " is-error" : ""
+            }`}
+            title={update?.error ?? status}
+          >
+            {t(status)}
+          </span>
+        )}
+        title={<OverflowTooltip className="profile-skill-name" text={skillName} />}
+        tone={effectiveEnabled ? "default" : "disabled"}
+        actions={(
+          <>
+            <Switch
+              checked={switchChecked}
+              className="profile-skill-switch"
+              disabled={disabled || !profileManagesSkills || !skill || !globallyEnabled || !groupEnabled}
+              label={t(!groupEnabled
+                ? "Enable the Group to change {{name}}"
+                : !globallyEnabled
+                  ? "{{name}} is disabled in Library"
+                  : switchChecked
+                    ? "Disable {{name}}"
+                    : "Enable {{name}}", { name: skillName })}
+              onClick={() => onChange({
+                ...value,
+                skills: value.skills.map((entry, currentIndex) =>
+                  currentIndex === index ? { ...entry, enabled: entry.enabled === false } : entry
+                )
+              })}
+            />
+            {menuItems.length > 0 ? (
+              <ToolbarOverflowMenu
+                disabled={disabled || !profileManagesSkills}
+                items={menuItems}
+                label={t("More actions for {{name}}", { name: skillName })}
+                menuLabel={t("Actions for {{name}}", { name: skillName })}
+              />
+            ) : null}
+          </>
+        )}
+      />
+    );
+  };
 
   return (
     <section
@@ -318,151 +530,86 @@ export const SkillsEditor = ({
             />
           );
         }) : null}
-        {!agentOwnsSkills ? value.skills.map((reference, index) => {
-          const skill = skillsById.get(reference.libraryId);
-          const update = updatesById.get(reference.libraryId);
-          const profileEnabled = reference.enabled !== false;
-          const globallyEnabled = skill?.globallyEnabled !== false;
-          const enabled = profileDisablesSkills
-            ? false
-            : Boolean(skill && profileEnabled && globallyEnabled);
-          const appliedRevision = appliedSkillVersions?.[reference.libraryId];
-          const localOverride = skillReceipts.find(
-            (entry) =>
-              entry.localOverride &&
-              entry.libraryId === reference.libraryId &&
-              entry.targetName === reference.targetName
+        {!agentOwnsSkills ? (value.skillGroups ?? []).map((group) => {
+          const available = availableGroups.find((candidate) =>
+            candidate.kind === group.kind && candidate.groupId === group.groupId
           );
-          const sharedRuntimeControlsSkill = sharedRuntimeLibraryIds.has(reference.libraryId);
-          const deploymentPending = Boolean(
-            profileManagesSkills && !sharedRuntimeControlsSkill && !localOverride && skill && appliedSkillVersions && (enabled
-              ? appliedRevision !== skill.contentHash
-              : appliedRevision)
-          );
-          const status = sharedRuntimeControlsSkill
-            ? enabled ? "Will be on" : "Will be off"
-            : !skill
-              ? "Missing"
-              : localOverride?.outcome === "external-active"
-                    ? "External active"
-                    : localOverride?.outcome === "external-remains"
-                      ? "External still active"
-                      : profileDisablesSkills
-                        ? "Off for Agent"
-                      : !globallyEnabled
-                        ? "Disabled in Library"
-                        : !profileEnabled
-                          ? deploymentPending ? "Apply pending" : "Disabled"
-                          : update?.error
-                            ? "Check failed"
-                            : update?.updateAvailable
-                              ? "Update available"
-                              : deploymentPending
-                                ? "Apply pending"
-                                : "Ready";
-          const visibleDetail = skill?.version
-            ? `v${skill.version}`
-            : !skill
-              ? t("Library skill {{id}} is missing", { id: reference.libraryId })
-              : undefined;
-          const skillName = skill?.name ?? reference.targetName;
-          const menuItems = [
-            ...(!skill ? [{
-              id: "relink",
-              icon: <Link2 size={14} strokeWidth={2.2} aria-hidden="true" />,
-              label: t("Relink {{name}}", { name: reference.targetName }),
-              onSelect: () => openPicker(index)
-            }] : []),
-            {
-              id: "remove",
-              icon: <Trash2 size={14} strokeWidth={2.2} aria-hidden="true" />,
-              label: t("Remove from Profile"),
-              onSelect: () => onChange({
-                ...value,
-                skills: value.skills.filter((_, currentIndex) => currentIndex !== index)
-              })
-            }
-          ];
+          const changed = profileSkillGroupChanged(group, available);
+          const members = group.memberIds.flatMap((libraryId) => {
+            const index = value.skills.findIndex((skill) =>
+              skill.libraryId === libraryId && (skill.groupIds ?? []).includes(group.id)
+            );
+            return index >= 0 ? [{ reference: value.skills[index], index }] : [];
+          });
+          const preferredCount = members.filter(({ reference }) => reference.enabled !== false).length;
+          const expanded = expandedGroupIds.includes(group.id);
           return (
-            <ResourceRow
-              className={`ui-resource-children__item profile-skill-row${enabled ? "" : " is-disabled"}${
-                localOverride ? " has-local-override" : ""
-              }`}
-              density="compact"
-              description={visibleDetail ? (
-                <OverflowTooltip
-                  ariaLabel={t("Full skill detail {{id}}", { id: reference.libraryId })}
-                  className="profile-skill-detail"
-                  displayText={visibleDetail}
-                  text={visibleDetail}
-                />
-              ) : undefined}
-              icon={(
-                <ResourceIconArtwork
-                  fallbackIconKey={skill?.sourceType === "github" || skill?.sourceType === "git" ? "github" : "folder"}
-                  iconKey={skill?.iconKey}
-                  sourceUrl={skill?.sourceType === "github" || skill?.sourceType === "git" ? skill.source : undefined}
-                  size={16}
-                />
-              )}
-              key={`${reference.libraryId}:${reference.targetName}:${index}`}
-              role="listitem"
-              aria-label={t("Profile Skill {{name}}", { name: reference.libraryId })}
-              state={status === "Update available" ? (
-                <InteractiveStatus
-                  className="profile-skill-state is-update"
-                  icon={<CircleArrowUp size={13} strokeWidth={2.2} />}
-                  label={t("Update available")}
-                  reviewLabel={t("Review update {{id}}", { id: reference.libraryId })}
-                  statusKind="update-available"
-                  tone="accent"
-                  onReview={onPreviewSkillUpdate
-                    ? () => onPreviewSkillUpdate(reference.libraryId)
-                    : undefined}
-                />
-              ) : (
-                <span
-                  className={`profile-skill-state${
-                    status === "Ready" || localOverride ? " is-neutral" : ""
-                  }${status === "Apply pending" ? " is-update" : ""}${
-                    !skill || update?.error ? " is-error" : ""
-                  }`}
-                  title={update?.error ?? status}
-                >
-                  {t(status)}
-                </span>
-              )}
-              title={<OverflowTooltip className="profile-skill-name" text={skillName} />}
-              tone={enabled ? "default" : "disabled"}
+            <ResourceDisclosureSection
               actions={(
                 <>
                   <Switch
-                      checked={enabled}
-                      className="profile-skill-switch"
-                      disabled={disabled || !profileManagesSkills || !skill || !globallyEnabled}
-                      label={t(!globallyEnabled
-                        ? "{{name}} is disabled in Library"
-                        : enabled
-                          ? "Disable {{name}}"
-                          : "Enable {{name}}", { name: skillName })}
-                      onClick={() => onChange({
-                        ...value,
-                        skills: value.skills.map((entry, currentIndex) =>
-                          currentIndex === index ? { ...entry, enabled: entry.enabled === false } : entry
-                        )
-                      })}
-                    />
+                    checked={group.enabled}
+                    disabled={disabled || !profileManagesSkills}
+                    label={t(group.enabled ? "Turn off {{name}}" : "Turn on {{name}}", { name: group.name })}
+                    onClick={() => onChange(setProfileSkillGroupEnabled(value, group.id, !group.enabled))}
+                  />
                   <ToolbarOverflowMenu
                     disabled={disabled || !profileManagesSkills}
-                    items={menuItems}
-                    label={t("More actions for {{name}}", { name: skillName })}
-                    menuLabel={t("Actions for {{name}}", { name: skillName })}
+                    items={[
+                      ...(changed && available ? [{
+                        id: "sync",
+                        icon: <RefreshCw size={14} strokeWidth={2.1} />,
+                        label: t("Sync Group members"),
+                        onSelect: () => onChange(syncProfileSkillGroup(value, group.id, available, librarySkills))
+                      }] : []),
+                      {
+                        id: "remove",
+                        icon: <Trash2 size={14} strokeWidth={2.1} />,
+                        label: t("Remove Group from Profile"),
+                        onSelect: () => onChange(removeProfileSkillGroup(value, group.id))
+                      }
+                    ]}
+                    label={t("More actions for {{name}}", { name: group.name })}
+                    menuLabel={t("Actions for {{name}}", { name: group.name })}
                   />
                 </>
               )}
-            />
+              className={`profile-skill-group${group.enabled ? "" : " is-group-off"}`}
+              density="compact"
+              description={group.kind === "source" ? t("Source Group") : t("Manual Group")}
+              expanded={expanded}
+              icon={<FolderTree size={17} strokeWidth={2} />}
+              id={group.id}
+              key={group.id}
+              onToggle={() => setExpandedGroupIds((current) =>
+                current.includes(group.id)
+                  ? current.filter((id) => id !== group.id)
+                  : [...current, group.id]
+              )}
+              nested
+              muted={!group.enabled}
+              summary={[
+                group.enabled
+                  ? t("{{enabled}} of {{total}} on", { enabled: preferredCount, total: members.length })
+                  : t("Group off"),
+                changed ? t("Group changed") : undefined
+              ].filter(Boolean).join(" · ")}
+              summaryWidth="wide"
+              title={group.name}
+              toggleLabel={t("Toggle {{name}}", { name: group.name })}
+            >
+              <AlignedResourceList className="profile-skill-group__members" role="list">
+                {members.map(({ reference, index }) => renderProfileSkill(reference, index, {
+                  grouped: true,
+                  groupEnabled: profileSkillGroupGateOpen(value, reference)
+                }))}
+              </AlignedResourceList>
+            </ResourceDisclosureSection>
           );
         }) : null}
+        {!agentOwnsSkills ? value.skills.map((reference, index) =>
+          (reference.groupIds ?? []).length === 0 ? renderProfileSkill(reference, index) : null
+        ) : null}
         {agentOwnsSkills && currentStateStatus === "ready" && currentSkills.length === 0 ? (
           <div className="profile-skill-empty">
             <strong>{t("No Skills detected in this Agent")}</strong>
@@ -486,17 +633,37 @@ export const SkillsEditor = ({
           onDismiss={closePicker}
         >
             <DialogHeader
-              title={t(replacingIndex === undefined ? "Add library skills" : "Relink missing skill")}
-              description={t("Choose reusable skills from Library.")}
+              title={t(replacingIndex === undefined ? "Add Skills or Groups" : "Relink missing skill")}
+              description={t("Choose individual Skills or add a reusable Group.")}
             />
             <DialogBody className="resource-picker-dialog__body">
-              <LibrarySkillPicker
-                excludedIds={pickerExcludedIds}
-                onChange={setSelectedIds}
-                selectedIds={selectedIds}
-                selectionMode={replacingIndex === undefined ? "multiple" : "single"}
-                skills={pickerSkills}
-              />
+              {replacingIndex === undefined ? (
+                <SegmentedControl
+                  label={t("Resource type")}
+                  className="profile-skill-picker-mode"
+                  options={[
+                    { value: "skills", label: t("Skills") },
+                    { value: "groups", label: t("Groups") }
+                  ]}
+                  value={pickerMode}
+                  onChange={(mode) => setPickerMode(mode as "skills" | "groups")}
+                />
+              ) : null}
+              {pickerMode === "skills" || replacingIndex !== undefined ? (
+                <LibrarySkillPicker
+                  excludedIds={pickerExcludedIds}
+                  onChange={setSelectedIds}
+                  selectedIds={selectedIds}
+                  selectionMode={replacingIndex === undefined ? "multiple" : "single"}
+                  skills={pickerSkills}
+                />
+              ) : (
+                <LibrarySkillGroupPicker
+                  groups={pickerGroups}
+                  selectedKeys={selectedGroupKeys}
+                  onChange={setSelectedGroupKeys}
+                />
+              )}
             </DialogBody>
             <DialogFooter>
               {onImportNewSkill ? (
@@ -513,10 +680,16 @@ export const SkillsEditor = ({
               <Button ref={pickerCancelRef} onClick={closePicker}>
                 {t("Cancel")}
               </Button>
-              <Button variant="primary" disabled={disabled || selectedIds.length === 0} onClick={commitPicker}>
+              <Button
+                variant="primary"
+                disabled={disabled || (pickerMode === "groups" ? selectedGroupKeys.length === 0 : selectedIds.length === 0)}
+                onClick={commitPicker}
+              >
                 {replacingIndex !== undefined
                   ? t("Relink skill")
-                  : t("Add {{count}}", { count: selectedIds.length })}
+                  : t("Add {{count}}", {
+                    count: pickerMode === "groups" ? selectedGroupKeys.length : selectedIds.length
+                  })}
               </Button>
             </DialogFooter>
         </ModalFrame>

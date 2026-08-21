@@ -9,6 +9,7 @@ import type {
 } from "../../shared/types";
 import type { useFreshnessCoordinator } from "./useFreshnessCoordinator";
 import { orderByPreference } from "../../shared/uiState";
+import { mergeLocalTargetStates, preserveSelectedTarget } from "../targetStateSlices";
 
 type FreshnessRunner = ReturnType<typeof useFreshnessCoordinator>["run"];
 type AgentRefreshReason = "page-entry" | "focus" | "mutation" | "manual";
@@ -83,17 +84,16 @@ export const useAgentRefresh = ({
         setMcpConnections(nativeMcpResult.value.connections);
         setMcpIssues(nativeMcpResult.value.issues);
       }
-      setTargetStates(targetStates.map((state) => ({
-        ...state,
-        activeProfileName:
-          profiles.find((profile) => profile.id === state.activeProfileId)?.name ??
-          state.activeProfileName
-      })));
-      setSelectedTargetId((current) =>
-        current && orderedTargets.some((target) => target.id === current)
-          ? current
-          : orderedTargets[0]?.id
-      );
+      setTargetStates((current) => mergeLocalTargetStates(
+        current,
+        targetStates.map((state) => ({
+          ...state,
+          activeProfileName:
+            profiles.find((profile) => profile.id === state.activeProfileId)?.name ??
+            state.activeProfileName
+        }))
+      ));
+      setSelectedTargetId((current) => preserveSelectedTarget(current, orderedTargets));
       return { mcpError: nativeMcpResult.error, targets: orderedTargets };
     }, {
       partialError: (value) => (

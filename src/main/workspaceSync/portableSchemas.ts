@@ -6,6 +6,7 @@ import {
   ResourceIconKeySchema,
   SafeIdSchema
 } from "../../shared/schemas";
+import { SkillGroupFileSchema } from "../../shared/skillGroups";
 
 const RepositoryIndexManifestPathSchema = z.string().max(4096).refine((value) =>
   !value.startsWith("/") &&
@@ -100,12 +101,14 @@ export const PortableWorkspaceManifestSchema = z.object({
   profileHashes: z.record(SafeIdSchema, SectionHashesSchema),
   skillHashes: z.record(SafeIdSchema, SkillHashesSchema),
   instructionHashes: z.record(SafeIdSchema, InstructionHashesSchema).optional(),
+  skillGroupsHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   sourcesHash: z.string().regex(/^[a-f0-9]{64}$/)
 });
 
 export const PortableProfileManifestSchema = ProfileManifestSchema;
 export const PortableProfileResourcesSchema = ProfileResourcesSchema;
 export const PortableInstructionMetadataSchema = InstructionBlockMetadataSchema;
+export const PortableSkillGroupsSchema = SkillGroupFileSchema;
 
 export type PortableSkillMetadata = z.infer<typeof PortableSkillMetadataSchema>;
 export type PortableSkillSource = z.infer<typeof PortableSkillSourceSchema>;

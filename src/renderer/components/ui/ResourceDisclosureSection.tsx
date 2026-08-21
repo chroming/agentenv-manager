@@ -5,6 +5,7 @@ export interface ResourceDisclosureSectionProps
   extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   actions?: ReactNode;
   description?: ReactNode;
+  density?: "default" | "compact";
   expanded: boolean;
   icon?: ReactNode;
   id: string;
@@ -24,6 +25,7 @@ export const ResourceDisclosureSection = ({
   children,
   className = "",
   description,
+  density = "default",
   expanded,
   icon,
   id,
@@ -51,7 +53,7 @@ export const ResourceDisclosureSection = ({
     <section
       {...props}
       aria-label={props["aria-label"] ?? title}
-      className={`ui-resource-disclosure${expanded ? " is-expanded" : ""}${nested ? " is-nested" : ""}${muted ? " is-muted" : ""}${summaryWidth === "wide" ? " has-wide-summary" : ""} ${className}`.trim()}
+      className={`ui-resource-disclosure is-${density}${expanded ? " is-expanded" : ""}${nested ? " is-nested" : ""}${muted ? " is-muted" : ""}${summaryWidth === "wide" ? " has-wide-summary" : ""} ${className}`.trim()}
       data-resource-disclosure-id={id}
     >
       <header className="ui-resource-disclosure__header">

@@ -5,6 +5,7 @@ import type {
 } from "./schemas";
 import type { ProfileDetail } from "./types";
 import { profileEffectiveInstructions } from "./profileInstructions";
+import { materializeProfileSkillGroups } from "./profileSkillGroups";
 
 export type ManagedProfileResource = "instructions" | "skills" | "mcp";
 
@@ -85,10 +86,15 @@ export const materializeTargetResourcePolicy = (
   );
   const mcpDisabled = profileDisablesResource(profile.resources, targetId, "mcp");
   const effectiveInstructions = instructionsDisabled ? "" : profileEffectiveInstructions(profile);
+  const groupMaterializedResources = materializeProfileSkillGroups(profile.resources);
+  const groupsChangeSkillState = groupMaterializedResources.skills.some(
+    (reference, index) => reference.enabled !== profile.resources.skills[index]?.enabled
+  );
   if (
     !instructionsDisabled &&
     !skillsDisabled &&
     !mcpDisabled &&
+    !groupsChangeSkillState &&
     profile.instructions === effectiveInstructions
   ) return profile;
 
@@ -100,11 +106,11 @@ export const materializeTargetResourcePolicy = (
     resources: {
       ...profile.resources,
       skills: skillsDisabled
-        ? profile.resources.skills.map((reference) => ({
+        ? groupMaterializedResources.skills.map((reference) => ({
             ...reference,
             enabled: false
           }))
-        : profile.resources.skills,
+        : groupMaterializedResources.skills,
       mcpByTarget:
         mcpDisabled && mcpPolicy
           ? {

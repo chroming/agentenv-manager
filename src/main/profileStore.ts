@@ -13,6 +13,7 @@ import {
 import type {
   CreateProfileInput,
   ForkProfileSkillsInput,
+  InstructionBlock,
   ProfileDetail,
   ProfileRecoverySummary,
   ProfileSummary,
@@ -47,6 +48,10 @@ export interface ProfileStore {
   createProfile(input: CreateProfileInput): Promise<ProfileDetail>;
   duplicateProfile(id: string): Promise<ProfileDetail>;
   deleteProfile(id: string): Promise<void>;
+  migrateInlineInstructions(profileId?: string): Promise<{
+    migrated: number;
+    skipped: Array<{ profileId: string; error: string }>;
+  }>;
 }
 
 const PROFILE_MANIFEST_FILE = "profile.json";
@@ -106,7 +111,10 @@ const createdAtFromProfile = (
 export const createProfileStore = (
   overrides: PathOverrides,
   targetRegistry: TargetRegistry = createTargetRegistry(),
-  instructionLibraryStore?: Pick<InstructionLibraryStore, "compile">
+  instructionLibraryStore?: Pick<
+    InstructionLibraryStore,
+    "compile" | "ensureProfileInstruction" | "remove"
+  >
 ): ProfileStore => {
   const paths = createPaths(overrides);
 
@@ -270,22 +278,9 @@ export const createProfileStore = (
   };
 
   const saveProfile = async (input: SaveProfileInput): Promise<ProfileDetail> => {
-    const instructionReferences = input.resources.instructions ?? [];
-    const resolvedInstructions = instructionReferences.length > 0
-      ? instructionLibraryStore
-        ? await instructionLibraryStore.compile(
-            instructionReferences
-              .filter((reference) => reference.enabled)
-              .map((reference) => reference.libraryId),
-            input.instructions
-          )
-        : (() => {
-            throw new Error(`Profile ${input.manifest.id} references Instruction Library content that is unavailable`);
-          })()
-      : input.instructions;
-    const secretWarnings = findSecretWarnings(resolvedInstructions);
-    if (secretWarnings.length > 0) {
-      const keys = [...new Set(secretWarnings.map((warning) => warning.split(": ").at(-1)))]
+    const inlineSecretWarnings = findSecretWarnings(input.instructions);
+    if (inlineSecretWarnings.length > 0) {
+      const keys = [...new Set(inlineSecretWarnings.map((warning) => warning.split(": ").at(-1)))]
         .filter(Boolean)
         .join(", ");
       throw new Error(
@@ -293,7 +288,7 @@ export const createProfileStore = (
       );
     }
     const parsedManifest = ProfileManifestSchema.parse(input.manifest);
-    const resources = ProfileResourcesSchema.parse(input.resources);
+    let resources = ProfileResourcesSchema.parse(input.resources);
     const profileDir = join(paths.profilesDir, parsedManifest.id);
     const existingPathHash = await hashPathEntry(profileDir);
     const existing = existingPathHash !== undefined;
@@ -332,6 +327,61 @@ export const createProfileStore = (
       ...parsedManifest,
       createdAt: createdAt ?? new Date().toISOString()
     });
+    let instructions = input.instructions;
+    let createdInstruction: InstructionBlock | undefined;
+    if (instructions.trim() && instructionLibraryStore) {
+      const ensured = await instructionLibraryStore.ensureProfileInstruction({
+        profileId: manifest.id,
+        profileName: manifest.name,
+        content: instructions
+      });
+      createdInstruction = ensured.created ? ensured.block : undefined;
+      const references = resources.instructions ?? [];
+      if (!references.some((reference) => reference.libraryId === ensured.block.id)) {
+        resources = ProfileResourcesSchema.parse({
+          ...resources,
+          instructions: [...references, { libraryId: ensured.block.id, enabled: true }]
+        });
+      }
+      instructions = "";
+    }
+    const discardCreatedInstruction = async () => {
+      if (!createdInstruction) return;
+      await instructionLibraryStore?.remove({
+        id: createdInstruction.id,
+        expectedContentHash: createdInstruction.contentHash
+      }).catch(() => undefined);
+      createdInstruction = undefined;
+    };
+    const instructionReferences = resources.instructions ?? [];
+    let resolvedInstructions: string;
+    try {
+      resolvedInstructions = instructionReferences.length > 0
+        ? instructionLibraryStore
+          ? await instructionLibraryStore.compile(
+              instructionReferences
+                .filter((reference) => reference.enabled)
+                .map((reference) => reference.libraryId),
+              instructions
+            )
+          : (() => {
+              throw new Error(`Profile ${input.manifest.id} references Instruction Library content that is unavailable`);
+            })()
+        : instructions;
+    } catch (error) {
+      await discardCreatedInstruction();
+      throw error;
+    }
+    const secretWarnings = findSecretWarnings(resolvedInstructions);
+    if (secretWarnings.length > 0) {
+      await discardCreatedInstruction();
+      const keys = [...new Set(secretWarnings.map((warning) => warning.split(": ").at(-1)))]
+        .filter(Boolean)
+        .join(", ");
+      throw new Error(
+        `Profile contains literal credentials (${keys}). Reference environment variables instead.`
+      );
+    }
     if (existing) {
       const currentStats = await lstat(profileDir);
       if (!currentStats.isDirectory() || currentStats.isSymbolicLink()) {
@@ -342,7 +392,7 @@ export const createProfileStore = (
     if (
       current &&
       JSON.stringify(current.manifest) === JSON.stringify(manifest) &&
-      current.instructions === input.instructions &&
+      current.instructions === instructions &&
       JSON.stringify(current.resources) === JSON.stringify(resources)
     ) {
       return current;
@@ -350,23 +400,58 @@ export const createProfileStore = (
 
     if (current) await snapshotProfile(current);
 
-    await replacePathAtomically(profileDir, async (stagingDir) => {
-      await mkdir(stagingDir, { recursive: true, mode: 0o700 });
-      await Promise.all([
-        writeAtomic(
-          join(stagingDir, PROFILE_MANIFEST_FILE),
-          `${JSON.stringify(manifest, null, 2)}\n`
-        ),
-        writeAtomic(join(stagingDir, PROFILE_INSTRUCTIONS_FILE), input.instructions),
-        writeAtomic(
-          join(stagingDir, PROFILE_RESOURCES_FILE),
-          `${JSON.stringify(resources, null, 2)}\n`
-        )
-      ]);
-      ProfileManifestSchema.parse(await readJson(join(stagingDir, PROFILE_MANIFEST_FILE)));
-      ProfileResourcesSchema.parse(await readJson(join(stagingDir, PROFILE_RESOURCES_FILE)));
-    }, { expectedTargetHash: existingPathHash });
+    try {
+      await replacePathAtomically(profileDir, async (stagingDir) => {
+        await mkdir(stagingDir, { recursive: true, mode: 0o700 });
+        await Promise.all([
+          writeAtomic(
+            join(stagingDir, PROFILE_MANIFEST_FILE),
+            `${JSON.stringify(manifest, null, 2)}\n`
+          ),
+          writeAtomic(join(stagingDir, PROFILE_INSTRUCTIONS_FILE), instructions),
+          writeAtomic(
+            join(stagingDir, PROFILE_RESOURCES_FILE),
+            `${JSON.stringify(resources, null, 2)}\n`
+          )
+        ]);
+        ProfileManifestSchema.parse(await readJson(join(stagingDir, PROFILE_MANIFEST_FILE)));
+        ProfileResourcesSchema.parse(await readJson(join(stagingDir, PROFILE_RESOURCES_FILE)));
+      }, { expectedTargetHash: existingPathHash });
+    } catch (error) {
+      await discardCreatedInstruction();
+      throw error;
+    }
     return readProfile(manifest.id);
+  };
+
+  const migrateInlineInstructions: ProfileStore["migrateInlineInstructions"] = async (profileId) => {
+    if (!instructionLibraryStore) return { migrated: 0, skipped: [] };
+    const ids = profileId
+      ? [parseProfileId(profileId)]
+      : (await listProfiles())
+          .filter((profile) => !profile.loadError)
+          .map((profile) => profile.id);
+    let migrated = 0;
+    const skipped: Array<{ profileId: string; error: string }> = [];
+    for (const id of ids) {
+      const current = await readProfile(id);
+      if (!current.instructions.trim()) continue;
+      try {
+        await saveProfile({
+          manifest: current.manifest,
+          instructions: current.instructions,
+          resources: current.resources,
+          expectedContentHash: current.contentHash
+        });
+        migrated += 1;
+      } catch (error) {
+        skipped.push({
+          profileId: id,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+    return { migrated, skipped };
   };
 
   const listProfileRecovery = async (
@@ -628,6 +713,7 @@ export const createProfileStore = (
     updateProfileMetadata,
     createProfile,
     duplicateProfile,
-    deleteProfile
+    deleteProfile,
+    migrateInlineInstructions
   };
 };

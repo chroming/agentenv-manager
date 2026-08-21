@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { ProfileDetail } from "../shared/types";
 import { profileResourceMode } from "../shared/profileResources";
 import { profileEffectiveInstructions } from "../shared/profileInstructions";
+import { materializeProfileSkillGroups } from "../shared/profileSkillGroups";
 
 type ProfileFingerprintInput = Pick<
   ProfileDetail,
@@ -30,6 +31,7 @@ export const createProfileContentHash = (
   profile: ProfileFingerprintInput,
   targetId?: string
 ): string => {
+  const effectiveSkills = materializeProfileSkillGroups(profile.resources).skills;
   const mcpPolicy = targetId ? profile.resources.mcpByTarget[targetId] : undefined;
   const instructionsMode = targetId
     ? profileResourceMode(profile.resources, targetId, "instructions")
@@ -47,9 +49,10 @@ export const createProfileContentHash = (
     },
     instructions: instructionsMode === "manage" ? profileEffectiveInstructions(profile) : null,
     skills: skillsMode !== "ignore"
-      ? [...profile.resources.skills]
+      ? [...effectiveSkills]
           .map((reference) => ({
-            ...reference,
+            libraryId: reference.libraryId,
+            targetName: reference.targetName,
             enabled:
               skillsMode === "disable" ? false : reference.enabled
           }))

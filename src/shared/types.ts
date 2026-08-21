@@ -18,9 +18,20 @@ export type {
   ProfileResourceMode,
   ProfileResources,
   ProfileSkill,
+  ProfileSkillGroup,
   ProfileTargetResourcePolicy,
   ResourceIconKey
 } from "./schemas";
+export type {
+  CreateSkillGroupInput,
+  SkillGroup,
+  UpdateSkillGroupInput
+} from "./skillGroups";
+import type {
+  CreateSkillGroupInput,
+  SkillGroup,
+  UpdateSkillGroupInput
+} from "./skillGroups";
 import type {
   ProfileManifest,
   ProfileResourceMode,
@@ -148,10 +159,12 @@ export interface AgentEnvApi {
   listTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
   listTargetStates(): Promise<TargetManagementState[]>;
   listRemoteDevices?(): Promise<RemoteDevice[]>;
+  listSshConfigHosts?(): Promise<SshConfigHost[]>;
+  resolveSshConfigHost?(alias: string): Promise<SshConfigHostResolution>;
   addRemoteDevice?(input: CreateRemoteDeviceInput): Promise<RemoteDevice>;
   updateRemoteDevice?(input: UpdateRemoteDeviceInput): Promise<RemoteDevice>;
   removeRemoteDevice?(id: string): Promise<void>;
-  probeRemoteDevice?(id: string): Promise<RemoteDeviceProbe>;
+  probeRemoteDevice?(id: string, forceRefresh?: boolean): Promise<RemoteDeviceProbe>;
   listRemoteEndpoints?(forceRefresh?: boolean): Promise<RemoteAgentEndpoint[]>;
   listRemoteTargetStates?(): Promise<TargetManagementState[]>;
   listConversations(input?: ConversationListInput): Promise<ConversationListResult>;
@@ -171,6 +184,10 @@ export interface AgentEnvApi {
   removeInstructionBlock(input: RemoveInstructionBlockInput): Promise<void>;
   selectInstructionFile(): Promise<InstructionFileSelection | undefined>;
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
+  listSkillGroups(): Promise<SkillGroup[]>;
+  createSkillGroup(input: CreateSkillGroupInput): Promise<SkillGroup>;
+  updateSkillGroup(input: UpdateSkillGroupInput): Promise<SkillGroup>;
+  removeSkillGroup(id: string): Promise<void>;
   listSkillFiles(id: string): Promise<SkillFileNode[]>;
   readSkillFile(input: SkillFileReadInput): Promise<SkillFileContent>;
   scanSkillInventory(): Promise<SkillInventoryScanResult>;
@@ -332,6 +349,7 @@ export type StartupPhase =
   | "preparing-data"
   | "migrating-data"
   | "upgrading-skills"
+  | "upgrading-profile-instructions"
   | "recovering-writes"
   | "recovering-sync";
 
@@ -1982,6 +2000,13 @@ export interface TargetInfo extends TargetDescriptor {
   paths: TargetPaths;
   health: TargetHealth;
   conversationCapabilities: TargetConversationCapabilities;
+  location?: {
+    kind: "ssh";
+    deviceId: string;
+    deviceName: string;
+    agentName: string;
+    host?: string;
+  };
 }
 
 export interface RemoteDevice {
@@ -2005,6 +2030,16 @@ export interface UpdateRemoteDeviceInput extends CreateRemoteDeviceInput {
   id: string;
 }
 
+export interface SshConfigHost {
+  alias: string;
+}
+
+export interface SshConfigHostResolution extends SshConfigHost {
+  hostName: string;
+  user?: string;
+  port?: number;
+}
+
 export interface RemoteDeviceProbe {
   deviceId: string;
   status: "ready" | "unavailable" | "unsupported";
@@ -2023,10 +2058,12 @@ export interface RemoteAgentEndpoint {
   deviceName: string;
   agentId: string;
   agentName: string;
-  homeDir: string;
-  executablePath: string;
+  homeDir?: string;
+  executablePath?: string;
   deviceFingerprint: string;
   checkedAt: string;
+  availability: "ready" | "unavailable" | "unsupported" | "agent-missing";
+  availabilityReason?: string;
   capabilities: {
     apply: true;
     capture: false;

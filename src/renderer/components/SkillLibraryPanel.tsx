@@ -106,11 +106,12 @@ import {
   type SkillManagementScope
 } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
-import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, Switch } from "./ui";
+import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, SegmentedControl, Switch } from "./ui";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { isExternalSkillImportable } from "../../shared/skillIdentity";
 import { sourceSubpathFor } from "../../shared/skillSourceGrouping";
 import { SkillSourceView } from "./SkillSourceView";
+import { SkillGroupView } from "./SkillGroupView";
 import type { SkillUpdateActivity } from "../skillUpdateActivity";
 import type { SkillUpdateRun } from "../skillUpdateQueue";
 import { SkillFileBrowserDialog } from "./SkillFileBrowserDialog";
@@ -216,6 +217,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   } = status;
   const {
     librarySkills,
+    skillGroups,
     skillUpdates,
     skillUsage,
     installedTargetIds = [],
@@ -296,6 +298,9 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     onMergeSources
   } = sourceActions;
   const {
+    onCreateGroup,
+    onUpdateGroup,
+    onRemoveGroup,
     onSaveUpdateSettings,
     onSetAvailability,
     onSetIcon,
@@ -1727,30 +1732,18 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     <section className="skill-library-panel ui-surface-frame" aria-label={t("Skill library")}>
       <div className="library-control-deck">
         <div className="library-quick-tabs">
-          <div
-            className="library-mode-switch ui-segmented-control ui-segmented-control--compact"
-            role="tablist"
-            aria-label={t("Skill library view")}
-          >
-            <button
-              className={`library-mode-tab ui-segmented-control__option${libraryMode === "skills" ? " is-active" : ""}`}
-              type="button"
-              role="tab"
-              aria-selected={libraryMode === "skills"}
-              onClick={() => onLibraryModeChange("skills")}
-            >
-              {t("Skill list")}
-            </button>
-            <button
-              className={`library-mode-tab ui-segmented-control__option${libraryMode === "sources" ? " is-active" : ""}`}
-              type="button"
-              role="tab"
-              aria-selected={libraryMode === "sources"}
-              onClick={() => onLibraryModeChange("sources")}
-            >
-              {t("By source")}
-            </button>
-          </div>
+          <SegmentedControl
+            className="library-mode-switch ui-segmented-control--compact"
+            label={t("Skill library view")}
+            onChange={onLibraryModeChange}
+            options={[
+              { value: "skills", label: t("Skill list") },
+              { value: "sources", label: t("By source") },
+              { value: "groups", label: t("Groups") }
+            ]}
+            semantics="tabs"
+            value={libraryMode}
+          />
           <div
             className="library-status-tabs"
             role="tablist"
@@ -2341,6 +2334,15 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         }}
         onOpenSource={onOpenSource}
         onCopySource={onCopySource}
+      />
+
+      <SkillGroupView
+        active={libraryMode === "groups"}
+        groups={skillGroups}
+        skills={librarySkills}
+        onCreate={onCreateGroup}
+        onUpdate={onUpdateGroup}
+        onRemove={onRemoveGroup}
       />
 
       <SkillUpdateDialog

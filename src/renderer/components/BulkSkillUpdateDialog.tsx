@@ -25,6 +25,7 @@ import {
   DialogHeader,
   IconButton,
   ModalFrame,
+  OperationStatusBar,
   Switch
 } from "./ui";
 
@@ -73,9 +74,15 @@ export const BulkSkillUpdateDialog = ({
   const started = applicablePlans.some((plan) => Boolean(updateRun[plan.id]));
   const running = applicablePlans.some((plan) => isRunning(updateRun[plan.id]));
   const completedCount = applicablePlans.filter((plan) => isFinished(updateRun[plan.id])).length;
+  const updatedCount = applicablePlans.filter((plan) => updateRun[plan.id]?.status === "updated").length;
   const failedPlans = applicablePlans.filter((plan) => updateRun[plan.id]?.status === "failed");
   const skippedPlans = applicablePlans.filter((plan) => updateRun[plan.id]?.status === "skipped");
   const finished = started && !running && completedCount === applicablePlans.length;
+  const completedSuccessfully =
+    finished &&
+    failures.length === 0 &&
+    failedPlans.length === 0 &&
+    skippedPlans.length === 0;
   const copiedInstallCount = applicablePlans.reduce(
     (total, plan) => total + (plan.impact?.copiedInstallCount ?? 0),
     0
@@ -107,6 +114,38 @@ export const BulkSkillUpdateDialog = ({
           : progress?.status === "skipped"
             ? t("Skipped")
             : undefined;
+  const overallStatus = !started && applicablePlans.length === 0 && failures.length > 0
+    ? {
+        kind: "warning" as const,
+        icon: <TriangleAlert size={15} aria-hidden="true" />,
+        label: t("Update previews need attention")
+      }
+    : !started
+      ? {
+        kind: "neutral" as const,
+        icon: <Clock3 size={15} aria-hidden="true" />,
+        label: t("{{count}} Skills ready to update", { count: applicablePlans.length })
+      }
+    : running
+      ? {
+          kind: "working" as const,
+          icon: <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />,
+          label: t("Updating {{completed}} of {{total}}", {
+            completed: completedCount,
+            total: applicablePlans.length
+          })
+        }
+      : completedSuccessfully
+        ? {
+            kind: "success" as const,
+            icon: <CheckCircle2 size={15} aria-hidden="true" />,
+            label: t("All {{count}} Skills updated", { count: updatedCount })
+          }
+        : {
+            kind: "warning" as const,
+            icon: <TriangleAlert size={15} aria-hidden="true" />,
+            label: t("Updates finished with issues")
+          };
 
   return (
     <>
@@ -134,6 +173,18 @@ export const BulkSkillUpdateDialog = ({
           )}
         />
         <DialogBody className="bulk-update-body">
+          <OperationStatusBar
+            icon={overallStatus.icon}
+            label={overallStatus.label}
+            statusKind={overallStatus.kind}
+            detail={started && !running && !completedSuccessfully
+              ? t("{{updated}} updated · {{failed}} failed · {{skipped}} skipped", {
+                  updated: updatedCount,
+                  failed: failedPlans.length + failures.length,
+                  skipped: skippedPlans.length
+                })
+              : undefined}
+          />
           {copiedInstallCount > 0 && !started ? (
             <div className="skill-update-copy-option">
               <span className="skill-update-copy-option__copy">
@@ -243,7 +294,12 @@ export const BulkSkillUpdateDialog = ({
           </div>
         </DialogBody>
         <DialogFooter className="preview-actions">
-          <Button ref={initialFocusRef} disabled={dismissDisabled} onClick={onClose}>
+          <Button
+            ref={initialFocusRef}
+            variant={completedSuccessfully ? "primary" : "secondary"}
+            disabled={dismissDisabled}
+            onClick={onClose}
+          >
             {t(started ? "Close" : "Cancel")}
           </Button>
           {running ? (
@@ -253,6 +309,7 @@ export const BulkSkillUpdateDialog = ({
           ) : null}
           {failures.length > 0 ? (
             <Button
+              variant={applicablePlans.length === 0 ? "primary" : "secondary"}
               disabled={isBusy || previewingAllUpdates || running}
               busy={previewingAllUpdates}
               onClick={() => onPreview([
@@ -264,7 +321,11 @@ export const BulkSkillUpdateDialog = ({
             </Button>
           ) : null}
           {finished && failedPlans.length > 0 ? (
-            <Button disabled={isBusy} onClick={() => onUpdate(failedPlans, syncCopiedInstalls)}>
+            <Button
+              variant={skippedPlans.length > 0 ? "secondary" : "primary"}
+              disabled={isBusy}
+              onClick={() => onUpdate(failedPlans, syncCopiedInstalls)}
+            >
               {t("Retry failed updates")}
             </Button>
           ) : null}

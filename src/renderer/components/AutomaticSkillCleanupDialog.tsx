@@ -209,7 +209,12 @@ export const AutomaticSkillCleanupDialog = ({
           <small>{t("Each Skill is backed up independently. A failure does not undo completed Skills.")}</small>
         </div>
         <footer className="preview-actions ui-dialog-footer">
-          <Button ref={initialFocusRef} disabled={running} onClick={onClose}>
+          <Button
+            ref={initialFocusRef}
+            variant={runStarted && !running ? "primary" : "secondary"}
+            disabled={running}
+            onClick={onClose}
+          >
             {t(runStarted ? "Close" : "Cancel")}
           </Button>
           {running ? (

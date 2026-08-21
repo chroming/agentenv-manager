@@ -5,7 +5,11 @@ import {
   ProfileResourcePolicyControl,
   type ProfileResourcePolicy
 } from "./ProfileResourcePolicyControl";
-import { ResourceDisclosureSection } from "./ui";
+import {
+  InteractiveStatus,
+  ResourceDisclosureSection,
+  type SemanticStatusKind
+} from "./ui";
 
 export interface ProfileComposerSectionProps {
   id: string;
@@ -15,6 +19,7 @@ export interface ProfileComposerSectionProps {
   count: number;
   enabledCount: number;
   countSummary?: string;
+  countStatusKind?: SemanticStatusKind;
   chipNames: string[];
   policy: ProfileResourcePolicy;
   policyDisabled?: boolean;
@@ -34,6 +39,7 @@ export const ProfileComposerSection = ({
   count,
   enabledCount,
   countSummary,
+  countStatusKind,
   chipNames,
   policy,
   policyDisabled = false,
@@ -77,7 +83,14 @@ export const ProfileComposerSection = ({
       onToggle={onToggle}
       nested={id === "instructions" || id === "skills" || id === "mcp"}
       muted={policyDisabled || policy !== "manage"}
-      summary={countSummary ? (
+      summary={countSummary && countStatusKind ? (
+        <InteractiveStatus
+          className="profile-composer-section__count-scope"
+          label={countSummary}
+          size="metadata"
+          statusKind={countStatusKind}
+        />
+      ) : countSummary ? (
         <span className="profile-composer-section__count-scope" aria-hidden="true">
           {countSummary}
         </span>

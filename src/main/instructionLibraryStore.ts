@@ -51,6 +51,11 @@ export interface InstructionLibraryStore {
   create(input: CreateInstructionBlockInput): Promise<InstructionBlock>;
   update(input: UpdateInstructionBlockInput): Promise<InstructionBlock>;
   remove(input: RemoveInstructionBlockInput): Promise<void>;
+  ensureProfileInstruction(input: {
+    profileId: string;
+    profileName: string;
+    content: string;
+  }): Promise<{ block: InstructionBlock; created: boolean }>;
   resolve(ids: readonly string[]): Promise<InstructionBlock[]>;
   compile(ids: readonly string[], inlineContent: string): Promise<string>;
 }
@@ -118,6 +123,43 @@ export const createInstructionLibraryStore = (
     return read(id);
   };
 
+  const ensureProfileInstruction: InstructionLibraryStore["ensureProfileInstruction"] = async (
+    input
+  ) => {
+    validateContent(input.content);
+    const id = `profile-${createHash("sha256").update(input.profileId).digest("hex").slice(0, 12)}-${
+      createHash("sha256").update(input.content).digest("hex").slice(0, 12)
+    }`;
+    try {
+      const existing = await read(id);
+      if (existing.content !== input.content) {
+        throw new Error(`Migrated Instruction ${id} does not match its Profile content`);
+      }
+      return { block: existing, created: false };
+    } catch (error) {
+      if (!isMissingFileError(error)) throw error;
+    }
+
+    const now = new Date().toISOString();
+    const metadata = InstructionBlockMetadataSchema.parse({
+      formatVersion: 1,
+      id,
+      name: `${input.profileName} instructions`,
+      description: `Reusable instructions for ${input.profileName}`,
+      createdAt: now,
+      updatedAt: now
+    });
+    await mkdir(paths.instructionsLibraryDir, { recursive: true, mode: 0o700 });
+    await replacePathAtomically(blockRoot(id), async (stagingDir) => {
+      await mkdir(stagingDir, { recursive: true, mode: 0o700 });
+      await Promise.all([
+        writeAtomic(join(stagingDir, METADATA_FILE), `${JSON.stringify(metadata, null, 2)}\n`),
+        writeAtomic(join(stagingDir, CONTENT_FILE), input.content)
+      ]);
+    });
+    return { block: await read(id), created: true };
+  };
+
   const update = async (input: UpdateInstructionBlockInput) => {
     validateContent(input.content);
     const current = await read(input.id);
@@ -167,6 +209,7 @@ export const createInstructionLibraryStore = (
     create,
     update,
     remove,
+    ensureProfileInstruction,
     resolve,
     compile: async (ids, inlineContent) => {
       const blocks = await resolve(ids);

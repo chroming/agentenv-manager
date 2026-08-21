@@ -1,7 +1,6 @@
-import { Monitor } from "lucide-react";
 import type { TargetInfo } from "../../shared/types";
 import { useI18n } from "../i18n";
-import { targetIconFor } from "./ProfileSidebar";
+import { AgentEndpointIcon } from "./AgentEndpointIcon";
 import { ObjectSwitcher } from "./ui";
 
 interface AgentContextSwitcherProps {
@@ -32,20 +31,21 @@ export const AgentContextSwitcher = ({
   const selectedTarget = targets.find((target) => target.id === selectedId)
     ?? (isStatic ? targets[0] : undefined);
   const items = targets.map((target) => {
-    const icon = targetIconFor(target);
+    const isRemote = target.location?.kind === "ssh";
+    const title = target.location?.agentName ?? target.name;
+    const description = isRemote ? `${target.location?.deviceName} · SSH` : undefined;
+    const unavailable = isRemote && target.health.status !== "ready";
     return {
       id: target.id,
-      icon: icon.assetUrl ? (
-        <img
-          className={`agent-context-switcher__logo agent-context-switcher__logo--${icon.flavor}`}
-          src={icon.assetUrl}
-          alt=""
-        />
-      ) : (
-        <Monitor size={16} strokeWidth={2.1} aria-hidden="true" />
-      ),
-      searchText: target.name,
-      title: target.name
+      ariaLabel: description ? `${title} · ${description}` : title,
+      description,
+      disabled: unavailable,
+      groupLabel: isRemote ? target.location?.deviceName : t("This Mac"),
+      icon: <AgentEndpointIcon target={target} size={16} />,
+      searchText: [title, description, target.location?.host].filter(Boolean).join(" "),
+      status: unavailable ? t("Offline") : undefined,
+      title,
+      tooltip: unavailable ? target.health.summary : undefined
     };
   });
 
@@ -59,7 +59,16 @@ export const AgentContextSwitcher = ({
         <span className="agent-context-switcher__static-icon" aria-hidden="true">
           {selectedItem.icon}
         </span>
-        <span className="agent-context-switcher__static-name">{selectedTarget.name}</span>
+        <span className="agent-context-switcher__static-copy">
+          <span className="agent-context-switcher__static-name">
+            {selectedTarget.location?.agentName ?? selectedTarget.name}
+          </span>
+          {selectedTarget.location ? (
+            <span className="agent-context-switcher__static-location">
+              {selectedTarget.location.deviceName} · SSH
+            </span>
+          ) : null}
+        </span>
       </div>
     );
   }

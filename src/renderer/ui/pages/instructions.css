@@ -270,11 +270,6 @@
   display: flex;
   flex: 1;
   min-height: 220px;
-}
-
-.instruction-block-editor__content textarea {
-  flex: 1;
-  min-height: 220px;
   overflow-x: hidden;
   overflow-wrap: anywhere;
   white-space: pre-wrap;

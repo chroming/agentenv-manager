@@ -107,6 +107,15 @@ export const AppUpdateSettings = ({
   const latestVersionCopy = effectivePhase === "checking"
     ? t("Checking…")
     : latestVersion ?? t("Not checked");
+  const statusTone = working
+    ? "working"
+    : status?.phase === "up-to-date"
+      ? "success"
+      : status?.phase === "available" || status?.phase === "ready"
+        ? "available"
+        : status?.phase === "failed"
+          ? "error"
+          : "neutral";
 
   return (
     <section className="resource-section settings-section app-update-settings" aria-labelledby="app-updates-heading">
@@ -115,7 +124,7 @@ export const AppUpdateSettings = ({
       </div>
       <div className="settings-preference-list">
         <SettingsPreferenceRow
-          className="app-update-summary"
+          className={`app-update-summary is-${statusTone}`}
           label={statusCopy}
           description={<>
             <span className="app-update-versions" aria-label={t("Application versions")}>

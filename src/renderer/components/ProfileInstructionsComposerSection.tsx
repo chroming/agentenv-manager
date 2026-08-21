@@ -10,6 +10,7 @@ import type { ProfileResourceSummary } from "../profileSummary";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { ProductIcon } from "../productIcons";
+import { InstructionBlockEditorDialog } from "./InstructionBlockEditorDialog";
 import { InstructionDocumentDialog } from "./InstructionDocumentDialog";
 import { LibraryInstructionPicker } from "./LibraryInstructionPicker";
 import { OverflowTooltip } from "./OverflowTooltip";
@@ -44,6 +45,10 @@ interface ProfileInstructionsComposerSectionProps {
   onToggle(): void;
   onPolicyChange(policy: ProfileResourcePolicy): void;
   onChange(instructions: string, resources: ProfileResources): void;
+  onUpdateBlock(
+    block: InstructionBlock,
+    input: { name: string; description: string; content: string }
+  ): Promise<void>;
 }
 
 export const ProfileInstructionsComposerSection = ({
@@ -59,13 +64,17 @@ export const ProfileInstructionsComposerSection = ({
   currentValueAvailable = false,
   onToggle,
   onPolicyChange,
-  onChange
+  onChange,
+  onUpdateBlock
 }: ProfileInstructionsComposerSectionProps) => {
   const { t } = useI18n();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [document, setDocument] = useState<"compiled" | "inline" | string>();
+  const [document, setDocument] = useState<"compiled" | "legacy">();
+  const [editingBlockId, setEditingBlockId] = useState<string>();
+  const [savingBlock, setSavingBlock] = useState(false);
+  const [blockError, setBlockError] = useState("");
   const pickerDialogRef = useRef<HTMLElement>(null);
   const pickerCancelRef = useRef<HTMLButtonElement>(null);
   const references = profile.resources.instructions ?? [];
@@ -75,16 +84,17 @@ export const ProfileInstructionsComposerSection = ({
     .filter((reference) => reference.enabled)
     .map((reference) => blockById.get(reference.libraryId)?.content ?? "");
   const compiled = joinInstructionContents([...enabledContents, profile.instructions]);
-  const selectedBlock = document && document !== "compiled" && document !== "inline"
-    ? blockById.get(document)
-    : undefined;
   const activeDocument = document === "compiled"
     ? { name: fileName, value: compiled, path: t("Compiled for {{name}}", { name: targetName }), editable: false }
-    : document === "inline"
-      ? { name: fileName, value: profile.instructions, path: t("Saved in this Profile"), editable: true }
-      : selectedBlock
-        ? { name: selectedBlock.name, value: selectedBlock.content, path: t("Instruction Library"), editable: false }
-        : undefined;
+    : document === "legacy"
+      ? {
+          name: t("Profile instructions"),
+          value: profile.instructions,
+          path: t("Waiting to move into Instruction Library"),
+          editable: true
+        }
+      : undefined;
+  const editingBlock = editingBlockId ? blockById.get(editingBlockId) : undefined;
 
   useModalDialog({
     open: pickerOpen,
@@ -178,7 +188,10 @@ export const ProfileInstructionsComposerSection = ({
                 key={reference.libraryId}
                 tone={!reference.enabled || policy !== "manage" ? "disabled" : "default"}
                 icon={<FileText size={15} />}
-                title={<TextAction onClick={() => setDocument(reference.libraryId)}>{name}</TextAction>}
+                title={<TextAction onClick={() => {
+                  setBlockError("");
+                  setEditingBlockId(reference.libraryId);
+                }}>{name}</TextAction>}
                 description={(
                   <OverflowTooltip
                     className="profile-instruction-description"
@@ -239,21 +252,17 @@ export const ProfileInstructionsComposerSection = ({
               />
             );
           }) : null}
-          {policy !== "ignore" ? (
+          {policy !== "ignore" && profile.instructions.trim() ? (
             <ResourceRow
               className="ui-resource-children__item"
               icon={<FileText size={15} />}
               title={(
-                <TextAction
-                  aria-label={t("Open {{name}}", { name: fileName })}
-                  onClick={() => setDocument("inline")}
-                >{fileName}</TextAction>
+                <TextAction onClick={() => setDocument("legacy")}>
+                  {t("Profile instructions")}
+                </TextAction>
               )}
-              description={profile.instructions.trim()
-                ? t("Profile-specific instructions")
-                : t("No Profile-specific content")}
-              metadata={t("This Profile")}
-              state={profile.instructions.trim() ? t("On") : t("Empty")}
+              description={t("This content needs review before it can move into Instruction Library")}
+              state={t("Needs review")}
             />
           ) : null}
         </AlignedResourceList>
@@ -299,9 +308,35 @@ export const ProfileInstructionsComposerSection = ({
           resetKey={`${document}-${activeDocument.value}`}
           value={activeDocument.value}
           onClose={() => setDocument(undefined)}
-          onSave={(instructions) => onChange(instructions, profile.resources)}
+          onSave={(value) => document === "legacy"
+            ? onChange(value, profile.resources)
+            : undefined}
         />
       ) : null}
+      <InstructionBlockEditorDialog
+        block={editingBlock}
+        open={Boolean(editingBlock)}
+        saving={savingBlock}
+        error={blockError}
+        onClose={() => {
+          if (savingBlock) return;
+          setEditingBlockId(undefined);
+          setBlockError("");
+        }}
+        onSave={async (input) => {
+          if (!editingBlock) return;
+          setSavingBlock(true);
+          setBlockError("");
+          try {
+            await onUpdateBlock(editingBlock, input);
+            setEditingBlockId(undefined);
+          } catch (unknownError) {
+            setBlockError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+          } finally {
+            setSavingBlock(false);
+          }
+        }}
+      />
     </ProfileComposerSection>
   );
 };

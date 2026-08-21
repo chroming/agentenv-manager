@@ -4,6 +4,7 @@ import type {
   SkillLibraryEntry
 } from "./types";
 import { profileUsesResource } from "./profileResources";
+import { profileSkillEnabled } from "./profileSkillGroups";
 
 export const collectLibraryResourceVersions = (
   profile: Pick<ProfileDetail, "resources">,
@@ -18,7 +19,7 @@ export const collectLibraryResourceVersions = (
         (usesSkills ? profile.resources.skills : [])
           .filter(
             (reference) =>
-              reference.enabled &&
+              profileSkillEnabled(profile.resources, reference) &&
               skillById.get(reference.libraryId)?.globallyEnabled !== false
           )
           .map((reference) => reference.libraryId)

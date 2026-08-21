@@ -2,7 +2,9 @@ import type {
   ProfileDetail,
   ProfileResources,
   SkillInventoryEntry,
+  SkillGroup,
   SkillLibraryEntry,
+  SkillSourceGroupView,
   SkillUpdateInfo,
   TargetManagementState
 } from "../../shared/types";
@@ -12,6 +14,8 @@ import { SkillsEditor } from "./SkillsEditor";
 interface ProfileSkillsEditorProps {
   profile: ProfileDetail;
   librarySkills: SkillLibraryEntry[];
+  skillGroups?: SkillGroup[];
+  sourceGroups?: SkillSourceGroupView[];
   skillUpdates: SkillUpdateInfo[];
   checkingSkillUpdates: boolean;
   policy: ProfileResourcePolicy;
@@ -36,6 +40,8 @@ export const ProfileSkillsEditor = (props: ProfileSkillsEditorProps) => (
   <SkillsEditor
     value={props.profile.resources ?? { skills: [], managementByTarget: {}, mcpByTarget: {} }}
     librarySkills={props.librarySkills}
+    skillGroups={props.skillGroups}
+    sourceGroups={props.sourceGroups}
     skillUpdates={props.skillUpdates}
     checkingSkillUpdates={props.checkingSkillUpdates}
     policy={props.policy}

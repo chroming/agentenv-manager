@@ -63,6 +63,16 @@ const sectionsFor = (snapshot: WorkspaceSnapshotDescriptor | undefined): Map<str
       });
     }
   }
+  if (snapshot.manifest.skillGroupsHash) {
+    result.set("group:registry:groups", {
+      key: "group:registry:groups",
+      resourceKind: "group",
+      resourceId: "registry",
+      section: "groups",
+      hash: snapshot.manifest.skillGroupsHash,
+      path: join(snapshot.root, "workspace", "skill-groups.json")
+    });
+  }
   result.set("source:registry:sources", {
     key: "source:registry:sources",
     resourceKind: "source",
@@ -87,6 +97,7 @@ const actionFor = (before: string | undefined, after: string | undefined): Works
   before === undefined ? "add" : after === undefined ? "delete" : "update";
 
 const titleFor = (record: SectionRecord) => {
+  if (record.resourceKind === "group") return "Skill Groups";
   if (record.resourceKind === "source") return "Skill sources";
   return record.resourceId;
 };
@@ -191,6 +202,9 @@ export const materializeMergedWorkspace = async (input: {
           source.section === "content" ? "CONTENT.md" : "instruction.json"
         );
       }
+      if (source.resourceKind === "group") {
+        return join(input.local.root, "workspace", "skill-groups.json");
+      }
       return join(input.local.root, "workspace", "skill-sources.json");
     })();
     const relativePath = relative(resolve(input.local.root), resolve(localPath));
@@ -255,6 +269,7 @@ export const materializeMergedWorkspace = async (input: {
     };
   }
   await mkdir(join(input.destination, "workspace", "instructions"), { recursive: true });
+  const skillGroupsHash = selected.get("group:registry:groups")?.hash;
   const sourcesHash = selected.get("source:registry:sources")?.hash;
   if (!sourcesHash) throw new Error("Merged Workspace is missing its Skill source registry");
   const unsigned = {
@@ -263,6 +278,7 @@ export const materializeMergedWorkspace = async (input: {
     profileHashes,
     skillHashes,
     instructionHashes,
+    ...(skillGroupsHash ? { skillGroupsHash } : {}),
     sourcesHash
   };
   const manifest = { ...unsigned, snapshotHash: snapshotHashFor(unsigned) };

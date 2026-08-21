@@ -17,6 +17,7 @@ export interface AgentEnvPaths {
   projectsPath: string;
   uiStatePath: string;
   skillSourcesPath: string;
+  skillGroupsPath: string;
   unmanagedSkillLocationsPath: string;
   skillCollectionDecisionsPath: string;
   sharedSkillAreaStatePath: string;
@@ -87,6 +88,8 @@ export const createPaths = (overrides: PathOverrides): AgentEnvPaths => {
       overrides.uiStatePath ?? join(overrides.appDataRoot, "ui-state.json"),
     skillSourcesPath:
       overrides.skillSourcesPath ?? join(overrides.appDataRoot, "skill-sources.json"),
+    skillGroupsPath:
+      overrides.skillGroupsPath ?? join(overrides.appDataRoot, "skill-groups.json"),
     unmanagedSkillLocationsPath:
       overrides.unmanagedSkillLocationsPath ??
       join(overrides.appDataRoot, "unmanaged-skill-locations.json"),

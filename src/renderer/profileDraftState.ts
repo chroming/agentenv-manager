@@ -41,6 +41,9 @@ const normalizeResources = (resources: ProfileResources): ProfileResources => {
   return {
     ...(resources.instructions ? { instructions: resources.instructions } : {}),
     skills: resources.skills,
+    ...(resources.skillGroups?.length
+      ? { skillGroups: resources.skillGroups }
+      : {}),
     ...(Object.keys(managementByTarget).length > 0
       ? { managementByTarget }
       : {}),

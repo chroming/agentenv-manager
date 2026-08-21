@@ -18,7 +18,8 @@ export interface ToolbarOverflowMenuItem {
   label: string;
   icon?: ReactNode;
   disabled?: boolean;
-  onSelect(): void;
+  title?: string;
+  onSelect(trigger: HTMLButtonElement): void;
 }
 
 interface ToolbarOverflowMenuProps {
@@ -116,9 +117,11 @@ export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflow
                 type="button"
                 role="menuitem"
                 disabled={item.disabled}
+                title={item.title}
                 onClick={() => {
                   setOpen(false);
-                  item.onSelect();
+                  const trigger = triggerRef.current;
+                  if (trigger) item.onSelect(trigger);
                 }}
               >
                 {item.icon}

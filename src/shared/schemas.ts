@@ -128,7 +128,26 @@ const TargetResourceNameSchema = z
 export const ProfileSkillSchema = z.object({
   libraryId: SafeIdSchema,
   targetName: TargetResourceNameSchema,
-  enabled: z.boolean().default(true)
+  enabled: z.boolean().default(true),
+  direct: z.boolean().optional(),
+  groupIds: z.array(SafeIdSchema).optional()
+});
+
+export const ProfileSkillGroupSchema = z.object({
+  id: SafeIdSchema,
+  kind: z.enum(["manual", "source"]),
+  groupId: SafeIdSchema,
+  name: z.string().trim().min(1).max(120),
+  enabled: z.boolean().default(true),
+  memberIds: z.array(SafeIdSchema).default([])
+}).strict().superRefine((group, context) => {
+  if (new Set(group.memberIds).size !== group.memberIds.length) {
+    context.addIssue({
+      code: "custom",
+      path: ["memberIds"],
+      message: `Skill Group ${group.id} contains duplicate members`
+    });
+  }
 });
 
 export const ProfileInstructionReferenceSchema = z.object({
@@ -165,6 +184,7 @@ export const ProfileTargetResourcePolicySchema = z.object({
 export const ProfileResourcesSchema = z.object({
   instructions: z.array(ProfileInstructionReferenceSchema).optional(),
   skills: z.array(ProfileSkillSchema).default([]),
+  skillGroups: z.array(ProfileSkillGroupSchema).optional(),
   managementByTarget: z
     .record(SafeIdSchema, ProfileTargetResourcePolicySchema)
     .optional(),
@@ -183,6 +203,17 @@ export const ProfileResourcesSchema = z.object({
   });
   const libraryIds = new Set<string>();
   const targetNames = new Set<string>();
+  const groupIds = new Set<string>();
+  (resources.skillGroups ?? []).forEach((group, index) => {
+    if (groupIds.has(group.id)) {
+      context.addIssue({
+        code: "custom",
+        path: ["skillGroups", index, "id"],
+        message: `Profile Skill Group ${group.id} is referenced more than once`
+      });
+    }
+    groupIds.add(group.id);
+  });
   resources.skills.forEach((skill, index) => {
     if (libraryIds.has(skill.libraryId)) {
       context.addIssue({
@@ -201,6 +232,27 @@ export const ProfileResourcesSchema = z.object({
     }
     libraryIds.add(skill.libraryId);
     targetNames.add(targetNameKey);
+    (skill.groupIds ?? []).forEach((groupId) => {
+      if (!groupIds.has(groupId)) {
+        context.addIssue({
+          code: "custom",
+          path: ["skills", index, "groupIds"],
+          message: `Skill ${skill.libraryId} references missing Profile Skill Group ${groupId}`
+        });
+      }
+    });
+  });
+  (resources.skillGroups ?? []).forEach((group, groupIndex) => {
+    group.memberIds.forEach((libraryId, memberIndex) => {
+      const reference = resources.skills.find((skill) => skill.libraryId === libraryId);
+      if (!reference || !(reference.groupIds ?? []).includes(group.id)) {
+        context.addIssue({
+          code: "custom",
+          path: ["skillGroups", groupIndex, "memberIds", memberIndex],
+          message: `Profile Skill Group ${group.id} member ${libraryId} is not linked to the group`
+        });
+      }
+    });
   });
   for (const [targetId, policy] of Object.entries(resources.mcpByTarget)) {
     const names = new Set<string>();
@@ -221,6 +273,7 @@ export type ProfileManifest = z.infer<typeof ProfileManifestSchema>;
 export type InstructionBlockMetadata = z.infer<typeof InstructionBlockMetadataSchema>;
 export type ProfileInstructionReference = z.infer<typeof ProfileInstructionReferenceSchema>;
 export type ProfileSkill = z.infer<typeof ProfileSkillSchema>;
+export type ProfileSkillGroup = z.infer<typeof ProfileSkillGroupSchema>;
 export type ProfileMcpSelection = z.infer<typeof ProfileMcpSelectionSchema>;
 export type ProfileMcpPolicy = z.infer<typeof ProfileMcpPolicySchema>;
 export type ProfileResourceMode = z.infer<typeof ProfileResourceModeSchema>;

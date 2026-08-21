@@ -481,12 +481,22 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   color: var(--accent);
 }
 
+.ui-interactive-status--success {
+  color: var(--success);
+}
+
 .ui-interactive-status--warning {
   color: var(--warning);
 }
 
 .ui-interactive-status--danger {
   color: var(--danger);
+}
+
+.ui-interactive-status--metadata {
+  font-size: var(--font-size-metadata);
+  line-height: 17px;
+  min-height: 17px;
 }
 
 .ui-interactive-status__icon {

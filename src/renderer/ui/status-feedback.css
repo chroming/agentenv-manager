@@ -1,0 +1,72 @@
+.ui-operation-status {
+  align-items: center;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  display: grid;
+  gap: 9px;
+  grid-template-columns: 24px minmax(0, 1fr);
+  min-height: 52px;
+  padding: 8px 18px;
+}
+
+.ui-operation-status__icon {
+  align-items: center;
+  color: currentColor;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.ui-operation-status__copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ui-operation-status__copy strong {
+  color: inherit;
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  line-height: 18px;
+}
+
+.ui-operation-status__copy small {
+  color: inherit;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.ui-operation-status--accent {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.ui-operation-status--success {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.ui-operation-status--warning {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.ui-operation-status--danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.app-update-summary.is-working .settings-preference-copy > strong,
+.app-update-summary.is-available .settings-preference-copy > strong {
+  color: var(--accent-strong);
+}
+
+.app-update-summary.is-success .settings-preference-copy > strong {
+  color: var(--success);
+}
+
+.app-update-summary.is-error .settings-preference-copy > strong {
+  color: var(--danger);
+}

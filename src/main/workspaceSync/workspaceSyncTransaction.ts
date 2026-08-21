@@ -19,6 +19,7 @@ import { createSkillSourceRegistry } from "../skillSourceRegistry";
 import {
   PortableSkillMetadataSchema,
   PortableSkillSourcesSchema,
+  PortableSkillGroupsSchema,
   type PortableSkillSource
 } from "./portableSchemas";
 import { isPortableOnlineLocator } from "./portableLocation";
@@ -87,7 +88,7 @@ export const createWorkspaceSyncTransaction = (input: {
   paths: AgentEnvPaths;
   backupStore: BackupStore;
   failureInjector?: (
-    phase: "profiles" | "skills" | "instructions" | "sources" | "verify"
+    phase: "profiles" | "skills" | "instructions" | "groups" | "sources" | "verify"
   ) => void | Promise<void>;
 }): WorkspaceSyncTransaction => {
   const rollback = async (
@@ -146,6 +147,7 @@ export const createWorkspaceSyncTransaction = (input: {
         input.paths.profilesDir,
         input.paths.skillsLibraryDir,
         input.paths.instructionsLibraryDir,
+        input.paths.skillGroupsPath,
         input.paths.skillSourcesPath
       ],
       { operation: "rollback-safety", profileName: "Workspace before restore" }
@@ -193,6 +195,7 @@ export const createWorkspaceSyncTransaction = (input: {
         input.paths.profilesDir,
         input.paths.skillsLibraryDir,
         input.paths.instructionsLibraryDir,
+        input.paths.skillGroupsPath,
         input.paths.skillSourcesPath
       ],
       { operation: "workspace-sync", profileName: "Workspace Sync" }
@@ -243,6 +246,16 @@ export const createWorkspaceSyncTransaction = (input: {
           join(portableSkillsRoot, entry.name, "metadata.json")
         );
         await writeAtomic(join(stagedSkill, ".agentenv-skill.json"), `${JSON.stringify(metadata, null, 2)}\n`);
+      }
+
+      const portableGroupsPath = join(snapshotRoot, "workspace", "skill-groups.json");
+      const portableGroupsPresent = await pathEntryExists(portableGroupsPath);
+      const stagedGroups = join(stagingRoot, "skill-groups.json");
+      if (portableGroupsPresent) {
+        const groups = PortableSkillGroupsSchema.parse(
+          JSON.parse(await readFile(portableGroupsPath, "utf8"))
+        );
+        await writeAtomic(stagedGroups, `${JSON.stringify(groups, null, 2)}\n`);
       }
 
       let previousSources = new Map<string, { createdAt: string; updatedAt: string }>();
@@ -304,6 +317,19 @@ export const createWorkspaceSyncTransaction = (input: {
         );
         await input.failureInjector?.("instructions");
       }
+      if (portableGroupsPresent) {
+        await claimPath(input.paths.skillGroupsPath);
+        await replacePathAtomically(
+          input.paths.skillGroupsPath,
+          (path) => cp(stagedGroups, path),
+          { expectedTargetHash: expectedHashes.get(resolve(input.paths.skillGroupsPath)) }
+        );
+        await claimPath.recordMutation(input.paths.skillGroupsPath);
+        journal.mutationHashes![resolve(input.paths.skillGroupsPath)] =
+          claimPath.mutationHashes.get(resolve(input.paths.skillGroupsPath)) ?? null;
+        await writeAtomic(input.paths.workspaceSyncJournalPath, `${JSON.stringify(journal, null, 2)}\n`);
+        await input.failureInjector?.("groups");
+      }
       await claimPath(input.paths.skillSourcesPath);
       await replacePathAtomically(
         input.paths.skillSourcesPath,
@@ -324,6 +350,9 @@ export const createWorkspaceSyncTransaction = (input: {
       ];
       if (portableInstructionsPresent) {
         verificationPaths.push(lstat(input.paths.instructionsLibraryDir));
+      }
+      if (portableGroupsPresent) {
+        verificationPaths.push(lstat(input.paths.skillGroupsPath));
       }
       await Promise.all(verificationPaths);
       await input.failureInjector?.("verify");

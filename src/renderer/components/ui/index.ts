@@ -20,9 +20,14 @@ export {
 } from "./FormFields";
 export { IconButton } from "./IconButton";
 export { InteractiveStatus } from "./InteractiveStatus";
-export { statusToneFor, type SemanticStatusKind } from "./statusPresentation";
+export {
+  statusToneFor,
+  type SemanticStatusKind,
+  type SemanticStatusTone
+} from "./statusPresentation";
 export { ModalFrame, type ModalDismissPolicy } from "./ModalFrame";
 export { Notice } from "./Notice";
+export { OperationStatusBar } from "./OperationStatusBar";
 export { ObjectSwitcher, type ObjectSwitcherItem } from "./ObjectSwitcher";
 export { PageHeader } from "./PageHeader";
 export { ProgressBar } from "./ProgressBar";

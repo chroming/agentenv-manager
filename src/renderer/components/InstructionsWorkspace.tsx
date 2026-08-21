@@ -20,7 +20,8 @@ import {
   ModalFrame,
   PageHeader,
   SearchField,
-  SelectableListRow
+  SelectableListRow,
+  ToolbarOverflowMenu
 } from "./ui";
 
 interface InstructionsWorkspaceProps {
@@ -143,15 +144,20 @@ export const InstructionsWorkspace = ({
                 actions={(
                   <>
                     <Button icon={<Pencil size={14} />} onClick={() => setEditor({ block: selected })}>{t("Edit")}</Button>
-                    <Button
-                      variant="danger"
-                      icon={<Trash2 size={14} />}
-                      disabled={(selected.usedByProfiles?.length ?? 0) > 0}
-                      title={(selected.usedByProfiles?.length ?? 0) > 0
-                        ? t("Remove this Block from its Profiles before deleting it")
-                        : undefined}
-                      onClick={() => setDeleteCandidate(selected)}
-                    >{t("Delete")}</Button>
+                    <ToolbarOverflowMenu
+                      items={[{
+                        id: "delete",
+                        icon: <Trash2 size={14} />,
+                        label: t("Delete"),
+                        disabled: (selected.usedByProfiles?.length ?? 0) > 0,
+                        title: (selected.usedByProfiles?.length ?? 0) > 0
+                          ? t("Remove this Block from its Profiles before deleting it")
+                          : undefined,
+                        onSelect: () => setDeleteCandidate(selected)
+                      }]}
+                      label={t("More actions for {{name}}", { name: selected.name })}
+                      menuLabel={t("Actions for {{name}}", { name: selected.name })}
+                    />
                   </>
                 )}
               />

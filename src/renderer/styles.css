@@ -2072,7 +2072,12 @@ summary {
 
 .resource-picker-option strong {
   color: var(--text);
+  display: block;
   font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .resource-picker-option small {
@@ -4039,6 +4044,18 @@ summary {
   background: var(--danger-bg);
   border-color: #ffd4cf;
   color: var(--danger);
+}
+
+.inline-state--success {
+  background: var(--success-bg);
+  border-color: color-mix(in srgb, var(--success) 22%, transparent);
+  color: var(--success);
+}
+
+.inline-state--warning {
+  background: var(--warning-bg);
+  border-color: color-mix(in srgb, var(--warning) 22%, transparent);
+  color: var(--warning-text);
 }
 
 .inline-state__content {

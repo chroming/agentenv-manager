@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Users } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { InstructionBlock } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
@@ -72,6 +72,19 @@ export const InstructionBlockEditorDialog = ({
     >
       <DialogBody className="instruction-block-editor__body">
         {error ? <Notice tone="danger" role="alert" icon={<AlertTriangle size={16} />}>{error}</Notice> : null}
+        {block?.usedByProfiles?.length ? (
+          <Notice
+            className="instruction-block-editor__impact"
+            icon={<Users size={16} />}
+            title={block.usedByProfiles.length === 1
+              ? t("Used by 1 Profile")
+              : t("Used by {{count}} Profiles", { count: block.usedByProfiles.length })}
+          >
+            {t("Saving updates the shared Instruction for {{profiles}}. Agent files remain unchanged until the affected Profiles are applied.", {
+              profiles: block.usedByProfiles.join(", ")
+            })}
+          </Notice>
+        ) : null}
         <TextField
           ref={nameRef}
           label={t("Name")}

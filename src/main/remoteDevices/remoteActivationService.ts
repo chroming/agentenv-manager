@@ -25,13 +25,15 @@ import type {
   RemoteAgentEndpoint,
   RemoteDevice,
   RemoteDeviceProbe,
+  SshConfigHost,
+  SshConfigHostResolution,
   TargetManagementState,
   TargetPaths,
   UpdateRemoteDeviceInput
 } from "../../shared/types";
 import { collectLibraryResourceVersions, libraryResourceVersionsEqual } from "../../shared/libraryVersions";
 import { profileEffectiveInstructions } from "../../shared/profileInstructions";
-import { profileResourceMode } from "../../shared/profileResources";
+import { materializeTargetResourcePolicy, profileResourceMode } from "../../shared/profileResources";
 import { createUnifiedDiff } from "../diff";
 import { createExecutableResolver } from "../executableDiscovery";
 import { hashPathEntry } from "../filesystemIntegrity";
@@ -54,6 +56,7 @@ import {
   shellQuote,
   type SshTransport
 } from "./systemSshTransport";
+import { createSshConfigDiscovery, type SshConfigDiscovery } from "./sshConfigDiscovery";
 
 const ENDPOINT_PREFIX = "ssh:";
 const PROBE_TTL_MS = 30_000;
@@ -72,7 +75,11 @@ interface RemoteOperation {
 
 interface PendingRemotePreview {
   publicPreview: ActivationPreview;
-  endpoint: RemoteAgentEndpoint;
+  endpoint: RemoteAgentEndpoint & {
+    availability: "ready";
+    homeDir: string;
+    executablePath: string;
+  };
   device: RemoteDevice;
   profile: ProfileDetail;
   profileHash: string;
@@ -86,6 +93,8 @@ interface PendingRemotePreview {
 
 export interface RemoteActivationService {
   listDevices(): Promise<RemoteDevice[]>;
+  listSshConfigHosts(): Promise<SshConfigHost[]>;
+  resolveSshConfigHost(alias: string): Promise<SshConfigHostResolution>;
   addDevice(input: CreateRemoteDeviceInput): Promise<RemoteDevice>;
   updateDevice(input: UpdateRemoteDeviceInput): Promise<RemoteDevice>;
   removeDevice(id: string): Promise<void>;
@@ -110,6 +119,8 @@ const parseEndpointId = (value: string) => {
 
 const hashBuffer = (value: Buffer) => createHash("sha256").update(value).digest("hex");
 const hashText = (value: string) => createHash("sha256").update(value).digest("hex");
+const connectionIdentityFor = (device: RemoteDevice) =>
+  `${device.user ?? ""}@${device.host}:${device.port ?? 22}`;
 
 const relativeToRemoteHome = (homeDir: string, path: string) => {
   const normalizedHome = posix.resolve(homeDir);
@@ -153,6 +164,37 @@ const runLocalCommand = async (
   child.stdin.end(options.input);
 });
 
+export const validateRemoteSnapshotArchive = (archive: Buffer) => {
+  let offset = 0;
+  while (offset + 512 <= archive.length) {
+    const header = archive.subarray(offset, offset + 512);
+    if (header.every((byte) => byte === 0)) return;
+    const type = String.fromCharCode(header[156] ?? 0).replace("\0", "");
+    if (type === "1" || type === "2") {
+      throw new Error("Remote Agent snapshot contains a symbolic link or hard link");
+    }
+    if (!["", "0", "5", "7", "x", "g", "L", "K"].includes(type)) {
+      throw new Error("Remote Agent snapshot contains an unsupported filesystem entry");
+    }
+    const rawSize = header.subarray(124, 136);
+    if ((rawSize[0] ?? 0) & 0x80) {
+      throw new Error("Remote Agent snapshot uses an unsupported archive size encoding");
+    }
+    const encodedSize = rawSize.toString("ascii").replaceAll("\0", "").trim();
+    const size = encodedSize ? Number.parseInt(encodedSize, 8) : 0;
+    if (!Number.isSafeInteger(size) || size < 0) {
+      throw new Error("Remote Agent snapshot has an invalid archive entry size");
+    }
+    offset += 512 + Math.ceil(size / 512) * 512;
+    if (offset > archive.length) {
+      throw new Error("Remote Agent snapshot is truncated");
+    }
+  }
+  if (offset !== archive.length) {
+    throw new Error("Remote Agent snapshot is malformed");
+  }
+};
+
 const collectVerificationCommands = async (
   basePath: string,
   relativePath: string,
@@ -191,9 +233,8 @@ const createApplyScript = async (
     "set -eu",
     `op=${shellQuote(stateRoot)}`,
     'umask 077',
-    'mkdir -p "$op/staged" "$op/backup" "$op/touched"',
+    'mkdir -p "$op/backup" "$op/touched"',
     'printf staging > "$op/status"',
-    'tar -xf - -C "$op/staged"',
     'rollback() {',
     '  set +e'
   ];
@@ -235,6 +276,26 @@ const createApplyScript = async (
     'printf "%s\\n" "$op"'
   );
   return lines.join("\n");
+};
+
+const createApplyBootstrap = (remoteHome: string, operationId: string) => {
+  const stateRoot = posix.join(
+    remoteHome,
+    ".local",
+    "state",
+    "agentenv-manager",
+    "operations",
+    operationId
+  );
+  return [
+    "set -eu",
+    `op=${shellQuote(stateRoot)}`,
+    "umask 077",
+    'mkdir -p "$op/staged"',
+    'printf receiving > "$op/status"',
+    'if ! tar -xf - -C "$op/staged"; then printf rolled-back > "$op/status"; exit 1; fi',
+    'sh "$op/staged/.agentenv-apply.sh"'
+  ].join("\n");
 };
 
 const targetSnapshotPaths = (targetPaths: TargetPaths) => [
@@ -288,12 +349,18 @@ export const createRemoteActivationService = (options: {
   deviceStore?: RemoteDeviceStore;
   stateRepository?: RemoteEndpointStateRepository;
   transport?: SshTransport;
+  sshConfigDiscovery?: SshConfigDiscovery;
   platform?: NodeJS.Platform;
   environment?: NodeJS.ProcessEnv;
 }): RemoteActivationService => {
   const deviceStore = options.deviceStore ?? createRemoteDeviceStore(options.paths);
   const stateRepository = options.stateRepository ?? createRemoteEndpointStateRepository(options.paths);
   const transport = options.transport ?? createSystemSshTransport({
+    homeDir: options.paths.homeDir,
+    platform: options.platform,
+    environment: options.environment
+  });
+  const sshConfigDiscovery = options.sshConfigDiscovery ?? createSshConfigDiscovery({
     homeDir: options.paths.homeDir,
     platform: options.platform,
     environment: options.environment
@@ -308,6 +375,49 @@ export const createRemoteActivationService = (options: {
   });
   const probes = new Map<string, { probe: RemoteDeviceProbe; at: number }>();
   const previews = new Map<string, PendingRemotePreview>();
+  let previewCachePreparation: Promise<void> | undefined;
+
+  const preparePreviewCache = () => {
+    previewCachePreparation ??= (async () => {
+      await rm(options.paths.remotePreviewCacheDir, { recursive: true, force: true });
+      await mkdir(options.paths.remotePreviewCacheDir, { recursive: true, mode: 0o700 });
+    })();
+    return previewCachePreparation;
+  };
+
+  const disposePreview = async (previewId: string) => {
+    const pending = previews.get(previewId);
+    previews.delete(previewId);
+    if (pending) await rm(dirname(pending.desiredRoot), { recursive: true, force: true });
+  };
+
+  const sweepExpiredPreviews = async () => {
+    const expired = [...previews.entries()]
+      .filter(([, pending]) => pending.expiresAt < Date.now())
+      .map(([previewId]) => previewId);
+    await Promise.all(expired.map(disposePreview));
+  };
+
+  const cleanupRemoteOperation = async (
+    device: RemoteDevice,
+    endpoint: RemoteAgentEndpoint,
+    operationId: string
+  ) => {
+    if (!endpoint.homeDir) return;
+    const operationRoot = posix.join(
+      endpoint.homeDir,
+      ".local",
+      "state",
+      "agentenv-manager",
+      "operations",
+      operationId
+    );
+    await transport.execute(
+      device,
+      `sh -c ${shellQuote(`rm -rf -- ${shellQuote(operationRoot)}`)}`,
+      { timeoutMs: 15_000, maxOutputBytes: 1024 }
+    ).catch(() => undefined);
+  };
 
   const clearRecoveryState = (state: RemoteEndpointState): RemoteEndpointState => {
     const { recoveryRequired: _recoveryRequired, pendingAppliedState: _pending, ...rest } = state;
@@ -321,6 +431,7 @@ export const createRemoteActivationService = (options: {
   ): Promise<RemoteEndpointState | undefined> => {
     const operationId = state?.recoveryRequired?.operationId;
     if (!state?.recoveryRequired || !operationId) return state;
+    if (endpoint.availability !== "ready" || !endpoint.homeDir) return state;
     const operationRoot = posix.join(
       endpoint.homeDir,
       ".local",
@@ -342,11 +453,13 @@ export const createRemoteActivationService = (options: {
         ...state.pendingAppliedState
       };
       await stateRepository.write(reconciled);
+      await cleanupRemoteOperation(device, endpoint, operationId);
       return reconciled;
     }
-    if (remoteStatus === "rolled-back" || remoteStatus === "") {
+    if (remoteStatus === "rolled-back") {
       const reconciled = clearRecoveryState(state);
       await stateRepository.write(reconciled);
+      await cleanupRemoteOperation(device, endpoint, operationId);
       return reconciled;
     }
     return state;
@@ -396,7 +509,8 @@ export const createRemoteActivationService = (options: {
           homeDir,
           platform,
           architecture,
-          machineId: values.get("MACHINE")
+          machineId: values.get("MACHINE"),
+          connectionIdentity: connectionIdentityFor(device)
         }),
         agentExecutables: commands,
         checkedAt: new Date().toISOString(),
@@ -439,6 +553,7 @@ export const createRemoteActivationService = (options: {
           executablePath: executable,
           deviceFingerprint: probe.deviceFingerprint,
           checkedAt: probe.checkedAt,
+          availability: "ready",
           capabilities: {
             apply: true,
             capture: false,
@@ -448,6 +563,47 @@ export const createRemoteActivationService = (options: {
           }
         });
       }
+    }
+    const endpointIds = new Set(endpoints.map((endpoint) => endpoint.id));
+    const deviceById = new Map(devices.map((device) => [device.id, device]));
+    const probeByDeviceId = new Map(deviceProbes.map(({ device, probe }) => [device.id, probe]));
+    for (const state of await stateRepository.list()) {
+      if (endpointIds.has(state.endpointId)) continue;
+      const { deviceId, agentId } = parseEndpointId(state.endpointId);
+      const device = deviceById.get(deviceId);
+      if (!device) continue;
+      let descriptor;
+      try {
+        descriptor = options.targetRegistry.get(agentId).descriptor;
+      } catch {
+        continue;
+      }
+      const probe = probeByDeviceId.get(deviceId);
+      const availability = probe?.status === "ready"
+        ? "agent-missing"
+        : probe?.status ?? "unavailable";
+      endpoints.push({
+        id: state.endpointId,
+        deviceId,
+        deviceName: device.name,
+        agentId,
+        agentName: descriptor.name,
+        homeDir: probe?.homeDir,
+        executablePath: undefined,
+        deviceFingerprint: state.deviceFingerprint,
+        checkedAt: probe?.checkedAt ?? state.lastAppliedAt ?? device.updatedAt,
+        availability,
+        availabilityReason: availability === "agent-missing"
+          ? `${descriptor.name} is no longer installed on ${device.name}`
+          : probe?.error ?? "SSH device is unavailable",
+        capabilities: {
+          apply: true,
+          capture: false,
+          conversations: false,
+          workspaceOpen: false,
+          comparison: false
+        }
+      });
     }
     return endpoints;
   };
@@ -476,6 +632,7 @@ export const createRemoteActivationService = (options: {
         executablePath: executable,
         deviceFingerprint: probe.deviceFingerprint,
         checkedAt: probe.checkedAt,
+        availability: "ready" as const,
         capabilities: {
           apply: true as const,
           capture: false as const,
@@ -483,11 +640,15 @@ export const createRemoteActivationService = (options: {
           workspaceOpen: false as const,
           comparison: false as const
         }
+      } as RemoteAgentEndpoint & {
+        availability: "ready";
+        homeDir: string;
+        executablePath: string;
       }
     };
   };
 
-  const createRemoteTargetPaths = (endpoint: RemoteAgentEndpoint) =>
+  const createRemoteTargetPaths = (endpoint: RemoteAgentEndpoint & { homeDir: string }) =>
     options.targetRegistry.get(endpoint.agentId).createTargetPaths({
       homeDir: endpoint.homeDir,
       platform: "linux",
@@ -515,6 +676,7 @@ export const createRemoteActivationService = (options: {
   };
 
   const extractArchive = async (archive: Buffer, destination: string) => {
+    validateRemoteSnapshotArchive(archive);
     const tar = await tarResolver.find("tar");
     if (!tar) throw new Error("System tar was not found");
     const listing = (await runLocalCommand(tar, ["-tf", "-"], {
@@ -545,13 +707,14 @@ export const createRemoteActivationService = (options: {
   };
 
   const previewProfile = async (profileId: string, endpointId: string): Promise<ActivationPreview> => {
+    await preparePreviewCache();
+    await sweepExpiredPreviews();
     const { device, endpoint } = await endpointFor(endpointId);
     const adapter = options.targetRegistry.get(endpoint.agentId);
     const targetPaths = createRemoteTargetPaths(endpoint);
     const snapshotPaths = targetSnapshotPaths(targetPaths);
     const snapshot = await snapshotRemote(device, endpoint.homeDir, snapshotPaths);
     const previewRoot = options.paths.remotePreviewCacheDir || tmpdir();
-    await mkdir(previewRoot, { recursive: true, mode: 0o700 });
     const root = await mkdtemp(join(previewRoot, "ssh-apply-"));
     const currentRoot = join(root, "current");
     const desiredRoot = join(root, "desired");
@@ -559,6 +722,7 @@ export const createRemoteActivationService = (options: {
     await cp(currentRoot, desiredRoot, { recursive: true, dereference: false, force: true });
 
     const profile = await options.profileStore.readProfile(profileId);
+    const effectiveProfile = materializeTargetResourcePolicy(profile, endpoint.agentId);
     const profileHash = profile.targetContentHashes?.[endpoint.agentId]
       ?? createProfileContentHash(profile, endpoint.agentId);
     const skillLibrary = await options.skillLibraryStore.listSkills();
@@ -584,7 +748,7 @@ export const createRemoteActivationService = (options: {
     const nextManagedResources: ManagedResourceSnapshot[] = [];
     const footprint = { adopted: 0, modified: 0, created: 0, removed: 0, liveLinks: 0 };
 
-    const instructionsMode = profileResourceMode(profile.resources, endpoint.agentId, "instructions");
+    const instructionsMode = profileResourceMode(effectiveProfile.resources, endpoint.agentId, "instructions");
     const instructionRelative = relativeToRemoteHome(endpoint.homeDir, targetPaths.instructionsPath);
     const currentInstructionPath = localPathFor(currentRoot, instructionRelative);
     const desiredInstructionPath = localPathFor(desiredRoot, instructionRelative);
@@ -593,7 +757,7 @@ export const createRemoteActivationService = (options: {
       (resource) => resource.kind === "instructions" && resource.path === targetPaths.instructionsPath
     );
     if (instructionsMode === "manage") {
-      const afterInstructions = profileEffectiveInstructions(profile);
+      const afterInstructions = profileEffectiveInstructions(effectiveProfile);
       if (beforeInstructions !== afterInstructions) {
         await writeAtomic(desiredInstructionPath, afterInstructions);
         operations.push({
@@ -655,7 +819,7 @@ export const createRemoteActivationService = (options: {
       nextManagedResources.push(...(state?.managedResources ?? []).filter((resource) => resource.kind === "instructions"));
     }
 
-    const mcpMode = profileResourceMode(profile.resources, endpoint.agentId, "mcp");
+    const mcpMode = profileResourceMode(effectiveProfile.resources, endpoint.agentId, "mcp");
     if (mcpMode !== "ignore") {
       issues.push({
         id: `remote-mcp-${endpoint.id}`,
@@ -668,7 +832,7 @@ export const createRemoteActivationService = (options: {
       });
     }
 
-    const skillsMode = profileResourceMode(profile.resources, endpoint.agentId, "skills");
+    const skillsMode = profileResourceMode(effectiveProfile.resources, endpoint.agentId, "skills");
     const skillsDir = targetPaths.skillsDir;
     if (!skillsDir && skillsMode !== "ignore") {
       issues.push({
@@ -682,7 +846,7 @@ export const createRemoteActivationService = (options: {
     } else if (skillsDir) {
       const managedSkillResources = (state?.managedResources ?? []).filter((resource) => resource.kind === "skill");
       const desiredReferences = skillsMode === "manage"
-        ? profile.resources.skills.filter((reference) =>
+        ? effectiveProfile.resources.skills.filter((reference) =>
             reference.enabled && libraryById.get(reference.libraryId)?.globallyEnabled !== false
           )
         : [];
@@ -853,10 +1017,10 @@ export const createRemoteActivationService = (options: {
         recoveryRequired: state?.recoveryRequired
       },
       effectivePayload: {
-        instructions: instructionsMode === "manage" && profileEffectiveInstructions(profile) ? 1 : 0,
+        instructions: instructionsMode === "manage" && profileEffectiveInstructions(effectiveProfile) ? 1 : 0,
         skills: nextManagedResources.filter((resource) => resource.kind === "skill" && !resource.paused).length,
         mcpServers: 0,
-        total: (instructionsMode === "manage" && profileEffectiveInstructions(profile) ? 1 : 0) + nextManagedResources.filter((resource) => resource.kind === "skill" && !resource.paused).length
+        total: (instructionsMode === "manage" && profileEffectiveInstructions(effectiveProfile) ? 1 : 0) + nextManagedResources.filter((resource) => resource.kind === "skill" && !resource.paused).length
       },
       localFootprint: footprint,
       operation: state?.activeProfileId ? "apply" : "takeover"
@@ -878,8 +1042,11 @@ export const createRemoteActivationService = (options: {
   };
 
   const applyProfile = async (profileId: string, previewId: string): Promise<ApplyResult> => {
+    await preparePreviewCache();
+    await sweepExpiredPreviews();
     const pending = previews.get(previewId);
     if (!pending || pending.profile.id !== profileId || pending.expiresAt < Date.now()) {
+      await disposePreview(previewId);
       return { ok: false, kind: "stale", errors: ["Remote Apply preview expired; review the current device again"] };
     }
     if (pending.publicPreview.issues.some((issue) => issue.disposition === "block")) {
@@ -890,12 +1057,14 @@ export const createRemoteActivationService = (options: {
       };
     }
     if (pending.operations.length === 0 && !pending.publicPreview.targetStateChanged) {
+      await disposePreview(previewId);
       return { ok: false, kind: "no-op", errors: ["No changes to apply"] };
     }
     const latestProfile = await options.profileStore.readProfile(profileId);
     const latestHash = latestProfile.targetContentHashes?.[pending.endpoint.agentId]
       ?? createProfileContentHash(latestProfile, pending.endpoint.agentId);
     if (latestHash !== pending.profileHash) {
+      await disposePreview(previewId);
       return { ok: false, kind: "stale", errors: ["Profile changed after preview; review the remote device again"] };
     }
     const latestLibrary = await options.skillLibraryStore.listSkills();
@@ -903,10 +1072,12 @@ export const createRemoteActivationService = (options: {
       collectLibraryResourceVersions(latestProfile, latestLibrary, pending.endpoint.agentId),
       pending.publicPreview.libraryVersions
     )) {
+      await disposePreview(previewId);
       return { ok: false, kind: "stale", errors: ["Library Skills changed after preview; review the remote device again"] };
     }
     const currentEndpoint = await endpointFor(pending.endpoint.id);
     if (currentEndpoint.endpoint.deviceFingerprint !== pending.endpoint.deviceFingerprint) {
+      await disposePreview(previewId);
       return { ok: false, kind: "stale", errors: ["SSH device identity changed after preview"] };
     }
     const latestSnapshot = await snapshotRemote(
@@ -915,6 +1086,7 @@ export const createRemoteActivationService = (options: {
       pending.snapshotPaths
     );
     if (latestSnapshot.fingerprint !== pending.snapshotHash) {
+      await disposePreview(previewId);
       return { ok: false, kind: "stale", errors: ["The remote Agent changed after preview; review it again"] };
     }
     const operationId = randomUUID();
@@ -931,13 +1103,15 @@ export const createRemoteActivationService = (options: {
         force: true
       });
     }
-    const payload = await createPayloadArchive(payloadRoot);
     const script = await createApplyScript(
       pending.endpoint.homeDir,
       operationId,
       pending.operations,
       payloadRoot
     );
+    await writeFile(join(payloadRoot, ".agentenv-apply.sh"), `${script}\n`, { mode: 0o700 });
+    const payload = await createPayloadArchive(payloadRoot);
+    const bootstrap = createApplyBootstrap(pending.endpoint.homeDir, operationId);
     const previousState = await stateRepository.read(pending.endpoint.id);
     const appliedAt = new Date().toISOString();
     const pendingAppliedState: NonNullable<RemoteEndpointState["pendingAppliedState"]> = {
@@ -978,13 +1152,13 @@ export const createRemoteActivationService = (options: {
         deviceFingerprint: pending.endpoint.deviceFingerprint,
         ...pendingAppliedState
       });
-      previews.delete(previewId);
-      await rm(dirname(pending.desiredRoot), { recursive: true, force: true });
+      await cleanupRemoteOperation(pending.device, pending.endpoint, operationId);
+      await disposePreview(previewId);
     };
     try {
       const result = await transport.execute(
         pending.device,
-        `sh -c ${shellQuote(script)}`,
+        `sh -c ${shellQuote(bootstrap)}`,
         { input: payload, timeoutMs: 120_000, maxOutputBytes: 1024 * 1024 }
       );
       if (result.exitCode !== 0) throw new Error(result.stderr || "Remote Apply failed and was rolled back");
@@ -1015,6 +1189,8 @@ export const createRemoteActivationService = (options: {
           endpointId: pending.endpoint.id,
           deviceFingerprint: pending.endpoint.deviceFingerprint
         });
+        await cleanupRemoteOperation(pending.device, pending.endpoint, operationId);
+        await disposePreview(previewId);
         return {
           ok: false,
           kind: "failed",
@@ -1044,13 +1220,11 @@ export const createRemoteActivationService = (options: {
 
   return {
     listDevices: () => deviceStore.list(),
+    listSshConfigHosts: () => sshConfigDiscovery.listHosts(),
+    resolveSshConfigHost: (alias) => sshConfigDiscovery.resolveHost(alias),
     addDevice: async (input) => {
       const device = await deviceStore.add(input);
-      const probe = await probeDevice(device.id, true);
-      if (probe.status !== "ready") {
-        await deviceStore.remove(device.id);
-        throw new Error(probe.error ?? "SSH device is not ready");
-      }
+      await probeDevice(device.id, true);
       return device;
     },
     updateDevice: async (input) => {
@@ -1063,7 +1237,10 @@ export const createRemoteActivationService = (options: {
             stateRepository.read(endpointIdFor(device.id, descriptor.id))
           ))).some((state) => state && state.deviceFingerprint !== probe.deviceFingerprint)
         : false;
-      if (probe.status !== "ready" || identityChanged) {
+      const managedStates = (await stateRepository.list()).filter((state) =>
+        state.endpointId.startsWith(`ssh:${device.id}:`)
+      );
+      if (identityChanged || (probe.status !== "ready" && managedStates.length > 0)) {
         await deviceStore.update({
           id: previous.id,
           name: previous.name,
@@ -1075,12 +1252,18 @@ export const createRemoteActivationService = (options: {
         throw new Error(
           identityChanged
             ? "This connection points to a different Linux device. Remove it and add the new device separately."
-            : probe.error ?? "SSH device is not ready"
+            : "Reconnect this managed SSH device before changing its connection details"
         );
       }
       return device;
     },
     removeDevice: async (id) => {
+      const states = (await stateRepository.list()).filter((state) =>
+        state.endpointId.startsWith(`ssh:${id}:`)
+      );
+      if (states.some((state) => state.recoveryRequired)) {
+        throw new Error("Reconnect this SSH device and finish recovery before removing it");
+      }
       await deviceStore.remove(id);
       probes.delete(id);
       await stateRepository.removeDevice(id);

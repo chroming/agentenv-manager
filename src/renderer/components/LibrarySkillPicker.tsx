@@ -6,7 +6,8 @@ import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
 import { SkillTagList } from "./SkillTags";
-import { ChoiceInput, SearchField, SelectControl } from "./ui";
+import { ResourcePickerOption } from "./ResourcePickerOption";
+import { SearchField, SelectControl } from "./ui";
 
 interface LibrarySkillPickerProps {
   emptyLabel?: string;
@@ -88,44 +89,41 @@ export const LibrarySkillPicker = ({
         {visibleSkills.map((skill) => {
           const selected = selectedIds.includes(skill.id);
           return (
-            <label
-              className={`resource-picker-option${selected ? " is-selected" : ""}`}
-              key={skill.id}
-            >
-              <ChoiceInput
-                aria-label={skill.name}
-                checked={selected}
-                name={selectionMode === "single" ? radioGroupName : undefined}
-                type={selectionMode === "single" ? "radio" : "checkbox"}
-                onChange={() => toggle(skill.id)}
-              />
-              <span className="resource-picker-option__content">
-                <span className="resource-picker-option__icon" aria-hidden="true">
-                  <ResourceIconArtwork
-                    fallbackIconKey={skill.sourceType === "github" || skill.sourceType === "git"
-                      ? "github"
-                      : "folder"}
-                    iconKey={skill.iconKey}
-                    sourceUrl={skill.sourceType === "github" || skill.sourceType === "git"
-                      ? skill.source
-                      : undefined}
-                    size={17}
-                  />
-                </span>
-                <span className="resource-picker-option__main">
-                  <strong>{skill.name}</strong>
+            <ResourcePickerOption
+              checked={selected}
+              description={(
+                <>
                   <OverflowTooltip
-                    className="resource-picker-option__description"
+                    className="resource-picker-option__description-text"
                     text={skill.description || skill.id}
                   />
                   <SkillTagList className="resource-picker-option__tags" maxVisible={3} tags={skill.tags} />
-                  <OverflowTooltip
-                    className="resource-picker-option__metadata"
-                    text={`${skill.version ? `v${skill.version}` : skill.contentHash.slice(0, 7)} · ${skill.path}`}
-                  />
-                </span>
-              </span>
-            </label>
+                </>
+              )}
+              icon={(
+                <ResourceIconArtwork
+                  fallbackIconKey={skill.sourceType === "github" || skill.sourceType === "git"
+                    ? "github"
+                    : "folder"}
+                  iconKey={skill.iconKey}
+                  sourceUrl={skill.sourceType === "github" || skill.sourceType === "git"
+                    ? skill.source
+                    : undefined}
+                  size={17}
+                />
+              )}
+              key={skill.id}
+              metadata={(
+                <OverflowTooltip
+                  className="resource-picker-option__metadata-text"
+                  text={`${skill.version ? `v${skill.version}` : skill.contentHash.slice(0, 7)} · ${skill.path}`}
+                />
+              )}
+              name={selectionMode === "single" ? radioGroupName : undefined}
+              title={skill.name}
+              type={selectionMode === "single" ? "radio" : "checkbox"}
+              onChange={() => toggle(skill.id)}
+            />
           );
         })}
       </div>

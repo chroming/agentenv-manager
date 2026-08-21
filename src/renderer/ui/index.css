@@ -7,6 +7,7 @@
 @import "../styles.css" layer(legacy);
 @import "./primitives.css" layer(primitives);
 @import "./patterns.css" layer(patterns);
+@import "./status-feedback.css" layer(patterns);
 @import "./shell.css" layer(shell);
 @import "./pages/targets.css" layer(pages);
 @import "./pages/targets-remote.css" layer(pages);
@@ -20,6 +21,7 @@
 @import "./pages/skills.css" layer(pages);
 @import "./pages/skills-merge.css" layer(pages);
 @import "./pages/skill-sources.css" layer(pages);
+@import "./pages/skill-groups.css" layer(pages);
 @import "./pages/skill-cleanup.css" layer(pages);
 @import "./pages/skills-dialogs.css" layer(pages);
 @import "./pages/skill-update-dialogs.css" layer(pages);

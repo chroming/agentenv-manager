@@ -54,12 +54,25 @@
   color: #17835a;
 }
 
+.workspace-sync-status.is-checking,
+.workspace-sync-status.is-local-changes,
+.workspace-sync-status.is-remote-changes {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+  color: var(--accent-strong);
+}
+
 .workspace-sync-status.is-review-required,
-.workspace-sync-status.is-error,
 .workspace-sync-status.is-recovery-required {
-  background: #fff7ed;
-  border-color: #fed7aa;
-  color: #b45309;
+  background: var(--warning-bg);
+  border-color: color-mix(in srgb, var(--warning) 24%, var(--border));
+  color: var(--warning-text);
+}
+
+.workspace-sync-status.is-error {
+  background: var(--danger-bg);
+  border-color: color-mix(in srgb, var(--danger) 24%, var(--border));
+  color: var(--danger);
 }
 
 .workspace-sync-connect {

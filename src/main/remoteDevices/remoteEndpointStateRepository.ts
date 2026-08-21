@@ -1,4 +1,4 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import type {
@@ -96,6 +96,7 @@ export interface RemoteEndpointState {
 }
 
 export interface RemoteEndpointStateRepository {
+  list(): Promise<RemoteEndpointState[]>;
   read(endpointId: string): Promise<RemoteEndpointState | undefined>;
   write(state: RemoteEndpointState): Promise<void>;
   removeDevice(deviceId: string): Promise<void>;
@@ -109,7 +110,22 @@ export const createRemoteEndpointStateRepository = (
 ): RemoteEndpointStateRepository => {
   const statePath = (endpointId: string) =>
     join(paths.remoteEndpointStatesDir, `${safeFileName(endpointId)}.json`);
+  const list = async () => {
+    let names: string[];
+    try {
+      names = await readdir(paths.remoteEndpointStatesDir);
+    } catch (error) {
+      if (isMissingFileError(error)) return [];
+      throw error;
+    }
+    return Promise.all(names.filter((name) => name.endsWith(".json")).map(async (name) =>
+      parseRemoteEndpointStateData(
+        JSON.parse(await readFile(join(paths.remoteEndpointStatesDir, name), "utf8"))
+      )
+    ));
+  };
   return {
+    list,
     read: async (endpointId) => {
       try {
         const parsed = parseRemoteEndpointStateData(
@@ -125,8 +141,11 @@ export const createRemoteEndpointStateRepository = (
       await mkdir(paths.remoteEndpointStatesDir, { recursive: true, mode: 0o700 });
       await writeAtomic(statePath(state.endpointId), `${JSON.stringify(state, null, 2)}\n`);
     },
-    removeDevice: async (_deviceId) => {
-      // Endpoint state is retained as a recovery receipt when a device is removed.
+    removeDevice: async (deviceId) => {
+      const states = (await list()).filter((state) =>
+        state.endpointId.startsWith(`ssh:${deviceId}:`)
+      );
+      await Promise.all(states.map((state) => rm(statePath(state.endpointId), { force: true })));
     }
   };
 };

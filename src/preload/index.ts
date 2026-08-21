@@ -93,10 +93,14 @@ const api: AgentEnvApi = {
   listTargets: (forceRefresh) => ipcRenderer.invoke("targets:list", forceRefresh),
   listTargetStates: () => ipcRenderer.invoke("targets:list-states"),
   listRemoteDevices: () => ipcRenderer.invoke("remote-devices:list"),
+  listSshConfigHosts: () => ipcRenderer.invoke("remote-devices:list-ssh-config-hosts"),
+  resolveSshConfigHost: (alias) =>
+    ipcRenderer.invoke("remote-devices:resolve-ssh-config-host", alias),
   addRemoteDevice: (input) => ipcRenderer.invoke("remote-devices:add", input),
   updateRemoteDevice: (input) => ipcRenderer.invoke("remote-devices:update", input),
   removeRemoteDevice: (id) => ipcRenderer.invoke("remote-devices:remove", id),
-  probeRemoteDevice: (id) => ipcRenderer.invoke("remote-devices:probe", id),
+  probeRemoteDevice: (id, forceRefresh) =>
+    ipcRenderer.invoke("remote-devices:probe", id, forceRefresh),
   listRemoteEndpoints: (forceRefresh) =>
     ipcRenderer.invoke("remote-endpoints:list", forceRefresh),
   listRemoteTargetStates: () => ipcRenderer.invoke("remote-endpoints:list-states"),
@@ -120,6 +124,10 @@ const api: AgentEnvApi = {
   removeInstructionBlock: (input) => ipcRenderer.invoke("instructions:remove", input),
   selectInstructionFile: () => ipcRenderer.invoke("dialog:select-instruction-file"),
   listSkillLibrary: () => ipcRenderer.invoke("skills:list-library"),
+  listSkillGroups: () => ipcRenderer.invoke("skills:list-groups"),
+  createSkillGroup: (input) => ipcRenderer.invoke("skills:create-group", input),
+  updateSkillGroup: (input) => ipcRenderer.invoke("skills:update-group", input),
+  removeSkillGroup: (id) => ipcRenderer.invoke("skills:remove-group", id),
   listSkillFiles: (id) => ipcRenderer.invoke("skills:list-files", id),
   readSkillFile: (input) => ipcRenderer.invoke("skills:read-file", input),
   scanSkillInventory: () => ipcRenderer.invoke("skills:scan-inventory"),

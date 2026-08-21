@@ -634,7 +634,9 @@ export const PreviewDialog = ({
                 : isNoOp
                   ? t("No files or AgentEnv state will change.")
                 : isActivationPreview
-                    ? t("A recovery point will be created before changes.")
+                    ? preview.targetId?.startsWith("ssh:")
+                      ? t("A temporary rollback checkpoint protects this remote Apply.")
+                      : t("A recovery point will be created before changes.")
                     : t("Review the changes below before continuing.")}
             </span>
           </p>

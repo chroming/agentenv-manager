@@ -4,7 +4,7 @@ import { useI18n } from "../i18n";
 import { Button, ControlGroup, RefreshAction } from "./ui";
 
 interface LibraryHeaderActionsProps {
-  mode: "skills" | "sources";
+  mode: "skills" | "sources" | "groups";
   freshness: FreshnessState;
   toolOpen?: boolean;
   returnTargetName?: string;
