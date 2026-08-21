@@ -4677,6 +4677,7 @@ Object.assign(zhTW, {
 
 Object.assign(zhCN, {
   "Not managed": "未管理",
+  "Changed outside AgentEnv": "已在 AgentEnv 外部更改",
   "Needs decision": "需要决定",
   "Repair": "修复",
   "Profile controlled": "由 Profile 控制",
@@ -4708,6 +4709,7 @@ Object.assign(zhCN, {
 
 Object.assign(zhTW, {
   "Not managed": "未管理",
+  "Changed outside AgentEnv": "已在 AgentEnv 外部變更",
   "Needs decision": "需要決定",
   "Repair": "修復",
   "Profile controlled": "由 Profile 控制",
