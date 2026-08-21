@@ -471,11 +471,33 @@ description: >
     const validId = "cleanup-1784603431397-valid";
     const validSource = join(paths.userSkillsDir, "valid-reviewer");
     const validBackup = join(backupRoot, validId, "locations", "0-valid-reviewer");
+    const validOwner = `${validSource}.agentenv-owner.json`;
+    const validOwnerBackup = join(
+      backupRoot,
+      validId,
+      "locations",
+      "0-valid-reviewer.agentenv-owner-0.json"
+    );
+    const validTargetState = join(paths.targetStatesDir, "opencode.json");
+    const validTargetStateBackup = join(
+      backupRoot,
+      validId,
+      "target-states",
+      "0-opencode.json"
+    );
     await mkdir(validSource, { recursive: true });
     await mkdir(validBackup, { recursive: true });
+    await mkdir(dirname(validTargetState), { recursive: true });
+    await mkdir(dirname(validTargetStateBackup), { recursive: true });
     await writeFile(join(validSource, "SKILL.md"), "# Current\n", "utf8");
     await writeFile(join(validBackup, "SKILL.md"), "# Before cleanup\n", "utf8");
+    await writeFile(validOwner, '{"owner":"agentenv-manager"}\n', "utf8");
+    await writeFile(validOwnerBackup, '{"owner":"agentenv-manager"}\n', "utf8");
+    await writeFile(validTargetState, '{"targetId":"opencode"}\n', "utf8");
+    await writeFile(validTargetStateBackup, '{"targetId":"opencode"}\n', "utf8");
     const validHash = await hashPathEntry(validBackup);
+    const validOwnerHash = await hashPathEntry(validOwnerBackup);
+    const validTargetStateHash = await hashPathEntry(validTargetStateBackup);
     await writeFile(
       join(backupRoot, validId, "manifest.json"),
       `${JSON.stringify({
@@ -486,8 +508,24 @@ description: >
         createdAt: "2026-07-21T03:10:31.397Z",
         operation: "cleanup",
         status: "complete",
-        expectedPaths: [{ path: validSource, sha256: validHash }],
-        entries: [{ sourcePath: validSource, backupPath: validBackup, sha256: validHash }]
+        expectedPaths: [
+          { path: validSource, sha256: validHash },
+          { path: validOwner, sha256: validOwnerHash },
+          { path: validTargetState, sha256: validTargetStateHash }
+        ],
+        entries: [
+          { sourcePath: validSource, backupPath: validBackup, sha256: validHash },
+          {
+            sourcePath: validOwner,
+            backupPath: validOwnerBackup,
+            sha256: validOwnerHash
+          },
+          {
+            sourcePath: validTargetState,
+            backupPath: validTargetStateBackup,
+            sha256: validTargetStateHash
+          }
+        ]
       }, null, 2)}\n`,
       "utf8"
     );
@@ -528,6 +566,13 @@ description: >
         createdAt: "2026-07-21T03:10:31.397Z",
         locationCount: 1,
         operation: "cleanup"
+      }
+    ]);
+    await expect(store.previewCleanupBackup(validId)).resolves.toEqual([
+      {
+        kind: "directory",
+        path: validSource,
+        state: "saved"
       }
     ]);
     expect(warning).toHaveBeenCalledWith(

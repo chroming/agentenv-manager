@@ -222,9 +222,25 @@ export const createSkillCleanupBackupStore = ({
         (root) => pathsEqual(dirname(sourcePath), root) && isPathInside(root, sourcePath)
       );
     const backupLocationsRoot = resolve(backupDir, "locations");
-    if (manifest.entries.length > 0) {
-      const locationsStats = await lstat(backupLocationsRoot);
-      if (!locationsStats.isDirectory() || locationsStats.isSymbolicLink()) {
+    const backupTargetStatesRoot = resolve(backupDir, "target-states");
+    const payloadRootsFor = (sourcePath: string) =>
+      pathsEqual(dirname(sourcePath), paths.targetStatesDir)
+        ? [backupLocationsRoot, backupTargetStatesRoot]
+        : [backupLocationsRoot];
+    const payloadRoots = new Set<string>();
+    for (const entry of manifest.entries) {
+      if (typeof entry?.sourcePath !== "string" || typeof entry?.backupPath !== "string") {
+        continue;
+      }
+      const payloadRoot = resolve(dirname(entry.backupPath));
+      if (!payloadRootsFor(resolve(entry.sourcePath)).some((root) => pathsEqual(root, payloadRoot))) {
+        throw new Error(`Skill cleanup backup contains an unsafe path: ${safeId}`);
+      }
+      payloadRoots.add(payloadRoot);
+    }
+    for (const payloadRoot of payloadRoots) {
+      const payloadStats = await lstat(payloadRoot);
+      if (!payloadStats.isDirectory() || payloadStats.isSymbolicLink()) {
         throw new Error(`Invalid Skill cleanup backup payload directory: ${safeId}`);
       }
     }
@@ -282,13 +298,23 @@ export const createSkillCleanupBackupStore = ({
       const backupPathKey = canonicalPathKey(backupPath);
       const expected = manifest.expectedPaths.find((item) => pathsEqual(item.path, sourcePath));
       const backupNameMatch = basename(backupPath).match(/^\d+-(.+)$/);
+      const sourceName = basename(sourcePath);
+      const backupSourceName = backupNameMatch?.[1];
+      const nameMatches = backupSourceName === sourceName || (
+        sourceName.endsWith(".agentenv-owner.json") &&
+        typeof backupSourceName === "string" &&
+        new RegExp(
+          `^${sourceName.slice(0, -".json".length).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-\\d+\\.json$`
+        ).test(backupSourceName)
+      );
+      const payloadRoot = resolve(dirname(backupPath));
       if (
         !sourceAllowed ||
         expected?.sha256 !== entry.sha256 ||
-        !pathsEqual(dirname(backupPath), backupLocationsRoot) ||
-        backupNameMatch?.[1] !== basename(sourcePath) ||
+        !payloadRootsFor(sourcePath).some((root) => pathsEqual(root, payloadRoot)) ||
+        !nameMatches ||
         seenBackupPaths.has(backupPathKey) ||
-        !isPathInside(backupLocationsRoot, backupPath)
+        !isPathInside(payloadRoot, backupPath)
       ) {
         throw new Error(`Skill cleanup backup contains an unsafe path: ${safeId}`);
       }
@@ -348,7 +374,9 @@ export const createSkillCleanupBackupStore = ({
             locationCount: manifest.operation === "update"
               ? 1
               : manifest.entries.filter(
-                  (item) => !item.sourcePath.endsWith(".agentenv-owner.json")
+                  (item) =>
+                    !item.sourcePath.endsWith(".agentenv-owner.json") &&
+                    !pathsEqual(dirname(item.sourcePath), paths.targetStatesDir)
                 ).length,
             operation: manifest.operation,
             ...(recoveryRequired ? { recoveryRequired: true } : {}),
@@ -379,7 +407,11 @@ export const createSkillCleanupBackupStore = ({
   const previewCleanupBackup = async (id: string): Promise<ManagedBackupFile[]> => {
     const { manifest } = await readCleanupBackup(id);
     return manifest.entries
-      .filter((entry) => !entry.sourcePath.endsWith(".agentenv-owner.json"))
+      .filter(
+        (entry) =>
+          !entry.sourcePath.endsWith(".agentenv-owner.json") &&
+          !pathsEqual(dirname(entry.sourcePath), paths.targetStatesDir)
+      )
       .map((entry) => ({
         kind: "directory" as const,
         path: entry.sourcePath,
