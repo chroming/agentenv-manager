@@ -20,7 +20,6 @@ import type {
   DiagnosticIssueDetail,
   ProfileDetail,
   ProfileResourceMode,
-  ProfileResources,
   ProfileSummary,
   ResourceIconKey,
   RollbackPreview,
@@ -209,7 +208,8 @@ import {
 } from "./hooks/useSkillCleanupBoundaries";
 import { useNativeResourceInspection } from "./hooks/useNativeResourceInspection";
 import { useRemoteEndpoints } from "./hooks/useRemoteEndpoints";
-import { mergeLocalTargetStates, preserveSelectedTarget } from "./targetStateSlices";
+import { mergeLocalTargetStates, mergeLocalTargetStatesWithProfiles, preserveSelectedTarget } from "./targetStateSlices";
+import { emptyProfileResources } from "./profileDraftState";
 import { useWindowChromeState } from "./hooks/useWindowChromeState";
 import { useDeviceUiState } from "./hooks/useDeviceUiState";
 import { loadProfileCoreData } from "./profileCoreLoader";
@@ -239,12 +239,6 @@ import {
 import { deriveAgentSetupAction, deriveAgentSetupActions } from "./agentSetup";
 import { useInstructionLibrary } from "./hooks/useInstructionLibrary";
 
-const emptyProfileResources: ProfileResources = {
-  instructions: [],
-  skills: [],
-  managementByTarget: {},
-  mcpByTarget: {}
-};
 type ComposerSection = "instructions" | "skills" | "mcp";
 type ProfileDialogMode = "create" | "edit";
 type ProfileCreateSource = "blank" | "target";
@@ -600,14 +594,8 @@ const AppContent = ({
     acceptUiState(core.uiState);
     setSupportedTargets(core.supportedTargetItems);
     setTargets(core.targetItems);
-    setTargetStates((current) => mergeLocalTargetStates(
-      current,
-      core.targetStateItems.map((targetState) => ({
-        ...targetState,
-        activeProfileName:
-          core.profileItems.find((profile) => profile.id === targetState.activeProfileId)?.name ??
-          targetState.activeProfileName
-      }))
+    setTargetStates((current) => mergeLocalTargetStatesWithProfiles(
+      current, core.targetStateItems, core.profileItems
     ));
     setProfiles(core.profileItems);
     settingsController.actions.accept(core.settings);

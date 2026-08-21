@@ -4,6 +4,13 @@ import type {
   SaveProfileInput
 } from "../shared/types";
 
+export const emptyProfileResources: ProfileResources = {
+  instructions: [],
+  skills: [],
+  managementByTarget: {},
+  mcpByTarget: {}
+};
+
 const canonicalize = (value: unknown): unknown => {
   if (Array.isArray(value)) {
     return value.map(canonicalize);

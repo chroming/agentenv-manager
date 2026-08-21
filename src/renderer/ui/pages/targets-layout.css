@@ -1,0 +1,22 @@
+.target-page:has(.target-page__context) {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.target-location-divider {
+  align-items: center;
+  align-self: stretch;
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--muted);
+  display: flex;
+  font-size: var(--font-size-metadata);
+  justify-content: space-between;
+  min-height: 28px;
+  padding: 0 12px;
+  width: auto;
+}
+
+.target-location-divider > span:first-child {
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+}

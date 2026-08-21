@@ -1,4 +1,4 @@
-import type { TargetInfo, TargetManagementState } from "../shared/types";
+import type { ProfileSummary, TargetInfo, TargetManagementState } from "../shared/types";
 
 export const isRemoteTargetId = (targetId: string) => targetId.startsWith("ssh:");
 
@@ -9,6 +9,16 @@ export const mergeLocalTargetStates = (
   ...local,
   ...current.filter((state) => isRemoteTargetId(state.targetId))
 ];
+
+export const mergeLocalTargetStatesWithProfiles = (
+  current: TargetManagementState[],
+  local: TargetManagementState[],
+  profiles: ProfileSummary[]
+) => mergeLocalTargetStates(current, local.map((state) => ({
+  ...state,
+  activeProfileName: profiles.find((profile) => profile.id === state.activeProfileId)?.name ??
+    state.activeProfileName
+})));
 
 export const mergeRemoteTargetStates = (
   current: TargetManagementState[],
