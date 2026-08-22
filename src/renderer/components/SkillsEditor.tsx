@@ -135,10 +135,6 @@ export const SkillsEditor = ({
     [availableGroups]
   );
   const attachedIds = new Set(value.skills.map((skill) => skill.libraryId));
-  const enabledCount = value.skills.filter((reference) => {
-    const skill = skillsById.get(reference.libraryId);
-    return Boolean(skill && profileSkillEnabled(value, reference) && skill.globallyEnabled !== false);
-  }).length;
   const checkableIds = value.skills
     .filter((reference) => profileManagesSkills && profileSkillEnabled(value, reference))
     .map((reference) => skillsById.get(reference.libraryId))
@@ -267,6 +263,10 @@ export const SkillsEditor = ({
                         : deploymentPending
                           ? "Apply pending"
                           : "Ready";
+    const routineStatus = status === "Ready" ||
+      status === "Disabled" ||
+      status === "Group off" ||
+      status === "Off for Agent";
     const visibleDetail = skill?.version
       ? `v${skill.version}`
       : !skill
@@ -327,10 +327,12 @@ export const SkillsEditor = ({
               ? () => onPreviewSkillUpdate(reference.libraryId)
               : undefined}
           />
+        ) : routineStatus ? (
+          <span aria-hidden="true" className="profile-skill-state">&nbsp;</span>
         ) : (
           <span
             className={`profile-skill-state${
-              status === "Ready" || localOverride ? " is-neutral" : ""
+              localOverride ? " is-neutral" : ""
             }${status === "Apply pending" ? " is-update" : ""}${
               !skill || update?.error ? " is-error" : ""
             }`}
@@ -385,14 +387,6 @@ export const SkillsEditor = ({
         aria-label={t("Profile Skill actions")}
         className="profile-skill-toolbar"
       >
-        <div className="profile-skill-summary ui-visually-hidden">
-          <span>
-            {t("{{count}} enabled", { count: enabledCount })}
-            {value.skills.length > enabledCount
-              ? ` · ${t("{{count}} disabled", { count: value.skills.length - enabledCount })}`
-              : ""}
-          </span>
-        </div>
         <div className="profile-skill-toolbar__actions">
           {profileManagesSkills && onCheckSkillUpdates &&
           (checkableIds.length > 0 || checkingSkillUpdates) ? (
@@ -426,12 +420,13 @@ export const SkillsEditor = ({
         <Notice
           actions={(
             <Button
+              aria-label={t("Move shared Skills to Profile control…")}
               icon={<FolderInput size={14} strokeWidth={2.1} aria-hidden="true" />}
               size="compact"
               variant="warning"
               onClick={sharedRuntimeBoundary.onReview}
             >
-              {t("Move shared Skills to Profile control…")}
+              {t("Review move…")}
             </Button>
           )}
           className="profile-skill-shared-notice"
@@ -440,20 +435,9 @@ export const SkillsEditor = ({
           tone="info"
         >
           <span>{t(
-            "{{target}} still loads these Skills from a shared folder. Move them after preview and backup so this Profile can control whether they are on or off.",
+            "Review the safe move before this Profile controls {{target}} Skills.",
             { target: sharedRuntimeBoundary.targetName }
           )}</span>
-          <OverflowTooltip
-            ariaLabel={t("Shared Skill paths")}
-            className="profile-skill-shared-path"
-            displayText={sharedRuntimeBoundary.paths.length > 1
-              ? t("{{path}} and {{count}} more", {
-                  path: sharedRuntimeBoundary.paths[0],
-                  count: sharedRuntimeBoundary.paths.length - 1
-                })
-              : sharedRuntimeBoundary.paths[0]}
-            text={sharedRuntimeBoundary.paths.join("\n")}
-          />
         </Notice>
       ) : null}
 

@@ -1805,7 +1805,17 @@ Status: shared transient success, persistent error, background progress, GitHub 
   width, a Skill's update or relink command collapses to the shared `32px` icon command with an
   accessible name while identity, lifecycle state, policy, and overflow retain dedicated
   non-overlapping lanes.
+- Profiles and Workspaces use the same exclusive top-level resource disclosure contract. Opening
+  Instructions, Skills, or MCPs closes the previously open sibling; activating the open trigger
+  collapses it, so zero or one top-level editor is visible. This transient state is not persisted and
+  does not change nested Skill-group disclosures.
 - The collapsed Profile resource trigger owns the resource name and count. Expanding Instructions, Skills, or MCPs MUST NOT repeat that heading inside the editor. An expanded toolbar MAY show one concise live-Agent scope label plus commands local to that editor; it MUST NOT create an empty command strip or a second resource title. A manageable MCP connection uses one keyboard-operable On/Off switch in a fixed action lane. Unsupported or ambiguous connections expose one quiet Agent-controlled value rather than a fake editable control.
+- The collapsed disclosure header is also the sole visible owner of routine resource totals and
+  policy outcomes. Expanded rows MUST NOT repeat `Library`, `On`, `Off`, `Ready`, or parent-level
+  `Group off` when identity, switch position, tone, and the parent header already communicate that
+  state. Missing resources, updates, external ownership, pending application, and other conditions
+  that require attention remain visible. A blocking shared-copy notice keeps one concise consequence
+  and one review action; paths and the complete migration plan belong in that review flow.
 - Profile Composer resource triggers remain `52px` high before, during, and after expansion. Expanding one resource MUST NOT compress, hide metadata from, or reposition its sibling triggers. The expanded trigger and editor surface MUST be visually distinguishable from ordinary collapsed rows without turning the editor into a nested card.
 - Profile Skills with zero or one item fit their content without stretching empty list space. Larger collections grow only within the available editor region and keep the Skill list as the scroll owner.
 - Agents use one continuous ordered management list at every supported width, with ordinary healthy state rendered as quiet metadata rather than a filled badge or separate card. Agent identity, health, management state, active Profile, last-applied time, and actions own stable sibling lanes. Every Capture, Profile, and Diagnostics control uses the shared control primitives and identical geometry across all Agent rows, regardless of Agent name, lifecycle state, or action label. Diagnostics expands to the full width of its owning Agent, shifts only later rows, leaves no peer-column void, and opening a second Diagnostics region closes the first.

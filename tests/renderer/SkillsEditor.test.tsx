@@ -51,6 +51,31 @@ afterEach(() => {
 });
 
 describe("SkillsEditor v2", () => {
+  it("keeps routine row state implicit in the switch and reserves text for exceptions", () => {
+    render(<SkillsEditor value={resources} librarySkills={skills} onChange={vi.fn()} />);
+
+    const readyRow = screen.getByRole("listitem", { name: "Profile Skill review" });
+    expect(readyRow).not.toHaveTextContent("Ready");
+    expect(within(readyRow).getByRole("switch", { name: "Disable Code Review" }))
+      .toHaveAttribute("aria-checked", "true");
+
+    cleanup();
+    render(
+      <SkillsEditor
+        value={{
+          ...resources,
+          skills: [{ libraryId: "review", targetName: "review", enabled: false }]
+        }}
+        librarySkills={skills}
+        onChange={vi.fn()}
+      />
+    );
+    const disabledRow = screen.getByRole("listitem", { name: "Profile Skill review" });
+    expect(disabledRow).not.toHaveTextContent("Disabled");
+    expect(within(disabledRow).getByRole("switch", { name: "Enable Code Review" }))
+      .toHaveAttribute("aria-checked", "false");
+  });
+
   it("treats a Group switch as a gate and preserves member switches", () => {
     const onChange = vi.fn();
     const groupedResources: ProfileResources = {

@@ -4702,7 +4702,8 @@ Object.assign(zhCN, {
   "Move new shared Skills to Profile control…": "将新的共享 Skills 迁移为 Profile 控制…",
   "Shared copy prevents changes": "共享副本阻止了更改",
   "Shared copies prevent this Profile change": "共享副本阻止了此 Profile 更改",
-  "{{target}} still loads these Skills from a shared folder. Move them after preview and backup so this Profile can control whether they are on or off.": "{{target}} 仍从共享目录加载这些 Skills。预览并备份后迁移它们，Profile 才能控制其开启或关闭。",
+  "Review the safe move before this Profile controls {{target}} Skills.": "请先检查安全迁移方案，再让此 Profile 控制 {{target}} Skills。",
+  "Review move…": "检查迁移…",
   "Shared copies prevent Profile control": "共享副本阻止 Profile 控制",
   "Move these Skills after preview and backup so the Profile can control whether they are on or off.": "预览并备份后迁移这些 Skills，Profile 才能控制其开启或关闭。"
 });
@@ -4734,7 +4735,8 @@ Object.assign(zhTW, {
   "Move new shared Skills to Profile control…": "將新的共享 Skills 遷移為 Profile 控制…",
   "Shared copy prevents changes": "共享副本阻止了變更",
   "Shared copies prevent this Profile change": "共享副本阻止了此 Profile 變更",
-  "{{target}} still loads these Skills from a shared folder. Move them after preview and backup so this Profile can control whether they are on or off.": "{{target}} 仍從共享目錄載入這些 Skills。預覽並備份後遷移它們，Profile 才能控制其開啟或關閉。",
+  "Review the safe move before this Profile controls {{target}} Skills.": "請先檢查安全遷移方案，再讓此 Profile 控制 {{target}} Skills。",
+  "Review move…": "檢查遷移…",
   "Shared copies prevent Profile control": "共享副本阻止 Profile 控制",
   "Move these Skills after preview and backup so the Profile can control whether they are on or off.": "預覽並備份後遷移這些 Skills，Profile 才能控制其開啟或關閉。"
 });

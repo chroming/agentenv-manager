@@ -64,7 +64,7 @@ import {
   SingleObjectWorkspace,
   TextField,
   ResourceRow,
-  useDisclosureSet
+  useExclusiveDisclosure
 } from "./ui";
 
 type ProjectOperation = "add" | "refresh" | "rename" | "remove" | "add-skill" | "remove-skill" | "inspect" | "open" | "preview";
@@ -94,7 +94,7 @@ export const ProjectsWorkspace = ({
   const {
     isExpanded: resourceKindIsExpanded,
     toggleExpandedId: toggleResourceKind
-  } = useDisclosureSet<ProjectResourceKind>();
+  } = useExclusiveDisclosure<ProjectResourceKind>();
   const [selectedId, setSelectedId] = useState<string | undefined>(uiState.selectedWorkspaceId);
   const [operation, setOperation] = useState<ProjectOperation>();
   const [error, setError] = useState("");

@@ -59,3 +59,4 @@ export {
 export { ToolbarOverflowMenu, type ToolbarOverflowMenuItem } from "./ToolbarOverflowMenu";
 export { focusInitialActionMenuItem, handleActionMenuKeyDown } from "./actionMenuKeyboard";
 export { useDisclosureSet } from "./useDisclosureSet";
+export { useExclusiveDisclosure } from "./useExclusiveDisclosure";

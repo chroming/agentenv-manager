@@ -165,7 +165,7 @@ import {
   ObjectSwitcher,
   PageHeader,
   SingleObjectWorkspace,
-  useDisclosureSet
+  useExclusiveDisclosure
 } from "./components/ui";
 import {
   deriveApplyActionLabel,
@@ -324,7 +324,7 @@ const AppContent = ({
     isExpanded: composerSectionIsExpanded,
     replaceExpandedIds: replaceComposerSections,
     toggleExpandedId: toggleComposerSection
-  } = useDisclosureSet<ComposerSection>();
+  } = useExclusiveDisclosure<ComposerSection>();
   const [isTargetMenuOpen, setIsTargetMenuOpen] = useState(false);
   const [targetMenuQuery, setTargetMenuQuery] = useState("");
   const [isProfileActionsOpen, setIsProfileActionsOpen] = useState(false);

@@ -193,13 +193,13 @@ describe("Workspaces desktop workflow", () => {
 
     await page.getByRole("button", { name: "Expand Skills", exact: true }).click();
     await expect.poll(() => page.getByRole("button", {
-      name: "Collapse Instructions",
+      name: "Expand Instructions",
       exact: true
-    }).getAttribute("aria-expanded")).toBe("true");
+    }).getAttribute("aria-expanded")).toBe("false");
     expectStableResourceDisclosureHeaders(
       collapsedResourceHeaders,
       await readResourceDisclosureHeaders(workspaceResources),
-      ["workspace-instructions", "workspace-skill"]
+      ["workspace-skill"]
     );
     await page.getByRole("button", { name: "Copy from Library" }).click();
     await page.getByRole("dialog", { name: "Copy Skill to Workspace" }).waitFor();
@@ -345,12 +345,14 @@ describe("Workspaces desktop workflow", () => {
     )).toBe(false);
     await page.getByRole("button", { name: "Close", exact: true }).click();
 
+    await page.getByRole("button", { name: "Expand Instructions", exact: true }).click();
     await page.getByRole("button", { name: "Add instruction", exact: true }).click();
     await page.getByRole("textbox", { name: "Workspace instruction content" }).fill("# Project rules\n");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     const recreatedInstructionDialog = page.getByRole("dialog", { name: "Workspace instruction" });
     await recreatedInstructionDialog.getByRole("button", { name: "Close", exact: true }).first().click();
     await recreatedInstructionDialog.waitFor({ state: "hidden" });
+    await page.getByRole("button", { name: "Expand Skills", exact: true }).click();
     await page.getByRole("button", { name: "Copy from Library" }).click();
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))

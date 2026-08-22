@@ -132,6 +132,11 @@ describe("ProfileInstructionsComposerSection", () => {
       />
     );
 
+    expect(screen.queryByText("1 of 1 blocks enabled")).not.toBeInTheDocument();
+    const instructionRow = screen.getByRole("button", { name: "Review rules" })
+      .closest(".ui-resource-row");
+    expect(instructionRow).not.toHaveTextContent("Library");
+    expect(instructionRow).not.toHaveTextContent(/\bOn\b/);
     expect(screen.queryByText("This Profile")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Review rules" }));
     const dialog = await screen.findByRole("dialog", { name: "Edit Instruction Block" });

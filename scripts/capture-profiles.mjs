@@ -1096,12 +1096,12 @@ try {
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(
     page,
-    join(outputDir, "workspaces-resources-multi-expanded-920x620.png")
+    join(outputDir, "workspaces-resource-exclusive-920x620.png")
   );
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(
     page,
-    join(outputDir, "workspaces-resources-multi-expanded-1180x728.png")
+    join(outputDir, "workspaces-resource-exclusive-1180x728.png")
   );
   await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("button", { name: "Agents", exact: true }).click();
@@ -1703,24 +1703,23 @@ try {
       await skillPicker.waitFor({ state: "hidden" });
     }
   }
-  for (const sectionName of ["Instructions", "Skills", "MCPs"]) {
-    await ensureComposerExpanded(sectionName);
-  }
-  await setWindowSize(page, windowHandle, 920, 620);
-  await capturePage(
-    page,
-    join(outputDir, "profile-resources-multi-expanded-920x620.png")
-  );
+  await showOnlyComposerSection("Skills");
   await captureRegion(
     page,
     page.locator('[data-profile-composer-id="skills"]'),
     join(outputDir, "profile-skills-region-920.png"),
     { widthLocator: page.locator(".profile-editor-surface") }
   );
+  await ensureComposerExpanded("Instructions");
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(
+    page,
+    join(outputDir, "profile-resource-exclusive-920x620.png")
+  );
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(
     page,
-    join(outputDir, "profile-resources-multi-expanded-1180x728.png")
+    join(outputDir, "profile-resource-exclusive-1180x728.png")
   );
   await setWindowSize(page, windowHandle, 1180, 728);
   await page.getByRole("button", { name: "Apply", exact: true }).click();

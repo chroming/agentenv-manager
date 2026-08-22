@@ -6046,20 +6046,6 @@ describe("Electron UI profile switching e2e", () => {
       await readResourceDisclosureHeaders(composer),
       ["skills"]
     );
-    await expandComposerSection(page, "Instructions");
-    expectStableResourceDisclosureHeaders(
-      collapsedComposerHeaders,
-      await readResourceDisclosureHeaders(composer),
-      ["instructions", "skills"]
-    );
-    expect(await skillsRow.getAttribute("aria-expanded")).toBe("true");
-    await page.locator(".profile-hero").hover({ position: { x: 4, y: 4 } });
-    await expect.poll(() => instructionsHeader.evaluate(
-      (element) => getComputedStyle(element).backgroundColor
-    )).toBe(collapsedInstructionsSurface.backgroundColor);
-    expect(await instructionsHeader.evaluate(
-      (element) => getComputedStyle(element).boxShadow
-    )).toBe(collapsedInstructionsSurface.boxShadow);
     const skillManager = composer.getByRole("region", { name: "Profile Skills" });
     const addSkill = skillManager.getByRole("button", { name: "Add Skill", exact: true });
     expect(await skillManager.getByRole("button", {
@@ -6084,8 +6070,21 @@ describe("Electron UI profile switching e2e", () => {
       };
     });
     expect(Math.abs(skillHierarchy.childLeft - skillHierarchy.parentLeft)).toBeLessThanOrEqual(1);
-    await skillsRow.click();
+    await expandComposerSection(page, "Instructions");
+    expectStableResourceDisclosureHeaders(
+      collapsedComposerHeaders,
+      await readResourceDisclosureHeaders(composer),
+      ["instructions"]
+    );
     await expect.poll(() => skillsRow.getAttribute("aria-expanded")).toBe("false");
+    expect(await instructionsSection.getByText(/blocks enabled/, { exact: false }).count()).toBe(0);
+    await page.locator(".profile-hero").hover({ position: { x: 4, y: 4 } });
+    await expect.poll(() => instructionsHeader.evaluate(
+      (element) => getComputedStyle(element).backgroundColor
+    )).toBe(collapsedInstructionsSurface.backgroundColor);
+    expect(await instructionsHeader.evaluate(
+      (element) => getComputedStyle(element).boxShadow
+    )).toBe(collapsedInstructionsSurface.boxShadow);
     const instructionsDisclosure = instructionsSection.getByRole("button", {
       name: "Instructions",
       exact: true
@@ -9355,7 +9354,9 @@ describe("Electron UI profile switching e2e", () => {
     const capturedSkillRow = page.getByRole("listitem", {
       name: "Profile Skill target-only-reviewer"
     });
-    await expect.poll(() => capturedSkillRow.textContent()).toContain("Ready");
+    await expect.poll(() => capturedSkillRow.textContent()).not.toContain("Ready");
+    await expect.poll(() => capturedSkillRow.getByRole("switch").getAttribute("aria-checked"))
+      .toBe("true");
     await expect.poll(() => capturedSkillRow.textContent()).not.toContain(
       capturedSkillMetadata.contentHash.slice(0, 7)
     );
@@ -10601,8 +10602,9 @@ describe("Electron UI profile switching e2e", () => {
     await disabledRow.getByRole("switch", { name: "Disable layout-skill-2" }).click();
     await addLibrarySkillToProfile(page, "Static Reference");
     const newRow = page.getByRole("listitem", { name: "Profile Skill static-reference" });
-    await expect.poll(() => readyRow.locator(".profile-skill-state").textContent())
-      .toContain("Ready");
+    await expect.poll(async () =>
+      (await readyRow.locator(".profile-skill-state").textContent())?.trim()
+    ).toBe("");
     await expect.poll(() => disabledRow.locator(".profile-skill-state").textContent())
       .toContain("Apply pending");
     await expect.poll(() => newRow.locator(".profile-skill-state").textContent())

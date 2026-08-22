@@ -78,7 +78,6 @@ export const ProfileInstructionsComposerSection = ({
   const pickerDialogRef = useRef<HTMLElement>(null);
   const pickerCancelRef = useRef<HTMLButtonElement>(null);
   const references = profile.resources.instructions ?? [];
-  const enabledReferenceCount = references.filter((reference) => reference.enabled).length;
   const blockById = useMemo(() => new Map(blocks.map((block) => [block.id, block])), [blocks]);
   const enabledContents = references
     .filter((reference) => reference.enabled)
@@ -143,31 +142,17 @@ export const ProfileInstructionsComposerSection = ({
     >
       <section className="profile-instructions-editor">
         <ResourcePanelToolbar>
-          <span className="profile-instructions-editor__summary">
-            {policy === "manage"
-              ? t("{{enabled}} of {{total}} blocks enabled", {
-                  enabled: enabledReferenceCount,
-                  total: references.length
-                })
-              : policy === "disable"
-                ? t("Instructions are turned off for this Agent")
-                : t("Current Agent instructions remain unchanged")}
-          </span>
-          <span className="profile-instructions-editor__toolbar-actions">
-            <>
-              <Button
-                size="compact"
-                disabled={policy !== "manage"}
-                onClick={() => setDocument("compiled")}
-              >{t("Preview output")}</Button>
-              <Button
-                size="compact"
-                icon={<Plus size={14} />}
-                disabled={policy !== "manage"}
-                onClick={() => setPickerOpen(true)}
-              >{t("Add")}</Button>
-            </>
-          </span>
+          <Button
+            size="compact"
+            disabled={policy !== "manage"}
+            onClick={() => setDocument("compiled")}
+          >{t("Preview output")}</Button>
+          <Button
+            size="compact"
+            icon={<Plus size={14} />}
+            disabled={policy !== "manage"}
+            onClick={() => setPickerOpen(true)}
+          >{t("Add")}</Button>
         </ResourcePanelToolbar>
         <AlignedResourceList actionTrack="standard">
           {policy === "ignore" && currentValueAvailable ? (
@@ -186,7 +171,7 @@ export const ProfileInstructionsComposerSection = ({
               <ResourceRow
                 className="ui-resource-children__item"
                 key={reference.libraryId}
-                tone={!reference.enabled || policy !== "manage" ? "disabled" : "default"}
+                tone={!block || !reference.enabled || policy !== "manage" ? "disabled" : "default"}
                 icon={<FileText size={15} />}
                 title={<TextAction onClick={() => {
                   setBlockError("");
@@ -198,8 +183,7 @@ export const ProfileInstructionsComposerSection = ({
                     text={block?.description || t("Instruction Library")}
                   />
                 )}
-                metadata={t("Library")}
-                state={reference.enabled ? t("On") : t("Off")}
+                state={block ? undefined : t("Missing")}
                 actions={(
                   <>
                     {references.length > 1 ? (

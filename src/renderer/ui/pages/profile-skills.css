@@ -72,19 +72,7 @@
   min-width: 0;
 }
 
-.profile-skill-shared-path {
-  color: var(--muted-strong);
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  margin-top: 4px;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@container profile-workspace (max-width: 760px) {
+@container profile-workspace (max-width: 620px) {
   .profile-skill-shared-notice {
     align-items: start;
     grid-template-columns: auto minmax(0, 1fr);

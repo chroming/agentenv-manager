@@ -278,7 +278,7 @@ describe("ProjectsWorkspace", () => {
     expect(api.readProjectResource).toHaveBeenCalledWith("project-1", "instruction-2");
   });
 
-  it("keeps resource groups independently expanded across Instructions, Skills, and MCPs", async () => {
+  it("keeps at most one resource group expanded across Instructions, Skills, and MCPs", async () => {
     installApi();
     render(<ProjectsWorkspace targets={[target]} />);
 
@@ -290,12 +290,16 @@ describe("ProjectsWorkspace", () => {
       .toHaveAttribute("aria-expanded", "true");
 
     fireEvent.click(within(skills).getByRole("button", { name: "Expand Skills" }));
-    expect(within(instructions).getByRole("button", { name: "Collapse Instructions" }))
-      .toHaveAttribute("aria-expanded", "true");
+    expect(within(instructions).getByRole("button", { name: "Expand Instructions" }))
+      .toHaveAttribute("aria-expanded", "false");
     expect(within(skills).getByRole("button", { name: "Collapse Skills" }))
       .toHaveAttribute("aria-expanded", "true");
     expect(document.querySelectorAll('.ui-resource-disclosure [aria-expanded="true"]'))
-      .toHaveLength(2);
+      .toHaveLength(1);
+
+    fireEvent.click(within(skills).getByRole("button", { name: "Collapse Skills" }));
+    expect(document.querySelectorAll('.ui-resource-disclosure [aria-expanded="true"]'))
+      .toHaveLength(0);
   });
 
   it("opens instruction files in preview before entering the safe editor", async () => {
