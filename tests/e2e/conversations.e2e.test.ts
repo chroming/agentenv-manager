@@ -405,6 +405,12 @@ describe("Conversations desktop workflow", () => {
       state: "visible",
       timeout: 15_000
     });
+    const titleLayout = await page.locator(".conversation-list-item__title").evaluateAll((titles) => ({
+      heights: titles.slice(0, 24).map((title) => Math.round(title.getBoundingClientRect().height)),
+      whiteSpaces: [...new Set(titles.slice(0, 24).map((title) => getComputedStyle(title).whiteSpace))]
+    }));
+    expect(new Set(titleLayout.heights).size).toBe(1);
+    expect(titleLayout.whiteSpaces).toEqual(["nowrap"]);
     await expect.poll(() => page.getByText("Could not complete this step").count()).toBe(0);
     await page.getByText("200 of 201 conversations", { exact: true }).waitFor();
     const sortedConversationTitles = await page.evaluate(async () => {

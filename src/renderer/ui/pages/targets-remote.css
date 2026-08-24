@@ -28,22 +28,29 @@
 
 .remote-location-header__identity {
   display: grid;
+  gap: 1px;
   min-width: 0;
 }
 
-.remote-location-header__identity strong {
-  font-size: var(--font-size-body);
+.remote-location-header__name {
+  color: var(--text-secondary);
+  font-size: var(--font-size-metadata);
   font-weight: var(--font-weight-medium);
-  line-height: 18px;
+  line-height: 16px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.remote-location-header__identity .overflow-tooltip-anchor {
+.remote-location-header__host {
   color: var(--muted);
-  font-size: var(--font-size-metadata);
-  line-height: 16px;
+  display: block;
+  font-size: var(--font-size-caption);
+  line-height: 15px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .remote-location-header__status {
@@ -85,7 +92,7 @@
   padding: 4px 12px 4px 52px;
 }
 
-.remote-location-error .overflow-tooltip-anchor {
+.remote-location-error__message {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

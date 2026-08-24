@@ -32,6 +32,7 @@ import {
   type SkillLibraryStore
 } from "./skillLibraryStore";
 import { normalizeSkillKey } from "../shared/skillIdentity";
+import { isSharedSkillInventoryEntry } from "../shared/skillLocationSemantics";
 import { profileEffectiveInstructions } from "../shared/profileInstructions";
 import {
   materializeTargetResourcePolicy,
@@ -1641,7 +1642,8 @@ export const createActivationService = ({
         const targetPath = join(targetPaths.skillsDir, intent.targetName);
         const inventory = await skillLibraryStore.scanInventory([targetPaths]);
         const occupyingItem = inventory.find(
-          (item) => !item.sharedLocation && resolve(item.path) === resolve(targetPath)
+          (item) =>
+            !isSharedSkillInventoryEntry(item) && resolve(item.path) === resolve(targetPath)
         );
         if (
           occupyingItem &&

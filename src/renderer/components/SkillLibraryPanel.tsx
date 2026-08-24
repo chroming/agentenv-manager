@@ -9,7 +9,6 @@ import {
 } from "react";
 import {
   CheckCircle2,
-  Circle,
   CircleAlert,
   CircleArrowUp,
   CircleSlash2,
@@ -105,6 +104,7 @@ import {
   type SkillCollectionLinkGroup,
   type SkillManagementScope
 } from "../../shared/skillCleanup";
+import { isSharedSkillInventoryEntry } from "../../shared/skillLocationSemantics";
 import { useI18n } from "../i18n";
 import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, SegmentedControl, Switch } from "./ui";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
@@ -1069,7 +1069,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     try {
       await onSetUnmanagedSkillLocations({
         items:
-          item.sharedLocation || item.foundIn.length === 0
+          isSharedSkillInventoryEntry(item) || item.foundIn.length === 0
             ? [{ path: item.path, coverage: "exact" }]
             : item.foundIn.map((targetId) => ({
                 path: item.path,
@@ -1889,14 +1889,6 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
           <span>{t("Skill")}</span>
           <span>{t("Source")}</span>
           <span className="library-column-label">
-            {t("Usage")}
-            <InfoTip
-              label={t(
-                "Shows Profile references and Agent installs for this Skill."
-              )}
-            />
-          </span>
-          <span className="library-column-label">
             {t("Status")}
             <InfoTip label={t("Shows the current maintenance state for this skill.")} />
           </span>
@@ -1963,10 +1955,6 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
             ]
               .filter(Boolean)
               .join(" · ");
-            const identityDetail = [
-              skill.name,
-              skill.description || skill.id
-            ].filter((value, index, values) => value && values.indexOf(value) === index).join("\n");
             const usageSummary = [
               t(usageCount === 1 ? "{{count}} Profile" : "{{count}} Profiles", {
                 count: usageCount
@@ -1976,6 +1964,12 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               })
             ].join(" · ");
             const usageDetail = `${t("Profiles")}: ${(skillUsage[skill.id] ?? []).join(", ") || t("Not referenced")} · ${t("Agents")}: ${installedAgentNames.join(", ") || t("Not installed")}`;
+            const identityDetail = [
+              skill.name,
+              skill.description || skill.id,
+              usageSummary,
+              usageDetail
+            ].filter((value, index, values) => value && values.indexOf(value) === index).join("\n");
             const staleInstallDetail = staleCopies.length > 0
               ? staleCopies.length === 1
                 ? t("1 Agent pending")
@@ -2108,14 +2102,6 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                     </span>
                   )}
                 </div>
-                <div className="library-usage-cell">
-                  <PreviewText
-                    ariaLabel={t("Usage details for {{id}}", { id: skill.id })}
-                    className="library-usage-summary"
-                    displayText={usageSummary}
-                    text={usageDetail}
-                  />
-                </div>
                 <div className="library-status-cell">
                   {availabilityIsChanging ? (
                     <InteractiveStatus
@@ -2183,15 +2169,11 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                   ) : (
                     <InteractiveStatus
                       className="library-primary-status"
-                      icon={isTracked && updateInfo ? (
-                        <CheckCircle2 size={13} strokeWidth={2.2} />
-                      ) : hasUpdateSource && !isTracked && skill.sourceType !== "local" ? (
-                        <Link2Off size={13} strokeWidth={2.2} />
-                      ) : isTracked && hasUpdateSource ? (
-                        <Circle size={13} strokeWidth={2.2} />
-                      ) : (
-                        <Circle size={13} strokeWidth={2.2} />
-                      )}
+                      icon={isTracked && updateInfo
+                        ? <CheckCircle2 size={13} strokeWidth={2.2} />
+                        : hasUpdateSource && !isTracked && skill.sourceType !== "local"
+                          ? <Link2Off size={13} strokeWidth={2.2} />
+                          : undefined}
                       label={t(maintenanceStatusLabel)}
                     />
                   )}
@@ -2980,7 +2962,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                             {t(cleanupInventoryStatusLabel(item))}
                           </span>
                           {onSetUnmanagedSkillLocations &&
-                          !item.sharedLocation &&
+                          !isSharedSkillInventoryEntry(item) &&
                           (item.status === "outside" ||
                             item.status === "left-unmanaged") ? (
                             <Button
@@ -3015,7 +2997,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                       <small>
                         {item.libraryId ? `${t("Library")}: ${item.libraryId}` : t("Not in Library")}
                       </small>
-                      {item.sharedLocation ? <small>{t("Shared compatibility location")}</small> : null}
+                      {isSharedSkillInventoryEntry(item) ? <small>{t("Shared compatibility location")}</small> : null}
                       {(item.runtimeIssues ?? []).map((issue) => (
                         <PreviewText
                           ariaLabel={t("Full runtime issue for {{path}}", { path: item.path })}
@@ -3261,7 +3243,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                         ? t("Already managed")
                         : item.status === "left-unmanaged"
                           ? t("Left unmanaged")
-                          : cleanupHasActiveSharedMigration && item.sharedLocation
+                          : cleanupHasActiveSharedMigration && isSharedSkillInventoryEntry(item)
                             ? t("Keep active")
                             : cleanupHasActiveSharedMigration
                               ? t("Remove duplicate")
@@ -3318,14 +3300,14 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                       : "target-copies",
                     sharedLocations: cleanupHasActiveSharedMigration
                       ? cleanupCandidate.items
-                          .filter((item) => item.sharedLocation)
+                          .filter(isSharedSkillInventoryEntry)
                           .map((item) => ({ path: item.path, contentHash: item.contentHash }))
                       : undefined,
                     locations: cleanupCandidate.items
                       .filter(
                         (item) =>
                           cleanupDraft.selectedPaths.includes(item.path) &&
-                          !item.sharedLocation
+                          !isSharedSkillInventoryEntry(item)
                       )
                       .map((item) => ({
                         targetId: item.foundIn[0] ?? "",
@@ -3462,7 +3444,9 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                       })
                     : group.presentation.state === "local-changes-found" && linkedLibraryId
                       ? group.activeItems.some(
-                          (item) => item.sharedLocation && item.contentMatchesLibrary === false
+                          (item) =>
+                            isSharedSkillInventoryEntry(item) &&
+                            item.contentMatchesLibrary === false
                         )
                         ? t("Shared copy differs from Library")
                         : t("Local copy differs from Library")
@@ -3494,7 +3478,8 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                 const actionLabel = t(skillManagementActionLabel(managementProjection.nextAction));
                 const actionDisplayLabel = actionLabel;
                 const managedInstallCount = group.activeItems.filter(
-                  (item) => item.status === "managed" && !item.sharedLocation
+                  (item) =>
+                    item.status === "managed" && !isSharedSkillInventoryEntry(item)
                 ).length;
                 const libraryRelationText = linkedLibraryId
                   ? managedInstallCount > 0

@@ -174,8 +174,8 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
         {
           path: join(homeDir, ".claude", "skills"),
           role: "compatibility-runtime",
-          shared: true,
-          scope: "shared",
+          shared: false,
+          scope: "user",
           scanDepth: "recursive",
           management: "observed",
           externalContainerMarkers: [{

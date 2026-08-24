@@ -6,6 +6,7 @@ import { IconButton } from "./ui";
 export interface InstructionDocumentPreview {
   id: string;
   name: string;
+  syntaxPath?: string;
   path?: string;
   content?: string;
   metadata?: string;
@@ -17,12 +18,14 @@ export interface InstructionDocumentPreview {
 interface InstructionDocumentPreviewListProps {
   documents: InstructionDocumentPreview[];
   emptyLabel?: string;
+  fillAvailable?: boolean;
   onOpen?(document: InstructionDocumentPreview): void;
 }
 
 export const InstructionDocumentPreviewList = ({
   documents,
   emptyLabel,
+  fillAvailable = false,
   onOpen
 }: InstructionDocumentPreviewListProps) => {
   const { t } = useI18n();
@@ -36,7 +39,7 @@ export const InstructionDocumentPreviewList = ({
   }
 
   return (
-    <div className="instruction-documents">
+    <div className={`instruction-documents${fillAvailable ? " instruction-documents--fill" : ""}`}>
       {documents.map((document) => (
         <article className="instruction-document" key={document.id}>
           <header className="instruction-document__header">
@@ -80,7 +83,7 @@ export const InstructionDocumentPreviewList = ({
                 <span>{document.error}</span>
               </div>
             ) : document.content ? (
-              <SyntaxCodePreview code={document.content} path={document.name} />
+              <SyntaxCodePreview code={document.content} path={document.syntaxPath ?? document.name} />
             ) : (
               <div className="instruction-document__state">{t("Empty file")}</div>
             )}

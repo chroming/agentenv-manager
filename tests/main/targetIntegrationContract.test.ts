@@ -156,6 +156,31 @@ describe("target integration contract", () => {
     });
   });
 
+  it("reserves shared Skill semantics for centrally identified locations", () => {
+    const paths = createBuiltInTargetAdapters().map((adapter) =>
+      adapter.createTargetPaths({ homeDir: "/tmp/agentenv-target-contract" })
+    );
+
+    for (const target of paths) {
+      for (const location of target.skillLocations ?? []) {
+        if (location.shared) {
+          expect(location.sharedLocationId, `${target.targetId}: ${location.path}`)
+            .toBe("agents-skills");
+        }
+      }
+    }
+
+    const openCodeCompatibility = paths
+      .find((target) => target.targetId === "opencode")
+      ?.skillLocations?.find((location) => location.path.endsWith("/.claude/skills"));
+    const antigravityCompatibility = paths
+      .find((target) => target.targetId === "antigravity")
+      ?.skillLocations?.find((location) => location.path.endsWith("/.gemini/skills"));
+
+    expect(openCodeCompatibility).toMatchObject({ shared: false, scope: "user" });
+    expect(antigravityCompatibility).toMatchObject({ shared: false, scope: "user" });
+  });
+
   it("declares the honest Project support matrix for every built-in Agent", () => {
     const support = Object.fromEntries(
       createBuiltInTargetAdapters().map((adapter) => [

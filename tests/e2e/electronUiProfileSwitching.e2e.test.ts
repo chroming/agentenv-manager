@@ -4318,6 +4318,20 @@ describe("Electron UI profile switching e2e", () => {
         width: expect.any(Number)
       });
       expect(switcherGeometry.width).toBeGreaterThan(100);
+      const profileSwitcherTrigger = page.locator(
+        ".profile-switcher--hero .ui-object-switcher__trigger"
+      );
+      await profileSwitcherTrigger.click();
+      const switcherBorderInset = await profileSwitcherTrigger.evaluate((trigger) => {
+        const title = trigger.querySelector<HTMLElement>(
+          ".ui-object-switcher__trigger-title"
+        )!;
+        const style = getComputedStyle(trigger);
+        return title.getBoundingClientRect().left - trigger.getBoundingClientRect().left +
+          Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset);
+      });
+      expect(switcherBorderInset).toBeGreaterThanOrEqual(3);
+      await page.keyboard.press("Escape");
 
       const heroContent = await page.locator(".profile-hero").evaluate((hero) => ({
         description: getComputedStyle(
@@ -5008,7 +5022,6 @@ describe("Electron UI profile switching e2e", () => {
         },
         source: box(".library-source-cell"),
         status: box(".library-status-cell"),
-        usage: box(".library-usage-cell"),
         visibleHeadings: Array.from(
           row.parentElement?.previousElementSibling?.children ?? []
         ).filter((element) => getComputedStyle(element).display !== "none").length
@@ -5016,8 +5029,8 @@ describe("Electron UI profile switching e2e", () => {
     });
     expect(skillLanes.contained).toBe(true);
     expect(skillLanes.visibleHeadings).toBe(4);
-    expect(skillLanes.source.left).toBe(skillLanes.usage.left);
-    expect(skillLanes.source.top).toBeLessThan(skillLanes.usage.top);
+    expect(skillLanes.resource.right).toBeLessThanOrEqual(skillLanes.source.left);
+    expect(skillLanes.source.right).toBeLessThanOrEqual(skillLanes.status.left);
     expect(skillLanes.status.bottom).toBeLessThanOrEqual(skillLanes.row.bottom);
     expect(skillLanes.status.right).toBeLessThanOrEqual(skillLanes.more.left);
     expect(skillLanes.more.right).toBeLessThanOrEqual(skillLanes.row.right);
@@ -7579,6 +7592,18 @@ describe("Electron UI profile switching e2e", () => {
     const brokenSharedLink = join(homeDir, ".agents", "skills", "auto-broken-shared");
     await mkdir(dirname(brokenSharedLink), { recursive: true });
     await symlink(join(root, "missing-auto-broken-shared"), brokenSharedLink, "dir");
+    const openCodeClaudeCompatibility = join(
+      homeDir,
+      ".claude",
+      "skills",
+      "opencode-claude-compatibility"
+    );
+    await mkdir(openCodeClaudeCompatibility, { recursive: true });
+    await writeFile(
+      join(openCodeClaudeCompatibility, "SKILL.md"),
+      "---\nname: OpenCode Claude Compatibility\ndescription: Agent-specific compatibility copy.\n---\n",
+      "utf8"
+    );
 
     await openSkillLibrary(page);
     await openLocalSkills(page);
@@ -7756,6 +7781,11 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => bulkCleanupDialog.textContent()).toContain(
       "Manage shared Skills in place"
     );
+    await expect.poll(() =>
+      bulkCleanupDialog
+        .locator('[data-cleanup-effect="import-shared"]')
+        .textContent()
+    ).not.toContain("OpenCode Claude Compatibility");
     await expect.poll(() => bulkCleanupDialog.textContent()).toContain("auto-broken-shared");
     await expect.poll(() => bulkCleanupDialog.textContent()).not.toContain("Manual Conflict Reviewer");
     await expect.poll(() => bulkCleanupDialog.textContent()).toContain(
@@ -8735,7 +8765,7 @@ describe("Electron UI profile switching e2e", () => {
         const metrics = rows.map((row) => {
           const status = row.querySelector<HTMLElement>(".library-status-cell")!;
           const primaryStatus = status.querySelector<HTMLElement>(".library-primary-status")!;
-          const statusIcon = primaryStatus.querySelector<SVGElement>("svg")!;
+          const statusIcon = primaryStatus.querySelector<SVGElement>("svg");
           const updateStatusLabels = Array.from(
             primaryStatus.querySelectorAll<HTMLElement>(".library-update-status-full, .library-update-status-compact")
           );
@@ -8764,7 +8794,8 @@ describe("Electron UI profile switching e2e", () => {
             skillNameSingleLine:
               skillName.getBoundingClientRect().height <= Number.parseFloat(getComputedStyle(skillName).lineHeight) + 1,
             skillNameWhiteSpace: getComputedStyle(skillName).whiteSpace,
-            statusIconLeft: statusIcon.getBoundingClientRect().left,
+            statusIconLeft: statusIcon?.getBoundingClientRect().left,
+            statusIconPresent: Boolean(statusIcon),
             statusLabelText: statusLabel.textContent?.trim(),
             statusLabelOverflow: statusLabel.scrollWidth - statusLabel.clientWidth,
             statusFontSize: getComputedStyle(primaryStatus).fontSize,
@@ -8796,8 +8827,8 @@ describe("Electron UI profile switching e2e", () => {
       expect(geometry.documentWidth).toBe(geometry.viewportWidth);
       expect(geometry.containerName).toBe("skill-library");
       expect(geometry.headerDisplay).toBe("grid");
-      expect(geometry.headerCount).toBe(5);
-      expect(geometry.visibleHeaderCount).toBe(width <= 920 ? 4 : 5);
+      expect(geometry.headerCount).toBe(4);
+      expect(geometry.visibleHeaderCount).toBe(4);
       expect(geometry.headerTextCenterSpread).toBeLessThanOrEqual(1);
       expect(geometry.metrics[0]!.primaryTag).toBe("BUTTON");
       expect(geometry.metrics[1]!.primaryTag).toBe("STRONG");
@@ -8809,26 +8840,25 @@ describe("Electron UI profile switching e2e", () => {
       for (const row of geometry.metrics) {
         expect(row.actionCellCount).toBe(0);
         expect(row.childrenFit).toBe(true);
-        expect(row.gridColumnCount).toBe(width <= 920 ? 4 : 5);
+        expect(row.gridColumnCount).toBe(4);
         expect(Math.abs(row.skillNameLeft - geometry.headerIdentityLeft)).toBeLessThanOrEqual(1);
         expect(row.moreLeft - row.statusRight).toBeGreaterThanOrEqual(9);
         expect(row.statusLabelOverflow).toBeLessThanOrEqual(1);
-        expect(Math.abs(row.statusIconLeft - row.statusLeft)).toBeLessThanOrEqual(1);
+        if (row.statusIconLeft !== undefined) {
+          expect(Math.abs(row.statusIconLeft - row.statusLeft)).toBeLessThanOrEqual(1);
+        }
         expect(row.rowHeight).toBeLessThanOrEqual(70);
         expect(row.skillNameSingleLine).toBe(true);
         expect(row.skillNameWhiteSpace).toBe("nowrap");
       }
       const columnWidths = await page.locator(".skill-library-panel .library-table-row").first().evaluate((row) => ({
         skill: row.querySelector<HTMLElement>(".library-resource-cell")!.getBoundingClientRect().width,
-        source: row.querySelector<HTMLElement>(".library-source-cell")!.getBoundingClientRect().width,
-        usage: row.querySelector<HTMLElement>(".library-usage-cell")!.getBoundingClientRect().width
+        source: row.querySelector<HTMLElement>(".library-source-cell")!.getBoundingClientRect().width
       }));
       expect(columnWidths.skill).toBeLessThanOrEqual(columnWidths.source * 1.35);
-      if (width > 920) {
-        expect(columnWidths.skill).toBeLessThanOrEqual(columnWidths.usage * 1.8);
-      }
       expect(Math.abs(geometry.metrics[0]!.statusLeft - geometry.metrics[1]!.statusLeft)).toBeLessThanOrEqual(1);
-      expect(Math.abs(geometry.metrics[0]!.statusIconLeft - geometry.metrics[1]!.statusIconLeft)).toBeLessThanOrEqual(1);
+      expect(geometry.metrics[0]!.statusIconPresent).toBe(true);
+      expect(geometry.metrics[1]!.statusIconPresent).toBe(false);
       expect(Math.abs(geometry.metrics[0]!.moreRight - geometry.metrics[1]!.moreRight)).toBeLessThanOrEqual(1);
     };
 
@@ -10529,6 +10559,16 @@ describe("Electron UI profile switching e2e", () => {
       await resizeAppWindow(page, viewport.width, viewport.height);
       await expectTextFits(status);
       await expectTextFits(status.locator(".ui-interactive-status__label"));
+      const statusAlignment = await status.evaluate((element) => {
+        const icon = element.querySelector<HTMLElement>(".ui-interactive-status__icon")!;
+        const label = element.querySelector<HTMLElement>(".ui-interactive-status__label")!;
+        const iconBox = icon.getBoundingClientRect();
+        const labelBox = label.getBoundingClientRect();
+        return Math.abs(
+          iconBox.top + iconBox.height / 2 - (labelBox.top + labelBox.height / 2)
+        );
+      });
+      expect(statusAlignment).toBeLessThanOrEqual(1);
     }
     expect(await status.getAttribute("data-status-kind")).toBe("update-available");
     await status.click();

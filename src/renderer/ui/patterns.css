@@ -213,7 +213,9 @@
 .ui-object-switcher--inline-trigger .ui-object-switcher__trigger:hover,
 .ui-object-switcher--inline-trigger .ui-object-switcher__trigger[aria-expanded="true"] {
   background: var(--surface-muted);
-  border-color: var(--border);
+  border-color: transparent;
+  outline: 1px solid var(--border);
+  outline-offset: 2px;
 }
 
 .ui-object-switcher--inline-trigger .ui-object-switcher__trigger-copy {
@@ -544,6 +546,14 @@
   line-height: 18px;
 }
 
+.ui-selectable-row--selected-emphasis .ui-selectable-row__title {
+  font-weight: var(--font-weight-regular);
+}
+
+.ui-selectable-row--selected-emphasis.is-selected .ui-selectable-row__title {
+  font-weight: var(--font-weight-medium);
+}
+
 .ui-selectable-row__description,
 .ui-selectable-row__status {
   color: var(--muted);
@@ -823,7 +833,7 @@
 
 /* The inset surface is the hierarchy cue; connector lines are intentionally omitted. */
 .ui-resource-disclosure.is-nested > .ui-resource-disclosure__panel .ui-resource-row {
-  padding-left: 24px;
+  padding-left: 18px;
 }
 
 .ui-resource-panel-toolbar {
@@ -917,6 +927,26 @@
 
 .ui-field__error {
   color: var(--danger);
+}
+
+.ui-textarea-stack {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+}
+
+.ui-textarea-stack__backdrop,
+.ui-textarea-stack > textarea {
+  grid-area: 1 / 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.ui-textarea-stack__backdrop {
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .syntax-code-preview {

@@ -4516,6 +4516,7 @@ Object.assign(zhTW, {
 
 Object.assign(zhCN, {
   "Instruction": "指令",
+  "Icon": "图标",
   "Instructions workspace": "指令工作区",
   "Reusable instruction blocks": "可复用指令块",
   "Create reusable Instruction Blocks and combine them in Profiles.": "创建可复用的指令块，并在 Profile 中组合使用。",
@@ -4563,6 +4564,7 @@ Object.assign(zhCN, {
 
 Object.assign(zhTW, {
   "Instruction": "指令",
+  "Icon": "圖示",
   "Instructions workspace": "指令工作區",
   "Reusable instruction blocks": "可重用指令塊",
   "Create reusable Instruction Blocks and combine them in Profiles.": "建立可重用的指令塊，並在 Profile 中組合使用。",

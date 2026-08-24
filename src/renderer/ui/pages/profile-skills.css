@@ -111,6 +111,10 @@
   max-width: 100%;
 }
 
+.profile-skill-state .ui-interactive-status__icon {
+  transform: translateY(1.5px);
+}
+
 .profile-skill-state.is-error {
   color: var(--danger);
 }

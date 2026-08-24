@@ -62,6 +62,7 @@ const sharedSkill = (
   contentHash: "review-hash",
   contentMatchesLibrary: true,
   sharedLocation: true,
+  sharedLocationId: "agents-skills",
   managedAsShared: true,
   libraryId: "review",
   ...overrides
@@ -134,6 +135,8 @@ describe("profileSharedSkillBoundary", () => {
       policy: "manage",
       inventory: [sharedSkill({
         path: "/home/test/.claude/skills/review",
+        sharedLocation: false,
+        sharedLocationId: undefined,
         status: "left-unmanaged",
         managedAsShared: false,
         runtimeStates: [{
@@ -142,6 +145,26 @@ describe("profileSharedSkillBoundary", () => {
           confidence: "verified",
           issues: []
         }]
+      })],
+      librarySkills: [librarySkill]
+    })).toEqual({
+      activeLibraryIds: [],
+      activePaths: [],
+      allActiveManaged: false,
+      migrationPaths: [],
+      retainedPaths: []
+    });
+  });
+
+  it("does not treat an Agent compatibility directory as a shared location", () => {
+    expect(profileSharedSkillBoundary({
+      profile: profile(false),
+      targetId: "opencode",
+      policy: "manage",
+      inventory: [sharedSkill({
+        path: "/home/test/.claude/skills/review",
+        sharedLocationId: undefined,
+        managedAsShared: false
       })],
       librarySkills: [librarySkill]
     })).toEqual({

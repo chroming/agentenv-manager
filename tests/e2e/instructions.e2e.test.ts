@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { tmpdir } from "node:os";
 import electronPath from "electron";
@@ -76,6 +76,7 @@ describe("Instruction Library desktop workflow", () => {
       id: "baseline-rules",
       name: "Baseline rules",
       description: "Shared engineering baseline",
+      iconKey: "book",
       createdAt: "2026-08-20T00:00:00.000Z",
       updatedAt: "2026-08-20T00:00:00.000Z"
     });
@@ -118,6 +119,18 @@ describe("Instruction Library desktop workflow", () => {
       await openInstructions(page);
       await expectNoHorizontalOverflow(page);
       await page.getByText("Baseline rules", { exact: true }).first().waitFor();
+      const previewGeometry = await page.locator(".instructions-detail-pane > .instruction-documents")
+        .evaluate((documents) => {
+          const preview = documents.querySelector<HTMLElement>(".instruction-document__preview");
+          const documentRect = documents.getBoundingClientRect();
+          const previewRect = preview?.getBoundingClientRect();
+          return {
+            previewHeight: previewRect?.height ?? 0,
+            bottomInset: previewRect ? documentRect.bottom - previewRect.bottom : Number.POSITIVE_INFINITY
+          };
+        });
+      expect(previewGeometry.previewHeight).toBeGreaterThan(140);
+      expect(previewGeometry.bottomInset).toBeLessThanOrEqual(20);
       if (process.env.AGENTENV_CAPTURE_INSTRUCTIONS_DIR) {
         await mkdir(process.env.AGENTENV_CAPTURE_INSTRUCTIONS_DIR, { recursive: true });
         await page.screenshot({
@@ -133,11 +146,45 @@ describe("Instruction Library desktop workflow", () => {
     const editor = page.getByRole("dialog", { name: "New Instruction Block" });
     await editor.getByRole("textbox", { name: "Name" }).fill("Review rules");
     await editor.getByRole("textbox", { name: "Description" }).fill("Reusable review workflow");
+    await editor.getByRole("button", { name: "Change icon for Review rules" }).click();
+    await page.getByRole("menuitemradio", { name: "Code", exact: true }).click();
     await editor.getByRole("textbox", { name: "Instruction content" })
       .fill("# Review\n\nExplain important findings first.\n");
+    await editor.locator(".syntax-textarea-field__backdrop .syntax-code-preview")
+      .waitFor({ state: "visible" });
+    if (process.env.AGENTENV_CAPTURE_INSTRUCTIONS_DIR) {
+      await page.screenshot({
+        path: join(process.env.AGENTENV_CAPTURE_INSTRUCTIONS_DIR, "instruction-editor-920x620.png")
+      });
+    }
     await editor.getByRole("button", { name: "Save", exact: true }).click();
     await editor.waitFor({ state: "hidden" });
     await page.getByText("Review rules", { exact: true }).first().waitFor();
+    const baselineRow = page.getByRole("button", { name: "Baseline rules", exact: true });
+    const reviewRow = page.getByRole("button", { name: "Review rules", exact: true });
+    await baselineRow.click();
+    expect(await Promise.all([
+      baselineRow.locator(".ui-selectable-row__title").evaluate((title) => getComputedStyle(title).fontWeight),
+      reviewRow.locator(".ui-selectable-row__title").evaluate((title) => getComputedStyle(title).fontWeight)
+    ])).toEqual(["500", "400"]);
+    const instructionIds = await readdir(join(dataRoot, "instructions-library"));
+    const reviewInstructionId = instructionIds.find((id) => id.startsWith("review-rules-"));
+    expect(reviewInstructionId).toBeTruthy();
+    await expect(readFile(
+      join(dataRoot, "instructions-library", reviewInstructionId!, "instruction.json"),
+      "utf8"
+    ).then(JSON.parse)).resolves.toMatchObject({ iconKey: "code" });
+
+    await reviewRow.click({ button: "right" });
+    const instructionMenu = page.getByRole("menu", { name: "Instruction actions" });
+    await instructionMenu.getByRole("menuitem", { name: "Preview", exact: true }).click();
+    const libraryPreview = page.getByRole("dialog", { name: "Instruction document" });
+    await expect.poll(() => libraryPreview.getByLabel("Preview of CONTENT.md").textContent())
+      .toContain("# Review");
+    await expect.poll(() => libraryPreview.locator(".syntax-code-preview span[style]").count())
+      .toBeGreaterThan(0);
+    await libraryPreview.locator(".ui-dialog-footer")
+      .getByRole("button", { name: "Close", exact: true }).click();
 
     await page.getByRole("button", { name: "Profiles", exact: true }).click();
     const composer = page.getByRole("region", { name: "Profile composer" });

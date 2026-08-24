@@ -15,6 +15,7 @@ import { InstructionDocumentDialog } from "./InstructionDocumentDialog";
 import { LibraryInstructionPicker } from "./LibraryInstructionPicker";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ProfileComposerSection } from "./ProfileComposerSection";
+import { ResourceIcon } from "./ResourceIconPicker";
 import type { ProfileResourcePolicy } from "./ProfileResourcePolicyControl";
 import {
   AlignedResourceList,
@@ -172,7 +173,7 @@ export const ProfileInstructionsComposerSection = ({
                 className="ui-resource-children__item"
                 key={reference.libraryId}
                 tone={!block || !reference.enabled || policy !== "manage" ? "disabled" : "default"}
-                icon={<FileText size={15} />}
+                icon={<ResourceIcon iconKey={block?.iconKey ?? "file"} size={15} />}
                 title={<TextAction onClick={() => {
                   setBlockError("");
                   setEditingBlockId(reference.libraryId);

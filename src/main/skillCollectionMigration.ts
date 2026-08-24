@@ -3,6 +3,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { materializeTargetResourcePolicy, profileResourceMode } from "../shared/profileResources";
 import { reconcileSkill, toAppliedSkillReceipt } from "../shared/skillReconciliation";
 import { normalizeSkillKey } from "../shared/skillIdentity";
+import { isSharedSkillInventoryEntry } from "../shared/skillLocationSemantics";
 import type {
   BackupManifest,
   ManagedResourceSnapshot,
@@ -248,7 +249,8 @@ export const completeSkillCollectionMigrationTransaction = async (
         };
         const targetPath = join(targetPaths.skillsDir, intent.targetName);
         const occupyingItem = inventory.find(
-          (item) => !item.sharedLocation && resolve(item.path) === resolve(targetPath)
+          (item) =>
+            !isSharedSkillInventoryEntry(item) && resolve(item.path) === resolve(targetPath)
         );
         if (
           occupyingItem &&

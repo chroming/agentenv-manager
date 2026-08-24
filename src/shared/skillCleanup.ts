@@ -1,3 +1,4 @@
+import { isSharedSkillInventoryEntry } from "./skillLocationSemantics";
 import type { SkillCleanupRequest, SkillInventoryEntry } from "./types";
 
 export type SkillCleanupGroupState =
@@ -90,6 +91,79 @@ export interface SkillCleanupPreparedTarget {
 const comparablePaths = (paths: readonly string[] = []) =>
   [...new Set(paths.map((path) => path.length > 1 ? path.replace(/[\\/]+$/, "") : path))].sort();
 
+const cleanupEntryPriority = (item: SkillInventoryEntry) => {
+  if (item.status === "left-unmanaged") return 500;
+  if (item.status === "managed" && item.contentMatchesLibrary === true) return 400;
+  if (item.status === "managed") return 350;
+  if (item.status === "library" && item.contentMatchesLibrary === true) return 300;
+  if (item.status === "library") return 250;
+  return isSkillCleanupManageable(item) ? 200 : 100;
+};
+
+const mergeSamePathCleanupEntries = (
+  entries: readonly SkillInventoryEntry[]
+): SkillInventoryEntry => {
+  const representative = [...entries].sort(
+    (left, right) => cleanupEntryPriority(right) - cleanupEntryPriority(left)
+  )[0];
+  const sharedLocation = entries.find((item) => Boolean(item.sharedLocationId));
+  const runtimeStates = [...new Map(
+    entries
+      .flatMap((item) => item.runtimeStates ?? [])
+      .map((state) => [state.targetId, state])
+  ).values()];
+  const runtimeIssues = [...new Map(
+    entries
+      .flatMap((item) => item.runtimeIssues ?? [])
+      .map((issue) => [`${issue.code}:${issue.message}`, issue])
+  ).values()];
+  const legacyOwnershipMarkerPaths = comparablePaths(
+    entries.flatMap((item) => item.legacyOwnershipMarkerPaths ?? [])
+  );
+
+  return {
+    ...representative,
+    foundIn: [...new Set(entries.flatMap((item) => item.foundIn))].sort((left, right) => {
+      const representativeOrder = representative.foundIn.indexOf(left) - representative.foundIn.indexOf(right);
+      if (representative.foundIn.includes(left) && representative.foundIn.includes(right)) {
+        return representativeOrder;
+      }
+      if (representative.foundIn.includes(left)) return -1;
+      if (representative.foundIn.includes(right)) return 1;
+      return left.localeCompare(right);
+    }),
+    managedByTarget: entries.some((item) => item.managedByTarget),
+    managedAsShared: entries.some((item) => item.managedAsShared),
+    runtimeStates: runtimeStates.length > 0 ? runtimeStates : representative.runtimeStates,
+    runtimeIssues: runtimeIssues.length > 0 ? runtimeIssues : representative.runtimeIssues,
+    legacyOwnershipMarkerPaths:
+      legacyOwnershipMarkerPaths.length > 0
+        ? legacyOwnershipMarkerPaths
+        : representative.legacyOwnershipMarkerPaths,
+    ...(sharedLocation
+      ? {
+          locationRole: sharedLocation.locationRole,
+          locationManagement: sharedLocation.locationManagement,
+          sharedLocation: true,
+          sharedLocationId: sharedLocation.sharedLocationId,
+          sharedAreaMode: sharedLocation.sharedAreaMode
+        }
+      : {})
+  };
+};
+
+const coalesceCleanupEntries = (entries: readonly SkillInventoryEntry[]) => {
+  const byPhysicalVersion = new Map<string, SkillInventoryEntry[]>();
+  for (const entry of entries) {
+    const path = entry.path.length > 1 ? entry.path.replace(/[\\/]+$/, "") : entry.path;
+    const key = `${path}\u0000${entry.contentHash}`;
+    byPhysicalVersion.set(key, [...(byPhysicalVersion.get(key) ?? []), entry]);
+  }
+  return [...byPhysicalVersion.values()].map((items) =>
+    items.length === 1 ? items[0] : mergeSamePathCleanupEntries(items)
+  );
+};
+
 const isCleanupCatalogExcluded = (item: SkillInventoryEntry) =>
   Boolean(item.collectionLink) || item.locationRole === "discovery-only";
 
@@ -97,7 +171,7 @@ export const isSkillCleanupManageable = (item: SkillInventoryEntry) =>
   !item.collectionLink &&
   item.status !== "left-unmanaged" &&
   item.locationRole !== "discovery-only" &&
-  (item.locationManagement !== "observed" || item.sharedLocation === true);
+  (item.locationManagement !== "observed" || isSharedSkillInventoryEntry(item));
 
 export const skillCleanupItemNeedsMutation = (item: SkillInventoryEntry) =>
   isSkillCleanupManageable(item) &&
@@ -153,7 +227,7 @@ export const skillInventoryMatchesManagementScope = (
   scope: SkillManagementScope
 ): boolean => {
   if (scope.kind === "all") return true;
-  return Boolean(item.sharedLocation || item.collectionLink);
+  return Boolean(isSharedSkillInventoryEntry(item) || item.collectionLink);
 };
 
 export const filterSkillInventoryForManagementScope = (
@@ -265,7 +339,8 @@ export const buildSkillCleanupGroups = (
   }
 
   return [...byKey.entries()]
-    .map(([skillKey, items]): SkillCleanupGroup => {
+    .map(([skillKey, observedItems]): SkillCleanupGroup => {
+      const items = coalesceCleanupEntries(observedItems);
       const activeItems = items.filter(
         (item) => item.status !== "left-unmanaged"
       );
@@ -341,8 +416,8 @@ export const buildSkillCleanupGroups = (
       const missingTarget = activeItems.some(
         (item) => item.status !== "managed" && item.foundIn.length === 0
       );
-      const allSharedItems = items.filter((item) => item.sharedLocation);
-      const sharedItems = activeItems.filter((item) => item.sharedLocation);
+      const allSharedItems = items.filter(isSharedSkillInventoryEntry);
+      const sharedItems = activeItems.filter(isSharedSkillInventoryEntry);
       const migrationScopeItems = sharedItems.length > 0 ? sharedItems : allSharedItems;
       const installedTargets = options.installedTargetIds
         ? new Set(options.installedTargetIds)
@@ -640,8 +715,10 @@ export const automaticSkillCleanupRequest = (
       (item) =>
         item.status !== "left-unmanaged" && isSkillCleanupManageable(item)
     );
-    const sharedItems = manageableItems.filter((item) => item.sharedLocation);
-    const targetItems = manageableItems.filter((item) => !item.sharedLocation);
+    const sharedItems = manageableItems.filter(isSharedSkillInventoryEntry);
+    const targetItems = manageableItems.filter(
+      (item) => !isSharedSkillInventoryEntry(item)
+    );
     if (
       (sharedMigration.state !== "not-imported" &&
         sharedMigration.state !== "not-managed") ||
@@ -670,7 +747,7 @@ export const automaticSkillCleanupRequest = (
 
   const locations = group.activeItems.filter(
     (item) =>
-      !item.sharedLocation &&
+      !isSharedSkillInventoryEntry(item) &&
       item.status !== "left-unmanaged" &&
       isSkillCleanupManageable(item) &&
       (

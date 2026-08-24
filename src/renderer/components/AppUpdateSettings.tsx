@@ -125,13 +125,17 @@ export const AppUpdateSettings = ({
       <div className="settings-preference-list">
         <SettingsPreferenceRow
           className={`app-update-summary is-${statusTone}`}
-          label={statusCopy}
+          label={(
+            <span className="app-update-heading">
+              <span>{statusCopy}</span>
+              <span className="app-update-channel">{channelCopy}</span>
+            </span>
+          )}
           description={<>
             <span className="app-update-versions" aria-label={t("Application versions")}>
               <span>{t("Current version")} <strong>{status?.currentVersion ?? "—"}</strong></span>
               <span>{t("Latest version")} <strong>{latestVersionCopy}</strong></span>
             </span>
-            <span>{channelCopy}</span>
             {working ? (
               <ProgressBar className="app-update-progress" label={statusCopy} />
             ) : null}

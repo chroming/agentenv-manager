@@ -4,6 +4,7 @@ import type {
   SharedSkillAreaState,
   SkillInventoryEntry
 } from "../../shared/types";
+import { isSharedSkillInventoryEntry } from "../../shared/skillLocationSemantics";
 
 interface SharedSkillAreaControllerOptions {
   active: boolean;
@@ -77,7 +78,7 @@ export const useSharedSkillAreaController = ({
   }, [historyRef]);
 
   return {
-    mode: state?.mode ?? inventory.find((item) => item.sharedLocation)?.sharedAreaMode,
+    mode: state?.mode ?? inventory.find(isSharedSkillInventoryEntry)?.sharedAreaMode,
     operation,
     changeMode,
     requestMode,

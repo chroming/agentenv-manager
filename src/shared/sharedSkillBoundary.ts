@@ -1,5 +1,6 @@
 import type { ProfileResourceMode, ProfileSkill } from "./schemas";
 import { normalizeSkillKey } from "./skillIdentity";
+import { isSharedSkillInventoryEntry } from "./skillLocationSemantics";
 import type {
   ProfileDetail,
   SkillInventoryEntry,
@@ -86,7 +87,7 @@ export const profileSharedSkillBoundary = ({
 }: ProfileSharedSkillBoundaryInput): ProfileSharedSkillBoundary => {
   const libraryById = new Map(librarySkills.map((skill) => [skill.id, skill]));
   const activeSharedEntries = inventory.filter((entry) => {
-    if (!entry.sharedLocation && !entry.collectionLink) return false;
+    if (!isSharedSkillInventoryEntry(entry) && !entry.collectionLink) return false;
     const availability = runtimeAvailabilityFor(entry, targetId);
     return availability !== "disabled" && availability !== "shadowed";
   });

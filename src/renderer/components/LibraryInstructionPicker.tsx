@@ -1,8 +1,9 @@
-import { FileText, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useMemo } from "react";
 import type { InstructionBlock } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
+import { ResourceIcon } from "./ResourceIconPicker";
 import { ChoiceInput, SearchField } from "./ui";
 
 interface LibraryInstructionPickerProps {
@@ -64,7 +65,7 @@ export const LibraryInstructionPicker = ({
               />
               <span className="resource-picker-option__content">
                 <span className="resource-picker-option__icon" aria-hidden="true">
-                  <FileText size={17} strokeWidth={2} />
+                  <ResourceIcon iconKey={block.iconKey ?? "file"} size={17} />
                 </span>
                 <span className="resource-picker-option__main">
                   <strong>{block.name}</strong>

@@ -21,15 +21,17 @@ const setup = async () => {
 
 describe("Instruction Library", () => {
   it("creates, updates, and resolves Blocks without mutating stale data", async () => {
-    const { store } = await setup();
+    const { paths, store } = await setup();
     const created = await store.create({
       name: "Review rules",
       description: "Reusable review guidance",
+      iconKey: "book",
       content: "# Review\nCheck behavior.\n"
     });
 
     expect(await store.read(created.id)).toMatchObject({
       name: "Review rules",
+      iconKey: "book",
       content: "# Review\nCheck behavior.\n"
     });
 
@@ -38,6 +40,7 @@ describe("Instruction Library", () => {
       expectedContentHash: created.contentHash,
       name: "Review rules",
       description: "Reusable review guidance",
+      iconKey: "pen",
       content: "# Review\nCheck behavior and tests.\n"
     });
     await expect(store.update({
@@ -47,6 +50,10 @@ describe("Instruction Library", () => {
       content: "stale"
     })).rejects.toThrow("changed since it was opened");
     expect((await store.list())[0]?.contentHash).toBe(updated.contentHash);
+    await expect(readFile(
+      join(paths.instructionsLibraryDir, created.id, "instruction.json"),
+      "utf8"
+    ).then(JSON.parse)).resolves.toMatchObject({ iconKey: "pen" });
   });
 
   it("moves deleted Blocks to recoverable Trash", async () => {

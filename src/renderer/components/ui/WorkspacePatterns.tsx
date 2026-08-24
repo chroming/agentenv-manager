@@ -75,6 +75,7 @@ interface SelectableListRowProps
   trailingAction?: ReactNode;
   title: ReactNode;
   titleClassName?: string;
+  titleEmphasis?: "always" | "selected";
   tooltip?: string;
   type?: ButtonHTMLAttributes<HTMLButtonElement>["type"];
   onClick?(event: MouseEvent<HTMLElement>): void;
@@ -99,6 +100,7 @@ export const SelectableListRow = ({
   trailingAction,
   title,
   titleClassName = "",
+  titleEmphasis = "always",
   tooltip,
   type = "button",
   ...props
@@ -124,6 +126,8 @@ export const SelectableListRow = ({
   };
   const classes = `ui-selectable-row${selected ? " is-selected" : ""}${
     trailingAction ? " has-trailing-action" : ""
+  }${
+    titleEmphasis === "selected" ? " ui-selectable-row--selected-emphasis" : ""
   } ${className}`.trim();
   const label = props["aria-label"] ?? (generatedLabel || undefined);
 

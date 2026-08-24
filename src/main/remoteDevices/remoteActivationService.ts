@@ -34,6 +34,7 @@ import type {
 import { collectLibraryResourceVersions, libraryResourceVersionsEqual } from "../../shared/libraryVersions";
 import { profileEffectiveInstructions } from "../../shared/profileInstructions";
 import { materializeTargetResourcePolicy, profileResourceMode } from "../../shared/profileResources";
+import { isSharedTargetSkillLocation } from "../../shared/skillLocationSemantics";
 import { createUnifiedDiff } from "../diff";
 import { createExecutableResolver } from "../executableDiscovery";
 import { hashPathEntry } from "../filesystemIntegrity";
@@ -303,7 +304,7 @@ const targetSnapshotPaths = (targetPaths: TargetPaths) => [
   targetPaths.instructionsOverridePath,
   targetPaths.skillsDir,
   ...(targetPaths.skillLocations ?? [])
-    .filter((location) => location.shared)
+    .filter(isSharedTargetSkillLocation)
     .map((location) => location.path)
 ].filter((path): path is string => Boolean(path));
 
@@ -964,7 +965,7 @@ export const createRemoteActivationService = (options: {
 
       if (skillsMode !== "ignore") {
         const desiredNames = new Set(desiredReferences.map((reference) => reference.targetName));
-        for (const sharedLocation of (targetPaths.skillLocations ?? []).filter((location) => location.shared)) {
+        for (const sharedLocation of (targetPaths.skillLocations ?? []).filter(isSharedTargetSkillLocation)) {
           for (const name of desiredNames) {
             const sharedPath = posix.join(sharedLocation.path, name);
             const sharedRelative = relativeToRemoteHome(endpoint.homeDir, sharedPath);

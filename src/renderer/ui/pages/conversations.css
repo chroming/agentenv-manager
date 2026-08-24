@@ -190,17 +190,14 @@
 }
 
 .conversation-list-item__title {
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
   color: var(--text);
-  display: -webkit-box;
+  display: block;
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-regular);
   line-height: 18px;
-  max-height: 36px;
   overflow: hidden;
-  overflow-wrap: anywhere;
-  white-space: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .conversation-list-item.is-selected .conversation-list-item__title {

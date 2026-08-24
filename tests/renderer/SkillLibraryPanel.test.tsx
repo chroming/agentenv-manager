@@ -506,7 +506,8 @@ describe("SkillLibraryPanel", () => {
             contentHash: "compat-hash",
             contentMatchesLibrary: true,
             locationRole: "compatibility-runtime",
-            sharedLocation: true
+            sharedLocation: true,
+            sharedLocationId: "agents-skills"
           },
           {
             id: "compat-reviewer",
@@ -691,6 +692,7 @@ describe("SkillLibraryPanel", () => {
             contentMatchesLibrary: true,
             locationRole: "compatibility-runtime",
             sharedLocation: true,
+            sharedLocationId: "agents-skills",
             unmanagedLocationId: "unmanaged-external-cli-skill-shared",
             unmanagedCoverage: "exact"
           },
@@ -917,7 +919,7 @@ describe("SkillLibraryPanel", () => {
     expect(screen.queryByRole("region", { name: "Local Skills Manager" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Library storage settings" })).not.toBeInTheDocument();
     const sharedRow = screen.getByRole("group", { name: "Library item shared-reviewer" });
-    expect(sharedRow).toHaveTextContent("1 Profile · 2 installs");
+    expect(sharedRow).not.toHaveTextContent("1 Profile · 2 installs");
     fireEvent.click(within(sharedRow).getByRole("button", { name: "Filter by tag Code Review" }));
     expect(onViewStateChange).toHaveBeenCalledWith({
       ...defaultSkillLibraryViewState,
@@ -928,6 +930,9 @@ describe("SkillLibraryPanel", () => {
     const sharedIdentity = within(sharedRow).getByLabelText("Skill details for shared-reviewer");
     fireEvent.mouseEnter(sharedIdentity);
     expect(await screen.findByRole("tooltip")).toHaveTextContent("Review code");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("1 Profile · 2 installs");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Daily Coding");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("OpenCode, Codex");
     fireEvent.mouseLeave(sharedIdentity);
     await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
     fireEvent.click(within(sharedRow).getByText("Shared Reviewer"));
@@ -941,12 +946,6 @@ describe("SkillLibraryPanel", () => {
         .toHaveTextContent("Shared Reviewer")
     );
     fireEvent.click(within(filesDialog).getByRole("button", { name: "Close" }));
-    const sharedUsage = within(sharedRow).getByLabelText("Usage details for shared-reviewer");
-    fireEvent.mouseEnter(sharedUsage);
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("Daily Coding");
-    expect(screen.getByRole("tooltip")).toHaveTextContent("OpenCode, Codex");
-    fireEvent.mouseLeave(sharedUsage);
-    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
     expect(sharedIdentity).not.toHaveAttribute("title");
     fireEvent.contextMenu(sharedRow, { clientX: 320, clientY: 240 });
     const rowMenu = screen.getByRole("menu", { name: "Actions for shared-reviewer" });
@@ -1078,7 +1077,7 @@ describe("SkillLibraryPanel", () => {
       "shared-reviewer"
     ]);
 
-    expect(sharedRow).toHaveTextContent("1 Profile · 2 installs");
+    expect(sharedRow).not.toHaveTextContent("1 Profile · 2 installs");
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.mouseDown(document.body);
     expect(screen.queryByLabelText("Update source for shared-reviewer")).not.toBeInTheDocument();

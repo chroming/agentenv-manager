@@ -2095,6 +2095,7 @@ export interface InstructionBlock {
   id: string;
   name: string;
   description: string;
+  iconKey?: ResourceIconKey;
   content: string;
   contentHash: string;
   createdAt: string;
@@ -2106,6 +2107,7 @@ export interface InstructionBlock {
 export interface CreateInstructionBlockInput {
   name: string;
   description?: string;
+  iconKey?: ResourceIconKey;
   content: string;
 }
 

@@ -27,7 +27,12 @@ const CONTENT_FILE = "CONTENT.md";
 
 const contentHashFor = (metadata: InstructionBlockMetadata, content: string) =>
   createHash("sha256")
-    .update(JSON.stringify({ name: metadata.name, description: metadata.description, content }))
+    .update(JSON.stringify({
+      name: metadata.name,
+      description: metadata.description,
+      iconKey: metadata.iconKey,
+      content
+    }))
     .digest("hex");
 
 const slugName = (name: string) => {
@@ -109,6 +114,7 @@ export const createInstructionLibraryStore = (
       id,
       name: input.name,
       description: input.description ?? "",
+      iconKey: input.iconKey,
       createdAt: now,
       updatedAt: now
     });
@@ -171,6 +177,7 @@ export const createInstructionLibraryStore = (
       id: current.id,
       name: input.name,
       description: input.description ?? "",
+      iconKey: input.iconKey ?? current.iconKey,
       createdAt: current.createdAt,
       updatedAt: new Date().toISOString()
     });

@@ -4,12 +4,12 @@ import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { DocumentDialogFrame } from "./DocumentDialogFrame";
 import { SyntaxCodePreview } from "./SyntaxCodePreview";
+import { SyntaxTextAreaField } from "./SyntaxTextAreaField";
 import {
   Button,
   DialogBody,
   DialogFooter,
   Notice,
-  TextAreaField
 } from "./ui";
 
 export interface InstructionDocumentGuard {
@@ -185,11 +185,12 @@ export const InstructionDocumentDialog = ({
             {t("Reading Workspace file…")}
           </div>
         ) : mode === "edit" ? (
-          <TextAreaField
+          <SyntaxTextAreaField
             className="instruction-document-dialog__textarea"
             fieldClassName="instruction-document-dialog__field"
             label={editorLabel}
             labelHidden
+            path={fileName}
             spellCheck={false}
             value={content}
             wrap="soft"

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { InstructionsWorkspace } from "../../src/renderer/components/InstructionsWorkspace";
 import type { InstructionBlock } from "../../src/shared/types";
@@ -10,6 +10,7 @@ const block: InstructionBlock = {
   id: "review-rules",
   name: "Review rules",
   description: "Consistent review guidance",
+  iconKey: "book",
   content: "# Review\nCheck behavior.\n",
   contentHash: "hash",
   createdAt: "2026-08-20T00:00:00.000Z",
@@ -65,5 +66,39 @@ describe("InstructionsWorkspace", () => {
       .toHaveValue("# Imported\n");
     fireEvent.click(screen.getByRole("button", { name: "Maximize preview" }));
     expect(dialog).toHaveClass("is-maximized");
+  });
+
+  it("offers the same preview and edit actions from the row context menu", async () => {
+    const onUpdate = vi.fn().mockResolvedValue(undefined);
+    render(
+      <InstructionsWorkspace
+        blocks={[block]}
+        loading={false}
+        onCreate={vi.fn()}
+        onImport={vi.fn()}
+        onRefresh={vi.fn()}
+        onRemove={vi.fn()}
+        onUpdate={onUpdate}
+      />
+    );
+
+    const row = screen.getByRole("button", { name: "Review rules" });
+    fireEvent.contextMenu(row, { clientX: 40, clientY: 50 });
+    expect(screen.getByRole("menu", { name: "Instruction actions" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Preview" }));
+    const preview = screen.getByRole("dialog", { name: "Instruction document" });
+    expect(within(preview).getByLabelText("Preview of CONTENT.md").querySelector(".syntax-code-preview"))
+      .toBeInTheDocument();
+    fireEvent.click(within(preview).getAllByRole("button", { name: "Close" }).at(-1)!);
+
+    fireEvent.contextMenu(row, { clientX: 40, clientY: 50 });
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change icon for Review rules" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Code" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledWith(block, expect.objectContaining({
+      iconKey: "code"
+    })));
   });
 });

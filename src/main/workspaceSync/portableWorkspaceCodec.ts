@@ -119,6 +119,7 @@ export const createPortableWorkspaceCodec = (input: {
         id: block.id,
         name: block.name,
         description: block.description,
+        iconKey: block.iconKey,
         createdAt: block.createdAt,
         updatedAt: block.updatedAt
       });

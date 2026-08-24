@@ -7,6 +7,7 @@ import type {
   SkillInventoryEntry,
   UnmanagedSkillLocationUpdate
 } from "../../shared/types";
+import { isSharedSkillInventoryEntry } from "../../shared/skillLocationSemantics";
 import type { SkillUpdateCheckStatus as RendererSkillUpdateCheckStatus } from "../skillLibraryContracts";
 
 type SetInventory = (
@@ -124,7 +125,7 @@ export const useSkillCleanupBoundaries = ({
             item.foundIn.length > 0
               ? item.foundIn.map((targetId) => ({
                   path: item.path,
-                  targetId: item.sharedLocation ? undefined : targetId,
+                  targetId: isSharedSkillInventoryEntry(item) ? undefined : targetId,
                   coverage: "exact" as const
                 }))
               : [{ path: item.path, coverage: "exact" as const }]

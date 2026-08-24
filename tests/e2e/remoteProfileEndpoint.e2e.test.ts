@@ -95,6 +95,42 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
     await remoteDeviceGroup.getByText("OpenCode", { exact: true }).waitFor({ state: "visible" });
     await remoteDeviceGroup.getByRole("button", { name: "Refresh fixture-host" }).click();
     await remoteDeviceGroup.getByText("Ready · 1 Agent", { exact: true }).waitFor({ state: "visible" });
+    const typography = await page.locator(".target-list").evaluate((list) => {
+      const remoteGroup = list.querySelector<HTMLElement>(".remote-location-group")!;
+      const remoteDeviceName = remoteGroup.querySelector<HTMLElement>(".remote-location-header__name")!;
+      const remoteDeviceHost = remoteGroup.querySelector<HTMLElement>(".remote-location-header__host")!;
+      const remoteAgentName = remoteGroup.querySelector<HTMLElement>(
+        ".target-workflow-name-action > strong"
+      )!;
+      const style = (element: HTMLElement) => {
+        const computed = getComputedStyle(element);
+        return {
+          fontSize: computed.fontSize,
+          fontWeight: computed.fontWeight,
+          lineHeight: computed.lineHeight
+        };
+      };
+      return {
+        remoteAgent: style(remoteAgentName),
+        remoteDevice: style(remoteDeviceName),
+        remoteHost: style(remoteDeviceHost)
+      };
+    });
+    expect(typography.remoteAgent).toEqual({
+      fontSize: "13px",
+      fontWeight: "500",
+      lineHeight: "normal"
+    });
+    expect(typography.remoteDevice).toEqual({
+      fontSize: "12px",
+      fontWeight: "500",
+      lineHeight: "16px"
+    });
+    expect(typography.remoteHost).toEqual({
+      fontSize: "11px",
+      fontWeight: "400",
+      lineHeight: "15px"
+    });
 
     const result = await page.evaluate(async () => {
       const created = await window.agentEnv.createProfile({

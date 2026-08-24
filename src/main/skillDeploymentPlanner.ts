@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import type { ProfileSkill } from "../shared/schemas";
 import { normalizeSkillKey } from "../shared/skillIdentity";
+import { isSharedSkillInventoryEntry } from "../shared/skillLocationSemantics";
 import { isSkillCollectionItemLibraryReady } from "../shared/skillCleanup";
 import { profileManagesResource } from "../shared/profileResources";
 import type {
@@ -165,7 +166,7 @@ export const deploymentRelevantSkillInventory = ({
     if (exactTargetPaths.has(path)) return true;
     if (entry.managedByTarget === true) return true;
     if (
-      entry.sharedLocation &&
+      isSharedSkillInventoryEntry(entry) &&
       entry.libraryId &&
       entry.contentMatchesLibrary === true &&
       entry.status !== "left-unmanaged"
@@ -273,7 +274,7 @@ export const buildSkillDeploymentPlan = ({
 
   for (const entry of inventory) {
     if (
-      !entry.sharedLocation ||
+      !isSharedSkillInventoryEntry(entry) ||
       entry.status !== "left-unmanaged"
     ) {
       continue;
@@ -316,7 +317,7 @@ export const buildSkillDeploymentPlan = ({
 
   for (const entry of inventory) {
     if (
-      !entry.sharedLocation ||
+      !isSharedSkillInventoryEntry(entry) ||
       !entry.libraryId ||
       !isSkillCollectionItemLibraryReady(entry) ||
       entry.status === "left-unmanaged" ||

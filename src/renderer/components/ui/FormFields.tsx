@@ -1,6 +1,7 @@
 import {
   forwardRef,
   useId,
+  type Ref,
   type InputHTMLAttributes,
   type ReactNode,
   type SelectHTMLAttributes,
@@ -154,7 +155,10 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(({
 
 SelectField.displayName = "SelectField";
 
-interface TextAreaFieldProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+export interface TextAreaFieldProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+  backdrop?: ReactNode;
+  backdropClassName?: string;
+  backdropRef?: Ref<HTMLDivElement>;
   description?: ReactNode;
   error?: ReactNode;
   fieldClassName?: string;
@@ -162,7 +166,13 @@ interface TextAreaFieldProps extends TextareaHTMLAttributes<HTMLTextAreaElement>
   labelHidden?: boolean;
 }
 
-export const TextAreaField = forwardRef<HTMLTextAreaElement, TextAreaFieldProps>(({
+export const TextAreaField = forwardRef<
+  HTMLTextAreaElement,
+  TextAreaFieldProps
+>(({
+  backdrop,
+  backdropClassName = "",
+  backdropRef,
   className = "",
   description,
   error,
@@ -176,7 +186,20 @@ export const TextAreaField = forwardRef<HTMLTextAreaElement, TextAreaFieldProps>
   const fieldId = id ?? generatedId;
   return (
     <FieldFrame className={fieldClassName} description={description} error={error} htmlFor={fieldId} label={label} labelHidden={labelHidden}>
-      <textarea ref={ref} {...props} aria-invalid={error ? true : props["aria-invalid"]} className={className} id={fieldId} />
+      {backdrop ? (
+        <div className="ui-textarea-stack">
+          <div
+            ref={backdropRef}
+            aria-hidden="true"
+            className={`ui-textarea-stack__backdrop ${backdropClassName}`.trim()}
+          >
+            {backdrop}
+          </div>
+          <textarea ref={ref} {...props} aria-invalid={error ? true : props["aria-invalid"]} className={className} id={fieldId} />
+        </div>
+      ) : (
+        <textarea ref={ref} {...props} aria-invalid={error ? true : props["aria-invalid"]} className={className} id={fieldId} />
+      )}
     </FieldFrame>
   );
 });

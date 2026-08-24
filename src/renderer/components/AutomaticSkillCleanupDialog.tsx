@@ -170,7 +170,11 @@ export const AutomaticSkillCleanupDialog = ({
         </header>
         <div className="cleanup-bulk-review-list ui-dialog-body">
           {[...groups.entries()].map(([effect, groupItems]) => (
-            <section className="cleanup-bulk-effect" key={effect}>
+            <section
+              className="cleanup-bulk-effect"
+              data-cleanup-effect={effect}
+              key={effect}
+            >
               <div className="cleanup-bulk-effect__header">
                 <strong>{t(cleanupEffectLabel(effect))}</strong>
                 <span>{groupItems.length}</span>

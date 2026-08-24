@@ -44,6 +44,7 @@ import type {
 import type { TargetRegistry } from "./targets/registry";
 import type { AgentEnvPaths } from "./paths";
 import { isTargetInstalled } from "../shared/targetHealth";
+import { isSharedSkillInventoryEntry } from "../shared/skillLocationSemantics";
 import {
   buildSkillCleanupGroups,
   isSkillCleanupManageable,
@@ -79,6 +80,11 @@ import { registerSkillRemovalIpc } from "./ipc/skillRemovalIpc";
 import type { InstructionLibraryStore } from "./instructionLibraryStore";
 import type { SkillGroupStore } from "./skillGroupStore";
 import { scanSkillInventoryForRenderer } from "./skillInventoryResponse";
+import {
+  findSharedSkillCleanupEntry,
+  findTargetSkillCleanupEntry,
+  indexSkillCleanupInventory
+} from "./skillCleanupInventory";
 
 export interface IpcServices {
   profileStore: ProfileStore;
@@ -563,9 +569,7 @@ export const registerIpcHandlers = ({
     const inventory = await skillLibraryStore.scanInventory(
       inventoryPathsFor(targets)
     );
-    const inventoryByPath = new Map(
-      inventory.map((item) => [resolve(item.path), item])
-    );
+    const inventoryByPath = indexSkillCleanupInventory(inventory);
     if ((input.mode ?? "target-copies") === "target-copies") {
       const currentGroup = buildSkillCleanupGroups(inventory)
         .find((group) => group.skillKey === skillKey);
@@ -585,7 +589,12 @@ export const registerIpcHandlers = ({
       input.libraryAction === "keep" &&
       input.locations.length > 0 &&
       input.locations.every((location) => {
-        const current = inventoryByPath.get(resolve(String(location.path)));
+        const current = findTargetSkillCleanupEntry(inventoryByPath, {
+          path: String(location.path),
+          targetId: String(location.targetId),
+          skillKey,
+          contentHash: String(location.contentHash)
+        });
         return Boolean(
           current &&
           current.status !== "left-unmanaged" &&
@@ -608,14 +617,15 @@ export const registerIpcHandlers = ({
       if (!isAllowed || !basename(targetDir)) {
         throw new Error(`Skill cleanup path is outside ${target.name}: ${targetDir}`);
       }
-      const current = inventoryByPath.get(targetDir);
-      if (
-        !current ||
-        current.skillKey !== skillKey ||
-        current.contentHash !== location.contentHash
-      ) {
+      const current = findTargetSkillCleanupEntry(inventoryByPath, {
+        path: targetDir,
+        targetId,
+        skillKey,
+        contentHash: String(location.contentHash)
+      });
+      if (!current) {
         throw new Error(
-          `${skillKey} changed after the cleanup preview. Refresh and review it again.`
+          `${skillKey} changed after the cleanup preview at ${targetDir}. Refresh and review it again.`
         );
       }
       if (!isSkillCleanupManageable(current)) {
@@ -649,18 +659,21 @@ export const registerIpcHandlers = ({
         const expected = requestedShared.find(
           (location) => resolve(location.path) === sharedPath
         );
-        const current = inventoryByPath.get(sharedPath);
+        const current = expected
+          ? findSharedSkillCleanupEntry(inventoryByPath, {
+              path: sharedPath,
+              skillKey,
+              contentHash: String(expected.contentHash)
+            })
+          : undefined;
         if (
           !expected ||
           !current ||
-          current.skillKey !== skillKey ||
-          current.sharedLocation !== true ||
           (dirname(sharedPath) === agentsSkillsRoot &&
-            current.sharedLocationId !== "agents-skills") ||
-          current.contentHash !== expected.contentHash
+            current.sharedLocationId !== "agents-skills")
         ) {
           throw new Error(
-            `${skillKey} changed after the cleanup preview. Refresh and review it again.`
+            `${skillKey} changed after the cleanup preview at ${sharedPath}. Refresh and review it again.`
           );
         }
       }
@@ -703,7 +716,7 @@ export const registerIpcHandlers = ({
     const sharedEntries = inventory.filter(
       (item) =>
         item.skillKey === skillKey &&
-        item.sharedLocation === true &&
+        isSharedSkillInventoryEntry(item) &&
         sharedPathSet.has(resolve(item.path))
     );
     const collectionEntry = sharedEntries.find((item) => item.collectionLink);

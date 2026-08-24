@@ -143,7 +143,8 @@ export const expectStableResourceDisclosureHeaders = (
     const current = after.find(({ id }) => id === initial.id);
     expect(current, `Missing resource header ${initial.id}`).toBeDefined();
     const context = `resource header ${initial.id}: ${JSON.stringify({ initial, current })}`;
-    expect(current?.height, context).toBe(54);
+    expect(initial.height, context).toBe(46);
+    expect(current?.height, context).toBe(initial.height);
     expect(current?.width, context).toBe(initial.width);
     expect(current?.x, context).toBe(initial.x);
     expect(current?.titleTop, context).toBe(initial.titleTop);

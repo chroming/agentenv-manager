@@ -110,8 +110,8 @@ export const antigravityIntegration: AgentTargetIntegration = {
           {
             path: sharedSkillsDir,
             role: "compatibility-runtime",
-            shared: true,
-            scope: "shared",
+            shared: false,
+            scope: "user",
             scanDepth: "direct",
             management: "observed"
           },

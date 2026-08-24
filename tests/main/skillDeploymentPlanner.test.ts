@@ -74,6 +74,7 @@ const inventoryEntry = (
   contentMatchesLibrary: true,
   locationRole: "preferred-runtime",
   sharedLocation: false,
+  sharedLocationId: overrides.sharedLocation ? "agents-skills" : undefined,
   ...overrides
 });
 
@@ -262,6 +263,24 @@ describe("skill deployment planner", () => {
       code: "unmanaged-skill-location",
       path: "/home/.agents/skills/reviewer"
     }));
+  });
+
+  it("does not bind deployment to another Agent's compatibility directory", () => {
+    const result = plan({
+      inventory: [inventoryEntry({
+        path: "/home/.claude/skills/reviewer",
+        locationRole: "compatibility-runtime",
+        locationManagement: "observed",
+        sharedLocation: true,
+        sharedLocationId: undefined
+      })]
+    });
+
+    expect(result.sharedPreparations).toEqual([]);
+    expect(result.sharedPaths).toEqual([]);
+    expect(result.effectiveSkills).toEqual([
+      { libraryId: "reviewer", targetName: "reviewer", enabled: true }
+    ]);
   });
 
   it("blocks duplicate deployment for an unresolved Skill collection member", () => {
@@ -546,7 +565,10 @@ describe("skill deployment planner", () => {
         })
       ])
     ).not.toBe(
-      fingerprintSkillInventory([inventoryEntry({ sharedLocation: true })])
+      fingerprintSkillInventory([inventoryEntry({
+        sharedLocation: true,
+        sharedLocationId: undefined
+      })])
     );
   });
 

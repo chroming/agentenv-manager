@@ -43,7 +43,8 @@ describe("ProfileComposerSection", () => {
     const panelId = trigger.getAttribute("aria-controls");
 
     expect(trigger.closest(".ui-resource-disclosure")).toHaveClass(
-      "profile-composer-section"
+      "profile-composer-section",
+      "is-compact"
     );
     expect(trigger.tagName).toBe("BUTTON");
     expect(trigger).toHaveAttribute("aria-expanded", "true");

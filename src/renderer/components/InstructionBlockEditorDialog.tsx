@@ -1,15 +1,16 @@
 import { AlertTriangle, Users } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { InstructionBlock } from "../../shared/types";
+import type { InstructionBlock, ResourceIconKey } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { DocumentDialogFrame } from "./DocumentDialogFrame";
+import { ResourceIconPicker } from "./ResourceIconPicker";
+import { SyntaxTextAreaField } from "./SyntaxTextAreaField";
 import {
   Button,
   DialogBody,
   DialogFooter,
   Notice,
-  TextAreaField,
   TextField
 } from "./ui";
 
@@ -20,7 +21,12 @@ interface InstructionBlockEditorDialogProps {
   saving: boolean;
   error?: string;
   onClose(): void;
-  onSave(input: { name: string; description: string; content: string }): Promise<void> | void;
+  onSave(input: {
+    name: string;
+    description: string;
+    iconKey?: ResourceIconKey;
+    content: string;
+  }): Promise<void> | void;
 }
 
 export const InstructionBlockEditorDialog = ({
@@ -37,12 +43,14 @@ export const InstructionBlockEditorDialog = ({
   const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [iconKey, setIconKey] = useState<ResourceIconKey>();
   const [content, setContent] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setName(block?.name ?? initial?.name ?? "");
     setDescription(block?.description ?? "");
+    setIconKey(block?.iconKey);
     setContent(block?.content ?? initial?.content ?? "");
   }, [block, initial, open]);
 
@@ -57,6 +65,7 @@ export const InstructionBlockEditorDialog = ({
   if (!open) return null;
   const dirty = name.trim() !== (block?.name ?? initial?.name ?? "") ||
     description.trim() !== (block?.description ?? "") ||
+    iconKey !== block?.iconKey ||
     content !== (block?.content ?? initial?.content ?? "");
   return (
     <DocumentDialogFrame
@@ -85,22 +94,36 @@ export const InstructionBlockEditorDialog = ({
             })}
           </Notice>
         ) : null}
-        <TextField
-          ref={nameRef}
-          label={t("Name")}
-          maxLength={120}
-          value={name}
-          onChange={(event) => setName(event.currentTarget.value)}
-        />
+        <div className="instruction-block-editor__identity">
+          <div className="instruction-block-editor__icon-field">
+            <span className="ui-field__label">{t("Icon")}</span>
+            <ResourceIconPicker
+              className="instruction-block-editor__icon-picker"
+              fallbackIconKey="file"
+              iconKey={iconKey}
+              label={name || t("Instruction")}
+              onChange={setIconKey}
+            />
+          </div>
+          <TextField
+            ref={nameRef}
+            label={t("Name")}
+            maxLength={120}
+            value={name}
+            onChange={(event) => setName(event.currentTarget.value)}
+          />
+        </div>
         <TextField
           label={t("Description")}
           maxLength={500}
           value={description}
           onChange={(event) => setDescription(event.currentTarget.value)}
         />
-        <TextAreaField
-          className="instruction-block-editor__content"
+        <SyntaxTextAreaField
+          className="instruction-block-editor__textarea"
+          fieldClassName="instruction-block-editor__content"
           label={t("Instruction content")}
+          path="CONTENT.md"
           spellCheck={false}
           wrap="soft"
           value={content}
@@ -113,7 +136,12 @@ export const InstructionBlockEditorDialog = ({
           variant="primary"
           busy={saving}
           disabled={!name.trim() || !content.trim() || !dirty}
-          onClick={() => void onSave({ name: name.trim(), description: description.trim(), content })}
+          onClick={() => void onSave({
+            name: name.trim(),
+            description: description.trim(),
+            iconKey,
+            content
+          })}
         >
           {t("Save")}
         </Button>

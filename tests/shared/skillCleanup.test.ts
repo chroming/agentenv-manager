@@ -19,6 +19,7 @@ const inventoryItem = (
   status: "outside",
   skillKey: "reviewer",
   contentHash: "same-hash",
+  sharedLocationId: overrides.sharedLocation ? "agents-skills" : undefined,
   ...overrides
 });
 
@@ -52,6 +53,7 @@ describe("skill cleanup groups", () => {
         id: "shared-copy",
         skillKey: "shared-copy",
         sharedLocation: true,
+        sharedLocationId: "agents-skills",
         foundIn: ["opencode", "codex"]
       })
     ];
@@ -60,6 +62,24 @@ describe("skill cleanup groups", () => {
       .toHaveLength(5);
     expect(filterSkillInventoryForManagementScope(inventory, { kind: "shared" })
       .map((item) => item.id)).toEqual(["shared-copy"]);
+  });
+
+  it("keeps Agent compatibility directories out of shared management", () => {
+    const compatibilityCopy = inventoryItem({
+      path: "/tmp/home/.claude/skills/reviewer",
+      locationRole: "compatibility-runtime",
+      locationManagement: "observed",
+      sharedLocation: true,
+      sharedLocationId: undefined
+    });
+
+    expect(filterSkillInventoryForManagementScope(
+      [compatibilityCopy],
+      { kind: "shared" }
+    )).toEqual([]);
+    expect(buildSkillCleanupGroups([compatibilityCopy])[0]).toMatchObject({
+      sharedMigration: undefined
+    });
   });
 
   it("requires a decision when a managed copy changed locally", () => {
@@ -149,6 +169,81 @@ describe("skill cleanup groups", () => {
     expect(group).toMatchObject({
       state: "outside",
       presentation: { state: "not-in-library", action: "add-to-library" }
+    });
+    expect(group.activeItems).toHaveLength(2);
+  });
+
+  it("treats one managed path observed by another Agent as one managed copy", () => {
+    const sharedPath = "/tmp/home/.claude/skills/reviewer";
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        path: sharedPath,
+        foundIn: ["opencode"],
+        status: "library",
+        libraryId: "reviewer",
+        contentMatchesLibrary: true,
+        locationRole: "compatibility-runtime",
+        locationManagement: "observed",
+        runtimeAvailability: "shadowed"
+      }),
+      inventoryItem({
+        path: sharedPath,
+        foundIn: ["claude-code"],
+        status: "managed",
+        libraryId: "reviewer",
+        contentMatchesLibrary: true,
+        installMethod: "copied",
+        locationRole: "preferred-runtime",
+        locationManagement: "managed",
+        runtimeAvailability: "enabled"
+      })
+    ]);
+
+    expect(group).toMatchObject({
+      state: "managed",
+      resolution: "resolved",
+      bucket: "managed",
+      presentation: { state: "managed", action: "none" }
+    });
+    expect(group.activeItems).toHaveLength(1);
+    expect(group.activeItems[0]).toMatchObject({
+      path: sharedPath,
+      status: "managed",
+      foundIn: ["claude-code", "opencode"],
+      locationRole: "preferred-runtime",
+      locationManagement: "managed"
+    });
+  });
+
+  it("does not merge observations when one physical path changed during scanning", () => {
+    const sharedPath = "/tmp/home/.claude/skills/reviewer";
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        path: sharedPath,
+        foundIn: ["opencode"],
+        contentHash: "before",
+        status: "library",
+        libraryId: "reviewer",
+        contentMatchesLibrary: true,
+        locationRole: "compatibility-runtime",
+        locationManagement: "observed"
+      }),
+      inventoryItem({
+        path: sharedPath,
+        foundIn: ["claude-code"],
+        contentHash: "after",
+        status: "managed",
+        libraryId: "reviewer",
+        contentMatchesLibrary: false,
+        locationRole: "preferred-runtime",
+        locationManagement: "managed"
+      })
+    ]);
+
+    expect(group).toMatchObject({
+      state: "conflict",
+      resolution: "manual",
+      bucket: "decision"
     });
     expect(group.activeItems).toHaveLength(2);
   });

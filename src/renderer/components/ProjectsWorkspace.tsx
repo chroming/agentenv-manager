@@ -745,6 +745,7 @@ export const ProjectsWorkspace = ({
                     return (
                       <ResourceDisclosureSection
                         className="project-resource-section"
+                        density="compact"
                         description={description}
                         expanded={expanded}
                         icon={icon}

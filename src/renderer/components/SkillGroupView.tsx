@@ -172,6 +172,7 @@ export const SkillGroupView = ({
                 />
               )}
               className="skill-group-card"
+              density="compact"
               description={group.description || t("Reusable Skill collection")}
               expanded={expanded}
               icon={<FolderTree size={17} strokeWidth={2} />}
@@ -189,7 +190,6 @@ export const SkillGroupView = ({
                 {memberSkills.map((skill) => (
                   <ResourceRow
                     density="compact"
-                    description={skill.version ? `v${skill.version}` : skill.contentHash.slice(0, 7)}
                     icon={(
                       <ResourceIconArtwork
                         fallbackIconKey={skill.sourceType === "github" || skill.sourceType === "git" ? "github" : "folder"}

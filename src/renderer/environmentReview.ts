@@ -2,6 +2,7 @@ import {
   buildSkillCleanupGroups,
   type SkillCleanupPreparedTarget
 } from "../shared/skillCleanup";
+import { isSharedSkillInventoryEntry } from "../shared/skillLocationSemantics";
 import type {
   ProfileSummary,
   SkillInventoryEntry,
@@ -54,7 +55,7 @@ export const deriveEnvironmentReview = ({
 }: EnvironmentReviewInput): EnvironmentReviewSummary => {
   const installedTargetSet = new Set(installedTargetIds);
   const usableProfileCount = profiles.filter((profile) => !profile.loadError).length;
-  const sharedAreaMode = inventory.find((item) => item.sharedLocation)?.sharedAreaMode;
+  const sharedAreaMode = inventory.find(isSharedSkillInventoryEntry)?.sharedAreaMode;
   const sharedGroups = buildSkillCleanupGroups(inventory, {
     installedTargetIds,
     preparedTargetsBySkill

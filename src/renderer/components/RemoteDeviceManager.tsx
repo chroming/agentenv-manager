@@ -312,7 +312,7 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
                 <MonitorUp size={16} strokeWidth={2.1} />
               </span>
               <span className="remote-location-header__identity">
-                <strong>{device.name}</strong>
+                <span className="remote-location-header__name">{device.name}</span>
                 <OverflowTooltip
                   className="remote-location-header__host"
                   displayText={`${device.user ? `${device.user}@` : ""}${device.host}${device.port ? `:${device.port}` : ""}`}

@@ -1,0 +1,81 @@
+.settings-preference-row.app-update-summary {
+  min-height: 64px;
+  padding-block: 4px;
+}
+
+.app-update-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.app-update-note,
+.app-update-error {
+  display: block;
+  margin: 0;
+}
+
+.app-update-heading {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.app-update-heading > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-update-channel {
+  color: var(--muted);
+  flex: 0 0 auto;
+  font-size: var(--font-size-metadata);
+  font-weight: var(--font-weight-regular);
+}
+
+.app-update-versions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.app-update-versions > span {
+  color: var(--muted);
+  display: inline-flex;
+  gap: 5px;
+}
+
+.app-update-versions strong {
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.app-update-progress {
+  margin-top: 3px;
+  width: min(260px, 100%);
+}
+
+.app-update-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.app-update-error {
+  background: transparent;
+  border: 0;
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+  padding: 0;
+  user-select: text;
+  white-space: pre-wrap;
+}

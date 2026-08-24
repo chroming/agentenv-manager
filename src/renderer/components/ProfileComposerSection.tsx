@@ -70,6 +70,7 @@ export const ProfileComposerSection = ({
         !policyDisabled && policy === "ignore" ? "is-unmanaged" : ""
       ].filter(Boolean).join(" ")}
       data-profile-composer-id={id}
+      density="compact"
       description={(
         <OverflowTooltip
           className="profile-composer-section__description"

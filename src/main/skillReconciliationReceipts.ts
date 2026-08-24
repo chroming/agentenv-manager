@@ -3,6 +3,7 @@ import {
   reconcileSkill,
   toAppliedSkillReceipt
 } from "../shared/skillReconciliation";
+import { isSharedSkillInventoryEntry } from "../shared/skillLocationSemantics";
 import type {
   AppliedSkillReceipt,
   ProfileDetail,
@@ -87,7 +88,7 @@ export const skillReceiptsFor = ({
             ? {
                 id: observation.unmanagedLocationId,
                 path: observation.path,
-                targetId: observation.sharedLocation
+                targetId: isSharedSkillInventoryEntry(observation)
                   ? undefined
                   : targetPaths.targetId,
                 coverage: observation.unmanagedCoverage ?? "exact",
@@ -118,7 +119,7 @@ export const skillReceiptsFor = ({
             ? {
                 id: observation.unmanagedLocationId,
                 path: observation.path,
-                targetId: observation.sharedLocation
+                targetId: isSharedSkillInventoryEntry(observation)
                   ? undefined
                   : targetPaths.targetId,
                 coverage: observation.unmanagedCoverage ?? "exact",

@@ -26,6 +26,7 @@ import {
 import { targetPathInputFor } from "./targets/pathInput";
 import type { CapturedTargetProfile } from "./targets/types";
 import { isTargetInstalled } from "../shared/targetHealth";
+import { isSharedSkillInventoryEntry } from "../shared/skillLocationSemantics";
 import {
   createCaptureReceiptStore,
   type CaptureSkillCopy
@@ -290,7 +291,7 @@ export const createTargetCaptureService = ({
             contentHash: entry.contentHash,
             modifiedAt: entry.modifiedAt,
             locationRole: entry.locationRole,
-            shared: entry.sharedLocation === true,
+            shared: isSharedSkillInventoryEntry(entry),
             sharedLocationId: entry.sharedLocationId,
             collectionPath: entry.collectionLink?.path,
             libraryId: prepared.skill.libraryId,

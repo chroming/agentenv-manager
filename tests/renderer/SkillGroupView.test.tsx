@@ -47,6 +47,7 @@ describe("SkillGroupView", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle Review pack" }));
     expect(screen.getByText("review")).toBeInTheDocument();
+    expect(screen.queryByText("review-hash")).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Search Skill Groups" }), {
       target: { value: "release" }

@@ -500,11 +500,15 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
 }
 
 .ui-interactive-status__icon {
+  align-items: center;
   display: inline-flex;
   flex: 0 0 auto;
+  justify-content: center;
+  line-height: 0;
 }
 
 .ui-interactive-status__icon > svg {
+  display: block;
   height: 13px;
   width: 13px;
 }

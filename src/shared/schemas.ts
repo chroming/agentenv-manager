@@ -160,6 +160,7 @@ export const InstructionBlockMetadataSchema = z.object({
   id: SafeIdSchema,
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(500).default(""),
+  iconKey: ResourceIconKeySchema.optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime()
 }).strict();
