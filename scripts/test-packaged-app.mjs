@@ -418,13 +418,20 @@ try {
     JSON.parse(await readFile(join(appDataRoot, "agentenv-data.json"), "utf8")),
     { formatVersion: 2 }
   );
-  assert.equal(
-    await readFile(join(legacyProfileDir, "INSTRUCTIONS.md"), "utf8"),
-    "# Migrated packaged instructions\n"
+  assert.equal(await readFile(join(legacyProfileDir, "INSTRUCTIONS.md"), "utf8"), "");
+  const migratedResources = JSON.parse(
+    await readFile(join(legacyProfileDir, "resources.json"), "utf8")
   );
-  assert.match(
-    await readFile(join(legacyProfileDir, "resources.json"), "utf8"),
-    /packaged-legacy-skill/
+  assert.match(JSON.stringify(migratedResources), /packaged-legacy-skill/);
+  assert.equal(migratedResources.instructions.length, 1);
+  assert.equal(
+    await readFile(join(
+      appDataRoot,
+      "instructions-library",
+      migratedResources.instructions[0].libraryId,
+      "CONTENT.md"
+    ), "utf8"),
+    "# Migrated packaged instructions\n"
   );
   assert.match(
     await readFile(
