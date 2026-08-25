@@ -129,6 +129,10 @@ const installApi = () => {
       updatedAt: "2026-08-06T00:00:00.000Z"
     }]),
     addProjectSkill: vi.fn().mockResolvedValue({ status: "saved", contentHash: "added" }),
+    addProjectSkills: vi.fn().mockResolvedValue({
+      status: "saved",
+      results: [{ libraryId: "testing", status: "saved", contentHash: "added" }]
+    }),
     removeProjectSkill: vi.fn().mockResolvedValue({ status: "saved", contentHash: "absent" })
   };
   Object.defineProperty(window, "agentEnv", {
@@ -197,13 +201,16 @@ describe("ProjectsWorkspace", () => {
     expect(skillPath).toHaveClass("project-resource-entry__path");
     expect(skillPath).toHaveAttribute("data-ui-overflow-detail", "true");
 
-    fireEvent.click(await within(skillsSection).findByRole("button", { name: "Copy from Library" }));
-    const dialog = await screen.findByRole("dialog", { name: "Copy Skill to Workspace" });
+    fireEvent.click(await within(skillsSection).findByRole("button", { name: "Add Skills" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add Skills to Workspace" });
     expect(dialog).toHaveClass("resource-picker-dialog", "resource-picker-dialog--skills");
-    expect(dialog).toHaveTextContent("Git changes stay unstaged and uncommitted.");
-    expect(within(dialog).getByRole("radiogroup", { name: "Library Skills" }))
+    expect(within(dialog).getByRole("group", { name: "Resource type" }))
       .toBeInTheDocument();
-    expect(within(dialog).getByRole("radio", { name: "testing" })).toBeChecked();
+    expect(within(dialog).getByRole("group", { name: "Library Skills" }))
+      .toBeInTheDocument();
+    expect(within(dialog).getByRole("checkbox", { name: "testing" })).not.toBeChecked();
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "testing" }));
+    expect(dialog).toHaveTextContent("Git changes stay unstaged and uncommitted.");
     expect(within(dialog).getByRole("combobox", { name: /Workspace location/ }).closest(".ui-field"))
       .toBeInTheDocument();
     expect(within(dialog).queryByRole("combobox", { name: "Agent" })).not.toBeInTheDocument();
@@ -365,14 +372,16 @@ describe("ProjectsWorkspace", () => {
     render(<ProjectsWorkspace targets={[target]} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Expand Skills" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Copy from Library" }));
-    expect(await screen.findByRole("dialog", { name: "Copy Skill to Workspace" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Add Skills" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add Skills to Workspace" });
+    expect(dialog)
       .toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /^Add$/ }));
-    await waitFor(() => expect(api.addProjectSkill).toHaveBeenCalledWith({
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "testing" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add 1" }));
+    await waitFor(() => expect(api.addProjectSkills).toHaveBeenCalledWith({
       projectId: "project-1",
       locationId: "location-shared",
-      libraryId: "testing"
+      items: [{ libraryId: "testing" }]
     }));
 
     fireEvent.click(screen.getByRole("button", { name: "Remove review from Workspace" }));
@@ -406,16 +415,16 @@ describe("ProjectsWorkspace", () => {
     render(<ProjectsWorkspace targets={[target]} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Expand Skills" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Copy from Library" }));
-    expect(await screen.findByText("A different Workspace copy already exists")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Keep Workspace copy" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Replace with Library copy" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add Skills" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add Skills to Workspace" });
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "testing" }));
+    expect(await within(dialog).findByText("1 Workspace Skills will be replaced")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Replace and add 1" }));
 
-    await waitFor(() => expect(api.addProjectSkill).toHaveBeenCalledWith({
+    await waitFor(() => expect(api.addProjectSkills).toHaveBeenCalledWith({
       projectId: "project-1",
       locationId: "location-shared",
-      libraryId: "testing",
-      conflictResolution: "replace"
+      items: [{ libraryId: "testing", conflictResolution: "replace" }]
     }));
   });
 
@@ -435,7 +444,7 @@ describe("ProjectsWorkspace", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Expand Skills" }));
     expect(await screen.findByText("No enabled Agent provides a writable Workspace Skill location."))
       .toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Copy from Library" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add Skills" })).not.toBeInTheDocument();
   });
 
   it("refreshes the selected Workspace instead of reloading every reference", async () => {
@@ -534,17 +543,63 @@ describe("ProjectsWorkspace", () => {
 
   it("keeps a failed Project Skill add actionable inside its dialog", async () => {
     const api = installApi();
-    api.addProjectSkill.mockRejectedValue(new Error("Project resource parent is not a regular directory"));
+    api.addProjectSkills.mockRejectedValue(new Error("Project resource parent is not a regular directory"));
     render(<ProjectsWorkspace targets={[target]} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Expand Skills" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Copy from Library" }));
-    const dialog = await screen.findByRole("dialog", { name: "Copy Skill to Workspace" });
-    fireEvent.click(within(dialog).getByRole("button", { name: /^Add$/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add Skills" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add Skills to Workspace" });
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "testing" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add 1" }));
 
     expect(await within(dialog).findByRole("alert"))
       .toHaveTextContent("Project resource parent is not a regular directory");
     expect(dialog).toBeInTheDocument();
+  });
+
+  it("copies every unique Skill selected through a reusable Group", async () => {
+    const api = installApi();
+    api.listSkillLibrary.mockResolvedValue([
+      ...(await api.listSkillLibrary()),
+      {
+        id: "review",
+        name: "review",
+        description: "Review workflow",
+        path: "/library/review",
+        sourceType: "local",
+        updatePolicy: "untracked",
+        contentHash: "review-hash",
+        updatedAt: "2026-08-06T00:00:00.000Z"
+      }
+    ]);
+    render(
+      <ProjectsWorkspace
+        targets={[target]}
+        skillGroups={[{
+          formatVersion: 1,
+          id: "quality",
+          name: "Quality",
+          description: "Quality checks",
+          iconKey: "shield",
+          skillIds: ["testing", "review", "testing"],
+          createdAt: "2026-08-06T00:00:00.000Z",
+          updatedAt: "2026-08-06T00:00:00.000Z"
+        }]}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Expand Skills" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add Skills" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add Skills to Workspace" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Groups" }));
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: /Quality/ }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add 2" }));
+
+    await waitFor(() => expect(api.addProjectSkills).toHaveBeenCalledWith({
+      projectId: "project-1",
+      locationId: "location-shared",
+      items: [{ libraryId: "review" }, { libraryId: "testing" }]
+    }));
   });
 
   it("opens the same Project actions from a row context menu and dismisses with Escape", async () => {

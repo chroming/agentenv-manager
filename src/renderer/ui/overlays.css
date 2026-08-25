@@ -349,6 +349,10 @@
   z-index: var(--z-popover);
 }
 
+.ui-action-menu.toolbar-overflow-menu--modal {
+  z-index: var(--z-modal-popover);
+}
+
 .ui-action-menu .row-action-item,
 .ui-action-menu > button {
   align-items: center;
@@ -449,6 +453,11 @@
 .resource-picker-dialog__body .resource-picker-list {
   max-height: none;
   overflow: visible;
+}
+
+.resource-picker-dialog--workspace-skills .project-workspace-skill-selection .resource-picker-list {
+  max-height: min(250px, calc(100vh - 380px));
+  overflow: auto;
 }
 
 .skill-tag-editor-dialog {

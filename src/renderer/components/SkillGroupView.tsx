@@ -2,6 +2,7 @@ import { FolderTree, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import type {
   CreateSkillGroupInput,
+  ResourceIconKey,
   SkillGroup,
   SkillLibraryEntry,
   UpdateSkillGroupInput
@@ -10,7 +11,10 @@ import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { LibrarySkillPicker } from "./LibrarySkillPicker";
 import { OverflowTooltip } from "./OverflowTooltip";
-import { ResourceIconArtwork } from "./ResourceIconPicker";
+import {
+  ResourceIconArtwork,
+  ResourceIconPicker
+} from "./ResourceIconPicker";
 import {
   AlignedResourceList,
   Button,
@@ -18,12 +22,13 @@ import {
   DialogFooter,
   DialogHeader,
   EmptyState,
+  IconButton,
   ModalFrame,
   ResourcePanelToolbar,
   ResourceDisclosureSection,
   ResourceRow,
   SearchField,
-  TextAreaField,
+  TextAction,
   TextField,
   ToolbarOverflowMenu
 } from "./ui";
@@ -32,6 +37,7 @@ interface SkillGroupViewProps {
   active: boolean;
   groups: SkillGroup[];
   skills: SkillLibraryEntry[];
+  onOpenSkill?(skill: SkillLibraryEntry): void;
   onCreate(input: CreateSkillGroupInput): Promise<boolean>;
   onUpdate(input: UpdateSkillGroupInput): Promise<boolean>;
   onRemove(id: string): Promise<boolean>;
@@ -41,15 +47,22 @@ interface GroupDraft {
   id?: string;
   name: string;
   description: string;
+  iconKey?: ResourceIconKey;
   skillIds: string[];
 }
 
-const emptyDraft = (): GroupDraft => ({ name: "", description: "", skillIds: [] });
+const emptyDraft = (): GroupDraft => ({
+  name: "",
+  description: "",
+  iconKey: "folder",
+  skillIds: []
+});
 
 export const SkillGroupView = ({
   active,
   groups,
   skills,
+  onOpenSkill,
   onCreate,
   onUpdate,
   onRemove
@@ -94,6 +107,7 @@ export const SkillGroupView = ({
     id: group.id,
     name: group.name,
     description: group.description,
+    iconKey: group.iconKey,
     skillIds: [...group.skillIds]
   });
   const saveGroup = async () => {
@@ -102,6 +116,7 @@ export const SkillGroupView = ({
     const input = {
       name: draft.name.trim(),
       description: draft.description.trim(),
+      iconKey: draft.iconKey,
       skillIds: draft.skillIds
     };
     const saved = draft.id
@@ -152,31 +167,48 @@ export const SkillGroupView = ({
           return (
             <ResourceDisclosureSection
               actions={(
-                <ToolbarOverflowMenu
-                  items={[
-                    {
-                      id: "edit",
-                      icon: <Pencil size={14} strokeWidth={2.1} />,
-                      label: t("Edit"),
-                      onSelect: () => editGroup(group)
-                    },
-                    {
-                      id: "delete",
-                      icon: <Trash2 size={14} strokeWidth={2.1} />,
-                      label: t("Delete"),
-                      onSelect: () => setDeleteCandidate(group)
-                    }
-                  ]}
-                  label={t("More actions for {{name}}", { name: group.name })}
-                  menuLabel={t("Actions for {{name}}", { name: group.name })}
-                />
+                <>
+                  <IconButton
+                    label={t("Add Skills to {{name}}", { name: group.name })}
+                    size="compact"
+                    variant="ghost"
+                    onClick={() => editGroup(group)}
+                  >
+                    <Plus size={14} strokeWidth={2.2} />
+                  </IconButton>
+                  <ToolbarOverflowMenu
+                    items={[
+                      {
+                        id: "edit",
+                        icon: <Pencil size={14} strokeWidth={2.1} />,
+                        label: t("Edit"),
+                        onSelect: () => editGroup(group)
+                      },
+                      {
+                        id: "delete",
+                        icon: <Trash2 size={14} strokeWidth={2.1} />,
+                        label: t("Delete"),
+                        onSelect: () => setDeleteCandidate(group)
+                      }
+                    ]}
+                    label={t("More actions for {{name}}", { name: group.name })}
+                    menuLabel={t("Actions for {{name}}", { name: group.name })}
+                  />
+                </>
               )}
               className="skill-group-card"
               density="compact"
               description={group.description || t("Reusable Skill collection")}
               expanded={expanded}
-              icon={<FolderTree size={17} strokeWidth={2} />}
+              icon={(
+                <ResourceIconArtwork
+                  fallbackIconKey="folder"
+                  iconKey={group.iconKey}
+                  size={17}
+                />
+              )}
               id={group.id}
+              nested
               onToggle={() => setExpandedIds((current) =>
                 current.includes(group.id)
                   ? current.filter((id) => id !== group.id)
@@ -186,9 +218,10 @@ export const SkillGroupView = ({
               title={group.name}
               toggleLabel={t("Toggle {{name}}", { name: group.name })}
             >
-              <AlignedResourceList className="skill-group-members" role="list">
+              <AlignedResourceList actionTrack="compact" className="skill-group-members" role="list">
                 {memberSkills.map((skill) => (
                   <ResourceRow
+                    actionsVisibility="contextual"
                     density="compact"
                     icon={(
                       <ResourceIconArtwork
@@ -200,7 +233,32 @@ export const SkillGroupView = ({
                     )}
                     key={skill.id}
                     role="listitem"
-                    title={<OverflowTooltip className="skill-group-member-name" text={skill.name} />}
+                    title={onOpenSkill ? (
+                      <TextAction
+                        className="skill-group-member-button"
+                        onClick={() => onOpenSkill(skill)}
+                      >
+                        <OverflowTooltip className="skill-group-member-name" text={skill.name} />
+                      </TextAction>
+                    ) : <OverflowTooltip className="skill-group-member-name" text={skill.name} />}
+                    actions={(
+                      <ToolbarOverflowMenu
+                        items={[{
+                          id: "remove-from-group",
+                          icon: <Trash2 size={14} strokeWidth={2.1} />,
+                          label: t("Remove from group"),
+                          onSelect: () => void onUpdate({
+                            id: group.id,
+                            name: group.name,
+                            description: group.description,
+                            iconKey: group.iconKey,
+                            skillIds: group.skillIds.filter((id) => id !== skill.id)
+                          })
+                        }]}
+                        label={t("More actions for {{name}}", { name: skill.name })}
+                        menuLabel={t("Actions for {{name}}", { name: skill.name })}
+                      />
+                    )}
                   />
                 ))}
               </AlignedResourceList>
@@ -223,17 +281,26 @@ export const SkillGroupView = ({
           />
           <DialogBody className="skill-group-dialog__body">
             <div className="skill-group-fields">
+              <div className="skill-group-identity-fields">
+                <ResourceIconPicker
+                  className="skill-group-icon-picker"
+                  fallbackIconKey="folder"
+                  iconKey={draft.iconKey}
+                  label={draft.name || t("Skill Group")}
+                  triggerLabel={t("Choose Group icon")}
+                  onChange={(iconKey) => setDraft({ ...draft, iconKey })}
+                />
+                <TextField
+                  autoFocus
+                  label={t("Group name")}
+                  maxLength={120}
+                  value={draft.name}
+                  onChange={(event) => setDraft({ ...draft, name: event.currentTarget.value })}
+                />
+              </div>
               <TextField
-                autoFocus
-                label={t("Group name")}
-                maxLength={120}
-                value={draft.name}
-                onChange={(event) => setDraft({ ...draft, name: event.currentTarget.value })}
-              />
-              <TextAreaField
                 label={t("Description")}
                 maxLength={500}
-                rows={2}
                 value={draft.description}
                 onChange={(event) => setDraft({ ...draft, description: event.currentTarget.value })}
               />

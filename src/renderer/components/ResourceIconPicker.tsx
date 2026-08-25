@@ -233,19 +233,20 @@ export const ResourceIconPicker = ({
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
+        event.stopImmediatePropagation();
         setOpen(false);
         triggerRef.current?.focus();
       }
     };
     document.addEventListener("mousedown", dismiss);
-    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("keydown", closeOnEscape, true);
     window.setTimeout(() => focusInitialActionMenuItem(
       menuRef.current,
       `[data-icon-key="${selectedKey}"]`
     ));
     return () => {
       document.removeEventListener("mousedown", dismiss);
-      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("keydown", closeOnEscape, true);
     };
   }, [open, selectedKey]);
 

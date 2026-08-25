@@ -1846,11 +1846,17 @@ const AppContent = ({
     nativeInstructionSnapshots,
     updateDraftProfile
   });
+  const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.preferredTargetId ?? "Agent";
+  const detectedMcpCount = (nativeMcpConnections ?? []).filter((connection) => connection.targetId === selectedTarget?.id && connection.enabled).length;
+  const mcpSummary = selectedRemoteEndpoint || !profileTarget?.capabilities.mcpActivation
+    ? t("Agent controlled") : resourceSummary?.mcp.mode === "disable"
+      ? t("Off")
+      : resourceSummary?.mcp.mode === "manage"
+        ? t("{{count}} selected", { count: resourceSummary.mcp.count }) : t("{{count}} active", { count: detectedMcpCount });
   const loadingProfileSummary = profileLoadingId
     ? profiles.find((profile) => profile.id === profileLoadingId)
     : undefined;
   const installedTargets = targets.filter((target) => isTargetInstalled(target.health));
-  const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.preferredTargetId ?? "Agent";
   const targetStateById = new Map(targetStates.map((state) => [state.targetId, state]));
   const preparedSkillTargetsBySkill = useMemo(
     () =>
@@ -4145,12 +4151,7 @@ const AppContent = ({
                         )}
                         count={resourceSummary?.mcp.total ?? 0}
                         enabledCount={resourceSummary?.mcp.count ?? 0}
-                        countSummary={t("Saved {{profile}} · Agent {{agent}}", {
-                          profile: resourceSummary?.mcp.total ?? 0,
-                          agent: (nativeMcpConnections ?? []).filter(
-                            (connection) => connection.targetId === selectedTarget?.id
-                          ).length
-                        })}
+                        countSummary={mcpSummary}
                         chipNames={resourceSummary?.mcp.names ?? []}
                         policy={resourceSummary?.mcp.mode ?? "ignore"}
                         policyDisabled={!profileTarget?.capabilities.mcpActivation}
@@ -4426,6 +4427,8 @@ const AppContent = ({
         ) : activeWorkspace === "projects" ? (
           <ProjectsWorkspace
             targets={targets}
+            skillGroups={skillGroups}
+            sourceGroups={skillSourceGroups}
             uiState={uiState}
             onUpdateUiState={persistUiState}
             onEditorGuardChange={setProjectEditorGuard}

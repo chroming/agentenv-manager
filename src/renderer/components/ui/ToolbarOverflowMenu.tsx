@@ -39,6 +39,7 @@ export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflow
     const [style, setStyle] = useState<CSSProperties>();
     const triggerRef = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
+    const inModal = Boolean(triggerRef.current?.closest('[aria-modal="true"]'));
 
     const positionMenu = () => {
       const triggerBox = triggerRef.current?.getBoundingClientRect();
@@ -97,6 +98,7 @@ export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflow
             else if (forwardedRef) forwardedRef.current = node;
           }}
           label={label}
+          className="ui-toolbar-overflow-menu__trigger"
           disabled={disabled}
           aria-expanded={open}
           aria-haspopup="menu"
@@ -107,7 +109,7 @@ export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflow
         {open ? createPortal(
           <ActionMenu
             ariaLabel={menuLabel}
-            className="toolbar-overflow-menu"
+            className={`toolbar-overflow-menu${inModal ? " toolbar-overflow-menu--modal" : ""}`}
             menuRef={menuRef}
             style={style}
           >

@@ -147,4 +147,37 @@ describe("Profile target fingerprint", () => {
     expect(createProfileContentHash(enabled, "codex"))
       .not.toBe(createProfileContentHash(disabled, "codex"));
   });
+
+  it("treats removing an off Skill Group as the same deployed Skill state", () => {
+    const grouped = profile("ignore", true);
+    grouped.resources.skills = [{
+      libraryId: "reviewer",
+      targetName: "reviewer",
+      enabled: true,
+      direct: false,
+      groupIds: ["manual-group-review"]
+    }];
+    grouped.resources.skillGroups = [{
+      id: "manual-group-review",
+      kind: "manual",
+      groupId: "group-review",
+      name: "Review",
+      enabled: false,
+      memberIds: ["reviewer"]
+    }];
+    grouped.resources.managementByTarget = {
+      codex: { instructions: "manage", skills: "manage" }
+    };
+    const removed = {
+      ...grouped,
+      resources: {
+        ...grouped.resources,
+        skills: [],
+        skillGroups: []
+      }
+    };
+
+    expect(createProfileContentHash(grouped, "codex"))
+      .toBe(createProfileContentHash(removed, "codex"));
+  });
 });

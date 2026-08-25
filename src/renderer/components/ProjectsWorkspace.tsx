@@ -14,9 +14,14 @@ import {
   RotateCcw,
   Trash2
 } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ProjectSummary, UiState, UiStateUpdate } from "../../shared/types";
+import {
+  manualProfileSkillGroup,
+  sourceProfileSkillGroup,
+  type AvailableProfileSkillGroup
+} from "../../shared/profileSkillGroups";
 import { completeOrder, defaultUiState, orderByPreference } from "../../shared/uiState";
 import type {
   ProjectEnvironmentPreview,
@@ -24,13 +29,18 @@ import type {
   ProjectGitPathState,
   ProjectResourceKind,
   ProjectResourceSummary,
+  SkillGroup,
   SkillLibraryEntry,
+  SkillSourceGroupView,
   TargetInfo
 } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { InfoTip } from "./InfoTip";
-import { LibrarySkillPicker } from "./LibrarySkillPicker";
+import {
+  LibrarySkillSelection,
+  type LibrarySkillSelectionMode
+} from "./LibrarySkillSelection";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ProjectEnvironmentPreviewDialog } from "./ProjectEnvironmentPreviewDialog";
 import { ProjectRecoveryDialog } from "./ProjectRecoveryDialog";
@@ -72,6 +82,8 @@ type ProjectMenuState = { projectId: string; left: number; top: number };
 
 export const ProjectsWorkspace = ({
   targets,
+  skillGroups = [],
+  sourceGroups = [],
   uiState = defaultUiState(),
   onUpdateUiState = () => undefined,
   onEditorGuardChange,
@@ -79,6 +91,8 @@ export const ProjectsWorkspace = ({
   editorGuardPromptOpen = false
 }: {
   targets: TargetInfo[];
+  skillGroups?: SkillGroup[];
+  sourceGroups?: SkillSourceGroupView[];
   uiState?: UiState;
   onUpdateUiState?(update: UiStateUpdate): void;
   onEditorGuardChange?(guard?: ProjectEditorGuard): void;
@@ -115,7 +129,9 @@ export const ProjectsWorkspace = ({
   const [renameValue, setRenameValue] = useState("");
   const [skillDialogOpen, setSkillDialogOpen] = useState(false);
   const [librarySkills, setLibrarySkills] = useState<SkillLibraryEntry[]>([]);
-  const [selectedLibraryId, setSelectedLibraryId] = useState("");
+  const [skillPickerMode, setSkillPickerMode] = useState<LibrarySkillSelectionMode>("skills");
+  const [selectedLibraryIds, setSelectedLibraryIds] = useState<string[]>([]);
+  const [selectedSkillGroupKeys, setSelectedSkillGroupKeys] = useState<string[]>([]);
   const [skillLocationId, setSkillLocationId] = useState("");
   const [removeSkillCandidate, setRemoveSkillCandidate] = useState<ProjectResourceSummary>();
   const removeDialogRef = useRef<HTMLElement>(null);
@@ -141,22 +157,40 @@ export const ProjectsWorkspace = ({
   );
   const writableSkillLocations = snapshot?.skillLocations?.filter((location) => location.writable) ?? [];
   const selectedSkillLocation = writableSkillLocations.find((location) => location.id === skillLocationId);
-  const selectedLibrarySkill = librarySkills.find((skill) => skill.id === selectedLibraryId);
-  const selectedSkillDestination = selectedSkillLocation && selectedLibrarySkill
-    ? `${selectedSkillLocation.relativePath.replace(/[\\/]+$/, "")}/${selectedLibrarySkill.id}`
-    : undefined;
-  const existingProjectSkill = selectedSkillDestination
-    ? snapshot?.resources.find((resource) =>
-        resource.kind === "skill" &&
-        resource.relativePath.replaceAll("\\", "/") === selectedSkillDestination
-      )
-    : undefined;
-  const selectedSkillAlreadyMatches = Boolean(
-    existingProjectSkill?.contentHash &&
-    selectedLibrarySkill?.contentHash &&
-    existingProjectSkill.contentHash === selectedLibrarySkill.contentHash
+  const availableSkillGroups = useMemo<AvailableProfileSkillGroup[]>(() => [
+    ...skillGroups.map(manualProfileSkillGroup),
+    ...sourceGroups.map(sourceProfileSkillGroup)
+  ], [skillGroups, sourceGroups]);
+  const availableSkillGroupsByKey = useMemo(
+    () => new Map(availableSkillGroups.map((group) => [`${group.kind}:${group.groupId}`, group])),
+    [availableSkillGroups]
   );
-  const selectedSkillConflicts = Boolean(existingProjectSkill && !selectedSkillAlreadyMatches);
+  const selectedWorkspaceLibraryIds = useMemo(() => {
+    const selected = skillPickerMode === "skills"
+      ? selectedLibraryIds
+      : selectedSkillGroupKeys.flatMap((key) => availableSkillGroupsByKey.get(key)?.memberIds ?? []);
+    const available = new Set(librarySkills.map((skill) => skill.id));
+    return [...new Set(selected)].filter((id) => available.has(id)).sort();
+  }, [availableSkillGroupsByKey, librarySkills, selectedLibraryIds, selectedSkillGroupKeys, skillPickerMode]);
+  const selectedWorkspaceSkillPlans = useMemo(() => {
+    if (!selectedSkillLocation) return [];
+    const root = selectedSkillLocation.relativePath.replaceAll("\\", "/").replace(/\/+$/, "");
+    const resourcesByPath = new Map(
+      (snapshot?.resources ?? [])
+        .filter((resource) => resource.kind === "skill")
+        .map((resource) => [resource.relativePath.replaceAll("\\", "/"), resource])
+    );
+    const skillsById = new Map(librarySkills.map((skill) => [skill.id, skill]));
+    return selectedWorkspaceLibraryIds.flatMap((libraryId) => {
+      const skill = skillsById.get(libraryId);
+      if (!skill) return [];
+      const existing = resourcesByPath.get(`${root}/${skill.id}`);
+      const matches = Boolean(existing?.contentHash && existing.contentHash === skill.contentHash);
+      return [{ libraryId, existing, matches, conflicts: Boolean(existing && !matches) }];
+    });
+  }, [librarySkills, selectedSkillLocation, selectedWorkspaceLibraryIds, snapshot?.resources]);
+  const selectedSkillMatches = selectedWorkspaceSkillPlans.filter((plan) => plan.matches).length;
+  const selectedSkillConflicts = selectedWorkspaceSkillPlans.filter((plan) => plan.conflicts).length;
   const orderProjects = (items: ProjectSummary[]) =>
     orderByPreference(items, uiState.workspaceOrder, (project) => project.id);
   const selectProject = (projectId: string | undefined) => {
@@ -314,7 +348,7 @@ export const ProjectsWorkspace = ({
   useModalDialog({
     open: skillDialogOpen,
     dialogRef: skillDialogRef,
-    onDismiss: () => setSkillDialogOpen(false),
+    onDismiss: () => closeSkillPicker(),
     dismissDisabled: operation === "add-skill"
   });
   useModalDialog({
@@ -399,7 +433,9 @@ export const ProjectsWorkspace = ({
       const next = (await window.agentEnv.listSkillLibrary())
         .filter((skill) => skill.globallyEnabled !== false);
       setLibrarySkills(next);
-      setSelectedLibraryId(next[0]?.id ?? "");
+      setSkillPickerMode("skills");
+      setSelectedLibraryIds([]);
+      setSelectedSkillGroupKeys([]);
       setSkillLocationId(
         writableSkillLocations.find((location) => location.recommended)?.id
           ?? writableSkillLocations[0]?.id
@@ -409,6 +445,15 @@ export const ProjectsWorkspace = ({
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     }
+  };
+
+  const closeSkillPicker = () => {
+    if (operation === "add-skill") return;
+    setSkillDialogOpen(false);
+    setSkillPickerMode("skills");
+    setSelectedLibraryIds([]);
+    setSelectedSkillGroupKeys([]);
+    setModalError("");
   };
 
   const showProjectMenu = (
@@ -447,18 +492,22 @@ export const ProjectsWorkspace = ({
     setRemoveCandidate(project);
   };
 
-  const addSkill = async () => {
-    if (!selected || !selectedLibraryId || !skillLocationId) return;
+  const addSkills = async () => {
+    if (!selected || selectedWorkspaceSkillPlans.length === 0 || !skillLocationId) return;
     setOperation("add-skill");
     setModalError("");
     try {
-      await window.agentEnv.addProjectSkill({
+      await window.agentEnv.addProjectSkills({
         projectId: selected.id,
         locationId: skillLocationId,
-        libraryId: selectedLibraryId,
-        ...(selectedSkillConflicts ? { conflictResolution: "replace" as const } : {})
+        items: selectedWorkspaceSkillPlans.map((plan) => ({
+          libraryId: plan.libraryId,
+          ...(plan.conflicts ? { conflictResolution: "replace" as const } : {})
+        }))
       });
       setSkillDialogOpen(false);
+      setSelectedLibraryIds([]);
+      setSelectedSkillGroupKeys([]);
       await refreshSelectedProject();
     } catch (unknownError) {
       setModalError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -763,6 +812,7 @@ export const ProjectsWorkspace = ({
                           <ResourcePanelToolbar
                             aria-label={t("Instruction actions")}
                             className="project-resource-section__toolbar"
+                            variant="embedded"
                           >
                             <Button
                               size="compact"
@@ -776,9 +826,15 @@ export const ProjectsWorkspace = ({
                           <ResourcePanelToolbar
                             aria-label={t("Skill actions")}
                             className="project-resource-section__toolbar"
+                            variant="embedded"
                           >
-                            <Button size="compact" icon={<Plus size={13} />} onClick={() => void openAddSkill()}>
-                              {t("Copy from Library")}
+                            <Button
+                              size="compact"
+                              variant="secondary"
+                              icon={<Plus size={13} />}
+                              onClick={() => void openAddSkill()}
+                            >
+                              {t("Add Skills")}
                             </Button>
                           </ResourcePanelToolbar>
                         ) : null}
@@ -804,6 +860,7 @@ export const ProjectsWorkspace = ({
                           const fullState = [consumerNames.join(" · "), gitLabel].filter(Boolean).join(" · ");
                           return (
                             <ResourceRow
+                              actionsVisibility="contextual"
                               className="ui-resource-children__item project-resource-entry"
                               density="compact"
                               description={resource.relativePath !== resource.name
@@ -978,26 +1035,33 @@ export const ProjectsWorkspace = ({
       ) : null}
       {selected && skillDialogOpen ? (
         <ModalFrame
-          ariaLabel={t("Copy Skill to Workspace")}
-          className="resource-picker-dialog resource-picker-dialog--skills ui-dialog-shell"
+          ariaLabel={t("Add Skills to Workspace")}
+          className="resource-picker-dialog resource-picker-dialog--skills resource-picker-dialog--workspace-skills ui-dialog-shell"
           dialogRef={skillDialogRef}
           dismissDisabled={operation === "add-skill"}
-          onDismiss={() => setSkillDialogOpen(false)}
+          onDismiss={closeSkillPicker}
         >
           <DialogHeader
-            title={t("Copy Skill to Workspace")}
-            description={t("A verified regular-file copy becomes part of this folder.")}
+            title={t("Add Skills to Workspace")}
+            description={t("Choose individual Skills or copy every Skill in a reusable Group.")}
           />
           <DialogBody className="resource-picker-dialog__body project-add-skill-fields">
             {modalError ? (
               <Notice tone="danger" role="alert" icon={<AlertTriangle size={15} />}>{modalError}</Notice>
             ) : null}
-            <LibrarySkillPicker
-              onChange={(ids) => setSelectedLibraryId(ids[0] ?? "")}
-              selectedIds={selectedLibraryId ? [selectedLibraryId] : []}
-              selectionMode="single"
-              skills={librarySkills}
-            />
+            <div className="project-workspace-skill-selection">
+              <LibrarySkillSelection
+                groups={availableSkillGroups.filter((group) => group.memberIds.length > 0)}
+                mode={skillPickerMode}
+                selectedGroupKeys={selectedSkillGroupKeys}
+                selectedSkillIds={selectedLibraryIds}
+                skillSelectionMode="multiple"
+                skills={librarySkills}
+                onModeChange={setSkillPickerMode}
+                onSelectedGroupKeysChange={setSelectedSkillGroupKeys}
+                onSelectedSkillIdsChange={setSelectedLibraryIds}
+              />
+            </div>
             <SelectField
               label={t("Workspace location")}
               value={skillLocationId}
@@ -1015,39 +1079,50 @@ export const ProjectsWorkspace = ({
                 );
               })}
             </SelectField>
-            {selectedSkillDestination ? (
+            {selectedWorkspaceSkillPlans.length > 0 && selectedSkillLocation ? (
               <div className="project-file-impact" aria-label={t("File impact") }>
-                <span>{t("Creates or replaces regular files")}</span>
-                <code className="selectable">{selectedSkillDestination}</code>
+                <span>{t("{{count}} regular-file Skill copies", {
+                  count: selectedWorkspaceSkillPlans.length
+                })}</span>
+                <code className="selectable">
+                  {selectedSkillLocation.relativePath.replace(/[\\/]+$/, "")}/
+                </code>
                 <small>{t("Git changes stay unstaged and uncommitted.")}</small>
               </div>
             ) : null}
             {librarySkills.length === 0 ? <p>{t("No enabled Library Skills are available.")}</p> : null}
-            {selectedSkillAlreadyMatches ? (
-              <Notice tone="info" title={t("Already in this Workspace")}>
-                {t("The Workspace copy already matches the selected Library Skill.")}
+            {selectedSkillConflicts > 0 ? (
+              <Notice tone="warning" title={t("{{count}} Workspace Skills will be replaced", {
+                count: selectedSkillConflicts
+              })}>
+                {t("Each existing copy gets a recovery point before the batch is changed.")}
               </Notice>
-            ) : selectedSkillConflicts ? (
-              <Notice tone="warning" title={t("A different Workspace copy already exists")}>
-                {t("Replacing it creates a recovery point first. You can keep the current Workspace copy instead.")}
+            ) : null}
+            {selectedSkillMatches > 0 ? (
+              <Notice tone="info">
+                {t("{{count}} selected Skills already match and will be skipped.", {
+                  count: selectedSkillMatches
+                })}
               </Notice>
             ) : null}
           </DialogBody>
           <DialogFooter>
-            <Button disabled={operation === "add-skill"} onClick={() => setSkillDialogOpen(false)}>
-              {selectedSkillConflicts ? t("Keep Workspace copy") : t("Cancel")}
+            <Button disabled={operation === "add-skill"} onClick={closeSkillPicker}>
+              {t("Cancel")}
             </Button>
             <Button
               variant="primary"
               busy={operation === "add-skill"}
-              disabled={!selectedLibraryId || !skillLocationId || selectedSkillAlreadyMatches}
-              onClick={() => void addSkill()}
+              disabled={!skillLocationId || selectedWorkspaceSkillPlans.length === 0 ||
+                selectedSkillMatches === selectedWorkspaceSkillPlans.length}
+              onClick={() => void addSkills()}
             >
-              {selectedSkillAlreadyMatches
+              {selectedWorkspaceSkillPlans.length > 0 &&
+              selectedSkillMatches === selectedWorkspaceSkillPlans.length
                 ? t("Already added")
-                : selectedSkillConflicts
-                  ? t("Replace with Library copy")
-                  : t("Add")}
+                : selectedSkillConflicts > 0
+                  ? t("Replace and add {{count}}", { count: selectedWorkspaceSkillPlans.length })
+                  : t("Add {{count}}", { count: selectedWorkspaceSkillPlans.length })}
             </Button>
           </DialogFooter>
         </ModalFrame>

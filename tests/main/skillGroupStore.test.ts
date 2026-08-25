@@ -21,11 +21,30 @@ describe("SkillGroupStore", () => {
     const root = await mkdtemp(join(tmpdir(), "agentenv-skill-groups-"));
     const store = createSkillGroupStore(join(root, "skill-groups.json"), async () => [skill("alpha"), skill("beta")]);
 
-    const created = await store.create({ name: "Review", description: "Review tools", skillIds: ["beta", "alpha"] });
-    expect((await store.list())[0]).toMatchObject({ name: "Review", skillIds: ["alpha", "beta"] });
+    const created = await store.create({
+      name: "Review",
+      description: "Review tools",
+      iconKey: "shield",
+      skillIds: ["beta", "alpha"]
+    });
+    expect((await store.list())[0]).toMatchObject({
+      name: "Review",
+      iconKey: "shield",
+      skillIds: ["alpha", "beta"]
+    });
 
-    await store.update({ id: created.id, name: "Focused review", description: "", skillIds: ["alpha"] });
-    expect((await store.list())[0]).toMatchObject({ name: "Focused review", skillIds: ["alpha"] });
+    await store.update({
+      id: created.id,
+      name: "Focused review",
+      description: "",
+      iconKey: "palette",
+      skillIds: ["alpha"]
+    });
+    expect((await store.list())[0]).toMatchObject({
+      name: "Focused review",
+      iconKey: "palette",
+      skillIds: ["alpha"]
+    });
 
     await store.remove(created.id);
     expect(await store.list()).toEqual([]);

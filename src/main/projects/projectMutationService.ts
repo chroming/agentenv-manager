@@ -3,9 +3,11 @@ import { lstat, mkdir, readFile, readdir, rename, rm, rmdir } from "node:fs/prom
 import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import type {
   AddProjectSkillInput,
+  AddProjectSkillsInput,
   CreateProjectInstructionInput,
   ProjectInstructionDraft,
   ProjectMutationResult,
+  ProjectSkillBatchMutationResult,
   ProjectResourceFile,
   RemoveProjectSkillInput,
   SaveProjectResourceInput
@@ -34,6 +36,7 @@ export interface ProjectMutationService {
   save(input: SaveProjectResourceInput): Promise<ProjectMutationResult>;
   createInstruction(input: CreateProjectInstructionInput): Promise<ProjectMutationResult>;
   addSkill(input: AddProjectSkillInput): Promise<ProjectMutationResult>;
+  addSkills(input: AddProjectSkillsInput): Promise<ProjectSkillBatchMutationResult>;
   removeSkill(input: RemoveProjectSkillInput): Promise<ProjectMutationResult>;
   restore(receiptId: string): Promise<ProjectMutationResult>;
 }
@@ -203,7 +206,7 @@ export const createProjectMutationService = ({
     }
   };
 
-  return {
+  const service: ProjectMutationService = {
     read,
     prepareInstruction: async (projectId, agentId) => {
       const { destination } = await environmentService.resolveInstructionDestination(projectId, agentId);
@@ -339,6 +342,44 @@ export const createProjectMutationService = ({
         throw error;
       }
     },
+    addSkills: async (input) => {
+      const results: ProjectSkillBatchMutationResult["results"] = [];
+      try {
+        for (const item of input.items) {
+          results.push({
+            libraryId: item.libraryId,
+            ...await service.addSkill({
+              projectId: input.projectId,
+              locationId: input.locationId,
+              libraryId: item.libraryId,
+              conflictResolution: item.conflictResolution
+            })
+          });
+        }
+      } catch (error) {
+        const rollbackErrors: string[] = [];
+        for (const result of [...results].reverse()) {
+          if (!result.receiptId) continue;
+          try {
+            await service.restore(result.receiptId);
+          } catch (rollbackError) {
+            rollbackErrors.push(
+              rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
+            );
+          }
+        }
+        if (rollbackErrors.length > 0) {
+          throw new Error(
+            `Workspace Skill batch failed and recovery requires attention: ${rollbackErrors.join("; ")}`
+          );
+        }
+        throw error;
+      }
+      return {
+        status: results.every((result) => result.status === "no-op") ? "no-op" : "saved",
+        results
+      };
+    },
     removeSkill: async (input) => {
       const resource = await environmentService.findResource(
         input.projectId,
@@ -470,4 +511,5 @@ export const createProjectMutationService = ({
       return { status: "restored", contentHash: restoredHash, receiptId };
     }
   };
+  return service;
 };

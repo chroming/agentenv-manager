@@ -17,13 +17,6 @@
   padding-block: 14px;
 }
 
-.profile-skill-toolbar__actions {
-  align-items: center;
-  display: flex;
-  flex: 0 0 auto;
-  gap: var(--space-2);
-}
-
 .profile-skill-list {
   --resource-row-actions-standard: 72px;
   --resource-row-state-track: 132px;
@@ -34,12 +27,39 @@
 }
 
 .profile-skill-group__members {
-  --resource-row-actions-standard: 72px;
+  --resource-row-actions-standard: 52px;
   --resource-row-state-track: 132px;
+  max-height: min(292px, 38vh);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .profile-skill-row.is-group-member {
-  background: var(--surface);
+  background: transparent;
+}
+
+/* Direct Skills reserve the disclosure lane used by sibling Group headers. */
+.profile-skill-row.is-direct {
+  padding-left: 34px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .profile-skill-row .ui-toolbar-overflow-menu__trigger,
+  .profile-skill-group > .ui-resource-disclosure__header .ui-toolbar-overflow-menu__trigger {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--motion-fast);
+  }
+
+  .profile-skill-row:hover .ui-toolbar-overflow-menu__trigger,
+  .profile-skill-row:focus-within .ui-toolbar-overflow-menu__trigger,
+  .profile-skill-group > .ui-resource-disclosure__header:hover .ui-toolbar-overflow-menu__trigger,
+  .profile-skill-group > .ui-resource-disclosure__header:focus-within .ui-toolbar-overflow-menu__trigger {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .profile-skill-picker-mode {

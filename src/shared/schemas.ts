@@ -99,6 +99,27 @@ export const AddProjectSkillInputSchema = z.object({
   conflictResolution: z.literal("replace").optional()
 }).strict();
 
+export const AddProjectSkillsInputSchema = z.object({
+  projectId: SafeIdSchema,
+  locationId: SafeIdSchema,
+  items: z.array(z.object({
+    libraryId: SafeIdSchema,
+    conflictResolution: z.literal("replace").optional()
+  }).strict()).min(1).max(1000)
+}).strict().superRefine((input, context) => {
+  const ids = new Set<string>();
+  input.items.forEach((item, index) => {
+    if (ids.has(item.libraryId)) {
+      context.addIssue({
+        code: "custom",
+        path: ["items", index, "libraryId"],
+        message: "Workspace Skill selections must be unique"
+      });
+    }
+    ids.add(item.libraryId);
+  });
+});
+
 export const RemoveProjectSkillInputSchema = z.object({
   projectId: SafeIdSchema,
   resourceId: SafeIdSchema,
@@ -138,6 +159,7 @@ export const ProfileSkillGroupSchema = z.object({
   kind: z.enum(["manual", "source"]),
   groupId: SafeIdSchema,
   name: z.string().trim().min(1).max(120),
+  iconKey: ResourceIconKeySchema.optional(),
   enabled: z.boolean().default(true),
   memberIds: z.array(SafeIdSchema).default([])
 }).strict().superRefine((group, context) => {

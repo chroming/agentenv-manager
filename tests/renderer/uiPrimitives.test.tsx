@@ -741,6 +741,7 @@ describe("renderer UI primitives", () => {
     const onToggle = vi.fn();
     render(
       <ResourceDisclosureSection
+        actionsLayout="row"
         density="compact"
         id="workspace-skills"
         icon={<RefreshCw />}
@@ -759,7 +760,14 @@ describe("renderer UI primitives", () => {
     );
 
     const section = screen.getByRole("region", { name: "Skills" });
-    expect(section).toHaveClass("ui-resource-disclosure", "is-compact", "is-expanded", "is-nested", "is-muted");
+    expect(section).toHaveClass(
+      "ui-resource-disclosure",
+      "is-compact",
+      "is-expanded",
+      "is-nested",
+      "is-muted",
+      "has-row-actions"
+    );
     expect(within(section).getByRole("button", { name: "Collapse Skills" }))
       .toHaveAttribute("aria-expanded", "true");
     expect(within(section).getByText("Project-owned Skill files"))

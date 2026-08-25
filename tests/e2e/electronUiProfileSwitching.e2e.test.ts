@@ -799,10 +799,27 @@ const launchApp = async (
     ].join("\n"), "utf8");
   }
   const librarySkill = await writeLibrarySkill(appDataRoot);
+  if (options.openCodeAlphaLibrarySkillCount) {
+    await addOpenCodeAlphaLibrarySkills(appDataRoot, options.openCodeAlphaLibrarySkillCount);
+  }
   if (options.skillGroupFixture) {
     const groupId = "manual-review-pack";
     const libraryId = "shared-reviewer";
-    const memberIds = ["ui-alpha-skill", libraryId];
+    const memberIds = [
+      "ui-alpha-skill",
+      libraryId,
+      ...Array.from(
+        { length: options.openCodeAlphaLibrarySkillCount ?? 0 },
+        (_, index) => `layout-skill-${index + 1}`
+      )
+    ];
+    const directSkillDir = join(appDataRoot, "skills-library", "static-reference");
+    await mkdir(directSkillDir, { recursive: true });
+    await writeFile(
+      join(directSkillDir, "SKILL.md"),
+      "---\nname: Static Reference\ndescription: Direct Skill alignment fixture.\n---\n\n# Static Reference\n",
+      "utf8"
+    );
     await writeJson(join(appDataRoot, "skill-groups.json"), {
       formatVersion: 1,
       groups: [{
@@ -853,9 +870,6 @@ const launchApp = async (
       kind: "skill",
       source: "skills-library/shared-reviewer"
     });
-  }
-  if (options.openCodeAlphaLibrarySkillCount) {
-    await addOpenCodeAlphaLibrarySkills(appDataRoot, options.openCodeAlphaLibrarySkillCount);
   }
   if (options.missingProfileSkill) {
     const resourcesPath = join(
@@ -1398,7 +1412,7 @@ const saveProfile = async (page: Page) => {
 const openProfileSkillPicker = async (page: Page) => {
   await page
     .getByRole("region", { name: "Profile Skills" })
-    .getByRole("button", { name: "Add Skill", exact: true })
+    .getByRole("button", { name: "Add Skills", exact: true })
     .click();
 };
 
@@ -6060,7 +6074,7 @@ describe("Electron UI profile switching e2e", () => {
       ["skills"]
     );
     const skillManager = composer.getByRole("region", { name: "Profile Skills" });
-    const addSkill = skillManager.getByRole("button", { name: "Add Skill", exact: true });
+    const addSkill = skillManager.getByRole("button", { name: "Add Skills", exact: true });
     expect(await skillManager.getByRole("button", {
       name: "Check Profile Skill updates"
     }).count()).toBe(0);
@@ -6175,7 +6189,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(policySurface.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
     expect(await instructionsRow.locator('[title="1 of 1 enabled"]').count()).toBe(1);
     expect(await skillsRow.locator('[title="1 of 1 enabled"]').count()).toBe(1);
-    expect(await mcpRow.locator('[title="Saved 3 · Agent 4"]').count()).toBe(1);
+    expect(await mcpRow.locator('[title="3 selected"]').count()).toBe(1);
 
     await setComposerResourcePolicy(page, "Instructions", "OpenCode", "Turn off");
     await setComposerResourcePolicy(page, "Skills", "OpenCode", "Turn off");
@@ -6186,7 +6200,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await mcpRow.getAttribute("aria-expanded")).toBe("false");
     expect(await instructionsRow.locator('[title="0 of 1 enabled"]').count()).toBe(1);
     expect(await skillsRow.locator('[title="0 of 1 enabled"]').count()).toBe(1);
-    expect(await mcpRow.locator('[title="Saved 3 · Agent 4"]').count()).toBe(1);
+    expect(await mcpRow.locator('[title="Off"]').count()).toBe(1);
     for (const policy of [instructionsPolicy, skillsPolicy, mcpPolicy]) {
       expect(await policy.inputValue()).toBe("disable");
       await expectTextFits(policy);
@@ -9230,8 +9244,9 @@ describe("Electron UI profile switching e2e", () => {
     await expectNoHorizontalOverflow(page, [".backup-manager-dialog", ".backup-preview-list"]);
     await manager.getByRole("button", { name: "Back" }).click();
     await manager.getByRole("button", {
-      name: "Delete backup Old Manual · cleanup-target"
+      name: "More actions for Old Manual · cleanup-target"
     }).click();
+    await page.getByRole("menuitem", { name: "Delete backup" }).click();
     await manager.getByRole("button", { name: "Delete backup", exact: true }).click();
     await expect.poll(() => fileExists(manualDeleteDir)).toBe(false);
 
@@ -10626,7 +10641,7 @@ describe("Electron UI profile switching e2e", () => {
     const checkSkillUpdates = skillManager.getByRole("button", {
       name: "Check Profile Skill updates"
     });
-    const addSkill = skillManager.getByRole("button", { name: "Add Skill", exact: true });
+    const addSkill = skillManager.getByRole("button", { name: "Add Skills", exact: true });
     await expectTextFits(checkSkillUpdates);
     await expectTextFits(addSkill);
     const [checkBox, addBox] = await Promise.all([
@@ -10675,10 +10690,43 @@ describe("Electron UI profile switching e2e", () => {
     const { appDataRoot, page } = await launchApp({ skillGroupFixture: true });
     await selectProfile(page, "UI OpenCode alpha");
     await expandComposerSection(page, "Skills");
+    await addLibrarySkillToProfile(page, "Static Reference");
     const group = page.getByRole("region", { name: "Review pack" });
     await group.getByRole("button", { name: "Toggle Review pack" }).click();
     await resizeAppWindow(page, 920, 620);
     await expectNoHorizontalOverflow(page, [".profile-skill-manager"]);
+
+    const hierarchyGeometry = await page.evaluate(() => {
+      const groupTitle = document.querySelector<HTMLElement>(
+        '.profile-skill-group .ui-resource-disclosure__title'
+      );
+      const directTitle = document.querySelector<HTMLElement>(
+        '.profile-skill-row.is-direct .profile-skill-name'
+      );
+      const memberTitle = document.querySelector<HTMLElement>(
+        '.profile-skill-row.is-group-member .profile-skill-name'
+      );
+      if (!groupTitle || !directTitle || !memberTitle) {
+        return null;
+      }
+      return {
+        directX: directTitle.getBoundingClientRect().x,
+        groupX: groupTitle.getBoundingClientRect().x,
+        memberX: memberTitle.getBoundingClientRect().x
+      };
+    });
+    expect(hierarchyGeometry).not.toBeNull();
+    expect(Math.abs(hierarchyGeometry!.directX - hierarchyGeometry!.groupX)).toBeLessThanOrEqual(1);
+    expect(hierarchyGeometry!.memberX - hierarchyGeometry!.groupX).toBeGreaterThanOrEqual(16);
+    const [groupSwitchBox, directSwitchBox] = await Promise.all([
+      group.getByRole("switch", { name: "Turn off Review pack" }).boundingBox(),
+      page.getByRole("listitem", { name: "Profile Skill static-reference" })
+        .getByRole("switch", { name: "Disable Static Reference" })
+        .boundingBox()
+    ]);
+    expect(groupSwitchBox).not.toBeNull();
+    expect(directSwitchBox).not.toBeNull();
+    expect(Math.abs(groupSwitchBox!.x - directSwitchBox!.x)).toBeLessThanOrEqual(1);
 
     await group.getByRole("switch", { name: "Turn off Review pack" }).click();
     const memberSwitches = group.getByRole("switch", { name: /Enable the Group to change/ });
@@ -10710,6 +10758,53 @@ describe("Electron UI profile switching e2e", () => {
     }>(join(appDataRoot, "profiles", "ui-opencode-alpha", "resources.json"));
     expect(persisted.skillGroups[0]?.enabled).toBe(true);
     expect(persisted.skills.every((skill) => skill.enabled)).toBe(true);
+
+    await group.getByRole("switch", { name: "Turn off Review pack" }).click();
+    await saveProfile(page);
+    await previewAndApply(page, "OpenCode");
+    await group.locator(".ui-resource-disclosure__header").hover();
+    await group.getByRole("button", { name: "More actions for Review pack" }).click();
+    await page.getByRole("menuitem", { name: "Remove group from Profile" }).click();
+    await saveProfile(page);
+    await expect.poll(() => page.locator(".profile-apply-button").isDisabled()).toBe(true);
+    await expect.poll(() => page.getByRole("status", { name: "Profile readiness" }).textContent())
+      .toContain("Up to date");
+    await expect.poll(async () => {
+      const profile = await page.evaluate(() => window.agentEnv.readProfile("ui-opencode-alpha"));
+      return profile.resources.skillGroups?.length ?? 0;
+    }).toBe(0);
+  }, standardElectronTestTimeout);
+
+  it("keeps a large Profile Skill Group scrollable inside the expanded Group", async () => {
+    const { page } = await launchApp({
+      skillGroupFixture: true,
+      openCodeAlphaLibrarySkillCount: 18
+    });
+    await selectProfile(page, "UI OpenCode alpha");
+    await expandComposerSection(page, "Skills");
+    const group = page.getByRole("region", { name: "Review pack" });
+    await group.getByRole("button", { name: "Toggle Review pack" }).click();
+    await resizeAppWindow(page, 920, 620);
+    const members = group.locator(".profile-skill-group__members");
+    await expect.poll(() => members.getByRole("listitem").count()).toBe(20);
+    const before = await members.evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      scrollTop: element.scrollTop
+    }));
+    expect(before.scrollHeight).toBeGreaterThan(before.clientHeight);
+    expect(before.scrollTop).toBe(0);
+    await members.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+      element.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await expect.poll(() => members.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    const lastRow = members.getByRole("listitem", { name: "Profile Skill layout-skill-18" });
+    expect(await lastRow.evaluate((row) => {
+      const rowBox = row.getBoundingClientRect();
+      const listBox = row.parentElement!.getBoundingClientRect();
+      return rowBox.top >= listBox.top - 1 && rowBox.bottom <= listBox.bottom + 1;
+    })).toBe(true);
   }, standardElectronTestTimeout);
 
   it("keeps Profile Skill edits, auto-save, and Preview responsive with many Skills", async () => {
@@ -12146,7 +12241,7 @@ describe("Electron UI profile switching e2e", () => {
       switches: 1
     });
 
-    await page.locator(".profile-skill-manager").getByRole("button", { name: "Add Skill", exact: true }).click();
+    await page.locator(".profile-skill-manager").getByRole("button", { name: "Add Skills", exact: true }).click();
     sharedSearchContracts.push(await readCompositeFieldContract(".resource-picker-search"));
     await page.getByRole("dialog", { name: "Add library skills" }).getByRole("button", { name: "Cancel" }).click();
 

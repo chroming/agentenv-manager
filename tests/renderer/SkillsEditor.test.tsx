@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SkillsEditor } from "../../src/renderer/components/SkillsEditor";
 import type { ProfileResources, SkillInventoryEntry, SkillLibraryEntry } from "../../src/shared/types";
@@ -96,6 +96,10 @@ describe("SkillsEditor v2", () => {
     render(<SkillsEditor value={groupedResources} librarySkills={skills} onChange={onChange} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle Review pack" }));
+    const group = screen.getByRole("region", { name: "Review pack" });
+    expect(group).toHaveClass("is-nested");
+    expect(group).not.toHaveClass("has-inset-panel");
+    expect(within(group).queryByText("Manual Group")).not.toBeInTheDocument();
     expect(screen.getAllByText("Group off").length).toBeGreaterThan(0);
     expect(screen.getByRole("switch", { name: "Enable the Group to change Code Review" }))
       .toHaveAttribute("aria-checked", "true");
@@ -130,7 +134,7 @@ describe("SkillsEditor v2", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Add Skill" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Skills" }));
     fireEvent.click(screen.getByRole("button", { name: "Groups" }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Review pack/ }));
     fireEvent.click(screen.getByRole("button", { name: "Add 1" }));
@@ -144,6 +148,53 @@ describe("SkillsEditor v2", () => {
         memberIds: ["docs", "review"]
       })]
     }));
+  });
+
+  it("automatically follows current Group membership without showing a manual sync action", async () => {
+    const onChange = vi.fn();
+    const value: ProfileResources = {
+      skills: [
+        { libraryId: "review", targetName: "review", enabled: false, direct: false, groupIds: ["manual-group-review"] }
+      ],
+      skillGroups: [{
+        id: "manual-group-review",
+        kind: "manual",
+        groupId: "group-review",
+        name: "Old review pack",
+        enabled: true,
+        memberIds: ["review"]
+      }],
+      mcpByTarget: {}
+    };
+    render(
+      <SkillsEditor
+        value={value}
+        librarySkills={skills}
+        skillGroups={[{
+          formatVersion: 1,
+          id: "group-review",
+          name: "Review pack",
+          description: "Review and docs",
+          skillIds: ["review", "docs"],
+          createdAt: "2026-08-21T00:00:00.000Z",
+          updatedAt: "2026-08-25T00:00:00.000Z"
+        }]}
+        onChange={onChange}
+      />
+    );
+
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      skillGroups: [expect.objectContaining({
+        name: "Review pack",
+        memberIds: ["docs", "review"]
+      })],
+      skills: expect.arrayContaining([
+        expect.objectContaining({ libraryId: "review", enabled: false }),
+        expect.objectContaining({ libraryId: "docs", enabled: true })
+      ])
+    })));
+    expect(screen.queryByRole("menuitem", { name: "Sync group members" }))
+      .not.toBeInTheDocument();
   });
 
   it("projects an Off policy as disabled switches without allowing child edits", () => {
@@ -160,7 +211,7 @@ describe("SkillsEditor v2", () => {
     const skillSwitch = screen.getByRole("switch", { name: "Enable Code Review" });
     expect(skillSwitch).toBeDisabled();
     expect(skillSwitch).not.toBeChecked();
-    expect(screen.queryByRole("button", { name: "Add Skill" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add Skills" })).not.toBeInTheDocument();
     fireEvent.click(skillSwitch);
     expect(onChange).not.toHaveBeenCalled();
   });
@@ -202,7 +253,7 @@ describe("SkillsEditor v2", () => {
       .toHaveTextContent("Agent only");
     expect(screen.queryByText("Code Review")).not.toBeInTheDocument();
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Add Skill" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add Skills" })).not.toBeInTheDocument();
   });
 
   it("reports an unavailable Agent inventory once at group level", () => {
@@ -267,7 +318,7 @@ describe("SkillsEditor v2", () => {
     const onChange = vi.fn();
     render(<SkillsEditor value={resources} librarySkills={skills} onChange={onChange} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Add Skill" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Skills" }));
     const dialog = screen.getByRole("dialog", { name: "Add library skills" });
     expect(dialog).toHaveClass("resource-picker-dialog", "resource-picker-dialog--skills");
     expect(within(dialog).getByRole("group", { name: "Library Skills" })).toBeInTheDocument();
@@ -327,10 +378,29 @@ describe("SkillsEditor v2", () => {
     );
 
     const checkButton = screen.getByRole("button", { name: "Check Profile Skill updates" });
-    expect(checkButton).toHaveClass("ui-button", "ui-button--secondary");
+    expect(checkButton).toHaveClass("ui-button", "ui-button--ghost");
     expect(checkButton).toHaveTextContent("Check updates");
     fireEvent.click(checkButton);
     expect(onCheck).toHaveBeenCalledWith(["review"]);
+  });
+
+  it("keeps the update check command stable while showing explicit progress", () => {
+    render(
+      <SkillsEditor
+        value={{
+          skills: [{ libraryId: "review", targetName: "review", enabled: true }],
+          mcpByTarget: {}
+        }}
+        librarySkills={skills}
+        checkingSkillUpdates
+        onCheckSkillUpdates={vi.fn()}
+        onChange={vi.fn()}
+      />
+    );
+
+    const checkButton = screen.getByRole("button", { name: "Check Profile Skill updates" });
+    expect(checkButton).toHaveAttribute("aria-busy", "true");
+    expect(checkButton).toHaveTextContent("Checking...");
   });
 
   it("does not show an unavailable update action when no Profile Skill is tracked", () => {
@@ -457,7 +527,7 @@ describe("SkillsEditor v2", () => {
     expect(row).toHaveTextContent("Will be on");
     expect(row).not.toHaveTextContent("Apply pending");
     expect(within(row).getByRole("switch", { name: "Disable Code Review" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Add Skill" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Add Skills" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", {
       name: "Move shared Skills to Profile control…"
     }));

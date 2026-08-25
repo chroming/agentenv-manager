@@ -201,12 +201,14 @@ describe("Workspaces desktop workflow", () => {
       await readResourceDisclosureHeaders(workspaceResources),
       ["workspace-skill"]
     );
-    await page.getByRole("button", { name: "Copy from Library" }).click();
-    await page.getByRole("dialog", { name: "Copy Skill to Workspace" }).waitFor();
+    await page.getByRole("button", { name: "Add Skills" }).click();
+    const addSkillsDialog = page.getByRole("dialog", { name: "Add Skills to Workspace" });
+    await addSkillsDialog.waitFor();
+    await addSkillsDialog.getByRole("checkbox", { name: "testing" }).click();
     if (captureDir) {
       await page.screenshot({ path: join(captureDir, "project-add-skill-920x620.png") });
     }
-    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await addSkillsDialog.getByRole("button", { name: "Add 1", exact: true }).click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
       .toContain("# Testing");
     const skillResourceList = page.locator(
@@ -245,9 +247,12 @@ describe("Workspaces desktop workflow", () => {
     await expect(readFile(join(addedProjectSkill, ".agentenv-skill.json"), "utf8"))
       .rejects.toMatchObject({ code: "ENOENT" });
 
-    await page.getByRole("button", { name: "Copy from Library" }).click();
-    const matchingDialog = page.getByRole("dialog", { name: "Copy Skill to Workspace" });
-    await matchingDialog.getByText("Already in this Workspace", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Add Skills" }).click();
+    const matchingDialog = page.getByRole("dialog", { name: "Add Skills to Workspace" });
+    await matchingDialog.getByRole("checkbox", { name: "testing" }).click();
+    await matchingDialog.getByText("1 selected Skills already match and will be skipped.", {
+      exact: true
+    }).waitFor();
     await expect.poll(() => matchingDialog.getByRole("button", {
       name: "Already added",
       exact: true
@@ -258,17 +263,18 @@ describe("Workspaces desktop workflow", () => {
       join(librarySkill, "SKILL.md"),
       "---\nname: testing\ndescription: Updated test changes.\n---\n\n# Updated Testing\n"
     );
-    await page.getByRole("button", { name: "Copy from Library" }).click();
-    const conflictDialog = page.getByRole("dialog", { name: "Copy Skill to Workspace" });
-    await conflictDialog.getByText("A different Workspace copy already exists", {
-      exact: true
-    }).waitFor();
-    await conflictDialog.getByRole("button", { name: "Keep Workspace copy", exact: true }).click();
+    await page.getByRole("button", { name: "Add Skills" }).click();
+    const conflictDialog = page.getByRole("dialog", { name: "Add Skills to Workspace" });
+    await conflictDialog.getByRole("checkbox", { name: "testing" }).click();
+    await conflictDialog.getByText("1 Workspace Skills will be replaced", { exact: true }).waitFor();
+    await conflictDialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
       .toContain("# Testing");
 
-    await page.getByRole("button", { name: "Copy from Library" }).click();
-    await page.getByRole("button", { name: "Replace with Library copy", exact: true }).click();
+    await page.getByRole("button", { name: "Add Skills" }).click();
+    const replaceDialog = page.getByRole("dialog", { name: "Add Skills to Workspace" });
+    await replaceDialog.getByRole("checkbox", { name: "testing" }).click();
+    await replaceDialog.getByRole("button", { name: "Replace and add 1", exact: true }).click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
       .toContain("# Updated Testing");
 
@@ -353,12 +359,20 @@ describe("Workspaces desktop workflow", () => {
     await recreatedInstructionDialog.getByRole("button", { name: "Close", exact: true }).first().click();
     await recreatedInstructionDialog.waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Expand Skills", exact: true }).click();
-    await page.getByRole("button", { name: "Copy from Library" }).click();
-    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await page.getByRole("button", { name: "Add Skills" }).click();
+    const restoreAddSkillsDialog = page.getByRole("dialog", { name: "Add Skills to Workspace" });
+    await restoreAddSkillsDialog.getByRole("checkbox", { name: "testing" }).click();
+    await restoreAddSkillsDialog.getByRole("button", { name: "Add 1", exact: true }).click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
       .toContain("# Updated Testing");
 
-    await page.getByRole("button", { name: "Remove testing from Workspace" }).click();
+    const removeWorkspaceSkillButton = page.getByRole("button", {
+      name: "Remove testing from Workspace"
+    });
+    await removeWorkspaceSkillButton.locator(
+      "xpath=ancestor::div[contains(@class, 'project-resource-entry')]"
+    ).hover();
+    await removeWorkspaceSkillButton.click();
     await page.getByRole("button", { name: "Remove", exact: true }).click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8").then(
       () => true,

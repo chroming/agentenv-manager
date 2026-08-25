@@ -320,7 +320,7 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
 
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
-    runtimeVersion: 7,
+    runtimeVersion: 8,
     platform: "darwin",
     readStartupStatus: vi.fn().mockResolvedValue({ state: "ready" }),
     onStartupStatusChanged: vi.fn().mockReturnValue(() => undefined),
@@ -404,6 +404,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     saveProjectResource: vi.fn().mockRejectedValue(new Error("Project unavailable")),
     createProjectInstruction: vi.fn().mockRejectedValue(new Error("Project unavailable")),
     addProjectSkill: vi.fn().mockRejectedValue(new Error("Project unavailable")),
+    addProjectSkills: vi.fn().mockRejectedValue(new Error("Project unavailable")),
     removeProjectSkill: vi.fn().mockRejectedValue(new Error("Project unavailable")),
     listProjectRecovery: vi.fn().mockResolvedValue([]),
     restoreProjectRecovery: vi.fn().mockRejectedValue(new Error("Project unavailable")),
@@ -1699,7 +1700,7 @@ describe("App", () => {
     const emptyMcpRow = within(composer).getByRole("button", { name: "MCPs" });
     expect(emptyMcpRow).toBeInTheDocument();
     expect(emptyMcpRow.querySelector('.ui-resource-disclosure__summary'))
-      .toHaveAttribute("title", "Saved 0 · Agent 0");
+      .toHaveAttribute("title", "0 active");
     expect(within(composer).queryByRole("button", { name: "Advanced" })).not.toBeInTheDocument();
     for (const oldTab of ["Overview", "Instructions", "Config", "Resources", "Validation"]) {
       expect(screen.queryByRole("tab", { name: oldTab })).not.toBeInTheDocument();
@@ -1713,7 +1714,7 @@ describe("App", () => {
         name: "MCPs application policy for OpenCode"
       })
     ).toHaveValue("ignore");
-    expect(screen.getByTitle("Saved 0 · Agent 0")).toBeInTheDocument();
+    expect(screen.getByTitle("0 active")).toBeInTheDocument();
   });
 
   it("keeps Agents navigation available while startup discovery is pending", async () => {
@@ -3702,7 +3703,7 @@ describe("App", () => {
       /2.*library-testing.*library-docs/
     );
     expect(mcp).toHaveAccessibleDescription(
-      /Saved 4 · Agent 0.*library-docs.*shared-mcp.*raw-browser/
+      /3 selected.*library-docs.*shared-mcp.*raw-browser/
     );
     expect(skills).toHaveAttribute("aria-expanded", "false");
     expect(instructions).toHaveAttribute("aria-expanded", "false");
@@ -5159,7 +5160,8 @@ describe("App", () => {
     });
     fireEvent.click(within(manager).getByRole("button", { name: "Back" }));
 
-    fireEvent.click(within(manager).getByRole("button", { name: /Delete backup Skill cleanup/ }));
+    fireEvent.click(within(manager).getByRole("button", { name: /More actions for Skill cleanup/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete backup" }));
     expect(within(manager).getByText("Delete backup?")).toBeInTheDocument();
     fireEvent.click(within(manager).getByRole("button", { name: "Cancel" }));
     expect(within(manager).getByText("Manage Backups")).toBeInTheDocument();

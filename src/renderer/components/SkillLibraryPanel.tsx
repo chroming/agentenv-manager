@@ -2322,6 +2322,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         active={libraryMode === "groups"}
         groups={skillGroups}
         skills={librarySkills}
+        onOpenSkill={(skill) => setBrowsingSkill(skill)}
         onCreate={onCreateGroup}
         onUpdate={onUpdateGroup}
         onRemove={onRemoveGroup}

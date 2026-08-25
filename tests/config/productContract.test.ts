@@ -39,7 +39,8 @@ describe("public product model contract", () => {
 
     expect(contract).toContain("AgentEnv MUST NOT create a link from a Workspace");
     expect(contract).toMatch(/MUST\s+NOT stage, commit, checkout, reset, clean, stash/);
-    expect(workspace).toContain('t("Copy Skill to Workspace")');
+    expect(workspace).toContain('t("Add Skills to Workspace")');
+    expect(workspace).toContain("addProjectSkills");
     expect(workspace).toContain('t("Git changes stay unstaged and uncommitted.")');
     expect(gitService).toContain('["rev-parse", "--show-toplevel"]');
     expect(gitService).not.toMatch(/\["(?:add|commit|checkout|reset|clean|stash)"/);

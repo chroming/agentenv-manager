@@ -204,8 +204,17 @@
 }
 
 .project-add-skill-fields {
+  align-content: start;
   display: grid;
   gap: 12px;
+  grid-template-rows: none;
+}
+
+.project-workspace-skill-selection,
+.project-workspace-skill-selection .library-skill-selection,
+.project-workspace-skill-selection .library-skill-picker,
+.project-workspace-skill-selection .library-skill-group-picker {
+  min-height: 0;
 }
 
 .project-file-impact {

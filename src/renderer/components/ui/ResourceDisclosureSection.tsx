@@ -4,6 +4,7 @@ import { DisclosureIcon } from "./DisclosureIcon";
 export interface ResourceDisclosureSectionProps
   extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   actions?: ReactNode;
+  actionsLayout?: "compact" | "row";
   description?: ReactNode;
   density?: "default" | "compact";
   expanded: boolean;
@@ -11,6 +12,7 @@ export interface ResourceDisclosureSectionProps
   id: string;
   onToggle(): void;
   nested?: boolean;
+  panelVariant?: "default" | "inset";
   muted?: boolean;
   summary?: ReactNode;
   summaryLabel?: string;
@@ -22,6 +24,7 @@ export interface ResourceDisclosureSectionProps
 
 export const ResourceDisclosureSection = ({
   actions,
+  actionsLayout = "compact",
   children,
   className = "",
   description,
@@ -31,6 +34,7 @@ export const ResourceDisclosureSection = ({
   id,
   onToggle,
   nested = false,
+  panelVariant = "default",
   muted = false,
   summary,
   summaryLabel,
@@ -53,7 +57,7 @@ export const ResourceDisclosureSection = ({
     <section
       {...props}
       aria-label={props["aria-label"] ?? title}
-      className={`ui-resource-disclosure is-${density}${expanded ? " is-expanded" : ""}${nested ? " is-nested" : ""}${muted ? " is-muted" : ""}${summaryWidth === "wide" ? " has-wide-summary" : ""} ${className}`.trim()}
+      className={`ui-resource-disclosure is-${density}${expanded ? " is-expanded" : ""}${nested ? " is-nested" : ""}${muted ? " is-muted" : ""}${summaryWidth === "wide" ? " has-wide-summary" : ""}${panelVariant === "inset" ? " has-inset-panel" : ""}${actionsLayout === "row" ? " has-row-actions" : ""} ${className}`.trim()}
       data-resource-disclosure-id={id}
     >
       <header className="ui-resource-disclosure__header">

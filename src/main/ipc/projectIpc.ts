@@ -1,5 +1,6 @@
 import {
   AddProjectSkillInputSchema,
+  AddProjectSkillsInputSchema,
   CreateProjectInstructionInputSchema,
   RemoveProjectSkillInputSchema,
   SaveProjectResourceInputSchema,
@@ -77,6 +78,9 @@ export const registerProjectIpc = (
   );
   handleMutation("projects:add-skill", (_event, input: unknown) =>
     projectMutationService.addSkill(AddProjectSkillInputSchema.parse(input))
+  );
+  handleMutation("projects:add-skills", (_event, input: unknown) =>
+    projectMutationService.addSkills(AddProjectSkillsInputSchema.parse(input))
   );
   handleMutation("projects:remove-skill", (_event, input: unknown) =>
     projectMutationService.removeSkill(RemoveProjectSkillInputSchema.parse(input))

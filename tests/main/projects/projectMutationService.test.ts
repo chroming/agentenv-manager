@@ -145,6 +145,22 @@ describe("project mutation service", () => {
     await expect(readFile(join(destination, "SKILL.md"), "utf8")).rejects.toThrow();
   });
 
+  it("rolls back earlier Workspace Skill copies when a batch item fails", async () => {
+    const { project, projectRoot, service, recoveryStore, skillLocationId } = await setup();
+    const destination = join(projectRoot, ".agents", "skills", "review");
+
+    await expect(service.addSkills({
+      projectId: project.id,
+      locationId: skillLocationId,
+      items: [{ libraryId: "review" }, { libraryId: "missing" }]
+    })).rejects.toThrow("Library Skill not found: missing");
+
+    await expect(readFile(join(destination, "SKILL.md"), "utf8")).rejects.toThrow();
+    expect((await recoveryStore.list(project.id)).find((receipt) =>
+      receipt.resourceId.includes("skill-add")
+    )?.status).toBe("restored");
+  });
+
   it("creates a missing declared Project Skill directory and restores its prior absence", async () => {
     const { project, projectRoot, service, skillLocationId } = await setup();
     await rm(join(projectRoot, ".agents"), { recursive: true, force: true });

@@ -48,20 +48,32 @@ export const createProfileContentHash = (
       mcp: mcpPolicy?.mode ?? "ignore"
     },
     instructions: instructionsMode === "manage" ? profileEffectiveInstructions(profile) : null,
-    skills: skillsMode !== "ignore"
+    skills: skillsMode === "manage"
       ? [...effectiveSkills]
+          .filter((reference) => reference.enabled)
           .map((reference) => ({
             libraryId: reference.libraryId,
             targetName: reference.targetName,
-            enabled:
-              skillsMode === "disable" ? false : reference.enabled
+            enabled: true
           }))
           .sort(
             (left, right) =>
               left.targetName.localeCompare(right.targetName) ||
               left.libraryId.localeCompare(right.libraryId)
           )
-      : [],
+      : skillsMode === "disable"
+        ? [...effectiveSkills]
+            .map((reference) => ({
+              libraryId: reference.libraryId,
+              targetName: reference.targetName,
+              enabled: false
+            }))
+            .sort(
+              (left, right) =>
+                left.targetName.localeCompare(right.targetName) ||
+                left.libraryId.localeCompare(right.libraryId)
+            )
+        : [],
     mcp: mcpPolicy?.mode === "manage"
       ? {
           mode: mcpPolicy.mode,

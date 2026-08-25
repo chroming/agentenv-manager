@@ -814,6 +814,11 @@
   padding: 0 var(--space-3) 0 0;
 }
 
+.ui-resource-disclosure.has-row-actions .ui-resource-disclosure__actions {
+  gap: var(--space-2);
+  padding-right: var(--space-3);
+}
+
 .ui-resource-disclosure__panel {
   background: var(--surface);
   border-top: 1px solid var(--border-subtle);
@@ -831,9 +836,17 @@
   padding-block: 2px;
 }
 
-/* The inset surface is the hierarchy cue; connector lines are intentionally omitted. */
+.ui-resource-disclosure.has-inset-panel > .ui-resource-disclosure__panel {
+  background: var(--surface-subtle);
+  border-radius: var(--radius-control);
+  margin: 0 10px 6px 34px;
+  max-width: calc(100% - 44px);
+  padding-block: 0;
+}
+
+/* Nested rows use indentation rather than connector lines or a colored container. */
 .ui-resource-disclosure.is-nested > .ui-resource-disclosure__panel .ui-resource-row {
-  padding-left: 18px;
+  padding-left: 42px;
 }
 
 .ui-resource-panel-toolbar {
@@ -845,6 +858,25 @@
   justify-content: flex-end;
   min-height: 36px;
   padding: var(--space-1) var(--space-3);
+}
+
+.ui-resource-panel-toolbar--embedded {
+  min-height: 34px;
+  padding: 3px 10px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ui-resource-row--actions-contextual .ui-resource-row__actions {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--motion-fast);
+  }
+
+  .ui-resource-row--actions-contextual:hover .ui-resource-row__actions,
+  .ui-resource-row--actions-contextual:focus-within .ui-resource-row__actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 

@@ -76,7 +76,7 @@ export const ProfileSkillsComposerSection = ({
   const sharedRuntimeSummary = sharedBoundary.migrationPaths.length > 0
     ? t("Needs review")
     : sharedBoundary.activePaths.length > 0
-      ? t("Shared across Agents")
+      ? t("Shared")
         : undefined;
 
   return (

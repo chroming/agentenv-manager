@@ -165,6 +165,7 @@ const writeProfile = async (appDataRoot, fixture) => {
         kind: "manual",
         groupId: "review-pack",
         name: "Review pack",
+        iconKey: "shield",
         enabled: true,
         memberIds: [...groupedSkillIds]
       }]
@@ -527,6 +528,7 @@ const prepareFixture = async (root) => {
       id: "review-pack",
       name: "Review pack",
       description: "Core checks for reviewing product changes.",
+      iconKey: "shield",
       skillIds: ["git-workflow", "testing-strategies", "security-checklist"],
       createdAt: captureFixtureTimestamp.toISOString(),
       updatedAt: captureFixtureTimestamp.toISOString()
@@ -535,6 +537,7 @@ const prepareFixture = async (root) => {
       id: "release-pack",
       name: "Release pack",
       description: "Reusable release verification workflow.",
+      iconKey: "rocket",
       skillIds: ["docs-review", "testing-strategies"],
       createdAt: captureFixtureTimestamp.toISOString(),
       updatedAt: captureFixtureTimestamp.toISOString()
@@ -1088,6 +1091,13 @@ try {
   await page.getByRole("button", { name: "Expand Skills", exact: true }).click();
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "workspaces-skills-expanded-920x620.png"));
+  await page.getByRole("button", { name: "Add Skills", exact: true }).click();
+  const workspaceSkillPicker = page.getByRole("dialog", { name: "Add Skills to Workspace" });
+  await workspaceSkillPicker.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "workspaces-skill-picker-920x620.png"));
+  await workspaceSkillPicker.getByRole("button", { name: "Groups", exact: true }).click();
+  await capturePage(page, join(outputDir, "workspaces-skill-group-picker-920x620.png"));
+  await workspaceSkillPicker.getByRole("button", { name: "Cancel", exact: true }).click();
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "workspaces-skills-expanded-1180x728.png"));
   await setWindowSize(page, windowHandle, 1440, 900);
@@ -1259,6 +1269,13 @@ try {
   await capturePage(page, join(outputDir, "skills-groups-920x620.png"));
   await page.getByRole("button", { name: "Toggle Review pack" }).click();
   await capturePage(page, join(outputDir, "skills-groups-expanded-920x620.png"));
+  await page.getByRole("button", { name: "More actions for Review pack" }).click();
+  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  const groupDialog = page.getByRole("dialog", { name: "Edit Skill Group" });
+  await groupDialog.getByRole("button", { name: "Choose Group icon" }).click();
+  await capturePage(page, join(outputDir, "skills-group-icon-picker-920x620.png"));
+  await page.keyboard.press("Escape");
+  await groupDialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "skills-groups-expanded-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
@@ -1631,7 +1648,7 @@ try {
   const sparseSkillsSection = await ensureComposerExpanded("Skills");
   await capturePage(page, join(outputDir, "profile-skills-empty-920x620.png"));
 
-  await sparseSkillsSection.getByRole("button", { name: "Add Skill", exact: true }).click();
+  await sparseSkillsSection.getByRole("button", { name: "Add Skills", exact: true }).click();
   const sparseSkillPicker = page.getByRole("dialog", { name: "Add library skills" });
   await sparseSkillPicker.waitFor({ state: "visible" });
   await sparseSkillPicker.getByLabel("git-workflow", { exact: true }).check();
@@ -1692,7 +1709,7 @@ try {
       await page.getByRole("switch", { name: "Turn on Review pack" }).click();
       await page
         .getByRole("region", { name: "Profile Skills" })
-        .getByRole("button", { name: "Add Skill", exact: true })
+        .getByRole("button", { name: "Add Skills", exact: true })
         .click();
       const skillPicker = page.getByRole("dialog", { name: "Add library skills" });
       await skillPicker.waitFor({ state: "visible" });
@@ -1849,7 +1866,7 @@ try {
     .getByRole("listitem", { name: "Profile Skill testing-strategies" })
     .getByRole("switch", { name: "Disable testing-strategies" })
     .click();
-  await mixedSkillRegion.getByRole("button", { name: "Add Skill", exact: true }).click();
+  await mixedSkillRegion.getByRole("button", { name: "Add Skills", exact: true }).click();
   const mixedSkillPicker = page.getByRole("dialog", { name: "Add library skills" });
   await mixedSkillPicker.getByLabel("react-best-practices", { exact: true }).check();
   await mixedSkillPicker.getByRole("button", { name: /^Add 1$/ }).click();

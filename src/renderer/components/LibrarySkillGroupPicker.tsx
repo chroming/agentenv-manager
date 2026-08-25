@@ -1,8 +1,9 @@
-import { FolderTree, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { AvailableProfileSkillGroup } from "../../shared/profileSkillGroups";
 import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
+import { ResourceIconArtwork } from "./ResourceIconPicker";
 import { ResourcePickerOption } from "./ResourcePickerOption";
 import { SearchField } from "./ui";
 
@@ -51,10 +52,17 @@ export const LibrarySkillGroupPicker = ({
               description={(
                 <OverflowTooltip
                   className="resource-picker-option__description-text"
-                  text={group.kind === "source" ? t("Source Group") : t("Manual Group")}
+                  text={group.description || (group.kind === "source" ? t("Source Group") : t("Manual Group"))}
                 />
               )}
-              icon={<FolderTree size={17} strokeWidth={2} />}
+              icon={(
+                <ResourceIconArtwork
+                  fallbackIconKey={group.kind === "source" ? "github" : "folder"}
+                  iconKey={group.iconKey}
+                  sourceUrl={group.sourceUrl}
+                  size={17}
+                />
+              )}
               key={key}
               metadata={t("{{count}} Skills", { count: group.memberIds.length })}
               title={(

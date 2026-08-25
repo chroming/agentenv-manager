@@ -1,10 +1,13 @@
 import type { ProfileResources, ProfileSkill, ProfileSkillGroup } from "./schemas";
-import type { SkillLibraryEntry, SkillSourceGroupView } from "./types";
+import type { ResourceIconKey, SkillLibraryEntry, SkillSourceGroupView } from "./types";
 
 export interface AvailableProfileSkillGroup {
   kind: "manual" | "source";
   groupId: string;
   name: string;
+  description?: string;
+  iconKey?: ResourceIconKey;
+  sourceUrl?: string;
   memberIds: string[];
 }
 
@@ -96,6 +99,7 @@ export const addProfileSkillGroup = (
         kind: available.kind,
         groupId: available.groupId,
         name: available.name,
+        iconKey: available.iconKey,
         enabled: true,
         memberIds
       }
@@ -153,23 +157,67 @@ export const syncProfileSkillGroup = (
   };
 };
 
+export const reconcileProfileSkillGroups = (
+  resources: ProfileResources,
+  availableGroups: readonly AvailableProfileSkillGroup[],
+  librarySkills: readonly SkillLibraryEntry[]
+): ProfileResources => {
+  const availableByKey = new Map(
+    availableGroups.map((group) => [`${group.kind}:${group.groupId}`, group])
+  );
+  return (resources.skillGroups ?? []).reduce((current, group) => {
+    const available = availableByKey.get(`${group.kind}:${group.groupId}`);
+    return available && profileSkillGroupChanged(group, available)
+      ? syncProfileSkillGroup(current, group.id, available, librarySkills)
+      : current;
+  }, resources);
+};
+
 export const manualProfileSkillGroup = (group: {
   id: string;
   name: string;
+  description?: string;
+  iconKey?: ResourceIconKey;
   skillIds: string[];
 }): AvailableProfileSkillGroup => ({
   kind: "manual",
   groupId: group.id,
   name: group.name,
+  description: group.description,
+  iconKey: group.iconKey,
   memberIds: uniqueSorted(group.skillIds)
 });
+
+const sourceRepositoryName = (repository: string) => {
+  try {
+    const url = new URL(repository);
+    const path = url.pathname.replace(/^\/+|\/+$/g, "").replace(/\.git$/i, "");
+    if (!path) return url.hostname;
+    return url.hostname === "github.com" ? path : `${url.hostname}/${path}`;
+  } catch {
+    const scpPath = repository.includes(":")
+      ? repository.slice(repository.indexOf(":") + 1)
+      : repository;
+    const segments = scpPath.replace(/\.git$/i, "").split(/[\\/]/).filter(Boolean);
+    return segments.slice(-2).join("/") || repository;
+  }
+};
+
+export const sourceProfileSkillGroupName = (group: SkillSourceGroupView) => {
+  if (group.displayName?.trim()) return group.displayName.trim();
+  const repository = sourceRepositoryName(group.repository);
+  const directory = group.directory.replace(/^\/+|\/+$/g, "");
+  return directory ? `${repository} · ${directory}` : repository;
+};
 
 export const sourceProfileSkillGroup = (
   group: SkillSourceGroupView
 ): AvailableProfileSkillGroup => ({
   kind: "source",
   groupId: group.sourceId,
-  name: group.displayName ?? group.canonicalLink,
+  name: sourceProfileSkillGroupName(group),
+  description: group.directory || group.repository,
+  sourceUrl: group.canonicalLink,
   memberIds: uniqueSorted(
     group.candidates.flatMap((candidate) => candidate.libraryId ? [candidate.libraryId] : [])
   )
@@ -180,5 +228,6 @@ export const profileSkillGroupChanged = (
   available: AvailableProfileSkillGroup | undefined
 ) => Boolean(available && (
   group.name !== available.name ||
+  group.iconKey !== available.iconKey ||
   JSON.stringify(uniqueSorted(group.memberIds)) !== JSON.stringify(uniqueSorted(available.memberIds))
 ));

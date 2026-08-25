@@ -150,6 +150,7 @@ export interface AgentEnvApi {
   saveProjectResource(input: SaveProjectResourceInput): Promise<ProjectMutationResult>;
   createProjectInstruction(input: CreateProjectInstructionInput): Promise<ProjectMutationResult>;
   addProjectSkill(input: AddProjectSkillInput): Promise<ProjectMutationResult>;
+  addProjectSkills(input: AddProjectSkillsInput): Promise<ProjectSkillBatchMutationResult>;
   removeProjectSkill(input: RemoveProjectSkillInput): Promise<ProjectMutationResult>;
   listProjectRecovery(projectId?: string): Promise<ProjectRecoverySummary[]>;
   restoreProjectRecovery(receiptId: string): Promise<ProjectMutationResult>;
@@ -181,7 +182,7 @@ export interface AgentEnvApi {
   listInstructionBlocks(): Promise<InstructionBlock[]>;
   createInstructionBlock(input: CreateInstructionBlockInput): Promise<InstructionBlock>;
   updateInstructionBlock(input: UpdateInstructionBlockInput): Promise<InstructionBlock>;
-  removeInstructionBlock(input: RemoveInstructionBlockInput): Promise<void>;
+  removeInstructionBlock(input: RemoveInstructionBlockInput): Promise<InstructionRemovalResult>;
   selectInstructionFile(): Promise<InstructionFileSelection | undefined>;
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
   listSkillGroups(): Promise<SkillGroup[]>;
@@ -874,6 +875,7 @@ export interface SkillSourceGroupCandidate {
   libraryId?: string;
   libraryName?: string;
   libraryVersion?: string;
+  libraryRevision?: string;
   libraryUpdatedAt?: string;
   globallyEnabled?: boolean;
   updatePolicy?: SkillUpdatePolicy;
@@ -1531,6 +1533,15 @@ export interface AddProjectSkillInput {
   conflictResolution?: "replace";
 }
 
+export interface AddProjectSkillsInput {
+  projectId: string;
+  locationId: string;
+  items: Array<{
+    libraryId: string;
+    conflictResolution?: "replace";
+  }>;
+}
+
 export interface RemoveProjectSkillInput {
   projectId: string;
   resourceId: string;
@@ -1541,6 +1552,11 @@ export interface ProjectMutationResult {
   status: "saved" | "restored" | "no-op";
   contentHash: string;
   receiptId?: string;
+}
+
+export interface ProjectSkillBatchMutationResult {
+  status: "saved" | "no-op";
+  results: Array<ProjectMutationResult & { libraryId: string }>;
 }
 
 export interface ProjectRecoverySummary {
@@ -2119,6 +2135,12 @@ export interface UpdateInstructionBlockInput extends CreateInstructionBlockInput
 export interface RemoveInstructionBlockInput {
   id: string;
   expectedContentHash: string;
+}
+
+export interface InstructionRemovalResult {
+  id: string;
+  affectedProfiles: Array<{ id: string; name: string }>;
+  backupId: string;
 }
 
 export interface InstructionFileSelection {

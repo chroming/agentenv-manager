@@ -1,9 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CircleArrowUp,
   FolderInput,
-  FolderTree,
   Link2,
   LoaderCircle,
   Plus,
@@ -23,20 +22,18 @@ import {
   addProfileSkillGroup,
   manualProfileSkillGroup,
   profileSkillEnabled,
-  profileSkillGroupChanged,
   profileSkillGroupGateOpen,
+  reconcileProfileSkillGroups,
   removeProfileSkillGroup,
   setProfileSkillGroupEnabled,
   sourceProfileSkillGroup,
-  syncProfileSkillGroup,
   type AvailableProfileSkillGroup
 } from "../../shared/profileSkillGroups";
 import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
-import { LibrarySkillPicker } from "./LibrarySkillPicker";
-import { LibrarySkillGroupPicker } from "./LibrarySkillGroupPicker";
+import { LibrarySkillSelection } from "./LibrarySkillSelection";
 import type { ProfileResourcePolicy } from "./ProfileResourcePolicyControl";
 import {
   AlignedResourceList,
@@ -50,7 +47,6 @@ import {
   ResourcePanelToolbar,
   ResourceDisclosureSection,
   ResourceRow,
-  SegmentedControl,
   ToolbarOverflowMenu,
   Switch
 } from "./ui";
@@ -153,6 +149,11 @@ export const SkillsEditor = ({
   const pickerGroups = availableGroups.filter((group) =>
     !attachedGroupKeys.has(`${group.kind}:${group.groupId}`) && group.memberIds.length > 0
   );
+
+  useEffect(() => {
+    const reconciled = reconcileProfileSkillGroups(value, availableGroups, librarySkills);
+    if (reconciled !== value) onChange(reconciled);
+  }, [availableGroups, librarySkills, onChange, value]);
 
   const closePicker = () => {
     setPickerOpen(false);
@@ -293,7 +294,7 @@ export const SkillsEditor = ({
     return (
       <ResourceRow
         className={`ui-resource-children__item profile-skill-row${effectiveEnabled ? "" : " is-disabled"}${
-          options.grouped ? " is-group-member" : ""
+          options.grouped ? " is-group-member" : " is-direct"
         }${localOverride ? " has-local-override" : ""}`}
         density="compact"
         description={visibleDetail ? (
@@ -383,39 +384,6 @@ export const SkillsEditor = ({
       aria-label={t("Profile Skills")}
       data-profile-skill-count={value.skills.length}
     >
-      {profileManagesSkills ? <ResourcePanelToolbar
-        aria-label={t("Profile Skill actions")}
-        className="profile-skill-toolbar"
-      >
-        <div className="profile-skill-toolbar__actions">
-          {profileManagesSkills && onCheckSkillUpdates &&
-          (checkableIds.length > 0 || checkingSkillUpdates) ? (
-            <Button
-              aria-label={t("Check Profile Skill updates")}
-              busy={checkingSkillUpdates}
-              className="profile-skill-check"
-              disabled={disabled}
-              icon={<RefreshCw size={14} strokeWidth={2.2} aria-hidden="true" />}
-              size="compact"
-              variant="secondary"
-              onClick={() => onCheckSkillUpdates(checkableIds)}
-            >
-              {t("Check updates")}
-            </Button>
-          ) : null}
-          <Button
-            ref={pickerTriggerRef}
-            variant="secondary"
-            size="compact"
-            disabled={disabled}
-            onClick={() => openPicker()}
-            icon={<Plus size={14} strokeWidth={2.2} aria-hidden="true" />}
-          >
-            {t("Add Skill")}
-          </Button>
-        </div>
-      </ResourcePanelToolbar> : null}
-
       {sharedRuntimeBoundary?.requiresMigration ? (
         <Notice
           actions={(
@@ -426,7 +394,7 @@ export const SkillsEditor = ({
               variant="warning"
               onClick={sharedRuntimeBoundary.onReview}
             >
-              {t("Review move…")}
+              {t("Review")}
             </Button>
           )}
           className="profile-skill-shared-notice"
@@ -466,6 +434,39 @@ export const SkillsEditor = ({
           {t("AgentEnv could not read this Agent's current Skills. The saved Profile has not changed.")}
         </Notice>
       ) : null}
+
+      {profileManagesSkills ? <ResourcePanelToolbar
+        aria-label={t("Profile Skill actions")}
+        className="profile-skill-toolbar"
+        variant="embedded"
+      >
+        {profileManagesSkills && onCheckSkillUpdates &&
+        (checkableIds.length > 0 || checkingSkillUpdates) ? (
+          <Button
+            aria-label={t("Check Profile Skill updates")}
+            busy={checkingSkillUpdates}
+            busyLabel={t("Checking...")}
+            className="profile-skill-check"
+            disabled={disabled}
+            icon={<RefreshCw size={14} strokeWidth={2.2} aria-hidden="true" />}
+            size="compact"
+            variant="ghost"
+            onClick={() => onCheckSkillUpdates(checkableIds)}
+          >
+            {t("Check updates")}
+          </Button>
+        ) : null}
+        <Button
+          ref={pickerTriggerRef}
+          variant="secondary"
+          size="compact"
+          disabled={disabled}
+          onClick={() => openPicker()}
+          icon={<Plus size={14} strokeWidth={2.2} aria-hidden="true" />}
+        >
+          {t("Add Skills")}
+        </Button>
+      </ResourcePanelToolbar> : null}
 
       <AlignedResourceList
         className="profile-skill-list"
@@ -518,7 +519,6 @@ export const SkillsEditor = ({
           const available = availableGroups.find((candidate) =>
             candidate.kind === group.kind && candidate.groupId === group.groupId
           );
-          const changed = profileSkillGroupChanged(group, available);
           const members = group.memberIds.flatMap((libraryId) => {
             const index = value.skills.findIndex((skill) =>
               skill.libraryId === libraryId && (skill.groupIds ?? []).includes(group.id)
@@ -540,16 +540,10 @@ export const SkillsEditor = ({
                   <ToolbarOverflowMenu
                     disabled={disabled || !profileManagesSkills}
                     items={[
-                      ...(changed && available ? [{
-                        id: "sync",
-                        icon: <RefreshCw size={14} strokeWidth={2.1} />,
-                        label: t("Sync Group members"),
-                        onSelect: () => onChange(syncProfileSkillGroup(value, group.id, available, librarySkills))
-                      }] : []),
                       {
                         id: "remove",
                         icon: <Trash2 size={14} strokeWidth={2.1} />,
-                        label: t("Remove Group from Profile"),
+                        label: t("Remove group from Profile"),
                         onSelect: () => onChange(removeProfileSkillGroup(value, group.id))
                       }
                     ]}
@@ -558,11 +552,18 @@ export const SkillsEditor = ({
                   />
                 </>
               )}
+              actionsLayout="row"
               className={`profile-skill-group${group.enabled ? "" : " is-group-off"}`}
               density="compact"
-              description={group.kind === "source" ? t("Source Group") : t("Manual Group")}
               expanded={expanded}
-              icon={<FolderTree size={17} strokeWidth={2} />}
+              icon={(
+                <ResourceIconArtwork
+                  fallbackIconKey={group.kind === "source" ? "github" : "folder"}
+                  iconKey={available?.iconKey ?? group.iconKey}
+                  sourceUrl={available?.sourceUrl}
+                  size={17}
+                />
+              )}
               id={group.id}
               key={group.id}
               onToggle={() => setExpandedGroupIds((current) =>
@@ -575,8 +576,7 @@ export const SkillsEditor = ({
               summary={[
                 group.enabled
                   ? t("{{enabled}} of {{total}} on", { enabled: preferredCount, total: members.length })
-                  : t("Group off"),
-                changed ? t("Group changed") : undefined
+                  : t("Group off")
               ].filter(Boolean).join(" · ")}
               summaryWidth="wide"
               title={group.name}
@@ -621,33 +621,19 @@ export const SkillsEditor = ({
               description={t("Choose individual Skills or add a reusable Group.")}
             />
             <DialogBody className="resource-picker-dialog__body">
-              {replacingIndex === undefined ? (
-                <SegmentedControl
-                  label={t("Resource type")}
-                  className="profile-skill-picker-mode"
-                  options={[
-                    { value: "skills", label: t("Skills") },
-                    { value: "groups", label: t("Groups") }
-                  ]}
-                  value={pickerMode}
-                  onChange={(mode) => setPickerMode(mode as "skills" | "groups")}
-                />
-              ) : null}
-              {pickerMode === "skills" || replacingIndex !== undefined ? (
-                <LibrarySkillPicker
-                  excludedIds={pickerExcludedIds}
-                  onChange={setSelectedIds}
-                  selectedIds={selectedIds}
-                  selectionMode={replacingIndex === undefined ? "multiple" : "single"}
-                  skills={pickerSkills}
-                />
-              ) : (
-                <LibrarySkillGroupPicker
-                  groups={pickerGroups}
-                  selectedKeys={selectedGroupKeys}
-                  onChange={setSelectedGroupKeys}
-                />
-              )}
+              <LibrarySkillSelection
+                excludedSkillIds={pickerExcludedIds}
+                groups={pickerGroups}
+                mode={pickerMode}
+                selectedGroupKeys={selectedGroupKeys}
+                selectedSkillIds={selectedIds}
+                showModeControl={replacingIndex === undefined}
+                skillSelectionMode={replacingIndex === undefined ? "multiple" : "single"}
+                skills={pickerSkills}
+                onModeChange={setPickerMode}
+                onSelectedGroupKeysChange={setSelectedGroupKeys}
+                onSelectedSkillIdsChange={setSelectedIds}
+              />
             </DialogBody>
             <DialogFooter>
               {onImportNewSkill ? (

@@ -5,6 +5,7 @@ type ResourceRowTone = "default" | "disabled" | "attention";
 
 interface ResourceRowProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   actions?: ReactNode;
+  actionsVisibility?: "always" | "contextual";
   density?: ResourceRowDensity;
   description?: ReactNode;
   icon: ReactNode;
@@ -16,6 +17,7 @@ interface ResourceRowProps extends Omit<HTMLAttributes<HTMLDivElement>, "title">
 
 export const ResourceRow = ({
   actions,
+  actionsVisibility = "always",
   className = "",
   density = "default",
   description,
@@ -28,7 +30,7 @@ export const ResourceRow = ({
 }: ResourceRowProps) => (
   <div
     {...props}
-    className={`ui-resource-row ui-resource-row--${density} ui-resource-row--${tone} ${className}`.trim()}
+    className={`ui-resource-row ui-resource-row--${density} ui-resource-row--${tone} ui-resource-row--actions-${actionsVisibility} ${className}`.trim()}
   >
     <span className="ui-resource-row__icon" aria-hidden="true">
       {icon}
