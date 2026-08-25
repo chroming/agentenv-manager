@@ -21,13 +21,14 @@
   align-items: baseline;
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
   min-width: 0;
+  row-gap: 0;
 }
 
 .app-update-heading > span:first-child {
+  flex: 1 1 160px;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
