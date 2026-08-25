@@ -5552,7 +5552,9 @@ describe("Electron UI profile switching e2e", () => {
 
     const expectTextContracts = async (context: string) => {
       const defects = await findVisibleTextLayoutDefects(page);
-      expect(defects, context).toEqual([]);
+      if (defects.length > 0) {
+        throw new Error(`${context}: ${JSON.stringify(defects)}`);
+      }
     };
 
     for (const viewport of [

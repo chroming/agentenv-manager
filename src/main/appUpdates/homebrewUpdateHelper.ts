@@ -6,6 +6,7 @@ import { join } from "node:path";
 const RECEIPT_SCHEMA_VERSION = 1;
 const UPDATE_ROOT_NAME = "automatic-homebrew-update";
 const HELPER_TIMEOUT_SECONDS = 10 * 60;
+const TERMINAL_STATE_SETTLE_MS = 250;
 
 type HomebrewUpdateState = "scheduled" | "installing" | "completed" | "failed";
 
@@ -169,6 +170,20 @@ export const inspectHomebrewUpdateStartup = async (
   }
   if (processIsRunning(receipt.helperPid)) {
     return { state: "running", expectedVersion: receipt.expectedVersion };
+  }
+  // The detached shell may exit between the PID probe and the final state rename
+  // becoming observable. Give that terminal receipt one bounded chance to settle.
+  await new Promise((resolve) => setTimeout(resolve, TERMINAL_STATE_SETTLE_MS));
+  const settledState = await readState(cacheDirectory);
+  if (settledState === "completed") {
+    return { state: "completed", expectedVersion: receipt.expectedVersion };
+  }
+  if (settledState === "failed") {
+    return {
+      state: "failed",
+      expectedVersion: receipt.expectedVersion,
+      message: await failureMessage(cacheDirectory)
+    };
   }
   return {
     state: "failed",

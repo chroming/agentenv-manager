@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -36,6 +36,34 @@ afterEach(async () => {
 });
 
 describe("automatic Homebrew update helper", () => {
+  it("waits for a terminal state receipt after the detached helper exits", async () => {
+    const root = await mkdtemp(join(tmpdir(), "agentenv-homebrew-helper-settle-"));
+    roots.push(root);
+    const cacheDirectory = join(root, "cache");
+    const updateDirectory = join(cacheDirectory, "automatic-homebrew-update");
+    await mkdir(updateDirectory, { recursive: true });
+    await writeFile(join(updateDirectory, "receipt.json"), `${JSON.stringify({
+      schemaVersion: 1,
+      expectedVersion: "0.2.0",
+      helperPid: 2_147_483_647,
+      scheduledAt: new Date().toISOString()
+    })}\n`, "utf8");
+    await writeFile(join(updateDirectory, "state"), "installing\n", "utf8");
+
+    const terminalWrite = new Promise<void>((resolve, reject) => {
+      setTimeout(() => {
+        void writeFile(join(updateDirectory, "state"), "completed\n", "utf8")
+          .then(() => resolve(), reject);
+      }, 20);
+    });
+
+    await expect(inspectHomebrewUpdateStartup(cacheDirectory)).resolves.toEqual({
+      state: "completed",
+      expectedVersion: "0.2.0"
+    });
+    await terminalWrite;
+  });
+
   it("finishes a scheduled update outside the parent process and records completion", async () => {
     const { root, brewPath } = await createFakeBrew();
     const cacheDirectory = join(root, "cache");
