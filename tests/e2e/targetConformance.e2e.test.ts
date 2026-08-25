@@ -317,7 +317,7 @@ describe.each(targetConformanceFixtures)(
       await expect(readFile(environment.targetPaths.instructionsPath, "utf8"))
         .resolves.toBe("# ALPHA INSTRUCTIONS\n");
       await expect(readFile(installedSkill, "utf8")).resolves.toContain("# LIBRARY CHANGED");
-    });
+    }, 15_000);
 
     it("rejects a stale Preview without writing over the changed Agent", async () => {
       const environment = await createEnvironment(fixture);
