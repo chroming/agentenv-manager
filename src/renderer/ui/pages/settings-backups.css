@@ -97,7 +97,7 @@
   align-items: center;
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(0, 1fr) 82px;
+  grid-template-columns: minmax(0, 1fr) minmax(30px, auto);
   min-height: 62px;
   padding: 5px 10px 5px 12px;
 }
@@ -203,16 +203,6 @@
 .backup-required-lock {
   color: var(--text-secondary);
   font-weight: var(--font-weight-regular);
-}
-
-.backup-row-delete {
-  align-items: center;
-  display: inline-flex;
-  gap: 5px;
-  justify-content: center;
-  min-height: 32px;
-  min-width: 82px;
-  padding-inline: 9px;
 }
 
 .backup-manager-empty {
@@ -338,7 +328,7 @@
 
 @container (max-width: 620px) {
   .backup-manager-row {
-    grid-template-columns: minmax(0, 1fr) 82px;
+    grid-template-columns: minmax(0, 1fr) minmax(30px, auto);
   }
 
   .backup-row-preview {
@@ -355,7 +345,6 @@
     grid-row: 1 / span 2;
   }
 
-  .backup-row-delete,
   .backup-required-lock {
     grid-column: 2;
     grid-row: 1;

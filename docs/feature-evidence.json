@@ -43,6 +43,7 @@
           "tests/renderer/ConversationWorkspace.test.tsx"
         ],
         "visual": [
+          "conversations-detail-920x620.png",
           "conversations-largest-920x620.png",
           "conversations-list-region-920.png"
         ]
@@ -540,11 +541,12 @@
         "stale": "Edits and deletes carry the opened content hash; a changed Block must be reloaded before mutation.",
         "partial": "A Profile may combine reusable Blocks with its own inline instructions, and unsupported Agent instruction capabilities remain Agent controlled.",
         "persisted": "Blocks use stable Library IDs and portable content; Profile references and Workspace Sync preserve order, enabled state, metadata, and hashes.",
-        "rollback": "Delete moves an unreferenced Block to AgentEnv Trash, Profile saves remain atomic, and Workspace Sync restores Instructions with the rest of its transaction."
+        "rollback": "Delete backs up the Block and every referencing Profile, removes those references, moves the Block to AgentEnv Trash, and restores the complete pre-delete state on failure."
       },
       "evidence": {
         "domain": [
           "tests/main/instructionLibraryStore.test.ts",
+          "tests/main/instructionRemovalService.test.ts",
           "tests/e2e/opencodeProfileSwitching.e2e.test.ts",
           "tests/main/workspaceSync.test.ts"
         ],
@@ -558,6 +560,7 @@
         ],
         "persistence": [
           "tests/main/instructionLibraryStore.test.ts",
+          "tests/main/instructionRemovalService.test.ts",
           "tests/main/workspaceSync.test.ts",
           "tests/e2e/instructions.e2e.test.ts"
         ],
@@ -570,7 +573,7 @@
     },
     {
       "id": "profile-skill-groups",
-      "summary": "Organize reusable Skills into Library Groups, add saved group snapshots to Profiles, and gate the whole group without losing member choices.",
+      "summary": "Organize reusable Skills into icon-labelled Library Groups, add saved group snapshots to Profiles, and copy a Group's unique members to a Workspace without creating a second ownership layer.",
       "contract": {
         "path": "docs/product-contracts.md",
         "anchor": "## 7. Profile Lifecycle"
@@ -586,23 +589,25 @@
       "states": {
         "idle": "Groups is a dedicated Library view with searchable manual groups and stable member counts.",
         "working": "Create, edit, remove, synchronize, and Profile gate actions report progress on their initiating dialog or control.",
-        "success": "A Profile saves a group snapshot and applies only members enabled by both the group gate and member choice.",
+        "success": "A Profile saves a group snapshot and applies only members enabled by both the group gate and member choice; Workspace selection copies the Group's unique members as ordinary Workspace Skills.",
         "error": "Invalid members, stale Library state, and persistence failures leave the previous Library and Profile state intact.",
         "cancelled": "Closing a group editor or picker does not change Library or Profile data.",
         "noOp": "Adding an existing group or saving unchanged membership performs no duplicate mutation.",
         "stale": "Library membership changes are shown as a group state and require an explicit sync into the Profile snapshot.",
         "partial": "Source-backed groups are selection recipes; they do not transfer source ownership or create deployable directories.",
-        "persisted": "Manual groups sync portably, while each Profile keeps its own group gate and member snapshot.",
-        "rollback": "Profile autosave recovery and Workspace Sync rollback restore group references with the rest of the Profile transaction."
+        "persisted": "Manual groups and icons sync portably, each Profile keeps its own group gate and member snapshot, and Workspaces persist only the copied Skill files plus private recovery receipts.",
+        "rollback": "Profile autosave recovery and Workspace Sync rollback restore group references with the rest of the Profile transaction; a failed Workspace batch restores every earlier changed destination."
       },
       "evidence": {
         "domain": [
           "tests/main/skillGroupStore.test.ts",
-          "tests/shared/profileSkillGroups.test.ts"
+          "tests/shared/profileSkillGroups.test.ts",
+          "tests/main/projects/projectMutationService.test.ts"
         ],
         "renderer": [
           "tests/renderer/SkillGroupView.test.tsx",
-          "tests/renderer/SkillsEditor.test.tsx"
+          "tests/renderer/SkillsEditor.test.tsx",
+          "tests/renderer/ProjectsWorkspace.test.tsx"
         ],
         "desktop": [
           "tests/e2e/electronUiProfileSwitching.e2e.test.ts"
@@ -615,9 +620,12 @@
           "skills-groups-920x620.png",
           "skills-groups-expanded-920x620.png",
           "skills-groups-expanded-1180x728.png",
+          "skills-group-icon-picker-920x620.png",
           "profile-skill-group-on-920x620.png",
           "profile-skill-group-off-920x620.png",
-          "profile-skill-group-picker-920x620.png"
+          "profile-skill-group-picker-920x620.png",
+          "workspaces-skill-picker-920x620.png",
+          "workspaces-skill-group-picker-920x620.png"
         ]
       }
     },

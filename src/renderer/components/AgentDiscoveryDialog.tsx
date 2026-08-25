@@ -100,6 +100,13 @@ export const AgentDiscoveryDialog = ({
           const evidence = agent.health.executableSource === "bundled-runtime"
             ? agent.health.installationEvidence[0]?.path ?? agent.health.executablePath
             : agent.health.executablePath ?? agent.health.installationEvidence[0]?.path;
+          const detectionSummary = !installed
+            ? t("Not detected")
+            : agent.health.executableSource === "bundled-runtime"
+              ? t("Detected via desktop app")
+              : agent.health.executableSource === "override"
+                ? t("Custom command")
+                : t("Detected");
           const checked = selected.has(agent.id);
           const setupAction = setupActions[agent.id] ?? { kind: "review-current" as const };
           const setupCopy = setupAction.kind === "open-profile"
@@ -144,11 +151,11 @@ export const AgentDiscoveryDialog = ({
                   <span>{agent.name}</span>
                   <small title={phase === "setup"
                     ? setupCopy
-                    : evidence ?? t(installed ? agent.health.summary : "Not detected")}
+                    : evidence ?? detectionSummary}
                   >
                     {phase === "setup"
                       ? setupCopy
-                      : evidence ?? t(installed ? agent.health.summary : "Not detected")}
+                      : detectionSummary}
                   </small>
                 </span>
               </label>

@@ -101,6 +101,7 @@ export const ProfileMcpEditor = ({
       <ResourcePanelToolbar
         aria-label={t("Profile MCP actions")}
         className="profile-mcp-toolbar"
+        variant="embedded"
       >
         <span className="profile-mcp-toolbar__actions">
           {!canManage && policy.mode !== "ignore" ? (

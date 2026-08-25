@@ -333,6 +333,26 @@
   min-width: 0;
 }
 
+.conversation-detail-workspace-path {
+  align-items: flex-start;
+  color: var(--muted);
+  display: flex;
+  font-size: var(--font-size-caption);
+  gap: 5px;
+  line-height: 16px;
+  min-width: 0;
+}
+
+.conversation-detail-workspace-path svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.conversation-detail-workspace-path > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .conversation-detail-metadata {
   align-items: center;
   color: var(--subtle);
@@ -917,10 +937,6 @@
 
   .conversation-detail-more-button {
     display: inline-flex;
-  }
-
-  .conversation-detail-metadata > .conversation-detail-metadata__workspace {
-    display: none;
   }
 
   .conversation-detail-metadata > .conversation-detail-metadata__messages,

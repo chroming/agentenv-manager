@@ -796,8 +796,8 @@ describe("Conversations desktop workflow", () => {
       (header) => {
         const title = header.querySelector(".conversation-detail-title__copy")!
           .getBoundingClientRect();
-        const workspace = header.querySelector(
-          ".conversation-detail-metadata__workspace"
+        const workspace = header.querySelector<HTMLElement>(
+          ".conversation-detail-workspace-path"
         );
         const more = header.querySelector(".conversation-detail-more-button")!
           .getBoundingClientRect();
@@ -807,14 +807,20 @@ describe("Conversations desktop workflow", () => {
           height: Math.round(header.getBoundingClientRect().height),
           titleWidth: Math.round(title.width),
           workspaceDisplay: workspace ? getComputedStyle(workspace).display : "missing",
+          workspaceText: workspace?.textContent?.trim(),
+          workspaceContained: workspace
+            ? workspace.getBoundingClientRect().right <= header.getBoundingClientRect().right + 1
+            : false,
           moreWidth: Math.round(more.width),
           secondaryWidth: Math.round(secondary.width)
         };
       }
     );
-    expect(compactHeaderGeometry.height).toBeLessThanOrEqual(96);
+    expect(compactHeaderGeometry.height).toBeLessThanOrEqual(112);
     expect(compactHeaderGeometry.titleWidth).toBeGreaterThanOrEqual(180);
-    expect(compactHeaderGeometry.workspaceDisplay).toBe("none");
+    expect(compactHeaderGeometry.workspaceDisplay).toBe("flex");
+    expect(compactHeaderGeometry.workspaceText).toBe("/work/performance");
+    expect(compactHeaderGeometry.workspaceContained).toBe(true);
     expect(compactHeaderGeometry.moreWidth).toBeGreaterThan(0);
     expect(compactHeaderGeometry.secondaryWidth).toBe(0);
     await page.getByRole("button", { name: "Conversation actions" }).click();

@@ -3369,22 +3369,14 @@ describe("Electron UI profile switching e2e", () => {
       const detail = issue.querySelector(".apply-preview-issue-detail")?.getBoundingClientRect();
       return Boolean(title && detail && title.bottom <= detail.top + 1);
     })).toBe(true);
-    const driftActions = previewDialog.locator(".preview-drift-recovery");
+    const driftActions = reviewIssues.locator(".apply-preview-issue-options");
     await driftActions.waitFor({ state: "visible" });
+    await expectTextFits(driftActions.getByRole("button", { name: "Adopt compatible changes" }));
     expect(await driftActions.evaluate((element) => {
-      const style = getComputedStyle(element);
-      return {
-        backgroundColor: style.backgroundColor,
-        borderLeftWidth: style.borderLeftWidth,
-        borderRadius: style.borderRadius,
-        marginLeft: style.marginLeft
-      };
-    })).toEqual({
-      backgroundColor: "rgba(0, 0, 0, 0)",
-      borderLeftWidth: "0px",
-      borderRadius: "0px",
-      marginLeft: "0px"
-    });
+      const parent = element.parentElement!.getBoundingClientRect();
+      const box = element.getBoundingClientRect();
+      return box.left >= parent.left && box.right <= parent.right + 1 && box.bottom <= parent.bottom + 1;
+    })).toBe(true);
     await previewDialog.getByRole("button", { name: "Apply", exact: true }).click();
     await previewDialog.waitFor({ state: "hidden" });
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toContain("UI ALPHA");
@@ -6096,7 +6088,8 @@ describe("Electron UI profile switching e2e", () => {
         parentLeft: Math.round(parent.getBoundingClientRect().left)
       };
     });
-    expect(Math.abs(skillHierarchy.childLeft - skillHierarchy.parentLeft)).toBeLessThanOrEqual(1);
+    expect(skillHierarchy.childLeft - skillHierarchy.parentLeft).toBeGreaterThanOrEqual(12);
+    expect(skillHierarchy.childLeft - skillHierarchy.parentLeft).toBeLessThanOrEqual(24);
     await expandComposerSection(page, "Instructions");
     expectStableResourceDisclosureHeaders(
       collapsedComposerHeaders,
@@ -6158,8 +6151,8 @@ describe("Electron UI profile switching e2e", () => {
         parentLeft: Math.round(parent.getBoundingClientRect().left)
       };
     });
-    expect(Math.abs(instructionHierarchy.childLeft - instructionHierarchy.parentLeft))
-      .toBeLessThanOrEqual(1);
+    expect(instructionHierarchy.childLeft - instructionHierarchy.parentLeft).toBeGreaterThanOrEqual(12);
+    expect(instructionHierarchy.childLeft - instructionHierarchy.parentLeft).toBeLessThanOrEqual(28);
     await instructionsDisclosure.click();
     await expect.poll(() => instructionsDisclosure.getAttribute("aria-expanded")).toBe("false");
     await expandComposerSection(page, "MCPs");
@@ -6189,7 +6182,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(policySurface.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
     expect(await instructionsRow.locator('[title="1 of 1 enabled"]').count()).toBe(1);
     expect(await skillsRow.locator('[title="1 of 1 enabled"]').count()).toBe(1);
-    expect(await mcpRow.locator('[title="3 selected"]').count()).toBe(1);
+    expect(await mcpRow.locator('[title="2 selected"]').count()).toBe(1);
 
     await setComposerResourcePolicy(page, "Instructions", "OpenCode", "Turn off");
     await setComposerResourcePolicy(page, "Skills", "OpenCode", "Turn off");
@@ -10188,7 +10181,7 @@ describe("Electron UI profile switching e2e", () => {
     );
     await expect
       .poll(async () => (await localizedMcpScope.textContent())?.trim())
-      .toMatch(/^已保存 \d+ · Agent \d+$/);
+      .toMatch(/^已选择 \d+ 个$/);
     await expectTextFits(localizedMcpScope);
     const localizedPolicyBoxes = await Promise.all(
       localizedPolicies.map((policy) => policy.boundingBox())

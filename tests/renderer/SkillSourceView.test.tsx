@@ -137,11 +137,9 @@ describe("SkillSourceView", () => {
 
     const candidates = document.querySelector<HTMLElement>(".skill-source-candidates");
     expect(candidates).not.toBeNull();
-    expect(
-      [...candidates!.querySelectorAll(".skill-source-candidate-field-label")]
-        .map((label) => label.textContent)
-    ).toEqual(group.candidates.flatMap(() => ["Upstream", "Library"]));
-    expect(candidates).toHaveTextContent("2026");
+    expect(candidates!.querySelectorAll(".skill-source-candidate-version")).toHaveLength(4);
+    expect(candidates).toHaveTextContent("1.0.0 → review-2");
+    expect(candidates!.querySelector(".skill-source-candidate-field-label")).toBeNull();
     fireEvent.click(within(candidates!).getByRole("button", { name: "Add" }));
     await waitFor(() => expect(onAdd).toHaveBeenCalledWith(group, group.candidates[0]));
     fireEvent.click(within(candidates!).getByRole("button", { name: "Update review" }));

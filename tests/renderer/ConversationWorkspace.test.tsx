@@ -178,6 +178,15 @@ describe("ConversationWorkspace", () => {
     expect(time).toHaveAttribute("title", expect.stringMatching(/^Last reply /));
   });
 
+  it("shows the complete working directory in the selected conversation", async () => {
+    installApi();
+    render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);
+
+    const workspace = await screen.findByLabelText("Working directory: /work/project");
+    expect(workspace).toHaveTextContent("/work/project");
+    expect(workspace.querySelector(".selectable")).toHaveTextContent("/work/project");
+  });
+
   it("groups known Projects in the folder filter and opens a matching Project", async () => {
     const api = installApi();
     const project = {

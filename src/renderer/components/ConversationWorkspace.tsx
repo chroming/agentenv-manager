@@ -1871,19 +1871,19 @@ export const ConversationWorkspace = ({
                           text={detail.title}
                         />
                       </h3>
+                      {detail.workspacePath ? (
+                        <span
+                          aria-label={`${t("Working directory")}: ${detail.workspacePath}`}
+                          className="conversation-detail-workspace-path"
+                        >
+                          <FolderOpen size={12} aria-hidden="true" />
+                          <span className="selectable">{detail.workspacePath}</span>
+                        </span>
+                      ) : null}
                       <div className="conversation-detail-metadata">
                         <span className="conversation-detail-metadata__agent">
                           {detail.agentName}
                         </span>
-                        {detail.workspacePath ? (
-                          <span
-                            className="conversation-detail-metadata__workspace"
-                            title={detail.workspacePath}
-                          >
-                            <FolderOpen size={12} aria-hidden="true" />
-                            {workspaceName(detail.workspacePath)}
-                          </span>
-                        ) : null}
                         <span className="conversation-detail-metadata__time">
                           <Clock3 size={12} aria-hidden="true" />
                           <time

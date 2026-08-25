@@ -110,7 +110,8 @@ describe("AgentDiscoveryDialog", () => {
       />
     );
 
-    expect(screen.getByText("/Applications/ChatGPT.app")).toBeInTheDocument();
+    expect(screen.getByText("Detected via desktop app"))
+      .toHaveAttribute("title", "/Applications/ChatGPT.app");
     expect(screen.queryByText(/Contents\/Resources\/codex/)).not.toBeInTheDocument();
   });
 });

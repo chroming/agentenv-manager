@@ -97,6 +97,11 @@ const stateLabel = (state: SkillSourceGroupCandidate["state"]) => {
 
 const sourceIsOpenable = (source: string) => /^https?:\/\//i.test(source);
 
+const compactRevision = (revision: string | undefined) => {
+  if (!revision) return undefined;
+  return /^[0-9a-f]{8,}$/i.test(revision) ? revision.slice(0, 7) : revision;
+};
+
 const sourceRepositoryLabel = (repository: string) => {
   try {
     const url = new URL(repository);
@@ -1035,8 +1040,7 @@ export const SkillSourceView = ({
                 <div className="skill-source-candidates">
                   <div className="skill-source-candidate-head" aria-hidden="true">
                     <span>{t("Skill")}</span>
-                    <span>{t("Upstream")}</span>
-                    <span>{t("Library")}</span>
+                    <span>{t("Version")}</span>
                     <span>{t("Status")}</span>
                     <span>{t("Action")}</span>
                   </div>
@@ -1054,6 +1058,32 @@ export const SkillSourceView = ({
                       operation === updateKey ||
                       (updateActivity?.kind === "preview-skill" &&
                         updateActivity.skillId === candidate.libraryId);
+                    const upstreamRevision =
+                      candidate.version ?? compactRevision(candidate.contentRevision) ?? t("Unknown");
+                    const libraryRevision = candidate.libraryVersion ??
+                      compactRevision(candidate.libraryRevision);
+                    const versionSummary = candidate.state === "new"
+                      ? upstreamRevision
+                      : candidate.state === "removed"
+                        ? libraryRevision ?? t("Library copy")
+                        : candidate.state === "current"
+                          ? upstreamRevision
+                          : libraryRevision && libraryRevision !== upstreamRevision
+                            ? `${libraryRevision} → ${upstreamRevision}`
+                            : upstreamRevision;
+                    const versionDetail = [
+                      `${t("Upstream")}: ${candidate.version ?? candidate.contentRevision ?? t("Unknown")}`,
+                      candidate.upstreamUpdatedAt
+                        ? `${t("Updated")}: ${formatDate(candidate.upstreamUpdatedAt)}`
+                        : undefined,
+                      `${t("Library")}: ${candidate.libraryName ?? t("Not in Library")}`,
+                      candidate.libraryRevision
+                        ? `${t("Revision")}: ${candidate.libraryRevision}`
+                        : undefined,
+                      candidate.libraryUpdatedAt
+                        ? `${t("Modified")}: ${formatDate(candidate.libraryUpdatedAt)}`
+                        : undefined
+                    ].filter(Boolean).join("\n");
                     return (
                       <div
                         className={`skill-source-candidate is-${candidate.state}${candidate.globallyEnabled === false ? " is-disabled" : ""}`}
@@ -1066,22 +1096,11 @@ export const SkillSourceView = ({
                             text={candidate.directory || group.directory || "."}
                           />
                         </div>
-                        <div className="skill-source-candidate-meta">
-                          <span className="skill-source-candidate-field-label">{t("Upstream")}</span>
-                          <strong>{candidate.version ?? candidate.contentRevision?.slice(0, 7) ?? "—"}</strong>
-                          <span>{candidate.upstreamUpdatedAt ? formatDate(candidate.upstreamUpdatedAt) : "—"}</span>
-                        </div>
-                        <div className="skill-source-candidate-meta">
-                          <span className="skill-source-candidate-field-label">{t("Library")}</span>
-                          <strong>{candidate.libraryName ?? t("Not in Library")}</strong>
-                          <span>
-                            {[candidate.libraryVersion ?? candidate.libraryId, candidate.libraryUpdatedAt
-                              ? formatDate(candidate.libraryUpdatedAt)
-                              : undefined]
-                              .filter(Boolean)
-                              .join(" · ") || "—"}
-                          </span>
-                        </div>
+                        <OverflowTooltip
+                          className="skill-source-candidate-version"
+                          displayText={versionSummary}
+                          text={versionDetail}
+                        />
                         <div className={`skill-source-state is-${candidate.state}`}>
                           {candidate.state === "current" ? (
                             <CheckCircle2 size={14} strokeWidth={2.2} />

@@ -423,9 +423,8 @@
   column-gap: 12px;
   display: grid;
   grid-template-columns:
-    minmax(180px, 1.35fr)
-    minmax(90px, 0.62fr)
-    minmax(120px, 0.8fr)
+    minmax(180px, 1.5fr)
+    minmax(150px, 0.9fr)
     minmax(120px, 0.78fr)
     minmax(88px, auto);
   min-width: 0;
@@ -448,19 +447,14 @@
   opacity: 0.62;
 }
 
-.skill-source-candidate-name,
-.skill-source-candidate-meta {
+.skill-source-candidate-name {
   display: grid;
   gap: 3px;
   min-width: 0;
 }
 
-.skill-source-candidate-field-label {
-  display: none;
-}
-
 .skill-source-candidate-name strong,
-.skill-source-candidate-meta strong {
+.skill-source-candidate-version {
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-regular);
   min-width: 0;
@@ -474,7 +468,7 @@
 }
 
 .skill-source-candidate-path,
-.skill-source-candidate-meta span {
+.skill-source-candidate-version {
   color: var(--muted);
   font-size: var(--font-size-metadata);
   min-width: 0;
@@ -588,7 +582,7 @@
     gap: 5px 12px;
     grid-template-areas:
       "name status action"
-      "upstream library action";
+      "version version action";
     grid-template-columns: minmax(0, 1fr) minmax(120px, 0.8fr) auto;
     min-height: 72px;
     padding-block: 8px;
@@ -598,26 +592,8 @@
     grid-area: name;
   }
 
-  .skill-source-candidate-meta:nth-of-type(2) {
-    grid-area: upstream;
-  }
-
-  .skill-source-candidate-meta:nth-of-type(3) {
-    grid-area: library;
-  }
-
-  .skill-source-candidate-meta {
-    align-items: baseline;
-    column-gap: 5px;
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .skill-source-candidate-field-label {
-    color: var(--muted);
-    display: block;
-    font-size: var(--font-size-caption);
-    font-weight: var(--font-weight-regular);
-    grid-row: 1 / span 2;
+  .skill-source-candidate-version {
+    grid-area: version;
   }
 
   .skill-source-state {

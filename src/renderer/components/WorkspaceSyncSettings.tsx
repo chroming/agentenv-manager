@@ -336,7 +336,7 @@ export const WorkspaceSyncSettings = ({
             </span>
             <span>
               <strong>{t("Not configured")}</strong>
-              <small>{t("Connect a private Git repository when you want to reuse this Workspace on another device.")}</small>
+              <small>{t("Connect a private Git repository to reuse Profiles and Library resources on another device.")}</small>
             </span>
             <Button variant="secondary" onClick={() => setIsSetupOpen((current) => !current)}>
               {t(isSetupOpen ? "Cancel" : "Set up")}
@@ -377,7 +377,7 @@ export const WorkspaceSyncSettings = ({
           <div className="workspace-sync-actions settings-row-actions">
             {status.kind === "recovery-required" ? (
               <Button variant="primary" busy={working === "recover"} busyLabel={t("Preparing...")} icon={<RefreshCw />} disabled={Boolean(working)} onClick={() => void recover()}>
-                {t("Recover Workspace")}
+                {t("Recover Device Sync")}
               </Button>
             ) : null}
             {status.kind !== "recovery-required" ? <Button variant="secondary" busy={working === "check"} busyLabel={t("Checking...")} icon={<RefreshCw />} disabled={Boolean(working)} onClick={() => void check()}>

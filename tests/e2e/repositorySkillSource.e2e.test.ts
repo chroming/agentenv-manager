@@ -326,10 +326,10 @@ describe("Repository Skill source", () => {
     await page.getByRole("button", { name: /Filters/, exact: false }).click();
     await sourceGroup.getByRole("button", { name: "Expand source" }).click();
     const firstCandidate = sourceGroup.locator(".skill-source-candidate").first();
-    expect(await firstCandidate.locator(".skill-source-candidate-field-label").allTextContents())
-      .toEqual(["Upstream", "Library"]);
-    expect(await firstCandidate.getByText("Upstream", { exact: true }).isVisible()).toBe(true);
-    expect(await firstCandidate.getByText("Library", { exact: true }).isVisible()).toBe(true);
+    const candidateVersion = firstCandidate.locator(".skill-source-candidate-version");
+    await candidateVersion.waitFor({ state: "visible" });
+    expect((await candidateVersion.textContent())?.trim().length).toBeGreaterThan(0);
+    expect(await firstCandidate.locator(".skill-source-candidate-field-label").count()).toBe(0);
     await sourceGroup.getByRole("button", {
       name: "Ignore Release Check Internal for this source"
     }).click();

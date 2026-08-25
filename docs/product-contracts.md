@@ -186,6 +186,8 @@ content hash.
 
 Device Sync reuses portable Profile and Library intent across the user's devices through a user-owned private Git repository. It is implemented by the internal Workspace Sync subsystem, but it is not project Workspace management or Target deployment and MUST NOT automatically Apply a Profile.
 
+Visible Device Sync copy MUST describe Profiles and Library resources and MUST NOT call the synced payload a `Workspace`; `Workspace` remains reserved for project directories. Recovery commands name Device Sync rather than the internal subsystem.
+
 Local Skills Manager is always a device-wide inventory. Profile and Agent entry points MAY open it with return context or focus a relevant row, but MUST NOT expose or persist a narrower inventory scope. Shared compatibility review is a conditional subflow, not a selectable scope.
 
 Managed copy is the default for new installations. Deployment preference and management-format migration are independent: an existing explicit Live link preference MUST remain Live link, and a legacy `auto` preference normalizes to Managed copy without being treated as proof of old Agent ownership. `skillManagementFormatVersion` identifies the settings schema only. The application determines actionable legacy state exclusively from validated `.agentenv-owner.json` files whose Target and resource kind match the observed path; a link or copy without that evidence is never classified as old merely because of its topology.
@@ -318,11 +320,15 @@ AgentEnv-owned copy of the folder and does not require Git.
   destination only while its verified content still matches the attempted Library copy. An identical
   destination is a no-op. Different content requires an explicit Keep Workspace copy or Replace with
   Library copy decision; replacement backs up and verifies the original directory before commit.
-- Profile composition and Workspace copy use the same Library Skill picker primitive: searchable
+- Profile composition and Workspace copy use the same Library Skill selection primitive: searchable
   identity rows show the same icon, description, version/hash, path, selection, empty, and keyboard
-  states. Profile composition may select several Skills, while Workspace copy selects one and then
-  shows the Workspace location and file impact in the same dialog. A native Skill dropdown is not a
-  separate Workspace interaction pattern.
+  states. Both surfaces may select individual Skills or a reusable manual or source-backed Group.
+  A Group is only a selection recipe in Workspace: its unique enabled Library members are copied as
+  ordinary Workspace-owned Skill directories, and no Group identity or gate is persisted in the
+  Workspace. The dialog shows the selected Workspace location, total file impact, identical no-ops,
+  and replacements before commit. Every changed destination receives its own recovery receipt; if
+  any item fails, AgentEnv restores and verifies all earlier items from the same batch. A native Skill
+  dropdown is not a separate Workspace interaction pattern.
 - Git observation is advisory and bounded to the selected Workspace and affected relative paths.
   It reports only `Tracked`, `Modified`, `Untracked`, `Ignored`, `Not a Git repository`, or
   `Git unavailable`. Git absence or dirtiness never expands or removes filesystem authority.
@@ -567,6 +573,7 @@ Preview/Apply transaction, never a second editor or a reduced resource model.
   installed Agent IDs, review version, reviewed IDs, and suppression choices are unchanged, startup
   MUST NOT reopen `Choose Agents`. Diagnostics include those non-secret discovery fields so a
   repeated chooser can be distinguished from a newly detected Agent or a review-version migration.
+- The chooser presents Agent identity and a concise `Detected`, `Detected via desktop app`, custom-command, or unavailable state. Exact executable and application paths remain selectable diagnostic evidence and MUST NOT become the ordinary selection row's primary supporting text.
 - Supported, detected, enabled, and managed are distinct states. The all-supported detection
   probe is read-only and MUST NOT weaken operation guards: operational Target APIs continue to
   expose enabled Agents only.
@@ -962,6 +969,7 @@ Rules:
 - Auto-save MUST expose local working feedback immediately. Once persistence succeeds, Apply availability is recalculated from the returned saved Profile without waiting for Target discovery, inventory scanning, update checks, usage aggregation, or a full-page refresh.
 - Agent selection, Apply, and overflow MUST appear as one compact action group in the selected Profile context. Compare, Undo, Recovery, Duplicate, and Delete belong to overflow; Apply Preview may expose Compare beside the commit controls.
 - Apply keeps a stable label and position. It is disabled only while the Profile save queue is pending or failed, when no Target is available, when no change exists, or when validation prevents a truthful Preview.
+- Compact resource summaries use user-facing relationships such as `N selected`, `N active`, `Off`, and `Agent controlled`. They MUST fit without clipping at the supported minimum width; internal `Saved N · Agent N` counters are not user-facing state.
 - The commit verb remains `Apply` in Ready, Review, drift, and protected-replacement states. Backup and replacement safeguards are disclosed inside Preview; they MUST NOT rename the commit command to `Apply with backup` or introduce a parallel apply workflow.
 - Readiness text describes the current state; it is not a second workflow. Only a condition that requires another product area exposes an inline remediation link: unavailable Target opens Agents and required recovery opens Recovery. Resource validation stays beside the affected Instructions, Skill, or MCP row. Preview blockers and drift do not expose a separate Review command because Apply already creates the authoritative fresh preview.
 - Readiness remediation links MUST show a visible verb and object. Icon-only arrows and backend phase labels such as `Review preview` are not executable product intents and MUST NOT appear as commands.
@@ -985,8 +993,9 @@ Rules:
 - For pre-existing Target state without a baseline, AgentEnv may create one only when the current target-specific Profile hash and deployed Library versions still match the last successful Apply. It must never infer a baseline from a pending or drifted Profile.
 - A Workspace has no separate Apply phase. `Undo last change` restores the file or Skill changed by AgentEnv's most recent completed Workspace mutation; `Recovery` lists older mutation receipts.
 - Profile Skills MUST expose enabled and disabled Library references in one compact list. Each row has one identity line, one supporting line for version and source, one truthful state, one availability switch, and one overflow command. Full Library paths, applied revisions, alternate install names, and update details remain selectable through overflow detail or the row menu instead of becoming additional visible lanes. A mismatch, missing install, or pending removal is `Apply pending`. A matching device-local management boundary is shown as `External active` when it satisfies enabled intent, or `External still active` when it contradicts omit intent; neither state is presented as pending after a successful Apply. Ownership, update-source policy, source-check result, Profile availability, Target deployment, and local overrides are separate dimensions: the visible state shows only exceptional or currently actionable states. `Not tracked` MUST NOT be presented as an ownership or management state. Check updates checks only enabled tracked references in that Profile and appears only while at least one such reference is checkable or a check is already running; an unavailable check MUST NOT remain as a permanently disabled toolbar control. Add opens a searchable Library-only picker that identifies source, revision, and path and omits already attached or globally disabled Skills; Remove detaches a reference from the Profile without deleting Library content. A missing reference disables its availability control and offers Relink or Remove through the same overflow menu. Row menus MUST fit their longest localized command at the minimum viewport.
-- Library Skill Groups are reusable selection recipes, not deployable folders or a second ownership layer. Library owns manually named groups; an existing By source collection may also be selected as a source-backed group. Adding a group stores a Profile-local snapshot of its name and member Library IDs so a later Library or source edit cannot silently change the Profile. The user explicitly synchronizes changed membership.
-- A Profile Skill Group has one independent On/Off gate. When the group is Off, every member is omitted from the effective Profile regardless of its saved member switch; member switches remain visible, retain their values, and are read-only. Turning the group On restores those saved member choices. Apply, Compare, evaluation, deployment fingerprints, update checks, and summaries MUST consume the same flattened effective Skill set. A grouped member cannot be detached from that group individually; removing the group removes group-only references while preserving Skills that were also added directly or belong to another group.
+- Library Skill Groups are reusable selection recipes, not deployable folders or a second ownership layer. Library owns manually named groups and their optional icon; an existing By source collection may also be selected as a source-backed group and uses its source identity. A Profile stores the Group identity, its On/Off gate, and each member's saved preference; while the Group exists, its current Library membership is reconciled into the Profile automatically. Existing member preferences survive reconciliation, new members default On, and removed members disappear only when they have no direct or other Group reference. Selecting a Group in Workspace expands its current members into a one-time batch of unique Library Skills and does not create a Workspace Group lifecycle or silently change project files later.
+- Expanded Skill Groups use one neutral nested-list treatment in Library and Profile: the group header remains stable, member rows are visibly indented without a colored panel or connector line, and low-frequency membership commands stay in each member's contextual menu. In Library, selecting a member name opens its existing read-only Skill browser and `Remove from group` changes only that reusable group. In Profile, grouped members expose their saved On/Off choice but cannot be removed individually. A long expanded member list owns a bounded vertical scroll region at the minimum supported window size; every member remains keyboard- and pointer-reachable without scrolling the whole Profile surface.
+- A Profile Skill Group has one independent On/Off gate. When the group is Off, every member is omitted from the effective Profile regardless of its saved member switch; member switches remain visible, retain their values, and are read-only. Turning the group On restores those saved member choices. Apply, Compare, evaluation, deployment fingerprints, update checks, and summaries MUST consume the same flattened effective Skill set. Under `Use Profile`, disabled or gated-off Skill identities are absent from the deployment fingerprint, so deleting an already-Off Group is a Target no-op and cannot create false Apply-pending state. A grouped member cannot be detached from that group individually; removing the group removes group-only references while preserving Skills that were also added directly or belong to another group.
 - Updating from Profile Skills still updates the global Library copy. The update confirmation MUST disclose how many Profiles reference it and whether Copy or Live link mode changes installed Targets immediately.
 
 Status: v2 whole-Profile auto-save, recovery history, per-Target applied hashes, active-Profile focus, Profile-scoped Skill enablement, and per-Target MCP policy are `Implemented`. Compatible live Instructions can be adopted. Native configuration, Agent definitions, hooks, environment variables, credentials, and MCP definitions remain Target-owned.
@@ -1395,6 +1404,7 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 - A group exists only while at least one current Library Skill belongs to it. Removing the final member removes the projected group; there is no independent source-delete workflow.
 - Source checks are read-only with respect to Library, Profiles, and Targets. They may update only rebuildable cache data. A failed, cancelled, rate-limited, truncated, or otherwise incomplete scan MUST preserve the last successful complete observation and MUST NOT infer upstream removal.
 - Each group exposes the complete selectable source address, last check state, and distinct total, update, new, and removed counts. Expanding the group maps each remote candidate to its current Library relationship and exposes at most one contextual action.
+- An expanded source candidate has one identity line, one path line, one compact Library-to-upstream version relationship, one truthful status, and at most one current action. Full revisions, timestamps, and Library identity remain selectable detail; a Library ID MUST NOT be presented as a version fallback.
 - `New` uses the existing reviewed repository import flow, `Update available` uses the existing immutable Update Preview, and `Removed upstream` uses the existing Library delete confirmation and reference safety. A check MUST NOT automatically add, update, delete, disable, or detach a Skill.
 - Source status and per-Skill Update Preview MUST converge on the verified file content. When Update Preview proves that the upstream files and Library files are identical despite different revision encodings, AgentEnv advances only the internal tracking checkpoint, refreshes the source projection, and removes the stale update state. The same Skill MUST NOT remain `Update available` after a no-file-change review.
 - Invalid upstream candidates and relationship conflicts remain visible with selectable detail and no unsafe mutation shortcut. A source-level failure is also reported through the shared application feedback system.
@@ -1593,9 +1603,13 @@ name, description, content, and revision hash per real directory under
   declared native instruction path. Library edits and reference changes update
   saved Profile hashes but never write an Agent until the ordinary Preview and
   Apply flow runs.
-- A Block referenced by any Profile cannot be deleted. An unreferenced delete
-  moves the verified directory to AgentEnv Trash instead of erasing it in
-  place. Stale content hashes stop edit and delete mutations.
+- Instructions always shows the names of Profiles that reference the selected
+  Block. References define delete impact rather than hiding or disabling the
+  command: confirmation lists the affected Profiles, one verified Backup covers
+  the Block and every affected Profile, references are removed in one recoverable operation, and
+  the Block moves to AgentEnv Trash. Agent files remain unchanged until those
+  Profiles are applied again. Any runtime failure restores the verified paths
+  written by this operation; stale content hashes stop the mutation before writes begin.
 - Portable Workspace Sync includes Block metadata and content as independent
   resources. Profiles with missing Block references are invalid. Sync Update
   backs up and atomically replaces Profiles, Skills, Instruction Blocks, and
@@ -1768,6 +1782,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Repeated rows implemented as independent Grid or Flex containers MUST reserve the same fixed state and action tracks. Content-sized `auto` tracks MUST NOT make status text change its horizontal origin between sibling rows; a missing secondary line keeps the same top-aligned state slot.
 - Resource rows expose at most one direct contextual command plus a trailing overflow menu. Destructive, settings, and infrequent commands belong in that menu. Inline icon commands use shared `32px` hit targets and always have accessible names and tooltips.
 - Skill Library and Profile list rows expose their existing overflow command set through the same compact renderer action menu used by the trailing ellipsis. Right-click MUST target the row under the pointer without inventing commands, changing availability, bypassing dirty-state or destructive confirmation, or silently applying the command to the selected row. The shared menu owns viewport clamping, Escape and outside-click dismissal, initial focus, Arrow/Home/End navigation, focus return, icon lanes, and danger treatment. The same keyboard contract applies to Profile actions, Agent selection, cleanup actions, and icon selection menus.
+- A portaled action menu opened from a modal stays above that modal and accepts real pointer input. A visible menu item intercepted by its owning dialog is a blocking interaction defect, not a test-only layering detail.
 - Accent fill identifies only the current page-level primary command or the next commit action. Lists MUST NOT contain repeated primary-filled actions unless each row is an independent queued workflow.
 - A populated Profiles workspace keeps `New Profile` neutral because Apply owns the external commit emphasis; an empty Profiles workspace MAY promote `New Profile` to the primary action. Available Skill updates use a neutral compact `Update` action, while the update confirmation dialog owns the filled commit action.
 - The Library page uses `Skills` as its interactive page title; `Library` is neutral scope text and MUST NOT resemble a clickable breadcrumb.
@@ -2180,7 +2195,7 @@ receipts are device-local.
 - Connections use the system `ssh` executable with the user's SSH config, SSH Agent, and
   `known_hosts`. Non-interactive operations use Batch Mode and never open a password prompt.
 - A remote device is supported only when it reports Linux and provides `sh`, `tar`,
-  `sha256sum`, a HOME directory, and a supported Agent executable.
+  `sha256sum`, `find`, `readlink`, a HOME directory, and a supported Agent executable.
 - Profile identity and resource policy remain keyed by the underlying Agent adapter. An
   SSH endpoint ID is deployment context and MUST NOT be persisted into portable Profile
   resource policy.
@@ -2189,8 +2204,13 @@ receipts are device-local.
 - Native MCP definitions and credentials remain remote-Agent owned. A Profile that asks
   AgentEnv to manage MCPs on an SSH endpoint is blocked with a direct `Keep Agent`
   remediation; no MCP file is created or rewritten remotely.
-- Preview reads only adapter-declared paths under the remote HOME. Apply rechecks Profile,
-  Library, device identity, and the exact remote snapshot before any write.
+- Preview reads only adapter-declared paths under the remote HOME. A symbolic link at or
+  below one of those paths is accepted only when it resolves to an available regular entry
+  inside that same remote HOME and the traversed tree contains no link cycle. The read-only
+  snapshot materializes accepted links as ordinary content; broken, cyclic, or outside-HOME
+  links fail with the affected path before local extraction. Apply rechecks Profile, Library,
+  device identity, and the exact remote snapshot before any write. Replacing a reviewed linked
+  Skill backs up and replaces the Agent path itself while leaving the link source untouched.
 - Existing identical files are adopted without rewriting them. Existing different files
   require explicit review and are included in the remote transaction checkpoint before replacement.
 - Shared Skill locations are never silently removed over SSH. A matching shared copy is a

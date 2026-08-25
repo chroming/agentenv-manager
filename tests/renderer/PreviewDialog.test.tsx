@@ -96,7 +96,7 @@ describe("PreviewDialog", () => {
       .toHaveTextContent("Skills after move");
     expect(screen.queryByText("Preserved outside this Profile")).not.toBeInTheDocument();
     fireEvent.click(within(boundary).getByRole("button", {
-      name: "Move shared Skills to Profile control…"
+      name: "Review shared Skills"
     }));
     expect(onManageSharedSkills).toHaveBeenCalledOnce();
   });

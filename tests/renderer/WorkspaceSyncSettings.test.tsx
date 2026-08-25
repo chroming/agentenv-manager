@@ -86,11 +86,11 @@ describe("Workspace Sync settings", () => {
     render(<WorkspaceSyncSettings onWorkspaceChanged={onWorkspaceChanged} />);
 
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Recovery required"));
-    expect(screen.getByRole("button", { name: "Recover Workspace" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Recover Device Sync" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Disconnect" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Check" })).toBeNull();
     await waitFor(() => expect(api.checkWorkspaceSync).toHaveBeenCalledTimes(1));
-    fireEvent.click(screen.getByRole("button", { name: "Recover Workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "Recover Device Sync" }));
     await waitFor(() => expect(onWorkspaceChanged).toHaveBeenCalledTimes(1));
   });
 

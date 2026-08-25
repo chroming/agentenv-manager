@@ -15,7 +15,7 @@ import type {
 } from "../../shared/types";
 import { useI18n, type TranslationValues } from "../i18n";
 import { FileTypeIcon } from "./FileTypeIcon";
-import { Button } from "./ui";
+import { Button, ToolbarOverflowMenu } from "./ui";
 
 type Translate = (message: string, values?: TranslationValues) => string;
 
@@ -307,18 +307,21 @@ export const BackupManagerDialog = ({
                       />
                     </button>
                     {item.deletable ? (
-                      <button
-                        className="backup-row-delete"
-                        type="button"
+                      <ToolbarOverflowMenu
                         disabled={busy}
-                        aria-label={t("Delete backup {{name}}", {
+                        label={t("More actions for {{name}}", {
                           name: managedBackupTitle(item, t)
                         })}
-                        onClick={() => onOpenDelete(item)}
-                      >
-                        <Trash2 size={15} aria-hidden="true" />
-                        {t("Delete")}
-                      </button>
+                        menuLabel={t("Actions for {{name}}", {
+                          name: managedBackupTitle(item, t)
+                        })}
+                        items={[{
+                          id: "delete",
+                          icon: <Trash2 size={15} aria-hidden="true" />,
+                          label: t("Delete backup"),
+                          onSelect: () => onOpenDelete(item)
+                        }]}
+                      />
                     ) : (
                       <span
                         className="backup-required-lock"

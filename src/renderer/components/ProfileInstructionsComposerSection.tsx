@@ -142,7 +142,7 @@ export const ProfileInstructionsComposerSection = ({
       onPolicyChange={onPolicyChange}
     >
       <section className="profile-instructions-editor">
-        <ResourcePanelToolbar>
+        <ResourcePanelToolbar variant="embedded">
           <Button
             size="compact"
             disabled={policy !== "manage"}
