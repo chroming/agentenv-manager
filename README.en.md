@@ -8,8 +8,9 @@ English | [简体中文](README.md)
 
 AgentEnv Manager keeps coding agent environments in one place. Its main features are:
 
-- **Profile switching:** Save combinations of Instructions, Skills, and MCP servers, then apply them to Codex, Claude Code, OpenCode, and other supported Agents.
-- **Skills management:** Import Skills from local folders, ZIP archives, GitHub, or Git repositories, manage them in one Library, and keep checking their sources for updates.
+- **Profile switching:** Combine Instructions, Skills, Skill Groups, and MCP choices, then apply them to Agents on this computer or an SSH Linux device.
+- **Instructions management:** Save reusable instruction blocks and compose them in order into each Agent's instruction file.
+- **Skills management:** Import Skills from local folders, ZIP archives, GitHub, or Git repositories, add tags and groups, and keep checking their sources for updates.
 - **Project environments:** Save frequently used project folders, manage their Instructions and Skills, and open them with an installed Agent.
 - **Conversation history:** Search local conversations from multiple Agents, return to the original session, or continue with another Agent.
 - **Try before Apply:** Preview Profile changes and run the same task with the current setup and a proposed Profile before deciding whether to apply it.
@@ -38,14 +39,14 @@ Formal macOS packages use the project's fixed self-signed identity, without a De
 
 ## First run
 
-1. Launch the app and confirm the Agents it detected. Agents that are not installed stay disabled by default.
-2. Configure an Agent from the Agents page. Save its current setup as a Profile, or start with an empty Profile.
+1. Launch the app and confirm the Agents it detected. Agents that are not installed stay disabled by default. To manage a remote environment, add a Linux device from your SSH configuration.
+2. Configure an Agent from the Agents page. Save its current setup and reusable Skills to a Profile and the Library, or start with an empty Profile.
 3. Changes are saved to the Profile automatically. Review the Apply preview before writing to the Agent. AgentEnv creates a recovery point first and attempts an automatic rollback after a failed write.
 4. Local Skills Manager appears only when Capture or Apply finds relevant local Skills that need confirmation. You can also open it from Skills when you want to organize the whole device.
 
 ## Profiles
 
-A Profile contains a reusable Agent setup: Instructions, Skills from the Library, and enablement choices for MCP servers already known to a supported Agent. Each resource type can use the Profile, be turned off, or keep the Agent's current state. Changes are saved to AgentEnv automatically but are not written to an Agent until Apply.
+A Profile contains a reusable Agent setup. It can compose ordered Instructions, select individual Skills, or include a Skill Group that continues to follow Library membership changes. MCP settings contain only enablement choices for servers already known to a supported Agent. Each resource type can use the Profile, be turned off, or keep the Agent's current state. Changes are saved to AgentEnv automatically but are not written to an Agent until Apply.
 
 ![Profiles](docs/images/profiles.png)
 
@@ -61,21 +62,29 @@ Compare runs the same task once with the current Agent setup and once with the p
 
 Both runs use isolated temporary Homes and Workspaces. Compare does not Apply the Profile or modify the real Agent or original folder, but it consumes quota from the Agent account. It currently requires macOS. OpenCode, Claude Code, Codex, Antigravity CLI, and Pi have verified implementations; Trae CLI does not expose a reliable one-shot command.
 
+## Instructions
+
+The Instruction Library stores reusable Markdown instruction blocks. A Profile can reference several Instructions, order them, and compile them into the instruction file used by the selected Agent during Apply. The Library and Profile use the same preview and editor, and editing shows which Profiles will be affected.
+
+![Instruction Library](docs/images/instructions.png)
+
+Project instructions in a Workspace remain owned by that folder and are not automatically linked to the Instruction Library.
+
 ## Workspaces
 
-Workspaces keep references to frequently used local folders and show the Instructions, Skills, and MCP names a selected Agent can load there. You can edit supported Workspace Instructions, copy Library Skills into ordinary folder-owned files, or open the folder with an installed Agent.
+Workspaces keep references to frequently used local folders and show the Instructions, Skills, and MCP names a selected Agent can load there. You can edit supported Workspace Instructions, copy an individual Library Skill or the currently enabled members of a Skill Group into ordinary folder-owned files, or open the folder with an installed Agent.
 
 ![Workspace resources](docs/images/workspaces.png)
 
-The folder remains the source of truth. A Workspace is not bound to a Profile, does not contain Library links, and does not stage or commit Git changes. Removing a Workspace deletes only the app reference. Explicit Workspace resource changes keep recovery records, so you can undo the latest change or restore an earlier version from Recovery.
+The folder remains the source of truth. A Workspace is not bound to a Profile, does not contain Library links, and does not stage or commit Git changes. A Skill Group is a one-time selection recipe here; its identity is not written into the project after copying. Removing a Workspace deletes only the app reference. Explicit Workspace resource changes keep recovery records, so you can undo the latest change or restore an earlier version from Recovery.
 
 ## Skill Library
 
-The Library keeps one reusable copy of each Skill. Import from a local folder, ZIP archive, GitHub path, or regular Git repository, then install Skills into Agent-specific directories through Profiles.
+The Library keeps one reusable copy of each Skill. Import from a local folder, ZIP archive, GitHub path, or regular Git repository, then install Skills into Agent-specific directories through Profiles. Tags help filter Skills by task. Manual Skill Groups can add a reusable set to several Profiles and keep those Profiles aligned when group membership changes.
 
 ![Skills grouped by source](docs/images/skills-by-source.png)
 
-The source view shows additions, updates, and removals within a repository or folder. It also supports merging sources, ignoring entries, and disabling update checks. `Local Skills` handles existing duplicate copies, content conflicts, broken links, and shared collections. Every cleanup action has a preview and keeps recovery records for changed files.
+The source view shows additions, updates, and removals within a repository or folder. It also supports merging sources, ignoring entries, and disabling update checks. `Groups` maintains manual collections; turning off a group preserves each member's own switch state. `Local Skills` handles existing duplicate copies, content conflicts, broken links, and shared collections. Every cleanup action has a preview and keeps recovery records for changed files.
 
 ## Conversations
 
@@ -96,9 +105,11 @@ The source Agent still owns the original history. AgentEnv does not edit convers
 
 Instructions, MCP, Conversations, and Compare support differs between Agents. The app shows only actions supported by the current Agent.
 
+The Agents page can also read the current user's SSH configuration and add Linux devices. Remote Profile Apply uses system SSH and manages only adapter-supported remote Instructions and copied Skills. Remote MCP definitions and credentials remain owned by the Agent.
+
 ## More features
 
-- Device Sync uses a dedicated private Git repository for portable Profiles and Skill Library data. Pull and publish both require review, and sync never Applies changes to a local Agent.
+- Device Sync uses a dedicated private Git repository for portable Profiles, the Instruction Library, the Skill Library, and manual Skill Groups. Pull and publish both require review, and sync never Applies changes to a local Agent.
 - Recovery collects recovery points created by Apply, Profile edits, Workspace changes, Skill cleanup, and sync. You can inspect files before restoring them.
 - GitHub sign-in raises API limits for repository imports and update checks. Regular Git and SSH repositories use system Git credentials.
 - The interface supports English, Simplified Chinese, and Traditional Chinese.

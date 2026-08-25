@@ -8,8 +8,9 @@
 
 AgentEnv Manager 用来统一管理多个 coding agent 的工作环境，主要功能包括：
 
-- **Profile 切换**：保存不同的 Instructions、Skills 和 MCP 组合，并应用到 Codex、Claude Code、OpenCode 等 Agent。
-- **Skills 管理**：从本地、ZIP、GitHub 或 Git 仓库导入 Skills，集中启用、停用和更新，并持续检查来源变化。
+- **Profile 切换**：组合 Instructions、Skills、Skill Groups 和 MCP 选择，再应用到本机或 SSH Linux 设备上的 Agent。
+- **Instructions 管理**：把常用规则保存成可复用的内容块，在不同 Profile 中按顺序组合成 Agent 的指令文件。
+- **Skills 管理**：从本地、ZIP、GitHub 或 Git 仓库导入 Skills，添加标签和分组，并持续检查来源更新。
 - **项目环境**：保存常用项目目录，管理项目自己的 Instructions 和 Skills，并直接用已安装的 Agent 打开。
 - **对话历史**：搜索多个 Agent 的本地历史对话，回到原对话，或交给另一个 Agent 继续。
 - **应用前试用**：预览 Profile 会带来的变化，用同一个任务对比当前环境和新 Profile，再决定是否应用。
@@ -38,14 +39,14 @@ macOS 正式安装包使用项目固定的自签名身份，但没有 Developer 
 
 ## 第一次使用
 
-1. 启动应用，确认自动检测到的 Agent。没有安装的 Agent 默认保持关闭。
-2. 在 Agents 中配置一个 Agent，把当前设置保存为 Profile，或从空 Profile 开始。
+1. 启动应用，确认自动检测到的 Agent。没有安装的 Agent 默认保持关闭；需要管理远程环境时，可以从 SSH 配置添加 Linux 设备。
+2. 在 Agents 中配置一个 Agent，把当前设置和需要复用的 Skills 保存到 Profile 与 Library，或从空 Profile 开始。
 3. 修改会自动保存到 Profile。查看 Apply 预览，确认变化后再写入 Agent。AgentEnv 会先创建恢复点，并在写入失败时尝试自动回滚。
 4. 只有 Capture 或 Apply 发现相关的本地 Skill 需要确认时，才进入 Local Skills Manager。需要整理整台设备时，也可以从 Skills 页面主动打开它。
 
 ## Profiles
 
-Profile 保存一套可复用的 Agent 工作方式，包括 Instructions、Library Skills，以及受支持 Agent 中已有 MCP 的启停选择。每类资源都可以使用 Profile 内容、关闭，或保留 Agent 当前状态。修改会自动保存到 AgentEnv，但不会自动写入 Agent。
+Profile 保存一套可复用的 Agent 工作方式。你可以按顺序组合 Instructions，直接选择 Skills，或选择会持续跟随 Library 成员变化的 Skill Group；MCP 只保存受支持 Agent 中已有服务的启停选择。每类资源都可以使用 Profile 内容、关闭，或保留 Agent 当前状态。修改会自动保存到 AgentEnv，但不会自动写入 Agent。
 
 ![Profiles](docs/images/profiles.png)
 
@@ -61,21 +62,29 @@ Compare 会让当前 Agent 设置和候选 Profile 对同一个任务各运行�
 
 两次运行都使用隔离的临时 Home 和 Workspace，不会 Apply，也不会修改真实 Agent 或原项目。Compare 会消耗对应 Agent 的账号额度，目前仅支持 macOS。OpenCode、Claude Code、Codex、Antigravity CLI 和 Pi 已提供验证过的实现，Trae CLI 暂不支持可靠的一次性运行。
 
+## Instructions
+
+Instruction Library 用来保存可复用的 Markdown 指令块。一个 Profile 可以引用多条 Instruction 并调整顺序，Apply 时再合成为目标 Agent 使用的指令文件。你可以从 Library 或 Profile 中打开同一套预览和编辑器；编辑前会显示受影响的 Profiles。
+
+![Instruction Library](docs/images/instructions.png)
+
+Workspace 中的项目指令仍由项目目录自己管理，不会自动连接到 Instruction Library。
+
 ## Workspaces
 
-Workspaces 保存常用本地目录的引用，并展示所选 Agent 会在该目录加载的 Instructions、Skills 和 MCP 名称。你可以编辑受支持的 Workspace Instructions、把 Library Skill 复制为目录中的普通文件，或直接用已安装的 Agent 打开目录。
+Workspaces 保存常用本地目录的引用，并展示所选 Agent 会在该目录加载的 Instructions、Skills 和 MCP 名称。你可以编辑受支持的 Workspace Instructions，把单个 Library Skill 或 Skill Group 当前启用的成员复制为目录中的普通文件，或直接用已安装的 Agent 打开目录。
 
 ![Workspace resources](docs/images/workspaces.png)
 
-目录中的文件始终是唯一事实源。Workspace 不绑定 Profile，不创建 Library 链接，也不会替你 stage 或 commit Git 变化。移除 Workspace 只会删除应用内引用。明确修改 Workspace 资源时会保留恢复记录，可以撤销最近一次修改或从 Recovery 选择历史版本。
+目录中的文件始终是唯一事实源。Workspace 不绑定 Profile，不创建 Library 链接，也不会替你 stage 或 commit Git 变化。Skill Group 在这里是一次选择模板，复制后不会把 Group 状态写进项目。移除 Workspace 只会删除应用内引用。明确修改 Workspace 资源时会保留恢复记录，可以撤销最近一次修改或从 Recovery 选择历史版本。
 
 ## Skill Library
 
-Library 为每个 Skill 保存一份可复用内容。可以从本地目录、ZIP、GitHub 路径或普通 Git 仓库导入，再通过 Profile 安装到各 Agent 的专属目录。
+Library 为每个 Skill 保存一份可复用内容。可以从本地目录、ZIP、GitHub 路径或普通 Git 仓库导入，再通过 Profile 安装到各 Agent 的专属目录。标签可以按任务筛选 Skills；手动 Skill Group 可以把常用组合加入多个 Profile，并在 Group 成员变化时同步更新这些 Profile 的有效成员。
 
 ![Skills grouped by source](docs/images/skills-by-source.png)
 
-按来源视图会显示同一仓库或目录中的新增、更新和删除，也支持合并来源、忽略条目和关闭更新检查。`Local Skills` 用来处理机器上已有的重复副本、内容冲突、失效链接和共享集合。所有清理动作都会先预览，并为改动保留恢复记录。
+按来源视图会显示同一仓库或目录中的新增、更新和删除，也支持合并来源、忽略条目和关闭更新检查。`Groups` 用来维护手动组合，整组关闭时会保留成员自己的开关状态。`Local Skills` 用来处理机器上已有的重复副本、内容冲突、失效链接和共享集合。所有清理动作都会先预览，并为改动保留恢复记录。
 
 ## Conversations
 
@@ -96,9 +105,11 @@ Conversations 只读索引本机 Agent 的历史记录。可以搜索标题和�
 
 不同 Agent 支持的 Instructions、MCP、Conversations 和 Compare 能力并不完全相同。应用只显示当前 Agent 实际支持的操作。
 
+Agents 页面还可以读取当前用户的 SSH 配置并添加 Linux 设备。远程 Profile Apply 使用系统 SSH，只管理适配器明确支持的远程 Instructions 和复制到远程目录的 Skills；远程 MCP 定义和凭据仍由对应 Agent 管理。
+
 ## 其他功能
 
-- Device Sync 通过专用私有 Git 仓库同步可移植的 Profiles 和 Skill Library。拉取和发布都需要手动审核，不会自动 Apply。
+- Device Sync 通过专用私有 Git 仓库同步可移植的 Profiles、Instruction Library、Skill Library 和手动 Skill Groups。拉取和发布都需要手动审核，不会自动 Apply。
 - Recovery 包含 Apply、Profile 编辑、Workspace 修改、Skill 清理和同步产生的恢复记录，可以预览文件后再恢复。
 - GitHub 登录为仓库导入和更新检查提供更高的 API 限额；普通 Git 和 SSH 仓库使用系统 Git 凭据。
 - 界面支持 English、简体中文和繁體中文。
