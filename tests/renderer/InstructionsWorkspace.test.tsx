@@ -20,7 +20,7 @@ const block: InstructionBlock = {
 };
 
 describe("InstructionsWorkspace", () => {
-  it("uses the shared list-detail pattern and protects referenced Blocks", () => {
+  it("shows referenced Profiles and lets users review a cascading delete", () => {
     render(
       <InstructionsWorkspace
         blocks={[block]}
@@ -35,10 +35,12 @@ describe("InstructionsWorkspace", () => {
 
     expect(screen.getAllByText("Review rules").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Consistent review guidance")).toHaveLength(2);
+    expect(screen.getByText(/Daily/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "More actions for Review rules" }));
-    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeDisabled();
-    expect(screen.getByRole("menuitem", { name: "Delete" }))
-      .toHaveAttribute("title", "Remove this Block from its Profiles before deleting it");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete Instruction Block" });
+    expect(dialog).toHaveTextContent("Daily");
+    expect(dialog).toHaveTextContent("removed from 1 Profile");
   });
 
   it("opens imported content in the same editor used for a new Block", async () => {
@@ -85,7 +87,7 @@ describe("InstructionsWorkspace", () => {
     const row = screen.getByRole("button", { name: "Review rules" });
     fireEvent.contextMenu(row, { clientX: 40, clientY: 50 });
     expect(screen.getByRole("menu", { name: "Instruction actions" })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeEnabled();
     fireEvent.click(screen.getByRole("menuitem", { name: "Preview" }));
     const preview = screen.getByRole("dialog", { name: "Instruction document" });
     expect(within(preview).getByLabelText("Preview of CONTENT.md").querySelector(".syntax-code-preview"))

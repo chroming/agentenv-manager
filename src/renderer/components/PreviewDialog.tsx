@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   Ban,
@@ -303,7 +303,8 @@ export const PreviewDialog = ({
 
   const issueList = (
     items: Array<{ issue: ApplyIssue; id: string; title: string; detail?: string }>,
-    kind: "blocked" | "review"
+    kind: "blocked" | "review",
+    options?: ReactNode
   ) => (
     <section className={`apply-preview-issues apply-preview-issues--${kind}`}>
       <header>
@@ -313,7 +314,9 @@ export const PreviewDialog = ({
           <AlertTriangle size={17} strokeWidth={2.1} aria-hidden="true" />
         )}
         <strong>
-          {kind === "blocked" ? t("Blocking issues") : t("Decisions needed")}
+          {kind === "blocked"
+            ? t("Blocking issues")
+            : t(isActivationPreview ? "Before Apply" : "Decisions needed")}
         </strong>
         <span className="apply-preview-count">{items.length}</span>
       </header>
@@ -363,6 +366,7 @@ export const PreviewDialog = ({
           </article>
         ))}
       </div>
+      {options ? <footer className="apply-preview-issue-options">{options}</footer> : null}
     </section>
   );
 
@@ -415,14 +419,11 @@ export const PreviewDialog = ({
           </section>
 
           {blockedItems.length > 0 ? issueList(blockedItems, "blocked") : null}
-          {reviewItems.length > 0 ? issueList(reviewItems, "review") : null}
-
-          {managedDriftIssues.length > 0 && (onAdoptTargetChanges || onOpenRecovery) ? (
-            <section
-              className="preview-drift-recovery"
-              aria-label={t("Protected Agent change options")}
-            >
-              <div className="preview-drift-actions">
+          {reviewItems.length > 0 ? issueList(
+            reviewItems,
+            "review",
+            managedDriftIssues.length > 0 && (onAdoptTargetChanges || onOpenRecovery) ? (
+              <>
                 {onAdoptTargetChanges ? (
                   <Button
                     size="compact"
@@ -441,8 +442,8 @@ export const PreviewDialog = ({
                     {t("Open recovery history")}
                   </Button>
                 ) : null}
-              </div>
-            </section>
+              </>
+            ) : undefined
           ) : null}
 
           {sharedSkillItems.length > 0 ? (
@@ -481,7 +482,7 @@ export const PreviewDialog = ({
                   variant="warning"
                   onClick={onManageSharedSkills}
                 >
-                  {t("Move shared Skills to Profile control…")}
+                  {t("Review shared Skills")}
                 </Button>
               ) : null}
             </section>

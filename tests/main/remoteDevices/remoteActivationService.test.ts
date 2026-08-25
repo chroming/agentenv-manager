@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -163,7 +163,56 @@ describe("remote Profile activation", () => {
     await symlink(localSecret, instructionPath);
 
     await expect(fixture.service.previewProfile(fixture.profile.manifest.id, fixture.endpoint.id))
-      .rejects.toThrow(/symbolic link/i);
+      .rejects.toThrow(/link points outside HOME/i);
+  });
+
+  it("previews a remote Skill linked to a regular directory inside remote HOME", async () => {
+    const fixture = await createFixture();
+    const sharedSkill = join(fixture.remoteHome, ".remote-skills", "review");
+    const runtimeSkill = join(fixture.remoteHome, ".config", "opencode", "skills", "review");
+    await mkdir(sharedSkill, { recursive: true });
+    await writeFile(join(sharedSkill, "SKILL.md"), [
+      "---",
+      "name: review",
+      "description: Remote linked copy",
+      "---",
+      "# Remote linked review",
+      ""
+    ].join("\n"));
+    await mkdir(join(fixture.remoteHome, ".config", "opencode", "skills"), { recursive: true });
+    await symlink(sharedSkill, runtimeSkill);
+
+    const preview = await fixture.service.previewProfile(fixture.profile.manifest.id, fixture.endpoint.id);
+    expect(preview.resourceChanges).toEqual([
+      expect.objectContaining({ action: "replace", name: "review" })
+    ]);
+    await expect(fixture.service.applyProfile(fixture.profile.manifest.id, preview.id))
+      .resolves.toMatchObject({ ok: true });
+    expect((await lstat(runtimeSkill)).isDirectory()).toBe(true);
+    expect((await lstat(runtimeSkill)).isSymbolicLink()).toBe(false);
+    await expect(readFile(join(runtimeSkill, "SKILL.md"), "utf8"))
+      .resolves.toContain("# Review");
+    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8"))
+      .resolves.toContain("# Remote linked review");
+  });
+
+  it("rejects unavailable and cyclic links without extracting the remote snapshot", async () => {
+    const broken = await createFixture();
+    const brokenSkill = join(broken.remoteHome, ".config", "opencode", "skills", "review");
+    await mkdir(join(broken.remoteHome, ".config", "opencode", "skills"), { recursive: true });
+    await symlink(join(broken.remoteHome, "missing-review"), brokenSkill);
+    await expect(broken.service.previewProfile(broken.profile.manifest.id, broken.endpoint.id))
+      .rejects.toThrow(/link is unavailable/i);
+
+    await rm(root, { recursive: true, force: true });
+    root = "";
+    const cyclic = await createFixture();
+    const cyclicSkill = join(cyclic.remoteHome, ".config", "opencode", "skills", "review");
+    await mkdir(cyclicSkill, { recursive: true });
+    await writeFile(join(cyclicSkill, "SKILL.md"), "# Cyclic review\n");
+    await symlink(".", join(cyclicSkill, "loop"));
+    await expect(cyclic.service.previewProfile(cyclic.profile.manifest.id, cyclic.endpoint.id))
+      .rejects.toThrow(/link cycle/i);
   });
 
   it("applies Instructions and managed-copy Skills without changing the local Agent", async () => {

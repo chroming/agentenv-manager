@@ -1,5 +1,10 @@
 import type { InstructionLibraryStore } from "../instructionLibraryStore";
 import type { ProfileStore } from "../profileStore";
+import type { BackupStore } from "../backupStore";
+import {
+  collectInstructionUsage,
+  removeInstructionBlockWithReferences
+} from "../instructionRemovalService";
 import type {
   CreateInstructionBlockInput,
   RemoveInstructionBlockInput,
@@ -10,20 +15,19 @@ import type { IpcRegistrationHandles } from "./registration";
 export const registerInstructionIpc = (
   handles: Pick<IpcRegistrationHandles, "diagnosticHandle" | "handleMutation">,
   services: {
+    backupStore: BackupStore;
     instructionLibraryStore: InstructionLibraryStore;
     profileStore: ProfileStore;
   }
 ) => {
   const { diagnosticHandle, handleMutation } = handles;
-  const { instructionLibraryStore, profileStore } = services;
+  const { backupStore, instructionLibraryStore, profileStore } = services;
 
   const usage = async () => {
     const result = new Map<string, string[]>();
-    for (const summary of await profileStore.listProfiles()) {
-      if (summary.loadError) continue;
-      const profile = await profileStore.readProfile(summary.id);
+    for (const { name, profile } of await collectInstructionUsage(profileStore)) {
       for (const reference of profile.resources.instructions ?? []) {
-        result.set(reference.libraryId, [...(result.get(reference.libraryId) ?? []), summary.name]);
+        result.set(reference.libraryId, [...(result.get(reference.libraryId) ?? []), name]);
       }
     }
     return result;
@@ -39,13 +43,10 @@ export const registerInstructionIpc = (
   handleMutation("instructions:update", (_event, input: UpdateInstructionBlockInput) =>
     instructionLibraryStore.update(input)
   );
-  handleMutation("instructions:remove", async (_event, input: RemoveInstructionBlockInput) => {
-    const profileNames = (await usage()).get(input.id) ?? [];
-    if (profileNames.length > 0) {
-      throw new Error(
-        `Instruction Block is used by ${profileNames.length} Profile${profileNames.length === 1 ? "" : "s"}: ${profileNames.join(", ")}`
-      );
-    }
-    await instructionLibraryStore.remove(input);
-  });
+  handleMutation("instructions:remove", (_event, input: RemoveInstructionBlockInput) =>
+    removeInstructionBlockWithReferences(
+      { backupStore, instructionLibraryStore, profileStore },
+      input
+    )
+  );
 };

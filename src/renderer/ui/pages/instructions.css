@@ -382,6 +382,36 @@
   width: min(440px, calc(100vw - 48px));
 }
 
+.instructions-detail-usage {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.instruction-delete-impact {
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+}
+
+.instruction-delete-impact strong {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+}
+
+.instruction-delete-impact span,
+.instruction-delete-impact p {
+  color: var(--muted);
+  font-size: var(--font-size-metadata);
+  line-height: 18px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .profile-instructions-editor {
   min-width: 0;
 }

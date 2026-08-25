@@ -171,8 +171,9 @@ export const validateRemoteSnapshotArchive = (archive: Buffer) => {
     const header = archive.subarray(offset, offset + 512);
     if (header.every((byte) => byte === 0)) return;
     const type = String.fromCharCode(header[156] ?? 0).replace("\0", "");
-    if (type === "1" || type === "2") {
-      throw new Error("Remote Agent snapshot contains a symbolic link or hard link");
+    if (type === "1") throw new Error("Remote Agent snapshot contains a hard link");
+    if (type === "2") {
+      throw new Error("Remote Agent snapshot contains a symbolic link that could not be materialized safely");
     }
     if (!["", "0", "5", "7", "x", "g", "L", "K"].includes(type)) {
       throw new Error("Remote Agent snapshot contains an unsupported filesystem entry");
@@ -479,7 +480,7 @@ export const createRemoteActivationService = (options: {
       "printf 'OS\\t%s\\n' \"$(uname -s)\"",
       "printf 'ARCH\\t%s\\n' \"$(uname -m)\"",
       "if [ -r /etc/machine-id ]; then printf 'MACHINE\\t%s\\n' \"$(cat /etc/machine-id)\"; fi",
-      "for tool in sh tar sha256sum; do command -v \"$tool\" >/dev/null 2>&1 || { printf 'MISSING\\t%s\\n' \"$tool\"; }; done",
+      "for tool in sh tar sha256sum find readlink; do command -v \"$tool\" >/dev/null 2>&1 || { printf 'MISSING\\t%s\\n' \"$tool\"; }; done",
       ...commandNames.map((name) => `if path=$(command -v ${shellQuote(name)} 2>/dev/null); then printf 'CMD\\t%s\\t%s\\n' ${shellQuote(name)} "$path"; fi`)
     ].join("\n");
     let probe: RemoteDeviceProbe;
@@ -662,11 +663,44 @@ export const createRemoteActivationService = (options: {
     absolutePaths: string[]
   ) => {
     const relativePaths = [...new Set(absolutePaths.map((path) => relativeToRemoteHome(homeDir, path)))];
+    const validateLinks = [
+      "home=$1",
+      "shift",
+      "for link do",
+      '  if ! resolved=$(readlink -f -- "$link") || [ ! -e "$resolved" ]; then',
+      '    printf "Remote Agent link is unavailable: %s\\n" "$link" >&2',
+      "    exit 65",
+      "  fi",
+      '  parent_path=${link%/*}',
+      '  parent=$(readlink -f -- "$parent_path")',
+      '  if [ -d "$resolved" ]; then',
+      '    case "$parent" in "$resolved"|"$resolved"/*) printf "Remote Agent link cycle cannot be read safely: %s\\n" "$link" >&2; exit 67 ;; esac',
+      "  fi",
+      '  case "$resolved" in',
+      '    "$home"|"$home"/*) ;;',
+      '    *) printf "Remote Agent link points outside HOME and cannot be read safely: %s -> %s\\n" "$link" "$resolved" >&2; exit 66 ;;',
+      "  esac",
+      "done"
+    ].join("\n");
     const script = [
       "set -eu",
       "set --",
       ...relativePaths.map((path) => `if [ -e ${shellQuote(posix.join(homeDir, path))} ] || [ -L ${shellQuote(posix.join(homeDir, path))} ]; then set -- "$@" ${shellQuote(path)}; fi`),
-      `if [ "$#" -eq 0 ]; then tar -cf - -C ${shellQuote(homeDir)} --files-from /dev/null; else tar -cf - -C ${shellQuote(homeDir)} "$@"; fi`
+      `home_resolved=$(readlink -f -- ${shellQuote(homeDir)})`,
+      '[ -n "$home_resolved" ] || { printf "Remote HOME could not be resolved\\n" >&2; exit 64; }',
+      "for root do",
+      `  absolute=${shellQuote(`${homeDir}/`)}"$root"`,
+      `  if [ -L "$absolute" ]; then sh -c ${shellQuote(validateLinks)} sh "$home_resolved" "$absolute"; fi`,
+      `  if [ -d "$absolute" ]; then find -H "$absolute" -type l -exec sh -c ${shellQuote(validateLinks)} sh "$home_resolved" {} +; fi`,
+      '  if [ -d "$absolute" ] && ! find -L "$absolute" -print >/dev/null 2>&1; then',
+      '    printf "Remote Agent link cycle cannot be read safely: %s\\n" "$absolute" >&2',
+      "    exit 67",
+      "  fi",
+      "done",
+      `if [ "$#" -eq 0 ]; then tar -cf - -C ${shellQuote(homeDir)} --files-from /dev/null; ` +
+        `elif tar --hard-dereference -cf - -C ${shellQuote(homeDir)} --files-from /dev/null >/dev/null 2>&1; then ` +
+        `tar -chf - --hard-dereference -C ${shellQuote(homeDir)} "$@"; ` +
+        `else tar -chf - -C ${shellQuote(homeDir)} "$@"; fi`
     ].join("\n");
     const result = await transport.execute(device, `sh -c ${shellQuote(script)}`, {
       timeoutMs: 45_000,

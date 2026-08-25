@@ -303,7 +303,7 @@ export const registerIpcHandlers = ({
     { diagnosticHandle, handleMutation, handleWorkspaceSyncMutation },
     { skillLibraryStore, resolveSharedSkillPaths }
   );
-  registerInstructionIpc({ diagnosticHandle, handleMutation }, { instructionLibraryStore, profileStore });
+  registerInstructionIpc({ diagnosticHandle, handleMutation }, { backupStore, instructionLibraryStore, profileStore });
   registerSkillGroupIpc({ diagnosticHandle, handleMutation }, skillGroupStore);
   registerSkillRemovalIpc({ handleMutation }, {
     profileStore,

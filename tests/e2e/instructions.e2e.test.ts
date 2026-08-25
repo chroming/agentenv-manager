@@ -104,7 +104,10 @@ describe("Instruction Library desktop workflow", () => {
       }
     });
     const openInstructions = async (page: Page) => {
-      await page.getByRole("button", { name: "Instructions", exact: true }).click();
+      await page
+        .getByRole("complementary", { name: "Global navigation" })
+        .getByRole("button", { name: "Instructions", exact: true })
+        .click();
       await page.getByRole("heading", { name: "Instructions", exact: true }).waitFor();
     };
 
@@ -241,5 +244,36 @@ describe("Instruction Library desktop workflow", () => {
     }
     await restoredInstructions.getByText("Review rules", { exact: true }).waitFor();
     await restoredInstructions.getByText("Baseline rules", { exact: true }).waitFor();
+
+    await openInstructions(page);
+    await page.getByRole("button", { name: "Review rules", exact: true }).click();
+    await page.getByRole("button", { name: "More actions for Review rules" }).click();
+    await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
+    const deleteDialog = page.getByRole("dialog", { name: "Delete Instruction Block" });
+    await deleteDialog.getByText("Daily Coding", { exact: true }).waitFor();
+    await deleteDialog.getByText("This Instruction will be removed from 1 Profile", {
+      exact: true
+    }).waitFor();
+    if (process.env.AGENTENV_CAPTURE_INSTRUCTIONS_DIR) {
+      await page.screenshot({
+        path: join(
+          process.env.AGENTENV_CAPTURE_INSTRUCTIONS_DIR,
+          "instruction-referenced-delete-920x620.png"
+        )
+      });
+    }
+    await deleteDialog.getByRole("button", { name: "Delete", exact: true }).click();
+    await deleteDialog.waitFor({ state: "hidden" });
+    await expect.poll(() => page.getByText("Review rules", { exact: true }).count()).toBe(0);
+    await expect.poll(async () => {
+      const resources = JSON.parse(await readFile(join(profileDir, "resources.json"), "utf8"));
+      return resources.instructions?.some(
+        (reference: { libraryId: string }) => reference.libraryId === reviewInstructionId
+      );
+    }).toBe(false);
+    await expect.poll(async () => {
+      const entries = await readdir(join(dataRoot, "trash", "instructions"));
+      return entries.some((entry) => entry.startsWith(`${reviewInstructionId}-`));
+    }).toBe(true);
   }, 30_000);
 });

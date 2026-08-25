@@ -253,10 +253,6 @@ export const InstructionsWorkspace = ({
                         id: "delete",
                         icon: <Trash2 size={14} />,
                         label: t("Delete"),
-                        disabled: (selected.usedByProfiles?.length ?? 0) > 0,
-                        title: (selected.usedByProfiles?.length ?? 0) > 0
-                          ? t("Remove this Block from its Profiles before deleting it")
-                          : undefined,
                         onSelect: () => setDeleteCandidate(selected)
                       }]}
                       label={t("More actions for {{name}}", { name: selected.name })}
@@ -266,7 +262,12 @@ export const InstructionsWorkspace = ({
                 )}
               />
               <div className="instructions-detail-meta">
-                <span>{t("Used by {{count}} Profiles", { count: selected.usedByProfiles?.length ?? 0 })}</span>
+                <OverflowTooltip
+                  className="instructions-detail-usage"
+                  text={(selected.usedByProfiles?.length ?? 0) > 0
+                    ? `${t("Used by {{count}} Profiles", { count: selected.usedByProfiles!.length })}: ${selected.usedByProfiles!.join(", ")}`
+                    : t("Not used by any profile")}
+                />
                 <span>{t("Updated {{date}}", { date: formatDate(selected.updatedAt) })}</span>
               </div>
               <InstructionDocumentPreviewList
@@ -328,7 +329,21 @@ export const InstructionsWorkspace = ({
               name: deleteCandidate.name
             })}
           />
-          {deleteError ? <DialogBody><p className="ui-field-error" role="alert">{deleteError}</p></DialogBody> : null}
+          <DialogBody>
+            {(deleteCandidate.usedByProfiles?.length ?? 0) > 0 ? (
+              <div className="instruction-delete-impact">
+                <strong>{t(
+                  deleteCandidate.usedByProfiles!.length === 1
+                    ? "This Instruction will be removed from 1 Profile"
+                    : "This Instruction will be removed from {{count}} Profiles",
+                  { count: deleteCandidate.usedByProfiles!.length }
+                )}</strong>
+                <span>{deleteCandidate.usedByProfiles!.join(", ")}</span>
+                <p>{t("Agent files stay unchanged until those Profiles are applied again.")}</p>
+              </div>
+            ) : null}
+            {deleteError ? <p className="ui-field-error" role="alert">{deleteError}</p> : null}
+          </DialogBody>
           <DialogFooter>
             <Button ref={deleteCancelRef} disabled={deleting} onClick={closeDeleteDialog}>
               {t("Cancel")}
@@ -377,10 +392,6 @@ export const InstructionsWorkspace = ({
             <span>{t("Edit")}</span>
           </ActionMenuItem>
           <ActionMenuItem
-            disabled={(contextBlock.usedByProfiles?.length ?? 0) > 0}
-            title={(contextBlock.usedByProfiles?.length ?? 0) > 0
-              ? t("Remove this Block from its Profiles before deleting it")
-              : undefined}
             tone="danger"
             onClick={() => {
               setContextMenu(undefined);

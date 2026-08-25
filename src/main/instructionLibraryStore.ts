@@ -202,7 +202,7 @@ export const createInstructionLibraryStore = (
       blockRoot(input.id),
       join(trashRoot, `${input.id}-${Date.now()}-${randomUUID().slice(0, 8)}`)
     );
-    await Promise.all([
+    await Promise.allSettled([
       syncParentDirectory(paths.instructionsLibraryDir),
       syncParentDirectory(trashRoot)
     ]);

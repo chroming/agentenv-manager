@@ -447,6 +447,16 @@
   line-height: 18px;
 }
 
+.apply-preview-issue-options {
+  align-items: center;
+  background: color-mix(in srgb, var(--warning-bg) 45%, #fff);
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  gap: 7px;
+  justify-content: flex-end;
+  padding: 8px 10px;
+}
+
 .apply-preview-issues--blocked {
   border-color: #efd0cd;
 }
@@ -475,53 +485,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.apply-preview-dialog .preview-drift-recovery {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  border-top: 1px solid var(--border-soft);
-  display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  margin: 0;
-  padding: 10px 0 0;
-}
-
-.apply-preview-dialog .preview-drift-recovery > label {
-  align-items: center;
-  color: var(--text);
-  display: grid;
-  font-size: 12px;
-  gap: 9px;
-  grid-template-columns: 18px minmax(0, 1fr);
-  white-space: normal;
-}
-
-.apply-preview-dialog .preview-drift-recovery input {
-  height: 16px;
-  margin: 0;
-  width: 16px;
-}
-
-.apply-preview-dialog .preview-drift-recovery label > span {
-  display: grid;
-}
-
-.apply-preview-dialog .preview-drift-recovery label strong,
-.apply-preview-dialog .preview-drift-recovery label small {
-  line-height: 18px;
-}
-
-.apply-preview-dialog .preview-drift-recovery label small {
-  color: var(--muted);
-}
-
-.apply-preview-dialog .preview-drift-actions {
-  display: flex;
-  gap: 7px;
 }
 
 .apply-preview-disclosure,
@@ -646,8 +609,9 @@
     border-top: 1px solid var(--border-soft);
   }
 
-  .apply-preview-dialog .preview-drift-recovery {
-    grid-template-columns: 1fr;
+  .apply-preview-issue-options {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .apply-preview-dialog .preview-actions {
