@@ -266,7 +266,11 @@ export const InstructionsWorkspace = ({
                 <div className="instructions-detail-meta">
                   <OverflowTooltip
                     className="instructions-detail-usage"
-                    text={`${t("Used by {{count}} Profiles", { count: selected.usedByProfiles!.length })}: ${selected.usedByProfiles!.join(", ")}`}
+                    text={`${selected.usedByProfiles!.length === 1
+                      ? t("Used by 1 Profile")
+                      : t("Used by {{count}} Profiles", {
+                        count: selected.usedByProfiles!.length
+                      })}: ${selected.usedByProfiles!.join(", ")}`}
                   />
                 </div>
               ) : null}

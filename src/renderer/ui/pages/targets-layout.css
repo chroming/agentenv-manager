@@ -12,11 +12,15 @@
   font-size: var(--font-size-metadata);
   justify-content: space-between;
   min-height: 28px;
-  padding: 0 12px;
+  padding: 0 12px 0 52px;
   width: auto;
 }
 
 .target-location-divider > span:first-child {
   color: var(--text-secondary);
   font-weight: var(--font-weight-medium);
+}
+
+.target-location-divider > span:last-child {
+  color: var(--muted);
 }

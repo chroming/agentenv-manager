@@ -424,13 +424,7 @@ export const TargetWorkspace = ({
             <span />
             <span>{t("Agent")}</span>
             <span>{t("Status")}</span>
-            <span className="target-list__environment-headings">
-              <span>{t("Management")}</span>
-              <span>{t("Profile")}</span>
-              <span className="target-list__environment-heading--compact">
-                {t("Profile state")}
-              </span>
-            </span>
+            <span>{t("Profile")}</span>
             <span>{t("Last applied")}</span>
             <span aria-label={t("Actions")} />
           </div>
@@ -459,6 +453,7 @@ export const TargetWorkspace = ({
         {remoteDevices.length > 0 && targets.length > 0 ? (
           <div className="target-location-divider">
             <span>{t("This Mac")}</span>
+            <span>{t("{{count}} Agents", { count: targets.length })}</span>
           </div>
         ) : null}
         {targets.map((target) => {
@@ -521,9 +516,7 @@ export const TargetWorkspace = ({
                   </span>
                 </span>
                 <span className={`target-health-status target-health-status--${target.health.status}`}>
-                  {target.health.status === "ready" ? (
-                    <span className="ui-visually-hidden">{t("Ready")}</span>
-                  ) : t(targetStatusLabel[target.health.status])}
+                  {t(targetStatusLabel[target.health.status])}
                 </span>
                 <span className="target-workflow-environment">
                   <strong className="target-workflow-lifecycle">

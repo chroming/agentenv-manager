@@ -5648,6 +5648,9 @@ describe("Electron UI profile switching e2e", () => {
           lifecycleLanesAligned: hasStableValues(laneLefts(".target-workflow-lifecycle")),
           moreButtonsMatch: hasStableSizes(sizes(".target-more-action")),
           profileLanesAligned: hasStableValues(laneLefts(".target-workflow-profile")),
+          statusLabelsVisible: rows.every((row) =>
+            Boolean(row.querySelector<HTMLElement>(".target-health-status")?.textContent?.trim())
+          ),
           typography: {
             health: getComputedStyle(first.querySelector<HTMLElement>(".target-health-status")!).fontWeight,
             lifecycle: getComputedStyle(first.querySelector<HTMLElement>(".target-workflow-lifecycle")!).fontWeight,
@@ -5662,6 +5665,7 @@ describe("Electron UI profile switching e2e", () => {
         lifecycleLanesAligned: true,
         moreButtonsMatch: true,
         profileLanesAligned: true,
+        statusLabelsVisible: true,
         typography: {
           health: "400",
           lifecycle: "400",
@@ -10771,7 +10775,20 @@ describe("Electron UI profile switching e2e", () => {
     await group.getByRole("button", { name: "Toggle Review pack" }).click();
     await resizeAppWindow(page, 920, 620);
     const members = group.locator(".profile-skill-group__members");
+    const panel = group.locator(":scope > .ui-resource-disclosure__panel");
     await expect.poll(() => members.getByRole("listitem").count()).toBe(20);
+    const scrollOwners = await Promise.all([panel, members].map((locator) =>
+      locator.evaluate((element) => ({
+        clientHeight: element.clientHeight,
+        overflowY: window.getComputedStyle(element).overflowY,
+        scrollHeight: element.scrollHeight
+      }))
+    ));
+    expect(scrollOwners[0]?.overflowY).toBe("visible");
+    expect(scrollOwners[0]?.scrollHeight).toBeLessThanOrEqual(
+      (scrollOwners[0]?.clientHeight ?? 0) + 1
+    );
+    expect(scrollOwners[1]?.overflowY).toBe("auto");
     const before = await members.evaluate((element) => ({
       clientHeight: element.clientHeight,
       scrollHeight: element.scrollHeight,
@@ -10779,11 +10796,12 @@ describe("Electron UI profile switching e2e", () => {
     }));
     expect(before.scrollHeight).toBeGreaterThan(before.clientHeight);
     expect(before.scrollTop).toBe(0);
-    await members.evaluate((element) => {
-      element.scrollTop = element.scrollHeight;
-      element.dispatchEvent(new Event("scroll", { bubbles: true }));
-    });
+    await members.hover();
+    for (let step = 0; step < 8; step += 1) {
+      await page.mouse.wheel(0, 120);
+    }
     await expect.poll(() => members.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    expect(await panel.evaluate((element) => element.scrollTop)).toBe(0);
     const lastRow = members.getByRole("listitem", { name: "Profile Skill layout-skill-18" });
     expect(await lastRow.evaluate((row) => {
       const rowBox = row.getBoundingClientRect();
@@ -12426,7 +12444,7 @@ describe("Electron UI profile switching e2e", () => {
       const headerCells = [
         list.querySelector<HTMLElement>(".target-list__header > span:nth-child(2)")!,
         list.querySelector<HTMLElement>(".target-list__header > span:nth-child(3)")!,
-        list.querySelector<HTMLElement>(".target-list__environment-heading--compact")!
+        list.querySelector<HTMLElement>(".target-list__header > span:nth-child(4)")!
       ];
       const textCenters = headerCells.map((cell) => {
         const range = document.createRange();

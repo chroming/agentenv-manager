@@ -573,6 +573,7 @@ export const SkillsEditor = ({
               )}
               nested
               muted={!group.enabled}
+              panelScrollOwner="child"
               summary={[
                 group.enabled
                   ? t("{{enabled}} of {{total}} on", { enabled: preferredCount, total: members.length })

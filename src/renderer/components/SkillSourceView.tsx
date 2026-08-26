@@ -980,7 +980,7 @@ export const SkillSourceView = ({
                     busy={monitoringOperation === group.sourceId}
                     label={t("Source actions for {{name}}", { name: groupName })}
                     size="compact"
-                    variant="ghost"
+                    variant="secondary"
                     aria-expanded={sourceMenu?.sourceId === group.sourceId}
                     aria-haspopup="menu"
                     onClick={(event) => toggleSourceMenu(group.sourceId, event.currentTarget)}

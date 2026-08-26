@@ -114,10 +114,10 @@ export const ProfileMcpEditor = ({
             </Button>
           ) : null}
           <RefreshAction
-            label={t("Refresh MCP connections")}
-            presentation="icon"
+            ariaLabel={t("Refresh MCP connections")}
+            label={t("Refresh")}
             size="compact"
-            variant="ghost"
+            variant="secondary"
             busy={refreshing}
             onRefresh={() => void refresh()}
           />

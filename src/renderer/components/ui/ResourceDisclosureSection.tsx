@@ -12,6 +12,7 @@ export interface ResourceDisclosureSectionProps
   id: string;
   onToggle(): void;
   nested?: boolean;
+  panelScrollOwner?: "panel" | "child";
   panelVariant?: "default" | "inset";
   muted?: boolean;
   summary?: ReactNode;
@@ -34,6 +35,7 @@ export const ResourceDisclosureSection = ({
   id,
   onToggle,
   nested = false,
+  panelScrollOwner = "panel",
   panelVariant = "default",
   muted = false,
   summary,
@@ -57,7 +59,7 @@ export const ResourceDisclosureSection = ({
     <section
       {...props}
       aria-label={props["aria-label"] ?? title}
-      className={`ui-resource-disclosure is-${density}${expanded ? " is-expanded" : ""}${nested ? " is-nested" : ""}${muted ? " is-muted" : ""}${summaryWidth === "wide" ? " has-wide-summary" : ""}${panelVariant === "inset" ? " has-inset-panel" : ""}${actionsLayout === "row" ? " has-row-actions" : ""} ${className}`.trim()}
+      className={`ui-resource-disclosure is-${density}${expanded ? " is-expanded" : ""}${nested ? " is-nested" : ""}${muted ? " is-muted" : ""}${summaryWidth === "wide" ? " has-wide-summary" : ""}${panelVariant === "inset" ? " has-inset-panel" : ""}${panelScrollOwner === "child" ? " has-child-scroll" : ""}${actionsLayout === "row" ? " has-row-actions" : ""} ${className}`.trim()}
       data-resource-disclosure-id={id}
     >
       <header className="ui-resource-disclosure__header">

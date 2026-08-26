@@ -711,7 +711,7 @@ export const ProjectsWorkspace = ({
                       disabled={!selected.exists}
                       label={t("Refresh Workspace")}
                       presentation="icon"
-                      variant="ghost"
+                      variant="secondary"
                       onRefresh={() => void refreshSelectedProject()}
                     />
                     <AgentContextSwitcher

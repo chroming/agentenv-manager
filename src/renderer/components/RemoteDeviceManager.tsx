@@ -1,4 +1,4 @@
-import { LoaderCircle, MonitorUp, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { Clock3, LoaderCircle, MonitorUp, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type {
   CreateRemoteDeviceInput,
@@ -16,6 +16,7 @@ import { AgentEndpointIcon } from "./AgentEndpointIcon";
 import { OverflowTooltip } from "./OverflowTooltip";
 import {
   Button,
+  ControlGroup,
   DialogBody,
   DialogFooter,
   DialogHeader,
@@ -319,41 +320,45 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
                   text={`${device.user ? `${device.user}@` : ""}${device.host}${device.port ? `:${device.port}` : ""}`}
                 />
               </span>
-              <span className={`remote-location-header__status is-${status}`}>
-                {checking ? <LoaderCircle className="is-spinning" size={13} aria-hidden="true" /> : null}
-                {statusText}
-              </span>
-              <span className="remote-location-header__checked" title={probe?.checkedAt
-                ? t("Checked {{time}}", { time: formatCheckedAt(probe.checkedAt) })
-                : undefined} />
-              <IconButton
-                disabled={busy || checking}
-                label={t("Refresh {{name}}", { name: device.name })}
-                size="compact"
-                variant="ghost"
-                onClick={() => void onRefreshDevice(device.id)}
+              <span
+                className={`remote-location-header__status is-${status}`}
+                title={probe?.checkedAt
+                  ? t("Checked {{time}}", { time: formatCheckedAt(probe.checkedAt) })
+                  : undefined}
               >
-                <RefreshCw className={checking ? "is-spinning" : ""} size={14} aria-hidden="true" />
-              </IconButton>
-              <ToolbarOverflowMenu
-                disabled={busy || checking}
-                items={[
-                  {
-                    id: "edit",
-                    icon: <Pencil size={14} />,
-                    label: t("Edit"),
-                    onSelect: (trigger) => startEdit(device, trigger)
-                  },
-                  {
-                    id: "remove",
-                    icon: <Trash2 size={14} />,
-                    label: t("Remove"),
-                    onSelect: (trigger) => startRemove(device, trigger)
-                  }
-                ]}
-                label={t("More actions for {{name}}", { name: device.name })}
-                menuLabel={t("Actions for {{name}}", { name: device.name })}
-              />
+                {checking ? <LoaderCircle className="is-spinning" size={13} aria-hidden="true" /> : null}
+                <span>{statusText}</span>
+              </span>
+              <ControlGroup density="compact" className="remote-location-header__actions">
+                <IconButton
+                  disabled={busy || checking}
+                  label={t("Refresh {{name}}", { name: device.name })}
+                  size="compact"
+                  variant="ghost"
+                  onClick={() => void onRefreshDevice(device.id)}
+                >
+                  <RefreshCw className={checking ? "is-spinning" : ""} size={14} aria-hidden="true" />
+                </IconButton>
+                <ToolbarOverflowMenu
+                  disabled={busy || checking}
+                  items={[
+                    {
+                      id: "edit",
+                      icon: <Pencil size={14} />,
+                      label: t("Edit"),
+                      onSelect: (trigger) => startEdit(device, trigger)
+                    },
+                    {
+                      id: "remove",
+                      icon: <Trash2 size={14} />,
+                      label: t("Remove"),
+                      onSelect: (trigger) => startRemove(device, trigger)
+                    }
+                  ]}
+                  label={t("More actions for {{name}}", { name: device.name })}
+                  menuLabel={t("Actions for {{name}}", { name: device.name })}
+                />
+              </ControlGroup>
             </header>
             {!checking && probe?.error ? (
               <div className="remote-location-error" role="status">
@@ -386,7 +391,7 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
                       <span className="target-workflow-description">{device.name} · SSH</span>
                     </span>
                     <span className={`target-health-status target-health-status--${available ? "ready" : "unknown"}`}>
-                      {available ? <span className="ui-visually-hidden">{t("Ready")}</span> : t("Unavailable")}
+                      {t(available ? "Ready" : "Unavailable")}
                     </span>
                     <span className="target-workflow-environment">
                       <strong className="target-workflow-lifecycle">
@@ -395,7 +400,12 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
                       <span className="target-workflow-profile">{state?.activeProfileName}</span>
                     </span>
                     <span className="target-workflow-last-applied">
-                      {state?.lastAppliedAt ? formatCheckedAt(state.lastAppliedAt) : null}
+                      {state?.lastAppliedAt ? (
+                        <>
+                          <Clock3 size={12} aria-hidden="true" />
+                          {formatCheckedAt(state.lastAppliedAt)}
+                        </>
+                      ) : null}
                     </span>
                     <span className="remote-agent-row__action" />
                   </header>

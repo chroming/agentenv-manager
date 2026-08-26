@@ -89,9 +89,11 @@ describe("SkillSourceView", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", {
+    const sourceActions = screen.getByRole("button", {
       name: "Source actions for acme/skills · /engineering"
-    }));
+    });
+    expect(sourceActions).toHaveClass("ui-icon-button--secondary");
+    fireEvent.click(sourceActions);
     fireEvent.click(screen.getByRole("menuitem", {
       name: "Exclude from routine checks"
     }));

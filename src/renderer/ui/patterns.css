@@ -829,6 +829,11 @@
   overscroll-behavior: contain;
 }
 
+.ui-resource-disclosure.has-child-scroll > .ui-resource-disclosure__panel {
+  max-height: none;
+  overflow: visible;
+}
+
 .ui-resource-disclosure.is-nested > .ui-resource-disclosure__panel {
   background: var(--surface);
   margin-left: 16px;

@@ -11,6 +11,7 @@
 @import "./shell.css" layer(shell);
 @import "./pages/targets.css" layer(pages);
 @import "./pages/targets-layout.css" layer(pages);
+@import "./pages/targets-details.css" layer(pages);
 @import "./pages/targets-remote.css" layer(pages);
 @import "./pages/projects.css" layer(pages);
 @import "./pages/settings.css" layer(pages);

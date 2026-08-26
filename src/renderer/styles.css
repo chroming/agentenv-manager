@@ -211,12 +211,6 @@ h2 {
   color: #475467;
 }
 
-.target-checks {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-
 .target-details {
   background: transparent;
   border: 0;
@@ -233,39 +227,6 @@ h2 {
 .target-details[open] {
   display: grid;
   gap: 8px;
-}
-
-.target-check {
-  align-items: start;
-  border-top: 1px solid #eef2f7;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-width: 0;
-  padding-top: 8px;
-}
-
-.target-check span {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: var(--font-weight-regular);
-  text-transform: uppercase;
-}
-
-.target-check code {
-  color: var(--text);
-  display: block;
-  font-size: 11px;
-  line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.target-check strong {
-  color: var(--subtle);
-  font-size: 11px;
-  padding-top: 1px;
 }
 
 .profile-list,

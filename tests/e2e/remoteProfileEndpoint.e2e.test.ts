@@ -131,6 +131,49 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
       fontWeight: "400",
       lineHeight: "15px"
     });
+    const remoteLayout = await remoteDeviceGroup.evaluate((group) => {
+      const header = group.querySelector<HTMLElement>(".remote-location-header")!;
+      const headerBox = header.getBoundingClientRect();
+      const actions = header.querySelector<HTMLElement>(".remote-location-header__actions")!;
+      const actionButtons = Array.from(actions.querySelectorAll<HTMLElement>("button"));
+      const remoteRow = group.querySelector<HTMLElement>(".target-workflow-header")!;
+      const remoteName = remoteRow.querySelector<HTMLElement>(".target-workflow-name-action > strong")!;
+      const remoteStatus = remoteRow.querySelector<HTMLElement>(".target-health-status")!;
+      const remoteProfile = remoteRow.querySelector<HTMLElement>(".target-workflow-environment")!;
+      const tableHeader = group.parentElement?.querySelector<HTMLElement>(".target-list__header")!;
+      const textLeft = (element: HTMLElement) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return Math.round(range.getBoundingClientRect().left);
+      };
+      return {
+        actionsContained: actions.getBoundingClientRect().right <= headerBox.right,
+        actionSizes: actionButtons.map((button) => {
+          const box = button.getBoundingClientRect();
+          return `${Math.round(box.width)}x${Math.round(box.height)}`;
+        }),
+        nameAligned: Math.abs(
+          textLeft(remoteName) - textLeft(tableHeader.children[1] as HTMLElement)
+        ) <= 1,
+        profileAligned: Math.abs(
+          remoteProfile.getBoundingClientRect().left -
+          (tableHeader.children[3] as HTMLElement).getBoundingClientRect().left
+        ) <= 1,
+        statusAligned: Math.abs(
+          remoteStatus.getBoundingClientRect().left -
+          (tableHeader.children[2] as HTMLElement).getBoundingClientRect().left
+        ) <= 1,
+        statusText: remoteStatus.textContent?.trim()
+      };
+    });
+    expect(remoteLayout).toEqual({
+      actionsContained: true,
+      actionSizes: ["28x28", "28x28"],
+      nameAligned: true,
+      profileAligned: true,
+      statusAligned: true,
+      statusText: "Ready"
+    });
 
     const result = await page.evaluate(async () => {
       const created = await window.agentEnv.createProfile({
