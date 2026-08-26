@@ -1053,7 +1053,7 @@ try {
   );
   await rm(sharedSkillDir, { recursive: true, force: true });
   await page.reload();
-  await agentsWorkspace.locator(".target-page-summary").waitFor({ state: "visible" });
+  await agentsWorkspace.locator(".target-list[aria-busy='false']").waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "agents-ready-920x620.png"));
   await page.getByRole("button", { name: "More Agent actions" }).click();
   await page.getByRole("menuitem", { name: "Add SSH device" }).click();

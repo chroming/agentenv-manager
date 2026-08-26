@@ -15,7 +15,7 @@ export interface ProfileComposerSectionProps {
   id: string;
   icon: ReactNode;
   title: string;
-  description: string;
+  description?: string;
   count: number;
   enabledCount: number;
   countSummary?: string;
@@ -71,13 +71,13 @@ export const ProfileComposerSection = ({
       ].filter(Boolean).join(" ")}
       data-profile-composer-id={id}
       density="compact"
-      description={(
+      description={description ? (
         <OverflowTooltip
           className="profile-composer-section__description"
           focusable={false}
           text={description}
         />
-      )}
+      ) : undefined}
       expanded={expanded}
       icon={icon}
       id={id}

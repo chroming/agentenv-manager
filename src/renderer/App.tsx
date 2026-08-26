@@ -4086,11 +4086,11 @@ const AppContent = ({
                           </IconButton>
                         </span>
                       )}
-                      description={(
+                      description={draftProfile.manifest.description ? (
                         <span className="profile-description">
-                          {draftProfile.manifest.description || t("No description")}
+                          {draftProfile.manifest.description}
                         </span>
-                      )}
+                      ) : undefined}
                       actions={profileObjectActions}
                     />
                     <section className="profile-composer" aria-label={t("Profile composer")}>
@@ -4146,9 +4146,6 @@ const AppContent = ({
                         id="mcp"
                         icon={<ProductIcon name="mcps" size={18} />}
                         title={t("MCPs")}
-                        description={t(
-                          "External tools and service connections"
-                        )}
                         count={resourceSummary?.mcp.total ?? 0}
                         enabledCount={resourceSummary?.mcp.count ?? 0}
                         countSummary={mcpSummary}

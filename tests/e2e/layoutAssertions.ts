@@ -149,7 +149,7 @@ export const expectStableResourceDisclosureHeaders = (
     expect(current?.x, context).toBe(initial.x);
     expect(current?.titleTop, context).toBe(initial.titleTop);
     expect(current?.descriptionTop, context).toBe(initial.descriptionTop);
-    expect(current?.descriptionVisible, context).toBe(true);
+    expect(current?.descriptionVisible, context).toBe(initial.descriptionVisible);
     expect(current?.actionsTop, context).toBe(initial.actionsTop);
   }
   expect(after.filter(({ expanded }) => expanded).map(({ id }) => id).sort())

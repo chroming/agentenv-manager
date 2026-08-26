@@ -285,7 +285,7 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
         hour: "numeric",
         minute: "2-digit"
       }).format(new Date(value))
-    : t("Not checked");
+    : "";
 
   return (
     <>
@@ -323,9 +323,9 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
                 {checking ? <LoaderCircle className="is-spinning" size={13} aria-hidden="true" /> : null}
                 {statusText}
               </span>
-              <span className="remote-location-header__checked">
-                {t("Checked {{time}}", { time: formatCheckedAt(probe?.checkedAt) })}
-              </span>
+              <span className="remote-location-header__checked" title={probe?.checkedAt
+                ? t("Checked {{time}}", { time: formatCheckedAt(probe.checkedAt) })
+                : undefined} />
               <IconButton
                 disabled={busy || checking}
                 label={t("Refresh {{name}}", { name: device.name })}
@@ -386,16 +386,16 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
                       <span className="target-workflow-description">{device.name} · SSH</span>
                     </span>
                     <span className={`target-health-status target-health-status--${available ? "ready" : "unknown"}`}>
-                      {available ? t("Ready") : t("Unavailable")}
+                      {available ? <span className="ui-visually-hidden">{t("Ready")}</span> : t("Unavailable")}
                     </span>
                     <span className="target-workflow-environment">
                       <strong className="target-workflow-lifecycle">
-                        {remoteLifecycleLabel(state?.lifecycleStatus, t)}
+                        {state?.lifecycleStatus ? remoteLifecycleLabel(state.lifecycleStatus, t) : t("Not managed")}
                       </strong>
-                      <span className="target-workflow-profile">{state?.activeProfileName ?? t("None")}</span>
+                      <span className="target-workflow-profile">{state?.activeProfileName}</span>
                     </span>
                     <span className="target-workflow-last-applied">
-                      {state?.lastAppliedAt ? formatCheckedAt(state.lastAppliedAt) : t("Never applied")}
+                      {state?.lastAppliedAt ? formatCheckedAt(state.lastAppliedAt) : null}
                     </span>
                     <span className="remote-agent-row__action" />
                   </header>

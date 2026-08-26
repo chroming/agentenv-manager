@@ -380,7 +380,6 @@ const AgentOverflowPopover = ({
 
 export const ProfileSidebar = ({
   targets,
-  profiles,
   activeWorkspace,
   isLoading,
   collapsed,
@@ -398,13 +397,7 @@ export const ProfileSidebar = ({
   const hiddenTargets = orderedTargets.slice(statusTargets.length);
   const statusSummary = isLoading
     ? t("Detecting Agents")
-    : t("{{ready}}/{{total}} Agents · {{profiles}}", {
-        ready: readyTargets,
-        total: targets.length,
-        profiles: t(profiles.length === 1 ? "{{count}} Profile" : "{{count}} Profiles", {
-          count: profiles.length
-        })
-      });
+    : t("{{count}} Agents", { count: targets.length });
   const summaryState = isLoading
     ? "loading"
     : targets.length === 0

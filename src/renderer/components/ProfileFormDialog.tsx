@@ -77,7 +77,7 @@ export const ProfileFormDialog = ({
           title={t(creating ? "New Profile" : "Edit Profile")}
           description={creating
             ? t("Start blank or capture an existing local Agent setup.")
-            : t("Update the Profile name and description.")}
+            : undefined}
         />
         <DialogBody className="profile-form-grid">
           {creating ? (

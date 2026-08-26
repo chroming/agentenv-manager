@@ -76,7 +76,6 @@ export const InstructionBlockEditorDialog = ({
       dismissPolicy="intentional"
       resetKey={block?.id ?? initial?.name ?? "new-instruction"}
       title={t(block ? "Edit Instruction Block" : "New Instruction Block")}
-      description={t("Reusable content that Profiles can combine into an Agent instruction file.")}
       onClose={onClose}
     >
       <DialogBody className="instruction-block-editor__body">

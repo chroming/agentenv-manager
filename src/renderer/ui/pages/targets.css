@@ -83,12 +83,6 @@
   gap: 8px;
 }
 
-.target-page-summary {
-  color: var(--muted);
-  font-size: var(--font-size-caption);
-  white-space: nowrap;
-}
-
 .target-list {
   --target-list-columns:
     32px minmax(132px, 200px) 84px minmax(112px, 0.68fr)

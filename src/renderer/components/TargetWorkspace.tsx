@@ -343,9 +343,6 @@ export const TargetWorkspace = ({
     "setup",
     "agent-review"
   ].includes(environmentReview.state);
-  const detectedAgentCount = environmentReview.installedAgentCount
-    + remoteEndpoints.filter((endpoint) => endpoint.availability === "ready").length;
-
   useModalDialog({
     open: Boolean(stopManagingTargetId),
     dialogRef: stopManagingDialogRef,
@@ -372,14 +369,6 @@ export const TargetWorkspace = ({
         help={<InfoTip label={t("Inspect each Agent and apply a saved Profile only when you choose.")} />}
         actions={(
           <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
-            {detectedAgentCount > 0 ? (
-              <span className="target-page-summary">
-                {t("{{agents}} Agents detected · {{profiles}} Profiles", {
-                  agents: detectedAgentCount,
-                  profiles: environmentReview.usableProfileCount
-                })}
-              </span>
-            ) : null}
             {backups.length > 0 ? (
               <Button
                 ref={recoveryTriggerRef}
@@ -443,7 +432,7 @@ export const TargetWorkspace = ({
               </span>
             </span>
             <span>{t("Last applied")}</span>
-            <span>{t("Actions")}</span>
+            <span aria-label={t("Actions")} />
           </div>
         ) : null}
         {isLoading && targets.length === 0 && remoteDevices.length === 0 ? (
@@ -470,7 +459,6 @@ export const TargetWorkspace = ({
         {remoteDevices.length > 0 && targets.length > 0 ? (
           <div className="target-location-divider">
             <span>{t("This Mac")}</span>
-            <span>{t("{{count}} Agents", { count: targets.length })}</span>
           </div>
         ) : null}
         {targets.map((target) => {
@@ -533,19 +521,23 @@ export const TargetWorkspace = ({
                   </span>
                 </span>
                 <span className={`target-health-status target-health-status--${target.health.status}`}>
-                  {t(targetStatusLabel[target.health.status])}
+                  {target.health.status === "ready" ? (
+                    <span className="ui-visually-hidden">{t("Ready")}</span>
+                  ) : t(targetStatusLabel[target.health.status])}
                 </span>
                 <span className="target-workflow-environment">
                   <strong className="target-workflow-lifecycle">
                     {t(state?.lifecycleStatus ? lifecycleLabel[state.lifecycleStatus] : isManaged ? "Managed by AgentEnv" : "Not managed")}
                   </strong>
-                  <span className="target-workflow-profile">
-                    {state?.activeProfileName ?? t("None")}
-                  </span>
+                  <span className="target-workflow-profile">{state?.activeProfileName}</span>
                 </span>
                 <span className="target-workflow-last-applied">
-                  <Clock3 size={12} />
-                  {formatLastApplied(state?.lastAppliedAt, localeTag, t("Never applied"))}
+                  {state?.lastAppliedAt ? (
+                    <>
+                      <Clock3 size={12} />
+                      {formatLastApplied(state.lastAppliedAt, localeTag, "")}
+                    </>
+                  ) : null}
                 </span>
                 <TargetRowActions
                   target={target}

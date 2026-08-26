@@ -1096,8 +1096,8 @@ describe("App", () => {
 
     const workspace = await screen.findByRole("region", { name: "Agents" });
     expect(within(workspace).queryByText("Checking local Skills")).not.toBeInTheDocument();
-    expect(within(workspace).getByText("1 Agents detected · 1 Profiles"))
-      .toBeInTheDocument();
+    expect(within(workspace).queryByText("1 Agents detected · 1 Profiles"))
+      .not.toBeInTheDocument();
     expect(
       within(workspace).getByRole("button", { name: "OpenCode" })
     ).toBeEnabled();
@@ -1106,8 +1106,8 @@ describe("App", () => {
       inventoryRequest.resolve(inventoryScan());
       await Promise.resolve();
     });
-    expect(await within(workspace).findByText("1 Agents detected · 1 Profiles"))
-      .toBeInTheDocument();
+    expect(within(workspace).queryByText("1 Agents detected · 1 Profiles"))
+      .not.toBeInTheDocument();
     expect(within(workspace).queryByRole("region", { name: "Profile status" }))
       .toBeNull();
   });
@@ -1240,8 +1240,8 @@ describe("App", () => {
     const workspace = await screen.findByRole("region", { name: "Agents" });
     expect(within(workspace).queryByRole("region", { name: "Profile status" }))
       .toBeNull();
-    expect(within(workspace).getByText("1 Agents detected · 1 Profiles"))
-      .toBeInTheDocument();
+    expect(within(workspace).queryByText("1 Agents detected · 1 Profiles"))
+      .not.toBeInTheDocument();
     expect(
       within(within(workspace).getByRole("article", { name: "Agent OpenCode" }))
         .getByText("Local overrides")

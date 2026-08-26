@@ -63,7 +63,7 @@ describe("App update settings", () => {
     expect(statusRow).toHaveTextContent("Current version 0.1.0");
     expect(statusRow).toHaveTextContent("Latest version 0.1.0");
     expect(screen.getByText("Finish updates after quitting")).toBeInTheDocument();
-    expect(screen.getByText(/quitting is not delayed/)).toBeInTheDocument();
+    expect(screen.queryByText(/quitting is not delayed/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Check now" }));
     await waitFor(() => expect(api.checkAppUpdate).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole("switch", { name: "Automatic update checks" }));
@@ -147,8 +147,8 @@ describe("App update settings", () => {
 
     expect(await screen.findByText("Installed directly")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Download" })).toBeInTheDocument();
-    expect(screen.getByText("Downloads and verifies the official update in the background."))
-      .toBeInTheDocument();
+    expect(screen.queryByText("Downloads and verifies the official update in the background."))
+      .not.toBeInTheDocument();
     expect(screen.queryByText("Install when quitting")).not.toBeInTheDocument();
   });
 

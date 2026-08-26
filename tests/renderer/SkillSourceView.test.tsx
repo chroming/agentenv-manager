@@ -124,7 +124,7 @@ describe("SkillSourceView", () => {
       />
     );
 
-    expect(screen.getByLabelText("Source summary")).toHaveTextContent("Total4Changes 3");
+    expect(screen.getByLabelText("Source summary")).toHaveTextContent("4Changes 3");
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Merge selected/ })).not.toBeInTheDocument();
     expect(document.querySelector(".skill-source-counts .is-change")).toHaveClass("has-value");
@@ -800,7 +800,7 @@ describe("SkillSourceView", () => {
     expect(updateReview).toHaveAttribute("data-status-kind", "update-available");
     expect(updateReview).toHaveAttribute("data-tone", "accent");
     expect(document.querySelector(".skill-source-current-action")).toBeNull();
-    expect(screen.getByText("—", { selector: ".skill-source-last-checked" })).toBeInTheDocument();
+    expect(document.querySelector(".skill-source-last-checked")).toBeNull();
     fireEvent.click(updateReview!);
     await waitFor(() => expect(onReviewUpdates).toHaveBeenCalledWith(["review"]));
   });

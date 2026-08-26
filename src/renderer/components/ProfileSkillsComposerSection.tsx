@@ -84,7 +84,6 @@ export const ProfileSkillsComposerSection = ({
       id="skills"
       icon={<ProductIcon name="skills" size={18} />}
       title={t("Skills")}
-      description={t("Reusable skills and workflows")}
       count={summary.total}
       enabledCount={summary.count}
       countSummary={sharedRuntimeSummary}

@@ -755,7 +755,6 @@ export const SkillSourceView = ({
             {mergeSelectionMode ? <span aria-hidden="true" /> : null}
             <span>{t("Source")}</span>
             <span>{t("Skills")}</span>
-            <span>{t("Last checked")}</span>
             <span>{t("Status")}</span>
             <span aria-label={t("More")} />
           </div>
@@ -946,24 +945,19 @@ export const SkillSourceView = ({
                   </span>
                 </div>
                 <div className="skill-source-counts" aria-label={t("Source summary")}>
-                  <span className="is-total"><span>{t("Total")}</span><strong>{group.counts.total}</strong></span>
-                  <OverflowTooltip
-                    className={`is-change${changedCount > 0 ? " has-value" : ""}`}
-                    displayText={`${t("Changes")} ${changedCount}`}
-                    text={[
-                      `${t("Updates")} ${group.counts.updates}`,
-                      `${t("New")} ${group.counts.new}`,
-                      `${t("Removed")} ${group.counts.removed}`
-                    ].join(" · ")}
-                  />
+                  <strong>{group.counts.total}</strong>
+                  {changedCount > 0 ? (
+                    <OverflowTooltip
+                      className="is-change has-value"
+                      displayText={`${t("Changes")} ${changedCount}`}
+                      text={[
+                        `${t("Updates")} ${group.counts.updates}`,
+                        `${t("New")} ${group.counts.new}`,
+                        `${t("Removed")} ${group.counts.removed}`
+                      ].join(" · ")}
+                    />
+                  ) : null}
                 </div>
-                <span className="skill-source-last-checked">
-                  {group.error
-                    ? t("Last check failed")
-                    : group.checkedAt
-                      ? formatDate(group.checkedAt)
-                      : "—"}
-                </span>
                 <InteractiveStatus
                   busy={reviewingGroup}
                   className={statusClassName}
@@ -972,6 +966,9 @@ export const SkillSourceView = ({
                   label={statusLabel}
                   reviewLabel={reviewStatusLabel}
                   statusKind={semanticStatus}
+                  title={!group.error && group.checkedAt
+                    ? `${t("Last checked")} · ${formatDate(group.checkedAt)}`
+                    : undefined}
                   tone={statusToneFor(semanticStatus)}
                   onReview={reviewStatus ? (event) => {
                     event.stopPropagation();

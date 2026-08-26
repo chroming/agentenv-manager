@@ -493,7 +493,7 @@ describe("Conversations desktop workflow", () => {
       name: /Repair the desktop release workflow/
     });
     await selectedConversation.click();
-    await expect.poll(() => selectedConversation.textContent()).toContain(
+    await expect.poll(() => selectedConversation.textContent()).not.toContain(
       `${Buffer.byteLength(source, "utf8")} B`
     );
     await expect.poll(() => selectedConversation.getAttribute("aria-selected"))

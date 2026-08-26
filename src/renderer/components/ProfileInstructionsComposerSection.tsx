@@ -129,7 +129,6 @@ export const ProfileInstructionsComposerSection = ({
       id="instructions"
       icon={<ProductIcon name="instructions" size={18} />}
       title={t("Instructions")}
-      description={t("Reusable rules compiled into the Agent instruction file")}
       count={summary.total}
       enabledCount={summary.count}
       chipNames={references.map((reference) => blockById.get(reference.libraryId)?.name).filter((name): name is string => Boolean(name))}
@@ -178,12 +177,12 @@ export const ProfileInstructionsComposerSection = ({
                   setBlockError("");
                   setEditingBlockId(reference.libraryId);
                 }}>{name}</TextAction>}
-                description={(
+                description={block?.description ? (
                   <OverflowTooltip
                     className="profile-instruction-description"
-                    text={block?.description || t("Instruction Library")}
+                    text={block.description}
                   />
-                )}
+                ) : undefined}
                 state={block ? undefined : t("Missing")}
                 actions={(
                   <>

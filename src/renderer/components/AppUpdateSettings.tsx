@@ -199,7 +199,6 @@ export const AppUpdateSettings = ({
         />
         <SettingsPreferenceRow
           label={t("Automatic checks")}
-          description={t("Checks for stable releases after startup.")}
           control={<Switch
             checked={settings.appUpdateAutoCheckEnabled !== false}
             disabled={busy}
@@ -216,7 +215,6 @@ export const AppUpdateSettings = ({
                 settings.appUpdateAutoCheckEnabled === false ? " is-disabled" : ""
               }`}
               label={t("Prepare updates")}
-              description={t("Downloads and verifies the official update in the background.")}
               control={<Switch
                 checked={settings.appUpdateAutoDownloadEnabled !== false}
                 disabled={busy || settings.appUpdateAutoCheckEnabled === false}
@@ -229,7 +227,6 @@ export const AppUpdateSettings = ({
             {status.installChannel === "homebrew" ? (
               <SettingsPreferenceRow
                 label={t("Finish updates after quitting")}
-                description={t("Starts an already prepared Homebrew update after AgentEnv Manager closes, so quitting is not delayed.")}
                 control={<Switch
                   checked={settings.appUpdateInstallOnQuit !== false}
                   disabled={busy}

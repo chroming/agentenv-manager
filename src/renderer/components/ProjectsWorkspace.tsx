@@ -785,9 +785,9 @@ export const ProjectsWorkspace = ({
                     {gitSummary}{snapshot?.partial ? ` · ${t("Some sources unavailable")}` : ""}
                   </span>
                   {([
-                    ["instructions", t("Instructions"), t("Workspace-owned guidance files"), <FileText size={17} aria-hidden="true" />],
-                    ["skill", t("Skills"), t("Regular files copied into this folder"), <BookOpen size={17} aria-hidden="true" />],
-                    ["mcp", t("MCPs"), t("Detected only; AgentEnv does not edit these files"), <Plug size={17} aria-hidden="true" />]
+                    ["instructions", t("Instructions"), undefined, <FileText size={17} aria-hidden="true" />],
+                    ["skill", t("Skills"), undefined, <BookOpen size={17} aria-hidden="true" />],
+                    ["mcp", t("MCPs"), t("Read-only"), <Plug size={17} aria-hidden="true" />]
                   ] as const).filter(([kind]) => resourceKindIsVisible(kind)).map(([kind, label, description, icon]) => {
                     const resources = resourcesByKind(kind);
                     const expanded = resourceKindIsExpanded(kind);
@@ -863,15 +863,6 @@ export const ProjectsWorkspace = ({
                               actionsVisibility="contextual"
                               className="ui-resource-children__item project-resource-entry"
                               density="compact"
-                              description={resource.relativePath !== resource.name
-                                ? (
-                                  <OverflowTooltip
-                                    className="project-resource-entry__path"
-                                    displayText={resource.relativePath}
-                                    text={resource.absolutePath}
-                                  />
-                                )
-                                : undefined}
                               icon={icon}
                               key={resource.id}
                               state={compactState ? (
@@ -881,7 +872,13 @@ export const ProjectsWorkspace = ({
                                   text={fullState}
                                 />
                               ) : undefined}
-                              title={resource.name}
+                              title={(
+                                <OverflowTooltip
+                                  className="project-resource-entry__name"
+                                  displayText={resource.name}
+                                  text={resource.absolutePath}
+                                />
+                              )}
                               actions={resource.kind === "skill" && resource.editable ? (
                                 <IconButton
                                   size="compact"

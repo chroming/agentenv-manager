@@ -187,19 +187,20 @@ describe("ProjectsWorkspace", () => {
       .not.toBeInTheDocument();
     const skillsSection = await screen.findByRole("region", { name: "Skills" });
     expect(skillsSection).toHaveClass("ui-resource-disclosure");
-    expect(within(skillsSection).getByText("Regular files copied into this folder"))
-      .not.toHaveClass("ui-visually-hidden");
+    expect(within(skillsSection).queryByText("Regular files copied into this folder"))
+      .not.toBeInTheDocument();
     expect(within(skillsSection).queryByRole("button", { name: "Copy from Library" }))
       .not.toBeInTheDocument();
     fireEvent.click(within(skillsSection).getByRole("button", { name: "Expand Skills" }));
-    expect(within(skillsSection).getByText("Regular files copied into this folder"))
-      .not.toHaveClass("ui-visually-hidden");
+    expect(within(skillsSection).queryByText("Regular files copied into this folder"))
+      .not.toBeInTheDocument();
     expect(within(skillsSection).getByText(/Tracked/)).toBeInTheDocument();
     expect(within(skillsSection).getByText(/2 Agents/)).toBeInTheDocument();
     expect(within(skillsSection).queryByText("OpenCode · codex")).not.toBeInTheDocument();
-    const skillPath = within(skillsSection).getByText(".opencode/skills/review");
-    expect(skillPath).toHaveClass("project-resource-entry__path");
-    expect(skillPath).toHaveAttribute("data-ui-overflow-detail", "true");
+    expect(within(skillsSection).queryByText(".opencode/skills/review"))
+      .not.toBeInTheDocument();
+    expect(within(skillsSection).getByText("review"))
+      .toHaveAttribute("data-ui-overflow-detail", "true");
 
     fireEvent.click(await within(skillsSection).findByRole("button", { name: "Add Skills" }));
     const dialog = await screen.findByRole("dialog", { name: "Add Skills to Workspace" });

@@ -1888,10 +1888,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         <div className="library-table__head">
           <span>{t("Skill")}</span>
           <span>{t("Source")}</span>
-          <span className="library-column-label">
-            {t("Status")}
-            <InfoTip label={t("Shows the current maintenance state for this skill.")} />
-          </span>
+          <span className="library-column-label">{t("Status")}</span>
           <span aria-label={t("More")} />
         </div>
         <div className="library-table__body" ref={scrollOwnerRef}>

@@ -1785,7 +1785,7 @@ export const ConversationWorkspace = ({
                             </span>
                             {item.agentName}
                           </span>
-                          {item.workspacePath ? (
+                          {workspaceFilter && item.workspacePath ? (
                             <>
                               <span aria-hidden="true">·</span>
                               <OverflowTooltip
@@ -1807,7 +1807,7 @@ export const ConversationWorkspace = ({
                           >
                             {formatListTime(item.updatedAt)}
                           </time>
-                          {item.sizeBytes !== undefined ? (
+                          {sort === "size-desc" && item.sizeBytes !== undefined ? (
                             <>
                               <span aria-hidden="true">·</span>
                               <span className="conversation-list-item__size">

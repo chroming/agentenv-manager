@@ -3711,17 +3711,6 @@ describe("Electron UI profile switching e2e", () => {
     await page.mouse.move(10, 10);
     await descriptionTip.waitFor({ state: "hidden" });
 
-    const headerTip = page.getByRole("tooltip");
-    await hoverUntilVisible(
-      page,
-      page.locator(".library-table__head .info-tip").first(),
-      headerTip
-    );
-    expect(await headerTip.getAttribute("class")).toContain("ui-hover-detail");
-    await expectInViewport(page, headerTip);
-    await page.mouse.move(10, 10);
-    await headerTip.waitFor({ state: "hidden" });
-
     await page.getByRole("button", { name: "Profiles" }).click();
     await page.getByRole("button", { name: "Select apply Agent" }).click();
     const targetMenu = page.getByRole("dialog", { name: "Select apply Agent" });
@@ -5688,7 +5677,7 @@ describe("Electron UI profile switching e2e", () => {
     const wideHeaderGeometry = await page.locator(".target-list__header").evaluate((header) => {
       const labels = Array.from(header.querySelectorAll<HTMLElement>(":scope > span"));
       const lastApplied = labels.find((label) => label.textContent === "Last applied");
-      const actions = labels.find((label) => label.textContent === "Actions");
+      const actions = labels.at(-1);
       return {
         actionsWidth: Math.round(actions?.getBoundingClientRect().width ?? 0),
         lastAppliedHeight: Math.round(lastApplied?.getBoundingClientRect().height ?? 0),
@@ -5944,7 +5933,8 @@ describe("Electron UI profile switching e2e", () => {
       fileExists(join(appDataRoot, "target-states", "opencode.json"))
     ).resolves.toBe(false);
     await expect.poll(() => openCodeCard.textContent()).toContain("Not managed");
-    await expect.poll(() => openCodeCard.textContent()).toContain("None");
+    await expect.poll(() => openCodeCard.locator(".target-workflow-profile").textContent())
+      .toBe("");
   }, standardElectronTestTimeout);
 
   it("stops managing OpenCode by restoring the environment from before takeover", async () => {
@@ -11967,9 +11957,9 @@ describe("Electron UI profile switching e2e", () => {
     await page.locator(".profile-hero").waitFor({ state: "visible" });
     const profileSwitcher = await openProfileSwitcher(page);
     const profileTypography = await page.evaluate(() => ({
-      composerDescription: getComputedStyle(
-        document.querySelector<HTMLElement>(".profile-composer-section__description")!
-      ).fontWeight,
+      composerDescriptionCount: document.querySelectorAll(
+        ".profile-composer-section__description"
+      ).length,
       composerTitle: getComputedStyle(
         document.querySelector<HTMLElement>(".ui-resource-disclosure__title")!
       ).fontWeight,
@@ -11982,7 +11972,7 @@ describe("Electron UI profile switching e2e", () => {
       )!).fontWeight
     }));
     expect(profileTypography).toEqual({
-      composerDescription: "400",
+      composerDescriptionCount: 0,
       composerTitle: "500",
       deployment: "400",
       name: "500",

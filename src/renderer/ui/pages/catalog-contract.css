@@ -1,7 +1,7 @@
 .skill-source-table-head,
 .skill-source-group-row {
   column-gap: 10px;
-  grid-template-columns: 24px 28px minmax(125px, 1fr) 68px minmax(76px, 0.7fr) minmax(110px, 0.8fr) 32px;
+  grid-template-columns: 24px 28px minmax(125px, 1fr) 68px minmax(110px, 0.8fr) 32px;
 }
 
 .skill-source-table-head {
@@ -25,7 +25,7 @@
 
 .skill-source-table-head.can-merge,
 .skill-source-list.can-merge .skill-source-group-row {
-  grid-template-columns: 20px 24px 28px minmax(110px, 1fr) 62px minmax(70px, 0.65fr) minmax(104px, 0.8fr) 32px;
+  grid-template-columns: 20px 24px 28px minmax(110px, 1fr) 62px minmax(104px, 0.8fr) 32px;
 }
 
 .skill-source-table-head.can-merge > span:first-child {
@@ -42,22 +42,22 @@
   align-items: center;
   cursor: pointer;
   display: grid;
-  grid-template-areas: "disclosure artwork identity counts checked status more";
+  grid-template-areas: "disclosure artwork identity counts status more";
   min-height: 62px;
   padding: 9px 12px;
   transition: background-color var(--motion-fast);
 }
 
 .skill-source-list.can-merge .skill-source-group-row {
-  grid-template-areas: "select disclosure artwork identity counts checked status more";
+  grid-template-areas: "select disclosure artwork identity counts status more";
 }
 
 .skill-source-counts {
-  align-content: center;
-  display: grid;
-  gap: 2px;
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   grid-area: counts;
-  grid-template-rows: repeat(2, 18px);
   min-width: 0;
 }
 
@@ -88,15 +88,6 @@
 
 .skill-source-counts .is-change.has-value {
   color: var(--warning);
-}
-
-.skill-source-last-checked {
-  color: var(--muted);
-  font-size: var(--font-size-metadata);
-  grid-area: checked;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .skill-source-status {
@@ -173,12 +164,12 @@
 @container skill-library (min-width: 920px) {
   .skill-source-table-head,
   .skill-source-group-row {
-    grid-template-columns: 24px 28px minmax(190px, 1fr) 78px minmax(100px, 0.7fr) minmax(118px, 0.8fr) 32px;
+    grid-template-columns: 24px 28px minmax(190px, 1fr) 78px minmax(118px, 0.8fr) 32px;
   }
 
   .skill-source-table-head.can-merge,
   .skill-source-list.can-merge .skill-source-group-row {
-    grid-template-columns: 20px 24px 28px minmax(166px, 1fr) 72px minmax(94px, 0.65fr) minmax(114px, 0.8fr) 32px;
+    grid-template-columns: 20px 24px 28px minmax(166px, 1fr) 72px minmax(114px, 0.8fr) 32px;
   }
 }
 
@@ -206,31 +197,14 @@
     padding-inline-start: 58px;
   }
 
-  .skill-source-table-head:not(.can-merge) > span:nth-child(3),
-  .skill-source-table-head.can-merge > span:nth-child(4) {
-    display: none;
-  }
-
   .skill-source-group-row {
-    grid-template-areas:
-      "disclosure artwork identity counts status more"
-      "disclosure artwork identity counts status more"
-      "disclosure artwork checked counts status more";
-    grid-template-rows: 18px 16px 16px;
-    min-height: 68px;
+    grid-template-areas: "disclosure artwork identity counts status more";
+    min-height: 62px;
     padding-block: 7px;
   }
 
   .skill-source-list.can-merge .skill-source-group-row {
-    grid-template-areas:
-      "select disclosure artwork identity counts status more"
-      "select disclosure artwork identity counts status more"
-      "select disclosure artwork checked counts status more";
-  }
-
-  .skill-source-last-checked {
-    align-self: center;
-    font-size: var(--font-size-caption);
+    grid-template-areas: "select disclosure artwork identity counts status more";
   }
 
   .skill-source-group-row .skill-source-identity {

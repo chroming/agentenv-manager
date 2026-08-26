@@ -325,7 +325,7 @@ describe("ConversationWorkspace", () => {
     expect(api.listConversations).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the indexed transcript size without crowding the conversation title", async () => {
+  it("shows transcript size on demand without crowding the default conversation list", async () => {
     installApi();
     render(
       <ConversationWorkspace
@@ -336,11 +336,16 @@ describe("ConversationWorkspace", () => {
     const option = await screen.findByRole("option", {
       name: /Repair release workflow/
     });
-    expect(option).toHaveTextContent("24 KB");
+    expect(option).not.toHaveTextContent("24 KB");
     expect(within(option).getByText("Repair release workflow"))
       .toHaveClass("conversation-list-item__title");
     expect(document.querySelector(".conversation-list-meta"))
       .toHaveTextContent("Total 24 KB");
+
+    chooseConversationSort("Largest");
+    expect(await screen.findByRole("option", {
+      name: /Repair release workflow/
+    })).toHaveTextContent("24 KB");
   });
 
   it("restores its local view context after the workspace is remounted", async () => {

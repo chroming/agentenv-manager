@@ -42,7 +42,7 @@
   --resource-row-state-track: 112px;
 }
 
-.project-resource-entry__path {
+.project-resource-entry__name {
   display: block;
   max-width: 100%;
 }

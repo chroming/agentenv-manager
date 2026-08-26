@@ -232,40 +232,28 @@ describe("Repository Skill source", () => {
         const sourceHeaderCell = headerCells[0]!;
         const sourceHeaderRange = document.createRange();
         sourceHeaderRange.selectNodeContents(sourceHeaderCell);
-        const identity = row.querySelector<HTMLElement>(".skill-source-identity")!;
-        const identitySupport = row.querySelector<HTMLElement>(".skill-source-checked")!;
         const identityScope = row.querySelector<HTMLElement>(".skill-source-link-scope")!;
         const counts = row.querySelector<HTMLElement>(".skill-source-counts")!;
-        const checked = row.querySelector<HTMLElement>(".skill-source-last-checked")!;
         const status = row.querySelector<HTMLElement>(".skill-source-status")!;
         const statusContent = status.firstElementChild as HTMLElement;
         const statusLabel = row.querySelector<HTMLElement>(".skill-source-status-label")!;
         const more = row.querySelector<HTMLElement>(".skill-source-more")!;
         return {
-          checkedBelowIdentityTitle:
-            checked.getBoundingClientRect().top > identity.getBoundingClientRect().top,
-          checkedHeaderDisplay: getComputedStyle(headerCells[2]!).display,
-          checkedHeaderLeft: headerCells[2]!.getBoundingClientRect().left,
-          checkedLeft: checked.getBoundingClientRect().left,
           columnCount: getComputedStyle(row).gridTemplateColumns.split(" ").length,
           countsHeaderLeft: headerCells[1]!.getBoundingClientRect().left,
           countsLeft: counts.getBoundingClientRect().left,
           countsFit: counts.scrollWidth <= counts.clientWidth + 1,
           documentWidth: document.documentElement.scrollWidth,
-          identityLeft: identity.getBoundingClientRect().left,
           identityScopeText: identityScope.textContent,
           identityScopeVisible: identityScope.getBoundingClientRect().width > 0,
-          identitySupportClearsChecked:
-            identitySupport.getBoundingClientRect().bottom <=
-              checked.getBoundingClientRect().top + 1,
           identityTextLeft: row.querySelector<HTMLElement>(".skill-source-link-text")!
             .getBoundingClientRect().left,
-          moreHeaderLeft: headerCells[4]!.getBoundingClientRect().left,
+          moreHeaderLeft: headerCells[3]!.getBoundingClientRect().left,
           moreLeft: more.getBoundingClientRect().left,
           moreRight: more.getBoundingClientRect().right,
           rowRight: row.getBoundingClientRect().right,
           rowScrollContained: row.scrollWidth <= row.clientWidth + 1,
-          statusHeaderLeft: headerCells[3]!.getBoundingClientRect().left,
+          statusHeaderLeft: headerCells[2]!.getBoundingClientRect().left,
           statusContentLeft: statusContent.getBoundingClientRect().left,
           statusLeft: status.getBoundingClientRect().left,
           statusFits: statusLabel.scrollWidth <= statusLabel.clientWidth + 1,
@@ -287,17 +275,7 @@ describe("Repository Skill source", () => {
       expect(geometry.statusToMoreGap).toBeGreaterThanOrEqual(7);
       expect(Math.abs(geometry.moreLeft - geometry.moreHeaderLeft)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.moreRight - geometry.rowRight + 12)).toBeLessThanOrEqual(1);
-      if (width === 920) {
-        expect(geometry.columnCount).toBe(6);
-        expect(geometry.checkedHeaderDisplay).toBe("none");
-        expect(Math.abs(geometry.checkedLeft - geometry.identityLeft)).toBeLessThanOrEqual(1);
-        expect(geometry.checkedBelowIdentityTitle).toBe(true);
-        expect(geometry.identitySupportClearsChecked).toBe(true);
-      } else {
-        expect(geometry.columnCount).toBe(7);
-        expect(geometry.checkedHeaderDisplay).not.toBe("none");
-        expect(Math.abs(geometry.checkedLeft - geometry.checkedHeaderLeft)).toBeLessThanOrEqual(1);
-      }
+      expect(geometry.columnCount).toBe(6);
     };
     await expectSourceLaneGeometry(920, 620);
     await expectSourceLaneGeometry(1180, 760);
@@ -335,7 +313,7 @@ describe("Repository Skill source", () => {
     }).click();
     await sourceGroup.getByText("Ignored", { exact: true }).waitFor({ state: "visible" });
     await expect.poll(() => sourceGroup.getByLabel("Source summary").textContent())
-      .toContain("Changes 0");
+      .not.toContain("Changes");
     const ignoredRegistry = JSON.parse(
       await readFile(join(appDataRoot, "skill-sources.json"), "utf8")
     ) as { sources: Array<{ ignoredSubpaths?: string[] }> };

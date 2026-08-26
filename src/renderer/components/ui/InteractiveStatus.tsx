@@ -17,6 +17,7 @@ interface InteractiveStatusProps {
   reviewLabel?: string;
   size?: "body" | "metadata";
   statusKind?: SemanticStatusKind;
+  title?: string;
   tone?: SemanticStatusTone;
 }
 
@@ -31,6 +32,7 @@ export const InteractiveStatus = ({
   reviewLabel,
   size = "body",
   statusKind,
+  title,
   tone
 }: InteractiveStatusProps) => {
   const effectiveTone = tone ?? statusToneFor(statusKind ?? "neutral");
@@ -61,6 +63,7 @@ export const InteractiveStatus = ({
         data-status-kind={statusKind}
         data-tone={effectiveTone}
         disabled={disabled || busy}
+        title={title}
         type="button"
         onClick={onReview}
       >
@@ -69,5 +72,5 @@ export const InteractiveStatus = ({
     );
   }
 
-  return <strong className={classes} data-status-kind={statusKind} data-tone={effectiveTone}>{content}</strong>;
+  return <strong className={classes} data-status-kind={statusKind} data-tone={effectiveTone} title={title}>{content}</strong>;
 };

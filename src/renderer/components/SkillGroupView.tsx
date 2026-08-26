@@ -198,7 +198,7 @@ export const SkillGroupView = ({
               )}
               className="skill-group-card"
               density="compact"
-              description={group.description || t("Reusable Skill collection")}
+              description={group.description || undefined}
               expanded={expanded}
               icon={(
                 <ResourceIconArtwork
@@ -277,7 +277,6 @@ export const SkillGroupView = ({
         >
           <DialogHeader
             title={t(draft.id ? "Edit Skill Group" : "New Skill Group")}
-            description={t("Choose the Skills this reusable group contains.")}
           />
           <DialogBody className="skill-group-dialog__body">
             <div className="skill-group-fields">
@@ -335,7 +334,7 @@ export const SkillGroupView = ({
         >
           <DialogHeader
             title={t("Delete {{name}}?", { name: deleteCandidate.name })}
-            description={t("The Skills stay in Library. Existing Profiles keep their saved group snapshot.")}
+            description={t("Skills stay in Library. Profiles already using this group are unchanged.")}
           />
           <DialogFooter>
             <Button ref={deleteCancelRef} onClick={() => setDeleteCandidate(undefined)}>{t("Cancel")}</Button>

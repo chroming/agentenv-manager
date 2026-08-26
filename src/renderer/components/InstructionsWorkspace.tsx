@@ -60,7 +60,7 @@ export const InstructionsWorkspace = ({
   onRemove,
   onUpdate
 }: InstructionsWorkspaceProps) => {
-  const { t, formatDate } = useI18n();
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string>();
   const [editor, setEditor] = useState<{ block?: InstructionBlock; initial?: InstructionFileSelection }>();
@@ -194,6 +194,16 @@ export const InstructionsWorkspace = ({
           <div className="instructions-list" role="list">
             {visible.map((block) => {
               const profileCount = block.usedByProfiles?.length ?? 0;
+              const description = block.description || profileCount > 0 ? (
+                <span className="instructions-list-row__metadata">
+                  {block.description ? <span>{block.description}</span> : null}
+                  {profileCount > 0 ? (
+                    <span>{t(profileCount === 1 ? "{{count}} Profile" : "{{count}} Profiles", {
+                      count: profileCount
+                    })}</span>
+                  ) : null}
+                </span>
+              ) : undefined;
               return (
                 <SelectableListRow
                   className="instructions-list-row"
@@ -202,16 +212,7 @@ export const InstructionsWorkspace = ({
                   icon={<ResourceIcon iconKey={block.iconKey ?? "file"} size={17} />}
                   title={block.name}
                   titleEmphasis="selected"
-                  description={(
-                    <span className="instructions-list-row__metadata">
-                      <span>{block.description || t("No description")}</span>
-                      {profileCount > 0 ? (
-                        <span>{t(profileCount === 1 ? "{{count}} Profile" : "{{count}} Profiles", {
-                          count: profileCount
-                        })}</span>
-                      ) : null}
-                    </span>
-                  )}
+                  description={description}
                   tooltip={block.name}
                   onSelect={() => setSelectedId(block.id)}
                   onContextMenu={(event: ReactMouseEvent<HTMLElement>) => {
@@ -239,12 +240,12 @@ export const InstructionsWorkspace = ({
               <InspectorHeader
                 icon={<ResourceIcon iconKey={selected.iconKey ?? "file"} size={18} />}
                 title={selected.name}
-                description={(
+                description={selected.description ? (
                   <OverflowTooltip
                     className="instructions-detail-description"
-                    text={selected.description || t("Reusable Profile instructions")}
+                    text={selected.description}
                   />
-                )}
+                ) : undefined}
                 actions={(
                   <>
                     <Button icon={<Pencil size={14} />} onClick={() => setEditor({ block: selected })}>{t("Edit")}</Button>
@@ -261,22 +262,20 @@ export const InstructionsWorkspace = ({
                   </>
                 )}
               />
-              <div className="instructions-detail-meta">
-                <OverflowTooltip
-                  className="instructions-detail-usage"
-                  text={(selected.usedByProfiles?.length ?? 0) > 0
-                    ? `${t("Used by {{count}} Profiles", { count: selected.usedByProfiles!.length })}: ${selected.usedByProfiles!.join(", ")}`
-                    : t("Not used by any profile")}
-                />
-                <span>{t("Updated {{date}}", { date: formatDate(selected.updatedAt) })}</span>
-              </div>
+              {(selected.usedByProfiles?.length ?? 0) > 0 ? (
+                <div className="instructions-detail-meta">
+                  <OverflowTooltip
+                    className="instructions-detail-usage"
+                    text={`${t("Used by {{count}} Profiles", { count: selected.usedByProfiles!.length })}: ${selected.usedByProfiles!.join(", ")}`}
+                  />
+                </div>
+              ) : null}
               <InstructionDocumentPreviewList
                 fillAvailable
                 documents={[{
                   id: selected.id,
                   name: "CONTENT.md",
                   syntaxPath: "CONTENT.md",
-                  path: selected.path,
                   content: selected.content,
                   metadata: selected.name
                 }]}
