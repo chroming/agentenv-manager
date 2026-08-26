@@ -72,7 +72,8 @@ const target = (
       state: continueState,
       evidence: ["test"],
       delivery: continueState === "degraded" ? "clipboard" : "context-file"
-    }
+    },
+    move: { state: "available", evidence: ["test"] }
   }
 });
 
@@ -138,6 +139,23 @@ const installApi = (
       mode: "context-file",
       message: "Started a new conversation in OpenCode"
     }),
+    selectConversationWorkspace: vi.fn().mockResolvedValue("/work/stable"),
+    previewConversationMove: vi.fn().mockResolvedValue({
+      previewId: "move-preview-1",
+      conversationId: detail.id,
+      agentId: "codex",
+      agentName: "Codex",
+      sourcePath: "/work/project",
+      destinationPath: "/work/stable",
+      warnings: []
+    }),
+    moveConversation: vi.fn().mockResolvedValue({
+      conversation: {
+        ...conversationSummary,
+        workspacePath: "/work/stable"
+      },
+      message: "Moved conversation to /work/stable"
+    }),
     listProjects: vi.fn().mockResolvedValue([]),
     findProjectByPath: vi.fn().mockResolvedValue(undefined),
     openExternalUrl: vi.fn().mockResolvedValue(undefined),
@@ -185,6 +203,46 @@ describe("ConversationWorkspace", () => {
     const workspace = await screen.findByLabelText("Working directory: /work/project");
     expect(workspace).toHaveTextContent("/work/project");
     expect(workspace.querySelector(".selectable")).toHaveTextContent("/work/project");
+  });
+
+  it("moves one native conversation through the shared preview and result dialog", async () => {
+    const api = installApi();
+    render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Move conversation…" }));
+    await waitFor(() => expect(api.previewConversationMove).toHaveBeenCalledWith({
+      conversationId: detail.id,
+      destinationPath: "/work/stable"
+    }));
+
+    const preview = await screen.findByRole("dialog", { name: "Move conversation" });
+    expect(within(preview).getByText("/work/project")).toBeInTheDocument();
+    expect(within(preview).getByText("/work/stable")).toBeInTheDocument();
+    expect(within(preview).getByText("Project files will not be moved or modified."))
+      .toBeInTheDocument();
+    fireEvent.click(within(preview).getByRole("button", { name: "Move conversation" }));
+
+    await waitFor(() => expect(api.moveConversation).toHaveBeenCalledWith("move-preview-1"));
+    const result = await screen.findByRole("dialog", { name: "Conversation moved" });
+    expect(within(result).getByText("/work/stable")).toBeInTheDocument();
+    expect(screen.getByLabelText("Working directory: /work/stable")).toBeInTheDocument();
+    fireEvent.click(within(result).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("keeps a failed move actionable inside its review dialog", async () => {
+    const api = installApi();
+    api.moveConversation.mockRejectedValue(new Error("Conversation changed after preview"));
+    render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Move conversation…" }));
+    const preview = await screen.findByRole("dialog", { name: "Move conversation" });
+    fireEvent.click(within(preview).getByRole("button", { name: "Move conversation" }));
+
+    expect(await within(preview).findByRole("alert"))
+      .toHaveTextContent("Conversation changed after preview");
+    expect(preview).toBeInTheDocument();
+    expect(screen.queryByText("Action failed")).not.toBeInTheDocument();
   });
 
   it("groups known Projects in the folder filter and opens a matching Project", async () => {
@@ -1110,6 +1168,8 @@ describe("ConversationWorkspace", () => {
     fireEvent.contextMenu(row, { clientX: 240, clientY: 180 });
 
     const menu = await screen.findByRole("menu", { name: "Conversation actions" });
+    expect(within(menu).getByRole("menuitem", { name: "Move conversation…" }))
+      .toBeInTheDocument();
     fireEvent.click(within(menu).getByRole("menuitem", { name: "Open in Codex" }));
     await waitFor(() => expect(api.openOriginalConversation).toHaveBeenCalledWith(detail.id));
     expect(await screen.findByText("Opened in Codex")).toBeInTheDocument();

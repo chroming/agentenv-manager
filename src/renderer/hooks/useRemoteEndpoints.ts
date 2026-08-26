@@ -56,7 +56,8 @@ const endpointTargetInfo = (
   conversationCapabilities: {
     history: { state: "unsupported", evidence: ["Remote history is not read"] },
     openOriginal: { state: "unsupported", evidence: ["Remote launch is not supported"] },
-    continue: { state: "unsupported", evidence: ["Remote continuation is not supported"] }
+    continue: { state: "unsupported", evidence: ["Remote continuation is not supported"] },
+    move: { state: "unsupported", evidence: ["Remote conversations are not read"] }
   },
   location: {
     kind: "ssh",

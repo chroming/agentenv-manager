@@ -391,6 +391,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     selectTargetConfigRoot: vi.fn().mockResolvedValue(undefined),
     selectComparisonWorkspace: vi.fn().mockResolvedValue(undefined),
     selectProjectFolder: vi.fn().mockResolvedValue(undefined),
+    selectConversationWorkspace: vi.fn().mockResolvedValue(undefined),
     listProjects: vi.fn().mockResolvedValue([]),
     findProjectByPath: vi.fn().mockResolvedValue(undefined),
     addProject: vi.fn().mockRejectedValue(new Error("Project unavailable")),
@@ -439,6 +440,12 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       mode: "context-file",
       message: "Started"
     }),
+    previewConversationMove: vi.fn().mockRejectedValue(
+      new Error("Conversation not found")
+    ),
+    moveConversation: vi.fn().mockRejectedValue(
+      new Error("Conversation not found")
+    ),
     listNativeMcpConnections: vi.fn().mockResolvedValue({ connections: [], issues: [] }),
     listInstructionBlocks: vi.fn().mockResolvedValue([]),
     createInstructionBlock: vi.fn().mockRejectedValue(new Error("Instructions unavailable")),

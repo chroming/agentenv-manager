@@ -88,4 +88,11 @@ export const registerDialogIpc = (
       properties: ["openDirectory"]
     })
   );
+  diagnosticHandle("dialog:select-conversation-workspace", (event) =>
+    selectDirectory(event, {
+      title: "Move conversation to working directory",
+      buttonLabel: "Choose",
+      properties: ["openDirectory"]
+    })
+  );
 };

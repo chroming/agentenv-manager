@@ -152,6 +152,51 @@ describe("filesystem conversation adapters", () => {
     });
   });
 
+  it("keeps a Claude custom title when a later generated title is appended", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-claude-title-"));
+    const configDir = join(root, ".claude");
+    const projectDir = join(configDir, "projects", "workspace");
+    const historyPath = join(projectDir, "claude-session.jsonl");
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(historyPath, [
+      JSON.stringify({
+        type: "user",
+        sessionId: "claude-session",
+        uuid: "user-1",
+        message: { role: "user", content: "Review the release" }
+      }),
+      JSON.stringify({
+        type: "ai-title",
+        sessionId: "claude-session",
+        aiTitle: "Generated release review"
+      }),
+      JSON.stringify({
+        type: "custom-title",
+        sessionId: "claude-session",
+        customTitle: "Release readiness"
+      })
+    ].join("\n") + "\n", "utf8");
+
+    const capability = createClaudeConversationCapability();
+    const initialCandidate = (await capability.discover(contextFor(configDir))).candidates[0];
+    const initial = await capability.read(contextFor(configDir), initialCandidate);
+    expect(initial.title).toBe("Release readiness");
+
+    await appendFile(historyPath, `${JSON.stringify({
+      type: "ai-title",
+      sessionId: "claude-session",
+      aiTitle: "Later generated title"
+    })}\n`, "utf8");
+    const updatedCandidate = (await capability.discover(contextFor(configDir))).candidates[0];
+    const updated = await capability.read(contextFor(configDir), updatedCandidate, {
+      detail: initial,
+      sourceVersion: initialCandidate.source.version
+    });
+
+    expect(updated.title).toBe("Release readiness");
+    expect(updated.messages.map((message) => message.text)).toEqual(["Review the release"]);
+  });
+
   it("parses only an appended Codex JSONL tail while preserving indexed messages", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-codex-history-"));
     const configDir = join(root, ".codex");

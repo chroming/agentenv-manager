@@ -1,11 +1,13 @@
 import {
   ArrowUpDown,
+  ArrowRight,
   Check,
   ChevronDown,
   Clock3,
   Copy,
   ExternalLink,
   FolderGit2,
+  FolderInput,
   FolderOpen,
   HardDrive,
   ListFilter,
@@ -32,6 +34,8 @@ import type {
   ConversationContinuationPreview,
   ConversationDetail,
   ConversationListResult,
+  ConversationMovePreview,
+  ConversationMoveResult,
   ConversationRefreshResult,
   ConversationSortOrder,
   ConversationSummary,
@@ -113,7 +117,7 @@ const conversationPageSize = 200;
 const conversationMessagePageSize = 60;
 const conversationListEndThreshold = 56;
 const manualRefreshFeedbackMinimumMs = 240;
-type ConversationOperation = "copy" | "open-original" | "continue";
+type ConversationOperation = "copy" | "open-original" | "continue" | "move";
 
 const conversationSortOptions: Array<{
   value: ConversationSortOrder;
@@ -487,13 +491,17 @@ const TargetMenu = ({
 const ConversationActionItems = ({
   agentName,
   canOpenOriginal,
+  canMove,
   onCopy,
-  onOpenOriginal
+  onOpenOriginal,
+  onMove
 }: {
   agentName: string;
   canOpenOriginal: boolean;
+  canMove: boolean;
   onCopy(): void;
   onOpenOriginal(): void;
+  onMove(): void;
 }) => {
   const { t } = useI18n();
   return (
@@ -502,6 +510,12 @@ const ConversationActionItems = ({
         <ActionMenuItem role="menuitem" onClick={onOpenOriginal}>
           <ExternalLink size={15} aria-hidden="true" />
           <span>{t("Open in {{name}}", { name: agentName })}</span>
+        </ActionMenuItem>
+      ) : null}
+      {canMove ? (
+        <ActionMenuItem role="menuitem" onClick={onMove}>
+          <FolderInput size={15} aria-hidden="true" />
+          <span>{t("Move conversation…")}</span>
         </ActionMenuItem>
       ) : null}
       <ActionMenuItem role="menuitem" onClick={onCopy}>
@@ -517,15 +531,19 @@ const ConversationActionsMenu = ({
   operation,
   agentName,
   canOpenOriginal,
+  canMove,
   onCopy,
-  onOpenOriginal
+  onOpenOriginal,
+  onMove
 }: {
   busy: boolean;
   operation?: ConversationOperation;
   agentName: string;
   canOpenOriginal: boolean;
+  canMove: boolean;
   onCopy(): Promise<void>;
   onOpenOriginal(): Promise<void>;
+  onMove(): Promise<void>;
 }) => {
   const { t } = useI18n();
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -537,7 +555,7 @@ const ConversationActionsMenu = ({
     const bounds = buttonRef.current?.getBoundingClientRect();
     if (bounds) {
       const width = 210;
-      const height = canOpenOriginal ? 86 : 45;
+      const height = 45 + (canOpenOriginal ? 41 : 0) + (canMove ? 41 : 0);
       const fitsBelow = bounds.bottom + 6 + height <= window.innerHeight - 12;
       setStyle({
         width,
@@ -597,7 +615,7 @@ const ConversationActionsMenu = ({
         aria-expanded={open}
         onClick={() => open ? setOpen(false) : show()}
       >
-        {operation === "copy" || operation === "open-original"
+        {operation === "copy" || operation === "open-original" || operation === "move"
           ? <LoaderCircle className="is-spinning" size={14} />
           : <MoreHorizontal size={15} />}
       </IconButton>
@@ -611,8 +629,10 @@ const ConversationActionsMenu = ({
           <ConversationActionItems
             agentName={agentName}
             canOpenOriginal={canOpenOriginal}
+            canMove={canMove}
             onCopy={() => run(onCopy)}
             onOpenOriginal={() => run(onOpenOriginal)}
+            onMove={() => run(onMove)}
           />
         </ActionMenu>,
         document.body
@@ -706,6 +726,9 @@ export const ConversationWorkspace = ({
   const [warning, setWarning] = useState("");
   const [error, setError] = useState("");
   const [review, setReview] = useState<ConversationContinuationPreview>();
+  const [movePreview, setMovePreview] = useState<ConversationMovePreview>();
+  const [moveResult, setMoveResult] = useState<ConversationMoveResult>();
+  const [moveError, setMoveError] = useState("");
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [workspaceProjects, setWorkspaceProjects] = useState<Record<string, ProjectSummary>>({});
   const [detailProject, setDetailProject] = useState<ProjectSummary>();
@@ -720,6 +743,8 @@ export const ConversationWorkspace = ({
   );
   const reviewDialogRef = useRef<HTMLElement>(null);
   const reviewCancelRef = useRef<HTMLButtonElement>(null);
+  const moveDialogRef = useRef<HTMLElement>(null);
+  const moveCancelRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const conversationListRef = useRef<HTMLDivElement>(null);
   const conversationTranscriptRef = useRef<HTMLDivElement>(null);
@@ -950,6 +975,18 @@ export const ConversationWorkspace = ({
     onDismiss: () => setReview(undefined),
     dismissDisabled: busy,
     focusKey: review?.previewId
+  });
+  useModalDialog({
+    open: Boolean(movePreview || moveResult),
+    dialogRef: moveDialogRef,
+    initialFocusRef: moveCancelRef,
+    onDismiss: () => {
+      setMovePreview(undefined);
+      setMoveResult(undefined);
+      setMoveError("");
+    },
+    dismissDisabled: operation === "move",
+    focusKey: movePreview?.previewId ?? moveResult?.conversation.id
   });
 
   const loadList = async (
@@ -1429,6 +1466,62 @@ export const ConversationWorkspace = ({
     targets.find((target) => target.id === detail.agentId)
       ?.conversationCapabilities.openOriginal.state === "available"
   );
+  const sourceCanMove = Boolean(
+    detail && detailTarget?.conversationCapabilities.move?.state === "available"
+  );
+  const movedConversationCanOpenOriginal = Boolean(
+    moveResult && targets.find((target) => target.id === moveResult.conversation.agentId)
+      ?.conversationCapabilities.openOriginal.state === "available"
+  );
+
+  const chooseMoveDestination = async (conversationId = detail?.id) => {
+    if (!conversationId) return;
+    setOperation("move");
+    setError("");
+    setMoveError("");
+    try {
+      const destinationPath = await window.agentEnv.selectConversationWorkspace();
+      if (!destinationPath) return;
+      const preview = await window.agentEnv.previewConversationMove({
+        conversationId,
+        destinationPath
+      });
+      setMoveResult(undefined);
+      setMovePreview(preview);
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setOperation(undefined);
+    }
+  };
+
+  const executeMove = async (previewId: string) => {
+    setOperation("move");
+    setMoveError("");
+    try {
+      const result = await window.agentEnv.moveConversation(previewId);
+      setMovePreview(undefined);
+      setMoveResult(result);
+      setItems((current) => current.map((item) =>
+        item.id === result.conversation.id ? result.conversation : item
+      ));
+      if (selectedId === result.conversation.id) {
+        setDetail((current) => current ? {
+          ...current,
+          ...result.conversation,
+          messages: current.messages
+        } : current);
+      }
+      setWorkspacePaths((current) => [
+        ...new Set([...current, result.conversation.workspacePath].filter(Boolean) as string[])
+      ]);
+      invalidateConversationListPrefetch();
+    } catch (unknownError) {
+      setMoveError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setOperation(undefined);
+    }
+  };
 
   const executeContinuation = async (previewId: string) => {
     setOperation("continue");
@@ -1878,6 +1971,20 @@ export const ConversationWorkspace = ({
                         >
                           <FolderOpen size={12} aria-hidden="true" />
                           <span className="selectable">{detail.workspacePath}</span>
+                          {sourceCanMove ? (
+                            <IconButton
+                              className="conversation-move-workspace-button"
+                              label={t("Move conversation…")}
+                              title={t("Move this conversation to another working directory.")}
+                              variant="ghost"
+                              disabled={busy}
+                              onClick={() => void chooseMoveDestination()}
+                            >
+                              {operation === "move"
+                                ? <LoaderCircle className="is-spinning" size={13} />
+                                : <FolderInput size={13} />}
+                            </IconButton>
+                          ) : null}
                         </span>
                       ) : null}
                       <div className="conversation-detail-metadata">
@@ -1940,9 +2047,13 @@ export const ConversationWorkspace = ({
                       operation={operation}
                       agentName={detail.agentName}
                       canOpenOriginal={sourceCanOpenOriginal}
+                      canMove={sourceCanMove}
                       onCopy={async () => copyConversation()}
                       onOpenOriginal={async () => {
                         await openOriginal();
+                      }}
+                      onMove={async () => {
+                        await chooseMoveDestination();
                       }}
                     />
                     {detailProject ? (
@@ -2176,6 +2287,125 @@ export const ConversationWorkspace = ({
             </DialogFooter>
           </ModalFrame>
         ) : null}
+        {movePreview || moveResult ? (
+          <ModalFrame
+            ariaLabel={t(moveResult ? "Conversation moved" : "Move conversation")}
+            className="profile-form-dialog--compact conversation-move-dialog ui-dialog-shell"
+            dialogRef={moveDialogRef}
+            dismissDisabled={operation === "move"}
+            onDismiss={() => {
+              setMovePreview(undefined);
+              setMoveResult(undefined);
+              setMoveError("");
+            }}
+          >
+            <DialogHeader
+              title={t(moveResult ? "Conversation moved" : "Move conversation")}
+              description={t(moveResult
+                ? "The same native conversation now opens in the new working directory."
+                : "Keep the same Agent, session, and history while changing its working directory.")}
+            />
+            <DialogBody className="conversation-move-body">
+              {movePreview ? (
+                <div className="conversation-move-route">
+                  <div className="conversation-review-workspace">
+                    <FolderOpen size={16} aria-hidden="true" />
+                    <span>
+                      <small>{t("Current directory")}</small>
+                      <OverflowTooltip
+                        className="conversation-review-workspace__path"
+                        text={movePreview.sourcePath ?? t("Not recorded")}
+                      />
+                    </span>
+                  </div>
+                  <ArrowRight className="conversation-move-route__arrow" size={16} aria-hidden="true" />
+                  <div className="conversation-review-workspace">
+                    <FolderInput size={16} aria-hidden="true" />
+                    <span>
+                      <small>{t("New directory")}</small>
+                      <OverflowTooltip
+                        className="conversation-review-workspace__path"
+                        text={movePreview.destinationPath}
+                      />
+                    </span>
+                  </div>
+                </div>
+              ) : moveResult ? (
+                <div className="conversation-review-workspace conversation-move-result">
+                  <Check size={16} aria-hidden="true" />
+                  <span>
+                    <small>{t("Working directory")}</small>
+                    <OverflowTooltip
+                      className="conversation-review-workspace__path"
+                      text={moveResult.conversation.workspacePath ?? ""}
+                    />
+                  </span>
+                </div>
+              ) : null}
+              <p className="conversation-move-footprint">
+                {t("Project files will not be moved or modified.")}
+              </p>
+              {movePreview?.warnings.length ? (
+                <div className="conversation-review-warning">
+                  <TriangleAlert size={16} aria-hidden="true" />
+                  <div>
+                    <strong>{t("Needs attention")}</strong>
+                    <ul>
+                      {movePreview.warnings.map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  </div>
+                </div>
+              ) : null}
+              {moveError ? <p className="ui-field__error" role="alert">{moveError}</p> : null}
+            </DialogBody>
+            <DialogFooter className="preview-actions">
+              {movePreview ? (
+                <>
+                  <Button
+                    ref={moveCancelRef}
+                    disabled={operation === "move"}
+                    onClick={() => {
+                      setMovePreview(undefined);
+                      setMoveError("");
+                    }}
+                  >
+                    {t("Cancel")}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    busy={operation === "move"}
+                    busyLabel={t("Moving…")}
+                    disabled={operation === "move"}
+                    onClick={() => void executeMove(movePreview.previewId)}
+                  >
+                    {t("Move conversation")}
+                  </Button>
+                </>
+              ) : moveResult ? (
+                <>
+                  {movedConversationCanOpenOriginal ? (
+                    <Button
+                      disabled={busy}
+                      onClick={() => void openOriginal(moveResult.conversation.id)}
+                    >
+                      {t("Open in {{name}}", { name: moveResult.conversation.agentName })}
+                    </Button>
+                  ) : null}
+                  <Button
+                    ref={moveCancelRef}
+                    variant="primary"
+                    onClick={() => {
+                      setMoveResult(undefined);
+                      setMoveError("");
+                    }}
+                  >
+                    {t("Close")}
+                  </Button>
+                </>
+              ) : null}
+            </DialogFooter>
+          </ModalFrame>
+        ) : null}
       </section>
       {contextMenu ? (() => {
         const item = items.find((candidate) => candidate.id === contextMenu.conversationId);
@@ -2196,8 +2426,11 @@ export const ConversationWorkspace = ({
             <ConversationActionItems
               agentName={item.agentName}
               canOpenOriginal={Boolean(canOpenOriginal)}
+              canMove={Boolean(targets.find((target) => target.id === item.agentId)
+                ?.conversationCapabilities.move?.state === "available")}
               onCopy={() => closeAndRun(() => copyConversation(item.id))}
               onOpenOriginal={() => closeAndRun(() => openOriginal(item.id))}
+              onMove={() => closeAndRun(() => chooseMoveDestination(item.id))}
             />
           </ActionMenu>,
           document.body

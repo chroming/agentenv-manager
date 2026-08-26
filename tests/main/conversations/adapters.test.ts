@@ -115,6 +115,42 @@ describe("conversation history adapters", () => {
     ]);
   });
 
+  it("uses Claude's native generated and custom session titles", () => {
+    const generated = parseClaudeConversation(candidate(), [
+      JSON.stringify({
+        type: "user",
+        sessionId: "claude-session",
+        uuid: "u1",
+        message: { role: "user", content: "A long first prompt that is not the displayed title" }
+      }),
+      JSON.stringify({
+        type: "ai-title",
+        sessionId: "claude-session",
+        aiTitle: "Review profile activation states"
+      })
+    ].join("\n"));
+    const renamed = parseClaudeConversation(candidate(), [
+      JSON.stringify({
+        type: "ai-title",
+        sessionId: "claude-session",
+        aiTitle: "Generated title"
+      }),
+      JSON.stringify({
+        type: "custom-title",
+        sessionId: "claude-session",
+        customTitle: "Release readiness review"
+      }),
+      JSON.stringify({
+        type: "agent-name",
+        sessionId: "claude-session",
+        agentName: "Release readiness review"
+      })
+    ].join("\n"));
+
+    expect(generated.title).toBe("Review profile activation states");
+    expect(renamed.title).toBe("Release readiness review");
+  });
+
   it("uses the assistant text when a history has no user message", () => {
     const detail = parseCodexConversation(candidate(), JSON.stringify({
       type: "response_item",

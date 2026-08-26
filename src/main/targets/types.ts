@@ -177,6 +177,20 @@ export interface ConversationContinuationInput extends AgentConversationContext 
   contextFilePath: string;
 }
 
+export interface ConversationMoveCommit {
+  rollback(): Promise<void>;
+  finalize?(): Promise<void>;
+}
+
+export interface ConversationMoveCheck {
+  warnings?: string[];
+}
+
+export interface ConversationMoveAdapterInput extends AgentConversationContext {
+  candidate: AgentConversationCandidate;
+  destinationPath: string;
+}
+
 export interface AgentConversationCapability {
   historyDetail: ConversationDetailState;
   discover(context: AgentConversationContext): Promise<{
@@ -199,6 +213,12 @@ export interface AgentConversationCapability {
   continueWithContext?(
     input: ConversationContinuationInput
   ): ConversationLaunchSpec | undefined;
+  checkMove?(
+    input: ConversationMoveAdapterInput
+  ): Promise<ConversationMoveCheck>;
+  move?(
+    input: ConversationMoveAdapterInput
+  ): Promise<ConversationMoveCommit>;
 }
 
 export interface EvaluationProbeInput {

@@ -210,7 +210,16 @@ const conversationCapabilitiesFor = (
             evidence: conversations?.continueWithContext
               ? executableEvidence
               : ["No continuation path is available"]
-          }
+          },
+    move: conversations?.move
+      ? {
+          state: "available",
+          evidence: ["Native conversation working-directory migration"]
+        }
+      : {
+          state: "unsupported",
+          evidence: ["This Agent history format cannot be moved safely"]
+        }
   };
 };
 

@@ -18,6 +18,10 @@ import {
   trimConversationText,
   visibleMessage
 } from "../../conversations/adapterUtils";
+import {
+  rewriteConversationJsonLines,
+  setNestedString
+} from "../../conversations/conversationMoveStorage";
 
 const agent = { id: "pi", name: "Pi" };
 
@@ -253,5 +257,9 @@ export const createPiConversationCapability = (): AgentConversationCapability =>
             : {})
         }
       }
-    : undefined
+    : undefined,
+  move: ({ candidate, destinationPath }) =>
+    rewriteConversationJsonLines(candidate.source.locator, (record) =>
+      record.type === "session" && setNestedString(record, ["cwd"], destinationPath)
+    )
 });

@@ -1,5 +1,5 @@
 import { stat } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type {
   ConversationDetail,
   ConversationMessage
@@ -17,8 +17,50 @@ import {
   trimConversationText,
   visibleMessage
 } from "../../conversations/adapterUtils";
+import {
+  moveAndRewriteConversationJsonLines,
+  setNestedString
+} from "../../conversations/conversationMoveStorage";
+import { pathEntryExists } from "../../fileUtils";
 
 const agent = { id: "claude-code", name: "Claude Code" };
+
+const claudeProjectDirectoryName = (workspacePath: string) =>
+  workspacePath.replace(/[^A-Za-z0-9]/g, "-");
+
+type ClaudeTitleCandidate = {
+  rank: 1 | 2 | 3;
+  value: string;
+};
+
+const claudeTitleCandidate = (record: any): ClaudeTitleCandidate | undefined => {
+  if (record.type === "custom-title") {
+    const value = trimConversationText(record.customTitle);
+    return value ? { rank: 3, value } : undefined;
+  }
+  if (record.type === "agent-name") {
+    const value = trimConversationText(record.agentName);
+    return value ? { rank: 3, value } : undefined;
+  }
+  if (record.type === "ai-title") {
+    const value = trimConversationText(record.aiTitle);
+    return value ? { rank: 2, value } : undefined;
+  }
+  if (record.type === "summary") {
+    const value = trimConversationText(record.summary);
+    return value ? { rank: 1, value } : undefined;
+  }
+  return undefined;
+};
+
+const resolveClaudeTitle = async (path: string, fallback: string) => {
+  let selected: { rank: number; value: string } = { rank: 0, value: fallback };
+  await forEachJsonLine(path, (record) => {
+    const candidate = claudeTitleCandidate(record);
+    if (candidate && candidate.rank >= selected.rank) selected = candidate;
+  });
+  return selected.value;
+};
 
 const claudeText = (message: unknown) => {
   if (!message || typeof message !== "object") return "";
@@ -62,7 +104,8 @@ const createClaudeAccumulator = (
     candidate.recordId;
   let workspacePath = seed?.workspacePath ?? candidate.workspacePath;
   let createdAt = seed?.createdAt ?? candidate.createdAt;
-  let summary = seed?.title ?? candidate.title;
+  let title = seed?.title ?? candidate.title ?? "";
+  let titleRank = 0;
 
   const consume = (record: any, index: number) => {
     sessionId = trimConversationText(record.sessionId) || sessionId;
@@ -70,8 +113,12 @@ const createClaudeAccumulator = (
     if (record.timestamp && !createdAt) {
       createdAt = isoDate(record.timestamp, new Date(candidate.updatedAt));
     }
-    if (record.type === "summary") {
-      summary = trimConversationText(record.summary) || summary;
+    const nextTitle = claudeTitleCandidate(record);
+    if (nextTitle) {
+      if (nextTitle.rank >= titleRank) {
+        title = nextTitle.value;
+        titleRank = nextTitle.rank;
+      }
       return;
     }
     const message = visibleMessage(
@@ -85,7 +132,8 @@ const createClaudeAccumulator = (
 
   return {
     consume,
-    finish: () => createConversationDetail(
+    titleRank: () => titleRank,
+    finish: (resolvedTitle = title) => createConversationDetail(
       agent,
       {
         ...candidate,
@@ -96,7 +144,7 @@ const createClaudeAccumulator = (
         }
       },
       messages,
-      { title: summary, workspacePath, createdAt }
+      { title: resolvedTitle, workspacePath, createdAt }
     )
   };
 };
@@ -159,7 +207,10 @@ export const createClaudeConversationCapability = (): AgentConversationCapabilit
     await forEachJsonLine(candidate.source.locator, accumulator.consume, {
       start: canResume ? previousSize : 0
     });
-    return accumulator.finish();
+    const resolvedTitle = canResume && accumulator.titleRank() > 0 && accumulator.titleRank() < 3
+      ? await resolveClaudeTitle(candidate.source.locator, previous?.detail.title ?? candidate.title ?? "")
+      : undefined;
+    return accumulator.finish(resolvedTitle);
   },
   openOriginal: ({ executablePath }, candidate) => executablePath
     ? {
@@ -180,8 +231,33 @@ export const createClaudeConversationCapability = (): AgentConversationCapabilit
           `Read the continuation context at ${contextFilePath}, then continue the user's work.`,
           "--add-dir",
           dirname(contextFilePath)
-        ],
-        cwd: conversation.workspacePath
-      }
-    : undefined
+      ],
+      cwd: conversation.workspacePath
+    }
+    : undefined,
+  checkMove: async ({ candidate, destinationPath, targetPaths }) => {
+    const destination = join(
+      targetPaths.configDir,
+      "projects",
+      claudeProjectDirectoryName(destinationPath),
+      basename(candidate.source.locator)
+    );
+    if (destination !== candidate.source.locator && await pathEntryExists(destination)) {
+      throw new Error("Claude Code already has a conversation with this ID in that working directory");
+    }
+    return {};
+  },
+  move: ({ candidate, destinationPath, targetPaths }) => {
+    const destination = join(
+      targetPaths.configDir,
+      "projects",
+      claudeProjectDirectoryName(destinationPath),
+      basename(candidate.source.locator)
+    );
+    return moveAndRewriteConversationJsonLines(
+      candidate.source.locator,
+      destination,
+      (record) => setNestedString(record, ["cwd"], destinationPath)
+    );
+  }
 });

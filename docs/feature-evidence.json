@@ -50,6 +50,54 @@
       }
     },
     {
+      "id": "native-conversation-move",
+      "summary": "Move one supported native Agent conversation to another local working directory while preserving its Agent, provider session identity, and visible history without touching project files.",
+      "contract": {
+        "path": "docs/product-contracts.md",
+        "anchor": "Moving a conversation changes only the working-directory metadata owned by that Agent."
+      },
+      "support": {
+        "opencode": "supported",
+        "claude-code": "supported",
+        "codex": "supported",
+        "antigravity": "supported",
+        "trae-cli": "unsupported",
+        "pi": "supported"
+      },
+      "states": {
+        "idle": "The working-directory row and existing action menus expose Move only when the selected Agent adapter advertises native support.",
+        "working": "The initiating Move control and confirmation button show local progress while the rest of the application remains stable.",
+        "success": "The result keeps the same Agent and conversation identity, shows the canonical new directory, and offers Open in Agent.",
+        "error": "Picker, stale-source, collision, storage, and verification failures remain in the Move surface and preserve the prior native conversation and both project directories.",
+        "cancelled": "Cancelling the native picker, pressing Escape, clicking outside the review, or choosing Cancel performs no source or index mutation.",
+        "noOp": "Choosing the currently recorded canonical directory is rejected as already current without writing source history.",
+        "stale": "A source version, locator, provider identity, or visible-history change after Preview requires a fresh review.",
+        "partial": "Trae CLI, metadata-only records, and unverified native stores omit Move rather than simulating support; SSH remote endpoints expose no Conversations at all.",
+        "persisted": "Only the Agent-owned working-directory metadata changes; the disposable index is refreshed after verified commit and no project data enters AgentEnv storage.",
+        "rollback": "Atomic file replacement or one SQLite transaction restores the prior source when rediscovery, identity, directory, or history verification fails."
+      },
+      "evidence": {
+        "domain": [
+          "tests/main/conversations/conversationMoveAdapters.test.ts",
+          "tests/main/conversations/conversationService.test.ts"
+        ],
+        "renderer": [
+          "tests/renderer/ConversationWorkspace.test.tsx"
+        ],
+        "desktop": [
+          "tests/e2e/conversations.e2e.test.ts"
+        ],
+        "persistence": [
+          "tests/main/conversations/conversationMoveAdapters.test.ts",
+          "tests/main/conversations/conversationService.test.ts",
+          "tests/e2e/conversations.e2e.test.ts"
+        ],
+        "visual": [
+          "conversations-detail-920x620-move.png"
+        ]
+      }
+    },
+    {
       "id": "single-object-workspaces",
       "summary": "Give Profiles and Workspaces the full work surface while preserving searchable object switching, creation, context actions, and dirty navigation protection in a temporary Page Header switcher.",
       "contract": {

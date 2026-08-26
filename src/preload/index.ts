@@ -69,6 +69,8 @@ const api: AgentEnvApi = {
   selectTargetConfigRoot: (targetId) => ipcRenderer.invoke("dialog:select-target-config-root", targetId),
   selectComparisonWorkspace: () => ipcRenderer.invoke("dialog:select-comparison-workspace"),
   selectProjectFolder: () => ipcRenderer.invoke("dialog:select-project-folder"),
+  selectConversationWorkspace: () =>
+    ipcRenderer.invoke("dialog:select-conversation-workspace"),
   listProjects: () => ipcRenderer.invoke("projects:list"),
   findProjectByPath: (rootPath) => ipcRenderer.invoke("projects:find-by-path", rootPath),
   addProject: (rootPath) => ipcRenderer.invoke("projects:add", rootPath),
@@ -115,6 +117,10 @@ const api: AgentEnvApi = {
     ipcRenderer.invoke("conversations:preview-continue", input),
   continueConversation: (previewId) =>
     ipcRenderer.invoke("conversations:continue", previewId),
+  previewConversationMove: (input) =>
+    ipcRenderer.invoke("conversations:preview-move", input),
+  moveConversation: (previewId) =>
+    ipcRenderer.invoke("conversations:move", previewId),
   listNativeMcpConnections: () =>
     ipcRenderer.invoke("targets:list-native-mcps"),
   listNativeInstructions: () =>

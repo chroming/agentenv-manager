@@ -689,14 +689,37 @@ source scheduling, non-blocking automatic refresh, and regression coverage are `
 
 ### 4.5 Conversations
 
-Conversations is a local, read-only index over histories owned by enabled Agents. It helps the
-user find prior work and continue its visible context in another Agent. It is not a chat client,
-an archive, or a native-session database migration tool.
+Conversations is a local index over histories owned by enabled Agents. It helps the user find
+prior work, reopen it, continue its visible context in another Agent, and explicitly move a
+supported native conversation to a different working directory. It is not a chat client or an
+archive. Discovery remains read-only; Move is the only operation in this workspace that may
+mutate a source history.
 
 - Original Agent history is always the source of truth. Discovery, indexing, search, and preview
   MUST NOT edit, rename, delete, resume, or otherwise mutate a source conversation. `Open original`
   is an explicit user action that MAY resume the source through the Agent's supported command; it
-  MUST NOT rewrite the Agent's history store directly.
+  MUST NOT rewrite the Agent's history store directly. `Move conversation` is a separate explicit
+  command and MUST NOT be inferred from Open, Continue, Workspace selection, indexing, or refresh.
+- Moving a conversation changes only the working-directory metadata owned by that Agent. The
+  Agent, provider session ID, visible history, title, timestamps, and source-specific runtime
+  identity remain the same. Project files in the old and new directories MUST NOT be moved,
+  copied, deleted, or modified.
+- Move support is an adapter capability, not an Agent-name assumption. A supported adapter MUST
+  re-read the native source before commit, reject a stale preview, use an atomic file replacement
+  or one database transaction, rediscover the same provider session afterward, verify the new
+  canonical directory and unchanged visible-history hash, then update the disposable index. A
+  failed verification MUST restore the prior native state; a crash MUST leave either the complete
+  old state or complete new state, never a partially rewritten history.
+- The destination MUST be an existing local directory selected through the native directory
+  picker and resolved to its canonical path. Moving to the recorded directory is a no-op. A
+  provider-specific destination collision, busy database, unreadable source, unsupported format,
+  remote session, or unavailable Agent MUST fail in the Move review surface without changing the
+  source or either project directory.
+- Codex, Claude Code, OpenCode, Pi, and Antigravity MAY expose Move only for the native stores that
+  their adapters have verified. Trae CLI history remains explicitly unsupported for Move. SSH
+  remote endpoints do not expose Conversations at all; they MUST NOT imply that a remote history
+  exists merely because remote Profile Apply is available. The renderer MUST omit Move when the
+  selected local source does not advertise the capability.
 - The index is a disposable device-local cache. It MUST NOT enter Workspace Sync, Profile data,
   data exports, backups, diagnostics, or startup-critical data.
 - Only visible user and assistant text is portable. Hidden instructions, reasoning, tool protocol
@@ -852,8 +875,9 @@ an archive, or a native-session database migration tool.
   a newer query. Destination menus and review dialogs follow the shared keyboard, Escape,
   outside-click, focus-return, and viewport-containment contracts.
 
-Source of truth: the original Agent history. AgentEnv owns only the disposable local index and
-short-lived continuation artifacts.
+Source of truth: the original Agent history. AgentEnv owns only the disposable local index,
+short-lived continuation artifacts, and the bounded preview receipt used to verify one explicit
+Move command.
 
 ### 4.6 Backup
 

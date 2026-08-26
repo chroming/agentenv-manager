@@ -58,6 +58,7 @@ describe("Conversations desktop workflow", () => {
     const cacheRoot = join(root, "cache");
     const binDir = join(root, "bin");
     const releaseWorkspacePath = join(root, "work", "release");
+    const movedWorkspacePath = join(root, "work", "long-lived");
     const sessionDir = join(home, ".codex", "sessions", "2026", "07", "24");
     const sourcePath = join(
       sessionDir,
@@ -67,7 +68,13 @@ describe("Conversations desktop workflow", () => {
     await mkdir(binDir, { recursive: true });
     await mkdir(dataRoot, { recursive: true });
     await mkdir(releaseWorkspacePath, { recursive: true });
+    await mkdir(movedWorkspacePath, { recursive: true });
     const releaseWorkspace = await realpath(releaseWorkspacePath);
+    const movedWorkspace = await realpath(movedWorkspacePath);
+    const releaseSentinelPath = join(releaseWorkspace, "project-sentinel.txt");
+    const movedSentinelPath = join(movedWorkspace, "destination-sentinel.txt");
+    await writeFile(releaseSentinelPath, "release project stays unchanged\n", "utf8");
+    await writeFile(movedSentinelPath, "destination project stays unchanged\n", "utf8");
     await writeFile(
       join(dataRoot, "projects.json"),
       `${JSON.stringify({
@@ -887,10 +894,86 @@ describe("Conversations desktop workflow", () => {
       state: "visible",
       timeout: 15_000
     });
+    await page.getByRole("button", { name: "Conversation actions" }).click();
+    const unsupportedMoveMenu = page.getByRole("menu", { name: "Conversation actions" });
+    expect(await unsupportedMoveMenu.getByRole("menuitem", {
+      name: "Move conversation…"
+    }).count()).toBe(0);
+    await page.keyboard.press("Escape");
     expect(await readFile(sourcePath, "utf8")).toBe(source);
     expect(await readFile(longSessionPath, "utf8")).toBe(longSession);
     expect(await readFile(openCodeDatabasePath)).toEqual(openCodeSource);
     expect(await readFile(antigravityTranscriptPath)).toEqual(antigravitySource);
     expect(await readFile(traeSessionPath)).toEqual(traeSource);
+
+    await app.evaluate(({ dialog }, selectedPath) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [selectedPath]
+      });
+    }, movedWorkspace);
+    const movableConversation = page.getByRole("option", {
+      name: /Repair the desktop release workflow/
+    });
+    await movableConversation.click();
+    await page.getByText("The release workflow is ready.").waitFor();
+    const openMoveReview = async () => {
+      await page.getByRole("button", { name: "Conversation actions" }).click();
+      await page.getByRole("menu", { name: "Conversation actions" })
+        .getByRole("menuitem", { name: "Move conversation…" })
+        .click();
+    };
+    await openMoveReview();
+    const moveDialog = page.getByRole("dialog", { name: "Move conversation" });
+    await moveDialog.waitFor({ state: "visible" });
+    await moveDialog.getByText(releaseWorkspace, { exact: true }).waitFor();
+    await moveDialog.getByText(movedWorkspace, { exact: true }).waitFor();
+    await moveDialog.getByText("Project files will not be moved or modified.").waitFor();
+    await expectInViewport(page, moveDialog);
+    await expectTopmost(moveDialog);
+    if (process.env.AGENTENV_CAPTURE_CONVERSATIONS) {
+      await page.screenshot({
+        path: process.env.AGENTENV_CAPTURE_CONVERSATIONS.replace(
+          /(\.[^.]+)$/,
+          "-move$1"
+        ),
+        fullPage: true
+      });
+    }
+    await page.keyboard.press("Escape");
+    await moveDialog.waitFor({ state: "hidden" });
+    expect(await readFile(sourcePath, "utf8")).toBe(source);
+
+    await openMoveReview();
+    await moveDialog.getByRole("button", { name: "Move conversation" }).click();
+    const moveResult = page.getByRole("dialog", { name: "Conversation moved" });
+    await moveResult.getByText(movedWorkspace, { exact: true }).waitFor();
+    await moveResult.getByText(
+      "The same native conversation now opens in the new working directory."
+    ).waitFor();
+    expect(await readFile(releaseSentinelPath, "utf8"))
+      .toBe("release project stays unchanged\n");
+    expect(await readFile(movedSentinelPath, "utf8"))
+      .toBe("destination project stays unchanged\n");
+    const movedSource = (await readFile(sourcePath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(movedSource[0].payload.cwd).toBe(movedWorkspace);
+    expect(movedSource.slice(1)).toEqual(
+      source.trim().split("\n").slice(1).map((line) => JSON.parse(line))
+    );
+    const movedDetail = await page.evaluate(async (conversationId) =>
+      window.agentEnv.readConversation(conversationId),
+    "codex:11111111-1111-4111-8111-111111111111");
+    expect(movedDetail.id).toBe("codex:11111111-1111-4111-8111-111111111111");
+    expect(movedDetail.workspacePath).toBe(movedWorkspace);
+    expect(movedDetail.messages.map((message) => message.text)).toEqual([
+      "Repair the desktop release workflow",
+      "## Result\n\nThe release workflow is ready.\n\n```ts\nconst ready = true;\n```"
+    ]);
+    await moveResult.getByRole("button", { name: "Close" }).click();
+    await moveResult.waitFor({ state: "hidden" });
+    await page.getByText(movedWorkspace, { exact: true }).waitFor();
   }, 60_000);
 });

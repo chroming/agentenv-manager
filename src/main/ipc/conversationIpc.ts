@@ -61,6 +61,19 @@ export const registerConversationIpc = (
   diagnosticHandle("conversations:continue", (_event, previewId: unknown) =>
     conversationService.continue(String(previewId ?? ""))
   );
+  diagnosticHandle("conversations:preview-move", (_event, input: unknown) => {
+    if (!input || typeof input !== "object") {
+      throw new Error("Conversation move requires a conversation and destination");
+    }
+    const value = input as { conversationId?: unknown; destinationPath?: unknown };
+    return conversationService.previewMove({
+      conversationId: String(value.conversationId ?? ""),
+      destinationPath: String(value.destinationPath ?? "")
+    });
+  });
+  diagnosticHandle("conversations:move", (_event, previewId: unknown) =>
+    conversationService.move(String(previewId ?? ""))
+  );
   diagnosticHandle("menu:open-context", (event, value: unknown) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (!window || window.isDestroyed()) return undefined;

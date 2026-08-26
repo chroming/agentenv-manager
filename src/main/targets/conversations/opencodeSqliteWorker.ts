@@ -19,7 +19,16 @@ export interface OpenCodeSqliteMessage {
 
 type WorkerRequest =
   | { type: "list"; dbPath: string }
-  | { type: "read"; dbPath: string; sessionId: string };
+  | { type: "read"; dbPath: string; sessionId: string }
+  | {
+      type: "move";
+      dbPath: string;
+      sessionId: string;
+      expectedDirectory: string;
+      destinationDirectory: string;
+      projectId?: string | null;
+      resolveProject: boolean;
+    };
 
 const workerSource = String.raw`
 const { parentPort } = require("node:worker_threads");
@@ -136,11 +145,75 @@ const read = (path, sessionId) => {
   }
 };
 
+const move = (path, request) => {
+  const db = new DatabaseSync(path, { timeout: 5000 });
+  db.exec("PRAGMA busy_timeout = 5000");
+  try {
+    if (!hasTable(db, "session")) throw new Error("OpenCode database has no session table");
+    const sessionColumns = columns(db, "session");
+    if (!requiredColumns(sessionColumns, ["id", "directory"])) {
+      throw new Error("OpenCode session schema is unsupported");
+    }
+    const hasProjectId = sessionColumns.has("project_id");
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const row = db.prepare(
+        "SELECT directory" + (hasProjectId ? ", project_id" : "") +
+        " FROM session WHERE id = ?"
+      ).get(request.sessionId);
+      if (!row) throw new Error("OpenCode conversation no longer exists");
+      if (String(row.directory || "") !== request.expectedDirectory) {
+        throw new Error("OpenCode conversation changed after preview");
+      }
+      let projectId = hasProjectId ? (row.project_id == null ? null : String(row.project_id)) : null;
+      if (hasProjectId && request.resolveProject) {
+        if (!hasTable(db, "project")) {
+          throw new Error("OpenCode project registry is unavailable");
+        }
+        const projectColumns = columns(db, "project");
+        if (!requiredColumns(projectColumns, ["id", "worktree"])) {
+          throw new Error("OpenCode project registry schema is unsupported");
+        }
+        const project = db.prepare(
+          "SELECT id FROM project WHERE worktree = ? ORDER BY id LIMIT 1"
+        ).get(request.destinationDirectory);
+        if (!project) throw new Error("OpenCode has not registered the destination project");
+        projectId = String(project.id);
+      } else if (hasProjectId && Object.prototype.hasOwnProperty.call(request, "projectId")) {
+        projectId = request.projectId == null ? null : String(request.projectId);
+      }
+      if (hasProjectId) {
+        db.prepare(
+          "UPDATE session SET directory = ?, project_id = ? WHERE id = ?"
+        ).run(request.destinationDirectory, projectId, request.sessionId);
+      } else {
+        db.prepare("UPDATE session SET directory = ? WHERE id = ?")
+          .run(request.destinationDirectory, request.sessionId);
+      }
+      db.exec("COMMIT");
+      return {
+        previousDirectory: String(row.directory || ""),
+        previousProjectId: hasProjectId && row.project_id != null
+          ? String(row.project_id)
+          : null,
+        projectId
+      };
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  } finally {
+    db.close();
+  }
+};
+
 parentPort.on("message", (request) => {
   try {
     const value = request.type === "list"
       ? list(request.dbPath)
-      : read(request.dbPath, request.sessionId);
+      : request.type === "read"
+        ? read(request.dbPath, request.sessionId)
+        : move(request.dbPath, request);
     parentPort.postMessage({ ok: true, value });
   } catch (error) {
     parentPort.postMessage({
@@ -222,3 +295,28 @@ export const listOpenCodeSqliteSessions = (dbPath: string) =>
 
 export const readOpenCodeSqliteMessages = (dbPath: string, sessionId: string) =>
   runDatabaseWorker<OpenCodeSqliteMessage[]>({ type: "read", dbPath, sessionId });
+
+export interface OpenCodeSqliteMoveResult {
+  previousDirectory: string;
+  previousProjectId: string | null;
+  projectId: string | null;
+}
+
+export const moveOpenCodeSqliteSession = (input: {
+  dbPath: string;
+  sessionId: string;
+  expectedDirectory: string;
+  destinationDirectory: string;
+  projectId?: string | null;
+  resolveProject?: boolean;
+}) => runDatabaseWorker<OpenCodeSqliteMoveResult>({
+  type: "move",
+  dbPath: input.dbPath,
+  sessionId: input.sessionId,
+  expectedDirectory: input.expectedDirectory,
+  destinationDirectory: input.destinationDirectory,
+  ...(Object.prototype.hasOwnProperty.call(input, "projectId")
+    ? { projectId: input.projectId }
+    : {}),
+  resolveProject: input.resolveProject ?? false
+});

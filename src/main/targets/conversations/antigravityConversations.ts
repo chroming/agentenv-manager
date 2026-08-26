@@ -18,6 +18,8 @@ import {
   trimConversationText,
   visibleMessage
 } from "../../conversations/adapterUtils";
+import { hashPathEntry } from "../../filesystemIntegrity";
+import { writeAtomic } from "../../fileUtils";
 
 const agent = { id: "antigravity", name: "Antigravity CLI" };
 
@@ -79,6 +81,20 @@ const workspaceByConversation = async (appDataDir: string) => {
     // Optional workspace metadata must not hide readable transcripts.
   }
   return result;
+};
+
+const readWorkspaceMap = async (appDataDir: string) => {
+  const path = join(appDataDir, "cache", "last_conversations.json");
+  const content = await readFile(path, "utf8");
+  const value = JSON.parse(content) as unknown;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Antigravity CLI workspace metadata is unavailable");
+  }
+  return {
+    path,
+    content,
+    value: value as Record<string, unknown>
+  };
 };
 
 export const createAntigravityConversationCapability = (): AgentConversationCapability => ({
@@ -224,8 +240,41 @@ export const createAntigravityConversationCapability = (): AgentConversationCapa
           dirname(contextFilePath),
           "--prompt-interactive",
           `Read the continuation context at ${contextFilePath}, then continue the user's work.`
-        ],
-        cwd: conversation.workspacePath
-      }
-    : undefined
+      ],
+      cwd: conversation.workspacePath
+    }
+    : undefined,
+  checkMove: async ({ candidate, destinationPath }) => {
+    const appDataDir = candidate.source.runtimeHome;
+    if (!appDataDir) throw new Error("Antigravity CLI workspace metadata is unavailable");
+    const { value } = await readWorkspaceMap(appDataDir);
+    const sessionId = candidate.providerSession?.id ?? candidate.recordId;
+    const mapped = Object.entries(value).some(([, id]) => id === sessionId);
+    if (!mapped) {
+      throw new Error("This Antigravity CLI conversation has no movable workspace mapping");
+    }
+    const occupied = value[destinationPath];
+    if (typeof occupied === "string" && occupied !== sessionId) {
+      throw new Error("Another Antigravity CLI conversation already uses that working directory");
+    }
+    return {};
+  },
+  move: async ({ candidate, destinationPath }) => {
+    const appDataDir = candidate.source.runtimeHome;
+    if (!appDataDir) throw new Error("Antigravity CLI workspace metadata is unavailable");
+    const sessionId = candidate.providerSession?.id ?? candidate.recordId;
+    const { path, content, value } = await readWorkspaceMap(appDataDir);
+    const expectedHash = await hashPathEntry(path);
+    for (const [workspace, id] of Object.entries(value)) {
+      if (id === sessionId) delete value[workspace];
+    }
+    value[destinationPath] = sessionId;
+    await writeAtomic(path, `${JSON.stringify(value, null, 2)}\n`, {
+      expectedTargetHash: expectedHash
+    });
+    const committedHash = await hashPathEntry(path);
+    return {
+      rollback: () => writeAtomic(path, content, { expectedTargetHash: committedHash })
+    };
+  }
 });

@@ -1184,6 +1184,10 @@ const createServices = async (
       loadConversationService().then((service) => service.previewContinuation(input)),
     continue: (previewId) =>
       loadConversationService().then((service) => service.continue(previewId)),
+    previewMove: (input) =>
+      loadConversationService().then((service) => service.previewMove(input)),
+    move: (previewId) =>
+      loadConversationService().then((service) => service.move(previewId)),
     dispose: () => {
       conversationServiceDisposed = true;
       void loadedConversationService

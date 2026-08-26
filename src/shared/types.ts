@@ -138,6 +138,7 @@ export interface AgentEnvApi {
   selectTargetConfigRoot(targetId: string): Promise<string | undefined>;
   selectComparisonWorkspace(): Promise<string | undefined>;
   selectProjectFolder(): Promise<string | undefined>;
+  selectConversationWorkspace(): Promise<string | undefined>;
   listProjects(): Promise<ProjectSummary[]>;
   findProjectByPath(rootPath: string): Promise<ProjectSummary | undefined>;
   addProject(rootPath: string): Promise<ProjectSummary>;
@@ -177,6 +178,8 @@ export interface AgentEnvApi {
     input: ConversationContinueInput
   ): Promise<ConversationContinuationPreview>;
   continueConversation(previewId: string): Promise<ConversationLaunchResult>;
+  previewConversationMove(input: ConversationMoveInput): Promise<ConversationMovePreview>;
+  moveConversation(previewId: string): Promise<ConversationMoveResult>;
   listNativeMcpConnections(): Promise<NativeMcpInspection>;
   listNativeInstructions?(): Promise<NativeInstructionsInspection>;
   listInstructionBlocks(): Promise<InstructionBlock[]>;
@@ -442,6 +445,7 @@ export interface TargetConversationCapabilities {
   history: ConversationCapabilityStatus;
   openOriginal: ConversationCapabilityStatus;
   continue: ConversationCapabilityStatus;
+  move?: ConversationCapabilityStatus;
 }
 
 export interface ConversationSummary {
@@ -549,6 +553,26 @@ export interface ConversationContinuationPreview {
 
 export interface ConversationLaunchResult {
   mode: ConversationLaunchMode;
+  message: string;
+}
+
+export interface ConversationMoveInput {
+  conversationId: string;
+  destinationPath: string;
+}
+
+export interface ConversationMovePreview {
+  previewId: string;
+  conversationId: string;
+  agentId: string;
+  agentName: string;
+  sourcePath?: string;
+  destinationPath: string;
+  warnings: string[];
+}
+
+export interface ConversationMoveResult {
+  conversation: ConversationSummary;
   message: string;
 }
 

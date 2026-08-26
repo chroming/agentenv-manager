@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { chmod, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { chmod, mkdir, realpath, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { isAbsolute, join, resolve } from "node:path";
 import type {
   ConversationContinueInput,
   ConversationContinuationPreview,
@@ -10,6 +10,9 @@ import type {
   ConversationListResult,
   ConversationReadInput,
   ConversationRefreshResult,
+  ConversationMoveInput,
+  ConversationMovePreview,
+  ConversationMoveResult,
   ConversationSearchInput,
   ConversationSummary
 } from "../../shared/types";
@@ -32,6 +35,7 @@ import {
   createConversationLauncher,
   type ConversationLauncher
 } from "./conversationLauncher";
+import { stableConversationContentHash } from "./conversationMoveStorage";
 
 const MAX_CONTEXT_CHARACTERS = 120_000;
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
@@ -48,6 +52,16 @@ interface PendingContinuation {
   createdAt: number;
 }
 
+interface PendingMove {
+  preview: ConversationMovePreview;
+  recordId: string;
+  sourceVersion: string;
+  sourceLocator: string;
+  sourceId: string;
+  sourceContentHash: string;
+  createdAt: number;
+}
+
 export interface ConversationClipboard {
   writeText(text: string): void;
 }
@@ -60,6 +74,8 @@ export interface ConversationService {
   openOriginal(id: string): Promise<ConversationLaunchResult>;
   previewContinuation(input: ConversationContinueInput): Promise<ConversationContinuationPreview>;
   continue(previewId: string): Promise<ConversationLaunchResult>;
+  previewMove(input: ConversationMoveInput): Promise<ConversationMovePreview>;
+  move(previewId: string): Promise<ConversationMoveResult>;
   dispose(): void;
 }
 
@@ -225,6 +241,8 @@ export const createConversationService = async (options: {
       (await options.settingsStore.readSettings()).conversationTerminal
   });
   const pending = new Map<string, PendingContinuation>();
+  const pendingMoves = new Map<string, PendingMove>();
+  const moveLocks = new Map<string, Promise<unknown>>();
   const now = options.now ?? Date.now;
 
   const enabledAgentIds = async () => {
@@ -245,6 +263,9 @@ export const createConversationService = async (options: {
     const cutoff = now() - PREVIEW_TTL_MS;
     for (const [id, entry] of pending) {
       if (entry.createdAt < cutoff) pending.delete(id);
+    }
+    for (const [id, entry] of pendingMoves) {
+      if (entry.createdAt < cutoff) pendingMoves.delete(id);
     }
   };
 
@@ -273,6 +294,45 @@ export const createConversationService = async (options: {
       throw new Error(`${target.name} is not installed`);
     }
     return target;
+  };
+
+  const freshConversation = async (
+    target: Awaited<ReturnType<TargetDiscoveryService["listTargets"]>>[number],
+    recordId: string,
+    sourceId: string
+  ) => {
+    const capability = options.targetRegistry.get(target.id).conversations;
+    if (!capability) throw new Error(`${target.name} has no local conversation history`);
+    const context = contextFor(target, options.paths.homeDir);
+    const discovery = await capability.discover(context);
+    const candidate = dedupeCandidates(discovery.candidates).find((item) =>
+      item.recordId === recordId || item.providerSession?.id === sourceId
+    );
+    if (!candidate) throw new Error("Conversation is no longer available in the Agent history");
+    const detail = await capability.read(context, candidate);
+    return {
+      capability,
+      context,
+      candidate: {
+        ...candidate,
+        workspacePath: detail.workspacePath,
+        providerSession: {
+          kind: candidate.providerSession?.kind ?? "native" as const,
+          id: detail.sourceId,
+          resumeLocator: candidate.providerSession?.resumeLocator ?? detail.sourceId
+        }
+      },
+      detail
+    };
+  };
+
+  const runMoveExclusive = <T>(conversationId: string, operation: () => Promise<T>) => {
+    const previous = moveLocks.get(conversationId) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(operation);
+    moveLocks.set(conversationId, current);
+    return current.finally(() => {
+      if (moveLocks.get(conversationId) === current) moveLocks.delete(conversationId);
+    });
   };
 
   const listIndexed = async (
@@ -543,6 +603,132 @@ export const createConversationService = async (options: {
         mode: "clipboard",
         message: `Opened ${entry.preview.targetName}; paste the copied handoff prompt to continue`
       };
+    },
+    previewMove: async (input) => {
+      cleanupPending();
+      const destinationInput = input.destinationPath.trim();
+      if (!destinationInput || !isAbsolute(destinationInput)) {
+        throw new Error("Choose an absolute working-directory path");
+      }
+      const destinationPath = await realpath(resolve(destinationInput)).catch(() => undefined);
+      if (!destinationPath || !(await stat(destinationPath)).isDirectory()) {
+        throw new Error("The selected working directory is unavailable");
+      }
+      const record = index.record(input.conversationId);
+      await assertEnabled(record.summary.agentId);
+      const target = await targetFor(record.summary.agentId);
+      const fresh = await freshConversation(
+        target,
+        record.candidate.recordId,
+        record.summary.sourceId
+      );
+      if (!fresh.capability.move) {
+        throw new Error(`${target.name} conversation migration is not supported`);
+      }
+      if (fresh.detail.workspacePath && pathsEqual(fresh.detail.workspacePath, destinationPath)) {
+        throw new Error("This conversation already uses the selected working directory");
+      }
+      const check = await fresh.capability.checkMove?.({
+        ...fresh.context,
+        candidate: fresh.candidate,
+        destinationPath
+      });
+      index.upsert({
+        ...fresh.detail,
+        id: input.conversationId,
+        agentId: target.id,
+        agentName: target.name
+      }, fresh.candidate);
+      const preview: ConversationMovePreview = {
+        previewId: randomUUID(),
+        conversationId: input.conversationId,
+        agentId: target.id,
+        agentName: target.name,
+        sourcePath: fresh.detail.workspacePath,
+        destinationPath,
+        warnings: check?.warnings ?? []
+      };
+      pendingMoves.set(preview.previewId, {
+        preview,
+        recordId: fresh.candidate.recordId,
+        sourceVersion: fresh.candidate.source.version,
+        sourceLocator: fresh.candidate.source.locator,
+        sourceId: fresh.detail.sourceId,
+        sourceContentHash: stableConversationContentHash(fresh.detail),
+        createdAt: now()
+      });
+      return preview;
+    },
+    move: async (previewId) => {
+      cleanupPending();
+      const pendingMove = pendingMoves.get(previewId);
+      if (!pendingMove) {
+        throw new Error("Move preview expired; choose the working directory again");
+      }
+      pendingMoves.delete(previewId);
+      return runMoveExclusive(pendingMove.preview.conversationId, async () => {
+        const target = await targetFor(pendingMove.preview.agentId);
+        const current = await freshConversation(
+          target,
+          pendingMove.recordId,
+          pendingMove.sourceId
+        );
+        if (
+          current.candidate.source.version !== pendingMove.sourceVersion ||
+          current.candidate.source.locator !== pendingMove.sourceLocator ||
+          stableConversationContentHash(current.detail) !== pendingMove.sourceContentHash
+        ) {
+          throw new Error("Conversation changed after preview; review the move again");
+        }
+        if (!current.capability.move) {
+          throw new Error(`${target.name} conversation migration is no longer available`);
+        }
+        const commit = await current.capability.move({
+          ...current.context,
+          candidate: current.candidate,
+          destinationPath: pendingMove.preview.destinationPath
+        });
+        try {
+          const moved = await freshConversation(
+            target,
+            pendingMove.recordId,
+            current.detail.sourceId
+          );
+          if (!pathsEqual(moved.detail.workspacePath ?? "", pendingMove.preview.destinationPath)) {
+            throw new Error("The Agent did not retain the new working directory");
+          }
+          if (
+            moved.detail.sourceId !== current.detail.sourceId ||
+            stableConversationContentHash(moved.detail) !== pendingMove.sourceContentHash
+          ) {
+            throw new Error("Conversation history changed while its working directory was moved");
+          }
+          const conversation = {
+            ...moved.detail,
+            id: pendingMove.preview.conversationId,
+            agentId: target.id,
+            agentName: target.name
+          };
+          index.upsert(conversation, moved.candidate);
+          await commit.finalize?.();
+          const { messages: _messages, loadedMessageOffset: _offset, matchedMessageId: _match, ...summary } = conversation;
+          return {
+            conversation: summary,
+            message: `Moved conversation to ${pendingMove.preview.destinationPath}`
+          };
+        } catch (error) {
+          try {
+            await commit.rollback();
+          } catch (rollbackError) {
+            throw new Error(
+              `Conversation move failed and automatic recovery also failed: ${
+                rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
+              }. Original error: ${error instanceof Error ? error.message : String(error)}`
+            );
+          }
+          throw error;
+        }
+      });
     },
     dispose: () => index.close()
   };

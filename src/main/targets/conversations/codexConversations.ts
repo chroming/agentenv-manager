@@ -12,6 +12,10 @@ import {
   parseRolloutConversation,
   readRolloutConversation
 } from "./rolloutConversations";
+import {
+  rewriteConversationJsonLines,
+  setNestedString
+} from "../../conversations/conversationMoveStorage";
 
 const agent = { id: "codex", name: "Codex" };
 
@@ -153,7 +157,17 @@ export const createCodexConversationCapability = (): AgentConversationCapability
               `Read the continuation context at ${contextFilePath}, then continue the user's work.`
             ],
             cwd: conversation.workspacePath
-          }
-        : undefined
+        }
+        : undefined,
+    move: ({ candidate, destinationPath }) =>
+      rewriteConversationJsonLines(candidate.source.locator, (record) => {
+        if (record.type === "session_meta") {
+          return setNestedString(record, ["payload", "cwd"], destinationPath);
+        }
+        if (record.type === "turn_context") {
+          return setNestedString(record, ["payload", "cwd"], destinationPath);
+        }
+        return false;
+      })
   };
 };

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -876,6 +876,147 @@ describe("conversation service", () => {
       paths.conversationHandoffDir,
       `${preview.previewId}.md`
     ), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    service.dispose();
+  });
+
+  it("previews, commits, verifies, and reindexes one native conversation move", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-conversation-move-service-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "data"),
+      homeDir: join(root, "home"),
+      conversationIndexPath: join(root, "cache", "conversations.sqlite"),
+      conversationHandoffDir: join(root, "cache", "handoffs")
+    });
+    const destination = join(root, "projects", "stable");
+    const projectSentinel = join(destination, "README.md");
+    await mkdir(destination, { recursive: true });
+    await writeFile(projectSentinel, "project-owned\n");
+    const canonicalDestination = await realpath(destination);
+    let workspacePath = "/work/project";
+    const rollback = vi.fn(async () => {
+      workspacePath = "/work/project";
+    });
+    const candidate = () => ({ ...sourceCandidate(join(root, "history.jsonl")), workspacePath });
+    const codex = {
+      ...createCodexTargetAdapter(),
+      conversations: {
+        historyDetail: "full" as const,
+        discover: async () => ({ candidates: [candidate()], complete: true }),
+        read: async () => ({ ...sourceDetail(), workspacePath }),
+        move: async ({ destinationPath }: { destinationPath: string }) => {
+          workspacePath = destinationPath;
+          return { rollback };
+        }
+      }
+    };
+    const target = makeTarget(codex, paths.homeDir);
+    const service = await createConversationService({
+      paths,
+      targetRegistry: createTargetRegistry([codex]),
+      targetDiscoveryService: {
+        probeSupportedTargets: async () => [target],
+        listTargets: async () => [target]
+      },
+      settingsStore: {
+        ...settingsStore,
+        readSettings: async () => ({
+          ...await settingsStore.readSettings(),
+          enabledTargetIds: ["codex"]
+        })
+      },
+      clipboard: { writeText: vi.fn() },
+      launcher: { launch: vi.fn() }
+    });
+    await service.refresh();
+
+    const preview = await service.previewMove({
+      conversationId: "codex:session-1",
+      destinationPath: destination
+    });
+    expect(preview).toMatchObject({
+      agentName: "Codex",
+      sourcePath: "/work/project",
+      destinationPath: canonicalDestination
+    });
+    const result = await service.move(preview.previewId);
+
+    expect(result.conversation).toMatchObject({
+      id: "codex:session-1",
+      sourceId: "session-1",
+      workspacePath: canonicalDestination,
+      messageCount: 2
+    });
+    expect(result.conversation).not.toHaveProperty("messages");
+    expect((await service.read("codex:session-1")).workspacePath).toBe(canonicalDestination);
+    expect(await readFile(projectSentinel, "utf8")).toBe("project-owned\n");
+    expect(rollback).not.toHaveBeenCalled();
+    service.dispose();
+  });
+
+  it("rolls back when native history changes during move verification", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-conversation-move-rollback-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "data"),
+      homeDir: join(root, "home"),
+      conversationIndexPath: join(root, "cache", "conversations.sqlite"),
+      conversationHandoffDir: join(root, "cache", "handoffs")
+    });
+    const destination = join(root, "projects", "stable");
+    await mkdir(destination, { recursive: true });
+    let workspacePath = "/work/project";
+    let changed = false;
+    const rollback = vi.fn(async () => {
+      workspacePath = "/work/project";
+      changed = false;
+    });
+    const candidate = () => ({ ...sourceCandidate(join(root, "history.jsonl")), workspacePath });
+    const codex = {
+      ...createCodexTargetAdapter(),
+      conversations: {
+        historyDetail: "full" as const,
+        discover: async () => ({ candidates: [candidate()], complete: true }),
+        read: async () => ({
+          ...sourceDetail(changed
+            ? [{ id: "u1", role: "user" as const, text: "Unexpected replacement" }]
+            : undefined),
+          workspacePath
+        }),
+        move: async ({ destinationPath }: { destinationPath: string }) => {
+          workspacePath = destinationPath;
+          changed = true;
+          return { rollback };
+        }
+      }
+    };
+    const target = makeTarget(codex, paths.homeDir);
+    const service = await createConversationService({
+      paths,
+      targetRegistry: createTargetRegistry([codex]),
+      targetDiscoveryService: {
+        probeSupportedTargets: async () => [target],
+        listTargets: async () => [target]
+      },
+      settingsStore: {
+        ...settingsStore,
+        readSettings: async () => ({
+          ...await settingsStore.readSettings(),
+          enabledTargetIds: ["codex"]
+        })
+      },
+      clipboard: { writeText: vi.fn() },
+      launcher: { launch: vi.fn() }
+    });
+    await service.refresh();
+    const preview = await service.previewMove({
+      conversationId: "codex:session-1",
+      destinationPath: destination
+    });
+
+    await expect(service.move(preview.previewId)).rejects.toThrow(
+      "Conversation history changed"
+    );
+    expect(rollback).toHaveBeenCalledOnce();
+    expect(workspacePath).toBe("/work/project");
     service.dispose();
   });
 });

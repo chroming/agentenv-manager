@@ -1,5 +1,7 @@
+import { execFile } from "node:child_process";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { promisify } from "node:util";
 import type { ConversationMessage } from "../../../shared/types";
 import type {
   AgentConversationCandidate,
@@ -18,13 +20,29 @@ import {
 } from "../../conversations/adapterUtils";
 import {
   listOpenCodeSqliteSessions,
+  moveOpenCodeSqliteSession,
   readOpenCodeSqliteMessages
 } from "./opencodeSqliteWorker";
+import {
+  rewriteConversationJsonFile,
+  setNestedString
+} from "../../conversations/conversationMoveStorage";
 
 const agent = { id: "opencode", name: "OpenCode" };
 const SQLITE_PREFIX = "opencode-sqlite:";
 const CLI_PREFIX = "opencode-cli:";
 type JsonCommandRunner = typeof runJsonCommand;
+type ProjectRegistrar = (executablePath: string, workspacePath: string) => Promise<void>;
+const execFileAsync = promisify(execFile);
+
+const registerOpenCodeProject: ProjectRegistrar = async (executablePath, workspacePath) => {
+  await execFileAsync(executablePath, ["debug", "info"], {
+    cwd: workspacePath,
+    timeout: 15_000,
+    maxBuffer: 4 * 1024 * 1024,
+    env: process.env
+  });
+};
 
 interface OpenCodeSession {
   id: string;
@@ -296,9 +314,13 @@ const readLegacyMessages = async (
 };
 
 export const createOpenCodeConversationCapability = (
-  options: { runCommand?: JsonCommandRunner } = {}
+  options: {
+    runCommand?: JsonCommandRunner;
+    registerProject?: ProjectRegistrar;
+  } = {}
 ): AgentConversationCapability => {
   const runCommand = options.runCommand ?? runJsonCommand;
+  const registerProject = options.registerProject ?? registerOpenCodeProject;
   return {
   historyDetail: "full",
   discover: async ({ homeDir, executablePath, platform, environment }) => {
@@ -428,8 +450,67 @@ export const createOpenCodeConversationCapability = (
             ...(conversation.workspacePath ? [conversation.workspacePath] : []),
             "--session"
           ]
-        }
       }
-    : undefined
+    }
+    : undefined,
+  checkMove: async ({ candidate }) => {
+    if (candidate.source.locator.startsWith(CLI_PREFIX)) {
+      throw new Error("OpenCode exposed this conversation through its command only; its native storage cannot be moved safely");
+    }
+    if (
+      !candidate.source.locator.startsWith(SQLITE_PREFIX) &&
+      !candidate.source.locator.endsWith(".json")
+    ) {
+      throw new Error("This OpenCode conversation storage format cannot be moved safely");
+    }
+    return {};
+  },
+  move: async ({ candidate, destinationPath, executablePath }) => {
+    if (!candidate.source.locator.startsWith(SQLITE_PREFIX)) {
+      return rewriteConversationJsonFile(candidate.source.locator, (record) =>
+        setNestedString(record, ["directory"], destinationPath)
+      );
+    }
+    const { dbPath, sessionId } = sqliteLocation(candidate.source.locator);
+    const expectedDirectory = candidate.workspacePath ?? "";
+    let moved;
+    try {
+      moved = await moveOpenCodeSqliteSession({
+        dbPath,
+        sessionId,
+        expectedDirectory,
+        destinationDirectory: destinationPath,
+        resolveProject: true
+      });
+    } catch (error) {
+      if (
+        !/has not registered the destination project/i.test(
+          error instanceof Error ? error.message : String(error)
+        ) ||
+        !executablePath
+      ) {
+        throw error;
+      }
+      await registerProject(executablePath, destinationPath);
+      moved = await moveOpenCodeSqliteSession({
+        dbPath,
+        sessionId,
+        expectedDirectory,
+        destinationDirectory: destinationPath,
+        resolveProject: true
+      });
+    }
+    return {
+      rollback: async () => {
+        await moveOpenCodeSqliteSession({
+          dbPath,
+          sessionId,
+          expectedDirectory: destinationPath,
+          destinationDirectory: moved.previousDirectory,
+          projectId: moved.previousProjectId
+        });
+      }
+    };
+  }
   };
 };
