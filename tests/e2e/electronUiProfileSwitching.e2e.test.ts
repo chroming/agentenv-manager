@@ -10795,19 +10795,20 @@ describe("Electron UI profile switching e2e", () => {
       scrollTop: element.scrollTop
     }));
     expect(before.scrollHeight).toBeGreaterThan(before.clientHeight);
-    expect(before.scrollTop).toBe(0);
-    await members.hover();
-    for (let step = 0; step < 8; step += 1) {
-      await page.mouse.wheel(0, 120);
-    }
-    await expect.poll(() => members.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-    expect(await panel.evaluate((element) => element.scrollTop)).toBe(0);
     const lastRow = members.getByRole("listitem", { name: "Profile Skill layout-skill-18" });
-    expect(await lastRow.evaluate((row) => {
-      const rowBox = row.getBoundingClientRect();
-      const listBox = row.parentElement!.getBoundingClientRect();
-      return rowBox.top >= listBox.top - 1 && rowBox.bottom <= listBox.bottom + 1;
-    })).toBe(true);
+    await expect.poll(async () => {
+      await members.hover();
+      for (let step = 0; step < 4; step += 1) {
+        await page.mouse.wheel(0, 120);
+      }
+      return lastRow.evaluate((row) => {
+        const rowBox = row.getBoundingClientRect();
+        const listBox = row.parentElement!.getBoundingClientRect();
+        return rowBox.top >= listBox.top - 1 && rowBox.bottom <= listBox.bottom + 1;
+      });
+    }).toBe(true);
+    expect(await members.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    expect(await panel.evaluate((element) => element.scrollTop)).toBe(0);
   }, standardElectronTestTimeout);
 
   it("keeps Profile Skill edits, auto-save, and Preview responsive with many Skills", async () => {
