@@ -235,14 +235,15 @@ describe("Pi conversations", () => {
         message: { role: "user", content: "Continue this work" }
       })
     ].join("\n"));
-    expect(capability.continueWithContext?.({
+    expect(capability.openContinuation?.({
       ...context,
       conversation,
       contextFilePath: "/tmp/agentenv/handoff.md"
     })).toEqual({
       executablePath: "/usr/local/bin/pi",
       args: [
-        "Read the continuation context at /tmp/agentenv/handoff.md, then continue the user's work."
+        "--name",
+        "Continue this work"
       ],
       cwd: "/work/project",
       env: {

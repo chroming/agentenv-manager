@@ -560,6 +560,7 @@ describe("conversation service", () => {
       makeTarget(codex, paths.homeDir),
       makeTarget(opencode, paths.homeDir)
     ];
+    const clipboard = { writeText: vi.fn() };
     const launched: ConversationLaunchSpec[] = [];
     const service = await createConversationService({
       paths,
@@ -569,7 +570,7 @@ describe("conversation service", () => {
         listTargets: async () => targets
       },
       settingsStore,
-      clipboard: { writeText: vi.fn() },
+      clipboard,
       launcher: { launch: async (spec) => { launched.push(spec); } }
     });
     await service.refresh();
@@ -585,18 +586,18 @@ describe("conversation service", () => {
     });
 
     const result = await service.continue(preview.previewId);
-    const contextPath = launched[0].args[
-      launched[0].args.indexOf("--file") + 1
-    ];
+    const contextPath = join(
+      paths.conversationHandoffDir,
+      `${preview.previewId}.md`
+    );
 
     expect(result.mode).toBe("context-file");
     expect(launched).toHaveLength(1);
-    expect(launched[0].resumeAfterExit).toMatchObject({
-      kind: "json-session",
-      sessionIdField: "sessionID",
-      argsBeforeSessionId: ["/work/project", "--session"]
-    });
+    expect(launched[0].args).toEqual(["/work/project"]);
     expect(launched[0].args.join(" ")).not.toContain("failing step");
+    expect(clipboard.writeText).toHaveBeenCalledWith(
+      expect.stringContaining('conversation titled "Release repair"')
+    );
     expect(await readFile(contextPath!, "utf8")).toContain("I found the failing step.");
     expect((await stat(contextPath!)).mode & 0o777).toBe(0o600);
     await expect(service.previewContinuation({
@@ -660,7 +661,10 @@ describe("conversation service", () => {
     );
 
     await service.continue(preview.previewId);
-    const contextPath = launchSpec!.args[launchSpec!.args.indexOf("--file") + 1];
+    const contextPath = join(
+      paths.conversationHandoffDir,
+      `${preview.previewId}.md`
+    );
     const content = await readFile(contextPath, "utf8");
     expect(content).toContain("<redacted>");
     expect(content).not.toContain("sk-1234567890abcdefgh");
@@ -731,7 +735,7 @@ describe("conversation service", () => {
 
     expect(result).toEqual({
       mode: "context-file",
-      message: "Opened Codex with context; paste the fallback prompt if needed"
+      message: "Opened Codex; the handoff prompt is copied. Paste it when ready; no task was sent automatically"
     });
     expect(clipboard.writeText).toHaveBeenCalledWith(
       expect.stringContaining(`Read the continuation context at ${contextPath}`)
@@ -744,7 +748,7 @@ describe("conversation service", () => {
       executablePath: "/usr/local/bin/codex",
       cwd: "/work/project"
     });
-    expect(launched[0].args.join(" ")).toContain(contextPath);
+    expect(launched[0].args.join(" ")).not.toContain(contextPath);
     expect(launched[0].args.join(" ")).not.toContain("I found the failing step.");
     await expect(readFile(contextPath, "utf8")).resolves.toContain(
       "I found the failing step."

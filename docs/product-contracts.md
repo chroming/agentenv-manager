@@ -734,14 +734,14 @@ mutate a source history.
   those values before creating a handoff artifact.
 - `Continue in` always keeps the source Agent as the first destination. Choosing it is equivalent
   to `Open original`: AgentEnv invokes the source adapter's native resume command and creates no
-  handoff artifact. Choosing another Agent creates a new target conversation initialized from the
-  selected visible context. It MUST NOT claim that a native session ID, hidden model state, or
-  running tools moved between Agents.
-- A direct CLI continuation MUST end in the target's persistent interactive entry point. A
-  one-shot bootstrap MAY create the seeded target session only when the same terminal captures its
-  provider session identity and immediately resumes that session in the full interactive client.
-  Exiting after the seeded response is not a successful continuation, even when the bootstrap
-  exposes an option named `interactive`.
+  handoff artifact. Choosing another Agent creates a protected handoff artifact and opens an idle
+  interactive target session. AgentEnv MUST NOT submit the handoff prompt or any user task
+  automatically, and MUST NOT claim that a new target conversation exists until the user sends it.
+  It MUST NOT claim that a native session ID, hidden model state, or running tools moved between
+  Agents.
+- A cross-Agent continuation MUST launch the target's persistent interactive entry point without a
+  task argument. Adapters MUST NOT use a one-shot bootstrap, `run` command, initial prompt, or
+  equivalent mechanism that starts model work before the user confirms it in the target.
 - When the source history exposes a working directory, Continue MUST carry it into every CLI
   launch, including the generic clipboard fallback. The review surface names the complete
   directory and whether preservation is guaranteed or best effort. A desktop-only launch MUST NOT
@@ -751,14 +751,15 @@ mutate a source history.
   unavailable, sensitive text is detected, or the target cannot receive context automatically.
 - Context MUST NOT be placed in command-line arguments or copied wholesale to the clipboard.
   Every cross-Agent continuation first writes the reviewed context to an app-owned mode-`0600`
-  handoff file. Adapters MAY use a native import API, stdin, or that private file directly. When a
-  target cannot receive the file automatically, the clipboard contains only a short prompt that
-  names the handoff path and the original working directory; the UI MUST report that pasting this
-  prompt is still required.
-- Passing a context-file path in the initial prompt is a best-effort handoff, not native session
-  transfer. The adapter MUST allow access only to the private handoff directory, copy the same
-  short handoff prompt to the clipboard before launch, and identify the method as `Context file`.
-  A target with no verified file path MUST use the short `Paste prompt` fallback instead.
+  handoff file, copies a short prompt that names that file and the original title, and opens the
+  target without a prompt. Adapters MAY grant the target access only to the private handoff
+  directory; the user still decides when to paste and send the short prompt. The UI MUST say that
+  no task was sent automatically. A target with no verified file access MUST use the short
+  `Paste prompt` fallback instead.
+- If a target exposes a native new-session naming option, its adapter MAY pass the normalized
+  source title while opening the idle session. Otherwise the source title MUST remain in the
+  handoff file and copied prompt, and the UI MUST NOT claim that the target's native title was
+  synchronized exactly.
 - Conversation support is a capability of one Agent integration. Unsupported or metadata-only
   formats remain visible with an honest capability state; the renderer MUST NOT infer support from
   an Agent name or path.

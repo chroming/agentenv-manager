@@ -210,7 +210,11 @@ export interface AgentConversationCapability {
     context: AgentConversationContext,
     candidate: AgentConversationCandidate
   ): ConversationLaunchSpec | undefined;
-  continueWithContext?(
+  /**
+   * Build an interactive launch spec for a cross-Agent handoff. The spec must
+   * open an idle session and must not include or submit a user task.
+   */
+  openContinuation?(
     input: ConversationContinuationInput
   ): ConversationLaunchSpec | undefined;
   checkMove?(

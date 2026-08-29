@@ -146,18 +146,17 @@ export const createCodexConversationCapability = (): AgentConversationCapability
             : {})
         }
       : undefined,
-    continueWithContext: ({ executablePath, conversation, contextFilePath }) =>
+    openContinuation: ({ executablePath, conversation, contextFilePath }) =>
       executablePath
         ? {
             executablePath,
             args: [
               ...(conversation.workspacePath ? ["-C", conversation.workspacePath] : []),
               "--add-dir",
-              dirname(contextFilePath),
-              `Read the continuation context at ${contextFilePath}, then continue the user's work.`
+              dirname(contextFilePath)
             ],
             cwd: conversation.workspacePath
-        }
+          }
         : undefined,
     move: ({ candidate, destinationPath }) =>
       rewriteConversationJsonLines(candidate.source.locator, (record) => {

@@ -16,7 +16,7 @@ afterEach(async () => {
 describe("Antigravity conversation adapter", () => {
   it("uses a private context file for best-effort continuation", () => {
     expect(
-      createAntigravityConversationCapability().continueWithContext
+      createAntigravityConversationCapability().openContinuation
     ).toBeTypeOf("function");
   });
 

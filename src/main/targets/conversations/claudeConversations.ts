@@ -8,6 +8,7 @@ import type { AgentConversationCapability } from "../types";
 import {
   candidateForFile,
   canResumeJsonLines,
+  conversationTitleFrom,
   createConversationDetail,
   forEachJsonLine,
   isoDate,
@@ -224,16 +225,17 @@ export const createClaudeConversationCapability = (): AgentConversationCapabilit
         cwd: candidate.workspacePath
       }
     : undefined,
-  continueWithContext: ({ executablePath, conversation, contextFilePath }) => executablePath
+  openContinuation: ({ executablePath, conversation, contextFilePath }) => executablePath
     ? {
         executablePath,
         args: [
-          `Read the continuation context at ${contextFilePath}, then continue the user's work.`,
           "--add-dir",
-          dirname(contextFilePath)
-      ],
-      cwd: conversation.workspacePath
-    }
+          dirname(contextFilePath),
+          "--name",
+          conversationTitleFrom(conversation.title)
+        ],
+        cwd: conversation.workspacePath
+      }
     : undefined,
   checkMove: async ({ candidate, destinationPath, targetPaths }) => {
     const destination = join(

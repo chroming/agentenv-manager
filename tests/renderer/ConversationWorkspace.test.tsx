@@ -137,7 +137,7 @@ const installApi = (
     }),
     continueConversation: vi.fn().mockResolvedValue({
       mode: "context-file",
-      message: "Started a new conversation in OpenCode"
+      message: "Opened OpenCode; the handoff prompt is copied. Paste it when ready; no task was sent automatically"
     }),
     selectConversationWorkspace: vi.fn().mockResolvedValue("/work/stable"),
     previewConversationMove: vi.fn().mockResolvedValue({
@@ -577,11 +577,11 @@ describe("ConversationWorkspace", () => {
     expect(within(menu).getByRole("menuitem", {
       name: "Codex, Open original"
     })).toBeInTheDocument();
-    expect(within(menu).getByText("Continue automatically")).toBeInTheDocument();
+    expect(within(menu).getByText("Open with handoff")).toBeInTheDocument();
     fireEvent.click(within(menu).getByRole("menuitem", { name: /^OpenCode/ }));
 
     await waitFor(() => expect(api.continueConversation).toHaveBeenCalledWith("preview-1"));
-    expect(await screen.findByText("Started a new conversation in OpenCode"))
+    expect(await screen.findByText("Opened OpenCode; the handoff prompt is copied. Paste it when ready; no task was sent automatically"))
       .toBeInTheDocument();
   });
 
@@ -790,7 +790,10 @@ describe("ConversationWorkspace", () => {
     expect(within(dialog).getByText(
       "Sensitive-looking values will be redacted before transfer"
     )).toBeInTheDocument();
-    expect(within(dialog).getByText("Context file")).toBeInTheDocument();
+    expect(within(dialog).getByText("Handoff file")).toBeInTheDocument();
+    expect(within(dialog).getByText(
+      "The target opens an idle session. The copied handoff prompt is not sent until you paste it."
+    )).toBeInTheDocument();
     expect(within(dialog).getByText("Working directory")).toBeInTheDocument();
     expect(within(dialog).getByText("/work/project")).toBeInTheDocument();
     expect(within(dialog).getByText("Preserved")).toBeInTheDocument();
@@ -816,10 +819,10 @@ describe("ConversationWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     const menu = await screen.findByRole("menu", { name: "Continue in" });
     const destination = within(menu).getByRole("menuitem", {
-      name: "OpenCode, Paste prompt"
+      name: "OpenCode, Open and copy prompt"
     });
     expect(destination.getAttribute("title"))
-      .toContain("Paste the short handoff prompt into the new conversation.");
+      .toContain("The Agent opens an idle interactive session.");
   });
 
   it("keeps progress on the selected destination while continuation is prepared", async () => {
@@ -837,13 +840,13 @@ describe("ConversationWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     const menu = await screen.findByRole("menu", { name: "Continue in" });
     fireEvent.click(within(menu).getByRole("menuitem", {
-      name: "OpenCode, Continue automatically"
+      name: "OpenCode, Open with handoff"
     }));
 
     await waitFor(() => expect(menu).toHaveAttribute("aria-busy", "true"));
     expect(menu.querySelector(".is-spinning")).not.toBeNull();
     expect(within(menu).getByRole("menuitem", {
-      name: "OpenCode, Continue automatically"
+      name: "OpenCode, Open with handoff"
     })).toBeDisabled();
 
     await act(async () => resolvePreview({

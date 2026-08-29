@@ -624,9 +624,9 @@ describe("Conversations desktop workflow", () => {
     await targetMenu.getByRole("menuitem", {
       name: /Open original/
     }).waitFor();
-    expect(await targetMenu.getByText("Continue automatically", { exact: true }).count())
+    expect(await targetMenu.getByText("Open with handoff", { exact: true }).count())
       .toBeGreaterThan(0);
-    expect(await targetMenu.getByText("Paste prompt", { exact: true }).count())
+    expect(await targetMenu.getByText("Open and copy prompt", { exact: true }).count())
       .toBeGreaterThan(0);
     const targetMenuGeometry = await targetMenu.evaluate((menu) => ({
       width: Math.round(menu.getBoundingClientRect().width),
@@ -654,7 +654,7 @@ describe("Conversations desktop workflow", () => {
     )).resolves.toBe(true);
 
     await page.getByRole("button", { name: "Continue" }).click();
-    await page.getByRole("menuitem", { name: "Trae CLI, Paste prompt" }).click();
+    await page.getByRole("menuitem", { name: "Trae CLI, Open and copy prompt" }).click();
     const continuationReview = page.getByRole("dialog", {
       name: "Review continuation"
     });
@@ -666,7 +666,7 @@ describe("Conversations desktop workflow", () => {
     await continuationReview.getByText("Preserved", { exact: true }).waitFor();
     await expectInViewport(
       page,
-      continuationReview.getByRole("button", { name: "Copy prompt and open Trae CLI" })
+      continuationReview.getByRole("button", { name: "Open Trae CLI and copy prompt" })
     );
     if (process.env.AGENTENV_CAPTURE_CONVERSATIONS) {
       await page.screenshot({

@@ -428,30 +428,12 @@ export const createOpenCodeConversationCapability = (
         cwd: candidate.workspacePath
       }
     : undefined,
-  continueWithContext: ({ executablePath, conversation, contextFilePath }) => executablePath
+  openContinuation: ({ executablePath, conversation }) => executablePath
     ? {
         executablePath,
-        args: [
-          "run",
-          ...(conversation.workspacePath ? ["--dir", conversation.workspacePath] : []),
-          "--file",
-          contextFilePath,
-          "--title",
-          "Continued conversation",
-          "--format",
-          "json",
-          "Continue the work using the attached conversation context."
-        ],
-        cwd: conversation.workspacePath,
-        resumeAfterExit: {
-          kind: "json-session",
-          sessionIdField: "sessionID",
-          argsBeforeSessionId: [
-            ...(conversation.workspacePath ? [conversation.workspacePath] : []),
-            "--session"
-          ]
+        args: conversation.workspacePath ? [conversation.workspacePath] : [],
+        cwd: conversation.workspacePath
       }
-    }
     : undefined,
   checkMove: async ({ candidate }) => {
     if (candidate.source.locator.startsWith(CLI_PREFIX)) {

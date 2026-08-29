@@ -438,8 +438,8 @@ const TargetMenu = ({
                 const methodLabel = isOriginal
                   ? "Open original"
                   : requiresPaste
-                    ? "Paste prompt"
-                    : "Continue automatically";
+                    ? "Open and copy prompt"
+                    : "Open with handoff";
                 return (
                   <button
                     type="button"
@@ -449,9 +449,7 @@ const TargetMenu = ({
                     aria-label={`${target.name}, ${t(methodLabel)}`}
                     title={`${target.name} — ${t(isOriginal
                       ? "Resume the original conversation in this Agent."
-                      : requiresPaste
-                        ? "Paste the short handoff prompt into the new conversation."
-                        : "The Agent will open with a private context file. A fallback copy is also ready.")}`}
+                      : "The Agent opens an idle interactive session. The handoff prompt is copied; no task is sent until you paste it.")}`}
                     onClick={() => void selectTarget(target.id)}
                   >
                     <span className="conversation-target-menu__row">
@@ -1378,10 +1376,10 @@ export const ConversationWorkspace = ({
   const reviewModeLabel = review?.mode === "clipboard"
     ? t("Paste prompt")
     : review
-      ? t("Context file")
+      ? t("Handoff file")
       : "";
   const reviewActionLabel = review?.mode === "clipboard"
-    ? t("Copy prompt and open {{name}}", { name: review.targetName })
+    ? t("Open {{name}} and copy prompt", { name: review.targetName })
     : review
       ? t("Open {{name}}", { name: review.targetName })
       : "";
@@ -2210,11 +2208,11 @@ export const ConversationWorkspace = ({
             dialogRef={reviewDialogRef}
             dismissDisabled={busy}
             onDismiss={() => setReview(undefined)}
-            >
-              <DialogHeader
-                title={t("Continue in {{name}}", { name: review.targetName })}
-                description={t("Review how this conversation will be transferred.")}
-              />
+          >
+            <DialogHeader
+              title={t("Continue in {{name}}", { name: review.targetName })}
+              description={t("The target opens an idle session. The copied handoff prompt is not sent until you paste it.")}
+            />
             <DialogBody className="conversation-review-body">
               <div className="conversation-review-destination">
                 <span

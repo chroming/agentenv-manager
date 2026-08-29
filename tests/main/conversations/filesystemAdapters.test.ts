@@ -37,15 +37,13 @@ const dirnameForConfig = (configDir: string) => join(configDir, "..");
 
 describe("filesystem conversation adapters", () => {
   it("uses private context files for best-effort continuation", () => {
-    expect(createCodexConversationCapability().continueWithContext).toBeTypeOf("function");
-    expect(createClaudeConversationCapability().continueWithContext).toBeTypeOf("function");
+    expect(createCodexConversationCapability().openContinuation).toBeTypeOf("function");
+    expect(createClaudeConversationCapability().openContinuation).toBeTypeOf("function");
   });
 
-  it("passes Claude's initial prompt before the variadic add-dir option", () => {
+  it("opens Claude interactively with the original conversation title", () => {
     const contextFilePath = "/tmp/agentenv/handoff.md";
-    const prompt =
-      `Read the continuation context at ${contextFilePath}, then continue the user's work.`;
-    const launch = createClaudeConversationCapability().continueWithContext?.({
+    const launch = createClaudeConversationCapability().openContinuation?.({
       ...contextFor("/tmp/.claude"),
       conversation: {
         id: "codex:conversation",
@@ -66,16 +64,14 @@ describe("filesystem conversation adapters", () => {
 
     expect(launch).toEqual({
       executablePath: "/usr/local/bin/claude",
-      args: [prompt, "--add-dir", "/tmp/agentenv"],
+      args: ["--add-dir", "/tmp/agentenv", "--name", "Continue the release"],
       cwd: "/work/project"
     });
-    expect(launch?.args.indexOf(prompt)).toBeLessThan(
-      launch?.args.indexOf("--add-dir") ?? -1
-    );
+    expect(launch?.args).not.toContain(contextFilePath);
   });
 
-  it("seeds OpenCode with the private file and resumes the created session in its full TUI", () => {
-    const launch = createOpenCodeConversationCapability().continueWithContext?.({
+  it("opens OpenCode in its interactive TUI without submitting a task", () => {
+    const launch = createOpenCodeConversationCapability().openContinuation?.({
       ...contextFor("/tmp/.config/opencode"),
       executablePath: "/usr/local/bin/opencode",
       conversation: {
@@ -98,25 +94,10 @@ describe("filesystem conversation adapters", () => {
     expect(launch).toMatchObject({
       executablePath: "/usr/local/bin/opencode",
       cwd: "/work/project",
-      args: [
-        "run",
-        "--dir",
-        "/work/project",
-        "--file",
-        "/tmp/agentenv/handoff.md",
-        "--title",
-        "Continued conversation",
-        "--format",
-        "json",
-        "Continue the work using the attached conversation context."
-      ],
-      resumeAfterExit: {
-        kind: "json-session",
-        sessionIdField: "sessionID",
-        argsBeforeSessionId: ["/work/project", "--session"]
-      }
+      args: ["/work/project"]
     });
-    expect(launch?.args).not.toContain("--interactive");
+    expect(launch?.args).not.toContain("run");
+    expect(launch?.args).not.toContain("Continue the work using the attached conversation context.");
   });
 
   it("keeps large Claude transcripts and excludes subagent logs from top-level history", async () => {

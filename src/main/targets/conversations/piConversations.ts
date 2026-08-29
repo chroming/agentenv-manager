@@ -10,6 +10,7 @@ import type {
 } from "../types";
 import {
   candidateForFile,
+  conversationTitleFrom,
   createConversationDetail,
   forEachJsonLine,
   isoDate,
@@ -238,16 +239,16 @@ export const createPiConversationCapability = (): AgentConversationCapability =>
         }
       }
     : undefined,
-  continueWithContext: ({
+  openContinuation: ({
     executablePath,
     targetPaths,
-    conversation,
-    contextFilePath
+    conversation
   }) => executablePath
     ? {
         executablePath,
         args: [
-          `Read the continuation context at ${contextFilePath}, then continue the user's work.`
+          "--name",
+          conversationTitleFrom(conversation.title)
         ],
         cwd: conversation.workspacePath,
         env: {

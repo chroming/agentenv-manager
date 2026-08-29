@@ -190,7 +190,7 @@ const conversationCapabilitiesFor = (
           state: "unsupported",
           evidence: ["This Agent has no verified native resume command"]
         },
-    continue: health.executablePath && conversations?.continueWithContext
+    continue: health.executablePath && conversations?.openContinuation
       ? {
           state: "available",
           evidence: executableEvidence,
@@ -206,8 +206,8 @@ const conversationCapabilitiesFor = (
             delivery: "clipboard"
           }
         : {
-            state: conversations?.continueWithContext ? "unavailable" : "unsupported",
-            evidence: conversations?.continueWithContext
+            state: conversations?.openContinuation ? "unavailable" : "unsupported",
+            evidence: conversations?.openContinuation
               ? executableEvidence
               : ["No continuation path is available"]
           },
