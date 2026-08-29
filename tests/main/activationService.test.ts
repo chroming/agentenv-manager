@@ -319,6 +319,41 @@ describe("activation service v2", () => {
     });
   });
 
+  it("records a different Profile when its filesystem payload is identical", async () => {
+    const { paths, profile, profileStore, service } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const firstPreview = await service.previewProfile(profile.id, "codex");
+    await expect(service.applyProfile(profile.id, firstPreview.id)).resolves.toMatchObject({
+      ok: true
+    });
+
+    const duplicate = await profileStore.createProfile({
+      preferredTargetId: "codex",
+      name: "Same payload"
+    });
+    const secondProfile = await profileStore.saveProfile({
+      manifest: duplicate.manifest,
+      instructions: profile.instructions,
+      resources: profile.resources,
+      expectedContentHash: duplicate.contentHash
+    });
+
+    const secondPreview = await service.previewProfile(secondProfile.id, "codex");
+    expect(secondPreview.changes).toEqual([]);
+    expect(secondPreview.resourceChanges).toEqual([]);
+    expect(secondPreview.targetStateChanged).toBe(true);
+    expect(secondPreview.targetStateChanges).toEqual([
+      { kind: "profile-assignment" }
+    ]);
+
+    await expect(service.applyProfile(secondProfile.id, secondPreview.id)).resolves.toMatchObject({
+      ok: true
+    });
+    const stable = await service.previewProfile(secondProfile.id, "codex");
+    expect(stable.targetStateChanged).toBe(false);
+    expect(stable.targetStateChanges).toEqual([]);
+  });
+
   it("restores the selected Agent's last applied Profile baseline without changing live files", async () => {
     const { paths, profileStore, service } = await makeEnv();
     await writeCodexLiveFiles(paths);

@@ -84,6 +84,7 @@ const resultKeys = new Set([
   "resourceChanges",
   "issues",
   "targetStateChanged",
+  "targetStateChanges",
   "sharedSkillPreparationChanged",
   "failed",
   "importedSkillCount",
@@ -119,6 +120,21 @@ const summarizeArguments = (args: unknown[]): Record<string, unknown> | undefine
   return values.length > 0 ? Object.fromEntries(values) : undefined;
 };
 
+const summarizeTargetStateChanges = (value: unknown): unknown => {
+  if (!Array.isArray(value)) return undefined;
+  const kinds = value
+    .map((item) =>
+      item && typeof item === "object" && typeof item.kind === "string"
+        ? item.kind
+        : undefined
+    )
+    .filter((kind): kind is string => Boolean(kind));
+  return {
+    count: value.length,
+    kinds: [...new Set(kinds)]
+  };
+};
+
 const summarizeResult = (value: unknown, depth = 0): unknown => {
   if (depth > 3) return undefined;
   if (Array.isArray(value)) {
@@ -141,7 +157,12 @@ const summarizeResult = (value: unknown, depth = 0): unknown => {
   if (!value || typeof value !== "object") return undefined;
   const entries = Object.entries(value as Record<string, unknown>)
     .filter(([key]) => resultKeys.has(key) || /Count$/.test(key))
-    .map(([key, item]) => [key, summarizeResult(item, depth + 1)] as const)
+    .map(([key, item]) => [
+      key,
+      key === "targetStateChanges"
+        ? summarizeTargetStateChanges(item)
+        : summarizeResult(item, depth + 1)
+    ] as const)
     .filter((entry) => entry[1] !== undefined);
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 };

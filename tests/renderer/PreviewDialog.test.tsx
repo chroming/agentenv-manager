@@ -92,7 +92,7 @@ describe("PreviewDialog", () => {
       name: "Shared copies prevent Profile control"
     });
     expect(boundary).toHaveTextContent("/home/test/.agents/skills/review");
-    expect(screen.getByRole("region", { name: "After applying" }))
+    expect(screen.getByRole("region", { name: "Profile content" }))
       .toHaveTextContent("Skills after move");
     expect(screen.queryByText("Preserved outside this Profile")).not.toBeInTheDocument();
     fireEvent.click(within(boundary).getByRole("button", {
@@ -122,7 +122,43 @@ describe("PreviewDialog", () => {
     expect(screen.getByText("No files or AgentEnv state will change.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "Confirm" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "After applying" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Profile content" })).not.toBeInTheDocument();
+  });
+
+  it("explains a state-only Apply separately from Agent file changes", () => {
+    render(
+      <PreviewDialog
+        targetNames={{ opencode: "OpenCode" }}
+        preview={{
+          ...preview,
+          changes: [],
+          resourceChanges: [],
+          sharedSkillPreparationChanged: false,
+          targetStateChanged: true,
+          targetStateChanges: [{ kind: "profile-assignment" }],
+          effectivePayload: { instructions: 1, skills: 5, mcpServers: 0, total: 6 },
+          localFootprint: {
+            adopted: 0,
+            modified: 0,
+            created: 0,
+            removed: 0,
+            liveLinks: 0
+          },
+          operation: "apply"
+        }}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Ready to apply")).toBeInTheDocument();
+    expect(screen.getByText("No Agent files will change. AgentEnv will update its management state.")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "AgentEnv state" }))
+      .toHaveTextContent("Record this Profile as active on OpenCode");
+    expect(screen.getByRole("region", { name: "Profile content" }))
+      .toHaveTextContent("5Skills");
+    expect(screen.queryByRole("region", { name: "Local footprint" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirm" })).toBeEnabled();
   });
 
   it("renders a structured syntax-highlighted diff", async () => {
@@ -257,7 +293,7 @@ describe("PreviewDialog", () => {
       />
     );
 
-    const payload = screen.getByRole("region", { name: "After applying" });
+    const payload = screen.getByRole("region", { name: "Profile content" });
     expect(payload).toHaveTextContent("1Instruction files");
     expect(payload).toHaveTextContent("0Skills");
     expect(payload).toHaveTextContent("0MCP overrides");

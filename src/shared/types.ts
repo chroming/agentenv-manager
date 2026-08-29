@@ -2303,6 +2303,19 @@ export interface ApplyIssue {
   detail?: string;
 }
 
+export type ActivationStateChangeKind =
+  | "profile-assignment"
+  | "profile-baseline"
+  | "library-versions"
+  | "skill-receipts"
+  | "mcp-management"
+  | "resource-adoption"
+  | "management-record";
+
+export interface ActivationStateChange {
+  kind: ActivationStateChangeKind;
+}
+
 export interface ActivationPreview {
   id: string;
   profileId: string;
@@ -2319,6 +2332,7 @@ export interface ActivationPreview {
   skillReceipts?: AppliedSkillReceipt[];
   sharedSkillPreparationChanged?: boolean;
   targetStateChanged?: boolean;
+  targetStateChanges?: ActivationStateChange[];
   targetId: string;
   targetState: TargetState;
   effectivePayload?: EffectiveProfilePayload;

@@ -11,6 +11,7 @@ import {
 import type {
   ApplyIssue,
   ActivationPreview,
+  ActivationStateChange,
   RollbackPreview,
   StopManagingPreview
 } from "../../shared/types";
@@ -90,6 +91,35 @@ const presentIssue = (
   }
 
   return { title: t(issue.message), detail: issue.detail ?? issue.path };
+};
+
+const hasLocalFootprintWork = (
+  footprint: ActivationPreview["localFootprint"]
+) => Boolean(
+  footprint && Object.values(footprint).some((count) => count > 0)
+);
+
+const stateChangeMessage = (
+  change: ActivationStateChange,
+  targetName: string,
+  t: (message: string, values?: TranslationValues) => string
+) => {
+  switch (change.kind) {
+    case "profile-assignment":
+      return t("Record this Profile as active on {{target}}", { target: targetName });
+    case "profile-baseline":
+      return t("Refresh the saved Profile baseline");
+    case "library-versions":
+      return t("Refresh Library version records");
+    case "skill-receipts":
+      return t("Refresh managed Skill records");
+    case "mcp-management":
+      return t("Refresh MCP management records");
+    case "resource-adoption":
+      return t("Register adopted Agent resources");
+    case "management-record":
+      return t("Update AgentEnv management state");
+  }
 };
 
 export const PreviewDialog = ({
@@ -259,9 +289,31 @@ export const PreviewDialog = ({
     sharedSkillItems.flatMap((item) => item.issue.path ? [item.issue.path] : [])
   )];
   const payload = isActivationPreview ? preview.effectivePayload : undefined;
+  const targetStateChanges: ActivationStateChange[] = isActivationPreview
+    ? preview.targetStateChanges ?? (
+        preview.targetStateChanged
+          ? [{ kind: "management-record" }]
+          : []
+      )
+    : [];
   const isNoOp =
     isActivationPreview &&
     !activationPreviewHasWork(preview);
+  const resourceChanges = "resourceChanges" in preview ? preview.resourceChanges : [];
+  const hasPlannedChanges =
+    preview.changes.length > 0 ||
+    resourceChanges.length > 0 ||
+    (isActivationPreview && preview.sharedSkillPreparationChanged === true);
+  const hasStateOnlyWork =
+    isActivationPreview &&
+    !isNoOp &&
+    targetStateChanges.length > 0 &&
+    !hasPlannedChanges;
+  const localFootprint = isActivationPreview ? preview.localFootprint : undefined;
+  const showLocalFootprint =
+    isActivationPreview &&
+    !isNoOp &&
+    hasLocalFootprintWork(localFootprint);
   const status =
     blockedItems.length > 0 ? "blocked" : reviewItems.length > 0 ? "review" : "ready";
   const statusTitle =
@@ -287,6 +339,8 @@ export const PreviewDialog = ({
           })
         : isNoOp
           ? t("This Agent already matches the Profile.")
+          : hasStateOnlyWork
+            ? t("No Agent files will change. AgentEnv will update its management state.")
         : isActivationPreview
           ? t("Review the changes below before applying this Profile.")
           : t("Review the changes below before continuing.");
@@ -446,6 +500,35 @@ export const PreviewDialog = ({
             ) : undefined
           ) : null}
 
+          {isActivationPreview && targetStateChanges.length > 0 ? (
+            <section className="apply-preview-state" aria-label={t("AgentEnv state")}>
+              <header className="apply-preview-section-heading">
+                <span className="apply-preview-state__icon" aria-hidden="true">
+                  <ShieldCheck size={17} strokeWidth={2.1} />
+                </span>
+                <strong>{t("AgentEnv state")}</strong>
+                <span className="apply-preview-count">{targetStateChanges.length}</span>
+              </header>
+              <div className="apply-preview-state__items">
+                {targetStateChanges.map((change) => (
+                  <article key={change.kind}>
+                    <CheckCircle2 size={15} strokeWidth={2.1} aria-hidden="true" />
+                    <span>{stateChangeMessage(change, targetName, t)}</span>
+                  </article>
+                ))}
+              </div>
+              {hasStateOnlyWork ? (
+                <p className="apply-preview-state__summary">
+                  <CheckCircle2 size={15} strokeWidth={2.1} aria-hidden="true" />
+                  <span>
+                    <strong>{t("No Agent files will change")}</strong>
+                    <small>{t("Only AgentEnv management state will be updated.")}</small>
+                  </span>
+                </p>
+              ) : null}
+            </section>
+          ) : null}
+
           {sharedSkillItems.length > 0 ? (
             <section
               className="apply-preview-shared-boundary"
@@ -489,9 +572,9 @@ export const PreviewDialog = ({
           ) : null}
 
           {payload && !isNoOp ? (
-            <section className="apply-preview-payload" aria-label={t("After applying")}>
+            <section className="apply-preview-payload" aria-label={t("Profile content")}>
               <header className="apply-preview-section-heading">
-                <strong>{t("After applying")}</strong>
+                <strong>{t("Profile content")}</strong>
               </header>
               <div>
                 <article>
@@ -519,7 +602,7 @@ export const PreviewDialog = ({
             </section>
           ) : null}
 
-          {isActivationPreview && preview.localFootprint && !isNoOp ? (
+          {showLocalFootprint && localFootprint ? (
             <section className="apply-preview-footprint" aria-label={t("Local footprint")}>
               <header className="apply-preview-section-heading">
                 <strong>{t("Local footprint")}</strong>
@@ -537,16 +620,16 @@ export const PreviewDialog = ({
                 ) : null}
               </header>
               <div>
-                <span>{t("Adopt existing")}: <strong>{preview.localFootprint.adopted}</strong></span>
-                <span>{t("Modify")}: <strong>{preview.localFootprint.modified}</strong></span>
-                <span>{t("Create")}: <strong>{preview.localFootprint.created}</strong></span>
-                <span>{t("Remove")}: <strong>{preview.localFootprint.removed}</strong></span>
-                <span>{t("Live links")}: <strong>{preview.localFootprint.liveLinks}</strong></span>
+                <span>{t("Adopt existing")}: <strong>{localFootprint.adopted}</strong></span>
+                <span>{t("Modify")}: <strong>{localFootprint.modified}</strong></span>
+                <span>{t("Create")}: <strong>{localFootprint.created}</strong></span>
+                <span>{t("Remove")}: <strong>{localFootprint.removed}</strong></span>
+                <span>{t("Live links")}: <strong>{localFootprint.liveLinks}</strong></span>
               </div>
             </section>
           ) : null}
 
-          {isActivationPreview && !preview.localFootprint && !isNoOp && onManageLocalSkills ? (
+          {isActivationPreview && !showLocalFootprint && !isNoOp && onManageLocalSkills ? (
             <div className="apply-preview-secondary-actions">
               <Button
                 className="apply-preview-manage-skills"
@@ -634,6 +717,8 @@ export const PreviewDialog = ({
                   : t("Resolve blocking issues before continuing.")
                 : isNoOp
                   ? t("No files or AgentEnv state will change.")
+                : hasStateOnlyWork
+                  ? t("Only AgentEnv management state will be updated.")
                 : isActivationPreview
                     ? preview.targetId?.startsWith("ssh:")
                       ? t("A temporary rollback checkpoint protects this remote Apply.")

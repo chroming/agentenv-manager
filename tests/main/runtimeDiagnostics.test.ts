@@ -181,6 +181,7 @@ describe("runtime diagnostics", () => {
       resourceChanges: [],
       issues: [],
       targetStateChanged: false,
+      targetStateChanges: [],
       sharedSkillPreparationChanged: false
     }));
     await diagnostics.runIpcOperation("targets:list-states", [], async () => ([{
@@ -196,6 +197,7 @@ describe("runtime diagnostics", () => {
     await diagnostics.readRecentEvents();
     const content = await readFile(diagnostics.logPath, "utf8");
     expect(content).toContain('"targetStateChanged":false');
+    expect(content).toContain('"targetStateChanges":{"count":0,"kinds":[]}');
     expect(content).toContain('"resourceChanges":{"count":0}');
     expect(content).toContain('"activeProfileId":"daily-coding"');
     expect(content).toContain('"lifecycleStatus":"pending"');

@@ -48,6 +48,7 @@ import {
 import { createTargetScope, type TargetScope } from "./targets/targetScope";
 import type {
   ActivationPreview,
+  ActivationStateChange,
   AdoptTargetChangesResult,
   ApplyIssue,
   ApplyResult,
@@ -841,6 +842,31 @@ export const createActivationService = ({
       skillLibrary,
       state: stateFile.state
     });
+    const activeProfileChanged = stateFile.state.activeProfileId !== profile.id;
+    const profileBaselineChanged =
+      !activeProfileChanged && stateFile.state.appliedProfileHash !== profileContentHash;
+    const libraryVersionsChanged = !libraryResourceVersionsEqual(
+      libraryVersions,
+      appliedLibraryVersions
+    );
+    const skillReceiptsChanged = !skillReceiptsEqual(
+      skillReceipts,
+      stateFile.state.skillReceipts
+    );
+    const mcpManagementChanged =
+      JSON.stringify([...new Set(stateFile.state.managedMcpNames)].sort()) !==
+      JSON.stringify([...new Set(targetPreview.targetState.managedMcpNames)].sort());
+    const resourceAdoptionChanged =
+      assetPlan.adoptedResourcePaths.length > 0 ||
+      assetPlan.legacyOwnedResourcePaths.length > 0;
+    const targetStateChanges: ActivationStateChange[] = [
+      ...(activeProfileChanged ? [{ kind: "profile-assignment" as const }] : []),
+      ...(profileBaselineChanged ? [{ kind: "profile-baseline" as const }] : []),
+      ...(libraryVersionsChanged ? [{ kind: "library-versions" as const }] : []),
+      ...(skillReceiptsChanged ? [{ kind: "skill-receipts" as const }] : []),
+      ...(mcpManagementChanged ? [{ kind: "mcp-management" as const }] : []),
+      ...(resourceAdoptionChanged ? [{ kind: "resource-adoption" as const }] : [])
+    ];
     const preview: InternalActivationPreview = {
       id: randomUUID(),
       profileId: profile.id,
@@ -886,21 +912,8 @@ export const createActivationService = ({
         stateFile.state.sharedSkillPreparations,
         skillDeploymentPlan.sharedPreparations
       ),
-      targetStateChanged:
-        stateFile.state.activeProfileId !== profile.id ||
-        stateFile.state.appliedProfileHash !== profileContentHash ||
-        !libraryResourceVersionsEqual(
-          libraryVersions,
-          appliedLibraryVersions
-        ) ||
-        !skillReceiptsEqual(
-          skillReceipts,
-          stateFile.state.skillReceipts
-        ) ||
-        JSON.stringify([...new Set(stateFile.state.managedMcpNames)].sort()) !==
-          JSON.stringify([...new Set(targetPreview.targetState.managedMcpNames)].sort()) ||
-        assetPlan.adoptedResourcePaths.length > 0 ||
-        assetPlan.legacyOwnedResourcePaths.length > 0,
+      targetStateChanged: targetStateChanges.length > 0,
+      targetStateChanges,
       targetState: targetPreview.targetState,
       effectivePayload,
       localFootprint: {

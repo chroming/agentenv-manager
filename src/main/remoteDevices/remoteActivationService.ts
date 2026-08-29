@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import type {
   ActivationPreview,
+  ActivationStateChange,
   ApplyIssue,
   ApplyResult,
   CreateRemoteDeviceInput,
@@ -1021,11 +1022,21 @@ export const createRemoteActivationService = (options: {
     }
 
     const libraryVersions = collectLibraryResourceVersions(profile, skillLibrary, endpoint.agentId);
-    const targetStateChanged =
-      state?.activeProfileId !== profile.id ||
-      state?.appliedProfileHash !== profileHash ||
-      !libraryResourceVersionsEqual(state?.appliedLibraryVersions, libraryVersions) ||
+    const activeProfileChanged = state?.activeProfileId !== profile.id;
+    const profileBaselineChanged =
+      !activeProfileChanged && state?.appliedProfileHash !== profileHash;
+    const libraryVersionsChanged = !libraryResourceVersionsEqual(
+      state?.appliedLibraryVersions,
+      libraryVersions
+    );
+    const managedResourcesChanged =
       JSON.stringify(state?.managedResources ?? []) !== JSON.stringify(nextManagedResources);
+    const targetStateChanges: ActivationStateChange[] = [
+      ...(activeProfileChanged ? [{ kind: "profile-assignment" as const }] : []),
+      ...(profileBaselineChanged ? [{ kind: "profile-baseline" as const }] : []),
+      ...(libraryVersionsChanged ? [{ kind: "library-versions" as const }] : []),
+      ...(managedResourcesChanged ? [{ kind: "resource-adoption" as const }] : [])
+    ];
     const preview: ActivationPreview = {
       id: randomUUID(),
       profileId,
@@ -1038,7 +1049,8 @@ export const createRemoteActivationService = (options: {
       liveFingerprints: {},
       resourceFingerprints: {},
       sourceFingerprints: {},
-      targetStateChanged,
+      targetStateChanged: targetStateChanges.length > 0,
+      targetStateChanges,
       targetId: endpoint.id,
       targetState: {
         formatVersion: 3,

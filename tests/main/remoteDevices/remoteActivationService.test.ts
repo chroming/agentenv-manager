@@ -371,6 +371,9 @@ describe("remote Profile activation", () => {
     expect(preview.changes).toEqual([]);
     expect(preview.resourceChanges).toEqual([]);
     expect(preview.targetStateChanged).toBe(true);
+    expect(preview.targetStateChanges).toEqual([
+      { kind: "profile-assignment" }
+    ]);
     await expect(fixture.service.applyProfile(secondProfile.manifest.id, preview.id))
       .resolves.toMatchObject({ ok: true });
     await expect(fixture.service.listTargetStates()).resolves.toEqual([
