@@ -129,10 +129,10 @@ describe("target integration contract", () => {
       "claude-code": { declared: true, implemented: true, reason: undefined },
       codex: { declared: true, implemented: true, reason: undefined },
       antigravity: { declared: true, implemented: true, reason: undefined },
-      "antigravity-client": {
+      "antigravity-app": {
         declared: false,
         implemented: false,
-        reason: "Antigravity Client is an interactive desktop application, so isolated one-shot comparison is unavailable."
+        reason: "Antigravity App is an interactive desktop application, so isolated one-shot comparison is unavailable."
       },
       "trae-cli": {
         declared: false,
@@ -156,7 +156,7 @@ describe("target integration contract", () => {
       "claude-code": ["claude"],
       codex: ["codex"],
       antigravity: ["agy"],
-      "antigravity-client": ["Antigravity", "antigravity"],
+      "antigravity-app": ["Antigravity", "antigravity"],
       "trae-cli": ["traecli", "trae-cli", "trae-agent"],
       pi: ["pi"]
     });
@@ -224,7 +224,7 @@ describe("target integration contract", () => {
         effectivePreview: "partial",
         cliLaunch: "supported"
       },
-      "antigravity-client": {
+      "antigravity-app": {
         instructions: { inspect: "supported", mutate: "supported" },
         skills: { inspect: "partial", mutate: "unsupported" },
         mcp: { inspect: "unsupported", mutate: "unsupported" },
@@ -306,7 +306,7 @@ describe("target integration contract", () => {
         compare: ["GEMINI.md", ".gemini", ".agents"],
         evaluationOwnsPaths: true
       },
-      "antigravity-client": {
+      "antigravity-app": {
         instructions: ["GEMINI.md", "AGENTS.md"],
         instructionCreateFile: "GEMINI.md",
         skills: [".agents/skills", ".gemini/skills"],

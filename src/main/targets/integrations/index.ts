@@ -4,7 +4,7 @@ import { createOpenCodeTargetAdapter } from "../opencodeTarget";
 import type { AgentTargetAdapter } from "../types";
 import { defineTargetIntegration } from "../defineTargetIntegration";
 import { createAntigravityTargetAdapter } from "./antigravity";
-import { createAntigravityClientTargetAdapter } from "./antigravity-client";
+import { createAntigravityAppTargetAdapter } from "./antigravity-app";
 import { createPiTargetAdapter } from "./pi";
 import { createTraeCliTargetAdapter } from "./trae-cli";
 
@@ -40,7 +40,7 @@ export const createBuiltInTargetAdapters = (): AgentTargetAdapter[] => [
   composeBuiltInIntegration(createClaudeCodeTargetAdapter()),
   composeBuiltInIntegration(createCodexTargetAdapter()),
   createAntigravityTargetAdapter(),
-  createAntigravityClientTargetAdapter(),
+  createAntigravityAppTargetAdapter(),
   createTraeCliTargetAdapter(),
   createPiTargetAdapter()
 ];

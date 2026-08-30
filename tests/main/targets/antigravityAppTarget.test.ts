@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createAntigravityClientTargetAdapter } from "../../../src/main/targets/integrations/antigravity-client";
+import { createAntigravityAppTargetAdapter } from "../../../src/main/targets/integrations/antigravity-app";
 import { blockingMessages } from "../../helpers/applyIssues";
 
 let root = "";
@@ -12,18 +12,18 @@ afterEach(async () => {
 });
 
 const setup = async () => {
-  root = await mkdtemp(join(tmpdir(), "agentenv-antigravity-client-"));
-  const adapter = createAntigravityClientTargetAdapter();
+  root = await mkdtemp(join(tmpdir(), "agentenv-antigravity-app-"));
+  const adapter = createAntigravityAppTargetAdapter();
   const paths = adapter.createTargetPaths({ homeDir: root });
   await mkdir(paths.configDir, { recursive: true });
   return { adapter, paths, profile: adapter.createDefaultProfile("daily") };
 };
 
-describe("Antigravity Client Target adapter", () => {
-  it("describes the Antigravity Client target correctly", () => {
-    const adapter = createAntigravityClientTargetAdapter();
-    expect(adapter.descriptor.id).toBe("antigravity-client");
-    expect(adapter.descriptor.name).toBe("Antigravity Client");
+describe("Antigravity App Target adapter", () => {
+  it("describes the Antigravity App target correctly", () => {
+    const adapter = createAntigravityAppTargetAdapter();
+    expect(adapter.descriptor.id).toBe("antigravity-app");
+    expect(adapter.descriptor.name).toBe("Antigravity App");
     expect(adapter.descriptor.iconKey).toBe("antigravity");
     expect(adapter.descriptor.instructionsLabel).toBe("GEMINI.md");
     expect(adapter.descriptor.configLabel).toBe("mcp_config.json");
@@ -53,7 +53,7 @@ describe("Antigravity Client Target adapter", () => {
         resources: {
           skills: [],
           mcpByTarget: {
-            "antigravity-client": { mode: "manage", selections: [{ name: "docs", enabled: true }] }
+            "antigravity-app": { mode: "manage", selections: [{ name: "docs", enabled: true }] }
           }
         }
       },
@@ -76,13 +76,13 @@ describe("Antigravity Client Target adapter", () => {
     const captured = await adapter.captureProfile(paths);
 
     expect(captured.mcpConnections).toEqual([
-      expect.objectContaining({ name: "docs", controllable: false, targetId: "antigravity-client" })
+      expect.objectContaining({ name: "docs", controllable: false, targetId: "antigravity-app" })
     ]);
     expect(captured.excluded).toEqual(["mcp_config.json.mcpServers"]);
   });
 
   it("declares desktop app and command discovery evidence", async () => {
-    const adapter = createAntigravityClientTargetAdapter();
+    const adapter = createAntigravityAppTargetAdapter();
     const result = await adapter.detectInstallation({
       platform: "darwin",
       homeDir: "/Users/test",

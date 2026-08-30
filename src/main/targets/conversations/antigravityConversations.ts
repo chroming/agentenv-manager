@@ -73,8 +73,8 @@ export const createAntigravityConversationCapability = (
 ): AgentConversationCapability => {
   const targetId = options.targetId ?? "antigravity";
   const targetName = options.targetName ?? "Antigravity CLI";
-  const appDataSubdir = options.appDataSubdir ?? (targetId === "antigravity-client" ? "antigravity" : "antigravity-cli");
-  const isDesktopApp = options.isDesktopApp ?? targetId === "antigravity-client";
+  const appDataSubdir = options.appDataSubdir ?? (targetId === "antigravity-app" ? "antigravity" : "antigravity-cli");
+  const isDesktopApp = options.isDesktopApp ?? targetId === "antigravity-app";
   const agent = { id: targetId, name: targetName };
 
   const readTranscriptForAgent = async (

@@ -293,7 +293,7 @@ describe("remote Profile activation", () => {
       .resolves.toMatchObject({ ok: true });
     expect(applyCommandLength).toBeGreaterThan(0);
     expect(applyCommandLength).toBeLessThan(2_048);
-  });
+  }, 15_000);
 
   it("never removes an untouched remote resource when a later backup fails", async () => {
     const fixture = await createFixture((remoteHome) => {

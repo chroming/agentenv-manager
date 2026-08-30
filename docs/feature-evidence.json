@@ -13,7 +13,7 @@
         "claude-code": "supported",
         "codex": "supported",
         "antigravity": "supported",
-        "antigravity-client": "supported",
+        "antigravity-app": "supported",
         "trae-cli": "supported",
         "pi": "supported"
       },
@@ -62,7 +62,7 @@
         "claude-code": "supported",
         "codex": "supported",
         "antigravity": "supported",
-        "antigravity-client": "supported",
+        "antigravity-app": "supported",
         "trae-cli": "unsupported",
         "pi": "supported"
       },
@@ -111,7 +111,7 @@
         "claude-code": "not-applicable",
         "codex": "not-applicable",
         "antigravity": "not-applicable",
-        "antigravity-client": "not-applicable",
+        "antigravity-app": "not-applicable",
         "trae-cli": "not-applicable",
         "pi": "not-applicable"
       },
@@ -169,7 +169,7 @@
         "claude-code": "partial",
         "codex": "partial",
         "antigravity": "partial",
-        "antigravity-client": "partial",
+        "antigravity-app": "partial",
         "trae-cli": "partial",
         "pi": "partial"
       },
@@ -231,7 +231,7 @@
         "claude-code": "supported",
         "codex": "supported",
         "antigravity": "supported",
-        "antigravity-client": "supported",
+        "antigravity-app": "supported",
         "trae-cli": "supported",
         "pi": "supported"
       },
@@ -282,7 +282,7 @@
         "claude-code": "supported",
         "codex": "supported",
         "antigravity": "supported",
-        "antigravity-client": "supported",
+        "antigravity-app": "supported",
         "trae-cli": "supported",
         "pi": "supported"
       },
@@ -331,7 +331,7 @@
         "claude-code": "supported",
         "codex": "supported",
         "antigravity": "supported",
-        "antigravity-client": "supported",
+        "antigravity-app": "supported",
         "trae-cli": "unsupported",
         "pi": "supported"
       },
@@ -386,7 +386,7 @@
         "claude-code": "supported",
         "codex": "supported",
         "antigravity": "supported",
-        "antigravity-client": "supported",
+        "antigravity-app": "supported",
         "trae-cli": "supported",
         "pi": "supported"
       },
@@ -435,7 +435,7 @@
         "claude-code": "not-applicable",
         "codex": "not-applicable",
         "antigravity": "not-applicable",
-        "antigravity-client": "not-applicable",
+        "antigravity-app": "not-applicable",
         "trae-cli": "not-applicable",
         "pi": "not-applicable"
       },
@@ -488,7 +488,7 @@
         "claude-code": "not-applicable",
         "codex": "not-applicable",
         "antigravity": "not-applicable",
-        "antigravity-client": "not-applicable",
+        "antigravity-app": "not-applicable",
         "trae-cli": "not-applicable",
         "pi": "not-applicable"
       },
@@ -537,7 +537,7 @@
         "claude-code": "supported",
         "codex": "supported",
         "antigravity": "supported",
-        "antigravity-client": "supported",
+        "antigravity-app": "supported",
         "trae-cli": "supported",
         "pi": "supported"
       },
@@ -587,7 +587,7 @@
         "claude-code": "supported",
         "codex": "supported",
         "antigravity": "supported",
-        "antigravity-client": "supported",
+        "antigravity-app": "supported",
         "trae-cli": "supported",
         "pi": "supported"
       },
@@ -643,7 +643,7 @@
         "claude-code": "supported",
         "codex": "supported",
         "antigravity": "supported",
-        "antigravity-client": "supported",
+        "antigravity-app": "supported",
         "trae-cli": "supported",
         "pi": "supported"
       },
@@ -702,7 +702,7 @@
         "claude-code": "partial",
         "codex": "partial",
         "antigravity": "partial",
-        "antigravity-client": "partial",
+        "antigravity-app": "partial",
         "trae-cli": "partial",
         "pi": "partial"
       },
@@ -756,7 +756,7 @@
         "claude-code": "supported",
         "codex": "supported",
         "antigravity": "supported",
-        "antigravity-client": "supported",
+        "antigravity-app": "supported",
         "trae-cli": "supported",
         "pi": "supported"
       },

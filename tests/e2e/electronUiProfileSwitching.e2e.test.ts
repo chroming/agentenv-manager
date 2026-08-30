@@ -622,7 +622,7 @@ const launchApp = async (
     "claude-code",
     "codex",
     "antigravity",
-    "antigravity-client",
+    "antigravity-app",
     "trae-cli",
     "pi"
   ];
@@ -9940,7 +9940,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await dialog.getByRole("checkbox", { name: "Codex" }).isChecked()).toBe(true);
     expect(await dialog.getByRole("checkbox", { name: "Claude Code" }).isChecked()).toBe(false);
     expect(await dialog.getByRole("checkbox", { name: "Antigravity CLI", exact: true }).isChecked()).toBe(false);
-    expect(await dialog.getByRole("checkbox", { name: "Antigravity Client", exact: true }).isChecked()).toBe(false);
+    expect(await dialog.getByRole("checkbox", { name: "Antigravity App", exact: true }).isChecked()).toBe(false);
     expect(await dialog.getByRole("checkbox", { name: "Trae CLI" }).isChecked()).toBe(false);
     expect(await dialog.getByRole("checkbox", { name: "Pi" }).isChecked()).toBe(false);
     if (process.env.AGENTENV_AGENT_DISCOVERY_CAPTURE_DIR) {
@@ -10056,7 +10056,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("switch", { name: "Turn off Codex" }).click();
     await page.getByRole("switch", { name: "Turn off Claude Code" }).click();
     await page.getByRole("switch", { name: "Turn off Antigravity CLI", exact: true }).click();
-    await page.getByRole("switch", { name: "Turn off Antigravity Client", exact: true }).click();
+    await page.getByRole("switch", { name: "Turn off Antigravity App", exact: true }).click();
     await page.getByRole("switch", { name: "Turn off Trae CLI" }).click();
     await page.getByRole("switch", { name: "Turn off Pi" }).click();
     await expect

@@ -11,7 +11,7 @@ describe("target configuration root overrides", () => {
       opencode: override,
       "claude-code": override,
       antigravity: join(override, "config"),
-      "antigravity-client": join(override, "antigravity"),
+      "antigravity-app": join(override, "antigravity"),
       "trae-cli": override,
       pi: override
     };

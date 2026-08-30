@@ -57,13 +57,13 @@ const addChange = (
   changes.push({ path, before, after, diff: createUnifiedDiff(path, before, after) });
 };
 
-const assets = createDirectoryAssetDriver({ targetName: "Antigravity Client" });
-const skills = createFilesystemSkillDriver({ targetId: "antigravity-client" });
+const assets = createDirectoryAssetDriver({ targetName: "Antigravity App" });
+const skills = createFilesystemSkillDriver({ targetId: "antigravity-app" });
 
-export const antigravityClientIntegration: AgentTargetIntegration = {
+export const antigravityAppIntegration: AgentTargetIntegration = {
   descriptor: {
-    id: "antigravity-client",
-    name: "Antigravity Client",
+    id: "antigravity-app",
+    name: "Antigravity App",
     description: "Manage Antigravity Desktop App instructions, Skills, and MCP configuration.",
     iconKey: "antigravity",
     displayOrder: 4,
@@ -81,7 +81,7 @@ export const antigravityClientIntegration: AgentTargetIntegration = {
       disabledSkillPaths: false,
       mcpActivation: false,
       evaluation: false,
-      evaluationUnavailableReason: "Antigravity Client is an interactive desktop application, so isolated one-shot comparison is unavailable."
+      evaluationUnavailableReason: "Antigravity App is an interactive desktop application, so isolated one-shot comparison is unavailable."
     }
   },
   discovery: createInstallationDriver({
@@ -102,18 +102,18 @@ export const antigravityClientIntegration: AgentTargetIntegration = {
     createTargetPaths: ({ homeDir, rootDirOverride }) => {
       const geminiDir = rootDirOverride ?? join(homeDir, ".gemini");
       const configDir = join(geminiDir, "antigravity");
-      const clientSkillsDir = join(geminiDir, "skills");
+      const appSkillsDir = join(geminiDir, "skills");
       const cliSkillsDir = join(geminiDir, "antigravity-cli", "skills");
       const legacySkillsDir = join(geminiDir, "config", "skills");
       return {
-        targetId: "antigravity-client",
+        targetId: "antigravity-app",
         configDir,
         instructionsPath: join(geminiDir, "GEMINI.md"),
         configPath: join(configDir, "mcp_config.json"),
-        skillsDir: clientSkillsDir,
+        skillsDir: appSkillsDir,
         skillLocations: [
           {
-            path: clientSkillsDir,
+            path: appSkillsDir,
             role: "preferred-runtime",
             shared: false,
             scope: "user",
@@ -137,7 +137,7 @@ export const antigravityClientIntegration: AgentTargetIntegration = {
             management: "legacy"
           }
         ],
-        skillScanDirs: [clientSkillsDir, cliSkillsDir, legacySkillsDir]
+        skillScanDirs: [appSkillsDir, cliSkillsDir, legacySkillsDir]
       };
     }
   },
@@ -164,9 +164,9 @@ export const antigravityClientIntegration: AgentTargetIntegration = {
       id,
       manifest: {
         id,
-        name: "Antigravity Client Profile",
-        description: "Default Antigravity Client environment",
-        preferredTargetId: "antigravity-client",
+        name: "Antigravity App Profile",
+        description: "Default Antigravity App environment",
+        preferredTargetId: "antigravity-app",
         version: 2
       },
       instructions: "# Agent Guidance\n\n- Keep changes scoped and reversible.\n",
@@ -177,12 +177,12 @@ export const antigravityClientIntegration: AgentTargetIntegration = {
         readTextIfExists(targetPaths.instructionsPath),
         readTextIfExists(targetPaths.configPath)
       ]);
-      const parsed = parseJsonObject(configText, "Invalid live Antigravity Client MCP config");
+      const parsed = parseJsonObject(configText, "Invalid live Antigravity App MCP config");
       if (!parsed.ok) throw new Error(parsed.message);
       const mcpConnections = captureNativeJsonMcpConnections(
         parsed.value.mcpServers,
         {
-          targetId: "antigravity-client",
+          targetId: "antigravity-app",
           sourcePath: targetPaths.configPath,
           controllable: false
         }
@@ -194,7 +194,7 @@ export const antigravityClientIntegration: AgentTargetIntegration = {
         instructions,
         mcpConnections,
         warnings: excluded.length > 0
-          ? ["Antigravity Client MCP configuration remains Agent-owned"]
+          ? ["Antigravity App MCP configuration remains Agent-owned"]
           : [],
         excluded
       };
@@ -234,11 +234,11 @@ export const antigravityClientIntegration: AgentTargetIntegration = {
       if (managesInstructions) {
         addChange(changes, targetPaths.instructionsPath, liveInstructions, profile.instructions);
       }
-      if (profile.resources.mcpByTarget["antigravity-client"]?.mode === "manage") {
+      if (profile.resources.mcpByTarget["antigravity-app"]?.mode === "manage") {
         issues.push(createApplyIssue({
           code: "unsupported-mcp-management",
           resourceKind: "mcp",
-          message: "Antigravity Client MCP activation is Agent-controlled. Set this Profile to Ignore MCPs for Antigravity Client."
+          message: "Antigravity App MCP activation is Agent-controlled. Set this Profile to Ignore MCPs for Antigravity App."
         }));
       }
       return {
@@ -258,13 +258,13 @@ export const antigravityClientIntegration: AgentTargetIntegration = {
     }
   },
   conversations: createAntigravityConversationCapability({
-    targetId: "antigravity-client",
-    targetName: "Antigravity Client",
+    targetId: "antigravity-app",
+    targetName: "Antigravity App",
     appDataSubdir: "antigravity",
     isDesktopApp: true
   }),
   assets
 };
 
-export const createAntigravityClientTargetAdapter = () =>
-  defineTargetIntegration(antigravityClientIntegration);
+export const createAntigravityAppTargetAdapter = () =>
+  defineTargetIntegration(antigravityAppIntegration);

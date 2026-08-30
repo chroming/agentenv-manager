@@ -12,17 +12,17 @@ afterEach(async () => {
   root = "";
 });
 
-describe("Antigravity Client conversation adapter", () => {
+describe("Antigravity App conversation adapter", () => {
   it("uses open -a Antigravity for launch and handoff continuation", () => {
     const capability = createAntigravityConversationCapability({
-      targetId: "antigravity-client",
-      targetName: "Antigravity Client",
+      targetId: "antigravity-app",
+      targetName: "Antigravity App",
       appDataSubdir: "antigravity",
       isDesktopApp: true
     });
 
     const openOriginalSpec = capability.openOriginal?.(
-      { homeDir: "/Users/test", targetPaths: { targetId: "antigravity-client", configDir: "/Users/test/.gemini/antigravity", instructionsPath: "", configPath: "" }, executablePath: "/Applications/Antigravity.app" },
+      { homeDir: "/Users/test", targetPaths: { targetId: "antigravity-app", configDir: "/Users/test/.gemini/antigravity", instructionsPath: "", configPath: "" }, executablePath: "/Applications/Antigravity.app" },
       {
         recordId: "sess-1",
         source: { version: "1", locator: "/path/to/transcript.jsonl" },
@@ -40,12 +40,12 @@ describe("Antigravity Client conversation adapter", () => {
 
     const openContinuationSpec = capability.openContinuation?.({
       homeDir: "/Users/test",
-      targetPaths: { targetId: "antigravity-client", configDir: "/Users/test/.gemini/antigravity", instructionsPath: "", configPath: "" },
+      targetPaths: { targetId: "antigravity-app", configDir: "/Users/test/.gemini/antigravity", instructionsPath: "", configPath: "" },
       executablePath: "/Applications/Antigravity.app",
       conversation: {
-        id: "antigravity-client:sess-1",
-        agentId: "antigravity-client",
-        agentName: "Antigravity Client",
+        id: "antigravity-app:sess-1",
+        agentId: "antigravity-app",
+        agentName: "Antigravity App",
         sourceId: "sess-1",
         title: "Test Task",
         snippet: "Test snippet",
@@ -67,7 +67,7 @@ describe("Antigravity Client conversation adapter", () => {
   });
 
   it("discovers and reads transcripts from ~/.gemini/antigravity/brain", async () => {
-    root = await mkdtemp(join(tmpdir(), "agentenv-antigravity-client-transcript-"));
+    root = await mkdtemp(join(tmpdir(), "agentenv-antigravity-app-transcript-"));
     const configDir = join(root, ".gemini", "antigravity");
     const conversationId = "07c73372-7a6d-44f6-9179-43149cbad3d2";
     const transcriptDir = join(
@@ -101,15 +101,15 @@ describe("Antigravity Client conversation adapter", () => {
     await writeFile(transcriptPath, `${lines.join("\n")}\n`);
 
     const targetPaths: TargetPaths = {
-      targetId: "antigravity-client",
+      targetId: "antigravity-app",
       configDir,
       instructionsPath: join(root, ".gemini", "GEMINI.md"),
       configPath: join(configDir, "mcp_config.json")
     };
 
     const capability = createAntigravityConversationCapability({
-      targetId: "antigravity-client",
-      targetName: "Antigravity Client",
+      targetId: "antigravity-app",
+      targetName: "Antigravity App",
       appDataSubdir: "antigravity",
       isDesktopApp: true
     });
@@ -131,8 +131,8 @@ describe("Antigravity Client conversation adapter", () => {
       discovery.candidates[0]
     );
 
-    expect(detail.agentId).toBe("antigravity-client");
-    expect(detail.agentName).toBe("Antigravity Client");
+    expect(detail.agentId).toBe("antigravity-app");
+    expect(detail.agentName).toBe("Antigravity App");
     expect(detail.title).toBe("Fix the button layout in renderer");
     expect(detail.messages.length).toBe(2);
     expect(detail.messages[0]).toMatchObject({
