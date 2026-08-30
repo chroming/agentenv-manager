@@ -129,6 +129,11 @@ describe("target integration contract", () => {
       "claude-code": { declared: true, implemented: true, reason: undefined },
       codex: { declared: true, implemented: true, reason: undefined },
       antigravity: { declared: true, implemented: true, reason: undefined },
+      "antigravity-client": {
+        declared: false,
+        implemented: false,
+        reason: "Antigravity Client is an interactive desktop application, so isolated one-shot comparison is unavailable."
+      },
       "trae-cli": {
         declared: false,
         implemented: false,
@@ -151,6 +156,7 @@ describe("target integration contract", () => {
       "claude-code": ["claude"],
       codex: ["codex"],
       antigravity: ["agy"],
+      "antigravity-client": ["Antigravity", "antigravity"],
       "trae-cli": ["traecli", "trae-cli", "trae-agent"],
       pi: ["pi"]
     });
@@ -212,6 +218,13 @@ describe("target integration contract", () => {
         cliLaunch: "supported"
       },
       antigravity: {
+        instructions: { inspect: "supported", mutate: "supported" },
+        skills: { inspect: "partial", mutate: "unsupported" },
+        mcp: { inspect: "unsupported", mutate: "unsupported" },
+        effectivePreview: "partial",
+        cliLaunch: "supported"
+      },
+      "antigravity-client": {
         instructions: { inspect: "supported", mutate: "supported" },
         skills: { inspect: "partial", mutate: "unsupported" },
         mcp: { inspect: "unsupported", mutate: "unsupported" },
@@ -292,6 +305,14 @@ describe("target integration contract", () => {
         mcp: [],
         compare: ["GEMINI.md", ".gemini", ".agents"],
         evaluationOwnsPaths: true
+      },
+      "antigravity-client": {
+        instructions: ["GEMINI.md", "AGENTS.md"],
+        instructionCreateFile: "GEMINI.md",
+        skills: [".agents/skills", ".gemini/skills"],
+        mcp: [],
+        compare: ["GEMINI.md", ".gemini", ".agents"],
+        evaluationOwnsPaths: false
       },
       "trae-cli": {
         instructions: [".trae/rules", "AGENTS.md"],

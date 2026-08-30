@@ -111,6 +111,7 @@ export const targetIconFor = (
     codex: "codex",
     "claude-code": "claude",
     antigravity: "antigravity",
+    "antigravity-client": "antigravity",
     "trae-cli": "trae",
     pi: "pi"
   } as Record<string, string>)[target.id];

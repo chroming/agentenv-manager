@@ -21,48 +21,12 @@ import {
 import { hashPathEntry } from "../../filesystemIntegrity";
 import { writeAtomic } from "../../fileUtils";
 
-const agent = { id: "antigravity", name: "Antigravity CLI" };
-
-const appDataDirFor = (configDir: string) =>
-  join(configDir, "..", "antigravity-cli");
+const appDataDirFor = (configDir: string, appDataSubdir = "antigravity-cli") =>
+  join(configDir, "..", appDataSubdir);
 
 const userRequestText = (content: string) => {
   const request = content.match(/<USER_REQUEST>\s*([\s\S]*?)\s*<\/USER_REQUEST>/i)?.[1];
   return trimConversationText(request ?? stripConversationScaffolding(content));
-};
-
-const readTranscript = async (
-  candidate: Parameters<AgentConversationCapability["read"]>[1]
-) => {
-  const messages: ConversationMessage[] = [];
-  let createdAt = candidate.createdAt;
-  await forEachJsonLine(candidate.source.locator, (record: any, index) => {
-    const timestamp = record?.created_at
-      ? isoDate(record.created_at, new Date(candidate.updatedAt))
-      : undefined;
-    let message: ConversationMessage | undefined;
-    if (record?.source === "USER_EXPLICIT" && record?.type === "USER_INPUT") {
-      message = visibleMessage(
-        `${candidate.recordId}:${record.step_index ?? index}`,
-        "user",
-        userRequestText(trimConversationText(record.content)),
-        timestamp
-      );
-      createdAt ??= timestamp;
-    } else if (record?.source === "MODEL" && typeof record?.content === "string") {
-      message = visibleMessage(
-        `${candidate.recordId}:${record.step_index ?? index}`,
-        "assistant",
-        trimConversationText(record.content),
-        timestamp
-      );
-    }
-    if (message) messages.push(message);
-  });
-  return createConversationDetail(agent, candidate, messages, {
-    workspacePath: candidate.workspacePath,
-    createdAt
-  });
 };
 
 const workspaceByConversation = async (appDataDir: string) => {
@@ -83,12 +47,12 @@ const workspaceByConversation = async (appDataDir: string) => {
   return result;
 };
 
-const readWorkspaceMap = async (appDataDir: string) => {
+const readWorkspaceMap = async (appDataDir: string, targetName: string) => {
   const path = join(appDataDir, "cache", "last_conversations.json");
   const content = await readFile(path, "utf8");
   const value = JSON.parse(content) as unknown;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Antigravity CLI workspace metadata is unavailable");
+    throw new Error(`${targetName} workspace metadata is unavailable`);
   }
   return {
     path,
@@ -97,182 +61,257 @@ const readWorkspaceMap = async (appDataDir: string) => {
   };
 };
 
-export const createAntigravityConversationCapability = (): AgentConversationCapability => ({
-  historyDetail: "full",
-  discover: async ({ targetPaths }) => {
-    const appDataDir = appDataDirFor(targetPaths.configDir);
-    const summariesPath = join(appDataDir, "conversation_summaries.db");
-    const candidates = new Map<string, AgentConversationCandidate>();
-    let summarySourceObserved = false;
-    let summaryReadFailed = false;
-    try {
-      await access(summariesPath);
-      const database = new DatabaseSync(summariesPath, { readOnly: true });
-      try {
-        const rows = database.prepare(`
-          SELECT conversation_id, title, preview, step_count, last_modified_time,
-                 workspace_uris, last_user_input_time
-          FROM conversation_summaries
-          ORDER BY last_modified_time DESC
-        `).all() as Array<Record<string, string | number>>;
-        for (const row of rows) {
-          let workspacePath: string | undefined;
-          try {
-            const uris = JSON.parse(String(row.workspace_uris ?? "[]"));
-            const first = Array.isArray(uris) ? uris[0] : undefined;
-            if (typeof first === "string") {
-              workspacePath = first.startsWith("file:")
-                ? fileURLToPath(first)
-                : first;
-            }
-          } catch {
-            // A malformed optional workspace field does not invalidate the summary.
-          }
-          const updatedAt = isoDate(row.last_modified_time, new Date());
-          const sourceId = String(row.conversation_id);
-          candidates.set(sourceId, {
-            recordId: sourceId,
-            source: {
-              version: `${row.last_modified_time}:${row.step_count}`,
-              locator: summariesPath,
-              runtimeHome: appDataDir
-            },
-            providerSession: {
-              kind: "database" as const,
-              id: sourceId,
-              resumeLocator: sourceId
-            },
-            title: trimConversationText(row.title),
-            snippet: conversationSnippetFrom(trimConversationText(row.preview)),
-            workspacePath,
-            createdAt: isoDate(row.last_user_input_time, new Date(updatedAt)),
-            updatedAt,
-            messageCount: Number(row.step_count ?? 0),
-            detailState: "summary-only" as const
-          });
-        }
-        summarySourceObserved = true;
-      } finally {
-        database.close();
-      }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-        summaryReadFailed = true;
-      }
-    }
+export interface AntigravityConversationOptions {
+  targetId?: string;
+  targetName?: string;
+  appDataSubdir?: string;
+  isDesktopApp?: boolean;
+}
 
-    const brainRoot = join(appDataDir, "brain");
-    const workspaces = await workspaceByConversation(appDataDir);
-    const transcriptPaths = await listFilesRecursively(
-      brainRoot,
-      (path) => path.endsWith(join(".system_generated", "logs", "transcript.jsonl"))
-    );
-    for (const path of transcriptPaths) {
-      const conversationId = basename(dirname(dirname(dirname(path))));
-      const summary = candidates.get(conversationId);
-      const transcript = await candidateForFile(path, {
-        recordId: conversationId,
-        providerSession: {
-          kind: "file",
-          id: conversationId,
-          resumeLocator: conversationId
-        },
-        runtimeHome: appDataDir,
-        title: summary?.title,
-        workspacePath: workspaces.get(conversationId) ?? summary?.workspacePath,
-        createdAt: summary?.createdAt,
-        detailState: "full"
-      });
-      candidates.set(conversationId, {
-        ...transcript,
-        source: {
-          ...transcript.source,
-          version: summary
-            ? `${transcript.source.version}:${summary.source.version}`
-            : transcript.source.version
-        },
-        updatedAt: summary && summary.updatedAt > transcript.updatedAt
-          ? summary.updatedAt
-          : transcript.updatedAt
-      });
-    }
+export const createAntigravityConversationCapability = (
+  options: AntigravityConversationOptions = {}
+): AgentConversationCapability => {
+  const targetId = options.targetId ?? "antigravity";
+  const targetName = options.targetName ?? "Antigravity CLI";
+  const appDataSubdir = options.appDataSubdir ?? (targetId === "antigravity-client" ? "antigravity" : "antigravity-cli");
+  const isDesktopApp = options.isDesktopApp ?? targetId === "antigravity-client";
+  const agent = { id: targetId, name: targetName };
 
-    let transcriptSourceObserved = transcriptPaths.length > 0;
-    if (!transcriptSourceObserved) {
-      try {
-        await access(brainRoot);
-        transcriptSourceObserved = true;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  const readTranscriptForAgent = async (
+    candidate: Parameters<AgentConversationCapability["read"]>[1]
+  ) => {
+    const messages: ConversationMessage[] = [];
+    let createdAt = candidate.createdAt;
+    await forEachJsonLine(candidate.source.locator, (record: any, index) => {
+      const timestamp = record?.created_at
+        ? isoDate(record.created_at, new Date(candidate.updatedAt))
+        : undefined;
+      let message: ConversationMessage | undefined;
+      if (record?.source === "USER_EXPLICIT" && record?.type === "USER_INPUT") {
+        message = visibleMessage(
+          `${candidate.recordId}:${record.step_index ?? index}`,
+          "user",
+          userRequestText(trimConversationText(record.content)),
+          timestamp
+        );
+        createdAt ??= timestamp;
+      } else if (record?.source === "MODEL" && typeof record?.content === "string") {
+        message = visibleMessage(
+          `${candidate.recordId}:${record.step_index ?? index}`,
+          "assistant",
+          trimConversationText(record.content),
+          timestamp
+        );
       }
-    }
-    return {
-      candidates: [...candidates.values()],
-      complete: !summaryReadFailed && (summarySourceObserved || transcriptSourceObserved)
-    };
-  },
-  read: async (_context, candidate) =>
-    candidate.detailState === "full"
-      ? readTranscript(candidate)
-      : createConversationDetail(agent, candidate, [], {
-          title: candidate.title,
-          snippet: candidate.snippet,
-          workspacePath: candidate.workspacePath,
-          createdAt: candidate.createdAt
-        }),
-  openOriginal: ({ executablePath }, candidate) => executablePath
-    ? {
-        executablePath,
-        args: [
-          "--conversation",
-          candidate.providerSession?.resumeLocator ??
-            candidate.providerSession?.id ??
-            candidate.recordId
-        ],
-        cwd: candidate.workspacePath
-      }
-    : undefined,
-  openContinuation: ({ executablePath, conversation, contextFilePath }) => executablePath
-    ? {
-        executablePath,
-        args: [
-          "--add-dir",
-          dirname(contextFilePath)
-        ],
-        cwd: conversation.workspacePath
-      }
-    : undefined,
-  checkMove: async ({ candidate, destinationPath }) => {
-    const appDataDir = candidate.source.runtimeHome;
-    if (!appDataDir) throw new Error("Antigravity CLI workspace metadata is unavailable");
-    const { value } = await readWorkspaceMap(appDataDir);
-    const sessionId = candidate.providerSession?.id ?? candidate.recordId;
-    const mapped = Object.entries(value).some(([, id]) => id === sessionId);
-    if (!mapped) {
-      throw new Error("This Antigravity CLI conversation has no movable workspace mapping");
-    }
-    const occupied = value[destinationPath];
-    if (typeof occupied === "string" && occupied !== sessionId) {
-      throw new Error("Another Antigravity CLI conversation already uses that working directory");
-    }
-    return {};
-  },
-  move: async ({ candidate, destinationPath }) => {
-    const appDataDir = candidate.source.runtimeHome;
-    if (!appDataDir) throw new Error("Antigravity CLI workspace metadata is unavailable");
-    const sessionId = candidate.providerSession?.id ?? candidate.recordId;
-    const { path, content, value } = await readWorkspaceMap(appDataDir);
-    const expectedHash = await hashPathEntry(path);
-    for (const [workspace, id] of Object.entries(value)) {
-      if (id === sessionId) delete value[workspace];
-    }
-    value[destinationPath] = sessionId;
-    await writeAtomic(path, `${JSON.stringify(value, null, 2)}\n`, {
-      expectedTargetHash: expectedHash
+      if (message) messages.push(message);
     });
-    const committedHash = await hashPathEntry(path);
-    return {
-      rollback: () => writeAtomic(path, content, { expectedTargetHash: committedHash })
-    };
-  }
-});
+    return createConversationDetail(agent, candidate, messages, {
+      workspacePath: candidate.workspacePath,
+      createdAt
+    });
+  };
+
+  return {
+    historyDetail: "full",
+    discover: async ({ targetPaths }) => {
+      const appDataDir = appDataDirFor(targetPaths.configDir, appDataSubdir);
+      const summariesPath = join(appDataDir, "conversation_summaries.db");
+      const candidates = new Map<string, AgentConversationCandidate>();
+      let summarySourceObserved = false;
+      let summaryReadFailed = false;
+      try {
+        await access(summariesPath);
+        const database = new DatabaseSync(summariesPath, { readOnly: true });
+        try {
+          const rows = database.prepare(`
+            SELECT conversation_id, title, preview, step_count, last_modified_time,
+                   workspace_uris, last_user_input_time
+            FROM conversation_summaries
+            ORDER BY last_modified_time DESC
+          `).all() as Array<Record<string, string | number>>;
+          for (const row of rows) {
+            let workspacePath: string | undefined;
+            try {
+              const uris = JSON.parse(String(row.workspace_uris ?? "[]"));
+              const first = Array.isArray(uris) ? uris[0] : undefined;
+              if (typeof first === "string") {
+                workspacePath = first.startsWith("file:")
+                  ? fileURLToPath(first)
+                  : first;
+              }
+            } catch {
+              // A malformed optional workspace field does not invalidate the summary.
+            }
+            const updatedAt = isoDate(row.last_modified_time, new Date());
+            const sourceId = String(row.conversation_id);
+            candidates.set(sourceId, {
+              recordId: sourceId,
+              source: {
+                version: `${row.last_modified_time}:${row.step_count}`,
+                locator: summariesPath,
+                runtimeHome: appDataDir
+              },
+              providerSession: {
+                kind: "database" as const,
+                id: sourceId,
+                resumeLocator: sourceId
+              },
+              title: trimConversationText(row.title),
+              snippet: conversationSnippetFrom(trimConversationText(row.preview)),
+              workspacePath,
+              createdAt: isoDate(row.last_user_input_time, new Date(updatedAt)),
+              updatedAt,
+              messageCount: Number(row.step_count ?? 0),
+              detailState: "summary-only" as const
+            });
+          }
+          summarySourceObserved = true;
+        } finally {
+          database.close();
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          summaryReadFailed = true;
+        }
+      }
+
+      const brainRoot = join(appDataDir, "brain");
+      const workspaces = await workspaceByConversation(appDataDir);
+      const transcriptPaths = await listFilesRecursively(
+        brainRoot,
+        (path) => path.endsWith(join(".system_generated", "logs", "transcript.jsonl"))
+      );
+      for (const path of transcriptPaths) {
+        const conversationId = basename(dirname(dirname(dirname(path))));
+        const summary = candidates.get(conversationId);
+        const transcript = await candidateForFile(path, {
+          recordId: conversationId,
+          providerSession: {
+            kind: "file",
+            id: conversationId,
+            resumeLocator: conversationId
+          },
+          runtimeHome: appDataDir,
+          title: summary?.title,
+          workspacePath: workspaces.get(conversationId) ?? summary?.workspacePath,
+          createdAt: summary?.createdAt,
+          detailState: "full"
+        });
+        candidates.set(conversationId, {
+          ...transcript,
+          source: {
+            ...transcript.source,
+            version: summary
+              ? `${transcript.source.version}:${summary.source.version}`
+              : transcript.source.version
+          },
+          updatedAt: summary && summary.updatedAt > transcript.updatedAt
+            ? summary.updatedAt
+            : transcript.updatedAt
+        });
+      }
+
+      let transcriptSourceObserved = transcriptPaths.length > 0;
+      if (!transcriptSourceObserved) {
+        try {
+          await access(brainRoot);
+          transcriptSourceObserved = true;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
+      }
+      return {
+        candidates: [...candidates.values()],
+        complete: !summaryReadFailed && (summarySourceObserved || transcriptSourceObserved)
+      };
+    },
+    read: async (_context, candidate) =>
+      candidate.detailState === "full"
+        ? readTranscriptForAgent(candidate)
+        : createConversationDetail(agent, candidate, [], {
+            title: candidate.title,
+            snippet: candidate.snippet,
+            workspacePath: candidate.workspacePath,
+            createdAt: candidate.createdAt
+          }),
+    openOriginal: ({ executablePath }, candidate) => {
+      if (isDesktopApp) {
+        const appPath = executablePath?.endsWith(".app")
+          ? executablePath
+          : "/Applications/Antigravity.app";
+        return {
+          executablePath: "/usr/bin/open",
+          args: ["-a", appPath, candidate.workspacePath ?? "."],
+          cwd: candidate.workspacePath
+        };
+      }
+      return executablePath
+        ? {
+            executablePath,
+            args: [
+              "--conversation",
+              candidate.providerSession?.resumeLocator ??
+                candidate.providerSession?.id ??
+                candidate.recordId
+            ],
+            cwd: candidate.workspacePath
+          }
+        : undefined;
+    },
+    openContinuation: ({ executablePath, conversation, contextFilePath }) => {
+      if (isDesktopApp) {
+        const appPath = executablePath?.endsWith(".app")
+          ? executablePath
+          : "/Applications/Antigravity.app";
+        return {
+          executablePath: "/usr/bin/open",
+          args: ["-a", appPath, conversation.workspacePath ?? "."],
+          cwd: conversation.workspacePath
+        };
+      }
+      return executablePath
+        ? {
+            executablePath,
+            args: [
+              "--add-dir",
+              dirname(contextFilePath)
+            ],
+            cwd: conversation.workspacePath
+          }
+        : undefined;
+    },
+    checkMove: async ({ candidate, destinationPath }) => {
+      const appDataDir = candidate.source.runtimeHome;
+      if (!appDataDir) throw new Error(`${targetName} workspace metadata is unavailable`);
+      const { value } = await readWorkspaceMap(appDataDir, targetName);
+      const sessionId = candidate.providerSession?.id ?? candidate.recordId;
+      const mapped = Object.entries(value).some(([, id]) => id === sessionId);
+      if (!mapped) {
+        throw new Error(`This ${targetName} conversation has no movable workspace mapping`);
+      }
+      const occupied = value[destinationPath];
+      if (typeof occupied === "string" && occupied !== sessionId) {
+        throw new Error(`Another ${targetName} conversation already uses that working directory`);
+      }
+      return {};
+    },
+    move: async ({ candidate, destinationPath }) => {
+      const appDataDir = candidate.source.runtimeHome;
+      if (!appDataDir) throw new Error(`${targetName} workspace metadata is unavailable`);
+      const sessionId = candidate.providerSession?.id ?? candidate.recordId;
+      const { path, content, value } = await readWorkspaceMap(appDataDir, targetName);
+      const expectedHash = await hashPathEntry(path);
+      for (const [workspace, id] of Object.entries(value)) {
+        if (id === sessionId) delete value[workspace];
+      }
+      value[destinationPath] = sessionId;
+      await writeAtomic(path, `${JSON.stringify(value, null, 2)}\n`, {
+        expectedTargetHash: expectedHash
+      });
+      const committedHash = await hashPathEntry(path);
+      return {
+        rollback: () => writeAtomic(path, content, { expectedTargetHash: committedHash })
+      };
+    }
+  };
+};
