@@ -90,11 +90,7 @@ export const antigravityAppIntegration: AgentTargetIntegration = {
       {
         bundleName: "Antigravity.app",
         bundleIdentifier: "com.google.antigravity",
-        label: "Antigravity.app",
-        bundledExecutable: {
-          relativePath: "Contents/MacOS/Antigravity",
-          label: "Antigravity executable"
-        }
+        label: "Antigravity.app"
       }
     ]
   }),
