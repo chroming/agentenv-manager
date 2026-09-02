@@ -1311,7 +1311,7 @@ const openSkillLibrary = async (page: Page) => {
 };
 
 const openLocalSkills = async (page: Page) => {
-  await page.getByRole("button", { name: "Local Skills" }).click();
+  await page.getByRole("button", { name: "Local Skills", exact: true }).click();
 };
 
 const openSharedSkills = async (page: Page) => {
