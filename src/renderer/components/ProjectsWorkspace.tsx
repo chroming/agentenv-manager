@@ -15,6 +15,7 @@ import {
   Plug,
   RotateCcw,
   Server,
+  Terminal,
   Trash2
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -57,6 +58,7 @@ import {
   ActionMenu,
   ActionMenuItem,
   AlignedResourceList,
+  Badge,
   Button,
   ControlGroup,
   DialogBody,
@@ -92,7 +94,8 @@ export const ProjectsWorkspace = ({
   onUpdateUiState = () => undefined,
   onEditorGuardChange,
   openRequest,
-  editorGuardPromptOpen = false
+  editorGuardPromptOpen = false,
+  onConfigureRemoteDevices
 }: {
   targets: TargetInfo[];
   skillGroups?: SkillGroup[];
@@ -102,6 +105,7 @@ export const ProjectsWorkspace = ({
   onEditorGuardChange?(guard?: ProjectEditorGuard): void;
   openRequest?: { requestId: number; projectId: string };
   editorGuardPromptOpen?: boolean;
+  onConfigureRemoteDevices?(): void;
 }) => {
   const { t } = useI18n();
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -116,6 +120,7 @@ export const ProjectsWorkspace = ({
   const [selectedId, setSelectedId] = useState<string | undefined>(uiState.selectedWorkspaceId);
   const [operation, setOperation] = useState<ProjectOperation>();
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [modalError, setModalError] = useState("");
   const [projectMenu, setProjectMenu] = useState<ProjectMenuState>();
   const [removeCandidate, setRemoveCandidate] = useState<ProjectSummary>();
@@ -658,6 +663,28 @@ export const ProjectsWorkspace = ({
     }
   };
 
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 4000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  const copySshCommand = async (project: ProjectSummary) => {
+    setProjectMenu(undefined);
+    const device = remoteDevices.find((d) => d.id === project.deviceId);
+    const host = device?.host || project.deviceHost || "host";
+    const port = device?.port && device.port !== 22 ? ` -p ${device.port}` : "";
+    const userPrefix = device?.user ? `${device.user}@` : "";
+    const cmd = `ssh${port} -t ${userPrefix}${host} "cd '${project.rootPath}' && exec \\$SHELL -l"`;
+    try {
+      await navigator.clipboard.writeText(cmd);
+      setNotice(t("SSH command copied to clipboard"));
+      setError("");
+    } catch {
+      setError(t("Failed to copy SSH command"));
+    }
+  };
+
   const resourcesByKind = (kind: ProjectResourceKind) =>
     snapshot?.resources.filter((resource) => resource.kind === kind) ?? [];
 
@@ -688,9 +715,9 @@ export const ProjectsWorkspace = ({
       <span className="project-switcher-title">
         <span>{project.name}</span>
         {project.isRemote ? (
-          <span className="project-remote-tag" title={project.deviceName ?? project.deviceHost ?? "SSH"}>
+          <Badge tone="neutral" title={project.deviceName ?? project.deviceHost ?? "SSH"}>
             SSH: {project.deviceName ?? project.deviceHost}
-          </span>
+          </Badge>
         ) : null}
       </span>
     ),
@@ -726,16 +753,37 @@ export const ProjectsWorkspace = ({
         title={t("Workspaces")}
         help={<InfoTip label={t("Open recurring folders with an Agent and manage only the files owned by that folder.")} />}
         actions={(
-          <Button
-            variant="secondary"
-            size="compact"
-            icon={<Server size={14} />}
-            onClick={() => void openAddWorkspaceDialog()}
-          >
-            {t("Add SSH remote workspace")}
-          </Button>
+          <ControlGroup className="projects-header-actions" aria-label={t("Workspace actions")}>
+            <Button
+              variant="secondary"
+              size="compact"
+              icon={<Folder size={14} />}
+              onClick={() => void addLocalProject()}
+            >
+              {t("Add folder")}
+            </Button>
+            <Button
+              variant="secondary"
+              size="compact"
+              icon={<Server size={14} />}
+              onClick={() => void openAddWorkspaceDialog()}
+            >
+              {t("Add SSH remote workspace")}
+            </Button>
+          </ControlGroup>
         )}
       />
+
+      {notice ? (
+        <Notice
+          className="project-scoped-notice"
+          icon={<CheckCircle2 size={15} />}
+          tone="info"
+          role="status"
+        >
+          {notice}
+        </Notice>
+      ) : null}
 
       {error ? (
         <Notice
@@ -817,9 +865,9 @@ export const ProjectsWorkspace = ({
                 description={(
                   <span className="selectable" title={selected.rootPath}>
                     {selected.isRemote ? (
-                      <span className="project-remote-tag" style={{ marginRight: 6 }}>
+                      <Badge tone="neutral" style={{ marginRight: 6 }}>
                         SSH: {selected.deviceName ?? selected.deviceHost}
-                      </span>
+                      </Badge>
                     ) : null}
                     {selected.rootPath}
                   </span>
@@ -1083,6 +1131,12 @@ export const ProjectsWorkspace = ({
               <History size={15} aria-hidden="true" />
               <span>{t("Recovery")}</span>
             </ActionMenuItem>
+            {menuProject.isRemote ? (
+              <ActionMenuItem onClick={() => void copySshCommand(menuProject)}>
+                <Terminal size={15} aria-hidden="true" />
+                <span>{t("Copy SSH command")}</span>
+              </ActionMenuItem>
+            ) : null}
             <ActionMenuItem
               tone="danger"
               onClick={() => runProjectMenuAction(menuProject, "remove")}
@@ -1377,9 +1431,26 @@ export const ProjectsWorkspace = ({
             ) : (
               <div className="add-workspace-remote-pane">
                 {remoteDevices.length === 0 ? (
-                  <Notice tone="info" icon={<Info size={15} />}>
-                    {t("No SSH devices found. Please configure an SSH device first.")}
-                  </Notice>
+                  <div className="add-workspace-no-devices">
+                    <Notice tone="info" icon={<Info size={15} />}>
+                      {t("No SSH devices found. Please configure an SSH device first.")}
+                    </Notice>
+                    {onConfigureRemoteDevices ? (
+                      <div className="add-workspace-no-devices__action">
+                        <Button
+                          variant="secondary"
+                          size="compact"
+                          icon={<Server size={14} />}
+                          onClick={() => {
+                            setAddWorkspaceOpen(false);
+                            onConfigureRemoteDevices();
+                          }}
+                        >
+                          {t("Go to Agents to configure SSH devices")}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
                 ) : (
                   <>
                     <SelectField

@@ -83,4 +83,41 @@ describe("project launch service", () => {
     await expect(service.openProject(project.id, "opencode"))
       .rejects.toThrow("OpenCode is not enabled or installed");
   });
+
+  it("provides an actionable SSH command when attempting to open a remote Project with a CLI Agent", async () => {
+    const project = {
+      id: "proj-remote-1",
+      name: "RemoteRepo",
+      rootPath: "/home/ubuntu/repo",
+      deviceId: "dev-1",
+      exists: true
+    };
+    const store = {
+      listProjects: vi.fn().mockResolvedValue([project]),
+      updateProject: vi.fn().mockResolvedValue(project)
+    };
+    const target = {
+      id: "opencode",
+      name: "OpenCode",
+      health: { executablePath: "/usr/local/bin/opencode" }
+    } as TargetInfo;
+    const deviceStore = {
+      get: vi.fn().mockResolvedValue({
+        id: "dev-1",
+        name: "DevServer",
+        host: "192.168.1.100",
+        user: "ubuntu"
+      })
+    };
+    const service = createProjectLaunchService({
+      projectStore: store as never,
+      targetRegistry: createTargetRegistry(),
+      targetDiscoveryService: { listTargets: vi.fn().mockResolvedValue([target]) } as never,
+      launcher: { launch: vi.fn() },
+      deviceStore: deviceStore as never
+    });
+
+    await expect(service.openProject(project.id, "opencode"))
+      .rejects.toThrow("OpenCode does not support remote SSH project launch. Use VS Code / Cursor or run in remote terminal:\nssh -t ubuntu@192.168.1.100 \"cd '/home/ubuntu/repo' && exec \\$SHELL -l\"");
+  });
 });

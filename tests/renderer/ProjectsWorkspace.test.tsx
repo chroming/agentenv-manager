@@ -671,4 +671,39 @@ describe("ProjectsWorkspace", () => {
       });
     });
   });
+
+  it("copies the SSH launch command for a remote workspace", async () => {
+    const api = installApi();
+    const remoteProject: ProjectSummary = {
+      id: "proj-remote-1",
+      name: "RemoteService",
+      rootPath: "/var/www/app",
+      deviceId: "dev-1",
+      deviceName: "ProductionBox",
+      deviceHost: "192.168.1.50",
+      exists: true,
+      isRemote: true,
+      remoteStatus: "ready",
+      createdAt: "2026-08-06T00:00:00.000Z"
+    };
+    api.listProjects.mockResolvedValue([remoteProject]);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<ProjectsWorkspace targets={[target]} />);
+
+    expect(await screen.findByRole("button", { name: "Add folder" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add SSH remote workspace" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "More Workspace actions" }));
+    const copyItem = await screen.findByRole("menuitem", { name: "Copy SSH command" });
+    fireEvent.click(copyItem);
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        expect.stringContaining("ssh -t 192.168.1.50 \"cd '/var/www/app' && exec \\$SHELL -l\"")
+      );
+    });
+    expect(await screen.findByText("SSH command copied to clipboard")).toBeInTheDocument();
+  });
 });

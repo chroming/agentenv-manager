@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ProfileSummary, SkillLibraryEntry, TargetInfo } from "../../src/shared/types";
+import type { ProfileSummary, ProjectSummary, SkillLibraryEntry, TargetInfo } from "../../src/shared/types";
 import { buildQuickOpenItems } from "../../src/renderer/quickOpenItems";
 import {
   defaultProfileIconKey,
@@ -49,9 +49,16 @@ describe("product icon semantics", () => {
         name: "Codex",
         health: { summary: "Ready" }
       } as unknown as TargetInfo],
+      projects: [{
+        id: "proj-1",
+        name: "Core",
+        rootPath: "/workspace/core",
+        exists: true
+      } as ProjectSummary],
       t: (message) => message,
       onOpenWorkspace: noop,
       onOpenProfile: noop,
+      onOpenProject: noop,
       onOpenSkill: noop,
       onOpenTarget: noop,
       onOpenLocalSkills: noop,
@@ -62,13 +69,17 @@ describe("product icon semantics", () => {
       .toMatchObject({ label: "Local Skills" });
     expect(items.find((candidate) => candidate.id === "skill:review")?.keywords)
       .toContain("Code Review");
+    expect(items.find((candidate) => candidate.id === "project:proj-1"))
+      .toMatchObject({ label: "Core", description: "/workspace/core" });
     const expected = new Map([
       ["workspace:targets", "agents"],
       ["workspace:profiles", "profiles"],
+      ["workspace:projects", "projects"],
       ["workspace:conversations", "conversations"],
       ["workspace:skills", "skills"],
       ["workspace:settings", "settings"],
       ["profile:daily", "profiles"],
+      ["project:proj-1", "projects"],
       ["skill:review", "skills"],
       ["target:codex", "agents"]
     ]);

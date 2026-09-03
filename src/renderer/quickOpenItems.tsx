@@ -2,6 +2,7 @@ import { RefreshCw, ScanLine } from "lucide-react";
 import type {
   ConversationSummary,
   ProfileSummary,
+  ProjectSummary,
   SkillLibraryEntry,
   TargetInfo
 } from "../shared/types";
@@ -14,11 +15,13 @@ interface QuickOpenItemOptions {
   profiles: ProfileSummary[];
   skills: SkillLibraryEntry[];
   targets: TargetInfo[];
+  projects?: ProjectSummary[];
   t(message: string, values?: TranslationValues): string;
   onOpenWorkspace(workspace: AppWorkspace): void;
   onOpenProfile(id: string): void;
   onOpenSkill(skill: SkillLibraryEntry): void;
   onOpenTarget(id: string): void;
+  onOpenProject?(id: string): void;
   onOpenLocalSkills(): void | Promise<void>;
   onRefreshSkills(): void | Promise<void>;
   onRefreshTargets(): void | Promise<void>;
@@ -43,9 +46,11 @@ export const buildQuickOpenItems = ({
   profiles,
   skills,
   targets,
+  projects = [],
   t,
   onOpenWorkspace,
   onOpenProfile,
+  onOpenProject,
   onOpenSkill,
   onOpenTarget,
   onOpenLocalSkills,
@@ -116,6 +121,25 @@ export const buildQuickOpenItems = ({
     keywords: [profile.id],
     icon: <ProductIcon name="profiles" />,
     onSelect: () => onOpenProfile(profile.id)
+  })),
+  ...(projects ?? []).map((project) => ({
+    id: `project:${project.id}`,
+    group: t("Workspaces"),
+    label: project.name,
+    description: project.isRemote
+      ? `SSH: ${project.deviceName ?? project.deviceHost} · ${project.rootPath}`
+      : project.rootPath,
+    keywords: [
+      project.id,
+      project.rootPath,
+      project.name,
+      project.deviceName ?? "",
+      project.deviceHost ?? "",
+      project.isRemote ? "ssh" : "local",
+      project.isRemote ? "remote" : ""
+    ].filter(Boolean),
+    icon: <ProductIcon name="projects" />,
+    onSelect: () => onOpenProject?.(project.id)
   })),
   ...skills.map((skill) => ({
     id: `skill:${skill.id}`,

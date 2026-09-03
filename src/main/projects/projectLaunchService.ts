@@ -56,6 +56,12 @@ export const createProjectLaunchService = ({
           message: `Opened remote ${project.name} on ${device.name} in ${adapter.descriptor.name}`
         };
       }
+      const userHost = device.user ? `${device.user}@${device.host}` : device.host;
+      const portArg = device.port && device.port !== 22 ? ` -p ${device.port}` : "";
+      const sshCommand = `ssh${portArg} -t ${userHost} "cd '${project.rootPath}' && exec \\$SHELL -l"`;
+      throw new Error(
+        `${adapter.descriptor.name} does not support remote SSH project launch. Use VS Code / Cursor or run in remote terminal:\n${sshCommand}`
+      );
     }
 
     const capability = adapter.projects;

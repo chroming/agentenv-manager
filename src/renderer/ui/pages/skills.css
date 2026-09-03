@@ -25,32 +25,15 @@
   align-items: center;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-  gap: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
   min-height: 40px;
-  padding: 5px 12px;
+  padding: 6px 12px;
 }
 
-.skill-library-panel .library-quick-tab {
-  border: 0;
-  border-radius: var(--radius-control);
-  color: var(--muted);
-  gap: 6px;
-  min-height: 30px;
-  padding: 0 10px;
-}
-
-.skill-library-panel .library-quick-tab:hover:not(:disabled) {
-  background: rgba(60, 60, 67, 0.055);
-}
-
-.skill-library-panel .library-quick-tab.is-active {
-  background: rgba(60, 60, 67, 0.1);
-  color: var(--text);
-}
-
-.skill-library-panel .library-quick-tab strong {
-  font-size: 11px;
-  font-weight: var(--font-weight-regular);
+.skill-library-panel .library-status-switch {
+  font-size: var(--font-size-caption);
 }
 
 .skill-library-panel .library-toolbar {

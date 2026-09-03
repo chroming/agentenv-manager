@@ -21,47 +21,22 @@ import type {
   ProfileDetail,
   ProfileResourceMode,
   ProfileSummary,
+  ProjectSummary,
   ResourceIconKey,
   RollbackPreview,
   StopManagingMode,
   StopManagingPreview,
   AgentEnvSettings,
   AppLocale,
-  GitHubSkillImportInput,
-  GitHubSkillImportResult,
-  GitHubSkillScanResult,
-  RepositorySkillImportInput,
-  RepositorySkillImportResult,
-  RepositorySkillScanResult,
-  RepositorySkillSourceInput,
-  LibraryResourceVersions,
-  ManageTargetSkillInput,
-  SkillInventoryEntry,
-  SkillRuntimeIssue,
-  SkillImportConflictResolution,
-  SkillImportInput,
-  SkillImportPreviewInput,
-  SkillAvailabilityInput,
-  SkillIconInput,
-  SkillTagsInput,
-  SkillCleanupRequest,
-  SkillCleanupBackupSummary,
-  SkillCleanupResult,
-  SkillLibraryEntry,
-  SkillSourceCandidateIgnoreInput,
-  SkillSourceCheckAllResult,
-  SkillSourceGroupView,
-  SkillSourceNameInput,
-  SkillSourceMergePreview,
-  SkillSourceMergePreviewInput,
-  SkillSourceMergeResult,
-  SkillUpstream,
-  SkillMergeInput,
-  SkillMergePreview,
-  SkillUpdateInfo,
-  SkillUpdatePlan,
-  SkillUpdatePreviewBatchResult,
-  SkillUpdateSettingsInput,
+  GitHubSkillImportInput, GitHubSkillImportResult, GitHubSkillScanResult,
+  RepositorySkillImportInput, RepositorySkillImportResult, RepositorySkillScanResult, RepositorySkillSourceInput,
+  LibraryResourceVersions, ManageTargetSkillInput, SkillInventoryEntry, SkillRuntimeIssue,
+  SkillImportConflictResolution, SkillImportInput, SkillImportPreviewInput, SkillAvailabilityInput,
+  SkillIconInput, SkillTagsInput, SkillCleanupRequest, SkillCleanupBackupSummary, SkillCleanupResult,
+  SkillLibraryEntry, SkillSourceCandidateIgnoreInput, SkillSourceCheckAllResult, SkillSourceGroupView,
+  SkillSourceNameInput, SkillSourceMergePreview, SkillSourceMergePreviewInput, SkillSourceMergeResult,
+  SkillUpstream, SkillMergeInput, SkillMergePreview, SkillUpdateInfo, SkillUpdatePlan,
+  SkillUpdatePreviewBatchResult, SkillUpdateSettingsInput,
   TargetDescriptor,
   TargetInfo,
   TargetCaptureDecision,
@@ -298,6 +273,7 @@ const AppContent = ({
   const [conversationViewState, setConversationViewState] = useState<ConversationWorkspaceViewState>();
   const [projectEditorGuard, setProjectEditorGuard] = useState<ProjectEditorGuard>();
   const [projectOpenRequest, setProjectOpenRequest] = useState<{ requestId: number; projectId: string }>();
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
 
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("general");
   const [quickOpen, setQuickOpen] = useState(false);
@@ -533,6 +509,14 @@ const AppContent = ({
     const timeout = window.setTimeout(() => setSkillUpdateCheckStatus(undefined), 5000);
     return () => window.clearTimeout(timeout);
   }, [skillUpdateCheckStatus]);
+
+  useEffect(() => {
+    let current = true;
+    void window.agentEnv.listProjects?.().then((loaded) => {
+      if (current && loaded) setProjects(loaded);
+    }).catch(() => undefined);
+    return () => { current = false; };
+  }, [activeWorkspace]);
 
   const loadSkillCleanupHistory = async (
     shouldApply: () => boolean = () => true
@@ -3632,12 +3616,17 @@ const AppContent = ({
     profiles,
     skills: librarySkills,
     targets,
+    projects,
     t,
     onOpenWorkspace: workspace => {
       if (workspace === "library") setSkillLibraryMode("skills");
       selectWorkspace(workspace);
     },
     onOpenProfile: selectProfile,
+    onOpenProject: (projectId) => {
+      setProjectOpenRequest({ requestId: Date.now(), projectId });
+      openWorkspaceNow("projects");
+    },
     onOpenSkill: skill => {
       setSkillLibraryMode("skills");
       setSkillLibraryViewState(current =>
@@ -4431,6 +4420,7 @@ const AppContent = ({
             onEditorGuardChange={setProjectEditorGuard}
             openRequest={projectOpenRequest}
             editorGuardPromptOpen={Boolean(pendingProfileAction && projectEditorGuard?.dirty)}
+            onConfigureRemoteDevices={() => selectWorkspace("targets")}
           />
         ) : activeWorkspace === "conversations" ? (
           <ConversationWorkspace

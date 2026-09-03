@@ -1744,74 +1744,34 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
             semantics="tabs"
             value={libraryMode}
           />
-          <div
-            className="library-status-tabs"
-            role="tablist"
-            aria-label={t("Skill status filters")}
-            hidden={libraryMode !== "skills"}
-          >
-          <button
-            className={`library-quick-tab${statusFilter === "enabled" ? " is-active" : ""}`}
-            type="button"
-            role="tab"
-            aria-selected={statusFilter === "enabled"}
-            onClick={() => updateControls({ statusFilter: "enabled" })}
-          >
-            {t("Enabled")} <strong>{librarySkills.length - disabledSkillCount}</strong>
-          </button>
-          <button
-            className={`library-quick-tab${statusFilter === "updates" ? " is-active" : ""}`}
-            type="button"
-            role="tab"
-            aria-selected={statusFilter === "updates"}
-            onClick={() => updateControls({ statusFilter: "updates" })}
-          >
-            {t("Updates")} <strong>{availableUpdateCount}</strong>
-          </button>
-          <button
-            className={`library-quick-tab${statusFilter === "disabled" ? " is-active" : ""}`}
-            type="button"
-            role="tab"
-            aria-selected={statusFilter === "disabled"}
-            onClick={() => updateControls({ statusFilter: "disabled" })}
-          >
-            {t("Disabled")} <strong>{disabledSkillCount}</strong>
-          </button>
-          </div>
-          <div
-            className="library-status-tabs"
-            role="tablist"
-            aria-label={t("Source check scope")}
-            hidden={libraryMode !== "sources"}
-          >
-            <button
-              className={`library-quick-tab${sourceScopeFilter === "monitored" ? " is-active" : ""}`}
-              type="button"
-              role="tab"
-              aria-selected={sourceScopeFilter === "monitored"}
-              onClick={() => setSourceScopeFilter("monitored")}
-            >
-              {t("Monitored")} <strong>{monitoredSourceCount}</strong>
-            </button>
-            <button
-              className={`library-quick-tab${sourceScopeFilter === "manual" ? " is-active" : ""}`}
-              type="button"
-              role="tab"
-              aria-selected={sourceScopeFilter === "manual"}
-              onClick={() => setSourceScopeFilter("manual")}
-            >
-              {t("Manual only")} <strong>{manualSourceCount}</strong>
-            </button>
-            <button
-              className={`library-quick-tab${sourceScopeFilter === "all" ? " is-active" : ""}`}
-              type="button"
-              role="tab"
-              aria-selected={sourceScopeFilter === "all"}
-              onClick={() => setSourceScopeFilter("all")}
-            >
-              {t("All")} <strong>{sourceGroups.length}</strong>
-            </button>
-          </div>
+          {libraryMode === "skills" ? (
+            <SegmentedControl
+              className="library-status-switch ui-segmented-control--compact"
+              label={t("Skill status filters")}
+              value={statusFilter ?? "all"}
+              onChange={(value) => updateControls({ statusFilter: value === "all" ? undefined : value as any })}
+              options={[
+                { value: "all", label: `${t("All")} (${librarySkills.length})` },
+                { value: "enabled", label: `${t("Enabled")} (${librarySkills.length - disabledSkillCount})` },
+                { value: "updates", label: `${t("Updates")} (${availableUpdateCount})` },
+                { value: "disabled", label: `${t("Disabled")} (${disabledSkillCount})` }
+              ]}
+              semantics="tabs"
+            />
+          ) : libraryMode === "sources" ? (
+            <SegmentedControl
+              className="library-status-switch ui-segmented-control--compact"
+              label={t("Source check scope")}
+              value={sourceScopeFilter}
+              onChange={(value) => setSourceScopeFilter(value as any)}
+              options={[
+                { value: "monitored", label: `${t("Monitored")} (${monitoredSourceCount})` },
+                { value: "manual", label: `${t("Manual only")} (${manualSourceCount})` },
+                { value: "all", label: `${t("All")} (${sourceGroups.length})` }
+              ]}
+              semantics="tabs"
+            />
+          ) : null}
         </div>
         <div className="library-toolbar" hidden={libraryMode !== "skills"}>
           <label className="library-search ui-composite-field">
