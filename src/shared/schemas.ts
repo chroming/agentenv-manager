@@ -57,6 +57,7 @@ export const ProjectReferenceSchema = z.object({
   id: SafeIdSchema,
   name: z.string().trim().min(1).max(120),
   rootPath: z.string().min(1).max(4096),
+  deviceId: SafeIdSchema.optional(),
   createdAt: z.string().datetime(),
   lastOpenedAt: z.string().datetime().optional(),
   lastAgentId: SafeIdSchema.optional()
@@ -67,15 +68,26 @@ export const ProjectReferenceFileSchema = z.object({
   projects: z.array(ProjectReferenceSchema)
 }).strict();
 
+export const AddProjectInputSchema = z.union([
+  z.string().min(1).max(4096),
+  z.object({
+    rootPath: z.string().min(1).max(4096),
+    name: z.string().trim().min(1).max(120).optional(),
+    deviceId: SafeIdSchema.optional()
+  }).strict()
+]);
+
 const ProjectContentHashSchema = z.string().min(1).max(256);
 
 export const UpdateProjectInputSchema = z.object({
   id: SafeIdSchema,
   name: z.string().trim().min(1).max(120).optional(),
+  deviceId: SafeIdSchema.optional(),
   lastAgentId: SafeIdSchema.optional(),
   markOpened: z.boolean().optional()
 }).strict().refine(
-  ({ name, lastAgentId, markOpened }) => name !== undefined || lastAgentId !== undefined || markOpened !== undefined,
+  ({ name, deviceId, lastAgentId, markOpened }) =>
+    name !== undefined || deviceId !== undefined || lastAgentId !== undefined || markOpened !== undefined,
   "Project update must change at least one field"
 );
 

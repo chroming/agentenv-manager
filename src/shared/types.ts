@@ -140,8 +140,9 @@ export interface AgentEnvApi {
   selectProjectFolder(): Promise<string | undefined>;
   selectConversationWorkspace(): Promise<string | undefined>;
   listProjects(): Promise<ProjectSummary[]>;
-  findProjectByPath(rootPath: string): Promise<ProjectSummary | undefined>;
-  addProject(rootPath: string): Promise<ProjectSummary>;
+  findProjectByPath(rootPath: string, deviceId?: string): Promise<ProjectSummary | undefined>;
+  addProject(input: string | AddProjectInput): Promise<ProjectSummary>;
+  testRemoteProjectPath?(deviceId: string, remotePath: string): Promise<{ exists: boolean; isDirectory?: boolean; canonicalPath?: string; error?: string }>;
   updateProject(input: UpdateProjectInput): Promise<ProjectSummary>;
   removeProject(id: string): Promise<void>;
   inspectProject(id: string): Promise<ProjectEnvironmentSnapshot>;
@@ -1415,6 +1416,7 @@ export interface ProjectReference {
   id: string;
   name: string;
   rootPath: string;
+  deviceId?: string;
   createdAt: string;
   lastOpenedAt?: string;
   lastAgentId?: string;
@@ -1422,11 +1424,22 @@ export interface ProjectReference {
 
 export interface ProjectSummary extends ProjectReference {
   exists: boolean;
+  isRemote?: boolean;
+  deviceName?: string;
+  deviceHost?: string;
+  remoteStatus?: "ready" | "unreachable" | "path-missing" | "unsupported";
+}
+
+export interface AddProjectInput {
+  rootPath: string;
+  name?: string;
+  deviceId?: string;
 }
 
 export interface UpdateProjectInput {
   id: string;
   name?: string;
+  deviceId?: string;
   lastAgentId?: string;
   markOpened?: boolean;
 }

@@ -129,6 +129,8 @@ import {
 import { createTelemetryService } from "./telemetry/telemetryService";
 import { createUiStateStore } from "./uiStateStore";
 import { createRemoteActivationService } from "./remoteDevices/remoteActivationService";
+import { createRemoteDeviceStore } from "./remoteDevices/remoteDeviceStore";
+import { createSystemSshTransport } from "./remoteDevices/systemSshTransport";
 
 const createGitHubFixtureFetch = (fixtureRoot: string) => {
   const fixtureTrees = new Map<string, string>();
@@ -954,9 +956,14 @@ const createServices = async (
       `[AgentEnv] Profile ${skipped.profileId} Instructions were left unchanged: ${skipped.error}`
     );
   }
+  const remoteDeviceStore = createRemoteDeviceStore(paths);
+  const sshTransport = createSystemSshTransport({ homeDir: paths.homeDir });
+
   const projectStore = createProjectStore({
     appDataRoot: paths.appDataRoot,
-    projectsPath: paths.projectsPath
+    projectsPath: paths.projectsPath,
+    deviceStore: remoteDeviceStore,
+    sshTransport
   });
   const uiStateStore = createUiStateStore(paths);
   let projectGitRunner: GitCommandRunner | undefined;
@@ -980,7 +987,10 @@ const createServices = async (
   const projectEnvironmentService = createProjectEnvironmentService({
     projectStore,
     targetRegistry,
-    gitService: projectGitService
+    gitService: projectGitService,
+    deviceStore: remoteDeviceStore,
+    sshTransport,
+    cacheDir: paths.appDataRoot
   });
   const projectRecoveryStore = createProjectRecoveryStore(paths.appDataRoot);
   const backupStore = createBackupStore(paths, { platform: process.platform });
@@ -1066,7 +1076,9 @@ const createServices = async (
     paths,
     profileStore,
     skillLibraryStore,
-    targetRegistry
+    targetRegistry,
+    deviceStore: remoteDeviceStore,
+    transport: sshTransport
   });
   const targetDiscoveryService = createTargetDiscoveryService({
     paths,
@@ -1081,6 +1093,9 @@ const createServices = async (
     environmentService: projectEnvironmentService,
     recoveryStore: projectRecoveryStore,
     skillLibraryStore,
+    projectStore,
+    deviceStore: remoteDeviceStore,
+    sshTransport,
     enabledAgentIds: async () =>
       (await targetDiscoveryService.listTargets()).map((target) => target.id)
   });
@@ -1088,6 +1103,7 @@ const createServices = async (
     projectStore,
     targetRegistry,
     targetDiscoveryService,
+    deviceStore: remoteDeviceStore,
     launcher: createConversationLauncher({
       artifactDir: paths.conversationHandoffDir,
       terminalPreference: async () =>
@@ -1247,6 +1263,8 @@ const createServices = async (
     profileStore,
     projectStore,
     uiStateStore,
+    remoteDeviceStore,
+    sshTransport,
     projectEnvironmentService,
     projectLaunchService,
     projectMutationService,

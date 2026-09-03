@@ -72,8 +72,10 @@ const api: AgentEnvApi = {
   selectConversationWorkspace: () =>
     ipcRenderer.invoke("dialog:select-conversation-workspace"),
   listProjects: () => ipcRenderer.invoke("projects:list"),
-  findProjectByPath: (rootPath) => ipcRenderer.invoke("projects:find-by-path", rootPath),
-  addProject: (rootPath) => ipcRenderer.invoke("projects:add", rootPath),
+  findProjectByPath: (rootPath, deviceId) => ipcRenderer.invoke("projects:find-by-path", rootPath, deviceId),
+  addProject: (input) => ipcRenderer.invoke("projects:add", input),
+  testRemoteProjectPath: (deviceId, remotePath) =>
+    ipcRenderer.invoke("projects:test-remote-path", deviceId, remotePath),
   updateProject: (input) => ipcRenderer.invoke("projects:update", input),
   removeProject: (id) => ipcRenderer.invoke("projects:remove", id),
   inspectProject: (id) => ipcRenderer.invoke("projects:inspect", id),

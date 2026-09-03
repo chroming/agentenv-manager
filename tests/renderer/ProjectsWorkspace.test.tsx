@@ -87,6 +87,14 @@ const installApi = () => {
       }
     }),
     selectProjectFolder: vi.fn().mockResolvedValue(undefined),
+    listRemoteDevices: vi.fn().mockResolvedValue([
+      { id: "dev-1", name: "Dev Machine", host: "192.168.1.50" }
+    ]),
+    testRemoteProjectPath: vi.fn().mockResolvedValue({
+      exists: true,
+      isDirectory: true,
+      canonicalPath: "/home/ubuntu/remote-app"
+    }),
     addProject: vi.fn(),
     removeProject: vi.fn().mockResolvedValue(undefined),
     openProject: vi.fn().mockResolvedValue({
@@ -616,5 +624,51 @@ describe("ProjectsWorkspace", () => {
     expect(screen.getByRole("menuitem", { name: "Recovery" })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("menuitem", { name: "Recovery" })).not.toBeInTheDocument();
+  });
+
+  it("allows adding an SSH remote workspace, testing its path, and displaying SSH tag", async () => {
+    const api = installApi();
+    const remoteProject: ProjectSummary = {
+      id: "project-remote",
+      name: "Remote App",
+      rootPath: "/home/ubuntu/remote-app",
+      deviceId: "dev-1",
+      deviceName: "Dev Machine",
+      deviceHost: "192.168.1.50",
+      isRemote: true,
+      exists: true,
+      createdAt: "2026-08-06T00:00:00.000Z"
+    };
+    api.addProject.mockResolvedValue(remoteProject);
+    api.listProjects.mockResolvedValue([project, remoteProject]);
+
+    render(<ProjectsWorkspace targets={[target]} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add SSH remote workspace" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add Workspace" });
+    expect(dialog).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "SSH remote machine" }));
+
+    const pathInput = within(dialog).getByLabelText("Remote directory path");
+    fireEvent.change(pathInput, { target: { value: "/home/ubuntu/remote-app" } });
+
+    const testButton = within(dialog).getByRole("button", { name: "Test path" });
+    fireEvent.click(testButton);
+    await waitFor(() => {
+      expect(api.testRemoteProjectPath).toHaveBeenCalledWith("dev-1", "/home/ubuntu/remote-app");
+    });
+    expect(await within(dialog).findByText(/Remote path verified/)).toBeInTheDocument();
+
+    const submitButton = within(dialog).getByRole("button", { name: "Add remote workspace" });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(api.addProject).toHaveBeenCalledWith({
+        deviceId: "dev-1",
+        rootPath: "/home/ubuntu/remote-app",
+        name: undefined
+      });
+    });
   });
 });

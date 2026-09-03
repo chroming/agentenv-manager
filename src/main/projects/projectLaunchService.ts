@@ -3,16 +3,18 @@ import type { TargetDiscoveryService } from "../targetDiscovery";
 import type { TargetRegistry } from "../targets/registry";
 import type { AgentLaunchSpec } from "../targets/types";
 import type { ProjectStore } from "./projectStore";
+import type { RemoteDeviceStore } from "../remoteDevices/remoteDeviceStore";
 
 interface ProjectLauncher {
   launch(spec: AgentLaunchSpec): Promise<void>;
 }
 
-interface ProjectLaunchServiceOptions {
+export interface ProjectLaunchServiceOptions {
   projectStore: ProjectStore;
   targetRegistry: TargetRegistry;
   targetDiscoveryService: TargetDiscoveryService;
   launcher: ProjectLauncher;
+  deviceStore?: RemoteDeviceStore;
 }
 
 export interface ProjectLaunchService {
@@ -23,7 +25,8 @@ export const createProjectLaunchService = ({
   projectStore,
   targetRegistry,
   targetDiscoveryService,
-  launcher
+  launcher,
+  deviceStore
 }: ProjectLaunchServiceOptions): ProjectLaunchService => ({
   openProject: async (projectId, agentId) => {
     const project = (await projectStore.listProjects()).find((candidate) => candidate.id === projectId);
@@ -35,6 +38,26 @@ export const createProjectLaunchService = ({
     if (!target?.health.executablePath) {
       throw new Error(`${adapter.descriptor.name} is not enabled or installed`);
     }
+
+    if (project.deviceId) {
+      const device = await deviceStore?.get(project.deviceId).catch(() => undefined);
+      if (!device) throw new Error(`Remote SSH device not found: ${project.deviceId}`);
+      const isRemoteIde = agentId === "vscode" || agentId === "cursor";
+      if (isRemoteIde) {
+        const spec: AgentLaunchSpec = {
+          executablePath: target.health.executablePath,
+          args: ["--remote", `ssh-remote+${device.host}`, project.rootPath]
+        };
+        await launcher.launch(spec);
+        await projectStore.updateProject({ id: project.id, lastAgentId: agentId, markOpened: true });
+        return {
+          agentId,
+          agentName: adapter.descriptor.name,
+          message: `Opened remote ${project.name} on ${device.name} in ${adapter.descriptor.name}`
+        };
+      }
+    }
+
     const capability = adapter.projects;
     if (!capability || capability.support.cliLaunch !== "supported") {
       throw new Error(`${adapter.descriptor.name} cannot open Projects from AgentEnv`);

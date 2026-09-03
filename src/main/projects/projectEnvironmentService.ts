@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
-import { lstat, readdir, readFile, stat } from "node:fs/promises";
-import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { lstat, readdir, readFile, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, dirname, extname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 import * as TOML from "@iarna/toml";
 import { parse as parseJsonc } from "jsonc-parser";
 import { parse as parseYaml } from "yaml";
 import type {
   ProjectEnvironmentPreview,
   ProjectEnvironmentSnapshot,
+  ProjectGitObservation,
   ProjectResourceKind,
   ProjectResourceSummary,
   ProjectSkillLocationSummary,
@@ -19,12 +21,22 @@ import { parseSkillFrontmatter } from "../skillFrontmatter";
 import type { TargetRegistry } from "../targets/registry";
 import type { ProjectStore } from "./projectStore";
 import type { ProjectGitService } from "./projectGitService";
+import type { RemoteDeviceStore } from "../remoteDevices/remoteDeviceStore";
+import type { SshTransport } from "../remoteDevices/systemSshTransport";
+import {
+  extractTarArchiveSafely,
+  fetchRemoteWorkspaceResourcesTar,
+  inspectRemoteGit
+} from "./remoteProjectTransport";
 import { SafeIdSchema } from "../../shared/schemas";
 
-interface ProjectEnvironmentServiceOptions {
+export interface ProjectEnvironmentServiceOptions {
   projectStore: ProjectStore;
   targetRegistry: TargetRegistry;
   gitService?: ProjectGitService;
+  deviceStore?: RemoteDeviceStore;
+  sshTransport?: SshTransport;
+  cacheDir?: string;
 }
 
 export interface ProjectEnvironmentService {
@@ -128,11 +140,10 @@ const parseMcpNames = (path: string, content: string): string[] => {
   return mcpNamesFromValue(parseJsonc(content));
 };
 
-export const createProjectEnvironmentService = ({
-  projectStore,
-  targetRegistry,
-  gitService
-}: ProjectEnvironmentServiceOptions): ProjectEnvironmentService => {
+export const createProjectEnvironmentService = (
+  options: ProjectEnvironmentServiceOptions
+): ProjectEnvironmentService => {
+  const { projectStore, targetRegistry, gitService, deviceStore, sshTransport, cacheDir } = options;
   const requireProject = async (projectId: string) => {
     const project = (await projectStore.listProjects()).find((candidate) => candidate.id === projectId);
     if (!project) throw new Error(`Project not found: ${projectId}`);
@@ -207,6 +218,59 @@ export const createProjectEnvironmentService = ({
       recommended: location.id === recommendedLocation?.id
     }));
 
+    let basePath = project.rootPath;
+    let gitObservation: ProjectGitObservation | undefined;
+
+    if (project.deviceId) {
+      if (!deviceStore) throw new Error("SSH device store is not available");
+      const device = await deviceStore.get(project.deviceId).catch(() => undefined);
+      if (!device) throw new Error(`SSH device not found: ${project.deviceId}`);
+      if (!sshTransport) throw new Error("SSH transport is not available");
+
+      const candidates = new Set<string>();
+      for (const adapter of adapters) {
+        const capability = adapter.projects!;
+        for (const declaration of capability.instructionFiles) {
+          candidates.add(normalizeRelativeDeclaration(declaration).split(sep).join("/"));
+        }
+        for (const declaration of capability.skillLocations) {
+          candidates.add(normalizeRelativeDeclaration(declaration.relativePath).split(sep).join("/"));
+        }
+        for (const declaration of capability.mcpFiles) {
+          candidates.add(normalizeRelativeDeclaration(declaration).split(sep).join("/"));
+        }
+      }
+
+      const candidateList = [...candidates];
+      const localInspectRoot = join(cacheDir ?? tmpdir(), "agentenv-remote-workspaces", project.id);
+      await rm(localInspectRoot, { recursive: true, force: true }).catch(() => undefined);
+
+      try {
+        const tarBuffer = await fetchRemoteWorkspaceResourcesTar(
+          device,
+          sshTransport,
+          project.rootPath,
+          candidateList
+        );
+        await extractTarArchiveSafely(tarBuffer, localInspectRoot);
+      } catch (error) {
+        issues.push(`Remote resource inspection issue: ${error instanceof Error ? error.message : String(error)}`);
+      }
+
+      gitObservation = await inspectRemoteGit(
+        device,
+        sshTransport,
+        project.rootPath,
+        candidateList
+      ).catch((error) => ({
+        repository: "unavailable" as const,
+        pathStates: {},
+        issue: error instanceof Error ? error.message : String(error)
+      }));
+
+      basePath = localInspectRoot;
+    }
+
     for (const adapter of adapters) {
       const capability = adapter.projects!;
       const agentId = adapter.descriptor.id;
@@ -214,8 +278,8 @@ export const createProjectEnvironmentService = ({
       for (const declaration of capability.instructionFiles) {
         try {
           const relativeDeclaration = normalizeRelativeDeclaration(declaration);
-          const candidate = resolve(project.rootPath, relativeDeclaration);
-          await assertBoundedParents(project.rootPath, candidate);
+          const candidate = resolve(basePath, relativeDeclaration);
+          if (!project.deviceId) await assertBoundedParents(basePath, candidate);
           let entry;
           try {
             entry = await lstat(candidate);
@@ -231,16 +295,17 @@ export const createProjectEnvironmentService = ({
               ? [candidate]
               : [];
           for (const path of paths) {
-            await assertBoundedParents(project.rootPath, path);
+            if (!project.deviceId) await assertBoundedParents(basePath, path);
             const content = await readFile(path);
             const info = await stat(path);
-            const relativePath = relative(project.rootPath, path);
+            const relativePath = relative(basePath, path).split(sep).join("/");
+            const absolutePath = project.deviceId ? posix.join(project.rootPath, relativePath) : path;
             addResource({
               id: resourceId("instructions", relativePath),
               kind: "instructions",
               name: basename(path),
               relativePath,
-              absolutePath: path,
+              absolutePath,
               consumerAgentIds: [agentId],
               state: "ready",
               editable: capability.support.instructions.mutate === "supported",
@@ -256,8 +321,8 @@ export const createProjectEnvironmentService = ({
       for (const declaration of capability.skillLocations) {
         try {
           const relativeDeclaration = normalizeRelativeDeclaration(declaration.relativePath);
-          const skillRoot = resolve(project.rootPath, relativeDeclaration);
-          await assertBoundedParents(project.rootPath, skillRoot);
+          const skillRoot = resolve(basePath, relativeDeclaration);
+          if (!project.deviceId) await assertBoundedParents(basePath, skillRoot);
           let rootEntry;
           try {
             rootEntry = await lstat(skillRoot);
@@ -278,13 +343,14 @@ export const createProjectEnvironmentService = ({
               await assertPortableTree(skillPath);
               const frontmatter = parseSkillFrontmatter(markdown);
               const info = await stat(skillFile);
-              const relativePath = relative(project.rootPath, skillPath);
+              const relativePath = relative(basePath, skillPath).split(sep).join("/");
+              const absolutePath = project.deviceId ? posix.join(project.rootPath, relativePath) : skillPath;
               addResource({
                 id: resourceId("skill", relativePath),
                 kind: "skill",
                 name: frontmatter.name || child.name,
                 relativePath,
-                absolutePath: skillPath,
+                absolutePath,
                 consumerAgentIds: [agentId],
                 state: frontmatter.errors.length > 0 ? "partial" : "ready",
                 editable: capability.support.skills.mutate === "supported" && declaration.writable,
@@ -308,8 +374,8 @@ export const createProjectEnvironmentService = ({
       for (const declaration of capability.mcpFiles) {
         try {
           const relativeDeclaration = normalizeRelativeDeclaration(declaration);
-          const path = resolve(project.rootPath, relativeDeclaration);
-          await assertBoundedParents(project.rootPath, path);
+          const path = resolve(basePath, relativeDeclaration);
+          if (!project.deviceId) await assertBoundedParents(basePath, path);
           let entry;
           try {
             entry = await lstat(path);
@@ -321,13 +387,14 @@ export const createProjectEnvironmentService = ({
           const names = parseMcpNames(path, await readFile(path, "utf8"));
           const info = await stat(path);
           for (const name of names) {
-            const relativePath = relative(project.rootPath, path);
+            const relativePath = relative(basePath, path).split(sep).join("/");
+            const absolutePath = project.deviceId ? posix.join(project.rootPath, relativePath) : path;
             addResource({
               id: resourceId("mcp", `${relativePath}:${name}`),
               kind: "mcp",
               name,
               relativePath,
-              absolutePath: path,
+              absolutePath,
               consumerAgentIds: [agentId],
               state: "partial",
               editable: false,
@@ -344,9 +411,9 @@ export const createProjectEnvironmentService = ({
     const sortedResources = [...resources.values()].sort((left, right) =>
       left.kind.localeCompare(right.kind) || left.relativePath.localeCompare(right.relativePath)
     );
-    const git = gitService
+    const git = gitObservation ?? (gitService
       ? await gitService.inspect(project.rootPath, sortedResources.map((resource) => resource.relativePath))
-      : { repository: "not-git" as const, pathStates: {} };
+      : { repository: "not-git" as const, pathStates: {} });
     for (const resource of sortedResources) {
       resource.gitState = git.pathStates[resource.relativePath];
     }
@@ -384,7 +451,11 @@ export const createProjectEnvironmentService = ({
       if (!declaration) {
         throw new Error(`${adapter.descriptor.name} does not declare a Project instruction file`);
       }
-      const relativePath = normalizeRelativeDeclaration(declaration);
+      const relativePath = normalizeRelativeDeclaration(declaration).split(sep).join("/");
+      if (project.deviceId) {
+        const destination = posix.join(project.rootPath, relativePath);
+        return { projectRoot: project.rootPath, destination, relativePath };
+      }
       const destination = resolve(project.rootPath, relativePath);
       await assertBoundedParents(project.rootPath, destination);
       const entry = await lstat(destination).catch((error) => {
@@ -411,7 +482,15 @@ export const createProjectEnvironmentService = ({
         return skillLocationId(relativePath) === locationId;
       });
       if (!declaration) throw new Error("Project Skill location is unavailable or read-only");
-      const relativeRoot = normalizeRelativeDeclaration(declaration.location.relativePath);
+      const relativeRoot = normalizeRelativeDeclaration(declaration.location.relativePath).split(sep).join("/");
+      const skillId = SafeIdSchema.parse(unsafeSkillId);
+
+      if (project.deviceId) {
+        const skillRoot = posix.join(project.rootPath, relativeRoot);
+        const destination = posix.join(skillRoot, skillId);
+        return { projectRoot: project.rootPath, skillRoot, destination };
+      }
+
       const skillRoot = resolve(project.rootPath, relativeRoot);
       await assertBoundedParents(project.rootPath, skillRoot);
       const rootEntry = await lstat(skillRoot).catch((error) => {
@@ -421,13 +500,32 @@ export const createProjectEnvironmentService = ({
       if (rootEntry && (!rootEntry.isDirectory() || rootEntry.isSymbolicLink())) {
         throw new Error(`Project Skills destination is not a regular directory: ${skillRoot}`);
       }
-      const skillId = SafeIdSchema.parse(unsafeSkillId);
       const destination = join(skillRoot, skillId);
       await assertBoundedParents(project.rootPath, destination);
       return { projectRoot: project.rootPath, skillRoot, destination };
     },
     assertProjectSkillPath: async (projectId, path) => {
       const project = await requireProject(projectId);
+      if (project.deviceId) {
+        const rel = posix.relative(project.rootPath, path);
+        if (!rel || rel.startsWith("../") || posix.isAbsolute(rel)) {
+          throw new Error("Project Skill path escapes workspace root");
+        }
+        const candidates = targetRegistry.listAdapters().flatMap((adapter) =>
+          adapter.projects?.support.skills.mutate === "supported"
+            ? adapter.projects.skillLocations
+                .filter((decl) => decl.writable)
+                .map((decl) =>
+                  posix.join(project.rootPath, normalizeRelativeDeclaration(decl.relativePath).split(sep).join("/")))
+            : []
+        );
+        const insideDeclaredRoot = candidates.some((root) => {
+          const relFromRoot = posix.relative(root, path);
+          return relFromRoot && !relFromRoot.startsWith("../") && !posix.isAbsolute(relFromRoot);
+        });
+        if (!insideDeclaredRoot) throw new Error("Project Skill path is no longer declared by a supported Agent");
+        return;
+      }
       const candidates = targetRegistry.listAdapters().flatMap((adapter) =>
         adapter.projects?.support.skills.mutate === "supported"
           ? adapter.projects.skillLocations

@@ -250,6 +250,65 @@
   overflow-wrap: anywhere;
 }
 
+.project-add-dialog {
+  max-width: 520px;
+  width: 100%;
+}
+
+.add-workspace-local-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.add-workspace-remote-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.add-workspace-test-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.add-workspace-test-success {
+  align-items: center;
+  color: var(--success);
+  display: inline-flex;
+  font-size: var(--font-size-caption);
+  gap: 4px;
+}
+
+.add-workspace-test-error {
+  align-items: center;
+  color: var(--danger);
+  display: inline-flex;
+  font-size: var(--font-size-caption);
+  gap: 4px;
+}
+
+.project-remote-tag {
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-tight);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: normal;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.project-switcher-title {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
 @container app-shell (max-width: 700px) {
   .projects-page-header {
     align-items: flex-start;

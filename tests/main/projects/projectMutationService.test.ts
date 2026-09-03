@@ -267,4 +267,103 @@ describe("project mutation service", () => {
     await expect(readFile(join(destination, "SKILL.md"), "utf8"))
       .resolves.toContain("# Review");
   });
+
+  it("reads, saves, and restores remote instruction files via SSH with local recovery receipts", async () => {
+    const { recoveryStore } = await setup();
+    const skillLibraryStore = { listSkills: async () => [] };
+    const mockDevice = {
+      id: "88888888-8888-4888-8888-888888888888",
+      name: "Remote Host",
+      host: "remote.host",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const mockDeviceStore = {
+      list: async () => [mockDevice],
+      get: async (id: string) => (id === mockDevice.id ? mockDevice : Promise.reject(new Error("Not found"))),
+      add: async () => mockDevice,
+      update: async () => mockDevice,
+      remove: async () => undefined
+    };
+
+    let remoteContent = "# Remote Rules Original\n";
+    const mockTransport = {
+      execute: async (_dev: unknown, cmd: string, opts?: { input?: Buffer }) => {
+        if (cmd.includes("DIR")) {
+          return { stdout: Buffer.from("DIR\t/opt/workspace\n"), stderr: "", exitCode: 0 };
+        }
+        if (cmd.includes("cat --")) {
+          return { stdout: Buffer.from(remoteContent), stderr: "", exitCode: 0 };
+        }
+        if (cmd.includes("cat >")) {
+          remoteContent = opts?.input?.toString("utf8") ?? "";
+          return { stdout: Buffer.alloc(0), stderr: "", exitCode: 0 };
+        }
+        return { stdout: Buffer.from(""), stderr: "", exitCode: 0 };
+      }
+    };
+
+    const project = {
+      id: "project-remote-123",
+      name: "remote-workspace",
+      rootPath: "/opt/workspace",
+      deviceId: mockDevice.id,
+      createdAt: new Date().toISOString(),
+      exists: true,
+      isRemote: true
+    };
+
+    const mockProjectStore = {
+      listProjects: async () => [project],
+      findProjectByPath: async () => project,
+      addProject: async () => project,
+      updateProject: async () => project,
+      removeProject: async () => undefined
+    };
+
+    const mockEnvironmentService = {
+      findResource: async () => ({
+        id: "instructions-rule",
+        kind: "instructions" as const,
+        name: "AGENTS.md",
+        relativePath: "AGENTS.md",
+        absolutePath: "/opt/workspace/AGENTS.md",
+        consumerAgentIds: ["codex"],
+        state: "ready" as const,
+        editable: true,
+        contentHash: "dummy"
+      }),
+      resolveInstructionDestination: async () => ({
+        projectRoot: "/opt/workspace",
+        destination: "/opt/workspace/AGENTS.md",
+        relativePath: "AGENTS.md"
+      })
+    } as any;
+
+    const service = createProjectMutationService({
+      environmentService: mockEnvironmentService,
+      recoveryStore,
+      skillLibraryStore,
+      projectStore: mockProjectStore,
+      deviceStore: mockDeviceStore,
+      sshTransport: mockTransport,
+      enabledAgentIds: async () => ["codex"]
+    });
+
+    const file = await service.read(project.id, "instructions-rule");
+    expect(file.content).toBe("# Remote Rules Original\n");
+
+    const saved = await service.save({
+      projectId: project.id,
+      resourceId: "instructions-rule",
+      expectedHash: file.contentHash,
+      content: "# Remote Rules Modified\n"
+    });
+    expect(saved.status).toBe("saved");
+    expect(remoteContent).toBe("# Remote Rules Modified\n");
+
+    const restored = await service.restore(saved.receiptId!);
+    expect(restored.status).toBe("restored");
+    expect(remoteContent).toBe("# Remote Rules Original\n");
+  });
 });

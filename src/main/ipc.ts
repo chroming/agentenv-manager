@@ -115,6 +115,8 @@ export interface IpcServices {
   appUpdateService: AppUpdateService;
   telemetryService: TelemetryService;
   uiStateStore: import("./uiStateStore").UiStateStore;
+  remoteDeviceStore?: import("./remoteDevices/remoteDeviceStore").RemoteDeviceStore;
+  sshTransport?: import("./remoteDevices/systemSshTransport").SshTransport;
   onSettingsUpdated?(settings: AgentEnvSettings): Promise<void> | void;
   cancelRepositoryOperations(): void;
 }
@@ -156,6 +158,8 @@ export const registerIpcHandlers = ({
   appUpdateService,
   telemetryService,
   uiStateStore,
+  remoteDeviceStore,
+  sshTransport,
   onSettingsUpdated,
   cancelRepositoryOperations
 }: IpcServices) => {
@@ -280,21 +284,17 @@ export const registerIpcHandlers = ({
     { diagnosticHandle },
     { conversationService }
   );
-  registerDialogIpc(
-    { diagnosticHandle },
-    { targetRegistry }
-  );
-  registerProjectIpc(
-    { diagnosticHandle, handleMutation },
-    {
-      projectEnvironmentService,
-      projectLaunchService,
-      projectMutationService,
-      projectRecoveryStore,
-      projectStore,
-      targetDiscoveryService
-    }
-  );
+  registerDialogIpc({ diagnosticHandle }, { targetRegistry });
+  registerProjectIpc({ diagnosticHandle, handleMutation }, {
+    projectEnvironmentService,
+    projectLaunchService,
+    projectMutationService,
+    projectRecoveryStore,
+    projectStore,
+    targetDiscoveryService,
+    deviceStore: remoteDeviceStore,
+    sshTransport
+  });
   registerAgentIpc(
     { diagnosticHandle, handleMutation },
     { activationService, remoteActivationService, targetDiscoveryService, targetRegistry }

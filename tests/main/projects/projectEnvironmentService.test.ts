@@ -152,4 +152,87 @@ describe("project environment service", () => {
     expect(preview.loadOrder).toBe("unknown");
     expect(JSON.stringify(preview)).not.toContain("super-secret-token");
   });
+
+  it("inspects a remote SSH workspace with instructions and git observation", async () => {
+    const appDataRoot = join(root, "data");
+    const mockDevice = {
+      id: "66666666-6666-4666-8666-666666666666",
+      name: "Remote Box",
+      host: "box.internal",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const mockDeviceStore = {
+      list: async () => [mockDevice],
+      get: async (id: string) => (id === mockDevice.id ? mockDevice : Promise.reject(new Error("Not found"))),
+      add: async () => mockDevice,
+      update: async () => mockDevice,
+      remove: async () => undefined
+    };
+
+    const remoteSource = join(root, "remote-source");
+    await mkdir(join(remoteSource, ".agents", "skills", "deployer"), { recursive: true });
+    await writeFile(join(remoteSource, "AGENTS.md"), "# Remote Agents Rule\n", "utf8");
+    await writeFile(
+      join(remoteSource, ".agents", "skills", "deployer", "SKILL.md"),
+      "---\nname: deployer\ndescription: Deploys containers\n---\n",
+      "utf8"
+    );
+
+    const { createTarArchiveFromDirectory } = await import("../../../src/main/projects/remoteProjectTransport");
+    const tarBuffer = await createTarArchiveFromDirectory(remoteSource);
+
+    const mockTransport = {
+      execute: async (_dev: unknown, cmd: string) => {
+        if (cmd.includes("DIR")) {
+          return { stdout: Buffer.from("DIR\t/var/workspace/app\n"), stderr: "", exitCode: 0 };
+        }
+        if (cmd.includes("tar -chf -") || cmd.includes("tar -cf -")) {
+          return { stdout: tarBuffer, stderr: "", exitCode: 0 };
+        }
+        if (cmd.includes("git rev-parse")) {
+          return { stdout: Buffer.from("IS_GIT\t/var/workspace/app\n M AGENTS.md\0"), stderr: "", exitCode: 0 };
+        }
+        return { stdout: Buffer.from(""), stderr: "", exitCode: 0 };
+      }
+    };
+
+    const store = createProjectStore({
+      appDataRoot,
+      deviceStore: mockDeviceStore,
+      sshTransport: mockTransport
+    });
+    const project = await store.addProject({
+      deviceId: mockDevice.id,
+      rootPath: "/var/workspace/app"
+    });
+
+    const service = createProjectEnvironmentService({
+      projectStore: store,
+      targetRegistry: createTargetRegistry(),
+      deviceStore: mockDeviceStore,
+      sshTransport: mockTransport,
+      cacheDir: appDataRoot
+    });
+
+    const snapshot = await service.inspectProject(project.id, ["codex", "opencode"]);
+
+    expect(snapshot.projectRoot).toBe("/var/workspace/app");
+    expect(snapshot.git?.repository).toBe("git");
+    expect(snapshot.resources).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "instructions",
+        name: "AGENTS.md",
+        relativePath: "AGENTS.md",
+        absolutePath: "/var/workspace/app/AGENTS.md",
+        gitState: "tracked-modified"
+      }),
+      expect.objectContaining({
+        kind: "skill",
+        name: "deployer",
+        relativePath: ".agents/skills/deployer",
+        absolutePath: "/var/workspace/app/.agents/skills/deployer"
+      })
+    ]));
+  });
 });

@@ -107,4 +107,51 @@ describe("project store", () => {
     await expect(createProjectStore({ appDataRoot }).listProjects()).rejects.toThrow();
     await expect(stat(projectRoot)).resolves.toMatchObject({});
   });
+
+  it("adds and summarizes a remote SSH Project", async () => {
+    const { appDataRoot } = await setup();
+    const mockDevice = {
+      id: "77777777-7777-4777-8777-777777777777",
+      name: "Remote GPU",
+      host: "gpu.internal",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const mockDeviceStore = {
+      list: async () => [mockDevice],
+      get: async (id: string) => (id === mockDevice.id ? mockDevice : Promise.reject(new Error("Not found"))),
+      add: async () => mockDevice,
+      update: async () => mockDevice,
+      remove: async () => undefined
+    };
+    const mockTransport = {
+      execute: async (_device: unknown, cmd: string) => {
+        if (cmd.includes("DIR")) {
+          return { stdout: Buffer.from("DIR\t/data/projects/my-remote-app\n"), stderr: "", exitCode: 0 };
+        }
+        return { stdout: Buffer.from(""), stderr: "", exitCode: 0 };
+      }
+    };
+    const store = createProjectStore({
+      appDataRoot,
+      deviceStore: mockDeviceStore,
+      sshTransport: mockTransport
+    });
+    const created = await store.addProject({
+      deviceId: mockDevice.id,
+      rootPath: "/data/projects/my-remote-app"
+    });
+    expect(created).toMatchObject({
+      name: "my-remote-app",
+      rootPath: "/data/projects/my-remote-app",
+      deviceId: mockDevice.id,
+      isRemote: true,
+      deviceName: "Remote GPU",
+      deviceHost: "gpu.internal",
+      exists: true,
+      remoteStatus: "ready"
+    });
+    const found = await store.findProjectByPath("/data/projects/my-remote-app", mockDevice.id);
+    expect(found?.id).toBe(created.id);
+  });
 });

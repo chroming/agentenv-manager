@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, readdir, rename, rm, rmdir } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, sep } from "node:path";
+import { tmpdir } from "node:os";
+import { dirname, isAbsolute, join, posix, relative, sep } from "node:path";
 import type {
   AddProjectSkillInput,
   AddProjectSkillsInput,
@@ -20,14 +21,29 @@ import { pathsEqual } from "../platformPaths";
 import type { SkillLibraryStore } from "../skillLibraryStore";
 import type { ProjectEnvironmentService } from "./projectEnvironmentService";
 import type { ProjectRecoveryStore } from "./projectRecoveryStore";
+import type { ProjectStore } from "./projectStore";
+import type { RemoteDeviceStore } from "../remoteDevices/remoteDeviceStore";
+import type { SshTransport } from "../remoteDevices/systemSshTransport";
+import {
+  archiveRemoteDirectory,
+  createTarArchiveFromDirectory,
+  deploySkillToRemote,
+  extractTarArchiveSafely,
+  readRemoteTextFile,
+  removeRemotePath,
+  writeRemoteTextFile
+} from "./remoteProjectTransport";
 
 const MAX_PROJECT_TEXT_BYTES = 2 * 1024 * 1024;
 
-interface ProjectMutationServiceOptions {
+export interface ProjectMutationServiceOptions {
   environmentService: ProjectEnvironmentService;
   recoveryStore: ProjectRecoveryStore;
   skillLibraryStore: Pick<SkillLibraryStore, "listSkills">;
   enabledAgentIds(): Promise<string[]>;
+  projectStore?: ProjectStore;
+  deviceStore?: RemoteDeviceStore;
+  sshTransport?: SshTransport;
 }
 
 export interface ProjectMutationService {
@@ -41,12 +57,29 @@ export interface ProjectMutationService {
   restore(receiptId: string): Promise<ProjectMutationResult>;
 }
 
-export const createProjectMutationService = ({
-  environmentService,
-  recoveryStore,
-  skillLibraryStore,
-  enabledAgentIds
-}: ProjectMutationServiceOptions): ProjectMutationService => {
+export const createProjectMutationService = (
+  options: ProjectMutationServiceOptions
+): ProjectMutationService => {
+  const {
+    environmentService,
+    recoveryStore,
+    skillLibraryStore,
+    enabledAgentIds,
+    projectStore,
+    deviceStore,
+    sshTransport
+  } = options;
+
+  const getProjectAndDevice = async (projectId: string) => {
+    if (!projectStore) return undefined;
+    const project = (await projectStore.listProjects()).find((p) => p.id === projectId);
+    if (!project?.deviceId) return undefined;
+    const device = await deviceStore?.get(project.deviceId).catch(() => undefined);
+    if (!device) throw new Error(`Remote SSH device not found: ${project.deviceId}`);
+    if (!sshTransport) throw new Error("SSH transport is not available");
+    return { project, device, transport: sshTransport };
+  };
+
   const ensureRegularProjectDirectory = async (projectRoot: string, target: string) => {
     const relativePath = relative(projectRoot, target);
     if (!relativePath || relativePath === ".") return [];
@@ -59,54 +92,45 @@ export const createProjectMutationService = ({
     }
     const created: string[] = [];
     let current = projectRoot;
-    for (const part of relativePath.split(sep)) {
-      current = join(current, part);
-      let entry = await lstat(current).catch((error) => {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-        throw error;
-      });
-      if (!entry) {
-        let createdHere = false;
-        try {
-          await mkdir(current);
-          createdHere = true;
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-        }
+    for (const segment of relativePath.split(sep).filter(Boolean)) {
+      current = join(current, segment);
+      let entry;
+      try {
         entry = await lstat(current);
-        if (createdHere) created.push(current);
+      } catch (error) {
+        if (!isMissingFileError(error)) throw error;
+        await mkdir(current);
+        created.push(current);
+        continue;
       }
       if (!entry.isDirectory() || entry.isSymbolicLink()) {
-        throw new Error(`Project resource parent is not a regular directory: ${current}`);
+        throw new Error(`Project directory component is not a regular directory: ${current}`);
       }
     }
     return created;
   };
 
-  const removeCreatedEmptyDirectories = async (paths: readonly string[]) => {
-    for (const path of [...paths].reverse()) {
-      await rmdir(path).catch((error) => {
-        if (!["ENOENT", "ENOTEMPTY", "EEXIST"].includes((error as NodeJS.ErrnoException).code ?? "")) {
-          throw error;
-        }
-      });
+  const removeCreatedEmptyDirectories = async (directories: string[]) => {
+    for (const directory of [...directories].reverse()) {
+      try {
+        await rmdir(directory);
+      } catch (error) {
+        if (!isMissingFileError(error)) break;
+      }
     }
   };
 
-  const assertPortableSkill = async (root: string) => {
-    const queue = [root];
-    let count = 0;
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      for (const entry of await readdir(current, { withFileTypes: true })) {
-        count += 1;
-        if (count > 2_000) throw new Error("Project Skill contains too many files");
-        const path = join(current, entry.name);
-        if (entry.isSymbolicLink()) throw new Error(`Project Skill contains a symbolic link: ${path}`);
-        if (entry.isDirectory()) queue.push(path);
-        else if (!entry.isFile()) throw new Error(`Project Skill contains an unsupported entry: ${path}`);
+  const assertPortableSkill = async (rootPath: string) => {
+    const checkTree = async (current: string) => {
+      const entries = await readdir(current, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isSymbolicLink()) {
+          throw new Error(`Project Skill contains an unsafe symbolic link: ${join(current, entry.name)}`);
+        }
+        if (entry.isDirectory()) await checkTree(join(current, entry.name));
       }
-    }
+    };
+    await checkTree(rootPath);
   };
 
   const copySkillAtomically = async (
@@ -148,7 +172,13 @@ export const createProjectMutationService = ({
 
   const read = async (projectId: string, resourceId: string): Promise<ProjectResourceFile> => {
     const resource = await resolveInstruction(projectId, resourceId);
-    const content = await readFile(resource.absolutePath, "utf8");
+    const remoteContext = await getProjectAndDevice(projectId);
+    let content: string;
+    if (remoteContext) {
+      content = await readRemoteTextFile(remoteContext.device, remoteContext.transport, resource.absolutePath);
+    } else {
+      content = await readFile(resource.absolutePath, "utf8");
+    }
     const bytes = Buffer.byteLength(content);
     if (bytes > MAX_PROJECT_TEXT_BYTES) throw new Error("Project instruction file is too large to edit safely");
     return {
@@ -185,6 +215,27 @@ export const createProjectMutationService = ({
       originalHash: current.contentHash,
       appliedHash
     });
+
+    const remoteContext = await getProjectAndDevice(input.projectId);
+    if (remoteContext) {
+      try {
+        await writeRemoteTextFile(remoteContext.device, remoteContext.transport, current.path, input.content);
+        const verified = hashFileContent(await readRemoteTextFile(remoteContext.device, remoteContext.transport, current.path));
+        if (verified !== appliedHash) throw new Error("Project instruction verification failed after save");
+        await recoveryStore.update(receipt.id, "committed");
+        return { status: "saved", contentHash: appliedHash, receiptId: receipt.id };
+      } catch (error) {
+        try {
+          await writeRemoteTextFile(remoteContext.device, remoteContext.transport, current.path, current.content);
+          await recoveryStore.update(receipt.id, "failed-restored");
+        } catch (restoreError) {
+          await recoveryStore.update(receipt.id, "recovery-required");
+          throw new Error(`Project save failed and recovery requires attention: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`);
+        }
+        throw error;
+      }
+    }
+
     try {
       await writeAtomic(current.path, input.content);
       const verified = hashFileContent(await readFile(current.path));
@@ -210,7 +261,17 @@ export const createProjectMutationService = ({
     read,
     prepareInstruction: async (projectId, agentId) => {
       const { destination } = await environmentService.resolveInstructionDestination(projectId, agentId);
-      if (await pathEntryExists(destination)) {
+      const remoteContext = await getProjectAndDevice(projectId);
+      if (remoteContext) {
+        let exists = false;
+        try {
+          await readRemoteTextFile(remoteContext.device, remoteContext.transport, destination);
+          exists = true;
+        } catch {
+          exists = false;
+        }
+        if (exists) throw new Error("Project instruction already exists. Refresh the Project before editing it.");
+      } else if (await pathEntryExists(destination)) {
         throw new Error("Project instruction already exists. Refresh the Project before editing it.");
       }
       return {
@@ -231,6 +292,42 @@ export const createProjectMutationService = ({
         input.projectId,
         input.agentId
       );
+      const remoteContext = await getProjectAndDevice(input.projectId);
+      if (remoteContext) {
+        let exists = false;
+        try {
+          await readRemoteTextFile(remoteContext.device, remoteContext.transport, destination);
+          exists = true;
+        } catch {
+          exists = false;
+        }
+        if (exists) {
+          throw new Error("Project instruction changed outside AgentEnv. Refresh before saving.");
+        }
+        const appliedHash = hashFileContent(input.content);
+        await recoveryStore.assertWritablePath(destination);
+        const receipt = await recoveryStore.prepare({
+          projectId: input.projectId,
+          resourceId: `instruction-create:${input.agentId}`,
+          agentId: input.agentId,
+          path: destination,
+          kind: "instructions",
+          originalWasAbsent: true,
+          originalHash: "absent",
+          appliedHash
+        });
+        try {
+          await writeRemoteTextFile(remoteContext.device, remoteContext.transport, destination, input.content);
+          const verified = hashFileContent(await readRemoteTextFile(remoteContext.device, remoteContext.transport, destination));
+          if (verified !== appliedHash) throw new Error("Project instruction verification failed after save");
+          await recoveryStore.update(receipt.id, "committed");
+          return { status: "saved", contentHash: appliedHash, receiptId: receipt.id };
+        } catch (error) {
+          await removeRemotePath(remoteContext.device, remoteContext.transport, destination).catch(() => undefined);
+          await recoveryStore.update(receipt.id, "failed-restored");
+          throw error;
+        }
+      }
       if (await pathEntryExists(destination)) {
         throw new Error("Project instruction changed outside AgentEnv. Refresh before saving.");
       }
@@ -284,6 +381,57 @@ export const createProjectMutationService = ({
         library.id,
         await enabledAgentIds()
       );
+
+      const remoteContext = await getProjectAndDevice(input.projectId);
+      if (remoteContext) {
+        let existingHash = "absent";
+        let existingArchive: Buffer | undefined;
+        try {
+          existingArchive = await archiveRemoteDirectory(remoteContext.device, remoteContext.transport, destination);
+          const tempCheckDir = join(tmpdir(), `check-skill-${randomUUID()}`);
+          await extractTarArchiveSafely(existingArchive, tempCheckDir);
+          existingHash = await hashSkillContent(tempCheckDir).catch(() => "unreadable");
+          await rm(tempCheckDir, { recursive: true, force: true }).catch(() => undefined);
+          if (existingHash === sourceHash) {
+            return { status: "no-op", contentHash: sourceHash };
+          }
+          if (input.conflictResolution !== "replace") {
+            throw new Error(`Project Skill replacement requires an explicit replacement choice: ${destination}`);
+          }
+        } catch (e: unknown) {
+          if ((e as NodeJS.ErrnoException)?.code !== "ENOENT") throw e;
+        }
+
+        await recoveryStore.assertWritablePath(destination);
+        const receipt = await recoveryStore.prepareDirectory({
+          projectId: input.projectId,
+          resourceId: `skill-add:${input.locationId}:${library.id}`,
+          path: destination,
+          originalHash: existingHash,
+          appliedHash: sourceHash,
+          originalWasAbsent: existingHash === "absent",
+          sourcePath: undefined
+        });
+        if (existingArchive && existingHash !== "absent") {
+          const backupDest = recoveryStore.directoryBackupPath(receipt.id);
+          await extractTarArchiveSafely(existingArchive, backupDest);
+        }
+        try {
+          const tarToDeploy = await createTarArchiveFromDirectory(library.path);
+          await deploySkillToRemote(remoteContext.device, remoteContext.transport, tarToDeploy, destination);
+          await recoveryStore.update(receipt.id, "committed");
+          return { status: "saved", contentHash: sourceHash, receiptId: receipt.id };
+        } catch (error) {
+          if (existingArchive && existingHash !== "absent") {
+            await deploySkillToRemote(remoteContext.device, remoteContext.transport, existingArchive, destination).catch(() => undefined);
+          } else {
+            await removeRemotePath(remoteContext.device, remoteContext.transport, destination).catch(() => undefined);
+          }
+          await recoveryStore.update(receipt.id, "failed-restored");
+          throw error;
+        }
+      }
+
       let existingHash = "absent";
       if (await pathEntryExists(destination)) {
         const existing = await lstat(destination);
@@ -390,6 +538,36 @@ export const createProjectMutationService = ({
         throw new Error("Only safe Project Skills can be removed");
       }
       await environmentService.assertProjectSkillPath(input.projectId, resource.absolutePath);
+
+      const remoteContext = await getProjectAndDevice(input.projectId);
+      if (remoteContext) {
+        if (resource.contentHash !== input.expectedHash) {
+          throw new Error("Project Skill changed outside AgentEnv. Refresh before removing it.");
+        }
+        await recoveryStore.assertWritablePath(resource.absolutePath);
+        const receipt = await recoveryStore.prepareDirectory({
+          projectId: input.projectId,
+          resourceId: input.resourceId,
+          path: resource.absolutePath,
+          originalHash: resource.contentHash ?? "absent",
+          appliedHash: "absent",
+          originalWasAbsent: false,
+          sourcePath: undefined
+        });
+        const backupArchive = await archiveRemoteDirectory(remoteContext.device, remoteContext.transport, resource.absolutePath);
+        const backupDest = recoveryStore.directoryBackupPath(receipt.id);
+        await extractTarArchiveSafely(backupArchive, backupDest);
+        try {
+          await removeRemotePath(remoteContext.device, remoteContext.transport, resource.absolutePath);
+          await recoveryStore.update(receipt.id, "committed");
+          return { status: "saved", contentHash: "absent", receiptId: receipt.id };
+        } catch (error) {
+          await deploySkillToRemote(remoteContext.device, remoteContext.transport, backupArchive, resource.absolutePath).catch(() => undefined);
+          await recoveryStore.update(receipt.id, "failed-restored");
+          throw error;
+        }
+      }
+
       await assertPortableSkill(resource.absolutePath);
       const currentHash = await hashSkillContent(resource.absolutePath);
       if (currentHash !== input.expectedHash) {
@@ -428,6 +606,33 @@ export const createProjectMutationService = ({
     },
     restore: async (receiptId) => {
       const receipt = await recoveryStore.get(receiptId);
+      const remoteContext = await getProjectAndDevice(receipt.projectId);
+      if (remoteContext) {
+        if (receipt.kind === "instructions") {
+          if (receipt.originalWasAbsent) {
+            await removeRemotePath(remoteContext.device, remoteContext.transport, receipt.path).catch(() => undefined);
+            await recoveryStore.update(receipt.id, "restored");
+            return { status: "restored", contentHash: "absent", receiptId };
+          }
+          const original = Buffer.from(receipt.originalContentBase64 ?? "", "base64").toString("utf8");
+          await writeRemoteTextFile(remoteContext.device, remoteContext.transport, receipt.path, original);
+          await recoveryStore.update(receipt.id, "restored");
+          return { status: "restored", contentHash: receipt.originalHash, receiptId };
+        }
+        if (receipt.kind === "skill") {
+          if (receipt.originalWasAbsent) {
+            await removeRemotePath(remoteContext.device, remoteContext.transport, receipt.path).catch(() => undefined);
+            await recoveryStore.update(receipt.id, "restored");
+            return { status: "restored", contentHash: "absent", receiptId };
+          }
+          const backupDir = recoveryStore.directoryBackupPath(receipt.id);
+          const tar = await createTarArchiveFromDirectory(backupDir);
+          await deploySkillToRemote(remoteContext.device, remoteContext.transport, tar, receipt.path);
+          await recoveryStore.update(receipt.id, "restored");
+          return { status: "restored", contentHash: receipt.originalHash, receiptId };
+        }
+      }
+
       if (receipt.kind === "skill") {
         await environmentService.assertProjectSkillPath(receipt.projectId, receipt.path);
         const exists = await pathEntryExists(receipt.path);
