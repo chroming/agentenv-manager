@@ -9,6 +9,7 @@ import {
   Folder,
   History,
   Info,
+  LoaderCircle,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -86,7 +87,19 @@ import {
 type ProjectOperation = "add" | "refresh" | "rename" | "remove" | "add-skill" | "remove-skill" | "inspect" | "open" | "preview";
 type ProjectMenuState = { projectId: string; left: number; top: number };
 
+export const projectSnapshotCache = new Map<string, ProjectEnvironmentSnapshot>();
+
+export const clearProjectSnapshotCache = (projectId?: string) => {
+  if (projectId) {
+    projectSnapshotCache.delete(projectId);
+  } else {
+    projectSnapshotCache.clear();
+  }
+};
+
 export const ProjectsWorkspace = ({
+  initialProjects,
+  onProjectsChange,
   targets,
   skillGroups = [],
   sourceGroups = [],
@@ -97,6 +110,8 @@ export const ProjectsWorkspace = ({
   editorGuardPromptOpen = false,
   onConfigureRemoteDevices
 }: {
+  initialProjects?: ProjectSummary[];
+  onProjectsChange?(projects: ProjectSummary[]): void;
   targets: TargetInfo[];
   skillGroups?: SkillGroup[];
   sourceGroups?: SkillSourceGroupView[];
@@ -108,7 +123,22 @@ export const ProjectsWorkspace = ({
   onConfigureRemoteDevices?(): void;
 }) => {
   const { t } = useI18n();
-  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const orderProjects = (items: ProjectSummary[]) =>
+    orderByPreference(items, uiState.workspaceOrder, (project) => project.id);
+  const [projects, setProjects] = useState<ProjectSummary[]>(() =>
+    initialProjects && initialProjects.length > 0 ? orderProjects(initialProjects) : []
+  );
+  const [hasLoadedProjects, setHasLoadedProjects] = useState(
+    Boolean(initialProjects && initialProjects.length > 0)
+  );
+
+  const applyProjects = (next: ProjectSummary[] | ((current: ProjectSummary[]) => ProjectSummary[])) => {
+    setProjects((current) => {
+      const resolved = typeof next === "function" ? next(current) : next;
+      onProjectsChange?.(resolved);
+      return resolved;
+    });
+  };
   const [query, setQuery] = useState("");
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [agentSwitcherOpen, setAgentSwitcherOpen] = useState(false);
@@ -124,7 +154,10 @@ export const ProjectsWorkspace = ({
   const [modalError, setModalError] = useState("");
   const [projectMenu, setProjectMenu] = useState<ProjectMenuState>();
   const [removeCandidate, setRemoveCandidate] = useState<ProjectSummary>();
-  const [snapshot, setSnapshot] = useState<ProjectEnvironmentSnapshot>();
+  const initialSnapshot = uiState.selectedWorkspaceId
+    ? projectSnapshotCache.get(uiState.selectedWorkspaceId)
+    : undefined;
+  const [snapshot, setSnapshot] = useState<ProjectEnvironmentSnapshot | undefined>(initialSnapshot);
   const [selectedAgentId, setSelectedAgentId] = useState<string>();
   const [previewOpen, setPreviewOpen] = useState(false);
   const [preview, setPreview] = useState<ProjectEnvironmentPreview>();
@@ -209,8 +242,6 @@ export const ProjectsWorkspace = ({
   }, [librarySkills, selectedSkillLocation, selectedWorkspaceLibraryIds, snapshot?.resources]);
   const selectedSkillMatches = selectedWorkspaceSkillPlans.filter((plan) => plan.matches).length;
   const selectedSkillConflicts = selectedWorkspaceSkillPlans.filter((plan) => plan.conflicts).length;
-  const orderProjects = (items: ProjectSummary[]) =>
-    orderByPreference(items, uiState.workspaceOrder, (project) => project.id);
   const selectProject = (projectId: string | undefined) => {
     setSelectedId(projectId);
     if (uiState.selectedWorkspaceId !== projectId) {
@@ -243,7 +274,8 @@ export const ProjectsWorkspace = ({
     setError("");
     try {
       const next = orderProjects(await window.agentEnv.listProjects());
-      setProjects(next);
+      applyProjects(next);
+      setHasLoadedProjects(true);
       const preferredSelectedId = selectedId ?? uiState.selectedWorkspaceId;
       const nextSelectedId = preferredSelectedId && next.some((project) => project.id === preferredSelectedId)
         ? preferredSelectedId
@@ -251,16 +283,36 @@ export const ProjectsWorkspace = ({
       selectProject(nextSelectedId);
       if (refreshEnvironment) {
         const nextSelected = next.find((project) => project.id === nextSelectedId);
-        setSnapshot(nextSelected?.exists
-          ? await window.agentEnv.inspectProject(nextSelected.id)
-          : undefined);
+        if (nextSelected?.exists) {
+          const inspected = await window.agentEnv.inspectProject(nextSelected.id);
+          projectSnapshotCache.set(nextSelected.id, inspected);
+          setSnapshot(inspected);
+        } else {
+          setSnapshot(undefined);
+        }
       }
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
       setOperation(undefined);
+      setHasLoadedProjects(true);
     }
   };
+
+  useEffect(() => {
+    if (initialProjects && initialProjects.length > 0 && projects.length === 0) {
+      const ordered = orderProjects(initialProjects);
+      applyProjects(ordered);
+      setHasLoadedProjects(true);
+      const preferred = selectedId ?? uiState.selectedWorkspaceId;
+      const nextSelectedId = preferred && ordered.some((p) => p.id === preferred)
+        ? preferred
+        : ordered[0]?.id;
+      if (!selectedId && nextSelectedId) {
+        selectProject(nextSelectedId);
+      }
+    }
+  }, [initialProjects]);
 
   useEffect(() => {
     void refresh();
@@ -311,12 +363,19 @@ export const ProjectsWorkspace = ({
       setSnapshot(undefined);
       return;
     }
+    const cached = projectSnapshotCache.get(selected.id);
+    if (cached) {
+      setSnapshot(cached);
+    }
     let current = true;
     setOperation("inspect");
     setError("");
     void window.agentEnv.inspectProject(selected.id)
       .then((next) => {
-        if (current) setSnapshot(next);
+        if (current) {
+          projectSnapshotCache.set(selected.id, next);
+          setSnapshot(next);
+        }
       })
       .catch((unknownError) => {
         if (current) setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -426,7 +485,7 @@ export const ProjectsWorkspace = ({
         added.id,
         ...loaded.map((project) => project.id).filter((id) => id !== added.id)
       ];
-      setProjects(orderByPreference(loaded, order, (project) => project.id));
+      applyProjects(orderByPreference(loaded, order, (project) => project.id));
       setSelectedId(added.id);
       onUpdateUiState({ workspaceOrder: order, selectedWorkspaceId: added.id });
       setAddWorkspaceOpen(false);
@@ -478,7 +537,7 @@ export const ProjectsWorkspace = ({
         added.id,
         ...loaded.map((project) => project.id).filter((id) => id !== added.id)
       ];
-      setProjects(orderByPreference(loaded, order, (project) => project.id));
+      applyProjects(orderByPreference(loaded, order, (project) => project.id));
       setSelectedId(added.id);
       onUpdateUiState({ workspaceOrder: order, selectedWorkspaceId: added.id });
       setAddWorkspaceOpen(false);
@@ -503,7 +562,8 @@ export const ProjectsWorkspace = ({
       );
       const next = orderByPreference(loaded, order, (project) => project.id);
       const nextSelected = next[Math.min(Math.max(removedIndex, 0), next.length - 1)];
-      setProjects(next);
+      applyProjects(next);
+      projectSnapshotCache.delete(removeCandidate.id);
       setSelectedId(nextSelected?.id);
       onUpdateUiState({ workspaceOrder: order, selectedWorkspaceId: nextSelected?.id });
       setRemoveCandidate(undefined);
@@ -519,6 +579,7 @@ export const ProjectsWorkspace = ({
     setModalError("");
     try {
       await window.agentEnv.updateProject({ id: selected.id, name: renameValue.trim() });
+      projectSnapshotCache.delete(selected.id);
       setRenameOpen(false);
       await refresh();
     } catch (unknownError) {
@@ -698,6 +759,7 @@ export const ProjectsWorkspace = ({
 
   const resourceKindIsVisible = (kind: ProjectResourceKind) => {
     if (resourcesByKind(kind).length > 0) return true;
+    if (!snapshot) return true;
     if (!selectedAgentSupport) return false;
     if (kind === "instructions") return selectedAgentSupport.instructions.inspect !== "unsupported";
     if (kind === "skill") return selectedAgentSupport.skills.inspect !== "unsupported";
@@ -754,7 +816,9 @@ export const ProjectsWorkspace = ({
     setOperation("inspect");
     setError("");
     try {
-      setSnapshot(await window.agentEnv.inspectProject(selected.id));
+      const next = await window.agentEnv.inspectProject(selected.id);
+      projectSnapshotCache.set(selected.id, next);
+      setSnapshot(next);
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -856,7 +920,7 @@ export const ProjectsWorkspace = ({
                           projectIds,
                           projects.map((project) => project.id)
                         );
-                        setProjects((current) =>
+                        applyProjects((current) =>
                           orderByPreference(current, order, (project) => project.id)
                         );
                         onUpdateUiState({ workspaceOrder: order });
@@ -1020,9 +1084,19 @@ export const ProjectsWorkspace = ({
                         nested={kind === "skill" || kind === "mcp"}
                         title={label}
                         toggleLabel={t(expanded ? "Collapse {{name}}" : "Expand {{name}}", { name: label })}
-                        summary={operation === "inspect"
-                          ? t("Reading…")
-                          : String(resources.length)}
+                        summary={operation === "inspect" && !snapshot ? (
+                          <span className="project-section-reading">
+                            <LoaderCircle className="is-spinning" size={12} aria-hidden="true" />
+                            <span>{t("Reading…")}</span>
+                          </span>
+                        ) : operation === "inspect" ? (
+                          <span className="project-section-reading">
+                            <LoaderCircle className="is-spinning" size={12} aria-hidden="true" />
+                            <span>{resources.length}</span>
+                          </span>
+                        ) : (
+                          String(resources.length)
+                        )}
                       >
                         {kind === "instructions" && canCreateInstruction ? (
                           <ResourcePanelToolbar
@@ -1054,71 +1128,76 @@ export const ProjectsWorkspace = ({
                             </Button>
                           </ResourcePanelToolbar>
                         ) : null}
-                        {kind === "instructions" ? (
-                  <WorkspaceInstructionPreviewList
-                    projectId={selected.id}
-                    resources={resources}
-                    onOpen={(resource) => setEditorRequest({ resourceId: resource.id })}
-                  />
+                        {!snapshot && operation === "inspect" ? (
+                          <div className="project-resource-loading" role="status">
+                            <LoaderCircle className="is-spinning" size={14} aria-hidden="true" />
+                            <span>{t("Reading Workspace resources...")}</span>
+                          </div>
+                        ) : kind === "instructions" ? (
+                          <WorkspaceInstructionPreviewList
+                            projectId={selected.id}
+                            resources={resources}
+                            onOpen={(resource) => setEditorRequest({ resourceId: resource.id })}
+                          />
                         ) : (
-                        <AlignedResourceList
-                          actionTrack="compact"
-                          className="project-resource-section__list"
-                        >
-                          {resources.map((resource) => {
-                          const consumerNames = resource.consumerAgentIds
-                            .map((agentId) => targets.find((target) => target.id === agentId)?.name ?? agentId);
-                          const gitLabel = gitStateLabel(resource.gitState);
-                          const consumerSummary = consumerNames.length > 1
-                            ? t("{{count}} Agents", { count: consumerNames.length })
-                            : consumerNames[0];
-                          const compactState = [consumerSummary, gitLabel].filter(Boolean).join(" · ");
-                          const fullState = [consumerNames.join(" · "), gitLabel].filter(Boolean).join(" · ");
-                          return (
-                            <ResourceRow
-                              actionsVisibility="contextual"
-                              className="ui-resource-children__item project-resource-entry"
-                              density="compact"
-                              icon={icon}
-                              key={resource.id}
-                              state={compactState ? (
-                                <OverflowTooltip
-                                  className="project-resource-entry__state"
-                                  displayText={compactState}
-                                  text={fullState}
+                          <AlignedResourceList
+                            actionTrack="compact"
+                            className="project-resource-section__list"
+                          >
+                            {resources.map((resource) => {
+                              const consumerNames = resource.consumerAgentIds
+                                .map((agentId) => targets.find((target) => target.id === agentId)?.name ?? agentId);
+                              const gitLabel = gitStateLabel(resource.gitState);
+                              const consumerSummary = consumerNames.length > 1
+                                ? t("{{count}} Agents", { count: consumerNames.length })
+                                : consumerNames[0];
+                              const compactState = [consumerSummary, gitLabel].filter(Boolean).join(" · ");
+                              const fullState = [consumerNames.join(" · "), gitLabel].filter(Boolean).join(" · ");
+                              return (
+                                <ResourceRow
+                                  actionsVisibility="contextual"
+                                  className="ui-resource-children__item project-resource-entry"
+                                  density="compact"
+                                  icon={icon}
+                                  key={resource.id}
+                                  state={compactState ? (
+                                    <OverflowTooltip
+                                      className="project-resource-entry__state"
+                                      displayText={compactState}
+                                      text={fullState}
+                                    />
+                                  ) : undefined}
+                                  title={(
+                                    <OverflowTooltip
+                                      className="project-resource-entry__name"
+                                      displayText={resource.name}
+                                      text={resource.absolutePath}
+                                    />
+                                  )}
+                                  actions={resource.kind === "skill" && resource.editable ? (
+                                    <IconButton
+                                      size="compact"
+                                      label={t("Remove {{name}} from Workspace", { name: resource.name })}
+                                      onClick={() => {
+                                        setModalError("");
+                                        setRemoveSkillCandidate(resource);
+                                      }}
+                                    >
+                                      <Trash2 size={14} />
+                                    </IconButton>
+                                  ) : undefined}
                                 />
-                              ) : undefined}
-                              title={(
-                                <OverflowTooltip
-                                  className="project-resource-entry__name"
-                                  displayText={resource.name}
-                                  text={resource.absolutePath}
-                                />
-                              )}
-                              actions={resource.kind === "skill" && resource.editable ? (
-                                <IconButton
-                                  size="compact"
-                                  label={t("Remove {{name}} from Workspace", { name: resource.name })}
-                                  onClick={() => {
-                                    setModalError("");
-                                    setRemoveSkillCandidate(resource);
-                                  }}
-                                >
-                                  <Trash2 size={14} />
-                                </IconButton>
-                              ) : undefined}
-                            />
-                          );
-                          })}
-                          {kind === "skill" && writableSkillLocations.length === 0 ? (
-                            <p className="project-resource-note">
-                              {t("No enabled Agent provides a writable Workspace Skill location.")}
-                            </p>
-                          ) : null}
-                          {resources.length === 0 ? (
-                            <p className="project-resource-note">{t("No files detected")}</p>
-                          ) : null}
-                        </AlignedResourceList>
+                              );
+                            })}
+                            {kind === "skill" && writableSkillLocations.length === 0 && snapshot ? (
+                              <p className="project-resource-note">
+                                {t("No enabled Agent provides a writable Workspace Skill location.")}
+                              </p>
+                            ) : null}
+                            {resources.length === 0 && snapshot ? (
+                              <p className="project-resource-note">{t("No files detected")}</p>
+                            ) : null}
+                          </AlignedResourceList>
                         )}
                       </ResourceDisclosureSection>
                     );
@@ -1126,6 +1205,11 @@ export const ProjectsWorkspace = ({
                 </div>
               )}
             </>
+          ) : !hasLoadedProjects && (operation === "refresh" || projects.length === 0) ? (
+            <div className="project-loading-state" role="status" aria-live="polite">
+              <LoaderCircle className="is-spinning" size={24} aria-hidden="true" />
+              <span>{t("Loading Workspaces")}</span>
+            </div>
           ) : (
             <EmptyState
               className="project-empty-detail"

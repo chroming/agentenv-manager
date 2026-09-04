@@ -4412,6 +4412,8 @@ const AppContent = ({
           </section>
         ) : activeWorkspace === "projects" ? (
           <ProjectsWorkspace
+            initialProjects={projects}
+            onProjectsChange={setProjects}
             targets={targets}
             skillGroups={skillGroups}
             sourceGroups={skillSourceGroups}

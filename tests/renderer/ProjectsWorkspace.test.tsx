@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ProjectsWorkspace } from "../../src/renderer/components/ProjectsWorkspace";
+import {
+  clearProjectSnapshotCache,
+  ProjectsWorkspace
+} from "../../src/renderer/components/ProjectsWorkspace";
 import type {
   AgentEnvApi,
   ProjectSkillLocationSummary,
@@ -152,6 +155,7 @@ const installApi = () => {
 
 afterEach(() => {
   cleanup();
+  clearProjectSnapshotCache();
   vi.restoreAllMocks();
 });
 
@@ -711,4 +715,45 @@ describe("ProjectsWorkspace", () => {
       expect(writeText).toHaveBeenCalledTimes(2);
     });
   });
+
+  it("renders workspace and resource structure immediately with initialProjects without empty state flash", async () => {
+    const api = installApi();
+    let resolveInspect: (value: unknown) => void = () => {};
+    api.inspectProject.mockReturnValue(new Promise((resolve) => { resolveInspect = resolve; }));
+
+    render(<ProjectsWorkspace targets={[target]} initialProjects={[project]} />);
+
+    // Workspace name and structure appear immediately on first render
+    expect(screen.getByText(project.name)).toBeInTheDocument();
+    expect(screen.queryByText("Add a folder to open with an Agent")).not.toBeInTheDocument();
+
+    // Resource disclosure sections are rendered immediately with reading indicators
+    expect(screen.getByRole("button", { name: /Expand Instructions/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Expand Skills/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Expand MCPs/ })).toBeInTheDocument();
+
+    // Now resolve inspect
+    resolveInspect({
+      resources: [],
+      agentSupport: [{
+        agentId: "opencode",
+        agentName: "OpenCode",
+        instructions: { inspect: "supported", mutate: "supported" },
+        instructionCreateFile: "AGENTS.md",
+        skills: { inspect: "supported", mutate: "supported" },
+        mcp: { inspect: "partial", mutate: "unsupported" },
+        effectivePreview: "partial",
+        cliLaunch: "supported"
+      }],
+      skillLocations: [],
+      issues: [],
+      partial: false,
+      git: { repository: "local", rootRelation: "workspace-root", pathStates: {} }
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Expand Instructions/ })).toBeInTheDocument();
+    });
+  });
 });
+
