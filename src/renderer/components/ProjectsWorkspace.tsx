@@ -918,7 +918,9 @@ export const ProjectsWorkspace = ({
                     <Button
                       className="ui-inspector-header__command"
                       aria-label={selectedAgent
-                        ? t("Open in {{name}}", { name: selectedAgent.name })
+                        ? selected.isRemote && selectedAgent.id !== "vscode" && selectedAgent.id !== "cursor"
+                          ? t("Copy SSH")
+                          : t("Open in {{name}}", { name: selectedAgent.name })
                         : t("No Agent available")}
                       variant="primary"
                       icon={selected.isRemote && selectedAgent?.id !== "vscode" && selectedAgent?.id !== "cursor" ? <Terminal size={15} /> : <ExternalLink size={15} />}

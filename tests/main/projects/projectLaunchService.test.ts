@@ -149,7 +149,9 @@ describe("project launch service", () => {
     const launcher = { launch: vi.fn().mockResolvedValue(undefined) };
     const service = createProjectLaunchService({
       projectStore: store as never,
-      targetRegistry: createTargetRegistry(),
+      targetRegistry: {
+        get: vi.fn().mockReturnValue({ descriptor: { id: "vscode", name: "VS Code" } })
+      } as never,
       targetDiscoveryService: { listTargets: vi.fn().mockResolvedValue([target]) } as never,
       launcher,
       deviceStore: deviceStore as never
