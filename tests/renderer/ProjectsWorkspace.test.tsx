@@ -173,7 +173,7 @@ describe("ProjectsWorkspace", () => {
     )).not.toBeNull();
     fireEvent.click(switcherTrigger);
     const switcher = await screen.findByRole("dialog", { name: "Choose Workspace" });
-    expect(within(switcher).getByRole("button", { name: "Add folder" })).toBeInTheDocument();
+    expect(within(switcher).getByRole("button", { name: "Add Workspace" })).toBeInTheDocument();
     const projectRow = within(switcher).getByRole("option", { name: /Example/ });
     expect(projectRow).toHaveClass("ui-selectable-row", "is-selected");
     expect(projectRow.closest(".ui-object-switcher__list")).toBeInTheDocument();
@@ -644,7 +644,7 @@ describe("ProjectsWorkspace", () => {
 
     render(<ProjectsWorkspace targets={[target]} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add SSH remote workspace" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add Workspace" }));
     const dialog = await screen.findByRole("dialog", { name: "Add Workspace" });
     expect(dialog).toBeInTheDocument();
 
@@ -692,8 +692,7 @@ describe("ProjectsWorkspace", () => {
 
     render(<ProjectsWorkspace targets={[target]} />);
 
-    expect(await screen.findByRole("button", { name: "Add folder" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add SSH remote workspace" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Add Workspace" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "More Workspace actions" }));
     const copyItem = await screen.findByRole("menuitem", { name: "Copy SSH command" });

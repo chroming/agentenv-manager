@@ -671,11 +671,8 @@ export const ProjectsWorkspace = ({
 
   const copySshCommand = async (project: ProjectSummary) => {
     setProjectMenu(undefined);
-    const device = remoteDevices.find((d) => d.id === project.deviceId);
-    const host = device?.host || project.deviceHost || "host";
-    const port = device?.port && device.port !== 22 ? ` -p ${device.port}` : "";
-    const userPrefix = device?.user ? `${device.user}@` : "";
-    const cmd = `ssh${port} -t ${userPrefix}${host} "cd '${project.rootPath}' && exec \\$SHELL -l"`;
+    const host = project.deviceHost || "host";
+    const cmd = `ssh -t ${host} "cd '${project.rootPath}' && exec \\$SHELL -l"`;
     try {
       await navigator.clipboard.writeText(cmd);
       setNotice(t("SSH command copied to clipboard"));
@@ -753,31 +750,21 @@ export const ProjectsWorkspace = ({
         title={t("Workspaces")}
         help={<InfoTip label={t("Open recurring folders with an Agent and manage only the files owned by that folder.")} />}
         actions={(
-          <ControlGroup className="projects-header-actions" aria-label={t("Workspace actions")}>
-            <Button
-              variant="secondary"
-              size="compact"
-              icon={<Folder size={14} />}
-              onClick={() => void addLocalProject()}
-            >
-              {t("Add folder")}
-            </Button>
-            <Button
-              variant="secondary"
-              size="compact"
-              icon={<Server size={14} />}
-              onClick={() => void openAddWorkspaceDialog()}
-            >
-              {t("Add SSH remote workspace")}
-            </Button>
-          </ControlGroup>
+          <Button
+            variant="secondary"
+            size="compact"
+            icon={<Plus size={14} />}
+            onClick={() => void openAddWorkspaceDialog()}
+          >
+            {t("Add Workspace")}
+          </Button>
         )}
       />
 
       {notice ? (
         <Notice
           className="project-scoped-notice"
-          icon={<CheckCircle2 size={15} />}
+          icon={<Info size={15} />}
           tone="info"
           role="status"
         >
@@ -822,8 +809,8 @@ export const ProjectsWorkspace = ({
                           : t("No Workspaces yet")}
                       footerAction={{
                         icon: <Plus size={15} />,
-                        label: t("Add folder"),
-                        onClick: () => void addLocalProject()
+                        label: t("Add Workspace"),
+                        onClick: () => void openAddWorkspaceDialog()
                       }}
                       items={switcherItems}
                       open={switcherOpen}
@@ -864,12 +851,9 @@ export const ProjectsWorkspace = ({
                 )}
                 description={(
                   <span className="selectable" title={selected.rootPath}>
-                    {selected.isRemote ? (
-                      <Badge tone="neutral" style={{ marginRight: 6 }}>
-                        SSH: {selected.deviceName ?? selected.deviceHost}
-                      </Badge>
-                    ) : null}
-                    {selected.rootPath}
+                    {selected.isRemote
+                      ? `${selected.deviceName ?? selected.deviceHost} · ${selected.rootPath}`
+                      : selected.rootPath}
                   </span>
                 )}
                 actions={(
@@ -1086,23 +1070,13 @@ export const ProjectsWorkspace = ({
               title={t("Add a folder to open with an Agent")}
               description={t("AgentEnv stores the folder reference and changes project files only after an explicit action.")}
               actions={(
-                <ControlGroup>
-                  <Button
-                    variant="primary"
-                    busy={operation === "add"}
-                    icon={<Plus size={15} />}
-                    onClick={() => void addLocalProject()}
-                  >
-                    {t("Add folder")}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    icon={<Server size={15} />}
-                    onClick={() => void openAddWorkspaceDialog()}
-                  >
-                    {t("Add SSH remote workspace")}
-                  </Button>
-                </ControlGroup>
+                <Button
+                  variant="primary"
+                  icon={<Plus size={15} />}
+                  onClick={() => void openAddWorkspaceDialog()}
+                >
+                  {t("Add Workspace")}
+                </Button>
               )}
             />
           )}

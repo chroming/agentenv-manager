@@ -309,10 +309,6 @@
   }
 }
 
-.projects-header-actions {
-  display: inline-flex;
-  gap: var(--space-2);
-}
 
 .add-workspace-no-devices {
   display: grid;
