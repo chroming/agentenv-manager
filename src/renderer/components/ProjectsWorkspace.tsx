@@ -934,7 +934,7 @@ export const ProjectsWorkspace = ({
         actions={(
           <Button
             ref={addMenuButtonRef}
-            variant="primary"
+            variant="secondary"
             size="compact"
             icon={<Plus size={14} />}
             onClick={(e) => toggleAddMenu(e.currentTarget)}
