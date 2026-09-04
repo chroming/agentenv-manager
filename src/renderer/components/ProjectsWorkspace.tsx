@@ -144,7 +144,6 @@ export const ProjectsWorkspace = ({
   const [skillLocationId, setSkillLocationId] = useState("");
   const [removeSkillCandidate, setRemoveSkillCandidate] = useState<ProjectResourceSummary>();
   const [addWorkspaceOpen, setAddWorkspaceOpen] = useState(false);
-  const [addWorkspaceType, setAddWorkspaceType] = useState<"local" | "remote">("local");
   const [remoteDevices, setRemoteDevices] = useState<RemoteDevice[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
   const [remotePath, setRemotePath] = useState("");
@@ -235,7 +234,9 @@ export const ProjectsWorkspace = ({
       : t("Git · Clean")
     : snapshot?.git?.repository === "unavailable"
       ? t("Git unavailable")
-      : t("Local folder");
+      : selected?.isRemote
+        ? t("SSH Remote")
+        : t("Local folder");
 
   const refresh = async (refreshEnvironment = false) => {
     setOperation("refresh");
@@ -263,6 +264,9 @@ export const ProjectsWorkspace = ({
 
   useEffect(() => {
     void refresh();
+    void window.agentEnv.listRemoteDevices?.().then((devices) => {
+      if (Array.isArray(devices)) setRemoteDevices(devices);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -398,7 +402,6 @@ export const ProjectsWorkspace = ({
     setTestResult(undefined);
     setRemotePath("");
     setRemoteName("");
-    setAddWorkspaceType("local");
     try {
       const devices = await window.agentEnv.listRemoteDevices?.() ?? [];
       setRemoteDevices(devices);
@@ -635,6 +638,11 @@ export const ProjectsWorkspace = ({
 
   const openProject = async () => {
     if (!selected || !selectedAgent) return;
+    if (selected.isRemote && selectedAgent.id !== "vscode" && selectedAgent.id !== "cursor") {
+      await copySshCommand(selected);
+      setNotice(t("SSH launch command copied to clipboard. Run it in terminal to access this workspace."));
+      return;
+    }
     setOperation("open");
     setError("");
     try {
@@ -671,8 +679,11 @@ export const ProjectsWorkspace = ({
 
   const copySshCommand = async (project: ProjectSummary) => {
     setProjectMenu(undefined);
-    const host = project.deviceHost || "host";
-    const cmd = `ssh -t ${host} "cd '${project.rootPath}' && exec \\$SHELL -l"`;
+    const device = remoteDevices.find((d) => d.id === project.deviceId);
+    const host = device?.host || project.deviceHost || "host";
+    const port = device?.port && device.port !== 22 ? ` -p ${device.port}` : "";
+    const userPrefix = device?.user ? `${device.user}@` : "";
+    const cmd = `ssh${port} -t ${userPrefix}${host} "cd '${project.rootPath}' && exec \\$SHELL -l"`;
     try {
       await navigator.clipboard.writeText(cmd);
       setNotice(t("SSH command copied to clipboard"));
@@ -703,32 +714,40 @@ export const ProjectsWorkspace = ({
     )
   );
 
-  const switcherItems = projects.map((project) => ({
-    id: project.id,
-    ariaLabel: t("Workspace {{name}}", { name: project.name }),
-    searchText: `${project.name} ${project.rootPath} ${project.deviceName ?? ""}`,
-    icon: project.isRemote ? <Server size={17} strokeWidth={2} /> : <Folder size={17} strokeWidth={2} />,
-    title: (
-      <span className="project-switcher-title">
-        <span>{project.name}</span>
-        {project.isRemote ? (
-          <Badge tone="neutral" title={project.deviceName ?? project.deviceHost ?? "SSH"}>
-            SSH: {project.deviceName ?? project.deviceHost}
-          </Badge>
-        ) : null}
-      </span>
-    ),
-    description: <span title={project.rootPath}>{project.rootPath}</span>,
-    status: !project.exists
-      ? (project.isRemote ? t("Remote path unreachable or missing") : t("Folder missing"))
-      : project.lastAgentId
-        ? targets.find((target) => target.id === project.lastAgentId)?.name ?? project.lastAgentId
-        : undefined,
-    onContextMenu: (event: React.MouseEvent<HTMLElement>) => {
-      event.preventDefault();
-      showProjectMenu(project, event.clientX, event.clientY, event.currentTarget);
-    }
-  }));
+  const orderedProjects = useMemo(() => {
+    const local = projects.filter((project) => !project.isRemote);
+    const remote = projects.filter((project) => project.isRemote);
+    return [...local, ...remote];
+  }, [projects]);
+
+  const switcherItems = orderedProjects.map((project) => {
+    const isRemote = Boolean(project.isRemote);
+    const deviceName = project.deviceName || project.deviceHost || "SSH";
+    const groupLabel = isRemote
+      ? t("SSH: {{device}}", { device: deviceName })
+      : t("This Mac");
+
+    return {
+      id: project.id,
+      ariaLabel: isRemote
+        ? t("SSH Workspace {{name}} on {{device}}", { name: project.name, device: deviceName })
+        : t("Workspace {{name}}", { name: project.name }),
+      searchText: `${project.name} ${project.rootPath} ${project.deviceName ?? ""} ${project.deviceHost ?? ""} ${isRemote ? "ssh remote" : "local"}`,
+      groupLabel,
+      icon: isRemote ? <Server size={17} strokeWidth={2} /> : <Folder size={17} strokeWidth={2} />,
+      title: project.name,
+      description: <span title={project.rootPath}>{project.rootPath}</span>,
+      status: !project.exists
+        ? (isRemote ? t("Remote path unreachable or missing") : t("Folder missing"))
+        : project.lastAgentId
+          ? targets.find((target) => target.id === project.lastAgentId)?.name ?? project.lastAgentId
+          : undefined,
+      onContextMenu: (event: React.MouseEvent<HTMLElement>) => {
+        event.preventDefault();
+        showProjectMenu(project, event.clientX, event.clientY, event.currentTarget);
+      }
+    };
+  });
 
   const refreshSelectedProject = async () => {
     if (!selected?.exists || operation === "inspect") return;
@@ -750,14 +769,24 @@ export const ProjectsWorkspace = ({
         title={t("Workspaces")}
         help={<InfoTip label={t("Open recurring folders with an Agent and manage only the files owned by that folder.")} />}
         actions={(
-          <Button
-            variant="secondary"
-            size="compact"
-            icon={<Plus size={14} />}
-            onClick={() => void openAddWorkspaceDialog()}
-          >
-            {t("Add Workspace")}
-          </Button>
+          <ControlGroup aria-label={t("Workspace actions")}>
+            <Button
+              variant="secondary"
+              size="compact"
+              icon={<Folder size={14} />}
+              onClick={() => void addLocalProject()}
+            >
+              {t("Add folder")}
+            </Button>
+            <Button
+              variant="secondary"
+              size="compact"
+              icon={<Server size={14} />}
+              onClick={() => void openAddWorkspaceDialog()}
+            >
+              {t("Add SSH remote workspace")}
+            </Button>
+          </ControlGroup>
         )}
       />
 
@@ -809,8 +838,8 @@ export const ProjectsWorkspace = ({
                           : t("No Workspaces yet")}
                       footerAction={{
                         icon: <Plus size={15} />,
-                        label: t("Add Workspace"),
-                        onClick: () => void openAddWorkspaceDialog()
+                        label: t("Add folder"),
+                        onClick: () => void addLocalProject()
                       }}
                       items={switcherItems}
                       open={switcherOpen}
@@ -892,12 +921,14 @@ export const ProjectsWorkspace = ({
                         ? t("Open in {{name}}", { name: selectedAgent.name })
                         : t("No Agent available")}
                       variant="primary"
-                      icon={<ExternalLink size={15} />}
+                      icon={selected.isRemote && selectedAgent?.id !== "vscode" && selectedAgent?.id !== "cursor" ? <Terminal size={15} /> : <ExternalLink size={15} />}
                       busy={operation === "open"}
                       disabled={!selected.exists || !selectedAgent}
                       onClick={() => void openProject()}
                     >
-                      {t("Open")}
+                      {selected.isRemote && selectedAgent?.id !== "vscode" && selectedAgent?.id !== "cursor"
+                        ? t("Copy SSH")
+                        : t("Open")}
                     </Button>
                     <div className="project-actions-menu-wrap">
                       <IconButton
@@ -926,11 +957,41 @@ export const ProjectsWorkspace = ({
                   </ControlGroup>
                 )}
               />
+              {selected.isRemote ? (
+                <div className="project-remote-banner">
+                  <div className="project-remote-banner__info">
+                    <span className="project-remote-banner__device">
+                      <Server size={14} aria-hidden="true" />
+                      <span>{selected.deviceName ?? "SSH"}</span>
+                    </span>
+                    {selected.deviceHost ? (
+                      <span className="project-remote-banner__host">
+                        {selected.deviceHost}
+                      </span>
+                    ) : null}
+                    <Badge tone={selected.remoteStatus === "ready" || selected.exists ? "success" : "danger"}>
+                      {selected.remoteStatus === "ready" || selected.exists ? t("Connected") : t("Unreachable")}
+                    </Badge>
+                  </div>
+                  <div className="project-remote-banner__actions">
+                    <Button
+                      size="compact"
+                      variant="secondary"
+                      icon={<Terminal size={13} />}
+                      onClick={() => void copySshCommand(selected)}
+                    >
+                      {t("Copy SSH command")}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
               {!selected.exists ? (
                 <EmptyState
                   className="project-missing-state"
-                  title={t("Workspace folder is unavailable")}
-                  description={t("The reference is kept. Reconnect the folder or remove the reference.")}
+                  title={selected.isRemote ? t("Remote path unreachable or missing") : t("Workspace folder is unavailable")}
+                  description={selected.isRemote
+                    ? t("The remote device may be offline, or the path does not exist on the remote machine.")
+                    : t("The reference is kept. Reconnect the folder or remove the reference.")}
                 />
               ) : (
                 <div className="project-resource-groups">
@@ -1070,13 +1131,23 @@ export const ProjectsWorkspace = ({
               title={t("Add a folder to open with an Agent")}
               description={t("AgentEnv stores the folder reference and changes project files only after an explicit action.")}
               actions={(
-                <Button
-                  variant="primary"
-                  icon={<Plus size={15} />}
-                  onClick={() => void openAddWorkspaceDialog()}
-                >
-                  {t("Add Workspace")}
-                </Button>
+                <ControlGroup>
+                  <Button
+                    variant="primary"
+                    busy={operation === "add"}
+                    icon={<Folder size={15} />}
+                    onClick={() => void addLocalProject()}
+                  >
+                    {t("Add folder")}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    icon={<Server size={15} />}
+                    onClick={() => void openAddWorkspaceDialog()}
+                  >
+                    {t("Add SSH remote workspace")}
+                  </Button>
+                </ControlGroup>
               )}
             />
           )}
@@ -1341,17 +1412,15 @@ export const ProjectsWorkspace = ({
       ) : null}
       {addWorkspaceOpen ? (
         <ModalFrame
-          ariaLabel={t("Add Workspace")}
+          ariaLabel={t("Add SSH remote workspace")}
           className="project-add-dialog ui-dialog-shell profile-form-dialog--compact"
           dialogRef={addDialogRef}
           dismissDisabled={operation === "add" || testingPath}
           onDismiss={() => setAddWorkspaceOpen(false)}
         >
           <DialogHeader
-            title={t("Add Workspace")}
-            description={addWorkspaceType === "local"
-              ? t("Select a local folder on this computer.")
-              : t("Connect to a workspace folder on a configured SSH device.")}
+            title={t("Add SSH remote workspace")}
+            description={t("Connect to a workspace folder on a configured SSH device.")}
           />
           <DialogBody>
             {modalError ? (
@@ -1359,147 +1428,100 @@ export const ProjectsWorkspace = ({
                 {modalError}
               </Notice>
             ) : null}
-            <div style={{ marginBottom: "var(--space-4)" }}>
-              <SegmentedControl<"local" | "remote">
-                label={t("Workspace type")}
-                value={addWorkspaceType}
-                onChange={setAddWorkspaceType}
-                options={[
-                  {
-                    value: "local",
-                    label: (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                        <Folder size={15} />
-                        <span>{t("Local folder")}</span>
-                      </span>
-                    )
-                  },
-                  {
-                    value: "remote",
-                    label: (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                        <Server size={15} />
-                        <span>{t("SSH remote machine")}</span>
-                      </span>
-                    )
-                  }
-                ]}
-              />
-            </div>
-
-            {addWorkspaceType === "local" ? (
-              <div className="add-workspace-local-pane">
-                <p className="project-resource-note" style={{ padding: 0 }}>
-                  {t("AgentEnv stores the folder reference and changes project files only after an explicit action.")}
-                </p>
-                <Button
-                  ref={addInitialFocusRef as any}
-                  variant="primary"
-                  icon={<Folder size={15} />}
-                  busy={operation === "add"}
-                  onClick={() => void addLocalProject()}
-                >
-                  {t("Choose local folder")}
-                </Button>
-              </div>
-            ) : (
-              <div className="add-workspace-remote-pane">
-                {remoteDevices.length === 0 ? (
-                  <div className="add-workspace-no-devices">
-                    <Notice tone="info" icon={<Info size={15} />}>
-                      {t("No SSH devices found. Please configure an SSH device first.")}
-                    </Notice>
-                    {onConfigureRemoteDevices ? (
-                      <div className="add-workspace-no-devices__action">
-                        <Button
-                          variant="secondary"
-                          size="compact"
-                          icon={<Server size={14} />}
-                          onClick={() => {
-                            setAddWorkspaceOpen(false);
-                            onConfigureRemoteDevices();
-                          }}
-                        >
-                          {t("Go to Agents to configure SSH devices")}
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : (
-                  <>
-                    <SelectField
-                      ref={addInitialFocusRef as any}
-                      label={t("SSH device")}
-                      value={selectedDeviceId}
-                      onChange={(event) => {
-                        setSelectedDeviceId(event.target.value);
-                        setTestResult(undefined);
-                      }}
-                    >
-                      {remoteDevices.map((device) => (
-                        <option key={device.id} value={device.id}>
-                          {device.name} ({device.host})
-                        </option>
-                      ))}
-                    </SelectField>
-                    <TextField
-                      label={t("Remote directory path")}
-                      placeholder={t("e.g. /home/ubuntu/repo or ~/projects/app")}
-                      value={remotePath}
-                      onChange={(event) => {
-                        setRemotePath(event.target.value);
-                        setTestResult(undefined);
-                      }}
-                    />
-                    <TextField
-                      label={t("Workspace name (optional)")}
-                      placeholder={t("Leave blank to use folder name")}
-                      value={remoteName}
-                      onChange={(event) => setRemoteName(event.target.value)}
-                    />
-                    <div className="add-workspace-test-row">
+            <div className="add-workspace-remote-pane">
+              {remoteDevices.length === 0 ? (
+                <div className="add-workspace-no-devices">
+                  <Notice tone="info" icon={<Info size={15} />}>
+                    {t("No SSH devices found. Please configure an SSH device first.")}
+                  </Notice>
+                  {onConfigureRemoteDevices ? (
+                    <div className="add-workspace-no-devices__action">
                       <Button
                         variant="secondary"
                         size="compact"
-                        disabled={!remotePath.trim() || testingPath}
-                        busy={testingPath}
-                        onClick={() => void testRemotePath()}
+                        icon={<Server size={14} />}
+                        onClick={() => {
+                          setAddWorkspaceOpen(false);
+                          onConfigureRemoteDevices();
+                        }}
                       >
-                        {t("Test path")}
+                        {t("Go to Agents to configure SSH devices")}
                       </Button>
-                      {testResult ? (
-                        testResult.exists ? (
-                          <span className="add-workspace-test-success">
-                            <CheckCircle2 size={14} />
-                            <span>{t("Remote path verified: {{path}}", { path: testResult.canonicalPath ?? remotePath })}</span>
-                          </span>
-                        ) : (
-                          <span className="add-workspace-test-error">
-                            <AlertTriangle size={14} />
-                            <span>{testResult.error ?? t("Remote path does not exist or is not a directory")}</span>
-                          </span>
-                        )
-                      ) : null}
                     </div>
-                  </>
-                )}
-              </div>
-            )}
+                  ) : null}
+                </div>
+              ) : (
+                <>
+                  <SelectField
+                    ref={addInitialFocusRef as any}
+                    label={t("SSH device")}
+                    value={selectedDeviceId}
+                    onChange={(event) => {
+                      setSelectedDeviceId(event.target.value);
+                      setTestResult(undefined);
+                    }}
+                  >
+                    {remoteDevices.map((device) => (
+                      <option key={device.id} value={device.id}>
+                        {device.name} ({device.host})
+                      </option>
+                    ))}
+                  </SelectField>
+                  <TextField
+                    label={t("Remote directory path")}
+                    placeholder={t("e.g. /home/ubuntu/repo or ~/projects/app")}
+                    value={remotePath}
+                    onChange={(event) => {
+                      setRemotePath(event.target.value);
+                      setTestResult(undefined);
+                    }}
+                  />
+                  <TextField
+                    label={t("Workspace name (optional)")}
+                    placeholder={t("Leave blank to use folder name")}
+                    value={remoteName}
+                    onChange={(event) => setRemoteName(event.target.value)}
+                  />
+                  <div className="add-workspace-test-row">
+                    <Button
+                      variant="secondary"
+                      size="compact"
+                      disabled={!remotePath.trim() || testingPath}
+                      busy={testingPath}
+                      onClick={() => void testRemotePath()}
+                    >
+                      {t("Test path")}
+                    </Button>
+                    {testResult ? (
+                      testResult.exists ? (
+                        <span className="add-workspace-test-success">
+                          <CheckCircle2 size={14} />
+                          <span>{t("Remote path verified: {{path}}", { path: testResult.canonicalPath ?? remotePath })}</span>
+                        </span>
+                      ) : (
+                        <span className="add-workspace-test-error">
+                          <AlertTriangle size={14} />
+                          <span>{testResult.error ?? t("Remote path does not exist or is not a directory")}</span>
+                        </span>
+                      )
+                    ) : null}
+                  </div>
+                </>
+              )}
+            </div>
           </DialogBody>
           <DialogFooter>
             <Button disabled={operation === "add" || testingPath} onClick={() => setAddWorkspaceOpen(false)}>
               {t("Cancel")}
             </Button>
-            {addWorkspaceType === "remote" ? (
-              <Button
-                variant="primary"
-                busy={operation === "add"}
-                disabled={remoteDevices.length === 0 || !remotePath.trim() || testingPath}
-                onClick={() => void addRemoteProject()}
-              >
-                {t("Add remote workspace")}
-              </Button>
-            ) : null}
+            <Button
+              variant="primary"
+              busy={operation === "add"}
+              disabled={remoteDevices.length === 0 || !remotePath.trim() || testingPath}
+              onClick={() => void addRemoteProject()}
+            >
+              {t("Add remote workspace")}
+            </Button>
           </DialogFooter>
         </ModalFrame>
       ) : null}

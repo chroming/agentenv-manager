@@ -173,7 +173,7 @@ describe("ProjectsWorkspace", () => {
     )).not.toBeNull();
     fireEvent.click(switcherTrigger);
     const switcher = await screen.findByRole("dialog", { name: "Choose Workspace" });
-    expect(within(switcher).getByRole("button", { name: "Add Workspace" })).toBeInTheDocument();
+    expect(within(switcher).getByRole("button", { name: "Add folder" })).toBeInTheDocument();
     const projectRow = within(switcher).getByRole("option", { name: /Example/ });
     expect(projectRow).toHaveClass("ui-selectable-row", "is-selected");
     expect(projectRow.closest(".ui-object-switcher__list")).toBeInTheDocument();
@@ -644,11 +644,9 @@ describe("ProjectsWorkspace", () => {
 
     render(<ProjectsWorkspace targets={[target]} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add Workspace" }));
-    const dialog = await screen.findByRole("dialog", { name: "Add Workspace" });
+    fireEvent.click(await screen.findByRole("button", { name: "Add SSH remote workspace" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add SSH remote workspace" });
     expect(dialog).toBeInTheDocument();
-
-    fireEvent.click(within(dialog).getByRole("button", { name: "SSH remote machine" }));
 
     const pathInput = within(dialog).getByLabelText("Remote directory path");
     fireEvent.change(pathInput, { target: { value: "/home/ubuntu/remote-app" } });
@@ -672,7 +670,7 @@ describe("ProjectsWorkspace", () => {
     });
   });
 
-  it("copies the SSH launch command for a remote workspace", async () => {
+  it("copies the SSH launch command for a remote workspace via banner and command button", async () => {
     const api = installApi();
     const remoteProject: ProjectSummary = {
       id: "proj-remote-1",
@@ -692,11 +690,12 @@ describe("ProjectsWorkspace", () => {
 
     render(<ProjectsWorkspace targets={[target]} />);
 
-    expect(await screen.findByRole("button", { name: "Add Workspace" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Add folder" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add SSH remote workspace" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "More Workspace actions" }));
-    const copyItem = await screen.findByRole("menuitem", { name: "Copy SSH command" });
-    fireEvent.click(copyItem);
+    // Banner has direct Copy SSH command button
+    const copyButton = await screen.findByRole("button", { name: "Copy SSH command" });
+    fireEvent.click(copyButton);
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(
@@ -704,5 +703,12 @@ describe("ProjectsWorkspace", () => {
       );
     });
     expect(await screen.findByText("SSH command copied to clipboard")).toBeInTheDocument();
+
+    // Command button shows "Copy SSH" when CLI agent (OpenCode) is selected
+    const commandButton = screen.getByRole("button", { name: "Copy SSH" });
+    fireEvent.click(commandButton);
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledTimes(2);
+    });
   });
 });

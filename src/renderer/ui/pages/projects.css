@@ -319,3 +319,43 @@
   display: flex;
   justify-content: flex-start;
 }
+
+.project-remote-banner {
+  align-items: center;
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-4);
+}
+
+.project-remote-banner__info {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.project-remote-banner__device {
+  align-items: center;
+  color: var(--text);
+  display: inline-flex;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-medium);
+  gap: 6px;
+}
+
+.project-remote-banner__host {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+}
+
+.project-remote-banner__actions {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+}

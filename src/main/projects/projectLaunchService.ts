@@ -42,11 +42,12 @@ export const createProjectLaunchService = ({
     if (project.deviceId) {
       const device = await deviceStore?.get(project.deviceId).catch(() => undefined);
       if (!device) throw new Error(`Remote SSH device not found: ${project.deviceId}`);
+      const userHost = device.user ? `${device.user}@${device.host}` : device.host;
       const isRemoteIde = agentId === "vscode" || agentId === "cursor";
       if (isRemoteIde) {
         const spec: AgentLaunchSpec = {
           executablePath: target.health.executablePath,
-          args: ["--remote", `ssh-remote+${device.host}`, project.rootPath]
+          args: ["--remote", `ssh-remote+${userHost}`, project.rootPath]
         };
         await launcher.launch(spec);
         await projectStore.updateProject({ id: project.id, lastAgentId: agentId, markOpened: true });
@@ -56,7 +57,6 @@ export const createProjectLaunchService = ({
           message: `Opened remote ${project.name} on ${device.name} in ${adapter.descriptor.name}`
         };
       }
-      const userHost = device.user ? `${device.user}@${device.host}` : device.host;
       const portArg = device.port && device.port !== 22 ? ` -p ${device.port}` : "";
       const sshCommand = `ssh${portArg} -t ${userHost} "cd '${project.rootPath}' && exec \\$SHELL -l"`;
       throw new Error(

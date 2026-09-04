@@ -120,4 +120,46 @@ describe("project launch service", () => {
     await expect(service.openProject(project.id, "opencode"))
       .rejects.toThrow("OpenCode does not support remote SSH project launch. Use VS Code / Cursor or run in remote terminal:\nssh -t ubuntu@192.168.1.100 \"cd '/home/ubuntu/repo' && exec \\$SHELL -l\"");
   });
+
+  it("launches VS Code in remote SSH mode with user and host", async () => {
+    const project = {
+      id: "proj-remote-2",
+      name: "RemoteRepo",
+      rootPath: "/home/ubuntu/repo",
+      deviceId: "dev-1",
+      exists: true
+    };
+    const store = {
+      listProjects: vi.fn().mockResolvedValue([project]),
+      updateProject: vi.fn().mockResolvedValue(project)
+    };
+    const target = {
+      id: "vscode",
+      name: "VS Code",
+      health: { executablePath: "/usr/local/bin/code" }
+    } as TargetInfo;
+    const deviceStore = {
+      get: vi.fn().mockResolvedValue({
+        id: "dev-1",
+        name: "DevServer",
+        host: "192.168.1.100",
+        user: "ubuntu"
+      })
+    };
+    const launcher = { launch: vi.fn().mockResolvedValue(undefined) };
+    const service = createProjectLaunchService({
+      projectStore: store as never,
+      targetRegistry: createTargetRegistry(),
+      targetDiscoveryService: { listTargets: vi.fn().mockResolvedValue([target]) } as never,
+      launcher,
+      deviceStore: deviceStore as never
+    });
+
+    const result = await service.openProject(project.id, "vscode");
+    expect(launcher.launch).toHaveBeenCalledWith({
+      executablePath: "/usr/local/bin/code",
+      args: ["--remote", "ssh-remote+ubuntu@192.168.1.100", "/home/ubuntu/repo"]
+    });
+    expect(result.message).toContain("Opened remote RemoteRepo on DevServer in VS Code");
+  });
 });
