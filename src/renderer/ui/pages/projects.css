@@ -251,7 +251,7 @@
 }
 
 .project-add-dialog {
-  max-width: 520px;
+  max-width: 560px;
   width: 100%;
 }
 
@@ -388,4 +388,151 @@
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
 }
+
+.project-add-menu {
+  min-width: 200px;
+}
+
+.add-workspace-browser-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.remote-directory-browser {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.remote-directory-browser__header {
+  align-items: center;
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  gap: var(--space-2);
+  justify-content: space-between;
+  min-height: 32px;
+  padding: var(--space-1) var(--space-2);
+}
+
+.remote-directory-browser__current-path {
+  align-items: center;
+  color: var(--text);
+  display: flex;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.remote-directory-browser__path-icon {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.remote-directory-browser__path-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-directory-browser__nav-actions {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.remote-directory-browser__select-current-btn {
+  font-size: var(--font-size-caption);
+  height: 22px;
+  padding: 0 var(--space-2);
+}
+
+.remote-directory-browser__body {
+  max-height: 160px;
+  min-height: 100px;
+  overflow-y: auto;
+}
+
+.remote-directory-browser__status {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: var(--font-size-caption);
+  gap: var(--space-2);
+  justify-content: center;
+  min-height: 100px;
+  padding: var(--space-3);
+  text-align: center;
+}
+
+.remote-directory-browser__status--error {
+  color: var(--danger);
+}
+
+.remote-directory-browser__list {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0;
+}
+
+.remote-directory-browser__item {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: var(--space-2);
+  justify-content: space-between;
+  padding: 5px var(--space-2);
+  transition: background-color 0.1s ease;
+  user-select: none;
+}
+
+.remote-directory-browser__item:hover {
+  background: var(--surface-subtle);
+}
+
+.remote-directory-browser__item.is-selected {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.remote-directory-browser__item-main {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.remote-directory-browser__item-icon {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.remote-directory-browser__item.is-selected .remote-directory-browser__item-icon {
+  color: var(--accent-strong);
+}
+
+.remote-directory-browser__item-name {
+  font-size: var(--font-size-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-directory-browser__item-open {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.remote-directory-browser__item-open:hover {
+  color: var(--text);
+}
+
 

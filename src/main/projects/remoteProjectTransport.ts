@@ -5,9 +5,11 @@ import { homedir } from "node:os";
 import { promisify } from "node:util";
 import { posix } from "node:path";
 import type {
+  ListRemoteDirectoriesResult,
   ProjectGitObservation,
   ProjectGitPathState,
-  RemoteDevice
+  RemoteDevice,
+  RemoteDirectoryEntry
 } from "../../shared/types";
 import { findExecutable } from "../executableDiscovery";
 import { shellQuote, type SshTransport } from "../remoteDevices/systemSshTransport";
@@ -151,6 +153,102 @@ export const testRemoteProjectPath = async (
     };
   }
 };
+
+export const listRemoteDirectories = async (
+  device: RemoteDevice,
+  transport: SshTransport,
+  rawPath?: string
+): Promise<ListRemoteDirectoriesResult> => {
+  const hasPath = typeof rawPath === "string" && rawPath.trim().length > 0;
+  const script = hasPath
+    ? [
+        `target=${shellQuote(normalizePosixPath(rawPath))}`,
+        'if ! cd "$target" 2>/dev/null; then',
+        '  printf "CD_FAIL\\t%s\\n" "$target"',
+        '  exit 1',
+        'fi',
+        'canonical=$(pwd -P 2>/dev/null || pwd 2>/dev/null)',
+        'parent=$(cd .. 2>/dev/null && (pwd -P 2>/dev/null || pwd 2>/dev/null))',
+        'printf "CANONICAL\\t%s\\n" "$canonical"',
+        'if [ "$parent" != "$canonical" ]; then',
+        '  printf "PARENT\\t%s\\n" "$parent"',
+        'fi',
+        'count=0',
+        'for entry in *; do',
+        '  if [ "$entry" = "*" ]; then continue; fi',
+        '  if [ ! -d "$entry" ]; then continue; fi',
+        '  printf "DIR\\t%s\\n" "$entry"',
+        '  count=$((count + 1))',
+        '  if [ "$count" -ge 300 ]; then break; fi',
+        'done'
+      ].join("\n")
+    : [
+        'cd "$HOME" 2>/dev/null || cd /',
+        'canonical=$(pwd -P 2>/dev/null || pwd 2>/dev/null)',
+        'parent=$(cd .. 2>/dev/null && (pwd -P 2>/dev/null || pwd 2>/dev/null))',
+        'printf "CANONICAL\\t%s\\n" "$canonical"',
+        'if [ "$parent" != "$canonical" ]; then',
+        '  printf "PARENT\\t%s\\n" "$parent"',
+        'fi',
+        'count=0',
+        'for entry in *; do',
+        '  if [ "$entry" = "*" ]; then continue; fi',
+        '  if [ ! -d "$entry" ]; then continue; fi',
+        '  printf "DIR\\t%s\\n" "$entry"',
+        '  count=$((count + 1))',
+        '  if [ "$count" -ge 300 ]; then break; fi',
+        'done'
+      ].join("\n");
+
+  try {
+    const result = await transport.execute(device, `sh -c ${shellQuote(script)}`, {
+      timeoutMs: 10_000
+    });
+    const stdout = result.stdout.toString("utf8");
+    const lines = stdout.split("\n").map((l) => l.trim()).filter(Boolean);
+    let currentPath = "";
+    let parentPath: string | undefined;
+    const directories: RemoteDirectoryEntry[] = [];
+
+    for (const line of lines) {
+      const [type, ...rest] = line.split("\t");
+      const val = rest.join("\t");
+      if (type === "CANONICAL") {
+        currentPath = val;
+      } else if (type === "PARENT") {
+        parentPath = val;
+      } else if (type === "DIR") {
+        if (val) {
+          directories.push({
+            name: val,
+            path: currentPath === "/" ? `/${val}` : `${currentPath}/${val}`
+          });
+        }
+      } else if (type === "CD_FAIL") {
+        return {
+          currentPath: rawPath || "",
+          directories: [],
+          error: `Cannot open remote directory: ${val}`
+        };
+      }
+    }
+
+    directories.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+
+    return {
+      currentPath: currentPath || rawPath || "/",
+      parentPath,
+      directories
+    };
+  } catch (error) {
+    return {
+      currentPath: rawPath || "",
+      directories: [],
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+};
+
 
 export const inspectRemoteGit = async (
   device: RemoteDevice,

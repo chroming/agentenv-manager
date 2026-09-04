@@ -1347,15 +1347,16 @@ describe("App", () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Workspaces" }));
-    expect(await screen.findByRole("heading", { name: "Workspaces" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Add folder" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Workspace" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Add local folder" }));
 
     expect((await screen.findAllByText("/work/example")).length).toBeGreaterThan(0);
     expect(addProject).toHaveBeenCalledWith("/work/example");
     expect(screen.queryByRole("button", { name: /Delete folder/i })).not.toBeInTheDocument();
 
+    await waitFor(() => expect(screen.getByRole("button", { name: "More Workspace actions" })).not.toBeDisabled());
     fireEvent.click(screen.getByRole("button", { name: "More Workspace actions" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Loaded resource details" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Loaded resource details" }));
     expect(await screen.findByRole("dialog", { name: "Loaded resource details" }))
       .toBeInTheDocument();
     expect(previewProject).toHaveBeenCalledWith("project-example", "opencode");

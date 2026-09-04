@@ -143,6 +143,7 @@ export interface AgentEnvApi {
   findProjectByPath(rootPath: string, deviceId?: string): Promise<ProjectSummary | undefined>;
   addProject(input: string | AddProjectInput): Promise<ProjectSummary>;
   testRemoteProjectPath?(deviceId: string, remotePath: string): Promise<{ exists: boolean; isDirectory?: boolean; canonicalPath?: string; error?: string }>;
+  listRemoteDirectories?(deviceId: string, directoryPath?: string): Promise<ListRemoteDirectoriesResult>;
   updateProject(input: UpdateProjectInput): Promise<ProjectSummary>;
   removeProject(id: string): Promise<void>;
   inspectProject(id: string): Promise<ProjectEnvironmentSnapshot>;
@@ -1434,6 +1435,18 @@ export interface AddProjectInput {
   rootPath: string;
   name?: string;
   deviceId?: string;
+}
+
+export interface RemoteDirectoryEntry {
+  name: string;
+  path: string;
+}
+
+export interface ListRemoteDirectoriesResult {
+  currentPath: string;
+  parentPath?: string;
+  directories: RemoteDirectoryEntry[];
+  error?: string;
 }
 
 export interface UpdateProjectInput {

@@ -1,7 +1,9 @@
 import {
   AlertTriangle,
+  ArrowUp,
   BookOpen,
   CheckCircle2,
+  ChevronRight,
   Eye,
   ExternalLink,
   FileText,
@@ -19,9 +21,15 @@ import {
   Terminal,
   Trash2
 } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { ProjectSummary, RemoteDevice, UiState, UiStateUpdate } from "../../shared/types";
+import type {
+  ProjectSummary,
+  RemoteDevice,
+  RemoteDirectoryEntry,
+  UiState,
+  UiStateUpdate
+} from "../../shared/types";
 import {
   manualProfileSkillGroup,
   sourceProfileSkillGroup,
@@ -133,12 +141,12 @@ export const ProjectsWorkspace = ({
   );
 
   const applyProjects = (next: ProjectSummary[] | ((current: ProjectSummary[]) => ProjectSummary[])) => {
-    setProjects((current) => {
-      const resolved = typeof next === "function" ? next(current) : next;
-      onProjectsChange?.(resolved);
-      return resolved;
-    });
+    setProjects((current) => (typeof next === "function" ? next(current) : next));
   };
+
+  useEffect(() => {
+    onProjectsChange?.(projects);
+  }, [projects, onProjectsChange]);
   const [query, setQuery] = useState("");
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [agentSwitcherOpen, setAgentSwitcherOpen] = useState(false);
@@ -177,12 +185,20 @@ export const ProjectsWorkspace = ({
   const [skillLocationId, setSkillLocationId] = useState("");
   const [removeSkillCandidate, setRemoveSkillCandidate] = useState<ProjectResourceSummary>();
   const [addWorkspaceOpen, setAddWorkspaceOpen] = useState(false);
+  const [addMenu, setAddMenu] = useState<{ left: number; top: number }>();
+  const addMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const addMenuRef = useRef<HTMLDivElement | null>(null);
   const [remoteDevices, setRemoteDevices] = useState<RemoteDevice[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
   const [remotePath, setRemotePath] = useState("");
   const [remoteName, setRemoteName] = useState("");
   const [testingPath, setTestingPath] = useState(false);
   const [testResult, setTestResult] = useState<{ exists: boolean; canonicalPath?: string; error?: string }>();
+  const [browsingPath, setBrowsingPath] = useState<string>("");
+  const [parentBrowsingPath, setParentBrowsingPath] = useState<string | undefined>();
+  const [remoteDirectories, setRemoteDirectories] = useState<RemoteDirectoryEntry[]>([]);
+  const [loadingDirectories, setLoadingDirectories] = useState(false);
+  const [directoryError, setDirectoryError] = useState<string>();
   const addDialogRef = useRef<HTMLElement>(null);
   const addInitialFocusRef = useRef<HTMLElement>(null);
   const removeDialogRef = useRef<HTMLElement>(null);
@@ -427,6 +443,53 @@ export const ProjectsWorkspace = ({
       window.removeEventListener("scroll", dismissForViewportChange, true);
     };
   }, [projectMenu]);
+
+  useEffect(() => {
+    if (!addMenu) return;
+    focusInitialActionMenuItem(addMenuRef.current);
+  }, [addMenu]);
+
+  useEffect(() => {
+    if (!addMenu) return;
+    const dismiss = (event: MouseEvent) => {
+      if (
+        event.target instanceof Node &&
+        !addMenuRef.current?.contains(event.target) &&
+        !addMenuButtonRef.current?.contains(event.target)
+      ) {
+        setAddMenu(undefined);
+      }
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setAddMenu(undefined);
+      addMenuButtonRef.current?.focus({ preventScroll: true });
+    };
+    const dismissForViewportChange = () => setAddMenu(undefined);
+    document.addEventListener("mousedown", dismiss);
+    document.addEventListener("keydown", escape);
+    window.addEventListener("resize", dismissForViewportChange);
+    window.addEventListener("scroll", dismissForViewportChange, true);
+    return () => {
+      document.removeEventListener("mousedown", dismiss);
+      document.removeEventListener("keydown", escape);
+      window.removeEventListener("resize", dismissForViewportChange);
+      window.removeEventListener("scroll", dismissForViewportChange, true);
+    };
+  }, [addMenu]);
+
+  const toggleAddMenu = (button: HTMLElement) => {
+    if (addMenu) {
+      setAddMenu(undefined);
+      return;
+    }
+    const rect = button.getBoundingClientRect();
+    const width = 200;
+    const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+    const top = rect.bottom + 4;
+    setAddMenu({ left, top });
+  };
+
   useModalDialog({
     open: skillDialogOpen,
     dialogRef: skillDialogRef,
@@ -456,11 +519,44 @@ export const ProjectsWorkspace = ({
     dismissDisabled: operation === "add" || testingPath
   });
 
+  const loadRemoteDirectories = useCallback(
+    async (path?: string) => {
+      if (!selectedDeviceId) return;
+      setLoadingDirectories(true);
+      setDirectoryError(undefined);
+      try {
+        const result = await window.agentEnv.listRemoteDirectories?.(selectedDeviceId, path);
+        if (result?.error) {
+          setDirectoryError(result.error);
+        } else if (result) {
+          setBrowsingPath(result.currentPath);
+          setParentBrowsingPath(result.parentPath);
+          setRemoteDirectories(result.directories ?? []);
+        }
+      } catch (err) {
+        setDirectoryError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setLoadingDirectories(false);
+      }
+    },
+    [selectedDeviceId]
+  );
+
+  useEffect(() => {
+    if (addWorkspaceOpen && selectedDeviceId) {
+      void loadRemoteDirectories();
+    }
+  }, [addWorkspaceOpen, selectedDeviceId, loadRemoteDirectories]);
+
   const openAddWorkspaceDialog = async () => {
     setModalError("");
     setTestResult(undefined);
     setRemotePath("");
     setRemoteName("");
+    setBrowsingPath("");
+    setParentBrowsingPath(undefined);
+    setRemoteDirectories([]);
+    setDirectoryError(undefined);
     try {
       const devices = await window.agentEnv.listRemoteDevices?.() ?? [];
       setRemoteDevices(devices);
@@ -504,6 +600,9 @@ export const ProjectsWorkspace = ({
       const probe = await window.agentEnv.testRemoteProjectPath?.(selectedDeviceId, remotePath.trim());
       if (probe?.exists && probe.isDirectory) {
         setTestResult({ exists: true, canonicalPath: probe.canonicalPath });
+        if (probe.canonicalPath) {
+          void loadRemoteDirectories(probe.canonicalPath);
+        }
       } else {
         setTestResult({
           exists: false,
@@ -833,24 +932,17 @@ export const ProjectsWorkspace = ({
         title={t("Workspaces")}
         help={<InfoTip label={t("Open recurring folders with an Agent and manage only the files owned by that folder.")} />}
         actions={(
-          <ControlGroup aria-label={t("Workspace actions")}>
-            <Button
-              variant="secondary"
-              size="compact"
-              icon={<Folder size={14} />}
-              onClick={() => void addLocalProject()}
-            >
-              {t("Add folder")}
-            </Button>
-            <Button
-              variant="secondary"
-              size="compact"
-              icon={<Server size={14} />}
-              onClick={() => void openAddWorkspaceDialog()}
-            >
-              {t("Add SSH remote workspace")}
-            </Button>
-          </ControlGroup>
+          <Button
+            ref={addMenuButtonRef}
+            variant="primary"
+            size="compact"
+            icon={<Plus size={14} />}
+            onClick={(e) => toggleAddMenu(e.currentTarget)}
+            aria-haspopup="menu"
+            aria-expanded={Boolean(addMenu)}
+          >
+            {t("Add Workspace")}
+          </Button>
         )}
       />
 
@@ -1280,6 +1372,37 @@ export const ProjectsWorkspace = ({
         );
       })() : null}
 
+      {addMenu ? (
+        createPortal(
+          <ActionMenu
+            ariaLabel={t("Add Workspace")}
+            className="project-actions-menu project-add-menu"
+            menuRef={addMenuRef}
+            style={{ left: addMenu.left, top: addMenu.top }}
+          >
+            <ActionMenuItem
+              onClick={() => {
+                setAddMenu(undefined);
+                void addLocalProject();
+              }}
+            >
+              <Folder size={15} aria-hidden="true" />
+              <span>{t("Add local folder")}</span>
+            </ActionMenuItem>
+            <ActionMenuItem
+              onClick={() => {
+                setAddMenu(undefined);
+                void openAddWorkspaceDialog();
+              }}
+            >
+              <Server size={15} aria-hidden="true" />
+              <span>{t("Add SSH remote workspace...")}</span>
+            </ActionMenuItem>
+          </ActionMenu>,
+          document.body
+        )
+      ) : null}
+
       {removeCandidate ? (
         <ModalFrame
           ariaLabel={t("Remove Workspace reference?")}
@@ -1545,6 +1668,12 @@ export const ProjectsWorkspace = ({
                     onChange={(event) => {
                       setSelectedDeviceId(event.target.value);
                       setTestResult(undefined);
+                      setRemotePath("");
+                      setRemoteName("");
+                      setBrowsingPath("");
+                      setParentBrowsingPath(undefined);
+                      setRemoteDirectories([]);
+                      setDirectoryError(undefined);
                     }}
                   >
                     {remoteDevices.map((device) => (
@@ -1553,6 +1682,125 @@ export const ProjectsWorkspace = ({
                       </option>
                     ))}
                   </SelectField>
+
+                  <div className="add-workspace-browser-field">
+                    <label className="ui-field__label">{t("Browse remote directories")}</label>
+                    <div className="remote-directory-browser">
+                      <div className="remote-directory-browser__header">
+                        <div className="remote-directory-browser__current-path" title={browsingPath}>
+                          <Folder size={14} className="remote-directory-browser__path-icon" />
+                          <span className="remote-directory-browser__path-text">{browsingPath || "/"}</span>
+                        </div>
+                        <div className="remote-directory-browser__nav-actions">
+                          {browsingPath && remotePath !== browsingPath ? (
+                            <Button
+                              variant="secondary"
+                              size="compact"
+                              className="remote-directory-browser__select-current-btn"
+                              onClick={() => {
+                                setRemotePath(browsingPath);
+                                const parts = browsingPath.split("/").filter(Boolean);
+                                if (parts.length > 0) setRemoteName(parts[parts.length - 1]);
+                                setTestResult({ exists: true, canonicalPath: browsingPath });
+                              }}
+                            >
+                              {t("Select this folder")}
+                            </Button>
+                          ) : null}
+                          {parentBrowsingPath ? (
+                            <IconButton
+                              size="compact"
+                              variant="ghost"
+                              label={t("Parent folder")}
+                              onClick={() => {
+                                setRemotePath(parentBrowsingPath);
+                                const parts = parentBrowsingPath.split("/").filter(Boolean);
+                                if (parts.length > 0) setRemoteName(parts[parts.length - 1]);
+                                setTestResult({ exists: true, canonicalPath: parentBrowsingPath });
+                                void loadRemoteDirectories(parentBrowsingPath);
+                              }}
+                              disabled={loadingDirectories}
+                            >
+                              <ArrowUp size={13} />
+                            </IconButton>
+                          ) : null}
+                          <IconButton
+                            size="compact"
+                            variant="ghost"
+                            label={t("Refresh directories")}
+                            onClick={() => void loadRemoteDirectories(browsingPath || undefined)}
+                            disabled={loadingDirectories}
+                            busy={loadingDirectories}
+                          >
+                            <RotateCcw size={13} />
+                          </IconButton>
+                        </div>
+                      </div>
+
+                      <div className="remote-directory-browser__body">
+                        {loadingDirectories && remoteDirectories.length === 0 ? (
+                          <div className="remote-directory-browser__status">
+                            <LoaderCircle size={16} className="is-spinning" />
+                            <span>{t("Loading remote directories...")}</span>
+                          </div>
+                        ) : directoryError ? (
+                          <div className="remote-directory-browser__status remote-directory-browser__status--error">
+                            <AlertTriangle size={14} />
+                            <span>{t("Failed to load remote directories: {{error}}", { error: directoryError })}</span>
+                          </div>
+                        ) : remoteDirectories.length === 0 ? (
+                          <div className="remote-directory-browser__status">
+                            <span>{t("No subdirectories found in this folder")}</span>
+                          </div>
+                        ) : (
+                          <ul className="remote-directory-browser__list" role="listbox">
+                            {remoteDirectories.map((dir) => {
+                              const isSelected = remotePath === dir.path;
+                              return (
+                                <li
+                                  key={dir.path}
+                                  className={`remote-directory-browser__item${isSelected ? " is-selected" : ""}`}
+                                  onClick={() => {
+                                    setRemotePath(dir.path);
+                                    setRemoteName(dir.name);
+                                    setTestResult({ exists: true, canonicalPath: dir.path });
+                                  }}
+                                  onDoubleClick={() => {
+                                    setRemotePath(dir.path);
+                                    setRemoteName(dir.name);
+                                    setTestResult({ exists: true, canonicalPath: dir.path });
+                                    void loadRemoteDirectories(dir.path);
+                                  }}
+                                  role="option"
+                                  aria-selected={isSelected}
+                                >
+                                  <div className="remote-directory-browser__item-main">
+                                    <Folder size={14} className="remote-directory-browser__item-icon" />
+                                    <span className="remote-directory-browser__item-name">{dir.name}</span>
+                                  </div>
+                                  <IconButton
+                                    size="compact"
+                                    variant="ghost"
+                                    className="remote-directory-browser__item-open"
+                                    label={t("Navigate into folder")}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setRemotePath(dir.path);
+                                      setRemoteName(dir.name);
+                                      setTestResult({ exists: true, canonicalPath: dir.path });
+                                      void loadRemoteDirectories(dir.path);
+                                    }}
+                                  >
+                                    <ChevronRight size={13} />
+                                  </IconButton>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                   <TextField
                     label={t("Remote directory path")}
                     placeholder={t("e.g. /home/ubuntu/repo or ~/projects/app")}

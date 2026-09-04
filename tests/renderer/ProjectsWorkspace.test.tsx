@@ -98,6 +98,11 @@ const installApi = () => {
       isDirectory: true,
       canonicalPath: "/home/ubuntu/remote-app"
     }),
+    listRemoteDirectories: vi.fn().mockResolvedValue({
+      currentPath: "/home/ubuntu",
+      parentPath: "/home",
+      directories: [{ name: "remote-app", path: "/home/ubuntu/remote-app" }]
+    }),
     addProject: vi.fn(),
     removeProject: vi.fn().mockResolvedValue(undefined),
     openProject: vi.fn().mockResolvedValue({
@@ -648,12 +653,14 @@ describe("ProjectsWorkspace", () => {
 
     render(<ProjectsWorkspace targets={[target]} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add SSH remote workspace" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add Workspace" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Add SSH remote workspace..." }));
     const dialog = await screen.findByRole("dialog", { name: "Add SSH remote workspace" });
     expect(dialog).toBeInTheDocument();
 
-    const pathInput = within(dialog).getByLabelText("Remote directory path");
-    fireEvent.change(pathInput, { target: { value: "/home/ubuntu/remote-app" } });
+    expect(await within(dialog).findByText("remote-app")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByText("remote-app"));
+    expect(within(dialog).getByLabelText("Remote directory path")).toHaveValue("/home/ubuntu/remote-app");
 
     const testButton = within(dialog).getByRole("button", { name: "Test path" });
     fireEvent.click(testButton);
@@ -669,7 +676,7 @@ describe("ProjectsWorkspace", () => {
       expect(api.addProject).toHaveBeenCalledWith({
         deviceId: "dev-1",
         rootPath: "/home/ubuntu/remote-app",
-        name: undefined
+        name: "remote-app"
       });
     });
   });
@@ -694,8 +701,7 @@ describe("ProjectsWorkspace", () => {
 
     render(<ProjectsWorkspace targets={[target]} />);
 
-    expect(await screen.findByRole("button", { name: "Add folder" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add SSH remote workspace" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Add Workspace" })).toBeInTheDocument();
 
     // Banner has direct Copy SSH command button
     const copyButton = await screen.findByRole("button", { name: "Copy SSH command" });

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RemoteDevice } from "../../../src/shared/types";
 import {
   inspectRemoteGit,
+  listRemoteDirectories,
   readRemoteTextFile,
   testRemoteProjectPath,
   writeRemoteTextFile
@@ -100,5 +101,30 @@ describe("remoteProjectTransport", () => {
 
     await writeRemoteTextFile(mockDevice, transport, "/home/ubuntu/repo/CLAUDE.md", "new instructions");
     expect(capturedInput).toBe("new instructions");
+  });
+
+  it("lists remote directories in given path", async () => {
+    const transport = {
+      execute: async (_device: unknown, command: string) => {
+        expect(command).toContain("CANONICAL");
+        return {
+          stdout: Buffer.from(
+            "CANONICAL\t/home/ubuntu\nPARENT\t/home\nDIR\tprojects\nDIR\tdocuments\n"
+          ),
+          stderr: "",
+          exitCode: 0
+        };
+      }
+    };
+
+    const result = await listRemoteDirectories(mockDevice, transport as any, "/home/ubuntu");
+    expect(result).toEqual({
+      currentPath: "/home/ubuntu",
+      parentPath: "/home",
+      directories: [
+        { name: "documents", path: "/home/ubuntu/documents" },
+        { name: "projects", path: "/home/ubuntu/projects" }
+      ]
+    });
   });
 });

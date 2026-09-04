@@ -76,6 +76,8 @@ const api: AgentEnvApi = {
   addProject: (input) => ipcRenderer.invoke("projects:add", input),
   testRemoteProjectPath: (deviceId, remotePath) =>
     ipcRenderer.invoke("projects:test-remote-path", deviceId, remotePath),
+  listRemoteDirectories: (deviceId, directoryPath) =>
+    ipcRenderer.invoke("projects:list-remote-directories", deviceId, directoryPath),
   updateProject: (input) => ipcRenderer.invoke("projects:update", input),
   removeProject: (id) => ipcRenderer.invoke("projects:remove", id),
   inspectProject: (id) => ipcRenderer.invoke("projects:inspect", id),

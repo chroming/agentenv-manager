@@ -16,7 +16,7 @@ import type { ProjectStore } from "../projects/projectStore";
 import type { TargetDiscoveryService } from "../targetDiscovery";
 import type { RemoteDeviceStore } from "../remoteDevices/remoteDeviceStore";
 import type { SshTransport } from "../remoteDevices/systemSshTransport";
-import { testRemoteProjectPath } from "../projects/remoteProjectTransport";
+import { listRemoteDirectories, testRemoteProjectPath } from "../projects/remoteProjectTransport";
 import { parseId, type IpcRegistrationHandles } from "./registration";
 
 interface ProjectIpcServices {
@@ -62,10 +62,7 @@ export const registerProjectIpc = (
     return projectEnvironmentService.previewProject(parseId(projectId, "Project id"), target);
   });
   diagnosticHandle("projects:open", (_event, projectId: unknown, agentId: unknown) =>
-    projectLaunchService.openProject(
-      parseId(projectId, "Project id"),
-      parseId(agentId, "Agent id")
-    )
+    projectLaunchService.openProject(parseId(projectId, "Project id"), parseId(agentId, "Agent id"))
   );
   diagnosticHandle("projects:read-resource", (_event, projectId: unknown, resourceId: unknown) =>
     projectMutationService.read(parseId(projectId, "Project id"), parseId(resourceId, "Resource id"))
@@ -89,28 +86,30 @@ export const registerProjectIpc = (
     projectMutationService.removeSkill(RemoveProjectSkillInputSchema.parse(input))
   );
   diagnosticHandle("projects:list-recovery", (_event, projectId: unknown) =>
-    projectRecoveryStore.list(
-      projectId === undefined ? undefined : parseId(projectId, "Project id")
-    )
+    projectRecoveryStore.list(projectId === undefined ? undefined : parseId(projectId, "Project id"))
   );
   handleMutation("projects:restore", (_event, receiptId: unknown) =>
-    projectMutationService.restore(parseId(receiptId, "Project recovery id"))
-  );
+    projectMutationService.restore(parseId(receiptId, "Project recovery id")));
   handleMutation("projects:add", (_event, input: unknown) =>
-    projectStore.addProject(AddProjectInputSchema.parse(input))
-  );
-  diagnosticHandle("projects:test-remote-path", async (_event, deviceId: unknown, remotePath: unknown) => {
+    projectStore.addProject(AddProjectInputSchema.parse(input)));
+  const getDeviceAndTransport = async (deviceId: unknown) => {
     const parsedDeviceId = SafeIdSchema.parse(deviceId);
     if (!deviceStore) throw new Error("SSH device store is not available");
     const device = await deviceStore.get(parsedDeviceId);
     if (!device) throw new Error("SSH device not found");
     if (!sshTransport) throw new Error("SSH transport is not available");
-    return testRemoteProjectPath(device, sshTransport, String(remotePath));
+    return { device, transport: sshTransport };
+  };
+  diagnosticHandle("projects:test-remote-path", async (_event, deviceId: unknown, remotePath: unknown) => {
+    const { device, transport } = await getDeviceAndTransport(deviceId);
+    return testRemoteProjectPath(device, transport, String(remotePath));
+  });
+  diagnosticHandle("projects:list-remote-directories", async (_event, deviceId: unknown, directoryPath: unknown) => {
+    const { device, transport } = await getDeviceAndTransport(deviceId);
+    return listRemoteDirectories(device, transport, directoryPath ? String(directoryPath) : undefined);
   });
   handleMutation("projects:update", (_event, input: unknown) =>
-    projectStore.updateProject(UpdateProjectInputSchema.parse(input))
-  );
+    projectStore.updateProject(UpdateProjectInputSchema.parse(input)));
   handleMutation("projects:remove", (_event, id: unknown) =>
-    projectStore.removeProject(parseId(id, "Project id"))
-  );
+    projectStore.removeProject(parseId(id, "Project id")));
 };
