@@ -22,6 +22,7 @@ import { IconButton, ModalFrame } from "./ui";
 
 interface DiffWorkspaceDialogProps {
   changes: PlannedFileChange[];
+  initialPath?: string;
   readonlyFiles?: Array<{ content: string; path: string }>;
   onReadChange?(change: PlannedFileChange): Promise<PlannedFileChange>;
   open: boolean;
@@ -137,6 +138,7 @@ const treeFor = (
 
 export const DiffWorkspaceDialog = ({
   changes,
+  initialPath,
   readonlyFiles = [],
   onReadChange,
   open,
@@ -216,13 +218,14 @@ export const DiffWorkspaceDialog = ({
 
   useEffect(() => {
     if (!open) return;
-    setSelectedIndex(changes.length > 0 ? 0 : -1);
+    const initialIndex = changes.findIndex((change) => change.path === initialPath);
+    setSelectedIndex(initialIndex >= 0 ? initialIndex : changes.length > 0 ? 0 : -1);
     setSelectedReadonlyPath(firstReadonlyPath);
     setCollapsed(new Set());
     setLoadedChanges(new Map());
     setLoadingPath("");
     setLoadError("");
-  }, [changes.length, open, changeSetKey, firstReadonlyPath]);
+  }, [changes.length, open, changeSetKey, firstReadonlyPath, initialPath]);
 
   useEffect(() => {
     if (

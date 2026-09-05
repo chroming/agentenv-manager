@@ -58,6 +58,14 @@ application data directory.
 
 ## Network Access
 
+Optional Skill update summaries send selected diffs and necessary context to the
+API endpoint configured by the user, only after an explicit Generate action and
+confirmation. They may contain private repository information and consume model
+quota. Recognized secrets are redacted on a best-effort basis, not a guarantee.
+No tools or automatic requests are enabled. Summaries and redacted supporting
+diffs persist locally; the API Key is stored encrypted using OS secure storage.
+These records and credentials are excluded from portable Workspace Sync.
+
 Network requests occur only for user-requested or configured features:
 
 - GitHub device authorization and GitHub API requests;

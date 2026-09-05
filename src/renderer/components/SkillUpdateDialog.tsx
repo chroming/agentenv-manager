@@ -14,6 +14,7 @@ import { DiffViewer } from "./DiffViewer";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
 import { Button, IconButton, ModalFrame, Switch } from "./ui";
 import { useI18n } from "../i18n";
+import { SkillSummaryReview } from "./SkillSummaryReview";
 
 interface SkillUpdateDialogProps {
   plan?: SkillUpdatePlan;
@@ -98,6 +99,8 @@ export const SkillUpdateDialog = ({
   const initialFocusRef = useRef<HTMLButtonElement>(null);
   const expandPreviewRef = useRef<HTMLButtonElement>(null);
   const [diffWorkspaceOpen, setDiffWorkspaceOpen] = useState(false);
+  const [summaryFile, setSummaryFile] = useState<string>();
+  const [summaryEvidence, setSummaryEvidence] = useState<PlannedFileChange[]>();
   const [commitResult, setCommitResult] = useState<SkillUpdateActionResult>();
   const [syncCopiedInstalls, setSyncCopiedInstalls] = useState(false);
   const onCloseRef = useRef(onClose);
@@ -241,6 +244,10 @@ export const SkillUpdateDialog = ({
           </IconButton>
         </header>
         <div className="skill-update-dialog__body ui-dialog-body">
+          <SkillSummaryReview plans={[plan]} disabled={busy || running || finished} onViewFile={(_plan, path, summary) => {
+            setSummaryEvidence(summary.files.map((file) => ({ ...file, before: "", after: "", action: "write" })));
+            setSummaryFile(path); setDiffWorkspaceOpen(true);
+          }} />
           {planImpact.copiedInstallCount > 0 && progress?.status !== "updated" ? (
             <div className="skill-update-copy-option">
               <span className="skill-update-copy-option__copy">
@@ -316,14 +323,15 @@ export const SkillUpdateDialog = ({
         </footer>
       </ModalFrame>
       <DiffWorkspaceDialog
-        changes={plan.changes}
-        onReadChange={plan.previewId && onReadChange
+        initialPath={summaryFile}
+        changes={summaryEvidence ?? plan.changes}
+        onReadChange={!summaryEvidence && plan.previewId && onReadChange
           ? (change) => onReadChange(plan.previewId!, change.path)
           : undefined}
         open={diffWorkspaceOpen}
         returnFocusRef={expandPreviewRef}
         title={t("Update {{name}}", { name: plan.name })}
-        onClose={() => setDiffWorkspaceOpen(false)}
+        onClose={() => { setDiffWorkspaceOpen(false); setSummaryEvidence(undefined); setSummaryFile(undefined); }}
       />
     </>
   );

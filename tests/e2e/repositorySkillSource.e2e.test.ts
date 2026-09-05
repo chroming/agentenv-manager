@@ -400,7 +400,7 @@ describe("Repository Skill source", () => {
     await expect.poll(() => preview.textContent()).toContain("SKILL.md");
     await expect.poll(() => readFile(join(librarySkill, "SKILL.md"), "utf8"))
       .not.toContain("Review compatibility");
-    await preview.getByRole("button", { name: "Update 1 skill" }).click();
+    await preview.getByRole("button", { name: "Update selected (1)" }).click();
     await preview
       .getByRole("status", { name: "API Design Internal: Done" })
       .waitFor({ state: "visible" });

@@ -1,0 +1,43 @@
+# Skill 更新摘要
+
+## 产品契约
+
+Skill 更新摘要仅由用户手动触发。检查更新、打开预览、选择更新项、执行更新和启动软件均不得调用模型。
+
+- 单项与批量更新预览共用摘要界面；批量可选择更新项，生成与更新是两个独立动作。
+- 生成前列出服务地址、模型、请求项数、文本文件数和未覆盖文件。确认后每项最多一次请求；没有隐式重试、分块请求或服务切换。
+- 按重要变更、使用影响、安全关注和其他变更分类。观察事实与潜在影响分别展示，每条必须引用输入中的文件。
+- 不输出安全评分或认证。未发现问题不代表安全；未分析的文件明确显示。
+- 关闭预览取消未完成的生成队列；已发送请求可能已计费。取消和失败不影响原更新流程。
+- 以 Skill ID、旧内容哈希、新内容哈希定位记录。已有记录直接显示；只有重新生成可以替换。失败不覆盖旧记录。
+- 摘要与脱敏的分析 Diff 更新后仍可从 Skill 菜单的更新摘要查看。记录不代表更新已经应用。
+- 摘要、服务配置、密钥均为本机数据，不加入 Workspace Sync；不写 Agent 或 Skill 源文件。
+
+## 调用与安全边界
+
+P0 使用支持 JSON 输出的 OpenAI-compatible Chat Completions endpoint。地址必须 HTTPS，只有 loopback 允许 HTTP；拒绝 URL 中的凭据、query、fragment，拒绝重定向。变更 endpoint 时不复用原 API Key。
+
+复用系统安全存储加密 Key，不增加依赖，不复用 Agent 登录凭据，不启用 CLI fallback。
+不配置工具，不运行 Skill、不跟随链接；外部文件作为不可信资料。输入和输出尽力脱敏，不能承诺发现所有私密信息，因此发送前必须确认。
+
+一次请求最多 96 KB 输入、2500 输出 token、128 KB 响应、90 秒。全局同时只运行一项。大文件、长行、二进制与总输入限额造成的未覆盖内容，在确认和结果中均可见。校验候选内容前后哈希，拒绝过期预览。摘要使用带必要上下文的 Diff，不声称完整代码审计。
+
+## 组件与证据
+
+- 配置：TextField、Button、Notice，放在 Skills 设置折叠项。
+- 摘要：SkillSummaryReview / SkillSummaryContent，单项与批量共用。
+- 证据：DiffWorkspaceDialog，支持引用定位；历史也使用同一组件。
+- 选择：ChoiceInput；操作：ResourcePanelToolbar、Button；历史窗口：ModalFrame、DialogHeader/Body/Footer。
+
+状态：idle 无请求；working 可停止；success 原子保存；error 局部提示、手动重试；cancelled 不保存半条结果；no-op 复用缓存；stale 拒绝请求；partial 明确范围；persisted 可重启读取；rollback 失败保留原摘要，原 Skill 不受影响。
+
+验证入口：`tests/main/skillSummaries.test.ts`、`tests/renderer/SkillSummaryReview.test.tsx`、`tests/e2e/skillSummaries.e2e.test.ts`。
+桌面 E2E 使用隔离 Home、本地 Skill 和 loopback 假 API，不消耗真实额度。截图路径 `/tmp/agentenv-summary-evidence`，覆盖 920/1180/1440 与英/简中/繁中。真实 API 供应商兼容性不由模拟测试证明。
+
+## 完成验证记录
+
+2026-09-05：`npm run verify:commit` 完整通过，保留原有测试覆盖；1798 项非 Electron 测试与 158 项 Electron 测试通过，样式、模块、Target 边界、翻译、功能证据及 UI 契约审计通过。
+
+当前截图构建身份：`ea172e9428fa`。手动检查单项摘要、批量选择、完成状态以及英/繁中大小窗口；新增摘要 E2E 覆盖三种语言和 920/1180/1440 三档窗口。单项预览与批量准备/完成态视觉基线已更新。
+
+摘要引用使用持久化的脱敏 Diff，更新完成后不再依赖临时候选目录。此次未打包发布、未调用真实供应商，也不把模拟 API 通过当成真实服务兼容性或安全审计证明。

@@ -73,6 +73,7 @@ import { registerAgentIpc } from "./ipc/agentIpc";
 import { registerDialogIpc } from "./ipc/dialogIpc";
 import { registerSharedSkillAreaIpc } from "./ipc/sharedSkillAreaIpc";
 import { registerSkillUpdateIpc } from "./ipc/skillUpdateIpc";
+import { registerSkillSummaryIpc } from "./ipc/skillSummaryIpc";
 import { registerInstructionIpc } from "./ipc/instructionIpc";
 import { registerSkillLibraryBrowserIpc } from "./ipc/skillLibraryBrowserIpc";
 import { registerSkillGroupIpc } from "./ipc/skillGroupIpc";
@@ -899,11 +900,8 @@ export const registerIpcHandlers = ({
       tags: input.tags
     });
   });
-  registerSkillUpdateIpc(
-    { diagnosticHandle, handleMutation },
-    skillLibraryStore,
-    waitForAutomationBackgroundDelay
-  );
+  registerSkillUpdateIpc({ diagnosticHandle, handleMutation }, skillLibraryStore, waitForAutomationBackgroundDelay);
+  registerSkillSummaryIpc({ diagnosticHandle, handleMutation, handleWorkspaceSyncMutation }, paths.appDataRoot, skillLibraryStore);
   registerSettingsIpc(
     { diagnosticHandle, handleMutation, handleWorkspaceSyncMutation },
     {

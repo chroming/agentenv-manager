@@ -6,6 +6,8 @@ Audience: Product, design, engineering, QA, and target-adapter contributors
 
 ## 1. Purpose
 
+Skill update summaries follow the [manual-only summary contract](skill-update-summaries.md). Summary generation never runs as part of update checks or Apply and never grants external Skill text tool access.
+
 AgentEnv Manager is a local-first desktop application for saving reusable agent environments as Profiles and safely deploying a complete Profile to local agent tools. Local Skill cleanup is an on-demand recovery and migration workflow, not a prerequisite for ordinary Profile use.
 
 The product succeeds when a user can answer all of these questions without inspecting implementation files:

@@ -1798,7 +1798,7 @@ describe("SkillLibraryPanel", () => {
       "broken-reviewer",
       "missing-reviewer"
     ]);
-    const partialApply = within(bulkDialog).getByRole("button", { name: "Update 1 skill" });
+    const partialApply = within(bulkDialog).getByRole("button", { name: "Update selected (1)" });
     expect(partialApply).toBeEnabled();
     fireEvent.click(partialApply);
     expect(onUpdateAllLibrarySkills).toHaveBeenCalledWith(
@@ -1837,7 +1837,7 @@ describe("SkillLibraryPanel", () => {
       within(completedDialog).getByRole("status", { name: "Shared Reviewer: Done" })
     ).toBeInTheDocument();
     expect(within(completedDialog).getByRole("button", { name: "Close" })).toBeEnabled();
-    expect(within(completedDialog).queryByRole("button", { name: "Update 1 skill" })).toBeNull();
+    expect(within(completedDialog).queryByRole("button", { name: "Update selected (1)" })).toBeNull();
   }, 30_000);
 
   it("falls back from a private GitHub URL to SSH-backed System Git and preserves its directory scope", async () => {

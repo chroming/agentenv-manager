@@ -1,14 +1,12 @@
 .skill-update-dialog__body {
   align-content: start;
   display: grid;
-  grid-template-rows: auto auto;
   min-height: 0;
   overflow: auto;
   padding: 0;
 }
 
 .skill-update-dialog__body > .update-change-list {
-  grid-row: 2;
   padding: 16px 18px;
 }
 
@@ -38,4 +36,46 @@
   color: var(--muted);
   font-size: 11px;
   line-height: 1.4;
+}
+
+.skill-summary-review {
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  font-size: var(--font-size-body);
+  line-height: 1.5;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px 18px;
+}
+
+.skill-summary-heading {
+  margin-right: auto;
+}
+
+.skill-summary-content {
+  display: grid;
+  font-size: var(--font-size-body);
+  line-height: 1.5;
+  gap: 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.skill-summary-content p,
+.skill-summary-content h4 {
+  margin: 0;
+}
+
+.skill-summary-content ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.skill-summary-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
 }

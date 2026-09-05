@@ -1,4 +1,5 @@
 export const electronE2eTestFiles = [
+  "tests/e2e/skillSummaries.e2e.test.ts",
   "tests/e2e/electronAppUpdates.e2e.test.ts",
   "tests/e2e/conversations.e2e.test.ts",
   "tests/e2e/desktopShell.e2e.test.ts",
@@ -20,4 +21,4 @@ export const exclusiveElectronE2eTestNames = [
 ];
 
 export const electronE2eExcludeGlob =
-  "**/tests/e2e/{conversations,desktopShell,electronAppUpdates,electronUiProfileSwitching,instructions,profileEvaluation,projects,remoteProfileEndpoint,repositorySkillSource,startupRecovery,workspaceSync}.e2e.test.ts";
+  "**/tests/e2e/{conversations,desktopShell,electronAppUpdates,electronUiProfileSwitching,instructions,profileEvaluation,projects,remoteProfileEndpoint,repositorySkillSource,skillSummaries,startupRecovery,workspaceSync}.e2e.test.ts";

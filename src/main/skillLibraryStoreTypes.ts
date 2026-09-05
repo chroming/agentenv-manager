@@ -142,5 +142,6 @@ export interface SkillLibraryStore {
   previewUpdate(id: string): Promise<SkillUpdatePlan>;
   previewUpdates(ids: string[]): Promise<SkillUpdatePreviewBatchResult>;
   readUpdateChange(input: SkillUpdateChangeReadInput): Promise<import("../shared/types").PlannedFileChange>;
+  readSummaryInput(previewId: string): Promise<import("../shared/skillSummaries").SkillSummaryInput>;
   updateSkill(input: SkillUpdateConfirmation): Promise<SkillLibraryEntry>;
 }

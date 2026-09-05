@@ -8950,7 +8950,7 @@ describe("Electron UI profile switching e2e", () => {
       });
     }
     await fullPreview.getByRole("button", { name: "Close" }).click();
-    await bulkUpdateDialog.getByRole("button", { name: "Update 2 skills" }).click();
+    await bulkUpdateDialog.getByRole("button", { name: "Update selected (2)" }).click();
     await bulkUpdateDialog
       .getByRole("status", { name: "Shared Reviewer: Done" })
       .waitFor({ state: "visible" });
@@ -9084,7 +9084,7 @@ describe("Electron UI profile switching e2e", () => {
     await bulkUpdateDialog.waitFor({ state: "visible" });
 
     await rm(missingSourceSkill.sourceDir, { recursive: true, force: true });
-    await bulkUpdateDialog.getByRole("button", { name: "Update 2 skills" }).click();
+    await bulkUpdateDialog.getByRole("button", { name: "Update selected (2)" }).click();
 
     await expect.poll(() => page.locator(".app-feedback").textContent()).toContain(
       "Updated 2 skills"

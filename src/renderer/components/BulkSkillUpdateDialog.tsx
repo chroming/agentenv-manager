@@ -10,6 +10,7 @@ import {
   TriangleAlert
 } from "lucide-react";
 import type {
+  PlannedFileChange,
   SkillUpdatePlan,
   SkillUpdatePreviewBatchResult
 } from "../../shared/types";
@@ -17,9 +18,11 @@ import type { SkillUpdateRun, SkillUpdateRunItem } from "../skillUpdateQueue";
 import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
+import { SkillSummaryReview } from "./SkillSummaryReview";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
 import {
   Button,
+  ChoiceInput,
   DialogBody,
   DialogFooter,
   DialogHeader,
@@ -67,9 +70,12 @@ export const BulkSkillUpdateDialog = ({
   const initialFocusRef = useRef<HTMLButtonElement>(null);
   const expandPreviewRef = useRef<HTMLButtonElement>(null);
   const [diffWorkspaceOpen, setDiffWorkspaceOpen] = useState(false);
+  const [summaryFile, setSummaryFile] = useState<string>();
+  const [summaryEvidence, setSummaryEvidence] = useState<PlannedFileChange[]>();
+  const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
   const [syncCopiedInstalls, setSyncCopiedInstalls] = useState(false);
   const applicablePlans = plans.filter(
-    (plan) => plan.changes.length > 0 && plan.errors.length === 0
+    (plan) => plan.changes.length > 0 && plan.errors.length === 0 && !excludedIds.has(plan.id)
   );
   const started = applicablePlans.some((plan) => Boolean(updateRun[plan.id]));
   const running = applicablePlans.some((plan) => isRunning(updateRun[plan.id]));
@@ -185,6 +191,10 @@ export const BulkSkillUpdateDialog = ({
                 })
               : undefined}
           />
+          <SkillSummaryReview plans={plans} selectedIds={applicablePlans.map((plan) => plan.id)} disabled={started || isBusy} onViewFile={(plan, path, summary) => {
+            setSummaryEvidence(summary.files.map((file) => ({ ...file, path: `${plan.name}/${file.path}`, before: "", after: "", action: "write" })));
+            setSummaryFile(`${plan.name}/${path}`); setDiffWorkspaceOpen(true);
+          }} />
           {copiedInstallCount > 0 && !started ? (
             <div className="skill-update-copy-option">
               <span className="skill-update-copy-option__copy">
@@ -236,6 +246,18 @@ export const BulkSkillUpdateDialog = ({
                 >
                   <summary>
                     <span className="bulk-update-summary-identity">
+                      <ChoiceInput type="checkbox" aria-label={t("Select update {{name}}", { name: plan.name })}
+                        checked={!excludedIds.has(plan.id) && plan.errors.length === 0 && plan.changes.length > 0}
+                        disabled={started || isBusy || plan.errors.length > 0 || !plan.changes.length}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) => {
+                          const checked = event.currentTarget.checked;
+                          setExcludedIds((current) => {
+                            const next = new Set(current);
+                            if (checked) next.delete(plan.id); else next.add(plan.id);
+                            return next;
+                          });
+                        }} />
                       <ChevronDown className="bulk-update-disclosure" size={15} strokeWidth={2.2} />
                       <strong>{plan.name}</strong>
                     </span>
@@ -287,7 +309,9 @@ export const BulkSkillUpdateDialog = ({
                       </Button>
                     </div>
                   ) : null}
-                  {plan.changes.map((change) => <code key={change.path}>{change.path}</code>)}
+                  {plan.changes.map((change) => <Button variant="ghost" size="compact" key={change.path} onClick={() => {
+                    setSummaryFile(`${plan.name}/${change.path}`); setDiffWorkspaceOpen(true);
+                  }}>{change.path}</Button>)}
                 </details>
               );
             })}
@@ -350,20 +374,25 @@ export const BulkSkillUpdateDialog = ({
               disabled={isBusy || updateActivityBusy || applicablePlans.length === 0}
               onClick={() => onUpdate(applicablePlans, syncCopiedInstalls)}
             >
-              {t(
-                applicablePlans.length === 1 ? "Update {{count}} skill" : "Update {{count}} skills",
-                { count: applicablePlans.length }
-              )}
+              {t("Update selected ({{count}})", { count: applicablePlans.length })}
             </Button>
           ) : null}
         </DialogFooter>
       </ModalFrame>
       <DiffWorkspaceDialog
-        changes={workspaceChanges}
+        initialPath={summaryFile}
+        changes={summaryEvidence ?? workspaceChanges}
+        onReadChange={summaryEvidence ? undefined : async (change) => {
+          const plan = plans.find((plan) => plan.changes.some((file) => `${plan.name}/${file.path}` === change.path));
+          const file = plan?.changes.find((file) => `${plan.name}/${file.path}` === change.path);
+          if (!plan?.previewId || !file) throw new Error("Update preview unavailable");
+          const loaded = await window.agentEnv.readLibrarySkillUpdateChange({ previewId: plan.previewId, path: file.path });
+          return { ...loaded, path: change.path };
+        }}
         open={diffWorkspaceOpen}
         returnFocusRef={expandPreviewRef}
         title={t("Update all skills")}
-        onClose={() => setDiffWorkspaceOpen(false)}
+        onClose={() => { setDiffWorkspaceOpen(false); setSummaryEvidence(undefined); setSummaryFile(undefined); }}
       />
     </>
   );

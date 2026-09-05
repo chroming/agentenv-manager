@@ -320,6 +320,12 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
 
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
+    readSkillSummaryConfig: vi.fn().mockResolvedValue({ endpoint: "", model: "", hasKey: false }),
+    prepareSkillSummary: vi.fn().mockResolvedValue({ fileCount: 1, omittedPaths: [] }),
+    saveSkillSummaryConfig: vi.fn().mockResolvedValue(undefined),
+    listSkillSummaries: vi.fn().mockResolvedValue([]),
+    generateSkillSummary: vi.fn(),
+    cancelSkillSummary: vi.fn().mockResolvedValue(undefined),
     runtimeVersion: 8,
     platform: "darwin",
     readStartupStatus: vi.fn().mockResolvedValue({ state: "ready" }),

@@ -83,6 +83,7 @@ import { InfoTip } from "./InfoTip";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
 import { ResourceIconPicker } from "./ResourceIconPicker";
 import { SkillUpdateDialog } from "./SkillUpdateDialog";
+import { SkillSummaryHistoryDialog } from "./SkillSummaryHistoryDialog";
 import { SkillMergeDiffSection } from "./SkillMergeDiffSection";
 import {
   matchesSkillStatusFilter,
@@ -388,6 +389,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     patch: Partial<Omit<SkillLibraryViewState, "scrollTop">>
   ) => onViewStateChange(updateSkillLibraryControls(viewState, patch));
   const [openAction, setOpenAction] = useState<{ id: string; left: number; top: number }>();
+  const [summaryHistoryId, setSummaryHistoryId] = useState<string>();
   const openActionId = openAction?.id;
   const [deleteCandidate, setDeleteCandidate] = useState<SkillLibraryEntry>();
   const [disableCandidate, setDisableCandidate] = useState<SkillLibraryEntry>();
@@ -1730,6 +1732,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   };
   return (
     <section className="skill-library-panel ui-surface-frame" aria-label={t("Skill library")}>
+      {summaryHistoryId ? <SkillSummaryHistoryDialog id={summaryHistoryId} onClose={() => setSummaryHistoryId(undefined)} /> : null}
       <div className="library-control-deck">
         <div className="library-quick-tabs">
           <SegmentedControl
@@ -2187,6 +2190,9 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                           >
                             <Tags size={14} strokeWidth={2.2} />
                             <span>{t("Edit tags")}</span>
+                          </ActionMenuItem>
+                          <ActionMenuItem className="row-action-item" onClick={() => { setOpenAction(undefined); setSummaryHistoryId(skill.id); }}>
+                            <SearchCheck size={14} /><span>{t("Update summaries")}</span>
                           </ActionMenuItem>
                           <button
                             className="row-action-item"

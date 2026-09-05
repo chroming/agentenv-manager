@@ -140,6 +140,7 @@ import { createSkillSourceMergeService } from "./skillSourceMergeService";
 import { githubContentsRevision } from "./skillSources/revisionCompatibility";
 import { scanProjectSkillRoots } from "./projectSkillDiscovery";
 import { createRemovedSourceSkillUpdatePlan } from "./skillUpdatePlans";
+import { readSummarySnapshot } from "./skillSummaries/summaryInput";
 import {
   createGitHubSkillClient,
   encodeGitHubPath,
@@ -2776,6 +2777,8 @@ export const createSkillLibraryStore = (
       return {
         id: skill.id,
         previewId,
+        beforeContentHash: expectedLibraryContentHash,
+        afterContentHash: candidateContentHash,
         name: skill.name,
         sourceType: skill.sourceType,
         source: metadata.source,
@@ -3052,6 +3055,14 @@ export const createSkillLibraryStore = (
     );
   };
 
+  const readSummaryInput = async (previewId: string): Promise<import("../shared/skillSummaries").SkillSummaryInput> => {
+    const pending = pendingUpdates.get(previewId);
+    if (!pending || pendingUpdates.isExpired(pending)) {
+      throw new Error("Skill update preview expired. Reopen the update preview before generating a summary.");
+    }
+    return readSummarySnapshot(pending, join(await libraryDir(), pending.id));
+  };
+
   const updateSkill = async ({
     id,
     previewId,
@@ -3191,6 +3202,7 @@ export const createSkillLibraryStore = (
     previewUpdate,
     previewUpdates,
     readUpdateChange,
+    readSummaryInput,
     updateSkill
   };
 };

@@ -242,6 +242,12 @@ export interface AgentEnvApi {
   setSkillIcon(input: SkillIconInput): Promise<SkillLibraryEntry>;
   setSkillTags(input: SkillTagsInput): Promise<SkillLibraryEntry>;
   previewLibrarySkillUpdate(id: string): Promise<SkillUpdatePlan>;
+  readSkillSummaryConfig(): Promise<import("./skillSummaries").SkillSummaryConfig>;
+  prepareSkillSummary(previewId: string): Promise<{ fileCount: number; omittedPaths: string[] }>;
+  saveSkillSummaryConfig(input: import("./skillSummaries").SkillSummaryConfigInput): Promise<void>;
+  listSkillSummaries(id: string): Promise<import("./skillSummaries").SkillSummary[]>;
+  generateSkillSummary(input: import("./skillSummaries").SkillSummaryGenerateInput): Promise<import("./skillSummaries").SkillSummary>;
+  cancelSkillSummary(requestId: string): Promise<void>;
   previewLibrarySkillUpdates(ids: string[]): Promise<SkillUpdatePreviewBatchResult>;
   readLibrarySkillUpdateChange(input: SkillUpdateChangeReadInput): Promise<PlannedFileChange>;
   updateLibrarySkill(input: SkillUpdateConfirmation): Promise<SkillLibraryEntry>;
@@ -1026,6 +1032,8 @@ export interface ManageTargetSkillInput {
 
 export interface SkillUpdatePlan {
   id: string;
+  beforeContentHash?: string;
+  afterContentHash?: string;
   previewId?: string;
   name: string;
   sourceType: SkillSourceType;

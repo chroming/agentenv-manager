@@ -24,6 +24,15 @@ const plan: SkillUpdatePlan = {
 };
 
 describe("BulkSkillUpdateDialog", () => {
+  it("updates only selected Skills and completes without treating unselected items as unfinished", () => {
+    const onUpdate = vi.fn();
+    render(<BulkSkillUpdateDialog plans={[plan, { ...plan, id: "other", name: "Other" }]}
+      failures={[]} updateRun={{}} isBusy={false} previewingAllUpdates={false} updateActivityBusy={false}
+      stopRequested={false} onClose={vi.fn()} onPreview={vi.fn()} onStop={vi.fn()} onUpdate={onUpdate} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select update Other" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update selected (1)" }));
+    expect(onUpdate).toHaveBeenCalledWith([plan], false);
+  });
   it("applies one explicit Agent-copy choice to the whole update queue", () => {
     const onUpdate = vi.fn();
     const copiedPlan = {
@@ -49,7 +58,7 @@ describe("BulkSkillUpdateDialog", () => {
     expect(screen.getByText("Off: 3 Agent copies will show Apply pending."))
       .toBeInTheDocument();
     fireEvent.click(screen.getByRole("switch", { name: "Also update Agent copies" }));
-    fireEvent.click(screen.getByRole("button", { name: "Update 1 skill" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update selected (1)" }));
 
     expect(onUpdate).toHaveBeenCalledWith([copiedPlan], true);
   });

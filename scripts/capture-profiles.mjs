@@ -1386,7 +1386,7 @@ try {
   const bulkUpdateDialog = page.getByRole("dialog", { name: "Update all skills" });
   await bulkUpdateDialog.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-bulk-update-ready-920x620.png"));
-  await bulkUpdateDialog.getByRole("button", { name: /Update \d+ skills?/ }).click();
+  await bulkUpdateDialog.getByRole("button", { name: /Update selected \(\d+\)/ }).click();
   await bulkUpdateDialog.getByRole("status", { name: /All \d+ Skills updated/ }).waitFor({
     state: "visible",
     timeout: 15_000

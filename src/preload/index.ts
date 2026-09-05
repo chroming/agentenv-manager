@@ -5,6 +5,12 @@ import { AGENTENV_RUNTIME_VERSION } from "../shared/runtimeVersion";
 const api: AgentEnvApi = {
   runtimeVersion: AGENTENV_RUNTIME_VERSION,
   platform: process.platform,
+  readSkillSummaryConfig: () => ipcRenderer.invoke("skill-summaries:config"),
+  prepareSkillSummary: (id) => ipcRenderer.invoke("skill-summaries:prepare", id),
+  saveSkillSummaryConfig: (input) => ipcRenderer.invoke("skill-summaries:configure", input),
+  listSkillSummaries: (id) => ipcRenderer.invoke("skill-summaries:history", id),
+  generateSkillSummary: (input) => ipcRenderer.invoke("skill-summaries:generate", input),
+  cancelSkillSummary: (requestId) => ipcRenderer.invoke("skill-summaries:cancel", requestId),
   readStartupStatus: () => ipcRenderer.invoke("startup:status"),
   onStartupStatusChanged: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, status: Parameters<typeof callback>[0]) => callback(status);

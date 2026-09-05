@@ -13,6 +13,8 @@ export type ResolvedAppLocale = Exclude<AppLocale, "system">;
 export type TranslationValues = Record<string, string | number>;
 
 const zhCN: Record<string, string> = {
+  "No readable text changes. Review the original files instead.": "没有可分析的文本变更，请查看原始文件。",
+  "{{count}} text files will be analyzed": "将分析 {{count}} 个文本文件",
   ...generatedZhCN,
   "Set up {{name}}": "配置 {{name}}",
   "Choose a Profile to edit and preview. Nothing is applied by this step.": "选择要编辑和预览的 Profile，此步骤不会应用任何更改。",
@@ -2547,6 +2549,8 @@ Object.assign(zhCN, {
 });
 
 const zhTW: Record<string, string> = {
+  "No readable text changes. Review the original files instead.": "沒有可分析的文字變更，請查看原始檔案。",
+  "{{count}} text files will be analyzed": "將分析 {{count}} 個文字檔案",
   "Set up {{name}}": "設定 {{name}}",
   "Choose a Profile to edit and preview. Nothing is applied by this step.": "選擇要編輯和預覽的 Profile，此步驟不會套用任何變更。",
   "Remote capture is not supported. Use a saved Profile or create an empty one.": "暫不支援從遠端環境建立 Profile，請選擇現有 Profile 或建立空白 Profile。",
@@ -5005,6 +5009,70 @@ Object.assign(zhTW, {
   "Add Skills to {{name}}": "向 {{name}} 加入 Skill",
   "Sync group members": "同步分組成員",
   "Remove group from Profile": "從 Profile 移除分組"
+});
+
+Object.assign(zhCN, {
+  "Update summaries": "更新摘要",
+  "Select update {{name}}": "选择更新 {{name}}",
+  "Update selected ({{count}})": "更新所选（{{count}}）",
+  "AI-generated": "AI 生成",
+  "Important changes": "重要变更",
+  "Usage impact": "使用影响",
+  "Security concerns": "安全关注",
+  "Other changes": "其他变更",
+  "AI review is not a safety guarantee. Check the original diff when in doubt.": "AI 分析不代表安全保证，有疑问时请查看原始差异。",
+  "Partial analysis": "分析不完整",
+  "Files not analyzed": "未分析的文件",
+  "Possible credentials were redacted before analysis.": "疑似凭据已在分析前脱敏。",
+  "No saved summaries. Generate one from an update preview.": "暂无已保存的摘要，可以在更新预览中手动生成。",
+  "Saved summaries could not be loaded. Updates are still available.": "无法读取已保存的摘要，不影响更新功能。",
+  "Configure Update summaries in Settings first.": "请先在设置中配置更新摘要服务。",
+  "Generate summary": "生成摘要",
+  "Summarize selected ({{count}})": "生成所选摘要（{{count}}）",
+  "Generate summaries?": "生成摘要？",
+  "Generate {{count}}": "生成 {{count}} 项",
+  "Selected Skill diffs are sent to this service and may contain private content. Model usage is charged by your provider.": "所选 Skill 的变更内容将发送到此服务，可能包含私有内容，并消耗模型服务额度。",
+  "One request per Skill. Large or binary files may be excluded and will be listed. Nothing is generated automatically.": "每个 Skill 最多发送一次请求。大文件和二进制文件可能不参与分析，会明确列出。摘要不会自动生成。",
+  "Generating summary": "正在生成摘要",
+  "Regenerate summary": "重新生成摘要",
+  "Manual only. OpenAI-compatible Chat Completions API with JSON output. Credentials stay on this device.": "仅手动调用。使用支持 JSON 输出的 OpenAI 兼容 Chat Completions API，凭据仅保存在本机。",
+  "API endpoint": "API 地址",
+  "API Key": "API 密钥",
+  "Saved securely; leave blank to keep": "已安全保存，留空保留",
+  "Saved": "已保存",
+  "Remove API Key": "移除 API 密钥"
+});
+
+Object.assign(zhTW, {
+  "Update summaries": "更新摘要",
+  "Select update {{name}}": "選擇更新 {{name}}",
+  "Update selected ({{count}})": "更新所選（{{count}}）",
+  "AI-generated": "AI 產生",
+  "Important changes": "重要變更",
+  "Usage impact": "使用影響",
+  "Security concerns": "安全注意事項",
+  "Other changes": "其他變更",
+  "AI review is not a safety guarantee. Check the original diff when in doubt.": "AI 分析不代表安全保證，有疑問時請查看原始差異。",
+  "Partial analysis": "分析不完整",
+  "Files not analyzed": "未分析的檔案",
+  "Possible credentials were redacted before analysis.": "疑似憑證已在分析前遮蔽。",
+  "No saved summaries. Generate one from an update preview.": "尚無已儲存的摘要，可以在更新預覽中手動產生。",
+  "Saved summaries could not be loaded. Updates are still available.": "無法讀取已儲存的摘要，不影響更新功能。",
+  "Configure Update summaries in Settings first.": "請先在設定中配置更新摘要服務。",
+  "Generate summary": "產生摘要",
+  "Summarize selected ({{count}})": "產生所選摘要（{{count}}）",
+  "Generate summaries?": "產生摘要？",
+  "Generate {{count}}": "產生 {{count}} 項",
+  "Selected Skill diffs are sent to this service and may contain private content. Model usage is charged by your provider.": "所選 Skill 的變更內容將傳送到此服務，可能包含私人內容，並消耗模型服務額度。",
+  "One request per Skill. Large or binary files may be excluded and will be listed. Nothing is generated automatically.": "每個 Skill 最多傳送一次請求。大檔案和二進位檔案可能不參與分析，會明確列出。摘要不會自動產生。",
+  "Generating summary": "正在產生摘要",
+  "Regenerate summary": "重新產生摘要",
+  "Manual only. OpenAI-compatible Chat Completions API with JSON output. Credentials stay on this device.": "僅手動呼叫。使用支援 JSON 輸出的 OpenAI 相容 Chat Completions API，憑證僅儲存在本機。",
+  "API endpoint": "API 位址",
+  "API Key": "API 金鑰",
+  "Saved securely; leave blank to keep": "已安全儲存，留空保留",
+  "Saved": "已儲存",
+  "Remove API Key": "移除 API 金鑰"
 });
 
 export const localeTag = (locale: ResolvedAppLocale) =>
