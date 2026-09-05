@@ -12,6 +12,7 @@ const ReceiptSchema = z.object({
   formatVersion: z.literal(1),
   id: z.string().min(1),
   projectId: z.string().min(1),
+  remoteIdentity: z.string().optional(),
   resourceId: z.string().min(1),
   agentId: z.string().min(1).optional(),
   path: z.string().min(1),
@@ -30,6 +31,7 @@ export interface ProjectRecoveryStore {
   prepare(input: Omit<ProjectRecoveryReceipt, "formatVersion" | "id" | "createdAt" | "status">): Promise<ProjectRecoveryReceipt>;
   prepareDirectory(input: {
     projectId: string;
+    remoteIdentity?: string;
     resourceId: string;
     path: string;
     originalHash: string;
@@ -38,7 +40,7 @@ export interface ProjectRecoveryStore {
     sourcePath?: string;
   }): Promise<ProjectRecoveryReceipt>;
   directoryBackupPath(id: string): string;
-  assertWritablePath(path: string): Promise<void>;
+  assertWritablePath(path: string, projectId?: string): Promise<void>;
   update(id: string, status: ProjectRecoveryReceipt["status"]): Promise<ProjectRecoveryReceipt>;
   get(id: string): Promise<ProjectRecoveryReceipt>;
   list(projectId?: string): Promise<ProjectRecoverySummary[]>;
@@ -73,6 +75,7 @@ export const createProjectRecoveryStore = (appDataRoot: string): ProjectRecovery
         formatVersion: 1,
         id,
         projectId: input.projectId,
+        remoteIdentity: input.remoteIdentity,
         resourceId: input.resourceId,
         path: input.path,
         createdAt: new Date().toISOString(),
@@ -94,7 +97,7 @@ export const createProjectRecoveryStore = (appDataRoot: string): ProjectRecovery
       return receipt;
     },
     directoryBackupPath,
-    assertWritablePath: async (path) => {
+    assertWritablePath: async (path, projectId) => {
       let entries: string[];
       try {
         entries = await readdir(recoveryDir);
@@ -106,6 +109,7 @@ export const createProjectRecoveryStore = (appDataRoot: string): ProjectRecovery
         const receipt = ReceiptSchema.parse(JSON.parse(await readFile(join(recoveryDir, name), "utf8")));
         if (
           (receipt.status === "prepared" || receipt.status === "recovery-required") &&
+          (projectId === undefined || receipt.projectId === projectId) &&
           pathsEqual(receipt.path, path)
         ) {
           throw new Error(`Project path requires recovery before another change: ${path}`);

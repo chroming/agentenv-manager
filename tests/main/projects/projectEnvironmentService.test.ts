@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -182,12 +182,14 @@ describe("project environment service", () => {
     const { createTarArchiveFromDirectory } = await import("../../../src/main/projects/remoteProjectTransport");
     const tarBuffer = await createTarArchiveFromDirectory(remoteSource);
 
+    let readFailed = false;
     const mockTransport = {
       execute: async (_dev: unknown, cmd: string) => {
         if (cmd.includes("DIR")) {
           return { stdout: Buffer.from("DIR\t/var/workspace/app\n"), stderr: "", exitCode: 0 };
         }
         if (cmd.includes("tar -chf -") || cmd.includes("tar -cf -")) {
+          if (readFailed) throw new Error("SSH disconnected");
           return { stdout: tarBuffer, stderr: "", exitCode: 0 };
         }
         if (cmd.includes("git rev-parse")) {
@@ -234,5 +236,25 @@ describe("project environment service", () => {
         absolutePath: "/var/workspace/app/.agents/skills/deployer"
       })
     ]));
+    const concurrent = await Promise.all([
+      service.inspectProject(project.id, ["codex"]),
+      service.inspectProject(project.id, ["opencode"])
+    ]);
+    expect(concurrent.every((item) => item.resources.length === 2)).toBe(true);
+    expect(await readdir(join(appDataRoot, "agentenv-remote-workspaces"))).toEqual([]);
+
+    const adapter = createTargetRegistry().get("codex");
+    const paths = adapter.createTargetPaths({ homeDir: join(root, "local-home") });
+    await mkdir(paths.configDir, { recursive: true });
+    await writeFile(paths.instructionsPath, "private local instructions");
+    const preview = await service.previewProject(project.id, { ...adapter.descriptor, paths } as never);
+    expect(preview.globalResources).toEqual([]);
+    expect(preview.fidelity).toBe("partial");
+    expect(JSON.stringify(preview)).not.toContain("local-home");
+
+    readFailed = true;
+    await expect(service.inspectProject(project.id, ["codex"]))
+      .rejects.toThrow("Could not read remote Workspace resources: SSH disconnected");
+    expect(await readdir(join(appDataRoot, "agentenv-remote-workspaces"))).toEqual([]);
   });
 });

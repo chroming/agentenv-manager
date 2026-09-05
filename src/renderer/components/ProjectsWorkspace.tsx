@@ -1,3 +1,4 @@
+import { workspaceSshCommand } from "../../shared/workspaceSshCommand";
 import {
   AlertTriangle,
   ArrowUp,
@@ -165,7 +166,8 @@ export const ProjectsWorkspace = ({
   const initialSnapshot = uiState.selectedWorkspaceId
     ? projectSnapshotCache.get(uiState.selectedWorkspaceId)
     : undefined;
-  const [snapshot, setSnapshot] = useState<ProjectEnvironmentSnapshot | undefined>(initialSnapshot);
+  const [loadedSnapshot, setSnapshot] = useState<ProjectEnvironmentSnapshot | undefined>(initialSnapshot);
+  const snapshot = loadedSnapshot?.projectId === selectedId ? loadedSnapshot : undefined;
   const [selectedAgentId, setSelectedAgentId] = useState<string>();
   const [previewOpen, setPreviewOpen] = useState(false);
   const [preview, setPreview] = useState<ProjectEnvironmentPreview>();
@@ -380,9 +382,7 @@ export const ProjectsWorkspace = ({
       return;
     }
     const cached = projectSnapshotCache.get(selected.id);
-    if (cached) {
-      setSnapshot(cached);
-    }
+    setSnapshot(cached);
     let current = true;
     setOperation("inspect");
     setError("");
@@ -841,9 +841,7 @@ export const ProjectsWorkspace = ({
     setProjectMenu(undefined);
     const device = remoteDevices.find((d) => d.id === project.deviceId);
     const host = device?.host || project.deviceHost || "host";
-    const port = device?.port && device.port !== 22 ? ` -p ${device.port}` : "";
-    const userPrefix = device?.user ? `${device.user}@` : "";
-    const cmd = `ssh${port} -t ${userPrefix}${host} "cd '${project.rootPath}' && exec \\$SHELL -l"`;
+    const cmd = workspaceSshCommand({ host, port: device?.port, user: device?.user }, project.rootPath);
     try {
       await navigator.clipboard.writeText(cmd);
       setNotice(t("SSH command copied to clipboard"));

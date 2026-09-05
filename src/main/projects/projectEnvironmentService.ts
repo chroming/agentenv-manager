@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { lstat, readdir, readFile, rm, stat } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 import * as TOML from "@iarna/toml";
@@ -220,223 +220,230 @@ export const createProjectEnvironmentService = (
 
     let basePath = project.rootPath;
     let gitObservation: ProjectGitObservation | undefined;
+    let temporaryRoot: string | undefined;
 
-    if (project.deviceId) {
-      if (!deviceStore) throw new Error("SSH device store is not available");
-      const device = await deviceStore.get(project.deviceId).catch(() => undefined);
-      if (!device) throw new Error(`SSH device not found: ${project.deviceId}`);
-      if (!sshTransport) throw new Error("SSH transport is not available");
+    try {
+      if (project.deviceId) {
+        if (!deviceStore) throw new Error("SSH device store is not available");
+        const device = await deviceStore.get(project.deviceId).catch(() => undefined);
+        if (!device) throw new Error(`SSH device not found: ${project.deviceId}`);
+        if (!sshTransport) throw new Error("SSH transport is not available");
 
-      const candidates = new Set<string>();
-      for (const adapter of adapters) {
-        const capability = adapter.projects!;
-        for (const declaration of capability.instructionFiles) {
-          candidates.add(normalizeRelativeDeclaration(declaration).split(sep).join("/"));
+        const candidates = new Set<string>();
+        for (const adapter of adapters) {
+          const capability = adapter.projects!;
+          for (const declaration of capability.instructionFiles) {
+            candidates.add(normalizeRelativeDeclaration(declaration).split(sep).join("/"));
+          }
+          for (const declaration of capability.skillLocations) {
+            candidates.add(normalizeRelativeDeclaration(declaration.relativePath).split(sep).join("/"));
+          }
+          for (const declaration of capability.mcpFiles) {
+            candidates.add(normalizeRelativeDeclaration(declaration).split(sep).join("/"));
+          }
         }
-        for (const declaration of capability.skillLocations) {
-          candidates.add(normalizeRelativeDeclaration(declaration.relativePath).split(sep).join("/"));
-        }
-        for (const declaration of capability.mcpFiles) {
-          candidates.add(normalizeRelativeDeclaration(declaration).split(sep).join("/"));
-        }
-      }
 
-      const candidateList = [...candidates];
-      const localInspectRoot = join(cacheDir ?? tmpdir(), "agentenv-remote-workspaces", project.id);
-      await rm(localInspectRoot, { recursive: true, force: true }).catch(() => undefined);
+        const candidateList = [...candidates];
+        const cacheRoot = join(cacheDir ?? tmpdir(), "agentenv-remote-workspaces");
+        await mkdir(cacheRoot, { recursive: true, mode: 0o700 });
+        const localInspectRoot = await mkdtemp(join(cacheRoot, `${project.id}-`));
+        temporaryRoot = localInspectRoot;
 
-      try {
-        const tarBuffer = await fetchRemoteWorkspaceResourcesTar(
+        try {
+          const tarBuffer = await fetchRemoteWorkspaceResourcesTar(
+            device,
+            sshTransport,
+            project.rootPath,
+            candidateList
+          );
+          await extractTarArchiveSafely(tarBuffer, localInspectRoot);
+        } catch (error) {
+          throw new Error(`Could not read remote Workspace resources: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        gitObservation = await inspectRemoteGit(
           device,
           sshTransport,
           project.rootPath,
           candidateList
-        );
-        await extractTarArchiveSafely(tarBuffer, localInspectRoot);
-      } catch (error) {
-        issues.push(`Remote resource inspection issue: ${error instanceof Error ? error.message : String(error)}`);
+        ).catch((error) => ({
+          repository: "unavailable" as const,
+          pathStates: {},
+          issue: error instanceof Error ? error.message : String(error)
+        }));
+
+        basePath = localInspectRoot;
       }
 
-      gitObservation = await inspectRemoteGit(
-        device,
-        sshTransport,
-        project.rootPath,
-        candidateList
-      ).catch((error) => ({
-        repository: "unavailable" as const,
-        pathStates: {},
-        issue: error instanceof Error ? error.message : String(error)
-      }));
+      for (const adapter of adapters) {
+        const capability = adapter.projects!;
+        const agentId = adapter.descriptor.id;
 
-      basePath = localInspectRoot;
-    }
-
-    for (const adapter of adapters) {
-      const capability = adapter.projects!;
-      const agentId = adapter.descriptor.id;
-
-      for (const declaration of capability.instructionFiles) {
-        try {
-          const relativeDeclaration = normalizeRelativeDeclaration(declaration);
-          const candidate = resolve(basePath, relativeDeclaration);
-          if (!project.deviceId) await assertBoundedParents(basePath, candidate);
-          let entry;
+        for (const declaration of capability.instructionFiles) {
           try {
-            entry = await lstat(candidate);
-          } catch (error) {
-            if (isMissingFileError(error)) continue;
-            throw error;
-          }
-          const paths = entry.isDirectory()
-            ? (await readdir(candidate, { withFileTypes: true }))
-                .filter((child) => child.isFile() && /\.md$/i.test(child.name))
-                .map((child) => join(candidate, child.name))
-            : entry.isFile()
-              ? [candidate]
-              : [];
-          for (const path of paths) {
-            if (!project.deviceId) await assertBoundedParents(basePath, path);
-            const content = await readFile(path);
-            const info = await stat(path);
-            const relativePath = relative(basePath, path).split(sep).join("/");
-            const absolutePath = project.deviceId ? posix.join(project.rootPath, relativePath) : path;
-            addResource({
-              id: resourceId("instructions", relativePath),
-              kind: "instructions",
-              name: basename(path),
-              relativePath,
-              absolutePath,
-              consumerAgentIds: [agentId],
-              state: "ready",
-              editable: capability.support.instructions.mutate === "supported",
-              contentHash: hashFileContent(content),
-              modifiedAt: info.mtime.toISOString()
-            });
-          }
-        } catch (error) {
-          issues.push(`${adapter.descriptor.name}: ${error instanceof Error ? error.message : String(error)}`);
-        }
-      }
-
-      for (const declaration of capability.skillLocations) {
-        try {
-          const relativeDeclaration = normalizeRelativeDeclaration(declaration.relativePath);
-          const skillRoot = resolve(basePath, relativeDeclaration);
-          if (!project.deviceId) await assertBoundedParents(basePath, skillRoot);
-          let rootEntry;
-          try {
-            rootEntry = await lstat(skillRoot);
-          } catch (error) {
-            if (isMissingFileError(error)) continue;
-            throw error;
-          }
-          if (!rootEntry.isDirectory()) throw new Error(`Project Skill root is not a directory: ${skillRoot}`);
-          for (const child of await readdir(skillRoot, { withFileTypes: true })) {
-            if (!child.isDirectory() || child.isSymbolicLink()) {
-              if (child.isSymbolicLink()) issues.push(`${adapter.descriptor.name}: Project Skill uses an unsafe symbolic link: ${join(skillRoot, child.name)}`);
-              continue;
-            }
-            const skillPath = join(skillRoot, child.name);
-            const skillFile = join(skillPath, "SKILL.md");
+            const relativeDeclaration = normalizeRelativeDeclaration(declaration);
+            const candidate = resolve(basePath, relativeDeclaration);
+            if (!project.deviceId) await assertBoundedParents(basePath, candidate);
+            let entry;
             try {
-              const markdown = await readFile(skillFile, "utf8");
-              await assertPortableTree(skillPath);
-              const frontmatter = parseSkillFrontmatter(markdown);
-              const info = await stat(skillFile);
-              const relativePath = relative(basePath, skillPath).split(sep).join("/");
-              const absolutePath = project.deviceId ? posix.join(project.rootPath, relativePath) : skillPath;
+              entry = await lstat(candidate);
+            } catch (error) {
+              if (isMissingFileError(error)) continue;
+              throw error;
+            }
+            const paths = entry.isDirectory()
+              ? (await readdir(candidate, { withFileTypes: true }))
+                  .filter((child) => child.isFile() && /\.md$/i.test(child.name))
+                  .map((child) => join(candidate, child.name))
+              : entry.isFile()
+                ? [candidate]
+                : [];
+            for (const path of paths) {
+              if (!project.deviceId) await assertBoundedParents(basePath, path);
+              const content = await readFile(path);
+              const info = await stat(path);
+              const relativePath = relative(basePath, path).split(sep).join("/");
+              const absolutePath = project.deviceId ? posix.join(project.rootPath, relativePath) : path;
               addResource({
-                id: resourceId("skill", relativePath),
-                kind: "skill",
-                name: frontmatter.name || child.name,
+                id: resourceId("instructions", relativePath),
+                kind: "instructions",
+                name: basename(path),
                 relativePath,
                 absolutePath,
                 consumerAgentIds: [agentId],
-                state: frontmatter.errors.length > 0 ? "partial" : "ready",
-                editable: capability.support.skills.mutate === "supported" && declaration.writable,
-                description: frontmatter.description,
-                version: frontmatter.version,
-                contentHash: await hashSkillContent(skillPath),
-                modifiedAt: info.mtime.toISOString(),
-                issue: frontmatter.errors.join("; ") || undefined
+                state: "ready",
+                editable: capability.support.instructions.mutate === "supported",
+                contentHash: hashFileContent(content),
+                modifiedAt: info.mtime.toISOString()
               });
+            }
+          } catch (error) {
+            issues.push(`${adapter.descriptor.name}: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        }
+
+        for (const declaration of capability.skillLocations) {
+          try {
+            const relativeDeclaration = normalizeRelativeDeclaration(declaration.relativePath);
+            const skillRoot = resolve(basePath, relativeDeclaration);
+            if (!project.deviceId) await assertBoundedParents(basePath, skillRoot);
+            let rootEntry;
+            try {
+              rootEntry = await lstat(skillRoot);
             } catch (error) {
-              if (!isMissingFileError(error)) {
-                issues.push(`${adapter.descriptor.name}: ${error instanceof Error ? error.message : String(error)}`);
+              if (isMissingFileError(error)) continue;
+              throw error;
+            }
+            if (!rootEntry.isDirectory()) throw new Error(`Project Skill root is not a directory: ${skillRoot}`);
+            for (const child of await readdir(skillRoot, { withFileTypes: true })) {
+              if (!child.isDirectory() || child.isSymbolicLink()) {
+                if (child.isSymbolicLink()) issues.push(`${adapter.descriptor.name}: Project Skill uses an unsafe symbolic link: ${join(skillRoot, child.name)}`);
+                continue;
+              }
+              const skillPath = join(skillRoot, child.name);
+              const skillFile = join(skillPath, "SKILL.md");
+              try {
+                const markdown = await readFile(skillFile, "utf8");
+                await assertPortableTree(skillPath);
+                const frontmatter = parseSkillFrontmatter(markdown);
+                const info = await stat(skillFile);
+                const relativePath = relative(basePath, skillPath).split(sep).join("/");
+                const absolutePath = project.deviceId ? posix.join(project.rootPath, relativePath) : skillPath;
+                addResource({
+                  id: resourceId("skill", relativePath),
+                  kind: "skill",
+                  name: frontmatter.name || child.name,
+                  relativePath,
+                  absolutePath,
+                  consumerAgentIds: [agentId],
+                  state: frontmatter.errors.length > 0 ? "partial" : "ready",
+                  editable: capability.support.skills.mutate === "supported" && declaration.writable,
+                  description: frontmatter.description,
+                  version: frontmatter.version,
+                  contentHash: await hashSkillContent(skillPath),
+                  modifiedAt: info.mtime.toISOString(),
+                  issue: frontmatter.errors.join("; ") || undefined
+                });
+              } catch (error) {
+                if (!isMissingFileError(error)) {
+                  issues.push(`${adapter.descriptor.name}: ${error instanceof Error ? error.message : String(error)}`);
+                }
               }
             }
-          }
-        } catch (error) {
-          issues.push(`${adapter.descriptor.name}: ${error instanceof Error ? error.message : String(error)}`);
-        }
-      }
-
-      for (const declaration of capability.mcpFiles) {
-        try {
-          const relativeDeclaration = normalizeRelativeDeclaration(declaration);
-          const path = resolve(basePath, relativeDeclaration);
-          if (!project.deviceId) await assertBoundedParents(basePath, path);
-          let entry;
-          try {
-            entry = await lstat(path);
           } catch (error) {
-            if (isMissingFileError(error)) continue;
-            throw error;
+            issues.push(`${adapter.descriptor.name}: ${error instanceof Error ? error.message : String(error)}`);
           }
-          if (!entry.isFile()) throw new Error(`Project MCP resource is not a regular file: ${path}`);
-          const names = parseMcpNames(path, await readFile(path, "utf8"));
-          const info = await stat(path);
-          for (const name of names) {
-            const relativePath = relative(basePath, path).split(sep).join("/");
-            const absolutePath = project.deviceId ? posix.join(project.rootPath, relativePath) : path;
-            addResource({
-              id: resourceId("mcp", `${relativePath}:${name}`),
-              kind: "mcp",
-              name,
-              relativePath,
-              absolutePath,
-              consumerAgentIds: [agentId],
-              state: "partial",
-              editable: false,
-              modifiedAt: info.mtime.toISOString(),
-              issue: "Only non-secret MCP names are available"
-            });
+        }
+
+        for (const declaration of capability.mcpFiles) {
+          try {
+            const relativeDeclaration = normalizeRelativeDeclaration(declaration);
+            const path = resolve(basePath, relativeDeclaration);
+            if (!project.deviceId) await assertBoundedParents(basePath, path);
+            let entry;
+            try {
+              entry = await lstat(path);
+            } catch (error) {
+              if (isMissingFileError(error)) continue;
+              throw error;
+            }
+            if (!entry.isFile()) throw new Error(`Project MCP resource is not a regular file: ${path}`);
+            const names = parseMcpNames(path, await readFile(path, "utf8"));
+            const info = await stat(path);
+            for (const name of names) {
+              const relativePath = relative(basePath, path).split(sep).join("/");
+              const absolutePath = project.deviceId ? posix.join(project.rootPath, relativePath) : path;
+              addResource({
+                id: resourceId("mcp", `${relativePath}:${name}`),
+                kind: "mcp",
+                name,
+                relativePath,
+                absolutePath,
+                consumerAgentIds: [agentId],
+                state: "partial",
+                editable: false,
+                modifiedAt: info.mtime.toISOString(),
+                issue: "Only non-secret MCP names are available"
+              });
+            }
+          } catch (error) {
+            issues.push(`${adapter.descriptor.name}: ${error instanceof Error ? error.message : String(error)}`);
           }
-        } catch (error) {
-          issues.push(`${adapter.descriptor.name}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
-    }
 
-    const sortedResources = [...resources.values()].sort((left, right) =>
-      left.kind.localeCompare(right.kind) || left.relativePath.localeCompare(right.relativePath)
-    );
-    const git = gitObservation ?? (gitService
-      ? await gitService.inspect(project.rootPath, sortedResources.map((resource) => resource.relativePath))
-      : { repository: "not-git" as const, pathStates: {} });
-    for (const resource of sortedResources) {
-      resource.gitState = git.pathStates[resource.relativePath];
-    }
+      const sortedResources = [...resources.values()].sort((left, right) =>
+        left.kind.localeCompare(right.kind) || left.relativePath.localeCompare(right.relativePath)
+      );
+      const git = gitObservation ?? (gitService
+        ? await gitService.inspect(project.rootPath, sortedResources.map((resource) => resource.relativePath))
+        : { repository: "not-git" as const, pathStates: {} });
+      for (const resource of sortedResources) {
+        resource.gitState = git.pathStates[resource.relativePath];
+      }
 
-    return {
-      projectId: project.id,
-      projectRoot: project.rootPath,
-      resources: sortedResources,
-      skillLocations,
-      agentSupport: adapters.map((adapter) => ({
-        agentId: adapter.descriptor.id,
-        agentName: adapter.descriptor.name,
-        instructions: { ...adapter.projects!.support.instructions },
-        instructionCreateFile: adapter.projects!.instructionCreateFile,
-        skills: { ...adapter.projects!.support.skills },
-        mcp: { ...adapter.projects!.support.mcp },
-        effectivePreview: adapter.projects!.support.effectivePreview,
-        cliLaunch: adapter.projects!.support.cliLaunch
-      })),
-      issues,
-      partial: issues.length > 0,
-      git
-    };
+      return {
+        projectId: project.id,
+        projectRoot: project.rootPath,
+        resources: sortedResources,
+        skillLocations,
+        agentSupport: adapters.map((adapter) => ({
+          agentId: adapter.descriptor.id,
+          agentName: adapter.descriptor.name,
+          instructions: { ...adapter.projects!.support.instructions },
+          instructionCreateFile: adapter.projects!.instructionCreateFile,
+          skills: { ...adapter.projects!.support.skills },
+          mcp: { ...adapter.projects!.support.mcp },
+          effectivePreview: adapter.projects!.support.effectivePreview,
+          cliLaunch: adapter.projects!.support.cliLaunch
+        })),
+        issues,
+        partial: issues.length > 0,
+        git
+      };
+    } finally {
+      if (temporaryRoot) await rm(temporaryRoot, { recursive: true, force: true });
+    }
   };
 
   return {
@@ -508,7 +515,7 @@ export const createProjectEnvironmentService = (
       const project = await requireProject(projectId);
       if (project.deviceId) {
         const rel = posix.relative(project.rootPath, path);
-        if (!rel || rel.startsWith("../") || posix.isAbsolute(rel)) {
+        if (!rel || rel === ".." || rel.startsWith("../") || posix.isAbsolute(rel)) {
           throw new Error("Project Skill path escapes workspace root");
         }
         const candidates = targetRegistry.listAdapters().flatMap((adapter) =>
@@ -521,7 +528,7 @@ export const createProjectEnvironmentService = (
         );
         const insideDeclaredRoot = candidates.some((root) => {
           const relFromRoot = posix.relative(root, path);
-          return relFromRoot && !relFromRoot.startsWith("../") && !posix.isAbsolute(relFromRoot);
+          return relFromRoot && relFromRoot !== ".." && !relFromRoot.startsWith("../") && !posix.isAbsolute(relFromRoot);
         });
         if (!insideDeclaredRoot) throw new Error("Project Skill path is no longer declared by a supported Agent");
         return;
@@ -554,6 +561,15 @@ export const createProjectEnvironmentService = (
       const snapshot = await inspectProject(projectId, [target.id]);
       const globalResources: ProjectEnvironmentPreview["globalResources"] = [];
       const issues = [...snapshot.issues];
+      const project = await requireProject(projectId);
+      if (project.deviceId) {
+        return {
+          projectId, agentId: target.id, agentName: target.name,
+          fidelity: "partial", loadOrder: "unknown",
+          projectResources: snapshot.resources, globalResources,
+          issues: [...issues, "Remote Agent global resources are not included in this Workspace preview."]
+        };
+      }
 
       if (await pathExists(target.paths.instructionsPath)) {
         globalResources.push({

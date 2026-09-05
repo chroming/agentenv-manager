@@ -709,7 +709,7 @@ describe("ProjectsWorkspace", () => {
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(
-        expect.stringContaining("ssh -t 192.168.1.50 \"cd '/var/www/app' && exec \\$SHELL -l\"")
+        expect.stringContaining("ssh -t -- '192.168.1.50'")
       );
     });
     expect(await screen.findByText("SSH command copied to clipboard")).toBeInTheDocument();
@@ -720,6 +720,20 @@ describe("ProjectsWorkspace", () => {
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it("does not display another Workspace's resources while reading an uncached selection", async () => {
+    const api = installApi();
+    const second = { ...project, id: "second", name: "Second", rootPath: "/work/second" };
+    api.listProjects.mockResolvedValue([project, second]);
+    const view = render(<ProjectsWorkspace targets={[target]} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Expand Skills" }));
+    expect(await screen.findByText("review")).toBeInTheDocument();
+    api.inspectProject.mockReturnValue(new Promise(() => {}));
+    view.rerender(<ProjectsWorkspace targets={[target]} openRequest={{ requestId: 1, projectId: second.id }} />);
+    await waitFor(() => expect(api.inspectProject).toHaveBeenCalledWith(second.id));
+    expect(screen.queryByText("review")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Collapse Skills/ })).toBeInTheDocument();
   });
 
   it("renders workspace and resource structure immediately with initialProjects without empty state flash", async () => {
@@ -762,4 +776,3 @@ describe("ProjectsWorkspace", () => {
     });
   });
 });
-

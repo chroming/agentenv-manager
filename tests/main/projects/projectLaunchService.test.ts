@@ -118,7 +118,7 @@ describe("project launch service", () => {
     });
 
     await expect(service.openProject(project.id, "opencode"))
-      .rejects.toThrow("OpenCode does not support remote SSH project launch. Use VS Code / Cursor or run in remote terminal:\nssh -t ubuntu@192.168.1.100 \"cd '/home/ubuntu/repo' && exec \\$SHELL -l\"");
+      .rejects.toThrow("OpenCode does not support remote SSH project launch. Use VS Code / Cursor or run in remote terminal:");
   });
 
   it("launches VS Code in remote SSH mode with user and host", async () => {

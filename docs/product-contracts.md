@@ -2262,6 +2262,40 @@ Preview/Apply/stale/rollback/reconciliation tests, Docker OpenSSH integration on
 Electron coverage for add, visible connection failure, per-device refresh, local/remote
 Agent grouping, endpoint selection, Preview, Apply, and unsupported capability states.
 
+### SSH Workspace Resource Operations
+
+- A saved SSH Workspace is a directory reference on a saved device. Its inspection,
+  mutation, and recovery scope is independent from global Profile Apply. A remote
+  Workspace preview MUST NOT include this computer's Agent-global resources.
+- Every inspection uses a private, request-local snapshot directory and removes it
+  after parsing. A failed remote read MUST NOT replace a trusted snapshot with an
+  apparently empty environment. Renderer caches are session-local and keyed by
+  Workspace identity; a different selected Workspace never displays the old resources.
+- Remote archives are validated for bounded paths and filesystem entry types before
+  extraction. Symbolic links, hard links, and special entries are rejected rather than
+  silently dereferenced. System tar work has bounded output and a timeout.
+- Instruction creation treats only confirmed absence as an empty destination. Connection,
+  permission, and type errors do not authorize creation. Instruction saves recheck the
+  reviewed hash in the remote write command before replacing the file.
+- Skill copies use an immutable, verified payload without Library metadata. Replacement
+  stages a complete directory and checks the reviewed remote tree before switching it;
+  it MUST NOT overlay an archive on the old directory and retain obsolete files.
+- Every remote resource mutation verifies its result. Recovery verifies the backup and
+  current remote content before writing, preserves later external edits, and verifies
+  the restored result. A connection loss or unverified rollback stays Recovery required;
+  a confirmed precondition rejection creates no additional recovery obligation.
+- New remote recovery receipts bind the device ID, connection fields, and Workspace root.
+  Receipts without that binding cannot authorize remote restoration. A pending receipt
+  on another remote Workspace does not block an unrelated same-spelled path.
+- Copy SSH uses one shared shell-quoting implementation for the local and remote shell
+  layers. It opens the saved directory in a login shell; it does not claim to launch or
+  resume a particular Agent.
+
+Evidence: `remoteProjectSafety.test.ts` executes actual shell and tar operations against
+disposable local directories, including replacement, stale writes, external edits,
+interrupted connections, exact restoration, and unsafe archives. This evidence does not
+replace a real OpenSSH/Linux or packaged desktop run.
+
 ## 24. Required Acceptance Matrix
 
 Every release that changes Profile, Library, Target, or Apply behavior MUST verify these scenarios:

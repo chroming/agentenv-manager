@@ -292,7 +292,7 @@ describe("project mutation service", () => {
         if (cmd.includes("DIR")) {
           return { stdout: Buffer.from("DIR\t/opt/workspace\n"), stderr: "", exitCode: 0 };
         }
-        if (cmd.includes("cat --")) {
+        if (!opts?.input && cmd.includes("cat --")) {
           return { stdout: Buffer.from(remoteContent), stderr: "", exitCode: 0 };
         }
         if (cmd.includes("cat >")) {

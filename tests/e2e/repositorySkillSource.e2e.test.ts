@@ -210,8 +210,8 @@ describe("Repository Skill source", () => {
 
     await page.getByRole("tab", { name: "By source" }).click();
     expect(await page.getByRole("tab", { name: /^Enabled / }).count()).toBe(0);
-    expect(await page.getByRole("tab", { name: /^Monitored 1$/ }).count()).toBe(1);
-    expect(await page.getByRole("tab", { name: /^Manual only 0$/ }).count()).toBe(1);
+    expect(await page.getByRole("tab", { name: "Monitored (1)", exact: true }).count()).toBe(1);
+    expect(await page.getByRole("tab", { name: "Manual only (0)", exact: true }).count()).toBe(1);
     expect(await page.getByRole("button", { name: "Refresh skills" }).count()).toBe(0);
     expect(await page.getByRole("button", { name: "Refresh sources" }).count()).toBe(1);
     expect(await page.getByRole("button", { name: "Check updates" }).count()).toBe(1);

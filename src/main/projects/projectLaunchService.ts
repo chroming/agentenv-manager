@@ -4,6 +4,7 @@ import type { TargetRegistry } from "../targets/registry";
 import type { AgentLaunchSpec } from "../targets/types";
 import type { ProjectStore } from "./projectStore";
 import type { RemoteDeviceStore } from "../remoteDevices/remoteDeviceStore";
+import { workspaceSshCommand } from "../../shared/workspaceSshCommand";
 
 interface ProjectLauncher {
   launch(spec: AgentLaunchSpec): Promise<void>;
@@ -57,8 +58,7 @@ export const createProjectLaunchService = ({
           message: `Opened remote ${project.name} on ${device.name} in ${adapter.descriptor.name}`
         };
       }
-      const portArg = device.port && device.port !== 22 ? ` -p ${device.port}` : "";
-      const sshCommand = `ssh${portArg} -t ${userHost} "cd '${project.rootPath}' && exec \\$SHELL -l"`;
+      const sshCommand = workspaceSshCommand(device, project.rootPath);
       throw new Error(
         `${adapter.descriptor.name} does not support remote SSH project launch. Use VS Code / Cursor or run in remote terminal:\n${sshCommand}`
       );

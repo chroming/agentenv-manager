@@ -10951,7 +10951,7 @@ describe("Electron UI profile switching e2e", () => {
       )).globallyEnabled
     ).toBe(false);
     await expect.poll(() => libraryRow.count()).toBe(0);
-    const disabledTab = page.getByRole("tab", { name: /Disabled 1/ });
+    const disabledTab = page.getByRole("tab", { name: "Disabled (1)", exact: true });
     await disabledTab.click();
     await libraryRow.waitFor({ state: "visible" });
     await expect.poll(() => libraryRow.textContent()).toContain("Disabled");
@@ -10996,7 +10996,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(fileExists(installedSkillDir)).resolves.toBe(false);
 
     await openSkillLibrary(page);
-    await page.getByRole("tab", { name: /Disabled 1/ }).click();
+    await page.getByRole("tab", { name: "Disabled (1)", exact: true }).click();
     await libraryRow.getByRole("button", { name: "More actions for layout-skill-1" }).click();
     await page.getByRole("menuitem", { name: /Enable globally/ }).click();
     await expect.poll(async () =>

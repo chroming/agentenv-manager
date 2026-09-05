@@ -2,6 +2,8 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import type { RemoteDevice } from "../../shared/types";
 import { createExecutableResolver } from "../executableDiscovery";
+import { quotePosixShellArgument as shellQuote } from "../../shared/workspaceSshCommand";
+export { quotePosixShellArgument as shellQuote } from "../../shared/workspaceSshCommand";
 
 const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
 
@@ -21,8 +23,6 @@ export interface SshTransport {
 
 const deviceDestination = (device: RemoteDevice) =>
   device.user ? `${device.user}@${device.host}` : device.host;
-
-export const shellQuote = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
 
 export const createSystemSshTransport = (options: {
   homeDir: string;

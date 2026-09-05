@@ -1,8 +1,7 @@
-import { execFile, spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { promisify } from "node:util";
 import { posix } from "node:path";
 import type {
   ListRemoteDirectoriesResult,
@@ -13,8 +12,9 @@ import type {
 } from "../../shared/types";
 import { findExecutable } from "../executableDiscovery";
 import { shellQuote, type SshTransport } from "../remoteDevices/systemSshTransport";
+import { validateRemoteSnapshotArchive } from "../remoteDevices/remoteArchiveValidation";
+import { remoteFileGuard, remoteHashFunction, remotePathGuard, RemoteProjectPreconditionError } from "./remoteProjectGuards";
 
-const execFileAsync = promisify(execFile);
 const MAX_WORKSPACE_TAR_BYTES = 64 * 1024 * 1024;
 const MAX_TEXT_BYTES = 4 * 1024 * 1024;
 
@@ -34,18 +34,24 @@ export const runLocalTarCommand = async (
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
     let size = 0;
-    child.stdout.on("data", (chunk: Buffer) => {
+    const timeout = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error("Local archive operation timed out"));
+    }, 30_000);
+    const collect = (chunks: Buffer[], chunk: Buffer) => {
       size += chunk.length;
       if (size > (options.maxOutputBytes ?? MAX_WORKSPACE_TAR_BYTES)) {
-        child.kill("SIGTERM");
+        child.kill("SIGKILL");
         reject(new Error("Local archive operation produced too much output"));
         return;
       }
-      stdout.push(chunk);
-    });
-    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
-    child.on("error", reject);
+      chunks.push(chunk);
+    };
+    child.stdout.on("data", (chunk: Buffer) => collect(stdout, chunk));
+    child.stderr.on("data", (chunk: Buffer) => collect(stderr, chunk));
+    child.on("error", (error) => { clearTimeout(timeout); reject(error); });
     child.on("close", (code) => {
+      clearTimeout(timeout);
       if (code === 0) resolvePromise(Buffer.concat(stdout));
       else reject(new Error(Buffer.concat(stderr).toString("utf8").trim() || `Tar command exited with ${code}`));
     });
@@ -56,6 +62,7 @@ export const runLocalTarCommand = async (
 
 export const validateTarArchiveEntries = async (archive: Buffer): Promise<void> => {
   if (archive.length === 0) return;
+  validateRemoteSnapshotArchive(archive);
   const listing = (await runLocalTarCommand(["-tf", "-"], {
     input: archive,
     maxOutputBytes: 8 * 1024 * 1024
@@ -205,6 +212,9 @@ export const listRemoteDirectories = async (
       timeoutMs: 10_000
     });
     const stdout = result.stdout.toString("utf8");
+    if (result.exitCode !== 0) {
+      throw new Error(result.stderr || "Could not list remote directories. Check the connection and folder permissions.");
+    }
     const lines = stdout.split("\n").map((l) => l.trim()).filter(Boolean);
     let currentPath = "";
     let parentPath: string | undefined;
@@ -346,19 +356,25 @@ export const fetchRemoteWorkspaceResourcesTar = async (
   if (candidateRelativePaths.length === 0) {
     return Buffer.alloc(1024);
   }
+  for (const path of candidateRelativePaths) {
+    if (!path || posix.isAbsolute(path) || path.split("/").includes("..") || /[\r\n\0\\]/.test(path)) {
+      throw new Error("Remote Workspace resource path must stay inside its directory");
+    }
+  }
 
   const script = [
+    ...candidateRelativePaths.flatMap((path) => remotePathGuard(posix.join(normalizedRoot, path))),
     `cd ${shellQuote(normalizedRoot)} || exit 1`,
-    'existing=""',
     'for p in "$@"; do',
+    '  shift',
     '  if [ -e "$p" ]; then',
-    '    existing="$existing $p"',
+    '    set -- "$@" "$p"',
     '  fi',
     'done',
-    'if [ -z "$existing" ]; then',
+    'if [ "$#" -eq 0 ]; then',
     '  tar -cf - --files-from /dev/null 2>/dev/null || tar -cf - -T /dev/null 2>/dev/null',
     'else',
-    '  tar -chf - $existing',
+    '  tar -cf - -- "$@"',
     'fi'
   ].join("\n");
 
@@ -385,11 +401,13 @@ export const readRemoteTextFile = async (
 ): Promise<string> => {
   const normalizedPath = normalizePosixPath(remoteFilePath);
   const script = [
+    ...remotePathGuard(normalizedPath),
     `target=${shellQuote(normalizedPath)}`,
-    'if [ ! -f "$target" ]; then',
+    'if [ ! -e "$target" ] && [ ! -L "$target" ]; then',
     '  printf "FILE_NOT_FOUND\\n" >&2',
     '  exit 44',
     'fi',
+    'if [ ! -f "$target" ] || [ -L "$target" ]; then echo "Remote instruction is not a regular file" >&2; exit 45; fi',
     'cat -- "$target"'
   ].join("\n");
 
@@ -413,19 +431,24 @@ export const writeRemoteTextFile = async (
   device: RemoteDevice,
   transport: SshTransport,
   remoteFilePath: string,
-  content: string
+  content: string,
+  expectedHash?: string
 ): Promise<void> => {
   const normalizedPath = normalizePosixPath(remoteFilePath);
   const targetDir = posix.dirname(normalizedPath);
-  const tempPath = `${normalizedPath}.agentenv-tmp-${Date.now()}`;
+  const tempPath = `${normalizedPath}.agentenv-tmp-${randomUUID()}`;
   const input = Buffer.from(content, "utf8");
 
   const script = [
+    remoteHashFunction,
+    ...remotePathGuard(normalizedPath),
     `dir=${shellQuote(targetDir)}`,
     `target=${shellQuote(normalizedPath)}`,
     `tmp=${shellQuote(tempPath)}`,
+    'trap \'rm -f -- "$tmp"\' EXIT',
     'mkdir -p -- "$dir" || exit 1',
-    'cat > "$tmp" || exit 2',
+    '(umask 077; set -C; cat > "$tmp") || exit 2',
+    ...(expectedHash === undefined ? [] : remoteFileGuard(normalizedPath, expectedHash)),
     'mv -f -- "$tmp" "$target" || exit 3'
   ].join("\n");
 
@@ -435,6 +458,7 @@ export const writeRemoteTextFile = async (
   });
 
   if (result.exitCode !== 0) {
+    if (result.exitCode === 45 || result.exitCode === 46) throw new RemoteProjectPreconditionError(result.stderr || "Remote resource changed after review");
     throw new Error(result.stderr || `Failed to write remote file: ${remoteFilePath}`);
   }
 };
@@ -443,13 +467,28 @@ export const deploySkillToRemote = async (
   device: RemoteDevice,
   transport: SshTransport,
   tarArchive: Buffer,
-  remoteSkillDestination: string
+  remoteSkillDestination: string,
+  expected: string[] = []
 ): Promise<void> => {
   const normalizedDest = normalizePosixPath(remoteSkillDestination);
+  await validateTarArchiveEntries(tarArchive);
+  const stage = `${normalizedDest}.agentenv-stage-${randomUUID()}`;
+  const backup = `${normalizedDest}.agentenv-previous-${randomUUID()}`;
   const script = [
+    remoteHashFunction,
+    ...remotePathGuard(normalizedDest),
     `dest=${shellQuote(normalizedDest)}`,
-    'mkdir -p -- "$dest" || exit 1',
-    'tar -xf - -C "$dest" || exit 2'
+    `stage=${shellQuote(stage)}`,
+    `previous=${shellQuote(backup)}`,
+    'trap \'rm -rf -- "$stage"; if [ -d "$previous" ] && [ ! -e "$dest" ] && [ ! -L "$dest" ]; then mv -- "$previous" "$dest"; fi\' EXIT',
+    `mkdir -p -- ${shellQuote(posix.dirname(normalizedDest))} || exit 1`,
+    '(umask 077; mkdir -- "$stage") || exit 1',
+    'tar -xf - -C "$stage" || exit 2',
+    ...expected,
+    ...remotePathGuard(normalizedDest),
+    'if [ -e "$dest" ]; then [ -d "$dest" ] || exit 45; mv -- "$dest" "$previous" || exit 3; fi',
+    'mv -- "$stage" "$dest" || exit 4',
+    'rm -rf -- "$previous" || exit 5'
   ].join("\n");
 
   const result = await transport.execute(device, `sh -c ${shellQuote(script)}`, {
@@ -459,6 +498,7 @@ export const deploySkillToRemote = async (
   });
 
   if (result.exitCode !== 0) {
+    if (result.exitCode === 45 || result.exitCode === 46) throw new RemoteProjectPreconditionError(result.stderr || "Remote resource changed after review");
     throw new Error(result.stderr || `Failed to deploy skill to remote: ${remoteSkillDestination}`);
   }
 };
@@ -470,12 +510,14 @@ export const archiveRemoteDirectory = async (
 ): Promise<Buffer> => {
   const normalizedDir = normalizePosixPath(remoteDirectory);
   const script = [
+    ...remotePathGuard(normalizedDir),
     `dir=${shellQuote(normalizedDir)}`,
-    'if [ ! -d "$dir" ]; then',
+    'if [ ! -e "$dir" ] && [ ! -L "$dir" ]; then',
     '  printf "DIR_NOT_FOUND\\n" >&2',
     '  exit 44',
     'fi',
-    'tar -chf - -C "$dir" .'
+    'if [ ! -d "$dir" ] || [ -L "$dir" ]; then echo "Remote Skill is not a regular directory" >&2; exit 45; fi',
+    'tar -cf - -C "$dir" .'
   ].join("\n");
 
   const result = await transport.execute(device, `sh -c ${shellQuote(script)}`, {
@@ -497,10 +539,14 @@ export const archiveRemoteDirectory = async (
 export const removeRemotePath = async (
   device: RemoteDevice,
   transport: SshTransport,
-  remotePath: string
+  remotePath: string,
+  expected: string[] = []
 ): Promise<void> => {
   const normalizedPath = normalizePosixPath(remotePath);
   const script = [
+    remoteHashFunction,
+    ...remotePathGuard(normalizedPath),
+    ...expected,
     `target=${shellQuote(normalizedPath)}`,
     'rm -rf -- "$target"'
   ].join("\n");
@@ -510,6 +556,7 @@ export const removeRemotePath = async (
   });
 
   if (result.exitCode !== 0) {
+    if (result.exitCode === 45 || result.exitCode === 46) throw new RemoteProjectPreconditionError(result.stderr || "Remote resource changed after review");
     throw new Error(result.stderr || `Failed to remove remote path: ${remotePath}`);
   }
 };

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { lstat, mkdir, readFile, readdir, rename, rm, rmdir } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, rmdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, posix, relative, sep } from "node:path";
 import type {
@@ -25,7 +25,6 @@ import type { ProjectStore } from "./projectStore";
 import type { RemoteDeviceStore } from "../remoteDevices/remoteDeviceStore";
 import type { SshTransport } from "../remoteDevices/systemSshTransport";
 import {
-  archiveRemoteDirectory,
   createTarArchiveFromDirectory,
   deploySkillToRemote,
   extractTarArchiveSafely,
@@ -33,6 +32,7 @@ import {
   removeRemotePath,
   writeRemoteTextFile
 } from "./remoteProjectTransport";
+import { readRemoteProjectState, recoverFailedRemoteProjectMutation, remoteProjectIdentity, restoreRemoteProjectReceipt } from "./remoteProjectRecovery";
 
 const MAX_PROJECT_TEXT_BYTES = 2 * 1024 * 1024;
 
@@ -205,9 +205,11 @@ export const createProjectMutationService = (
     if (appliedHash === current.contentHash) {
       return { status: "no-op", contentHash: current.contentHash };
     }
-    await recoveryStore.assertWritablePath(current.path);
+    const remoteContext = await getProjectAndDevice(input.projectId);
+    await recoveryStore.assertWritablePath(current.path, remoteContext ? input.projectId : undefined);
     const receipt = await recoveryStore.prepare({
       projectId: input.projectId,
+      remoteIdentity: remoteContext ? remoteProjectIdentity(remoteContext) : undefined,
       resourceId: input.resourceId,
       path: current.path,
       kind: "instructions",
@@ -216,22 +218,15 @@ export const createProjectMutationService = (
       appliedHash
     });
 
-    const remoteContext = await getProjectAndDevice(input.projectId);
     if (remoteContext) {
       try {
-        await writeRemoteTextFile(remoteContext.device, remoteContext.transport, current.path, input.content);
+        await writeRemoteTextFile(remoteContext.device, remoteContext.transport, current.path, input.content, current.contentHash);
         const verified = hashFileContent(await readRemoteTextFile(remoteContext.device, remoteContext.transport, current.path));
         if (verified !== appliedHash) throw new Error("Project instruction verification failed after save");
         await recoveryStore.update(receipt.id, "committed");
         return { status: "saved", contentHash: appliedHash, receiptId: receipt.id };
       } catch (error) {
-        try {
-          await writeRemoteTextFile(remoteContext.device, remoteContext.transport, current.path, current.content);
-          await recoveryStore.update(receipt.id, "failed-restored");
-        } catch (restoreError) {
-          await recoveryStore.update(receipt.id, "recovery-required");
-          throw new Error(`Project save failed and recovery requires attention: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`);
-        }
+        await recoverFailedRemoteProjectMutation(remoteContext, receipt, recoveryStore, error);
         throw error;
       }
     }
@@ -267,8 +262,8 @@ export const createProjectMutationService = (
         try {
           await readRemoteTextFile(remoteContext.device, remoteContext.transport, destination);
           exists = true;
-        } catch {
-          exists = false;
+        } catch (error) {
+          if (!isMissingFileError(error)) throw error;
         }
         if (exists) throw new Error("Project instruction already exists. Refresh the Project before editing it.");
       } else if (await pathEntryExists(destination)) {
@@ -298,16 +293,17 @@ export const createProjectMutationService = (
         try {
           await readRemoteTextFile(remoteContext.device, remoteContext.transport, destination);
           exists = true;
-        } catch {
-          exists = false;
+        } catch (error) {
+          if (!isMissingFileError(error)) throw error;
         }
         if (exists) {
           throw new Error("Project instruction changed outside AgentEnv. Refresh before saving.");
         }
         const appliedHash = hashFileContent(input.content);
-        await recoveryStore.assertWritablePath(destination);
+        await recoveryStore.assertWritablePath(destination, input.projectId);
         const receipt = await recoveryStore.prepare({
           projectId: input.projectId,
+          remoteIdentity: remoteProjectIdentity(remoteContext),
           resourceId: `instruction-create:${input.agentId}`,
           agentId: input.agentId,
           path: destination,
@@ -317,14 +313,13 @@ export const createProjectMutationService = (
           appliedHash
         });
         try {
-          await writeRemoteTextFile(remoteContext.device, remoteContext.transport, destination, input.content);
+          await writeRemoteTextFile(remoteContext.device, remoteContext.transport, destination, input.content, "absent");
           const verified = hashFileContent(await readRemoteTextFile(remoteContext.device, remoteContext.transport, destination));
           if (verified !== appliedHash) throw new Error("Project instruction verification failed after save");
           await recoveryStore.update(receipt.id, "committed");
           return { status: "saved", contentHash: appliedHash, receiptId: receipt.id };
         } catch (error) {
-          await removeRemotePath(remoteContext.device, remoteContext.transport, destination).catch(() => undefined);
-          await recoveryStore.update(receipt.id, "failed-restored");
+          await recoverFailedRemoteProjectMutation(remoteContext, receipt, recoveryStore, error);
           throw error;
         }
       }
@@ -384,54 +379,47 @@ export const createProjectMutationService = (
 
       const remoteContext = await getProjectAndDevice(input.projectId);
       if (remoteContext) {
-        let existingHash = "absent";
-        let existingArchive: Buffer | undefined;
-        try {
-          existingArchive = await archiveRemoteDirectory(remoteContext.device, remoteContext.transport, destination);
-          const tempCheckDir = join(tmpdir(), `check-skill-${randomUUID()}`);
-          await extractTarArchiveSafely(existingArchive, tempCheckDir);
-          existingHash = await hashSkillContent(tempCheckDir).catch(() => "unreadable");
-          await rm(tempCheckDir, { recursive: true, force: true }).catch(() => undefined);
-          if (existingHash === sourceHash) {
-            return { status: "no-op", contentHash: sourceHash };
-          }
-          if (input.conflictResolution !== "replace") {
-            throw new Error(`Project Skill replacement requires an explicit replacement choice: ${destination}`);
-          }
-        } catch (e: unknown) {
-          if ((e as NodeJS.ErrnoException)?.code !== "ENOENT") throw e;
+        const existing = await readRemoteProjectState(remoteContext, destination, "skill");
+        if (existing.hash === sourceHash) return { status: "no-op", contentHash: sourceHash };
+        if (existing.hash !== "absent" && input.conflictResolution !== "replace") {
+          throw new Error(`Project Skill replacement requires an explicit replacement choice: ${destination}`);
         }
-
-        await recoveryStore.assertWritablePath(destination);
-        const receipt = await recoveryStore.prepareDirectory({
-          projectId: input.projectId,
-          resourceId: `skill-add:${input.locationId}:${library.id}`,
-          path: destination,
-          originalHash: existingHash,
-          appliedHash: sourceHash,
-          originalWasAbsent: existingHash === "absent",
-          sourcePath: undefined
-        });
-        if (existingArchive && existingHash !== "absent") {
-          const backupDest = recoveryStore.directoryBackupPath(receipt.id);
-          await extractTarArchiveSafely(existingArchive, backupDest);
-        }
+        const staging = await mkdtemp(join(tmpdir(), "agentenv-project-deploy-"));
         try {
-          const tarToDeploy = await createTarArchiveFromDirectory(library.path);
-          await deploySkillToRemote(remoteContext.device, remoteContext.transport, tarToDeploy, destination);
-          await recoveryStore.update(receipt.id, "committed");
-          return { status: "saved", contentHash: sourceHash, receiptId: receipt.id };
-        } catch (error) {
-          if (existingArchive && existingHash !== "absent") {
-            await deploySkillToRemote(remoteContext.device, remoteContext.transport, existingArchive, destination).catch(() => undefined);
-          } else {
-            await removeRemotePath(remoteContext.device, remoteContext.transport, destination).catch(() => undefined);
+          await copySkillEntries(library.path, staging);
+          if (await hashSkillContent(staging) !== sourceHash) {
+            throw new Error("Library Skill changed while preparing its copy. Retry.");
           }
-          await recoveryStore.update(receipt.id, "failed-restored");
-          throw error;
+          const tarToDeploy = await createTarArchiveFromDirectory(staging);
+          await recoveryStore.assertWritablePath(destination, input.projectId);
+          const receipt = await recoveryStore.prepareDirectory({
+            projectId: input.projectId,
+            remoteIdentity: remoteProjectIdentity(remoteContext),
+            resourceId: `skill-add:${input.locationId}:${library.id}`,
+            path: destination,
+            originalHash: existing.hash,
+            appliedHash: sourceHash,
+            originalWasAbsent: existing.hash === "absent"
+          });
+          try {
+            if (existing.archive) {
+              const backup = recoveryStore.directoryBackupPath(receipt.id);
+              await extractTarArchiveSafely(existing.archive, backup);
+              if (await hashSkillContent(backup) !== existing.hash) throw new Error("Workspace recovery backup verification failed");
+            }
+            await deploySkillToRemote(remoteContext.device, remoteContext.transport, tarToDeploy, destination, existing.guard);
+            const verified = await readRemoteProjectState(remoteContext, destination, "skill");
+            if (verified.hash !== sourceHash) throw new Error("Remote Skill verification failed after copy");
+            await recoveryStore.update(receipt.id, "committed");
+            return { status: "saved", contentHash: sourceHash, receiptId: receipt.id };
+          } catch (error) {
+            await recoverFailedRemoteProjectMutation(remoteContext, receipt, recoveryStore, error);
+            throw error;
+          }
+        } finally {
+          await rm(staging, { recursive: true, force: true });
         }
       }
-
       let existingHash = "absent";
       if (await pathEntryExists(destination)) {
         const existing = await lstat(destination);
@@ -541,33 +529,35 @@ export const createProjectMutationService = (
 
       const remoteContext = await getProjectAndDevice(input.projectId);
       if (remoteContext) {
-        if (resource.contentHash !== input.expectedHash) {
+        const current = await readRemoteProjectState(remoteContext, resource.absolutePath, "skill");
+        if (current.hash !== input.expectedHash || !current.archive) {
           throw new Error("Project Skill changed outside AgentEnv. Refresh before removing it.");
         }
-        await recoveryStore.assertWritablePath(resource.absolutePath);
+        await recoveryStore.assertWritablePath(resource.absolutePath, input.projectId);
         const receipt = await recoveryStore.prepareDirectory({
           projectId: input.projectId,
+          remoteIdentity: remoteProjectIdentity(remoteContext),
           resourceId: input.resourceId,
           path: resource.absolutePath,
-          originalHash: resource.contentHash ?? "absent",
+          originalHash: current.hash,
           appliedHash: "absent",
-          originalWasAbsent: false,
-          sourcePath: undefined
+          originalWasAbsent: false
         });
-        const backupArchive = await archiveRemoteDirectory(remoteContext.device, remoteContext.transport, resource.absolutePath);
-        const backupDest = recoveryStore.directoryBackupPath(receipt.id);
-        await extractTarArchiveSafely(backupArchive, backupDest);
         try {
-          await removeRemotePath(remoteContext.device, remoteContext.transport, resource.absolutePath);
+          const backup = recoveryStore.directoryBackupPath(receipt.id);
+          await extractTarArchiveSafely(current.archive, backup);
+          if (await hashSkillContent(backup) !== current.hash) throw new Error("Workspace recovery backup verification failed");
+          await removeRemotePath(remoteContext.device, remoteContext.transport, resource.absolutePath, current.guard);
+          if ((await readRemoteProjectState(remoteContext, resource.absolutePath, "skill")).hash !== "absent") {
+            throw new Error("Remote Skill still exists after removal");
+          }
           await recoveryStore.update(receipt.id, "committed");
           return { status: "saved", contentHash: "absent", receiptId: receipt.id };
         } catch (error) {
-          await deploySkillToRemote(remoteContext.device, remoteContext.transport, backupArchive, resource.absolutePath).catch(() => undefined);
-          await recoveryStore.update(receipt.id, "failed-restored");
+          await recoverFailedRemoteProjectMutation(remoteContext, receipt, recoveryStore, error);
           throw error;
         }
       }
-
       await assertPortableSkill(resource.absolutePath);
       const currentHash = await hashSkillContent(resource.absolutePath);
       if (currentHash !== input.expectedHash) {
@@ -608,31 +598,13 @@ export const createProjectMutationService = (
       const receipt = await recoveryStore.get(receiptId);
       const remoteContext = await getProjectAndDevice(receipt.projectId);
       if (remoteContext) {
-        if (receipt.kind === "instructions") {
-          if (receipt.originalWasAbsent) {
-            await removeRemotePath(remoteContext.device, remoteContext.transport, receipt.path).catch(() => undefined);
-            await recoveryStore.update(receipt.id, "restored");
-            return { status: "restored", contentHash: "absent", receiptId };
-          }
-          const original = Buffer.from(receipt.originalContentBase64 ?? "", "base64").toString("utf8");
-          await writeRemoteTextFile(remoteContext.device, remoteContext.transport, receipt.path, original);
-          await recoveryStore.update(receipt.id, "restored");
-          return { status: "restored", contentHash: receipt.originalHash, receiptId };
+        const relativePath = posix.relative(remoteContext.project.rootPath, receipt.path);
+        if (!relativePath || relativePath === ".." || relativePath.startsWith("../") || posix.isAbsolute(relativePath)) {
+          throw new Error("Remote Workspace recovery path is outside its project");
         }
-        if (receipt.kind === "skill") {
-          if (receipt.originalWasAbsent) {
-            await removeRemotePath(remoteContext.device, remoteContext.transport, receipt.path).catch(() => undefined);
-            await recoveryStore.update(receipt.id, "restored");
-            return { status: "restored", contentHash: "absent", receiptId };
-          }
-          const backupDir = recoveryStore.directoryBackupPath(receipt.id);
-          const tar = await createTarArchiveFromDirectory(backupDir);
-          await deploySkillToRemote(remoteContext.device, remoteContext.transport, tar, receipt.path);
-          await recoveryStore.update(receipt.id, "restored");
-          return { status: "restored", contentHash: receipt.originalHash, receiptId };
-        }
+        await restoreRemoteProjectReceipt(remoteContext, receipt, recoveryStore);
+        return { status: "restored", contentHash: receipt.originalHash, receiptId };
       }
-
       if (receipt.kind === "skill") {
         await environmentService.assertProjectSkillPath(receipt.projectId, receipt.path);
         const exists = await pathEntryExists(receipt.path);
