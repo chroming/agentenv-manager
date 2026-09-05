@@ -1544,6 +1544,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByRole("dialog").count()).toBe(0);
 
     await agents.getByRole("button", { name: "OpenCode", exact: true }).click();
+    await page.getByRole("button", { name: "Create from current environment" }).click();
     await page.getByRole("dialog", {
       name: "Create Profile from OpenCode"
     }).waitFor({ state: "visible" });
@@ -1782,14 +1783,14 @@ describe("Electron UI profile switching e2e", () => {
     await dialog.getByRole("button", { name: "Close", exact: true }).click();
     await page.getByRole("tab", { name: "By source" }).click();
     await expectNoHorizontalOverflow(page, [".editor-panel", ".skill-source-view"]);
-    await page.getByRole("tab", { name: /Manual only/ }).click();
+    await page.getByRole("combobox", { name: "Source check scope" }).selectOption("manual");
     const sourceRow = page.locator(".skill-source-group").filter({
       hasText: "project-skills"
     });
     await sourceRow.waitFor({ state: "visible" });
     await sourceRow.getByRole("button", { name: /Source actions/ }).click();
     await page.getByRole("menuitem", { name: "Include in routine checks" }).click();
-    await page.getByRole("tab", { name: /Monitored/ }).click();
+    await page.getByRole("combobox", { name: "Source check scope" }).selectOption("monitored");
     await sourceRow.waitFor({ state: "visible" });
     await sourceRow.getByRole("button", { name: /Source actions/ }).click();
     await page.getByRole("menuitem", { name: "Exclude from routine checks" })
@@ -2422,15 +2423,14 @@ describe("Electron UI profile switching e2e", () => {
         await search.fill("");
         await expect.poll(() => allRows.count()).toBe(testCase.count + 4);
       }
-      const updatesTab = page.getByRole("tab", { name: /Updates/ });
-      const allTab = page.getByRole("tab", { name: /Enabled/ });
+      const statusFilter = page.getByRole("combobox", { name: "Skill status filters" });
       for (let run = 0; run < 4; run += 1) {
         const startedAt = await page.evaluate(() => performance.now());
-        await updatesTab.click();
+        await statusFilter.selectOption("updates");
         await expect.poll(() => allRows.count()).toBe(testCase.count);
         const duration = (await page.evaluate(() => performance.now())) - startedAt;
         if (run > 0) filterRuns.push(duration);
-        await allTab.click();
+        await statusFilter.selectOption("enabled");
         await expect.poll(() => allRows.count()).toBe(testCase.count + 4);
       }
 
@@ -2767,6 +2767,9 @@ describe("Electron UI profile switching e2e", () => {
     const targetCard = page.getByRole("article", { name: "Agent OpenCode" });
     await targetCard.getByRole("button", { name: "OpenCode", exact: true }).click();
 
+    const setupChoice = page.getByRole("dialog", { name: "Set up OpenCode" });
+    expect(await setupChoice.getByRole("button", { name: "Use selected Profile" }).isDisabled()).toBe(true);
+    await setupChoice.getByRole("button", { name: "Create from current environment" }).click();
     let dialog = page.getByRole("dialog", { name: "Create Profile from OpenCode" });
     await dialog.getByRole("button", { name: "Review" }).click();
     dialog = page.getByRole("dialog", { name: "Review OpenCode capture" });
@@ -5793,6 +5796,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByRole("button", { name: "More Agent actions" }).count()).toBe(1);
 
     await codexCard.getByRole("button", { name: "Codex", exact: true }).click();
+    await page.getByRole("button", { name: "Use selected Profile" }).click();
     await page.getByRole("region", { name: "Profiles" }).waitFor({ state: "visible" });
     await page.getByRole("region", { name: "Profile composer" }).waitFor({ state: "visible" });
   }, 45_000);
@@ -9762,7 +9766,7 @@ describe("Electron UI profile switching e2e", () => {
     await popover.waitFor({ state: "visible" });
     await popover.getByRole("menuitem", { name: /Antigravity CLI/ }).click();
     const captureDialog = page.getByRole("dialog", {
-      name: "Create Profile from Antigravity CLI"
+      name: "Set up Antigravity CLI"
     });
     await captureDialog.waitFor({ state: "visible" });
     await captureDialog.getByRole("button", { name: "Cancel" }).click();
@@ -9772,6 +9776,7 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("article", { name: "Agent Codex" })
       .getByRole("button", { name: "Codex", exact: true })
       .click();
+    await page.getByRole("button", { name: "Use selected Profile" }).click();
     await page
       .getByRole("region", { name: "Profiles" })
       .waitFor({ state: "visible" });
@@ -9818,13 +9823,13 @@ describe("Electron UI profile switching e2e", () => {
     await nameAction.click();
 
     const dialog = page.getByRole("dialog", {
-      name: "Create Profile from Antigravity CLI"
+      name: "Set up Antigravity CLI"
     });
     await dialog.waitFor({ state: "visible", timeout: 5_000 });
     await expect
       .poll(() => dialog.textContent())
       .toContain("Installation not detected");
-    expect(await dialog.getByRole("button", { name: "Review" }).isDisabled()).toBe(true);
+    expect(await dialog.getByRole("button", { name: "Create from current environment" }).isDisabled()).toBe(true);
   }, standardElectronTestTimeout);
 
   it("offers detected Agents without changing their files until the user enables one", async () => {
@@ -9908,6 +9913,7 @@ describe("Electron UI profile switching e2e", () => {
       .toBe(before.codexConfig);
 
     await setupDialog.getByRole("button", { name: "Review current setup" }).click();
+    await page.getByRole("button", { name: "Create from current environment" }).click();
     await page.getByRole("dialog", { name: "Create Profile from OpenCode" }).waitFor({
       state: "visible"
     });
@@ -10960,8 +10966,8 @@ describe("Electron UI profile switching e2e", () => {
       )).globallyEnabled
     ).toBe(false);
     await expect.poll(() => libraryRow.count()).toBe(0);
-    const disabledTab = page.getByRole("tab", { name: "Disabled (1)", exact: true });
-    await disabledTab.click();
+    const statusFilter = page.getByRole("combobox", { name: "Skill status filters" });
+    await statusFilter.selectOption("disabled");
     await libraryRow.waitFor({ state: "visible" });
     await expect.poll(() => libraryRow.textContent()).toContain("Disabled");
     expect(await libraryRow.getAttribute("class")).toContain("is-globally-disabled");
@@ -10971,11 +10977,11 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => libraryRow.evaluate((row) => getComputedStyle(row).boxShadow))
       .toBe("none");
-    expect(await disabledTab.getAttribute("aria-selected")).toBe("true");
+    expect(await statusFilter.inputValue()).toBe("disabled");
     expect(await page.getByRole("group", { name: /^Library item / }).count()).toBe(1);
-    await page.getByRole("tab", { name: /Updates/ }).click();
+    await statusFilter.selectOption("updates");
     expect(await page.getByRole("group", { name: "Library item layout-skill-1" }).count()).toBe(0);
-    await page.getByRole("tab", { name: /^Enabled / }).click();
+    await statusFilter.selectOption("enabled");
     await page.getByRole("button", { name: "Filters", exact: true }).click();
     const usageFilter = page.getByRole("combobox", { name: "Skill usage filter" });
     await usageFilter.selectOption("referenced");
@@ -11005,7 +11011,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(fileExists(installedSkillDir)).resolves.toBe(false);
 
     await openSkillLibrary(page);
-    await page.getByRole("tab", { name: "Disabled (1)", exact: true }).click();
+    await statusFilter.selectOption("disabled");
     await libraryRow.getByRole("button", { name: "More actions for layout-skill-1" }).click();
     await page.getByRole("menuitem", { name: /Enable globally/ }).click();
     await expect.poll(async () =>
@@ -11093,7 +11099,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => updateCheckSwitch.getAttribute("aria-checked")).toBe("true");
     await updateCheckSwitch.click();
     await page.getByRole("button", { name: "Save settings" }).click();
-    await expect.poll(() => githubRow.textContent()).toContain("Monitoring off");
+    await expect.poll(() => githubRow.textContent()).toContain("No update checks");
     await expect
       .poll(async () =>
         (await readJson<{ updateCheckEnabled?: boolean }>(

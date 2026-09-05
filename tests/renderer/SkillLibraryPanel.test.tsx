@@ -1048,6 +1048,8 @@ describe("SkillLibraryPanel", () => {
     const copiedLocalRow = screen.getByRole("group", { name: "Library item copied-local" });
     expect(copiedLocalRow).toHaveTextContent("Local import");
     expect(copiedLocalRow).toHaveTextContent("1 Agent pending");
+    expect(copiedLocalRow.querySelector(".library-primary-status")).toHaveTextContent("No update checks");
+    expect(copiedLocalRow.querySelector(".library-primary-status")).not.toHaveTextContent("Agent pending");
     expect(within(copiedLocalRow).queryByRole("button", { name: /Check update/ })).toBeNull();
     expect(within(copiedLocalRow).queryByRole("button", { name: "Sync install of copied-local" }))
       .not.toBeInTheDocument();

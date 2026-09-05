@@ -1224,6 +1224,11 @@ It MUST:
 
 Preview MUST also summarize the local footprint as adopted existing resources, modified paths, created paths, removed paths, and live links. Zero-write adoption is distinct from replacement. Internal Target-state and Backup files remain under AgentEnv's data root and are not presented as extra Agent files.
 
+Apply Preview shows actionable issues and actual changes before secondary inventory summaries.
+Profile content totals, footprint counts, notes, and preserved resources use disclosures; shared
+resource warnings and the direct Local Skills review action remain reachable without expanding
+those summaries. Collapsing information never changes the prepared transaction.
+
 Apply executes the immutable Preview plan. It MAY re-read and hash the plan's bound preconditions, but MUST NOT rerun runtime conflict classification, asset ownership classification, backup-path discovery, or stale-resource discovery after confirmation. Newly discovered facts outside the reviewed plan remain untouched. A changed bound precondition returns `stale` before Backup or mutation.
 
 Switching Profiles MUST reconcile every writable Skill location declared by the selected Target adapter. Skills absent or disabled in the Profile are removed from managed locations; content outside AgentEnv is changed only when the fresh Preview names the exact backup-and-replace or backup-and-remove effect. Observe-only locations and locations covered by `Leave unmanaged` remain unchanged. MCP choices absent from the sparse policy remain Agent-controlled.
@@ -2116,6 +2121,20 @@ provider session ID, the captured working directory, and the resolved Pi environ
 
 ## 23.2 First-Run Workflow
 
+### Surface Clarity
+
+- Skills has one view switch for the catalog, sources, and groups. Status/check scope is a
+  secondary SelectControl, not a competing tab strip; selection remains visible and retained.
+- Library's primary status describes upstream maintenance, not Agent deployment. Pending copied
+  installs remain in usage details and update impact confirmation; `Local` is source provenance,
+  not an update result. Unmonitored entries show `No update checks`.
+- Profile and Workspace use the same LibrarySkillSelection picker. Selecting groups in Profile
+  creates live membership references; Workspace copies current members once. Each picker explains
+  its respective effect before confirmation, and Workspace's command is `Copy`.
+- A remote Workspace has one primary SSH connection-copy command for CLI selections. The command
+  enters the folder but does not launch the selected Agent. Its device banner is context, not a
+  duplicate action toolbar; remote-editor attachment remains an actual `Open` action.
+
 The first useful journey is the empty-workspace presentation of the repeatable Profile
 Review and canonical Agent/Profile workflows:
 
@@ -2125,8 +2144,12 @@ Review and canonical Agent/Profile workflows:
    Agent changes only AgentEnv settings; it does not Capture, Apply, or write Agent files.
 3. Run a read-only local Skill inventory. Shared compatibility findings appear in Profile
    Review; no modal opens and no file changes without an explicit command.
-4. Configure opens the complete Create from Target flow. Capture reads Instructions, Skills,
-   supported MCP activation policy, and effective shared resources without changing the Agent.
+4. Configure opens the Profile actually active on that exact Agent endpoint. Without an active
+   Profile, it offers an explicit saved-Profile selection or local Capture; a previously captured
+   Profile is only a suggestion until selected. SSH endpoints offer saved Profiles or an empty
+   new Profile, never a fallback to the first Profile or a different local Agent. Capture reads
+   Instructions, Skills, supported MCP activation policy, and effective shared resources without
+   changing the Agent.
 5. Save creates an ordinary reusable Profile. It does not Apply, prepare another Agent, or
    mutate a shared compatibility location.
 6. When shared Skills are detected, Review opens Local Skills Manager scoped to that directory.

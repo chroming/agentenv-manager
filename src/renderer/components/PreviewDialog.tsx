@@ -501,14 +501,12 @@ export const PreviewDialog = ({
           ) : null}
 
           {isActivationPreview && targetStateChanges.length > 0 ? (
+            <details className="apply-preview-disclosure" open={hasStateOnlyWork || undefined}>
+              <summary>
+                <span>{t("AgentEnv state")}</span>
+                <strong>{targetStateChanges.length}</strong>
+              </summary>
             <section className="apply-preview-state" aria-label={t("AgentEnv state")}>
-              <header className="apply-preview-section-heading">
-                <span className="apply-preview-state__icon" aria-hidden="true">
-                  <ShieldCheck size={17} strokeWidth={2.1} />
-                </span>
-                <strong>{t("AgentEnv state")}</strong>
-                <span className="apply-preview-count">{targetStateChanges.length}</span>
-              </header>
               <div className="apply-preview-state__items">
                 {targetStateChanges.map((change) => (
                   <article key={change.kind}>
@@ -527,6 +525,7 @@ export const PreviewDialog = ({
                 </p>
               ) : null}
             </section>
+            </details>
           ) : null}
 
           {sharedSkillItems.length > 0 ? (
@@ -571,11 +570,17 @@ export const PreviewDialog = ({
             </section>
           ) : null}
 
+          <PreviewChangeList
+            preview={preview}
+            activation={isActivationPreview}
+            expandButtonRef={expandPreviewRef}
+            onExpandPreview={() => setDiffWorkspaceOpen(true)}
+          />
+
           {payload && !isNoOp ? (
+            <details className="apply-preview-disclosure">
+              <summary><span>{t("Profile content")}</span></summary>
             <section className="apply-preview-payload" aria-label={t("Profile content")}>
-              <header className="apply-preview-section-heading">
-                <strong>{t("Profile content")}</strong>
-              </header>
               <div>
                 <article>
                   <ProductIcon name="instructions" size={18} strokeWidth={2} />
@@ -600,25 +605,13 @@ export const PreviewDialog = ({
                 </article>
               </div>
             </section>
+            </details>
           ) : null}
 
           {showLocalFootprint && localFootprint ? (
+            <details className="apply-preview-disclosure">
+              <summary><span>{t("Local footprint")}</span></summary>
             <section className="apply-preview-footprint" aria-label={t("Local footprint")}>
-              <header className="apply-preview-section-heading">
-                <strong>{t("Local footprint")}</strong>
-                {onManageLocalSkills ? (
-                  <Button
-                    className="apply-preview-manage-skills"
-                    disabled={confirmBusy}
-                    icon={<Layers3 size={14} strokeWidth={2.1} />}
-                    size="compact"
-                    variant="secondary"
-                    onClick={onManageLocalSkills}
-                  >
-                    {t("Review local Skills")}
-                  </Button>
-                ) : null}
-              </header>
               <div>
                 <span>{t("Adopt existing")}: <strong>{localFootprint.adopted}</strong></span>
                 <span>{t("Modify")}: <strong>{localFootprint.modified}</strong></span>
@@ -627,9 +620,10 @@ export const PreviewDialog = ({
                 <span>{t("Live links")}: <strong>{localFootprint.liveLinks}</strong></span>
               </div>
             </section>
+            </details>
           ) : null}
 
-          {isActivationPreview && !showLocalFootprint && !isNoOp && onManageLocalSkills ? (
+          {isActivationPreview && !isNoOp && onManageLocalSkills ? (
             <div className="apply-preview-secondary-actions">
               <Button
                 className="apply-preview-manage-skills"
@@ -643,13 +637,6 @@ export const PreviewDialog = ({
               </Button>
             </div>
           ) : null}
-
-          <PreviewChangeList
-            preview={preview}
-            activation={isActivationPreview}
-            expandButtonRef={expandPreviewRef}
-            onExpandPreview={() => setDiffWorkspaceOpen(true)}
-          />
 
           {noteItems.length > 0 ? (
             <details className="apply-preview-disclosure">

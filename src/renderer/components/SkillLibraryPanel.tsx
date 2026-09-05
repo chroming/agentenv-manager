@@ -106,7 +106,7 @@ import {
 } from "../../shared/skillCleanup";
 import { isSharedSkillInventoryEntry } from "../../shared/skillLocationSemantics";
 import { useI18n } from "../i18n";
-import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, SegmentedControl, Switch } from "./ui";
+import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, SegmentedControl, SelectControl, Switch } from "./ui";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { isExternalSkillImportable } from "../../shared/skillIdentity";
 import { sourceSubpathFor } from "../../shared/skillSourceGrouping";
@@ -1745,32 +1745,28 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
             value={libraryMode}
           />
           {libraryMode === "skills" ? (
-            <SegmentedControl
-              className="library-status-switch ui-segmented-control--compact"
-              label={t("Skill status filters")}
+            <SelectControl
+              controlWidth="compact"
+              aria-label={t("Skill status filters")}
               value={statusFilter ?? "all"}
-              onChange={(value) => updateControls({ statusFilter: value === "all" ? undefined : value as any })}
-              options={[
-                { value: "all", label: `${t("All")} (${librarySkills.length})` },
-                { value: "enabled", label: `${t("Enabled")} (${librarySkills.length - disabledSkillCount})` },
-                { value: "updates", label: `${t("Updates")} (${availableUpdateCount})` },
-                { value: "disabled", label: `${t("Disabled")} (${disabledSkillCount})` }
-              ]}
-              semantics="tabs"
-            />
+              onChange={(event) => updateControls({ statusFilter: event.currentTarget.value === "all" ? undefined : event.currentTarget.value as SkillLibraryViewState["statusFilter"] })}
+            >
+              <option value="all">{t("All")} ({librarySkills.length})</option>
+              <option value="enabled">{t("Enabled")} ({librarySkills.length - disabledSkillCount})</option>
+              <option value="updates">{t("Updates")} ({availableUpdateCount})</option>
+              <option value="disabled">{t("Disabled")} ({disabledSkillCount})</option>
+            </SelectControl>
           ) : libraryMode === "sources" ? (
-            <SegmentedControl
-              className="library-status-switch ui-segmented-control--compact"
-              label={t("Source check scope")}
+            <SelectControl
+              controlWidth="compact"
+              aria-label={t("Source check scope")}
               value={sourceScopeFilter}
-              onChange={(value) => setSourceScopeFilter(value as any)}
-              options={[
-                { value: "monitored", label: `${t("Monitored")} (${monitoredSourceCount})` },
-                { value: "manual", label: `${t("Manual only")} (${manualSourceCount})` },
-                { value: "all", label: `${t("All")} (${sourceGroups.length})` }
-              ]}
-              semantics="tabs"
-            />
+              onChange={(event) => setSourceScopeFilter(event.currentTarget.value as SkillSourceScopeFilter)}
+            >
+              <option value="monitored">{t("Monitored")} ({monitoredSourceCount})</option>
+              <option value="manual">{t("Manual only")} ({manualSourceCount})</option>
+              <option value="all">{t("All")} ({sourceGroups.length})</option>
+            </SelectControl>
           ) : null}
         </div>
         <div className="library-toolbar" hidden={libraryMode !== "skills"}>
@@ -1881,9 +1877,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               ? "Up to date"
               : isTracked && hasUpdateSource
                 ? "Not checked"
-                : hasUpdateSource && skill.sourceType !== "local"
-                  ? "Monitoring off"
-                  : "Local";
+                : "No update checks";
             const usageCount = (skillUsage[skill.id] ?? []).length;
             const revisionLabel = shortSkillRevision(skill);
             const versionLabel = skill.version ?? skill.remoteRef ?? revisionLabel;
@@ -1925,7 +1919,10 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               skill.name,
               skill.description || skill.id,
               usageSummary,
-              usageDetail
+              usageDetail,
+              staleCopies.length > 0
+                ? t("{{count}} copied Agent installs will need Apply", { count: staleCopies.length })
+                : undefined
             ].filter((value, index, values) => value && values.indexOf(value) === index).join("\n");
             const staleInstallDetail = staleCopies.length > 0
               ? staleCopies.length === 1
@@ -2111,17 +2108,6 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                         modalFallbackFocusRef.current = event.currentTarget;
                         void runSkillUpdatePreview(skill.id);
                       }}
-                    />
-                  ) : staleCopies.length > 0 ? (
-                    <InteractiveStatus
-                      className="library-primary-status is-warning"
-                      icon={<CircleAlert size={13} strokeWidth={2.2} />}
-                      label={
-                        staleCopies.length === 1
-                          ? t("1 Agent pending")
-                          : t("{{count}} Agents pending", { count: staleCopies.length })
-                      }
-                      tone="warning"
                     />
                   ) : (
                     <InteractiveStatus

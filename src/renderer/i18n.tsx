@@ -14,6 +14,16 @@ export type TranslationValues = Record<string, string | number>;
 
 const zhCN: Record<string, string> = {
   ...generatedZhCN,
+  "Set up {{name}}": "配置 {{name}}",
+  "Choose a Profile to edit and preview. Nothing is applied by this step.": "选择要编辑和预览的 Profile，此步骤不会应用任何更改。",
+  "Remote capture is not supported. Use a saved Profile or create an empty one.": "暂不支持从远程环境创建 Profile，请选择已有 Profile 或新建空白 Profile。",
+  "Use selected Profile": "使用所选 Profile",
+  "Create from current environment": "从当前环境创建",
+  "No update checks": "不检查更新",
+  "Groups follow Library membership. Apply deploys membership changes.": "分组成员跟随资源库变化，成员增减在应用后生效。",
+  "Copy the current group members. Later group changes do not change this Workspace.": "复制当前分组成员，之后分组的变化不会修改此工作区。",
+  "Copy a command to connect and open this folder. This does not launch an Agent.": "复制连接并进入此目录的命令，不会启动 Agent。",
+  "Copy {{count}}": "复制 {{count}} 项",
   "SSH devices": "SSH 设备",
   "Apply saved Profiles to Agents on Linux devices.": "将已保存的 Profile 应用到 Linux 设备上的 Agent。",
   "Check SSH connections": "检查 SSH 连接",
@@ -2537,6 +2547,16 @@ Object.assign(zhCN, {
 });
 
 const zhTW: Record<string, string> = {
+  "Set up {{name}}": "設定 {{name}}",
+  "Choose a Profile to edit and preview. Nothing is applied by this step.": "選擇要編輯和預覽的 Profile，此步驟不會套用任何變更。",
+  "Remote capture is not supported. Use a saved Profile or create an empty one.": "暫不支援從遠端環境建立 Profile，請選擇現有 Profile 或建立空白 Profile。",
+  "Use selected Profile": "使用所選 Profile",
+  "Create from current environment": "從目前環境建立",
+  "No update checks": "不檢查更新",
+  "Groups follow Library membership. Apply deploys membership changes.": "群組成員跟隨資源庫變化，成員增減在套用後生效。",
+  "Copy the current group members. Later group changes do not change this Workspace.": "複製目前群組成員，之後群組的變化不會修改此工作區。",
+  "Copy a command to connect and open this folder. This does not launch an Agent.": "複製連線並進入此目錄的命令，不會啟動 Agent。",
+  "Copy {{count}}": "複製 {{count}} 項",
   "SSH devices": "SSH 裝置",
   "Apply saved Profiles to Agents on Linux devices.": "將已儲存的 Profile 套用到 Linux 裝置上的 Agent。",
   "Check SSH connections": "檢查 SSH 連線",

@@ -395,7 +395,7 @@ describe("ProjectsWorkspace", () => {
     expect(dialog)
       .toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("checkbox", { name: "testing" }));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add 1" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Copy 1" }));
     await waitFor(() => expect(api.addProjectSkills).toHaveBeenCalledWith({
       projectId: "project-1",
       locationId: "location-shared",
@@ -568,7 +568,7 @@ describe("ProjectsWorkspace", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Add Skills" }));
     const dialog = await screen.findByRole("dialog", { name: "Add Skills to Workspace" });
     fireEvent.click(within(dialog).getByRole("checkbox", { name: "testing" }));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add 1" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Copy 1" }));
 
     expect(await within(dialog).findByRole("alert"))
       .toHaveTextContent("Project resource parent is not a regular directory");
@@ -611,7 +611,7 @@ describe("ProjectsWorkspace", () => {
     const dialog = await screen.findByRole("dialog", { name: "Add Skills to Workspace" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Groups" }));
     fireEvent.click(within(dialog).getByRole("checkbox", { name: /Quality/ }));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add 2" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Copy 2" }));
 
     await waitFor(() => expect(api.addProjectSkills).toHaveBeenCalledWith({
       projectId: "project-1",
@@ -753,7 +753,7 @@ describe("ProjectsWorkspace", () => {
     expect(within(dialog).queryByText(/Remote path verified/)).not.toBeInTheDocument();
   });
 
-  it("copies the SSH launch command for a remote workspace via banner and command button", async () => {
+  it("has one SSH connection command and reports clipboard success and failure", async () => {
     const api = installApi();
     const remoteProject: ProjectSummary = {
       id: "proj-remote-1",
@@ -771,12 +771,13 @@ describe("ProjectsWorkspace", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
 
-    render(<ProjectsWorkspace targets={[target]} />);
+    const view = render(<ProjectsWorkspace targets={[target]} />);
 
     expect(await screen.findByRole("button", { name: "Add Workspace" })).toBeInTheDocument();
 
-    // Banner has direct Copy SSH command button
-    const copyButton = await screen.findByRole("button", { name: "Copy SSH command" });
+    expect(screen.queryByRole("button", { name: "Copy SSH command" })).not.toBeInTheDocument();
+    const copyButton = await screen.findByRole("button", { name: "Copy SSH" });
+    expect(copyButton).toHaveAttribute("title", expect.stringContaining("does not launch an Agent"));
     fireEvent.click(copyButton);
 
     await waitFor(() => {
@@ -797,6 +798,11 @@ describe("ProjectsWorkspace", () => {
     expect(await screen.findByText("Failed to copy SSH command")).toBeInTheDocument();
     expect(screen.queryByText("SSH command copied to clipboard")).not.toBeInTheDocument();
     expect(screen.queryByText("SSH launch command copied to clipboard. Run it in terminal to access this workspace.")).not.toBeInTheDocument();
+    view.rerender(<ProjectsWorkspace targets={[]} />);
+    const connection = screen.getByRole("button", { name: "Copy SSH" });
+    expect(connection).toBeEnabled();
+    fireEvent.click(connection);
+    expect(await screen.findByText("SSH command copied to clipboard")).toBeInTheDocument();
   });
 
   it("does not display another Workspace's resources while reading an uncached selection", async () => {

@@ -815,11 +815,12 @@ export const ProjectsWorkspace = ({
   };
 
   const openProject = async () => {
-    if (!selected || !selectedAgent) return;
-    if (selected.isRemote && selectedAgent.id !== "vscode" && selectedAgent.id !== "cursor") {
+    if (!selected) return;
+    if (selected.isRemote && selectedAgent?.id !== "vscode" && selectedAgent?.id !== "cursor") {
       await copySshCommand(selected);
       return;
     }
+    if (!selectedAgent) return;
     setOperation("open");
     setError("");
     try {
@@ -1052,9 +1053,7 @@ export const ProjectsWorkspace = ({
                 )}
                 description={(
                   <span className="selectable" title={selected.rootPath}>
-                    {selected.isRemote
-                      ? `${selected.deviceName ?? selected.deviceHost} · ${selected.rootPath}`
-                      : selected.rootPath}
+                    {selected.rootPath}
                   </span>
                 )}
                 actions={(
@@ -1089,15 +1088,16 @@ export const ProjectsWorkspace = ({
                     />
                     <Button
                       className="ui-inspector-header__command"
-                      aria-label={selectedAgent
-                        ? selected.isRemote && selectedAgent.id !== "vscode" && selectedAgent.id !== "cursor"
-                          ? t("Copy SSH")
-                          : t("Open in {{name}}", { name: selectedAgent.name })
-                        : t("No Agent available")}
+                      title={selected.isRemote && selectedAgent?.id !== "vscode" && selectedAgent?.id !== "cursor"
+                        ? t("Copy a command to connect and open this folder. This does not launch an Agent.")
+                        : undefined}
+                      aria-label={selected.isRemote && selectedAgent?.id !== "vscode" && selectedAgent?.id !== "cursor"
+                        ? t("Copy SSH")
+                        : selectedAgent ? t("Open in {{name}}", { name: selectedAgent.name }) : t("No Agent available")}
                       variant="primary"
                       icon={selected.isRemote && selectedAgent?.id !== "vscode" && selectedAgent?.id !== "cursor" ? <Terminal size={15} /> : <ExternalLink size={15} />}
                       busy={operation === "open"}
-                      disabled={!selected.exists || !selectedAgent}
+                      disabled={!selected.exists || (!selected.isRemote && !selectedAgent)}
                       onClick={() => void openProject()}
                     >
                       {selected.isRemote && selectedAgent?.id !== "vscode" && selectedAgent?.id !== "cursor"
@@ -1146,16 +1146,6 @@ export const ProjectsWorkspace = ({
                     <Badge tone={selected.remoteStatus === "ready" || selected.exists ? "success" : "danger"}>
                       {selected.remoteStatus === "ready" || selected.exists ? t("Connected") : t("Unreachable")}
                     </Badge>
-                  </div>
-                  <div className="project-remote-banner__actions">
-                    <Button
-                      size="compact"
-                      variant="secondary"
-                      icon={<Terminal size={13} />}
-                      onClick={() => void copySshCommand(selected)}
-                    >
-                      {t("Copy SSH command")}
-                    </Button>
                   </div>
                 </div>
               ) : null}
@@ -1494,7 +1484,9 @@ export const ProjectsWorkspace = ({
         >
           <DialogHeader
             title={t("Add Skills to Workspace")}
-            description={t("Choose individual Skills or copy every Skill in a reusable Group.")}
+            description={skillPickerMode === "groups"
+              ? t("Copy the current group members. Later group changes do not change this Workspace.")
+              : t("Choose individual Skills or copy every Skill in a reusable Group.")}
           />
           <DialogBody className="resource-picker-dialog__body project-add-skill-fields">
             {modalError ? (
@@ -1573,7 +1565,7 @@ export const ProjectsWorkspace = ({
                 ? t("Already added")
                 : selectedSkillConflicts > 0
                   ? t("Replace and add {{count}}", { count: selectedWorkspaceSkillPlans.length })
-                  : t("Add {{count}}", { count: selectedWorkspaceSkillPlans.length })}
+                  : t("Copy {{count}}", { count: selectedWorkspaceSkillPlans.length })}
             </Button>
           </DialogFooter>
         </ModalFrame>

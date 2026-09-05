@@ -75,7 +75,7 @@ export const ProfileFormDialog = ({
         <DialogHeader
           className="profile-dialog-header"
           title={t(creating ? "New Profile" : "Edit Profile")}
-          description={creating
+          description={creating && !sourceChoiceComplete
             ? t("Start blank or capture an existing local Agent setup.")
             : undefined}
         />

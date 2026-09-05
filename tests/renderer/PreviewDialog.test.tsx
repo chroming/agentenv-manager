@@ -237,6 +237,8 @@ describe("PreviewDialog", () => {
       />
     );
 
+    expect(screen.getByText("Local footprint").closest("details")).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByText("Local footprint"));
     const footprint = screen.getByRole("region", { name: "Local footprint" });
     expect(footprint).toHaveTextContent("Adopt existing: 3");
     expect(footprint).toHaveTextContent("Modify: 1");
@@ -293,6 +295,11 @@ describe("PreviewDialog", () => {
       />
     );
 
+    const disclosure = screen.getByText("Profile content").closest("details");
+    expect(disclosure).not.toHaveAttribute("open");
+    expect(screen.getByRole("region", { name: "Planned changes" }).compareDocumentPosition(disclosure!))
+      .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    fireEvent.click(screen.getByText("Profile content"));
     const payload = screen.getByRole("region", { name: "Profile content" });
     expect(payload).toHaveTextContent("1Instruction files");
     expect(payload).toHaveTextContent("0Skills");

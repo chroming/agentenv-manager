@@ -32,10 +32,6 @@
   padding: 6px 12px;
 }
 
-.skill-library-panel .library-status-switch {
-  font-size: var(--font-size-caption);
-}
-
 .skill-library-panel .library-toolbar {
   background: var(--surface);
   border-top: 0;

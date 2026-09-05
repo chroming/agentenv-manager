@@ -209,9 +209,10 @@ describe("Repository Skill source", () => {
     ).toBe(true);
 
     await page.getByRole("tab", { name: "By source" }).click();
-    expect(await page.getByRole("tab", { name: /^Enabled / }).count()).toBe(0);
-    expect(await page.getByRole("tab", { name: "Monitored (1)", exact: true }).count()).toBe(1);
-    expect(await page.getByRole("tab", { name: "Manual only (0)", exact: true }).count()).toBe(1);
+    expect(await page.getByRole("combobox", { name: "Skill status filters" }).count()).toBe(0);
+    const scopeFilter = page.getByRole("combobox", { name: "Source check scope" });
+    expect(await scopeFilter.inputValue()).toBe("monitored");
+    expect(await scopeFilter.locator("option[value=manual]").textContent()).toBe("Manual only (0)");
     expect(await page.getByRole("button", { name: "Refresh skills" }).count()).toBe(0);
     expect(await page.getByRole("button", { name: "Refresh sources" }).count()).toBe(1);
     expect(await page.getByRole("button", { name: "Check updates" }).count()).toBe(1);
@@ -437,7 +438,7 @@ describe("Repository Skill source", () => {
     await page.getByRole("tab", { name: "Skill list" }).click();
     const removedRow = page.getByRole("group", { name: "Library item release-check-internal" });
     await removedRow.getByText("Removed upstream", { exact: true }).waitFor({ state: "visible" });
-    await page.getByRole("tab", { name: /^Updates / }).click();
+    await page.getByRole("combobox", { name: "Skill status filters" }).selectOption("updates");
     expect(await removedRow.count()).toBe(0);
   }, 90_000);
 

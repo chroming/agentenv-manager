@@ -1280,9 +1280,9 @@ try {
   await capturePage(page, join(outputDir, "skills-groups-expanded-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("tab", { name: "Skill list" }).click();
-  await page.getByRole("tab", { name: /Disabled/ }).click();
+  await page.getByRole("combobox", { name: "Skill status filters" }).selectOption("disabled");
   await capturePage(page, join(outputDir, "skills-disabled-920x620.png"));
-  await page.getByRole("tab", { name: /Enabled/ }).click();
+  await page.getByRole("combobox", { name: "Skill status filters" }).selectOption("enabled");
   const skillSearch = page.getByRole("textbox", { name: "Search skills" });
   await skillSearch.fill("no-such-skill");
   await capturePage(page, join(outputDir, "skills-empty-920x620.png"));
@@ -1894,7 +1894,7 @@ try {
   const claudeAgent = page.getByRole("article", { name: "Agent Claude Code" });
   await claudeAgent.getByRole("button", { name: "Claude Code", exact: true }).click();
   const unmanagedAgentCapture = page.getByRole("dialog", {
-    name: "Create Profile from Claude Code"
+    name: "Set up Claude Code"
   });
   await unmanagedAgentCapture.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "agent-configure-unmanaged-920x620.png"));

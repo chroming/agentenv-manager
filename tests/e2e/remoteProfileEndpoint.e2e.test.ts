@@ -95,6 +95,26 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
     await remoteDeviceGroup.getByText("OpenCode", { exact: true }).waitFor({ state: "visible" });
     await remoteDeviceGroup.getByRole("button", { name: "Refresh fixture-host" }).click();
     await remoteDeviceGroup.getByText("Ready · 1 Agent", { exact: true }).waitFor({ state: "visible" });
+    await remoteDeviceGroup.getByRole("button", { name: "OpenCode", exact: true }).click();
+    const setup = page.getByRole("dialog", { name: /^Set up OpenCode/ });
+    await setup.waitFor({ state: "visible" });
+    expect(await setup.getByRole("combobox", { name: "Profile" }).count()).toBe(0);
+    expect(await setup.getByRole("button", { name: "New Profile" }).isEnabled()).toBe(true);
+    expect(await setup.getByRole("button", { name: "Create from current environment" }).count()).toBe(0);
+    for (const width of [920, 1180, 1440]) {
+      await page.setViewportSize({ width, height: width === 920 ? 620 : 900 });
+      const geometry = await setup.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return {
+          contained: bounds.left >= 0 && bounds.top >= 0 && bounds.right <= innerWidth && bounds.bottom <= innerHeight,
+          overflowing: Array.from(element.querySelectorAll<HTMLElement>("button, select")).some((control) => control.scrollWidth > control.clientWidth + 1)
+        };
+      });
+      expect(geometry).toEqual({ contained: true, overflowing: false });
+    }
+    await page.setViewportSize({ width: 920, height: 620 });
+    await page.keyboard.press("Escape");
+    await setup.waitFor({ state: "hidden" });
     const typography = await page.locator(".target-list").evaluate((list) => {
       const remoteGroup = list.querySelector<HTMLElement>(".remote-location-group")!;
       const remoteDeviceName = remoteGroup.querySelector<HTMLElement>(".remote-location-header__name")!;

@@ -1938,6 +1938,7 @@ describe("App", () => {
     expect(previewCreateProfileFromTarget).not.toHaveBeenCalled();
 
     fireEvent.click(within(nextStep).getByRole("button", { name: "Review current setup" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Create from current environment" }));
     expect(await screen.findByRole("dialog", { name: "Create Profile from OpenCode" }))
       .toBeInTheDocument();
     expect(previewCreateProfileFromTarget).not.toHaveBeenCalled();
@@ -3683,10 +3684,10 @@ describe("App", () => {
     fireEvent.click(within(targetCard).getByRole("button", { name: "OpenCode" }));
 
     const dialog = await screen.findByRole("dialog", {
-      name: "Create Profile from OpenCode"
+      name: "Set up OpenCode"
     });
     expect(dialog).toHaveTextContent("Installation not detected");
-    expect(within(dialog).getByRole("button", { name: "Review" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Create from current environment" })).toBeDisabled();
   });
 
   it("opens at most one composer section and allows all sections to collapse", async () => {
@@ -4944,6 +4945,7 @@ describe("App", () => {
     fireEvent.click(
       within(targetCard).getByRole("button", { name: "OpenCode" })
     );
+    fireEvent.click(screen.getByRole("button", { name: "Create from current environment" }));
     let dialog = screen.getByRole("dialog", { name: "Create Profile from OpenCode" });
     expect(dialog).toHaveTextContent("Save the current Agent setup as a reusable Profile");
     fireEvent.click(within(dialog).getByRole("button", { name: "Review" }));
@@ -5486,6 +5488,7 @@ describe("App", () => {
     const targetCard = within(targetsWorkspace).getByRole("article", { name: "Agent OpenCode" });
     fireEvent.click(within(targetCard).getByRole("button", { name: "OpenCode" }));
 
+    fireEvent.click(screen.getByRole("button", { name: "Create from current environment" }));
     const dialog = screen.getByRole("dialog", { name: "Create Profile from OpenCode" });
     expect(screen.getByRole("region", { name: "Agents" })).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));

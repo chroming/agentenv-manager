@@ -208,7 +208,7 @@ describe("Workspaces desktop workflow", () => {
     if (captureDir) {
       await page.screenshot({ path: join(captureDir, "project-add-skill-920x620.png") });
     }
-    await addSkillsDialog.getByRole("button", { name: "Add 1", exact: true }).click();
+    await addSkillsDialog.getByRole("button", { name: "Copy 1", exact: true }).click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
       .toContain("# Testing");
     const skillResourceList = page.locator(
@@ -362,7 +362,7 @@ describe("Workspaces desktop workflow", () => {
     await page.getByRole("button", { name: "Add Skills" }).click();
     const restoreAddSkillsDialog = page.getByRole("dialog", { name: "Add Skills to Workspace" });
     await restoreAddSkillsDialog.getByRole("checkbox", { name: "testing" }).click();
-    await restoreAddSkillsDialog.getByRole("button", { name: "Add 1", exact: true }).click();
+    await restoreAddSkillsDialog.getByRole("button", { name: "Copy 1", exact: true }).click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8"))
       .toContain("# Updated Testing");
 

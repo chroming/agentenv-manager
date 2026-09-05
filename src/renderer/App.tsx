@@ -212,7 +212,8 @@ import {
   deriveEnvironmentReview,
   type EnvironmentScanStatus
 } from "./environmentReview";
-import { deriveAgentSetupAction, deriveAgentSetupActions } from "./agentSetup";
+import { deriveAgentSetupActions } from "./agentSetup";
+import { useAgentConfiguration } from "./hooks/useAgentConfiguration";
 import { useInstructionLibrary } from "./hooks/useInstructionLibrary";
 
 type ComposerSection = "instructions" | "skills" | "mcp";
@@ -1196,27 +1197,13 @@ const AppContent = ({
     );
   };
 
-  const openAgentConfiguration = (targetId: string) => {
-    const targetName =
-      profileTargets.find((target) => target.id === targetId)?.name ?? "Agent";
-    if (targetId.startsWith("ssh:")) {
-      const activeProfileId = targetStates.find((state) => state.targetId === targetId)?.activeProfileId;
-      const profileId = activeProfileId ?? selectedProfileId ?? profiles[0]?.id;
-      setSelectedTargetId(targetId);
-      if (profileId) selectProfile(profileId, undefined, targetId);
-      else openWorkspaceNow("profiles");
-      return;
-    }
-    const setupAction = deriveAgentSetupAction(targetId, profiles, targetStates);
-
-    if (setupAction.kind !== "review-current") {
-      selectProfile(setupAction.profileId, undefined, targetId);
-      return;
-    }
-    guardProfileAction(`configure ${targetName}`, () => {
-      openCreateFromTargetDialogNow(targetId, "all");
-    });
-  };
+  const creationEndpointRef = useRef<string | undefined>(undefined);
+  const { openAgentConfiguration, agentConfigurationDialog } = useAgentConfiguration({
+    profiles, targets: profileTargets, states: targetStates,
+    onSelect: (profileId, targetId) => selectProfile(profileId, undefined, targetId),
+    onCapture: (id) => openCreateFromTargetDialog(id),
+    onCreate: (id) => guardProfileAction("create a new Profile", () => openCreateProfileDialogNow(id))
+  });
 
   const prepareSkillImport = async (
     source: SkillImportPreviewInput,
@@ -1331,8 +1318,9 @@ const AppContent = ({
     skillSearchRef: skillSearchInputRef
   });
 
-  const openCreateProfileDialogNow = () => {
-    const targetId = selectedTargetId ?? targets[0]?.id;
+  const openCreateProfileDialogNow = (endpointId?: string) => {
+    creationEndpointRef.current = endpointId;
+    const targetId = remote.endpoints.find((endpoint) => endpoint.id === endpointId)?.agentId ?? endpointId ?? selectedAgentId ?? targets[0]?.id;
     if (!targetId) {
       setError("No enabled Agent available");
       return;
@@ -1361,6 +1349,7 @@ const AppContent = ({
     returnFocus?: HTMLElement | null
   ) => {
     appModalFallbackFocusRef.current = returnFocus ?? null;
+    creationEndpointRef.current = undefined;
     const target = targets.find((item) => item.id === targetId);
     setProfileForm({
       targetId,
@@ -1485,10 +1474,11 @@ const AppContent = ({
         ];
         setProfiles(orderByPreference(refreshed.profileItems, nextProfileOrder, (profile) => profile.id));
         persistUiState({ profileOrder: nextProfileOrder });
-        setSelectedTargetId(saved.manifest.preferredTargetId ?? profileForm.targetId);
+        const destination = creationEndpointRef.current ?? saved.manifest.preferredTargetId ?? profileForm.targetId;
+        setSelectedTargetId(destination);
         setProfileTargetSelections((current) => ({
           ...current,
-          [saved.id]: saved.manifest.preferredTargetId ?? profileForm.targetId
+          [saved.id]: destination
         }));
         acceptSelectedProfile(saved);
         if (profileCreateSource === "target") {
@@ -4304,7 +4294,7 @@ const AppContent = ({
                 )}
                 mode={profileDialogMode ?? "create"}
                 source={profileCreateSource}
-                sourceChoiceComplete={Boolean(targetCapturePreview)}
+                sourceChoiceComplete={Boolean(targetCapturePreview || creationEndpointRef.current)}
                 busy={busy}
                 targets={targets}
                 form={profileForm}
@@ -4738,6 +4728,7 @@ const AppContent = ({
           {...skillManagementMigration}
           onReview={() => { skillManagementMigration.onReview(); void openSkillDiscoveries(); }}
         />
+        {agentConfigurationDialog}
         <AgentDiscoveryDialog
           agents={visibleAgentSuggestions}
           allowSuggestionPreferences={allowSuggestionPreferences}

@@ -619,7 +619,9 @@ export const SkillsEditor = ({
         >
             <DialogHeader
               title={t(replacingIndex === undefined ? "Add Skills or Groups" : "Relink missing skill")}
-              description={t("Choose individual Skills or add a reusable Group.")}
+              description={pickerMode === "groups"
+                ? t("Groups follow Library membership. Apply deploys membership changes.")
+                : t("Choose individual Skills or add a reusable Group.")}
             />
             <DialogBody className="resource-picker-dialog__body">
               <LibrarySkillSelection
