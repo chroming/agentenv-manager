@@ -120,6 +120,8 @@ import { SkillCleanupDetailsFooter } from "./SkillCleanupDetailsFooter";
 import { SkillUpdateSettingsDialog } from "./SkillUpdateSettingsDialog";
 import { SkillTagEditorDialog, SkillTagList } from "./SkillTags";
 import { SkillTagSuggestionsDialog } from "./SkillTagSuggestionsDialog";
+import { useAIPreferences } from "../hooks/useAIPreferences";
+import { LocalSkillAnalysis } from "./LocalSkillAnalysis";
 import { SkillLibraryFilters } from "./skillLibrary/SkillLibraryFilters";
 import { CleanupBucketHeader } from "./CleanupBucketHeader";
 import { BulkSkillUpdateDialog } from "./BulkSkillUpdateDialog";
@@ -392,6 +394,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   const [openAction, setOpenAction] = useState<{ id: string; left: number; top: number }>();
   const [summaryHistoryId, setSummaryHistoryId] = useState<string>();
   const [tagAnalysisSkills, setTagAnalysisSkills] = useState<SkillLibraryEntry[]>();
+  const aiPreferences = useAIPreferences();
   const openActionId = openAction?.id;
   const [deleteCandidate, setDeleteCandidate] = useState<SkillLibraryEntry>();
   const [disableCandidate, setDisableCandidate] = useState<SkillLibraryEntry>();
@@ -1827,10 +1830,10 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               {t("Update all")}
             </Button>
           ) : null}
-          <ToolbarOverflowMenu label={t("More Skill actions")} menuLabel={t("Skill actions")} items={[{
+          {aiPreferences.enabled("tags") ? <ToolbarOverflowMenu label={t("More Skill actions")} menuLabel={t("Skill actions")} items={[{
             id: "ai-tags", label: t("AI tags..."), icon: <Sparkles size={15} />, disabled: filteredSkills.length === 0,
             onSelect: () => setTagAnalysisSkills(filteredSkills)
-          }]} />
+          }]} /> : null}
           {filtersOpen ? (
             <SkillLibraryFilters
               availableTags={availableTags}
@@ -2452,7 +2455,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         skill={tagCandidate}
         onDismiss={() => setTagCandidate(undefined)}
         onSave={onSetTags}
-        onSuggest={(skill) => { setTagCandidate(undefined); setTagAnalysisSkills([skill]); }}
+        onSuggest={aiPreferences.enabled("tags") ? (skill) => { setTagCandidate(undefined); setTagAnalysisSkills([skill]); } : undefined}
       />
 
       {deleteCandidate ? createPortal(
@@ -3040,6 +3043,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               </div>
             </header>
             <div className="cleanup-review-content ui-dialog-body">
+              <LocalSkillAnalysis key={cleanupDraft.canonicalPath} sourcePath={cleanupDraft.canonicalPath} />
               {cleanupUsesExistingLibrary ? (
                 <fieldset className="cleanup-review-group">
                   <legend>

@@ -103,6 +103,12 @@ export type {
 } from "./workspaceSync";
 
 export interface AgentEnvApi {
+  readAIPreferences(): Promise<import("./aiAssistance").AIPreferences>;
+  saveAIPreferences(input: import("./aiAssistance").AIPreferences): Promise<import("./aiAssistance").AIPreferences>;
+  onAIPreferencesChanged(callback: (value: import("./aiAssistance").AIPreferences) => void): () => void;
+  prepareAIAnalysis(subject: import("./aiAssistance").AIAnalysisSubject, locale: string): Promise<import("./aiAssistance").AIAnalysisPreview>;
+  generateAIAnalysis(input: import("./aiAssistance").AIAnalysisGenerateInput): Promise<import("./aiAssistance").AIAnalysisRecord>;
+  cancelAIAnalysis(id: string): Promise<void>;
   readonly runtimeVersion: number;
   readonly platform: string;
   readStartupStatus(): Promise<StartupStatus>;

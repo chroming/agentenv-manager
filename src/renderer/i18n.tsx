@@ -1062,6 +1062,7 @@ const zhCN: Record<string, string> = {
 };
 
 Object.assign(zhCN, {
+  "Inputs changed. This is the previous analysis; regenerate to analyze the current content.": "内容已变化。这是之前的分析；请重新生成以分析当前内容。",
   "Move legacy Skill records": "迁移旧版 Skill 管理记录",
   "This cleanup does not change Skill content, timestamps, or whether an existing install is a link or copy. Your current deployment preference is preserved.": "此清理不会改变 Skill 内容、时间戳或现有安装的链接/副本形式，并会保留当前部署偏好。",
   "Legacy records": "旧版管理记录",
@@ -3613,6 +3614,7 @@ Object.assign(zhCN, {
 });
 
 Object.assign(zhTW, {
+  "Inputs changed. This is the previous analysis; regenerate to analyze the current content.": "內容已變更。這是先前的分析；請重新產生以分析目前內容。",
   "Move legacy Skill records": "遷移舊版 Skill 管理記錄",
   "This cleanup does not change Skill content, timestamps, or whether an existing install is a link or copy. Your current deployment preference is preserved.": "此清理不會改變 Skill 內容、時間戳或現有安裝的連結/副本形式，並會保留目前部署偏好。",
   "Legacy records": "舊版管理記錄",
@@ -5190,3 +5192,34 @@ export const I18nProvider = ({
 export const useI18n = () => {
   return useContext(I18nContext);
 };
+
+Object.assign(zhCN, {
+  "AI assistance": "AI 辅助", "AI analysis": "AI 分析", "Tag suggestions": "标签建议",
+  "Compare interpretation": "对比结果解读", "Duplicate Skill analysis": "重复 Skill 差异解读", "Profile analysis": "Profile 分析",
+  "Analyze Profile": "分析 Profile", "Analyze results": "分析结果", "Analyze differences": "分析差异",
+  "Generate analysis?": "生成分析？", "Generate": "生成", "Analysis scope": "分析范围",
+  "Potential risk": "潜在风险", "Suggestion": "建议", "Observation": "观察结果",
+  "Manual requests only. Turning this off cancels active AI requests and keeps saved results. Your provider may still bill requests already sent.": "仅在手动确认后调用。关闭会停止正在进行的 AI 请求，保留已有结果。已发送的请求仍可能计费。",
+  "The selected content will be sent to this service and may contain private information. Your provider may charge for this request. Nothing will be changed.": "选定内容将发送到此服务，可能包含私人信息，并消耗服务额度。分析不会修改任何资源。",
+  "Partial analysis: long content is truncated. Only the displayed scope is analyzed.": "分析不完整：长内容已截断，仅分析所示范围。",
+  "No Library version to compare. Add this Skill to Library using the existing controls.": "没有可对比的库内版本。可使用原有操作将此 Skill 添加到库。",
+  "Only the selected version preview is analyzed; no version is selected automatically.": "仅分析选定版本的预览，不会自动选择保留版本。",
+  "This comparison is incomplete or excludes some resources.": "本次对比未完整完成，或排除了部分资源。",
+  "A single comparison cannot establish consistent superiority. Missing metrics are unavailable, not zero.": "单次对比不能证明稳定优劣；缺失指标不可用，不代表零。",
+  "Agent-controlled resources are not read. Analysis covers only this Profile's managed intent.": "不会读取由 Agent 自行管理的资源，仅分析此 Profile 的受管配置意图。"
+});
+Object.assign(zhTW, {
+  "AI assistance": "AI 輔助", "AI analysis": "AI 分析", "Tag suggestions": "標籤建議",
+  "Compare interpretation": "比較結果解讀", "Duplicate Skill analysis": "重複 Skill 差異解讀", "Profile analysis": "Profile 分析",
+  "Analyze Profile": "分析 Profile", "Analyze results": "分析結果", "Analyze differences": "分析差異",
+  "Generate analysis?": "產生分析？", "Generate": "產生", "Analysis scope": "分析範圍",
+  "Potential risk": "潛在風險", "Suggestion": "建議", "Observation": "觀察結果",
+  "Manual requests only. Turning this off cancels active AI requests and keeps saved results. Your provider may still bill requests already sent.": "僅在手動確認後呼叫。關閉會停止進行中的 AI 請求，保留既有結果。已傳送的請求仍可能計費。",
+  "The selected content will be sent to this service and may contain private information. Your provider may charge for this request. Nothing will be changed.": "選定內容將傳送至此服務，可能包含私人資訊，並消耗服務額度。分析不會修改任何資源。",
+  "Partial analysis: long content is truncated. Only the displayed scope is analyzed.": "分析不完整：長內容已截斷，僅分析所示範圍。",
+  "No Library version to compare. Add this Skill to Library using the existing controls.": "沒有可比較的庫內版本。可使用原有操作將此 Skill 加入庫。",
+  "Only the selected version preview is analyzed; no version is selected automatically.": "僅分析選定版本的預覽，不會自動選擇保留版本。",
+  "This comparison is incomplete or excludes some resources.": "本次比較未完整完成，或排除了部分資源。",
+  "A single comparison cannot establish consistent superiority. Missing metrics are unavailable, not zero.": "單次比較不能證明穩定優劣；缺失指標不可用，不代表零。",
+  "Agent-controlled resources are not read. Analysis covers only this Profile's managed intent.": "不會讀取由 Agent 自行管理的資源，僅分析此 Profile 的受管設定意圖。"
+});

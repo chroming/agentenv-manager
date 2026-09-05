@@ -10,6 +10,7 @@ const plan = { id: "review", name: "Review", previewId: "preview", beforeContent
 const record: SkillSummary = { schemaVersion: 1, key: "key", skillId: "review", beforeHash: "old", afterHash: "new", generatedAt: "2026-09-05T10:00:00Z", model: "fixture", overview: "Adds log upload", items: [{ category: "security", fact: "New upload endpoint", implication: "May disclose logs", paths: ["SKILL.md"] }], coverage: "complete", omittedPaths: [], redacted: false, files: [{ path: "SKILL.md", diff: "+new" }] };
 const install = (history: SkillSummary[] = []) => {
   const api = { listSkillSummaries: vi.fn().mockResolvedValue(history),
+    readAIPreferences: vi.fn().mockResolvedValue({ enabled: true, features: { summaries: true } }),
     prepareSkillSummary: vi.fn().mockResolvedValue({ fileCount: 1, omittedPaths: [] }),
     readSkillSummaryConfig: vi.fn().mockResolvedValue({ endpoint: "https://example.com/v1/chat/completions", model: "fixture", hasKey: true }),
     generateSkillSummary: vi.fn().mockResolvedValue(record), cancelSkillSummary: vi.fn().mockResolvedValue(undefined) };
@@ -46,7 +47,7 @@ describe("Skill summary review", () => {
   it("only generates selected batch items", async () => {
     const api = install();
     render(<SkillSummaryReview plans={[plan, { ...plan, id: "other" }]} selectedIds={["review"]} onViewFile={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Summarize selected (1)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Summarize selected (1)" }));
     fireEvent.click(await screen.findByRole("button", { name: "Generate 1" }));
     await screen.findByText("Adds log upload");
     expect(api.generateSkillSummary).toHaveBeenCalledTimes(1);

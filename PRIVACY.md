@@ -73,6 +73,20 @@ are cached locally and do not change Library tags until accepted. Accepted tags
 are ordinary Library metadata and follow the existing Workspace Sync rules;
 AI suggestion caches and credentials do not sync.
 
+Profile analysis, Compare interpretation and duplicate Skill analysis are also
+manual-only. Before sending, the app identifies the selected content and service.
+Profile analysis uses saved instructions, enabled Library SKILL.md text and MCP
+selection policies, not native MCP definitions or credentials. Compare analysis
+may send the selected task, responses, diffs and reported metrics; duplicate
+analysis sends the selected version previews. This content may be private.
+Recognized secrets are redacted on a best-effort basis. Results and their supplied
+evidence remain local, outside portable sync, and never modify original resources.
+Settings provides a master AI assistance switch and individual feature switches.
+Turning them off stops new requests and cancels active analysis where possible;
+requests already sent may still incur provider charges. Existing results and
+accepted tags are retained. These switches do not disable the separate CLI
+Profile Compare execution, which always requires its own explicit Run action.
+
 Network requests occur only for user-requested or configured features:
 
 - GitHub device authorization and GitHub API requests;

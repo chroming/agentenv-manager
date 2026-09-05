@@ -3730,7 +3730,9 @@ describe("Electron UI profile switching e2e", () => {
     await profileActionsTrigger.click();
     const profileActionsMenu = page.getByRole("menu", { name: "Profile actions" });
     await profileActionsMenu.waitFor({ state: "visible" });
-    await page.waitForFunction(() => document.activeElement?.textContent?.includes("Compare"));
+    await expect.poll(() => profileActionsMenu.getByRole("menuitem").first().evaluate(
+      (element) => element === document.activeElement
+    )).toBe(true);
     await page.keyboard.press("End");
     expect(await profileActionsMenu.getByRole("menuitem", { name: "Delete Profile" }).evaluate(
       (element) => element === document.activeElement

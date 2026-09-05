@@ -10,6 +10,7 @@ const skills = [{ id: "review", name: "Review", tags: [] }, { id: "testing", nam
 const record = (id: string): SkillTagSuggestion => ({ schemaVersion: 1, key: id, skillId: id, contentHash: "hash", vocabularyHash: "vocab", locale: "en", generatedAt: "2026-09-05", model: "fixture", partial: false, tags: [{ tag: "Code review", reason: "Reviews code changes" }, { tag: "Testing", reason: "Tests behavior" }] });
 const install = (cached = false) => {
   const api = {
+    readAIPreferences: vi.fn().mockResolvedValue({ enabled: true, features: { tags: true } }),
     prepareSkillTagSuggestions: vi.fn(async (ids: string[]) => ({ items: ids.map((id) => ({ skillId: id, key: id, contentHash: "hash", partial: false, cached: cached ? record(id) : undefined })), errors: [] })),
     readSkillSummaryConfig: vi.fn().mockResolvedValue({ endpoint: "https://example.test/", model: "fixture", hasKey: false }),
     generateSkillTagSuggestions: vi.fn().mockImplementation(async ({ skillId }) => record(skillId)),

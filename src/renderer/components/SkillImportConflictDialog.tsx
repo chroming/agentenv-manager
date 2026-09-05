@@ -10,6 +10,7 @@ import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { SyntaxCodePreview } from "./SyntaxCodePreview";
 import { Button, IconButton } from "./ui";
+import { AIAnalysisReview } from "./AIAnalysisReview";
 
 export interface PendingSkillImport {
   preview: SkillImportPreview;
@@ -223,6 +224,11 @@ export const SkillImportConflictDialog = ({
           </div>
 
           <div className="skill-import-file-review">
+            <AIAnalysisReview subject={{ kind: "duplicates", documents: [
+              { id: "library", label: "Library copy", content: JSON.stringify({ name: selectedConflict.existing.name, version: selectedConflict.existing.version, hash: selectedConflict.existing.contentHash, content: selectedConflict.existing.skillMarkdown }) },
+              { id: "incoming", label: "Incoming copy", content: JSON.stringify({ name: pending.preview.incoming.name, version: pending.preview.incoming.version, hash: pending.preview.incoming.contentHash, content: pending.preview.incoming.skillMarkdown }) },
+              ...selectedConflict.changes.slice(0, 198).map((change, index) => ({ id: `file:${index}`, label: change.path, content: change.diff }))
+            ] }} />
             <div className="skill-import-file-review__header">
               <div>
                 <strong>{t("SKILL.md preview")}</strong>

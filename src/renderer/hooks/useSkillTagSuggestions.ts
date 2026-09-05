@@ -4,6 +4,7 @@ import type { SkillTagAnalysis, SkillTagSuggestion } from "../../shared/skillTag
 import type { SkillSummaryConfig } from "../../shared/skillSummaries";
 import { parseSkillTags, skillTagKey } from "../../shared/skillTags";
 import { useI18n } from "../i18n";
+import { useAIPreferences } from "./useAIPreferences";
 
 export interface TagReviewRow {
   analysis?: SkillTagAnalysis;
@@ -21,6 +22,7 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
   const [confirmation, setConfirmation] = useState<{ config: SkillSummaryConfig; items: SkillTagAnalysis[]; regenerate: boolean }>();
   const active = useRef(true);
   const stopped = useRef(false);
+  const ai = useAIPreferences();
   const requestId = useRef("");
   const patch = (id: string, values: Partial<TagReviewRow>) => {
     if (active.current) setRows((current) => ({ ...current, [id]: { ...(current[id] ?? { draft: [], status: "idle" }), ...values } }));
@@ -83,6 +85,7 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
     }
     if (active.current) setBusy(undefined);
   };
+  useEffect(() => { if (!ai.enabled("tags")) { stop(); setConfirmation(undefined); } }, [ai.preferences]);
   const saveable = skills.filter((skill) => selected.has(skill.id) && rows[skill.id]?.record && rows[skill.id].status !== "saved" && rows[skill.id].draft.some((tag) => !skill.tags?.some((existing) => skillTagKey(existing) === skillTagKey(tag))));
   const save = async () => {
     if (busy || !saveable.length) return;
@@ -98,6 +101,6 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
     }
     if (active.current) setBusy(undefined);
   };
-  return { rows, selected, setSelected, busy, error, confirmation, setConfirmation, prepare, generate, stop, save,
+  return { allowed: ai.enabled("tags"), rows, selected, setSelected, busy, error, confirmation, setConfirmation, prepare, generate, stop, save,
     saveable, patch, savedCount: Object.values(rows).filter((row) => row.status === "saved").length };
 };

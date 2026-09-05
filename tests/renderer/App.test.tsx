@@ -320,6 +320,11 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
 
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
+    readAIPreferences: vi.fn().mockResolvedValue({ enabled: true, features: { summaries: true, tags: true, comparison: true, duplicates: true, profile: true } }),
+    saveAIPreferences: vi.fn().mockImplementation(async (value) => value),
+    onAIPreferencesChanged: vi.fn().mockReturnValue(() => undefined),
+    prepareAIAnalysis: vi.fn().mockResolvedValue({ key: "fixture", documents: [], warnings: [], partial: false }),
+    generateAIAnalysis: vi.fn(), cancelAIAnalysis: vi.fn(),
     readSkillSummaryConfig: vi.fn().mockResolvedValue({ endpoint: "", model: "", hasKey: false }),
     prepareSkillTagSuggestions: vi.fn().mockResolvedValue({ items: [], errors: [] }),
     generateSkillTagSuggestions: vi.fn(),

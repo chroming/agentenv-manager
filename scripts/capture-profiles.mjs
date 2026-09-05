@@ -2058,6 +2058,11 @@ try {
   await capturePage(page, join(outputDir, "settings-controls-1180x728.png"));
   await setWindowSize(page, windowHandle, 1440, 900);
   await capturePage(page, join(outputDir, "settings-controls-1440x900.png"));
+  await page.getByRole("tab", { name: "AI assistance", exact: true }).click();
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(page, join(outputDir, "settings-ai-920x620.png"));
+  await setWindowSize(page, windowHandle, 1440, 900);
+  await capturePage(page, join(outputDir, "settings-ai-1440x900.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
   await page.getByRole("tab", { name: "Connections" }).click();
   await capturePage(page, join(outputDir, "settings-connections-1180x728.png"));
@@ -2189,6 +2194,27 @@ try {
   await page.keyboard.press("Escape");
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "implementation-1180x728.png"));
+
+  // Local synthetic analysis evidence; captures never call a model service.
+  await page.getByRole("button", { name: "Profiles", exact: true }).click();
+  await selectCaptureProfile("Daily Coding");
+  await mkdir(join(appDataRoot, "ai-analyses"), { recursive: true });
+  for (const targetId of ["codex", "opencode", "claude-code", "pi", "trae-cli", "antigravity", "antigravity-app"]) {
+    const analysis = await page.evaluate((targetId) => window.agentEnv.prepareAIAnalysis({ kind: "profile", profileId: "daily-coding", targetId }, "en"), targetId);
+    await writeJson(join(appDataRoot, "ai-analyses", `${analysis.key}.json`), {
+      schemaVersion: 1, key: analysis.key, kind: "profile", locale: "en", generatedAt: "2026-09-06T00:00:00Z",
+      endpoint: "https://example.test/api", model: "Mock analysis", partial: analysis.partial,
+      overview: "Review the instruction overlap before applying this Profile.",
+      findings: [{ category: "suggestion", detail: "Some review responsibilities may overlap.", suggestion: "Keep the detailed rule in one instruction and reference it from the others.", evidence: ["scope"] }],
+      limitations: ["Mock content for visual review. No real model request was made."], documents: analysis.documents
+    });
+  }
+  await page.getByRole("button", { name: "More Profile actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Analyze Profile", exact: true }).click();
+  await page.getByText("Review the instruction overlap before applying this Profile.", { exact: true }).waitFor();
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(page, join(outputDir, "ai-analysis-profile-920x620.png"));
+  await page.keyboard.press("Escape");
 
   if (await fileExists(referencePath)) {
     const htmlPath = await writeComparisonPage();

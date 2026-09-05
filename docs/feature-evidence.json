@@ -2,6 +2,31 @@
   "formatVersion": 1,
   "features": [
     {
+      "id": "ai-assistance-controls-and-analysis",
+      "summary": "Device-local model gates and manual evidence-linked Profile, comparison and duplicate analysis.",
+      "contract": { "path": "docs/ai-assistance.md", "anchor": "## 功能准入" },
+      "support": { "opencode": "supported", "claude-code": "supported", "codex": "supported", "antigravity": "supported", "antigravity-app": "supported", "trae-cli": "supported", "pi": "supported" },
+      "states": {
+        "idle": "Only cached results are read; generation requires confirmation.",
+        "working": "A bounded single model request shows progress and Stop.",
+        "success": "Evidence-linked results do not modify Profile, Skills or Agents.",
+        "error": "Errors preserve previous results and do not prevent normal management.",
+        "cancelled": "Feature/master disable cancels active requests and prevents further sends.",
+        "noOp": "Identical content and locale reuse saved analysis without a model call.",
+        "stale": "Generate re-reads input; changed previews must be refreshed.",
+        "partial": "Truncated documents, ignored resources and incomplete comparisons are disclosed.",
+        "persisted": "Preferences and evidence caches are device-local and excluded from sync.",
+        "rollback": "Failed regeneration preserves prior atomic cache; no original resource changes occur."
+      },
+      "evidence": {
+        "domain": ["tests/main/aiAssistance.test.ts"],
+        "renderer": ["tests/renderer/AIAssistance.test.tsx"],
+        "desktop": ["tests/e2e/aiAssistance.e2e.test.ts"],
+        "persistence": ["tests/main/aiAssistance.test.ts"],
+        "visual": ["ai-analysis-profile-920x620.png", "settings-ai-920x620.png"]
+      }
+    },
+    {
       "id": "manual-ai-skill-tags",
       "summary": "Manually generate and accept cached task-oriented tag suggestions using the shared AI service, for one Skill or a selected batch.",
       "contract": { "path": "docs/skill-ai-tags.md", "anchor": "AI 建议沿用普通 Library 标签" },

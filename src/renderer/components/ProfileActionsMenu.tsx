@@ -12,6 +12,7 @@ interface ProfileActionsMenuProps {
   appliedRestoreAvailable?: boolean;
   appliedRestoreDescription?: string;
   onCompare?(): void;
+  onAnalyze?(): void;
   onDelete(): void;
   onDuplicate(): void;
   onOpenRecovery?(): void;
@@ -28,6 +29,7 @@ export const ProfileActionsMenu = ({
   appliedRestoreAvailable = false,
   appliedRestoreDescription,
   onCompare,
+  onAnalyze,
   onDelete,
   onDuplicate,
   onOpenRecovery,
@@ -42,6 +44,7 @@ export const ProfileActionsMenu = ({
       menuRef={menuRef}
       style={style}
     >
+      {onAnalyze ? <ActionMenuItem disabled={disabled} onClick={onAnalyze}><span>{t("Analyze Profile")}</span></ActionMenuItem> : null}
       {onCompare ? <ActionMenuItem
         disabled={disabled || compareDisabled}
         title={compareDescription}

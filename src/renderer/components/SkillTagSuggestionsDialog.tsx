@@ -61,8 +61,8 @@ export const SkillTagSuggestionsDialog = ({ skills, vocabulary, onClose, onSave 
       <ResourcePanelToolbar>
         <label className="skill-ai-tags-selection"><ChoiceInput type="checkbox" aria-label={t("Select all")} checked={allSelected} disabled={locked}
           onChange={() => state.setSelected(allSelected ? new Set() : new Set(skills.map((skill) => skill.id)))} />{t("{{count}} selected", { count: state.selected.size })}</label>
-        <Button icon={<Sparkles size={15} />} busy={state.busy === "loading" || state.busy === "preparing"} disabled={locked || !state.selected.size}
-          onClick={() => void state.prepare(undefined, allCached)}>{t(allCached ? "Regenerate selected" : "Suggest tags")}</Button>
+        {state.allowed ? <Button icon={<Sparkles size={15} />} busy={state.busy === "loading" || state.busy === "preparing"} disabled={locked || !state.selected.size}
+          onClick={() => void state.prepare(undefined, allCached)}>{t(allCached ? "Regenerate selected" : "Suggest tags")}</Button> : null}
       </ResourcePanelToolbar>
       {state.error ? <Notice tone="warning" role="alert">{state.error}</Notice> : null}
       {state.confirmation ? <Notice title={t("Generate tag suggestions?")} actions={<>
@@ -88,9 +88,9 @@ export const SkillTagSuggestionsDialog = ({ skills, vocabulary, onClose, onSave 
               <InteractiveStatus size="metadata" busy={working} icon={saved ? <CheckCircle2 size={14} /> : undefined}
                 statusKind={working ? "working" : saved ? "success" : row?.error ? "error" : "neutral"}
                 label={t(statusLabel)} />
-              <Button size="compact" disabled={locked || saved} onClick={() => void state.prepare([skill.id], Boolean(row?.record))}>
+              {state.allowed ? <Button size="compact" disabled={locked || saved} onClick={() => void state.prepare([skill.id], Boolean(row?.record))}>
                 {t(row?.record ? "Regenerate" : row?.error || row?.status === "skipped" ? "Retry" : "Suggest tags")}
-              </Button>
+              </Button> : null}
             </div>
             {skill.tags?.length ? <div className="skill-ai-tags-existing"><span>{t("Existing tags")}</span><SkillTagList tags={skill.tags} maxVisible={12} /></div> : null}
             {row?.error ? <Notice tone="warning" role="alert">{row.error}</Notice> : null}

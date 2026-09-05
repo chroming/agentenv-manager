@@ -94,6 +94,8 @@ import { QuickOpen } from "./components/QuickOpen";
 import { ProfileList } from "./components/ProfileList";
 import { ResourceIcon } from "./components/ResourceIconPicker";
 import { ProfileActionsMenu } from "./components/ProfileActionsMenu";
+import { ProfileAnalysisDialog } from "./components/ProfileAnalysisDialog";
+import { useAIPreferences } from "./hooks/useAIPreferences";
 import { ProfileComposerSection } from "./components/ProfileComposerSection";
 import { ProfileInstructionsComposerSection } from "./components/ProfileInstructionsComposerSection";
 import { GeneralSettingsSection, SettingsCategoryTabs, type SettingsCategory } from "./components/SettingsCategoryTabs";
@@ -118,6 +120,7 @@ import {
   type PendingSkillImport
 } from "./components/SkillImportConflictDialog";
 import { SkillSettingsSection } from "./components/SkillSettingsSection";
+import { SkillSummarySettings } from "./components/SkillSummarySettings";
 import { ProfileSkillsComposerSection } from "./components/ProfileSkillsComposerSection";
 import { TargetCaptureDialog } from "./components/TargetCaptureDialog";
 import { TargetWorkspace } from "./components/TargetWorkspace";
@@ -352,6 +355,8 @@ const AppContent = ({
   const profileApplyControlRef = useRef<HTMLDivElement>(null);
   const profileActionsButtonRef = useRef<HTMLButtonElement>(null);
   const profileActionsMenuRef = useRef<HTMLDivElement>(null);
+  const aiPreferences = useAIPreferences();
+  const [profileAnalysis, setProfileAnalysis] = useState<{ profileId: string; targetId: string }>();
   const profileSearchInputRef = useRef<HTMLInputElement>(null);
   const skillSearchInputRef = useRef<HTMLInputElement>(null);
   const dataRefreshRequestRef = useRef(0);
@@ -3588,6 +3593,12 @@ const AppContent = ({
                   target: selectedTarget?.name ?? t("this Agent")
                 })}
             onCompare={() => void openProfileEvaluation()}
+            onAnalyze={aiPreferences.enabled("profile") ? () => {
+              setIsProfileActionsOpen(false);
+              void saveDraft().then((saved) => {
+                if (saved && selectedTargetId) setProfileAnalysis({ profileId: saved.id, targetId: selectedTargetId });
+              });
+            } : undefined}
             onDuplicate={() => duplicateProfile()}
             onDelete={() => {
               setIsProfileActionsOpen(false);
@@ -3651,6 +3662,7 @@ const AppContent = ({
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={toggleSidebar}
       />
+      {profileAnalysis ? <ProfileAnalysisDialog {...profileAnalysis} onClose={() => setProfileAnalysis(undefined)} /> : null}
       <ProfileSidebar
         targets={targets}
         profiles={profiles}
@@ -4538,6 +4550,7 @@ const AppContent = ({
                 onChange={(input) => void updateSkillSettings(input)}
               />
             ) : null}
+            {settingsCategory === "ai" ? <SkillSummarySettings /> : null}
             {settingsCategory === "connections" ? (
               <>
                 <WorkspaceSyncSettings onWorkspaceChanged={refreshWorkspaceStateAfterSync} />

@@ -2,7 +2,6 @@ import type { AgentEnvSettings } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { SettingsPreferenceRow } from "./SettingsPreferenceRow";
 import { SelectControl, Switch } from "./ui";
-import { SkillSummarySettings } from "./SkillSummarySettings";
 
 interface SkillSettingsSectionProps {
   busy: boolean;
@@ -100,7 +99,6 @@ export const SkillSettingsSection = ({
           </SelectControl>}
         />
       </div>
-      <SkillSummarySettings />
     </section>
   );
 };

@@ -4,6 +4,7 @@ import type { SkillSummary, SkillSummaryConfig } from "../../shared/skillSummari
 import { useI18n } from "../i18n";
 import { Button, Notice, ResourcePanelToolbar } from "./ui";
 import { SkillSummaryContent } from "./SkillSummaryContent";
+import { useAIPreferences } from "../hooks/useAIPreferences";
 
 export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = false }: {
   plans: SkillUpdatePlan[]; selectedIds?: string[]; disabled?: boolean;
@@ -18,6 +19,11 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
   const active = useRef(true);
   const requestId = useRef("");
   const stopped = useRef(false);
+  const ai = useAIPreferences();
+  const allowed = ai.enabled("summaries");
+  useEffect(() => {
+    if (!allowed) { stopped.current = true; setConfirmation(undefined); if (requestId.current) void window.agentEnv.cancelSkillSummary(requestId.current); }
+  }, [allowed]);
   const identity = plans.map((plan) => `${plan.id}:${plan.previewId}`).join("|");
   useEffect(() => {
     active.current = true;
@@ -42,7 +48,7 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
   const selected = plans.filter((plan) => plan.previewId && (!selectedIds || selectedIds.includes(plan.id)));
   const missing = selected.filter((plan) => !records[plan.id]);
   const prepare = async (chosen: SkillUpdatePlan[], regenerate = false) => {
-    if (busyId || loadingConfig || !chosen.length) return;
+    if (!allowed || busyId || loadingConfig || !chosen.length) return;
     setLoadingConfig(true);
     setErrors({});
     try {
@@ -87,15 +93,16 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
     }
     if (active.current) setBusyId("");
   };
+  if (!allowed && !Object.keys(records).length) return null;
   return <section className="skill-summary-review" aria-label={t("Update summaries")}>
     <ResourcePanelToolbar>
       <span className="resource-heading skill-summary-heading">{t("Update summaries")}</span>
       {busyId ? <Button onClick={() => {
         stopped.current = true;
         if (requestId.current) void window.agentEnv.cancelSkillSummary(requestId.current);
-      }}>{t("Stop")}</Button> : missing.length ? <Button disabled={disabled} busy={loadingConfig} onClick={() => void prepare(missing)}>
+      }}>{t("Stop")}</Button> : allowed && missing.length ? <Button disabled={disabled} busy={loadingConfig} onClick={() => void prepare(missing)}>
         {t(plans.length === 1 ? "Generate summary" : "Summarize selected ({{count}})", { count: missing.length })}
-      </Button> : plans.length === 1 && records[plans[0].id] ? <Button disabled={disabled} busy={loadingConfig} onClick={() => void prepare([plans[0]], true)}>{t("Regenerate summary")}</Button> : null}
+      </Button> : allowed && plans.length === 1 && records[plans[0].id] ? <Button disabled={disabled} busy={loadingConfig} onClick={() => void prepare([plans[0]], true)}>{t("Regenerate summary")}</Button> : null}
     </ResourcePanelToolbar>
     {confirmation ? <Notice title={t("Generate summaries?")} actions={<>
       <Button onClick={() => setConfirmation(undefined)}>{t("Cancel")}</Button>
@@ -114,7 +121,7 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
       {busyId === plan.id ? <Button busy disabled>{t("Generating summary")}</Button> : null}
       {records[plan.id] ? <>
         <SkillSummaryContent summary={records[plan.id]} onViewFile={(path) => onViewFile(plan, path, records[plan.id])} />
-        {plans.length > 1 ? <Button size="compact" disabled={disabled || Boolean(busyId) || loadingConfig} onClick={() => void prepare([plan], true)}>{t("Regenerate summary")}</Button> : null}
+        {allowed && plans.length > 1 ? <Button size="compact" disabled={disabled || Boolean(busyId) || loadingConfig} onClick={() => void prepare([plan], true)}>{t("Regenerate summary")}</Button> : null}
       </> : null}
     </div> : null)}
   </section>;

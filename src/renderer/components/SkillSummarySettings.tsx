@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n";
 import { Button, Notice, TextField } from "./ui";
+import { AIAssistanceSettings } from "./AIAssistanceSettings";
 
 export const SkillSummarySettings = () => {
   const { t } = useI18n();
@@ -25,7 +26,7 @@ export const SkillSummarySettings = () => {
     } catch (error) { setError(error instanceof Error ? error.message : String(error)); }
     finally { setBusy(false); }
   };
-  return <details className="settings-disclosure">
+  return <section className="resource-section settings-section"><AIAssistanceSettings /><details className="settings-disclosure">
     <summary>{t("AI service")}</summary>
     <div className="profile-form-grid">
       <p className="settings-muted">{t("Manual only. OpenAI-compatible Chat Completions API with JSON output. Credentials stay on this device.")}</p>
@@ -41,5 +42,5 @@ export const SkillSummarySettings = () => {
         <Button busy={busy} disabled={!endpoint || !model} onClick={() => void save()}>{t("Save")}</Button>
       </div>
     </div>
-  </details>;
+  </details></section>;
 };

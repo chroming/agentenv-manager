@@ -1,3 +1,4 @@
+import { AIAnalysisReview } from "./AIAnalysisReview";
 import {
   AlertTriangle,
   Check,
@@ -549,6 +550,7 @@ export const ProfileEvaluationDialog = ({
               <div className="profile-comparison-result__panel" role="tabpanel">
                 {resultTab === "overview" && result ? (
                   <div className="profile-comparison-overview">
+                    <AIAnalysisReview subject={{ kind: "comparison", runId: result.runId }} />
                     <div className={`profile-comparison-outcome${result.current.error || result.proposed.error ? " is-incomplete" : ""}`}>
                       {result.current.error || result.proposed.error
                         ? <AlertTriangle size={17} aria-hidden="true" />

@@ -3,12 +3,13 @@ import { useI18n } from "../i18n";
 import { SettingsPreferenceRow } from "./SettingsPreferenceRow";
 import { SelectControl, TabBar } from "./ui";
 
-export type SettingsCategory = "general" | "agents" | "skills" | "connections" | "data";
+export type SettingsCategory = "general" | "agents" | "skills" | "ai" | "connections" | "data";
 
 const categories = [
   ["general", "General"],
   ["agents", "Agents"],
   ["skills", "Skills"],
+  ["ai", "AI assistance"],
   ["connections", "Connections"],
   ["data", "Data"]
 ] as const;

@@ -5,6 +5,16 @@ import { AGENTENV_RUNTIME_VERSION } from "../shared/runtimeVersion";
 const api: AgentEnvApi = {
   runtimeVersion: AGENTENV_RUNTIME_VERSION,
   platform: process.platform,
+  readAIPreferences: () => ipcRenderer.invoke("ai:preferences"),
+  saveAIPreferences: (input) => ipcRenderer.invoke("ai:configure", input),
+  onAIPreferencesChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: import("../shared/aiAssistance").AIPreferences) => callback(value);
+    ipcRenderer.on("ai:preferences-changed", listener);
+    return () => { ipcRenderer.removeListener("ai:preferences-changed", listener); };
+  },
+  prepareAIAnalysis: (subject, locale) => ipcRenderer.invoke("ai:prepare", subject, locale),
+  generateAIAnalysis: (input) => ipcRenderer.invoke("ai:generate", input),
+  cancelAIAnalysis: (id) => ipcRenderer.invoke("ai:cancel", id),
   readSkillSummaryConfig: () => ipcRenderer.invoke("skill-summaries:config"),
   prepareSkillTagSuggestions: (id, locale) => ipcRenderer.invoke("skill-tags:prepare", id, locale),
   generateSkillTagSuggestions: (input) => ipcRenderer.invoke("skill-tags:generate", input),
