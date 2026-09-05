@@ -66,6 +66,13 @@ No tools or automatic requests are enabled. Summaries and redacted supporting
 diffs persist locally; the API Key is stored encrypted using OS secure storage.
 These records and credentials are excluded from portable Workspace Sync.
 
+Optional AI tag suggestions use that same configured API service only after
+manual confirmation. They send bounded SKILL.md text and existing tag names,
+not other Skill files, Agent settings or conversation history. Suggested tags
+are cached locally and do not change Library tags until accepted. Accepted tags
+are ordinary Library metadata and follow the existing Workspace Sync rules;
+AI suggestion caches and credentials do not sync.
+
 Network requests occur only for user-requested or configured features:
 
 - GitHub device authorization and GitHub API requests;

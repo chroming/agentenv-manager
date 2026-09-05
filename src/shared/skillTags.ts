@@ -59,7 +59,7 @@ export const canonicalizeSkillTags = (
   availableTags: readonly string[] = []
 ) => {
   const canonical = new Map(
-    parseSkillTags(availableTags, { strict: false }).map((tag) => [skillTagKey(tag), tag])
+    availableTags.flatMap((tag) => parseSkillTags([tag], { strict: false })).map((tag) => [skillTagKey(tag), tag])
   );
   return parseSkillTags(value).map((tag) => canonical.get(skillTagKey(tag)) ?? tag);
 };

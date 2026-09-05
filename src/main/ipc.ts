@@ -32,7 +32,6 @@ import type {
   SkillImportInput,
   SkillImportPreviewInput,
   SkillIconInput,
-  SkillTagsInput,
   SkillMergeInput,
   SkillCollectionMemberDecisionUpdate,
   SkillSourceMergePreviewInput,
@@ -891,15 +890,6 @@ export const registerIpcHandlers = ({
           : ResourceIconKeySchema.parse(input.iconKey)
     })
   );
-  handleMutation("skills:set-tags", (_event, input: SkillTagsInput) => {
-    if (!Array.isArray(input?.tags)) {
-      throw new Error("Skill tags must be an array");
-    }
-    return skillLibraryStore.setTags({
-      id: parseId(input?.id, "skill id"),
-      tags: input.tags
-    });
-  });
   registerSkillUpdateIpc({ diagnosticHandle, handleMutation }, skillLibraryStore, waitForAutomationBackgroundDelay);
   registerSkillSummaryIpc({ diagnosticHandle, handleMutation, handleWorkspaceSyncMutation }, paths.appDataRoot, skillLibraryStore);
   registerSettingsIpc(

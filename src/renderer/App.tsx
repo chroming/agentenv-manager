@@ -3158,12 +3158,14 @@ const AppContent = ({
     try {
       const updated = await window.agentEnv.setSkillTags(input);
       replaceLibrarySkillLocally(updated);
+      if (input.suggestionKey) return true;
       setSkillUpdateCheckStatus({
         state: "success",
         message: t("Tags saved for {{name}}", { name: updated.name })
       });
       return true;
     } catch (unknownError) {
+      if (input.suggestionKey) throw unknownError;
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       return false;
     }

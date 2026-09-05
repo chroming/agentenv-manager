@@ -36,4 +36,9 @@ describe("skill tags", () => {
       {}
     ])).toEqual(["Docs", "React", "Testing"]);
   });
+
+  it("does not apply the per-Skill limit to the Library-wide vocabulary", () => {
+    const vocabulary = Array.from({ length: 30 }, (_, index) => `Task ${index}`);
+    expect(canonicalizeSkillTags(["task 29"], vocabulary)).toEqual(["Task 29"]);
+  });
 });

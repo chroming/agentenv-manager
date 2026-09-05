@@ -13,6 +13,8 @@ interface ModalFrameProps {
   dismissDisabled?: boolean;
   onDismiss(): void;
   suspended?: boolean;
+  maximized?: boolean;
+  size?: "default" | "wide";
 }
 
 export const ModalFrame = ({
@@ -24,7 +26,9 @@ export const ModalFrame = ({
   dismissPolicy = "standard",
   dismissDisabled = false,
   onDismiss,
-  suspended = false
+  suspended = false,
+  maximized = false,
+  size = "default"
 }: ModalFrameProps) => {
   const stopPropagation = (event: MouseEvent<HTMLElement>) => event.stopPropagation();
 
@@ -40,7 +44,7 @@ export const ModalFrame = ({
     >
       <section
         ref={dialogRef}
-        className={`profile-form-dialog ui-modal ${className}`.trim()}
+        className={`profile-form-dialog ui-modal ${className}${size === "wide" ? " ui-modal--wide" : ""}${maximized ? " ui-modal--maximized" : ""}`.trim()}
         role="dialog"
         aria-hidden={suspended || undefined}
         aria-modal={suspended ? undefined : "true"}

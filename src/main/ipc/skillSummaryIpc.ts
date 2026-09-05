@@ -6,9 +6,11 @@ import { parseId } from "./registration";
 import { isSecureTokenStorageAvailable } from "../githubAuthService";
 import { createSummaryStore } from "../skillSummaries/summaryStore";
 import { createSummaryService } from "../skillSummaries/summaryService";
+import { createAIJsonClient } from "../ai/aiJsonClient";
+import { createSkillTagSuggestionService } from "../ai/skillTagSuggestions";
 
 export const registerSkillSummaryIpc = (
-  { diagnosticHandle }: IpcRegistrationHandles,
+  { diagnosticHandle, handleMutation }: IpcRegistrationHandles,
   root: string,
   library: SkillLibraryStore
 ) => {
@@ -20,7 +22,16 @@ export const registerSkillSummaryIpc = (
       ...(process.platform === "linux" ? { backend: safeStorage.getSelectedStorageBackend() } : {})
     })
   });
-  const service = createSummaryService({ store, readInput: library.readSummaryInput });
+  const request = createAIJsonClient();
+  const service = createSummaryService({ store, readInput: library.readSummaryInput, request });
+  const tags = createSkillTagSuggestionService({ root, library, configStore: store, request });
+  diagnosticHandle("skill-tags:prepare", (_event, ids, locale) => tags.prepareBatch(z.array(z.string()).parse(ids), z.enum(["en", "zh_CN", "zh_TW"]).parse(locale)));
+  diagnosticHandle("skill-tags:generate", (_event, input) => tags.generate(input));
+  diagnosticHandle("skill-tags:cancel", (_event, id) => tags.cancel(z.string().uuid().parse(id)));
+  handleMutation("skills:set-tags", (_event, raw) => {
+    const input = z.object({ id: z.string(), tags: z.array(z.string()), suggestionKey: z.string().regex(/^[a-f0-9]{64}$/).optional() }).parse(raw);
+    return input.suggestionKey ? tags.apply(input) : library.setTags({ ...input, id: parseId(input.id, "Skill id") });
+  });
   diagnosticHandle("skill-summaries:config", () => store.config());
   diagnosticHandle("skill-summaries:prepare", async (_event, previewId) => {
     const snapshot = await library.readSummaryInput(z.string().uuid().parse(previewId));

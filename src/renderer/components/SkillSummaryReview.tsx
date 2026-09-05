@@ -47,7 +47,7 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
     setErrors({});
     try {
       const config = await window.agentEnv.readSkillSummaryConfig();
-      if (!config.model) throw new Error(t("Configure Update summaries in Settings first."));
+      if (!config.model) throw new Error(t("Configure the AI service in Settings first."));
       const prepared: SkillUpdatePlan[] = [];
       const omitted: string[] = [];
       let fileCount = 0;

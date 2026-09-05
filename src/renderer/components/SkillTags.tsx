@@ -77,6 +77,7 @@ export const SkillTagList = ({
 };
 
 interface SkillTagEditorDialogProps {
+  onSuggest?(skill: SkillLibraryEntry): void;
   availableTags: readonly string[];
   fallbackFocusRef?: RefObject<HTMLElement | null>;
   onDismiss(): void;
@@ -89,6 +90,7 @@ export const SkillTagEditorDialog = ({
   fallbackFocusRef,
   onDismiss,
   onSave,
+  onSuggest,
   skill
 }: SkillTagEditorDialogProps) => {
   const { t } = useI18n();
@@ -254,6 +256,7 @@ export const SkillTagEditorDialog = ({
         ) : null}
       </DialogBody>
       <DialogFooter>
+        {onSuggest ? <Button disabled={dirty || saving} onClick={() => onSuggest(skill)}>{t("AI suggestions")}</Button> : null}
         <Button variant="secondary" disabled={saving} onClick={onDismiss}>
           {t("Cancel")}
         </Button>

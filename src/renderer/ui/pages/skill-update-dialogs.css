@@ -79,3 +79,41 @@
   gap: 8px;
   min-width: 0;
 }
+.skill-ai-tags-body,
+.skill-ai-tags-list,
+.skill-ai-tags-row {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.skill-ai-tags-row {
+  border-bottom: 1px solid var(--border);
+  padding: 12px var(--space-3);
+}
+
+.skill-ai-tags-body {
+  align-content: start;
+  font-size: var(--font-size-body);
+  line-height: 1.5;
+}
+
+.skill-ai-tags-row-heading {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.skill-ai-tags-selection,
+.skill-ai-tags-existing {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.skill-ai-tags-selection { margin-right: auto; }
+.skill-ai-tags-selection span { overflow-wrap: anywhere; min-width: 0; }
+.skill-ai-tags-existing { flex-wrap: wrap; color: var(--text-secondary); }
+.skill-ai-tags-body .skill-tag-editor-chips { overflow-wrap: anywhere; }

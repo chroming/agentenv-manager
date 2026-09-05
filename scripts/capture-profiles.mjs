@@ -1395,6 +1395,14 @@ try {
   await bulkUpdateDialog.getByRole("button", { name: "Close" }).click();
   await bulkUpdateDialog.waitFor({ state: "hidden" });
 
+  await page.getByRole("button", { name: "More Skill actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "AI tags...", exact: true }).click();
+  const aiTagsDialog = page.getByRole("dialog", { name: "AI tags", exact: true });
+  await aiTagsDialog.getByRole("checkbox", { name: "Select all", exact: true }).waitFor();
+  await page.waitForFunction(() => !document.querySelector('.skill-ai-tags-body input[aria-label="Select all"]')?.hasAttribute("disabled"));
+  await capturePage(page, join(outputDir, "skills-ai-tags-920x620.png"));
+  await aiTagsDialog.getByRole("button", { name: "Close", exact: true }).click();
+
   await page.getByRole("button", { name: "Import skills" }).click();
   const importDialog = page.getByRole("dialog", { name: "Import skills" });
   await importDialog.waitFor({ state: "visible" });

@@ -22,7 +22,7 @@ export const SkillSummaryHistoryDialog = ({ id, onClose }: { id: string; onClose
       .catch((error) => { if (active) setError(String(error)); });
     return () => { active = false; };
   }, [id]);
-  return <><ModalFrame suspended={Boolean(evidence)} ariaLabel={t("Update summaries")} className={`profile-dialog ui-dialog-shell${maximized ? " is-maximized" : ""}`}
+  return <><ModalFrame suspended={Boolean(evidence)} ariaLabel={t("Update summaries")} className="profile-dialog ui-dialog-shell" maximized={maximized}
     dialogRef={dialogRef} onDismiss={onClose}>
     <DialogHeader title={t("Update summaries")} description={id} actions={<IconButton label={t(maximized ? "Restore" : "Maximize preview")} onClick={() => setMaximized(!maximized)}>
       {maximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}

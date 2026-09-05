@@ -5075,6 +5075,42 @@ Object.assign(zhTW, {
   "Remove API Key": "移除 API 金鑰"
 });
 
+Object.assign(zhCN, {
+  "Regenerate": "重新生成",
+  "Regenerate selected": "重新生成所选项",
+  "AI service": "AI 服务",
+  "Configure the AI service in Settings first.": "请先在设置中配置 AI 服务。",
+  "AI tags": "AI 打标签", "AI tags...": "AI 打标签…", "AI suggestions": "AI 建议",
+  "More Skill actions": "更多 Skill 操作", "Skill actions": "Skill 操作",
+  "Suggested tags": "建议标签", "New tag": "新标签", "No tags selected": "未选择标签",
+  "Suggest task labels. Existing tags are kept; nothing is saved until you confirm.": "建议适用任务标签。保留已有标签，确认后才保存。",
+  "Suggest tags": "建议标签", "Generate tag suggestions?": "生成标签建议？",
+  "Selected SKILL.md contents and existing tag names will be sent to this service. They may contain private information. Your provider may charge for each request.": "将向此服务发送所选 SKILL.md 内容和已有标签名称，其中可能包含私人信息。服务商可能按请求收费。",
+  "One request per Skill. No scripts, linked files, or Agent configuration are sent.": "每个 Skill 一次请求。不发送脚本、链接文件或 Agent 配置。",
+  "Some long documents or tag lists will be truncated. Suggestions cover only the supplied content.": "部分长文档或标签列表将被截断，建议仅基于已提供的内容。",
+  "Analyzing": "分析中", "Not analyzed": "未分析", "Existing tags": "已有标签", "Partial analysis": "部分内容分析",
+  "No distinctive tags were found. You can add your own.": "未找到有辨识度的标签，可以自行添加。",
+  "Save tags ({{count}})": "保存标签（{{count}}）"
+});
+Object.assign(zhTW, {
+  "Regenerate": "重新產生",
+  "Regenerate selected": "重新產生所選項",
+  "Restore": "恢復",
+  "AI service": "AI 服務",
+  "Configure the AI service in Settings first.": "請先在設定中配置 AI 服務。",
+  "AI tags": "AI 標籤", "AI tags...": "AI 標籤…", "AI suggestions": "AI 建議",
+  "More Skill actions": "更多 Skill 操作", "Skill actions": "Skill 操作",
+  "Suggested tags": "建議標籤", "New tag": "新標籤", "No tags selected": "未選擇標籤",
+  "Suggest task labels. Existing tags are kept; nothing is saved until you confirm.": "建議適用任務標籤。保留已有標籤，確認後才儲存。",
+  "Suggest tags": "建議標籤", "Generate tag suggestions?": "產生標籤建議？",
+  "Selected SKILL.md contents and existing tag names will be sent to this service. They may contain private information. Your provider may charge for each request.": "將向此服務傳送所選 SKILL.md 內容和已有標籤名稱，其中可能包含私人資訊。服務商可能按請求收費。",
+  "One request per Skill. No scripts, linked files, or Agent configuration are sent.": "每個 Skill 一次請求。不傳送腳本、連結檔案或 Agent 配置。",
+  "Some long documents or tag lists will be truncated. Suggestions cover only the supplied content.": "部分長文件或標籤列表將被截斷，建議僅基於已提供的內容。",
+  "Analyzing": "分析中", "Not analyzed": "未分析", "Existing tags": "已有標籤", "Partial analysis": "部分內容分析",
+  "No distinctive tags were found. You can add your own.": "未找到有辨識度的標籤，可以自行新增。",
+  "Save tags ({{count}})": "儲存標籤（{{count}}）"
+});
+
 export const localeTag = (locale: ResolvedAppLocale) =>
   locale === "zh_CN" ? "zh-CN" : locale === "zh_TW" ? "zh-TW" : "en-US";
 

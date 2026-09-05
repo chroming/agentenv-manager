@@ -107,7 +107,7 @@ import {
 } from "../../shared/skillCleanup";
 import { isSharedSkillInventoryEntry } from "../../shared/skillLocationSemantics";
 import { useI18n } from "../i18n";
-import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, SegmentedControl, SelectControl, Switch } from "./ui";
+import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, SegmentedControl, SelectControl, Switch, ToolbarOverflowMenu } from "./ui";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { isExternalSkillImportable } from "../../shared/skillIdentity";
 import { sourceSubpathFor } from "../../shared/skillSourceGrouping";
@@ -119,6 +119,7 @@ import { SkillFileBrowserDialog } from "./SkillFileBrowserDialog";
 import { SkillCleanupDetailsFooter } from "./SkillCleanupDetailsFooter";
 import { SkillUpdateSettingsDialog } from "./SkillUpdateSettingsDialog";
 import { SkillTagEditorDialog, SkillTagList } from "./SkillTags";
+import { SkillTagSuggestionsDialog } from "./SkillTagSuggestionsDialog";
 import { SkillLibraryFilters } from "./skillLibrary/SkillLibraryFilters";
 import { CleanupBucketHeader } from "./CleanupBucketHeader";
 import { BulkSkillUpdateDialog } from "./BulkSkillUpdateDialog";
@@ -390,6 +391,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   ) => onViewStateChange(updateSkillLibraryControls(viewState, patch));
   const [openAction, setOpenAction] = useState<{ id: string; left: number; top: number }>();
   const [summaryHistoryId, setSummaryHistoryId] = useState<string>();
+  const [tagAnalysisSkills, setTagAnalysisSkills] = useState<SkillLibraryEntry[]>();
   const openActionId = openAction?.id;
   const [deleteCandidate, setDeleteCandidate] = useState<SkillLibraryEntry>();
   const [disableCandidate, setDisableCandidate] = useState<SkillLibraryEntry>();
@@ -1733,6 +1735,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   return (
     <section className="skill-library-panel ui-surface-frame" aria-label={t("Skill library")}>
       {summaryHistoryId ? <SkillSummaryHistoryDialog id={summaryHistoryId} onClose={() => setSummaryHistoryId(undefined)} /> : null}
+      {tagAnalysisSkills ? <SkillTagSuggestionsDialog skills={tagAnalysisSkills} vocabulary={availableTags} onSave={onSetTags} onClose={() => setTagAnalysisSkills(undefined)} /> : null}
       <div className="library-control-deck">
         <div className="library-quick-tabs">
           <SegmentedControl
@@ -1824,6 +1827,10 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               {t("Update all")}
             </Button>
           ) : null}
+          <ToolbarOverflowMenu label={t("More Skill actions")} menuLabel={t("Skill actions")} items={[{
+            id: "ai-tags", label: t("AI tags..."), icon: <Sparkles size={15} />, disabled: filteredSkills.length === 0,
+            onSelect: () => setTagAnalysisSkills(filteredSkills)
+          }]} />
           {filtersOpen ? (
             <SkillLibraryFilters
               availableTags={availableTags}
@@ -2445,6 +2452,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         skill={tagCandidate}
         onDismiss={() => setTagCandidate(undefined)}
         onSave={onSetTags}
+        onSuggest={(skill) => { setTagCandidate(undefined); setTagAnalysisSkills([skill]); }}
       />
 
       {deleteCandidate ? createPortal(

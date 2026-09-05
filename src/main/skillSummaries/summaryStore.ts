@@ -64,7 +64,7 @@ export const createSummaryStore = (root: string, cipher: GitHubTokenCipher) => {
     },
     async credentials() {
       const config = await readConfig();
-      if (!config) throw new Error("Configure Update summaries in Settings first.");
+      if (!config) throw new Error("Configure the AI service in Settings first.");
       if (config.encryptedKey && !cipher.isEncryptionAvailable()) throw new Error("Secure storage is unavailable on this device");
       return { ...config, key: config.encryptedKey ? cipher.decryptString(Buffer.from(config.encryptedKey, "base64")) : "" };
     },

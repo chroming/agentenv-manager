@@ -321,6 +321,9 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
     readSkillSummaryConfig: vi.fn().mockResolvedValue({ endpoint: "", model: "", hasKey: false }),
+    prepareSkillTagSuggestions: vi.fn().mockResolvedValue({ items: [], errors: [] }),
+    generateSkillTagSuggestions: vi.fn(),
+    cancelSkillTagSuggestions: vi.fn().mockResolvedValue(undefined),
     prepareSkillSummary: vi.fn().mockResolvedValue({ fileCount: 1, omittedPaths: [] }),
     saveSkillSummaryConfig: vi.fn().mockResolvedValue(undefined),
     listSkillSummaries: vi.fn().mockResolvedValue([]),
@@ -1408,8 +1411,9 @@ describe("App", () => {
       .toBeInTheDocument();
     expect(within(editor).getByRole("button", { name: "Local Skills" }))
       .toBeInTheDocument();
-    expect(within(editor).queryByRole("button", { name: "More Skill actions" }))
+    expect(within(editor.querySelector<HTMLElement>(".library-page-header")!).queryByRole("button", { name: "More Skill actions" }))
       .not.toBeInTheDocument();
+    expect(within(editor.querySelector<HTMLElement>(".library-toolbar")!).getByRole("button", { name: "More Skill actions" })).toBeInTheDocument();
     const refreshSkills = within(editor).getByRole("button", { name: "Refresh skills" });
     expect(refreshSkills).toHaveClass("ui-button", "ui-button--secondary");
     expect(refreshSkills).toHaveTextContent("Refresh");

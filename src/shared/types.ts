@@ -243,6 +243,9 @@ export interface AgentEnvApi {
   setSkillTags(input: SkillTagsInput): Promise<SkillLibraryEntry>;
   previewLibrarySkillUpdate(id: string): Promise<SkillUpdatePlan>;
   readSkillSummaryConfig(): Promise<import("./skillSummaries").SkillSummaryConfig>;
+  prepareSkillTagSuggestions(ids: string[], locale: string): Promise<import("./skillTagSuggestions").SkillTagAnalysisBatch>;
+  generateSkillTagSuggestions(input: import("./skillTagSuggestions").SkillTagGenerateInput): Promise<import("./skillTagSuggestions").SkillTagSuggestion>;
+  cancelSkillTagSuggestions(requestId: string): Promise<void>;
   prepareSkillSummary(previewId: string): Promise<{ fileCount: number; omittedPaths: string[] }>;
   saveSkillSummaryConfig(input: import("./skillSummaries").SkillSummaryConfigInput): Promise<void>;
   listSkillSummaries(id: string): Promise<import("./skillSummaries").SkillSummary[]>;
@@ -1020,6 +1023,7 @@ export interface SkillIconInput {
 }
 
 export interface SkillTagsInput {
+  suggestionKey?: string;
   id: string;
   tags: string[];
 }

@@ -26,7 +26,7 @@ export const SkillSummarySettings = () => {
     finally { setBusy(false); }
   };
   return <details className="settings-disclosure">
-    <summary>{t("Update summaries")}</summary>
+    <summary>{t("AI service")}</summary>
     <div className="profile-form-grid">
       <p className="settings-muted">{t("Manual only. OpenAI-compatible Chat Completions API with JSON output. Credentials stay on this device.")}</p>
       <TextField label={t("API endpoint")} value={endpoint} disabled={busy} onChange={(event) => { setEndpoint(event.currentTarget.value); setSaved(false); }} />
