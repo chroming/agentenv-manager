@@ -180,6 +180,10 @@
   min-width: 0;
 }
 
+.target-workflow-environment--single {
+  grid-template-rows: 18px;
+}
+
 .target-card--workflow {
   align-content: start;
   align-self: start;

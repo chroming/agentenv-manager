@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
+import { profileSharedSkillBoundary } from "../shared/sharedSkillBoundary";
 import {
   ArrowRight,
   CheckCircle2,
@@ -1917,6 +1918,9 @@ const AppContent = ({
       ? draftProfile.targetContentHashes?.[selectedAgentId ?? selectedTarget.id]
       : undefined;
   const readinessInput = {
+    sharedSkillsRequireReview: Boolean(draftProfile && selectedTarget && !selectedRemoteEndpoint &&
+      profileSharedSkillBoundary({ profile: draftProfile, targetId: selectedTarget.id,
+        policy: skillsPolicy, inventory: currentTargetSkills, librarySkills }).migrationPaths.length > 0),
     profile: draftProfile
       ? { id: draftProfile.id, contentHash: selectedTargetProfileHash }
       : undefined,

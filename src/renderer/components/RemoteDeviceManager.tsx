@@ -1,4 +1,5 @@
 import { Clock3, LoaderCircle, MonitorUp, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { TargetEnvironmentSummary } from "./TargetEnvironmentSummary";
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type {
   CreateRemoteDeviceInput,
@@ -393,12 +394,10 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
                     <span className={`target-health-status target-health-status--${available ? "ready" : "unknown"}`}>
                       {t(available ? "Ready" : "Unavailable")}
                     </span>
-                    <span className="target-workflow-environment">
-                      <strong className="target-workflow-lifecycle">
-                        {state?.lifecycleStatus ? remoteLifecycleLabel(state.lifecycleStatus, t) : t("Not managed")}
-                      </strong>
-                      <span className="target-workflow-profile">{state?.activeProfileName}</span>
-                    </span>
+                    <TargetEnvironmentSummary
+                      lifecycle={state?.lifecycleStatus ? remoteLifecycleLabel(state.lifecycleStatus, t) : t("Not managed")}
+                      profileName={state?.activeProfileName}
+                    />
                     <span className="target-workflow-last-applied">
                       {state?.lastAppliedAt ? (
                         <>

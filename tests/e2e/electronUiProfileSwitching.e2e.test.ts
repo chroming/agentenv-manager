@@ -5036,23 +5036,25 @@ describe("Electron UI profile switching e2e", () => {
     await targetRow.waitFor({ state: "visible" });
     const targetLanes = await targetRow.evaluate((row) => {
       const lifecycle = row.querySelector<HTMLElement>(".target-workflow-lifecycle")!.getBoundingClientRect();
-      const profile = row.querySelector<HTMLElement>(".target-workflow-profile")!.getBoundingClientRect();
+      const profile = row.querySelector<HTMLElement>(".target-workflow-profile")?.getBoundingClientRect();
       const environment = row.querySelector<HTMLElement>(".target-workflow-environment")!.getBoundingClientRect();
+      const health = row.querySelector<HTMLElement>(".target-health-status")!.getBoundingClientRect();
       const rowBox = row.getBoundingClientRect();
       return {
         columnCount: getComputedStyle(row).gridTemplateColumns.split(" ").length,
         environmentContained:
           environment.left >= rowBox.left && environment.right <= rowBox.right + 1,
         lifecycleLeft: Math.round(lifecycle.left),
-        profileBelowLifecycle: profile.top > lifecycle.top,
-        profileLeft: Math.round(profile.left),
+        profileLayoutCorrect: profile ? profile.top > lifecycle.top :
+          Math.abs((lifecycle.top + lifecycle.bottom - health.top - health.bottom) / 2) <= 1,
+        profileLeft: Math.round(profile?.left ?? environment.left),
         rowContained: row.scrollWidth <= row.clientWidth + 1
       };
     });
     expect(targetLanes.columnCount).toBe(5);
     expect(targetLanes.environmentContained).toBe(true);
     expect(targetLanes.lifecycleLeft).toBe(targetLanes.profileLeft);
-    expect(targetLanes.profileBelowLifecycle).toBe(true);
+    expect(targetLanes.profileLayoutCorrect).toBe(true);
     expect(targetLanes.rowContained).toBe(true);
   }, standardElectronTestTimeout);
 
@@ -5648,7 +5650,13 @@ describe("Electron UI profile switching e2e", () => {
           healthLanesAligned: hasStableValues(laneLefts(".target-health-status")),
           lifecycleLanesAligned: hasStableValues(laneLefts(".target-workflow-lifecycle")),
           moreButtonsMatch: hasStableSizes(sizes(".target-more-action")),
-          profileLanesAligned: hasStableValues(laneLefts(".target-workflow-profile")),
+          profileLanesAligned: hasStableValues(laneLefts(".target-workflow-environment")),
+          singleLineCentered: rows.every((row) => {
+            if (row.querySelector(".target-workflow-profile")) return true;
+            const label = row.querySelector(".target-workflow-lifecycle")!.getBoundingClientRect();
+            const health = row.querySelector(".target-health-status")!.getBoundingClientRect();
+            return Math.abs((label.top + label.bottom - health.top - health.bottom) / 2) <= 1;
+          }),
           statusLabelsVisible: rows.every((row) =>
             Boolean(row.querySelector<HTMLElement>(".target-health-status")?.textContent?.trim())
           ),
@@ -5666,6 +5674,7 @@ describe("Electron UI profile switching e2e", () => {
         lifecycleLanesAligned: true,
         moreButtonsMatch: true,
         profileLanesAligned: true,
+        singleLineCentered: true,
         statusLabelsVisible: true,
         typography: {
           health: "400",
@@ -5938,8 +5947,8 @@ describe("Electron UI profile switching e2e", () => {
       fileExists(join(appDataRoot, "target-states", "opencode.json"))
     ).resolves.toBe(false);
     await expect.poll(() => openCodeCard.textContent()).toContain("Not managed");
-    await expect.poll(() => openCodeCard.locator(".target-workflow-profile").textContent())
-      .toBe("");
+    await expect.poll(() => openCodeCard.locator(".target-workflow-profile").count())
+      .toBe(0);
   }, standardElectronTestTimeout);
 
   it("stops managing OpenCode by restoring the environment from before takeover", async () => {
@@ -12385,7 +12394,7 @@ describe("Electron UI profile switching e2e", () => {
         row.querySelector<HTMLElement>(".target-workflow-lifecycle")!.getBoundingClientRect().left
       );
       const profileLefts = rows.map((row) =>
-        row.querySelector<HTMLElement>(".target-workflow-profile")!.getBoundingClientRect().left
+        row.querySelector<HTMLElement>(".target-workflow-environment")!.getBoundingClientRect().left
       );
       const actionLefts = rows.map((row) =>
         row.querySelector<HTMLElement>(".target-workflow-actions")!.getBoundingClientRect().left

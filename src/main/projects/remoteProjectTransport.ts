@@ -104,6 +104,14 @@ const normalizePosixPath = (rawPath: string): string => {
   return posix.normalize(converted);
 };
 
+// Expand only the home shorthand, never evaluate shell syntax supplied in a path.
+const remoteTargetAssignment = (rawPath: string): string => {
+  const path = rawPath.trim().replaceAll("\\", "/");
+  if (path === "~") return 'target="$HOME"';
+  if (path.startsWith("~/")) return `target="$HOME"/${shellQuote(path.slice(2))}`;
+  return `target=${shellQuote(normalizePosixPath(path))}`;
+};
+
 const stateFromPorcelain = (output: string): ProjectGitPathState | undefined => {
   const entries = output.split("\0").filter(Boolean);
   if (entries.some((entry) => !entry.startsWith("?? ") && !entry.startsWith("!! "))) {
@@ -126,9 +134,8 @@ export const testRemoteProjectPath = async (
   transport: SshTransport,
   rawPath: string
 ): Promise<RemotePathProbeResult> => {
-  const normalized = normalizePosixPath(rawPath);
   const script = [
-    `target=${shellQuote(normalized)}`,
+    remoteTargetAssignment(rawPath),
     'if [ -d "$target" ]; then',
     '  canonical=$(cd "$target" && pwd -P 2>/dev/null || pwd 2>/dev/null)',
     '  printf "DIR\\t%s\\n" "$canonical"',
@@ -169,7 +176,7 @@ export const listRemoteDirectories = async (
   const hasPath = typeof rawPath === "string" && rawPath.trim().length > 0;
   const script = hasPath
     ? [
-        `target=${shellQuote(normalizePosixPath(rawPath))}`,
+        remoteTargetAssignment(rawPath),
         'if ! cd "$target" 2>/dev/null; then',
         '  printf "CD_FAIL\\t%s\\n" "$target"',
         '  exit 1',

@@ -36,6 +36,7 @@ export interface ProfileReadinessInput {
   preview?: Pick<ActivationPreview, "issues">;
   dependenciesCurrent?: boolean;
   saveFailed?: boolean;
+  sharedSkillsRequireReview?: boolean;
 }
 
 export interface ProfileComparisonControlInput {
@@ -65,7 +66,8 @@ export const deriveProfileReadiness = ({
   localValidationErrors = [],
   preview,
   dependenciesCurrent,
-  saveFailed = false
+  saveFailed = false,
+  sharedSkillsRequireReview = false
 }: ProfileReadinessInput): ProfileReadiness => {
   if (!profile) {
     return {
@@ -133,20 +135,28 @@ export const deriveProfileReadiness = ({
     };
   }
 
-  if (targetState?.status !== "managed") {
-    return {
-      status: "unmanaged",
-      label: "Ready",
-      message: `${target.name} is ready to take over`
-    };
-  }
-
-  if (targetState.lifecycleStatus === "recovery-required") {
+  if (targetState?.lifecycleStatus === "recovery-required") {
     return {
       status: "preview-error",
       label: "Needs review",
       message: `${target.name} requires recovery`,
       remediationLabel: "Open Recovery"
+    };
+  }
+
+  if (sharedSkillsRequireReview) {
+    return {
+      status: "review-required",
+      label: "Needs review",
+      message: "Shared copies prevent this Profile change"
+    };
+  }
+
+  if (targetState?.status !== "managed") {
+    return {
+      status: "unmanaged",
+      label: "Ready",
+      message: `${target.name} is ready to take over`
     };
   }
 

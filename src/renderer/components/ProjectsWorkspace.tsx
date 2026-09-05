@@ -201,6 +201,10 @@ export const ProjectsWorkspace = ({
   const [remoteDirectories, setRemoteDirectories] = useState<RemoteDirectoryEntry[]>([]);
   const [loadingDirectories, setLoadingDirectories] = useState(false);
   const [directoryError, setDirectoryError] = useState<string>();
+  const directoryRequestRef = useRef(0);
+  const pathRequestRef = useRef(0);
+  const remoteContextRef = useRef({ open: addWorkspaceOpen, deviceId: selectedDeviceId, path: remotePath });
+  remoteContextRef.current = { open: addWorkspaceOpen, deviceId: selectedDeviceId, path: remotePath };
   const addDialogRef = useRef<HTMLElement>(null);
   const addInitialFocusRef = useRef<HTMLElement>(null);
   const removeDialogRef = useRef<HTMLElement>(null);
@@ -521,11 +525,15 @@ export const ProjectsWorkspace = ({
 
   const loadRemoteDirectories = useCallback(
     async (path?: string) => {
-      if (!selectedDeviceId) return;
+      if (!selectedDeviceId || !addWorkspaceOpen) return;
+      const requestId = ++directoryRequestRef.current;
+      const isCurrent = () => requestId === directoryRequestRef.current &&
+        remoteContextRef.current.open && remoteContextRef.current.deviceId === selectedDeviceId;
       setLoadingDirectories(true);
       setDirectoryError(undefined);
       try {
         const result = await window.agentEnv.listRemoteDirectories?.(selectedDeviceId, path);
+        if (!isCurrent()) return;
         if (result?.error) {
           setDirectoryError(result.error);
         } else if (result) {
@@ -534,18 +542,23 @@ export const ProjectsWorkspace = ({
           setRemoteDirectories(result.directories ?? []);
         }
       } catch (err) {
-        setDirectoryError(err instanceof Error ? err.message : String(err));
+        if (isCurrent()) setDirectoryError(err instanceof Error ? err.message : String(err));
       } finally {
-        setLoadingDirectories(false);
+        if (isCurrent()) setLoadingDirectories(false);
       }
     },
-    [selectedDeviceId]
+    [selectedDeviceId, addWorkspaceOpen]
   );
 
   useEffect(() => {
+    setTestingPath(false);
     if (addWorkspaceOpen && selectedDeviceId) {
       void loadRemoteDirectories();
     }
+    return () => {
+      directoryRequestRef.current += 1;
+      pathRequestRef.current += 1;
+    };
   }, [addWorkspaceOpen, selectedDeviceId, loadRemoteDirectories]);
 
   const openAddWorkspaceDialog = async () => {
@@ -594,10 +607,14 @@ export const ProjectsWorkspace = ({
 
   const testRemotePath = async () => {
     if (!selectedDeviceId || !remotePath.trim() || testingPath) return;
+    const requestId = ++pathRequestRef.current;
+    const isCurrent = () => requestId === pathRequestRef.current && remoteContextRef.current.open &&
+      remoteContextRef.current.deviceId === selectedDeviceId && remoteContextRef.current.path === remotePath;
     setTestingPath(true);
     setTestResult(undefined);
     try {
       const probe = await window.agentEnv.testRemoteProjectPath?.(selectedDeviceId, remotePath.trim());
+      if (!isCurrent()) return;
       if (probe?.exists && probe.isDirectory) {
         setTestResult({ exists: true, canonicalPath: probe.canonicalPath });
         if (probe.canonicalPath) {
@@ -606,18 +623,19 @@ export const ProjectsWorkspace = ({
       } else {
         setTestResult({
           exists: false,
-          error: probe?.exists
+          error: probe?.error || (probe?.exists
             ? t("Remote path exists but is not a directory")
-            : t("Remote path does not exist or is not a directory")
+            : t("Remote path does not exist or is not a directory"))
         });
       }
     } catch (unknownError) {
+      if (!isCurrent()) return;
       setTestResult({
         exists: false,
         error: unknownError instanceof Error ? unknownError.message : String(unknownError)
       });
     } finally {
-      setTestingPath(false);
+      if (requestId === pathRequestRef.current) setTestingPath(false);
     }
   };
 
@@ -800,7 +818,6 @@ export const ProjectsWorkspace = ({
     if (!selected || !selectedAgent) return;
     if (selected.isRemote && selectedAgent.id !== "vscode" && selectedAgent.id !== "cursor") {
       await copySshCommand(selected);
-      setNotice(t("SSH launch command copied to clipboard. Run it in terminal to access this workspace."));
       return;
     }
     setOperation("open");
@@ -839,6 +856,7 @@ export const ProjectsWorkspace = ({
 
   const copySshCommand = async (project: ProjectSummary) => {
     setProjectMenu(undefined);
+    setNotice("");
     const device = remoteDevices.find((d) => d.id === project.deviceId);
     const host = device?.host || project.deviceHost || "host";
     const cmd = workspaceSshCommand({ host, port: device?.port, user: device?.user }, project.rootPath);

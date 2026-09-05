@@ -188,6 +188,10 @@ Device Sync reuses portable Profile and Library intent across the user's devices
 
 Visible Device Sync copy MUST describe Profiles and Library resources and MUST NOT call the synced payload a `Workspace`; `Workspace` remains reserved for project directories. Recovery commands name Device Sync rather than the internal subsystem.
 
+Review titles use names from the immutable portable snapshots, not generated resource IDs.
+Conflicting names show both device versions; deleted resources fall back to the base snapshot.
+Display names never replace stable IDs in merge choices or mutation authority.
+
 Local Skills Manager is always a device-wide inventory. Profile and Agent entry points MAY open it with return context or focus a relevant row, but MUST NOT expose or persist a narrower inventory scope. Shared compatibility review is a conditional subflow, not a selectable scope.
 
 Managed copy is the default for new installations. Deployment preference and management-format migration are independent: an existing explicit Live link preference MUST remain Live link, and a legacy `auto` preference normalizes to Managed copy without being treated as proof of old Agent ownership. `skillManagementFormatVersion` identifies the settings schema only. The application determines actionable legacy state exclusively from validated `.agentenv-owner.json` files whose Target and resource kind match the observed path; a link or copy without that evidence is never classified as old merely because of its topology.
@@ -279,6 +283,11 @@ AgentEnv-owned copy of the folder and does not require Git.
   left and reserve the trailing lanes for Agent context, the primary command, and overflow actions;
   responsive layout MUST NOT move this action group to the left edge. Profile readiness belongs to
   that trailing Agent/action context and MUST NOT appear as Profile identity metadata below its name.
+- Profile readiness and the Skills section MUST use the same selected-Agent shared-Skill boundary.
+  Required shared-copy review cannot coexist with `Ready to apply` or `Up to date` in the summary.
+  Review remains available; a shared-copy warning alone does not disable Preview. Recovery takes
+  precedence over this warning. Local and SSH Agent rows share a single environment-summary
+  component; a lifecycle without a Profile name is vertically centered without an empty second row.
 - The selected `Agent` is the context for Workspace inspection, supported edits, Preview, and Open;
   it MUST NOT be labelled as only an `Open with` preference. Changing it refreshes the visible
   resources before another Agent-scoped mutation can be reviewed. Resource identity remains plain
@@ -2264,6 +2273,12 @@ Agent grouping, endpoint selection, Preview, Apply, and unsupported capability s
 
 ### SSH Workspace Resource Operations
 
+- Directory browsing and path verification belong to the current device, dialog lifetime, and
+  latest request. Stale replies cannot replace current results, clear current busy state, or
+  overwrite a newly edited path. `~/` resolves against the remote home without evaluating user
+  shell syntax. Path checks preserve connection and permission errors rather than claiming absence.
+- Clipboard success is reported only after the clipboard operation succeeds, including the
+  remote Workspace primary command. A failed copy cannot also produce a success message.
 - A saved SSH Workspace is a directory reference on a saved device. Its inspection,
   mutation, and recovery scope is independent from global Profile Apply. A remote
   Workspace preview MUST NOT include this computer's Agent-global resources.

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   clearProjectSnapshotCache,
@@ -681,6 +681,78 @@ describe("ProjectsWorkspace", () => {
     });
   });
 
+  it("discards directory results from the previously selected SSH device", async () => {
+    const api = installApi();
+    api.listRemoteDevices.mockResolvedValue([
+      { id: "dev-1", name: "First", host: "first" },
+      { id: "dev-2", name: "Second", host: "second" }
+    ]);
+    let finishFirst!: (value: unknown) => void;
+    api.listRemoteDirectories.mockImplementation((id) => id === "dev-1"
+      ? new Promise((resolve) => { finishFirst = resolve; })
+      : Promise.resolve({ currentPath: "/second", directories: [{ name: "second-folder", path: "/second/folder" }] }));
+    render(<ProjectsWorkspace targets={[target]} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add Workspace" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Add SSH remote workspace..." }));
+    const dialog = await screen.findByRole("dialog", { name: "Add SSH remote workspace" });
+    await waitFor(() => expect(api.listRemoteDirectories).toHaveBeenCalledWith("dev-1", undefined));
+    fireEvent.change(within(dialog).getByLabelText("SSH device"), { target: { value: "dev-2" } });
+    expect(await within(dialog).findByText("second-folder")).toBeInTheDocument();
+    await act(async () => finishFirst({ currentPath: "/first", directories: [{ name: "first-folder", path: "/first/folder" }] }));
+    expect(within(dialog).queryByText("first-folder")).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByText("second-folder"));
+    expect(within(dialog).getByLabelText("Remote directory path")).toHaveValue("/second/folder");
+  });
+
+  it("retains the actual SSH failure when verifying a directory", async () => {
+    const api = installApi();
+    api.testRemoteProjectPath.mockResolvedValue({ exists: false, error: "Permission denied (publickey)" });
+    render(<ProjectsWorkspace targets={[target]} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add Workspace" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Add SSH remote workspace..." }));
+    const dialog = await screen.findByRole("dialog", { name: "Add SSH remote workspace" });
+    fireEvent.click(await within(dialog).findByText("remote-app"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Test path" }));
+    expect(await within(dialog).findByText("Permission denied (publickey)")).toBeInTheDocument();
+    expect(within(dialog).queryByText("Remote path does not exist or is not a directory")).not.toBeInTheDocument();
+  });
+
+  it("ignores directory results from a closed dialog after reopening it", async () => {
+    const api = installApi();
+    let finishOld!: (value: unknown) => void;
+    api.listRemoteDirectories.mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve; }));
+    render(<ProjectsWorkspace targets={[target]} />);
+    const open = async () => {
+      fireEvent.click(await screen.findByRole("button", { name: "Add Workspace" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Add SSH remote workspace..." }));
+      return screen.findByRole("dialog", { name: "Add SSH remote workspace" });
+    };
+    const previous = await open();
+    await waitFor(() => expect(api.listRemoteDirectories).toHaveBeenCalledTimes(1));
+    fireEvent.click(within(previous).getByRole("button", { name: "Cancel" }));
+    const current = await open();
+    expect(await within(current).findByText("remote-app")).toBeInTheDocument();
+    await act(async () => finishOld({ currentPath: "/old", directories: [{ name: "stale-folder", path: "/old/stale-folder" }] }));
+    expect(within(current).queryByText("stale-folder")).not.toBeInTheDocument();
+    expect(within(current).getByText("remote-app")).toBeInTheDocument();
+  });
+
+  it("does not overwrite an edited remote path with an older verification result", async () => {
+    const api = installApi();
+    let finishProbe!: (value: unknown) => void;
+    api.testRemoteProjectPath.mockImplementationOnce(() => new Promise((resolve) => { finishProbe = resolve; }));
+    render(<ProjectsWorkspace targets={[target]} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add Workspace" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Add SSH remote workspace..." }));
+    const dialog = await screen.findByRole("dialog", { name: "Add SSH remote workspace" });
+    fireEvent.click(await within(dialog).findByText("remote-app"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Test path" }));
+    fireEvent.change(within(dialog).getByLabelText("Remote directory path"), { target: { value: "~/new-project" } });
+    await act(async () => finishProbe({ exists: true, isDirectory: true, canonicalPath: "/old-project" }));
+    expect(within(dialog).getByLabelText("Remote directory path")).toHaveValue("~/new-project");
+    expect(within(dialog).queryByText(/Remote path verified/)).not.toBeInTheDocument();
+  });
+
   it("copies the SSH launch command for a remote workspace via banner and command button", async () => {
     const api = installApi();
     const remoteProject: ProjectSummary = {
@@ -720,6 +792,11 @@ describe("ProjectsWorkspace", () => {
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledTimes(2);
     });
+    writeText.mockRejectedValueOnce(new Error("Clipboard unavailable"));
+    fireEvent.click(commandButton);
+    expect(await screen.findByText("Failed to copy SSH command")).toBeInTheDocument();
+    expect(screen.queryByText("SSH command copied to clipboard")).not.toBeInTheDocument();
+    expect(screen.queryByText("SSH launch command copied to clipboard. Run it in terminal to access this workspace.")).not.toBeInTheDocument();
   });
 
   it("does not display another Workspace's resources while reading an uncached selection", async () => {

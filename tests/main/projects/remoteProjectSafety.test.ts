@@ -12,7 +12,8 @@ import type { RemoteDeviceStore } from "../../../src/main/remoteDevices/remoteDe
 import { createProjectRecoveryStore } from "../../../src/main/projects/projectRecoveryStore";
 import { hashFileContent } from "../../../src/main/filesystemIntegrity";
 import { hashSkillContent } from "../../../src/main/skillContentHash";
-import { createTarArchiveFromDirectory, extractTarArchiveSafely, fetchRemoteWorkspaceResourcesTar } from "../../../src/main/projects/remoteProjectTransport";
+import { createTarArchiveFromDirectory, extractTarArchiveSafely, fetchRemoteWorkspaceResourcesTar, testRemoteProjectPath, listRemoteDirectories } from "../../../src/main/projects/remoteProjectTransport";
+import { shellQuote } from "../../../src/main/remoteDevices/systemSshTransport";
 import { workspaceSshCommand } from "../../../src/shared/workspaceSshCommand";
 
 // Execute the actual remote shell scripts against disposable directories, never a real SSH host.
@@ -114,6 +115,19 @@ describe.skipIf(process.platform === "win32")("remote Workspace safety", () => {
     await symlink(root, join(source, "escape"));
     const archive = await createTarArchiveFromDirectory(source);
     await expect(extractTarArchiveSafely(archive, join(root, "extracted"))).rejects.toThrow(/link/);
+  });
+
+  it("expands the remote home shorthand without evaluating directory characters", async () => {
+    const name = "project ' $(touch injected)";
+    await mkdir(join(root, name));
+    const homeTransport: SshTransport = { execute: (device, command, options) =>
+      transport.execute(device, `HOME=${shellQuote(root)} ${command}`, options) };
+    const probe = await testRemoteProjectPath({} as RemoteDevice, homeTransport, `~/${name}`);
+    expect(probe).toMatchObject({ exists: true, canonicalPath: join(root, name), isDirectory: true });
+    const directories = await listRemoteDirectories({} as RemoteDevice, homeTransport, "~");
+    expect(directories.currentPath).toBe(root);
+    expect(directories.directories.map((entry) => entry.name)).toContain(name);
+    await expect(readFile(join(root, "injected"))).rejects.toThrow();
   });
 
   it("rejects a linked parent before reading resources outside the Workspace", async () => {

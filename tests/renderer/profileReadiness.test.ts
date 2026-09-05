@@ -35,6 +35,17 @@ const unmanagedState = {
   status: "unmanaged"
 } as TargetManagementState;
 
+it("projects known shared Skill decisions into overall readiness without preventing preview", () => {
+  for (const targetState of [unmanagedState, { ...managedState, lifecycleStatus: "applied" as const }]) {
+    expect(deriveProfileReadiness({ profile, target, targetState, isDirty: false, sharedSkillsRequireReview: true }))
+      .toMatchObject({ status: "review-required", label: "Needs review" });
+  }
+  expect(deriveProfileReadiness({ profile, target, targetState: unmanagedState, isDirty: false, sharedSkillsRequireReview: false }).status)
+    .toBe("unmanaged");
+  expect(deriveProfileReadiness({ profile, target, targetState: { ...managedState, lifecycleStatus: "recovery-required" }, isDirty: false, sharedSkillsRequireReview: true }))
+    .toMatchObject({ status: "preview-error", remediationLabel: "Open Recovery" });
+});
+
 const issue = (
   message: string,
   code: ApplyIssue["code"] = "operation-precondition",

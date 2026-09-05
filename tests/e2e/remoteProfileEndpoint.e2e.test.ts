@@ -175,6 +175,20 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
       statusText: "Ready"
     });
 
+    for (const width of [920, 1180, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const centers = await page.locator(".target-workflow-environment--single").evaluateAll((cells) =>
+        cells.map((cell) => {
+          const label = cell.querySelector(".target-workflow-lifecycle")!.getBoundingClientRect();
+          const health = cell.parentElement!.querySelector(".target-health-status")!.getBoundingClientRect();
+          return Math.abs((label.top + label.bottom - health.top - health.bottom) / 2);
+        })
+      );
+      expect(centers.length).toBeGreaterThanOrEqual(1);
+      expect(centers.every((difference) => difference <= 1)).toBe(true);
+    }
+    await page.setViewportSize({ width: 920, height: 620 });
+
     const result = await page.evaluate(async () => {
       const created = await window.agentEnv.createProfile({
         preferredTargetId: "opencode",

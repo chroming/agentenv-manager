@@ -28,6 +28,7 @@ import {
 } from "../../src/main/workspaceSync/syncPlanner";
 import { createWorkspaceSyncTransaction } from "../../src/main/workspaceSync/workspaceSyncTransaction";
 import { createWorkspaceSyncService } from "../../src/main/workspaceSync/workspaceSyncService";
+import { resolveSyncReviewTitles } from "../../src/main/workspaceSync/syncReviewTitles";
 import { createWorkspaceSyncStateStore, parseWorkspaceSyncConnection } from "../../src/main/workspaceSync/syncStateStore";
 import { toPortableOnlineLocator } from "../../src/main/workspaceSync/portableLocation";
 import { canonicalJson, hashJson, hashPortableTree, snapshotHashFor } from "../../src/main/workspaceSync/workspaceSnapshotHasher";
@@ -45,6 +46,24 @@ const tempRoot = async (prefix: string) => {
   roots.push(root);
   return root;
 };
+
+it("uses portable resource names in sync review, including both names on conflicts", async () => {
+  const local = await writeSnapshot(await tempRoot("sync-names-local-"), { profileName: "My environment", instructionContent: "local rules" });
+  const remote = await writeSnapshot(await tempRoot("sync-names-remote-"), { profileName: "Remote environment", instructionContent: "remote rules" });
+  await writeFile(join(remote.root, "workspace", "instructions", "shared-rules", "instruction.json"), JSON.stringify({ name: "Remote rules" }));
+  const plan = planWorkspaceSync({ local, remote });
+  await resolveSyncReviewTitles(plan, { local, remote });
+  expect(plan.review.changes.find((change) => change.resourceKind === "profile")?.title)
+    .toBe("My environment / Remote environment");
+  expect(plan.review.changes.find((change) => change.resourceKind === "instruction")?.title)
+    .toBe("Shared rules / Remote rules");
+  const publish = planWorkspaceSync({ local });
+  await resolveSyncReviewTitles(publish, { local });
+  expect(publish.review.changes.filter((change) => change.resourceKind === "instruction").every((change) => change.title === "Shared rules")).toBe(true);
+  const deletion = planWorkspaceSync({ base: local, remote: local, local: await writeSnapshot(await tempRoot("sync-names-empty-")) });
+  await resolveSyncReviewTitles(deletion, { local: { ...local, root: "/missing-snapshot" }, base: local });
+  expect(deletion.review.changes.find((change) => change.resourceKind === "instruction")?.title).toBe("Shared rules");
+});
 
 const writeSnapshot = async (root: string, input: {
   workspaceId?: string;

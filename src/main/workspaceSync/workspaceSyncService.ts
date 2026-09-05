@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { resolveSyncReviewTitles } from "./syncReviewTitles";
 import { cp, lstat, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type {
@@ -237,6 +238,7 @@ export const createWorkspaceSyncService = (input: {
         lastCheckedRevision: remoteResult.revision,
         lastCheckedAt: new Date().toISOString()
       };
+      await resolveSyncReviewTitles(plan, { local, remote, base });
       if (persist) await input.stateStore.write(nextState);
       const partial = { state: nextState, local, remote, base, remoteRevision: remoteResult.revision, plan, operationRoot };
       const status = statusFor(partial);

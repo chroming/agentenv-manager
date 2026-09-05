@@ -1,3 +1,4 @@
+import { TargetEnvironmentSummary } from "./TargetEnvironmentSummary";
 import {
   Activity,
   ArchiveRestore,
@@ -518,12 +519,10 @@ export const TargetWorkspace = ({
                 <span className={`target-health-status target-health-status--${target.health.status}`}>
                   {t(targetStatusLabel[target.health.status])}
                 </span>
-                <span className="target-workflow-environment">
-                  <strong className="target-workflow-lifecycle">
-                    {t(state?.lifecycleStatus ? lifecycleLabel[state.lifecycleStatus] : isManaged ? "Managed by AgentEnv" : "Not managed")}
-                  </strong>
-                  <span className="target-workflow-profile">{state?.activeProfileName}</span>
-                </span>
+                <TargetEnvironmentSummary
+                  lifecycle={t(state?.lifecycleStatus ? lifecycleLabel[state.lifecycleStatus] : isManaged ? "Managed by AgentEnv" : "Not managed")}
+                  profileName={state?.activeProfileName}
+                />
                 <span className="target-workflow-last-applied">
                   {state?.lastAppliedAt ? (
                     <>
