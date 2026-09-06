@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -10,6 +10,8 @@ import { createSummaryStore } from "../../src/main/skillSummaries/summaryStore";
 import { aiFeatures, defaultAIPreferences, type AIAnalysisSubject } from "../../src/shared/aiAssistance";
 import type { ProfileDetail } from "../../src/shared/types";
 import type { OneShotEvaluationRun } from "../../src/shared/evaluations";
+import { planAnalysisBudget, analysisPayload } from "../../src/main/ai/analysisBudget";
+import { AI_INPUT_BYTES, createAIJsonClient } from "../../src/main/ai/aiJsonClient";
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
@@ -51,6 +53,49 @@ describe("AI assistance privacy gates", () => {
   });
 });
 describe("immutable AI analyses", () => {
+  it("budgets the actual UTF-8 JSON payload including Chinese, emoji and escaped text", async () => {
+    const documents = Array.from({ length: 250 }, (_, index) => ({ id: String(index), label: `文件${index}`, content: '中文😀\\"\n'.repeat(3000) }));
+    const planned = planAnalysisBudget({ documents, warnings: [] });
+    const content = analysisPayload(planned.documents, planned.warnings, planned.partial);
+    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(AI_INPUT_BYTES);
+    expect(planned.partial).toBe(true);
+    expect(planned.coverage.total).toBe(250);
+    expect(planned.coverage.omitted).toBeGreaterThan(0);
+    expect(planned.coverage.included + planned.coverage.omitted).toBe(250);
+    const fetch = vi.fn().mockResolvedValue(new Response('{}'));
+    await createAIJsonClient(fetch)({ endpoint: 'http://localhost/mock', model: 'mock', key: '', system: '', content, signal: new AbortController().signal });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+  it("hashes differences beyond the old first-198-file cutoff even when omitted from the request", async () => {
+    const f = await fixture();
+    f.input.documents = Array.from({ length: 250 }, (_, index) => ({ id: String(index), label: `File ${index}`, content: "x".repeat(2000) }));
+    const before = await f.service.prepare(subject, "en");
+    expect(before.coverage?.total).toBe(250);
+    expect(before.partial).toBe(true);
+    f.input.documents[249].content += "Changed";
+    const after = await f.service.prepare(subject, "en");
+    expect(after.key).not.toBe(before.key);
+    await expect(f.service.generate({ ...f.args, expectedKey: before.key })).rejects.toThrow("inputs changed");
+    expect(f.request).not.toHaveBeenCalled();
+  });
+  it("recovers damaged cache only after confirmation and preserves the original bytes", async () => {
+    const f = await fixture();
+    await f.service.generate(f.args);
+    const path = join(f.dir, "ai-analyses", `${f.args.expectedKey}.json`);
+    await writeFile(path, "damaged original");
+    const preview = await f.service.prepare(subject, "en");
+    expect(preview.cacheDamaged).toBe(true);
+    expect(await readFile(path, "utf8")).toBe("damaged original");
+    f.request.mockRejectedValueOnce(new Error("offline"));
+    await expect(f.service.generate(f.args)).rejects.toThrow("offline");
+    expect(await readFile(path, "utf8")).toBe("damaged original");
+    const record = await f.service.generate(f.args);
+    expect((await f.service.prepare(subject, "en")).cached).toEqual(record);
+    const recovery = join(f.dir, "ai-analyses", "recovery");
+    const files = await readdir(recovery);
+    expect(files).toHaveLength(1);
+    expect(await readFile(join(recovery, files[0]), "utf8")).toBe("damaged original");
+  });
   it("reads Compare evidence without forwarding Workspace paths or inventing missing metrics", async () => {
     const side = { finalResponse: "Result", diff: "", durationMs: 12, fidelity: "partial", environment: "current", error: "incomplete" };
     const run = { result: { prompt: "Test", current: side, proposed: { ...side, environment: "proposed" }, fidelity: "partial", workspace: { path: "/private/project" } } } as unknown as OneShotEvaluationRun;

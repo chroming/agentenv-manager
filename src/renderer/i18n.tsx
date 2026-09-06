@@ -5195,6 +5195,12 @@ export const useI18n = () => {
 
 Object.assign(zhCN, {
   "AI assistance": "AI 辅助", "AI analysis": "AI 分析", "Tag suggestions": "标签建议",
+  "Analyze {{name}}": "分析 {{name}}",
+  "Configure AI service": "配置 AI 服务",
+  "Configure the AI service before generating. No request has been sent.": "请先配置 AI 服务。尚未发送任何请求。",
+  "Saved analysis is unreadable. Generate a new analysis; the old file will be preserved for diagnostics.": "已保存的分析无法读取。可重新生成，原文件将保留用于排查。",
+  "{{included}} of {{total}} documents": "包含 {{included}} / {{total}} 份内容",
+  "{{truncated}} truncated · {{omitted}} omitted": "{{truncated}} 份截断 · {{omitted}} 份省略",
   "Compare interpretation": "对比结果解读", "Duplicate Skill analysis": "重复 Skill 差异解读", "Profile analysis": "Profile 分析",
   "Analyze Profile": "分析 Profile", "Analyze results": "分析结果", "Analyze differences": "分析差异",
   "Generate analysis?": "生成分析？", "Generate": "生成", "Analysis scope": "分析范围",
@@ -5210,6 +5216,12 @@ Object.assign(zhCN, {
 });
 Object.assign(zhTW, {
   "AI assistance": "AI 輔助", "AI analysis": "AI 分析", "Tag suggestions": "標籤建議",
+  "Analyze {{name}}": "分析 {{name}}",
+  "Configure AI service": "設定 AI 服務",
+  "Configure the AI service before generating. No request has been sent.": "請先設定 AI 服務。尚未傳送任何請求。",
+  "Saved analysis is unreadable. Generate a new analysis; the old file will be preserved for diagnostics.": "已儲存的分析無法讀取。可重新產生，原檔案將保留用於排查。",
+  "{{included}} of {{total}} documents": "包含 {{included}} / {{total}} 份內容",
+  "{{truncated}} truncated · {{omitted}} omitted": "{{truncated}} 份截斷 · {{omitted}} 份省略",
   "Compare interpretation": "比較結果解讀", "Duplicate Skill analysis": "重複 Skill 差異解讀", "Profile analysis": "Profile 分析",
   "Analyze Profile": "分析 Profile", "Analyze results": "分析結果", "Analyze differences": "分析差異",
   "Generate analysis?": "產生分析？", "Generate": "產生", "Analysis scope": "分析範圍",

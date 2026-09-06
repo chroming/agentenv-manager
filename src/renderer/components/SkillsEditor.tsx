@@ -364,14 +364,13 @@ export const SkillsEditor = ({
                 )
               })}
             />
-            {menuItems.length > 0 ? (
               <ToolbarOverflowMenu
+                reserveSpace
                 disabled={disabled || !profileManagesSkills}
                 items={menuItems}
                 label={t("More actions for {{name}}", { name: skillName })}
                 menuLabel={t("Actions for {{name}}", { name: skillName })}
               />
-            ) : null}
           </>
         )}
       />

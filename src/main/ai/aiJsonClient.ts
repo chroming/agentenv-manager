@@ -1,8 +1,9 @@
+export const AI_INPUT_BYTES = 96_000;
 export const createAIJsonClient = (fetchImpl: typeof fetch = fetch) => {
   let busy = false;
   return async (input: { endpoint: string; key: string; model: string; system: string; content: string; signal: AbortSignal }) => {
     if (busy) throw new Error("Another AI request is running. Wait or cancel it first.");
-    if (Buffer.byteLength(input.content) > 96_000) throw new Error("AI input exceeds the size limit. No request was sent.");
+    if (Buffer.byteLength(input.content) > AI_INPUT_BYTES) throw new Error("AI input exceeds the size limit. No request was sent.");
     busy = true;
     try {
       let response: Response;

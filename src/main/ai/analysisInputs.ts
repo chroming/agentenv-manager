@@ -15,7 +15,7 @@ const documentSchema = z.object({ id: z.string().min(1).max(256), label: z.strin
 export const AnalysisSubjectSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("profile"), profileId: SafeIdSchema, targetId: z.string().min(1).max(200) }),
   z.object({ kind: z.literal("comparison"), runId: z.string().uuid() }),
-  z.object({ kind: z.literal("duplicates"), documents: z.array(documentSchema).min(2).max(200) })
+  z.object({ kind: z.literal("duplicates"), objectId: z.string().max(1000).optional(), documents: z.array(documentSchema).min(2).max(10000) })
 ]);
 export interface AnalysisDependencies {
   profileStore: Pick<ProfileStore, "readProfile">;

@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AIAnalysisReview } from "../../src/renderer/components/AIAnalysisReview";
 import { AIAssistanceSettings } from "../../src/renderer/components/AIAssistanceSettings";
+import { SkillSummarySettings } from "../../src/renderer/components/SkillSummarySettings";
 import { defaultAIPreferences, type AIPreferences, type AIAnalysisRecord } from "../../src/shared/aiAssistance";
 import type { AgentEnvApi } from "../../src/shared/types";
 
@@ -23,6 +24,49 @@ const install = (cached = false, prefs = defaultAIPreferences()) => {
   return api;
 };
 describe("AI assistance surfaces", () => {
+  it("clears a different object's cached result even if the new preview fails", async () => {
+    const api = install(true);
+    const view = render(<AIAnalysisReview subject={{ kind: "comparison", runId: "one" }} />);
+    await screen.findByText("Adds a test");
+    api.prepareAIAnalysis.mockRejectedValue(new Error("Could not read new run"));
+    view.rerender(<AIAnalysisReview subject={{ kind: "comparison", runId: "two" }} />);
+    expect(screen.queryByText("Adds a test")).not.toBeInTheDocument();
+    await screen.findByText("Error: Could not read new run");
+    expect(screen.queryByText("Adds a test")).not.toBeInTheDocument();
+  });
+  it("keeps stale analysis only for the same duplicate object and labels it even on preview failure", async () => {
+    const api = install(true);
+    const view = render(<AIAnalysisReview subject={{ kind: "duplicates", objectId: "one", documents: record.documents }} />);
+    await screen.findByText("Adds a test");
+    api.prepareAIAnalysis.mockRejectedValue(new Error("Read failed"));
+    view.rerender(<AIAnalysisReview subject={{ kind: "duplicates", objectId: "one", documents: [{ ...record.documents[0], content: "changed" }] }} />);
+    await screen.findByText("Error: Read failed");
+    expect(screen.getByText("Adds a test")).toBeInTheDocument();
+    expect(screen.getByText(/Inputs changed/)).toBeInTheDocument();
+  });
+  it("configures the service in place and returns to confirmation without generating", async () => {
+    const api = install();
+    api.readSkillSummaryConfig.mockResolvedValue({ endpoint: "https://example.test/", model: "", hasKey: false });
+    window.agentEnv.saveSkillSummaryConfig = vi.fn(async () => {
+      api.readSkillSummaryConfig.mockResolvedValue({ endpoint: "https://example.test/", model: "configured", hasKey: false });
+    });
+    render(<AIAnalysisReview subject={{ kind: "comparison", runId: "run" }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Analyze results" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Configure AI service" }));
+    fireEvent.change(await screen.findByLabelText("Model"), { target: { value: "configured" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByRole("button", { name: "Generate" });
+    expect(api.generateAIAnalysis).not.toHaveBeenCalled();
+  });
+  it("shows configuration read errors outside the collapsed disclosure", async () => {
+    const api = install(); api.readSkillSummaryConfig.mockRejectedValue(new Error("Config unreadable"));
+    render(<SkillSummarySettings />);
+    const retry = await screen.findByRole("button", { name: "Retry" });
+    expect(retry.closest("details")).toBeNull();
+    api.readSkillSummaryConfig.mockResolvedValue({ endpoint: "https://example.test/", model: "fixture", hasKey: true });
+    fireEvent.click(retry);
+    await screen.findByText("AI service · Configured");
+  });
   it("keeps generation manual, confirms destination and shows linked evidence", async () => {
     const api = install(); render(<AIAnalysisReview subject={{ kind: "comparison", runId: "run" }} />);
     fireEvent.click(await screen.findByRole("button", { name: "Analyze results" }));

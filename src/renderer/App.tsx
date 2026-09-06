@@ -356,7 +356,7 @@ const AppContent = ({
   const profileActionsButtonRef = useRef<HTMLButtonElement>(null);
   const profileActionsMenuRef = useRef<HTMLDivElement>(null);
   const aiPreferences = useAIPreferences();
-  const [profileAnalysis, setProfileAnalysis] = useState<{ profileId: string; targetId: string }>();
+  const [profileAnalysis, setProfileAnalysis] = useState<{ profileId: string; targetId: string; profileName: string; targetName: string }>();
   const profileSearchInputRef = useRef<HTMLInputElement>(null);
   const skillSearchInputRef = useRef<HTMLInputElement>(null);
   const dataRefreshRequestRef = useRef(0);
@@ -3596,7 +3596,7 @@ const AppContent = ({
             onAnalyze={aiPreferences.enabled("profile") ? () => {
               setIsProfileActionsOpen(false);
               void saveDraft().then((saved) => {
-                if (saved && selectedTargetId) setProfileAnalysis({ profileId: saved.id, targetId: selectedTargetId });
+                if (saved && selectedTargetId) setProfileAnalysis({ profileId: saved.id, targetId: selectedTargetId, profileName: saved.manifest.name, targetName: selectedTarget?.name ?? selectedTargetId });
               });
             } : undefined}
             onDuplicate={() => duplicateProfile()}

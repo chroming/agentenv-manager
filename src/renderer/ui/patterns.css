@@ -854,6 +854,16 @@
   padding-left: 42px;
 }
 
+.ui-menu-placeholder {
+  flex: 0 0 var(--control-height-default);
+  width: var(--control-height-default);
+}
+
+.ui-menu-placeholder--compact {
+  flex-basis: var(--control-height-compact);
+  width: var(--control-height-compact);
+}
+
 .ui-resource-panel-toolbar {
   align-items: center;
   background: transparent;

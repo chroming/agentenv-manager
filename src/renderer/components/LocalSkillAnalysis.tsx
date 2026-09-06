@@ -23,11 +23,11 @@ export const LocalSkillAnalysis = ({ sourcePath }: { sourcePath: string }) => {
     {!preview && prefs.enabled("duplicates") ? <Button busy={busy} onClick={() => void read()}>{t("Analyze differences")}</Button> : null}
     {error ? <Notice tone="warning" role="alert">{error}</Notice> : null}
     {preview && !preview.conflicts.length ? <Notice>{t("No Library version to compare. Add this Skill to Library using the existing controls.")}</Notice> : null}
-    {preview?.conflicts.map((conflict) => <AIAnalysisReview key={`${sourcePath}:${conflict.existing.id}`} subject={{ kind: "duplicates", documents: [
+    {preview?.conflicts.map((conflict) => <AIAnalysisReview key={`${sourcePath}:${conflict.existing.id}`} subject={{ kind: "duplicates", objectId: JSON.stringify([sourcePath, conflict.existing.id]), documents: [
       { id: "library", label: conflict.existing.name, content: conflict.existing.skillMarkdown },
       { id: "incoming", label: preview.incoming.name, content: preview.incoming.skillMarkdown },
-      ...conflict.changes.slice(0, 197).map((change, index) => ({ id: `file:${index}`, label: change.path, content: change.diff })),
-      { id: "scope", label: "Version scope", content: JSON.stringify({ library: { hash: conflict.existing.contentHash, version: conflict.existing.version, modified: conflict.existing.modifiedAt }, incoming: { hash: preview.incoming.contentHash, version: preview.incoming.version, modified: preview.incoming.modifiedAt }, omittedDiffs: Math.max(0, conflict.changes.length - 197) }) }
+      { id: "scope", label: "Version scope", content: JSON.stringify({ library: { hash: conflict.existing.contentHash, version: conflict.existing.version, modified: conflict.existing.modifiedAt }, incoming: { hash: preview.incoming.contentHash, version: preview.incoming.version, modified: preview.incoming.modifiedAt } }) },
+      ...conflict.changes.map((change, index) => ({ id: `file:${index}`, label: change.path, content: change.diff }))
     ] }} />)}
   </>;
 };

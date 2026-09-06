@@ -10739,6 +10739,12 @@ describe("Electron UI profile switching e2e", () => {
     expect(groupSwitchBox).not.toBeNull();
     expect(directSwitchBox).not.toBeNull();
     expect(Math.abs(groupSwitchBox!.x - directSwitchBox!.x)).toBeLessThanOrEqual(1);
+    for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+      await resizeAppWindow(page, width, height);
+      const switches = await group.getByRole("switch").evaluateAll((items) => items.map((item) => item.getBoundingClientRect().x));
+      expect(Math.max(...switches) - Math.min(...switches)).toBeLessThanOrEqual(1);
+    }
+    await resizeAppWindow(page, 920, 620);
 
     await group.getByRole("switch", { name: "Turn off Review pack" }).click();
     const memberSwitches = group.getByRole("switch", { name: /Enable the Group to change/ });

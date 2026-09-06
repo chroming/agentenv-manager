@@ -27,7 +27,7 @@
 }
 
 .profile-skill-group__members {
-  --resource-row-actions-standard: 52px;
+  --resource-row-actions-standard: 72px;
   --resource-row-state-track: 132px;
   max-height: min(292px, 38vh);
   min-height: 0;

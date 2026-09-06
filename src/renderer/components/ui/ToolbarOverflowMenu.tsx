@@ -12,6 +12,7 @@ import { MoreHorizontal } from "lucide-react";
 import { ActionMenu } from "./ActionMenu";
 import { focusInitialActionMenuItem } from "./actionMenuKeyboard";
 import { IconButton } from "./IconButton";
+import { useControlDensity } from "./controlDensity";
 
 export interface ToolbarOverflowMenuItem {
   id: string;
@@ -27,6 +28,7 @@ interface ToolbarOverflowMenuProps {
   menuLabel: string;
   disabled?: boolean;
   items: ToolbarOverflowMenuItem[];
+  reserveSpace?: boolean;
 }
 
 const menuWidth = 220;
@@ -34,7 +36,8 @@ const viewportInset = 8;
 const anchorGap = 6;
 
 export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflowMenuProps>(
-  ({ label, menuLabel, disabled = false, items }, forwardedRef) => {
+  ({ label, menuLabel, disabled = false, items, reserveSpace = false }, forwardedRef) => {
+    const density = useControlDensity() ?? "default";
     const [open, setOpen] = useState(false);
     const [style, setStyle] = useState<CSSProperties>();
     const triggerRef = useRef<HTMLButtonElement>(null);
@@ -89,6 +92,7 @@ export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflow
       };
     }, [open]);
 
+    if (reserveSpace && items.length === 0) return <span aria-hidden="true" className={`ui-menu-placeholder ui-menu-placeholder--${density}`} />;
     return (
       <>
         <IconButton

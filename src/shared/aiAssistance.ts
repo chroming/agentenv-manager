@@ -8,16 +8,20 @@ export interface AIAnalysisDocument { id: string; label: string; content: string
 export type AIAnalysisSubject =
   | { kind: "profile"; profileId: string; targetId: string }
   | { kind: "comparison"; runId: string }
-  | { kind: "duplicates"; documents: AIAnalysisDocument[] };
+  | { kind: "duplicates"; objectId?: string; documents: AIAnalysisDocument[] };
+export interface AIAnalysisCoverage { total: number; included: number; truncated: number; omitted: number }
 export interface AIAnalysisRecord {
   schemaVersion: 1; key: string; kind: AIAnalysisKind; locale: string;
   generatedAt: string; endpoint: string; model: string; overview: string;
   findings: Array<{ category: "observation" | "suggestion" | "risk"; detail: string; suggestion: string; evidence: string[] }>;
   limitations: string[]; documents: AIAnalysisDocument[]; partial: boolean;
+  coverage?: AIAnalysisCoverage;
 }
 export interface AIAnalysisPreview {
   key: string; documents: AIAnalysisDocument[]; partial: boolean; warnings: string[];
   cached?: AIAnalysisRecord;
+  cacheDamaged?: boolean;
+  coverage?: AIAnalysisCoverage;
 }
 export interface AIAnalysisGenerateInput {
   subject: AIAnalysisSubject; locale: string; expectedKey: string; requestId: string;
