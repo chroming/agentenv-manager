@@ -53,6 +53,28 @@ describe("AI assistance privacy gates", () => {
   });
 });
 describe("immutable AI analyses", () => {
+  it("requests a focused Profile brief and preserves issue titles across cached reads", async () => {
+    const f = await fixture();
+    const profile: AIAnalysisSubject = { kind: "profile", profileId: "review", targetId: "codex" };
+    const preview = await f.service.prepare(profile, "en");
+    f.request.mockResolvedValue({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify({
+      overview: "Resolve conflicting commit instructions.", findings: [{ category: "risk", title: "Automatic commits bypass approval", detail: "Two instructions disagree on when to commit.", suggestion: "Require approval before committing.", evidence: ["b"] }], limitations: []
+    }) } }] });
+    const result = await f.service.generate({ ...f.args, subject: profile, expectedKey: preview.key });
+    const prompt = f.request.mock.calls[0][0].system;
+    expect(prompt).toContain("zero to three findings");
+    expect(prompt).toContain("Merge findings with the same root cause");
+    expect(prompt).toContain("one concrete, minimal edit");
+    expect(prompt).toContain("140 English words or 220 Chinese characters");
+    expect((await f.service.prepare(profile, "en")).cached?.findings[0].title).toBe(result.findings[0].title);
+  });
+  it("accepts a Profile with no actionable findings without inventing an issue", async () => {
+    const f = await fixture();
+    const profile: AIAnalysisSubject = { kind: "profile", profileId: "review", targetId: "codex" };
+    const preview = await f.service.prepare(profile, "en");
+    f.request.mockResolvedValue({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ overview: "No important issue found in the supplied scope.", findings: [], limitations: [] }) } }] });
+    expect((await f.service.generate({ ...f.args, subject: profile, expectedKey: preview.key })).findings).toEqual([]);
+  });
   it("budgets the actual UTF-8 JSON payload including Chinese, emoji and escaped text", async () => {
     const documents = Array.from({ length: 250 }, (_, index) => ({ id: String(index), label: `文件${index}`, content: '中文😀\\"\n'.repeat(3000) }));
     const planned = planAnalysisBudget({ documents, warnings: [] });

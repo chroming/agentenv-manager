@@ -24,6 +24,24 @@ const install = (cached = false, prefs = defaultAIPreferences()) => {
   return api;
 };
 describe("AI assistance surfaces", () => {
+  it("prioritizes three Profile findings without losing older cached details or evidence", async () => {
+    const api = install();
+    api.prepareAIAnalysis.mockResolvedValue({ key: "key", documents: record.documents, warnings: [], partial: false, cached: {
+      ...record, kind: "profile", findings: Array.from({ length: 6 }, (_, index) => ({
+        category: index === 5 ? "risk" : "suggestion", title: `Issue ${index}`, detail: `Impact ${index}`, suggestion: `Edit ${index}`, evidence: ["proposed"]
+      }))
+    } });
+    const { container } = render(<AIAnalysisReview subject={{ kind: "profile", profileId: "review", targetId: "codex" }} />);
+    await screen.findByText("Issue 5");
+    const headings = [...container.querySelectorAll("h4")].filter((node) => !node.closest("details"));
+    expect(headings.map((node) => node.textContent)).toEqual(["Issue 5", "Issue 0", "Issue 1"]);
+    expect(screen.getByText("Issue 4").closest("details")).not.toBeNull();
+    fireEvent.click(screen.getByText("More findings (3)"));
+    expect(screen.getByText("Edit 4")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "With Profile" }));
+    await screen.findByText("test added");
+    expect(api.generateAIAnalysis).not.toHaveBeenCalled();
+  });
   it("uses the standard dialog action lane and makes Close primary after analysis", async () => {
     install(); const close = vi.fn();
     const { container } = render(<AIAnalysisReview standalone onClose={close} subject={{ kind: "profile", profileId: "review", targetId: "codex" }} />);

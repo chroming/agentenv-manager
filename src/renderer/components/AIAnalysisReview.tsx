@@ -63,6 +63,16 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
   const action = subject.kind === "comparison" ? "Analyze results" : subject.kind === "duplicates" ? "Analyze differences" : "Analyze Profile";
   const heading = subject.kind === "duplicates" ? "Duplicate Skill analysis" : "AI analysis";
   const shownDocument = record?.documents.find((doc) => doc.id === evidence);
+  const priority = { risk: 0, suggestion: 1, observation: 2 };
+  const findings = subject.kind === "profile"
+    ? [...(record?.findings ?? [])].sort((a, b) => priority[a.category] - priority[b.category])
+    : record?.findings ?? [];
+  const visibleFindings = subject.kind === "profile" ? findings.slice(0, 3) : findings;
+  const remainingFindings = findings.slice(visibleFindings.length);
+  const findingContent = (finding: AIAnalysisRecord["findings"][number], index: number) => <section key={index}>
+    <h4>{finding.title || ({ risk: t("Potential risk"), suggestion: t("Suggestion"), observation: t("Observation") })[finding.category]}</h4>
+    <p>{finding.detail}</p>{finding.suggestion ? <p className="muted">{finding.suggestion}</p> : null}
+  </section>;
   if (!allowed && !record && !standalone) return null;
   const actions = <>
     {busy === "generating" ? <Button onClick={() => void window.agentEnv.cancelAIAnalysis(request.current)}>{t("Stop")}</Button> : null}
@@ -80,11 +90,9 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
       {(!preview || record.key !== preview.key) ? <Notice tone="warning">{t("Inputs changed. This is the previous analysis; regenerate to analyze the current content.")}</Notice> : null}
       <p>{record.overview}</p>
       {record.partial ? <Notice tone="warning">{t("Partial analysis: long content is truncated. Only the displayed scope is analyzed.")}</Notice> : null}
-      {record.findings.map((finding, index) => <section key={index}>
-        <h4>{({ risk: t("Potential risk"), suggestion: t("Suggestion"), observation: t("Observation") })[finding.category]}</h4>
-        <p>{finding.detail}</p>{finding.suggestion ? <p className="muted">{finding.suggestion}</p> : null}
-      </section>)}
-      <details><summary>{t("Details")}</summary><div className="skill-summary-content">
+      {visibleFindings.map(findingContent)}
+      <details><summary>{remainingFindings.length ? t("More findings ({{count}})", { count: remainingFindings.length }) : t("Details")}</summary><div className="skill-summary-content">
+      {remainingFindings.map(findingContent)}
       <p className="muted">{t("AI-generated")} · {record.model} · {formatDate(record.generatedAt)}</p>
       <div className="skill-summary-files">{[...new Set(record.findings.flatMap((finding) => finding.evidence))].map((id) => <TextAction key={id} onClick={() => setEvidence(evidence === id ? "" : id)}>{record.documents.find((doc) => doc.id === id)?.label ?? id}</TextAction>)}</div>
       {shownDocument ? <SyntaxCodePreview path="evidence.md" code={shownDocument.content} /> : null}

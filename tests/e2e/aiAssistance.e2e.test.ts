@@ -19,7 +19,11 @@ it("gates all model calls and reviews a saved Profile across locales, sizes and 
   server = createServer((request, response) => {
     calls++; request.resume(); response.setHeader("Content-Type", "application/json");
     response.end(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify({
-      overview: "No resource changes are made by analysis.", findings: [{ category: "observation", detail: "The Profile declares resource management modes.", suggestion: "Review the resources before Apply.", evidence: ["scope"] }], limitations: ["This is a fixture analysis, not a safety guarantee."]
+      overview: "Resolve the commit policy before applying.", findings: [
+        { category: "risk", title: "Automatic commits bypass approval", detail: "The review Skill asks for immediate commits, but the instruction requires approval.", suggestion: "Require approval before the commit step.", evidence: ["scope"] },
+        { category: "suggestion", title: "Review rules are repeated", detail: "Two instructions describe the same review checklist.", suggestion: "Keep the checklist in one instruction and reference it from the other.", evidence: ["scope"] },
+        { category: "suggestion", title: "Test expectations are unclear", detail: "The workflow asks for test evidence without specifying which checks to run.", suggestion: "Name the project's test command in the instruction.", evidence: ["scope"] }
+      ], limitations: ["This is a fixture analysis, not a safety guarantee."]
     }) } }] }));
   });
   await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve)); const port = (server.address() as { port: number }).port;
@@ -46,7 +50,8 @@ it("gates all model calls and reviews a saved Profile across locales, sizes and 
     const analyze = dialog.getByRole("button", { name: locale === "en" ? "Analyze Profile" : "分析 Profile", exact: true });
     await page.screenshot({ path: join(captures, `profile-${locale}-idle.png`) });
     expect(calls).toBe(index); await analyze.click();
-    await dialog.getByText("No resource changes are made by analysis.", { exact: true }).waitFor(); expect(calls).toBe(index + 1);
+    await dialog.getByText("Resolve the commit policy before applying.", { exact: true }).waitFor(); expect(calls).toBe(index + 1);
+    expect(await dialog.locator("h4").allTextContents()).toEqual(["Automatic commits bypass approval", "Review rules are repeated", "Test expectations are unclear"]);
     for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
       await page.setViewportSize({ width, height });
       const overflow = await dialog.evaluate((node) => {
