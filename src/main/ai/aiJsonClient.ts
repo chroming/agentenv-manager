@@ -20,7 +20,10 @@ export const createAIJsonClient = (fetchImpl: typeof fetch = fetch) => {
           headers: { "Content-Type": "application/json", ...(input.key ? { Authorization: `Bearer ${input.key}` } : {}) },
           body: JSON.stringify({ model: input.model, messages: [
             { role: "system", content: input.system }, { role: "user", content: input.content }
-          ], max_tokens: 2500, stream: false, response_format: { type: "json_object" } })
+          ], max_tokens: 2500, stream: false, response_format: { type: "json_object" },
+          // V4 defaults to thinking, which shares the bounded output budget.
+          ...(new URL(input.endpoint).hostname === "api.deepseek.com" && /^deepseek-v4-(flash|pro)(?:-|$)/.test(input.model)
+            ? { thinking: { type: "disabled" } } : {}) })
         });
       } catch {
         throw new Error(input.signal.aborted ? "AI request cancelled or timed out. A sent request may still be billed." : "Could not reach the AI service. Check its address and connection; retry manually.");

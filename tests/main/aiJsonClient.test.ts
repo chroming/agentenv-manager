@@ -3,6 +3,18 @@ import { createAIJsonClient } from "../../src/main/ai/aiJsonClient";
 
 describe("AI Chat Completions address resolution", () => {
   it.each([
+    ["https://api.deepseek.com/", "deepseek-v4-flash", true],
+    ["https://api.deepseek.com/v1", "deepseek-v4-pro", true],
+    ["https://example.test/v1", "deepseek-v4-flash", false],
+    ["https://api.deepseek.com/", "another-model", false]
+  ])("uses bounded non-thinking JSON output only for supported DeepSeek service/model: %s %s", async (endpoint, model, disableThinking) => {
+    const transport = vi.fn<typeof fetch>(async () => new Response('{"choices":[]}'));
+    await createAIJsonClient(transport)({ endpoint, model, key: "fixture", system: "JSON", content: "{}", signal: new AbortController().signal });
+    const body = JSON.parse(String(transport.mock.calls[0][1]?.body));
+    expect(body.thinking).toEqual(disableThinking ? { type: "disabled" } : undefined);
+    expect(body.max_tokens).toBe(2500);
+  });
+  it.each([
     ["https://api.deepseek.com/", "https://api.deepseek.com/chat/completions"],
     ["https://example.test/v1", "https://example.test/v1/chat/completions"],
     ["https://example.test/v1/", "https://example.test/v1/chat/completions"],

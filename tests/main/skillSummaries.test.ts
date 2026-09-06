@@ -79,8 +79,19 @@ describe("manual Skill update summaries", () => {
 
   it.each(["length", "tool_calls"])("rejects incomplete responses (%s)", async (finish) => {
     const { service, store } = await setup(vi.fn<typeof fetch>().mockResolvedValue(response(result, finish)));
-    await expect(service.generate(input())).rejects.toThrow("incomplete summary");
+    await expect(service.generate(input())).rejects.toThrow(finish === "length" ? "output limit" : "tool calls");
     expect(await store.history("review")).toEqual([]);
+  });
+
+  it("distinguishes empty answers from invalid JSON without exposing reasoning or response content", async () => {
+    const { service, store } = await setup(vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: "", reasoning_content: "private reasoning" } }] }))));
+    await expect(service.generate(input())).rejects.toThrow("empty summary (content characters: 0; reasoning characters: 17)");
+    expect(await store.history("review")).toEqual([]);
+  });
+
+  it("accepts a complete fenced JSON summary without weakening evidence checks", async () => {
+    const { service } = await setup(vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: `\u0060\u0060\u0060json\n${JSON.stringify(result)}\n\u0060\u0060\u0060` } }] }))));
+    expect((await service.generate(input())).overview).toBe(result.overview);
   });
 
   it("rejects invented file evidence", async () => {
