@@ -116,7 +116,7 @@ export const createSkillTagSuggestionService = ({ root, library, configStore, re
       if (!record) throw new Error("Tag suggestions are unavailable. Analyze this Skill again.");
       const current = await snapshot(id, record.locale);
       if (current.contentHash !== record.contentHash) throw new Error("This Skill changed after analysis. Analyze it again before saving tags.");
-      return library.setTags({ id, ...replaceSuggestedTags(current.skill, input.tags, record.tags.map((tag) => tag.tag)) });
+      return library.setTags({ id, ...replaceSuggestedTags(current.skill, input.tags, record.tags.map((tag) => tag.tag), input.fixedTags) });
     }
   };
 };

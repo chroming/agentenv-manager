@@ -18,6 +18,25 @@ const install = (history: SkillSummary[] = []) => {
   return api;
 };
 describe("Skill summary review", () => {
+  it("configures a missing AI service without navigating away or sending content", async () => {
+    const api = install(); api.readSkillSummaryConfig.mockResolvedValue({ endpoint: "", model: "", hasKey: false });
+    const save = vi.fn().mockImplementation(async () => {
+      api.readSkillSummaryConfig.mockResolvedValue({ endpoint: "https://example.test/v1", model: "fixture", hasKey: false });
+    });
+    window.agentEnv.saveSkillSummaryConfig = save;
+    render(<SkillSummaryReview plans={[plan]} onViewFile={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Generate summary" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Configure AI service" }));
+    expect(screen.getByRole("button", { name: "Generate summary" })).toBeDisabled();
+    fireEvent.change(await screen.findByRole("textbox", { name: "API endpoint" }), { target: { value: "https://example.test/v1" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Model" }), { target: { value: "fixture" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: "API endpoint" })).not.toBeInTheDocument());
+    expect(api.generateSkillSummary).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Generate summary" }));
+    await waitFor(() => expect(api.generateSkillSummary).toHaveBeenCalledTimes(1));
+  });
   it("keeps progress on the initiating action and uses a non-interactive content status", async () => {
     const api = install();
     api.generateSkillSummary.mockImplementation(() => new Promise(() => undefined));

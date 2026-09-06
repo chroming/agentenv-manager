@@ -78,13 +78,15 @@ export const createSkillLibraryMetadataMutations = (
     return dependencies.entryFor(safeId, targetDir);
   };
 
-  const setTags = async ({ id, tags, aiTags }: SkillTagsInput): Promise<SkillLibraryEntry> => {
+  const setTags = async ({ id, tags, aiTags, fixedTags }: SkillTagsInput): Promise<SkillLibraryEntry> => {
     const { safeId, targetDir } = await targetFor(id);
     const skills = await dependencies.listSkills();
     const nextTags = canonicalizeSkillTags(tags, collectSkillTags(skills));
     const metadata = await dependencies.readMetadata(targetDir);
     const currentTags = parseSkillTags(metadata.tags, { strict: false });
+    const fixedKeys = new Set(parseSkillTags(fixedTags).map(skillTagKey));
     const nextAiTags = parseSkillTags(aiTags ?? metadata.aiTags, { strict: false })
+      .filter((tag) => !fixedKeys.has(skillTagKey(tag)))
       .filter((tag) => nextTags.some((next) => skillTagKey(next) === skillTagKey(tag)));
     const unchanged =
       JSON.stringify(nextAiTags) === JSON.stringify(metadata.aiTags ?? []) &&

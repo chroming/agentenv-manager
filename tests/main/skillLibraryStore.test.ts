@@ -1373,6 +1373,14 @@ description: >
     expect(sameTags.aiTags).toEqual(["quality"]);
     expect(afterNoOp.mtimeMs).toBe(beforeNoOp.mtimeMs);
 
+    const fixed = await store.setTags({ id: "reviewer", tags: sameTags.tags!, fixedTags: ["QUALITY"] });
+    expect(fixed.tags).toEqual(["Code Review", "quality"]);
+    expect(fixed.aiTags ?? []).toEqual([]);
+    const reopened = createSkillLibraryStore(paths);
+    const persisted = (await reopened.listSkills()).find((skill) => skill.id === "reviewer");
+    expect(persisted?.aiTags ?? []).toEqual([]);
+    expect(await readFile(join(sourceDir, "SKILL.md"), "utf8")).toContain("# v2");
+
     const automatic = await store.setIcon({ id: "reviewer", iconKey: undefined });
     expect(automatic.iconKey).toBeUndefined();
     await expect(

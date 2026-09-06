@@ -6,7 +6,7 @@ Audience: Product, design, engineering, QA, and target-adapter contributors
 
 ## 1. Purpose
 
-AI tag suggestions follow [the manual tagging contract](skill-ai-tags.md): explicit generation and acceptance only, additive Library metadata, no Skill content or Agent mutation.
+AI tag suggestions follow [the tag suggestion contract](skill-ai-tags.md): explicit generation and acceptance only, replacement of AI tags while preserving fixed tags, and no Skill content or Agent mutation.
 
 Skill update summaries follow the [manual-only summary contract](skill-update-summaries.md). Summary generation never runs as part of update checks or Apply and never grants external Skill text tool access.
 
@@ -1433,6 +1433,7 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 ### 16.1.2 Tags
 
 - Tags are optional user-owned Library metadata used to organize Skills by task. They are stored only in AgentEnv metadata, never written to `SKILL.md`, Profile references, Workspace copies, or Agent directories.
+- Fixed tags survive AI regeneration. AI-generated tags can be made fixed in the existing tag editor; Save persists that provenance change, Cancel does not. Unclassified legacy tags are fixed. Typed additions in a suggestion draft are fixed even when the model suggests the same name, and regeneration must preserve them before Save.
 - A Skill may have at most 12 tags of at most 32 characters. Input is Unicode-normalized, trimmed, whitespace-collapsed, and deduplicated case-insensitively while preserving the user's canonical spelling.
 - Skill content updates and reimports preserve existing tags. Merging Library Skills produces the case-insensitive union of their tags. A semantic no-op tag save performs no metadata write.
 - Portable Workspace Sync includes tags and manual Skill Groups because they describe reusable Library organization; Target deployment and Profile Apply ignore tags and materialize Profile group gates into the effective Skill list.
@@ -1442,6 +1443,7 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 ### 16.1.2 Source view
 
 - `Skill list` remains the canonical Library resource view. `By source` is a peer view inside Skills, not a separate navigation area, source subscription system, or replacement for per-Skill management.
+- Source groups, the header and expanded Skill rows share status and action tracks at every supported width, including merge selection. Status text starts at the same position regardless of state, with the shared InteractiveStatus icon slot and semantic tone. Version metadata stays within the Skill identity area rather than creating an independently sized status grid.
 - A source group is identified by one deterministically normalized complete import scope. Repository sources use repository identity, ref, directory, and an optional reviewed `llms.txt` index path; an indexed suite and a full-directory source are distinct even when their common directory is identical. Every later Check MUST reuse the saved index so unlisted repository Skills do not reappear as `New`. Local sources use one canonical absolute root directory. Parent and child scopes and unrelated complete links MUST remain separate until the user explicitly merges them. Similarity, URL prefixes, Skill names, and matching content MUST NOT merge groups automatically.
 - Every external, re-readable import scope becomes a source group whether it contains one Skill or many. Repository and local directory imports record the reviewed scope plus each Skill's relative source path. Legacy online or ordinary local imports without collection metadata appear as exact one-Skill source groups without rewriting their files. Agent runtime install locations and the AgentEnv Library are deployment/canonical locations, not upstream source groups.
 - A group exists only while at least one current Library Skill belongs to it. Removing the final member removes the projected group; there is no independent source-delete workflow.

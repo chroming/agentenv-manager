@@ -29,7 +29,7 @@
     {
       "id": "manual-ai-skill-tags",
       "summary": "Manually generate and accept cached task-oriented tag suggestions using the shared AI service, for one Skill or a selected batch.",
-      "contract": { "path": "docs/skill-ai-tags.md", "anchor": "所有标签共用一套筛选词表，但记录手动和 AI 来源" },
+      "contract": { "path": "docs/skill-ai-tags.md", "anchor": "所有标签共用一套筛选词表，但区分固定标签和 AI 标签" },
       "support": { "opencode": "not-applicable", "claude-code": "not-applicable", "codex": "not-applicable", "antigravity": "not-applicable", "antigravity-app": "not-applicable", "trae-cli": "not-applicable", "pi": "not-applicable" },
       "states": {
         "idle": "Opening reads cached suggestions only; no model request.",

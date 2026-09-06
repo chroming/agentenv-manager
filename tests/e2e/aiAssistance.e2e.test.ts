@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import electronPath from "electron";
@@ -14,6 +14,59 @@ afterEach(async () => {
   await new Promise<void>((resolve) => server ? server.close(() => resolve()) : resolve()); server = undefined;
   if (root) await rm(root, { recursive: true, force: true });
 });
+it("analyzes two local versions before import, configures in place and leaves originals untouched", async () => {
+  root = await mkdtemp(join(tmpdir(), "aem-local-analysis-")); let calls = 0;
+  server = createServer((request, response) => {
+    calls++; request.resume(); response.setHeader("Content-Type", "application/json");
+    response.end(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify({
+      overview: "These versions cover different review tasks.", findings: [], limitations: ["Only supplied files were analyzed."]
+    }) } }] }));
+  });
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as { port: number }).port;
+  const bin = join(root, "bin"); await mkdir(bin, { recursive: true });
+  await mkdir(join(root, "data"), { recursive: true });
+  await writeFile(join(root, "data", "settings.json"), JSON.stringify({ locale: "en", telemetryEnabled: false,
+    enabledTargetIds: ["codex", "claude-code"], agentDiscoveryVersion: 1, agentDiscoveryReviewedIds: ["codex", "claude-code"] }));
+  const copies = [join(root, "home", ".codex", "skills", "review"), join(root, "home", ".claude", "skills", "review")];
+  for (const [index, dir] of copies.entries()) {
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "SKILL.md"), `---\nname: review\ndescription: Review work\n---\nReview ${index ? "documentation" : "tests"}.\n`);
+  }
+  for (const [command, version] of [["codex", "codex-cli 0.100.0"], ["claude", "2.0.0 (Claude Code)"]]) {
+    await writeFile(join(bin, command), `#!/bin/sh\nprintf '%s\\n' '${version}'\n`); await chmod(join(bin, command), 0o755);
+  }
+  const before = await Promise.all(copies.map((dir) => readFile(join(dir, "SKILL.md"), "utf8")));
+  app = await electron.launch({ executablePath: electronPath as unknown as string,
+    args: [`--user-data-dir=${join(root, "electron")}`, join(process.cwd(), "out/main/main.js")],
+    env: { ...process.env, AGENTENV_AUTOMATION: "1", AGENTENV_DATA_ROOT: join(root, "data"), AGENTENV_HOME: join(root, "home"), AGENTENV_CACHE_ROOT: join(root, "cache"), AGENTENV_AUTOMATION_TARGET_PATH: bin }
+  });
+  const page = await app.firstWindow(); page.setDefaultTimeout(10_000);
+  await page.getByRole("button", { name: "Skills", exact: true }).click();
+  await page.getByRole("button", { name: "Local Skills", exact: true }).click();
+  const group = page.getByRole("group", { name: "Cleanup group review" });
+  await group.getByRole("button", { name: "Add to Library review", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Review skill cleanup" });
+  await dialog.getByRole("button", { name: "Analyze differences", exact: true }).click();
+  expect(calls).toBe(0);
+  await dialog.getByRole("button", { name: "Configure AI service", exact: true }).click();
+  await dialog.getByRole("textbox", { name: "API endpoint", exact: true }).fill(`http://127.0.0.1:${port}/v1`);
+  await dialog.getByRole("textbox", { name: "Model", exact: true }).fill("fixture");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await dialog.getByRole("textbox", { name: "API endpoint", exact: true }).waitFor({ state: "hidden" });
+  expect(calls).toBe(0);
+  await dialog.getByRole("button", { name: "Analyze differences", exact: true }).click();
+  await dialog.getByText("These versions cover different review tasks.", { exact: true }).waitFor();
+  expect(calls).toBe(1);
+  const captureDir = "/tmp/agentenv-local-analysis-evidence"; await mkdir(captureDir, { recursive: true });
+  for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+    await page.setViewportSize({ width, height });
+    expect(await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    await page.screenshot({ path: join(captureDir, `duplicates-${width}.png`) });
+  }
+  expect(await page.evaluate(() => window.agentEnv.listSkillLibrary())).toEqual([]);
+  expect(await Promise.all(copies.map((dir) => readFile(join(dir, "SKILL.md"), "utf8")))).toEqual(before);
+}, 60_000);
 it("gates all model calls and reviews a saved Profile across locales, sizes and restart", async () => {
   root = await mkdtemp(join(tmpdir(), "aem-ai-e2e-")); let calls = 0;
   server = createServer((request, response) => {

@@ -18,6 +18,7 @@ import {
   LoaderCircle,
   MoreHorizontal,
   Pencil,
+  Plus,
   RefreshCw,
   RotateCcw,
   Search,
@@ -1037,7 +1038,6 @@ export const SkillSourceView = ({
                 <div className="skill-source-candidates">
                   <div className="skill-source-candidate-head" aria-hidden="true">
                     <span>{t("Skill")}</span>
-                    <span>{t("Version")}</span>
                     <span>{t("Status")}</span>
                     <span>{t("Action")}</span>
                   </div>
@@ -1081,35 +1081,43 @@ export const SkillSourceView = ({
                         ? `${t("Modified")}: ${formatDate(candidate.libraryUpdatedAt)}`
                         : undefined
                     ].filter(Boolean).join("\n");
+                    const candidateIssue = ["invalid", "conflict", "missing", "removed"].includes(candidate.state);
                     return (
                       <div
                         className={`skill-source-candidate is-${candidate.state}${candidate.globallyEnabled === false ? " is-disabled" : ""}`}
                         key={`${candidate.sourceSubpath}\0${candidate.libraryId ?? "remote"}`}
                       >
-                        <div className="skill-source-candidate-name">
-                          <strong>{candidate.name}</strong>
+                        <div className="skill-source-candidate-identity">
+                          <div className="skill-source-candidate-name">
+                            <strong>{candidate.name}</strong>
+                            <OverflowTooltip
+                              className="skill-source-candidate-path"
+                              text={candidate.directory || group.directory || "."}
+                            />
+                          </div>
                           <OverflowTooltip
-                            className="skill-source-candidate-path"
-                            text={candidate.directory || group.directory || "."}
+                            className="skill-source-candidate-version"
+                            displayText={versionSummary}
+                            text={versionDetail}
                           />
                         </div>
-                        <OverflowTooltip
-                          className="skill-source-candidate-version"
-                          displayText={versionSummary}
-                          text={versionDetail}
-                        />
-                        <div className={`skill-source-state is-${candidate.state}`}>
-                          {candidate.state === "current" ? (
-                            <CheckCircle2 size={14} strokeWidth={2.2} />
-                          ) : candidate.state === "invalid" || candidate.state === "conflict" ? (
-                            <CircleAlert size={14} strokeWidth={2.2} />
-                          ) : null}
-                          <OverflowTooltip
+                        <InteractiveStatus
+                          className="skill-source-state"
+                          size="metadata"
+                          statusKind={candidate.state === "current" ? "success"
+                            : candidate.state === "update" ? "update-available"
+                            : candidateIssue ? "error" : "neutral"}
+                          tone={candidate.state === "new" ? "accent" : undefined}
+                          icon={candidate.state === "current" ? <CheckCircle2 />
+                            : candidate.state === "ignored" ? <EyeOff />
+                            : candidate.state === "new" ? <Plus />
+                            : candidateIssue ? <CircleAlert /> : <RefreshCw />}
+                          label={<OverflowTooltip
                             className="skill-source-state-label"
                             displayText={t(stateLabel(candidate.state))}
                             text={candidate.detail ?? t(stateLabel(candidate.state))}
-                          />
-                        </div>
+                          />}
+                        />
                         <div className="skill-source-candidate-action">
                           {candidate.state === "new" ? (
                             <>

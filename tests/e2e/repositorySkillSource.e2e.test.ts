@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { access, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { tmpdir } from "node:os";
 import electronPath from "electron";
@@ -240,7 +240,7 @@ describe("Repository Skill source", () => {
         const statusLabel = row.querySelector<HTMLElement>(".skill-source-status-label")!;
         const more = row.querySelector<HTMLElement>(".skill-source-more")!;
         return {
-          columnCount: getComputedStyle(row).gridTemplateColumns.split(" ").length,
+          columnCount: getComputedStyle(row).gridTemplateColumns.replace(/\[[^\]]*\]/g, "").trim().split(/\s+/).length,
           countsHeaderLeft: headerCells[1]!.getBoundingClientRect().left,
           countsLeft: counts.getBoundingClientRect().left,
           countsFit: counts.scrollWidth <= counts.clientWidth + 1,
@@ -307,6 +307,23 @@ describe("Repository Skill source", () => {
     const firstCandidate = sourceGroup.locator(".skill-source-candidate").first();
     const candidateVersion = firstCandidate.locator(".skill-source-candidate-version");
     await candidateVersion.waitFor({ state: "visible" });
+    for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+      await page.setViewportSize({ width, height });
+      const lanes = await sourceGroup.evaluate((group) => {
+        const status = group.querySelector(".skill-source-status")!.getBoundingClientRect();
+        const statusLabel = group.querySelector(".skill-source-status .ui-interactive-status__label")!.getBoundingClientRect();
+        const actions = group.querySelector(".skill-source-more")!.getBoundingClientRect();
+        return [...group.querySelectorAll<HTMLElement>(".skill-source-candidate")].map((row) => ({
+          statusDelta: Math.abs(row.querySelector(".skill-source-state")!.getBoundingClientRect().left - status.left),
+          labelDelta: Math.abs(row.querySelector(".skill-source-state .ui-interactive-status__label")!.getBoundingClientRect().left - statusLabel.left),
+          actionsDelta: Math.abs(row.querySelector(".skill-source-candidate-action")!.getBoundingClientRect().left - actions.left),
+          overflow: row.scrollWidth > row.clientWidth + 1
+        }));
+      });
+      expect(lanes.length).toBeGreaterThan(0);
+      expect(lanes.every((row) => row.statusDelta <= 1 && row.labelDelta <= 1 && row.actionsDelta <= 1 && !row.overflow)).toBe(true);
+    }
+    await page.setViewportSize({ width: 920, height: 620 });
     expect((await candidateVersion.textContent())?.trim().length).toBeGreaterThan(0);
     expect(await firstCandidate.locator(".skill-source-candidate-field-label").count()).toBe(0);
     await sourceGroup.getByRole("button", {
@@ -440,6 +457,23 @@ describe("Repository Skill source", () => {
     await removedRow.getByText("Removed upstream", { exact: true }).waitFor({ state: "visible" });
     await page.getByRole("group", { name: "Skill status filters" }).getByRole("button", { name: /^Updates/ }).click();
     expect(await removedRow.count()).toBe(0);
+    const captureDir = "/tmp/agentenv-source-alignment-evidence"; await mkdir(captureDir, { recursive: true });
+    for (const locale of ["en", "zh_CN", "zh_TW"] as const) {
+      await page.evaluate((locale) => window.agentEnv.updateSettings({ locale }), locale); await page.reload();
+      await page.getByRole("button", { name: locale === "en" ? "Skills" : "技能", exact: true }).click();
+      await page.getByRole("tab", { name: locale === "en" ? "By source" : locale === "zh_CN" ? "按来源" : "按來源", exact: true }).click();
+      await sourceGroup.locator(".skill-source-disclosure").click();
+      for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+        await page.setViewportSize({ width, height });
+        const deltas = await sourceGroup.evaluate((group) => {
+          const label = group.querySelector(".skill-source-status .ui-interactive-status__label")!.getBoundingClientRect();
+          return [...group.querySelectorAll<HTMLElement>(".skill-source-state .ui-interactive-status__label")]
+            .map((el) => Math.abs(el.getBoundingClientRect().left - label.left));
+        });
+        expect(deltas.length).toBeGreaterThan(0); expect(deltas.every((delta) => delta <= 1)).toBe(true);
+        await page.screenshot({ path: join(captureDir, `sources-${locale}-${width}.png`) });
+      }
+    }
   }, 90_000);
 
   it("merges separately imported repository directories through an explicit preview", async () => {

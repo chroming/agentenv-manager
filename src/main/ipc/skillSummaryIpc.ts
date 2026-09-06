@@ -55,7 +55,7 @@ export const registerSkillSummaryIpc = (
   diagnosticHandle("skill-tags:generate", (_event, input) => guarded("tags", input.requestId, tags.cancel, () => tags.generate(input)));
   diagnosticHandle("skill-tags:cancel", (_event, id) => tags.cancel(z.string().uuid().parse(id)));
   handleMutation("skills:set-tags", (_event, raw) => {
-    const input = z.object({ id: z.string(), tags: z.array(z.string()), suggestionKey: z.string().regex(/^[a-f0-9]{64}$/).optional() }).parse(raw);
+    const input = z.object({ id: z.string(), tags: z.array(z.string()), fixedTags: z.array(z.string()).max(12).optional(), suggestionKey: z.string().regex(/^[a-f0-9]{64}$/).optional() }).parse(raw);
     return input.suggestionKey ? tags.apply(input) : library.setTags({ ...input, id: parseId(input.id, "Skill id") });
   });
   diagnosticHandle("skill-summaries:config", () => store.config());

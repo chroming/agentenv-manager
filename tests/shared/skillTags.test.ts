@@ -10,6 +10,12 @@ import {
 } from "../../src/shared/skillTags";
 
 describe("skill tags", () => {
+  it("keeps explicitly fixed suggestions out of replaceable AI provenance", () => {
+    const first = replaceSuggestedTags({ tags: [] }, ["Review", "Docs"], ["Review", "Docs"], ["review"]);
+    expect(first).toEqual({ tags: ["Review", "Docs"], aiTags: ["Docs"] });
+    expect(replaceSuggestedTags(first, ["Testing"], ["Testing"]))
+      .toEqual({ tags: ["Review", "Testing"], aiTags: ["Testing"] });
+  });
   it("treats legacy tags as manual and ignores orphaned AI provenance", () => {
     expect(splitSkillTags({ tags: ["Review"] })).toEqual({ manual: ["Review"], ai: [] });
     expect(splitSkillTags({ tags: ["Review", "Docs"], aiTags: ["review", "missing"] }))

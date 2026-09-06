@@ -1030,6 +1030,7 @@ export interface SkillIconInput {
 }
 
 export interface SkillTagsInput {
+  fixedTags?: string[];
   /** Internal provenance; IPC callers cannot assign AI origin without a saved suggestion. */
   aiTags?: string[];
   suggestionKey?: string;

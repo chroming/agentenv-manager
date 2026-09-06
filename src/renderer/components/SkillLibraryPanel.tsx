@@ -1016,8 +1016,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   const cleanupDetails = cleanupDetailsKey
     ? cleanupGroups.find((group) => group.skillKey === cleanupDetailsKey)
     : undefined;
-  const cleanupDetailsAnalysisPath = cleanupDetails?.resolution === "manual" &&
-    cleanupDetails.items.some((item) => item.libraryId)
+  const cleanupDetailsAnalysisPath = cleanupDetails?.resolution === "manual"
     ? cleanupDetails.primary?.path : undefined;
   const cleanupDetailsStatusClass = cleanupDetails?.automaticEffect === "remove-broken-link"
     ? "managed"
@@ -2901,7 +2900,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               </span>
             </header>
             <div className="cleanup-details-list ui-dialog-body">
-              {cleanupDetailsAnalysisPath ? <LocalSkillAnalysis sourcePath={cleanupDetailsAnalysisPath} /> : null}
+              {cleanupDetailsAnalysisPath ? <LocalSkillAnalysis sourcePath={cleanupDetailsAnalysisPath} comparisonPaths={cleanupDetails.items.filter((item) => item.contentHash).map((item) => item.path)} /> : null}
               {cleanupDetailVersions.map((version) => (
                 <section
                   aria-label={t(
@@ -3051,7 +3050,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               </div>
             </header>
             <div className="cleanup-review-content ui-dialog-body">
-              <LocalSkillAnalysis key={cleanupDraft.canonicalPath} sourcePath={cleanupDraft.canonicalPath} />
+              <LocalSkillAnalysis key={cleanupDraft.canonicalPath} sourcePath={cleanupDraft.canonicalPath} comparisonPaths={cleanupCandidate.items.filter((item) => item.contentHash).map((item) => item.path)} />
               {cleanupUsesExistingLibrary ? (
                 <fieldset className="cleanup-review-group">
                   <legend>

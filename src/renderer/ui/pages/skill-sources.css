@@ -414,33 +414,28 @@
 .skill-source-candidates {
   background: color-mix(in srgb, var(--surface-muted) 62%, var(--surface));
   border-top: 1px solid var(--border);
-  padding-left: 62px;
 }
 
-.skill-source-candidate-head,
-.skill-source-candidate {
+.skill-source-candidate-identity,
+.skill-source-candidate-head > :first-child {
+  grid-column: content / status;
+  padding-inline-start: 72px;
+}
+
+.skill-source-candidate-identity {
   align-items: center;
-  column-gap: 12px;
   display: grid;
-  grid-template-columns:
-    minmax(180px, 1.5fr)
-    minmax(150px, 0.9fr)
-    minmax(120px, 0.78fr)
-    minmax(88px, auto);
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(68px, 0.6fr);
   min-width: 0;
-  padding: 0 12px;
 }
 
-.skill-source-candidate-head {
-  color: var(--muted);
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-regular);
-  min-height: 32px;
+.skill-source-candidate > .skill-source-state {
+  grid-column: status;
 }
 
-.skill-source-candidate {
-  border-top: 1px solid var(--border);
-  min-height: 58px;
+.skill-source-candidate > .skill-source-candidate-action {
+  grid-column: actions;
 }
 
 .skill-source-candidate.is-disabled {
@@ -475,39 +470,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.skill-source-state {
-  align-items: center;
-  color: var(--muted-strong);
-  display: flex;
-  font-size: var(--font-size-metadata);
-  font-weight: var(--font-weight-regular);
-  gap: 5px;
-  min-width: 0;
-}
-
-.skill-source-state.is-current {
-  color: var(--success);
-}
-
-.skill-source-state.is-update {
-  color: var(--warning);
-}
-
-.skill-source-state.is-new {
-  color: var(--accent);
-}
-
-.skill-source-state.is-ignored {
-  color: var(--muted);
-}
-
-.skill-source-state.is-removed,
-.skill-source-state.is-invalid,
-.skill-source-state.is-conflict,
-.skill-source-state.is-missing {
-  color: var(--danger);
 }
 
 .skill-source-state-label {
@@ -570,37 +532,13 @@
     gap: 10px;
   }
 
-  .skill-source-candidates {
-    padding-left: 34px;
+  .skill-source-candidate-identity,
+  .skill-source-candidate-head > :first-child {
+    padding-inline-start: 60px;
   }
 
-  .skill-source-candidate-head {
-    display: none;
-  }
-
-  .skill-source-candidate {
-    gap: 5px 12px;
-    grid-template-areas:
-      "name status action"
-      "version version action";
-    grid-template-columns: minmax(0, 1fr) minmax(120px, 0.8fr) auto;
-    min-height: 72px;
-    padding-block: 8px;
-  }
-
-  .skill-source-candidate-name {
-    grid-area: name;
-  }
-
-  .skill-source-candidate-version {
-    grid-area: version;
-  }
-
-  .skill-source-state {
-    grid-area: status;
-  }
-
-  .skill-source-candidate-action {
-    grid-area: action;
+  .skill-source-candidate-identity {
+    gap: 3px;
+    grid-template-columns: minmax(0, 1fr);
   }
 }

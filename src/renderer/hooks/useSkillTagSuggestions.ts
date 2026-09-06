@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { SkillLibraryEntry, SkillTagsInput } from "../../shared/types";
 import type { SkillTagAnalysis, SkillTagSuggestion } from "../../shared/skillTagSuggestions";
 import type { SkillSummaryConfig } from "../../shared/skillSummaries";
-import { replaceSuggestedTags, splitSkillTags } from "../../shared/skillTags";
+import { replaceSuggestedTags, skillTagKey, splitSkillTags } from "../../shared/skillTags";
 import { useI18n } from "../i18n";
 import { useAIPreferences } from "./useAIPreferences";
 
@@ -10,15 +10,19 @@ export interface TagReviewRow {
   analysis?: SkillTagAnalysis;
   record?: SkillTagSuggestion;
   draft: string[];
+  fixedDraft?: string[];
   error?: string;
   status: "idle" | "running" | "ready" | "skipped" | "saved" | "error";
 }
+const mergeDraftTags = (fixed: string[] = [], suggested: string[] = []) =>
+  [...new Map([...suggested, ...fixed].map((tag) => [skillTagKey(tag), tag])).values()];
 export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (input: SkillTagsInput) => Promise<boolean>) => {
   const { locale, t } = useI18n();
   const [rows, setRows] = useState<Record<string, TagReviewRow>>({});
   const [selected, setSelected] = useState(new Set(skills.filter((skill) => skills.length === 1 || !skill.tags?.length).map((skill) => skill.id)));
   const [busy, setBusy] = useState<"loading" | "preparing" | "generating" | "saving" | undefined>("loading");
   const [error, setError] = useState("");
+  const [needsConfig, setNeedsConfig] = useState(false);
   const active = useRef(true);
   const stopped = useRef(false);
   const ai = useAIPreferences();
@@ -34,7 +38,7 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
         const prior = current[item.skillId];
         const changed = prior?.analysis?.key !== item.key;
         return { ...current, [item.skillId]: { ...(prior ?? { draft: [], status: "idle" }), analysis: item, error: undefined,
-          ...(changed ? { record: item.cached, draft: item.cached?.tags.map((tag) => tag.tag) ?? [], status: item.cached ? "ready" : "idle" } : {}) } };
+          ...(changed ? { record: item.cached, draft: mergeDraftTags(prior?.fixedDraft, item.cached?.tags.map((tag) => tag.tag)), status: item.cached ? "ready" : "idle" } : {}) } };
       });
     }
     for (const issue of result.errors) patch(issue.skillId, { error: issue.message, status: "error" });
@@ -58,7 +62,8 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
       const items = result.items.filter((item) => regenerate || !item.cached);
       if (!items.length || !active.current) return;
       const config = await window.agentEnv.readSkillSummaryConfig();
-      if (!config.model) throw new Error(t("Configure the AI service in Settings first."));
+      if (!config.model || !config.endpoint) { setNeedsConfig(true); return; }
+      setNeedsConfig(false);
       if (active.current && !stopped.current) await generate({ config, items, regenerate });
     } catch (error) { if (active.current) setError(error instanceof Error ? error.message : String(error)); }
     finally { if (active.current) setBusy(undefined); }
@@ -77,7 +82,10 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
       try {
         const record = await window.agentEnv.generateSkillTagSuggestions({ skillId: item.skillId, expectedKey: item.key,
           requestId: id, expectedEndpoint: pending.config.endpoint, expectedModel: pending.config.model, confirmed: true, locale, regenerate: pending.regenerate });
-        patch(item.skillId, { record, draft: record.tags.map((item) => item.tag), status: "ready" });
+        if (active.current) setRows((current) => ({ ...current, [item.skillId]: {
+          ...current[item.skillId], record,
+          draft: mergeDraftTags(current[item.skillId]?.fixedDraft, record.tags.map((item) => item.tag)), status: "ready"
+        } }));
       } catch (error) { patch(item.skillId, { status: stopped.current ? "skipped" : "error", error: String(error) }); }
       finally { requestId.current = ""; }
     }
@@ -88,7 +96,7 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
     const row = rows[skill.id];
     if (!selected.has(skill.id) || !row?.record || row.status === "saved") return false;
     try {
-      const next = replaceSuggestedTags(skill, row.draft, row.record.tags.map((tag) => tag.tag));
+      const next = replaceSuggestedTags(skill, row.draft, row.record.tags.map((tag) => tag.tag), row.fixedDraft);
       return JSON.stringify(next.tags) !== JSON.stringify(skill.tags ?? []) ||
         JSON.stringify(next.aiTags) !== JSON.stringify(splitSkillTags(skill).ai);
     } catch { return true; }
@@ -100,13 +108,14 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
       patch(skill.id, { status: "running", error: undefined });
       try {
         const row = rows[skill.id];
-        replaceSuggestedTags(skill, row.draft, row.record!.tags.map((tag) => tag.tag));
-        if (!await onSave({ id: skill.id, tags: row.draft, suggestionKey: row.record!.key })) throw new Error(t("Tags could not be saved. Try again."));
+        replaceSuggestedTags(skill, row.draft, row.record!.tags.map((tag) => tag.tag), row.fixedDraft);
+        if (!await onSave({ id: skill.id, tags: row.draft, suggestionKey: row.record!.key,
+          ...(row.fixedDraft?.length ? { fixedTags: row.fixedDraft } : {}) })) throw new Error(t("Tags could not be saved. Try again."));
         patch(skill.id, { status: "saved" });
       } catch (error) { patch(skill.id, { status: "error", error: error instanceof Error ? error.message : String(error) }); }
     }
     if (active.current) setBusy(undefined);
   };
-  return { allowed: ai.enabled("tags"), rows, selected, setSelected, busy, error, prepare, stop, save,
+  return { allowed: ai.enabled("tags"), rows, selected, setSelected, busy, error, needsConfig, setNeedsConfig, prepare, stop, save,
     saveable, patch, savedCount: Object.values(rows).filter((row) => row.status === "saved").length };
 };

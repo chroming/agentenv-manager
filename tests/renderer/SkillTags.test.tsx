@@ -19,9 +19,19 @@ const skill: SkillLibraryEntry = {
 };
 
 describe("SkillTagEditorDialog", () => {
+  it("converts an AI tag into a fixed tag only when saved", async () => {
+    const onSave = vi.fn().mockResolvedValue(true);
+    render(<SkillTagEditorDialog availableTags={[]} skill={{ ...skill, tags: ["Review", "Testing"], aiTags: ["Review", "Testing"] }} onDismiss={vi.fn()} onSave={onSave} />);
+    fireEvent.click(screen.getByRole("button", { name: "Make Review fixed" }));
+    expect(within(screen.getByRole("region", { name: "Fixed tags" })).getByRole("button", { name: "Remove tag Review" })).toBeVisible();
+    expect(onSave).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByRole("button", { name: "Make Testing fixed" })).toBeDisabled();
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ id: "reviewer", tags: ["Review", "Testing"], fixedTags: ["Review"] }));
+  });
   it("separates persisted AI and manual tags without changing tag labels", () => {
     render(<SkillTagEditorDialog availableTags={[]} skill={{ ...skill, tags: ["Manual", "Review"], aiTags: ["Review"] }} onDismiss={vi.fn()} onSave={vi.fn()} />);
-    expect(within(screen.getByRole("region", { name: "Manual tags" })).getByRole("button", { name: "Remove tag Manual" })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Fixed tags" })).getByRole("button", { name: "Remove tag Manual" })).toBeInTheDocument();
     expect(within(screen.getByRole("region", { name: "AI-generated tags" })).getByRole("button", { name: "Remove tag Review" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });

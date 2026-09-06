@@ -1,4 +1,4 @@
-import { Plus, Sparkles, Tags, X } from "lucide-react";
+import { Pin, Plus, Sparkles, Tags, X } from "lucide-react";
 import {
   useEffect,
   useMemo,
@@ -24,6 +24,7 @@ import {
   DialogFooter,
   DialogHeader,
   ModalFrame,
+  IconButton,
   TagChip,
   TextField
 } from "./ui";
@@ -47,7 +48,7 @@ export const SkillTagList = ({
   const visibleTags = tags.slice(0, maxVisible);
   const hiddenCount = Math.max(0, tags.length - visibleTags.length);
   const aiKeys = new Set(aiTags.map(skillTagKey));
-  const label = (tag: string) => `${tag} · ${t(aiKeys.has(skillTagKey(tag)) ? "AI-generated tags" : "Manual tags")}`;
+  const label = (tag: string) => `${tag} · ${t(aiKeys.has(skillTagKey(tag)) ? "AI-generated tags" : "Fixed tags")}`;
 
   if (visibleTags.length === 0) return null;
 
@@ -100,6 +101,7 @@ export const SkillTagEditorDialog = ({
 }: SkillTagEditorDialogProps) => {
   const { t } = useI18n();
   const [draftTags, setDraftTags] = useState<string[]>([]);
+  const [fixedTags, setFixedTags] = useState<string[]>([]);
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -108,6 +110,7 @@ export const SkillTagEditorDialog = ({
 
   useEffect(() => {
     setDraftTags(parseSkillTags(skill?.tags, { strict: false }));
+    setFixedTags([]);
     setInput("");
     setError("");
   }, [skill]);
@@ -122,8 +125,10 @@ export const SkillTagEditorDialog = ({
   });
 
   const originalTags = parseSkillTags(skill?.tags, { strict: false });
-  const origins = splitSkillTags({ tags: draftTags, aiTags: skill?.aiTags });
+  const fixedKeys = new Set(fixedTags.map(skillTagKey));
+  const origins = splitSkillTags({ tags: draftTags, aiTags: skill?.aiTags?.filter((tag) => !fixedKeys.has(skillTagKey(tag))) });
   const dirty =
+    fixedTags.some((tag) => draftTags.some((draft) => skillTagKey(draft) === skillTagKey(tag))) ||
     originalTags.length !== draftTags.length ||
     originalTags.some((tag, index) => skillTagKey(tag) !== skillTagKey(draftTags[index] ?? ""));
   const normalizedInput = normalizeSkillTag(input);
@@ -167,7 +172,7 @@ export const SkillTagEditorDialog = ({
     setSaving(true);
     setError("");
     try {
-      if (await onSave({ id: skill.id, tags: draftTags })) {
+      if (await onSave({ id: skill.id, tags: draftTags, ...(fixedTags.length ? { fixedTags } : {}) })) {
         onDismiss();
       } else {
         setError(t("Tags could not be saved. Try again."));
@@ -201,10 +206,11 @@ export const SkillTagEditorDialog = ({
           </div>
           {draftTags.length > 0 ? (
             <div className="skill-tag-editor-selection">
-              {([ ["Manual tags", origins.manual], ["AI-generated tags", origins.ai] ] as const).filter(([, tags]) => tags.length).map(([label, tags]) => <section key={label} aria-label={t(label)}>
+              {([ ["Fixed tags", origins.manual], ["AI-generated tags", origins.ai] ] as const).filter(([, tags]) => tags.length).map(([label, tags]) => <section key={label} aria-label={t(label)}>
               <div className="skill-tag-editor-section-title"><span>{t(label)}</span></div>
               <div className="skill-tag-editor-chips">
               {tags.map((tag) => (
+                <span className="skill-tag-editor-item" key={skillTagKey(tag)}>
                 <TagChip
                   aria-label={t("Remove tag {{tag}}", { tag })}
                   className="skill-tag-editor-chip"
@@ -216,6 +222,11 @@ export const SkillTagEditorDialog = ({
                   <span>{tag}</span>
                   <X size={12} strokeWidth={2.2} aria-hidden="true" />
                 </TagChip>
+                {label === "AI-generated tags" ? <IconButton size="compact" variant="ghost" disabled={saving}
+                  label={t("Make {{tag}} fixed", { tag })} onClick={() => setFixedTags((current) => [...current, tag])}>
+                  <Pin size={14} />
+                </IconButton> : null}
+                </span>
               ))}
               </div></section>)}
             </div>

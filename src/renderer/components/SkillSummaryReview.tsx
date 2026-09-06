@@ -5,6 +5,7 @@ import { useI18n } from "../i18n";
 import { Button, InteractiveStatus, Notice, ResourcePanelToolbar } from "./ui";
 import { SkillSummaryContent } from "./SkillSummaryContent";
 import { useAIPreferences } from "../hooks/useAIPreferences";
+import { AIServiceSetup } from "./AIServiceSetup";
 
 export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = false }: {
   plans: SkillUpdatePlan[]; selectedIds?: string[]; disabled?: boolean;
@@ -15,6 +16,8 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState("");
   const [loadingConfig, setLoadingConfig] = useState(false);
+  const [needsConfig, setNeedsConfig] = useState(false);
+  const [configuring, setConfiguring] = useState(false);
   const [operationLabel, setOperationLabel] = useState("");
   const active = useRef(true);
   const requestId = useRef("");
@@ -48,14 +51,15 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
   const selected = plans.filter((plan) => plan.previewId && (!selectedIds || selectedIds.includes(plan.id)));
   const missing = selected.filter((plan) => !records[plan.id]);
   const prepare = async (chosen: SkillUpdatePlan[], regenerate = false) => {
-    if (!allowed || busyId || loadingConfig || !chosen.length) return;
+    if (!allowed || busyId || loadingConfig || configuring || !chosen.length) return;
     setLoadingConfig(true);
     setOperationLabel(t(regenerate ? "Regenerate summary" : plans.length === 1 ? "Generate summary" : "Summarize selected ({{count}})", { count: chosen.length }));
     stopped.current = false;
     setErrors({});
     try {
       const config = await window.agentEnv.readSkillSummaryConfig();
-      if (!config.model) throw new Error(t("Configure the AI service in Settings first."));
+      if (!config.model || !config.endpoint) { setNeedsConfig(true); return; }
+      setNeedsConfig(false);
       const prepared: SkillUpdatePlan[] = [];
       for (const plan of chosen) {
         if (!active.current || stopped.current) break;
@@ -92,22 +96,23 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
   return <section className="skill-summary-review" aria-label={t("Update summaries")}>
     <ResourcePanelToolbar variant="flush">
       <span className="resource-heading skill-summary-heading">{t("Update summaries")}</span>
-      {allowed && (missing.length || loadingConfig) ? <Button disabled={disabled} busy={loadingConfig} onClick={() => void prepare(missing)}>
+      {allowed && (missing.length || loadingConfig) ? <Button disabled={disabled || configuring} busy={loadingConfig} onClick={() => void prepare(missing)}>
         {loadingConfig ? operationLabel : t(plans.length === 1 ? "Generate summary" : "Summarize selected ({{count}})", { count: missing.length })}
-      </Button> : allowed && plans.length === 1 && records[plans[0].id] ? <Button disabled={disabled} busy={loadingConfig} onClick={() => void prepare([plans[0]], true)}>{t("Regenerate summary")}</Button> : null}
+      </Button> : allowed && plans.length === 1 && records[plans[0].id] ? <Button disabled={disabled || configuring} busy={loadingConfig} onClick={() => void prepare([plans[0]], true)}>{t("Regenerate summary")}</Button> : null}
       {loadingConfig ? <Button onClick={() => {
         stopped.current = true;
         if (requestId.current) void window.agentEnv.cancelSkillSummary(requestId.current);
       }}>{t("Stop")}</Button> : null}
     </ResourcePanelToolbar>
     {errors.general ? <Notice tone="warning" role="alert">{errors.general}</Notice> : null}
+    {needsConfig && allowed ? <AIServiceSetup editing={configuring} onEditingChange={setConfiguring} onSaved={() => setNeedsConfig(false)} /> : null}
     {plans.map((plan) => records[plan.id] || errors[plan.id] || busyId === plan.id ? <div key={plan.id}>
       {plans.length > 1 ? <h4>{plan.name}</h4> : null}
       {errors[plan.id] ? <Notice tone="warning" role="alert">{errors[plan.id]}</Notice> : null}
       {busyId === plan.id ? <div role="status"><InteractiveStatus busy statusKind="working" label={t("Generating summary")} /></div> : null}
       {records[plan.id] ? <>
         <SkillSummaryContent summary={records[plan.id]} onViewFile={(path) => onViewFile(plan, path, records[plan.id])} />
-        {allowed && plans.length > 1 ? <Button size="compact" disabled={disabled || Boolean(busyId) || loadingConfig} onClick={() => void prepare([plan], true)}>{t("Regenerate summary")}</Button> : null}
+        {allowed && plans.length > 1 ? <Button size="compact" disabled={disabled || Boolean(busyId) || loadingConfig || configuring} onClick={() => void prepare([plan], true)}>{t("Regenerate summary")}</Button> : null}
       </> : null}
     </div> : null)}
   </section>;

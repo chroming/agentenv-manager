@@ -475,6 +475,14 @@
   gap: 9px;
 }
 
+.skill-tag-editor-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 100%;
+}
+
 .skill-tag-editor-section-title {
   align-items: center;
   color: var(--text-secondary);

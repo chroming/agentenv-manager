@@ -1247,6 +1247,11 @@ try {
   await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("button", { name: "Expand source" }).first().click();
   await capturePage(page, join(outputDir, "skills-sources-expanded-920x620.png"));
+  for (const [width, height] of [[1180, 728], [1440, 900]]) {
+    await setWindowSize(page, windowHandle, width, height);
+    await capturePage(page, join(outputDir, `skills-sources-expanded-${width}x${height}.png`));
+  }
+  await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("button", { name: /Source actions for/ }).first().click();
   await page.getByRole("menuitem", { name: "Rename source" }).click();
   await page.getByRole("dialog", { name: "Rename source" }).waitFor({ state: "visible" });

@@ -19,6 +19,46 @@ const install = (cached = false) => {
   window.agentEnv = api as unknown as AgentEnvApi; return api;
 };
 describe("AI tag review", () => {
+  it("allows trimming an over-limit regenerated draft without losing fixed additions", async () => {
+    const api = install(true);
+    render(<SkillTagSuggestionsDialog skills={[skills[0]]} vocabulary={[]} onClose={vi.fn()} onSave={vi.fn()} />);
+    const input = await screen.findByRole("textbox", { name: "Add a tag" });
+    for (let index = 0; index < 10; index++) {
+      fireEvent.change(input, { target: { value: `Fixed ${index}` } }); fireEvent.keyDown(input, { key: "Enter" });
+    }
+    api.generateSkillTagSuggestions.mockResolvedValue({ ...record("review"), tags: Array.from({ length: 5 }, (_, i) => ({ tag: `AI ${i}`, reason: "Task" })) });
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+    await screen.findByRole("button", { name: "Remove tag AI 0" });
+    for (let i = 0; i < 3; i++) fireEvent.click(screen.getByRole("button", { name: `Remove tag AI ${i}` }));
+    expect(screen.queryByRole("button", { name: "Remove tag AI 0" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove tag Fixed 0" })).toBeVisible();
+  });
+  it("preserves unsaved fixed additions across regeneration, including model overlaps", async () => {
+    const api = install(true); const save = vi.fn().mockResolvedValue(true);
+    render(<SkillTagSuggestionsDialog skills={[skills[0]]} vocabulary={[]} onClose={vi.fn()} onSave={save} />);
+    const input = await screen.findByRole("textbox", { name: "Add a tag" });
+    for (const value of ["Docs", "Code review"]) {
+      fireEvent.change(input, { target: { value } }); fireEvent.keyDown(input, { key: "Enter" });
+    }
+    api.generateSkillTagSuggestions.mockResolvedValue({ ...record("review"), tags: [{ tag: "New", reason: "New capability" }] });
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+    await screen.findByRole("button", { name: "Remove tag New" });
+    expect(screen.getByRole("button", { name: "Remove tag Docs" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Remove tag Code review" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Remove tag Testing" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save tags (1)" }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({ fixedTags: ["Docs", "Code review"], tags: ["New", "Docs", "Code review"] })));
+  });
+  it("offers configuration in place without generating or losing selection", async () => {
+    const api = install(); api.readSkillSummaryConfig.mockResolvedValue({ endpoint: "", model: "", hasKey: false });
+    render(<SkillTagSuggestionsDialog skills={skills} vocabulary={[]} onClose={vi.fn()} onSave={vi.fn()} />);
+    fireEvent.click((await screen.findAllByRole("button", { name: "Suggest tags" }))[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Configure AI service" }));
+    expect(await screen.findByRole("textbox", { name: "API endpoint" })).toBeVisible();
+    for (const button of screen.getAllByRole("button", { name: "Suggest tags" })) expect(button).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Select Review" })).toBeChecked();
+    expect(api.generateSkillTagSuggestions).not.toHaveBeenCalled();
+  });
   it("allows saving removal-only AI changes while retaining manual tags", async () => {
     install(true); const save = vi.fn().mockResolvedValue(true);
     render(<SkillTagSuggestionsDialog skills={[{ ...skills[0], tags: ["Manual", "Code review", "Testing"], aiTags: ["Code review", "Testing"] }]} vocabulary={[]} onClose={vi.fn()} onSave={save} />);

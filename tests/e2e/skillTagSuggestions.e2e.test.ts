@@ -42,12 +42,11 @@ describe("AI tag suggestions desktop flow", () => {
     });
     const page = await app.firstWindow(); page.setDefaultTimeout(10_000);
     await page.getByRole("button", { name: "Skills", exact: true }).waitFor();
-    await page.evaluate(async ({ source, secondSource, port }) => {
+    await page.evaluate(async ({ source, secondSource }) => {
       await window.agentEnv.importSkillToLibrary({ sourcePath: source, id: "review" });
       await window.agentEnv.importSkillToLibrary({ sourcePath: secondSource, id: "already-tagged" });
       await window.agentEnv.setSkillTags({ id: "already-tagged", tags: ["Testing", "Manual"] });
-      await window.agentEnv.saveSkillSummaryConfig({ endpoint: `http://127.0.0.1:${port}/v1/chat/completions`, model: "mock-model" });
-    }, { source, secondSource, port });
+    }, { source, secondSource });
     const captureDir = "/tmp/agentenv-ai-tags-evidence"; await mkdir(captureDir, { recursive: true });
     for (const [index, locale] of (["en", "zh_CN", "zh_TW"] as const).entries()) {
       await page.evaluate((locale) => window.agentEnv.updateSettings({ locale }), locale); await page.reload();
@@ -60,8 +59,21 @@ describe("AI tag suggestions desktop flow", () => {
       await generateButtons.first().waitFor();
       expect(calls).toBe(index);
       await generateButtons.first().click();
+      if (index === 0) {
+        await dialog.getByRole("button", { name: "Configure AI service", exact: true }).click();
+        await dialog.getByRole("textbox", { name: "API endpoint", exact: true }).fill(`http://127.0.0.1:${port}/v1/chat/completions`);
+        await dialog.getByRole("textbox", { name: "Model", exact: true }).fill("mock-model");
+        await page.setViewportSize({ width: 920, height: 620 });
+        expect(await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+        await page.screenshot({ path: join(captureDir, "tags-configure-920.png") });
+        await dialog.getByRole("button", { name: "Save", exact: true }).click();
+        await dialog.getByRole("textbox", { name: "API endpoint", exact: true }).waitFor({ state: "hidden" });
+        expect(calls).toBe(0);
+        await generateButtons.first().click();
+      }
       await dialog.getByRole("button", { name: english ? "Remove tag Testing" : locale === "zh_CN" ? "移除标签 Testing" : "移除標籤 Testing", exact: true }).waitFor();
       expect(calls).toBe(index + 1);
+      await page.setViewportSize({ width: 1180, height: 728 });
       const originalBounds = await dialog.boundingBox();
       await dialog.getByRole("button", { name: english ? "Maximize preview" : locale === "zh_CN" ? "最大化预览" : "最大化預覽", exact: true }).click();
       const expandedBounds = await dialog.boundingBox();
@@ -105,11 +117,29 @@ describe("AI tag suggestions desktop flow", () => {
     await page.getByRole("button", { name: "Skills", exact: true }).click();
     await page.getByRole("button", { name: "More actions for review", exact: true }).click();
     await page.getByRole("menuitem", { name: "Edit tags", exact: true }).click();
-    await page.getByRole("region", { name: "Manual tags", exact: true }).getByRole("button", { name: "Remove tag Manual" }).waitFor();
+    await page.getByRole("region", { name: "Fixed tags", exact: true }).getByRole("button", { name: "Remove tag Manual" }).waitFor();
     await page.getByRole("region", { name: "AI-generated tags", exact: true }).getByRole("button", { name: "Remove tag Code review" }).waitFor();
     await page.setViewportSize({ width: 920, height: 620 });
     await page.screenshot({ path: join(captureDir, "tag-origins-920.png") });
-    expect(calls).toBe(3);
+    await page.getByRole("button", { name: "Make Code review fixed", exact: true }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await page.getByRole("dialog", { name: "Edit tags for review" }).waitFor({ state: "hidden" });
+    const fixed = await page.evaluate(async () => (await window.agentEnv.listSkillLibrary()).find((skill) => skill.id === "review"));
+    expect(fixed?.tags).toEqual(["Code review", "Manual"]);
+    expect(fixed?.aiTags ?? []).toEqual([]);
+    // A later generation can update AI tags but cannot undo an explicit fixed choice.
+    await page.getByRole("button", { name: "More actions for review", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Edit tags", exact: true }).click();
+    await page.getByRole("button", { name: "AI suggestions", exact: true }).click();
+    const nextDialog = page.getByRole("dialog", { name: "AI tags", exact: true });
+    await nextDialog.getByRole("button", { name: "Suggest tags", exact: true }).first().click();
+    await nextDialog.getByRole("button", { name: "Remove tag Testing" }).waitFor();
+    await nextDialog.getByRole("button", { name: "Save tags (1)", exact: true }).click();
+    await nextDialog.getByText("Saved", { exact: true }).waitFor();
+    const regenerated = await page.evaluate(async () => (await window.agentEnv.listSkillLibrary()).find((skill) => skill.id === "review"));
+    expect(regenerated?.tags).toEqual(["Code review", "Manual", "Testing"]);
+    expect(regenerated?.aiTags).toEqual(["Testing"]);
+    expect(calls).toBe(4);
     expect(await readFile(join(source, "SKILL.md"), "utf8")).toBe(text);
     expect(await readFile(join(root, "data", "skills-library", "review", "SKILL.md"), "utf8")).toBe(text);
   }, 120_000);

@@ -6,6 +6,8 @@
 
 所有 Agent 可分析 Profile 意图；Compare 仅分析已完成或不完整的已保存报告，不增加 Runner 能力。重复版本仅分析当前明确选中的版本预览，不读取任意来源路径。
 
+Local Skills 的版本决策同时支持 Library 与本地版本、以及尚未导入的多个本地版本。通过现有只读导入预览获取内容，按内容哈希去重；无需先导入才能分析。提供 SKILL.md、版本、哈希、修改时间，已有文件差异一并提供；没有提供的文件不作完整性推断。任一读取失败留在当前区域重试，不自动选择或写入版本。
+
 组件映射：开关 -> Switch；设置行 -> SettingsPreferenceRow；动作 -> Button / ActionMenuItem；分析 -> Notice / ResourcePanelToolbar；详情 -> SyntaxCodePreview；窗口 -> ModalFrame / DialogHeader / DialogBody / DialogFooter / useModalDialog。页面只新增内容排列，不定义另一套控件。五项能力位于 Settings 的 AI 辅助页签，不混入 Skills 设置。额度说明复用 InfoTip。
 
 ## 状态与边界

@@ -1,7 +1,9 @@
 .skill-source-table-head,
-.skill-source-group-row {
+.skill-source-group-row,
+.skill-source-candidate,
+.skill-source-candidate-head {
   column-gap: 10px;
-  grid-template-columns: 24px 28px minmax(125px, 1fr) 68px minmax(110px, 0.8fr) 32px;
+  grid-template-columns: [content] 24px 28px minmax(125px, 1fr) 68px [status] minmax(110px, 0.8fr) [actions] 104px;
 }
 
 .skill-source-table-head {
@@ -18,14 +20,36 @@
   z-index: var(--z-raised);
 }
 
+.skill-source-candidate-head,
+.skill-source-candidate {
+  align-items: center;
+  display: grid;
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.skill-source-candidate-head {
+  color: var(--muted);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-regular);
+  min-height: 32px;
+}
+
+.skill-source-candidate {
+  border-top: 1px solid var(--border);
+  min-height: 58px;
+}
+
 .skill-source-table-head > span:first-child {
   grid-column: 1 / 4;
   padding-inline-start: 72px;
 }
 
 .skill-source-table-head.can-merge,
-.skill-source-list.can-merge .skill-source-group-row {
-  grid-template-columns: 20px 24px 28px minmax(110px, 1fr) 62px minmax(104px, 0.8fr) 32px;
+.skill-source-list.can-merge .skill-source-group-row,
+.skill-source-list.can-merge .skill-source-candidate,
+.skill-source-list.can-merge .skill-source-candidate-head {
+  grid-template-columns: [content] 20px 24px 28px minmax(110px, 1fr) 62px [status] minmax(104px, 0.8fr) [actions] 104px;
 }
 
 .skill-source-table-head.can-merge > span:first-child {
@@ -163,26 +187,39 @@
 
 @container skill-library (min-width: 920px) {
   .skill-source-table-head,
-  .skill-source-group-row {
-    grid-template-columns: 24px 28px minmax(190px, 1fr) 78px minmax(118px, 0.8fr) 32px;
+  .skill-source-group-row,
+  .skill-source-candidate,
+  .skill-source-candidate-head {
+    grid-template-columns: [content] 24px 28px minmax(190px, 1fr) 78px [status] minmax(118px, 0.8fr) [actions] 104px;
   }
 
   .skill-source-table-head.can-merge,
-  .skill-source-list.can-merge .skill-source-group-row {
-    grid-template-columns: 20px 24px 28px minmax(166px, 1fr) 72px minmax(114px, 0.8fr) 32px;
+  .skill-source-list.can-merge .skill-source-group-row,
+  .skill-source-list.can-merge .skill-source-candidate,
+  .skill-source-list.can-merge .skill-source-candidate-head {
+    grid-template-columns: [content] 20px 24px 28px minmax(166px, 1fr) 72px [status] minmax(114px, 0.8fr) [actions] 104px;
   }
 }
 
 @container skill-library (max-width: 820px) {
+  .skill-source-candidate {
+    min-height: 72px;
+    padding-block: 8px;
+  }
+
   .skill-source-table-head,
-  .skill-source-group-row {
+  .skill-source-group-row,
+  .skill-source-candidate,
+  .skill-source-candidate-head {
     column-gap: 8px;
-    grid-template-columns: 20px 24px minmax(120px, 1fr) 58px minmax(112px, 0.8fr) 28px;
+    grid-template-columns: [content] 20px 24px minmax(120px, 1fr) 58px [status] minmax(112px, 0.8fr) [actions] 104px;
   }
 
   .skill-source-table-head.can-merge,
-  .skill-source-list.can-merge .skill-source-group-row {
-    grid-template-columns: 18px 20px 22px minmax(108px, 1fr) 54px minmax(108px, 0.8fr) 28px;
+  .skill-source-list.can-merge .skill-source-group-row,
+  .skill-source-list.can-merge .skill-source-candidate,
+  .skill-source-list.can-merge .skill-source-candidate-head {
+    grid-template-columns: [content] 18px 20px 22px minmax(108px, 1fr) 54px [status] minmax(108px, 0.8fr) [actions] 104px;
   }
 
   .skill-source-table-head > span:first-child {

@@ -10,10 +10,12 @@ export const splitSkillTags = (skill: { tags?: readonly string[]; aiTags?: reado
 export const replaceSuggestedTags = (
   skill: { tags?: readonly string[]; aiTags?: readonly string[] },
   selected: string[],
-  suggested: readonly string[]
+  suggested: readonly string[],
+  fixed: readonly string[] = []
 ) => {
   const manual = splitSkillTags(skill).manual;
   const manualKeys = new Set(manual.map(skillTagKey));
+  for (const tag of fixed) manualKeys.add(skillTagKey(tag));
   const suggestedKeys = new Set(suggested.map(skillTagKey));
   const tags = parseSkillTags([...manual, ...selected]);
   return { tags, aiTags: tags.filter((tag) => !manualKeys.has(skillTagKey(tag)) && suggestedKeys.has(skillTagKey(tag))) };

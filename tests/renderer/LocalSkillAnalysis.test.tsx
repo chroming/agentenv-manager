@@ -6,6 +6,24 @@ import { defaultAIPreferences } from "../../src/shared/aiAssistance";
 import { LocalSkillAnalysis } from "../../src/renderer/components/LocalSkillAnalysis";
 
 afterEach(cleanup);
+it("compares local versions before either is imported into Library", async () => {
+  const prepare = vi.fn().mockResolvedValue({ key: "key", documents: [], partial: false, warnings: [] });
+  const generate = vi.fn().mockResolvedValue({ key: "key", overview: "Different review scope", findings: [], limitations: [], documents: [] });
+  window.agentEnv = {
+    readAIPreferences: vi.fn().mockResolvedValue(defaultAIPreferences()),
+    previewSkillImport: vi.fn(async ({ input }) => ({ incoming: { name: "Review", contentHash: input.sourcePath, skillMarkdown: input.sourcePath.endsWith("one") ? "Review tests" : "Review docs" }, conflicts: [] })),
+    prepareAIAnalysis: prepare,
+    readSkillSummaryConfig: vi.fn().mockResolvedValue({ endpoint: "https://example.test", model: "fixture" }),
+    generateAIAnalysis: generate
+  } as unknown as AgentEnvApi;
+  render(<LocalSkillAnalysis sourcePath="/fixture/one" comparisonPaths={["/fixture/one", "/fixture/two"]} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Analyze differences" }));
+  await waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+  expect(prepare).toHaveBeenCalledWith(expect.objectContaining({ documents: expect.arrayContaining([
+    expect.objectContaining({ content: "Review tests" }), expect.objectContaining({ content: "Review docs" })
+  ]) }), "en");
+  expect(window.agentEnv.previewSkillImport).toHaveBeenCalledTimes(2);
+});
 it("offers duplicate analysis after a local read, but never sends content until clicked", async () => {
   const api = {
     readAIPreferences: vi.fn().mockResolvedValue(defaultAIPreferences()),

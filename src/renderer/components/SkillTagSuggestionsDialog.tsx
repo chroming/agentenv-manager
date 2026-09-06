@@ -1,21 +1,29 @@
 import { useRef, useState } from "react";
-import { CheckCircle2, Maximize2, Minimize2, Sparkles, X } from "lucide-react";
+import { CheckCircle2, Maximize2, Minimize2, Pin, Sparkles, X } from "lucide-react";
 import type { SkillLibraryEntry, SkillTagsInput } from "../../shared/types";
 import { canonicalizeSkillTags, replaceSuggestedTags, skillTagKey } from "../../shared/skillTags";
 import { useSkillTagSuggestions, type TagReviewRow } from "../hooks/useSkillTagSuggestions";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { SkillTagList } from "./SkillTags";
+import { AIServiceSetup } from "./AIServiceSetup";
 import { Button, ChoiceInput, DialogBody, DialogFooter, DialogHeader, IconButton, InteractiveStatus, ModalFrame, Notice, ResourcePanelToolbar, TagChip, TextField } from "./ui";
 
 const TagSuggestions = ({ row, skill, vocabulary, disabled, onChange }: {
-  row: TagReviewRow; skill: SkillLibraryEntry; vocabulary: string[]; disabled: boolean; onChange(tags: string[]): void;
+  row: TagReviewRow; skill: SkillLibraryEntry; vocabulary: string[]; disabled: boolean; onChange(tags: string[], fixed: string[]): void;
 }) => {
   const { t } = useI18n();
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
-  const update = (tags: string[]) => {
-    try { const next = canonicalizeSkillTags(tags, vocabulary); replaceSuggestedTags(skill, next, row.record?.tags.map((tag) => tag.tag) ?? []); onChange(next); setError(""); }
+  const update = (tags: string[], fixed = row.fixedDraft ?? []) => {
+    try {
+      const next = [...new Map(tags.flatMap((tag) => canonicalizeSkillTags([tag], vocabulary)).map((tag) => [skillTagKey(tag), tag])).values()];
+      const retained = canonicalizeSkillTags(fixed, vocabulary).filter((tag) => next.some((item) => skillTagKey(item) === skillTagKey(tag)));
+      const removing = next.length < row.draft.length && next.every((tag) => row.draft.some((item) => skillTagKey(item) === skillTagKey(tag)));
+      // Regeneration may exceed the combined limit; allow removal until the draft fits again.
+      if (!removing) replaceSuggestedTags(skill, next, row.record?.tags.map((tag) => tag.tag) ?? [], retained);
+      onChange(next, retained); setError("");
+    }
     catch (error) { setError(String(error)); }
   };
   return <div className="skill-tag-editor-selection">
@@ -23,16 +31,17 @@ const TagSuggestions = ({ row, skill, vocabulary, disabled, onChange }: {
       {row.draft.map((tag) => {
         const reason = row.record?.tags.find((item) => skillTagKey(item.tag) === skillTagKey(tag))?.reason;
         const isNew = !vocabulary.some((item) => skillTagKey(item) === skillTagKey(tag));
-        return <span className="skill-ai-tag-choice" key={skillTagKey(tag)}><TagChip className="skill-tag-editor-chip" disabled={disabled} title={[isNew ? t("New tag") : "", reason].filter(Boolean).join(" · ")}
+        const fixed = row.fixedDraft?.some((item) => skillTagKey(item) === skillTagKey(tag));
+        return <span className="skill-ai-tag-choice" key={skillTagKey(tag)}><TagChip className="skill-tag-editor-chip" disabled={disabled} title={[fixed ? t("Fixed tags") : "", isNew ? t("New tag") : "", reason].filter(Boolean).join(" · ")}
           aria-label={t("Remove tag {{tag}}", { tag })} onClick={() => update(row.draft.filter((item) => skillTagKey(item) !== skillTagKey(tag)))}>
-          <span>{tag}</span><X size={12} />
+          {fixed ? <Pin size={12} /> : null}<span>{tag}</span><X size={12} />
         </TagChip>{isNew ? <small className="muted">{t("New tag")}</small> : null}</span>;
       })}
       {!row.draft.length ? <span className="settings-muted">{t("No tags selected")}</span> : null}
     </div>
     <TextField label={t("Add a tag")} value={input} disabled={disabled} maxLength={32} error={error || undefined}
       placeholder={t("Type a tag and press Enter")} onChange={(event) => setInput(event.currentTarget.value)} onKeyDown={(event) => {
-        if (event.key === "Enter" && input.trim()) { event.preventDefault(); update([...row.draft, input]); setInput(""); }
+        if (event.key === "Enter" && input.trim()) { event.preventDefault(); update([...row.draft, input], [...(row.fixedDraft ?? []), input]); setInput(""); }
       }} />
   </div>;
 };
@@ -45,15 +54,16 @@ export const SkillTagSuggestionsDialog = ({ skills, vocabulary, onClose, onSave 
   const dialogRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const [maximized, setMaximized] = useState(false);
+  const [configuring, setConfiguring] = useState(false);
   const close = () => { state.stop(); onClose(); };
   useModalDialog({ open: true, dialogRef, initialFocusRef: closeRef, onDismiss: close, dismissDisabled: state.busy === "saving" });
   const waiting = state.busy === "generating";
-  const locked = Boolean(state.busy);
+  const locked = Boolean(state.busy) || configuring;
   const allSelected = skills.length > 0 && skills.every((skill) => state.selected.has(skill.id));
   const allCached = state.selected.size > 0 && [...state.selected].every((id) => Boolean(state.rows[id]?.record));
   return <ModalFrame ariaLabel={t("AI tags")} className="ui-dialog-shell" maximized={maximized} size={skills.length > 1 ? "wide" : "default"}
     dialogRef={dialogRef} onDismiss={close} dismissDisabled={state.busy === "saving"} dismissPolicy="intentional">
-    <DialogHeader title={t("AI tags")} description={t("Saving replaces AI tags only. Manual tags are kept.")}
+    <DialogHeader title={t("AI tags")} description={t("Saving replaces AI tags only. Fixed tags are kept.")}
       actions={<IconButton label={t(maximized ? "Restore" : "Maximize preview")} onClick={() => setMaximized(!maximized)}>
         {maximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
       </IconButton>} />
@@ -65,6 +75,7 @@ export const SkillTagSuggestionsDialog = ({ skills, vocabulary, onClose, onSave 
           onClick={() => void state.prepare(undefined, allCached)}>{t(allCached ? "Regenerate selected" : "Suggest tags")}</Button> : null}
       </ResourcePanelToolbar>
       {state.error ? <Notice tone="warning" role="alert">{state.error}</Notice> : null}
+      {state.needsConfig && state.allowed ? <AIServiceSetup editing={configuring} onEditingChange={setConfiguring} onSaved={() => state.setNeedsConfig(false)} /> : null}
       <div className="skill-ai-tags-list">
         {skills.map((skill) => {
           const row = state.rows[skill.id];
@@ -88,7 +99,7 @@ export const SkillTagSuggestionsDialog = ({ skills, vocabulary, onClose, onSave 
             {row?.record ? <>
               {row.record.partial ? <p className="settings-muted">{t("Partial analysis")}</p> : null}
               {!row.record.tags.length ? <p className="settings-muted">{t("No distinctive tags were found. You can add your own.")}</p> : null}
-              <TagSuggestions row={row} skill={skill} vocabulary={vocabulary} disabled={locked || saved} onChange={(draft) => state.patch(skill.id, { draft })} />
+              <TagSuggestions row={row} skill={skill} vocabulary={vocabulary} disabled={locked || saved} onChange={(draft, fixedDraft) => state.patch(skill.id, { draft, fixedDraft })} />
             </> : null}
           </section>;
         })}
