@@ -2358,6 +2358,15 @@ describe("Electron UI profile switching e2e", () => {
       expect(libraryHeaderGeometry.actionsInsideHeader).toBe(true);
       expect(libraryHeaderGeometry.actionsBesideTitle).toBe(true);
       expect(libraryHeaderGeometry.centerDelta).toBeLessThanOrEqual(1);
+      const toolbarLayout = await page.locator(".library-toolbar-actions").evaluate((actions) => {
+        const row = actions.closest(".library-toolbar")!.getBoundingClientRect();
+        const controls = [...actions.querySelectorAll("button")].map((button) => button.getBoundingClientRect()).filter((box) => box.width && box.height);
+        return { count: controls.length, aligned: controls.every((box) => Math.abs(box.top - controls[0].top) <= 1),
+          contained: controls.every((box) => box.left >= row.left && box.right <= row.right) };
+      });
+      expect(toolbarLayout.count).toBeGreaterThanOrEqual(4);
+      expect(toolbarLayout.aligned).toBe(true);
+      expect(toolbarLayout.contained).toBe(true);
       const toolbarActions = [
         page.getByRole("button", { name: "Check updates" }),
         page.getByRole("button", { name: "Update all skills" })
@@ -2423,14 +2432,14 @@ describe("Electron UI profile switching e2e", () => {
         await search.fill("");
         await expect.poll(() => allRows.count()).toBe(testCase.count + 4);
       }
-      const statusFilter = page.getByRole("combobox", { name: "Skill status filters" });
+      const statusFilter = page.getByRole("group", { name: "Skill status filters" });
       for (let run = 0; run < 4; run += 1) {
         const startedAt = await page.evaluate(() => performance.now());
-        await statusFilter.selectOption("updates");
+        await statusFilter.getByRole("button", { name: /^Updates/ }).click();
         await expect.poll(() => allRows.count()).toBe(testCase.count);
         const duration = (await page.evaluate(() => performance.now())) - startedAt;
         if (run > 0) filterRuns.push(duration);
-        await statusFilter.selectOption("enabled");
+        await statusFilter.getByRole("button", { name: /^Enabled/ }).click();
         await expect.poll(() => allRows.count()).toBe(testCase.count + 4);
       }
 
@@ -5097,7 +5106,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(pageActions.length).toBeGreaterThanOrEqual(3);
     expect(new Set(pageActions.map(({ height }) => height))).toEqual(new Set([32]));
     const toolbarControls = await readBoxes(
-      page.locator(".library-toolbar > .ui-composite-field, .library-toolbar > button")
+      page.locator(".library-toolbar > .ui-composite-field, .library-toolbar-actions button")
     );
     expect(toolbarControls.length).toBeGreaterThanOrEqual(3);
     expect(new Set(toolbarControls.map(({ height }) => height))).toEqual(new Set([32]));
@@ -10974,8 +10983,8 @@ describe("Electron UI profile switching e2e", () => {
       )).globallyEnabled
     ).toBe(false);
     await expect.poll(() => libraryRow.count()).toBe(0);
-    const statusFilter = page.getByRole("combobox", { name: "Skill status filters" });
-    await statusFilter.selectOption("disabled");
+    const statusFilter = page.getByRole("group", { name: "Skill status filters" });
+    await statusFilter.getByRole("button", { name: /^Disabled/ }).click();
     await libraryRow.waitFor({ state: "visible" });
     await expect.poll(() => libraryRow.textContent()).toContain("Disabled");
     expect(await libraryRow.getAttribute("class")).toContain("is-globally-disabled");
@@ -10985,11 +10994,11 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => libraryRow.evaluate((row) => getComputedStyle(row).boxShadow))
       .toBe("none");
-    expect(await statusFilter.inputValue()).toBe("disabled");
+    expect(await statusFilter.getByRole("button", { name: /^Disabled/ }).getAttribute("aria-pressed")).toBe("true");
     expect(await page.getByRole("group", { name: /^Library item / }).count()).toBe(1);
-    await statusFilter.selectOption("updates");
+    await statusFilter.getByRole("button", { name: /^Updates/ }).click();
     expect(await page.getByRole("group", { name: "Library item layout-skill-1" }).count()).toBe(0);
-    await statusFilter.selectOption("enabled");
+    await statusFilter.getByRole("button", { name: /^Enabled/ }).click();
     await page.getByRole("button", { name: "Filters", exact: true }).click();
     const usageFilter = page.getByRole("combobox", { name: "Skill usage filter" });
     await usageFilter.selectOption("referenced");
@@ -11019,7 +11028,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(fileExists(installedSkillDir)).resolves.toBe(false);
 
     await openSkillLibrary(page);
-    await statusFilter.selectOption("disabled");
+    await statusFilter.getByRole("button", { name: /^Disabled/ }).click();
     await libraryRow.getByRole("button", { name: "More actions for layout-skill-1" }).click();
     await page.getByRole("menuitem", { name: /Enable globally/ }).click();
     await expect.poll(async () =>

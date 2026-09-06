@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { SkillUpdatePlan } from "../../shared/types";
 import type { SkillSummary, SkillSummaryConfig } from "../../shared/skillSummaries";
 import { useI18n } from "../i18n";
-import { Button, Notice, ResourcePanelToolbar } from "./ui";
+import { Button, InteractiveStatus, Notice, ResourcePanelToolbar } from "./ui";
 import { SkillSummaryContent } from "./SkillSummaryContent";
 import { useAIPreferences } from "../hooks/useAIPreferences";
 
@@ -15,6 +15,7 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState("");
   const [loadingConfig, setLoadingConfig] = useState(false);
+  const [operationLabel, setOperationLabel] = useState("");
   const active = useRef(true);
   const requestId = useRef("");
   const stopped = useRef(false);
@@ -49,6 +50,7 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
   const prepare = async (chosen: SkillUpdatePlan[], regenerate = false) => {
     if (!allowed || busyId || loadingConfig || !chosen.length) return;
     setLoadingConfig(true);
+    setOperationLabel(t(regenerate ? "Regenerate summary" : plans.length === 1 ? "Generate summary" : "Summarize selected ({{count}})", { count: chosen.length }));
     stopped.current = false;
     setErrors({});
     try {
@@ -90,18 +92,19 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
   return <section className="skill-summary-review" aria-label={t("Update summaries")}>
     <ResourcePanelToolbar>
       <span className="resource-heading skill-summary-heading">{t("Update summaries")}</span>
-      {busyId ? <Button onClick={() => {
+      {allowed && (missing.length || loadingConfig) ? <Button disabled={disabled} busy={loadingConfig} onClick={() => void prepare(missing)}>
+        {loadingConfig ? operationLabel : t(plans.length === 1 ? "Generate summary" : "Summarize selected ({{count}})", { count: missing.length })}
+      </Button> : allowed && plans.length === 1 && records[plans[0].id] ? <Button disabled={disabled} busy={loadingConfig} onClick={() => void prepare([plans[0]], true)}>{t("Regenerate summary")}</Button> : null}
+      {loadingConfig ? <Button onClick={() => {
         stopped.current = true;
         if (requestId.current) void window.agentEnv.cancelSkillSummary(requestId.current);
-      }}>{t("Stop")}</Button> : allowed && missing.length ? <Button disabled={disabled} busy={loadingConfig} onClick={() => void prepare(missing)}>
-        {t(plans.length === 1 ? "Generate summary" : "Summarize selected ({{count}})", { count: missing.length })}
-      </Button> : allowed && plans.length === 1 && records[plans[0].id] ? <Button disabled={disabled} busy={loadingConfig} onClick={() => void prepare([plans[0]], true)}>{t("Regenerate summary")}</Button> : null}
+      }}>{t("Stop")}</Button> : null}
     </ResourcePanelToolbar>
     {errors.general ? <Notice tone="warning" role="alert">{errors.general}</Notice> : null}
     {plans.map((plan) => records[plan.id] || errors[plan.id] || busyId === plan.id ? <div key={plan.id}>
       {plans.length > 1 ? <h4>{plan.name}</h4> : null}
       {errors[plan.id] ? <Notice tone="warning" role="alert">{errors[plan.id]}</Notice> : null}
-      {busyId === plan.id ? <Button busy disabled>{t("Generating summary")}</Button> : null}
+      {busyId === plan.id ? <div role="status"><InteractiveStatus busy statusKind="working" label={t("Generating summary")} /></div> : null}
       {records[plan.id] ? <>
         <SkillSummaryContent summary={records[plan.id]} onViewFile={(path) => onViewFile(plan, path, records[plan.id])} />
         {allowed && plans.length > 1 ? <Button size="compact" disabled={disabled || Boolean(busyId) || loadingConfig} onClick={() => void prepare([plan], true)}>{t("Regenerate summary")}</Button> : null}

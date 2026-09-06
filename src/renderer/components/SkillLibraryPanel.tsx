@@ -1754,17 +1754,18 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
             value={libraryMode}
           />
           {libraryMode === "skills" ? (
-            <SelectControl
-              controlWidth="compact"
-              aria-label={t("Skill status filters")}
+            <SegmentedControl
+              className="ui-segmented-control--compact"
+              label={t("Skill status filters")}
               value={statusFilter ?? "all"}
-              onChange={(event) => updateControls({ statusFilter: event.currentTarget.value === "all" ? undefined : event.currentTarget.value as SkillLibraryViewState["statusFilter"] })}
-            >
-              <option value="all">{t("All")} ({librarySkills.length})</option>
-              <option value="enabled">{t("Enabled")} ({librarySkills.length - disabledSkillCount})</option>
-              <option value="updates">{t("Updates")} ({availableUpdateCount})</option>
-              <option value="disabled">{t("Disabled")} ({disabledSkillCount})</option>
-            </SelectControl>
+              onChange={(value) => updateControls({ statusFilter: value === "all" ? undefined : value as SkillLibraryViewState["statusFilter"] })}
+              options={[
+                { value: "all", label: `${t("All")} (${librarySkills.length})` },
+                { value: "enabled", label: `${t("Enabled")} (${librarySkills.length - disabledSkillCount})` },
+                { value: "updates", label: `${t("Updates")} (${availableUpdateCount})` },
+                { value: "disabled", label: `${t("Disabled")} (${disabledSkillCount})` }
+              ]}
+            />
           ) : libraryMode === "sources" ? (
             <SelectControl
               controlWidth="compact"
@@ -1790,6 +1791,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               onChange={(event) => updateControls({ search: event.currentTarget.value })}
             />
           </label>
+          <div className="library-toolbar-actions">
           <Button
             aria-expanded={filtersOpen}
             className={`library-filter-trigger${advancedFilterCount > 0 ? " has-filters" : ""}`}
@@ -1834,6 +1836,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
             id: "ai-tags", label: t("AI tags..."), icon: <Sparkles size={15} />, disabled: filteredSkills.length === 0,
             onSelect: () => setTagAnalysisSkills(filteredSkills)
           }]} /> : null}
+          </div>
           {filtersOpen ? (
             <SkillLibraryFilters
               availableTags={availableTags}

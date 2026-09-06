@@ -1280,9 +1280,9 @@ try {
   await capturePage(page, join(outputDir, "skills-groups-expanded-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("tab", { name: "Skill list" }).click();
-  await page.getByRole("combobox", { name: "Skill status filters" }).selectOption("disabled");
+  await page.getByRole("group", { name: "Skill status filters" }).getByRole("button", { name: /^Disabled/ }).click();
   await capturePage(page, join(outputDir, "skills-disabled-920x620.png"));
-  await page.getByRole("combobox", { name: "Skill status filters" }).selectOption("enabled");
+  await page.getByRole("group", { name: "Skill status filters" }).getByRole("button", { name: /^Enabled/ }).click();
   const skillSearch = page.getByRole("textbox", { name: "Search skills" });
   await skillSearch.fill("no-such-skill");
   await capturePage(page, join(outputDir, "skills-empty-920x620.png"));

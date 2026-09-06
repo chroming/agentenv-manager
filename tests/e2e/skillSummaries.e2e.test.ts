@@ -11,7 +11,9 @@ requireCurrentElectronBuild();
 let root = "";
 let app: ElectronApplication | undefined;
 let server: Server | undefined;
+let releaseResponse: (() => void) | undefined;
 afterEach(async () => {
+  releaseResponse?.(); releaseResponse = undefined;
   if (app) {
     const page = await app.firstWindow();
     await page.screenshot({ path: "/tmp/agentenv-summary-last.png" }).catch(() => undefined);
@@ -31,7 +33,7 @@ describe("manual update summaries desktop flow", () => {
       request.resume();
       if (request.url !== "/chat/completions") { response.writeHead(404); response.end(); return; }
       response.setHeader("Content-Type", "application/json");
-      response.end(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify({
+      releaseResponse = () => response.end(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify({
         overview: "Adds optional log upload before review.", items: [{ category: "security", fact: "A log upload instruction was added.", implication: "Project logs could leave the device; check the destination first.", paths: ["SKILL.md"] }]
       }) } }], usage: { prompt_tokens: 100, completion_tokens: 80 } }));
     });
@@ -64,6 +66,13 @@ describe("manual update summaries desktop flow", () => {
     await dialog.waitFor();
     expect(calls).toBe(0);
     await dialog.getByRole("button", { name: "Generate summary", exact: true }).click();
+    await expect.poll(() => calls).toBe(1);
+    expect(await dialog.getByRole("button", { name: "Generate summary", exact: true }).getAttribute("aria-busy")).toBe("true");
+    expect(await dialog.getByRole("button", { name: "Generating summary", exact: true }).count()).toBe(0);
+    await dialog.getByRole("status").filter({ hasText: "Generating summary" }).waitFor();
+    await page.setViewportSize({ width: 920, height: 620 });
+    await page.screenshot({ path: "/tmp/summary-generating-920.png" });
+    releaseResponse!(); releaseResponse = undefined;
     await dialog.getByText("Adds optional log upload before review.", { exact: true }).waitFor();
     expect(calls).toBe(1);
     const captureDir = "/tmp/agentenv-summary-evidence";

@@ -18,6 +18,18 @@ const install = (history: SkillSummary[] = []) => {
   return api;
 };
 describe("Skill summary review", () => {
+  it("keeps progress on the initiating action and uses a non-interactive content status", async () => {
+    const api = install();
+    api.generateSkillSummary.mockImplementation(() => new Promise(() => undefined));
+    render(<SkillSummaryReview plans={[plan]} onViewFile={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Generate summary" }));
+    await waitFor(() => expect(api.generateSkillSummary).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Generate summary" })).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("status")).toHaveTextContent("Generating summary");
+    expect(screen.queryByRole("button", { name: "Generating summary" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    expect(api.cancelSkillSummary).toHaveBeenCalledTimes(1);
+  });
   it("generates with one manual click, without a confirmation prompt, then links evidence", async () => {
     const api = install(); const view = vi.fn();
     render(<SkillSummaryReview plans={[plan]} onViewFile={view} />);
@@ -27,6 +39,7 @@ describe("Skill summary review", () => {
     await screen.findByText("Adds log upload");
     expect(screen.queryByText("Generate summaries?")).not.toBeInTheDocument();
     expect(api.generateSkillSummary).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText("Details"));
     fireEvent.click(screen.getByRole("button", { name: "SKILL.md" }));
     expect(view).toHaveBeenCalledWith(plan, "SKILL.md", expect.objectContaining({ skillId: "review" }));
   });

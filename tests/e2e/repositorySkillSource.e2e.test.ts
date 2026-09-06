@@ -209,7 +209,7 @@ describe("Repository Skill source", () => {
     ).toBe(true);
 
     await page.getByRole("tab", { name: "By source" }).click();
-    expect(await page.getByRole("combobox", { name: "Skill status filters" }).count()).toBe(0);
+    expect(await page.getByRole("group", { name: "Skill status filters" }).count()).toBe(0);
     const scopeFilter = page.getByRole("combobox", { name: "Source check scope" });
     expect(await scopeFilter.inputValue()).toBe("monitored");
     expect(await scopeFilter.locator("option[value=manual]").textContent()).toBe("Manual only (0)");
@@ -438,7 +438,7 @@ describe("Repository Skill source", () => {
     await page.getByRole("tab", { name: "Skill list" }).click();
     const removedRow = page.getByRole("group", { name: "Library item release-check-internal" });
     await removedRow.getByText("Removed upstream", { exact: true }).waitFor({ state: "visible" });
-    await page.getByRole("combobox", { name: "Skill status filters" }).selectOption("updates");
+    await page.getByRole("group", { name: "Skill status filters" }).getByRole("button", { name: /^Updates/ }).click();
     expect(await removedRow.count()).toBe(0);
   }, 90_000);
 
