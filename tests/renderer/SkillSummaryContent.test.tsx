@@ -12,6 +12,8 @@ it("keeps the quick read bounded while preserving every cached finding and evide
   const { container } = render(<SkillSummaryContent summary={summary} onViewFile={view} />);
   const details = container.querySelector("details")!;
   expect(details.open).toBe(false);
+  expect(container.querySelector("dl dt")?.textContent).toBe("Security concerns");
+  expect(screen.getAllByText("Impact 4").some((node) => !node.closest("details"))).toBe(true);
   expect(screen.getAllByText("Change 4").some((node) => !node.closest("details"))).toBe(true);
   expect(screen.getAllByText("Change 3").every((node) => node.closest("details"))).toBe(true);
   fireEvent.click(screen.getByText("Details · 5"));

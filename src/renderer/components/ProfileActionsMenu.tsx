@@ -1,5 +1,5 @@
 import type { CSSProperties, Ref } from "react";
-import { Columns2, Copy, History, RotateCcw, Trash2 } from "lucide-react";
+import { Columns2, Copy, History, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n";
 import { ActionMenu, ActionMenuItem } from "./ui";
 
@@ -44,7 +44,7 @@ export const ProfileActionsMenu = ({
       menuRef={menuRef}
       style={style}
     >
-      {onAnalyze ? <ActionMenuItem disabled={disabled} onClick={onAnalyze}><span>{t("Analyze Profile")}</span></ActionMenuItem> : null}
+      {onAnalyze ? <ActionMenuItem disabled={disabled} onClick={onAnalyze}><Sparkles size={15} aria-hidden="true" /><span>{t("Analyze Profile")}</span></ActionMenuItem> : null}
       {onCompare ? <ActionMenuItem
         disabled={disabled || compareDisabled}
         title={compareDescription}

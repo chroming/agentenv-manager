@@ -37,6 +37,8 @@ describe("AI tag review", () => {
     const api = install(true); const save = vi.fn().mockResolvedValue(true);
     render(<SkillTagSuggestionsDialog skills={[skills[0]]} vocabulary={["Testing"]} onClose={vi.fn()} onSave={save} />);
     const input = await screen.findByRole("textbox", { name: "Add a tag" });
+    expect(screen.getByRole("button", { name: "Remove tag Code review" }).textContent).toBe("Code review");
+    expect(screen.getByText("New tag").closest("button")).toBeNull();
     fireEvent.change(input, { target: { value: "Docs" } }); fireEvent.keyDown(input, { key: "Enter" });
     fireEvent.click(screen.getByRole("button", { name: "Save tags (1)" }));
     await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({ tags: ["Code review", "Testing", "Docs"] })));

@@ -14,9 +14,15 @@ export const SkillSummaryContent = ({ summary, onViewFile }: {
   const items = [...summary.items].sort((a, b) => Number(b.category === "security") - Number(a.category === "security"));
   return <div className="skill-summary-content">
     <p>{summary.overview}</p>
-    {items.slice(0, 3).map((item, index) => item.category === "security"
-      ? <Notice key={index} tone="warning" title={t("Security concerns")}>{item.fact}</Notice>
-      : <p key={index}>{item.fact}</p>)}
+    <dl className="skill-summary-findings">
+    {items.slice(0, 3).map((item, index) => <div key={index}>
+      <dt>{t(categories.find(([category]) => category === item.category)![1])}</dt>
+      <dd>{item.category === "security"
+        ? <Notice tone="warning">{item.fact}{item.implication ? <p>{item.implication}</p> : null}</Notice>
+        : <><p>{item.fact}</p>{item.implication ? <p className="muted">{item.implication}</p> : null}</>}
+      </dd>
+    </div>)}
+    </dl>
     {summary.coverage === "partial" ? <Notice tone="warning" title={t("Partial analysis")}>
       {t("Files not analyzed")}: {summary.omittedPaths.join(", ")}
     </Notice> : null}

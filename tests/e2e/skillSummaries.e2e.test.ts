@@ -74,6 +74,9 @@ describe("manual update summaries desktop flow", () => {
     await page.screenshot({ path: "/tmp/summary-generating-920.png" });
     releaseResponse!(); releaseResponse = undefined;
     await dialog.getByText("Adds optional log upload before review.", { exact: true }).waitFor();
+    const titleX = await dialog.locator(".skill-summary-heading").evaluate((node) => node.getBoundingClientRect().x);
+    const contentX = await dialog.locator(".skill-summary-content").first().evaluate((node) => node.getBoundingClientRect().x);
+    expect(Math.abs(titleX - contentX)).toBeLessThanOrEqual(1);
     expect(calls).toBe(1);
     const captureDir = "/tmp/agentenv-summary-evidence";
     await mkdir(captureDir, { recursive: true });

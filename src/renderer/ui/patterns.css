@@ -880,6 +880,10 @@
   padding: 3px 10px;
 }
 
+.ui-resource-panel-toolbar--flush {
+  padding-inline: 0;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .ui-resource-row--actions-contextual .ui-resource-row__actions {
     opacity: 0;

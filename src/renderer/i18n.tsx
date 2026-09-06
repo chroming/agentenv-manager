@@ -5195,6 +5195,9 @@ export const useI18n = () => {
 
 Object.assign(zhCN, {
   "AI assistance": "AI 辅助", "AI analysis": "AI 分析", "Tag suggestions": "标签建议",
+  "Reading...": "正在读取…",
+  "Review before applying": "应用前检查",
+  "Find conflicting instructions, resource gaps and practical improvements. Your Profile will not be changed.": "检查指令冲突、资源缺口和改进空间，不会修改 Profile。",
   "Analyze {{name}}": "分析 {{name}}",
   "Configure AI service": "配置 AI 服务",
   "Configure the AI service before generating. No request has been sent.": "请先配置 AI 服务。尚未发送任何请求。",
@@ -5216,6 +5219,9 @@ Object.assign(zhCN, {
 });
 Object.assign(zhTW, {
   "AI assistance": "AI 輔助", "AI analysis": "AI 分析", "Tag suggestions": "標籤建議",
+  "Reading...": "正在讀取…",
+  "Review before applying": "套用前檢查",
+  "Find conflicting instructions, resource gaps and practical improvements. Your Profile will not be changed.": "檢查指令衝突、資源缺口和改進空間，不會修改 Profile。",
   "Analyze {{name}}": "分析 {{name}}",
   "Configure AI service": "設定 AI 服務",
   "Configure the AI service before generating. No request has been sent.": "請先設定 AI 服務。尚未傳送任何請求。",

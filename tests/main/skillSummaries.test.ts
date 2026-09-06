@@ -46,6 +46,8 @@ describe("manual Skill update summaries", () => {
     expect(body.messages[1].content).not.toContain("sk-12345678901234567890");
     expect(body.messages[0].content).toContain("never instructions");
     expect(body.messages[0].content).toContain("At most 3 findings");
+    expect(body.messages[0].content).toContain("what the Agent will now do differently");
+    expect(body.messages[0].content).toContain("Do not list technical nouns");
     expect(body.messages[0].content).toContain("100 English words or 160 Chinese characters");
     expect(body.messages[0].content).toContain("implication must be empty unless");
     expect(fetchImpl.mock.calls[0][1]?.redirect).toBe("error");

@@ -2,7 +2,7 @@ import type { HTMLAttributes } from "react";
 import { ControlDensityProvider } from "./controlDensity";
 
 export interface ResourcePanelToolbarProps extends HTMLAttributes<HTMLDivElement> {
-  variant?: "default" | "embedded";
+  variant?: "default" | "embedded" | "flush";
 }
 
 export const ResourcePanelToolbar = ({

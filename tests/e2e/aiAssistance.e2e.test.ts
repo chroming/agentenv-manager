@@ -39,9 +39,12 @@ it("gates all model calls and reviews a saved Profile across locales, sizes and 
     await page.evaluate((locale) => window.agentEnv.updateSettings({ locale }), locale); await page.reload();
     await page.getByRole("button", { name: locale === "en" ? "Profiles" : locale === "zh_CN" ? "配置方案" : "設定檔", exact: true }).click();
     await page.getByRole("button", { name: /More Profile actions|更多配置方案操作|更多.*操作/ }).click();
-    await page.getByRole("menuitem", { name: locale === "en" ? "Analyze Profile" : "分析 Profile", exact: true }).click();
+    const analysisEntry = page.getByRole("menuitem", { name: locale === "en" ? "Analyze Profile" : "分析 Profile", exact: true });
+    expect(await analysisEntry.locator("svg").count()).toBe(1);
+    await analysisEntry.click();
     const dialog = page.getByRole("dialog", { name: locale === "en" ? "Profile analysis" : "Profile 分析", exact: true });
     const analyze = dialog.getByRole("button", { name: locale === "en" ? "Analyze Profile" : "分析 Profile", exact: true });
+    await page.screenshot({ path: join(captures, `profile-${locale}-idle.png`) });
     expect(calls).toBe(index); await analyze.click();
     await dialog.getByText("No resource changes are made by analysis.", { exact: true }).waitFor(); expect(calls).toBe(index + 1);
     for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {

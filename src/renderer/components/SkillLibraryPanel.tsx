@@ -1016,6 +1016,9 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   const cleanupDetails = cleanupDetailsKey
     ? cleanupGroups.find((group) => group.skillKey === cleanupDetailsKey)
     : undefined;
+  const cleanupDetailsAnalysisPath = cleanupDetails?.resolution === "manual" &&
+    cleanupDetails.items.some((item) => item.libraryId)
+    ? cleanupDetails.primary?.path : undefined;
   const cleanupDetailsStatusClass = cleanupDetails?.automaticEffect === "remove-broken-link"
     ? "managed"
     : cleanupDetails
@@ -2897,6 +2900,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               </span>
             </header>
             <div className="cleanup-details-list ui-dialog-body">
+              {cleanupDetailsAnalysisPath ? <LocalSkillAnalysis sourcePath={cleanupDetailsAnalysisPath} /> : null}
               {cleanupDetailVersions.map((version) => (
                 <section
                   aria-label={t(

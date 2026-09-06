@@ -8000,6 +8000,14 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => brokenDetails.textContent()).not.toContain("External");
     await brokenDetails.getByRole("button", { name: "Close" }).click();
 
+    await driftGroup.getByRole("button", { name: `More cleanup actions for ${skillId}` }).click();
+    await page.getByRole("menuitem", { name: "Details", exact: true }).click();
+    const duplicateDetails = page.getByRole("dialog", { name: `Skill details ${skillId}` });
+    await page.screenshot({ path: "/tmp/agentenv-duplicate-analysis-before.png" });
+    await duplicateDetails.getByRole("button", { name: "Analyze differences" }).waitFor();
+    await duplicateDetails.getByText("Duplicate Skill analysis", { exact: true }).waitFor();
+    await page.screenshot({ path: "/tmp/agentenv-duplicate-analysis-entry.png" });
+    await duplicateDetails.getByRole("button", { name: "Close", exact: true }).click();
     await chooseVersion.click();
     const driftDialog = page.getByRole("dialog", { name: "Review skill cleanup" });
     await driftDialog.waitFor({ state: "visible" });

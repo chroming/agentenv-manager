@@ -24,6 +24,18 @@ const install = (cached = false, prefs = defaultAIPreferences()) => {
   return api;
 };
 describe("AI assistance surfaces", () => {
+  it("uses the standard dialog action lane and makes Close primary after analysis", async () => {
+    install(); const close = vi.fn();
+    const { container } = render(<AIAnalysisReview standalone onClose={close} subject={{ kind: "profile", profileId: "review", targetId: "codex" }} />);
+    const analyze = await screen.findByRole("button", { name: "Analyze Profile" });
+    expect(analyze.closest(".ui-dialog-footer")).not.toBeNull();
+    expect(container.querySelector(".ui-dialog-body .ui-resource-panel-toolbar")).toBeNull();
+    fireEvent.click(analyze);
+    await screen.findByText("Adds a test");
+    expect(screen.getByRole("button", { name: "Close" })).toHaveClass("ui-button--primary");
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(close).toHaveBeenCalledTimes(1);
+  });
   it("clears a different object's cached result even if the new preview fails", async () => {
     const api = install(true);
     const view = render(<AIAnalysisReview subject={{ kind: "comparison", runId: "one" }} />);
@@ -73,6 +85,7 @@ describe("AI assistance surfaces", () => {
     const api = install(); render(<AIAnalysisReview subject={{ kind: "comparison", runId: "run" }} />);
     fireEvent.click(await screen.findByRole("button", { name: "Analyze results" }));
     await screen.findByText("Adds a test");
+    fireEvent.click(screen.getByText("Details"));
     fireEvent.click(screen.getByRole("button", { name: "With Profile" })); await screen.findByText("test added");
     expect(api.generateAIAnalysis).toHaveBeenCalledTimes(1);
   });

@@ -90,7 +90,7 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
   };
   if (!allowed && !Object.keys(records).length) return null;
   return <section className="skill-summary-review" aria-label={t("Update summaries")}>
-    <ResourcePanelToolbar>
+    <ResourcePanelToolbar variant="flush">
       <span className="resource-heading skill-summary-heading">{t("Update summaries")}</span>
       {allowed && (missing.length || loadingConfig) ? <Button disabled={disabled} busy={loadingConfig} onClick={() => void prepare(missing)}>
         {loadingConfig ? operationLabel : t(plans.length === 1 ? "Generate summary" : "Summarize selected ({{count}})", { count: missing.length })}

@@ -23,10 +23,10 @@ const TagSuggestions = ({ row, skill, vocabulary, disabled, onChange }: {
       {row.draft.map((tag) => {
         const reason = row.record?.tags.find((item) => skillTagKey(item.tag) === skillTagKey(tag))?.reason;
         const isNew = !vocabulary.some((item) => skillTagKey(item) === skillTagKey(tag));
-        return <TagChip className="skill-tag-editor-chip" key={skillTagKey(tag)} disabled={disabled} title={[isNew ? t("New tag") : "", reason].filter(Boolean).join(" · ")}
+        return <span className="skill-ai-tag-choice" key={skillTagKey(tag)}><TagChip className="skill-tag-editor-chip" disabled={disabled} title={[isNew ? t("New tag") : "", reason].filter(Boolean).join(" · ")}
           aria-label={t("Remove tag {{tag}}", { tag })} onClick={() => update(row.draft.filter((item) => skillTagKey(item) !== skillTagKey(tag)))}>
-          <span>{tag}{isNew ? ` · ${t("New")}` : ""}</span><X size={12} />
-        </TagChip>;
+          <span>{tag}</span><X size={12} />
+        </TagChip>{isNew ? <small className="muted">{t("New tag")}</small> : null}</span>;
       })}
       {!row.draft.length ? <span className="settings-muted">{t("No tags selected")}</span> : null}
     </div>
