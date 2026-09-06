@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 import type { AIAnalysisSubject, AIAnalysisPreview, AIAnalysisRecord } from "../../shared/aiAssistance";
-import type { SkillSummaryConfig } from "../../shared/skillSummaries";
 import { useAIPreferences } from "../hooks/useAIPreferences";
 import { useI18n } from "../i18n";
 import { Button, Notice, ResourcePanelToolbar, TextAction } from "./ui";
@@ -22,7 +21,6 @@ export const AIAnalysisReview = ({ subject, standalone = false }: { subject: AIA
   };
   const [configuring, setConfiguring] = useState(false);
   const [needsConfig, setNeedsConfig] = useState(false);
-  const [confirmation, setConfirmation] = useState<SkillSummaryConfig>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<"loading" | "generating" | undefined>();
   const [evidence, setEvidence] = useState("");
@@ -31,16 +29,17 @@ export const AIAnalysisReview = ({ subject, standalone = false }: { subject: AIA
   const identity = JSON.stringify([subject, locale]);
   const currentIdentity = useRef(identity); currentIdentity.current = identity;
   useEffect(() => {
-    active.current = true; setPreview(undefined); setConfirmation(undefined); setError(""); setEvidence(""); setBusy(undefined); setConfiguring(false); setNeedsConfig(false);
+    active.current = true; setPreview(undefined); setError(""); setEvidence(""); setBusy(undefined); setConfiguring(false); setNeedsConfig(false);
     let valid = true;
     void window.agentEnv?.prepareAIAnalysis?.(subject, locale).then((value) => { if (valid) { setPreview(value); setRecord(value.cached); } })
       .catch((error) => { if (valid) setError(String(error)); });
     return () => { valid = false; active.current = false; if (request.current) void window.agentEnv.cancelAIAnalysis(request.current); };
   }, [identity]);
   useEffect(() => {
-    if (!allowed) { setConfirmation(undefined); if (request.current) void window.agentEnv.cancelAIAnalysis(request.current); }
+    if (!allowed && request.current) void window.agentEnv.cancelAIAnalysis(request.current);
   }, [allowed]);
   const prepare = async () => {
+    if (!allowed || busy) return;
     setBusy("loading"); setError("");
     try {
       const value = await window.agentEnv.prepareAIAnalysis(subject, locale);
@@ -48,44 +47,29 @@ export const AIAnalysisReview = ({ subject, standalone = false }: { subject: AIA
       if (active.current && currentIdentity.current === identity) {
         setPreview(value); setRecord(value.cached);
         if (!config.model || !config.endpoint) { setNeedsConfig(true); return; }
-        setNeedsConfig(false); setConfirmation(config);
+        setNeedsConfig(false); setBusy("generating");
+        const id = crypto.randomUUID(); request.current = id;
+        try {
+          const generated = await window.agentEnv.generateAIAnalysis({ subject, locale, expectedKey: value.key, requestId: id,
+            expectedEndpoint: config.endpoint, expectedModel: config.model, confirmed: true, regenerate: Boolean(record) });
+          if (active.current && currentIdentity.current === identity) setRecord(generated);
+        } finally { if (request.current === id) request.current = ""; }
       }
     } catch (error) { if (active.current && currentIdentity.current === identity) setError(String(error)); }
     finally { if (active.current && currentIdentity.current === identity) setBusy(undefined); }
-  };
-  const generate = async () => {
-    if (!preview || !confirmation || !allowed || busy) return;
-    const config = confirmation; setConfirmation(undefined); setBusy("generating"); setError("");
-    const id = crypto.randomUUID(); request.current = id;
-    try {
-      const value = await window.agentEnv.generateAIAnalysis({ subject, locale, expectedKey: preview.key, requestId: id,
-        expectedEndpoint: config.endpoint, expectedModel: config.model, confirmed: true, regenerate: Boolean(record) });
-      if (active.current && currentIdentity.current === identity) setRecord(value);
-    } catch (error) { if (active.current && currentIdentity.current === identity) setError(String(error)); }
-    finally { if (request.current === id) request.current = ""; if (active.current && currentIdentity.current === identity) setBusy(undefined); }
   };
   const action = subject.kind === "comparison" ? "Analyze results" : subject.kind === "duplicates" ? "Analyze differences" : "Analyze Profile";
   const shownDocument = record?.documents.find((doc) => doc.id === evidence);
   if (!allowed && !record) return null;
   return <section className="skill-summary-review" aria-label={t("AI analysis")}>
     <ResourcePanelToolbar><span className="resource-heading skill-summary-heading">{standalone ? "" : t("AI analysis")}</span>
-      {allowed ? <Button icon={<Sparkles size={15} />} busy={Boolean(busy)} disabled={Boolean(busy || confirmation || configuring)} onClick={() => void prepare()}>{t(record ? "Regenerate" : action)}</Button> : null}
+      {allowed ? <Button icon={<Sparkles size={15} />} busy={Boolean(busy)} disabled={Boolean(busy || configuring)} onClick={() => void prepare()}>{t(record ? "Regenerate" : action)}</Button> : null}
       {busy === "generating" ? <Button onClick={() => void window.agentEnv.cancelAIAnalysis(request.current)}>{t("Stop")}</Button> : null}
     </ResourcePanelToolbar>
     {error ? <Notice tone="warning" role="alert" actions={allowed && !configuring ? <Button onClick={() => setConfiguring(true)}>{t("Configure AI service")}</Button> : undefined}>{error}</Notice> : null}
     {preview?.cacheDamaged ? <Notice tone="warning">{t("Saved analysis is unreadable. Generate a new analysis; the old file will be preserved for diagnostics.")}</Notice> : null}
     {needsConfig && !configuring ? <Notice actions={<Button onClick={() => setConfiguring(true)}>{t("Configure AI service")}</Button>}>{t("Configure the AI service before generating. No request has been sent.")}</Notice> : null}
-    {configuring ? <AIServiceForm onCancel={() => setConfiguring(false)} onSaved={() => { setConfiguring(false); void prepare(); }} /> : null}
-    {confirmation && preview ? <Notice title={t("Generate analysis?")} actions={<><Button onClick={() => setConfirmation(undefined)}>{t("Cancel")}</Button><Button variant="primary" onClick={() => void generate()}>{t("Generate")}</Button></>}>
-      <p>{t("The selected content will be sent to this service and may contain private information. Your provider may charge for this request. Nothing will be changed.")}</p>
-      <p>{confirmation.endpoint} · {confirmation.model}</p>
-      <details><summary>{t("Analysis scope")}{preview.coverage ? ` · ${t("{{included}} of {{total}} documents", { ...preview.coverage })}` : ""}</summary>
-        {preview.documents.map((doc) => <p key={doc.id}>{doc.label}</p>)}
-      </details>
-      {preview.coverage && preview.partial ? <p>{t("{{truncated}} truncated · {{omitted}} omitted", { ...preview.coverage })}</p> : null}
-      {preview.partial ? <p>{t("Partial analysis: long content is truncated. Only the displayed scope is analyzed.")}</p> : null}
-      {preview.warnings.map((warning) => <p key={warning}>{t(warning)}</p>)}
-    </Notice> : null}
+    {configuring ? <AIServiceForm onCancel={() => setConfiguring(false)} onSaved={() => { setConfiguring(false); setNeedsConfig(false); setError(""); }} /> : null}
     {record ? <div className="skill-summary-content">
       {(!preview || record.key !== preview.key) ? <Notice tone="warning">{t("Inputs changed. This is the previous analysis; regenerate to analyze the current content.")}</Notice> : null}
       <p>{record.overview}</p><p className="muted">{t("AI-generated")} · {record.model} · {formatDate(record.generatedAt)}</p>

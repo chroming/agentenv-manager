@@ -19,7 +19,7 @@ export const AIAssistanceSettings = () => {
     finally { setBusy(false); }
   };
   return <div className="settings-preference-list" aria-label={t("AI assistance")}>
-    <SettingsPreferenceRow label={<span className="settings-preference-label">{t("AI assistance")}<InfoTip label={t("Manual requests only. Turning this off cancels active AI requests and keeps saved results. Your provider may still bill requests already sent.")} /></span>}
+    <SettingsPreferenceRow label={<span className="settings-preference-label">{t("AI assistance")}<InfoTip label={`${t("The selected content will be sent to this service and may contain private information. Your provider may charge for this request. Nothing will be changed.")} ${t("Manual requests only. Turning this off cancels active AI requests and keeps saved results. Your provider may still bill requests already sent.")}`} /></span>}
       control={<Switch label={t("AI assistance")} checked={state.preferences?.enabled ?? false} disabled={busy || !state.preferences}
         onClick={() => state.preferences && void save({ ...state.preferences, enabled: !state.preferences.enabled })} />} />
     {aiFeatures.map((feature) => <SettingsPreferenceRow key={feature} label={names[feature]}

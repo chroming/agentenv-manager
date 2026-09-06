@@ -18,16 +18,14 @@ const install = (history: SkillSummary[] = []) => {
   return api;
 };
 describe("Skill summary review", () => {
-  it("requires a manual click and destination confirmation, then links evidence", async () => {
+  it("generates with one manual click, without a confirmation prompt, then links evidence", async () => {
     const api = install(); const view = vi.fn();
     render(<SkillSummaryReview plans={[plan]} onViewFile={view} />);
     await waitFor(() => expect(api.listSkillSummaries).toHaveBeenCalled());
     expect(api.generateSkillSummary).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Generate summary" }));
-    await screen.findByText("Generate summaries?");
-    expect(api.generateSkillSummary).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Generate 1" }));
     await screen.findByText("Adds log upload");
+    expect(screen.queryByText("Generate summaries?")).not.toBeInTheDocument();
     expect(api.generateSkillSummary).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "SKILL.md" }));
     expect(view).toHaveBeenCalledWith(plan, "SKILL.md", expect.objectContaining({ skillId: "review" }));
@@ -39,7 +37,6 @@ describe("Skill summary review", () => {
     expect(api.generateSkillSummary).not.toHaveBeenCalled();
     api.generateSkillSummary.mockRejectedValue(new Error("Quota exceeded"));
     fireEvent.click(screen.getByRole("button", { name: "Regenerate summary" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Generate 1" }));
     await screen.findByText("Quota exceeded");
     expect(screen.getByText("Adds log upload")).toBeInTheDocument();
     expect(api.generateSkillSummary.mock.calls[0][0].regenerate).toBe(true);
@@ -48,7 +45,6 @@ describe("Skill summary review", () => {
     const api = install();
     render(<SkillSummaryReview plans={[plan, { ...plan, id: "other" }]} selectedIds={["review"]} onViewFile={vi.fn()} />);
     fireEvent.click(await screen.findByRole("button", { name: "Summarize selected (1)" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Generate 1" }));
     await screen.findByText("Adds log upload");
     expect(api.generateSkillSummary).toHaveBeenCalledTimes(1);
   });

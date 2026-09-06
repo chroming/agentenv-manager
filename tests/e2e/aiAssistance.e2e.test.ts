@@ -42,8 +42,7 @@ it("gates all model calls and reviews a saved Profile across locales, sizes and 
     await page.getByRole("menuitem", { name: locale === "en" ? "Analyze Profile" : "分析 Profile", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: locale === "en" ? "Profile analysis" : "Profile 分析", exact: true });
     const analyze = dialog.getByRole("button", { name: locale === "en" ? "Analyze Profile" : "分析 Profile", exact: true });
-    await analyze.click(); expect(calls).toBe(index);
-    await dialog.getByRole("button", { name: locale === "en" ? "Generate" : locale === "zh_CN" ? "生成" : "產生", exact: true }).click();
+    expect(calls).toBe(index); await analyze.click();
     await dialog.getByText("No resource changes are made by analysis.", { exact: true }).waitFor(); expect(calls).toBe(index + 1);
     for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
       await page.setViewportSize({ width, height });

@@ -15,14 +15,13 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState("");
   const [loadingConfig, setLoadingConfig] = useState(false);
-  const [confirmation, setConfirmation] = useState<{ config: SkillSummaryConfig; plans: SkillUpdatePlan[]; regenerate: boolean; omitted: string[]; fileCount: number }>();
   const active = useRef(true);
   const requestId = useRef("");
   const stopped = useRef(false);
   const ai = useAIPreferences();
   const allowed = ai.enabled("summaries");
   useEffect(() => {
-    if (!allowed) { stopped.current = true; setConfirmation(undefined); if (requestId.current) void window.agentEnv.cancelSkillSummary(requestId.current); }
+    if (!allowed) { stopped.current = true; if (requestId.current) void window.agentEnv.cancelSkillSummary(requestId.current); }
   }, [allowed]);
   const identity = plans.map((plan) => `${plan.id}:${plan.previewId}`).join("|");
   useEffect(() => {
@@ -50,31 +49,25 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
   const prepare = async (chosen: SkillUpdatePlan[], regenerate = false) => {
     if (!allowed || busyId || loadingConfig || !chosen.length) return;
     setLoadingConfig(true);
+    stopped.current = false;
     setErrors({});
     try {
       const config = await window.agentEnv.readSkillSummaryConfig();
       if (!config.model) throw new Error(t("Configure the AI service in Settings first."));
       const prepared: SkillUpdatePlan[] = [];
-      const omitted: string[] = [];
-      let fileCount = 0;
       for (const plan of chosen) {
-        if (!active.current) break;
+        if (!active.current || stopped.current) break;
         try {
           const scope = await window.agentEnv.prepareSkillSummary(plan.previewId!);
           if (!scope.fileCount) throw new Error(t("No readable text changes. Review the original files instead."));
-          prepared.push(plan); fileCount += scope.fileCount;
-          omitted.push(...scope.omittedPaths.map((path) => `${plan.name}/${path}`));
+          prepared.push(plan);
         } catch (error) { if (active.current) setErrors((current) => ({ ...current, [plan.id]: String(error) })); }
       }
-      if (active.current && prepared.length) setConfirmation({ config, plans: prepared, regenerate, omitted, fileCount });
+      if (active.current && !stopped.current && prepared.length) await run({ config, plans: prepared, regenerate });
     } catch (error) { if (active.current) setErrors({ general: error instanceof Error ? error.message : String(error) }); }
     finally { if (active.current) setLoadingConfig(false); }
   };
-  const run = async () => {
-    if (!confirmation || busyId) return;
-    const selected = confirmation;
-    setConfirmation(undefined);
-    stopped.current = false;
+  const run = async (selected: { config: SkillSummaryConfig; plans: SkillUpdatePlan[]; regenerate: boolean }) => {
     for (const plan of selected.plans) {
       if (stopped.current || !active.current) break;
       const id = crypto.randomUUID();
@@ -104,16 +97,6 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
         {t(plans.length === 1 ? "Generate summary" : "Summarize selected ({{count}})", { count: missing.length })}
       </Button> : allowed && plans.length === 1 && records[plans[0].id] ? <Button disabled={disabled} busy={loadingConfig} onClick={() => void prepare([plans[0]], true)}>{t("Regenerate summary")}</Button> : null}
     </ResourcePanelToolbar>
-    {confirmation ? <Notice title={t("Generate summaries?")} actions={<>
-      <Button onClick={() => setConfirmation(undefined)}>{t("Cancel")}</Button>
-      <Button variant="primary" disabled={disabled} onClick={() => void run()}>{t("Generate {{count}}", { count: confirmation.plans.length })}</Button>
-    </>}>
-      <p>{t("Selected Skill diffs are sent to this service and may contain private content. Model usage is charged by your provider.")}</p>
-      <p>{confirmation.config.endpoint} · {confirmation.config.model}</p>
-      <p>{t("{{count}} text files will be analyzed", { count: confirmation.fileCount })}</p>
-      {confirmation.omitted.length ? <p>{t("Files not analyzed")}: {confirmation.omitted.join(", ")}</p> : null}
-      <p>{t("One request per Skill. Large or binary files may be excluded and will be listed. Nothing is generated automatically.")}</p>
-    </Notice> : null}
     {errors.general ? <Notice tone="warning" role="alert">{errors.general}</Notice> : null}
     {plans.map((plan) => records[plan.id] || errors[plan.id] || busyId === plan.id ? <div key={plan.id}>
       {plans.length > 1 ? <h4>{plan.name}</h4> : null}

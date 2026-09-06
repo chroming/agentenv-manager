@@ -19,7 +19,6 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
   const [selected, setSelected] = useState(new Set(skills.filter((skill) => skills.length === 1 || !skill.tags?.length).map((skill) => skill.id)));
   const [busy, setBusy] = useState<"loading" | "preparing" | "generating" | "saving" | undefined>("loading");
   const [error, setError] = useState("");
-  const [confirmation, setConfirmation] = useState<{ config: SkillSummaryConfig; items: SkillTagAnalysis[]; regenerate: boolean }>();
   const active = useRef(true);
   const stopped = useRef(false);
   const ai = useAIPreferences();
@@ -51,7 +50,8 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
     };
   }, []);
   const prepare = async (ids = [...selected], regenerate = false) => {
-    if (busy || !ids.length) return;
+    if (busy || !ai.enabled("tags") || !ids.length) return;
+    stopped.current = false;
     setBusy("preparing"); setError("");
     try {
       const result = await load(ids);
@@ -59,7 +59,7 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
       if (!items.length || !active.current) return;
       const config = await window.agentEnv.readSkillSummaryConfig();
       if (!config.model) throw new Error(t("Configure the AI service in Settings first."));
-      if (active.current) setConfirmation({ config, items, regenerate });
+      if (active.current && !stopped.current) await generate({ config, items, regenerate });
     } catch (error) { if (active.current) setError(error instanceof Error ? error.message : String(error)); }
     finally { if (active.current) setBusy(undefined); }
   };
@@ -67,10 +67,8 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
     stopped.current = true;
     if (requestId.current) void window.agentEnv.cancelSkillTagSuggestions(requestId.current);
   };
-  const generate = async () => {
-    if (!confirmation || busy) return;
-    const pending = confirmation;
-    setConfirmation(undefined); setBusy("generating"); stopped.current = false;
+  const generate = async (pending: { config: SkillSummaryConfig; items: SkillTagAnalysis[]; regenerate: boolean }) => {
+    setBusy("generating");
     for (const item of pending.items) {
       if (!active.current) break;
       if (stopped.current) { patch(item.skillId, { status: "skipped" }); continue; }
@@ -85,7 +83,7 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
     }
     if (active.current) setBusy(undefined);
   };
-  useEffect(() => { if (!ai.enabled("tags")) { stop(); setConfirmation(undefined); } }, [ai.preferences]);
+  useEffect(() => { if (!ai.enabled("tags")) stop(); }, [ai.preferences]);
   const saveable = skills.filter((skill) => selected.has(skill.id) && rows[skill.id]?.record && rows[skill.id].status !== "saved" && rows[skill.id].draft.some((tag) => !skill.tags?.some((existing) => skillTagKey(existing) === skillTagKey(tag))));
   const save = async () => {
     if (busy || !saveable.length) return;
@@ -101,6 +99,6 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
     }
     if (active.current) setBusy(undefined);
   };
-  return { allowed: ai.enabled("tags"), rows, selected, setSelected, busy, error, confirmation, setConfirmation, prepare, generate, stop, save,
+  return { allowed: ai.enabled("tags"), rows, selected, setSelected, busy, error, prepare, stop, save,
     saveable, patch, savedCount: Object.values(rows).filter((row) => row.status === "saved").length };
 };

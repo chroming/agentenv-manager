@@ -19,7 +19,7 @@ const install = (cached = false) => {
   window.agentEnv = api as unknown as AgentEnvApi; return api;
 };
 describe("AI tag review", () => {
-  it("defaults to untagged Skills, confirms destination and saves only accepted suggestions", async () => {
+  it("defaults to untagged Skills, generates with one click and saves only accepted suggestions", async () => {
     const api = install(); const save = vi.fn().mockResolvedValue(true);
     render(<SkillTagSuggestionsDialog skills={skills} vocabulary={["Manual", "Testing"]} onClose={vi.fn()} onSave={save} />);
     await waitFor(() => expect(screen.getByRole("checkbox", { name: "Select Review" })).toBeEnabled());
@@ -27,9 +27,6 @@ describe("AI tag review", () => {
     expect(screen.getByRole("checkbox", { name: "Select Testing" })).not.toBeChecked();
     expect(api.generateSkillTagSuggestions).not.toHaveBeenCalled();
     fireEvent.click(screen.getAllByRole("button", { name: "Suggest tags" })[0]);
-    const generate = await screen.findByRole("button", { name: "Generate 1" });
-    expect(api.generateSkillTagSuggestions).not.toHaveBeenCalled();
-    fireEvent.click(generate);
     fireEvent.click(await screen.findByRole("button", { name: "Remove tag Testing" }));
     fireEvent.click(screen.getByRole("button", { name: "Save tags (1)" }));
     await screen.findByText("Saved", { exact: true });
@@ -62,7 +59,6 @@ describe("AI tag review", () => {
     await waitFor(() => expect(screen.getByRole("checkbox", { name: "Select all" })).toBeEnabled());
     fireEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
     fireEvent.click(screen.getAllByRole("button", { name: "Suggest tags" })[0]);
-    fireEvent.click(await screen.findByRole("button", { name: "Generate 2" }));
     await screen.findByText("Analyzing");
     fireEvent.click(screen.getByRole("button", { name: "Stop" }));
     await screen.findByText("Skipped");
@@ -73,17 +69,13 @@ describe("AI tag review", () => {
     const api = install(true); api.generateSkillTagSuggestions.mockRejectedValue(new Error("Quota exceeded"));
     render(<SkillTagSuggestionsDialog skills={[skills[0]]} vocabulary={[]} onClose={vi.fn()} onSave={vi.fn()} />);
     fireEvent.click(await screen.findByRole("button", { name: "Regenerate" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Generate 1" }));
     await screen.findByText("Error: Quota exceeded");
     expect(screen.getByRole("button", { name: "Remove tag Code review" })).toBeInTheDocument();
   });
-  it("makes regenerating an already cached batch an explicit confirmed action", async () => {
+  it("makes regenerating an already cached batch an explicit one-click action", async () => {
     const api = install(true);
     render(<SkillTagSuggestionsDialog skills={[skills[0]]} vocabulary={[]} onClose={vi.fn()} onSave={vi.fn()} />);
     fireEvent.click(await screen.findByRole("button", { name: "Regenerate selected" }));
-    const confirm = await screen.findByRole("button", { name: "Generate 1" });
-    expect(api.generateSkillTagSuggestions).not.toHaveBeenCalled();
-    fireEvent.click(confirm);
     await waitFor(() => expect(api.generateSkillTagSuggestions).toHaveBeenCalledWith(expect.objectContaining({ regenerate: true, confirmed: true })));
   });
 });

@@ -48,7 +48,7 @@ export const SkillTagSuggestionsDialog = ({ skills, vocabulary, onClose, onSave 
   const close = () => { state.stop(); onClose(); };
   useModalDialog({ open: true, dialogRef, initialFocusRef: closeRef, onDismiss: close, dismissDisabled: state.busy === "saving" });
   const waiting = state.busy === "generating";
-  const locked = Boolean(state.busy || state.confirmation);
+  const locked = Boolean(state.busy);
   const allSelected = skills.length > 0 && skills.every((skill) => state.selected.has(skill.id));
   const allCached = state.selected.size > 0 && [...state.selected].every((id) => Boolean(state.rows[id]?.record));
   return <ModalFrame ariaLabel={t("AI tags")} className="ui-dialog-shell" maximized={maximized} size={skills.length > 1 ? "wide" : "default"}
@@ -65,15 +65,6 @@ export const SkillTagSuggestionsDialog = ({ skills, vocabulary, onClose, onSave 
           onClick={() => void state.prepare(undefined, allCached)}>{t(allCached ? "Regenerate selected" : "Suggest tags")}</Button> : null}
       </ResourcePanelToolbar>
       {state.error ? <Notice tone="warning" role="alert">{state.error}</Notice> : null}
-      {state.confirmation ? <Notice title={t("Generate tag suggestions?")} actions={<>
-        <Button onClick={() => state.setConfirmation(undefined)}>{t("Cancel")}</Button>
-        <Button variant="primary" onClick={() => void state.generate()}>{t("Generate {{count}}", { count: state.confirmation.items.length })}</Button>
-      </>}>
-        <p>{t("Selected SKILL.md contents and existing tag names will be sent to this service. They may contain private information. Your provider may charge for each request.")}</p>
-        <p>{state.confirmation.config.endpoint} · {state.confirmation.config.model}</p>
-        <p>{t("One request per Skill. No scripts, linked files, or Agent configuration are sent.")}</p>
-        {state.confirmation.items.some((item) => item.partial) ? <p>{t("Some long documents or tag lists will be truncated. Suggestions cover only the supplied content.")}</p> : null}
-      </Notice> : null}
       <div className="skill-ai-tags-list">
         {skills.map((skill) => {
           const row = state.rows[skill.id];

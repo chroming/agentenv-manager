@@ -44,7 +44,7 @@ describe("AI assistance surfaces", () => {
     expect(screen.getByText("Adds a test")).toBeInTheDocument();
     expect(screen.getByText(/Inputs changed/)).toBeInTheDocument();
   });
-  it("configures the service in place and returns to confirmation without generating", async () => {
+  it("configures the service in place without generating until another explicit action", async () => {
     const api = install();
     api.readSkillSummaryConfig.mockResolvedValue({ endpoint: "https://example.test/", model: "", hasKey: false });
     window.agentEnv.saveSkillSummaryConfig = vi.fn(async () => {
@@ -55,8 +55,10 @@ describe("AI assistance surfaces", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Configure AI service" }));
     fireEvent.change(await screen.findByLabelText("Model"), { target: { value: "configured" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await screen.findByRole("button", { name: "Generate" });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument());
     expect(api.generateAIAnalysis).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Analyze results" }));
+    await waitFor(() => expect(api.generateAIAnalysis).toHaveBeenCalledTimes(1));
   });
   it("shows configuration read errors outside the collapsed disclosure", async () => {
     const api = install(); api.readSkillSummaryConfig.mockRejectedValue(new Error("Config unreadable"));
@@ -67,20 +69,17 @@ describe("AI assistance surfaces", () => {
     fireEvent.click(retry);
     await screen.findByText("AI service · Configured");
   });
-  it("keeps generation manual, confirms destination and shows linked evidence", async () => {
+  it("keeps generation manual, uses one click and shows linked evidence", async () => {
     const api = install(); render(<AIAnalysisReview subject={{ kind: "comparison", runId: "run" }} />);
     fireEvent.click(await screen.findByRole("button", { name: "Analyze results" }));
-    const generate = await screen.findByRole("button", { name: "Generate" });
-    expect(api.generateAIAnalysis).not.toHaveBeenCalled(); fireEvent.click(generate);
     await screen.findByText("Adds a test");
     fireEvent.click(screen.getByRole("button", { name: "With Profile" })); await screen.findByText("test added");
     expect(api.generateAIAnalysis).toHaveBeenCalledTimes(1);
   });
   it("preserves cached results on failure and allows read-only access with AI disabled", async () => {
     const api = install(true); render(<AIAnalysisReview subject={{ kind: "comparison", runId: "run" }} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Regenerate" }));
     api.generateAIAnalysis.mockRejectedValue(new Error("Quota exceeded"));
-    fireEvent.click(await screen.findByRole("button", { name: "Generate" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Regenerate" }));
     await screen.findByText("Error: Quota exceeded"); expect(screen.getByText("Adds a test")).toBeInTheDocument();
     await api.saveAIPreferences({ ...defaultAIPreferences(), enabled: false });
     await waitFor(() => expect(screen.queryByRole("button", { name: "Regenerate" })).not.toBeInTheDocument());
@@ -90,7 +89,6 @@ describe("AI assistance surfaces", () => {
     const api = install(); api.generateAIAnalysis.mockImplementation(() => new Promise(() => undefined));
     render(<AIAnalysisReview subject={{ kind: "comparison", runId: "run" }} />);
     fireEvent.click(await screen.findByRole("button", { name: "Analyze results" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Generate" }));
     await waitFor(() => expect(api.generateAIAnalysis).toHaveBeenCalled());
     await api.saveAIPreferences({ ...defaultAIPreferences(), enabled: false });
     await waitFor(() => expect(api.cancelAIAnalysis).toHaveBeenCalled());

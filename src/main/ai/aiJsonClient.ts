@@ -1,4 +1,11 @@
 export const AI_INPUT_BYTES = 96_000;
+const completionEndpoint = (endpoint: string) => {
+  const url = new URL(endpoint);
+  const path = url.pathname.replace(/\/+$/, "");
+  // Accept common API base URLs while preserving explicit custom endpoints.
+  if (!path || /\/v\d+$/.test(path)) url.pathname = `${path}/chat/completions`;
+  return url.href;
+};
 export const createAIJsonClient = (fetchImpl: typeof fetch = fetch) => {
   let busy = false;
   return async (input: { endpoint: string; key: string; model: string; system: string; content: string; signal: AbortSignal }) => {
@@ -8,7 +15,7 @@ export const createAIJsonClient = (fetchImpl: typeof fetch = fetch) => {
     try {
       let response: Response;
       try {
-        response = await fetchImpl(input.endpoint, {
+        response = await fetchImpl(completionEndpoint(input.endpoint), {
           method: "POST", redirect: "error", signal: input.signal,
           headers: { "Content-Type": "application/json", ...(input.key ? { Authorization: `Bearer ${input.key}` } : {}) },
           body: JSON.stringify({ model: input.model, messages: [
@@ -20,6 +27,7 @@ export const createAIJsonClient = (fetchImpl: typeof fetch = fetch) => {
       }
       if (!response.ok) {
         await response.body?.cancel();
+        if (response.status === 404) throw new Error("AI service returned HTTP 404. Check the Chat Completions API address and model name in Settings > AI assistance, then retry.");
         throw new Error(`AI service returned HTTP ${response.status}. Check your API configuration or quota; retry manually.`);
       }
       const reader = response.body?.getReader();

@@ -60,8 +60,6 @@ describe("AI tag suggestions desktop flow", () => {
       await generateButtons.first().waitFor();
       expect(calls).toBe(index);
       await generateButtons.first().click();
-      const confirm = dialog.getByRole("button", { name: english ? "Generate 1" : locale === "zh_CN" ? "生成 1 项" : "產生 1 項", exact: true });
-      await confirm.waitFor(); expect(calls).toBe(index); await confirm.click();
       await dialog.getByRole("button", { name: english ? "Remove tag Testing" : locale === "zh_CN" ? "移除标签 Testing" : "移除標籤 Testing", exact: true }).waitFor();
       expect(calls).toBe(index + 1);
       const originalBounds = await dialog.boundingBox();
