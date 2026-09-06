@@ -2018,6 +2018,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                             className="library-skill-tags"
                             maxVisible={2}
                             tags={skill.tags}
+                            aiTags={skill.aiTags}
                             onSelect={(tag) => updateControls({ tagFilter: tag })}
                           />
                         </span>

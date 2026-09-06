@@ -32,6 +32,7 @@ const SkillMetadataFileSchema = z.object({
   updatePolicy: z.enum(["tracked", "untracked"]).optional(),
   globallyEnabled: z.boolean().optional(),
   tags: z.array(z.string().min(1).max(32)).max(12).optional(),
+  aiTags: z.array(z.string().min(1).max(32)).max(12).optional(),
   iconKey: ResourceIconKeySchema.optional(),
   contentHash: z.string().min(1).optional(),
   updatedAt: z.string().min(1).optional(),

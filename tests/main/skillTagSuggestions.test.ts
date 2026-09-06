@@ -19,7 +19,7 @@ const setup = async () => {
   await writeFile(join(path, "SKILL.md"), text);
   const skills: SkillLibraryEntry[] = [{ id: "review", name: "review", description: "Test code", path, sourceType: "local", contentHash: "fixture", updatePolicy: "untracked", updatedAt: "2026-09-05", tags: ["Development"] }];
   const library = { listSkills: vi.fn(async () => skills), setTags: vi.fn(async (input: SkillTagsInput) => {
-    skills[0].tags = input.tags; return skills[0];
+    skills[0].tags = input.tags; skills[0].aiTags = input.aiTags; return skills[0];
   }) };
   const configStore = createSummaryStore(root, { isEncryptionAvailable: () => true, encryptString: (text) => Buffer.from(text), decryptString: (value) => value.toString() });
   await configStore.saveConfig({ endpoint, model: "mock-model" });
@@ -75,6 +75,7 @@ describe("manual AI Skill tags", () => {
     f.skills[0].tags!.push("Manual");
     await f.service.apply({ id: "review", suggestionKey: record.key, tags: ["Testing", "testing", " Manual "] });
     expect(f.skills[0].tags).toEqual(["Development", "Manual", "Testing"]);
+    expect(f.skills[0].aiTags).toEqual(["Testing"]);
     expect(await readFile(join(f.path, "SKILL.md"), "utf8")).toBe(f.text);
   });
   it("does not silently truncate tags at the limit", async () => {
@@ -82,6 +83,19 @@ describe("manual AI Skill tags", () => {
     f.skills[0].tags = Array.from({ length: 12 }, (_, i) => `tag-${i}`);
     await expect(f.service.apply({ id: "review", suggestionKey: record.key, tags: ["Testing"] })).rejects.toThrow("12");
     expect(f.library.setTags).not.toHaveBeenCalled();
+  });
+  it("replaces old AI tags but keeps manual tags and manually typed additions", async () => {
+    const f = await setup();
+    f.skills[0].tags = ["Development", "Old"];
+    f.skills[0].aiTags = ["Old"];
+    const record = await f.service.generate(await f.input());
+    await f.service.apply({ id: "review", suggestionKey: record.key, tags: ["Testing", "Typed"] });
+    expect(f.skills[0].tags).toEqual(["Development", "Testing", "Typed"]);
+    expect(f.skills[0].aiTags).toEqual(["Testing"]);
+    await f.service.apply({ id: "review", suggestionKey: record.key, tags: [] });
+    expect(f.skills[0].tags).toEqual(["Development", "Typed"]);
+    expect(f.skills[0].aiTags).toEqual([]);
+    expect(f.fetchImpl).toHaveBeenCalledTimes(1);
   });
   it("refuses stale content and deleted Skills on save", async () => {
     const f = await setup(); const record = await f.service.generate(await f.input());

@@ -29,6 +29,7 @@ export type SkillMetadataWriteInput = Pick<
   | "upstream"
   | "provenance"
   | "tags"
+  | "aiTags"
 > & {
   iconKey?: ResourceIconKey | null;
   sourceCollection?: SkillSourceCollectionRef | null;
@@ -77,20 +78,24 @@ export const createSkillLibraryMetadataMutations = (
     return dependencies.entryFor(safeId, targetDir);
   };
 
-  const setTags = async ({ id, tags }: SkillTagsInput): Promise<SkillLibraryEntry> => {
+  const setTags = async ({ id, tags, aiTags }: SkillTagsInput): Promise<SkillLibraryEntry> => {
     const { safeId, targetDir } = await targetFor(id);
     const skills = await dependencies.listSkills();
     const nextTags = canonicalizeSkillTags(tags, collectSkillTags(skills));
     const metadata = await dependencies.readMetadata(targetDir);
     const currentTags = parseSkillTags(metadata.tags, { strict: false });
+    const nextAiTags = parseSkillTags(aiTags ?? metadata.aiTags, { strict: false })
+      .filter((tag) => nextTags.some((next) => skillTagKey(next) === skillTagKey(tag)));
     const unchanged =
+      JSON.stringify(nextAiTags) === JSON.stringify(metadata.aiTags ?? []) &&
       currentTags.length === nextTags.length &&
       currentTags.every((tag, index) => skillTagKey(tag) === skillTagKey(nextTags[index]));
     if (unchanged) return dependencies.entryFor(safeId, targetDir);
 
     await dependencies.writeMetadata(targetDir, {
       ...metadataBase(metadata, dependencies.updatePolicyFor),
-      tags: nextTags
+      tags: nextTags,
+      aiTags: nextAiTags
     });
     return dependencies.entryFor(safeId, targetDir);
   };

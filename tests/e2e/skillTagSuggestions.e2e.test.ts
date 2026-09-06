@@ -98,6 +98,18 @@ describe("AI tag suggestions desktop flow", () => {
     expect(calls).toBe(3);
     const entry = await page.evaluate(async () => (await window.agentEnv.listSkillLibrary()).find((skill) => skill.id === "review"));
     expect(entry?.tags).toEqual(["Code review"]);
+    expect(entry?.aiTags).toEqual(["Code review"]);
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await page.evaluate(() => window.agentEnv.setSkillTags({ id: "review", tags: ["Code review", "Manual"] }));
+    await page.reload();
+    await page.getByRole("button", { name: "Skills", exact: true }).click();
+    await page.getByRole("button", { name: "More actions for review", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Edit tags", exact: true }).click();
+    await page.getByRole("region", { name: "Manual tags", exact: true }).getByRole("button", { name: "Remove tag Manual" }).waitFor();
+    await page.getByRole("region", { name: "AI-generated tags", exact: true }).getByRole("button", { name: "Remove tag Code review" }).waitFor();
+    await page.setViewportSize({ width: 920, height: 620 });
+    await page.screenshot({ path: join(captureDir, "tag-origins-920.png") });
+    expect(calls).toBe(3);
     expect(await readFile(join(source, "SKILL.md"), "utf8")).toBe(text);
     expect(await readFile(join(root, "data", "skills-library", "review", "SKILL.md"), "utf8")).toBe(text);
   }, 120_000);

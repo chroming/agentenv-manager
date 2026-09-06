@@ -1,4 +1,4 @@
-import { Plus, Tags, X } from "lucide-react";
+import { Plus, Sparkles, Tags, X } from "lucide-react";
 import {
   useEffect,
   useMemo,
@@ -13,7 +13,8 @@ import {
   MAX_SKILL_TAGS,
   normalizeSkillTag,
   parseSkillTags,
-  skillTagKey
+  skillTagKey,
+  splitSkillTags
 } from "../../shared/skillTags";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
@@ -32,17 +33,21 @@ interface SkillTagListProps {
   maxVisible?: number;
   onSelect?(tag: string): void;
   tags?: readonly string[];
+  aiTags?: readonly string[];
 }
 
 export const SkillTagList = ({
   className = "",
   maxVisible = 2,
   onSelect,
+  aiTags = [],
   tags = []
 }: SkillTagListProps) => {
   const { t } = useI18n();
   const visibleTags = tags.slice(0, maxVisible);
   const hiddenCount = Math.max(0, tags.length - visibleTags.length);
+  const aiKeys = new Set(aiTags.map(skillTagKey));
+  const label = (tag: string) => `${tag} · ${t(aiKeys.has(skillTagKey(tag)) ? "AI-generated tags" : "Manual tags")}`;
 
   if (visibleTags.length === 0) return null;
 
@@ -53,21 +58,21 @@ export const SkillTagList = ({
           aria-label={t("Filter by tag {{tag}}", { tag })}
           className="skill-tag-chip is-interactive"
           key={skillTagKey(tag)}
-          title={tag}
+          title={label(tag)}
           onClick={(event) => {
             event.stopPropagation();
             onSelect(tag);
           }}
         >
-          {tag}
+          {aiKeys.has(skillTagKey(tag)) ? <Sparkles size={12} aria-hidden="true" /> : null}<span>{tag}</span>
         </TagChip>
       ) : (
-        <span className="skill-tag-chip" key={skillTagKey(tag)} title={tag}>{tag}</span>
+        <span className="skill-tag-chip" key={skillTagKey(tag)} title={label(tag)}>{aiKeys.has(skillTagKey(tag)) ? <Sparkles size={12} aria-hidden="true" /> : null}<span>{tag}</span></span>
       ))}
       {hiddenCount > 0 ? (
         <span
           className="skill-tag-chip skill-tag-chip--count"
-          title={tags.slice(visibleTags.length).join(", ")}
+          title={tags.slice(visibleTags.length).map(label).join(", ")}
         >
           +{hiddenCount}
         </span>
@@ -117,6 +122,7 @@ export const SkillTagEditorDialog = ({
   });
 
   const originalTags = parseSkillTags(skill?.tags, { strict: false });
+  const origins = splitSkillTags({ tags: draftTags, aiTags: skill?.aiTags });
   const dirty =
     originalTags.length !== draftTags.length ||
     originalTags.some((tag, index) => skillTagKey(tag) !== skillTagKey(draftTags[index] ?? ""));
@@ -194,8 +200,11 @@ export const SkillTagEditorDialog = ({
             <small>{draftTags.length}/{MAX_SKILL_TAGS}</small>
           </div>
           {draftTags.length > 0 ? (
-            <div className="skill-tag-editor-chips">
-              {draftTags.map((tag) => (
+            <div className="skill-tag-editor-selection">
+              {([ ["Manual tags", origins.manual], ["AI-generated tags", origins.ai] ] as const).filter(([, tags]) => tags.length).map(([label, tags]) => <section key={label} aria-label={t(label)}>
+              <div className="skill-tag-editor-section-title"><span>{t(label)}</span></div>
+              <div className="skill-tag-editor-chips">
+              {tags.map((tag) => (
                 <TagChip
                   aria-label={t("Remove tag {{tag}}", { tag })}
                   className="skill-tag-editor-chip"
@@ -208,6 +217,7 @@ export const SkillTagEditorDialog = ({
                   <X size={12} strokeWidth={2.2} aria-hidden="true" />
                 </TagChip>
               ))}
+              </div></section>)}
             </div>
           ) : (
             <p className="skill-tag-editor-empty">{t("No tags yet")}</p>

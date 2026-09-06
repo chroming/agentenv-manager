@@ -29,6 +29,7 @@ export const PortableSkillMetadataSchema = z.object({
   iconKey: ResourceIconKeySchema.optional(),
   globallyEnabled: z.boolean(),
   tags: z.array(z.string().min(1).max(32)).max(12).optional(),
+  aiTags: z.array(z.string().min(1).max(32)).max(12).optional(),
   updatePolicy: z.enum(["tracked", "untracked"]),
   sourceType: z.enum(["local", "github", "git"]),
   source: z.string().optional(),

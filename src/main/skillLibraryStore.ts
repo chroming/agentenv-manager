@@ -57,7 +57,7 @@ import type {
   UnmanagedSkillLocationUpdate,
   SharedSkillRetentionInput
 } from "../shared/types";
-import { parseSkillTags } from "../shared/skillTags";
+import { parseSkillTags, skillTagKey, splitSkillTags } from "../shared/skillTags";
 import { normalizeSkillKey } from "../shared/skillIdentity";
 import { buildSkillCleanupGroups } from "../shared/skillCleanup";
 import { managedResourceOrigin } from "../shared/managedResource";
@@ -590,6 +590,7 @@ export const createSkillLibraryStore = (
           iconKey: metadata.iconKey === null ? undefined : metadata.iconKey ?? current.iconKey,
           globallyEnabled: metadata.globallyEnabled ?? current.globallyEnabled ?? true,
           tags: tags.length > 0 ? tags : undefined,
+          aiTags: splitSkillTags({ tags, aiTags: metadata.aiTags ?? current.aiTags }).ai,
           updatePolicy:
             metadata.updatePolicy ??
             (typeof metadata.updateCheckEnabled === "boolean"
@@ -1231,6 +1232,7 @@ export const createSkillLibraryStore = (
       iconKey: previousMetadata?.iconKey,
       globallyEnabled: previousMetadata?.globallyEnabled,
       tags: previousMetadata?.tags,
+      aiTags: previousMetadata?.aiTags,
       upstream: upstream ?? {
         kind: "local" as const,
         locator: persistedLocalSource,
@@ -1419,6 +1421,7 @@ export const createSkillLibraryStore = (
             iconKey: previousMetadata?.iconKey,
             globallyEnabled: previousMetadata?.globallyEnabled,
             tags: previousMetadata?.tags,
+            aiTags: previousMetadata?.aiTags,
             upstream: {
               kind: "github",
               locator: source.sourceUrl,
@@ -1454,6 +1457,7 @@ export const createSkillLibraryStore = (
             iconKey: previousMetadata?.iconKey,
             globallyEnabled: previousMetadata?.globallyEnabled,
             tags: previousMetadata?.tags,
+            aiTags: previousMetadata?.aiTags,
             upstream: {
               kind: "github",
               locator: source.sourceUrl,
@@ -1563,6 +1567,7 @@ export const createSkillLibraryStore = (
         iconKey: previousMetadata?.iconKey,
         globallyEnabled: previousMetadata?.globallyEnabled,
         tags: previousMetadata?.tags,
+        aiTags: previousMetadata?.aiTags,
         upstream: materialized.upstream,
         provenance: previousMetadata?.provenance ?? { importedVia: "agentenv" },
         sourceCollection: validatedSourceCollection
@@ -1846,6 +1851,9 @@ export const createSkillLibraryStore = (
     const mergedTags = parseSkillTags(
       requestedIds.flatMap((id) => skillsById.get(id)?.tags ?? [])
     );
+    const mergedManualTags = new Set(requestedIds.flatMap((id) =>
+      splitSkillTags(skillsById.get(id) ?? {}).manual.map(skillTagKey)));
+    const mergedAiTags = mergedTags.filter((tag) => !mergedManualTags.has(skillTagKey(tag)));
     const removedIds = requestedIds.filter((id) => id !== keepId);
     const removedIdSet = new Set(removedIds);
     const profileDetails = await readAllProfilesForResourceMutation(
@@ -1918,7 +1926,8 @@ export const createSkillLibraryStore = (
         updatedAt: new Date().toISOString(),
         upstream: sourceMetadata.upstream,
         provenance: sourceMetadata.provenance,
-        tags: mergedTags
+        tags: mergedTags,
+        aiTags: mergedAiTags
       };
       await writeAtomic(
         join(keepSkill.path, ".agentenv-skill.json"),
@@ -2118,6 +2127,7 @@ export const createSkillLibraryStore = (
           iconKey: previousLibraryMetadata?.iconKey,
           globallyEnabled: previousLibraryMetadata?.globallyEnabled,
           tags: previousLibraryMetadata?.tags,
+          aiTags: previousLibraryMetadata?.aiTags,
           upstream: { kind: "local", locator: canonicalPath },
           provenance: { importedVia: "local-scan" }
         });
@@ -2343,6 +2353,7 @@ export const createSkillLibraryStore = (
           iconKey: previousLibraryMetadata?.iconKey,
           globallyEnabled: previousLibraryMetadata?.globallyEnabled,
           tags: previousLibraryMetadata?.tags,
+          aiTags: previousLibraryMetadata?.aiTags,
           upstream: { kind: "local", locator: canonicalPath },
           provenance: { importedVia: "local-scan" }
         });

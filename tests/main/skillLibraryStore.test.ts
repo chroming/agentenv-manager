@@ -1344,7 +1344,7 @@ description: >
     await store.importSkill({ sourcePath: sourceDir, id: "reviewer", sourceType: "local" });
 
     await store.setIcon({ id: "reviewer", iconKey: "shield" });
-    await store.setTags({ id: "reviewer", tags: ["Code Review", "quality"] });
+    await store.setTags({ id: "reviewer", tags: ["Code Review", "quality"], aiTags: ["quality"] });
     await store.setUpdateSource({ id: "reviewer", sourceType: "local", source: sourceDir });
     await writeFile(join(sourceDir, "SKILL.md"), "---\nname: Reviewer\n---\n\n# v2\n", "utf8");
     const updatePlan = await store.previewUpdate("reviewer");
@@ -1352,6 +1352,7 @@ description: >
 
     expect(updated.iconKey).toBe("shield");
     expect(updated.tags).toEqual(["Code Review", "quality"]);
+    expect(updated.aiTags).toEqual(["quality"]);
     await expect(store.listSkills()).resolves.toEqual([
       expect.objectContaining({
         id: "reviewer",
@@ -1369,6 +1370,7 @@ description: >
     const sameTags = await store.setTags({ id: "reviewer", tags: ["code review", "QUALITY"] });
     const afterNoOp = await stat(metadataPath);
     expect(sameTags.tags).toEqual(["Code Review", "quality"]);
+    expect(sameTags.aiTags).toEqual(["quality"]);
     expect(afterNoOp.mtimeMs).toBe(beforeNoOp.mtimeMs);
 
     const automatic = await store.setIcon({ id: "reviewer", iconKey: undefined });
@@ -3891,6 +3893,7 @@ description: >
         remoteRevision: "abcdef123456",
         updatePolicy: "tracked",
         tags: ["Quality", "review"],
+        aiTags: ["Quality", "review"],
         upstream: {
           kind: "github",
           locator: "https://github.com/acme/reviewer/tree/main/skill",
@@ -3990,7 +3993,8 @@ description: >
         sourceType: "github",
         source: "https://github.com/acme/reviewer/tree/main/skill",
         updatePolicy: "tracked",
-        tags: ["Review", "Quality"]
+        tags: ["Review", "Quality"],
+        aiTags: ["Quality"]
       })
     ]);
     await expect(readFile(join(alphaDir, "SKILL.md"), "utf8")).resolves.toContain(

@@ -4,7 +4,7 @@ import { lstat, open, readFile, realpath } from "node:fs/promises";
 import { isAbsolute, join, relative } from "node:path";
 import { z } from "zod";
 import { SafeIdSchema } from "../../shared/schemas";
-import { canonicalizeSkillTags, collectSkillTags, parseSkillTags, skillTagKey } from "../../shared/skillTags";
+import { canonicalizeSkillTags, collectSkillTags, replaceSuggestedTags, skillTagKey } from "../../shared/skillTags";
 import type { SkillTagAnalysis, SkillTagGenerateInput, SkillTagSuggestion } from "../../shared/skillTagSuggestions";
 import type { SkillTagsInput, SkillLibraryEntry } from "../../shared/types";
 import type { SkillLibraryStore } from "../skillLibraryStoreTypes";
@@ -116,7 +116,7 @@ export const createSkillTagSuggestionService = ({ root, library, configStore, re
       if (!record) throw new Error("Tag suggestions are unavailable. Analyze this Skill again.");
       const current = await snapshot(id, record.locale);
       if (current.contentHash !== record.contentHash) throw new Error("This Skill changed after analysis. Analyze it again before saving tags.");
-      return library.setTags({ id, tags: parseSkillTags([...(current.skill.tags ?? []), ...parseSkillTags(input.tags)]) });
+      return library.setTags({ id, ...replaceSuggestedTags(current.skill, input.tags, record.tags.map((tag) => tag.tag)) });
     }
   };
 };

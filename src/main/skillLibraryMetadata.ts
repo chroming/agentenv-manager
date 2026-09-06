@@ -16,7 +16,7 @@ import {
   bindSkillSourceCollection,
   type SkillSourceRegistry
 } from "./skillSourceRegistry";
-import { parseSkillTags } from "../shared/skillTags";
+import { parseSkillTags, splitSkillTags } from "../shared/skillTags";
 
 export interface SkillMetadataFile {
   sourceType?: SkillSourceType;
@@ -35,6 +35,7 @@ export interface SkillMetadataFile {
   provenance?: SkillProvenance;
   sourceCollection?: SkillSourceCollectionRef;
   tags?: string[];
+  aiTags?: string[];
 }
 
 export const readSkillLibraryEntry = async (
@@ -82,6 +83,7 @@ export const readSkillLibraryEntry = async (
       sourceRegistry,
       legacySkillSourceCollectionFor(metadata)
     ),
-    ...(tags.length > 0 ? { tags } : {})
+    ...(tags.length > 0 ? { tags } : {}),
+    ...(metadata.aiTags?.length ? { aiTags: splitSkillTags({ tags, aiTags: metadata.aiTags }).ai } : {})
   };
 };

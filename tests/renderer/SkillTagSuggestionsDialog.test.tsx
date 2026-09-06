@@ -19,6 +19,14 @@ const install = (cached = false) => {
   window.agentEnv = api as unknown as AgentEnvApi; return api;
 };
 describe("AI tag review", () => {
+  it("allows saving removal-only AI changes while retaining manual tags", async () => {
+    install(true); const save = vi.fn().mockResolvedValue(true);
+    render(<SkillTagSuggestionsDialog skills={[{ ...skills[0], tags: ["Manual", "Code review", "Testing"], aiTags: ["Code review", "Testing"] }]} vocabulary={[]} onClose={vi.fn()} onSave={save} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove tag Code review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove tag Testing" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save tags (1)" }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith({ id: "review", tags: [], suggestionKey: "review" }));
+  });
   it("defaults to untagged Skills, generates with one click and saves only accepted suggestions", async () => {
     const api = install(); const save = vi.fn().mockResolvedValue(true);
     render(<SkillTagSuggestionsDialog skills={skills} vocabulary={["Manual", "Testing"]} onClose={vi.fn()} onSave={save} />);

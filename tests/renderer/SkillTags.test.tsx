@@ -19,6 +19,12 @@ const skill: SkillLibraryEntry = {
 };
 
 describe("SkillTagEditorDialog", () => {
+  it("separates persisted AI and manual tags without changing tag labels", () => {
+    render(<SkillTagEditorDialog availableTags={[]} skill={{ ...skill, tags: ["Manual", "Review"], aiTags: ["Review"] }} onDismiss={vi.fn()} onSave={vi.fn()} />);
+    expect(within(screen.getByRole("region", { name: "Manual tags" })).getByRole("button", { name: "Remove tag Manual" })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "AI-generated tags" })).getByRole("button", { name: "Remove tag Review" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
   it("adds existing and custom tags, removes tags, and saves one normalized list", async () => {
     const onSave = vi.fn().mockResolvedValue(true);
     const onDismiss = vi.fn();

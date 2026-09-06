@@ -44,6 +44,7 @@ const portableMetadataFor = (skill: Awaited<ReturnType<SkillLibraryStore["listSk
     iconKey: skill.iconKey,
     globallyEnabled: skill.globallyEnabled !== false,
     tags: skill.tags?.length ? skill.tags : undefined,
+    aiTags: skill.aiTags?.length ? skill.aiTags : undefined,
     updatePolicy: portableSource ? skill.updatePolicy : "untracked",
     sourceType: portableSource ? skill.sourceType : "local",
     source,

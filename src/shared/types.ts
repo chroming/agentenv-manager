@@ -621,6 +621,7 @@ export interface SkillLibraryEntry {
   provenance?: SkillProvenance;
   sourceCollection?: SkillSourceCollectionRef;
   tags?: string[];
+  aiTags?: string[];
 }
 
 export interface SkillUpstream {
@@ -1029,6 +1030,8 @@ export interface SkillIconInput {
 }
 
 export interface SkillTagsInput {
+  /** Internal provenance; IPC callers cannot assign AI origin without a saved suggestion. */
+  aiTags?: string[];
   suggestionKey?: string;
   id: string;
   tags: string[];

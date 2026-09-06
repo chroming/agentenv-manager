@@ -72,6 +72,7 @@ const writeSnapshot = async (root: string, input: {
   skillContent?: string;
   instructionContent?: string;
   skillTags?: string[];
+  skillAiTags?: string[];
   skillGroups?: Array<{
     id: string;
     name: string;
@@ -111,6 +112,7 @@ const writeSnapshot = async (root: string, input: {
     id: "review",
     globallyEnabled: true,
     ...(input.skillTags ? { tags: input.skillTags } : {}),
+    ...(input.skillAiTags ? { aiTags: input.skillAiTags } : {}),
     updatePolicy: "untracked" as const,
     sourceType: "local" as const
   };
@@ -366,6 +368,8 @@ describe("Workspace Sync", () => {
           source: "/Users/other/private-skills",
           updatePolicy: "tracked",
           contentHash: "local",
+          tags: ["Manual", "Review"],
+          aiTags: ["Review"],
           updatedAt: "2026-07-20T00:00:00.000Z",
           upstream: { kind: "git", locator: "/Users/other/private-skills", ref: "main" }
         }]
@@ -376,6 +380,7 @@ describe("Workspace Sync", () => {
     const metadata = JSON.parse(await readFile(join(destination, "workspace", "skills", "local-only", "metadata.json"), "utf8"));
 
     expect(metadata).toMatchObject({ sourceType: "local", updatePolicy: "untracked" });
+    expect(metadata).toMatchObject({ tags: ["Manual", "Review"], aiTags: ["Review"] });
     expect(metadata).not.toHaveProperty("source");
     expect(metadata).not.toHaveProperty("upstream");
     expect(toPortableOnlineLocator("../private-skills")).toBeUndefined();
@@ -453,6 +458,7 @@ describe("Workspace Sync", () => {
     }));
     const snapshot = await writeSnapshot(await tempRoot("agentenv-sync-candidate-"), {
       skillTags: ["  Code   Review  ", "code review", "quality"],
+      skillAiTags: ["QUALITY"],
       sources: [{
         formatVersion: 1,
         id: "source-remote",
@@ -474,6 +480,7 @@ describe("Workspace Sync", () => {
       readFile(join(paths.skillsLibraryDir, "review", ".agentenv-skill.json"), "utf8")
         .then((content) => JSON.parse(content).tags)
     ).resolves.toEqual(["Code Review", "quality"]);
+    expect(JSON.parse(await readFile(join(paths.skillsLibraryDir, "review", ".agentenv-skill.json"), "utf8")).aiTags).toEqual(["quality"]);
     await expect(readFile(join(paths.targetStatesDir, "opencode.json"), "utf8"))
       .resolves.toBe("device-local target state\n");
     const sources = JSON.parse(await readFile(paths.skillSourcesPath, "utf8")).sources;

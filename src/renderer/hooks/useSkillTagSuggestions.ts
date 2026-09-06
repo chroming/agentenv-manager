@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { SkillLibraryEntry, SkillTagsInput } from "../../shared/types";
 import type { SkillTagAnalysis, SkillTagSuggestion } from "../../shared/skillTagSuggestions";
 import type { SkillSummaryConfig } from "../../shared/skillSummaries";
-import { parseSkillTags, skillTagKey } from "../../shared/skillTags";
+import { replaceSuggestedTags, splitSkillTags } from "../../shared/skillTags";
 import { useI18n } from "../i18n";
 import { useAIPreferences } from "./useAIPreferences";
 
@@ -84,7 +84,15 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
     if (active.current) setBusy(undefined);
   };
   useEffect(() => { if (!ai.enabled("tags")) stop(); }, [ai.preferences]);
-  const saveable = skills.filter((skill) => selected.has(skill.id) && rows[skill.id]?.record && rows[skill.id].status !== "saved" && rows[skill.id].draft.some((tag) => !skill.tags?.some((existing) => skillTagKey(existing) === skillTagKey(tag))));
+  const saveable = skills.filter((skill) => {
+    const row = rows[skill.id];
+    if (!selected.has(skill.id) || !row?.record || row.status === "saved") return false;
+    try {
+      const next = replaceSuggestedTags(skill, row.draft, row.record.tags.map((tag) => tag.tag));
+      return JSON.stringify(next.tags) !== JSON.stringify(skill.tags ?? []) ||
+        JSON.stringify(next.aiTags) !== JSON.stringify(splitSkillTags(skill).ai);
+    } catch { return true; }
+  });
   const save = async () => {
     if (busy || !saveable.length) return;
     setBusy("saving");
@@ -92,7 +100,7 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
       patch(skill.id, { status: "running", error: undefined });
       try {
         const row = rows[skill.id];
-        parseSkillTags([...(skill.tags ?? []), ...row.draft]);
+        replaceSuggestedTags(skill, row.draft, row.record!.tags.map((tag) => tag.tag));
         if (!await onSave({ id: skill.id, tags: row.draft, suggestionKey: row.record!.key })) throw new Error(t("Tags could not be saved. Try again."));
         patch(skill.id, { status: "saved" });
       } catch (error) { patch(skill.id, { status: "error", error: error instanceof Error ? error.message : String(error) }); }

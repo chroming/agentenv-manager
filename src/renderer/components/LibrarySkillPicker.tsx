@@ -97,7 +97,7 @@ export const LibrarySkillPicker = ({
                     className="resource-picker-option__description-text"
                     text={skill.description || skill.id}
                   />
-                  <SkillTagList className="resource-picker-option__tags" maxVisible={3} tags={skill.tags} />
+                  <SkillTagList className="resource-picker-option__tags" maxVisible={3} tags={skill.tags} aiTags={skill.aiTags} />
                 </>
               )}
               icon={(

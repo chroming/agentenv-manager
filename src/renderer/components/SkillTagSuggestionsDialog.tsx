@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { CheckCircle2, Maximize2, Minimize2, Sparkles, X } from "lucide-react";
 import type { SkillLibraryEntry, SkillTagsInput } from "../../shared/types";
-import { canonicalizeSkillTags, parseSkillTags, skillTagKey } from "../../shared/skillTags";
+import { canonicalizeSkillTags, replaceSuggestedTags, skillTagKey } from "../../shared/skillTags";
 import { useSkillTagSuggestions, type TagReviewRow } from "../hooks/useSkillTagSuggestions";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
@@ -15,7 +15,7 @@ const TagSuggestions = ({ row, skill, vocabulary, disabled, onChange }: {
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
   const update = (tags: string[]) => {
-    try { const next = canonicalizeSkillTags(tags, vocabulary); parseSkillTags([...(skill.tags ?? []), ...next]); onChange(next); setError(""); }
+    try { const next = canonicalizeSkillTags(tags, vocabulary); replaceSuggestedTags(skill, next, row.record?.tags.map((tag) => tag.tag) ?? []); onChange(next); setError(""); }
     catch (error) { setError(String(error)); }
   };
   return <div className="skill-tag-editor-selection">
@@ -53,7 +53,7 @@ export const SkillTagSuggestionsDialog = ({ skills, vocabulary, onClose, onSave 
   const allCached = state.selected.size > 0 && [...state.selected].every((id) => Boolean(state.rows[id]?.record));
   return <ModalFrame ariaLabel={t("AI tags")} className="ui-dialog-shell" maximized={maximized} size={skills.length > 1 ? "wide" : "default"}
     dialogRef={dialogRef} onDismiss={close} dismissDisabled={state.busy === "saving"} dismissPolicy="intentional">
-    <DialogHeader title={t("AI tags")} description={t("Suggest task labels. Existing tags are kept; nothing is saved until you confirm.")}
+    <DialogHeader title={t("AI tags")} description={t("Saving replaces AI tags only. Manual tags are kept.")}
       actions={<IconButton label={t(maximized ? "Restore" : "Maximize preview")} onClick={() => setMaximized(!maximized)}>
         {maximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
       </IconButton>} />
@@ -83,7 +83,7 @@ export const SkillTagSuggestionsDialog = ({ skills, vocabulary, onClose, onSave 
                 {t(row?.record ? "Regenerate" : row?.error || row?.status === "skipped" ? "Retry" : "Suggest tags")}
               </Button> : null}
             </div>
-            {skill.tags?.length ? <div className="skill-ai-tags-existing"><span>{t("Existing tags")}</span><SkillTagList tags={skill.tags} maxVisible={12} /></div> : null}
+            {skill.tags?.length ? <div className="skill-ai-tags-existing"><span>{t("Existing tags")}</span><SkillTagList tags={skill.tags} aiTags={skill.aiTags} maxVisible={12} /></div> : null}
             {row?.error ? <Notice tone="warning" role="alert">{row.error}</Notice> : null}
             {row?.record ? <>
               {row.record.partial ? <p className="settings-muted">{t("Partial analysis")}</p> : null}

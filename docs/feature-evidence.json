@@ -29,19 +29,19 @@
     {
       "id": "manual-ai-skill-tags",
       "summary": "Manually generate and accept cached task-oriented tag suggestions using the shared AI service, for one Skill or a selected batch.",
-      "contract": { "path": "docs/skill-ai-tags.md", "anchor": "AI 建议沿用普通 Library 标签" },
+      "contract": { "path": "docs/skill-ai-tags.md", "anchor": "所有标签共用一套筛选词表，但记录手动和 AI 来源" },
       "support": { "opencode": "not-applicable", "claude-code": "not-applicable", "codex": "not-applicable", "antigravity": "not-applicable", "antigravity-app": "not-applicable", "trae-cli": "not-applicable", "pi": "not-applicable" },
       "states": {
         "idle": "Opening reads cached suggestions only; no model request.",
         "working": "Confirmed requests run sequentially with per-Skill progress and Stop.",
-        "success": "Suggestions remain editable until Save; accepted labels become ordinary tags.",
+        "success": "Save replaces only AI-origin tags; manual labels are preserved. Both share one filtering vocabulary.",
         "error": "Local failures retain suggestions and permit individual retries.",
         "cancelled": "Current request aborts and pending items are skipped without altering Skills.",
         "noOp": "Matching input reuses cache; same tags retain existing no-op metadata writes.",
         "stale": "Content changes after analysis prevent saving stale suggestions.",
         "partial": "Truncated input is disclosed before sending and in results; batch failures do not prevent other saves.",
-        "persisted": "Suggestions persist by content, vocabulary, locale and rule version outside portable sync.",
-        "rollback": "Failed generation preserves previous cache; saving merges latest user tags under the existing mutation coordinator."
+        "persisted": "Suggestion caches remain device-local; accepted tag provenance survives updates, merges and portable sync. Legacy tags are manual.",
+        "rollback": "Failed generation preserves previous cache; saving replaces the AI subset while retaining latest manual tags under the existing mutation coordinator."
       },
       "evidence": {
         "domain": ["tests/main/skillTagSuggestions.test.ts"],

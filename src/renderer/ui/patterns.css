@@ -1111,6 +1111,7 @@
 }
 
 .skill-tag-chip {
+  gap: var(--space-1);
   align-items: center;
   background: var(--surface-muted);
   border: 1px solid var(--border-subtle);
@@ -1128,6 +1129,16 @@
   padding: 0 7px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.skill-tag-chip > svg {
+  flex-shrink: 0;
+}
+
+.skill-tag-chip > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 button.skill-tag-chip {

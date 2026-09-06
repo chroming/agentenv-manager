@@ -4,10 +4,24 @@ import {
   collectSkillTags,
   MAX_SKILL_TAGS,
   normalizeSkillTag,
-  parseSkillTags
+  parseSkillTags,
+  splitSkillTags,
+  replaceSuggestedTags
 } from "../../src/shared/skillTags";
 
 describe("skill tags", () => {
+  it("treats legacy tags as manual and ignores orphaned AI provenance", () => {
+    expect(splitSkillTags({ tags: ["Review"] })).toEqual({ manual: ["Review"], ai: [] });
+    expect(splitSkillTags({ tags: ["Review", "Docs"], aiTags: ["review", "missing"] }))
+      .toEqual({ manual: ["Docs"], ai: ["Review"] });
+  });
+  it("replaces only AI tags, preserves manual overlaps, and accepts manual additions", () => {
+    expect(replaceSuggestedTags({ tags: ["Manual", "Old"], aiTags: ["Old"] },
+      ["manual", "New", "Typed"], ["Manual", "New"]))
+      .toEqual({ tags: ["Manual", "New", "Typed"], aiTags: ["New"] });
+    expect(replaceSuggestedTags({ tags: ["Manual", "Old"], aiTags: ["Old"] }, [], []))
+      .toEqual({ tags: ["Manual"], aiTags: [] });
+  });
   it("normalizes whitespace and deduplicates case-insensitively", () => {
     expect(parseSkillTags(["  Code   Review  ", "code review", "React"])).toEqual([
       "Code Review",

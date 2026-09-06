@@ -1,4 +1,23 @@
 export const MAX_SKILL_TAGS = 12;
+
+// Unclassified (including legacy) tags are manual. AI provenance is a subset, not a second vocabulary.
+export const splitSkillTags = (skill: { tags?: readonly string[]; aiTags?: readonly string[] }) => {
+  const keys = new Set(parseSkillTags(skill.aiTags, { strict: false }).map(skillTagKey));
+  const tags = parseSkillTags(skill.tags, { strict: false });
+  return { manual: tags.filter((tag) => !keys.has(skillTagKey(tag))), ai: tags.filter((tag) => keys.has(skillTagKey(tag))) };
+};
+
+export const replaceSuggestedTags = (
+  skill: { tags?: readonly string[]; aiTags?: readonly string[] },
+  selected: string[],
+  suggested: readonly string[]
+) => {
+  const manual = splitSkillTags(skill).manual;
+  const manualKeys = new Set(manual.map(skillTagKey));
+  const suggestedKeys = new Set(suggested.map(skillTagKey));
+  const tags = parseSkillTags([...manual, ...selected]);
+  return { tags, aiTags: tags.filter((tag) => !manualKeys.has(skillTagKey(tag)) && suggestedKeys.has(skillTagKey(tag))) };
+};
 export const MAX_SKILL_TAG_LENGTH = 32;
 
 const controlCharacters = /[\u0000-\u001f\u007f]/;
