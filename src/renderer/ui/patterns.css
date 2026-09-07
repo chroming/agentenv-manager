@@ -1110,6 +1110,30 @@
   overflow: hidden;
 }
 
+.skill-tag-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  position: relative;
+}
+
+.skill-tag-cell .skill-tag-chip {
+  flex: 0 0 auto;
+  max-width: none;
+}
+
+.skill-tag-cell__measure {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  display: flex;
+  width: 0;
+  height: 0;
+  contain: layout;
+  overflow: hidden;
+}
+
 .skill-tag-chip {
   gap: var(--space-1);
   align-items: center;

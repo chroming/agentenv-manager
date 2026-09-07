@@ -45,13 +45,33 @@ describe("AI tag suggestions desktop flow", () => {
     await page.evaluate(async ({ source, secondSource }) => {
       await window.agentEnv.importSkillToLibrary({ sourcePath: source, id: "review" });
       await window.agentEnv.importSkillToLibrary({ sourcePath: secondSource, id: "already-tagged" });
-      await window.agentEnv.setSkillTags({ id: "already-tagged", tags: ["Testing", "Manual"] });
+      await window.agentEnv.setSkillTags({ id: "already-tagged", tags: ["Testing", "Manual", "Long integration workflows", "Deployment compatibility"] });
     }, { source, secondSource });
     const captureDir = "/tmp/agentenv-ai-tags-evidence"; await mkdir(captureDir, { recursive: true });
     for (const [index, locale] of (["en", "zh_CN", "zh_TW"] as const).entries()) {
       await page.evaluate((locale) => window.agentEnv.updateSettings({ locale }), locale); await page.reload();
       const english = locale === "en";
       await page.getByRole("button", { name: english ? "Skills" : "技能", exact: true }).click();
+      for (const width of [920, 1180, 1440]) {
+        await page.setViewportSize({ width, height: 728 });
+        const row = page.locator('.library-table-row').filter({ hasText: 'review-integration-workflows-with-long-library-labels' }).first();
+        await row.waitFor();
+        const geometry = await row.evaluate((node) => {
+          const name = node.querySelector('.library-skill-name-button')!.getBoundingClientRect();
+          const tags = node.querySelector('.skill-tag-cell')!.getBoundingClientRect();
+          const chips = Array.from(node.querySelectorAll('.skill-tag-cell > button')).map((chip) => chip.getBoundingClientRect());
+          const headers = Array.from(node.closest('.library-table')!.querySelectorAll('.library-table__head > span'));
+          const cells = ['.library-resource-cell', '.skill-tag-cell', '.library-source-cell', '.library-status-cell', '.library-actions-cell'];
+          const columnsAlign = cells.every((selector, i) => Math.abs(node.querySelector(selector)!.getBoundingClientRect().x - headers[i].getBoundingClientRect().x) < 1);
+          return { columnsAlign, chipsFit: chips.every((chip) => chip.right <= tags.right + 1), sameLine: Math.abs((name.top + name.bottom) / 2 - (tags.top + tags.bottom) / 2) < 2,
+            separated: name.right <= tags.left, fits: node.scrollWidth <= node.clientWidth };
+        });
+        expect(geometry).toEqual({ columnsAlign: true, chipsFit: true, sameLine: true, separated: true, fits: true });
+        await row.locator('.skill-tag-cell').getByRole('button', { name: english ? 'Tags' : locale === 'zh_CN' ? '标签' : '標籤', exact: true }).click();
+        await page.getByRole('menuitem', { name: 'Deployment compatibility', exact: true }).waitFor();
+        await page.keyboard.press('Escape');
+        await page.screenshot({ path: join(captureDir, `tag-list-${locale}-${width}.png`) });
+      }
       if (english) {
         await page.getByRole("button", { name: "Updates (0)", exact: true }).click();
         await page.getByRole("button", { name: "More Skill actions", exact: true }).click();

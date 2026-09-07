@@ -1,6 +1,7 @@
 import { Pin, Plus, Sparkles, Tags, X } from "lucide-react";
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -28,6 +29,7 @@ import {
   TagChip,
   TextField
 } from "./ui";
+import { ToolbarOverflowMenu } from "./ui/ToolbarOverflowMenu";
 
 interface SkillTagListProps {
   className?: string;
@@ -36,6 +38,48 @@ interface SkillTagListProps {
   tags?: readonly string[];
   aiTags?: readonly string[];
 }
+
+export const SkillTagCell = ({ skill, onSelect }: {
+  skill: SkillLibraryEntry;
+  onSelect(tag: string): void;
+}) => {
+  const { t } = useI18n();
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(0);
+  const tags = skill.tags ?? [];
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const measure = () => {
+      const widths = Array.from(node.querySelectorAll('.skill-tag-cell__measure > button')).map((item) => item.getBoundingClientRect().width);
+      const available = node.clientWidth;
+      let used = 0;
+      let count = 0;
+      for (const width of widths) {
+        const next = used + (count ? 4 : 0) + width;
+        if (next + (count < widths.length - 1 ? 36 : 0) > available) break;
+        used = next;
+        count++;
+      }
+      setVisible(count);
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [skill.tags]);
+  return <div className="skill-tag-cell" ref={ref}>
+    <span className="skill-tag-cell__measure" aria-hidden="true">{tags.map((tag) => <TagChip tabIndex={-1} className="skill-tag-chip" key={tag}>{tag}</TagChip>)}</span>
+    {tags.length === 0 ? <span className="muted">—</span> : null}
+    {tags.slice(0, visible).map((tag) => <TagChip className="skill-tag-chip" key={tag}
+      title={tag} aria-label={t("Filter by tag {{tag}}", { tag })}
+      onClick={(event) => { event.stopPropagation(); onSelect(tag); }}>{tag}</TagChip>)}
+    {visible < tags.length ? <ToolbarOverflowMenu label={t("Tags")} menuLabel={t("Tags")}
+      triggerContent={<span>+{tags.length - visible}</span>}
+      items={tags.slice(visible).map((tag) => ({ id: tag, label: tag, onSelect: () => onSelect(tag) }))} /> : null}
+  </div>;
+};
 
 export const SkillTagList = ({
   className = "",

@@ -31,7 +31,7 @@ const setup = async () => {
 };
 
 describe("manual AI Skill tags", () => {
-  it("reads cache without requests and requires confirmation; sends only redacted SKILL.md and vocabulary", async () => {
+  it("reads cache without requests and sends only name, description and vocabulary", async () => {
     const f = await setup();
     await f.service.prepare("review", "en");
     const input = await f.input();
@@ -45,6 +45,8 @@ describe("manual AI Skill tags", () => {
     expect(payload.messages[1].content).not.toContain("sk-12345678901234567890");
     expect(payload.messages[1].content).not.toContain(f.root);
     expect(JSON.parse(payload.messages[1].content).vocabulary).toEqual(["Development"]);
+    expect(JSON.parse(payload.messages[1].content).skill).toEqual({ name: "review", description: "Test code" });
+    expect(JSON.parse(payload.messages[1].content).fixedVocabulary).toEqual(["Development"]);
     expect(record.tags[0].tag).toBe("Testing");
     expect(await readFile(join(f.path, "SKILL.md"), "utf8")).toBe(f.text);
   });
@@ -112,10 +114,21 @@ describe("manual AI Skill tags", () => {
     expect(record.tags).toEqual([{ tag: "Testing", reason: "Code tests" }]);
   });
   it("identifies partial inputs without automatic chunk requests", async () => {
-    const f = await setup(); await writeFile(join(f.path, "SKILL.md"), "Review code. ".repeat(3000));
+    const f = await setup(); f.skills[0].description = "Review code. ".repeat(3000);
     expect((await f.service.prepare("review", "en")).partial).toBe(true);
     expect((await f.service.generate(await f.input())).partial).toBe(true);
     expect(f.fetchImpl).toHaveBeenCalledTimes(1);
+  });
+  it("uses global fixed tags as style references and invalidates provenance changes", async () => {
+    const f = await setup();
+    f.skills.push({ ...f.skills[0], id: "other", tags: ["Code Review", "Suggested"], aiTags: ["Suggested"] });
+    const before = await f.service.prepare("review", "en");
+    await f.service.generate(await f.input());
+    const body = JSON.parse(String(f.fetchImpl.mock.calls[0][1]?.body));
+    expect(JSON.parse(body.messages[1].content).fixedVocabulary).toEqual(["Code Review", "Development"]);
+    expect(body.messages[0].content).toContain("Never force an unrelated existing tag");
+    f.skills[1].aiTags = [];
+    expect((await f.service.prepare("review", "en")).key).not.toBe(before.key);
   });
   it.each(["length", "tool_calls"])("rejects incomplete output %s", async (finish) => {
     const f = await setup(); f.fetchImpl.mockImplementation(async () => response(undefined, finish));

@@ -964,9 +964,7 @@ describe("SkillLibraryPanel", () => {
     expect(sharedRow).not.toHaveTextContent("1 Profile · 2 installs");
     fireEvent.click(within(sharedRow).getByRole("button", { name: "Filter by tag Code Review" }));
     expect(onViewStateChange).toHaveBeenCalledWith({
-      ...defaultSkillLibraryViewState,
-      tagFilter: "Code Review",
-      scrollTop: 0
+      ...defaultSkillLibraryViewState, tagFilter: "Code Review", scrollTop: 0
     });
     expect(sharedRow).not.toHaveTextContent("Review code");
     const sharedIdentity = within(sharedRow).getByLabelText("Skill details for shared-reviewer");

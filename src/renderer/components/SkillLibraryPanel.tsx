@@ -118,7 +118,7 @@ import type { SkillUpdateRun } from "../skillUpdateQueue";
 import { SkillFileBrowserDialog } from "./SkillFileBrowserDialog";
 import { SkillCleanupDetailsFooter } from "./SkillCleanupDetailsFooter";
 import { SkillUpdateSettingsDialog } from "./SkillUpdateSettingsDialog";
-import { SkillTagEditorDialog, SkillTagList } from "./SkillTags";
+import { SkillTagEditorDialog, SkillTagCell } from "./SkillTags";
 import { SkillTagSuggestionsDialog } from "./SkillTagSuggestionsDialog";
 import { useAIPreferences } from "../hooks/useAIPreferences";
 import { LocalSkillAnalysis } from "./LocalSkillAnalysis";
@@ -1861,6 +1861,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
       >
         <div className="library-table__head">
           <span>{t("Skill")}</span>
+          <span>{t("Tags")}</span>
           <span>{t("Source")}</span>
           <span className="library-column-label">{t("Status")}</span>
           <span aria-label={t("More")} />
@@ -2013,13 +2014,6 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                               <span className="library-duplicate-id">{skill.id}</span>
                             ) : null}
                           </span>
-                          <SkillTagList
-                            className="library-skill-tags"
-                            maxVisible={2}
-                            tags={skill.tags}
-                            aiTags={skill.aiTags}
-                            onSelect={(tag) => updateControls({ tagFilter: tag })}
-                          />
                         </span>
                       )}
                       focusable={false}
@@ -2027,6 +2021,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                     />
                   </div>
                 </div>
+                <SkillTagCell skill={skill} onSelect={(tag) => updateControls({ tagFilter: tag })} />
                 <div className="library-source-cell">
                   {(skill.sourceType === "github" || skill.sourceType === "git") && /^https?:\/\//i.test(skill.source ?? "") ? (
                     <button

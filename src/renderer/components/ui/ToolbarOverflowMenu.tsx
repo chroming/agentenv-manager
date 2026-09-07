@@ -24,6 +24,7 @@ export interface ToolbarOverflowMenuItem {
 }
 
 interface ToolbarOverflowMenuProps {
+  triggerContent?: ReactNode;
   label: string;
   menuLabel: string;
   disabled?: boolean;
@@ -36,7 +37,7 @@ const viewportInset = 8;
 const anchorGap = 6;
 
 export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflowMenuProps>(
-  ({ label, menuLabel, disabled = false, items, reserveSpace = false }, forwardedRef) => {
+  ({ label, menuLabel, disabled = false, items, reserveSpace = false, triggerContent }, forwardedRef) => {
     const density = useControlDensity() ?? "default";
     const [open, setOpen] = useState(false);
     const [style, setStyle] = useState<CSSProperties>();
@@ -108,7 +109,7 @@ export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflow
           aria-haspopup="menu"
           onClick={() => setOpen((current) => !current)}
         >
-          <MoreHorizontal size={16} strokeWidth={2.2} aria-hidden="true" />
+          {triggerContent ?? <MoreHorizontal size={16} strokeWidth={2.2} aria-hidden="true" />}
         </IconButton>
         {open ? createPortal(
           <ActionMenu
