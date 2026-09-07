@@ -2069,6 +2069,8 @@ Object.assign(zhCN, {
   "Update {{name}}": "更新 {{name}}",
   "Apply update {{id}}": "应用 {{id}} 更新",
   "Updating...": "正在更新...",
+  "Adding...": "正在添加...",
+  "Skill summary": "Skill 摘要",
   "Update Skill": "更新 Skill",
   "Change icon for {{name}}": "更改 {{name}} 的图标",
   "Use source icon": "使用来源网站图标",
@@ -5212,6 +5214,8 @@ export const useI18n = () => {
 Object.assign(zhCN, {
   "AI assistance": "AI 辅助", "AI analysis": "AI 分析", "Tag suggestions": "标签建议",
   "Test connection": "测试连接",
+  "Add {{name}}": "添加 {{name}}",
+  "Review files before adding this Skill to Library.": "先查看文件，确认添加后才写入技能库。",
   "AI service is available": "AI 服务可用",
   "Sends a small test request using the saved configuration. Provider charges may apply.": "使用已保存的配置发送一次小型测试请求，可能消耗服务额度。",
   "Reading...": "正在读取…",
@@ -5240,6 +5244,8 @@ Object.assign(zhCN, {
 Object.assign(zhTW, {
   "AI assistance": "AI 輔助", "AI analysis": "AI 分析", "Tag suggestions": "標籤建議",
   "Test connection": "測試連線",
+  "Add {{name}}": "新增 {{name}}",
+  "Review files before adding this Skill to Library.": "先檢視檔案，確認新增後才寫入技能庫。",
   "AI service is available": "AI 服務可用",
   "Sends a small test request using the saved configuration. Provider charges may apply.": "使用已儲存的設定傳送一次小型測試請求，可能消耗服務額度。",
   "Reading...": "正在讀取…",

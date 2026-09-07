@@ -54,6 +54,7 @@ import {
   DisclosureIcon,
   IconButton,
   InteractiveStatus,
+  Notice,
   statusToneFor,
   ModalFrame,
   SelectControl
@@ -166,6 +167,7 @@ export const SkillSourceView = ({
   const [checking, setChecking] = useState<Set<string>>(new Set());
   const [checkingAll, setCheckingAll] = useState(false);
   const [operation, setOperation] = useState<string>();
+  const [operationError, setOperationError] = useState<string>();
   const [monitoringOperation, setMonitoringOperation] = useState<string>();
   const [mergeSelectionMode, setMergeSelectionMode] = useState(false);
   const [selectionDragging, setSelectionDragging] = useState(false);
@@ -574,8 +576,11 @@ export const SkillSourceView = ({
   const runAdd = async (group: SkillSourceGroupView, candidate: SkillSourceGroupCandidate) => {
     const key = `add\0${group.canonicalLink}\0${candidate.sourceSubpath}`;
     setOperation(key);
+    setOperationError(undefined);
     try {
       await onAdd(group, candidate);
+    } catch (error) {
+      setOperationError(error instanceof Error ? error.message : String(error));
     } finally {
       setOperation(undefined);
     }
@@ -751,6 +756,7 @@ export const SkillSourceView = ({
         className={`skill-source-list${mergeSelectionMode ? " can-merge" : ""}${selectionDragging ? " is-selecting" : ""}`}
         onPointerMove={scrollSelectionList}
       >
+        {operationError ? <Notice tone="warning" role="alert">{operationError}</Notice> : null}
         {groups.length > 0 ? (
           <div className={`skill-source-table-head${mergeSelectionMode ? " can-merge" : ""}`}>
             {mergeSelectionMode ? <span aria-hidden="true" /> : null}
@@ -1039,7 +1045,7 @@ export const SkillSourceView = ({
                   <div className="skill-source-candidate-head" aria-hidden="true">
                     <span>{t("Skill")}</span>
                     <span>{t("Status")}</span>
-                    <span>{t("Action")}</span>
+                    <span aria-label={t("More")} />
                   </div>
                   {group.candidates.map((candidate) => {
                     const addKey = `add\0${group.canonicalLink}\0${candidate.sourceSubpath}`;
@@ -1103,6 +1109,13 @@ export const SkillSourceView = ({
                         </div>
                         <InteractiveStatus
                           className="skill-source-state"
+                          busy={isAdding || isUpdating || isUnignoring}
+                          disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
+                          onReview={candidate.state === "new" ? () => void runAdd(group, candidate)
+                            : candidate.state === "update" && candidate.libraryId && candidate.globallyEnabled !== false && candidate.updatePolicy !== "untracked"
+                              ? () => void runUpdate(candidate.libraryId!)
+                              : candidate.state === "ignored" ? () => void setCandidateIgnored(group, candidate, false) : undefined}
+                          reviewLabel={candidate.state === "new" ? t("Add") : candidate.state === "ignored" ? t("Unignore") : t("Update {{name}}", { name: candidate.libraryId ?? candidate.name })}
                           size="metadata"
                           statusKind={candidate.state === "current" ? "success"
                             : candidate.state === "update" ? "update-available"
@@ -1121,16 +1134,6 @@ export const SkillSourceView = ({
                         <div className="skill-source-candidate-action">
                           {candidate.state === "new" ? (
                             <>
-                              <button
-                                aria-busy={isAdding}
-                                className="text-action"
-                                type="button"
-                                disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
-                                onClick={() => void runAdd(group, candidate)}
-                              >
-                                {isAdding ? <LoaderCircle className="is-spinning" size={13} /> : null}
-                                <span>{t("Add")}</span>
-                              </button>
                               {onSetCandidateIgnored ? (
                                 <IconButton
                                   busy={isIgnoring}
@@ -1147,42 +1150,16 @@ export const SkillSourceView = ({
                                 </IconButton>
                               ) : null}
                             </>
-                          ) : candidate.state === "ignored" ? (
-                            <button
-                              aria-busy={isUnignoring}
-                              className="text-action"
-                              type="button"
-                              disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
-                              onClick={() => void setCandidateIgnored(group, candidate, false)}
-                            >
-                              {isUnignoring ? <LoaderCircle className="is-spinning" size={13} /> : null}
-                              <span>{t("Unignore")}</span>
-                            </button>
-                          ) : candidate.state === "update" &&
-                            candidate.libraryId &&
-                            candidate.globallyEnabled !== false &&
-                            candidate.updatePolicy !== "untracked" ? (
-                            <button
-                              aria-busy={isUpdating}
-                              className="text-action"
-                              type="button"
-                              aria-label={t("Update {{name}}", { name: candidate.libraryId })}
-                              disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
-                              onClick={() => void runUpdate(candidate.libraryId!)}
-                            >
-                              {isUpdating ? <LoaderCircle className="is-spinning" size={13} /> : null}
-                              <span>{t("Update")}</span>
-                            </button>
                           ) : candidate.state === "removed" && candidate.libraryId ? (
-                            <button
-                              className="text-action text-action--danger"
-                              type="button"
+                            <IconButton
+                              label={t("Delete")}
+                              variant="ghost"
+                              size="compact"
                               disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
                               onClick={() => onDelete(candidate.libraryId!)}
                             >
                               <Trash2 size={13} strokeWidth={2.2} />
-                              <span>{t("Delete")}</span>
-                            </button>
+                            </IconButton>
                           ) : null}
                         </div>
                       </div>

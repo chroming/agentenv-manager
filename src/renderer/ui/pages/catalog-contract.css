@@ -3,7 +3,7 @@
 .skill-source-candidate,
 .skill-source-candidate-head {
   column-gap: 10px;
-  grid-template-columns: [content] 24px 28px minmax(125px, 1fr) 68px [status] minmax(110px, 0.8fr) [actions] 104px;
+  grid-template-columns: [content] 24px 28px minmax(125px, 1fr) 68px [status] minmax(110px, 0.8fr) [actions] 38px;
 }
 
 .skill-source-table-head {
@@ -49,7 +49,7 @@
 .skill-source-list.can-merge .skill-source-group-row,
 .skill-source-list.can-merge .skill-source-candidate,
 .skill-source-list.can-merge .skill-source-candidate-head {
-  grid-template-columns: [content] 20px 24px 28px minmax(110px, 1fr) 62px [status] minmax(104px, 0.8fr) [actions] 104px;
+  grid-template-columns: [content] 20px 24px 28px minmax(110px, 1fr) 62px [status] minmax(104px, 0.8fr) [actions] 38px;
 }
 
 .skill-source-table-head.can-merge > span:first-child {
@@ -190,14 +190,14 @@
   .skill-source-group-row,
   .skill-source-candidate,
   .skill-source-candidate-head {
-    grid-template-columns: [content] 24px 28px minmax(190px, 1fr) 78px [status] minmax(118px, 0.8fr) [actions] 104px;
+    grid-template-columns: [content] 24px 28px minmax(190px, 1fr) 78px [status] minmax(118px, 0.8fr) [actions] 38px;
   }
 
   .skill-source-table-head.can-merge,
   .skill-source-list.can-merge .skill-source-group-row,
   .skill-source-list.can-merge .skill-source-candidate,
   .skill-source-list.can-merge .skill-source-candidate-head {
-    grid-template-columns: [content] 20px 24px 28px minmax(166px, 1fr) 72px [status] minmax(114px, 0.8fr) [actions] 104px;
+    grid-template-columns: [content] 20px 24px 28px minmax(166px, 1fr) 72px [status] minmax(114px, 0.8fr) [actions] 38px;
   }
 }
 
@@ -212,14 +212,14 @@
   .skill-source-candidate,
   .skill-source-candidate-head {
     column-gap: 8px;
-    grid-template-columns: [content] 20px 24px minmax(120px, 1fr) 58px [status] minmax(112px, 0.8fr) [actions] 104px;
+    grid-template-columns: [content] 20px 24px minmax(120px, 1fr) 58px [status] minmax(112px, 0.8fr) [actions] 38px;
   }
 
   .skill-source-table-head.can-merge,
   .skill-source-list.can-merge .skill-source-group-row,
   .skill-source-list.can-merge .skill-source-candidate,
   .skill-source-list.can-merge .skill-source-candidate-head {
-    grid-template-columns: [content] 18px 20px 22px minmax(108px, 1fr) 54px [status] minmax(108px, 0.8fr) [actions] 104px;
+    grid-template-columns: [content] 18px 20px 22px minmax(108px, 1fr) 54px [status] minmax(108px, 0.8fr) [actions] 38px;
   }
 
   .skill-source-table-head > span:first-child {

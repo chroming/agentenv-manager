@@ -1,4 +1,4 @@
-import { FolderTree, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { FolderTree, Pencil, Plus, Search, Trash2, RefreshCw, CircleAlert, CheckCircle2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import type {
   CreateSkillGroupInput,
@@ -7,6 +7,8 @@ import type {
   SkillLibraryEntry,
   UpdateSkillGroupInput
 } from "../../shared/types";
+import type { SkillUpdateInfo } from "../../shared/types";
+import type { SkillUpdateActivity } from "../skillUpdateActivity";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { LibrarySkillPicker } from "./LibrarySkillPicker";
@@ -32,8 +34,15 @@ import {
   TextField,
   ToolbarOverflowMenu
 } from "./ui";
+import { InteractiveStatus } from "./ui/InteractiveStatus";
 
 interface SkillGroupViewProps {
+  filter?: "all" | "updates";
+  updates?: SkillUpdateInfo[];
+  updateActivity?: SkillUpdateActivity;
+  onCheckUpdates?(ids: string[]): Promise<void>;
+  onPreviewUpdate?(id: string): Promise<void>;
+  onPreviewUpdates?(ids: string[]): void | Promise<void>;
   active: boolean;
   groups: SkillGroup[];
   skills: SkillLibraryEntry[];
@@ -60,12 +69,13 @@ const emptyDraft = (): GroupDraft => ({
 
 export const SkillGroupView = ({
   active,
-  groups,
-  skills,
+  groups = [],
+  skills = [],
   onOpenSkill,
   onCreate,
   onUpdate,
-  onRemove
+  onRemove,
+  updates = [], updateActivity, onCheckUpdates, onPreviewUpdate, onPreviewUpdates, filter = "all"
 }: SkillGroupViewProps) => {
   const { t } = useI18n();
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
@@ -73,6 +83,15 @@ export const SkillGroupView = ({
   const [deleteCandidate, setDeleteCandidate] = useState<SkillGroup>();
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState("");
+  const [checkingGroup, setCheckingGroup] = useState<string>();
+  const updatesById = new Map(updates.map((item) => [item.id, item]));
+  const eligible = (skill: SkillLibraryEntry) => skill.globallyEnabled !== false && skill.updatePolicy === "tracked";
+  const hasUpdate = (skill: SkillLibraryEntry) => eligible(skill) && updatesById.get(skill.id)?.updateAvailable && !updatesById.get(skill.id)?.error && updatesById.get(skill.id)?.sourceStatus !== "removed";
+  const statusLabel = (skill: SkillLibraryEntry) => skill.globallyEnabled === false ? "Disabled" : !eligible(skill) ? "No update checks" : updatesById.get(skill.id)?.error ? "Check failed" : updatesById.get(skill.id)?.sourceStatus === "removed" ? "Removed upstream" : hasUpdate(skill) ? "Update available" : updatesById.has(skill.id) ? "Up to date" : "Not checked";
+  const checkGroup = async (id: string, ids: string[]) => {
+    setCheckingGroup(id);
+    try { await onCheckUpdates?.(ids); } finally { setCheckingGroup(undefined); }
+  };
   const dialogRef = useRef<HTMLElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const deleteDialogRef = useRef<HTMLElement>(null);
@@ -80,10 +99,16 @@ export const SkillGroupView = ({
   const skillsById = useMemo(() => new Map(skills.map((skill) => [skill.id, skill])), [skills]);
   const visibleGroups = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
-    if (!normalized) return groups;
-    return groups.filter((group) => [group.name, group.description, ...group.skillIds]
-      .some((value) => value.toLocaleLowerCase().includes(normalized)));
-  }, [groups, query]);
+    return groups.filter((group) => (!normalized || [group.name, group.description, ...group.skillIds]
+      .some((value) => value.toLocaleLowerCase().includes(normalized))) &&
+      (filter === "all" || group.skillIds.some((id) => { const skill = skillsById.get(id); return skill && hasUpdate(skill); })));
+  }, [groups, query, filter, skillsById, updates]);
+  const visibleSkillIds = [...new Set(visibleGroups.flatMap((group) => group.skillIds))];
+  const visibleCheckIds = visibleSkillIds.filter((id) => {
+    const skill = skillsById.get(id);
+    return skill && eligible(skill);
+  });
+  const visibleUpdateIds = visibleCheckIds.filter((id) => hasUpdate(skillsById.get(id)!));
 
   const closeEditor = () => {
     if (!saving) setDraft(undefined);
@@ -139,12 +164,21 @@ export const SkillGroupView = ({
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
+        <div className="library-toolbar-actions">
+          {onCheckUpdates ? <Button icon={<RefreshCw size={15} />} busy={checkingGroup === "all"}
+            disabled={Boolean(updateActivity) || visibleCheckIds.length === 0}
+            onClick={() => void checkGroup("all", visibleCheckIds)}>{t("Check updates")}</Button> : null}
+          {visibleUpdateIds.length > 0 && onPreviewUpdates ? <Button icon={<RefreshCw size={15} />}
+            disabled={Boolean(updateActivity)}
+            busy={updateActivity?.kind === "preview-skills"}
+            onClick={() => void onPreviewUpdates(visibleUpdateIds)}>{t("Update all")}</Button> : null}
         <Button
           icon={<Plus size={15} strokeWidth={2.2} />}
           onClick={() => setDraft(emptyDraft())}
         >
           {t("New group")}
         </Button>
+        </div>
       </ResourcePanelToolbar>
 
       <div className="skill-group-list">
@@ -152,8 +186,8 @@ export const SkillGroupView = ({
           <EmptyState
             className="skill-group-empty"
             icon={<FolderTree size={22} strokeWidth={1.8} />}
-            title={query ? t("No matching Skill Groups") : t("No Skill Groups")}
-            description={query
+            title={query || filter !== "all" ? t("No matching Skill Groups") : t("No Skill Groups")}
+            description={query || filter !== "all"
               ? t("Try another search.")
               : t("Create a group to add several Skills to a Profile together.")}
           />
@@ -164,10 +198,20 @@ export const SkillGroupView = ({
             const skill = skillsById.get(id);
             return skill ? [skill] : [];
           });
+          const checkIds = memberSkills.filter(eligible).map((skill) => skill.id);
+          const updateIds = checkIds.filter((id) => updatesById.get(id)?.updateAvailable && !updatesById.get(id)?.error && updatesById.get(id)?.sourceStatus !== "removed");
           return (
             <ResourceDisclosureSection
+              key={group.id}
               actions={(
                 <>
+                  {updateIds.length > 0 ? <InteractiveStatus size="metadata" statusKind="update-available"
+                    icon={<RefreshCw />} label={t("Update available")}
+                    disabled={Boolean(updateActivity)}
+                    onReview={() => void onPreviewUpdates?.(updateIds)} /> : null}
+                  {onCheckUpdates ? <IconButton label={t("Check updates")} variant="ghost" size="compact"
+                    busy={checkingGroup === group.id} disabled={Boolean(updateActivity) || checkIds.length === 0}
+                    onClick={() => void checkGroup(group.id, checkIds)}><RefreshCw size={14} /></IconButton> : null}
                   <IconButton
                     label={t("Add Skills to {{name}}", { name: group.name })}
                     size="compact"
@@ -221,6 +265,15 @@ export const SkillGroupView = ({
               <AlignedResourceList actionTrack="compact" className="skill-group-members" role="list">
                 {memberSkills.map((skill) => (
                   <ResourceRow
+                    state={<InteractiveStatus size="metadata"
+                      icon={updatesById.get(skill.id)?.error || updatesById.get(skill.id)?.sourceStatus === "removed" ? <CircleAlert /> : hasUpdate(skill) ? <RefreshCw /> : <CheckCircle2 />}
+                      statusKind={hasUpdate(skill) ? "update-available" : eligible(skill) && (updatesById.get(skill.id)?.error || updatesById.get(skill.id)?.sourceStatus === "removed") ? "error" : "neutral"}
+                      label={t(statusLabel(skill))}
+                      title={updatesById.get(skill.id)?.error}
+                      busy={updateActivity?.kind === "preview-skill" && updateActivity.skillId === skill.id}
+                      disabled={Boolean(updateActivity)}
+                      onReview={eligible(skill) && updatesById.get(skill.id)?.updateAvailable && !updatesById.get(skill.id)?.error && updatesById.get(skill.id)?.sourceStatus !== "removed" ? () => void onPreviewUpdate?.(skill.id) : undefined}
+                    />}
                     actionsVisibility="contextual"
                     density="compact"
                     icon={(

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { createSkillAdditionPreviews } from "./skillAdditionPreview";
 import { cp, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -302,6 +303,7 @@ export const createSkillLibraryStore = (
     createFilesystemSkillDriver({ targetId: targetPaths.targetId }).inspectRuntime(targetPaths));
   const targetStateRepository = createTargetStateRepository(paths);
   const pendingUpdates = createSkillUpdatePreviewStore();
+  const additionPreviews = createSkillAdditionPreviews();
   const updateCandidateCache = createSkillUpdateCandidateCache({
     root: paths.skillUpdateCacheDir
   });
@@ -413,7 +415,8 @@ export const createSkillLibraryStore = (
     source: SkillImportPreviewInput,
     sourceDir: string,
     requestedId: string,
-    sourceDetails: Pick<SkillImportSnapshot, "sourceType" | "source" | "upstream">
+    sourceDetails: Pick<SkillImportSnapshot, "sourceType" | "source" | "upstream">,
+    includeReview = false
   ): Promise<SkillImportPreview> => {
     const safeRequestedId = SafeIdSchema.parse(requestedId);
     const incoming = await snapshotForDirectory(safeRequestedId, sourceDir, sourceDetails);
@@ -465,10 +468,10 @@ export const createSkillLibraryStore = (
         };
       })
     );
-    return { source, incoming, conflicts, suggestedDuplicateId };
+    const review = includeReview ? await additionPreviews.prepare(incoming, sourceDir) : undefined;
+    return { source, incoming, conflicts, suggestedDuplicateId, ...(review ? { review } : {}) };
   };
-
-  const previewImport = async (source: SkillImportPreviewInput): Promise<SkillImportPreview> => {
+  const previewImport = async (source: SkillImportPreviewInput, includeReview = false): Promise<SkillImportPreview> => {
     if (source.kind === "local") {
       const sourceDir = resolve(source.input.sourcePath);
       if (!(await pathExists(join(sourceDir, "SKILL.md")))) {
@@ -496,7 +499,8 @@ export const createSkillLibraryStore = (
                 ? source.input.upstream.locator
                 : sourceDir,
               upstream: source.input.upstream ?? { kind: "local", locator: sourceDir }
-            }
+            },
+        includeReview
       );
     }
 
@@ -517,7 +521,7 @@ export const createSkillLibraryStore = (
           sourceType: "git",
           source: materialized.repository,
           upstream: materialized.upstream
-        });
+        }, includeReview);
       } finally {
         await rm(tempDir, { recursive: true, force: true });
       }
@@ -551,7 +555,7 @@ export const createSkillLibraryStore = (
             revision,
             updatedAt: sourceUpdatedAt
           }
-        }
+        }, includeReview
       );
     } finally {
       await rm(tempDir, { recursive: true, force: true });
@@ -3067,6 +3071,8 @@ export const createSkillLibraryStore = (
   };
 
   const readSummaryInput = async (previewId: string): Promise<import("../shared/skillSummaries").SkillSummaryInput> => {
+    const addition = additionPreviews.read(previewId);
+    if (addition) return addition;
     const pending = pendingUpdates.get(previewId);
     if (!pending || pendingUpdates.isExpired(pending)) {
       throw new Error("Skill update preview expired. Reopen the update preview before generating a summary.");

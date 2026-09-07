@@ -103,7 +103,7 @@ export interface SkillLibraryStore {
   setSkillCollectionDecision(input: SkillCollectionMemberDecisionUpdate): Promise<SkillCollectionMemberDecision[]>;
   scanUnmanaged(targetPaths: TargetPaths[]): Promise<UnmanagedSkillEntry[]>;
   scanLocalSkillSource(rootPath: string): Promise<ProjectSkillScanResult>;
-  previewImport(input: SkillImportPreviewInput): Promise<SkillImportPreview>;
+  previewImport(input: SkillImportPreviewInput, includeReview?: boolean): Promise<SkillImportPreview>;
   previewMerge(id: string, targetPaths: TargetPaths[]): Promise<SkillMergePreview>;
   mergeSkills(input: SkillMergeInput, targetPaths: TargetPaths[]): Promise<SkillMergeResult>;
   importSkill(input: ImportSkillStoreInput): Promise<SkillLibraryEntry>;

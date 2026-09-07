@@ -133,6 +133,7 @@ import {
   updateProfileLibraryVersions
 } from "./libraryUpdateState";
 import { runSkillImportQueue } from "./skillImportQueue";
+import { prepareReviewedSkillImport } from "./skillImportPreparation";
 import { useSkillUpdateActivity, type SkillUpdateActivity } from "./skillUpdateActivity";
 import { useSkillManagementMigration } from "./hooks/useSkillManagementMigration";
 import {
@@ -1210,44 +1211,10 @@ const AppContent = ({
     onCreate: (id) => guardProfileAction("create a new Profile", () => openCreateProfileDialogNow(id))
   });
 
-  const prepareSkillImport = async (
-    source: SkillImportPreviewInput,
-    preferredResolution?: SkillImportConflictResolution
-  ): Promise<SkillImportPreviewInput | undefined> => {
-    const preview = await window.agentEnv.previewSkillImport(source);
-    if (preview.conflicts.length === 0) {
-      return {
-        ...source,
-        input: {
-          ...source.input,
-          expectedContentHash: preview.incoming.contentHash
-        }
-      } as SkillImportPreviewInput;
-    }
-
-    const resolution = preferredResolution
-      ? "existingId" in preferredResolution &&
-        preview.conflicts.some(
-          (conflict) => conflict.existing.id === preferredResolution.existingId
-        )
-        ? preferredResolution
-        : undefined
-      : await new Promise<SkillImportConflictResolution | undefined>((resolve) => {
-          setPendingSkillImport({ preview, resolve });
-        });
-    if (preferredResolution && !resolution) {
-      throw new Error("The selected Library Skill is no longer a matching import conflict.");
-    }
-    if (!resolution) return undefined;
-    return {
-      ...source,
-      input: {
-        ...source.input,
-        expectedContentHash: preview.incoming.contentHash,
-        conflictResolution: resolution
-      }
-    } as SkillImportPreviewInput;
-  };
+  const prepareSkillImport = (source: SkillImportPreviewInput, preferredResolution?: SkillImportConflictResolution) =>
+    prepareReviewedSkillImport(source, (preview) => new Promise((resolve) => {
+      setPendingSkillImport({ preview, resolve });
+    }), preferredResolution);
 
   const dismissSkillImport = () => {
     if (pendingSkillImport?.committing) return;
@@ -2203,14 +2170,15 @@ const AppContent = ({
     errorScope: "global" | "caller" | "batch" = "global",
     sourceCollection?: SkillImportInput["sourceCollection"],
     upstream?: SkillUpstream,
-    preferredResolution?: SkillImportConflictResolution
+    preferredResolution?: SkillImportConflictResolution,
+    expectedContentHash?: string
   ) => {
     setBusy(true);
     setError(undefined);
     try {
       const prepared = await prepareSkillImport({
         kind: "local",
-        input: { sourcePath, sourceHandling, sourceCollection, upstream }
+        input: { sourcePath, sourceHandling, sourceCollection, upstream, expectedContentHash }
       }, preferredResolution);
       if (!prepared || prepared.kind !== "local") {
         return { ok: false as const };
@@ -2503,7 +2471,7 @@ const AppContent = ({
     }
   };
 
-  const checkSkillUpdates = async () => {
+  const checkSkillUpdates = async (ids?: string[]) => {
     const activity: SkillUpdateActivity = { kind: "check-library" };
     if (!beginSkillUpdateActivity(activity)) return;
     setError(undefined);
@@ -2511,8 +2479,8 @@ const AppContent = ({
     setSkillUpdateFeedbackWorkspace("library");
     setSkillUpdateCheckStatus({ state: "checking", message: "Checking library updates..." });
     try {
-      const skillUpdateItems = await window.agentEnv.checkSkillLibraryUpdates();
-      commitSkillUpdates(skillUpdateItems);
+      const skillUpdateItems = await window.agentEnv.checkSkillLibraryUpdates(ids);
+      commitSkillUpdates((current) => ids ? [...current.filter((item) => !ids.includes(item.id)), ...skillUpdateItems] : skillUpdateItems);
       setSkillUpdateCheckStatus(summarizeSkillUpdateChecks(skillUpdateItems, t));
       const checkError = skillUpdateItems.find((item) => item.error)?.error;
       if (checkError) {
@@ -3830,13 +3798,13 @@ const AppContent = ({
                     }
                     return true;
                   },
-                  onImportLocalSourceSkill: (sourcePath, sourceCollection, upstream) =>
+                  onImportLocalSourceSkill: (sourcePath, sourceCollection, upstream, expectedContentHash) =>
                     importUnmanagedSkill(
                       sourcePath,
                       "copy-only",
                       "caller",
                       sourceCollection,
-                      upstream
+                      upstream, undefined, expectedContentHash
                     ).then((outcome) => outcome.ok),
                   onImportExternal: importExternalSkill,
                   onManageTargetSkill: manageTargetSkill,

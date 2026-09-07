@@ -372,14 +372,14 @@ export const registerIpcHandlers = ({
       .listTargets()
       .then((targets) => skillLibraryStore.scanUnmanaged(inventoryPathsFor(targets)))
   );
-  diagnosticHandle("skills:preview-import", (_event, input: SkillImportPreviewInput) => {
+  diagnosticHandle("skills:preview-import", (_event, input: SkillImportPreviewInput, includeReview?: boolean) => {
     if (
       !input ||
       (input.kind !== "local" && input.kind !== "github" && input.kind !== "repository")
     ) {
       throw new Error("Skill import preview requires a local or Repository source");
     }
-    return skillLibraryStore.previewImport(input);
+    return skillLibraryStore.previewImport(input, includeReview === true);
   });
   diagnosticHandle("skills:preview-merge", async (_event, id: unknown) => {
     const skillId = parseId(id, "skill id");

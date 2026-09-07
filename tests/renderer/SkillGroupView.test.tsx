@@ -27,6 +27,35 @@ const group = (id: string, name: string, skillIds: string[]): SkillGroup => ({
 });
 
 describe("SkillGroupView", () => {
+  it("checks only eligible members and opens updates through the shared status", async () => {
+    const onCheckUpdates = vi.fn().mockResolvedValue(undefined);
+    const onPreviewUpdate = vi.fn().mockResolvedValue(undefined);
+    const onPreviewUpdates = vi.fn();
+    render(<SkillGroupView active groups={[group("tools", "Tools", ["online", "local", "disabled", "gone"])]}
+      skills={[
+        { ...skill("online"), updatePolicy: "tracked" },
+        { ...skill("local"), updatePolicy: "untracked" },
+        { ...skill("disabled"), updatePolicy: "tracked", globallyEnabled: false },
+        { ...skill("gone"), updatePolicy: "tracked" }
+      ]}
+      updates={[
+        { id: "online", name: "online", sourceType: "git", updateAvailable: true },
+        { id: "gone", name: "gone", sourceType: "git", updateAvailable: true, sourceStatus: "removed" }
+      ]}
+      onCheckUpdates={onCheckUpdates} onPreviewUpdate={onPreviewUpdate} onPreviewUpdates={onPreviewUpdates}
+      onCreate={vi.fn()} onUpdate={vi.fn()} onRemove={vi.fn()} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Check updates" })[1]);
+    await waitFor(() => expect(onCheckUpdates).toHaveBeenCalledWith(["online", "gone"]));
+    fireEvent.click(screen.getByRole("button", { name: "Update available" }));
+    expect(onPreviewUpdates).toHaveBeenCalledWith(["online"]);
+    fireEvent.click(screen.getByRole("button", { name: "Toggle Tools" }));
+    const members = screen.getByRole("list");
+    fireEvent.click(within(members).getByRole("button", { name: "Update available" }));
+    expect(onPreviewUpdate).toHaveBeenCalledWith("online");
+    expect(within(members).getByText("Removed upstream").closest("[data-tone]")).toHaveAttribute("data-tone", "danger");
+    expect(within(members).queryByRole("button", { name: "Removed upstream" })).not.toBeInTheDocument();
+  });
+
   it("uses one searchable resource list and keeps low-frequency actions in overflow", () => {
     const onOpenSkill = vi.fn();
     const onUpdate = vi.fn().mockResolvedValue(true);

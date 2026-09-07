@@ -17,6 +17,7 @@ import { useI18n } from "../i18n";
 import { SkillSummaryReview } from "./SkillSummaryReview";
 
 interface SkillUpdateDialogProps {
+  mode?: "update" | "addition";
   plan?: SkillUpdatePlan;
   impact?: string;
   busy?: boolean;
@@ -86,6 +87,7 @@ const SkillUpdateChange = ({
 };
 
 export const SkillUpdateDialog = ({
+  mode = "update",
   plan,
   impact,
   busy = false,
@@ -96,6 +98,7 @@ export const SkillUpdateDialog = ({
 }: SkillUpdateDialogProps) => {
   const { t } = useI18n();
   const dialogRef = useRef<HTMLElement>(null);
+  const adding = mode === "addition";
   const initialFocusRef = useRef<HTMLButtonElement>(null);
   const expandPreviewRef = useRef<HTMLButtonElement>(null);
   const [diffWorkspaceOpen, setDiffWorkspaceOpen] = useState(false);
@@ -175,7 +178,7 @@ export const SkillUpdateDialog = ({
     : progress?.status === "queued"
     ? t("Waiting")
     : progress?.status === "updating"
-      ? t("Updating...")
+      ? t(adding ? "Adding..." : "Updating...")
       : progress?.status === "updated"
         ? t("Done")
         : progress?.status === "failed"
@@ -187,7 +190,7 @@ export const SkillUpdateDialog = ({
   return (
     <>
       <ModalFrame
-      ariaLabel={t("Update preview for {{id}}", { id: plan.id })}
+      ariaLabel={t(adding ? "Add {{name}}" : "Update preview for {{id}}", { id: plan.id, name: plan.name })}
       className="skill-update-dialog ui-dialog-shell"
       dialogRef={dialogRef}
       dismissDisabled={busy}
@@ -196,14 +199,14 @@ export const SkillUpdateDialog = ({
     >
         <header className="profile-dialog-header ui-dialog-header">
           <div className="ui-dialog-header__copy">
-            <div className="section-title ui-dialog-title">{t("Update {{name}}", { name: plan.name })}</div>
+            <div className="section-title ui-dialog-title">{t(adding ? "Add {{name}}" : "Update {{name}}", { name: plan.name })}</div>
             <p className="muted ui-dialog-description">
               {t("{{count}} file changes", { count: plan.changes.length })}
               {plan.latestRevision
                 ? ` · ${(plan.currentRevision ?? "current").slice(0, 7)} → ${plan.latestRevision.slice(0, 7)}`
                 : ""}
             </p>
-            <p className="skill-update-impact">{impactSummary}</p>
+            <p className="skill-update-impact">{adding ? t("Review files before adding this Skill to Library.") : impactSummary}</p>
             {progressLabel ? (
               <div
                 className={`skill-update-progress skill-update-progress--${completionError ? "failed" : progress!.status}`}
@@ -244,7 +247,7 @@ export const SkillUpdateDialog = ({
           </IconButton>
         </header>
         <div className="skill-update-dialog__body ui-dialog-body">
-          <SkillSummaryReview plans={[plan]} disabled={busy || running || finished} onViewFile={(_plan, path, summary) => {
+          <SkillSummaryReview title={adding ? t("Skill summary") : undefined} plans={[plan]} disabled={busy || running || finished} onViewFile={(_plan, path, summary) => {
             setSummaryEvidence(summary.files.map((file) => ({ ...file, before: "", after: "", action: "write" })));
             setSummaryFile(path); setDiffWorkspaceOpen(true);
           }} />
@@ -294,7 +297,7 @@ export const SkillUpdateDialog = ({
           </Button>
           {progress?.status !== "updated" ? (
             <Button
-              aria-label={t(
+              aria-label={adding ? t("Add {{name}}", { name: plan.name }) : t(
                 running
                   ? "Updating {{id}}"
                   : progress?.status === "failed"
@@ -303,7 +306,7 @@ export const SkillUpdateDialog = ({
                 { id: plan.id }
               )}
               busy={running}
-              busyLabel={t("Updating...")}
+              busyLabel={t(adding ? "Adding..." : "Updating...")}
               disabled={running || (busy && progress?.status !== "failed")}
               variant="primary"
               onClick={() => {
@@ -316,7 +319,7 @@ export const SkillUpdateDialog = ({
               {t(
                 progress?.status === "failed"
                     ? "Retry"
-                    : "Update Skill"
+                    : adding ? "Add" : "Update Skill"
               )}
             </Button>
           ) : null}
@@ -330,7 +333,7 @@ export const SkillUpdateDialog = ({
           : undefined}
         open={diffWorkspaceOpen}
         returnFocusRef={expandPreviewRef}
-        title={t("Update {{name}}", { name: plan.name })}
+        title={t(adding ? "Add {{name}}" : "Update {{name}}", { name: plan.name })}
         onClose={() => { setDiffWorkspaceOpen(false); setSummaryEvidence(undefined); setSummaryFile(undefined); }}
       />
     </>

@@ -450,6 +450,7 @@
 
 .ui-interactive-status {
   align-items: center;
+  justify-content: flex-start;
   background: transparent;
   border: 0;
   color: var(--muted);

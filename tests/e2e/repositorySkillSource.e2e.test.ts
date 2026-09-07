@@ -210,9 +210,9 @@ describe("Repository Skill source", () => {
 
     await page.getByRole("tab", { name: "By source" }).click();
     expect(await page.getByRole("group", { name: "Skill status filters" }).count()).toBe(0);
-    const scopeFilter = page.getByRole("combobox", { name: "Source check scope" });
-    expect(await scopeFilter.inputValue()).toBe("monitored");
-    expect(await scopeFilter.locator("option[value=manual]").textContent()).toBe("Manual only (0)");
+    const scopeFilter = page.getByRole("group", { name: "Source check scope" });
+    expect(await scopeFilter.getByRole("button", { name: /Monitored/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(await scopeFilter.getByRole("button", { name: "Manual only (0)" }).count()).toBe(1);
     expect(await page.getByRole("button", { name: "Refresh skills" }).count()).toBe(0);
     expect(await page.getByRole("button", { name: "Refresh sources" }).count()).toBe(1);
     expect(await page.getByRole("button", { name: "Check updates" }).count()).toBe(1);
@@ -321,7 +321,7 @@ describe("Repository Skill source", () => {
         }));
       });
       expect(lanes.length).toBeGreaterThan(0);
-      expect(lanes.every((row) => row.statusDelta <= 1 && row.labelDelta <= 1 && row.actionsDelta <= 1 && !row.overflow)).toBe(true);
+      expect(lanes.every((row) => row.statusDelta <= 1 && row.labelDelta <= 1 && row.actionsDelta <= 1 && !row.overflow), JSON.stringify({ width, lanes })).toBe(true);
     }
     await page.setViewportSize({ width: 920, height: 620 });
     expect((await candidateVersion.textContent())?.trim().length).toBeGreaterThan(0);
@@ -350,7 +350,14 @@ describe("Repository Skill source", () => {
 
     await sourceGroup.getByRole("button", { name: "Add", exact: true }).click();
     const releaseLibrarySkill = join(appDataRoot, "skills-library", "release-check-internal");
+    const additionDialog = page.getByRole("dialog", { name: "Add Release Check Internal", exact: true });
+    await additionDialog.waitFor({ state: "visible" });
+    expect(await exists(join(releaseLibrarySkill, "SKILL.md"))).toBe(false);
+    await additionDialog.getByRole("button", { name: "Generate summary", exact: true }).waitFor({ state: "visible" });
+    await page.screenshot({ path: "/tmp/agentenv-addition-preview.png" });
+    await additionDialog.getByRole("button", { name: "Add Release Check Internal", exact: true }).click();
     await expect.poll(() => exists(join(releaseLibrarySkill, "SKILL.md"))).toBe(true);
+    await additionDialog.waitFor({ state: "hidden" });
     await expect.poll(() => sourceGroup.getByText("New", { exact: true }).count()).toBe(0);
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
@@ -474,6 +481,33 @@ describe("Repository Skill source", () => {
         await page.screenshot({ path: join(captureDir, `sources-${locale}-${width}.png`) });
       }
     }
+    await page.evaluate(async () => {
+      await window.agentEnv.createSkillGroup({ name: "Engineering", description: "", skillIds: ["api-design-internal", "release-check-internal"] });
+      await window.agentEnv.updateSettings({ locale: "en" });
+    });
+    await writeFile(join(repository.workDir, "skills/engineering/api-design/SKILL.md"),
+      "---\nname: API Design Internal\ndescription: Updated API design.\n---\n# API review\nRequire a test for each endpoint.\n");
+    await repository.commit("update group member");
+    await page.reload();
+    await page.getByRole("button", { name: "Skills", exact: true }).click();
+    await page.getByRole("tab", { name: "Groups", exact: true }).click();
+    const groupView = page.locator(".skill-group-view");
+    await groupView.getByRole("toolbar").getByRole("button", { name: "Check updates", exact: true }).click();
+    await groupView.getByRole("button", { name: "Toggle Engineering" }).click();
+    const groupMembers = groupView.getByRole("list");
+    await groupMembers.getByRole("button", { name: "Update available", exact: true }).waitFor();
+    for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+      await page.setViewportSize({ width, height });
+      const contained = await groupView.evaluate((view) => {
+        const box = view.getBoundingClientRect();
+        return [...view.querySelectorAll("button")].filter((button) => button.getBoundingClientRect().width > 0)
+          .every((button) => { const r = button.getBoundingClientRect(); return r.left >= box.left - 1 && r.right <= box.right + 1; });
+      });
+      expect(contained).toBe(true);
+      await page.screenshot({ path: join(captureDir, `groups-en-${width}.png`) });
+    }
+    await groupMembers.getByRole("button", { name: "Update available", exact: true }).click();
+    await page.getByRole("dialog", { name: "Update preview for api-design-internal" }).waitFor();
   }, 90_000);
 
   it("merges separately imported repository directories through an explicit preview", async () => {

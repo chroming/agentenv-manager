@@ -169,7 +169,7 @@ const api: AgentEnvApi = {
     ipcRenderer.invoke("skills:set-collection-decision", input),
   scanUnmanagedSkills: () => ipcRenderer.invoke("skills:scan-unmanaged"),
   scanLocalSkillSource: (rootPath) => ipcRenderer.invoke("skills:scan-local-source", rootPath),
-  previewSkillImport: (input) => ipcRenderer.invoke("skills:preview-import", input),
+  previewSkillImport: (input, includeReview) => ipcRenderer.invoke("skills:preview-import", input, includeReview),
   previewSkillMerge: (id) => ipcRenderer.invoke("skills:preview-merge", id),
   mergeLibrarySkills: (input) => ipcRenderer.invoke("skills:merge-library", input),
   importSkillToLibrary: (input) => ipcRenderer.invoke("skills:import-library", input),

@@ -212,7 +212,7 @@ export interface AgentEnvApi {
   ): Promise<SkillCollectionMemberDecision[]>;
   scanUnmanagedSkills(): Promise<UnmanagedSkillEntry[]>;
   scanLocalSkillSource(rootPath: string): Promise<ProjectSkillScanResult>;
-  previewSkillImport(input: SkillImportPreviewInput): Promise<SkillImportPreview>;
+  previewSkillImport(input: SkillImportPreviewInput, includeReview?: boolean): Promise<SkillImportPreview>;
   previewSkillMerge(id: string): Promise<SkillMergePreview>;
   mergeLibrarySkills(input: SkillMergeInput): Promise<SkillMergeResult>;
   importSkillToLibrary(input: SkillImportInput): Promise<SkillImportResult>;
@@ -692,6 +692,7 @@ export interface SkillImportConflict {
 }
 
 export interface SkillImportPreview {
+  review?: SkillUpdatePlan;
   source: SkillImportPreviewInput;
   incoming: SkillImportSnapshot;
   conflicts: SkillImportConflict[];

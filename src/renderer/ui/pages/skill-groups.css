@@ -9,12 +9,13 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   justify-content: stretch;
-  min-height: 52px;
-  padding-block: var(--space-2);
+  gap: 8px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
 }
 
 .skill-group-search {
-  max-width: 360px;
+  max-width: none;
 }
 
 .skill-group-list {
@@ -35,7 +36,7 @@
 
 .skill-group-members {
   --resource-row-actions-compact: 38px;
-  --resource-row-state-track: 0px;
+  --resource-row-state-track: 150px;
 }
 
 .skill-group-member-button {

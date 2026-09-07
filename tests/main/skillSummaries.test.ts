@@ -34,6 +34,17 @@ const setup = async (fetchImpl = vi.fn<typeof fetch>().mockImplementation(async 
 };
 
 describe("manual Skill update summaries", () => {
+  it("reuses a persisted addition summary and describes a new capability, not regressions", async () => {
+    const { service, readInput, fetchImpl } = await setup();
+    readInput.mockResolvedValue({ ...snapshot, kind: "addition", beforeHash: "empty" });
+    const first = await service.generate(input());
+    expect(await service.generate(input())).toEqual(first);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(String(fetchImpl.mock.calls[0][1]?.body));
+    expect(body.messages[0].content).toContain("Describe capabilities, not changes from an installed version");
+    expect(body.messages[1].content).toContain('"kind":"addition"');
+  });
+
   it("sends no requests until explicit confirmation, redacts input and persists exact-version evidence", async () => {
     const { root, store, service, fetchImpl } = await setup();
     await store.config(); await store.history("review");

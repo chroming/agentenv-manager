@@ -75,6 +75,7 @@ import type {
   UnmanagedSkillLocationUpdate,
   SkillUpdateInfo,
   SkillUpdatePlan,
+  SkillImportPreviewInput,
   SkillUpdatePreviewBatchResult,
   SkillUpdateSettingsInput
 } from "../../shared/types";
@@ -388,11 +389,14 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     useState<SkillSourceScopeFilter>("monitored");
   const [sourceResultFilter, setSourceResultFilter] =
     useState<SkillSourceResultFilter>("all");
+  const [groupFilter, setGroupFilter] = useState<"all" | "updates">("all");
   const updateControls = (
     patch: Partial<Omit<SkillLibraryViewState, "scrollTop">>
   ) => onViewStateChange(updateSkillLibraryControls(viewState, patch));
   const [openAction, setOpenAction] = useState<{ id: string; left: number; top: number }>();
   const [summaryHistoryId, setSummaryHistoryId] = useState<string>();
+  const [addition, setAddition] = useState<{ source: SkillImportPreviewInput; plan: SkillUpdatePlan }>();
+  const [additionProgress, setAdditionProgress] = useState<{ id: string; status: "updating" | "updated" | "failed"; error?: string }>();
   const [tagAnalysisSkills, setTagAnalysisSkills] = useState<SkillLibraryEntry[]>();
   const aiPreferences = useAIPreferences();
   const openActionId = openAction?.id;
@@ -1708,7 +1712,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
       const sourcePath = [group.repository.replace(/\/+$/, ""), candidate.sourceSubpath]
         .filter(Boolean)
         .join("/");
-      return onImportLocalSourceSkill(sourcePath, {
+      const source: SkillImportPreviewInput = { kind: "local", input: { sourcePath, sourceCollection: {
         formatVersion: 1,
         kind: "local",
         canonicalLink: group.canonicalLink,
@@ -1717,9 +1721,14 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         directory: "",
         sourceId: group.sourceId,
         sourceSubpath: candidate.sourceSubpath
-      });
+      } } };
+      const preview = await window.agentEnv.previewSkillImport(source, true);
+      if (!preview.review) throw new Error("Skill preview could not be prepared");
+      setAdditionProgress(undefined);
+      setAddition({ source, plan: preview.review });
+      return true;
     }
-    const result = await onImportRepositorySkills([{
+    const source: SkillImportPreviewInput = { kind: "repository", input: {
       repository: group.repository,
       ref: group.ref,
       directory: candidate.directory,
@@ -1734,8 +1743,12 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         indexManifestPath: group.indexManifestPath,
         sourceSubpath: candidate.sourceSubpath
       }
-    }]);
-    return result.imported.length > 0;
+    } };
+    const preview = await window.agentEnv.previewSkillImport(source, true);
+    if (!preview.review) throw new Error("Skill preview could not be prepared");
+    setAdditionProgress(undefined);
+    setAddition({ source, plan: preview.review });
+    return true;
   };
   return (
     <section className="skill-library-panel ui-surface-frame" aria-label={t("Skill library")}>
@@ -1769,17 +1782,21 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               ]}
             />
           ) : libraryMode === "sources" ? (
-            <SelectControl
-              controlWidth="compact"
-              aria-label={t("Source check scope")}
+            <SegmentedControl
+              className="ui-segmented-control--compact"
+              label={t("Source check scope")}
               value={sourceScopeFilter}
-              onChange={(event) => setSourceScopeFilter(event.currentTarget.value as SkillSourceScopeFilter)}
-            >
-              <option value="monitored">{t("Monitored")} ({monitoredSourceCount})</option>
-              <option value="manual">{t("Manual only")} ({manualSourceCount})</option>
-              <option value="all">{t("All")} ({sourceGroups.length})</option>
-            </SelectControl>
-          ) : null}
+              onChange={(value) => setSourceScopeFilter(value as SkillSourceScopeFilter)}
+              options={[
+                { value: "all", label: `${t("All")} (${sourceGroups.length})` },
+                { value: "monitored", label: `${t("Monitored")} (${monitoredSourceCount})` },
+                { value: "manual", label: `${t("Manual only")} (${manualSourceCount})` }
+              ]}
+            />
+          ) : libraryMode === "groups" ? <SegmentedControl className="ui-segmented-control--compact"
+            label={t("Skill status filters")} value={groupFilter} onChange={(value) => setGroupFilter(value as "all" | "updates")}
+            options={[{ value: "all", label: `${t("All")} (${skillGroups.length})` },
+              { value: "updates", label: `${t("Updates")} (${skillGroups.filter((group) => group.skillIds.some((id) => updateableSkillIds.includes(id))).length})` }]} /> : null}
         </div>
         <div className="library-toolbar" hidden={libraryMode !== "skills"}>
           <label className="library-search ui-composite-field">
@@ -1816,7 +1833,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
             busyLabel={t("Check updates")}
             icon={<SearchCheck size={15} strokeWidth={2.2} />}
             disabled={updateActivityBusy}
-            onClick={onCheckUpdates}
+            onClick={() => void onCheckUpdates()}
           >
             {t("Check updates")}
           </Button>
@@ -2280,6 +2297,12 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
 
       <SkillGroupView
         active={libraryMode === "groups"}
+        filter={groupFilter}
+        updates={skillUpdates}
+        updateActivity={updateActivity}
+        onCheckUpdates={async (ids) => { await onCheckUpdates(ids); }}
+        onPreviewUpdate={onPreviewLibrarySkillUpdate}
+        onPreviewUpdates={onPreviewAllLibrarySkillUpdates}
         groups={skillGroups}
         skills={librarySkills}
         onOpenSkill={(skill) => setBrowsingSkill(skill)}
@@ -2288,6 +2311,35 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         onRemove={onRemoveGroup}
       />
 
+      <SkillUpdateDialog
+        mode="addition"
+        plan={importConflictOpen ? undefined : addition?.plan}
+        progress={additionProgress}
+        busy={additionProgress?.status === "updating"}
+        onClose={() => { setAddition(undefined); setAdditionProgress(undefined); }}
+        onConfirm={async (plan) => {
+          if (!addition) return { status: "failed" };
+          setAdditionProgress({ id: plan.id, status: "updating" });
+          try {
+            const source = addition.source;
+            let ok = false;
+            if (source.kind === "local") {
+              ok = Boolean(await onImportLocalSourceSkill?.(source.input.sourcePath, source.input.sourceCollection, source.input.upstream, plan.afterContentHash));
+            } else if (source.kind === "repository") {
+              const result = await onImportRepositorySkills([{ ...source.input, expectedContentHash: plan.afterContentHash }]);
+              if (result.failed.length) throw new Error(result.failed.map((item) => item.error).join("\n"));
+              ok = result.imported.length > 0;
+            }
+            if (!ok) throw new Error("Skill was not added. Review the source and try again.");
+            setAdditionProgress({ id: plan.id, status: "updated" });
+            return { status: "completed" };
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setAdditionProgress({ id: plan.id, status: "failed", error: message });
+            return { status: "failed", error: message };
+          }
+        }}
+      />
       <SkillUpdateDialog
         plan={selectedUpdatePlan}
         busy={isBusy}

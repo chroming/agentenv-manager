@@ -48,6 +48,7 @@ export interface SkillSummaryGenerateInput {
 }
 
 export interface SkillSummaryInput {
+  kind?: "addition";
   skillId: string;
   beforeHash: string;
   afterHash: string;

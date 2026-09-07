@@ -137,7 +137,8 @@ export interface SkillLibraryPanelActions {
     onImportLocalSourceSkill?(
       sourcePath: string,
       sourceCollection?: SkillSourceCollectionRef,
-      upstream?: SkillUpstream
+      upstream?: SkillUpstream,
+      expectedContentHash?: string
     ): Promise<boolean>;
     onImportExternal(skill: SkillInventoryEntry): Promise<boolean>;
     onManageTargetSkill(input: ManageTargetSkillInput): void;
@@ -232,6 +233,6 @@ export interface SkillLibraryPanelActions {
     onStopBulkLibrarySkillUpdates?(): void;
     onPreviewAllLibrarySkillUpdates(ids: string[]): Promise<void>;
     onCloseBulkUpdatePreview(): void;
-    onCheckUpdates(): void;
+    onCheckUpdates(ids?: string[]): void | Promise<void>;
   };
 }

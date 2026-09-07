@@ -27,6 +27,24 @@ afterEach(async () => {
 });
 
 describe("skill library store", () => {
+  it("previews additions without importing and keeps immutable summary evidence", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-addition-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data") });
+    const sourceDir = join(root, "reviewer");
+    await mkdir(sourceDir, { recursive: true });
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\ndescription: Reviews code.\n---\n# Review\n");
+    const store = createSkillLibraryStore(paths);
+    const preview = await store.previewImport({ kind: "local", input: { sourcePath: sourceDir } }, true);
+    expect(preview.review?.changes).toEqual(expect.arrayContaining([expect.objectContaining({ path: "SKILL.md", action: "write", before: "" })]));
+    await expect(access(join(paths.skillsLibraryDir, "reviewer"))).rejects.toMatchObject({ code: "ENOENT" });
+    const snapshot = await store.readSummaryInput(preview.review!.previewId!);
+    expect(snapshot.kind).toBe("addition");
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\ndescription: Changed.\n---\n# Changed\n");
+    expect(await store.readSummaryInput(preview.review!.previewId!)).toEqual(snapshot);
+    await expect(store.importSkill({ sourcePath: sourceDir, expectedContentHash: preview.incoming.contentHash })).rejects.toThrow(/changed/i);
+    await expect(access(join(paths.skillsLibraryDir, "reviewer"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("rejects malformed YAML frontmatter before copying a local skill", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data") });

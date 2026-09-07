@@ -9,8 +9,8 @@ import { useAIPreferences } from "../hooks/useAIPreferences";
 import { AIServiceSetup } from "./AIServiceSetup";
 import { AIReviewHeading } from "./AIReviewHeading";
 
-export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = false }: {
-  plans: SkillUpdatePlan[]; selectedIds?: string[]; disabled?: boolean;
+export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = false, title }: {
+  plans: SkillUpdatePlan[]; selectedIds?: string[]; disabled?: boolean; title?: string;
   onViewFile(plan: SkillUpdatePlan, path: string, summary: SkillSummary): void;
 }) => {
   const { t, locale } = useI18n();
@@ -88,8 +88,8 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
     if (active.current) setBusyId("");
   };
   if (!allowed && !Object.keys(records).length) return null;
-  return <section className="skill-summary-review" aria-label={t("Update summaries")}>
-    <AIReviewHeading title={t("Update summaries")} actions={<>
+  return <section className="skill-summary-review" aria-label={title ?? t("Update summaries")}>
+    <AIReviewHeading title={title ?? t("Update summaries")} actions={<>
       {allowed && plans.length === 1 && records[plans[0].id] ? <IconButton label={t("Regenerate summary")} disabled={disabled || configuring} busy={loadingConfig} onClick={() => void prepare([plans[0]], true)}><RotateCw size={15} /></IconButton>
       : allowed && (missing.length || (loadingConfig && initiator === "batch")) ? <Button icon={<Sparkles size={15} />} disabled={disabled || configuring || loadingConfig} busy={loadingConfig && initiator === "batch"} onClick={() => void prepare(missing)}>
         {loadingConfig && initiator === "batch" ? operationLabel : t(plans.length === 1 ? "Generate summary" : "Summarize selected ({{count}})", { count: missing.length })}
