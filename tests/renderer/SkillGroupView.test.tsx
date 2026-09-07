@@ -52,8 +52,12 @@ describe("SkillGroupView", () => {
     const members = screen.getByRole("list");
     fireEvent.click(within(members).getByRole("button", { name: "Update available" }));
     expect(onPreviewUpdate).toHaveBeenCalledWith("online");
-    expect(within(members).getByText("Removed upstream").closest("[data-tone]")).toHaveAttribute("data-tone", "danger");
+    expect(within(members).getByText("Removed upstream").closest("[data-tone]")).toHaveAttribute("data-tone", "warning");
     expect(within(members).queryByRole("button", { name: "Removed upstream" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search Skill Groups" }), { target: { value: "no matching group" } });
+    fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
+    await waitFor(() => expect(onCheckUpdates).toHaveBeenCalledTimes(2));
+    expect(onCheckUpdates).toHaveBeenLastCalledWith(["online", "gone"]);
   });
 
   it("uses one searchable resource list and keeps low-frequency actions in overflow", () => {

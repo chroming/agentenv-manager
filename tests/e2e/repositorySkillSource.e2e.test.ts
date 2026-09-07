@@ -326,7 +326,8 @@ describe("Repository Skill source", () => {
     await page.setViewportSize({ width: 920, height: 620 });
     expect((await candidateVersion.textContent())?.trim().length).toBeGreaterThan(0);
     expect(await firstCandidate.locator(".skill-source-candidate-field-label").count()).toBe(0);
-    await sourceGroup.getByRole("button", {
+    await sourceGroup.getByRole("button", { name: "More actions for Release Check Internal" }).click();
+    await page.getByRole("menuitem", {
       name: "Ignore Release Check Internal for this source"
     }).click();
     await sourceGroup.getByText("Ignored", { exact: true }).waitFor({ state: "visible" });
@@ -353,6 +354,13 @@ describe("Repository Skill source", () => {
     const additionDialog = page.getByRole("dialog", { name: "Add Release Check Internal", exact: true });
     await additionDialog.waitFor({ state: "visible" });
     expect(await exists(join(releaseLibrarySkill, "SKILL.md"))).toBe(false);
+    expect(await additionDialog.locator(".syntax-code-preview").count()).toBe(1);
+    expect(await additionDialog.locator(".diff-viewer").count()).toBe(0);
+    await additionDialog.getByRole("button", { name: "Maximize preview" }).click();
+    const fullscreen = page.getByRole("dialog", { name: "Full-screen preview" });
+    await fullscreen.locator(".syntax-code-preview").waitFor();
+    expect(await fullscreen.locator(".syntax-code-preview").textContent()).toContain("Release Check Internal");
+    await fullscreen.getByRole("button", { name: "Close", exact: true }).click();
     await additionDialog.getByRole("button", { name: "Generate summary", exact: true }).waitFor({ state: "visible" });
     await page.screenshot({ path: "/tmp/agentenv-addition-preview.png" });
     await additionDialog.getByRole("button", { name: "Add Release Check Internal", exact: true }).click();
@@ -457,7 +465,9 @@ describe("Repository Skill source", () => {
     await page.getByRole("tab", { name: "By source" }).click();
     await checkSource();
     await sourceGroup.getByText("Removed upstream", { exact: true }).waitFor({ state: "visible" });
-    expect(await sourceGroup.getByRole("button", { name: "Delete", exact: true }).count()).toBe(1);
+    await sourceGroup.getByRole("button", { name: "More actions for Release Check Internal" }).click();
+    expect(await page.getByRole("menuitem", { name: "Delete", exact: true }).count()).toBe(1);
+    await page.keyboard.press("Escape");
 
     await page.getByRole("tab", { name: "Skill list" }).click();
     const removedRow = page.getByRole("group", { name: "Library item release-check-internal" });
@@ -507,7 +517,15 @@ describe("Repository Skill source", () => {
       await page.screenshot({ path: join(captureDir, `groups-en-${width}.png`) });
     }
     await groupMembers.getByRole("button", { name: "Update available", exact: true }).click();
-    await page.getByRole("dialog", { name: "Update preview for api-design-internal" }).waitFor();
+    const memberPreview = page.getByRole("dialog", { name: "Update preview for api-design-internal" });
+    await memberPreview.waitFor();
+    await memberPreview.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.getByRole("tab", { name: "Skill list", exact: true }).click();
+    await page.getByRole("group", { name: "Skill status filters" }).getByRole("button", { name: /^All/ }).click();
+    for (const [width, height] of [[920, 620], [1440, 900]]) {
+      await page.setViewportSize({ width, height });
+      await page.screenshot({ path: join(captureDir, `library-en-${width}.png`) });
+    }
   }, 90_000);
 
   it("merges separately imported repository directories through an explicit preview", async () => {

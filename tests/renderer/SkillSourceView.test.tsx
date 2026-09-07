@@ -152,7 +152,8 @@ describe("SkillSourceView", () => {
     await waitFor(() =>
       expect(within(candidates!).getByRole("button", { name: "Update review" })).toBeEnabled()
     );
-    fireEvent.click(within(candidates!).getByRole("button", { name: "Delete" }));
+    fireEvent.click(within(candidates!).getByRole("button", { name: "More actions for docs" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
     expect(onDelete).toHaveBeenCalledWith("docs");
 
     expect(screen.queryByRole("button", { name: "Check" })).not.toBeInTheDocument();
@@ -523,7 +524,8 @@ describe("SkillSourceView", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Expand source" }));
-    fireEvent.click(screen.getByRole("button", {
+    fireEvent.click(screen.getByRole("button", { name: "More actions for testing" }));
+    fireEvent.click(screen.getByRole("menuitem", {
       name: "Ignore testing for this source"
     }));
     await waitFor(() => expect(onSetCandidateIgnored).toHaveBeenCalledWith({

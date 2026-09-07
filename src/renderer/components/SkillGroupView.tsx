@@ -1,4 +1,4 @@
-import { FolderTree, Pencil, Plus, Search, Trash2, RefreshCw, CircleAlert, CheckCircle2 } from "lucide-react";
+import { FolderTree, Pencil, Plus, Search, Trash2, SearchCheck } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import type {
   CreateSkillGroupInput,
@@ -34,7 +34,9 @@ import {
   TextField,
   ToolbarOverflowMenu
 } from "./ui";
-import { InteractiveStatus } from "./ui/InteractiveStatus";
+import { SkillMaintenanceStatus } from "./SkillMaintenanceStatus";
+import { SkillMaintenanceAction } from "./SkillMaintenanceAction";
+import { skillMaintenanceState } from "../skillMaintenanceState";
 
 interface SkillGroupViewProps {
   filter?: "all" | "updates";
@@ -86,8 +88,7 @@ export const SkillGroupView = ({
   const [checkingGroup, setCheckingGroup] = useState<string>();
   const updatesById = new Map(updates.map((item) => [item.id, item]));
   const eligible = (skill: SkillLibraryEntry) => skill.globallyEnabled !== false && skill.updatePolicy === "tracked";
-  const hasUpdate = (skill: SkillLibraryEntry) => eligible(skill) && updatesById.get(skill.id)?.updateAvailable && !updatesById.get(skill.id)?.error && updatesById.get(skill.id)?.sourceStatus !== "removed";
-  const statusLabel = (skill: SkillLibraryEntry) => skill.globallyEnabled === false ? "Disabled" : !eligible(skill) ? "No update checks" : updatesById.get(skill.id)?.error ? "Check failed" : updatesById.get(skill.id)?.sourceStatus === "removed" ? "Removed upstream" : hasUpdate(skill) ? "Update available" : updatesById.has(skill.id) ? "Up to date" : "Not checked";
+  const hasUpdate = (skill: SkillLibraryEntry) => skillMaintenanceState(skill, updatesById.get(skill.id)) === "update";
   const checkGroup = async (id: string, ids: string[]) => {
     setCheckingGroup(id);
     try { await onCheckUpdates?.(ids); } finally { setCheckingGroup(undefined); }
@@ -103,7 +104,7 @@ export const SkillGroupView = ({
       .some((value) => value.toLocaleLowerCase().includes(normalized))) &&
       (filter === "all" || group.skillIds.some((id) => { const skill = skillsById.get(id); return skill && hasUpdate(skill); })));
   }, [groups, query, filter, skillsById, updates]);
-  const visibleSkillIds = [...new Set(visibleGroups.flatMap((group) => group.skillIds))];
+  const visibleSkillIds = [...new Set(groups.flatMap((group) => group.skillIds))];
   const visibleCheckIds = visibleSkillIds.filter((id) => {
     const skill = skillsById.get(id);
     return skill && eligible(skill);
@@ -165,13 +166,13 @@ export const SkillGroupView = ({
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
         <div className="library-toolbar-actions">
-          {onCheckUpdates ? <Button icon={<RefreshCw size={15} />} busy={checkingGroup === "all"}
+          {onCheckUpdates ? <SkillMaintenanceAction action="check" busy={checkingGroup === "all"}
             disabled={Boolean(updateActivity) || visibleCheckIds.length === 0}
-            onClick={() => void checkGroup("all", visibleCheckIds)}>{t("Check updates")}</Button> : null}
-          {visibleUpdateIds.length > 0 && onPreviewUpdates ? <Button icon={<RefreshCw size={15} />}
+            onClick={() => void checkGroup("all", visibleCheckIds)} /> : null}
+          {visibleUpdateIds.length > 0 && onPreviewUpdates ? <SkillMaintenanceAction action="update"
             disabled={Boolean(updateActivity)}
             busy={updateActivity?.kind === "preview-skills"}
-            onClick={() => void onPreviewUpdates(visibleUpdateIds)}>{t("Update all")}</Button> : null}
+            onClick={() => void onPreviewUpdates(visibleUpdateIds)} /> : null}
         <Button
           icon={<Plus size={15} strokeWidth={2.2} />}
           onClick={() => setDraft(emptyDraft())}
@@ -205,13 +206,12 @@ export const SkillGroupView = ({
               key={group.id}
               actions={(
                 <>
-                  {updateIds.length > 0 ? <InteractiveStatus size="metadata" statusKind="update-available"
-                    icon={<RefreshCw />} label={t("Update available")}
+                  {updateIds.length > 0 ? <SkillMaintenanceStatus state="update"
                     disabled={Boolean(updateActivity)}
                     onReview={() => void onPreviewUpdates?.(updateIds)} /> : null}
                   {onCheckUpdates ? <IconButton label={t("Check updates")} variant="ghost" size="compact"
                     busy={checkingGroup === group.id} disabled={Boolean(updateActivity) || checkIds.length === 0}
-                    onClick={() => void checkGroup(group.id, checkIds)}><RefreshCw size={14} /></IconButton> : null}
+                    onClick={() => void checkGroup(group.id, checkIds)}><SearchCheck size={14} /></IconButton> : null}
                   <IconButton
                     label={t("Add Skills to {{name}}", { name: group.name })}
                     size="compact"
@@ -265,14 +265,11 @@ export const SkillGroupView = ({
               <AlignedResourceList actionTrack="compact" className="skill-group-members" role="list">
                 {memberSkills.map((skill) => (
                   <ResourceRow
-                    state={<InteractiveStatus size="metadata"
-                      icon={updatesById.get(skill.id)?.error || updatesById.get(skill.id)?.sourceStatus === "removed" ? <CircleAlert /> : hasUpdate(skill) ? <RefreshCw /> : <CheckCircle2 />}
-                      statusKind={hasUpdate(skill) ? "update-available" : eligible(skill) && (updatesById.get(skill.id)?.error || updatesById.get(skill.id)?.sourceStatus === "removed") ? "error" : "neutral"}
-                      label={t(statusLabel(skill))}
-                      title={updatesById.get(skill.id)?.error}
+                    state={<SkillMaintenanceStatus state={skillMaintenanceState(skill, updatesById.get(skill.id))}
+                      detail={updatesById.get(skill.id)?.error}
                       busy={updateActivity?.kind === "preview-skill" && updateActivity.skillId === skill.id}
                       disabled={Boolean(updateActivity)}
-                      onReview={eligible(skill) && updatesById.get(skill.id)?.updateAvailable && !updatesById.get(skill.id)?.error && updatesById.get(skill.id)?.sourceStatus !== "removed" ? () => void onPreviewUpdate?.(skill.id) : undefined}
+                      onReview={hasUpdate(skill) || skillMaintenanceState(skill, updatesById.get(skill.id)) === "error" ? () => void onPreviewUpdate?.(skill.id) : undefined}
                     />}
                     actionsVisibility="contextual"
                     density="compact"

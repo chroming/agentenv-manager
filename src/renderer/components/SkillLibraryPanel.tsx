@@ -108,7 +108,10 @@ import {
 } from "../../shared/skillCleanup";
 import { isSharedSkillInventoryEntry } from "../../shared/skillLocationSemantics";
 import { useI18n } from "../i18n";
-import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, SegmentedControl, SelectControl, Switch, ToolbarOverflowMenu } from "./ui";
+import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, SegmentedControl, SelectControl, SearchField, Switch, ToolbarOverflowMenu } from "./ui";
+import { SkillMaintenanceStatus } from "./SkillMaintenanceStatus";
+import { SkillMaintenanceAction } from "./SkillMaintenanceAction";
+import { skillMaintenanceState } from "../skillMaintenanceState";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { isExternalSkillImportable } from "../../shared/skillIdentity";
 import { sourceSubpathFor } from "../../shared/skillSourceGrouping";
@@ -1799,17 +1802,15 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               { value: "updates", label: `${t("Updates")} (${skillGroups.filter((group) => group.skillIds.some((id) => updateableSkillIds.includes(id))).length})` }]} /> : null}
         </div>
         <div className="library-toolbar" hidden={libraryMode !== "skills"}>
-          <label className="library-search ui-composite-field">
-            <span>{t("Search")}</span>
-            <Search size={16} strokeWidth={2.1} aria-hidden="true" />
-            <input
+          <SearchField
+              fieldClassName="library-catalog-search"
+              icon={<Search size={15} strokeWidth={2.2} />}
               ref={searchInputRef}
-              aria-label={t("Search skills")}
+              label={t("Search skills")}
               placeholder={t("Search skill name or description...")}
               value={search}
               onChange={(event) => updateControls({ search: event.currentTarget.value })}
             />
-          </label>
           <div className="library-toolbar-actions">
           <Button
             aria-expanded={filtersOpen}
@@ -1825,31 +1826,17 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               </strong>
             ) : null}
           </Button>
-          <Button
-            className="library-toolbar-action"
-            aria-label={t("Check updates")}
-            title={t("Check skill updates")}
+          <SkillMaintenanceAction action="check"
             busy={checkingAllUpdates}
-            busyLabel={t("Check updates")}
-            icon={<SearchCheck size={15} strokeWidth={2.2} />}
             disabled={updateActivityBusy}
             onClick={() => void onCheckUpdates()}
-          >
-            {t("Check updates")}
-          </Button>
+          />
           {updateableSkillIds.length > 0 ? (
-            <Button
-              className="library-toolbar-action"
-              aria-label={t("Update all skills")}
-              title={t("Update all skills")}
+            <SkillMaintenanceAction action="update" label={t("Update all skills")}
               busy={previewingAllUpdates}
-              busyLabel={t("Update all")}
-              icon={<Sparkles size={15} strokeWidth={2.2} />}
               disabled={updateActivityBusy}
               onClick={() => onPreviewAllLibrarySkillUpdates(updateableSkillIds)}
-            >
-              {t("Update all")}
-            </Button>
+            />
           ) : null}
           {aiPreferences.enabled("tags") ? <ToolbarOverflowMenu label={t("More Skill actions")} menuLabel={t("Skill actions")} items={[{
             id: "ai-tags", label: t("AI tags..."), icon: <Sparkles size={15} />, disabled: filteredSkills.length === 0,
@@ -1906,14 +1893,10 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
             const isTracked = skill.updatePolicy === "tracked";
             const globallyEnabled = skill.globallyEnabled !== false;
             const availabilityIsChanging = availabilityOperation?.id === skill.id;
-            const hasUpdate = globallyEnabled && isTracked && Boolean(updateInfo?.updateAvailable);
-            const hasError = globallyEnabled && isTracked && Boolean(updateInfo?.error);
-            const sourceRemoved = globallyEnabled && isTracked && updateInfo?.sourceStatus === "removed";
-            const maintenanceStatusLabel = isTracked && updateInfo
-              ? "Up to date"
-              : isTracked && hasUpdateSource
-                ? "Not checked"
-                : "No update checks";
+            const maintenanceState = skillMaintenanceState(skill, updateInfo);
+            const hasUpdate = maintenanceState === "update";
+            const hasError = maintenanceState === "error";
+            const sourceRemoved = maintenanceState === "removed";
             const usageCount = (skillUsage[skill.id] ?? []).length;
             const revisionLabel = shortSkillRevision(skill);
             const versionLabel = skill.version ?? skill.remoteRef ?? revisionLabel;
@@ -2091,64 +2074,22 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                   {availabilityIsChanging ? (
                     <InteractiveStatus
                       className="library-primary-status is-working"
+                      size="metadata"
                       icon={<LoaderCircle className="is-spinning" size={13} strokeWidth={2.2} />}
                       label={t(availabilityOperation.enabled ? "Enabling..." : "Disabling...")}
                       tone="accent"
                     />
-                  ) : !globallyEnabled ? (
-                    <InteractiveStatus
-                      className="library-primary-status is-disabled"
-                      icon={<CircleSlash2 size={13} strokeWidth={2.2} />}
-                      label={t("Disabled")}
-                    />
-                  ) : hasUpdate ? (
-                    <InteractiveStatus
-                      busy={previewingSkillId === skill.id}
-                      className="library-primary-status is-update"
-                      disabled={updateActivityBusy || Boolean(previewingSkillId)}
-                      icon={<CircleArrowUp size={13} strokeWidth={2.2} />}
-                      label={<>
-                        <span className="library-update-status-full">{t("Update available")}</span>
-                        <span className="library-update-status-compact">{t("Update")}</span>
-                      </>}
-                      reviewLabel={t("Review update {{id}}", { id: skill.id })}
-                      statusKind="update-available"
-                      tone="accent"
-                      onReview={(event) => {
-                        modalFallbackFocusRef.current = event.currentTarget;
-                        void runSkillUpdatePreview(skill.id);
-                      }}
-                    />
-                  ) : sourceRemoved ? (
-                    <InteractiveStatus
-                      className="library-primary-status is-warning"
-                      icon={<Link2Off size={13} strokeWidth={2.2} />}
-                      label={t("Removed upstream")}
-                      tone="warning"
-                    />
-                  ) : hasError ? (
-                    <InteractiveStatus
-                      busy={previewingSkillId === skill.id}
-                      className="library-primary-status is-error"
-                      disabled={updateActivityBusy || Boolean(previewingSkillId)}
-                      icon={<TriangleAlert size={13} strokeWidth={2.2} />}
-                      label={t("Check failed")}
-                      reviewLabel={t("Review update {{id}}", { id: skill.id })}
-                      tone="danger"
-                      onReview={(event) => {
-                        modalFallbackFocusRef.current = event.currentTarget;
-                        void runSkillUpdatePreview(skill.id);
-                      }}
-                    />
                   ) : (
-                    <InteractiveStatus
+                    <SkillMaintenanceStatus state={maintenanceState}
                       className="library-primary-status"
-                      icon={isTracked && updateInfo
-                        ? <CheckCircle2 size={13} strokeWidth={2.2} />
-                        : hasUpdateSource && !isTracked && skill.sourceType !== "local"
-                          ? <Link2Off size={13} strokeWidth={2.2} />
-                          : undefined}
-                      label={t(maintenanceStatusLabel)}
+                      busy={previewingSkillId === skill.id}
+                      detail={updateInfo?.error}
+                      disabled={updateActivityBusy || Boolean(previewingSkillId)}
+                      reviewLabel={t("Review update {{id}}", { id: skill.id })}
+                      onReview={hasUpdate || hasError ? (event) => {
+                        modalFallbackFocusRef.current = event.currentTarget;
+                        void runSkillUpdatePreview(skill.id);
+                      } : undefined}
                     />
                   )}
                   {statusDetail ? <span className="ui-visually-hidden">{statusDetail}</span> : null}

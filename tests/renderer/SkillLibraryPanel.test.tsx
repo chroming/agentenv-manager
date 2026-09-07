@@ -935,7 +935,7 @@ describe("SkillLibraryPanel", () => {
     fireEvent.mouseLeave(githubSourceDetails);
     await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
 
-    fireEvent.change(screen.getByRole("textbox", { name: "Search skills" }), {
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search skills" }), {
       target: { value: "github" }
     });
     expect(onViewStateChange).toHaveBeenCalledWith({

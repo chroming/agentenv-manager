@@ -2063,7 +2063,7 @@ describe("Electron UI profile switching e2e", () => {
       element.scrollTop = Math.min(220, element.scrollHeight - element.clientHeight);
     });
     expect(await skillScroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(100);
-    await page.getByRole("textbox", { name: "Search skills" }).fill("layout-skill");
+    await page.getByRole("searchbox", { name: "Search skills" }).fill("layout-skill");
     expect(await skillScroller.evaluate((element) => element.scrollTop)).toBe(0);
     await page.getByRole("button", { name: "Filters", exact: true }).click();
     await page.getByRole("combobox", { name: "Skill source filter" }).selectOption("local");
@@ -2085,7 +2085,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await navigation.getByRole("button", { name: "Profiles", exact: true }).click();
     await navigation.getByRole("button", { name: "Skills", exact: true }).click();
-    expect(await page.getByRole("textbox", { name: "Search skills" }).inputValue()).toBe(
+    expect(await page.getByRole("searchbox", { name: "Search skills" }).inputValue()).toBe(
       "layout-skill"
     );
     await page.getByRole("button", { name: /Filters/, exact: false }).click();
@@ -2175,7 +2175,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.keyboard.press("Meta+f");
     expect(
       await page
-        .getByRole("textbox", { name: "Search skills" })
+        .getByRole("searchbox", { name: "Search skills" })
         .evaluate((element) => document.activeElement === element)
     ).toBe(true);
 
@@ -2287,7 +2287,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.keyboard.press("Escape");
 
     await openSkillLibrary(page);
-    const skillSearch = page.getByRole("textbox", { name: "Search skills" });
+    const skillSearch = page.getByRole("searchbox", { name: "Search skills" });
     const sharedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     await sharedRow.getByRole("button", { name: "More actions for shared-reviewer" }).click();
     await page.getByRole("menuitem", { name: /Remove from library/ }).click();
@@ -2422,7 +2422,7 @@ describe("Electron UI profile switching e2e", () => {
       expect(await sourceCheckAction.locator("svg").first().getAttribute("class"))
         .toBe(listCheckIconClass);
       await page.getByRole("tab", { name: "Skill list" }).click();
-      const search = page.getByRole("textbox", { name: "Search skills" });
+      const search = page.getByRole("searchbox", { name: "Search skills" });
       for (let run = 0; run < 4; run += 1) {
         const startedAt = await page.evaluate(() => performance.now());
         await search.fill(`layout-skill-${testCase.count}`);
@@ -2531,7 +2531,7 @@ describe("Electron UI profile switching e2e", () => {
         return {
           background: getComputedStyle(updateButton).backgroundColor,
           bodyFontSize: getComputedStyle(document.documentElement)
-            .getPropertyValue("--font-size-body")
+            .getPropertyValue("--font-size-metadata")
             .trim(),
           buttonFitsText: updateButton.scrollWidth <= updateButton.clientWidth,
           buttonInsideStatusColumn:
@@ -4840,7 +4840,7 @@ describe("Electron UI profile switching e2e", () => {
     const { app: electronApp, page } = await launchApp();
     await resizeAppWindow(page, 920, 620);
     const navigation = page.getByRole("complementary", { name: "Global navigation" });
-    const skillSearch = page.getByRole("textbox", { name: "Search skills" });
+    const skillSearch = page.getByRole("searchbox", { name: "Search skills" });
     const sidebarToggle = page.getByRole("button", { name: "Collapse sidebar" });
     await skillSearch.fill("shared");
 
@@ -8368,7 +8368,7 @@ describe("Electron UI profile switching e2e", () => {
 
   it("refreshes Skills in place without clearing the current view", async () => {
     const { appDataRoot, page } = await launchApp();
-    const search = page.getByRole("textbox", { name: "Search skills" });
+    const search = page.getByRole("searchbox", { name: "Search skills" });
     await search.waitFor({ state: "visible" });
 
     const shortcutSkill = join(appDataRoot, "skills-library", "refresh-shortcut");

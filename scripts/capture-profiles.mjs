@@ -1288,7 +1288,7 @@ try {
   await page.getByRole("group", { name: "Skill status filters" }).getByRole("button", { name: /^Disabled/ }).click();
   await capturePage(page, join(outputDir, "skills-disabled-920x620.png"));
   await page.getByRole("group", { name: "Skill status filters" }).getByRole("button", { name: /^Enabled/ }).click();
-  const skillSearch = page.getByRole("textbox", { name: "Search skills" });
+  const skillSearch = page.getByRole("searchbox", { name: "Search skills" });
   await skillSearch.fill("no-such-skill");
   await capturePage(page, join(outputDir, "skills-empty-920x620.png"));
   await skillSearch.fill("");

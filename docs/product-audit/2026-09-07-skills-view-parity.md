@@ -17,3 +17,13 @@
 - 人工查看本轮来源最小窗口、手动组大小窗口及新增预览截图。截图位于 `/tmp/agentenv-source-alignment-evidence`、`/tmp/agentenv-addition-preview.png`；摘要多语言截图由原有 E2E 保留在 `/tmp/agentenv-summary-evidence`。
 - 样式、模块预算、翻译、Target 边界、功能证据与 UI 契约审计通过。
 - 未运行整库完整套件、未打包发布、未调用真实 AI 服务；不将定向验证解释为全部用户环境或真实模型质量保证。
+
+## 后续状态与操作统一
+
+- 共享所有者：SkillMaintenanceStatus、SkillMaintenanceAction、skillMaintenanceState 和 SearchField。三个视图共用状态文字、图标、颜色、字号与检查/更新动作；移除页面对状态组件的重复样式覆盖。
+- 状态优先级：禁用、不检查、来源移除和检查失败不会被旧的 updateAvailable 标记覆盖；未检查不展示成功图标，检查失败提供重试入口。
+- 批量范围：检查/更新覆盖当前视图全部符合条件的资源，不随搜索或筛选悄悄缩小；Groups 汇总全部组并去重，单组操作仍只处理该组。范围由动作提示说明。
+- 来源成员的 Ignore/Delete 收进菜单，保留状态上的主要动作；新增预览显示高亮文件内容，普通及最大化预览均不使用空基线 Diff。
+- 构建 `c78ff3179df3`：生产构建、类型检查通过；7 个 Renderer 文件共 53 项测试、7 项定向 Electron 测试通过。
+- Electron 覆盖来源三语言/三窗口、手动组、新增预览及最大化、摘要流程、100/500 条列表性能和跨页状态保留。人工复核最小窗口列表及新增内容预览截图。
+- 继续采用隔离 Home、本地 Git 和假 API；未运行全量测试、未打包、未调用真实 AI。

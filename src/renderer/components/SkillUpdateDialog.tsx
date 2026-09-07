@@ -15,6 +15,7 @@ import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
 import { Button, IconButton, ModalFrame, Switch } from "./ui";
 import { useI18n } from "../i18n";
 import { SkillSummaryReview } from "./SkillSummaryReview";
+import { SyntaxCodePreview } from "./SyntaxCodePreview";
 
 interface SkillUpdateDialogProps {
   mode?: "update" | "addition";
@@ -33,10 +34,12 @@ interface SkillUpdateDialogProps {
 const SkillUpdateChange = ({
   change,
   initiallyOpen,
+  contentOnly = false,
   onReadChange
 }: {
   change: PlannedFileChange;
   initiallyOpen: boolean;
+  contentOnly?: boolean;
   onReadChange?(): Promise<PlannedFileChange>;
 }) => {
   const { t } = useI18n();
@@ -80,7 +83,8 @@ const SkillUpdateChange = ({
       ) : null}
       {open && error ? <p className="field-error">{error}</p> : null}
       {open && !loading && !error ? (
-        <DiffViewer path={visibleChange.path} diff={visibleChange.diff} />
+        contentOnly ? <SyntaxCodePreview path={visibleChange.path} code={visibleChange.after} />
+          : <DiffViewer path={visibleChange.path} diff={visibleChange.diff} />
       ) : null}
     </details>
   );
@@ -201,7 +205,7 @@ export const SkillUpdateDialog = ({
           <div className="ui-dialog-header__copy">
             <div className="section-title ui-dialog-title">{t(adding ? "Add {{name}}" : "Update {{name}}", { name: plan.name })}</div>
             <p className="muted ui-dialog-description">
-              {t("{{count}} file changes", { count: plan.changes.length })}
+              {t(adding ? plan.changes.length === 1 ? "1 file" : "{{count}} files" : "{{count}} file changes", { count: plan.changes.length })}
               {plan.latestRevision
                 ? ` · ${(plan.currentRevision ?? "current").slice(0, 7)} → ${plan.latestRevision.slice(0, 7)}`
                 : ""}
@@ -277,6 +281,7 @@ export const SkillUpdateDialog = ({
             {plan.changes.map((change, index) => (
               <SkillUpdateChange
                 change={change}
+                contentOnly={adding}
                 initiallyOpen={index === 0}
                 key={change.path}
                 onReadChange={plan.previewId && onReadChange
@@ -327,7 +332,8 @@ export const SkillUpdateDialog = ({
       </ModalFrame>
       <DiffWorkspaceDialog
         initialPath={summaryFile}
-        changes={summaryEvidence ?? plan.changes}
+        changes={summaryEvidence ?? (adding ? [] : plan.changes)}
+        readonlyFiles={adding && !summaryEvidence ? plan.changes.map((change) => ({ path: change.path, content: change.after })) : undefined}
         onReadChange={!summaryEvidence && plan.previewId && onReadChange
           ? (change) => onReadChange(plan.previewId!, change.path)
           : undefined}

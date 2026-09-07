@@ -44,11 +44,13 @@ P0 使用支持 JSON 输出的 OpenAI-compatible Chat Completions endpoint。地
 
 - Skill list、By source、Groups 使用同一紧凑分段筛选和 InteractiveStatus。状态文字保留真实含义；可更新项点击状态进入共用预览，不再并列一个 Update 动作占据空间。
 - By source 的 All / Monitored / Manual only 直接可见；来源类型和检查结果继续放 Filters。Groups 的 All / Updates 按组筛选。
-- 手动组支持按组检查和批量更新；工具栏按当前可见组去重成员，只检查已启用且开启检查的 Skill。局部检查合并结果，不能清空其他 Skill 的最后检查状态。
+- 手动组支持按组检查和批量更新；工具栏按本视图全部组去重成员，只检查已启用且开启检查的 Skill，不随搜索或筛选缩小范围。来源工具栏检查全部监控来源，Skill list 检查全部符合条件的 Library 项；按钮提示明确范围。局部检查合并结果，不能清空其他 Skill 的最后检查状态。
 - 来源的 New 状态先打开共用文件预览，可最大化、手动生成摘要，然后 Add。预览和生成都不会导入。确认导入重新核对内容哈希，变化时需重新预览；同名仍使用原有冲突处理。
 - 新增摘要描述用途、前提和可见风险，不把新文件虚构为旧版本的行为变化。使用空基线哈希和候选哈希定位持久记录，复用手动生成、缓存、重新生成、限额与脱敏逻辑。
 - 新增预览只短期保存最多二十份有界摘要证据，候选临时目录按原流程清理；三十分钟后需要重新预览。生成过的摘要独立持久保存。
 - 来源子项的状态与操作轨道和来源标题行共享网格；静态及可点击状态保持相同文字起点，按钮不能继承居中布局。
+- 三个视图通过 SkillMaintenanceStatus / skillMaintenanceState 共用状态文案、图标、颜色和优先级。上游移除是警告，不是请求错误；失败状态可重试，不能因旧 updateAvailable 标记显示成可更新。禁用、不检查、未检查不使用成功勾号。
+- 检查/更新工具栏共用 SkillMaintenanceAction，搜索共用 SearchField。来源子项忽略和删除放在更多菜单；新项默认用 SyntaxCodePreview 看文件，更新项用 DiffViewer 看变更，最大化沿用 DiffWorkspaceDialog。
 
 验证：`repositorySkillSource.e2e.test.ts` 覆盖来源新增预览、确认导入、手动组检查/预览以及多尺寸对齐；`skillLibraryStore.test.ts` 覆盖新增预览零导入、证据不变及过期内容拒绝；`skillSummaries.test.ts` 覆盖新增摘要复用与请求语义。
 

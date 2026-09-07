@@ -45,6 +45,8 @@ import type { SkillUpdateActivity } from "../skillUpdateActivity";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
+import { SkillMaintenanceStatus } from "./SkillMaintenanceStatus";
+import { SkillMaintenanceAction } from "./SkillMaintenanceAction";
 import {
   ActionMenu,
   Button,
@@ -57,7 +59,9 @@ import {
   Notice,
   statusToneFor,
   ModalFrame,
-  SelectControl
+  SelectControl,
+  SearchField,
+  ToolbarOverflowMenu
 } from "./ui";
 
 interface SkillSourceViewProps {
@@ -84,18 +88,6 @@ interface SkillSourceViewProps {
   onOpenSource(url: string): void;
   onCopySource(source: string): void;
 }
-
-const stateLabel = (state: SkillSourceGroupCandidate["state"]) => {
-  if (state === "current") return "Current";
-  if (state === "update") return "Update available";
-  if (state === "new") return "New";
-  if (state === "ignored") return "Ignored";
-  if (state === "removed") return "Removed upstream";
-  if (state === "invalid") return "Invalid upstream";
-  if (state === "conflict") return "Relationship conflict";
-  if (state === "missing") return "Library copy missing";
-  return "Not checked";
-};
 
 const sourceIsOpenable = (source: string) => /^https?:\/\//i.test(source);
 
@@ -641,16 +633,12 @@ export const SkillSourceView = ({
       aria-hidden={!active}
     >
       <div className={`skill-source-toolbar${mergeSelectionMode ? " is-merge-selection" : ""}`}>
-        <label className="library-search ui-composite-field">
-          <span>{t("Search")}</span>
-          <Search size={16} strokeWidth={2.1} aria-hidden="true" />
-          <input
-            aria-label={t("Search sources and skills")}
+        <SearchField fieldClassName="library-catalog-search" icon={<Search size={15} strokeWidth={2.2} />}
+            label={t("Search sources and skills")}
             placeholder={t("Search source or skill...")}
             value={search}
             onChange={(event) => setSearch(event.currentTarget.value)}
           />
-        </label>
         <Button
           aria-expanded={filtersOpen}
           className={`library-filter-trigger${activeFilterCount > 0 ? " has-filters" : ""}`}
@@ -665,18 +653,11 @@ export const SkillSourceView = ({
             </strong>
           ) : null}
         </Button>
-        <Button
-          aria-label={t("Check updates")}
+        <SkillMaintenanceAction action="check" scope="sources"
           busy={activeCheckingAll}
-          busyLabel={t("Checking...")}
-          className="library-toolbar-action"
-          icon={<SearchCheck size={15} strokeWidth={2.2} />}
-          title={t("Check updates")}
           disabled={activeCheckingAll || checking.size > 0 || Boolean(activeCheckingSourceId) || Boolean(operation) || monitoredSourceCount === 0}
           onClick={() => void runCheckMonitored()}
-        >
-          {t("Check updates")}
-        </Button>
+        />
         {canMergeSources ? (
           <Button
             icon={<GitMerge size={15} strokeWidth={2.2} />}
@@ -1087,7 +1068,8 @@ export const SkillSourceView = ({
                         ? `${t("Modified")}: ${formatDate(candidate.libraryUpdatedAt)}`
                         : undefined
                     ].filter(Boolean).join("\n");
-                    const candidateIssue = ["invalid", "conflict", "missing", "removed"].includes(candidate.state);
+                    const maintenanceState = candidate.libraryId && candidate.globallyEnabled === false ? "disabled"
+                      : candidate.libraryId && candidate.updatePolicy === "untracked" ? "untracked" : candidate.state;
                     return (
                       <div
                         className={`skill-source-candidate is-${candidate.state}${candidate.globallyEnabled === false ? " is-disabled" : ""}`}
@@ -1107,60 +1089,27 @@ export const SkillSourceView = ({
                             text={versionDetail}
                           />
                         </div>
-                        <InteractiveStatus
+                        <SkillMaintenanceStatus state={maintenanceState} detail={candidate.detail}
                           className="skill-source-state"
-                          busy={isAdding || isUpdating || isUnignoring}
+                          busy={isAdding || isUpdating || isUnignoring || isIgnoring}
                           disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
                           onReview={candidate.state === "new" ? () => void runAdd(group, candidate)
                             : candidate.state === "update" && candidate.libraryId && candidate.globallyEnabled !== false && candidate.updatePolicy !== "untracked"
                               ? () => void runUpdate(candidate.libraryId!)
                               : candidate.state === "ignored" ? () => void setCandidateIgnored(group, candidate, false) : undefined}
                           reviewLabel={candidate.state === "new" ? t("Add") : candidate.state === "ignored" ? t("Unignore") : t("Update {{name}}", { name: candidate.libraryId ?? candidate.name })}
-                          size="metadata"
-                          statusKind={candidate.state === "current" ? "success"
-                            : candidate.state === "update" ? "update-available"
-                            : candidateIssue ? "error" : "neutral"}
-                          tone={candidate.state === "new" ? "accent" : undefined}
-                          icon={candidate.state === "current" ? <CheckCircle2 />
-                            : candidate.state === "ignored" ? <EyeOff />
-                            : candidate.state === "new" ? <Plus />
-                            : candidateIssue ? <CircleAlert /> : <RefreshCw />}
-                          label={<OverflowTooltip
-                            className="skill-source-state-label"
-                            displayText={t(stateLabel(candidate.state))}
-                            text={candidate.detail ?? t(stateLabel(candidate.state))}
-                          />}
                         />
                         <div className="skill-source-candidate-action">
-                          {candidate.state === "new" ? (
-                            <>
-                              {onSetCandidateIgnored ? (
-                                <IconButton
-                                  busy={isIgnoring}
-                                  className="skill-source-ignore-action"
-                                  label={t("Ignore {{name}} for this source", {
-                                    name: candidate.name
-                                  })}
-                                  size="compact"
-                                  variant="ghost"
-                                  disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
-                                  onClick={() => void setCandidateIgnored(group, candidate, true)}
-                                >
-                                  <EyeOff />
-                                </IconButton>
-                              ) : null}
-                            </>
-                          ) : candidate.state === "removed" && candidate.libraryId ? (
-                            <IconButton
-                              label={t("Delete")}
-                              variant="ghost"
-                              size="compact"
+                          {(candidate.state === "new" && onSetCandidateIgnored) || (candidate.state === "removed" && candidate.libraryId) ?
+                            <ToolbarOverflowMenu label={t("More actions for {{name}}", { name: candidate.name })}
+                              menuLabel={t("Actions for {{name}}", { name: candidate.name })}
                               disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
-                              onClick={() => onDelete(candidate.libraryId!)}
-                            >
-                              <Trash2 size={13} strokeWidth={2.2} />
-                            </IconButton>
-                          ) : null}
+                              items={candidate.state === "new" ? [{ id: "ignore",
+                                label: t("Ignore {{name}} for this source", { name: candidate.name }),
+                                icon: <EyeOff size={14} />,
+                                onSelect: () => void setCandidateIgnored(group, candidate, true)
+                              }] : [{ id: "delete", label: t("Delete"), icon: <Trash2 size={14} />,
+                                onSelect: () => onDelete(candidate.libraryId!) }]} /> : null}
                         </div>
                       </div>
                     );
