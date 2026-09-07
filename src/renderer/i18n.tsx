@@ -5015,6 +5015,10 @@ Object.assign(zhTW, {
 
 Object.assign(zhCN, {
   "Update summaries": "更新摘要",
+  "Analyzed": "已分析",
+  "Added": "新增",
+  "AI response": "AI 响应",
+  "Some changed content was not analyzed. Review the coverage in Details.": "部分变更内容未分析，可展开查看具体范围。",
   "Select update {{name}}": "选择更新 {{name}}",
   "Update selected ({{count}})": "更新所选（{{count}}）",
   "AI-generated": "AI 生成",
@@ -5047,6 +5051,10 @@ Object.assign(zhCN, {
 
 Object.assign(zhTW, {
   "Update summaries": "更新摘要",
+  "Analyzed": "已分析",
+  "Added": "新增",
+  "AI response": "AI 回應",
+  "Some changed content was not analyzed. Review the coverage in Details.": "部分變更內容未分析，可展開查看具體範圍。",
   "Select update {{name}}": "選擇更新 {{name}}",
   "Update selected ({{count}})": "更新所選（{{count}}）",
   "AI-generated": "AI 產生",

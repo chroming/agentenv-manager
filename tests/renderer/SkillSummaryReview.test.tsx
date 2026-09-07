@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SkillSummaryReview } from "../../src/renderer/components/SkillSummaryReview";
 import type { AgentEnvApi, SkillUpdatePlan } from "../../src/shared/types";
@@ -78,6 +78,36 @@ describe("Skill summary review", () => {
     render(<SkillSummaryReview plans={[plan, { ...plan, id: "other" }]} selectedIds={["review"]} onViewFile={vi.fn()} />);
     fireEvent.click(await screen.findByRole("button", { name: "Summarize selected (1)" }));
     await screen.findByText("Adds log upload");
+    expect(api.generateSkillSummary).toHaveBeenCalledTimes(1);
+  });
+  it("finishes each batch item before preparing the next, and keeps regeneration in its heading", async () => {
+    const api = install();
+    let finish!: (value: SkillSummary) => void;
+    api.generateSkillSummary.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const other = { ...plan, id: "other", name: "Other", previewId: "other-preview" };
+    render(<SkillSummaryReview plans={[plan, other]} onViewFile={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Summarize selected (2)" }));
+    await waitFor(() => expect(api.generateSkillSummary).toHaveBeenCalledTimes(1));
+    expect(api.prepareSkillSummary).not.toHaveBeenCalled();
+    await act(async () => finish(record));
+    await waitFor(() => expect(api.generateSkillSummary).toHaveBeenCalledTimes(2));
+    const entry = screen.getByRole("region", { name: "Review" });
+    const heading = within(entry).getByRole("toolbar");
+    const regenerate = within(heading).getByRole("button", { name: "Regenerate summary" });
+    api.generateSkillSummary.mockImplementation(() => new Promise(() => undefined));
+    fireEvent.click(regenerate);
+    await waitFor(() => expect(regenerate).toHaveAttribute("aria-busy", "true"));
+    expect(within(entry).getByText("Adds log upload")).toBeInTheDocument();
+  });
+  it("does not start another item after Stop", async () => {
+    const api = install();
+    let finish!: (value: SkillSummary) => void;
+    api.generateSkillSummary.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    render(<SkillSummaryReview plans={[plan, { ...plan, id: "other" }]} onViewFile={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Summarize selected (2)" }));
+    await waitFor(() => expect(api.generateSkillSummary).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    await act(async () => finish(record));
     expect(api.generateSkillSummary).toHaveBeenCalledTimes(1);
   });
 });

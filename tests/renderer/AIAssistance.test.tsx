@@ -50,6 +50,7 @@ describe("AI assistance surfaces", () => {
     expect(container.querySelector(".ui-dialog-body .ui-resource-panel-toolbar")).toBeNull();
     fireEvent.click(analyze);
     await screen.findByText("Adds a test");
+    expect(screen.getByRole("button", { name: "Regenerate" })).toHaveTextContent("Regenerate");
     expect(screen.getByRole("button", { name: "Close" })).toHaveClass("ui-button--primary");
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(close).toHaveBeenCalledTimes(1);

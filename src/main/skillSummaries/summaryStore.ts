@@ -21,6 +21,9 @@ export const SummarySchema = z.object({
   coverage: z.enum(["complete", "partial"]), omittedPaths: z.array(z.string()),
   redacted: z.boolean(),
   files: z.array(z.object({ path: z.string(), diff: z.string() })),
+  context: z.string().optional(),
+  changeInventory: z.array(z.object({ path: z.string(), action: z.enum(["added", "removed", "modified"]), coverage: z.enum(["full", "partial", "omitted"]) })).optional(),
+  timings: z.object({ preparationMs: z.number().nonnegative(), requestMs: z.number().nonnegative() }).optional(),
   usage: z.object({ inputTokens: z.number().optional(), outputTokens: z.number().optional() }).optional()
 });
 

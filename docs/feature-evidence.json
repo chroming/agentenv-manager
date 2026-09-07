@@ -58,19 +58,19 @@
       "support": { "opencode": "not-applicable", "claude-code": "not-applicable", "codex": "not-applicable", "antigravity": "not-applicable", "antigravity-app": "not-applicable", "trae-cli": "not-applicable", "pi": "not-applicable" },
       "states": {
         "idle": "Preview reads cached summaries only; update checks and startup never call a model.",
-        "working": "Explicitly confirmed requests run sequentially with bounded input, response, timeout and a Stop action.",
+        "working": "Each selected Skill is prepared and generated sequentially; bounded evidence prioritizes instructions and runtime changes. The initiating action shows progress and Stop prevents further requests.",
         "success": "Validated classified output and redacted supporting diffs are persisted atomically.",
         "error": "Inline failures preserve old summaries and do not disable Skill updates; no automatic retries.",
         "cancelled": "Cancellation aborts the current request and stops queued generation; sent requests may already be billed.",
         "noOp": "Matching Skill identity and before/after content hashes reuse the saved summary without network calls.",
         "stale": "Candidate and Library hashes must still match the reviewed preview before sending model input.",
-        "partial": "Large, binary or bounded-out files are explicitly listed before confirmation and in the result.",
+        "partial": "Partially selected diff blocks and omitted files are recorded in the change inventory. Missing evidence never implies safety.",
         "persisted": "Saved summaries survive restart and Skill updates; history retains bounded redacted file evidence outside Workspace Sync.",
         "rollback": "Failed regeneration preserves the earlier record; summary operations never modify Agent or original Skill files."
       },
       "evidence": {
         "domain": ["tests/main/skillSummaries.test.ts", "tests/main/skillSummaryInput.test.ts"],
-        "renderer": ["tests/renderer/SkillSummaryReview.test.tsx", "tests/renderer/BulkSkillUpdateDialog.test.tsx"],
+        "renderer": ["tests/renderer/SkillSummaryReview.test.tsx", "tests/renderer/SkillSummaryContent.test.tsx", "tests/renderer/BulkSkillUpdateDialog.test.tsx"],
         "desktop": ["tests/e2e/skillSummaries.e2e.test.ts"],
         "persistence": ["tests/main/skillSummaries.test.ts", "tests/e2e/skillSummaries.e2e.test.ts"],
         "visual": ["skills-update-review-920x620.png", "skills-bulk-update-ready-920x620.png"]

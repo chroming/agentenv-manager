@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type Ref } from "react";
-import { Sparkles } from "lucide-react";
+import { RotateCw, Sparkles } from "lucide-react";
 import type { AIAnalysisSubject, AIAnalysisPreview, AIAnalysisRecord } from "../../shared/aiAssistance";
 import { useAIPreferences } from "../hooks/useAIPreferences";
 import { useI18n } from "../i18n";
-import { Button, DialogBody, DialogFooter, EmptyState, Notice, ResourcePanelToolbar, TextAction } from "./ui";
+import { Button, DialogBody, DialogFooter, EmptyState, IconButton, Notice, TextAction } from "./ui";
+import { AIReviewHeading } from "./AIReviewHeading";
 import { SyntaxCodePreview } from "./SyntaxCodePreview";
 import { AIServiceForm } from "./SkillSummarySettings";
 
@@ -76,7 +77,8 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
   if (!allowed && !record && !standalone) return null;
   const actions = <>
     {busy === "generating" ? <Button onClick={() => void window.agentEnv.cancelAIAnalysis(request.current)}>{t("Stop")}</Button> : null}
-    {allowed ? <Button variant={standalone && !record ? "primary" : "secondary"} icon={<Sparkles size={15} />} busy={Boolean(busy)} disabled={Boolean(busy || configuring)} onClick={() => void prepare()}>{t(record ? "Regenerate" : action)}</Button> : null}
+    {allowed && record && !standalone ? <IconButton label={t("Regenerate")} busy={Boolean(busy)} disabled={configuring} onClick={() => void prepare()}><RotateCw size={15} /></IconButton>
+      : allowed ? <Button variant={standalone && !record ? "primary" : "secondary"} icon={record ? <RotateCw size={15} /> : <Sparkles size={15} />} busy={Boolean(busy)} disabled={Boolean(busy || configuring)} onClick={() => void prepare()}>{t(record ? "Regenerate" : action)}</Button> : null}
   </>;
   const closeAction = <Button ref={closeRef} variant={record ? "primary" : "secondary"} onClick={onClose}>{t("Close")}</Button>;
   const content = <>
@@ -105,7 +107,7 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
     <DialogBody><div className="skill-summary-content">{content}</div></DialogBody>
     <DialogFooter>{record ? <>{actions}{closeAction}</> : <>{closeAction}{actions}</>}</DialogFooter>
   </> : <section className="skill-summary-review skill-summary-review--embedded" aria-label={t("AI analysis")}>
-    <ResourcePanelToolbar variant="flush"><span className="resource-heading skill-summary-heading">{t(heading)}</span>{actions}</ResourcePanelToolbar>
+    <AIReviewHeading title={t(heading)} actions={actions} />
     {content}
   </section>;
 };

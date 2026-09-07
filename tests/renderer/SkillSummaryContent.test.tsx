@@ -16,7 +16,7 @@ it("keeps the quick read bounded while preserving every cached finding and evide
   expect(screen.getAllByText("Impact 4").some((node) => !node.closest("details"))).toBe(true);
   expect(screen.getAllByText("Change 4").some((node) => !node.closest("details"))).toBe(true);
   expect(screen.getAllByText("Change 3").every((node) => node.closest("details"))).toBe(true);
-  fireEvent.click(screen.getByText("Details · 5"));
+  fireEvent.click(screen.getByText("More findings (2)"));
   expect(details.open).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "file-3.md" }));
   expect(view).toHaveBeenCalledWith("file-3.md");

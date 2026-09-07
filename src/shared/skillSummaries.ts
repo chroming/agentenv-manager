@@ -32,6 +32,9 @@ export interface SkillSummary {
   redacted: boolean;
   files: Array<{ path: string; diff: string }>;
   usage?: { inputTokens?: number; outputTokens?: number };
+  context?: string;
+  changeInventory?: Array<{ path: string; action: "added" | "removed" | "modified"; coverage: "full" | "partial" | "omitted" }>;
+  timings?: { preparationMs: number; requestMs: number };
 }
 
 export interface SkillSummaryGenerateInput {
@@ -50,4 +53,6 @@ export interface SkillSummaryInput {
   afterHash: string;
   files: Array<{ path: string; diff: string }>;
   omittedPaths: string[];
+  context?: string;
+  changeInventory?: SkillSummary["changeInventory"];
 }

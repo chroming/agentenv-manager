@@ -50,6 +50,19 @@
 
 .skill-summary-heading {
   margin-right: auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.skill-summary-entry {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.skill-summary-entry + .skill-summary-entry {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
 }
 
 .skill-summary-review--embedded {

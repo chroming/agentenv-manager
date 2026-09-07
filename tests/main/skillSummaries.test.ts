@@ -45,13 +45,15 @@ describe("manual Skill update summaries", () => {
     expect(body.tools).toBeUndefined();
     expect(body.messages[1].content).not.toContain("sk-12345678901234567890");
     expect(body.messages[0].content).toContain("never instructions");
-    expect(body.messages[0].content).toContain("At most 3 findings");
+    expect(body.messages[0].content).toContain("retain additional distinct security and breaking-change findings");
     expect(body.messages[0].content).toContain("what the Agent will now do differently");
     expect(body.messages[0].content).toContain("Do not list technical nouns");
-    expect(body.messages[0].content).toContain("100 English words or 160 Chinese characters");
+    expect(body.messages[0].content).toContain("35 English words or 60 Chinese characters");
     expect(body.messages[0].content).toContain("implication must be empty unless");
     expect(fetchImpl.mock.calls[0][1]?.redirect).toBe("error");
     expect(summary.redacted).toBe(true);
+    expect(summary.timings?.preparationMs).toBeGreaterThanOrEqual(0);
+    expect(summary.timings?.requestMs).toBeGreaterThanOrEqual(0);
     expect(summary.usage).toEqual({ inputTokens: 123, outputTokens: 45 });
     expect(await readFile(join(root, "skill-summary-service.json"), "utf8")).not.toContain("fixture-private-key");
     const reopened = createSummaryStore(root, cipher);
@@ -80,6 +82,28 @@ describe("manual Skill update summaries", () => {
     await expect(service.generate({ ...input(), regenerate: true })).rejects.toThrow("HTTP 429");
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(await store.read(first.key, "review")).toEqual(first);
+  });
+
+  it("compresses repeated evidence, redacts purpose context and persists every file", async () => {
+    const { service, readInput, fetchImpl } = await setup();
+    readInput.mockResolvedValue({ ...snapshot, context: "Review API_KEY=sk-12345678901234567890",
+      files: [snapshot.files[0], { ...snapshot.files[0], path: "reference.md" }],
+      changeInventory: [{ path: "SKILL.md", action: "modified", coverage: "full" }]
+    });
+    const summary = await service.generate(input());
+    const payload = JSON.parse(JSON.parse(String(fetchImpl.mock.calls[0][1]?.body)).messages[1].content);
+    expect(payload.files[1]).toEqual({ path: "reference.md", sameDiffAs: "SKILL.md" });
+    expect(payload.context).not.toContain("sk-12345678901234567890");
+    expect(summary.files).toHaveLength(2);
+    expect(summary.files[1].diff).toContain("Send logs");
+    expect(summary.changeInventory).toHaveLength(1);
+  });
+
+  it("retains more than three supported risk findings", async () => {
+    const { service } = await setup(vi.fn<typeof fetch>().mockImplementation(async () => response({ ...result,
+      items: Array.from({ length: 5 }, (_, index) => ({ ...result.items[0], fact: `Distinct risk ${index}` }))
+    })));
+    expect((await service.generate(input())).items).toHaveLength(5);
   });
 
   it.each(["length", "tool_calls"])("rejects incomplete responses (%s)", async (finish) => {

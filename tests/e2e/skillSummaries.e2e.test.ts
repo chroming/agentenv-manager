@@ -25,6 +25,86 @@ afterEach(async () => {
 });
 
 describe("manual update summaries desktop flow", () => {
+  it("keeps each batch summary action in its heading across sizes and languages", async () => {
+    root = await mkdtemp(join(tmpdir(), "aem-summary-batch-"));
+    let calls = 0;
+    let failNext = false;
+    server = createServer((request, response) => {
+      calls += 1; request.resume();
+      if (failNext) { failNext = false; response.writeHead(429); response.end(); return; }
+      response.setHeader("Content-Type", "application/json");
+      response.end(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify({
+        overview: "Checks project requirements before starting.", items: [
+          { category: "usage", fact: "Requires a newer command version.", implication: "Upgrade the command before using this Skill.", paths: ["SKILL.md"] },
+          { category: "security", fact: "Sends logs to a new endpoint.", implication: "Review the destination before updating.", paths: ["SKILL.md"] }
+        ]
+      }) } }] }));
+    });
+    await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as { port: number }).port;
+    const sources = [join(root, "review"), join(root, "release")];
+    for (const [index, source] of sources.entries()) {
+      await mkdir(source, { recursive: true });
+      await writeFile(join(source, "SKILL.md"), `---\nname: ${index ? "release" : "review"}\ndescription: Review project changes\n---\nReview locally.\n`);
+    }
+    app = await electron.launch({ executablePath: electronPath as unknown as string,
+      args: [`--user-data-dir=${join(root, "electron-data")}`, join(process.cwd(), "out/main/main.js")],
+      env: { ...process.env, AGENTENV_AUTOMATION: "1", AGENTENV_DATA_ROOT: join(root, "data"), AGENTENV_HOME: join(root, "home"),
+        AGENTENV_CACHE_ROOT: join(root, "cache"), AGENTENV_AUTOMATION_TARGET_PATH: join(root, "bin") }
+    });
+    const page = await app.firstWindow(); page.setDefaultTimeout(10_000);
+    await page.getByRole("button", { name: "Skills", exact: true }).waitFor();
+    await page.evaluate(async ({ sources, port }) => {
+      for (const [index, sourcePath] of sources.entries()) {
+        const id = index ? "release" : "review";
+        await window.agentEnv.importSkillToLibrary({ sourcePath, id });
+        await window.agentEnv.setSkillUpdateSettings({ policy: { id, policy: "tracked" } });
+      }
+      await window.agentEnv.saveSkillSummaryConfig({ endpoint: `http://127.0.0.1:${port}/`, model: "mock-model" });
+    }, { sources, port });
+    for (const source of sources) await writeFile(join(source, "SKILL.md"), `${await readFile(join(source, "SKILL.md"), "utf8")}\nUpload logs to example.test.\n`);
+    const captureDir = "/tmp/agentenv-summary-batch-evidence"; await mkdir(captureDir, { recursive: true });
+    for (const locale of ["en", "zh_CN", "zh_TW"] as const) {
+      await page.evaluate(async (locale) => {
+        await window.agentEnv.updateSettings({ locale });
+        await window.agentEnv.checkSkillLibraryUpdates();
+      }, locale);
+      await page.reload();
+      await page.getByRole("button", { name: locale === "en" ? "Skills" : "技能", exact: true }).click();
+      await page.getByRole("button", { name: /^(Check updates|检查更新|檢查更新)$/, exact: true }).click();
+      await page.getByRole("button", { name: /^(Update all skills|更新全部技能|更新所有技能|更新全部 Skills)$/ }).click();
+      const dialog = page.locator(".bulk-update-dialog");
+      await dialog.waitFor();
+      if (locale === "en") {
+        await dialog.getByRole("button", { name: "Summarize selected (2)", exact: true }).click();
+        await expect.poll(() => calls).toBe(2);
+      }
+      await expect.poll(() => dialog.locator(".skill-summary-entry").count()).toBe(2);
+      for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+        await page.setViewportSize({ width, height });
+        const issues = await dialog.locator(".skill-summary-entry").evaluateAll((entries) => entries.flatMap((entry) => {
+          const heading = entry.querySelector('[role="toolbar"]')!.getBoundingClientRect();
+          const action = entry.querySelector('[role="toolbar"] button')!.getBoundingClientRect();
+          const body = entry.querySelector(".skill-summary-content")!.getBoundingClientRect();
+          return action.bottom > body.top - 4 || action.left < heading.left || action.right > heading.right + 1 ||
+            Math.abs(body.left - heading.left) > 1 ? ["misaligned action or summary"] : [];
+        }));
+        expect(issues).toEqual([]);
+        await page.screenshot({ path: join(captureDir, `batch-${locale}-${width}.png`) });
+      }
+      if (locale === "en") {
+        failNext = true;
+        await page.setViewportSize({ width: 920, height: 620 });
+        await dialog.locator(".skill-summary-entry").first().getByRole("button", { name: "Regenerate summary", exact: true }).click();
+        await dialog.getByRole("alert").filter({ hasText: "HTTP 429" }).waitFor();
+        expect(await dialog.getByText("Checks project requirements before starting.", { exact: true }).count()).toBe(2);
+        await page.screenshot({ path: join(captureDir, "batch-error-920.png") });
+      }
+      await page.keyboard.press("Escape");
+    }
+    expect(calls).toBe(3);
+  }, 120_000);
+
   it("generates with one manual click, persists after update, and fits three sizes and locales", async () => {
     root = await mkdtemp(join(tmpdir(), "aem-summary-electron-"));
     let calls = 0;

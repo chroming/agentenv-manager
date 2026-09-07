@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
+import { RotateCw, Sparkles } from "lucide-react";
 import type { SkillUpdatePlan } from "../../shared/types";
 import type { SkillSummary, SkillSummaryConfig } from "../../shared/skillSummaries";
 import { useI18n } from "../i18n";
-import { Button, InteractiveStatus, Notice, ResourcePanelToolbar } from "./ui";
+import { Button, IconButton, InteractiveStatus, Notice } from "./ui";
 import { SkillSummaryContent } from "./SkillSummaryContent";
 import { useAIPreferences } from "../hooks/useAIPreferences";
 import { AIServiceSetup } from "./AIServiceSetup";
+import { AIReviewHeading } from "./AIReviewHeading";
 
 export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = false }: {
   plans: SkillUpdatePlan[]; selectedIds?: string[]; disabled?: boolean;
@@ -19,6 +21,7 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
   const [needsConfig, setNeedsConfig] = useState(false);
   const [configuring, setConfiguring] = useState(false);
   const [operationLabel, setOperationLabel] = useState("");
+  const [initiator, setInitiator] = useState("");
   const active = useRef(true);
   const requestId = useRef("");
   const stopped = useRef(false);
@@ -50,9 +53,10 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
   }, [identity]);
   const selected = plans.filter((plan) => plan.previewId && (!selectedIds || selectedIds.includes(plan.id)));
   const missing = selected.filter((plan) => !records[plan.id]);
-  const prepare = async (chosen: SkillUpdatePlan[], regenerate = false) => {
+  const prepare = async (chosen: SkillUpdatePlan[], regenerate = false, origin = "batch") => {
     if (!allowed || busyId || loadingConfig || configuring || !chosen.length) return;
     setLoadingConfig(true);
+    setInitiator(origin);
     setOperationLabel(t(regenerate ? "Regenerate summary" : plans.length === 1 ? "Generate summary" : "Summarize selected ({{count}})", { count: chosen.length }));
     stopped.current = false;
     setErrors({});
@@ -60,16 +64,7 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
       const config = await window.agentEnv.readSkillSummaryConfig();
       if (!config.model || !config.endpoint) { setNeedsConfig(true); return; }
       setNeedsConfig(false);
-      const prepared: SkillUpdatePlan[] = [];
-      for (const plan of chosen) {
-        if (!active.current || stopped.current) break;
-        try {
-          const scope = await window.agentEnv.prepareSkillSummary(plan.previewId!);
-          if (!scope.fileCount) throw new Error(t("No readable text changes. Review the original files instead."));
-          prepared.push(plan);
-        } catch (error) { if (active.current) setErrors((current) => ({ ...current, [plan.id]: String(error) })); }
-      }
-      if (active.current && !stopped.current && prepared.length) await run({ config, plans: prepared, regenerate });
+      if (active.current && !stopped.current) await run({ config, plans: chosen, regenerate });
     } catch (error) { if (active.current) setErrors({ general: error instanceof Error ? error.message : String(error) }); }
     finally { if (active.current) setLoadingConfig(false); }
   };
@@ -94,26 +89,28 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
   };
   if (!allowed && !Object.keys(records).length) return null;
   return <section className="skill-summary-review" aria-label={t("Update summaries")}>
-    <ResourcePanelToolbar variant="flush">
-      <span className="resource-heading skill-summary-heading">{t("Update summaries")}</span>
-      {allowed && (missing.length || loadingConfig) ? <Button disabled={disabled || configuring} busy={loadingConfig} onClick={() => void prepare(missing)}>
-        {loadingConfig ? operationLabel : t(plans.length === 1 ? "Generate summary" : "Summarize selected ({{count}})", { count: missing.length })}
-      </Button> : allowed && plans.length === 1 && records[plans[0].id] ? <Button disabled={disabled || configuring} busy={loadingConfig} onClick={() => void prepare([plans[0]], true)}>{t("Regenerate summary")}</Button> : null}
+    <AIReviewHeading title={t("Update summaries")} actions={<>
+      {allowed && plans.length === 1 && records[plans[0].id] ? <IconButton label={t("Regenerate summary")} disabled={disabled || configuring} busy={loadingConfig} onClick={() => void prepare([plans[0]], true)}><RotateCw size={15} /></IconButton>
+      : allowed && (missing.length || (loadingConfig && initiator === "batch")) ? <Button icon={<Sparkles size={15} />} disabled={disabled || configuring || loadingConfig} busy={loadingConfig && initiator === "batch"} onClick={() => void prepare(missing)}>
+        {loadingConfig && initiator === "batch" ? operationLabel : t(plans.length === 1 ? "Generate summary" : "Summarize selected ({{count}})", { count: missing.length })}
+      </Button> : null}
       {loadingConfig ? <Button onClick={() => {
         stopped.current = true;
         if (requestId.current) void window.agentEnv.cancelSkillSummary(requestId.current);
       }}>{t("Stop")}</Button> : null}
-    </ResourcePanelToolbar>
+    </>} />
     {errors.general ? <Notice tone="warning" role="alert">{errors.general}</Notice> : null}
     {needsConfig && allowed ? <AIServiceSetup editing={configuring} onEditingChange={setConfiguring} onSaved={() => setNeedsConfig(false)} /> : null}
-    {plans.map((plan) => records[plan.id] || errors[plan.id] || busyId === plan.id ? <div key={plan.id}>
-      {plans.length > 1 ? <h4>{plan.name}</h4> : null}
+    {plans.map((plan) => records[plan.id] || errors[plan.id] || busyId === plan.id ? <section className="skill-summary-entry" key={plan.id} aria-label={plan.name}>
+      {plans.length > 1 ? <AIReviewHeading title={plan.name} actions={allowed ? <IconButton
+        label={t(records[plan.id] ? "Regenerate summary" : "Generate summary")}
+        disabled={disabled || loadingConfig || configuring} busy={loadingConfig && initiator === plan.id}
+        onClick={() => void prepare([plan], Boolean(records[plan.id]), plan.id)}><RotateCw size={15} /></IconButton> : undefined} /> : null}
       {errors[plan.id] ? <Notice tone="warning" role="alert">{errors[plan.id]}</Notice> : null}
       {busyId === plan.id ? <div role="status"><InteractiveStatus busy statusKind="working" label={t("Generating summary")} /></div> : null}
       {records[plan.id] ? <>
         <SkillSummaryContent summary={records[plan.id]} onViewFile={(path) => onViewFile(plan, path, records[plan.id])} />
-        {allowed && plans.length > 1 ? <Button size="compact" disabled={disabled || Boolean(busyId) || loadingConfig || configuring} onClick={() => void prepare([plan], true)}>{t("Regenerate summary")}</Button> : null}
       </> : null}
-    </div> : null)}
+    </section> : null)}
   </section>;
 };
