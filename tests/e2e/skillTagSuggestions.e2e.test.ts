@@ -52,11 +52,19 @@ describe("AI tag suggestions desktop flow", () => {
       await page.evaluate((locale) => window.agentEnv.updateSettings({ locale }), locale); await page.reload();
       const english = locale === "en";
       await page.getByRole("button", { name: english ? "Skills" : "技能", exact: true }).click();
+      if (english) {
+        await page.getByRole("button", { name: "Updates (0)", exact: true }).click();
+        await page.getByRole("button", { name: "More Skill actions", exact: true }).click();
+        expect(await page.getByRole("menuitem", { name: "AI tags...", exact: true }).isDisabled()).toBe(true);
+        await page.keyboard.press("Escape");
+        await page.getByRole("button", { name: "All (2)", exact: true }).click();
+      }
       await page.getByRole("button", { name: english ? "More Skill actions" : "更多 Skill 操作", exact: true }).click();
       await page.getByRole("menuitem", { name: english ? "AI tags..." : locale === "zh_CN" ? "AI 打标签…" : "AI 標籤…", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: english ? "AI tags" : locale === "zh_CN" ? "AI 打标签" : "AI 標籤", exact: true });
       const generateButtons = dialog.getByRole("button", { name: english ? "Suggest tags" : locale === "zh_CN" ? "建议标签" : "建議標籤", exact: true });
       await generateButtons.first().waitFor();
+      expect(await dialog.locator(".skill-ai-tags-row").count()).toBe(2);
       expect(calls).toBe(index);
       await generateButtons.first().click();
       if (index === 0) {

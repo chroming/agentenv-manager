@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import { SkillLibraryPanel } from "../../src/renderer/components/SkillLibraryPanel";
 import type { SkillImportQueueOptions } from "../../src/renderer/skillLibraryContracts";
 import { defaultSkillLibraryViewState } from "../../src/renderer/libraryViewState";
@@ -147,6 +148,47 @@ const LegacySkillLibraryPanel = (props: Record<string, any>) => (
 );
 
 describe("SkillLibraryPanel", () => {
+  it("opens AI tags for the current filter after switching Updates to All", async () => {
+    const prepare = vi.fn(async (ids: string[]) => ({
+      items: ids.map((skillId) => ({ skillId, key: skillId, contentHash: "hash", partial: false })), errors: []
+    }));
+    Object.defineProperty(window, "agentEnv", { configurable: true, value: {
+      readAIPreferences: vi.fn().mockResolvedValue({ enabled: true, features: { tags: true } }),
+      prepareSkillTagSuggestions: prepare
+    } });
+    const skills = ["updated", "current", "disabled"].map((id) => ({
+      id, name: id, description: id, path: `/tmp/library/${id}`, sourceType: "local",
+      updatePolicy: "tracked", contentHash: id, updatedAt: "2026-09-07T00:00:00.000Z",
+      globallyEnabled: id !== "disabled"
+    }));
+    const Harness = () => {
+      const [viewState, onViewStateChange] = useState(defaultSkillLibraryViewState);
+      return <SkillLibraryPanel model={{
+        status: {}, catalog: { librarySkills: skills, skillUsage: {}, skillUpdates: [
+          { id: "updated", name: "updated", sourceType: "local", updateAvailable: true }
+        ] }, sources: { sourceGroups: [], libraryMode: "skills" },
+        cleanup: { skillInventory: [], cleanupBackups: [] }, updates: {}, workspace: {}, view: { viewState }
+      } as never} actions={{ navigation: { onViewStateChange }, inventory: {}, files: {}, repository: {},
+        sources: {}, catalog: {}, updates: {} } as never} />;
+    };
+    render(<Harness />);
+    const openTags = async () => {
+      fireEvent.click(await screen.findByRole("button", { name: "More Skill actions" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "AI tags..." }));
+      return screen.getByRole("dialog", { name: "AI tags" });
+    };
+    fireEvent.click(screen.getByRole("button", { name: "Updates (1)" }));
+    let dialog = await openTags();
+    await waitFor(() => expect(prepare).toHaveBeenLastCalledWith(["updated"], "en"));
+    expect(within(dialog).getAllByRole("checkbox", { name: /^Select / })).toHaveLength(2);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "All (3)" }));
+    expect(screen.getByRole("button", { name: "current" })).toBeInTheDocument();
+    dialog = await openTags();
+    await waitFor(() => expect(prepare).toHaveBeenLastCalledWith(["updated", "current", "disabled"], "en"));
+    expect(within(dialog).getAllByRole("checkbox", { name: /^Select / })).toHaveLength(4);
+  });
+
   it("routes grouped model state and actions through the panel boundary", () => {
     const onCheckUpdates = vi.fn();
 

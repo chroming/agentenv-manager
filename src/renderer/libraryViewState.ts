@@ -11,7 +11,7 @@ export type SkillSourceResultFilter = "all" | "changes" | "failed" | "not-checke
 export interface SkillLibraryViewState {
   search: string;
   sourceFilter: SkillSourceKindFilter;
-  statusFilter: "enabled" | "updates" | "disabled";
+  statusFilter: "all" | "enabled" | "updates" | "disabled";
   tagFilter: "all" | string;
   targetFilter: "all" | SkillInventoryEntry["status"] | "not-installed";
   usageFilter: "all" | "referenced" | "unreferenced";
@@ -45,6 +45,7 @@ export const matchesSkillStatusFilter = (
   skill: SkillLibraryEntry,
   update?: SkillUpdateInfo
 ) => {
+  if (statusFilter === "all") return true;
   if (statusFilter === "enabled") return skill.globallyEnabled !== false;
   if (statusFilter === "disabled") return skill.globallyEnabled === false;
   if (skill.globallyEnabled === false) return false;

@@ -1759,8 +1759,8 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
             <SegmentedControl
               className="ui-segmented-control--compact"
               label={t("Skill status filters")}
-              value={statusFilter ?? "all"}
-              onChange={(value) => updateControls({ statusFilter: value === "all" ? undefined : value as SkillLibraryViewState["statusFilter"] })}
+              value={statusFilter}
+              onChange={(value) => updateControls({ statusFilter: value as SkillLibraryViewState["statusFilter"] })}
               options={[
                 { value: "all", label: `${t("All")} (${librarySkills.length})` },
                 { value: "enabled", label: `${t("Enabled")} (${librarySkills.length - disabledSkillCount})` },
