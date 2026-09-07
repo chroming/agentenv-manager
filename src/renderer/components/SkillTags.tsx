@@ -47,6 +47,10 @@ export const SkillTagCell = ({ skill, onSelect }: {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(0);
   const tags = skill.tags ?? [];
+  const aiKeys = new Set((skill.aiTags ?? []).map(skillTagKey));
+  const origin = (tag: string) => t(aiKeys.has(skillTagKey(tag)) ? "AI-generated tags" : "Fixed tags");
+  const tagIcon = (tag: string) => aiKeys.has(skillTagKey(tag))
+    ? <Sparkles size={11} aria-hidden="true" /> : <Pin size={11} aria-hidden="true" />;
   useLayoutEffect(() => {
     const node = ref.current;
     if (!node) return;
@@ -68,17 +72,17 @@ export const SkillTagCell = ({ skill, onSelect }: {
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [skill.tags]);
+  }, [skill.tags, skill.aiTags]);
   return <div className="skill-tag-cell" ref={ref}>
-    <span className="skill-tag-cell__measure" aria-hidden="true">{tags.map((tag) => <TagChip tabIndex={-1} className="skill-tag-chip" key={tag}>{tag}</TagChip>)}</span>
+    <span className="skill-tag-cell__measure" aria-hidden="true">{tags.map((tag) => <TagChip tabIndex={-1} className="skill-tag-chip" key={tag}>{tagIcon(tag)}<span>{tag}</span></TagChip>)}</span>
     {tags.length === 0 ? <span className="muted">—</span> : null}
     {tags.slice(0, visible).map((tag) => <TagChip className="skill-tag-chip" key={tag}
-      title={tag} aria-label={t("Filter by tag {{tag}}", { tag })}
-      onClick={(event) => { event.stopPropagation(); onSelect(tag); }}>{tag}</TagChip>)}
+      title={`${tag} · ${origin(tag)}`} aria-label={t("Filter by tag {{tag}}", { tag })}
+      onClick={(event) => { event.stopPropagation(); onSelect(tag); }}>{tagIcon(tag)}<span>{tag}</span></TagChip>)}
     {visible < tags.length ? <ToolbarOverflowMenu label={t("Tags")} menuLabel={t("Tags")}
       triggerVariant="tag"
       triggerContent={<span>+{tags.length - visible}</span>}
-      items={tags.slice(visible).map((tag) => ({ id: tag, label: tag, onSelect: () => onSelect(tag) }))} /> : null}
+      items={tags.slice(visible).map((tag) => ({ id: tag, label: tag, title: `${tag} · ${origin(tag)}`, icon: tagIcon(tag), onSelect: () => onSelect(tag) }))} /> : null}
   </div>;
 };
 

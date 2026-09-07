@@ -1121,6 +1121,11 @@
 .skill-tag-cell .skill-tag-chip {
   flex: 0 0 auto;
   max-width: none;
+  height: 18px;
+  min-height: 18px;
+  border-radius: var(--radius-tight);
+  border-color: transparent;
+  padding-inline: 5px;
 }
 
 .skill-tag-cell__measure {
