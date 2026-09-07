@@ -254,6 +254,7 @@ export interface AgentEnvApi {
   cancelSkillTagSuggestions(requestId: string): Promise<void>;
   prepareSkillSummary(previewId: string): Promise<{ fileCount: number; omittedPaths: string[] }>;
   saveSkillSummaryConfig(input: import("./skillSummaries").SkillSummaryConfigInput): Promise<void>;
+  testAIService(): Promise<void>;
   listSkillSummaries(id: string): Promise<import("./skillSummaries").SkillSummary[]>;
   generateSkillSummary(input: import("./skillSummaries").SkillSummaryGenerateInput): Promise<import("./skillSummaries").SkillSummary>;
   cancelSkillSummary(requestId: string): Promise<void>;

@@ -1110,6 +1110,14 @@
   overflow: hidden;
 }
 
+.ai-service-feedback {
+  min-height: 20px;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-regular);
+  line-height: 20px;
+  margin: 0;
+}
+
 .skill-tag-cell {
   display: flex;
   align-items: center;

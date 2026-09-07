@@ -5211,6 +5211,9 @@ export const useI18n = () => {
 
 Object.assign(zhCN, {
   "AI assistance": "AI 辅助", "AI analysis": "AI 分析", "Tag suggestions": "标签建议",
+  "Test connection": "测试连接",
+  "AI service is available": "AI 服务可用",
+  "Sends a small test request using the saved configuration. Provider charges may apply.": "使用已保存的配置发送一次小型测试请求，可能消耗服务额度。",
   "Reading...": "正在读取…",
   "Review before applying": "应用前检查",
   "More findings ({{count}})": "其余 {{count}} 项与详情",
@@ -5236,6 +5239,9 @@ Object.assign(zhCN, {
 });
 Object.assign(zhTW, {
   "AI assistance": "AI 輔助", "AI analysis": "AI 分析", "Tag suggestions": "標籤建議",
+  "Test connection": "測試連線",
+  "AI service is available": "AI 服務可用",
+  "Sends a small test request using the saved configuration. Provider charges may apply.": "使用已儲存的設定傳送一次小型測試請求，可能消耗服務額度。",
   "Reading...": "正在讀取…",
   "Review before applying": "套用前檢查",
   "More findings ({{count}})": "其餘 {{count}} 項與詳情",

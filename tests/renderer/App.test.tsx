@@ -331,6 +331,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     cancelSkillTagSuggestions: vi.fn().mockResolvedValue(undefined),
     prepareSkillSummary: vi.fn().mockResolvedValue({ fileCount: 1, omittedPaths: [] }),
     saveSkillSummaryConfig: vi.fn().mockResolvedValue(undefined),
+    testAIService: vi.fn().mockResolvedValue(undefined),
     listSkillSummaries: vi.fn().mockResolvedValue([]),
     generateSkillSummary: vi.fn(),
     cancelSkillSummary: vi.fn().mockResolvedValue(undefined),

@@ -7,6 +7,7 @@ import { isSecureTokenStorageAvailable } from "../githubAuthService";
 import { createSummaryStore } from "../skillSummaries/summaryStore";
 import { createSummaryService } from "../skillSummaries/summaryService";
 import { createAIJsonClient } from "../ai/aiJsonClient";
+import { testAIService } from "../ai/testAIService";
 import { createSkillTagSuggestionService } from "../ai/skillTagSuggestions";
 import { createAIPreferences } from "../ai/aiPreferences";
 import { createAnalysisInputs, AnalysisSubjectSchema, type AnalysisDependencies } from "../ai/analysisInputs";
@@ -59,6 +60,7 @@ export const registerSkillSummaryIpc = (
     return input.suggestionKey ? tags.apply(input) : library.setTags({ ...input, id: parseId(input.id, "Skill id") });
   });
   diagnosticHandle("skill-summaries:config", () => store.config());
+  diagnosticHandle("skill-summaries:test", async () => testAIService(await store.credentials(), request));
   diagnosticHandle("skill-summaries:prepare", async (_event, previewId) => {
     const snapshot = await library.readSummaryInput(z.string().uuid().parse(previewId));
     return { fileCount: snapshot.files.length, omittedPaths: snapshot.omittedPaths };

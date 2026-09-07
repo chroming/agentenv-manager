@@ -8,7 +8,7 @@ const completionEndpoint = (endpoint: string) => {
 };
 export const createAIJsonClient = (fetchImpl: typeof fetch = fetch) => {
   let busy = false;
-  return async (input: { endpoint: string; key: string; model: string; system: string; content: string; signal: AbortSignal }) => {
+  return async (input: { endpoint: string; key: string; model: string; system: string; content: string; signal: AbortSignal; maxTokens?: number }) => {
     if (busy) throw new Error("Another AI request is running. Wait or cancel it first.");
     if (Buffer.byteLength(input.content) > AI_INPUT_BYTES) throw new Error("AI input exceeds the size limit. No request was sent.");
     busy = true;
@@ -20,7 +20,7 @@ export const createAIJsonClient = (fetchImpl: typeof fetch = fetch) => {
           headers: { "Content-Type": "application/json", ...(input.key ? { Authorization: `Bearer ${input.key}` } : {}) },
           body: JSON.stringify({ model: input.model, messages: [
             { role: "system", content: input.system }, { role: "user", content: input.content }
-          ], max_tokens: 2500, stream: false, response_format: { type: "json_object" },
+          ], max_tokens: input.maxTokens ?? 2500, stream: false, response_format: { type: "json_object" },
           // V4 defaults to thinking, which shares the bounded output budget.
           ...(new URL(input.endpoint).hostname === "api.deepseek.com" && /^deepseek-v4-(flash|pro)(?:-|$)/.test(input.model)
             ? { thinking: { type: "disabled" } } : {}) })

@@ -16,6 +16,7 @@ const api: AgentEnvApi = {
   generateAIAnalysis: (input) => ipcRenderer.invoke("ai:generate", input),
   cancelAIAnalysis: (id) => ipcRenderer.invoke("ai:cancel", id),
   readSkillSummaryConfig: () => ipcRenderer.invoke("skill-summaries:config"),
+  testAIService: () => ipcRenderer.invoke("skill-summaries:test"),
   prepareSkillTagSuggestions: (id, locale) => ipcRenderer.invoke("skill-tags:prepare", id, locale),
   generateSkillTagSuggestions: (input) => ipcRenderer.invoke("skill-tags:generate", input),
   cancelSkillTagSuggestions: (id) => ipcRenderer.invoke("skill-tags:cancel", id),
