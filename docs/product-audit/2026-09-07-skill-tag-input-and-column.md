@@ -14,3 +14,9 @@
 - Electron 使用隔离 Home 与本地假 AI 服务，覆盖 en / zh_CN / zh_TW，920 / 1180 / 1440 宽度；检查所有表头与内容列起点对齐、名称与标签居中、列不重叠、完整标签在列内及溢出菜单可达。大窗口截图发现旧列号错位后已修复并补入该断言。
 - 截图：`/tmp/agentenv-ai-tags-evidence/tag-list-{locale}-{width}.png`；人工查看最小英文与最大中文布局。
 - build、styles、translations、ui-contracts、diff whitespace 检查通过。未运行全量发布套件、未调用真实 AI、未打包发布。
+
+## 标签视觉复查
+
+- 用户反馈揭示了组件选型缺口：标签溢出使用了工具栏 IconButton，导致 +N 是方形按钮。ToolbarOverflowMenu 现在提供 tag 触发器，使用同一 TagChip 外形；列表标签明确采用 20px 紧凑高度，避免通用按钮最小高度覆盖。
+- 建议结果移除重复的 New tag 行内标记，新标签信息与推荐理由保留在悬浮说明。未改变标签来源或保存语义。
+- 当前构建 `ea034e07e938`：18 项 renderer 测试及 Electron 三语言三尺寸测试通过，额外断言标签与 +N 的高度、圆角一致。检查列表与生成建议截图；styles、构建及 whitespace 检查通过。

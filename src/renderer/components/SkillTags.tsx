@@ -76,6 +76,7 @@ export const SkillTagCell = ({ skill, onSelect }: {
       title={tag} aria-label={t("Filter by tag {{tag}}", { tag })}
       onClick={(event) => { event.stopPropagation(); onSelect(tag); }}>{tag}</TagChip>)}
     {visible < tags.length ? <ToolbarOverflowMenu label={t("Tags")} menuLabel={t("Tags")}
+      triggerVariant="tag"
       triggerContent={<span>+{tags.length - visible}</span>}
       items={tags.slice(visible).map((tag) => ({ id: tag, label: tag, onSelect: () => onSelect(tag) }))} /> : null}
   </div>;

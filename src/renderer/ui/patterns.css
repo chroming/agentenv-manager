@@ -1166,6 +1166,7 @@
 }
 
 button.skill-tag-chip {
+  min-height: 20px;
   cursor: pointer;
   font-family: inherit;
 }

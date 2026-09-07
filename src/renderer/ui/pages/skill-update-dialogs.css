@@ -120,12 +120,6 @@
   min-width: 0;
 }
 
-.skill-ai-tag-choice {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
 .skill-ai-tags-body,
 .skill-ai-tags-list,
 .skill-ai-tags-row {

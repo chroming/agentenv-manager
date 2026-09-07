@@ -12,6 +12,7 @@ import { MoreHorizontal } from "lucide-react";
 import { ActionMenu } from "./ActionMenu";
 import { focusInitialActionMenuItem } from "./actionMenuKeyboard";
 import { IconButton } from "./IconButton";
+import { TagChip } from "./TagChip";
 import { useControlDensity } from "./controlDensity";
 
 export interface ToolbarOverflowMenuItem {
@@ -24,6 +25,7 @@ export interface ToolbarOverflowMenuItem {
 }
 
 interface ToolbarOverflowMenuProps {
+  triggerVariant?: "icon" | "tag";
   triggerContent?: ReactNode;
   label: string;
   menuLabel: string;
@@ -37,7 +39,7 @@ const viewportInset = 8;
 const anchorGap = 6;
 
 export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflowMenuProps>(
-  ({ label, menuLabel, disabled = false, items, reserveSpace = false, triggerContent }, forwardedRef) => {
+  ({ label, menuLabel, disabled = false, items, reserveSpace = false, triggerContent, triggerVariant = "icon" }, forwardedRef) => {
     const density = useControlDensity() ?? "default";
     const [open, setOpen] = useState(false);
     const [style, setStyle] = useState<CSSProperties>();
@@ -96,7 +98,20 @@ export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflow
     if (reserveSpace && items.length === 0) return <span aria-hidden="true" className={`ui-menu-placeholder ui-menu-placeholder--${density}`} />;
     return (
       <>
-        <IconButton
+        {triggerVariant === "tag" ? <TagChip
+          ref={(node) => {
+            triggerRef.current = node;
+            if (typeof forwardedRef === "function") forwardedRef(node);
+            else if (forwardedRef) forwardedRef.current = node;
+          }}
+          className="skill-tag-chip skill-tag-chip--count"
+          aria-label={label}
+          title={label}
+          disabled={disabled}
+          aria-expanded={open}
+          aria-haspopup="menu"
+          onClick={() => setOpen((current) => !current)}
+        >{triggerContent}</TagChip> : <IconButton
           ref={(node) => {
             triggerRef.current = node;
             if (typeof forwardedRef === "function") forwardedRef(node);
@@ -110,7 +125,7 @@ export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflow
           onClick={() => setOpen((current) => !current)}
         >
           {triggerContent ?? <MoreHorizontal size={16} strokeWidth={2.2} aria-hidden="true" />}
-        </IconButton>
+        </IconButton>}
         {open ? createPortal(
           <ActionMenu
             ariaLabel={menuLabel}
