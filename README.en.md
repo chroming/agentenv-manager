@@ -11,9 +11,10 @@ AgentEnv Manager keeps coding agent environments in one place. Its main features
 - **Profile switching:** Combine Instructions, Skills, Skill Groups, and MCP choices, then apply them to Agents on this computer or an SSH Linux device.
 - **Instructions management:** Save reusable instruction blocks and compose them in order into each Agent's instruction file.
 - **Skills management:** Import Skills from local folders, ZIP archives, GitHub, or Git repositories, add tags and groups, and keep checking their sources for updates.
-- **Project environments:** Save frequently used project folders, manage their Instructions and Skills, and open them with an installed Agent.
+- **Project environments:** Save local or SSH Linux project folders, manage their Instructions and Skills, and open an Agent or copy its launch command.
 - **Conversation history:** Search local conversations from multiple Agents, return to the original session, or continue with another Agent.
 - **Try before Apply:** Preview Profile changes and run the same task with the current setup and a proposed Profile before deciding whether to apply it.
+- **AI assistance:** Summarize Skill updates, suggest tags, or analyze Profiles and comparison results. Your configured AI service is called only when you ask.
 
 It does not take over models, accounts, credentials, or entire configuration files. It only manages the Instructions, Skills, and MCP switches explicitly supported by each Agent integration.
 
@@ -72,11 +73,13 @@ Project instructions in a Workspace remain owned by that folder and are not auto
 
 ## Workspaces
 
-Workspaces keep references to frequently used local folders and show the Instructions, Skills, and MCP names a selected Agent can load there. You can edit supported Workspace Instructions, copy an individual Library Skill or the currently enabled members of a Skill Group into ordinary folder-owned files, or open the folder with an installed Agent.
+Workspaces keep local or SSH Linux folders and show the resources available to the selected Agent. Edit supported Instructions or copy a Library Skill or a Skill Group's enabled members into project-owned files. Browse remote folders when adding an SSH workspace instead of typing paths. Quick Open finds both local and remote workspaces.
 
 ![Workspace resources](docs/images/workspaces.png)
 
 The folder remains the source of truth. A Workspace is not bound to a Profile, does not contain Library links, and does not stage or commit Git changes. A Skill Group is a one-time selection recipe here; its identity is not written into the project after copying. Removing a Workspace deletes only the app reference. Explicit Workspace resource changes keep recovery records, so you can undo the latest change or restore an earlier version from Recovery.
+
+Open local folders with an installed Agent. For remote folders, supported integrations offer a remote editor entry point or a copyable SSH launch command.
 
 ## Skill Library
 
@@ -86,20 +89,23 @@ The Library keeps one reusable copy of each Skill. Import from a local folder, Z
 
 The source view shows additions, updates, and removals within a repository or folder. It also supports merging sources, ignoring entries, and disabling update checks. `Groups` maintains manual collections; turning off a group preserves each member's own switch state. `Local Skills` handles existing duplicate copies, content conflicts, broken links, and shared collections. Every cleanup action has a preview and keeps recovery records for changed files.
 
+Before updating or adding a source Skill, inspect its files or request an AI summary of behavior changes, compatibility, and potential risks. Summaries are saved for that content version; reopening one does not call the AI service again. Tags distinguish fixed labels you maintain from AI suggestions, which you can refresh or make fixed.
+
 ## Conversations
 
-Conversations maintains a read-only index of local Agent history. Search titles and messages, filter by folder, return to the original conversation, or review its context before continuing in another Agent.
+Conversations indexes local Agent history. Search titles and messages, filter by folder, sort by latest conversation time or file size, return to the original session, or hand it off to another Agent.
 
 ![Conversation history](docs/images/conversations.png)
 
-The source Agent still owns the original history. AgentEnv does not edit conversation databases or include conversations in Profiles, Backups, or Device Sync.
+Browsing and searching are read-only. For supported Agents, you can explicitly move a conversation to another working directory after previewing the impact. The source Agent still owns the history; conversations are not included in Profiles or Device Sync.
 
 ## Supported Agents
 
 - OpenCode
 - Claude Code
-- Codex
+- Codex (standalone CLI or Codex bundled in the newer ChatGPT desktop app)
 - Antigravity CLI
+- Antigravity desktop app
 - Trae CLI
 - Pi Coding Agent
 
@@ -119,6 +125,7 @@ The Agents page can also read the current user's SSH configuration and add Linux
 - Profile writes follow Preview, Backup, Apply, and Verify. A semantic no-op does not write files.
 - AgentEnv changes only files or fields declared by each Agent integration. Agents continue to own MCP definitions and credentials.
 - Repository scans use a separate cache and never modify an existing checkout. Device Sync excludes credentials, Agent state, Backups, and local absolute paths.
+- AI assistance requires a service endpoint, model, and API key in Settings. Manual analysis sends relevant content, which may include private files, and uses your provider's quota. Disable all AI features or individual ones in Settings. Results are suggestions, not a security certification, and do not modify resources for you.
 - Official builds send at most one anonymous installation event per day by default. It contains a random installation ID, app version, operating-system family and major version, architecture, interface language, and install channel. You can preview every field or disable reporting in Settings.
 
 See [Product contracts](docs/product-contracts.md) for exact behavior and [PRIVACY.md](PRIVACY.md) for local data and network access.

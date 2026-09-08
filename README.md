@@ -11,9 +11,10 @@ AgentEnv Manager 用来统一管理多个 coding agent 的工作环境，主要�
 - **Profile 切换**：组合 Instructions、Skills、Skill Groups 和 MCP 选择，再应用到本机或 SSH Linux 设备上的 Agent。
 - **Instructions 管理**：把常用规则保存成可复用的内容块，在不同 Profile 中按顺序组合成 Agent 的指令文件。
 - **Skills 管理**：从本地、ZIP、GitHub 或 Git 仓库导入 Skills，添加标签和分组，并持续检查来源更新。
-- **项目环境**：保存常用项目目录，管理项目自己的 Instructions 和 Skills，并直接用已安装的 Agent 打开。
+- **项目环境**：保存常用本地或 SSH Linux 项目目录，管理项目自己的 Instructions 和 Skills，并打开 Agent 或复制启动命令。
 - **对话历史**：搜索多个 Agent 的本地历史对话，回到原对话，或交给另一个 Agent 继续。
 - **应用前试用**：预览 Profile 会带来的变化，用同一个任务对比当前环境和新 Profile，再决定是否应用。
+- **AI 辅助**：看 Skill 更新摘要、生成标签建议，或分析 Profile 和运行对比结果；只在手动点击时调用你配置的 AI 服务。
 
 它不会接管模型、账号、凭据或整份配置文件，只处理各 Agent 明确支持的 Instructions、Skills 和 MCP 开关。
 
@@ -72,11 +73,13 @@ Workspace 中的项目指令仍由项目目录自己管理，不会自动连接�
 
 ## Workspaces
 
-Workspaces 保存常用本地目录的引用，并展示所选 Agent 会在该目录加载的 Instructions、Skills 和 MCP 名称。你可以编辑受支持的 Workspace Instructions，把单个 Library Skill 或 Skill Group 当前启用的成员复制为目录中的普通文件，或直接用已安装的 Agent 打开目录。
+Workspaces 保存常用本地或 SSH Linux 目录，并展示所选 Agent 在该目录可用的资源。你可以编辑受支持的 Instructions，把单个 Library Skill 或 Skill Group 当前启用的成员复制为项目文件。添加远程工作区时可以直接浏览远程目录，不必手写路径；本地和远程目录都能从 Quick Open 快速找到。
 
 ![Workspace resources](docs/images/workspaces.png)
 
 目录中的文件始终是唯一事实源。Workspace 不绑定 Profile，不创建 Library 链接，也不会替你 stage 或 commit Git 变化。Skill Group 在这里是一次选择模板，复制后不会把 Group 状态写进项目。移除 Workspace 只会删除应用内引用。明确修改 Workspace 资源时会保留恢复记录，可以撤销最近一次修改或从 Recovery 选择历史版本。
+
+本地目录可用已安装的 Agent 打开；远程目录按 Agent 能力提供远程编辑器入口或可复制的 SSH 启动命令。
 
 ## Skill Library
 
@@ -86,13 +89,15 @@ Library 为每个 Skill 保存一份可复用内容。可以从本地目录、ZI
 
 按来源视图会显示同一仓库或目录中的新增、更新和删除，也支持合并来源、忽略条目和关闭更新检查。`Groups` 用来维护手动组合，整组关闭时会保留成员自己的开关状态。`Local Skills` 用来处理机器上已有的重复副本、内容冲突、失效链接和共享集合。所有清理动作都会先预览，并为改动保留恢复记录。
 
+更新或添加来源中的 Skill 前，可以先看文件，再手动生成 AI 摘要，了解用途变化、兼容性和潜在风险。摘要按这次内容版本保存，重复查看不再调用 AI。标签分为自己维护的固定标签和 AI 建议；建议可按需更新，也可转为固定标签。
+
 ## Conversations
 
-Conversations 只读索引本机 Agent 的历史记录。可以搜索标题和消息、按目录筛选、回到原对话，或检查上下文后交给另一个 Agent 继续。
+Conversations 索引本机 Agent 的历史记录。可以搜索标题和消息、按目录筛选、按最近聊天时间或文件大小排序，回到原对话，或交给另一个 Agent 续接。
 
 ![Conversation history](docs/images/conversations.png)
 
-原始会话仍归对应 Agent 所有。AgentEnv 不会修改会话数据库，也不会把对话加入 Profile、Backup 或 Device Sync。
+日常浏览和搜索只读，不改原始会话。对支持迁移的 Agent，可以主动把会话迁移到另一个工作目录，并先预览影响。原始会话仍归对应 Agent 所有，不会加入 Profile 或 Device Sync。
 
 ## 支持的 Agents
 
@@ -100,6 +105,7 @@ Conversations 只读索引本机 Agent 的历史记录。可以搜索标题和�
 - Claude Code
 - Codex（独立 CLI，或新版 ChatGPT 桌面端内置的 Codex）
 - Antigravity CLI
+- Antigravity 桌面端
 - Trae CLI
 - Pi Coding Agent
 
@@ -119,6 +125,7 @@ Agents 页面还可以读取当前用户的 SSH 配置并添加 Linux 设备。�
 - Profile 写入遵循 Preview、Backup、Apply、Verify 流程；没有语义变化时不会写文件。
 - AgentEnv 只修改对应 Agent integration 明确声明可管理的文件或字段。MCP 定义和凭据仍由 Agent 保存。
 - Repository 扫描使用独立缓存，不会修改已有 checkout。Device Sync 不同步凭据、Agent 状态、Backup 或本机绝对路径。
+- AI 辅助需要在 Settings 配置服务地址、模型和 API Key。分析只在手动触发时发送相关内容，可能包含私有文件，并消耗该服务的额度；可关闭全部 AI 功能或单项功能。分析结果是参考，不是安全认证，也不会替你修改资源。
 - 官方构建默认每天最多发送一次匿名安装信息，包括随机安装 ID、应用版本、操作系统类型及主版本、架构、界面语言和安装渠道。可以在 Settings 中关闭并预览完整字段。
 
 完整行为见 [产品契约](docs/product-contracts.md)，数据与网络访问说明见 [PRIVACY.md](PRIVACY.md)。
