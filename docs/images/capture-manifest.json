@@ -1,0 +1,54 @@
+{
+  "generatedAt": "2026-09-08T14:30:49.299Z",
+  "mode": "mock-data",
+  "comparisonRunner": "fake-cli",
+  "build": {
+    "sourceFingerprint": "5b69c5eab52bd4017e9544fb421d2fbdf3de23df564524447c6859247b64f80d",
+    "artifactFingerprint": "b35af58bae22e3f2e25590cb6d1857ce0764015e5cc65df50b6493e5931c478e",
+    "generatedAt": "2026-09-08T14:18:14.790Z"
+  },
+  "files": [
+    {
+      "file": "agents.png",
+      "width": 1180,
+      "height": 728,
+      "sha256": "93aadda8399cc06fa57dddb39e57a5cdafc2ade6eee4536c3b618b77dc144cc3"
+    },
+    {
+      "file": "profiles.png",
+      "width": 1180,
+      "height": 728,
+      "sha256": "d4ff0340746edb9a7e03739880bc69e7bcdcfb91aa8fd1f4cb75b64af83e2be0"
+    },
+    {
+      "file": "workspaces.png",
+      "width": 1180,
+      "height": 728,
+      "sha256": "48c8552ae83b95b708a713b696f0f925630350863d88b77b0987ee6cd5debd39"
+    },
+    {
+      "file": "instructions.png",
+      "width": 1180,
+      "height": 728,
+      "sha256": "cff077db090b5095674f49fb381a760fc74a6ca1e6f42938cb4a826cc911051e"
+    },
+    {
+      "file": "skills-by-source.png",
+      "width": 1180,
+      "height": 728,
+      "sha256": "fab5b9bb387b85ac11b9de0c39bbbafb9a07302439e39327c81c045c09fae99e"
+    },
+    {
+      "file": "conversations.png",
+      "width": 1180,
+      "height": 728,
+      "sha256": "b2c319bd984a6f88b5e11a71c9ff2029c8018cd71a2792624b1d784b6b7052f3"
+    },
+    {
+      "file": "profile-compare.png",
+      "width": 920,
+      "height": 620,
+      "sha256": "84447291e230c4dd874eb83077c32b2716192d26076192abf5bcb2d1fc151190"
+    }
+  ]
+}

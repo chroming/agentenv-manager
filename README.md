@@ -20,6 +20,8 @@ AgentEnv Manager 用来统一管理多个 coding agent 的工作环境，主要�
 
 ![Agents overview](docs/images/agents.png)
 
+以下截图均使用演示数据，运行对比结果由测试 CLI 生成。
+
 ## 安装
 
 macOS 推荐使用官方 Homebrew Cask：

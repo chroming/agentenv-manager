@@ -19,6 +19,7 @@ import { promisify } from "node:util";
 import electronPath from "electron";
 import { _electron as electron } from "playwright-core";
 import { assertCurrentBuild } from "./build-fingerprint.mjs";
+import { captureReadmePages } from "./capture-readme-pages.mjs";
 
 const projectRoot = resolve(import.meta.dirname, "..");
 const defaultOutputDir = join(
@@ -31,8 +32,10 @@ const defaultOutputDir = join(
 const parseArguments = (argumentsList) => {
   let suppliedReference;
   let suppliedOutput;
+  let readmeOnly = false;
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index];
+    if (argument === "--readme") { readmeOnly = true; continue; }
     if (argument !== "--reference" && argument !== "--output") {
       throw new Error(`Unknown argument: ${argument}`);
     }
@@ -49,11 +52,12 @@ const parseArguments = (argumentsList) => {
   }
   return {
     outputDir: suppliedOutput ?? defaultOutputDir,
-    suppliedReference
+    suppliedReference,
+    readmeOnly
   };
 };
 
-const { outputDir, suppliedReference } = parseArguments(process.argv.slice(2));
+const { outputDir, suppliedReference, readmeOnly } = parseArguments(process.argv.slice(2));
 const referencePath = join(outputDir, "reference.png");
 const execFile = promisify(execFileCallback);
 const capturedBuild = await assertCurrentBuild(projectRoot);
@@ -933,7 +937,7 @@ const writeCaptureManifest = async () => {
       artifactFingerprint: capturedBuild.artifact.sha256,
       generatedAt: capturedBuild.generatedAt
     },
-    viewports: ["1180x728", "920x620"],
+    viewports: readmeOnly ? ["1180x728"] : ["1180x728", "920x620"],
     files
   });
 };
@@ -976,6 +980,23 @@ try {
     projectSkillRoot,
     workspaceSyncRemote
   } = await prepareFixture(fixtureRoot);
+  if (readmeOnly) {
+    for (const id of Object.keys(repositorySourceScopes)) {
+      const metadataPath = join(appDataRoot, "skills-library", id, ".agentenv-skill.json");
+      const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
+      await writeJson(metadataPath, { ...metadata, iconKey: "github" });
+    }
+    await writeFile(join(appDataRoot, "profiles", "code-review", "INSTRUCTIONS.md"), [
+      "# Code review", "", "## Focus", "",
+      "- Check correctness, data safety, and behavioral regressions.",
+      "- Read the surrounding code before suggesting a change.", "",
+      "## Verification", "",
+      "Run focused tests for changed behavior and report what was verified.", "",
+      "## Review notes", "",
+      "Lead with actionable findings and include file references.",
+      "Separate confirmed issues from open questions.", ""
+    ].join("\n"));
+  }
   app = await electron.launch({
     executablePath: electronPath,
     args: [
@@ -1003,6 +1024,9 @@ try {
   const page = await app.firstWindow();
   const windowHandle = await app.browserWindow(page);
   await page.waitForLoadState("domcontentloaded");
+  if (readmeOnly) {
+    await captureReadmePages({ page, windowHandle, outputDir, fixtureRoot, setWindowSize, capturePage });
+  } else {
   const agentDiscoveryDialog = page.getByRole("dialog", { name: "Choose Agents" });
   await agentDiscoveryDialog.waitFor({ state: "visible" });
   const firstRunAgentsWorkspace = page.getByRole("region", { name: "Agents", exact: true });
@@ -2263,6 +2287,7 @@ try {
     });
   } finally {
     await startupFailureApp.close();
+  }
   }
   await writeCaptureManifest();
 } finally {
