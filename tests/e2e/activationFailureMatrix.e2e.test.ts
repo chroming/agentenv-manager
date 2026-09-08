@@ -92,7 +92,8 @@ const createEnvironment = async (failurePhase?: ActivationFailurePhase) => {
 };
 
 describe.each(phases)("Activation failure at %s", (phase) => {
-  it("restores every Agent path and preserves the canonical source", async () => {
+  // Real backup/rollback IO can exceed the unit-test timeout on Windows CI.
+  it("restores every Agent path and preserves the canonical source", { timeout: 30_000 }, async () => {
     const environment = await createEnvironment(phase);
     const homeBefore = await snapshotFilesystemTree(environment.paths.homeDir);
     const sourceBefore = await snapshotFilesystemTree(environment.sourceDir);

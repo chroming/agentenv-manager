@@ -1783,14 +1783,14 @@ describe("Electron UI profile switching e2e", () => {
     await dialog.getByRole("button", { name: "Close", exact: true }).click();
     await page.getByRole("tab", { name: "By source" }).click();
     await expectNoHorizontalOverflow(page, [".editor-panel", ".skill-source-view"]);
-    await page.getByRole("combobox", { name: "Source check scope" }).selectOption("manual");
+    await page.getByRole("button", { name: /^Manual only/ }).click();
     const sourceRow = page.locator(".skill-source-group").filter({
       hasText: "project-skills"
     });
     await sourceRow.waitFor({ state: "visible" });
     await sourceRow.getByRole("button", { name: /Source actions/ }).click();
     await page.getByRole("menuitem", { name: "Include in routine checks" }).click();
-    await page.getByRole("combobox", { name: "Source check scope" }).selectOption("monitored");
+    await page.getByRole("button", { name: /^Monitored/ }).click();
     await sourceRow.waitFor({ state: "visible" });
     await sourceRow.getByRole("button", { name: /Source actions/ }).click();
     await page.getByRole("menuitem", { name: "Exclude from routine checks" })
@@ -5038,7 +5038,7 @@ describe("Electron UI profile switching e2e", () => {
       };
     });
     expect(skillLanes.contained).toBe(true);
-    expect(skillLanes.visibleHeadings).toBe(4);
+    expect(skillLanes.visibleHeadings).toBe(5);
     expect(skillLanes.resource.right).toBeLessThanOrEqual(skillLanes.source.left);
     expect(skillLanes.source.right).toBeLessThanOrEqual(skillLanes.status.left);
     expect(skillLanes.status.bottom).toBeLessThanOrEqual(skillLanes.row.bottom);
@@ -5106,11 +5106,11 @@ describe("Electron UI profile switching e2e", () => {
     expect(pageActions.length).toBeGreaterThanOrEqual(3);
     expect(new Set(pageActions.map(({ height }) => height))).toEqual(new Set([32]));
     const toolbarControls = await readBoxes(
-      page.locator(".library-toolbar > .ui-composite-field, .library-toolbar-actions button")
+      page.locator(".library-toolbar > .ui-search-field, .library-toolbar-actions button")
     );
     expect(toolbarControls.length).toBeGreaterThanOrEqual(3);
     expect(new Set(toolbarControls.map(({ height }) => height))).toEqual(new Set([32]));
-    const compositeField = await page.locator(".library-toolbar .ui-composite-field").evaluate(
+    const compositeField = await page.locator(".library-toolbar .ui-search-field").evaluate(
       (field) => {
         const input = field.querySelector("input")!;
         const fieldStyle = getComputedStyle(field);
@@ -8863,8 +8863,8 @@ describe("Electron UI profile switching e2e", () => {
       expect(geometry.documentWidth).toBe(geometry.viewportWidth);
       expect(geometry.containerName).toBe("skill-library");
       expect(geometry.headerDisplay).toBe("grid");
-      expect(geometry.headerCount).toBe(4);
-      expect(geometry.visibleHeaderCount).toBe(4);
+      expect(geometry.headerCount).toBe(5);
+      expect(geometry.visibleHeaderCount).toBe(5);
       expect(geometry.headerTextCenterSpread).toBeLessThanOrEqual(1);
       expect(geometry.metrics[0]!.primaryTag).toBe("BUTTON");
       expect(geometry.metrics[1]!.primaryTag).toBe("STRONG");
@@ -8872,11 +8872,11 @@ describe("Electron UI profile switching e2e", () => {
       expect(geometry.metrics[0]!.hiddenDetailFitsVisuallyHiddenContract).toBe(true);
       expect(geometry.metrics[0]!.statusFontSize).toBe(geometry.metrics[1]!.statusFontSize);
       expect(geometry.metrics[0]!.statusLineHeight).toBe(geometry.metrics[1]!.statusLineHeight);
-      expect(geometry.metrics[0]!.statusLabelText).toBe(width <= 920 ? "Update" : "Update available");
+      expect(geometry.metrics[0]!.statusLabelText).toBe("Update available");
       for (const row of geometry.metrics) {
         expect(row.actionCellCount).toBe(0);
         expect(row.childrenFit).toBe(true);
-        expect(row.gridColumnCount).toBe(4);
+        expect(row.gridColumnCount).toBe(5);
         expect(Math.abs(row.skillNameLeft - geometry.headerIdentityLeft)).toBeLessThanOrEqual(1);
         expect(row.moreLeft - row.statusRight).toBeGreaterThanOrEqual(9);
         expect(row.statusLabelOverflow).toBeLessThanOrEqual(1);
@@ -8894,7 +8894,7 @@ describe("Electron UI profile switching e2e", () => {
       expect(columnWidths.skill).toBeLessThanOrEqual(columnWidths.source * 1.35);
       expect(Math.abs(geometry.metrics[0]!.statusLeft - geometry.metrics[1]!.statusLeft)).toBeLessThanOrEqual(1);
       expect(geometry.metrics[0]!.statusIconPresent).toBe(true);
-      expect(geometry.metrics[1]!.statusIconPresent).toBe(false);
+      expect(geometry.metrics[1]!.statusIconPresent).toBe(true);
       expect(Math.abs(geometry.metrics[0]!.moreRight - geometry.metrics[1]!.moreRight)).toBeLessThanOrEqual(1);
     };
 
@@ -10894,7 +10894,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(previewDuration).toBeLessThan(2_000);
   }, standardElectronTestTimeout);
 
-  it("persists custom Skill tags and filters the Library without adding a table column", async () => {
+  it("persists custom Skill tags and filters the Library with a dedicated tag column", async () => {
     const { appDataRoot, page } = await launchApp({ openCodeAlphaLibrarySkillCount: 2 });
     await resizeAppWindow(page, 920, 620);
     await openSkillLibrary(page);
@@ -10922,10 +10922,11 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => taggedRow.count()).toBe(1);
     expect(await taggedRow.evaluate((row) => {
       const name = row.querySelector<HTMLElement>(".library-skill-name-button")!;
-      const tag = row.querySelector<HTMLElement>(".library-skill-tags")!;
+      const tag = row.querySelector<HTMLElement>(".skill-tag-cell")!;
       const nameBox = name.getBoundingClientRect();
       const tagBox = tag.getBoundingClientRect();
-      return name.scrollWidth <= name.clientWidth + 1 && nameBox.bottom <= tagBox.top + 1;
+      return name.scrollWidth <= name.clientWidth + 1 && nameBox.right <= tagBox.left + 1
+        && tagBox.top >= row.getBoundingClientRect().top && tagBox.bottom <= row.getBoundingClientRect().bottom;
     })).toBe(true);
 
     await page.getByRole("button", { name: /^Filters/ }).click();
@@ -11994,7 +11995,7 @@ describe("Electron UI profile switching e2e", () => {
       source: getComputedStyle(row.querySelector<HTMLElement>(".library-source-primary")!).fontWeight
     }));
     expect(skillTypography).toEqual({ name: "500", source: "400" });
-    sharedSearchContracts.push(await readCompositeFieldContract(".library-toolbar .library-search"));
+    sharedSearchContracts.push(await readCompositeFieldContract(".library-toolbar .ui-search-field"));
 
     await page.getByRole("button", { name: "Import skills", exact: true }).click();
     const readonlySourceField = page.getByRole("textbox", { name: "Local Skill source path" });
