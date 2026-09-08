@@ -10,12 +10,17 @@ export const planAnalysisBudget = (input: { documents: AIAnalysisDocument[]; war
   const documents: AIAnalysisDocument[] = [];
   let truncated = 0;
   let omitted = 0;
+  const redactedPrefixes = new Map<string, string[]>();
   if (Buffer.byteLength(analysisPayload([], warnings, false)) > AI_INPUT_BYTES) {
     throw new Error("Analysis scope exceeds the size limit. Select fewer resources.");
   }
   for (const original of input.documents) {
     const prefix = Array.from(original.content.slice(0, 24000)).slice(0, 12000).join("");
-    const text = Array.from(redactSensitiveValues(prefix));
+    let text = redactedPrefixes.get(prefix);
+    if (!text) {
+      text = Array.from(redactSensitiveValues(prefix));
+      redactedPrefixes.set(prefix, text);
+    }
     const doc = { ...original, label: redactSensitiveValues(original.label), content: "" };
     let low = 0;
     let high = Math.min(text.length, 12000);

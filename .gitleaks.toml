@@ -8,3 +8,10 @@ regexes = [
   '''sk-1234567890abcdefghijklmnop''',
   '''Ov23liOAxChYXPhAjVh8'''
 ]
+
+[[allowlists]]
+description = "Synthetic keys used to verify AI payload redaction"
+condition = "AND"
+paths = ['''^tests/main/(skillSummaries|skillTagSuggestions|aiAssistance)\.test\.ts$''']
+regexTarget = "secret"
+regexes = ['''^sk-12345678901234567890$''', '''^sk-secret123456789012345678901234567890$''']
