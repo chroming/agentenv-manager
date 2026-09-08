@@ -34,6 +34,23 @@ const setup = async (fetchImpl = vi.fn<typeof fetch>().mockImplementation(async 
 };
 
 describe("manual Skill update summaries", () => {
+  it("persists normalized categories without retry and keeps prior evidence on invalid regeneration", async () => {
+    const output = { ...result, items: [result.items[0],
+      { ...result.items[0], category: "breaking_changes" },
+      { ...result.items[0], category: "compatibility" }] };
+    const { service, store, fetchImpl } = await setup(vi.fn<typeof fetch>().mockImplementation(async () => response(output)));
+    const first = await service.generate({ ...input(), locale: "zh_CN" });
+    expect(first.items.map((item) => item.category)).toEqual(["security", "important", "usage"]);
+    expect(await store.read(first.key, "review")).toEqual(first);
+    const prompt = JSON.parse(String(fetchImpl.mock.calls[0][1]?.body)).messages[0].content;
+    expect(prompt).toContain("Never translate category values or invent categories");
+    expect(prompt).toContain('Classify breaking changes as "important"');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    fetchImpl.mockImplementation(async () => response({ ...result, items: [{ ...result.items[0], category: "unknown" }] }));
+    await expect(service.generate({ ...input(), regenerate: true })).rejects.toThrow("invalid fields");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(await store.read(first.key, "review")).toEqual(first);
+  });
   it("reuses a persisted addition summary and describes a new capability, not regressions", async () => {
     const { service, readInput, fetchImpl } = await setup();
     readInput.mockResolvedValue({ ...snapshot, kind: "addition", beforeHash: "empty" });

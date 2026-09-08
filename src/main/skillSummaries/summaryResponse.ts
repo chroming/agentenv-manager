@@ -1,7 +1,22 @@
 import { z } from "zod";
 import { SummarySchema } from "./summaryStore";
 
-const OutputSchema = SummarySchema.pick({ overview: true, items: true });
+const categoryAliases = new Map<string, string>([
+  ["breaking", "important"], ["breaking_change", "important"], ["breaking_changes", "important"],
+  ["compatibility", "usage"], ["security_risk", "security"], ["security_risks", "security"],
+  ["重要变更", "important"], ["重要變更", "important"],
+  ["使用变化", "usage"], ["使用變化", "usage"],
+  ["安全风险", "security"], ["安全風險", "security"], ["其他", "other"]
+]);
+const ItemSchema = SummarySchema.shape.items.element;
+// Normalize only equivalent transport labels. Stored categories and evidence remain strict.
+const OutputSchema = SummarySchema.pick({ overview: true }).extend({
+  items: z.array(ItemSchema.extend({ category: z.preprocess((value) => {
+    if (typeof value !== "string") return value;
+    const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+    return categoryAliases.get(normalized) ?? normalized;
+  }, ItemSchema.shape.category) })).max(30)
+});
 const EnvelopeSchema = z.object({
   choices: z.array(z.object({ finish_reason: z.string().nullable().optional(),
     message: z.object({ content: z.string().nullable().optional(), reasoning_content: z.string().nullable().optional() }) })).min(1),

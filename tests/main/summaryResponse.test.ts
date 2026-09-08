@@ -5,6 +5,20 @@ const valid = { overview: "Changed workflow", items: [{ category: "usage", fact:
 const envelope = (content: string, finish_reason = "stop") => ({ choices: [{ finish_reason, message: { content } }] });
 describe("summary response diagnostics", () => {
   it.each([
+    ["breaking_change", "important"], ["Breaking Changes", "important"],
+    ["compatibility", "usage"], ["security-risk", "security"],
+    [" SECURITY ", "security"], ["重要变更", "important"]
+  ])("normalizes equivalent category %s without dropping evidence", (category, expected) => {
+    const item = { ...valid.items[0], category };
+    const result = parseSummaryResponse(envelope(JSON.stringify({ ...valid, items: [item] })), ["SKILL.md"]);
+    expect(result.parsed.items).toEqual([{ ...item, category: expected }]);
+  });
+  it("rejects unknown categories instead of downgrading an unknown risk", () => {
+    const item = { ...valid.items[0], category: "private-unknown-category" };
+    expect(() => parseSummaryResponse(envelope(JSON.stringify({ ...valid, items: [item] })), ["SKILL.md"]))
+      .toThrow("items.0.category: invalid_value");
+  });
+  it.each([
     [envelope("private body"), "invalid JSON"],
     [envelope(JSON.stringify({ overview: "private body", items: "bad" })), "items: invalid_type"],
     [envelope("private body", "content_filter"), "filtered"],
