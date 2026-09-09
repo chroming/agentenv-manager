@@ -4599,7 +4599,12 @@ describe("App", () => {
       }
     };
 
-    const readyApi = installApi();
+    const readyApi = installApi({
+      previewApply: vi.fn().mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        return preview;
+      })
+    });
     render(<App />);
     await openProfiles();
     let readiness = screen.getByRole("status", { name: "Profile readiness" });
@@ -4608,7 +4613,7 @@ describe("App", () => {
     expect(action).toHaveAttribute("title", "Take over OpenCode");
     fireEvent.click(action);
     await waitFor(() => expect(readyApi.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
-    let dialog = screen.getByRole("dialog", { name: "Preview" });
+    let dialog = await screen.findByRole("dialog", { name: "Preview" });
     expect(within(dialog).getByRole("button", { name: /^Apply$/ })).toBeEnabled();
     expect(readyApi.applyProfile).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole("button", { name: "Review local Skills" }));

@@ -239,10 +239,15 @@ describe("ProjectsWorkspace", () => {
 
   it("shows a stable list-detail view and keeps remove scoped to the reference", async () => {
     const api = installApi();
+    const snapshot = await api.inspectProject("project-1");
+    api.inspectProject.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      return snapshot;
+    });
     render(<ProjectsWorkspace targets={[target]} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Expand Instructions" }));
-    expect(screen.getAllByText("AGENTS.md")).toHaveLength(1);
+    expect(await screen.findAllByText("AGENTS.md")).toHaveLength(1);
     expect(await screen.findByLabelText("Preview of AGENTS.md")).toHaveTextContent("# Original");
     expect(await screen.findByRole("button", { name: "Open AGENTS.md" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open in OpenCode" }));
