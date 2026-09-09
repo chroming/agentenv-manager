@@ -36,6 +36,13 @@
   scrollbar-gutter: stable;
 }
 
+/* Keep actions aligned with members when native scrollbars consume inline space. */
+.profile-skill-group > .ui-resource-disclosure__header,
+.profile-skill-row.is-direct {
+  overflow-y: hidden;
+  scrollbar-gutter: stable;
+}
+
 .profile-skill-row.is-group-member {
   background: transparent;
 }

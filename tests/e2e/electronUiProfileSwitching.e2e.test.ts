@@ -10715,8 +10715,10 @@ describe("Electron UI profile switching e2e", () => {
     );
   }, standardElectronTestTimeout);
 
-  it("applies a Profile Skill Group gate and restores its saved member choices", async () => {
+  it.each([0, 15])("applies a Profile Skill Group gate and restores its saved member choices with %ipx scrollbars", async (scrollbarWidth) => {
     const { appDataRoot, page } = await launchApp({ skillGroupFixture: true });
+    // CI and Windows may use space-consuming scrollbars instead of macOS overlays.
+    await page.addStyleTag({ content: `.profile-skill-manager ::-webkit-scrollbar { width: ${scrollbarWidth}px; }` });
     await selectProfile(page, "UI OpenCode alpha");
     await expandComposerSection(page, "Skills");
     await addLibrarySkillToProfile(page, "Static Reference");
@@ -10760,6 +10762,11 @@ describe("Electron UI profile switching e2e", () => {
       await resizeAppWindow(page, width, height);
       const switches = await group.getByRole("switch").evaluateAll((items) => items.map((item) => item.getBoundingClientRect().x));
       expect(Math.max(...switches) - Math.min(...switches)).toBeLessThanOrEqual(1);
+      const captureDir = process.env.AGENTENV_SKILL_GROUP_CAPTURE_DIR;
+      if (captureDir) {
+        await mkdir(captureDir, { recursive: true });
+        await page.screenshot({ path: join(captureDir, `group-${scrollbarWidth}px-${width}x${height}.png`) });
+      }
     }
     await resizeAppWindow(page, 920, 620);
 
