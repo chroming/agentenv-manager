@@ -450,21 +450,6 @@
   min-width: 0;
 }
 
-.profile-hero__title > .profile-edit-button {
-  border-color: transparent;
-  flex: 0 0 24px;
-  height: 24px;
-  min-height: 24px;
-  min-width: 24px;
-  padding: 0;
-  width: 24px;
-}
-
-.profile-hero__title > .profile-edit-button svg {
-  height: 13px;
-  width: 13px;
-}
-
 .profile-icon-field {
   align-items: center;
   display: grid;

@@ -161,6 +161,16 @@ describe("renderer UI primitives", () => {
       .toHaveClass("ui-icon-button--default");
   });
 
+  it("keeps inline utilities compact with shared busy feedback", () => {
+    const { rerender } = render(<IconButton appearance="inline" label="Edit"><RefreshCw /></IconButton>);
+    const button = screen.getByRole("button", { name: "Edit" });
+    expect(button).toHaveClass("ui-icon-button--inline", "ui-icon-button--compact", "ui-icon-button--ghost");
+    rerender(<IconButton appearance="inline" busy label="Edit"><RefreshCw /></IconButton>);
+    expect(screen.getByRole("button", { name: "Edit" })).toBe(button);
+    expect(button).toBeDisabled();
+    expect(button.querySelector(".ui-icon-button__busy .is-spinning")).not.toBeNull();
+  });
+
   it("keeps async button geometry local while preventing duplicate submission", () => {
     const { rerender } = render(<Button icon={<RefreshCw />}>Check</Button>);
     const button = screen.getByRole("button", { name: "Check" });

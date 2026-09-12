@@ -354,14 +354,6 @@
   overflow-wrap: anywhere;
 }
 
-.conversation-move-workspace-button {
-  flex: 0 0 auto;
-  height: 20px;
-  min-height: 20px;
-  min-width: 20px;
-  width: 20px;
-}
-
 .conversation-detail-metadata {
   grid-area: context;
   padding-inline-start: 40px;

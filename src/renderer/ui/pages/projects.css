@@ -93,21 +93,6 @@
   min-width: 0;
 }
 
-.project-detail__edit {
-  border-color: transparent;
-  flex: 0 0 24px;
-  height: 24px;
-  min-height: 24px;
-  min-width: 24px;
-  padding: 0;
-  width: 24px;
-}
-
-.project-detail__edit svg {
-  height: 13px;
-  width: 13px;
-}
-
 .project-detail__refresh {
   flex: 0 0 var(--control-height-compact);
 }
@@ -448,12 +433,6 @@
   gap: 4px;
 }
 
-.remote-directory-browser__select-current-btn {
-  font-size: var(--font-size-caption);
-  height: 22px;
-  padding: 0 var(--space-2);
-}
-
 .remote-directory-browser__body {
   max-height: 160px;
   min-height: 100px;
@@ -534,5 +513,4 @@
 .remote-directory-browser__item-open:hover {
   color: var(--text);
 }
-
 

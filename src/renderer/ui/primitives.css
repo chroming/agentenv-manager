@@ -269,6 +269,16 @@
   width: var(--icon-box-default);
 }
 
+.ui-icon-button--inline {
+  flex-shrink: 0;
+}
+
+.ui-icon-button--inline .ui-icon-button__content > svg,
+.ui-icon-button--inline .ui-icon-button__busy > svg {
+  height: var(--icon-size-inline);
+  width: var(--icon-size-inline);
+}
+
 .file-type-icon {
   display: block;
   flex: 0 0 auto;
@@ -336,6 +346,7 @@
   border-radius: var(--radius-control);
   display: flex;
   gap: 2px;
+  height: var(--control-height-default);
   min-height: var(--control-height-default);
   min-width: 0;
   padding: 2px;
@@ -354,8 +365,8 @@
   color: var(--muted-strong);
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-regular);
-  height: 28px;
-  min-height: 28px;
+  height: calc(var(--control-height-default) - 6px);
+  min-height: calc(var(--control-height-default) - 6px);
   min-width: 0;
 }
 

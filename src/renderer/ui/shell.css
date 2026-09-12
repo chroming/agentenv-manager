@@ -63,7 +63,7 @@ html[data-platform="darwin"] {
 
 .global-sidebar .sidebar__header {
   gap: 4px;
-  min-height: var(--control-height-prominent);
+  min-height: var(--sidebar-row-height);
   padding: 8px 2px 14px;
 }
 
@@ -452,8 +452,8 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
 .workspace-nav__group > button {
   align-items: center;
   border-width: 0;
-  height: var(--control-height-prominent);
-  min-height: var(--control-height-prominent);
+  height: var(--sidebar-row-height);
+  min-height: var(--sidebar-row-height);
   order: initial;
   padding: 0 10px;
 }
@@ -778,7 +778,7 @@ html[data-platform="darwin"] .global-sidebar--collapsed {
   display: grid;
   gap: 8px;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  min-height: var(--control-height-prominent);
+  min-height: var(--sidebar-row-height);
   padding: 0 9px;
   text-align: left;
   width: 100%;

@@ -52,12 +52,13 @@
 
   --control-height-compact: 28px;
   --control-height-default: 32px;
-  --control-height-prominent: 34px;
-  --control-height-dialog: 34px;
+  --control-height-prominent: var(--control-height-default);
+  --control-height-dialog: var(--control-height-default);
   --select-width-compact: 144px;
   --select-width-standard: 184px;
   --select-width-wide: 240px;
   --icon-size-default: 16px;
+  --icon-size-inline: 14px;
   --icon-box-compact: 28px;
   --icon-box-default: 32px;
   /* Standalone controls, surfaces, and dialogs own radii; connected rows stay square inside them. */
@@ -82,6 +83,7 @@
   --profile-expanded-border: #dbe3ed;
   --profile-expanded-accent: #6f9ee8;
   --sidebar-width-expanded: 204px;
+  --sidebar-row-height: 34px;
   --sidebar-width-collapsed: 64px;
 
   --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.1);

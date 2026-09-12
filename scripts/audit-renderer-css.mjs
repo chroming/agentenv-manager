@@ -275,6 +275,10 @@ const pagePrimitiveRedefinitions = reports.flatMap((report) => {
     .map((selector) => ({ file: report.file, selector }));
 });
 const protectedPrimitiveDescendants = [
+  ".profile-edit-button",
+  ".project-detail__edit",
+  ".conversation-move-workspace-button",
+  ".remote-directory-browser__select-current-btn",
   ".ui-button__",
   ".ui-object-switcher__trigger",
   ".ui-resource-disclosure__",

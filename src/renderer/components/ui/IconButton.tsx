@@ -6,6 +6,7 @@ import { HoverDetail } from "../HoverDetail";
 
 interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "aria-label"> {
   busy?: boolean;
+  appearance?: "control" | "inline";
   label: string;
   size?: Exclude<ButtonSize, "prominent">;
   variant?: ButtonVariant;
@@ -17,12 +18,13 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
     {
       children,
       busy = false,
+      appearance = "control",
       className = "",
       label,
       size,
       title = label,
       type = "button",
-      variant = "secondary",
+      variant = appearance === "inline" ? "ghost" : "secondary",
       "aria-busy": ariaBusy,
       ...props
     },
@@ -35,7 +37,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
       if (typeof ref === "function") return ref(node);
       if (ref) ref.current = node;
     }, [ref]);
-    const resolvedSize = inheritedSize ?? size ?? "default";
+    const resolvedSize = inheritedSize ?? size ?? (appearance === "inline" ? "compact" : "default");
     const effectiveBusy = busy || ariaBusy === true || ariaBusy === "true";
     return (
       <HoverDetail
@@ -63,7 +65,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         ref={setRef}
         aria-busy={effectiveBusy}
         aria-label={label}
-        className={`ui-icon-button ui-icon-button--${variant} ui-icon-button--${resolvedSize} ${className}`.trim()}
+        className={`ui-icon-button ui-icon-button--${variant} ui-icon-button--${resolvedSize} ${appearance === "inline" ? "ui-icon-button--inline" : ""} ${className}`.trim()}
         disabled={props.disabled || effectiveBusy}
         type={type}
       >

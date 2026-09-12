@@ -1041,6 +1041,7 @@ export const ProjectsWorkspace = ({
                     />
                     <IconButton
                       className="project-detail__edit"
+                      appearance="inline"
                       label={t("Rename Workspace")}
                       size="compact"
                       variant="ghost"
@@ -1709,7 +1710,6 @@ export const ProjectsWorkspace = ({
                             <Button
                               variant="secondary"
                               size="compact"
-                              className="remote-directory-browser__select-current-btn"
                               onClick={() => {
                                 setRemotePath(browsingPath);
                                 const parts = browsingPath.split("/").filter(Boolean);

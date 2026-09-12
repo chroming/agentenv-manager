@@ -1976,16 +1976,15 @@ export const ConversationWorkspace = ({
                           <span className="selectable">{detail.workspacePath}</span>
                           {sourceCanMove ? (
                             <IconButton
-                              className="conversation-move-workspace-button"
+                              appearance="inline"
+                              busy={operation === "move"}
                               label={t("Move conversation…")}
                               title={t("Move this conversation to another working directory.")}
                               variant="ghost"
                               disabled={busy}
                               onClick={() => void chooseMoveDestination()}
                             >
-                              {operation === "move"
-                                ? <LoaderCircle className="is-spinning" size={13} />
-                                : <FolderInput size={13} />}
+                              <FolderInput />
                             </IconButton>
                           ) : null}
                         </span>

@@ -4063,6 +4063,7 @@ const AppContent = ({
                           <IconButton
                             aria-label={t("Edit Profile")}
                             className="profile-edit-button"
+                            appearance="inline"
                             label={t("Edit Profile")}
                             size="compact"
                             variant="ghost"

@@ -4460,8 +4460,8 @@ describe("Electron UI profile switching e2e", () => {
       );
       expect(editOverlapsActions, JSON.stringify({ editProfileBox, titleBox, applyBox }))
         .toBe(false);
-      expect(Math.round(editProfileBox!.height)).toBeLessThanOrEqual(24);
-      expect(Math.round(editProfileBox!.width)).toBeLessThanOrEqual(24);
+      expect(Math.round(editProfileBox!.height)).toBe(28);
+      expect(Math.round(editProfileBox!.width)).toBe(28);
       expect(Math.abs(
         editProfileBox!.y + editProfileBox!.height / 2 -
         (titleBox!.y + titleBox!.height / 2)
@@ -5478,18 +5478,20 @@ describe("Electron UI profile switching e2e", () => {
       const checkBox = checkButton.getBoundingClientRect();
       return {
         checkRight: Math.round(checkBox.right),
-        rowHeightDelta: Math.abs(
-          Math.round(statusBox.height) - Math.round(automaticBox.height)
-        ),
+        statusHeight: statusBox.height,
+        automaticHeight: automaticBox.height,
+        checkCenterDelta: Math.abs((checkBox.top + checkBox.bottom - statusBox.top - statusBox.bottom) / 2),
+        switchCenterDelta: Math.abs((switchBox.top + switchBox.bottom - automaticBox.top - automaticBox.bottom) / 2),
         sameList: statusRow.parentElement === automaticRow.parentElement,
         switchRight: Math.round(switchBox.right)
       };
     });
     expect(updateAlignment.sameList).toBe(true);
-    expect(
-      updateAlignment.rowHeightDelta,
-      JSON.stringify(updateAlignment)
-    ).toBeLessThanOrEqual(1);
+    expect(updateAlignment.statusHeight).toBeGreaterThanOrEqual(64);
+    expect(updateAlignment.automaticHeight).toBeGreaterThanOrEqual(48);
+    expect(updateAlignment.automaticHeight).toBeLessThanOrEqual(49);
+    expect(updateAlignment.checkCenterDelta).toBeLessThanOrEqual(1);
+    expect(updateAlignment.switchCenterDelta).toBeLessThanOrEqual(1);
     expect(Math.abs(updateAlignment.checkRight - updateAlignment.switchRight)).toBeLessThanOrEqual(1);
     await assertSettingsCommandControls("General");
     await captureSettings("settings-general-920x620.png");
@@ -5612,11 +5614,11 @@ describe("Electron UI profile switching e2e", () => {
     const dialogSegmentOptions = await readBoxes(
       dialog.locator(".ui-segmented-control__option")
     );
-    expect(dialogSegment[0]?.height).toBe(34);
-    expect(new Set(dialogSegmentOptions.map(({ height }) => height))).toEqual(new Set([28]));
+    expect(dialogSegment[0]?.height).toBe(32);
+    expect(new Set(dialogSegmentOptions.map(({ height }) => height))).toEqual(new Set([26]));
     const dialogActions = await readBoxes(dialog.locator(".ui-dialog-footer button"));
     expect(dialogActions.length).toBe(2);
-    expect(new Set(dialogActions.map(({ height }) => height))).toEqual(new Set([34]));
+    expect(new Set(dialogActions.map(({ height }) => height))).toEqual(new Set([32]));
 
     await page.keyboard.press("Escape");
     await navigation.getByRole("button", { name: "Conversations", exact: true }).click();
@@ -5738,7 +5740,7 @@ describe("Electron UI profile switching e2e", () => {
       ]);
       expect(cancelBox).not.toBeNull();
       expect(confirmBox).not.toBeNull();
-      expect(Math.round(cancelBox!.height)).toBe(34);
+      expect(Math.round(cancelBox!.height)).toBe(32);
       expect(Math.abs(cancelBox!.height - confirmBox!.height)).toBeLessThanOrEqual(1);
       await expectInViewport(page, previewDialog.locator(".preview-header"));
       await expectInViewport(page, previewDialog.locator(".preview-actions"));
@@ -12499,14 +12501,14 @@ describe("Electron UI profile switching e2e", () => {
       cancel: {
         backgroundColor: "rgb(245, 245, 247)",
         fontWeight: "400",
-        height: 34,
+        height: 32,
         radius: "6px"
       },
       create: {
         backgroundColor: "rgb(245, 245, 247)",
         disabled: true,
         fontWeight: "400",
-        height: 34,
+        height: 32,
         radius: "6px"
       },
       input: {
@@ -12749,7 +12751,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(profileContextGeometry).toEqual({
       controlsAreContained: true,
       controlsShareRow: true,
-      editHeight: 24,
+      editHeight: 28,
       gap: 6
     });
     expect(workspaceSwitcherContract).toMatchObject({
@@ -12762,7 +12764,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(workspaceContextGeometry).toEqual({
       controlsAreContained: true,
       controlsShareRow: true,
-      editHeight: 24,
+      editHeight: 28,
       gap: expect.any(Number)
     });
     expect(workspaceContextGeometry.gap).toBeGreaterThanOrEqual(0);
