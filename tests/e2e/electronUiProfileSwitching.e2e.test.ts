@@ -41,6 +41,7 @@ import {
 } from "./layoutAssertions";
 import { requireCurrentElectronBuild } from "./currentBuild";
 import { createStoredZip } from "../helpers/createStoredZip";
+import { desktopReviewSizes, mixedSkillSources } from "../helpers/desktopMixedStates";
 
 let root = "";
 let app: ElectronApplication | undefined;
@@ -1530,16 +1531,13 @@ afterEach(async () => {
 describe("Electron UI profile switching e2e", () => {
   it("aligns local and linked Skill sources and uses compact single-line preferences", async () => {
     const { page, appDataRoot } = await launchApp();
-    for (const [id, sourceType, source] of [
-      ["ui-alpha-skill", "github", "https://github.com/acme/skills/tree/main/alpha"],
-      ["ui-beta-skill", "git", "git@example.test:team/skills.git"]
-    ]) {
+    for (const { id, sourceType, source } of mixedSkillSources) {
       const path = join(appDataRoot, "skills-library", id!, ".agentenv-skill.json");
       const metadata = await readJson<Record<string, unknown>>(path);
       await writeJson(path, { ...metadata, sourceType, source, updateCheckEnabled: false });
     }
     await page.reload();
-    for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+    for (const [width, height] of desktopReviewSizes) {
       await resizeAppWindow(page, width!, height!);
       await openSkillLibrary(page);
       await page.locator("button.library-source-primary").first().waitFor();
@@ -1551,6 +1549,16 @@ describe("Electron UI profile switching e2e", () => {
       }));
       expect(sources.length).toBeGreaterThan(2);
       expect(sources.every((source) => Math.abs(source.start) <= 1 && Math.abs(source.center) <= 1 && source.contained)).toBe(true);
+      const sourceAction = page.locator("button.library-source-primary").first();
+      const before = await sourceAction.boundingBox();
+      await sourceAction.hover();
+      await sourceAction.focus();
+      const after = await sourceAction.boundingBox();
+      expect(before).not.toBeNull();
+      expect(after).not.toBeNull();
+      for (const key of ["x", "y", "width", "height"] as const) {
+        expect(Math.abs(after![key] - before![key])).toBeLessThanOrEqual(1);
+      }
       await openSettingsCategory(page, "General");
       const preferenceRows = await page.locator(".settings-preference-row").evaluateAll((rows) => rows.filter((row) => !row.querySelector("small")).map((row) => {
         const box = row.getBoundingClientRect();

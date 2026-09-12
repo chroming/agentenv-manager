@@ -4,11 +4,34 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SkillMaintenanceStatus } from "../../src/renderer/components/SkillMaintenanceStatus";
 import { skillMaintenanceState } from "../../src/renderer/skillMaintenanceState";
 import type { SkillUpdateInfo } from "../../src/shared/types";
+import { mixedMaintenanceStates } from "../helpers/desktopMixedStates";
 
 afterEach(cleanup);
 const update: SkillUpdateInfo = { id: "review", name: "review", sourceType: "git", updateAvailable: true };
 
 describe("shared Skill maintenance semantics", () => {
+  it.each(mixedMaintenanceStates)("preserves the %s label and action contract while working", (state) => {
+    const review = vi.fn();
+    const { rerender } = render(<SkillMaintenanceStatus state={state} onReview={review} />);
+    const action = screen.getByRole("button");
+    const label = action.textContent;
+    expect(action.querySelectorAll(".ui-interactive-status__icon")).toHaveLength(1);
+    fireEvent.click(action);
+    expect(review).toHaveBeenCalledTimes(1);
+    rerender(<SkillMaintenanceStatus state={state} onReview={review} busy />);
+    expect(screen.getByRole("button")).toBe(action);
+    expect(action).toBeDisabled();
+    expect(action).toHaveAttribute("aria-busy", "true");
+    expect(action.querySelectorAll(".ui-interactive-status__icon")).toHaveLength(1);
+    expect(action.querySelector(".is-spinning")).not.toBeNull();
+    if (state !== "untracked") expect(action.textContent).toBe(label);
+    fireEvent.click(action);
+    expect(review).toHaveBeenCalledTimes(1);
+    rerender(<SkillMaintenanceStatus state={state} onReview={review} />);
+    expect(action).not.toBeDisabled();
+    expect(action.textContent).toBe(label);
+  });
+
   it("prioritizes disabled, untracked, removed and failed states over a stale update flag", () => {
     expect(skillMaintenanceState({ globallyEnabled: false, updatePolicy: "tracked" }, update)).toBe("disabled");
     expect(skillMaintenanceState({ updatePolicy: "untracked" }, update)).toBe("untracked");
