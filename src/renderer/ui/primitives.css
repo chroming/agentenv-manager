@@ -1192,6 +1192,31 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   min-height: 64px;
 }
 
+.ui-status-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  gap: 4px;
+  min-width: 24px;
+  min-height: 24px;
+  color: inherit;
+  font-size: var(--font-size-metadata);
+  font-weight: var(--font-weight-regular);
+  line-height: 1;
+}
+
+.ui-status-hint__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
+.ui-status-hint__icon > svg { width: 14px; height: 14px; }
+
 .ui-dialog-footer > button:not(.ui-icon-button),
 .ui-dialog-footer > .ui-button {
   flex: 0 0 auto;

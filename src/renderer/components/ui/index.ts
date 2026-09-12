@@ -34,6 +34,7 @@ export { ObjectSwitcher, type ObjectSwitcherItem } from "./ObjectSwitcher";
 export { PageHeader } from "./PageHeader";
 export { ProgressBar } from "./ProgressBar";
 export { RefreshAction } from "./RefreshAction";
+export { StatusHint } from "./StatusHint";
 export { ResourceRow } from "./ResourceRow";
 export {
   ResourceDisclosureSection,

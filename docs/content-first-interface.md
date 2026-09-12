@@ -292,3 +292,36 @@ Final artifact: `778a361e773eaf5c0e75b3721f4cc4ddd5581c8274e3d22462ee6bf8fb694d8
   controls. No new package, real Agent mutation or paid model call was involved.
 - This is macOS Electron/source-build evidence, not packaged-app or Windows/Linux
   validation, and does not claim that every screenshot received manual inspection.
+
+### Profile refresh and routine status representation
+
+- Reported symptom: Profiles lacked manual refresh; routine explanatory status lines still
+  competed with object identity after command iconification.
+- Core job -> reduce reading effort -> do not conceal pending effects or failures -> quiet
+  ready/current/pending icons with complete hover/focus details; keep warning/recovery and update
+  review labels visible. Existing desktop shell and object/action placement remain unchanged.
+- RefreshAction owns Profiles refresh; useProfileRefresh coalesces calls and rejects stale detail
+  results using the existing draft controller's flow token. No save or Apply occurs. Initial empty
+  state, read error, disappearance, dirty/saving state and edit/selection races require tests.
+- StatusHint owns non-command icon/value metadata using HoverDetail, not IconButton. Profiles
+  readiness, multi-Agent deployment counts and pending Skill rows reuse it. Routine readiness
+  stays inline beside Agent/Apply rather than leaving an empty metadata row; warnings remain below.
+  Object switcher deployment descriptions remain textual because choosing a Profile requires
+  scanning where it is applied; external-management and failure distinctions remain textual.
+- Required evidence: Renderer behavior and tooltip focus/Escape; actual Electron refresh without
+  displaced content; minimum/default/large screenshots and translated object-context geometry.
+
+#### Profile status verification receipt
+
+- Final source `e550df0bc4a4`, artifact `106ef5015375`; build, style, UI-contract, module,
+  translation and feature-evidence audits passed.
+- 686 Renderer tests passed, including refresh coalescing, edit/selection races, failure/retry,
+  disappeared selections, no writes/upstream checks, status hints and Library-disabled rows.
+- Eight focused Electron cases passed: seven desktop refresh/context/geometry flows (including
+  English, Simplified/Traditional Chinese and 920/1180/1440 widths) and the remote endpoint flow.
+- Final mock page manifest: `/tmp/aem-status-refresh-final-pages-20260912/capture-manifest.json`.
+  Inspected Profiles expanded/default and minimum-window refresh/status captures; scoped native
+  screenshots are in `/tmp/aem-status-refresh-final-20260912`.
+- Warnings and actionable update labels remain visible. No backend mutation policy, external
+  Agent files, paid model call, package dependency or release artifact changed. Full release tests,
+  packaged-app validation and Windows/Linux visual validation were not run for this change.

@@ -1528,6 +1528,37 @@ afterEach(async () => {
 });
 
 describe("Electron UI profile switching e2e", () => {
+  it("refreshes Profiles with quiet contextual status and stable page geometry", async () => {
+    const { page } = await launchApp();
+    await page.locator('.workspace-button[data-workspace="profiles"]').click();
+    const refresh = page.getByRole("button", { name: "Refresh Profiles" });
+    const hero = page.locator(".profile-hero");
+    await hero.waitFor({ state: "visible" });
+    const before = await hero.boundingBox();
+    await refresh.click();
+    await expect.poll(() => refresh.getAttribute("aria-busy")).toBe("false");
+    const after = await hero.boundingBox();
+    expect(after!.y).toBe(before!.y);
+    const status = page.getByRole("status", { name: "Profile readiness" });
+    expect(await status.locator(".profile-action-status__primary").count()).toBe(0);
+    const hint = status.locator(".ui-status-hint").first();
+    await hint.focus();
+    await expect.poll(() => page.getByRole("tooltip").count()).toBe(1);
+    await page.keyboard.press("Escape");
+    expect(await page.getByRole("tooltip").count()).toBe(0);
+    await refresh.focus();
+    await page.keyboard.press("Escape");
+    for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+      await resizeAppWindow(page, width!, height!);
+      const box = await refresh.boundingBox();
+      expect(box!.width).toBe(box!.height);
+      if (process.env.AGENTENV_STATUS_CAPTURE_DIR) {
+        await mkdir(process.env.AGENTENV_STATUS_CAPTURE_DIR, { recursive: true });
+        await page.screenshot({ path: join(process.env.AGENTENV_STATUS_CAPTURE_DIR, `profile-status-${width}.png`) });
+      }
+    }
+  }, standardElectronTestTimeout);
+
   it("keeps default catalog headers neutral without hiding configuration or update actions", async () => {
     const { page } = await launchApp({ initialWorkspace: null, omitAllProfiles: true });
     for (const width of [920, 1180, 1440]) {
@@ -4221,10 +4252,12 @@ describe("Electron UI profile switching e2e", () => {
         ".profile-hero .ui-object-switcher__trigger-title",
         ".profile-hero .profile-description"
       );
-      await expectTextOriginsAligned(
-        ".profile-agent-switcher .ui-object-switcher__trigger-title, .profile-agent-switcher .agent-context-switcher__static-name",
-        ".profile-action-status__primary"
-      );
+      const readinessHint = page.locator(".profile-action-status .ui-status-hint").first();
+      const hintBox = await readinessHint.boundingBox();
+      expect(hintBox!.width).toBe(hintBox!.height);
+      await readinessHint.focus();
+      await expect.poll(() => page.getByRole("tooltip").count()).toBe(1);
+      await page.keyboard.press("Escape");
       await expectTextOriginsAligned(
         ".system-status-card__summary strong",
         ".system-status-card__summary .system-status-summary"
@@ -12377,12 +12410,11 @@ describe("Electron UI profile switching e2e", () => {
       const applyBox = apply.getBoundingClientRect();
       const applyLabelBox = applyLabel.getBoundingClientRect();
       const headerBox = header.getBoundingClientRect();
-      const overlaps = !(
-        statusBox.right <= actionsBox.left ||
-        actionsBox.right <= statusBox.left ||
-        statusBox.bottom <= actionsBox.top ||
-        actionsBox.bottom <= statusBox.top
-      );
+      const overlaps = Array.from(actions.querySelectorAll<HTMLElement>("button")).some((button) => {
+        const box = button.getBoundingClientRect();
+        return !(statusBox.right <= box.left || box.right <= statusBox.left ||
+          statusBox.bottom <= box.top || box.bottom <= statusBox.top);
+      });
       return {
         applyHasNoDecorativeIcon: apply.querySelector(".ui-button__icon") === null,
         applyLabelHorizontalCenterDelta: Math.round(Math.abs(

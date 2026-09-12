@@ -51,6 +51,21 @@ afterEach(() => {
 });
 
 describe("SkillsEditor v2", () => {
+  it("explains Library-disabled Skills through a quiet off hint without enabling the switch", async () => {
+    render(<SkillsEditor
+      value={{ ...resources, skills: [{ libraryId: "hidden", targetName: "hidden", enabled: true }] }}
+      librarySkills={skills}
+      onChange={vi.fn()}
+    />);
+    const row = screen.getByRole("listitem", { name: "Profile Skill hidden" });
+    const hint = within(row).getByLabelText("Disabled in Library");
+    expect(hint.querySelector(".lucide-circle-off")).not.toBeNull();
+    expect(hint.querySelector(".ui-visually-hidden")).toHaveTextContent("Disabled in Library");
+    expect(within(row).getByRole("switch")).toBeDisabled();
+    fireEvent.focus(hint);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Disabled in Library");
+  });
+
   it("keeps routine row state implicit in the switch and reserves text for exceptions", () => {
     render(<SkillsEditor value={resources} librarySkills={skills} onChange={vi.fn()} />);
 

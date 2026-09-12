@@ -290,6 +290,18 @@ AgentEnv-owned copy of the folder and does not require Git.
   left and reserve the trailing lanes for Agent context, the primary command, and overflow actions;
   responsive layout MUST NOT move this action group to the left edge. Profile readiness belongs to
   that trailing Agent/action context and MUST NOT appear as Profile identity metadata below its name.
+- Profiles exposes a shared RefreshAction even when its catalog is empty. Manual refresh reads
+  Profiles, Library and Agent state without running upstream Skill checks, saving drafts or applying
+  resources. Existing content remains visible. Dirty/saving drafts disable the command; an edit or
+  selection made during refresh invalidates the detail result. Failure retains displayed data and
+  exposes an error; a repeat click cannot start another concurrent refresh. When the selected
+  Agent is remote, refresh probes that SSH device rather than scanning every remote device.
+- Routine Profile readiness uses a non-command StatusHint (distinct ready/current/pending/working
+  icons); multiple deployments use an icon plus count with complete Agent/status details on hover
+  and keyboard focus. Warning/error states and their recovery actions retain visible text. Pending
+  Skill deployment uses the same clock hint; Library-disabled rows use an off icon with the exact
+  scope in its hint. Available updates keep their actionable label.
+  Status hints must not look like disabled buttons or capture wheel scrolling.
 - Profile readiness and the Skills section MUST use the same selected-Agent shared-Skill boundary.
   Required shared-copy review cannot coexist with `Ready to apply` or `Up to date` in the summary.
   Review remains available; a shared-copy warning alone does not disable Preview. Recovery takes

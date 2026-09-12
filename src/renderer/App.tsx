@@ -3,6 +3,8 @@ import { profileSharedSkillBoundary } from "../shared/sharedSkillBoundary";
 import {
   ArrowRight,
   CheckCircle2,
+  CircleDashed,
+  Clock3,
   History,
   LoaderCircle,
   Monitor,
@@ -144,6 +146,8 @@ import {
   InspectorHeader,
   ObjectSwitcher,
   PageHeader,
+  RefreshAction,
+  StatusHint,
   SingleObjectWorkspace,
   useExclusiveDisclosure
 } from "./components/ui";
@@ -175,6 +179,7 @@ import { useConversationQuickOpen } from "./hooks/useConversationQuickOpen";
 import { useConversationIndexWarmup } from "./hooks/useConversationIndexWarmup";
 import { useProfileActionGuard } from "./hooks/useProfileActionGuard";
 import { useProfileDraftController } from "./hooks/useProfileDraftController";
+import { useProfileRefresh } from "./hooks/useProfileRefresh";
 import { useProfileActivationController } from "./hooks/useProfileActivationController";
 import { useGitHubConnectionController } from "./hooks/useGitHubConnectionController";
 import { useBackupRecoveryController } from "./hooks/useBackupRecoveryController";
@@ -763,6 +768,24 @@ const AppContent = ({
     );
     return { ...core, ...enrichment };
   };
+
+  const profileRefresh = useProfileRefresh({
+    disabled: busy || isLoading || isProfileDirty || isProfileSaving || Boolean(profileLoadingId) || Boolean(profileMetadataSavingId),
+    selectedId: selectedProfileId,
+    beginFlow: beginProfileFlow,
+    isFlowCurrent: isProfileFlowCurrent,
+    refresh: async () => {
+      const result = await refreshProfiles({ checkSkillUpdates: false, forceTargetRefresh: true });
+      const endpoint = remote.endpoints.find((item) => item.id === selectedTargetId);
+      if (endpoint) await remote.refreshDevice(endpoint.deviceId);
+      return result;
+    },
+    read: (id) => window.agentEnv.readProfile(id),
+    accept: acceptSelectedProfile,
+    clear: clearSelectedProfile,
+    invalidate: invalidateProfilePresentation,
+    onError: setError
+  });
 
   const refreshInstructionDependents = async () => {
     const profileId = selectedProfileId;
@@ -1914,12 +1937,14 @@ const AppContent = ({
   const applyActionLabel = deriveApplyActionLabel(readinessInput);
   const profileSaveWorking = isProfileSaving || profileMetadataSavingId === draftProfile?.id;
   const ReadinessIcon =
-    profileSaveWorking
+    profileSaveWorking || isProfilePreviewing || isProfileApplying
       ? LoaderCircle
-      : readiness.status === "ready" || readiness.status === "unmanaged" || readiness.status === "applied"
+      : readiness.status === "applied"
       ? CheckCircle2
+      : readiness.status === "ready" || readiness.status === "unmanaged"
+        ? CircleDashed
       : readiness.status === "dirty" || readiness.status === "apply-pending"
-        ? RefreshCw
+        ? Clock3
         : TriangleAlert;
   const readinessActionText = (() => {
     if (profileSaveWorking || readiness.status === "dirty") return t("Saving changes...");
@@ -3473,41 +3498,30 @@ const AppContent = ({
     />
   );
 
+  const showReadinessText = ["save-failed", "no-target", "target-unavailable", "validation-error", "review-required", "preview-error"].includes(readiness.status);
   const profileReadinessStatus = (
-    <span className={`profile-action-status profile-action-status--${readiness.status}`}>
+    <span className={`profile-action-status profile-action-status--${readiness.status}${showReadinessText ? "" : " profile-action-status--compact"}`}>
       <span
         className="profile-action-status__copy"
         role="status"
         aria-label={t("Profile readiness")}
-        title={t(readiness.message)}
       >
-        <span className="profile-action-status__icon" aria-hidden="true">
-          <ReadinessIcon
-            className={profileSaveWorking ? "is-spinning" : undefined}
-            size={13}
-            strokeWidth={2.3}
-          />
-        </span>
-        <span className="profile-action-status__text">
-          <span
-            className="profile-action-status__primary"
-            data-ui-overflow-detail="true"
-            title={t(readinessActionText)}
-          >
-            {t(readinessActionText)}
-          </span>
+        <StatusHint
+          icon={<ReadinessIcon className={profileSaveWorking || isProfilePreviewing || isProfileApplying ? "is-spinning" : undefined} />}
+          label={readinessActionText}
+          detail={t(readiness.message)}
+        />
+        {showReadinessText ? (
+          <span className="profile-action-status__primary">{readinessActionText}</span>
+        ) : null}
           {selectedProfileDeploymentLabel ? (
-            <>
-              <span className="profile-action-status__divider" aria-hidden="true">·</span>
-              <span
-                className="profile-action-status__applications"
-                title={selectedProfileDeploymentTitle}
-              >
-                {selectedProfileDeploymentLabel}
-              </span>
-            </>
+            <StatusHint
+              icon={<Monitor />}
+              value={selectedProfileDeployment?.items.length}
+              label={selectedProfileDeploymentLabel}
+              detail={selectedProfileDeploymentTitle}
+            />
           ) : null}
-        </span>
       </span>
       {readiness.remediationLabel ? (
         <button
@@ -3530,6 +3544,7 @@ const AppContent = ({
         className="profile-commit-actions"
         aria-label={t("Selected Profile actions")}
       >
+        {!showReadinessText ? profileReadinessStatus : null}
         {targetWorkspaceControl}
         {profileApplyControl}
         <IconButton
@@ -3583,7 +3598,7 @@ const AppContent = ({
           />
         ) : null}
       </ControlGroup>
-      {profileReadinessStatus}
+      {showReadinessText ? profileReadinessStatus : null}
     </div>
   ) : null;
 
@@ -3916,6 +3931,12 @@ const AppContent = ({
               <PageHeader
                 className="profile-page-header"
                 title={t("Profiles")}
+                actions={<RefreshAction
+                  label={t("Refresh Profiles")}
+                  busy={profileRefresh.refreshing}
+                  disabled={busy || isLoading || isProfileDirty || isProfileSaving || Boolean(profileLoadingId) || Boolean(profileMetadataSavingId)}
+                  onRefresh={() => void profileRefresh.refresh()}
+                />}
               help={
                 <InfoTip
                   label={t("Compose reusable resources, then preview and apply them to an Agent.")}

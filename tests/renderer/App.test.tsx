@@ -4725,6 +4725,35 @@ describe("App", () => {
     expect(api.previewApply).not.toHaveBeenCalled();
   });
 
+  it("refreshes Profiles from disk without checking upstreams or writing Agent resources", async () => {
+    const api = installApi();
+    render(<App />);
+    await openProfiles();
+    const read = vi.mocked(api.readProfile);
+    const changed = { ...profile, manifest: { ...profile.manifest, name: "Changed on disk" } };
+    vi.mocked(api.listProfiles).mockResolvedValue([summaryOf(changed)]);
+    const pending = deferred<ProfileDetail>();
+    read.mockReturnValueOnce(pending.promise);
+    const checks = vi.mocked(api.checkMonitoredSkillSourceGroups).mock.calls.length;
+    const refresh = screen.getByRole("button", { name: "Refresh Profiles" });
+    fireEvent.click(refresh);
+    await waitFor(() => expect(refresh).toHaveAttribute("aria-busy", "true"));
+    expect(refresh).toBeDisabled();
+    expect(document.querySelector(".profile-loading-surface")).toBeNull();
+    await act(async () => pending.resolve(changed));
+    await waitFor(() => expect(refresh).toHaveAttribute("aria-busy", "false"));
+    expect(document.querySelector(".profile-hero")).toHaveTextContent("Changed on disk");
+    expect(api.listTargets).toHaveBeenCalledWith(true);
+    expect(api.checkMonitoredSkillSourceGroups).toHaveBeenCalledTimes(checks);
+    expect(api.saveProfile).not.toHaveBeenCalled();
+    expect(api.applyProfile).not.toHaveBeenCalled();
+    const readiness = screen.getByRole("status", { name: "Profile readiness" });
+    expect(readiness.querySelector(".profile-action-status__primary")).toBeNull();
+    expect(readiness.querySelector(".ui-visually-hidden")).toHaveTextContent("Ready to apply");
+    fireEvent.focus(within(readiness).getByLabelText("Ready to apply"));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("OpenCode");
+  });
+
   it("refreshes a stale Apply preview in place and requires confirmation again", async () => {
     const refreshedPreview: ActivationPreview = {
       ...preview,

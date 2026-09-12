@@ -6,6 +6,8 @@ import {
   Link2,
   LoaderCircle,
   Plus,
+  Clock3,
+  CircleOff,
   Trash2
 } from "lucide-react";
 import type {
@@ -51,6 +53,7 @@ import {
   ToolbarOverflowMenu,
   Switch
 } from "./ui";
+import { StatusHint } from "./ui";
 
 interface SkillsEditorProps {
   value: ProfileResources;
@@ -332,11 +335,15 @@ export const SkillsEditor = ({
           />
         ) : routineStatus ? (
           <span aria-hidden="true" className="profile-skill-state">&nbsp;</span>
+        ) : status === "Apply pending" || status === "Disabled in Library" ? (
+          <span className={`profile-skill-state${status === "Apply pending" ? " is-update" : ""}`}>
+            <StatusHint icon={status === "Apply pending" ? <Clock3 /> : <CircleOff />} label={t(status)} />
+          </span>
         ) : (
           <span
             className={`profile-skill-state${
               localOverride ? " is-neutral" : ""
-            }${status === "Apply pending" ? " is-update" : ""}${
+            }${
               !skill || update?.error ? " is-error" : ""
             }`}
             title={update?.error ?? status}

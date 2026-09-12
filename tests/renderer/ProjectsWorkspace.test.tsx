@@ -302,8 +302,8 @@ describe("ProjectsWorkspace", () => {
     render(<ProjectsWorkspace targets={[target]} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Expand Instructions" }));
-    expect(await screen.findByLabelText("Preview of AGENTS.md")).toHaveTextContent("Original");
-    expect(await screen.findByLabelText("Preview of CLAUDE.md")).toHaveTextContent("Claude rules");
+    await waitFor(() => expect(screen.getByLabelText("Preview of AGENTS.md")).toHaveTextContent("Original"));
+    await waitFor(() => expect(screen.getByLabelText("Preview of CLAUDE.md")).toHaveTextContent("Claude rules"));
     expect(api.readProjectResource).toHaveBeenCalledWith("project-1", "instruction-1");
     expect(api.readProjectResource).toHaveBeenCalledWith("project-1", "instruction-2");
   });

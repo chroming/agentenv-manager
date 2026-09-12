@@ -563,27 +563,11 @@
 
 .profile-action-status__copy {
   align-items: center;
-  display: grid;
+  display: flex;
   flex: 1 1 auto;
-  gap: 8px;
-  grid-template-columns: 24px minmax(0, 1fr);
-  min-width: 0;
-  padding-left: 8px;
-}
-
-.profile-action-status__icon {
-  align-items: center;
-  display: inline-flex;
-  height: 18px;
-  justify-content: center;
-  width: 24px;
-}
-
-.profile-action-status__text {
-  align-items: center;
-  display: inline-flex;
   gap: 5px;
   min-width: 0;
+  padding-left: 8px;
 }
 
 .profile-action-status__primary {
@@ -592,18 +576,14 @@
   white-space: nowrap;
 }
 
-.profile-action-status__applications {
-  color: var(--text-tertiary);
-  flex: 0 1 auto;
-  max-width: 132px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.profile-action-status--compact {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 0;
 }
 
-.profile-action-status__divider {
-  color: var(--border-strong);
-  flex: 0 0 auto;
+.profile-action-status--compact .profile-action-status__copy {
+  padding: 0;
 }
 
 .profile-action-status__action {
