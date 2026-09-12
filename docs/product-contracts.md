@@ -2464,6 +2464,9 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Empty, one-item, long-content, 50, 100, and 500-item cases where relevant.
 - Default and minimum viewport without document overflow.
 - Skill, Skill-source, and Agent table headers and every data row MUST share one column contract;
+  headers and rows also share the same available scrollport width. Space-consuming system scrollbars
+  must not shift Source, Status, or trailing actions away from their headers. The Skill list uses a
+  sticky header inside its row scroll owner; both overlay and 15px scrollbars require geometry tests.
   the visible identity header text aligns with the first visible identity text rather than the
   disclosure, artwork, or icon lane. Contextual actions MUST NOT resize preceding columns. Compact
   width uses a visible grouped header and retains Skill, source, version, Profile usage, update,

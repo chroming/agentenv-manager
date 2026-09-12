@@ -4113,6 +4113,8 @@ describe("Electron UI profile switching e2e", () => {
     const header = page.locator(".library-page-header");
     const tableBody = page.locator(".skill-library-panel .library-table__body");
     const initialHeaderBox = await header.boundingBox();
+    const columnHeader = page.locator(".skill-library-panel .library-table__head");
+    const initialColumnHeaderBox = await columnHeader.boundingBox();
     const metrics = await tableBody.evaluate((body) => ({
       clientHeight: body.clientHeight,
       overflowX: getComputedStyle(body).overflowX,
@@ -4128,6 +4130,7 @@ describe("Electron UI profile switching e2e", () => {
     });
     await expect.poll(() => tableBody.evaluate((body) => body.scrollTop)).toBeGreaterThan(0);
     expect(await header.boundingBox()).toEqual(initialHeaderBox);
+    expect(await columnHeader.boundingBox()).toEqual(initialColumnHeaderBox);
     const shellScroll = await page.evaluate(() => ({
       document: document.documentElement.scrollTop,
       editor: document.querySelector<HTMLElement>(".editor-panel")?.scrollTop ?? -1,
@@ -8765,8 +8768,14 @@ describe("Electron UI profile switching e2e", () => {
     expect(geometry.diffHeight).toBeGreaterThan(100);
   }, standardElectronTestTimeout);
 
-  it("keeps Skill primary actions in one aligned status lane at supported widths", async () => {
+  it.each([0, 15])("keeps Skill primary actions in one aligned status lane with %ipx scrollbars", async (scrollbarWidth) => {
     const { appDataRoot, librarySkill, page } = await launchApp();
+    for (let index = 0; index < 18; index += 1) {
+      const directory = join(appDataRoot, "skills-library", `zz-layout-${index}`);
+      await mkdir(directory, { recursive: true });
+      await writeFile(join(directory, "SKILL.md"), `---\nname: zz-layout-${index}\ndescription: Scrollable catalog fixture\n---\nBody\n`);
+    }
+    await page.addStyleTag({ content: `.library-table__body::-webkit-scrollbar { width: ${scrollbarWidth}px; }` });
     const staticSkillDir = join(appDataRoot, "skills-library", "static-layout-reference");
     await mkdir(staticSkillDir, { recursive: true });
     await writeFile(
@@ -8791,6 +8800,10 @@ describe("Electron UI profile switching e2e", () => {
     await staticRow.waitFor({ state: "visible" });
     const expectUnifiedStatusLane = async (width: number, height: number) => {
       await resizeAppWindow(page, width, height);
+      if (process.env.AGENTENV_LIBRARY_LAYOUT_CAPTURE_DIR) {
+        await mkdir(process.env.AGENTENV_LIBRARY_LAYOUT_CAPTURE_DIR, { recursive: true });
+        await page.screenshot({ path: join(process.env.AGENTENV_LIBRARY_LAYOUT_CAPTURE_DIR, `library-${scrollbarWidth}-${width}.png`) });
+      }
       const geometry = await page.evaluate(() => {
         const head = document.querySelector<HTMLElement>(".skill-library-panel .library-table__head")!;
         const rows = [
@@ -8831,7 +8844,14 @@ describe("Electron UI profile switching e2e", () => {
           const source = row.querySelector<HTMLElement>(".library-source-primary")!;
           const sourceIcon = source.querySelector("svg")!.getBoundingClientRect();
           const sourceText = source.querySelector(".library-source-name")!.getBoundingClientRect();
+          const actionButton = more.querySelector("button")!.getBoundingClientRect();
+          const center = rowRect.top + rowRect.height / 2;
           return {
+            sourceHeaderOffset: source.getBoundingClientRect().left - headerCells[2]!.getBoundingClientRect().left,
+            statusHeaderOffset: statusRect.left - headerCells[3]!.getBoundingClientRect().left,
+            actionHeaderOffset: moreRect.right - headerCells[4]!.getBoundingClientRect().right,
+            sourceRowCenterOffset: Math.abs(sourceText.top + sourceText.height / 2 - center),
+            actionRowCenterOffset: Math.abs(actionButton.top + actionButton.height / 2 - center),
             sourceGap: sourceText.left - sourceIcon.right,
             sourceCenterOffset: Math.abs(sourceText.top + sourceText.height / 2 - sourceIcon.top - sourceIcon.height / 2),
             actionCellCount: row.querySelectorAll(".library-current-action-cell").length,
@@ -8892,6 +8912,11 @@ describe("Electron UI profile switching e2e", () => {
       expect(geometry.metrics[0]!.statusLineHeight).toBe(geometry.metrics[1]!.statusLineHeight);
       expect(geometry.metrics[0]!.statusLabelText).toBe("Update available");
       for (const row of geometry.metrics) {
+        expect(Math.abs(row.sourceHeaderOffset), JSON.stringify(row)).toBeLessThanOrEqual(1);
+        expect(Math.abs(row.statusHeaderOffset), JSON.stringify(row)).toBeLessThanOrEqual(1);
+        expect(Math.abs(row.actionHeaderOffset), JSON.stringify(row)).toBeLessThanOrEqual(1);
+        expect(row.sourceRowCenterOffset, JSON.stringify(row)).toBeLessThanOrEqual(1);
+        expect(row.actionRowCenterOffset, JSON.stringify(row)).toBeLessThanOrEqual(1);
         expect(row.sourceGap).toBeGreaterThanOrEqual(4);
         expect(row.sourceCenterOffset).toBeLessThanOrEqual(1);
         expect(row.actionCellCount).toBe(0);

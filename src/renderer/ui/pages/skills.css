@@ -110,7 +110,7 @@
   border: 0;
   border-radius: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
@@ -159,6 +159,9 @@
   background: var(--surface-muted);
   display: grid;
   padding: 9px 14px;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-raised);
 }
 
 .skill-library-panel .library-table__head > span {

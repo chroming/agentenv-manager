@@ -1862,14 +1862,14 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         aria-label={t("Library skills")}
         hidden={libraryMode !== "skills"}
       >
-        <div className="library-table__head">
-          <span>{t("Skill")}</span>
-          <span>{t("Tags")}</span>
-          <span>{t("Source")}</span>
-          <span className="library-column-label">{t("Status")}</span>
-          <span aria-label={t("More")} />
-        </div>
         <div className="library-table__body" ref={scrollOwnerRef}>
+          <div className="library-table__head">
+            <span>{t("Skill")}</span>
+            <span>{t("Tags")}</span>
+            <span>{t("Source")}</span>
+            <span className="library-column-label">{t("Status")}</span>
+            <span aria-label={t("More")} />
+          </div>
           {isLoading && librarySkills.length === 0 ? (
             <div className="inline-state inline-state--loading library-empty" role="status">
               <span className="inline-state__icon" aria-hidden="true" />
