@@ -1029,16 +1029,11 @@ describe("App", () => {
     expect(screen.queryByRole("menu", { name: "Agent actions" })).not.toBeInTheDocument();
     expect(moreActions).toHaveFocus();
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(await within(workspace).findByText("Set up your first Agent")).toBeInTheDocument();
-    expect(
-      within(
-        within(workspace).getByRole("region", { name: "Profile status" })
-      ).getByRole("button", { name: "Configure Agent" })
-    ).toBeEnabled();
+    expect(within(workspace).queryByRole("region", { name: "Profile status" })).toBeNull();
     expect(window.localStorage.getItem("agentenv:last-workspace")).toBeNull();
   });
 
-  it("keeps a visible setup path when multiple enabled Agents have no Profiles", async () => {
+  it("configures an Agent directly from its row without a duplicate setup banner", async () => {
     const settings: AgentEnvSettings = {
       locale: "system",
       conversationTerminal: "default",
@@ -1064,16 +1059,12 @@ describe("App", () => {
     render(<App />);
 
     const workspace = await screen.findByRole("region", { name: "Agents" });
-    const status = await within(workspace).findByRole("region", { name: "Profile status" });
-    const chooseAgent = within(status).getByRole("button", { name: "Choose Agent" });
-    expect(chooseAgent).toBeEnabled();
-
-    fireEvent.click(chooseAgent);
-    const dialog = await screen.findByRole("dialog", { name: "Agents enabled" });
-    expect(within(dialog).getByText("OpenCode")).toBeInTheDocument();
-    expect(within(dialog).getByText("Codex")).toBeInTheDocument();
-    expect(within(dialog).getAllByRole("button", { name: "Review current setup" }))
-      .toHaveLength(2);
+    expect(within(workspace).queryByRole("region", { name: "Profile status" })).toBeNull();
+    expect(within(workspace).getByRole("button", { name: "Codex" })).toBeEnabled();
+    fireEvent.click(within(workspace).getByRole("button", { name: "OpenCode" }));
+    const dialog = await screen.findByRole("dialog", { name: "Set up OpenCode" });
+    expect(within(dialog).getByRole("button", { name: "Create from current environment" }))
+      .toBeEnabled();
   });
 
   it("keeps an unclaimed shared folder outside first Agent setup", async () => {
@@ -1098,12 +1089,9 @@ describe("App", () => {
     render(<App />);
 
     const workspace = await screen.findByRole("region", { name: "Agents" });
-    expect(await within(workspace).findByText("Set up your first Agent"))
-      .toBeInTheDocument();
-    expect(within(workspace).getByText(
-      "Save its current setup as a Profile. One shared Skill remains unchanged."
-    )).toBeInTheDocument();
-    expect(within(workspace).queryByRole("button", { name: "Review Skills" }))
+    expect(within(workspace).getByRole("button", { name: "OpenCode" })).toBeEnabled();
+    expect(within(workspace).queryByRole("region", { name: "Profile status" })).toBeNull();
+    expect(within(workspace).queryByRole("button", { name: "Shared Skills" }))
       .not.toBeInTheDocument();
   });
 
@@ -1161,7 +1149,7 @@ describe("App", () => {
     );
   });
 
-  it("reviews only shared compatibility Skills from the Agents environment status", async () => {
+  it("opens shared Skills directly without presenting a page-level task banner", async () => {
     const inventory: SkillInventoryEntry[] = [
       {
         id: "shared-review",
@@ -1195,20 +1183,10 @@ describe("App", () => {
     render(<App />);
 
     const workspace = await screen.findByRole("region", { name: "Agents" });
-    expect(
-      await within(workspace).findByText("1 shared Skill needs review")
-    ).toBeInTheDocument();
-    const environmentStatus = within(workspace).getByRole("region", {
-      name: "Profile status"
-    });
-    expect(
-      within(environmentStatus).getByText(
-        "Shared locations are used by OpenCode."
-      )
-    ).toHaveAttribute("data-ui-overflow-detail", "true");
-    fireEvent.click(
-      within(environmentStatus).getByRole("button", { name: "Review Skills" })
-    );
+    const sharedSkills = await within(workspace).findByRole("button", { name: "Shared Skills" });
+    expect(within(workspace).queryByRole("region", { name: "Profile status" })).toBeNull();
+    expect(within(workspace).queryByText("1 shared Skill needs review")).toBeNull();
+    fireEvent.click(sharedSkills);
 
     const drawer = await screen.findByRole("region", { name: "Shared Skills" });
     expect(within(drawer).getByText("Shared Skills")).toBeInTheDocument();
@@ -1220,7 +1198,7 @@ describe("App", () => {
     ).toBeNull();
   });
 
-  it("names an Agent lifecycle review after the affected Profile", async () => {
+  it("keeps pending Profile information in its Agent row rather than a global warning", async () => {
     installApi({
       listTargetStates: vi.fn().mockResolvedValue([
         managedState({
@@ -1233,18 +1211,10 @@ describe("App", () => {
     render(<App />);
 
     const workspace = await screen.findByRole("region", { name: "Agents" });
-    const environmentStatus = await within(workspace).findByRole("region", {
-      name: "Profile status"
-    });
-    expect(
-      await within(environmentStatus).findByText("1 Agent needs review")
-    ).toBeInTheDocument();
-    expect(
-      within(environmentStatus).getByRole("button", { name: "Review Profile" })
-    ).toBeEnabled();
-    expect(
-      within(environmentStatus).queryByRole("button", { name: "Review" })
-    ).toBeNull();
+    const row = within(workspace).getByRole("article", { name: "Agent OpenCode" });
+    expect(await within(row).findByText("Changes pending")).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "OpenCode" })).toBeEnabled();
+    expect(within(workspace).queryByRole("region", { name: "Profile status" })).toBeNull();
   });
 
   it("keeps applied local overrides in Agent detail without promoting them globally", async () => {

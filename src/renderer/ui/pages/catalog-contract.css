@@ -9,7 +9,7 @@
 
 .skill-source-table-head {
   align-items: center;
-  background: var(--surface-muted);
+  background: var(--catalog-header-background);
   border-bottom: 1px solid var(--border);
   color: var(--muted);
   display: grid;

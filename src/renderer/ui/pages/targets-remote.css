@@ -9,7 +9,7 @@
 
 .remote-location-header {
   align-items: center;
-  background: var(--surface-muted);
+  background: var(--catalog-header-background);
   display: grid;
   gap: 8px;
   grid-template-columns: 32px minmax(140px, 1fr) auto auto;

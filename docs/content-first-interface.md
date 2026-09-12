@@ -34,6 +34,21 @@ or change the Library, Profile, deployment, recovery, or synchronization models.
 - Keep Agents as a comparison list, Settings as preference rows, and Conversations
   as list/detail. Visual consistency does not require identical page structures.
 
+## Default attention budget
+
+- Opening a page is not a request to configure or clean up everything. Do not turn optional
+  setup, ordinary pending changes, or routine discovery into persistent global tasks.
+- Agents keeps configuration and pending state on each row. Shared findings have a direct
+  neutral command. Only a failed scan adds a compact retry notice; no setup, checking, healthy,
+  or duplicate Agent-review banner is rendered.
+- Catalog column headings and local/remote location headings use
+  `--catalog-header-background`, matching the ordinary content surface. Fine separators and
+  typography establish hierarchy; stacked tinted bands are not a default grouping mechanism.
+- Needs setup is neutral, not a warning. Unavailable/guarded states, destructive confirmation,
+  outside changes, and recovery errors remain distinguishable and actionable.
+- Preserve selected/disabled row treatments and actual status meaning. This contract removes
+  redundant emphasis, not safety information or access to configuration.
+
 ## Reading safety
 
 Markdown uses the existing React Markdown/GFM renderer without raw HTML execution.
@@ -74,3 +89,28 @@ full backend-suite run, or verification on Windows/Linux. Fixtures and fake CLI
 runners do not modify real Agent resources or consume model quota. Pixel and
 geometry checks guard known regressions; they do not establish universal visual
 correctness or cover every possible user dataset.
+
+### Default-attention refinement evidence
+
+The initial content-first pass still promoted optional setup and review state into a
+permanent task strip. This refinement removes that duplicate presentation rather than
+only recoloring it. Agent row entry points and the scoped Shared Skills workflow remain.
+
+- Artifact `7560e187c8fd2f60e141cb05474605869011fb53cbac6f503fae0041fedeaf9c`,
+  source `d4a824ea369953f36991dea7f89c190157f1084e2f69f727653456c3401aa7e0`.
+- All 664 Renderer tests (97 files), six focused Electron tests, build/typecheck,
+  style/UI-contract/module/translation/feature audits passed. Comparison captures use
+  the existing isolated fake CLI workflow.
+- Tests explicitly reject a global strip for checking, setup, ready, no-agents,
+  shared-review, and agent-review. Failure/retry and direct configuration remain covered.
+- Electron asserts equal catalog-header/content backgrounds at 920/1180/1440 widths,
+  in addition to geometry checks. This is necessary because subtle gray/white changes
+  may fall below the pixel comparator's existing per-channel tolerance.
+- Inspected fresh mock screenshots including English/Simplified/Traditional Chinese,
+  local/SSH Agents, setup, shared findings, scan failure, Skills and source updates.
+  Updated four reviewed baselines for removed strips and affected modal backgrounds;
+  a fresh repeat passed all 79 critical pixel checks without tolerance changes.
+- Capture waits for the preceding bulk-update success message to expire before unrelated
+  AI-tag/Import captures, avoiding a transient message becoming an accidental baseline.
+- Scope remains macOS isolated Electron presentation. No backend/full-release suite,
+  packaged distribution, or Windows/Linux runtime approval is claimed.

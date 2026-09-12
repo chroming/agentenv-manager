@@ -159,7 +159,7 @@
 
 .skill-library-panel .library-table__head {
   align-items: center;
-  background: var(--surface-muted);
+  background: var(--catalog-header-background);
   display: grid;
   padding: 9px 14px;
   position: sticky;
@@ -1519,7 +1519,6 @@
 }
 
 .skill-library-panel .library-table__head {
-  background: var(--surface-muted);
   color: var(--muted);
   min-height: 40px;
 }

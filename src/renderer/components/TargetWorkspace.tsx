@@ -7,6 +7,7 @@ import {
   Layers3,
   LoaderCircle,
   MoreHorizontal,
+  ScanLine,
   Server,
   TerminalSquare
 } from "lucide-react";
@@ -72,7 +73,6 @@ interface TargetWorkspaceProps {
   detectedDisabledAgentCount: number;
   targetStates: TargetManagementState[];
   environmentReview: EnvironmentReviewSummary;
-  targetNames: Record<string, string>;
   mcpConnections: NativeMcpConnection[];
   backups: BackupSummary[];
   rollbackPreview?: RollbackPreview;
@@ -96,7 +96,6 @@ interface TargetWorkspaceProps {
   onRefreshRemoteDevice(id: string): Promise<void>;
   onReorder?(targetIds: string[]): void;
   onChooseAgents(): void;
-  onChooseSetupAgent(targetIds: string[]): void;
   onConfigure(targetId: string): void;
   onReviewEnvironment(): void;
   onCreateProfileFromTarget(targetId: string, returnFocus?: HTMLElement | null): void;
@@ -293,7 +292,6 @@ export const TargetWorkspace = ({
   detectedDisabledAgentCount,
   targetStates,
   environmentReview,
-  targetNames,
   mcpConnections,
   backups,
   rollbackPreview,
@@ -311,7 +309,6 @@ export const TargetWorkspace = ({
   onRefreshRemoteDevice,
   onReorder = () => undefined,
   onChooseAgents,
-  onChooseSetupAgent,
   onConfigure,
   onReviewEnvironment,
   onCreateProfileFromTarget,
@@ -338,12 +335,7 @@ export const TargetWorkspace = ({
   const recoveryCloseRef = useRef<HTMLButtonElement>(null);
   const remoteManagerRef = useRef<RemoteDeviceManagerHandle>(null);
   const statesByTarget = new Map(targetStates.map((state) => [state.targetId, state]));
-  const showEnvironmentStatus = [
-    "unavailable",
-    "shared-review",
-    "setup",
-    "agent-review"
-  ].includes(environmentReview.state);
+  const showEnvironmentStatus = environmentReview.state === "unavailable";
   useModalDialog({
     open: Boolean(stopManagingTargetId),
     dialogRef: stopManagingDialogRef,
@@ -370,6 +362,15 @@ export const TargetWorkspace = ({
         help={<InfoTip label={t("Inspect each Agent and apply a saved Profile only when you choose.")} />}
         actions={(
           <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
+            {environmentReview.state === "shared-review" ? (
+              <Button
+                disabled={busy || isLoading}
+                icon={<ScanLine size={15} aria-hidden="true" />}
+                onClick={onReviewEnvironment}
+              >
+                {t("Shared Skills")}
+              </Button>
+            ) : null}
             {backups.length > 0 ? (
               <Button
                 ref={recoveryTriggerRef}
@@ -407,14 +408,10 @@ export const TargetWorkspace = ({
         <div className="target-page__context">
           <EnvironmentStatusStrip
             summary={environmentReview}
-            targetNames={targetNames}
             busy={busy}
-            onChooseSetupAgent={onChooseSetupAgent}
-            onConfigure={onConfigure}
             onRefresh={() => {
               void onRefresh();
             }}
-            onReviewShared={onReviewEnvironment}
           />
         </div>
       ) : null}

@@ -5,7 +5,7 @@
 .target-location-divider {
   align-items: center;
   align-self: stretch;
-  background: var(--surface-subtle);
+  background: var(--catalog-header-background);
   border-bottom: 1px solid var(--border-subtle);
   color: var(--muted);
   display: flex;

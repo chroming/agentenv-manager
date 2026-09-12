@@ -1527,6 +1527,29 @@ afterEach(async () => {
 });
 
 describe("Electron UI profile switching e2e", () => {
+  it("keeps default catalog headers neutral without hiding configuration or update actions", async () => {
+    const { page } = await launchApp({ initialWorkspace: null, omitAllProfiles: true });
+    for (const width of [920, 1180, 1440]) {
+      await resizeAppWindow(page, width, width === 920 ? 620 : 900);
+      await page.locator(".sidebar").getByRole("button", { name: "Agents", exact: true }).click();
+      const agents = page.getByRole("region", { name: "Agents", exact: true });
+      await agents.getByRole("button", { name: "OpenCode", exact: true }).waitFor();
+      expect(await agents.getByRole("region", { name: "Profile status" }).count()).toBe(0);
+      const headerBackground = await agents.locator(".target-list__header").evaluate((element) => getComputedStyle(element).backgroundColor);
+      const rowBackground = await agents.locator(".target-card--workflow").first().evaluate((element) => getComputedStyle(element).backgroundColor);
+      expect(headerBackground).toBe(rowBackground);
+      await page.locator(".sidebar").getByRole("button", { name: "Skills", exact: true }).click();
+      await page.locator(".library-table__head").waitFor();
+      expect(await page.locator(".library-table__head").evaluate((element) => getComputedStyle(element).backgroundColor)).toBe(rowBackground);
+      expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
+      await page.getByRole("tab", { name: "By source", exact: true }).click();
+      await page.locator(".skill-source-table-head").waitFor();
+      expect(await page.locator(".skill-source-table-head").evaluate((element) => getComputedStyle(element).backgroundColor)).toBe(rowBackground);
+      expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
+      await page.getByRole("tab", { name: "Skill list", exact: true }).click();
+    }
+  }, standardElectronTestTimeout);
+
   it("keeps a new workspace empty until the user explicitly captures an Agent", async () => {
     const { appDataRoot, page } = await launchApp({
       initialWorkspace: null,
@@ -1535,9 +1558,10 @@ describe("Electron UI profile switching e2e", () => {
 
     const agents = page.getByRole("region", { name: "Agents", exact: true });
     await agents.waitFor({ state: "visible" });
-    await agents.getByText("Set up your first Agent", { exact: true }).waitFor({
+    await agents.getByRole("button", { name: "OpenCode", exact: true }).waitFor({
       state: "visible"
     });
+    expect(await agents.getByRole("region", { name: "Profile status" }).count()).toBe(0);
     expect(
       await readdir(join(appDataRoot, "profiles")).catch(() => [])
     ).toEqual([]);

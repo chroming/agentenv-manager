@@ -1144,7 +1144,8 @@ try {
   const heldProfilesDir = join(appDataRoot, "profiles-capture-hold");
   await rename(profilesDir, heldProfilesDir);
   await page.reload();
-  await agentsWorkspace.getByText("Set up your first Agent", { exact: true }).waitFor({
+  await agentsWorkspace.getByRole("article", { name: "Agent OpenCode", exact: true })
+    .getByRole("button", { name: "OpenCode", exact: true }).waitFor({
     state: "visible"
   });
   await setWindowSize(page, windowHandle, 920, 620);
@@ -1175,14 +1176,14 @@ try {
   );
   await page.evaluate(() => window.agentEnv.setSharedSkillAreaMode("managed"));
   await page.reload();
-  await agentsWorkspace.getByText("1 shared Skill needs review", { exact: true }).waitFor({
+  await agentsWorkspace.getByRole("button", { name: "Shared Skills", exact: true }).waitFor({
     state: "visible"
   });
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByLabel("Interface language").selectOption("zh_CN");
   await page.getByRole("heading", { name: "设置" }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Agents", exact: true }).click();
-  await agentsWorkspace.getByText("1 个共享 Skill 需要检查", { exact: true }).waitFor({
+  await agentsWorkspace.getByRole("button", { name: "共享技能", exact: true }).waitFor({
     state: "visible"
   });
   await setWindowSize(page, windowHandle, 920, 620);
@@ -1191,7 +1192,7 @@ try {
   await page.getByLabel("界面语言").selectOption("zh_TW");
   await page.getByRole("heading", { name: "設定" }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Agents", exact: true }).click();
-  await agentsWorkspace.getByText("1 個共享 Skill 需要檢查", { exact: true }).waitFor({
+  await agentsWorkspace.getByRole("button", { name: "共享技能", exact: true }).waitFor({
     state: "visible"
   });
   await capturePage(page, join(outputDir, "agents-ready-zh-tw-920x620.png"));
@@ -1199,7 +1200,7 @@ try {
   await page.getByLabel("介面語言").selectOption("en");
   await page.getByRole("heading", { name: "Settings" }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Agents", exact: true }).click();
-  await agentsWorkspace.getByText("1 shared Skill needs review", { exact: true }).waitFor({
+  await agentsWorkspace.getByRole("button", { name: "Shared Skills", exact: true }).waitFor({
     state: "visible"
   });
   await setWindowSize(page, windowHandle, 1180, 728);
@@ -1423,6 +1424,10 @@ try {
   await capturePage(page, join(outputDir, "skills-bulk-update-complete-920x620.png"));
   await bulkUpdateDialog.getByRole("button", { name: "Close" }).click();
   await bulkUpdateDialog.waitFor({ state: "hidden" });
+  await page.locator(".app-feedback--success, .app-feedback--info").waitFor({
+    state: "hidden",
+    timeout: 8_000
+  });
 
   await page.getByRole("button", { name: "More Skill actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "AI tags...", exact: true }).click();

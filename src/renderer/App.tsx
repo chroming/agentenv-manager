@@ -4425,7 +4425,6 @@ const AppContent = ({
               detectedDisabledAgentCount={detectedDisabledAgents.length}
               targetStates={targetStates}
               environmentReview={environmentReview}
-              targetNames={targetNames}
               mcpConnections={nativeMcpConnections ?? []}
               backups={backups}
               rollbackPreview={rollbackPreview}
@@ -4444,7 +4443,6 @@ const AppContent = ({
               onRefreshRemoteDevice={remote.refreshDevice}
               onReorder={reorderAgents}
               onChooseAgents={openAgentChooser}
-              onChooseSetupAgent={openAgentSetup}
               onConfigure={openAgentConfiguration}
               onReviewEnvironment={openEnvironmentReview}
               onCreateProfileFromTarget={(targetId, returnFocus) =>

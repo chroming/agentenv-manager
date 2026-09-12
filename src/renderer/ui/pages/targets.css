@@ -8,74 +8,6 @@
   overflow: hidden;
 }
 
-.environment-status-strip {
-  align-items: center;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-surface);
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
-  min-height: 54px;
-  padding: 8px 10px;
-}
-
-.environment-status-strip__icon {
-  align-items: center;
-  background: var(--surface-muted);
-  border-radius: var(--radius-control);
-  color: var(--muted-strong);
-  display: inline-flex;
-  height: 32px;
-  justify-content: center;
-  width: 32px;
-}
-
-.environment-status-strip--ready .environment-status-strip__icon {
-  background: color-mix(in srgb, var(--success) 10%, var(--surface));
-  color: var(--success);
-}
-
-.environment-status-strip--shared-review .environment-status-strip__icon,
-.environment-status-strip--agent-review .environment-status-strip__icon,
-.environment-status-strip--unavailable .environment-status-strip__icon {
-  background: color-mix(in srgb, var(--warning) 11%, var(--surface));
-  color: var(--warning);
-}
-
-.environment-status-strip__copy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.environment-status-strip__copy strong,
-.environment-status-strip__detail {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.environment-status-strip__copy strong {
-  color: var(--text);
-  font-size: 12px;
-  font-weight: var(--font-weight-medium);
-}
-
-.environment-status-strip__detail {
-  color: var(--muted);
-  font-size: var(--font-size-metadata);
-}
-
-.environment-status-strip__tooltip {
-  user-select: text;
-}
-
-.environment-status-strip__action {
-  min-width: 72px;
-}
 
 .workspace-page-header > .target-page-actions {
   align-items: center;
@@ -153,7 +85,7 @@
 .target-list__header {
   align-self: stretch;
   align-items: center;
-  background: var(--surface-muted);
+  background: var(--catalog-header-background);
   border-bottom: 1px solid var(--border);
   color: var(--muted);
   display: grid;
@@ -256,7 +188,10 @@
   background: var(--success);
 }
 
-.target-health-status--needs-setup,
+.target-health-status--needs-setup {
+  color: var(--muted);
+}
+
 .target-health-status--guarded,
 .target-health-status--unknown {
   color: var(--warning);

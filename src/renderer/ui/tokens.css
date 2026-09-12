@@ -13,6 +13,7 @@
   --surface: #ffffff;
   --surface-muted: #f5f5f7;
   --surface-subtle: #fafbfc;
+  --catalog-header-background: var(--surface);
   --surface-pressed: #e9e9eb;
   --accent: #007aff;
   --accent-soft: rgba(0, 122, 255, 0.1);

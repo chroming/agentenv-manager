@@ -626,17 +626,15 @@ implementation.
 - Profile Review derives its state from installed Agents, usable Profiles, Target
   lifecycle state, and the current local Skill inventory. It stores no wizard step and owns no
   duplicate lifecycle state.
-- The compact status projection shows exactly one of: checking local Skills, environment
-  check unavailable, shared Skills need review, first Agent setup, Agent changes need review,
-  or environment ready. `Applied with local overrides` is a stable current deployment and
-  MUST NOT be counted as an Agent that needs review or promoted to a separate global warning;
-  its machine-local exception remains visible on the affected Agent and Profile. The projection
-  exposes at most one current action. Commands name their affected object:
-  `Review Skills`, `Review Profile`, `Configure Agent`, or `Retry check`; a bare lifecycle verb
-  such as `Review` is not a Profile Review command.
-- Status detail remains a single compact line. When it overflows, the complete selectable value
-  is available through the shared enterable detail overlay; truncation MUST NOT discard affected
-  Agent names or recovery context.
+- Derived review state is not a default task banner. Setup, pending Profile changes, and stable
+  local overrides stay on the affected Agent row; selecting its name opens configuration or
+  the active Profile. A routine scan or healthy result MUST NOT insert a status row above the
+  list. Shared findings expose a neutral `Shared Skills` command, not a warning count or a
+  permanently expanded explanation. A real scan failure remains visible with `Retry check`.
+- `Applied with local overrides` is a stable current deployment and MUST NOT be counted as an
+  Agent that needs review or promoted to a separate global warning. Its machine-local exception
+  remains visible on the affected Agent and Profile. Dangerous Apply/Cleanup effects, external
+  changes, and recovery failures retain their existing warnings inside the relevant workflow.
 - Shared compatibility findings open the canonical Local Skills Manager surface already scoped
   to shared locations. The same scan, grouping, preview, Backup, mutation, verification, path
   policy, and rollback contracts apply whether the user enters from Agents or Skills.
@@ -647,15 +645,14 @@ implementation.
   effective environment, and must be reviewed before a Profile can claim to disable or omit a
   Skill that the Agent still loads from that location. Leaving migration outside AgentEnv remains
   an explicit device-local boundary and must produce `Applied with local overrides` on the affected
-  Agent. The global Profile Review may still show `Profile ready` because it answers
-  whether an action is currently required; it MUST NOT hide the exception from Agent or Profile
-  detail.
+  Agent. The derived global state may still be ready, but readiness does not require a visible
+  success banner and MUST NOT hide the exception from Agent or Profile detail.
 - Refresh is idempotent. An unchanged inventory produces no canonical write, Backup, ownership
   change, or timestamp churn. A changed inventory invalidates stale review plans and exposes
   only the remaining current work.
-- First-run presentation may give the same status projection stronger explanatory copy.
-  Completion changes only presentation emphasis; every Profile Review action remains
-  available on later runs.
+- First-run discovery and configuration keep their existing explicit dialogs. The default
+  Agents list MUST NOT repeat onboarding as a second task header; configuration remains
+  reachable through each Agent row on both first and later runs.
 
 Status: repeatable Profile Review, shared-location scoping, and first-run presentation are
 `Implemented`.
