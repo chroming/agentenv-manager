@@ -14,7 +14,23 @@ it("uses one actionable line for an unconfigured Agent", () => {
 });
 
 it("keeps the Profile identity and actionable recovery state visible", () => {
-  render(<TargetEnvironmentSummary lifecycle="Recovery required" profileName="Daily Coding" actionLabel="Open Recovery" onAction={vi.fn()} />);
-  expect(screen.getByText("Recovery required")).toBeVisible();
-  expect(screen.getByRole("button", { name: "Open Recovery" })).toHaveAttribute("title", "Daily Coding");
+  render(<TargetEnvironmentSummary lifecycle="Recovery required" lifecycleStatus="recovery-required" profileName="Daily Coding" actionLabel="Open Recovery" onAction={vi.fn()} />);
+  expect(screen.getByLabelText("Recovery required")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Open Recovery" })).toHaveAttribute("title", "Daily Coding\nRecovery required");
+});
+
+it("keeps an applied Profile on one line without repeated lifecycle copy", () => {
+  const { container } = render(<TargetEnvironmentSummary lifecycle="Applied" lifecycleStatus="applied" profileName="Daily Coding" onAction={vi.fn()} />);
+  expect(screen.getByRole("button", { name: "Daily Coding" })).toHaveAttribute("title", "Daily Coding\nApplied");
+  expect(screen.queryByText("Applied")).not.toBeInTheDocument();
+  expect(container.querySelector(".target-workflow-environment")!.children).toHaveLength(1);
+});
+
+it.each(["pending", "drifted", "applied-with-local-override"] as const)("retains %s details without a second text row", (lifecycleStatus) => {
+  const open = vi.fn();
+  const { container } = render(<TargetEnvironmentSummary lifecycle="State details" lifecycleStatus={lifecycleStatus} profileName="Daily Coding" onAction={open} />);
+  expect(screen.getByLabelText("State details")).toBeInTheDocument();
+  expect(container.querySelector(".target-workflow-lifecycle")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Daily Coding" }));
+  expect(open).toHaveBeenCalledOnce();
 });

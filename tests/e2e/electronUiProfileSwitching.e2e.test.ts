@@ -1528,6 +1528,51 @@ afterEach(async () => {
 });
 
 describe("Electron UI profile switching e2e", () => {
+  it("keeps configured Agent Profiles on one line before and after edits", async () => {
+    const { page } = await launchApp({ omitUnmanagedTargetSkill: true });
+    await page.evaluate(async () => {
+      const preview = await window.agentEnv.previewApply("ui-opencode-alpha", "opencode");
+      await window.agentEnv.applyProfile("ui-opencode-alpha", preview.id);
+    });
+    for (const pending of [false, true]) {
+      if (pending) await page.evaluate(async () => {
+        const profile = await window.agentEnv.readProfile("ui-opencode-alpha");
+        await window.agentEnv.saveProfile({
+          manifest: { ...profile.manifest, name: "Long Profile name for single-line Agent layout regression" },
+          instructions: profile.instructions,
+          resources: { ...profile.resources, skills: profile.resources.skills.map((skill) => ({ ...skill, enabled: false })) },
+          expectedContentHash: profile.contentHash
+        });
+      });
+      await page.reload();
+      await page.getByRole("button", { name: "Agents", exact: true }).click();
+      await page.locator(".target-workflow-environment button").filter({ hasText: pending ? "Long Profile" : "UI OpenCode alpha" }).waitFor();
+      const profileCell = page.getByRole("article", { name: "Agent OpenCode" }).locator(".target-workflow-environment");
+      if (pending) await profileCell.getByLabel("Changes pending", { exact: true }).waitFor();
+      else expect(await profileCell.locator(".ui-status-hint").count()).toBe(0);
+      for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+        await resizeAppWindow(page, width!, height!);
+        expect(await page.locator(".target-location-divider").count()).toBe(0);
+        const cells = await page.locator(".target-workflow-environment").evaluateAll((elements) => elements.map((cell) => {
+          const box = cell.getBoundingClientRect();
+          const action = cell.querySelector("button")!.getBoundingClientRect();
+          const health = cell.parentElement!.querySelector(".target-health-status")!.getBoundingClientRect();
+          return {
+            height: box.height,
+            centered: Math.abs((action.top + action.bottom - health.top - health.bottom) / 2) <= 1,
+            contained: action.left >= box.left - 1 && action.right <= box.right + 1,
+            secondLine: Boolean(cell.querySelector(".target-workflow-lifecycle"))
+          };
+        }));
+        expect(cells.every((cell) => cell.height <= 28 && cell.centered && cell.contained && !cell.secondLine)).toBe(true);
+        if (process.env.AGENTENV_REVIEW_SCREENSHOTS) {
+          await mkdir(process.env.AGENTENV_REVIEW_SCREENSHOTS, { recursive: true });
+          await page.screenshot({ path: join(process.env.AGENTENV_REVIEW_SCREENSHOTS, `agents-${pending ? "edited" : "applied"}-${width}.png`) });
+        }
+      }
+    }
+  }, standardElectronTestTimeout);
+
   it("balances compact catalog rows and bounded settings at desktop widths", async () => {
     const { page } = await launchApp();
     for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {

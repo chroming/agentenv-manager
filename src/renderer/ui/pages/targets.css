@@ -103,17 +103,16 @@
 }
 
 .target-workflow-environment {
-  align-content: center;
-  display: grid;
+  align-items: center;
+  display: flex;
   font-size: var(--font-size-metadata);
   line-height: 18px;
-  gap: 2px;
-  grid-template-rows: 18px 18px;
+  gap: 6px;
   min-width: 0;
 }
 
-.target-workflow-environment--single {
-  grid-template-rows: 18px;
+.target-workflow-environment > .ui-status-hint {
+  flex: 0 0 auto;
 }
 
 .target-card--workflow {
@@ -272,7 +271,6 @@
   white-space: nowrap;
 }
 
-.target-workflow-lifecycle,
 .target-workflow-profile,
 .target-workflow-last-applied {
   align-items: center;
@@ -285,10 +283,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.target-workflow-lifecycle {
-  color: var(--text);
 }
 
 @container (max-width: 900px) {

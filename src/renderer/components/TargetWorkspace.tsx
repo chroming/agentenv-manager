@@ -490,12 +490,6 @@ export const TargetWorkspace = ({
             <Button size="compact" onClick={onChooseAgents}>{t("Choose Agents")}</Button>
           </div>
         ) : null}
-        {remoteDevices.length > 0 && targets.length > 0 ? (
-          <div className="target-location-divider">
-            <span>{t("This Mac")}</span>
-            <span>{t("{{count}} Agents", { count: targets.length })}</span>
-          </div>
-        ) : null}
         {targets.map((target) => {
           const state = statesByTarget.get(target.id);
           const isManaged = state?.status === "managed";
@@ -559,6 +553,7 @@ export const TargetWorkspace = ({
                   {t(targetStatusLabel[target.health.status])}
                 </span>
                 <TargetEnvironmentSummary
+                  lifecycleStatus={state?.lifecycleStatus}
                   actionOnly={!state?.activeProfileName && (!state?.lifecycleStatus || state.lifecycleStatus === "unmanaged") && !isManaged}
                   lifecycle={t(state?.lifecycleStatus ? lifecycleLabel[state.lifecycleStatus] : isManaged ? "Managed by AgentEnv" : "Not managed")}
                   profileName={state?.activeProfileName}

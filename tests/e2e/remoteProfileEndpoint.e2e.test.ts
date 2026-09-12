@@ -197,6 +197,7 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
 
     for (const width of [920, 1180, 1440]) {
       await page.setViewportSize({ width, height: 900 });
+      expect(await page.locator(".target-location-divider").count()).toBe(0);
       const centers = await page.locator(".target-workflow-environment").evaluateAll((cells) =>
         cells.map((cell) => {
           const label = cell.querySelector(".target-workflow-lifecycle")?.getBoundingClientRect();

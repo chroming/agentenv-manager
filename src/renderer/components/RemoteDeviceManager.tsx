@@ -394,6 +394,7 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
                       {t(available ? "Ready" : "Unavailable")}
                     </span>
                     <TargetEnvironmentSummary
+                      lifecycleStatus={state?.lifecycleStatus}
                       actionOnly={!state?.activeProfileName && (!state?.lifecycleStatus || state.lifecycleStatus === "unmanaged")}
                       lifecycle={state?.lifecycleStatus ? remoteLifecycleLabel(state.lifecycleStatus, t) : t("Not managed")}
                       profileName={state?.activeProfileName}
