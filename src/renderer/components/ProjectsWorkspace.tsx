@@ -1253,6 +1253,7 @@ export const ProjectsWorkspace = ({
                               const fullState = [consumerNames.join(" · "), gitLabel].filter(Boolean).join(" · ");
                               return (
                                 <ResourceRow
+                                  appearance="plain"
                                   actionsVisibility="contextual"
                                   className="ui-resource-children__item project-resource-entry"
                                   density="compact"

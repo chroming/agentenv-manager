@@ -1,7 +1,7 @@
 /* Skills owns table density and responds to its actual content width. */
 .skill-library-panel {
-  border-radius: var(--radius-surface);
   box-shadow: none;
+  display: grid;
   container-name: skill-library;
   container-type: inline-size;
   flex: 1 1 auto;
@@ -24,22 +24,22 @@
 .skill-library-panel .library-quick-tabs {
   align-items: center;
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
+  gap: var(--space-5, 20px);
   min-height: 40px;
-  padding: 6px 12px;
+  padding: 0 0 8px;
 }
 
 .skill-library-panel .library-toolbar {
   background: var(--surface);
   border-top: 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0;
   display: grid;
   gap: 8px;
   grid-template-columns: minmax(0, 1fr) auto;
-  padding: 7px 12px;
+  padding: 4px 0 12px;
 }
 
 .skill-library-panel .library-toolbar-actions {

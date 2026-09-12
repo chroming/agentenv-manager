@@ -13,6 +13,7 @@ interface ResourceRowProps extends Omit<HTMLAttributes<HTMLDivElement>, "title">
   state?: ReactNode;
   title: ReactNode;
   tone?: ResourceRowTone;
+  appearance?: "default" | "plain";
 }
 
 export const ResourceRow = ({
@@ -26,11 +27,12 @@ export const ResourceRow = ({
   state,
   title,
   tone = "default",
+  appearance = "default",
   ...props
 }: ResourceRowProps) => (
   <div
     {...props}
-    className={`ui-resource-row ui-resource-row--${density} ui-resource-row--${tone} ui-resource-row--actions-${actionsVisibility} ${className}`.trim()}
+    className={`ui-resource-row ui-resource-row--${density} ui-resource-row--${tone} ui-resource-row--appearance-${appearance} ui-resource-row--actions-${actionsVisibility} ${className}`.trim()}
   >
     <span className="ui-resource-row__icon" aria-hidden="true">
       {icon}

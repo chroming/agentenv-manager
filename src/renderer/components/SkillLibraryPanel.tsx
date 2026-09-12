@@ -108,7 +108,7 @@ import {
 } from "../../shared/skillCleanup";
 import { isSharedSkillInventoryEntry } from "../../shared/skillLocationSemantics";
 import { useI18n } from "../i18n";
-import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, SegmentedControl, SelectControl, SearchField, Switch, ToolbarOverflowMenu } from "./ui";
+import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, SegmentedControl, SelectControl, SearchField, Switch, TabBar, ToolbarOverflowMenu } from "./ui";
 import { SkillMaintenanceStatus } from "./SkillMaintenanceStatus";
 import { SkillMaintenanceAction } from "./SkillMaintenanceAction";
 import { skillMaintenanceState } from "../skillMaintenanceState";
@@ -1754,13 +1754,13 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     return true;
   };
   return (
-    <section className="skill-library-panel ui-surface-frame" aria-label={t("Skill library")}>
+    <section className="skill-library-panel" aria-label={t("Skill library")}>
       {summaryHistoryId ? <SkillSummaryHistoryDialog id={summaryHistoryId} onClose={() => setSummaryHistoryId(undefined)} /> : null}
       {tagAnalysisSkills ? <SkillTagSuggestionsDialog skills={tagAnalysisSkills} vocabulary={availableTags} onSave={onSetTags} onClose={() => setTagAnalysisSkills(undefined)} /> : null}
       <div className="library-control-deck">
         <div className="library-quick-tabs">
-          <SegmentedControl
-            className="library-mode-switch ui-segmented-control--compact"
+          <TabBar
+            className="library-mode-switch"
             label={t("Skill library view")}
             onChange={onLibraryModeChange}
             options={[
@@ -1768,7 +1768,6 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               { value: "sources", label: t("By source") },
               { value: "groups", label: t("Groups") }
             ]}
-            semantics="tabs"
             value={libraryMode}
           />
           {libraryMode === "skills" ? (

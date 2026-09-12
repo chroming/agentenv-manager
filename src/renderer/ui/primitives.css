@@ -617,6 +617,28 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   white-space: nowrap;
 }
 
+/* Keep the hit area while reducing repeated control emphasis in inventories. */
+.ui-switch--compact {
+  min-width: 38px;
+}
+
+.ui-switch--compact .ui-switch__track {
+  flex-basis: 30px;
+  width: 30px;
+  height: 18px;
+  padding: 2px;
+}
+
+.ui-switch--compact .ui-switch__thumb {
+  flex-basis: 12px;
+  width: 12px;
+  height: 12px;
+}
+
+.ui-switch--compact.is-on .ui-switch__thumb {
+  transform: translateX(10px);
+}
+
 .ui-switch:disabled {
   cursor: not-allowed;
   opacity: 0.48;
@@ -954,6 +976,21 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   gap: 2px;
   grid-column: 2;
   min-width: 0;
+}
+
+/* Embedded inventories use indentation, not tiled icons and repeated rules. */
+.ui-resource-row--appearance-plain {
+  border-bottom-color: transparent;
+  min-height: 42px;
+  padding-block: 5px;
+}
+
+.ui-resource-row--appearance-plain .ui-resource-row__icon {
+  background: transparent;
+}
+
+.ui-resource-row--appearance-plain:hover {
+  background: var(--surface-subtle);
 }
 
 .ui-resource-row__identity > strong,

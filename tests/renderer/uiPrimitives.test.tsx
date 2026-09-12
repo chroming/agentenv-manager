@@ -43,6 +43,25 @@ import { OverflowTooltip } from "../../src/renderer/components/OverflowTooltip";
 import { InfoTip } from "../../src/renderer/components/InfoTip";
 import { useModalDialog } from "../../src/renderer/hooks/useModalDialog";
 
+it("renders plain resource rows without changing their state and action slots", () => {
+  const { container } = render(<ResourceRow appearance="plain" density="compact"
+    icon={<RefreshCw />} title="Review Skill" state="Update available"
+    actions={<Button>Review</Button>} />);
+  expect(container.querySelector(".ui-resource-row--appearance-plain")).not.toBeNull();
+  expect(container.querySelector(".ui-resource-row__state")?.textContent).toBe("Update available");
+  expect(screen.getByRole("button", { name: "Review" })).toBeEnabled();
+});
+
+it("keeps compact switches accessible and interactive", () => {
+  const onClick = vi.fn();
+  render(<Switch size="compact" checked label="Enable group" onClick={onClick} />);
+  const toggle = screen.getByRole("switch", { name: "Enable group" });
+  expect(toggle).toHaveClass("ui-switch--compact");
+  expect(toggle).toHaveAttribute("aria-checked", "true");
+  fireEvent.click(toggle);
+  expect(onClick).toHaveBeenCalledOnce();
+});
+
 afterEach(cleanup);
 
 describe("renderer UI primitives", () => {

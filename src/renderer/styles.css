@@ -2617,7 +2617,6 @@ summary {
 
 .skill-library-panel {
   background: #fff;
-  border: 1px solid var(--border);
   display: grid;
   gap: 0;
   min-width: 0;

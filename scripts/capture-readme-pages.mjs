@@ -25,6 +25,14 @@ export const captureReadmePages = async ({ page, windowHandle, outputDir, fixtur
       }
     }, fixtureRoot);
     await capturePage(page, join(outputDir, `${name}.png`));
+    if (process.env.AGENTENV_CAPTURE_RESPONSIVE === "1") {
+      for (const [width, height] of [[920, 620], [1440, 900]]) {
+        await setWindowSize(page, windowHandle, width, height);
+        await page.waitForTimeout(150);
+        await capturePage(page, join(outputDir, `${name}-${width}.png`));
+      }
+      await setWindowSize(page, windowHandle, 1180, 728);
+    }
   };
   const open = async (name) => {
     await page.getByRole("button", { name, exact: true }).click();

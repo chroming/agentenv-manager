@@ -2,15 +2,10 @@
   position: relative;
 }
 
-.skill-library-panel .library-mode-switch,
 .skill-library-panel .library-status-tabs {
   align-items: center;
   display: flex;
   gap: 4px;
-}
-
-.skill-library-panel .library-mode-switch {
-  gap: 2px;
 }
 
 .skill-library-panel .library-status-tabs {

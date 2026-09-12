@@ -293,6 +293,7 @@ export const SkillsEditor = ({
     ];
     return (
       <ResourceRow
+        appearance="plain"
         className={`ui-resource-children__item profile-skill-row${effectiveEnabled ? "" : " is-disabled"}${
           options.grouped ? " is-group-member" : " is-direct"
         }${localOverride ? " has-local-override" : ""}`}
@@ -347,6 +348,7 @@ export const SkillsEditor = ({
         actions={(
           <>
             <Switch
+              size="compact"
               checked={switchChecked}
               className="profile-skill-switch"
               disabled={disabled || !profileManagesSkills || !skill || !globallyEnabled || !groupEnabled}
@@ -488,6 +490,7 @@ export const SkillsEditor = ({
           const skillName = entry.name || entry.runtimeName || entry.deploymentName || entry.id;
           return (
             <ResourceRow
+              appearance="plain"
               className={`ui-resource-children__item profile-skill-row${enabled ? "" : " is-disabled"}`}
               density="compact"
               description={entry.version ? `v${entry.version}` : undefined}
@@ -531,6 +534,7 @@ export const SkillsEditor = ({
               actions={(
                 <>
                   <Switch
+                    size="compact"
                     checked={group.enabled}
                     disabled={disabled || !profileManagesSkills}
                     label={t(group.enabled ? "Turn off {{name}}" : "Turn on {{name}}", { name: group.name })}
