@@ -890,6 +890,11 @@
   padding-inline: 0;
 }
 
+.ui-resource-panel-toolbar--catalog {
+  border-bottom: 0;
+  padding: 4px 0 12px;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .ui-resource-row--actions-contextual .ui-resource-row__actions {
     opacity: 0;

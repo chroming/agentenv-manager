@@ -2477,6 +2477,11 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Embedded Skill members use the shared plain ResourceRow in Profiles, Workspaces, and Library groups.
   Parent group labels carry hierarchy; member labels remain regular weight. Compact switches retain
   their full interaction target. Toolbars must not introduce an extra framed section above members.
+- Skill list, By source, and Groups use ResourcePanelToolbar's catalog variant for the same search
+  baseline, outer spacing, and page-action density. Source identity icons retain a fixed gap and
+  vertical center with both interactive repository labels and static local labels. Source child
+  rows follow their parent's identity column across responsive and merge-selection layouts; compact
+  windows must not restore obsolete two-line spacing for single-line candidates.
 - The Instructions reading workspace keeps description and Profile usage in its header context.
   A single CONTENT.md preview does not repeat a filename header; its expand and edit commands remain
   available in the header. Multi-document previews elsewhere retain individual file headers.

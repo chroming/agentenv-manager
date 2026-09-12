@@ -108,7 +108,7 @@ import {
 } from "../../shared/skillCleanup";
 import { isSharedSkillInventoryEntry } from "../../shared/skillLocationSemantics";
 import { useI18n } from "../i18n";
-import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, SegmentedControl, SelectControl, SearchField, Switch, TabBar, ToolbarOverflowMenu } from "./ui";
+import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, ResourcePanelToolbar, SegmentedControl, SelectControl, SearchField, Switch, TabBar, ToolbarOverflowMenu } from "./ui";
 import { SkillMaintenanceStatus } from "./SkillMaintenanceStatus";
 import { SkillMaintenanceAction } from "./SkillMaintenanceAction";
 import { skillMaintenanceState } from "../skillMaintenanceState";
@@ -1800,7 +1800,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
             options={[{ value: "all", label: `${t("All")} (${skillGroups.length})` },
               { value: "updates", label: `${t("Updates")} (${skillGroups.filter((group) => group.skillIds.some((id) => updateableSkillIds.includes(id))).length})` }]} /> : null}
         </div>
-        <div className="library-toolbar" hidden={libraryMode !== "skills"}>
+        <ResourcePanelToolbar variant="catalog" className="library-toolbar" hidden={libraryMode !== "skills"}>
           <SearchField
               fieldClassName="library-catalog-search"
               icon={<Search size={15} strokeWidth={2.2} />}
@@ -1854,7 +1854,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               onReset={() => updateControls(resetSkillLibraryFilterPatch)}
             />
           ) : null}
-        </div>
+        </ResourcePanelToolbar>
       </div>
 
       <section

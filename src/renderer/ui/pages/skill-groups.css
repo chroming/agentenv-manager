@@ -10,8 +10,6 @@
   grid-template-columns: minmax(0, 1fr) auto;
   justify-content: stretch;
   gap: 8px;
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--border);
 }
 
 .skill-group-search {

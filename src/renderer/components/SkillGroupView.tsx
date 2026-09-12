@@ -156,7 +156,7 @@ export const SkillGroupView = ({
 
   return (
     <section className="skill-group-view" aria-label={t("Skill Groups")}>
-      <ResourcePanelToolbar className="skill-group-toolbar">
+      <ResourcePanelToolbar variant="catalog" className="skill-group-toolbar">
         <SearchField
           fieldClassName="skill-group-search"
           icon={<Search size={15} strokeWidth={2.2} />}

@@ -2,7 +2,7 @@ import type { HTMLAttributes } from "react";
 import { ControlDensityProvider } from "./controlDensity";
 
 export interface ResourcePanelToolbarProps extends HTMLAttributes<HTMLDivElement> {
-  variant?: "default" | "embedded" | "flush";
+  variant?: "default" | "embedded" | "flush" | "catalog";
 }
 
 export const ResourcePanelToolbar = ({
@@ -11,7 +11,7 @@ export const ResourcePanelToolbar = ({
   variant = "default",
   ...props
 }: ResourcePanelToolbarProps) => (
-  <ControlDensityProvider density="compact">
+  <ControlDensityProvider density={variant === "catalog" ? "default" : "compact"}>
     <div
       {...props}
       className={`ui-resource-panel-toolbar ui-resource-panel-toolbar--${variant} ${className}`.trim()}

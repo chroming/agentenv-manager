@@ -1788,6 +1788,19 @@ describe("Electron UI profile switching e2e", () => {
       hasText: "project-skills"
     });
     await sourceRow.waitFor({ state: "visible" });
+    await sourceRow.getByRole("button", { name: "Expand source", exact: true }).click();
+    for (const width of [920, 1020, 1180, 1440]) {
+      await resizeAppWindow(page, width, 728);
+      const geometry = await sourceRow.evaluate((group) => {
+        const parent = group.querySelector(".skill-source-identity")!.getBoundingClientRect();
+        const name = group.querySelector(".skill-source-candidate-name")!.getBoundingClientRect();
+        const candidate = group.querySelector(".skill-source-candidate")!.getBoundingClientRect();
+        return { parentLeft: parent.left, childLeft: name.left, height: candidate.height };
+      });
+      expect(Math.abs(geometry.childLeft - geometry.parentLeft)).toBeLessThanOrEqual(1);
+      expect(geometry.height).toBeLessThanOrEqual(52);
+    }
+    await resizeAppWindow(page, 920, 620);
     await sourceRow.getByRole("button", { name: /Source actions/ }).click();
     await page.getByRole("menuitem", { name: "Include in routine checks" }).click();
     await page.getByRole("button", { name: /^Monitored/ }).click();
@@ -8815,7 +8828,12 @@ describe("Electron UI profile switching e2e", () => {
           const moreRect = more.getBoundingClientRect();
           const hiddenDetail = status.querySelector<HTMLElement>(".ui-visually-hidden");
           const hiddenDetailRect = hiddenDetail?.getBoundingClientRect();
+          const source = row.querySelector<HTMLElement>(".library-source-primary")!;
+          const sourceIcon = source.querySelector("svg")!.getBoundingClientRect();
+          const sourceText = source.querySelector(".library-source-name")!.getBoundingClientRect();
           return {
+            sourceGap: sourceText.left - sourceIcon.right,
+            sourceCenterOffset: Math.abs(sourceText.top + sourceText.height / 2 - sourceIcon.top - sourceIcon.height / 2),
             actionCellCount: row.querySelectorAll(".library-current-action-cell").length,
             childrenFit: Array.from(row.children).every((child) => {
               const box = child.getBoundingClientRect();
@@ -8874,6 +8892,8 @@ describe("Electron UI profile switching e2e", () => {
       expect(geometry.metrics[0]!.statusLineHeight).toBe(geometry.metrics[1]!.statusLineHeight);
       expect(geometry.metrics[0]!.statusLabelText).toBe("Update available");
       for (const row of geometry.metrics) {
+        expect(row.sourceGap).toBeGreaterThanOrEqual(4);
+        expect(row.sourceCenterOffset).toBeLessThanOrEqual(1);
         expect(row.actionCellCount).toBe(0);
         expect(row.childrenFit).toBe(true);
         expect(row.gridColumnCount).toBe(5);
@@ -8901,6 +8921,37 @@ describe("Electron UI profile switching e2e", () => {
     await expectUnifiedStatusLane(920, 620);
     await expectUnifiedStatusLane(1180, 728);
     await expectUnifiedStatusLane(1536, 900);
+  }, 45_000);
+
+  it("keeps catalog toolbar geometry consistent across Skill projections", async () => {
+    const { page } = await launchApp();
+    await openSkillLibrary(page);
+    for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+      await resizeAppWindow(page, width!, height!);
+      const measurements = [];
+      for (const name of ["Skill list", "By source", "Groups"]) {
+        await page.getByRole("tab", { name, exact: true }).click();
+        const toolbar = page.locator(".ui-resource-panel-toolbar--catalog:visible");
+        await toolbar.waitFor({ state: "visible" });
+        measurements.push(await toolbar.evaluate((element) => {
+          const input = element.querySelector("input")!.getBoundingClientRect();
+          const button = element.querySelector("button")!.getBoundingClientRect();
+          const buttons = element.querySelectorAll("button");
+          const last = buttons[buttons.length - 1]!.getBoundingClientRect();
+          return { left: input.left, top: input.top, inputHeight: input.height,
+            trailingGap: element.getBoundingClientRect().right - last.right,
+            buttonHeight: button.height, centerOffset: Math.abs(input.top + input.height / 2 - button.top - button.height / 2) };
+        }));
+      }
+      for (const item of measurements) {
+        expect(Math.abs(item.left - measurements[0]!.left)).toBeLessThanOrEqual(1);
+        expect(Math.abs(item.top - measurements[0]!.top)).toBeLessThanOrEqual(1);
+        expect(item.inputHeight).toBe(measurements[0]!.inputHeight);
+        expect(item.buttonHeight).toBe(measurements[0]!.buttonHeight);
+        expect(item.centerOffset).toBeLessThanOrEqual(1);
+        expect(Math.abs(item.trailingGap)).toBeLessThanOrEqual(1);
+      }
+    }
   }, 45_000);
 
   it("updates all available library skill updates from the rendered app", async () => {

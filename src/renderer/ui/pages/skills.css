@@ -34,13 +34,9 @@
 }
 
 .skill-library-panel .library-toolbar {
-  background: var(--surface);
-  border-top: 0;
-  border-bottom: 0;
   display: grid;
   gap: 8px;
   grid-template-columns: minmax(0, 1fr) auto;
-  padding: 4px 0 12px;
 }
 
 .skill-library-panel .library-toolbar-actions {
@@ -320,9 +316,12 @@
   white-space: nowrap;
 }
 
-.skill-library-panel .library-source-primary,
-
 .skill-library-panel .library-source-primary {
+  align-items: center;
+  display: flex;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 100%;
   color: var(--text);
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-regular);
@@ -341,6 +340,7 @@
 }
 
 .skill-library-panel .library-source-primary > span {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

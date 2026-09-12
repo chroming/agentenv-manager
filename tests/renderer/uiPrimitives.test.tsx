@@ -823,6 +823,21 @@ describe("renderer UI primitives", () => {
     );
   });
 
+  it("keeps catalog actions at page density without enlarging embedded actions", () => {
+    render(<>
+      <ResourcePanelToolbar variant="catalog" aria-label="Catalog">
+        <Button>Check updates</Button>
+        <IconButton label="Merge"><RefreshCw /></IconButton>
+      </ResourcePanelToolbar>
+      <ResourcePanelToolbar variant="embedded" aria-label="Members">
+        <Button>Add</Button>
+      </ResourcePanelToolbar>
+    </>);
+    expect(screen.getByRole("button", { name: "Check updates" })).toHaveClass("ui-button--default");
+    expect(screen.getByRole("button", { name: "Merge" })).toHaveClass("ui-icon-button--default");
+    expect(screen.getByRole("button", { name: "Add" })).toHaveClass("ui-button--compact");
+  });
+
   it("owns field and dialog composition instead of relying on page-local form markup", () => {
     render(
       <ModalFrame ariaLabel="Add Skill" onDismiss={() => undefined}>

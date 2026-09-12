@@ -61,6 +61,7 @@ import {
   ModalFrame,
   SelectControl,
   SearchField,
+  ResourcePanelToolbar,
   ToolbarOverflowMenu
 } from "./ui";
 
@@ -632,7 +633,7 @@ export const SkillSourceView = ({
       aria-label={t("Skills by source")}
       aria-hidden={!active}
     >
-      <div className={`skill-source-toolbar${mergeSelectionMode ? " is-merge-selection" : ""}`}>
+      <ResourcePanelToolbar variant="catalog" className={`skill-source-toolbar${canMergeSources ? " has-merge" : ""}${mergeSelectionMode ? " is-merge-selection" : ""}`}>
         <SearchField fieldClassName="library-catalog-search" icon={<Search size={15} strokeWidth={2.2} />}
             label={t("Search sources and skills")}
             placeholder={t("Search source or skill...")}
@@ -731,7 +732,7 @@ export const SkillSourceView = ({
             </Button>
           </div>
         ) : null}
-      </div>
+      </ResourcePanelToolbar>
 
       <div
         className={`skill-source-list${mergeSelectionMode ? " can-merge" : ""}${selectionDragging ? " is-selecting" : ""}`}
