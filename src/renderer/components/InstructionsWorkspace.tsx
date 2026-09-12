@@ -1,4 +1,4 @@
-import { Expand, Eye, FileInput, Pencil, Plus, Layers, Trash2 } from "lucide-react";
+import { Expand, Eye, FileInput, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   useEffect,
@@ -179,7 +179,7 @@ export const InstructionsWorkspace = ({
             <Button icon={<FileInput size={14} />} onClick={() => void onImport().then((initial) => {
               if (initial) setEditor({ initial });
             })}>{t("Import")}</Button>
-            <Button variant="primary" icon={<Plus size={14} />} onClick={() => setEditor({})}>{t("New Instruction")}</Button>
+            <Button variant={blocks.length === 0 ? "primary" : "secondary"} icon={<Plus size={14} />} onClick={() => setEditor({})}>{t("New Instruction")}</Button>
             <RefreshAction label={t("Refresh")} busy={loading} onRefresh={() => void onRefresh()} />
           </>
         )}
@@ -252,7 +252,7 @@ export const InstructionsWorkspace = ({
                       <OverflowTooltip
                         className="instructions-detail-usage"
                         ariaLabel={`${selected.usedByProfiles!.length === 1 ? t("Used by 1 Profile") : t("Used by {{count}} Profiles", { count: selected.usedByProfiles!.length })}: ${selected.usedByProfiles!.join(", ")}`}
-                        displayContent={<><Layers size={14} aria-hidden="true" /><span>{selected.usedByProfiles!.length}</span></>}
+                        displayContent={t(selected.usedByProfiles!.length === 1 ? "{{count}} Profile" : "{{count}} Profiles", { count: selected.usedByProfiles!.length })}
                         text={selected.usedByProfiles!.join(", ")}
                         focusable
                       />

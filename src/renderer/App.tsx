@@ -3,7 +3,6 @@ import { profileSharedSkillBoundary } from "../shared/sharedSkillBoundary";
 import {
   ArrowRight,
   CheckCircle2,
-  CircleDashed,
   Clock3,
   History,
   LoaderCircle,
@@ -1941,8 +1940,6 @@ const AppContent = ({
       ? LoaderCircle
       : readiness.status === "applied"
       ? CheckCircle2
-      : readiness.status === "ready" || readiness.status === "unmanaged"
-        ? CircleDashed
       : readiness.status === "dirty" || readiness.status === "apply-pending"
         ? Clock3
         : TriangleAlert;
@@ -3499,6 +3496,7 @@ const AppContent = ({
   );
 
   const showReadinessText = ["save-failed", "no-target", "target-unavailable", "validation-error", "review-required", "preview-error"].includes(readiness.status);
+  const showReadinessIcon = profileSaveWorking || isProfilePreviewing || isProfileApplying || !["ready", "unmanaged"].includes(readiness.status);
   const profileReadinessStatus = (
     <span className={`profile-action-status profile-action-status--${readiness.status}${showReadinessText ? "" : " profile-action-status--compact"}`}>
       <span
@@ -3506,11 +3504,11 @@ const AppContent = ({
         role="status"
         aria-label={t("Profile readiness")}
       >
-        <StatusHint
+        {showReadinessIcon ? <StatusHint
           icon={<ReadinessIcon className={profileSaveWorking || isProfilePreviewing || isProfileApplying ? "is-spinning" : undefined} />}
           label={readinessActionText}
           detail={t(readiness.message)}
-        />
+        /> : <span className="ui-visually-hidden">{readinessActionText}</span>}
         {showReadinessText ? (
           <span className="profile-action-status__primary">{readinessActionText}</span>
         ) : null}

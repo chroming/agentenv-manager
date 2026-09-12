@@ -4750,8 +4750,7 @@ describe("App", () => {
     const readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness.querySelector(".profile-action-status__primary")).toBeNull();
     expect(readiness.querySelector(".ui-visually-hidden")).toHaveTextContent("Ready to apply");
-    fireEvent.focus(within(readiness).getByLabelText("Ready to apply"));
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("OpenCode");
+    expect(readiness.querySelector(".ui-status-hint")).toBeNull();
   });
 
   it("refreshes a stale Apply preview in place and requires confirmation again", async () => {
@@ -4859,7 +4858,7 @@ describe("App", () => {
     await screen.findByRole("region", { name: "Agents" });
 
     const openCodeCard = await screen.findByRole("article", { name: "Agent OpenCode" });
-    expect(within(openCodeCard).getByText("Applied")).toBeInTheDocument();
+    expect(within(openCodeCard).getByRole("button", { name: "Daily Coding" })).toHaveAttribute("title", "Daily Coding\nApplied");
     expect(within(openCodeCard).getByText("Daily Coding")).toBeInTheDocument();
   });
 

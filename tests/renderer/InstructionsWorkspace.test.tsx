@@ -35,7 +35,8 @@ describe("InstructionsWorkspace", () => {
 
     expect(screen.getAllByText("Review rules").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Consistent review guidance")).toHaveLength(2);
-    expect(screen.getByLabelText("Used by 1 Profile: Daily")).toHaveTextContent("1");
+    expect(screen.getByLabelText("Used by 1 Profile: Daily")).toHaveTextContent("1 Profile");
+    expect(screen.getByRole("button", { name: "New Instruction" })).not.toHaveClass("ui-button--primary");
     expect(screen.getByLabelText("Used by 1 Profile: Daily")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "More actions for Review rules" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));

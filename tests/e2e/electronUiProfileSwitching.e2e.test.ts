@@ -1528,6 +1528,25 @@ afterEach(async () => {
 });
 
 describe("Electron UI profile switching e2e", () => {
+  it("keeps Workspace read-only summaries on one aligned header line", async () => {
+    const { page } = await launchApp({ workspaceFixture: true });
+    await page.getByRole("button", { name: "Workspaces", exact: true }).click();
+    const mcp = page.locator('[data-resource-disclosure-id="workspace-mcp"]');
+    await mcp.waitFor();
+    expect(await mcp.locator(".ui-resource-disclosure__description").count()).toBe(0);
+    expect(await mcp.locator(".ui-resource-disclosure__summary").getAttribute("title")).toBe("Read-only");
+    for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+      await resizeAppWindow(page, width!, height!);
+      const geometry = await page.locator(".project-resource-section .ui-resource-disclosure__summary").evaluateAll((summaries) => summaries.map((summary) => {
+        const box = summary.getBoundingClientRect();
+        return { right: box.right, height: box.height };
+      }));
+      expect(geometry.length).toBeGreaterThanOrEqual(2);
+      expect(Math.max(...geometry.map((box) => box.right)) - Math.min(...geometry.map((box) => box.right))).toBeLessThanOrEqual(1);
+      expect(geometry.every((box) => box.height <= 24)).toBe(true);
+    }
+  }, standardElectronTestTimeout);
+
   it("keeps configured Agent Profiles on one line before and after edits", async () => {
     const { page } = await launchApp({ omitUnmanagedTargetSkill: true });
     await page.evaluate(async () => {
@@ -1608,11 +1627,8 @@ describe("Electron UI profile switching e2e", () => {
     expect(after!.y).toBe(before!.y);
     const status = page.getByRole("status", { name: "Profile readiness" });
     expect(await status.locator(".profile-action-status__primary").count()).toBe(0);
-    const hint = status.locator(".ui-status-hint").first();
-    await hint.focus();
-    await expect.poll(() => page.getByRole("tooltip").count()).toBe(1);
-    await page.keyboard.press("Escape");
-    expect(await page.getByRole("tooltip").count()).toBe(0);
+    expect(await status.locator(".ui-status-hint").count()).toBe(0);
+    expect(await status.textContent()).toContain("Ready to apply");
     await refresh.focus();
     await page.keyboard.press("Escape");
     for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {

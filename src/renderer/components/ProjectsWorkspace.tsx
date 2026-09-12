@@ -13,6 +13,7 @@ import {
   History,
   Info,
   LoaderCircle,
+  LockKeyhole,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -1173,7 +1174,6 @@ export const ProjectsWorkspace = ({
                       <ResourceDisclosureSection
                         className="project-resource-section"
                         density="compact"
-                        description={description}
                         expanded={expanded}
                         icon={icon}
                         id={`workspace-${kind}`}
@@ -1181,8 +1181,11 @@ export const ProjectsWorkspace = ({
                         onToggle={() => toggleResourceKind(kind)}
                         nested={kind === "skill" || kind === "mcp"}
                         title={label}
+                        summaryTitle={description}
                         toggleLabel={t(expanded ? "Collapse {{name}}" : "Expand {{name}}", { name: label })}
-                        summary={operation === "inspect" && !snapshot ? (
+                        summary={<span className="project-section-reading">
+                          {description ? <><LockKeyhole size={14} aria-hidden="true" /><span className="ui-visually-hidden">{description}</span></> : null}
+                          {operation === "inspect" && !snapshot ? (
                           <span className="project-section-reading">
                             <LoaderCircle className="is-spinning" size={12} aria-hidden="true" />
                             <span>{t("Reading…")}</span>
@@ -1194,7 +1197,7 @@ export const ProjectsWorkspace = ({
                           </span>
                         ) : (
                           String(resources.length)
-                        )}
+                        )}</span>}
                       >
                         {kind === "instructions" && canCreateInstruction ? (
                           <ResourcePanelToolbar

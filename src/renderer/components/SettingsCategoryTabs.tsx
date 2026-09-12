@@ -57,7 +57,7 @@ export const GeneralSettingsSection = ({
       <div className="settings-preference-list">
         <SettingsPreferenceRow
           label={t("Language")}
-          description={t("Uses your system language until you choose another language.")}
+          help={t("Uses your system language until you choose another language.")}
           control={<SelectControl
             controlWidth="standard"
             data-testid="locale-select"
@@ -73,7 +73,7 @@ export const GeneralSettingsSection = ({
         />
         <SettingsPreferenceRow
           label={t("Conversation terminal")}
-          description={t("Used when opening or continuing CLI conversations.")}
+          help={t("Used when opening or continuing CLI conversations.")}
           control={<SelectControl
             controlWidth="standard"
             data-testid="conversation-terminal-select"
