@@ -31,8 +31,9 @@ export const SkillMaintenanceStatus = ({ state, busy, disabled, detail, onReview
   const { t } = useI18n();
   const item = presentation[state];
   const Icon = item.icon;
+  const showIcon = item.kind !== "neutral" || busy;
   return <InteractiveStatus size="metadata" className={className}
-    statusKind={item.kind} icon={<Icon />} label={t(item.label)}
+    statusKind={item.kind} icon={<Icon className={showIcon ? undefined : "skill-maintenance-status__quiet-icon"} />} label={t(item.label)}
     busy={busy} disabled={disabled} title={detail}
     onReview={onReview} reviewLabel={reviewLabel} />;
 };

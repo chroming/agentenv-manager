@@ -327,6 +327,22 @@
   min-width: 0;
 }
 
+.instructions-context {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  min-width: 0;
+}
+
+.instructions-context > .instructions-detail-description {
+  flex: 0 1 auto;
+}
+
+.instructions-context > .instructions-detail-usage {
+  flex: 0 0 auto;
+}
+
 .instructions-detail-meta {
   align-items: center;
   border-bottom: 1px solid var(--border-subtle);

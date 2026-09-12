@@ -29,6 +29,7 @@ describe("shared Skill maintenance semantics", () => {
     const status = screen.getByText(label).closest(".ui-interactive-status")!;
     expect(status).toHaveAttribute("data-tone", tone);
     expect(status).toHaveClass("ui-interactive-status--metadata");
+    expect(Boolean(status.querySelector(".skill-maintenance-status__quiet-icon"))).toBe(tone === "neutral");
   });
 
   it("offers a retry without disguising failure as an update", () => {

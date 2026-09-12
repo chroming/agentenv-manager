@@ -2469,6 +2469,17 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
   width uses a visible grouped header and retains Skill, source, version, Profile usage, update,
   install, and action information rather than hiding columns.
 - Version, update, usage, and install metadata MUST use aligned first- and second-line tracks, including empty states and truncated values.
+- Default catalog rows prioritize identity and actionable state. Repository labels retain owner/repository;
+  full source paths, refs, and candidate version details remain available through focusable, selectable
+  detail popovers. Same-name source candidates retain their directory for visible disambiguation.
+- Neutral maintenance states retain the same icon/text lane as actionable states without decorative
+  emphasis. Updates, failures, and working feedback keep visible indicators and existing commands.
+- Embedded Skill members use the shared plain ResourceRow in Profiles, Workspaces, and Library groups.
+  Parent group labels carry hierarchy; member labels remain regular weight. Compact switches retain
+  their full interaction target. Toolbars must not introduce an extra framed section above members.
+- The Instructions reading workspace keeps description and Profile usage in its header context.
+  A single CONTENT.md preview does not repeat a filename header; its expand and edit commands remain
+  available in the header. Multi-document previews elsewhere retain individual file headers.
 - The Profile Target selector uses the selected Target name as its visible label without a redundant `Target:` prefix; its accessible name retains the full command meaning.
 - First and last row menus are topmost and in viewport.
 - Escape, outside click, keyboard focus, focus restoration, and Arrow/Home/End navigation for renderer action menus.

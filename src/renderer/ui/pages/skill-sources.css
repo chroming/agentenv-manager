@@ -443,7 +443,7 @@
   min-width: 0;
 }
 
-.skill-source-candidate-name strong,
+.skill-source-candidate-title,
 .skill-source-candidate-version {
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-regular);
@@ -453,7 +453,7 @@
   white-space: nowrap;
 }
 
-.skill-source-candidate-name strong {
+.skill-source-candidate-title {
   font-weight: var(--font-weight-medium);
 }
 

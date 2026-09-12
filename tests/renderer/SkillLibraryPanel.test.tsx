@@ -1032,8 +1032,11 @@ describe("SkillLibraryPanel", () => {
     );
     const repositoryRow = screen.getByRole("group", { name: "Library item internal-review" });
     expect(within(repositoryRow).getByLabelText("Full source for internal-review")).toHaveTextContent(
-      "code.example/platform/agent-skills/skills/engineering/review"
+      "code.example/platform/agent-skills"
     );
+    fireEvent.focus(within(repositoryRow).getByLabelText("Full source for internal-review"));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("skills/engineering/review");
+    fireEvent.blur(within(repositoryRow).getByLabelText("Full source for internal-review"));
     fireEvent.click(
       within(repositoryRow).getByRole("button", { name: "Copy repository source for internal-review" })
     );

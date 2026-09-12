@@ -17,8 +17,13 @@ export const skillSourceName = (skill: SkillLibraryEntry) => {
   if (skill.sourceType === "local" && !skill.source) return "Local import";
   if (skill.sourceType === "local") return "Local folder";
   const source = skillSourceLabel(skill);
-  if (source.startsWith("https://github.com/")) {
-    return source.replace("https://github.com/", "").replace("/tree/", "/");
+  try {
+    const url = new URL(source);
+    if (url.hostname === "github.com") {
+      return url.pathname.split("/").filter(Boolean).slice(0, 2).join("/").replace(/\.git$/, "");
+    }
+  } catch {
+    // Local paths and SSH remotes are formatted below.
   }
   if (skill.sourceType === "git" && skill.source) {
     let repository = skill.source;
@@ -30,7 +35,7 @@ export const skillSourceName = (skill: SkillLibraryEntry) => {
       if (scpLike) repository = `${scpLike[1]}/${scpLike[2]}`;
     }
     repository = repository.replace(/\.git$/, "").replace(/^\/+/, "");
-    return [repository, skill.upstream?.subpath].filter(Boolean).join("/");
+    return repository;
   }
   return source;
 };

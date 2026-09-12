@@ -20,6 +20,7 @@ interface InstructionDocumentPreviewListProps {
   emptyLabel?: string;
   fillAvailable?: boolean;
   appearance?: "framed" | "canvas";
+  showHeader?: boolean;
   onOpen?(document: InstructionDocumentPreview): void;
 }
 
@@ -28,6 +29,7 @@ export const InstructionDocumentPreviewList = ({
   emptyLabel,
   fillAvailable = false,
   appearance = "framed",
+  showHeader = true,
   onOpen
 }: InstructionDocumentPreviewListProps) => {
   const { t } = useI18n();
@@ -44,7 +46,7 @@ export const InstructionDocumentPreviewList = ({
     <div className={`instruction-documents instruction-documents--${appearance}${fillAvailable ? " instruction-documents--fill" : ""}`}>
       {documents.map((document) => (
         <article className="instruction-document" key={document.id}>
-          <header className="instruction-document__header">
+          {showHeader ? <header className="instruction-document__header">
             <span className="instruction-document__icon" aria-hidden="true">
               <FileText size={15} strokeWidth={2} />
             </span>
@@ -70,7 +72,7 @@ export const InstructionDocumentPreviewList = ({
                 <Expand size={14} strokeWidth={2.1} />
               </IconButton>
             ) : null}
-          </header>
+          </header> : null}
           <div className="instruction-document__preview" aria-label={t("Preview of {{name}}", {
             name: document.name
           })}>

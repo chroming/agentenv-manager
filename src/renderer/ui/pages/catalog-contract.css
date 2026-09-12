@@ -37,7 +37,7 @@
 
 .skill-source-candidate {
   border-top: 1px solid var(--border);
-  min-height: 58px;
+  min-height: var(--resource-row-compact);
 }
 
 .skill-source-table-head > span:first-child {

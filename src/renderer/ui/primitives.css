@@ -993,6 +993,15 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   background: var(--surface-subtle);
 }
 
+.ui-resource-row--appearance-plain .ui-resource-row__identity > strong {
+  font-weight: var(--font-weight-regular);
+}
+
+/* Keep the text lane stable beside actionable states without repeated healthy icons. */
+.skill-maintenance-status__quiet-icon {
+  visibility: hidden;
+}
+
 .ui-resource-row__identity > strong,
 .ui-resource-row__identity > span,
 .ui-resource-row__metadata {

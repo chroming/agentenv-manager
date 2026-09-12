@@ -1077,17 +1077,17 @@ export const SkillSourceView = ({
                       >
                         <div className="skill-source-candidate-identity">
                           <div className="skill-source-candidate-name">
-                            <strong>{candidate.name}</strong>
                             <OverflowTooltip
-                              className="skill-source-candidate-path"
-                              text={candidate.directory || group.directory || "."}
+                              className="skill-source-candidate-title"
+                              displayText={candidate.name}
+                              text={[candidate.name, candidate.directory || group.directory || ".", versionSummary, versionDetail].join("\n")}
+                              focusable
                             />
+                            {group.candidates.some((other) => other !== candidate && other.name === candidate.name) ? (
+                              <OverflowTooltip className="skill-source-candidate-path"
+                                text={candidate.directory || candidate.sourceSubpath || "."} />
+                            ) : null}
                           </div>
-                          <OverflowTooltip
-                            className="skill-source-candidate-version"
-                            displayText={versionSummary}
-                            text={versionDetail}
-                          />
                         </div>
                         <SkillMaintenanceStatus state={maintenanceState} detail={candidate.detail}
                           className="skill-source-state"

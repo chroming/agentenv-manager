@@ -36,7 +36,7 @@ describe("InstructionsWorkspace", () => {
     expect(screen.getAllByText("Review rules").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Consistent review guidance")).toHaveLength(2);
     expect(screen.getByText(/Used by 1 Profile/)).toBeInTheDocument();
-    expect(screen.getByText(/Daily/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Used by 1 Profile: Daily")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "More actions for Review rules" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
     const dialog = screen.getByRole("dialog", { name: "Delete Instruction Block" });

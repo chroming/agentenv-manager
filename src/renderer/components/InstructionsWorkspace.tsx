@@ -1,4 +1,4 @@
-import { Eye, FileInput, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Expand, Eye, FileInput, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   useEffect,
@@ -30,6 +30,7 @@ import {
   DialogHeader,
   EmptyState,
   InspectorHeader,
+  IconButton,
   MasterDetailLayout,
   MasterDetailPane,
   MasterListPane,
@@ -240,14 +241,34 @@ export const InstructionsWorkspace = ({
               <InspectorHeader
                 icon={<ResourceIcon iconKey={selected.iconKey ?? "file"} size={18} />}
                 title={selected.name}
-                description={selected.description ? (
-                  <OverflowTooltip
-                    className="instructions-detail-description"
-                    text={selected.description}
-                  />
+                description={selected.description || selected.usedByProfiles?.length ? (
+                  <span className="instructions-context">
+                    {selected.description ? (
+                      <OverflowTooltip
+                        className="instructions-detail-description"
+                        text={selected.description}
+                      />
+                    ) : null}
+                    {(selected.usedByProfiles?.length ?? 0) > 0 ? (
+                      <OverflowTooltip
+                        className="instructions-detail-usage"
+                        ariaLabel={`${selected.usedByProfiles!.length === 1 ? t("Used by 1 Profile") : t("Used by {{count}} Profiles", { count: selected.usedByProfiles!.length })}: ${selected.usedByProfiles!.join(", ")}`}
+                        displayText={selected.usedByProfiles!.length === 1 ? t("Used by 1 Profile") : t("Used by {{count}} Profiles", { count: selected.usedByProfiles!.length })}
+                        text={selected.usedByProfiles!.join(", ")}
+                        focusable
+                      />
+                    ) : null}
+                  </span>
                 ) : undefined}
                 actions={(
                   <>
+                    <IconButton
+                      label={t("Open {{name}}", { name: "CONTENT.md" })}
+                      variant="ghost"
+                      onClick={() => setPreviewBlock(selected)}
+                    >
+                      <Expand size={14} />
+                    </IconButton>
                     <Button icon={<Pencil size={14} />} onClick={() => setEditor({ block: selected })}>{t("Edit")}</Button>
                     <ToolbarOverflowMenu
                       items={[{
@@ -262,19 +283,8 @@ export const InstructionsWorkspace = ({
                   </>
                 )}
               />
-              {(selected.usedByProfiles?.length ?? 0) > 0 ? (
-                <div className="instructions-detail-meta">
-                  <OverflowTooltip
-                    className="instructions-detail-usage"
-                    text={`${selected.usedByProfiles!.length === 1
-                      ? t("Used by 1 Profile")
-                      : t("Used by {{count}} Profiles", {
-                        count: selected.usedByProfiles!.length
-                      })}: ${selected.usedByProfiles!.join(", ")}`}
-                  />
-                </div>
-              ) : null}
               <InstructionDocumentPreviewList
+                showHeader={false}
                 appearance="canvas"
                 fillAvailable
                 documents={[{

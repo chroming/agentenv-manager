@@ -26,6 +26,7 @@
   background: var(--surface);
   border-bottom: 0;
   display: flex;
+  justify-content: space-between;
   flex-wrap: wrap;
   gap: var(--space-5, 20px);
   min-height: 40px;

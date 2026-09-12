@@ -881,6 +881,7 @@
 }
 
 .ui-resource-panel-toolbar--embedded {
+  border-bottom: 0;
   min-height: 34px;
   padding: 3px 10px;
 }

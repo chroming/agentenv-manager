@@ -265,6 +265,7 @@ export const SkillGroupView = ({
               <AlignedResourceList actionTrack="compact" className="skill-group-members" role="list">
                 {memberSkills.map((skill) => (
                   <ResourceRow
+                    appearance="plain"
                     state={<SkillMaintenanceStatus state={skillMaintenanceState(skill, updatesById.get(skill.id))}
                       detail={updatesById.get(skill.id)?.error}
                       busy={updateActivity?.kind === "preview-skill" && updateActivity.skillId === skill.id}
