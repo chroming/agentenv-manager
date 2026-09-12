@@ -38,10 +38,11 @@ it("offers duplicate analysis after a local read, but never sends content until 
   window.agentEnv = api as unknown as AgentEnvApi;
   render(<LocalSkillAnalysis sourcePath="/fixture/review" />);
   const action = await screen.findByRole("button", { name: "Analyze differences" });
-  expect(screen.getByText("Duplicate Skill analysis")).toBeVisible();
+  expect(screen.queryByText("Duplicate Skill analysis")).not.toBeInTheDocument();
   expect(api.generateAIAnalysis).not.toHaveBeenCalled();
   fireEvent.click(action);
   await waitFor(() => expect(api.generateAIAnalysis).toHaveBeenCalledTimes(1));
   await screen.findByText("Now reviews tests");
+  expect(screen.getByText("Duplicate Skill analysis")).toBeVisible();
   expect(api.previewSkillImport).toHaveBeenCalledWith({ kind: "local", input: { sourcePath: "/fixture/review" } });
 });

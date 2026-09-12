@@ -15,7 +15,7 @@ import { useI18n } from "../i18n";
 import { DocumentDialogFrame } from "./DocumentDialogFrame";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { SyntaxCodePreview } from "./SyntaxCodePreview";
-import { Button, DetailList, DialogBody, DisclosureIcon, ResourcePanelToolbar, TabBar } from "./ui";
+import { Button, DetailList, DialogBody, DisclosureIcon, TextAction, TabBar } from "./ui";
 import { skillMaintenanceLabel } from "./SkillMaintenanceStatus";
 import { skillMaintenanceState } from "../skillMaintenanceState";
 
@@ -90,8 +90,10 @@ export const SkillFileBrowserDialog = ({
     { label: t("Status"), value: t(skillMaintenanceLabel(skillMaintenanceState(skill, update))) },
     ...(update?.error ? [{ label: t("Check failed"), value: update.error }] : []),
     ...(update?.sourceStatus === "removed" ? [{ label: t("Removed upstream"), value: t("The tracked source no longer contains this Skill. The Library copy is unchanged.") }] : []),
-    { label: t("Check updates"), value: skill.updatePolicy === "tracked" ? t("Enabled") : t("No update checks") },
-    { label: t("Profiles"), value: profileNames.join("\n") || t("Not referenced") },
+    { label: t("Check updates"), value: skill.updatePolicy === "tracked" ? t("Enabled") : t("No update checks"),
+      action: onUpdateSettings ? <TextAction onClick={onUpdateSettings}>{t("Update settings")}</TextAction> : undefined },
+    { label: t("Profiles"), value: profileNames.join("\n") || t("Not referenced"),
+      action: onReviewProfiles && profileNames.length > 0 ? <TextAction onClick={onReviewProfiles}>{t("Review Profiles")}</TextAction> : undefined },
     { label: t("Agent copies"), value: [installations.length ? installations.map((install) =>
       `${install.agents} · ${install.method} · ${install.status}\n${install.path}`
     ).join("\n\n") : inventoryNotice ? undefined : t("No detected copies"), inventoryNotice].filter(Boolean).join("\n\n") },
@@ -216,10 +218,6 @@ export const SkillFileBrowserDialog = ({
         options={[{ value: "files", label: t("Files") }, { value: "details", label: t("Details") }]} />
       </div>
       <DialogBody hidden={tab !== "details"} id={tab === "details" ? "skill-inspector-panel" : undefined} role="tabpanel" aria-labelledby="skill-inspector-details">
-        {onUpdateSettings || onReviewProfiles && profileNames.length > 0 ? <ResourcePanelToolbar variant="catalog" aria-label={t("Skill actions")}>
-          {onUpdateSettings ? <Button onClick={onUpdateSettings}>{t("Update settings")}</Button> : null}
-          {onReviewProfiles && profileNames.length > 0 ? <Button onClick={onReviewProfiles}>{t("Review Profiles")}</Button> : null}
-        </ResourcePanelToolbar> : null}
         <DetailList items={detailItems} />
       </DialogBody>
       <div hidden={tab !== "files"} className="skill-file-browser__body" id={tab === "files" ? "skill-inspector-panel" : undefined} role="tabpanel" aria-labelledby="skill-inspector-files">

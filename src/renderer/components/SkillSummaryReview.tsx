@@ -89,7 +89,7 @@ export const SkillSummaryReview = ({ plans, selectedIds, onViewFile, disabled = 
   };
   if (!allowed && !Object.keys(records).length) return null;
   return <section className="skill-summary-review" aria-label={title ?? t("Update summaries")}>
-    <AIReviewHeading title={title ?? t("Update summaries")} actions={<>
+    <AIReviewHeading title={Object.keys(records).length ? title ?? t("Update summaries") : undefined} actions={<>
       {allowed && plans.length === 1 && records[plans[0].id] ? <IconButton label={t("Regenerate summary")} disabled={disabled || configuring} busy={loadingConfig} onClick={() => void prepare([plans[0]], true)}><RotateCw size={15} /></IconButton>
       : allowed && (missing.length || (loadingConfig && initiator === "batch")) ? <Button icon={<Sparkles size={15} />} disabled={disabled || configuring || loadingConfig} busy={loadingConfig && initiator === "batch"} onClick={() => void prepare(missing)}>
         {loadingConfig && initiator === "batch" ? operationLabel : t(plans.length === 1 ? "Generate summary" : "Summarize selected ({{count}})", { count: missing.length })}

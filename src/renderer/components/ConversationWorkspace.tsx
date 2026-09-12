@@ -1964,6 +1964,9 @@ export const ConversationWorkspace = ({
                           text={detail.title}
                         />
                       </h3>
+                    </div>
+                  </div>
+                  <div className="conversation-detail-metadata">
                       {detail.workspacePath ? (
                         <span
                           aria-label={`${t("Working directory")}: ${detail.workspacePath}`}
@@ -1987,7 +1990,6 @@ export const ConversationWorkspace = ({
                           ) : null}
                         </span>
                       ) : null}
-                      <div className="conversation-detail-metadata">
                         <span className="conversation-detail-metadata__agent">
                           {detail.agentName}
                         </span>
@@ -2014,8 +2016,6 @@ export const ConversationWorkspace = ({
                         {detail.detailState === "summary-only"
                           ? <Badge tone="warning">{t("Summary only")}</Badge>
                           : null}
-                      </div>
-                    </div>
                   </div>
                   <ControlGroup className="conversation-detail-actions">
                     <span className="conversation-detail-secondary-actions">

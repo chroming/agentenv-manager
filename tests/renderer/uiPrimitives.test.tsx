@@ -10,6 +10,7 @@ import {
   Badge,
   Button,
   ControlGroup,
+  DetailList,
   DialogBody,
   DialogFooter,
   DialogHeader,
@@ -42,6 +43,20 @@ import { alignedResourceRowFixtures } from "../fixtures/alignedResourceRows";
 import { OverflowTooltip } from "../../src/renderer/components/OverflowTooltip";
 import { InfoTip } from "../../src/renderer/components/InfoTip";
 import { useModalDialog } from "../../src/renderer/hooks/useModalDialog";
+
+it("keeps detail actions beside their owning value without losing selectable metadata", () => {
+  const action = vi.fn();
+  const { container } = render(<DetailList items={[
+    { label: "Profiles", value: "Daily Coding\nCode Review", action: <Button onClick={action}>Review Profiles</Button> },
+    { label: "Source", value: "/fixture/skills/review" }
+  ]} />);
+  const values = container.querySelectorAll("dd");
+  expect(values[0]).toHaveTextContent("Daily Coding");
+  expect(values[0]).toContainElement(screen.getByRole("button", { name: "Review Profiles" }));
+  expect(values[1]).toHaveClass("selectable");
+  fireEvent.click(screen.getByRole("button", { name: "Review Profiles" }));
+  expect(action).toHaveBeenCalledOnce();
+});
 
 it("renders plain resource rows without changing their state and action slots", () => {
   const { container } = render(<ResourceRow appearance="plain" density="compact"

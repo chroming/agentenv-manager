@@ -98,8 +98,9 @@ describe("BulkSkillUpdateDialog", () => {
     expect(failures).toHaveTextContent("2 update previews could not be prepared");
     expect(failures).toHaveTextContent("ljg-book");
     expect(failures).toHaveTextContent("yao-meta-skill");
-    expect(screen.getByRole("status", { name: "1 Skills ready to update" }))
-      .toHaveAttribute("data-tone", "neutral");
+    expect(screen.getByText("1 Skills ready to update").closest(".ui-dialog-header"))
+      .toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: "1 Skills ready to update" })).not.toBeInTheDocument();
   });
 
   it("uses the standard preview controls and can stop an active queue", () => {
@@ -146,8 +147,9 @@ describe("BulkSkillUpdateDialog", () => {
       />
     );
 
-    expect(screen.getByRole("status", { name: "Update previews need attention" }))
-      .toHaveAttribute("data-tone", "warning");
+    expect(screen.getByText("Update previews need attention")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Preview failures" }))
+      .toHaveTextContent("Source no longer contains SKILL.md");
     expect(screen.getByRole("button", { name: "Retry failed previews" }))
       .toHaveClass("ui-button--primary");
     expect(screen.getByRole("button", { name: "Cancel" }))

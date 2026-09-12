@@ -389,12 +389,12 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
                           <strong>{endpoint.agentName}</strong>
                         </TextAction>
                       </span>
-                      <span className="target-workflow-description">{device.name} · SSH</span>
                     </span>
                     <span className={`target-health-status target-health-status--${available ? "ready" : "unknown"}`}>
                       {t(available ? "Ready" : "Unavailable")}
                     </span>
                     <TargetEnvironmentSummary
+                      actionOnly={!state?.activeProfileName && (!state?.lifecycleStatus || state.lifecycleStatus === "unmanaged")}
                       lifecycle={state?.lifecycleStatus ? remoteLifecycleLabel(state.lifecycleStatus, t) : t("Not managed")}
                       profileName={state?.activeProfileName}
                       actionLabel={state?.activeProfileName ? undefined : t("Configure")}

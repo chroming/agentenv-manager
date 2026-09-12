@@ -937,7 +937,8 @@ const writeCaptureManifest = async () => {
       artifactFingerprint: capturedBuild.artifact.sha256,
       generatedAt: capturedBuild.generatedAt
     },
-    viewports: readmeOnly ? ["1180x728"] : ["1180x728", "920x620"],
+    viewports: readmeOnly && process.env.AGENTENV_CAPTURE_RESPONSIVE !== "1"
+      ? ["1180x728"] : ["920x620", "1180x728", "1440x900"],
     files
   });
 };
@@ -1033,7 +1034,7 @@ try {
   await firstRunAgentsWorkspace.locator(".target-list[aria-busy='false']").waitFor({
     state: "visible"
   });
-  await firstRunAgentsWorkspace.getByText("Not managed", { exact: true }).first().waitFor({
+  await firstRunAgentsWorkspace.getByRole("button", { name: "Configure", exact: true }).first().waitFor({
     state: "visible"
   });
   await setWindowSize(page, windowHandle, 1180, 728);
@@ -1333,12 +1334,19 @@ try {
   await page.getByRole("heading", { name: "Instructions", exact: true }).waitFor({
     state: "visible"
   });
-  await setWindowSize(page, windowHandle, 920, 620);
-  await capturePage(page, join(outputDir, "instructions-920x620.png"));
-  await setWindowSize(page, windowHandle, 1180, 728);
-  await capturePage(page, join(outputDir, "instructions-1180x728.png"));
-  await setWindowSize(page, windowHandle, 1440, 900);
-  await capturePage(page, join(outputDir, "instructions-1440x900.png"));
+  for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+    await setWindowSize(page, windowHandle, width, height);
+    const aligned = await page.locator(".instructions-context").evaluate((context) => {
+      const description = context.querySelector(".instructions-detail-description");
+      const usage = context.querySelector(".instructions-detail-usage");
+      if (!description || !usage) return false;
+      const left = description.getBoundingClientRect();
+      const right = usage.getBoundingClientRect();
+      return right.left - left.right >= 8 && Math.abs(right.top - left.top) <= 3;
+    });
+    if (!aligned) throw new Error(`Instruction description and references overlap at ${width}px`);
+    await capturePage(page, join(outputDir, `instructions-${width}x${height}.png`));
+  }
   await page.getByRole("button", { name: "Skills", exact: true }).click();
   await page.getByRole("heading", { name: "Skills", exact: true }).waitFor({
     state: "visible"

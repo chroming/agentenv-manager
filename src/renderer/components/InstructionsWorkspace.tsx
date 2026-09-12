@@ -199,10 +199,8 @@ export const InstructionsWorkspace = ({
               const description = block.description || profileCount > 0 ? (
                 <span className="instructions-list-row__metadata">
                   {block.description ? <span>{block.description}</span> : null}
-                  {profileCount > 0 ? (
-                    <span>{t(profileCount === 1 ? "{{count}} Profile" : "{{count}} Profiles", {
-                      count: profileCount
-                    })}</span>
+                  {profileCount > 0 && !block.description ? (
+                    <span>{t(profileCount === 1 ? "{{count}} Profile" : "{{count}} Profiles", { count: profileCount })}</span>
                   ) : null}
                 </span>
               ) : undefined;

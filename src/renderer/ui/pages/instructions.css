@@ -327,11 +327,6 @@
   white-space: nowrap;
 }
 
-.instructions-list-row__metadata > span:last-child {
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
-
 .instructions-detail-pane {
   display: flex;
   flex-direction: column;
@@ -339,18 +334,21 @@
 
 .instructions-detail-description {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .instructions-context {
   align-items: baseline;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px 12px;
   min-width: 0;
 }
 
 .instructions-context > .instructions-detail-description {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
 }
 
 .instructions-context > .instructions-detail-usage {

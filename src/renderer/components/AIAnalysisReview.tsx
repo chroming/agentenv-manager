@@ -107,7 +107,7 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
     <DialogBody><div className="skill-summary-content">{content}</div></DialogBody>
     <DialogFooter>{record ? <>{actions}{closeAction}</> : <>{closeAction}{actions}</>}</DialogFooter>
   </> : <section className="skill-summary-review skill-summary-review--embedded" aria-label={t("AI analysis")}>
-    <AIReviewHeading title={t(heading)} actions={actions} />
+    <AIReviewHeading title={record ? t(heading) : undefined} actions={actions} />
     {content}
   </section>;
 };

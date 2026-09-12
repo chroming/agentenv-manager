@@ -165,7 +165,7 @@ export const BulkSkillUpdateDialog = ({
       >
         <DialogHeader
           title={t("Update all skills")}
-          description={t("Review every tracked change before updating the shared library.")}
+          description={started ? undefined : overallStatus.label}
           actions={(
             <IconButton
               ref={expandPreviewRef}
@@ -179,7 +179,7 @@ export const BulkSkillUpdateDialog = ({
           )}
         />
         <DialogBody className="bulk-update-body">
-          <OperationStatusBar
+          {started ? <OperationStatusBar
             icon={overallStatus.icon}
             label={overallStatus.label}
             statusKind={overallStatus.kind}
@@ -190,7 +190,7 @@ export const BulkSkillUpdateDialog = ({
                   skipped: skippedPlans.length
                 })
               : undefined}
-          />
+          /> : null}
           <SkillSummaryReview plans={plans} selectedIds={applicablePlans.map((plan) => plan.id)} disabled={started || isBusy} onViewFile={(plan, path, summary) => {
             setSummaryEvidence(summary.files.map((file) => ({ ...file, path: `${plan.name}/${file.path}`, before: "", after: "", action: "write" })));
             setSummaryFile(`${plan.name}/${path}`); setDiffWorkspaceOpen(true);

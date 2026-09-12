@@ -3184,7 +3184,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                   </small>
                 </legend>
                 {cleanupCandidate.items.filter(isCleanupManageable).map((item) => (
-                  <label className="cleanup-review-option" key={`location-${item.path}`}>
+                  <label className="cleanup-review-option cleanup-review-option--location" key={`location-${item.path}`}>
                     <input
                       type="checkbox"
                       checked={cleanupDraft.selectedPaths.includes(item.path)}

@@ -10,7 +10,7 @@
 }
 
 .ui-master-detail--compact {
-  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-columns: clamp(248px, 30%, 304px) minmax(0, 1fr);
 }
 
 .ui-master-detail--canvas {
@@ -837,6 +837,19 @@
   min-width: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+/* Keep bounded resource lists discoverable even with macOS overlay scrollbars. */
+.ui-resource-disclosure__panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.ui-resource-disclosure__panel::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  background-clip: padding-box;
+  border: 2px solid var(--surface);
+  border-radius: var(--radius-control);
 }
 
 .ui-resource-disclosure.has-child-scroll > .ui-resource-disclosure__panel {
@@ -881,23 +894,25 @@
   display: flex;
   gap: var(--space-2);
   justify-content: flex-end;
-  min-height: 36px;
-  padding: var(--space-1) var(--space-3);
+  box-sizing: border-box;
+  min-height: 34px;
+  padding: 2px var(--space-3);
 }
 
 .ui-resource-panel-toolbar--embedded {
   border-bottom: 0;
   min-height: 34px;
-  padding: 3px 10px;
+  padding: 2px 10px;
 }
 
 .ui-resource-panel-toolbar--flush {
+  border-bottom: 0;
   padding-inline: 0;
 }
 
 .ui-resource-panel-toolbar--catalog {
   border-bottom: 0;
-  padding: 4px 0 12px;
+  padding: 2px 0 6px;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -1253,8 +1268,8 @@ button.skill-tag-chip:focus-visible {
 .ui-detail-list > div {
   display: grid;
   grid-template-columns: minmax(100px, 144px) minmax(0, 1fr);
-  gap: var(--space-4);
-  padding-block: var(--space-3);
+  gap: var(--space-3);
+  padding-block: var(--space-2);
   border-bottom: 1px solid var(--border);
 }
 
@@ -1268,4 +1283,16 @@ button.skill-tag-chip:focus-visible {
   overflow-wrap: anywhere;
   user-select: text;
   white-space: pre-wrap;
+}
+
+.ui-detail-list__action-value {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.ui-detail-list__action-value > span {
+  flex: 1 1 180px;
+  min-width: 0;
 }

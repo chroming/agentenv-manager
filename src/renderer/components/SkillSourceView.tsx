@@ -1006,11 +1006,6 @@ export const SkillSourceView = ({
 
               {isExpanded ? (
                 <div className="skill-source-candidates">
-                  <div className="skill-source-candidate-head" aria-hidden="true">
-                    <span>{t("Skill")}</span>
-                    <span>{t("Status")}</span>
-                    <span aria-label={t("More")} />
-                  </div>
                   {group.candidates.map((candidate) => {
                     const addKey = `add\0${group.canonicalLink}\0${candidate.sourceSubpath}`;
                     const ignoreKey =

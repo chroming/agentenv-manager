@@ -292,13 +292,15 @@
   align-items: center;
   border-bottom: 1px solid var(--border);
   display: grid;
-  gap: 10px;
+  gap: 6px 10px;
   grid-template-columns: minmax(0, 1fr) auto;
-  min-height: 80px;
+  grid-template-areas: "identity actions" "context context";
+  min-height: 72px;
   padding: 12px 14px;
 }
 
 .conversation-detail-title {
+  grid-area: identity;
   align-items: flex-start;
   display: grid;
   gap: 10px;
@@ -319,7 +321,7 @@
 
 .conversation-detail-title__copy {
   display: grid;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -361,6 +363,8 @@
 }
 
 .conversation-detail-metadata {
+  grid-area: context;
+  padding-inline-start: 40px;
   align-items: center;
   color: var(--subtle);
   display: flex;
@@ -391,6 +395,7 @@
 }
 
 .conversation-detail-actions {
+  grid-area: actions;
   align-self: start;
 }
 
@@ -831,6 +836,10 @@
 
   .conversation-detail-title > .conversation-agent-icon {
     display: none;
+  }
+
+  .conversation-detail-metadata {
+    padding-inline-start: 0;
   }
 
   .conversation-detail-more-button {

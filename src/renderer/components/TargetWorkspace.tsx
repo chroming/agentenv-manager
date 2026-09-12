@@ -559,6 +559,7 @@ export const TargetWorkspace = ({
                   {t(targetStatusLabel[target.health.status])}
                 </span>
                 <TargetEnvironmentSummary
+                  actionOnly={!state?.activeProfileName && (!state?.lifecycleStatus || state.lifecycleStatus === "unmanaged") && !isManaged}
                   lifecycle={t(state?.lifecycleStatus ? lifecycleLabel[state.lifecycleStatus] : isManaged ? "Managed by AgentEnv" : "Not managed")}
                   profileName={state?.activeProfileName}
                   actionLabel={state?.lifecycleStatus === "recovery-required" ? t("Open Recovery") : state?.activeProfileName ? undefined : t("Configure")}

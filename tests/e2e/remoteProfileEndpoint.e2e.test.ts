@@ -199,14 +199,14 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
       await page.setViewportSize({ width, height: 900 });
       const centers = await page.locator(".target-workflow-environment").evaluateAll((cells) =>
         cells.map((cell) => {
-          const label = cell.querySelector(".target-workflow-lifecycle")!.getBoundingClientRect();
+          const label = cell.querySelector(".target-workflow-lifecycle")?.getBoundingClientRect();
           const health = cell.parentElement!.querySelector(".target-health-status")!.getBoundingClientRect();
           const action = cell.querySelector("button")!.getBoundingClientRect();
           const box = cell.getBoundingClientRect();
           return Math.max(
             Math.abs((box.top + box.bottom - health.top - health.bottom) / 2),
-            Math.abs(action.left - label.left),
-            Math.max(0, action.bottom - label.top)
+            Math.abs(action.left - (label ?? box).left),
+            label ? Math.max(0, action.bottom - label.top) : Math.abs((action.top + action.bottom - box.top - box.bottom) / 2)
           );
         })
       );

@@ -265,7 +265,7 @@
 }
 
 .skill-source-group.is-expanded .skill-source-group-row {
-  background: var(--surface-muted);
+  background: var(--surface);
 }
 
 .skill-source-disclosure {
@@ -398,14 +398,14 @@
 }
 
 .skill-source-candidates {
-  background: color-mix(in srgb, var(--surface-muted) 62%, var(--surface));
+  background: var(--surface);
   border-top: 1px solid var(--border);
 }
 
 .skill-source-candidate-identity,
 .skill-source-candidate-head > :first-child {
   grid-column: content / status;
-  padding-inline-start: var(--source-candidate-indent);
+  padding-inline-start: calc(var(--source-candidate-indent) + 16px);
 }
 
 .skill-source-candidate-identity {

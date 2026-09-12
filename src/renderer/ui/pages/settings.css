@@ -49,6 +49,9 @@
   border: 0;
   border-radius: 0;
   padding: 16px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1040px;
 }
 
 .settings-category-panel > .resource-section + .resource-section {

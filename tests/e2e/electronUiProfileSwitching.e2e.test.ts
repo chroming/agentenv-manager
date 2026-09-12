@@ -1528,6 +1528,28 @@ afterEach(async () => {
 });
 
 describe("Electron UI profile switching e2e", () => {
+  it("balances compact catalog rows and bounded settings at desktop widths", async () => {
+    const { page } = await launchApp();
+    for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+      await resizeAppWindow(page, width!, height!);
+      await openSkillLibrary(page);
+      const row = page.locator(".library-table-row").first();
+      await row.waitFor();
+      const geometry = await row.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const children = [...element.querySelectorAll("button")].map((button) => button.getBoundingClientRect());
+        return { height: box.height, contained: children.every((child) => child.top >= box.top - 1 && child.bottom <= box.bottom + 1) };
+      });
+      expect(geometry.height).toBeGreaterThanOrEqual(38);
+      expect(geometry.height).toBeLessThanOrEqual(44);
+      expect(geometry.contained).toBe(true);
+      await openSettingsCategory(page, "General");
+      const settings = await page.locator(".settings-category-panel > .resource-section").first().boundingBox();
+      expect(settings!.width).toBeLessThanOrEqual(1040);
+      expect(settings!.x + settings!.width).toBeLessThanOrEqual(width!);
+    }
+  }, standardElectronTestTimeout);
+
   it("refreshes Profiles with quiet contextual status and stable page geometry", async () => {
     const { page } = await launchApp();
     await page.locator('.workspace-button[data-workspace="profiles"]').click();
@@ -1572,12 +1594,11 @@ describe("Electron UI profile switching e2e", () => {
       expect(headerBackground).toBe(rowBackground);
       const actionGeometry = await agents.locator(".target-workflow-environment").first().evaluate((cell) => {
         const action = cell.querySelector("button")!;
-        const state = cell.querySelector(".target-workflow-lifecycle")!;
         return {
           textAligned: getComputedStyle(action).textAlign === "left",
-          sameTypeSize: getComputedStyle(action).fontSize === getComputedStyle(state).fontSize,
+          sameTypeSize: getComputedStyle(action).fontSize === getComputedStyle(cell).fontSize,
           contained: action.scrollWidth <= action.clientWidth + 1,
-          sharedStart: Math.abs(action.getBoundingClientRect().left - state.getBoundingClientRect().left) <= 1
+          sharedStart: Math.abs(action.getBoundingClientRect().left - cell.getBoundingClientRect().left) <= 1
         };
       });
       expect(actionGeometry).toEqual({ textAligned: true, sameTypeSize: true, contained: true, sharedStart: true });
@@ -2743,7 +2764,7 @@ describe("Electron UI profile switching e2e", () => {
     const openCodeCard = page.getByRole("article", { name: "Agent OpenCode" });
     await openCodeCard.waitFor({ state: "visible" });
     await expect.poll(() => openCodeCard.textContent()).toContain("Ready");
-    await expect.poll(() => openCodeCard.textContent()).toContain("Not managed");
+    await openCodeCard.getByRole("button", { name: "Configure", exact: true }).waitFor();
     await openAgentDiagnostics(page, openCodeCard, "OpenCode");
     await expect.poll(() => openCodeCard.textContent()).toContain(
       join(homeDir, ".config", "opencode")
@@ -5160,7 +5181,7 @@ describe("Electron UI profile switching e2e", () => {
     const targetRow = page.locator(".target-workflow-header").first();
     await targetRow.waitFor({ state: "visible" });
     const targetLanes = await targetRow.evaluate((row) => {
-      const lifecycle = row.querySelector<HTMLElement>(".target-workflow-lifecycle")!.getBoundingClientRect();
+      const lifecycle = row.querySelector<HTMLElement>(".target-workflow-lifecycle")?.getBoundingClientRect();
       const profile = row.querySelector<HTMLElement>(".target-workflow-environment button")?.getBoundingClientRect();
       const environment = row.querySelector<HTMLElement>(".target-workflow-environment")!.getBoundingClientRect();
       const health = row.querySelector<HTMLElement>(".target-health-status")!.getBoundingClientRect();
@@ -5169,9 +5190,9 @@ describe("Electron UI profile switching e2e", () => {
         columnCount: getComputedStyle(row).gridTemplateColumns.split(" ").length,
         environmentContained:
           environment.left >= rowBox.left && environment.right <= rowBox.right + 1,
-        lifecycleLeft: Math.round(lifecycle.left),
-        profileLayoutCorrect: profile ? profile.bottom <= lifecycle.top + 1 :
-          Math.abs((lifecycle.top + lifecycle.bottom - health.top - health.bottom) / 2) <= 1,
+        lifecycleLeft: Math.round((lifecycle ?? profile ?? environment).left),
+        profileLayoutCorrect: profile && lifecycle ? profile.bottom <= lifecycle.top + 1 :
+          Math.abs((environment.top + environment.bottom - health.top - health.bottom) / 2) <= 1,
         profileLeft: Math.round(profile?.left ?? environment.left),
         rowContained: row.scrollWidth <= row.clientWidth + 1
       };
@@ -5819,22 +5840,23 @@ describe("Electron UI profile switching e2e", () => {
         return {
           actionLanesAligned: hasStableValues(laneLefts(".target-workflow-actions")),
           healthLanesAligned: hasStableValues(laneLefts(".target-health-status")),
-          lifecycleLanesAligned: hasStableValues(laneLefts(".target-workflow-lifecycle")),
+          lifecycleLanesAligned: hasStableValues(laneLefts(".target-workflow-environment")),
           moreButtonsMatch: hasStableSizes(sizes(".target-more-action")),
           profileLanesAligned: hasStableValues(laneLefts(".target-workflow-environment")),
           singleLineCentered: rows.every((row) => {
             const action = row.querySelector(".target-workflow-environment button")?.getBoundingClientRect();
-            const label = row.querySelector(".target-workflow-lifecycle")!.getBoundingClientRect();
-            if (action) return Math.abs(action.left - label.left) <= 1 && action.bottom <= label.top + 1;
+            const label = row.querySelector(".target-workflow-lifecycle")?.getBoundingClientRect();
+            if (action && label) return Math.abs(action.left - label.left) <= 1 && action.bottom <= label.top + 1;
             const health = row.querySelector(".target-health-status")!.getBoundingClientRect();
-            return Math.abs((label.top + label.bottom - health.top - health.bottom) / 2) <= 1;
+            const single = label ?? action!;
+            return Math.abs((single.top + single.bottom - health.top - health.bottom) / 2) <= 1;
           }),
           statusLabelsVisible: rows.every((row) =>
             Boolean(row.querySelector<HTMLElement>(".target-health-status")?.textContent?.trim())
           ),
           typography: {
             health: getComputedStyle(first.querySelector<HTMLElement>(".target-health-status")!).fontWeight,
-            lifecycle: getComputedStyle(first.querySelector<HTMLElement>(".target-workflow-lifecycle")!).fontWeight,
+            lifecycle: getComputedStyle(first.querySelector<HTMLElement>(".target-workflow-lifecycle, .target-workflow-environment button")!).fontWeight,
             name: getComputedStyle(first.querySelector<HTMLElement>(".target-workflow-name-line strong")!).fontWeight,
             pageTitle: getComputedStyle(document.querySelector<HTMLElement>(".ui-page-header h2")!).fontWeight
           }
@@ -6120,7 +6142,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(
       fileExists(join(appDataRoot, "target-states", "opencode.json"))
     ).resolves.toBe(false);
-    await expect.poll(() => openCodeCard.textContent()).toContain("Not managed");
+    await openCodeCard.getByRole("button", { name: "Configure", exact: true }).waitFor();
     await expect.poll(() => openCodeCard.locator(".target-workflow-profile").count())
       .toBe(0);
   }, standardElectronTestTimeout);
@@ -6154,7 +6176,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(
       fileExists(join(appDataRoot, "target-states", "opencode.json"))
     ).resolves.toBe(false);
-    await expect.poll(() => openCodeCard.textContent()).toContain("Not managed");
+    await openCodeCard.getByRole("button", { name: "Configure", exact: true }).waitFor();
   }, standardElectronTestTimeout);
 
   it("keeps MCP definitions Agent-owned and exposes only Environment activation choices", async () => {
@@ -8165,7 +8187,7 @@ describe("Electron UI profile switching e2e", () => {
     const duplicateDetails = page.getByRole("dialog", { name: `Skill details ${skillId}` });
     await page.screenshot({ path: "/tmp/agentenv-duplicate-analysis-before.png" });
     await duplicateDetails.getByRole("button", { name: "Analyze differences" }).waitFor();
-    await duplicateDetails.getByText("Duplicate Skill analysis", { exact: true }).waitFor();
+    await duplicateDetails.getByRole("button", { name: "Analyze differences", exact: true }).waitFor();
     await page.screenshot({ path: "/tmp/agentenv-duplicate-analysis-entry.png" });
     await duplicateDetails.getByRole("button", { name: "Close", exact: true }).click();
     await chooseVersion.click();
@@ -12681,7 +12703,7 @@ describe("Electron UI profile switching e2e", () => {
       agentHeaderRange.selectNodeContents(agentHeader);
       const agentHeaderLeft = agentHeaderRange.getBoundingClientRect().left;
       const lifecycleLefts = rows.map((row) =>
-        row.querySelector<HTMLElement>(".target-workflow-lifecycle")!.getBoundingClientRect().left
+        row.querySelector<HTMLElement>(".target-workflow-lifecycle, .target-workflow-environment button")!.getBoundingClientRect().left
       );
       const profileLefts = rows.map((row) =>
         row.querySelector<HTMLElement>(".target-workflow-environment")!.getBoundingClientRect().left
