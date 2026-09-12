@@ -1192,7 +1192,7 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   min-height: 64px;
 }
 
-.ui-dialog-footer > button,
+.ui-dialog-footer > button:not(.ui-icon-button),
 .ui-dialog-footer > .ui-button {
   flex: 0 0 auto;
   height: var(--control-height-dialog);

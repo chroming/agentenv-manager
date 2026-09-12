@@ -1734,16 +1734,14 @@ export const ProjectsWorkspace = ({
                               <ArrowUp size={13} />
                             </IconButton>
                           ) : null}
-                          <IconButton
+                          <RefreshAction
                             size="compact"
                             variant="ghost"
                             label={t("Refresh directories")}
-                            onClick={() => void loadRemoteDirectories(browsingPath || undefined)}
+                            onRefresh={() => void loadRemoteDirectories(browsingPath || undefined)}
                             disabled={loadingDirectories}
                             busy={loadingDirectories}
-                          >
-                            <RotateCcw size={13} />
-                          </IconButton>
+                          />
                         </div>
                       </div>
 

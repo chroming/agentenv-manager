@@ -267,6 +267,9 @@ describe("ProfileEvaluationDialog", () => {
     );
     expect(screen.getByText("Only with Profile")).toBeInTheDocument();
     expect(screen.getByText("Only with Agent now")).toBeInTheDocument();
+    const maximizeDiff = screen.getByRole("button", { name: "Expand diff" });
+    expect(maximizeDiff).toHaveClass("ui-icon-button--ghost");
+    expect(maximizeDiff.textContent).toBe("");
     expect(await screen.findByRole("table", { name: "Formatted diff for test.ts" }))
       .toHaveTextContent("new test");
 

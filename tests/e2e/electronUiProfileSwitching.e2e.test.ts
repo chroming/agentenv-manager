@@ -9658,7 +9658,11 @@ describe("Electron UI profile switching e2e", () => {
     const save = dialog.getByRole("button", { name: "Save Profile" });
     expect(await save.isDisabled()).toBe(true);
 
-    await dialog.getByRole("button", { name: "Copy details" }).click();
+    const copyDetails = dialog.getByRole("button", { name: "Copy details" });
+    expect(await copyDetails.textContent()).toBe("");
+    const copyBox = await copyDetails.boundingBox();
+    expect(copyBox!.width).toBe(copyBox!.height);
+    await copyDetails.click();
     await expect.poll(() => dialog.getByRole("button", { name: "Copied" }).count()).toBe(1);
     await dialog.getByRole("button", { name: "Compare" }).click();
     const diff = page.getByRole("dialog", { name: "Full-screen preview" });
@@ -9742,6 +9746,20 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => details.textContent()).toContain("Ready to remove");
     await expect.poll(() => details.textContent()).toContain("Broken link");
     await expect.poll(() => details.textContent()).toContain(brokenSkill);
+    for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+      await resizeAppWindow(page, width!, height!);
+      const copy = details.getByRole("button", { name: "Copy details" });
+      const box = await copy.boundingBox();
+      expect(box!.width).toBe(box!.height);
+      expect(await copy.textContent()).toBe("");
+      const close = await details.getByRole("button", { name: "Close" }).boundingBox();
+      expect(close!.width).toBeGreaterThanOrEqual(104);
+      expect(Math.abs(box!.y + box!.height / 2 - close!.y - close!.height / 2)).toBeLessThanOrEqual(1);
+      if (process.env.AGENTENV_UTILITY_CAPTURE_DIR) {
+        await mkdir(process.env.AGENTENV_UTILITY_CAPTURE_DIR, { recursive: true });
+        await page.screenshot({ path: join(process.env.AGENTENV_UTILITY_CAPTURE_DIR, `cleanup-detail-${width}.png`) });
+      }
+    }
     await details.getByRole("button", { name: "Close" }).click();
 
     await page.getByRole("button", { name: /Manage \d+ eligible Skills/ }).click();

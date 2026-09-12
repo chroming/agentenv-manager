@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
-import { Copy } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import { useI18n } from "../i18n";
-import { Button } from "./ui";
+import { Button, DialogFooter, IconButton } from "./ui";
 
 interface SkillCleanupDetailsFooterProps {
   busy: boolean;
@@ -27,14 +27,15 @@ export const SkillCleanupDetailsFooter = ({
   const { t } = useI18n();
 
   return (
-    <footer className="preview-actions ui-dialog-footer">
-      <Button
+    <DialogFooter>
+      <IconButton
+        variant="ghost"
+        label={t(copied ? "Copied" : "Copy details")}
         disabled={working}
-        icon={<Copy size={15} strokeWidth={2.2} aria-hidden="true" />}
         onClick={onCopy}
       >
-        {t(copied ? "Copied" : "Copy details")}
-      </Button>
+        {copied ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
+      </IconButton>
       <Button
         ref={initialFocusRef}
         disabled={working}
@@ -52,6 +53,6 @@ export const SkillCleanupDetailsFooter = ({
           {t(working ? "Cleaning up..." : "Remove unavailable links")}
         </Button>
       ) : null}
-    </footer>
+    </DialogFooter>
   );
 };

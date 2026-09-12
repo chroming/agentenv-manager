@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  Check,
   CheckCircle2,
   ChevronDown,
   Copy,
@@ -21,7 +22,7 @@ import type {
 import { targetIconFor } from "./ProfileSidebar";
 import { useI18n } from "../i18n";
 import { isTargetInstalled } from "../../shared/targetHealth";
-import { Button, SelectControl } from "./ui";
+import { Button, IconButton, SelectControl } from "./ui";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
 
 type CaptureActivity = "idle" | "reviewing" | "creating";
@@ -303,10 +304,10 @@ export const TargetCaptureDialog = ({
                     {preview.errors.map((error) => <small key={error}>{error}</small>)}
                   </span>
                   <div className="capture-errors__actions">
-                    <Button
+                    <IconButton
                       size="compact"
                       variant="ghost"
-                      icon={<Copy size={14} aria-hidden="true" />}
+                      label={t(blockingCopyLabel)}
                       onClick={() => {
                         void window.agentEnv.copyText([
                           "AgentEnv Manager Capture blocked",
@@ -317,8 +318,8 @@ export const TargetCaptureDialog = ({
                         setCopiedIssueId("__blocking__");
                       }}
                     >
-                      {t(blockingCopyLabel)}
-                    </Button>
+                      {copiedIssueId === "__blocking__" ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+                    </IconButton>
                     {preview.blockingDiagnosticReference ? (
                       <Button
                         size="compact"
@@ -364,14 +365,14 @@ export const TargetCaptureDialog = ({
                             })}</small>
                           </div>
                           <div className="capture-decision__tools">
-                            <Button
+                            <IconButton
                               size="compact"
                               variant="ghost"
-                              icon={<Copy size={14} aria-hidden="true" />}
+                              label={t(copiedIssueId === issue.id ? "Copied" : "Copy details")}
                               onClick={() => void copyIssueDetails(issue)}
                             >
-                              {t(copiedIssueId === issue.id ? "Copied" : "Copy details")}
-                            </Button>
+                              {copiedIssueId === issue.id ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+                            </IconButton>
                             {issue.diagnosticReference ? (
                               <Button
                                 size="compact"

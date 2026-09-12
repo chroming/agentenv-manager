@@ -663,9 +663,9 @@ export const ProfileEvaluationDialog = ({
                         ))}
                       </div>
                       {changes.length > 0 ? (
-                        <Button size="compact" icon={<Expand size={14} />} onClick={() => setDiffWorkspaceOpen(true)}>
-                          {t("Expand")}
-                        </Button>
+                        <IconButton size="compact" variant="ghost" label={t("Expand diff")} onClick={() => setDiffWorkspaceOpen(true)}>
+                          <Expand size={14} />
+                        </IconButton>
                       ) : null}
                     </div>
                     {changeScope === "delta" && changes.length > 0 ? (

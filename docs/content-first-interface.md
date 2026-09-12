@@ -258,3 +258,37 @@ Final artifact: `778a361e773eaf5c0e75b3721f4cc4ddd5581c8274e3d22462ee6bf8fb694d8
   all comparison thresholds remain unchanged.
 - These checks exercise macOS Electron with isolated fixture homes, not real Agent
   writes, paid AI calls, packaged installers, or Windows/Linux release certification.
+
+### Follow-up representation sweep
+
+- Symptom: secondary dialogs still used text utilities even after page toolbars were
+  consolidated. Some footer rules sized every button as a text command.
+- Core job -> quieter tools -> do not sacrifice consequence/repair recognition -> keep
+  Import all, Edit as the document dialog's primary action, Retry, report export and
+  SSH launch commands textual; menus retain labels.
+- Existing owners: RefreshAction for local import rescans and SSH directory refresh;
+  IconButton for comparison diff expansion and Capture/cleanup detail copying;
+  DialogFooter for cleanup detail actions. No new control or page override is needed.
+- Copy retains its existing callback and copied state, now represented by a check icon.
+  Rescan remains read-only; Expand diff only opens the existing file/diff workspace.
+  No resource writes, consent or recovery behavior changes.
+- Text-command footer minimum width explicitly excludes IconButton. Copy remains square
+  and centered beside Close at 920/1180/1440; close/removal labels stay visible.
+- The result dialog's window maximize and the diff workspace expansion have distinct
+  tooltip/accessibility names, so hiding text does not create ambiguous keyboard targets.
+- Evidence: pending rescan and copied-state Renderer tests; native Capture, cleanup,
+  comparison, import, Workspace/SSH and sibling-control flows; final-artifact captures.
+
+#### Follow-up verification receipt
+
+- Build passed: source `dcb09ec876f8`, artifact `cf83492b640f`.
+- All 677 Renderer tests passed; 12 focused native Electron cases passed. Style,
+  UI-contract, translation and module audits passed. The full release suite was not rerun.
+- Fresh mock capture manifest:
+  `/tmp/agentenv-utility-sweep-pages-20260912/capture-manifest.json`.
+  Inspected minimum-window import, Capture, comparison and cleanup detail screenshots;
+  cleanup footer geometry is asserted at 920/1180/1440 widths.
+- Comparison expansion, clipboard feedback and pending rescan use existing shared
+  controls. No new package, real Agent mutation or paid model call was involved.
+- This is macOS Electron/source-build evidence, not packaged-app or Windows/Linux
+  validation, and does not claim that every screenshot received manual inspection.

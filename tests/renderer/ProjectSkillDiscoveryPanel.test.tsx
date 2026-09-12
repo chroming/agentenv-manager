@@ -66,8 +66,30 @@ describe("ProjectSkillDiscoveryPanel", () => {
     );
 
     await waitFor(() => expect(onScan).toHaveBeenCalledTimes(1));
-    fireEvent.click(await screen.findByRole("button", { name: "Scan" }));
+    const refresh = await screen.findByRole("button", { name: "Refresh" });
+    expect(refresh).toHaveClass("ui-icon-button", "ui-refresh-action");
+    expect(refresh.textContent).toBe("");
+    fireEvent.click(refresh);
     await waitFor(() => expect(onScan).toHaveBeenCalledTimes(2));
+  });
+
+  it("keeps the rescan utility fixed while scanning without hiding Import all", async () => {
+    let finish!: (value: typeof scanResult) => void;
+    const onScan = vi.fn().mockResolvedValueOnce(scanResult).mockImplementationOnce(
+      () => new Promise<typeof scanResult>((resolve) => { finish = resolve; })
+    );
+    render(<ProjectSkillDiscoveryPanel rootPath="/tmp/project" onScan={onScan} onImport={vi.fn()} />);
+    await screen.findByText("Review");
+    const refresh = screen.getByRole("button", { name: "Refresh" });
+    fireEvent.click(refresh);
+    expect(refresh).toHaveAttribute("aria-busy", "true");
+    expect(refresh).toBeDisabled();
+    expect(refresh.textContent).toBe("");
+    expect(refresh.querySelector(".is-spinning")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Import all" })).toBeDisabled();
+    finish(scanResult);
+    await waitFor(() => expect(refresh).toHaveAttribute("aria-busy", "false"));
+    expect(refresh).toBeEnabled();
   });
 
   it("keeps an import failure beside the affected Skill and offers retry", async () => {

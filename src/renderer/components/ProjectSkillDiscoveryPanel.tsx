@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
-  RefreshCw,
   TriangleAlert
 } from "lucide-react";
 import type {
@@ -10,7 +9,7 @@ import type {
   SkillUpstream
 } from "../../shared/types";
 import { useI18n } from "../i18n";
-import { Button } from "./ui";
+import { Button, RefreshAction } from "./ui";
 import { OverflowTooltip } from "./OverflowTooltip";
 
 interface ProjectSkillDiscoveryPanelProps {
@@ -158,15 +157,12 @@ export const ProjectSkillDiscoveryPanel = ({
               {t(operation === "importing-all" ? "Importing..." : "Import all")}
             </Button>
           ) : null}
-          <Button
+          <RefreshAction
+            label={t("Refresh")}
             busy={operation === "scanning"}
-            busyLabel={t("Scanning...")}
             disabled={Boolean(operation) || Boolean(importingPath)}
-            icon={<RefreshCw size={15} strokeWidth={2.2} />}
-            onClick={() => void scan()}
-          >
-            {t(operation === "scanning" ? "Scanning..." : "Scan")}
-          </Button>
+            onRefresh={() => void scan()}
+          />
         </div>
       </div>
 

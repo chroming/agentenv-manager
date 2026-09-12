@@ -443,6 +443,15 @@ printf '{"type":"step_finish","part":{"modelID":"fake/e2e","cost":0.01,"tokens":
       await verifyDialogLayout(page, ".profile-comparison-dialog", 920, 620);
 
       await dialog.getByRole("tab", { name: "Changes" }).click();
+      const maximizeDiff = dialog.getByRole("button", { name: "Expand diff" });
+      expect(await maximizeDiff.textContent()).toBe("");
+      const maximizeBox = await maximizeDiff.boundingBox();
+      expect(maximizeBox!.width).toBe(maximizeBox!.height);
+      await maximizeDiff.click();
+      const expandedDiff = page.getByRole("dialog", { name: "Full-screen preview" });
+      await expandedDiff.waitFor({ state: "visible" });
+      await page.keyboard.press("Escape");
+      await expandedDiff.waitFor({ state: "hidden" });
       const changedFile = dialog.getByLabel("Changed file");
       expect(await changedFile.locator("option").allTextContents())
         .toEqual(["current-output.txt", "proposed-output.txt"]);
