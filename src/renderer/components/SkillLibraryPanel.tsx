@@ -108,7 +108,7 @@ import {
 } from "../../shared/skillCleanup";
 import { isSharedSkillInventoryEntry } from "../../shared/skillLocationSemantics";
 import { useI18n } from "../i18n";
-import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, ResourcePanelToolbar, SegmentedControl, SelectControl, SearchField, Switch, TabBar, ToolbarOverflowMenu } from "./ui";
+import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, ResourcePanelToolbar, SegmentedControl, SelectControl, SearchField, Switch, TabBar, TextAction, ToolbarOverflowMenu } from "./ui";
 import { SkillMaintenanceStatus } from "./SkillMaintenanceStatus";
 import { SkillMaintenanceAction } from "./SkillMaintenanceAction";
 import { skillMaintenanceState } from "../skillMaintenanceState";
@@ -2028,7 +2028,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                 {availableTags.length > 0 ? <SkillTagCell skill={skill} onSelect={(tag) => updateControls({ tagFilter: tag })} /> : null}
                 <div className="library-source-cell">
                   {(skill.sourceType === "github" || skill.sourceType === "git") && /^https?:\/\//i.test(skill.source ?? "") ? (
-                    <button
+                    <TextAction
                       className="library-source-primary is-interactive"
                       type="button"
                       aria-label={t("Open repository source for {{id}}", { id: skill.id })}
@@ -2042,9 +2042,9 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                         tooltipClassName="library-source-tooltip"
                       />
                       <ExternalLink size={11} strokeWidth={2.2} />
-                    </button>
+                    </TextAction>
                   ) : skill.sourceType === "git" && skill.source ? (
-                    <button
+                    <TextAction
                       className="library-source-primary is-interactive"
                       type="button"
                       aria-label={t("Copy repository source for {{id}}", { id: skill.id })}
@@ -2058,7 +2058,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                         tooltipClassName="library-source-tooltip"
                       />
                       <Copy size={11} strokeWidth={2.2} />
-                    </button>
+                    </TextAction>
                   ) : (
                     <span className="library-source-primary">
                       <PreviewText

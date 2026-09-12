@@ -304,24 +304,15 @@
 .skill-library-panel .library-source-primary {
   align-items: center;
   display: flex;
+  justify-content: flex-start;
+  text-align: left;
+  line-height: 18px;
   gap: var(--space-1);
   min-width: 0;
   max-width: 100%;
   color: var(--text);
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-regular);
-}
-
-.skill-library-panel button.library-source-primary {
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-tight);
-  padding: 0;
-  width: fit-content;
-}
-
-.skill-library-panel button.library-source-primary:hover:not(:disabled) {
-  color: var(--accent);
 }
 
 .skill-library-panel .library-source-primary > span {

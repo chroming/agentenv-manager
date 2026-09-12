@@ -1528,6 +1528,40 @@ afterEach(async () => {
 });
 
 describe("Electron UI profile switching e2e", () => {
+  it("aligns local and linked Skill sources and uses compact single-line preferences", async () => {
+    const { page, appDataRoot } = await launchApp();
+    for (const [id, sourceType, source] of [
+      ["ui-alpha-skill", "github", "https://github.com/acme/skills/tree/main/alpha"],
+      ["ui-beta-skill", "git", "git@example.test:team/skills.git"]
+    ]) {
+      const path = join(appDataRoot, "skills-library", id!, ".agentenv-skill.json");
+      const metadata = await readJson<Record<string, unknown>>(path);
+      await writeJson(path, { ...metadata, sourceType, source, updateCheckEnabled: false });
+    }
+    await page.reload();
+    for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+      await resizeAppWindow(page, width!, height!);
+      await openSkillLibrary(page);
+      await page.locator("button.library-source-primary").first().waitFor();
+      const sources = await page.locator(".library-source-cell").evaluateAll((cells) => cells.map((cell) => {
+        const box = cell.getBoundingClientRect();
+        const content = cell.querySelector(".library-source-primary")!.getBoundingClientRect();
+        const text = cell.querySelector(".library-source-name")!.getBoundingClientRect();
+        return { start: text.left - box.left, center: (text.top + text.bottom - box.top - box.bottom) / 2, contained: content.top >= box.top - 1 && content.bottom <= box.bottom + 1 };
+      }));
+      expect(sources.length).toBeGreaterThan(2);
+      expect(sources.every((source) => Math.abs(source.start) <= 1 && Math.abs(source.center) <= 1 && source.contained)).toBe(true);
+      await openSettingsCategory(page, "General");
+      const preferenceRows = await page.locator(".settings-preference-row").evaluateAll((rows) => rows.filter((row) => !row.querySelector("small")).map((row) => {
+        const box = row.getBoundingClientRect();
+        const control = row.querySelector(".settings-preference-control")!.getBoundingClientRect();
+        return { height: box.height, centered: Math.abs((control.top + control.bottom - box.top - box.bottom) / 2) <= 1 };
+      }));
+      expect(preferenceRows.length).toBeGreaterThanOrEqual(2);
+      expect(preferenceRows.every((row) => row.height >= 48 && row.height <= 49 && row.centered)).toBe(true);
+    }
+  }, standardElectronTestTimeout);
+
   it("keeps Workspace read-only summaries on one aligned header line", async () => {
     const { page } = await launchApp({ workspaceFixture: true });
     await page.getByRole("button", { name: "Workspaces", exact: true }).click();
