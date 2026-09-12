@@ -37,12 +37,12 @@ describe("AgentsEditor", () => {
       />
     );
 
-    expect(screen.getByLabelText("Preview of AGENTS.md")).toHaveTextContent("# Guidance");
+    expect(screen.getByLabelText("Preview of AGENTS.md")).toHaveTextContent("Guidance");
     expect(screen.queryByText("/Users/example/.trae/rules/agentenv-manager.md"))
       .not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open AGENTS.md" }));
     const dialog = screen.getByRole("dialog", { name: "Instruction document" });
-    expect(within(dialog).getByLabelText("Preview of AGENTS.md")).toHaveTextContent("# Guidance");
+    expect(within(dialog).getByRole("heading", { name: "Guidance" })).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Edit" }));
     const editor = within(dialog).getByRole("textbox", { name: "Profile instruction content" });
     fireEvent.change(editor, { target: { value: "# Updated" } });
@@ -50,7 +50,7 @@ describe("AgentsEditor", () => {
 
     expect(onSave).toHaveBeenCalledWith("# Updated");
     await waitFor(() => expect(within(dialog).getByLabelText("Preview of AGENTS.md"))
-      .toHaveTextContent("# Updated"));
+      .toHaveTextContent("Updated"));
   });
 
   it("shows current Agent instructions as a read-only preview for Keep Agent", () => {
@@ -69,7 +69,7 @@ describe("AgentsEditor", () => {
 
     expect(screen.getByText(/\/Users\/example\/\.agent\/AGENTS\.md/)).toBeInTheDocument();
     expect(screen.getByLabelText("Preview of AGENTS.md"))
-      .toHaveTextContent("# Current Agent guidance");
+      .toHaveTextContent("Current Agent guidance");
     fireEvent.click(screen.getByRole("button", { name: "Open AGENTS.md" }));
     expect(within(screen.getByRole("dialog", { name: "Instruction document" }))
       .queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();

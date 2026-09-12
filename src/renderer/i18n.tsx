@@ -13,6 +13,7 @@ export type ResolvedAppLocale = Exclude<AppLocale, "system">;
 export type TranslationValues = Record<string, string | number>;
 
 const zhCN: Record<string, string> = {
+  "Source code": "源码",
   "No readable text changes. Review the original files instead.": "没有可分析的文本变更，请查看原始文件。",
   "{{count}} text files will be analyzed": "将分析 {{count}} 个文本文件",
   ...generatedZhCN,

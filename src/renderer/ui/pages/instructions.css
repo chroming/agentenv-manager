@@ -65,11 +65,25 @@
 .instruction-document__preview {
   background: var(--surface-subtle);
   border-top: 1px solid var(--border-subtle);
-  max-height: 138px;
+  max-height: 240px;
   min-height: 70px;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.instruction-content-preview {
+  min-width: 0;
+  width: 100%;
+}
+
+.instruction-content-preview__toolbar {
+  justify-content: flex-start;
+}
+
+.instruction-content-preview > .document-markdown {
+  max-width: 78ch;
+  padding: 12px 16px 20px;
 }
 
 .instruction-document__preview .syntax-code-preview {
@@ -225,7 +239,7 @@
 }
 
 .instruction-document-dialog__preview {
-  background: var(--surface-subtle);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   overflow-x: hidden;

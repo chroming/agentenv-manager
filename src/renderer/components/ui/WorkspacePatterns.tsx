@@ -53,11 +53,12 @@ export const SingleObjectWorkspace = ({
   children,
   className = "",
   surface = "framed",
+  contentWidth = "fluid",
   ...props
-}: HTMLAttributes<HTMLElement> & { surface?: "framed" | "open" }) => (
+}: HTMLAttributes<HTMLElement> & { surface?: "framed" | "open"; contentWidth?: "fluid" | "reading" }) => (
   <section
     {...props}
-    className={`ui-single-object-workspace ui-single-object-workspace--${surface} ${className}`.trim()}
+    className={`ui-single-object-workspace ui-single-object-workspace--${surface} ui-single-object-workspace--${contentWidth} ${className}`.trim()}
   >
     {children}
   </section>

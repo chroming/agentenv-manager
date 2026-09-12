@@ -1,6 +1,6 @@
 import { AlertTriangle, Expand, FileText, LoaderCircle } from "lucide-react";
 import { useI18n } from "../i18n";
-import { SyntaxCodePreview } from "./SyntaxCodePreview";
+import { InstructionContentPreview } from "./InstructionContentPreview";
 import { IconButton } from "./ui";
 
 export interface InstructionDocumentPreview {
@@ -87,7 +87,7 @@ export const InstructionDocumentPreviewList = ({
                 <span>{document.error}</span>
               </div>
             ) : document.content ? (
-              <SyntaxCodePreview code={document.content} path={document.syntaxPath ?? document.name} />
+              <InstructionContentPreview content={document.content} path={document.syntaxPath ?? document.name} />
             ) : (
               <div className="instruction-document__state">{t("Empty file")}</div>
             )}

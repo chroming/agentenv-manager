@@ -183,7 +183,8 @@ describe("Workspaces desktop workflow", () => {
       .toBe(workspaceInstruction);
     const instructionPreview = instructionDialog.getByLabel("Preview of AGENTS.md");
     await expect.poll(() => instructionPreview.textContent())
-      .toContain("# Project rules");
+      .toContain("Project rules");
+    expect(await instructionPreview.locator(".document-markdown--wrap").count()).toBe(1);
     expect(await instructionPreview.evaluate((element: HTMLElement) => ({
       contained: element.scrollWidth <= element.clientWidth + 1,
       overflowX: getComputedStyle(element).overflowX

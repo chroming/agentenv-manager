@@ -148,6 +148,31 @@ const LegacySkillLibraryPanel = (props: Record<string, any>) => (
 );
 
 describe("SkillLibraryPanel", () => {
+  it("allocates Tags only when the Library has tags and keeps the column when a filter excludes tagged Skills", () => {
+    const skills = ["plain", "tagged"].map((id) => ({
+      id, name: id, description: id, path: `/tmp/library/${id}`, sourceType: "local", contentHash: id,
+      updatedAt: "2026-09-07T00:00:00.000Z"
+    }));
+    const Panel = ({ tagged }: { tagged: boolean }) => {
+      const [viewState, onViewStateChange] = useState(defaultSkillLibraryViewState);
+      return <SkillLibraryPanel model={{
+        status: {}, catalog: { librarySkills: skills.map((skill) => ({ ...skill,
+          tags: tagged && skill.id === "tagged" ? ["Review"] : [] })), skillUsage: {}, skillUpdates: [] },
+        sources: { sourceGroups: [], libraryMode: "skills" }, cleanup: { skillInventory: [], cleanupBackups: [] },
+        updates: {}, workspace: {}, view: { viewState }
+      } as never} actions={{ navigation: { onViewStateChange }, inventory: {}, files: {}, repository: {},
+        sources: {}, catalog: {}, updates: {} } as never} />;
+    };
+    const { container, rerender } = render(<Panel tagged={false} />);
+    expect(container.querySelector(".library-table__head")!.children).toHaveLength(4);
+    rerender(<Panel tagged />);
+    expect(container.querySelector(".library-table__head")!.children).toHaveLength(5);
+    const search = container.querySelector<HTMLInputElement>(".library-toolbar input")!;
+    fireEvent.change(search, { target: { value: "plain" } });
+    expect(container.querySelectorAll(".library-table-row")).toHaveLength(1);
+    expect(container.querySelector(".library-table__head")!.children).toHaveLength(5);
+  });
+
   it("opens AI tags for the current filter after switching Updates to All", async () => {
     const prepare = vi.fn(async (ids: string[]) => ({
       items: ids.map((skillId) => ({ skillId, key: skillId, contentHash: "hash", partial: false })), errors: []

@@ -13,7 +13,7 @@ export const SkillMaintenanceAction = ({ action, scope = "skills", busy, disable
   const { t } = useI18n();
   const checking = action === "check";
   const text = t(checking ? "Check updates" : "Update all");
-  return <Button aria-label={label ?? text} className="library-toolbar-action"
+  return <Button aria-label={label ?? text} className="library-toolbar-action" variant={checking ? "ghost" : "secondary"}
     busy={busy} busyLabel={text} disabled={disabled}
     icon={checking ? <SearchCheck size={15} strokeWidth={2.2} /> : <CircleArrowUp size={15} strokeWidth={2.2} />}
     title={checking ? t(scope === "sources" ? "Check all monitored sources, regardless of filters." : "Check all monitored Skills in this view, regardless of filters.") : t("Review all available updates in this view, regardless of filters.")}

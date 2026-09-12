@@ -30,6 +30,9 @@ This document defines the behavior those answers require. Existing code and test
 
 ## 2. Product Read
 
+Cross-page content allocation and reading behavior follow the
+[content-first desktop presentation contract](content-first-interface.md).
+
 - Primary user: a developer who uses multiple local coding agents and wants reliable, reusable environments.
 - Core job: capture or compose an environment once, preview its exact effect, and safely deploy or switch it across supported Agents. Local Skill cleanup appears only when the affected environment needs it or when the user explicitly chooses whole-device cleanup.
 - Platform: local macOS, Windows, and Linux desktop application, with filesystem and CLI integration.

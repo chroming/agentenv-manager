@@ -92,7 +92,7 @@ describe("SkillSourceView", () => {
     const sourceActions = screen.getByRole("button", {
       name: "Source actions for acme/skills · /engineering"
     });
-    expect(sourceActions).toHaveClass("ui-icon-button--secondary");
+    expect(sourceActions).toHaveClass("ui-icon-button--ghost");
     fireEvent.click(sourceActions);
     fireEvent.click(screen.getByRole("menuitem", {
       name: "Exclude from routine checks"
@@ -251,14 +251,10 @@ describe("SkillSourceView", () => {
     const product = screen.getByRole("button", {
       name: "acme/skills · /product"
     });
-    expect(within(engineering).getByText("/engineering")).toHaveClass(
-      "skill-source-link-scope"
-    );
-    expect(within(product).getByText("/product")).toHaveClass(
-      "skill-source-link-scope"
-    );
-    expect(screen.getByText("main · /engineering")).toBeInTheDocument();
-    expect(screen.getByText("main · /product")).toBeInTheDocument();
+    expect(within(engineering).getByText("acme/skills")).toBeInTheDocument();
+    expect(within(product).getByText("acme/skills")).toBeInTheDocument();
+    expect(within(engineering.closest("article")!).getByText("main · /engineering")).toBeInTheDocument();
+    expect(within(product.closest("article")!).getByText("main · /product")).toBeInTheDocument();
   });
 
   it("keeps routine-check scope separate from source type and result filters", () => {

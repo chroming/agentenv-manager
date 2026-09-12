@@ -209,7 +209,7 @@ export const SkillGroupView = ({
                   {updateIds.length > 0 ? <SkillMaintenanceStatus state="update"
                     disabled={Boolean(updateActivity)}
                     onReview={() => void onPreviewUpdates?.(updateIds)} /> : null}
-                  {onCheckUpdates ? <IconButton label={t("Check updates")} variant="ghost" size="compact"
+                  {onCheckUpdates && (checkIds.length > 0 || checkingGroup === group.id) ? <IconButton label={t("Check updates")} variant="ghost" size="compact"
                     busy={checkingGroup === group.id} disabled={Boolean(updateActivity) || checkIds.length === 0}
                     onClick={() => void checkGroup(group.id, checkIds)}><SearchCheck size={14} /></IconButton> : null}
                   <IconButton
@@ -221,6 +221,7 @@ export const SkillGroupView = ({
                     <Plus size={14} strokeWidth={2.2} />
                   </IconButton>
                   <ToolbarOverflowMenu
+                    variant="ghost"
                     items={[
                       {
                         id: "edit",
@@ -294,6 +295,7 @@ export const SkillGroupView = ({
                     ) : <OverflowTooltip className="skill-group-member-name" text={skill.name} />}
                     actions={(
                       <ToolbarOverflowMenu
+                        variant="ghost"
                         items={[{
                           id: "remove-from-group",
                           icon: <Trash2 size={14} strokeWidth={2.1} />,

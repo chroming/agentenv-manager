@@ -33,7 +33,8 @@ export const SkillMaintenanceStatus = ({ state, busy, disabled, detail, onReview
   const Icon = item.icon;
   const showIcon = item.kind !== "neutral" || busy;
   return <InteractiveStatus size="metadata" className={className}
-    statusKind={item.kind} icon={<Icon className={showIcon ? undefined : "skill-maintenance-status__quiet-icon"} />} label={t(item.label)}
-    busy={busy} disabled={disabled} title={detail}
+    statusKind={item.kind} icon={<Icon className={showIcon ? undefined : "skill-maintenance-status__quiet-icon"} />}
+    label={state === "untracked" && !busy ? <><span aria-hidden="true">–</span><span className="ui-visually-hidden">{t(item.label)}</span></> : t(item.label)}
+    busy={busy} disabled={disabled} title={detail ?? t(item.label)}
     onReview={onReview} reviewLabel={reviewLabel} />;
 };

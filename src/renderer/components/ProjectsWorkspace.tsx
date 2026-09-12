@@ -989,6 +989,7 @@ export const ProjectsWorkspace = ({
       <SingleObjectWorkspace
         className="projects-workbench"
         surface="open"
+        contentWidth="reading"
         aria-label={t("Workspace browser")}
       >
         <div className="project-detail" aria-label={selected ? selected.name : t("Workspace detail")}>

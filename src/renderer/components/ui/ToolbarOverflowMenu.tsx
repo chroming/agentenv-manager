@@ -12,6 +12,7 @@ import { MoreHorizontal } from "lucide-react";
 import { ActionMenu } from "./ActionMenu";
 import { focusInitialActionMenuItem } from "./actionMenuKeyboard";
 import { IconButton } from "./IconButton";
+import type { ButtonVariant } from "./Button";
 import { TagChip } from "./TagChip";
 import { useControlDensity } from "./controlDensity";
 
@@ -25,6 +26,7 @@ export interface ToolbarOverflowMenuItem {
 }
 
 interface ToolbarOverflowMenuProps {
+  variant?: ButtonVariant;
   triggerVariant?: "icon" | "tag";
   triggerContent?: ReactNode;
   label: string;
@@ -39,7 +41,7 @@ const viewportInset = 8;
 const anchorGap = 6;
 
 export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflowMenuProps>(
-  ({ label, menuLabel, disabled = false, items, reserveSpace = false, triggerContent, triggerVariant = "icon" }, forwardedRef) => {
+  ({ label, menuLabel, disabled = false, items, reserveSpace = false, triggerContent, triggerVariant = "icon", variant = "secondary" }, forwardedRef) => {
     const density = useControlDensity() ?? "default";
     const [open, setOpen] = useState(false);
     const [style, setStyle] = useState<CSSProperties>();
@@ -112,6 +114,7 @@ export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflow
           aria-haspopup="menu"
           onClick={() => setOpen((current) => !current)}
         >{triggerContent}</TagChip> : <IconButton
+          variant={variant}
           ref={(node) => {
             triggerRef.current = node;
             if (typeof forwardedRef === "function") forwardedRef(node);

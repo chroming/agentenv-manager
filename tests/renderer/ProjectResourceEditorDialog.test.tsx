@@ -64,7 +64,7 @@ describe("ProjectResourceEditorDialog", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "Workspace instruction" });
     expect(await within(dialog).findByLabelText("Preview of AGENTS.md"))
-      .toHaveTextContent("# Original");
+      .toHaveTextContent("Original");
     fireEvent.click(within(dialog).getByRole("button", { name: "Edit" }));
     const editor = within(dialog).getByRole("textbox", { name: "Workspace instruction content" });
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
@@ -155,6 +155,6 @@ describe("ProjectResourceEditorDialog", () => {
     }));
     expect(onClose).not.toHaveBeenCalled();
     expect(within(dialog).getByLabelText("Preview of AGENTS.md"))
-      .toHaveTextContent("# New project rules");
+      .toHaveTextContent("New project rules");
   });
 });

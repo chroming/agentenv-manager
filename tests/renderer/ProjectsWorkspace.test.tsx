@@ -248,7 +248,7 @@ describe("ProjectsWorkspace", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Expand Instructions" }));
     expect(await screen.findAllByText("AGENTS.md")).toHaveLength(1);
-    expect(await screen.findByLabelText("Preview of AGENTS.md")).toHaveTextContent("# Original");
+    expect(await screen.findByLabelText("Preview of AGENTS.md")).toHaveTextContent("Original");
     expect(await screen.findByRole("button", { name: "Open AGENTS.md" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open in OpenCode" }));
     await waitFor(() => expect(api.openProject).toHaveBeenCalledWith("project-1", "opencode"));
@@ -302,8 +302,8 @@ describe("ProjectsWorkspace", () => {
     render(<ProjectsWorkspace targets={[target]} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Expand Instructions" }));
-    expect(await screen.findByLabelText("Preview of AGENTS.md")).toHaveTextContent("# Original");
-    expect(await screen.findByLabelText("Preview of CLAUDE.md")).toHaveTextContent("# Claude rules");
+    expect(await screen.findByLabelText("Preview of AGENTS.md")).toHaveTextContent("Original");
+    expect(await screen.findByLabelText("Preview of CLAUDE.md")).toHaveTextContent("Claude rules");
     expect(api.readProjectResource).toHaveBeenCalledWith("project-1", "instruction-1");
     expect(api.readProjectResource).toHaveBeenCalledWith("project-1", "instruction-2");
   });
@@ -340,7 +340,7 @@ describe("ProjectsWorkspace", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Open AGENTS.md" }));
     const dialog = await screen.findByRole("dialog", { name: "Workspace instruction" });
     expect(await within(dialog).findByLabelText("Preview of AGENTS.md"))
-      .toHaveTextContent("# Original");
+      .toHaveTextContent("Original");
     fireEvent.click(within(dialog).getByRole("button", { name: "Edit" }));
     expect(within(dialog).getByRole("textbox", { name: "Workspace instruction content" }))
       .toBeInTheDocument();

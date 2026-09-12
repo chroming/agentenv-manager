@@ -1858,14 +1858,14 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
       </div>
 
       <section
-        className="library-table"
+        className={`library-table${availableTags.length === 0 ? " library-table--without-tags" : ""}`}
         aria-label={t("Library skills")}
         hidden={libraryMode !== "skills"}
       >
         <div className="library-table__body" ref={scrollOwnerRef}>
           <div className="library-table__head">
             <span>{t("Skill")}</span>
-            <span>{t("Tags")}</span>
+            {availableTags.length > 0 ? <span>{t("Tags")}</span> : null}
             <span>{t("Source")}</span>
             <span className="library-column-label">{t("Status")}</span>
             <span aria-label={t("More")} />
@@ -2020,7 +2020,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                     />
                   </div>
                 </div>
-                <SkillTagCell skill={skill} onSelect={(tag) => updateControls({ tagFilter: tag })} />
+                {availableTags.length > 0 ? <SkillTagCell skill={skill} onSelect={(tag) => updateControls({ tagFilter: tag })} /> : null}
                 <div className="library-source-cell">
                   {(skill.sourceType === "github" || skill.sourceType === "git") && /^https?:\/\//i.test(skill.source ?? "") ? (
                     <button
@@ -2029,7 +2029,6 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                       aria-label={t("Open repository source for {{id}}", { id: skill.id })}
                       onClick={() => onOpenSource(skill.source!)}
                     >
-                      <GitBranch size={13} strokeWidth={2.2} />
                       <PreviewText
                         ariaLabel={t("Full source for {{id}}", { id: skill.id })}
                         className="library-source-name"
@@ -2046,7 +2045,6 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                       aria-label={t("Copy repository source for {{id}}", { id: skill.id })}
                       onClick={() => onCopySource(skill.source!)}
                     >
-                      <GitBranch size={13} strokeWidth={2.2} />
                       <PreviewText
                         ariaLabel={t("Full source for {{id}}", { id: skill.id })}
                         className="library-source-name"
@@ -2058,7 +2056,6 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                     </button>
                   ) : (
                     <span className="library-source-primary">
-                      <Folder size={13} strokeWidth={2.2} />
                       <PreviewText
                         ariaLabel={t("Full source for {{id}}", { id: skill.id })}
                         className="library-source-name"
@@ -2095,17 +2092,17 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
                 </div>
                 <div className="library-actions-cell">
                   <div className="row-action-menu">
-                    <button
+                    <IconButton
                       className="icon-action"
-                      type="button"
-                      aria-label={t("More actions for {{id}}", { id: skill.id })}
+                      variant="ghost"
+                      label={t("More actions for {{id}}", { id: skill.id })}
                       aria-expanded={openActionId === skill.id}
                       aria-haspopup="menu"
                       disabled={availabilityIsChanging}
                       onClick={(event) => toggleActionMenu(skill.id, event.currentTarget)}
                     >
                       <MoreHorizontal size={16} strokeWidth={2.2} />
-                    </button>
+                    </IconButton>
                   </div>
                   {openActionId === skill.id && openAction
                     ? createPortal(

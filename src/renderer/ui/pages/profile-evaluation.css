@@ -511,7 +511,7 @@
   z-index: var(--z-raised);
 }
 
-.profile-comparison-response .conversation-markdown {
+.profile-comparison-response .document-markdown {
   padding: 4px 1px 12px;
 }
 

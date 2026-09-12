@@ -1,0 +1,142 @@
+.document-markdown {
+  color: var(--text);
+  font-size: var(--font-size-body);
+  line-height: 1.6;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.document-markdown > :first-child {
+  margin-top: 0;
+}
+
+.document-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.document-markdown p,
+.document-markdown ul,
+.document-markdown ol,
+.document-markdown blockquote,
+.document-markdown pre,
+.document-markdown table {
+  margin: 0 0 10px;
+}
+
+.document-markdown h1,
+.document-markdown h2,
+.document-markdown h3,
+.document-markdown h4 {
+  color: var(--text);
+  font-weight: var(--font-weight-heading);
+  letter-spacing: 0;
+  margin: 18px 0 8px;
+}
+
+.document-markdown h1 {
+  font-size: 18px;
+}
+
+.document-markdown h2 {
+  font-size: 16px;
+}
+
+.document-markdown h3,
+.document-markdown h4 {
+  font-size: 14px;
+}
+
+.document-markdown ul,
+.document-markdown ol {
+  padding-left: 22px;
+}
+
+.document-markdown li + li {
+  margin-top: 3px;
+}
+
+.document-markdown blockquote {
+  border-left: 3px solid var(--border-strong);
+  color: var(--muted);
+  padding-left: 11px;
+}
+
+.document-markdown a {
+  color: var(--accent-strong);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.document-markdown a:hover {
+  text-decoration: underline;
+}
+
+.document-markdown code {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-tight);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  padding: 1px 4px;
+}
+
+.document-markdown pre {
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  max-width: 100%;
+  overflow: auto;
+  padding: 11px 12px;
+}
+
+.document-markdown pre code {
+  background: transparent;
+  border: 0;
+  display: block;
+  font-size: var(--font-size-metadata);
+  line-height: 1.55;
+  min-width: max-content;
+  padding: 0;
+}
+
+.document-markdown__code-line {
+  display: block;
+  min-height: 1.55em;
+}
+
+.document-markdown table {
+  border-collapse: collapse;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.document-markdown th,
+.document-markdown td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.document-markdown th {
+  background: var(--surface-subtle);
+  font-weight: var(--font-weight-medium);
+}
+
+.document-markdown input[type="checkbox"] {
+  margin-right: 6px;
+}
+
+.document-markdown__image-reference,
+.document-markdown__link-label {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.document-markdown--wrap pre,
+.document-markdown--wrap pre code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

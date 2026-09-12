@@ -3924,6 +3924,7 @@ const AppContent = ({
             <SingleObjectWorkspace
               className="profile-workbench"
               surface="open"
+              contentWidth="reading"
               aria-label={t("Profiles")}
             >
               <div className="profile-editor-surface">

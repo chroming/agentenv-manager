@@ -4149,6 +4149,11 @@ describe("Electron UI profile switching e2e", () => {
       enabledTargetIds: ["opencode"],
       locale: "zh_CN" as const,
       scenario: "one Agent in Simplified Chinese"
+    },
+    {
+      enabledTargetIds: ["opencode", "codex"],
+      locale: "zh_TW" as const,
+      scenario: "multiple Agents in Traditional Chinese"
     }
   ])("keeps object context text columns aligned with $scenario", async ({
     enabledTargetIds,
@@ -4174,6 +4179,8 @@ describe("Electron UI profile switching e2e", () => {
       await resizeAppWindow(page, viewport.width, viewport.height);
       await page.locator('.workspace-button[data-workspace="profiles"]').click();
       await page.locator(".profile-hero").waitFor({ state: "visible" });
+      const profileBounds = await page.locator(".profile-hero").boundingBox();
+      expect(profileBounds!.width).toBeLessThanOrEqual(1040);
       await expectTextOriginsAligned(
         ".profile-hero .ui-object-switcher__trigger-title",
         ".profile-hero .profile-description"
@@ -4189,6 +4196,9 @@ describe("Electron UI profile switching e2e", () => {
 
       await page.locator('.workspace-button[data-workspace="projects"]').click();
       await page.locator(".project-detail__header").waitFor({ state: "visible" });
+      const workspaceBounds = await page.locator(".project-detail__header").boundingBox();
+      expect(Math.abs(profileBounds!.x - workspaceBounds!.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(profileBounds!.width - workspaceBounds!.width)).toBeLessThanOrEqual(1);
       await expectTextOriginsAligned(
         ".project-detail__header .ui-object-switcher__trigger-title",
         ".project-detail__header .ui-inspector-header__copy > span"
@@ -8842,18 +8852,16 @@ describe("Electron UI profile switching e2e", () => {
           const hiddenDetail = status.querySelector<HTMLElement>(".ui-visually-hidden");
           const hiddenDetailRect = hiddenDetail?.getBoundingClientRect();
           const source = row.querySelector<HTMLElement>(".library-source-primary")!;
-          const sourceIcon = source.querySelector("svg")!.getBoundingClientRect();
           const sourceText = source.querySelector(".library-source-name")!.getBoundingClientRect();
           const actionButton = more.querySelector("button")!.getBoundingClientRect();
           const center = rowRect.top + rowRect.height / 2;
           return {
-            sourceHeaderOffset: source.getBoundingClientRect().left - headerCells[2]!.getBoundingClientRect().left,
-            statusHeaderOffset: statusRect.left - headerCells[3]!.getBoundingClientRect().left,
-            actionHeaderOffset: moreRect.right - headerCells[4]!.getBoundingClientRect().right,
+            sourceHeaderOffset: sourceText.left - headerCells[1]!.getBoundingClientRect().left,
+            statusHeaderOffset: statusRect.left - headerCells[2]!.getBoundingClientRect().left,
+            actionHeaderOffset: moreRect.right - headerCells[3]!.getBoundingClientRect().right,
             sourceRowCenterOffset: Math.abs(sourceText.top + sourceText.height / 2 - center),
             actionRowCenterOffset: Math.abs(actionButton.top + actionButton.height / 2 - center),
-            sourceGap: sourceText.left - sourceIcon.right,
-            sourceCenterOffset: Math.abs(sourceText.top + sourceText.height / 2 - sourceIcon.top - sourceIcon.height / 2),
+            sourceHasLeadingIcon: source.firstElementChild?.tagName.toLowerCase() === "svg",
             actionCellCount: row.querySelectorAll(".library-current-action-cell").length,
             childrenFit: Array.from(row.children).every((child) => {
               const box = child.getBoundingClientRect();
@@ -8901,8 +8909,8 @@ describe("Electron UI profile switching e2e", () => {
       expect(geometry.documentWidth).toBe(geometry.viewportWidth);
       expect(geometry.containerName).toBe("skill-library");
       expect(geometry.headerDisplay).toBe("grid");
-      expect(geometry.headerCount).toBe(5);
-      expect(geometry.visibleHeaderCount).toBe(5);
+      expect(geometry.headerCount).toBe(4);
+      expect(geometry.visibleHeaderCount).toBe(4);
       expect(geometry.headerTextCenterSpread).toBeLessThanOrEqual(1);
       expect(geometry.metrics[0]!.primaryTag).toBe("BUTTON");
       expect(geometry.metrics[1]!.primaryTag).toBe("STRONG");
@@ -8917,11 +8925,10 @@ describe("Electron UI profile switching e2e", () => {
         expect(Math.abs(row.actionHeaderOffset), JSON.stringify(row)).toBeLessThanOrEqual(1);
         expect(row.sourceRowCenterOffset, JSON.stringify(row)).toBeLessThanOrEqual(1);
         expect(row.actionRowCenterOffset, JSON.stringify(row)).toBeLessThanOrEqual(1);
-        expect(row.sourceGap).toBeGreaterThanOrEqual(4);
-        expect(row.sourceCenterOffset).toBeLessThanOrEqual(1);
+        expect(row.sourceHasLeadingIcon).toBe(false);
         expect(row.actionCellCount).toBe(0);
         expect(row.childrenFit).toBe(true);
-        expect(row.gridColumnCount).toBe(5);
+        expect(row.gridColumnCount).toBe(4);
         expect(Math.abs(row.skillNameLeft - geometry.headerIdentityLeft)).toBeLessThanOrEqual(1);
         expect(row.moreLeft - row.statusRight).toBeGreaterThanOrEqual(9);
         expect(row.statusLabelOverflow).toBeLessThanOrEqual(1);
@@ -8936,7 +8943,8 @@ describe("Electron UI profile switching e2e", () => {
         skill: row.querySelector<HTMLElement>(".library-resource-cell")!.getBoundingClientRect().width,
         source: row.querySelector<HTMLElement>(".library-source-cell")!.getBoundingClientRect().width
       }));
-      expect(columnWidths.skill).toBeLessThanOrEqual(columnWidths.source * 1.35);
+      expect(columnWidths.skill).toBeGreaterThanOrEqual(columnWidths.source);
+      expect(columnWidths.skill).toBeLessThanOrEqual(columnWidths.source * 1.7);
       expect(Math.abs(geometry.metrics[0]!.statusLeft - geometry.metrics[1]!.statusLeft)).toBeLessThanOrEqual(1);
       expect(geometry.metrics[0]!.statusIconPresent).toBe(true);
       expect(geometry.metrics[1]!.statusIconPresent).toBe(true);

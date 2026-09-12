@@ -91,8 +91,9 @@ describe("InstructionsWorkspace", () => {
     expect(screen.getByRole("menuitem", { name: "Delete" })).toBeEnabled();
     fireEvent.click(screen.getByRole("menuitem", { name: "Preview" }));
     const preview = screen.getByRole("dialog", { name: "Instruction document" });
-    expect(within(preview).getByLabelText("Preview of CONTENT.md").querySelector(".syntax-code-preview"))
-      .toBeInTheDocument();
+    expect(within(preview).getByRole("heading", { name: "Review" })).toBeInTheDocument();
+    fireEvent.click(within(preview).getByRole("button", { name: "Source code" }));
+    expect(within(preview).getByLabelText("Preview of CONTENT.md").querySelector(".syntax-code-preview")).toBeInTheDocument();
     fireEvent.click(within(preview).getAllByRole("button", { name: "Close" }).at(-1)!);
 
     fireEvent.contextMenu(row, { clientX: 40, clientY: 50 });

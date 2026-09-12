@@ -378,15 +378,6 @@
   white-space: nowrap;
 }
 
-.skill-source-link-scope {
-  color: var(--muted-strong);
-  flex: 0 1 48%;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .skill-source-link > svg {
   flex: 0 0 auto;
 }

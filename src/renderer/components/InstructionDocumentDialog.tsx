@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { DocumentDialogFrame } from "./DocumentDialogFrame";
-import { SyntaxCodePreview } from "./SyntaxCodePreview";
+import { InstructionContentPreview } from "./InstructionContentPreview";
 import { SyntaxTextAreaField } from "./SyntaxTextAreaField";
 import {
   Button,
@@ -200,7 +200,7 @@ export const InstructionDocumentDialog = ({
           <div className="instruction-document-dialog__preview" aria-label={t("Preview of {{name}}", {
             name: fileName
           })}>
-            <SyntaxCodePreview code={content} path={fileName} />
+            <InstructionContentPreview content={content} path={fileName} />
           </div>
         ) : (
           <div className="instruction-document-dialog__empty">{t("Empty file")}</div>

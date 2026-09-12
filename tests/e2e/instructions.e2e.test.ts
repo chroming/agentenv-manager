@@ -182,6 +182,8 @@ describe("Instruction Library desktop workflow", () => {
     const instructionMenu = page.getByRole("menu", { name: "Instruction actions" });
     await instructionMenu.getByRole("menuitem", { name: "Preview", exact: true }).click();
     const libraryPreview = page.getByRole("dialog", { name: "Instruction document" });
+    await libraryPreview.getByRole("heading", { name: "Review", exact: true }).waitFor();
+    await libraryPreview.getByRole("button", { name: "Source code", exact: true }).click();
     await expect.poll(() => libraryPreview.getByLabel("Preview of CONTENT.md").textContent())
       .toContain("# Review");
     await expect.poll(() => libraryPreview.locator(".syntax-code-preview span[style]").count())
@@ -215,9 +217,10 @@ describe("Instruction Library desktop workflow", () => {
     await instructions.getByRole("button", { name: "Preview output", exact: true }).click();
     const preview = page.getByRole("dialog", { name: "Instruction document" });
     const previewText = await preview.getByLabel("Preview of AGENTS.md").textContent();
-    expect(previewText).toContain("# Review");
-    expect(previewText).toContain("# Baseline");
-    expect(previewText).toContain("# Profile");
+    expect(previewText).toContain("Review");
+    expect(previewText).toContain("Baseline");
+    expect(previewText).toContain("Profile");
+    expect(await preview.locator(".document-markdown").count()).toBe(1);
     await preview.getByRole("button", { name: "Close", exact: true }).first().click();
 
     await instructions.getByRole("button", { name: "Daily Coding instructions", exact: true }).click();

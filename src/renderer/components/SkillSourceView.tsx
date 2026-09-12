@@ -119,9 +119,6 @@ const sourceDefaultLabel = (group: SkillSourceGroupView) => {
   return directory ? `${repository} · /${directory}` : repository;
 };
 
-const sourceDirectoryLeaf = (group: SkillSourceGroupView) =>
-  group.directory.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean).at(-1);
-
 const mergeErrorSummary = (message: string) => {
   if (/repository access failed|authentication failed|permission denied|publickey|host key verification/i.test(message)) {
     return "Could not access this repository. Check your Git credentials or SSH key.";
@@ -772,11 +769,7 @@ export const SkillSourceView = ({
           const hasAttention = group.counts.updates + group.counts.new + group.counts.removed > 0;
           const groupName = group.displayName ?? sourceDefaultLabel(group);
           const repositoryLabel = sourceRepositoryLabel(group.repository);
-          const directoryLeaf = sourceDirectoryLeaf(group);
           const primaryLabel = group.displayName ?? repositoryLabel;
-          const primaryScope = !group.displayName && directoryLeaf
-            ? `/${directoryLeaf}`
-            : undefined;
           const reviewableUpdateIds = group.candidates.flatMap((candidate) =>
             candidate.state === "update" &&
             candidate.libraryId &&
@@ -816,9 +809,9 @@ export const SkillSourceView = ({
           ) : group.error || hasAttention ? (
             <CircleAlert size={13} strokeWidth={2.2} />
           ) : group.checkedAt ? (
-            <CheckCircle2 size={13} strokeWidth={2.2} />
+            <CheckCircle2 className="skill-maintenance-status__quiet-icon" size={13} strokeWidth={2.2} />
           ) : (
-            <RefreshCw size={13} strokeWidth={2.2} />
+            <RefreshCw className="skill-maintenance-status__quiet-icon" size={13} strokeWidth={2.2} />
           );
           const statusLabel = group.error ? (
                 <OverflowTooltip
@@ -915,11 +908,6 @@ export const SkillSourceView = ({
                         focusable={false}
                         text={group.canonicalLink}
                       />
-                      {primaryScope ? (
-                        <span className="skill-source-link-scope" aria-hidden="true">
-                          {primaryScope}
-                        </span>
-                      ) : null}
                       {sourceIsOpenable(group.canonicalLink) ? (
                         <ExternalLink size={12} strokeWidth={2.2} />
                       ) : (
@@ -927,11 +915,9 @@ export const SkillSourceView = ({
                       )}
                     </button>
                   </div>
-                  <span className="skill-source-checked">
-                    {group.displayName
+                  <OverflowTooltip className="skill-source-checked" text={group.displayName
                       ? `${sourceRepositoryLabel(group.repository)} · ${sourceScopeLabel(group)}`
-                      : sourceScopeLabel(group)}
-                  </span>
+                      : sourceScopeLabel(group)} />
                 </div>
                 <div className="skill-source-counts" aria-label={t("Source summary")}>
                   <strong>{group.counts.total}</strong>
@@ -969,7 +955,7 @@ export const SkillSourceView = ({
                     busy={monitoringOperation === group.sourceId}
                     label={t("Source actions for {{name}}", { name: groupName })}
                     size="compact"
-                    variant="secondary"
+                    variant="ghost"
                     aria-expanded={sourceMenu?.sourceId === group.sourceId}
                     aria-haspopup="menu"
                     onClick={(event) => toggleSourceMenu(group.sourceId, event.currentTarget)}
@@ -1102,7 +1088,7 @@ export const SkillSourceView = ({
                         />
                         <div className="skill-source-candidate-action">
                           {(candidate.state === "new" && onSetCandidateIgnored) || (candidate.state === "removed" && candidate.libraryId) ?
-                            <ToolbarOverflowMenu label={t("More actions for {{name}}", { name: candidate.name })}
+                            <ToolbarOverflowMenu variant="ghost" label={t("More actions for {{name}}", { name: candidate.name })}
                               menuLabel={t("Actions for {{name}}", { name: candidate.name })}
                               disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
                               items={candidate.state === "new" ? [{ id: "ignore",
