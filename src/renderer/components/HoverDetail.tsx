@@ -1,6 +1,8 @@
 import {
   type CSSProperties,
+  type HTMLAttributes,
   type ReactNode,
+  type RefObject,
   type WheelEvent,
   useCallback,
   useEffect,
@@ -35,6 +37,8 @@ interface HoverDetailProps {
   showArrow?: boolean;
   showOnlyWhenOverflowing?: boolean;
   testId?: string;
+  renderTrigger?: (props: HTMLAttributes<HTMLElement>, setRef: (node: HTMLElement | null) => void) => ReactNode;
+  anchorRef?: RefObject<HTMLElement | null>;
 }
 
 const clamp = (value: number, min: number, max: number) =>
@@ -57,12 +61,15 @@ export const HoverDetail = ({
   preferredPlacement,
   showArrow = false,
   showOnlyWhenOverflowing = false,
-  testId
+  testId,
+  renderTrigger,
+  anchorRef
 }: HoverDetailProps) => {
   const popoverId = useId();
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<HoverDetailPosition>();
-  const triggerRef = useRef<HTMLSpanElement>(null);
+  const ownTriggerRef = useRef<HTMLElement>(null);
+  const triggerRef = anchorRef ?? ownTriggerRef;
   const popoverRef = useRef<HTMLDivElement>(null);
   const closeTimerRef = useRef<number | undefined>(undefined);
   const openTimerRef = useRef<number | undefined>(undefined);
@@ -174,6 +181,10 @@ export const HoverDetail = ({
     if (!isOpen) return undefined;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (renderTrigger) {
+          close();
+          return;
+        }
         const modalDialog = document.querySelector(
           '[role="dialog"][aria-modal="true"]'
         );
@@ -194,7 +205,7 @@ export const HoverDetail = ({
       window.removeEventListener("scroll", close, true);
       document.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [close, isOpen, updatePosition]);
+  }, [close, isOpen, updatePosition, renderTrigger]);
 
   useEffect(() => () => {
     cancelOpen();
@@ -243,27 +254,32 @@ export const HoverDetail = ({
     }
   };
 
+  const triggerProps: HTMLAttributes<HTMLElement> = {
+    "aria-describedby": isOpen ? popoverId : undefined,
+    onBlur: scheduleClose,
+    onFocus: open,
+    onMouseEnter: scheduleOpen,
+    onMouseLeave: () => { cancelOpen(); scheduleClose(); },
+    onPointerEnter: renderTrigger ? (event) => { if (event.pointerType !== "touch") scheduleOpen(); } : undefined,
+    onPointerLeave: renderTrigger ? () => { cancelOpen(); scheduleClose(); } : undefined,
+    onPointerDown: renderTrigger ? close : undefined,
+    onClick: renderTrigger ? close : undefined
+  };
+
   return (
     <>
-      <span
+      {renderTrigger ? renderTrigger(triggerProps, (node) => { triggerRef.current = node; }) : <span
+        {...triggerProps}
         aria-label={ariaLabel}
-        aria-describedby={isOpen ? popoverId : undefined}
         className={className}
         data-testid={testId}
         data-ui-overflow-detail="true"
         id={id}
-        ref={triggerRef}
+        ref={(node) => { triggerRef.current = node; }}
         tabIndex={focusable ? 0 : undefined}
-        onBlur={scheduleClose}
-        onFocus={open}
-        onMouseEnter={scheduleOpen}
-        onMouseLeave={() => {
-          cancelOpen();
-          scheduleClose();
-        }}
       >
         {children}
-      </span>
+      </span>}
       {isOpen
         ? createPortal(
             <div

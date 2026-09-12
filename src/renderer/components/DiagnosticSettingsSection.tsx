@@ -65,13 +65,14 @@ export const DiagnosticSettingsSection = ({
         >
           {t("Export report")}
         </Button>
-        <Button
+        <IconButton
+          label={t("Open logs")}
+          variant="ghost"
           disabled={busy}
-          icon={<FolderOpen size={15} strokeWidth={2.2} aria-hidden="true" />}
           onClick={() => void onOpenLogs()}
         >
-          {t("Open logs")}
-        </Button>
+          <FolderOpen size={15} strokeWidth={2.2} aria-hidden="true" />
+        </IconButton>
         {hasLatestIssue ? (
           <IconButton
             disabled={busy || exporting}

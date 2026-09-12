@@ -1,7 +1,8 @@
 import { LoaderCircle } from "lucide-react";
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useCallback, useRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import type { ButtonSize, ButtonVariant } from "./Button";
 import { useControlDensity } from "./controlDensity";
+import { HoverDetail } from "../HoverDetail";
 
 interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "aria-label"> {
   busy?: boolean;
@@ -28,17 +29,42 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
     ref
   ) => {
     const inheritedSize = useControlDensity();
+    const anchorRef = useRef<HTMLButtonElement>(null);
+    const setRef = useCallback((node: HTMLButtonElement | null) => {
+      anchorRef.current = node;
+      if (typeof ref === "function") return ref(node);
+      if (ref) ref.current = node;
+    }, [ref]);
     const resolvedSize = inheritedSize ?? size ?? "default";
     const effectiveBusy = busy || ariaBusy === true || ariaBusy === "true";
     return (
-      <button
+      <HoverDetail
+        className=""
+        anchorRef={anchorRef}
+        content={title || label}
+        focusable={false}
+        interactive={false}
+        hoverDelay={300}
+        maxWidth={320}
+        align="center"
+        preferredPlacement="top"
+        renderTrigger={(tooltipProps) => <button
         {...props}
-        ref={ref}
+        {...tooltipProps}
+        aria-describedby={[props["aria-describedby"], tooltipProps["aria-describedby"]].filter(Boolean).join(" ") || undefined}
+        onFocus={(event) => { tooltipProps.onFocus?.(event); props.onFocus?.(event); }}
+        onBlur={(event) => { tooltipProps.onBlur?.(event); props.onBlur?.(event); }}
+        onMouseEnter={(event) => { tooltipProps.onMouseEnter?.(event); props.onMouseEnter?.(event); }}
+        onMouseLeave={(event) => { tooltipProps.onMouseLeave?.(event); props.onMouseLeave?.(event); }}
+        onPointerEnter={(event) => { tooltipProps.onPointerEnter?.(event); props.onPointerEnter?.(event); }}
+        onPointerLeave={(event) => { tooltipProps.onPointerLeave?.(event); props.onPointerLeave?.(event); }}
+        onPointerDown={(event) => { tooltipProps.onPointerDown?.(event); props.onPointerDown?.(event); }}
+        onClick={(event) => { tooltipProps.onClick?.(event); props.onClick?.(event); }}
+        ref={setRef}
         aria-busy={effectiveBusy}
         aria-label={label}
         className={`ui-icon-button ui-icon-button--${variant} ui-icon-button--${resolvedSize} ${className}`.trim()}
         disabled={props.disabled || effectiveBusy}
-        title={title}
         type={type}
       >
         <span className="ui-icon-button__content">{children}</span>
@@ -47,7 +73,8 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
             <LoaderCircle className="is-spinning" />
           </span>
         ) : null}
-      </button>
+      </button>}
+      >{null}</HoverDetail>
     );
   }
 );

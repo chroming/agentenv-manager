@@ -51,7 +51,7 @@ describe("ProfileInstructionsComposerSection", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Instruction Blocks" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: "Review rules" }));
     fireEvent.click(screen.getByRole("button", { name: "Add 1" }));
 

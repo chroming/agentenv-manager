@@ -1065,7 +1065,6 @@ export const ProjectsWorkspace = ({
                       disabled={!selected.exists}
                       label={t("Refresh Workspace")}
                       presentation="icon"
-                      variant="secondary"
                       onRefresh={() => void refreshSelectedProject()}
                     />
                     <AgentContextSwitcher
@@ -1203,13 +1202,14 @@ export const ProjectsWorkspace = ({
                             className="project-resource-section__toolbar"
                             variant="embedded"
                           >
-                            <Button
+                            <IconButton
                               size="compact"
-                              icon={<FilePlus2 size={13} />}
+                              variant="ghost"
+                              label={t("Add instruction")}
                               onClick={() => setEditorRequest({ agentId: selectedAgent!.id })}
                             >
-                              {t("Add instruction")}
-                            </Button>
+                              <FilePlus2 size={14} />
+                            </IconButton>
                           </ResourcePanelToolbar>
                         ) : kind === "skill" && writableSkillLocations.length > 0 ? (
                           <ResourcePanelToolbar
@@ -1217,14 +1217,14 @@ export const ProjectsWorkspace = ({
                             className="project-resource-section__toolbar"
                             variant="embedded"
                           >
-                            <Button
+                            <IconButton
                               size="compact"
-                              variant="secondary"
-                              icon={<Plus size={13} />}
+                              variant="ghost"
+                              label={t("Add Skills")}
                               onClick={() => void openAddSkill()}
                             >
-                              {t("Add Skills")}
-                            </Button>
+                              <Plus size={14} />
+                            </IconButton>
                           </ResourcePanelToolbar>
                         ) : null}
                         {!snapshot && operation === "inspect" ? (

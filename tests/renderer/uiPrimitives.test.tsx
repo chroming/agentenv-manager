@@ -87,7 +87,8 @@ describe("renderer UI primitives", () => {
       "ui-button--primary",
       "ui-button--default"
     );
-    expect(screen.getByRole("button", { name: "Refresh" })).toHaveAttribute("title", "Refresh");
+    fireEvent.focus(screen.getByRole("button", { name: "Refresh" }));
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Refresh");
     expect(screen.getByRole("group", { name: "Actions" })).toHaveClass("ui-control-group");
   });
 
@@ -104,7 +105,7 @@ describe("renderer UI primitives", () => {
     expect(group).toHaveAttribute("data-control-density", "compact");
     for (const button of within(group).getAllByRole("button")) {
       expect(button).toHaveClass(
-        button.getAttribute("aria-label") === "Refresh"
+        button.classList.contains("ui-icon-button")
           ? "ui-icon-button--compact"
           : "ui-button--compact"
       );
@@ -247,7 +248,8 @@ describe("renderer UI primitives", () => {
       />
     );
     const button = screen.getByRole("button", { name: "Refresh" });
-    const content = button.querySelector(".ui-button__content");
+    const content = button.querySelector(".ui-icon-button__content");
+    expect(content).not.toBeNull();
 
     fireEvent.click(button);
     expect(onRefresh).toHaveBeenCalledOnce();
@@ -260,7 +262,7 @@ describe("renderer UI primitives", () => {
       />
     );
     expect(screen.getByRole("button", { name: "Refresh" })).toBe(button);
-    expect(button.querySelector(".ui-button__content")).toBe(content);
+    expect(button.querySelector(".ui-icon-button__content")).toBe(content);
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute("aria-busy", "true");
     expect(button.querySelector(".is-spinning")).not.toBeNull();
@@ -279,7 +281,8 @@ describe("renderer UI primitives", () => {
     );
     expect(button).not.toBeDisabled();
     expect(button).toHaveClass("ui-refresh-action--issue");
-    expect(button).toHaveAttribute("title", expect.stringContaining("One source could not be read"));
+    fireEvent.focus(button);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("One source could not be read");
   });
 
   it("shows progress on an interactive status without page-owned spinner markup", () => {
@@ -1007,7 +1010,7 @@ describe("renderer UI primitives", () => {
       </FilterPopover>
     );
 
-    const trigger = screen.getByRole("button", { name: "Filter conversations, 1 active" });
+    const trigger = screen.getByRole("button", { name: "Filter conversations, 1 active filters" });
     expect(trigger).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(trigger);
     expect(trigger).toHaveAttribute("aria-expanded", "true");

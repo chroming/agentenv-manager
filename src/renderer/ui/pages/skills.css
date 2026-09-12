@@ -50,27 +50,6 @@
   min-width: 0;
 }
 
-.skill-library-panel .library-filter-trigger {
-  gap: 6px;
-}
-
-.skill-library-panel .library-filter-trigger strong {
-  align-items: center;
-  background: var(--surface-pressed);
-  border-radius: var(--radius-pill);
-  display: inline-flex;
-  font-size: 10px;
-  height: 18px;
-  justify-content: center;
-  min-width: 18px;
-  padding-inline: 5px;
-}
-
-.skill-library-panel .library-filter-trigger.has-filters {
-  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-strong));
-  color: var(--accent);
-}
-
 .skill-library-panel .library-filter-panel {
   align-items: end;
   background: var(--surface-muted);

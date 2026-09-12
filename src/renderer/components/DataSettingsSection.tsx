@@ -8,7 +8,7 @@ import { formatBytes } from "../formatBytes";
 import { useI18n } from "../i18n";
 import { DataRootPath } from "./DataRootPath";
 import { FreshnessStatus } from "./FreshnessStatus";
-import { Button, SelectControl } from "./ui";
+import { Button, IconButton, SelectControl } from "./ui";
 
 interface DataSettingsSectionProps {
   backupRetentionDays: BackupRetentionDays;
@@ -45,13 +45,14 @@ export const DataSettingsSection = ({
           <p className="settings-muted">{t("AgentEnv data and the recovery points created before local changes.")}</p>
         </div>
         <div className="settings-data-actions settings-row-actions">
-          <Button
+          <IconButton
+            label={t("Open folder")}
+            variant="ghost"
             disabled={busy}
-            icon={<FolderOpen size={15} strokeWidth={2.2} aria-hidden="true" />}
             onClick={onOpenFolder}
           >
-            {t("Open folder")}
-          </Button>
+            <FolderOpen size={15} strokeWidth={2.2} aria-hidden="true" />
+          </IconButton>
         </div>
       </div>
       <DataRootPath />

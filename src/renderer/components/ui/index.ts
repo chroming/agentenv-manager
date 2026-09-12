@@ -11,6 +11,7 @@ export { DialogBody, DialogFooter, DialogHeader } from "./DialogParts";
 export { DetailList } from "./DetailList";
 export { DisclosureIcon } from "./DisclosureIcon";
 export { FilterPopover } from "./FilterPopover";
+export { FilterTrigger } from "./FilterTrigger";
 export {
   SearchField,
   SelectControl,

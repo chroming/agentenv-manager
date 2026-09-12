@@ -19,6 +19,31 @@ or change the Library, Profile, deployment, recovery, or synchronization models.
 
 ## Information allocation
 
+### Command and metadata representation
+
+- `RefreshAction` defaults to an icon-only utility on all pages and drawers. Local
+  refresh and upstream update checks are different intents: `SkillMaintenanceAction`
+  keeps its short Check updates label, and batch Update retains visible text.
+- `IconButton` owns normal-weight, hover/focus tooltips through `HoverDetail` without
+  an extra layout wrapper or duplicate native title. Tooltips do not capture wheel
+  events or consume the parent dialog/menu's Escape; refs and focus restoration stay stable.
+- `FilterTrigger` owns the same icon, active marker, accessible count and trigger
+  geometry in Skill list, By source and conversation popovers. Existing filter forms
+  and reset controls remain unchanged.
+- Add inside an explicitly named resource section, Edit in a document inspector,
+  and Open folder/logs are icon utilities. Page-level Import/New, Local Skills,
+  Apply, Continue, Merge, Update all, sync and destructive actions keep text because
+  they identify workflows or consequences rather than universal tools.
+- Instruction reference metadata uses an icon plus count with the full Profile list
+  available on hover/focus. Shared editing and deletion still disclose affected Profiles
+  in their dialogs. Names, paths, timestamps, source identities and user tags remain values,
+  not unexplained symbols. Existing source icons are not duplicated in the Source column.
+- Unknown, failed and actionable update states retain short text. Do not hide warnings
+  inside tooltips or turn all normal states into colored icons.
+- Verify minimum/default/large windows, keyboard focus, active filters, busy geometry,
+  tooltip scrolling/dismissal and nested-dialog focus return. Accessible names alone
+  do not prove that a user can recognize the symbol.
+
 - The Tags column exists if any Skill in the entire Library has tags. Filtering
   away tagged Skills must not change column geometry. Empty tag cells remain empty.
 - Skill identity keeps its source/custom icon. The Source column does not repeat
@@ -206,3 +231,30 @@ Final artifact: `778a361e773eaf5c0e75b3721f4cc4ddd5581c8274e3d22462ee6bf8fb694d8
   invocations; those failed attempts are not evidence of product behavior.
 - This is macOS isolated Electron evidence, not a packaged or Windows/Linux release
   approval, full backend-suite run, or a guarantee against all possible user datasets.
+
+## Icon utility consolidation evidence (2026-09-12)
+
+- Scope: shared RefreshAction, FilterTrigger and IconButton; contextual resource Add,
+  document Edit, folder/log opening, and Instruction reference metadata. Primary,
+  ambiguous, destructive and update-check commands retain text. No persistence or
+  Agent mutation behavior changed.
+- IconButton keeps the real button as its geometry/focus anchor. Short hints support
+  hover, keyboard focus and disabled reasons without wrappers, native-title duplicates,
+  scroll capture, or swallowing the containing dialog's Escape. Busy geometry stays fixed.
+- Final source: `7c7b511e15d6f2e0b7ed71b74aae9e5272562aa8bfca11f7b310013a251eb79b`.
+- Final artifact: `16b3abad994c11f0cf60fa22cb86fccb15b0812fc8371be00482e6f314f0bea6`.
+- Final non-Electron suite: 1,952 tests in 272 files passed, including 675 Renderer
+  cases. Build/typecheck and CSS, module, Target, translation, feature and UI audits passed.
+- All 169 native Electron cases were executed: the final full run passed 166; the
+  remaining three passed after correcting stale presentation assertions and rerunning
+  their cases/suites. Raw Markdown is verified through Source code, source versions
+  through their detail tooltip, and catalog surfaces through the current unframed contract.
+  No tests or cases were removed and no timeout/pixel tolerances were increased.
+- Fresh mock captures cover minimum/default/large windows, English and both Chinese
+  locales, collapsed/expanded resources, dialogs, settings and comparison fake-CLI states.
+  Capture manifest: `/tmp/agentenv-icon-release-review-20260912/capture-manifest.json`.
+- All 82 critical pixel comparisons passed on that artifact. Seven reviewed baselines
+  were refreshed for the intentional utility/toolbar and unframed presentation changes;
+  all comparison thresholds remain unchanged.
+- These checks exercise macOS Electron with isolated fixture homes, not real Agent
+  writes, paid AI calls, packaged installers, or Windows/Linux release certification.

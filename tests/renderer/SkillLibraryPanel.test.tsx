@@ -1004,6 +1004,7 @@ describe("SkillLibraryPanel", () => {
     });
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("group", { name: "Skill filters" })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Filters" })).toHaveFocus());
 
     expect(screen.getByRole("region", { name: "Skill library" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Import skills" })).not.toBeInTheDocument();
@@ -1018,7 +1019,7 @@ describe("SkillLibraryPanel", () => {
     expect(sharedRow).not.toHaveTextContent("Review code");
     const sharedIdentity = within(sharedRow).getByLabelText("Skill details for shared-reviewer");
     fireEvent.mouseEnter(sharedIdentity);
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("Review code");
+    await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent("Review code"));
     expect(screen.getByRole("tooltip")).toHaveTextContent("1 Profile · 2 installs");
     expect(screen.getByRole("tooltip")).toHaveTextContent("Daily Coding");
     expect(screen.getByRole("tooltip")).toHaveTextContent("OpenCode, Codex");

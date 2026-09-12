@@ -1395,8 +1395,8 @@ describe("App", () => {
       .not.toBeInTheDocument();
     expect(within(editor.querySelector<HTMLElement>(".library-toolbar")!).getByRole("button", { name: "More Skill actions" })).toBeInTheDocument();
     const refreshSkills = within(editor).getByRole("button", { name: "Refresh skills" });
-    expect(refreshSkills).toHaveClass("ui-button", "ui-button--secondary");
-    expect(refreshSkills).toHaveTextContent("Refresh");
+    expect(refreshSkills).toHaveClass("ui-icon-button", "ui-icon-button--ghost");
+    expect(refreshSkills).toHaveTextContent("");
   });
 
   it("opens an indexed conversation directly from Quick Open content search", async () => {
@@ -3147,7 +3147,7 @@ describe("App", () => {
     await openSettingsCategory("Data");
     expect(await screen.findByText("Logs & diagnostics")).toBeInTheDocument();
     const logsButton = screen.getByRole("button", { name: "Open logs" });
-    expect(logsButton).toHaveClass("ui-button", "ui-button--secondary");
+    expect(logsButton).toHaveClass("ui-icon-button", "ui-icon-button--ghost");
     const copyAction = await screen.findByRole("button", { name: "Copy latest issue" });
     expect(screen.queryByRole("button", { name: "More diagnostics actions" }))
       .not.toBeInTheDocument();
@@ -3618,10 +3618,8 @@ describe("App", () => {
       expect(screen.getByRole("article", { name: "Agent OpenCode" })).toHaveTextContent("Missing")
     );
     expect(refresh).toHaveClass("ui-refresh-action--issue");
-    expect(refresh).toHaveAttribute(
-      "title",
-      expect.stringContaining("Optional MCP diagnostics unavailable")
-    );
+    fireEvent.focus(refresh);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Optional MCP diagnostics unavailable");
     expect(screen.queryByText("Agents refreshed")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Dismiss message" })).not.toBeInTheDocument();
   });
@@ -3899,8 +3897,10 @@ describe("App", () => {
 
     const edit = screen.getByRole("button", { name: "Edit Profile" });
     const more = screen.getByRole("button", { name: "More Profile actions" });
-    expect(edit).toHaveAttribute("title", "Edit Profile");
-    expect(more).toHaveAttribute("title", "More Profile actions");
+    fireEvent.focus(edit);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Edit Profile");
+    fireEvent.focus(more);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("More Profile actions");
     expect(more.closest(".profile-hero")).not.toBeNull();
     expect(more.closest(".profile-page-header")).toBeNull();
     expect(screen.getByLabelText("Current Agent OpenCode")).toBeInTheDocument();

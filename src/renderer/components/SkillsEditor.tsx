@@ -6,7 +6,6 @@ import {
   Link2,
   LoaderCircle,
   Plus,
-  RefreshCw,
   Trash2
 } from "lucide-react";
 import type {
@@ -34,6 +33,7 @@ import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
 import { LibrarySkillSelection } from "./LibrarySkillSelection";
+import { SkillMaintenanceAction } from "./SkillMaintenanceAction";
 import type { ProfileResourcePolicy } from "./ProfileResourcePolicyControl";
 import {
   AlignedResourceList,
@@ -42,6 +42,7 @@ import {
   DialogFooter,
   DialogHeader,
   InteractiveStatus,
+  IconButton,
   ModalFrame,
   Notice,
   ResourcePanelToolbar,
@@ -443,30 +444,26 @@ export const SkillsEditor = ({
       >
         {profileManagesSkills && onCheckSkillUpdates &&
         (checkableIds.length > 0 || checkingSkillUpdates) ? (
-          <Button
-            aria-label={t("Check Profile Skill updates")}
+          <SkillMaintenanceAction
+            action="check"
+            scope="profile"
+            label={t("Check Profile Skill updates")}
             busy={checkingSkillUpdates}
-            busyLabel={t("Checking...")}
             className="profile-skill-check"
             disabled={disabled}
-            icon={<RefreshCw size={14} strokeWidth={2.2} aria-hidden="true" />}
-            size="compact"
-            variant="ghost"
             onClick={() => onCheckSkillUpdates(checkableIds)}
-          >
-            {t("Check updates")}
-          </Button>
+          />
         ) : null}
-        <Button
+        <IconButton
           ref={pickerTriggerRef}
-          variant="secondary"
+          variant="ghost"
+          label={t("Add Skills")}
           size="compact"
           disabled={disabled}
           onClick={() => openPicker()}
-          icon={<Plus size={14} strokeWidth={2.2} aria-hidden="true" />}
         >
-          {t("Add Skills")}
-        </Button>
+          <Plus size={14} strokeWidth={2.2} aria-hidden="true" />
+        </IconButton>
       </ResourcePanelToolbar> : null}
 
       <AlignedResourceList

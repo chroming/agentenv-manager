@@ -233,7 +233,7 @@ describe("Repository Skill source", () => {
         const sourceHeaderCell = headerCells[0]!;
         const sourceHeaderRange = document.createRange();
         sourceHeaderRange.selectNodeContents(sourceHeaderCell);
-        const identityScope = row.querySelector<HTMLElement>(".skill-source-link-scope")!;
+        const identityScope = row.querySelector<HTMLElement>(".skill-source-checked")!;
         const counts = row.querySelector<HTMLElement>(".skill-source-counts")!;
         const status = row.querySelector<HTMLElement>(".skill-source-status")!;
         const statusContent = status.firstElementChild as HTMLElement;
@@ -266,7 +266,7 @@ describe("Repository Skill source", () => {
       expect(geometry.documentWidth).toBe(geometry.viewportWidth);
       expect(geometry.rowScrollContained).toBe(true);
       expect(geometry.countsFit).toBe(true);
-      expect(geometry.identityScopeText).toBe("/engineering");
+      expect(geometry.identityScopeText).toBe("main · /skills/engineering");
       expect(geometry.identityScopeVisible).toBe(true);
       expect(Math.abs(geometry.identityTextLeft - geometry.sourceHeaderLeft)).toBeLessThanOrEqual(1);
       expect(geometry.statusFits).toBe(true);
@@ -305,8 +305,8 @@ describe("Repository Skill source", () => {
     await page.getByRole("button", { name: /Filters/, exact: false }).click();
     await sourceGroup.getByRole("button", { name: "Expand source" }).click();
     const firstCandidate = sourceGroup.locator(".skill-source-candidate").first();
-    const candidateVersion = firstCandidate.locator(".skill-source-candidate-version");
-    await candidateVersion.waitFor({ state: "visible" });
+    const candidateTitle = firstCandidate.locator(".skill-source-candidate-title");
+    await candidateTitle.waitFor({ state: "visible" });
     for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
       await page.setViewportSize({ width, height });
       const lanes = await sourceGroup.evaluate((group) => {
@@ -324,7 +324,9 @@ describe("Repository Skill source", () => {
       expect(lanes.every((row) => row.statusDelta <= 1 && row.labelDelta <= 1 && row.actionsDelta <= 1 && !row.overflow), JSON.stringify({ width, lanes })).toBe(true);
     }
     await page.setViewportSize({ width: 920, height: 620 });
-    expect((await candidateVersion.textContent())?.trim().length).toBeGreaterThan(0);
+    await candidateTitle.focus();
+    await expect.poll(() => page.getByRole("tooltip").textContent()).toContain("Upstream:");
+    await page.keyboard.press("Escape");
     expect(await firstCandidate.locator(".skill-source-candidate-field-label").count()).toBe(0);
     await sourceGroup.getByRole("button", { name: "More actions for Release Check Internal" }).click();
     await page.getByRole("menuitem", {

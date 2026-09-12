@@ -196,7 +196,7 @@ describe("Instruction Library desktop workflow", () => {
     const instructions = composer.locator('[data-profile-composer-id="instructions"]');
     const disclosure = instructions.getByRole("button", { name: "Instructions", exact: true });
     if (await disclosure.getAttribute("aria-expanded") !== "true") await disclosure.click();
-    await instructions.getByRole("button", { name: "Add", exact: true }).click();
+    await instructions.getByRole("button", { name: "Add Instruction Blocks", exact: true }).click();
     const picker = page.getByRole("dialog", { name: "Add Instruction Blocks" });
     await picker.getByRole("checkbox", { name: "Review rules" }).check();
     await picker.getByRole("checkbox", { name: "Baseline rules" }).check();

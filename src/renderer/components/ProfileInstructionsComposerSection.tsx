@@ -147,12 +147,13 @@ export const ProfileInstructionsComposerSection = ({
             disabled={policy !== "manage"}
             onClick={() => setDocument("compiled")}
           >{t("Preview output")}</Button>
-          <Button
+          <IconButton
             size="compact"
-            icon={<Plus size={14} />}
+            label={t("Add Instruction Blocks")}
+            variant="ghost"
             disabled={policy !== "manage"}
             onClick={() => setPickerOpen(true)}
-          >{t("Add")}</Button>
+          ><Plus size={14} /></IconButton>
         </ResourcePanelToolbar>
         <AlignedResourceList actionTrack="standard">
           {policy === "ignore" && currentValueAvailable ? (

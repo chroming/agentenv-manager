@@ -1,4 +1,4 @@
-import { Expand, Eye, FileInput, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Expand, Eye, FileInput, Pencil, Plus, Layers, Trash2 } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   useEffect,
@@ -36,6 +36,7 @@ import {
   MasterListPane,
   ModalFrame,
   PageHeader,
+  RefreshAction,
   SearchField,
   SelectableListRow,
   ToolbarOverflowMenu,
@@ -179,7 +180,7 @@ export const InstructionsWorkspace = ({
               if (initial) setEditor({ initial });
             })}>{t("Import")}</Button>
             <Button variant="primary" icon={<Plus size={14} />} onClick={() => setEditor({})}>{t("New Instruction")}</Button>
-            <Button icon={<RefreshCw size={14} />} busy={loading} onClick={() => void onRefresh()}>{t("Refresh")}</Button>
+            <RefreshAction label={t("Refresh")} busy={loading} onRefresh={() => void onRefresh()} />
           </>
         )}
       />
@@ -253,7 +254,7 @@ export const InstructionsWorkspace = ({
                       <OverflowTooltip
                         className="instructions-detail-usage"
                         ariaLabel={`${selected.usedByProfiles!.length === 1 ? t("Used by 1 Profile") : t("Used by {{count}} Profiles", { count: selected.usedByProfiles!.length })}: ${selected.usedByProfiles!.join(", ")}`}
-                        displayText={selected.usedByProfiles!.length === 1 ? t("Used by 1 Profile") : t("Used by {{count}} Profiles", { count: selected.usedByProfiles!.length })}
+                        displayContent={<><Layers size={14} aria-hidden="true" /><span>{selected.usedByProfiles!.length}</span></>}
                         text={selected.usedByProfiles!.join(", ")}
                         focusable
                       />
@@ -269,7 +270,7 @@ export const InstructionsWorkspace = ({
                     >
                       <Expand size={14} />
                     </IconButton>
-                    <Button icon={<Pencil size={14} />} onClick={() => setEditor({ block: selected })}>{t("Edit")}</Button>
+                    <IconButton label={t("Edit")} variant="ghost" onClick={() => setEditor({ block: selected })}><Pencil size={14} /></IconButton>
                     <ToolbarOverflowMenu
                       items={[{
                         id: "delete",

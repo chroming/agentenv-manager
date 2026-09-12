@@ -7,7 +7,7 @@ import {
   type ReactNode
 } from "react";
 import { createPortal } from "react-dom";
-import { IconButton } from "./IconButton";
+import { FilterTrigger } from "./FilterTrigger";
 
 interface FilterPopoverProps {
   activeCount?: number;
@@ -29,7 +29,6 @@ export const FilterPopover = ({
   const panelId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const triggerLabel = activeCount > 0 ? `${label}, ${activeCount} active` : label;
 
   const close = (restoreFocus = false) => {
     setOpen(false);
@@ -76,19 +75,18 @@ export const FilterPopover = ({
   }, [open]);
 
   return (
-    <span className={`ui-filter-popover${activeCount > 0 ? " has-active-filters" : ""}${className ? ` ${className}` : ""}`}>
-      <IconButton
+    <span className={`ui-filter-popover${className ? ` ${className}` : ""}`}>
+      <FilterTrigger
+        activeCount={activeCount}
         ref={triggerRef}
         aria-controls={open ? panelId : undefined}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="ui-filter-popover__trigger"
-        label={triggerLabel}
+        label={label}
         onClick={() => open ? close() : show()}
       >
         {icon}
-      </IconButton>
-      {activeCount > 0 ? <span className="ui-filter-popover__indicator" aria-hidden="true" /> : null}
+      </FilterTrigger>
       {open && style ? createPortal(
         <div
           aria-label={label}

@@ -43,6 +43,7 @@ import type {
 } from "../libraryViewState";
 import type { SkillUpdateActivity } from "../skillUpdateActivity";
 import { useModalDialog } from "../hooks/useModalDialog";
+import { FilterTrigger } from "./ui/FilterTrigger";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
 import { SkillMaintenanceStatus } from "./SkillMaintenanceStatus";
@@ -637,20 +638,15 @@ export const SkillSourceView = ({
             value={search}
             onChange={(event) => setSearch(event.currentTarget.value)}
           />
-        <Button
+        <FilterTrigger
+          label={t("Filters")}
+          activeCount={activeFilterCount}
           aria-expanded={filtersOpen}
-          className={`library-filter-trigger${activeFilterCount > 0 ? " has-filters" : ""}`}
-          icon={<ListFilter size={15} strokeWidth={2.2} />}
           ref={filterTriggerRef}
           onClick={() => setFiltersOpen((current) => !current)}
         >
-          {t("Filters")}
-          {activeFilterCount > 0 ? (
-            <strong aria-label={t("{{count}} active filters", { count: activeFilterCount })}>
-              {activeFilterCount}
-            </strong>
-          ) : null}
-        </Button>
+          <ListFilter size={15} strokeWidth={2.2} />
+        </FilterTrigger>
         <SkillMaintenanceAction action="check" scope="sources"
           busy={activeCheckingAll}
           disabled={activeCheckingAll || checking.size > 0 || Boolean(activeCheckingSourceId) || Boolean(operation) || monitoredSourceCount === 0}

@@ -24,7 +24,7 @@ export const RefreshAction = ({
   className = "",
   disabled = false,
   label,
-  presentation = "button",
+  presentation = "icon",
   size,
   state,
   variant = presentation === "icon" ? "ghost" : "secondary",
@@ -39,6 +39,7 @@ export const RefreshAction = ({
       ? t("Updated with issues")
       : undefined;
   const title = [
+    ariaLabel || label,
     statusLabel,
     state?.error,
     state?.lastSuccessAt

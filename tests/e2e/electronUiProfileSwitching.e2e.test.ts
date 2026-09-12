@@ -1187,6 +1187,7 @@ const editProfileInstructions = async (page: Page, value: string) => {
     .locator('[data-profile-composer-id="instructions"]');
   await instructions.getByRole("button", { name: "Preview output", exact: true }).click();
   const previewDialog = page.getByRole("dialog", { name: "Instruction document" });
+  await previewDialog.getByRole("button", { name: "Source code", exact: true }).click();
   const preview = previewDialog.getByLabel("Preview of AGENTS.md");
   await expect.poll(async () => (await preview.textContent())?.replace(/\s/g, ""))
     .toContain(value.replace(/\s/g, ""));
@@ -3321,9 +3322,9 @@ describe("Electron UI profile switching e2e", () => {
 
     await openSkillLibrary(page);
     await openLocalSkills(page);
-    await expect.poll(() => page.getByRole("button", { name: "Refresh local skills" })
-      .locator(".ui-button__label").textContent())
-      .toBe("Refresh");
+    const refreshLocal = page.getByRole("button", { name: "Refresh local skills" });
+    expect(await refreshLocal.textContent()).toBe("");
+    expect(await refreshLocal.locator(".ui-icon-button__content svg").count()).toBe(1);
     const cleanupGroup = page.getByRole("group", { name: "Cleanup group ui-alpha-skill" });
     await cleanupGroup.waitFor({ state: "visible" });
     await cleanupGroup
@@ -3576,7 +3577,7 @@ describe("Electron UI profile switching e2e", () => {
     await sharedRow.waitFor({ state: "visible" });
     const [refreshIconClass, checkIconClass] = await Promise.all([
       page.getByRole("button", { name: "Refresh skills" })
-        .locator(".ui-button__content svg").getAttribute("class"),
+        .locator(".ui-icon-button__content svg").getAttribute("class"),
       page.getByRole("button", { name: "Check updates" })
         .locator(".ui-button__content svg").getAttribute("class")
     ]);
@@ -5414,7 +5415,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByRole("combobox", { name: "Backup retention" }).inputValue())
       .toBe("30");
     const dataHeaderAlignment = await page.locator(".settings-data-header").evaluate((header) => {
-      const button = header.querySelector<HTMLElement>(".ui-button")!;
+      const button = header.querySelector<HTMLElement>("button")!;
       const location = header.parentElement!.querySelector<HTMLElement>(".settings-data-location")!;
       return {
         buttonHeight: Math.round(button.getBoundingClientRect().height),
@@ -9066,6 +9067,22 @@ describe("Electron UI profile switching e2e", () => {
         await page.getByRole("tab", { name, exact: true }).click();
         const toolbar = page.locator(".ui-resource-panel-toolbar--catalog:visible");
         await toolbar.waitFor({ state: "visible" });
+        const refresh = page.locator(".library-page-header .ui-refresh-action");
+        expect(await refresh.textContent()).toBe("");
+        const refreshBox = await refresh.boundingBox();
+        expect(refreshBox!.width).toBe(refreshBox!.height);
+        if (name !== "Groups") {
+          const filters = toolbar.getByRole("button", { name: "Filters", exact: true });
+          expect(await filters.textContent()).toBe("");
+          await filters.hover();
+          await expect.poll(() => page.getByRole("tooltip").textContent()).toBe("Filters");
+          expect(await page.getByRole("tooltip").evaluate((node) => getComputedStyle(node).pointerEvents)).toBe("none");
+          await filters.click();
+          expect(await filters.getAttribute("aria-expanded")).toBe("true");
+          await page.keyboard.press("Escape");
+          expect(await filters.getAttribute("aria-expanded")).toBe("false");
+          await page.mouse.move(5, 5);
+        }
         measurements.push(await toolbar.evaluate((element) => {
           const input = element.querySelector("input")!.getBoundingClientRect();
           const button = element.querySelector("button")!.getBoundingClientRect();
@@ -11948,11 +11965,11 @@ describe("Electron UI profile switching e2e", () => {
 
     const headerMetrics: Array<{ fontSize: string; left: number; top: number }> = [];
     const workspaceSurfaceSelectors: Record<string, { radius: string; selector: string }> = {
-      Skills: { radius: "8px", selector: ".skill-library-panel" },
+      Skills: { radius: "0px", selector: ".skill-library-panel" },
       Profiles: { radius: "0px", selector: ".profile-workbench" },
       Workspaces: { radius: "0px", selector: ".projects-workbench" },
-      Conversations: { radius: "8px", selector: ".conversation-layout" },
-      Agents: { radius: "8px", selector: ".target-list" },
+      Conversations: { radius: "0px", selector: ".conversation-layout" },
+      Agents: { radius: "0px", selector: ".target-list" },
       Settings: { radius: "0px", selector: ".settings-category-frame" }
     };
     for (const workspace of ["Skills", "Profiles", "Workspaces", "Conversations", "Agents", "Settings"]) {
@@ -12163,10 +12180,10 @@ describe("Electron UI profile switching e2e", () => {
         childrenContained: Array.from(frame.children).every((child) => {
           const childBox = child.getBoundingClientRect();
           return (
-            childBox.left >= box.left + 1 &&
-            childBox.right <= box.right - 1 &&
-            childBox.top >= box.top + 1 &&
-            childBox.bottom <= box.bottom - 1
+            childBox.left >= box.left - 1 &&
+            childBox.right <= box.right + 1 &&
+            childBox.top >= box.top - 1 &&
+            childBox.bottom <= box.bottom + 1
           );
         }),
         left: edge.borderLeftWidth,
@@ -12175,11 +12192,11 @@ describe("Electron UI profile switching e2e", () => {
       };
     });
     expect(skillFrameGeometry).toEqual({
-      bottom: "1px",
+      bottom: "0px",
       childrenContained: true,
-      left: "1px",
-      right: "1px",
-      top: "1px"
+      left: "0px",
+      right: "0px",
+      top: "0px"
     });
     const skillTypography = await page.locator(".library-table-row").first().evaluate((row) => ({
       name: getComputedStyle(row.querySelector<HTMLElement>(".skill-title")!).fontWeight,
@@ -12434,7 +12451,7 @@ describe("Electron UI profile switching e2e", () => {
     });
     expect(profileSkillGeometry).toEqual({
       border: "0px",
-      iconBackground: "rgb(245, 245, 247)",
+      iconBackground: "rgba(0, 0, 0, 0)",
       radius: "0px",
       rowContained: true
     });
@@ -12468,7 +12485,7 @@ describe("Electron UI profile switching e2e", () => {
         state: getComputedStyle(row.querySelector<HTMLElement>(".profile-skill-state")!).fontWeight
       };
     });
-    expect(profileSkillTypography).toEqual({ name: "500", state: "400" });
+    expect(profileSkillTypography).toEqual({ name: "400", state: "400" });
     expect(await page.locator(".profile-skill-detail").evaluateAll((details) =>
       details.every((detail) => getComputedStyle(detail).fontWeight === "400")
     )).toBe(true);

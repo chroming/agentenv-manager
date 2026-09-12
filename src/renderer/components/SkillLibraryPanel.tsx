@@ -127,6 +127,7 @@ import { SkillTagSuggestionsDialog } from "./SkillTagSuggestionsDialog";
 import { useAIPreferences } from "../hooks/useAIPreferences";
 import { LocalSkillAnalysis } from "./LocalSkillAnalysis";
 import { SkillLibraryFilters } from "./skillLibrary/SkillLibraryFilters";
+import { FilterTrigger } from "./ui/FilterTrigger";
 import { CleanupBucketHeader } from "./CleanupBucketHeader";
 import { BulkSkillUpdateDialog } from "./BulkSkillUpdateDialog";
 import { SkillImportDialog } from "./SkillImportDialog";
@@ -1820,20 +1821,15 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               onChange={(event) => updateControls({ search: event.currentTarget.value })}
             />
           <div className="library-toolbar-actions">
-          <Button
+          <FilterTrigger
+            label={t("Filters")}
+            activeCount={advancedFilterCount}
             aria-expanded={filtersOpen}
-            className={`library-filter-trigger${advancedFilterCount > 0 ? " has-filters" : ""}`}
-            icon={<ListFilter size={15} strokeWidth={2.2} />}
             ref={filterTriggerRef}
             onClick={() => setFiltersOpen((current) => !current)}
           >
-            {t("Filters")}
-            {advancedFilterCount > 0 ? (
-              <strong aria-label={t("{{count}} active filters", { count: advancedFilterCount })}>
-                {advancedFilterCount}
-              </strong>
-            ) : null}
-          </Button>
+            <ListFilter size={15} strokeWidth={2.2} />
+          </FilterTrigger>
           <SkillMaintenanceAction action="check"
             busy={checkingAllUpdates}
             disabled={updateActivityBusy}

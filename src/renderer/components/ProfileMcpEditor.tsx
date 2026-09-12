@@ -117,7 +117,6 @@ export const ProfileMcpEditor = ({
             ariaLabel={t("Refresh MCP connections")}
             label={t("Refresh")}
             size="compact"
-            variant="secondary"
             busy={refreshing}
             onRefresh={() => void refresh()}
           />
@@ -136,6 +135,7 @@ export const ProfileMcpEditor = ({
           <RefreshAction
             busy={refreshing}
             label={t("Retry")}
+            presentation="button"
             size="compact"
             variant="secondary"
             onRefresh={() => void refresh()}

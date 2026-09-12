@@ -400,7 +400,9 @@ describe("SkillsEditor v2", () => {
 
     const checkButton = screen.getByRole("button", { name: "Check Profile Skill updates" });
     expect(checkButton).toHaveAttribute("aria-busy", "true");
-    expect(checkButton).toHaveTextContent("Checking...");
+    expect(checkButton).toHaveTextContent("Check updates");
+    expect(checkButton.querySelector(".is-spinning")).not.toBeNull();
+    expect(checkButton).toBeDisabled();
   });
 
   it("does not show an unavailable update action when no Profile Skill is tracked", () => {
