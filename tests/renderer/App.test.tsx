@@ -1061,7 +1061,8 @@ describe("App", () => {
     const workspace = await screen.findByRole("region", { name: "Agents" });
     expect(within(workspace).queryByRole("region", { name: "Profile status" })).toBeNull();
     expect(within(workspace).getByRole("button", { name: "Codex" })).toBeEnabled();
-    fireEvent.click(within(workspace).getByRole("button", { name: "OpenCode" }));
+    const openCode = within(workspace).getByRole("article", { name: "Agent OpenCode" });
+    fireEvent.click(within(openCode).getByRole("button", { name: "Configure" }));
     const dialog = await screen.findByRole("dialog", { name: "Set up OpenCode" });
     expect(within(dialog).getByRole("button", { name: "Create from current environment" }))
       .toBeEnabled();
@@ -1093,6 +1094,9 @@ describe("App", () => {
     expect(within(workspace).queryByRole("region", { name: "Profile status" })).toBeNull();
     expect(within(workspace).queryByRole("button", { name: "Shared Skills" }))
       .not.toBeInTheDocument();
+    fireEvent.click(within(workspace).getByRole("button", { name: "More Agent actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Local Skills" }));
+    expect(await screen.findByRole("region", { name: "Local Skills Manager" })).toBeInTheDocument();
   });
 
   it("keeps Agent configuration available while the environment scan is pending", async () => {
@@ -1661,7 +1665,8 @@ describe("App", () => {
 
   const openRecoveryHistory = async () => {
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Recovery" }));
+    fireEvent.click(await screen.findByRole("button", { name: "More Agent actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Recovery" }));
     const dialog = await screen.findByRole("dialog", { name: "Recovery" });
     return within(dialog).getByRole("region", { name: "History" });
   };
@@ -4970,7 +4975,7 @@ describe("App", () => {
     expect(screen.getByText("OpenCode created. Agent unchanged.")).toBeInTheDocument();
   });
 
-  it("reviews and confirms Stop Managing from Target diagnostics", async () => {
+  it("keeps diagnostics read-only and confirms Stop Managing from the Agent menu", async () => {
     const api = installApi({
       listTargetStates: vi.fn().mockResolvedValue([managedState()])
     });
@@ -4985,7 +4990,9 @@ describe("App", () => {
     expect(within(diagnostics).getByText("Runtime")).toBeInTheDocument();
     expect(within(diagnostics).getByText("Command detected")).toBeInTheDocument();
     expect(within(diagnostics).getByText("/usr/local/bin/opencode")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Stop managing OpenCode" }));
+    expect(within(diagnostics).queryByRole("button", { name: "Stop managing OpenCode" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More actions for OpenCode" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Stop managing OpenCode" }));
 
     const choiceDialog = screen.getByRole("dialog", { name: "Stop managing Agent" });
     expect(within(choiceDialog).getByText("Keep current environment")).toBeInTheDocument();
@@ -5637,6 +5644,33 @@ describe("App", () => {
     expect(screen.queryByText("Rollback preview")).not.toBeInTheDocument();
   });
 
+  it("scopes Agent recovery history and keeps global history available from More", async () => {
+    installApi({
+      listBackups: vi.fn().mockResolvedValue([
+        backup,
+        { ...backup, id: "codex-backup", targetId: "codex", profileName: "Codex backup" }
+      ])
+    });
+    render(<App />);
+    const workspace = await screen.findByRole("region", { name: "Agents" });
+    fireEvent.click(within(workspace).getByRole("button", { name: "More actions for OpenCode" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Recovery" }));
+    const dialog = await screen.findByRole("dialog", { name: "Recovery" });
+    expect(await within(dialog).findByRole("button", { name: "Preview restore Daily Coding" })).toBeEnabled();
+    expect(within(dialog).queryByRole("button", { name: "Preview restore Codex backup" })).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    const history = await openRecoveryHistory();
+    expect(within(history).getByRole("button", { name: "Preview restore Codex backup" })).toBeEnabled();
+  });
+
+  it("routes a recovery-required Agent to recovery tools without requiring a Profile detour", async () => {
+    installApi({ listTargetStates: vi.fn().mockResolvedValue([managedState({ lifecycleStatus: "recovery-required" })]) });
+    render(<App />);
+    const workspace = await screen.findByRole("region", { name: "Agents" });
+    fireEvent.click(await within(workspace).findByRole("button", { name: "Open Recovery" }));
+    expect(await screen.findByRole("tab", { name: "Data" })).toHaveAttribute("aria-selected", "true");
+  });
+
   it("uses the confirmation preview when recovery starts from Targets", async () => {
     const api = installApi({
       listBackups: vi.fn().mockResolvedValue([backup])
@@ -5645,7 +5679,8 @@ describe("App", () => {
 
     await screen.findByRole("region", { name: "Agents" });
     expect(screen.queryByRole("region", { name: "History" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Recovery" }));
+    fireEvent.click(screen.getByRole("button", { name: "More Agent actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Recovery" }));
     const recoveryDialog = await screen.findByRole("dialog", { name: "Recovery" });
     const history = within(recoveryDialog).getByRole("region", { name: "History" });
     fireEvent.click(

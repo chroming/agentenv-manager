@@ -1260,6 +1260,18 @@ try {
     exact: true
   }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-file-browser-typescript-920x620.png"));
+  await fileBrowserDialog.getByRole("tab", { name: "Details", exact: true }).click();
+  for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+    await setWindowSize(page, windowHandle, width, height);
+    await capturePage(page, join(outputDir, `skills-file-details-${width}x${height}.png`));
+    const contained = await fileBrowserDialog.getByRole("tabpanel", { name: "Details" }).evaluate((panel) => panel.scrollWidth <= panel.clientWidth + 1);
+    if (!contained) throw new Error("Skill details overflow at " + width);
+  }
+  await setWindowSize(page, windowHandle, 920, 620);
+  await fileBrowserDialog.getByRole("button", { name: "Maximize preview" }).click();
+  await capturePage(page, join(outputDir, "skills-file-details-maximized-920x620.png"));
+  await fileBrowserDialog.getByRole("tab", { name: "Files", exact: true }).click();
+  await fileBrowserDialog.locator(".skill-file-preview > header code").getByText("typescript", { exact: true }).waitFor();
   await fileBrowserDialog.getByRole("button", { name: "Close" }).click();
   await fileBrowserDialog.waitFor({ state: "hidden" });
   await page.getByRole("tab", { name: "By source" }).click();
@@ -1969,7 +1981,9 @@ try {
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "target-diagnostics-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
-  await openCodeAgent.getByRole("button", { name: "Stop managing OpenCode" }).click();
+  await openCodeAgent.getByRole("button", { name: "More actions for OpenCode" }).click();
+  await capturePage(page, join(outputDir, "agents-actions-920x620.png"), { preserveFocus: true });
+  await page.getByRole("menuitem", { name: "Stop managing OpenCode" }).click();
   const stopManagingDialog = page.getByRole("dialog", { name: "Stop managing Agent" });
   await stopManagingDialog.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "target-stop-managing-choice-920x620.png"));
@@ -1990,7 +2004,8 @@ try {
   await openCodeMoreActions.click();
   await page.getByRole("menuitem", { name: "Hide diagnostics" }).click();
   await setWindowSize(page, windowHandle, 920, 620);
-  await page.getByRole("button", { name: "Recovery" }).click();
+  await page.getByRole("button", { name: "More Agent actions" }).click();
+  await page.getByRole("menuitem", { name: "Recovery" }).click();
   const recoveryDialog = page.getByRole("dialog", { name: "Recovery" });
   await recoveryDialog.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "target-recovery-920x620.png"));

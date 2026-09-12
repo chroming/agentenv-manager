@@ -4445,6 +4445,12 @@ const AppContent = ({
               onChooseAgents={openAgentChooser}
               onConfigure={openAgentConfiguration}
               onReviewEnvironment={openEnvironmentReview}
+              onReviewLocalSkills={openSkillDiscoveries}
+              onResolveRecovery={() => {
+                setSettingsCategory("data");
+                openWorkspaceNow("settings");
+                backupRecovery.actions.revealManager();
+              }}
               onCreateProfileFromTarget={(targetId, returnFocus) =>
                 openCreateFromTargetDialog(targetId, "all", returnFocus)}
               onManageSkills={openTargetSkillManager}

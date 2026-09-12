@@ -1,6 +1,6 @@
 .skill-file-browser {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   height: min(680px, calc(100vh - 64px));
   max-width: 960px;
   overflow: hidden;
@@ -23,6 +23,14 @@
   display: grid;
   grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
   min-height: 0;
+}
+
+.skill-file-browser > [hidden] {
+  display: none;
+}
+
+.skill-file-browser__navigation {
+  padding-inline: 18px;
 }
 
 .skill-file-tree {

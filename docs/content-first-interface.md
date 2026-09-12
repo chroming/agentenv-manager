@@ -49,6 +49,42 @@ or change the Library, Profile, deployment, recovery, or synchronization models.
 - Preserve selected/disabled row treatments and actual status meaning. This contract removes
   redundant emphasis, not safety information or access to configuration.
 
+## Discoverability and information access
+
+Quiet presentation must retain a predictable route to both facts and actions.
+
+| Surface | Default | On demand | Conditional action |
+| --- | --- | --- | --- |
+| Agents, including SSH | Agent, availability, clickable Profile or Configure, lifecycle | Local Skills and recovery in stable menus; runtime evidence in Diagnostics | Open Recovery for recovery-required, scoped shared review when needed |
+| Profiles | Selected Profile, target, resource groups and readiness | Composition on expansion; analysis, comparison and recovery in More | Apply preview shows effects; readiness links to its remedy |
+| Workspaces | Folder, Agent, Open and resource groups | Local resource content on expansion; recovery in More | Editing previews actual affected files |
+| Skills | Name, source, tags and maintenance state | Name opens Files by default; Details exposes versions, provenance, update policy, usage and install paths | Update settings and Review Profiles from Details; update state opens diff |
+| Instructions | Name and readable content | References in details | Shared edits disclose affected Profiles before saving |
+| Conversations | Title, directory, timestamp and Continue | Copy and migration in object menu; technical metadata on demand | Unsupported continuation retains a reason and supported alternative |
+| Settings | Current setting and command | Advanced configuration on expansion | Errors and remediation remain with the affected setting |
+
+- Hover is a preview, not the only route to version, ownership, policy or usage.
+- Configuration must be discoverable without hovering the Agent name. Names remain
+  shortcuts, and the same intent also has an explicit object-menu entry.
+- Diagnostics is read-only information. Stop managing is an object-menu command and
+  retains its existing preview, confirmation, backup and recovery behavior.
+- Local Skills and recovery do not disappear when the environment summary changes.
+  Historical backups alone do not justify a permanent primary-toolbar button.
+- File/detail tab changes never fetch an upstream source, mutate data or lose the
+  selected file. Details wrap long values and support selection/copy and maximization.
+- Verification must test retrieval and action routes, not only absence of banners.
+
+### Change evidence card
+
+- Intent: reduce default attention without removing configuration, provenance or recovery.
+- Owner: `TargetEnvironmentSummary`, `TargetWorkspace`, `SkillFileBrowserDialog`.
+- Reuse: `TextAction`, `ActionMenuItem`, `ToolbarOverflowMenu`, `DocumentDialogFrame`,
+  `TabBar`, `DialogBody`, `ControlGroup`; `DetailList` owns wrapping metadata geometry.
+- Scope: local/SSH Agent rows and Library files/details; existing sibling workflows
+  retain their context-specific information allocation above.
+- Evidence: Renderer routes and tab transitions; rebuilt mock Electron minimum/default/
+  wide windows and localized captures; stop-managing/restore end-to-end workflows.
+
 ## Reading safety
 
 Markdown uses the existing React Markdown/GFM renderer without raw HTML execution.
@@ -114,3 +150,22 @@ only recoloring it. Agent row entry points and the scoped Shared Skills workflow
   AI-tag/Import captures, avoiding a transient message becoming an accidental baseline.
 - Scope remains macOS isolated Electron presentation. No backend/full-release suite,
   packaged distribution, or Windows/Linux runtime approval is claimed.
+
+### Discoverability refinement evidence
+
+- Source `34b9c65e7a5cdf29b833b9ee7f9a620f8791b9d997f1c1f848bbff65437300a6`;
+  artifact `b21e3fcbf2f04eaca43bb5e102d74830868bbd34304cda26751e1499f7735e11`.
+- All 667 Renderer tests across 97 files passed. Six focused Electron tests cover
+  local/SSH action parity, catalog geometry, Skill inspector interaction, and both
+  Stop Managing outcomes; the isolated Workspace capture test also passed.
+- Fresh mock captures exercise Files/Details switching, selectable wrapped metadata,
+  maximization, Agent menus, and 920/1180/1440 layouts. Comparison captures use the
+  existing fake CLI runner. All 82 critical pixel checks passed at unchanged tolerances.
+- Added three reviewed baselines for Skill details and Agent actions; updated four
+  existing baselines for the explicit configuration action and affected modal background.
+- Build/typecheck and translation, style, module, UI-contract, and feature audits passed.
+- Recovery-required actions open recovery tools directly; Agent history is filtered
+  to that Agent, while global history and Local Skills remain available from More.
+  Skill facts remain reachable without hover, and opening details makes no mutations.
+- Evidence covers macOS isolated Electron, not a packaged release or Windows/Linux.
+  No backend ownership, deployment, or real Agent resources were changed.

@@ -19,6 +19,8 @@ const presentation = {
   missing: { label: "Library copy missing", kind: "warning", icon: Link2Off }
 } satisfies Record<SkillMaintenanceState, { label: string; kind: SemanticStatusKind; icon: typeof CheckCircle2 }>;
 
+export const skillMaintenanceLabel = (state: SkillMaintenanceState) => presentation[state].label;
+
 export const SkillMaintenanceStatus = ({ state, busy, disabled, detail, onReview, reviewLabel, className }: {
   state: SkillMaintenanceState;
   busy?: boolean;

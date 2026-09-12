@@ -105,6 +105,8 @@
 .target-workflow-environment {
   align-content: center;
   display: grid;
+  font-size: var(--font-size-metadata);
+  line-height: 18px;
   gap: 2px;
   grid-template-rows: 18px 18px;
   min-width: 0;

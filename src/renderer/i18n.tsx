@@ -13,6 +13,16 @@ export type ResolvedAppLocale = Exclude<AppLocale, "system">;
 export type TranslationValues = Record<string, string | number>;
 
 const zhCN: Record<string, string> = {
+  "Stop managing": "停止管理",
+  "Outside AgentEnv": "未由 AgentEnv 管理",
+  "Library path": "资源库路径",
+  "Library revision": "资源库提交版本",
+  "Upstream revision": "来源提交版本",
+  "Library updated": "资源库更新时间",
+  "Source updated": "来源更新时间",
+  "Agent copies": "Agent 副本",
+  "Skill details": "Skill 详情",
+  "Files": "文件",
   "Source code": "源码",
   "No readable text changes. Review the original files instead.": "没有可分析的文本变更，请查看原始文件。",
   "{{count}} text files will be analyzed": "将分析 {{count}} 个文本文件",
@@ -2557,6 +2567,16 @@ Object.assign(zhCN, {
 });
 
 const zhTW: Record<string, string> = {
+  "Stop managing": "停止管理",
+  "Outside AgentEnv": "未由 AgentEnv 管理",
+  "Library path": "資源庫路徑",
+  "Library revision": "資源庫提交版本",
+  "Upstream revision": "來源提交版本",
+  "Library updated": "資源庫更新時間",
+  "Source updated": "來源更新時間",
+  "Agent copies": "Agent 副本",
+  "Skill details": "Skill 詳情",
+  "Files": "檔案",
   "No readable text changes. Review the original files instead.": "沒有可分析的文字變更，請查看原始檔案。",
   "{{count}} text files will be analyzed": "將分析 {{count}} 個文字檔案",
   "Set up {{name}}": "設定 {{name}}",

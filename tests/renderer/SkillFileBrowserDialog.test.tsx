@@ -7,6 +7,42 @@ import { SkillFileBrowserDialog } from "../../src/renderer/components/SkillFileB
 afterEach(cleanup);
 
 describe("SkillFileBrowserDialog", () => {
+  it("keeps provenance and usage reachable without hovering and preserves file selection", async () => {
+    const onUpdateSettings = vi.fn();
+    const onReviewProfiles = vi.fn();
+    const onReadFile = vi.fn().mockResolvedValue({ path: "SKILL.md", kind: "text", content: "# Example", sizeBytes: 9 });
+    render(<SkillFileBrowserDialog
+      skill={{ id: "example", name: "Example", description: "Review changes", path: "/tmp/library/example", sourceType: "github",
+        source: "https://github.com/example/skills/tree/main/review", updatePolicy: "tracked", contentHash: "abc123", remoteRevision: "oldrevision",
+        updatedAt: "2026-09-10T00:00:00Z" }}
+      update={{ id: "example", name: "Example", sourceType: "github", latestRevision: "newrevision", updateAvailable: true }}
+      profileNames={["Daily", "Review"]}
+      installations={[{ agents: "Codex", path: "/tmp/agent/skills/example", method: "Copied", status: "Changes pending" }]}
+      onUpdateSettings={onUpdateSettings} onReviewProfiles={onReviewProfiles}
+      dialogRef={createRef<HTMLElement>()} initialFocusRef={createRef<HTMLButtonElement>()}
+      onListFiles={vi.fn().mockResolvedValue([{ path: "SKILL.md", name: "SKILL.md", kind: "file", sizeBytes: 9 }])}
+      onReadFile={onReadFile} onClose={vi.fn()}
+    />);
+    await waitFor(() => expect(onReadFile).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole("tab", { name: "Details" }));
+    const details = screen.getByRole("tabpanel", { name: "Details" });
+    expect(details).toHaveTextContent("oldrevision");
+    expect(details).toHaveTextContent("newrevision");
+    expect(details).toHaveTextContent("Daily Review");
+    expect(details).toHaveTextContent("Codex · Copied · Changes pending");
+    expect(details).toHaveTextContent("/tmp/agent/skills/example");
+    expect(details.querySelectorAll("dd.selectable").length).toBeGreaterThan(5);
+    fireEvent.click(screen.getByRole("button", { name: "Update settings" }));
+    expect(onUpdateSettings).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "Review Profiles" }));
+    expect(onReviewProfiles).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "Maximize preview" }));
+    expect(screen.getByRole("dialog")).toHaveClass("is-maximized");
+    fireEvent.click(screen.getByRole("tab", { name: "Files" }));
+    expect(await screen.findByText("# Example")).toBeInTheDocument();
+    expect(onReadFile).toHaveBeenCalledOnce();
+  });
+
   it("opens SKILL.md by default and lets the user browse nested files", async () => {
     const onReadFile = vi.fn().mockImplementation(async (_id: string, path: string) => ({
       path,

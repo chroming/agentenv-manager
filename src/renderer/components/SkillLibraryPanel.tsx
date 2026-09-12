@@ -2289,7 +2289,23 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
 
       {browsingSkill ? (
         <SkillFileBrowserDialog
-          skill={browsingSkill}
+          skill={librarySkills.find((skill) => skill.id === browsingSkill.id) ?? browsingSkill}
+          update={updatesById.get(browsingSkill.id)}
+          profileNames={skillUsage[browsingSkill.id] ?? []}
+          installations={installsFor(browsingSkill.id).map((install) => ({
+            agents: install.foundIn.map((id) => targetNameFor(id, targetNames, id)).join(", "),
+            path: install.path,
+            method: install.installMethod === "linked" ? t("Live link") : install.installMethod === "copied" ? t("Copied") : t("Unknown"),
+            status: install.status !== "managed" ? t("Outside AgentEnv") : install.contentMatchesLibrary === false ? t("Changes pending") : install.contentMatchesLibrary === true ? t("Up to date") : t("Not checked")
+          }))}
+          onUpdateSettings={() => {
+            setBrowsingSkill(undefined);
+            runSkillMenuAction(browsingSkill, "settings", modalFallbackFocusRef.current);
+          }}
+          onReviewProfiles={() => {
+            setBrowsingSkill(undefined);
+            runSkillMenuAction(browsingSkill, "review", modalFallbackFocusRef.current);
+          }}
           dialogRef={modalDialogRef}
           initialFocusRef={modalInitialFocusRef}
           onListFiles={onListSkillFiles}

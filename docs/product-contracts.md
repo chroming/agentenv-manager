@@ -631,6 +631,20 @@ implementation.
   the active Profile. A routine scan or healthy result MUST NOT insert a status row above the
   list. Shared findings expose a neutral `Shared Skills` command, not a warning count or a
   permanently expanded explanation. A real scan failure remains visible with `Retry check`.
+- Quiet rows MUST retain a visible configuration entry: local and SSH Agents expose a
+  clickable active Profile or `Configure` in the Profile column. Names remain shortcuts.
+  Recovery-required local Agents link directly to recovery tools. Agent menus retain
+  configuration, local Skill review, diagnostics and applicable stop-management actions;
+  stop-management is not hidden inside read-only diagnostics.
+- The Agents page keeps Local Skills and global recovery in a stable overflow menu,
+  independently of derived review state. Agent-specific recovery filters to that Agent's
+  checkpoints; global history remains reachable. Historical backups alone do not add a
+  permanent main-toolbar command.
+- Skill files and metadata share one maximizable inspector. Files opens by default; Details
+  exposes update policy, current status, Profile references, detected Agent copies, source,
+  versions, timestamps and Library path/hash without requiring hover. Metadata is selectable
+  and wraps; switching tabs preserves file selection and scroll and performs no mutation.
+  Update settings and Profile review reuse the existing workflows from the inspector.
 - `Applied with local overrides` is a stable current deployment and MUST NOT be counted as an
   Agent that needs review or promoted to a separate global warning. Its machine-local exception
   remains visible on the affected Agent and Profile. Dangerous Apply/Cleanup effects, external

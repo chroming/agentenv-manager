@@ -397,6 +397,8 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
                     <TargetEnvironmentSummary
                       lifecycle={state?.lifecycleStatus ? remoteLifecycleLabel(state.lifecycleStatus, t) : t("Not managed")}
                       profileName={state?.activeProfileName}
+                      actionLabel={state?.activeProfileName ? undefined : t("Configure")}
+                      onAction={() => onOpenProfile(endpoint.id)}
                     />
                     <span className="target-workflow-last-applied">
                       {state?.lastAppliedAt ? (

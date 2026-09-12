@@ -7,6 +7,7 @@ import {
   Layers3,
   LoaderCircle,
   MoreHorizontal,
+  Power,
   ScanLine,
   Server,
   TerminalSquare
@@ -98,6 +99,8 @@ interface TargetWorkspaceProps {
   onChooseAgents(): void;
   onConfigure(targetId: string): void;
   onReviewEnvironment(): void;
+  onReviewLocalSkills(): void;
+  onResolveRecovery(): void;
   onCreateProfileFromTarget(targetId: string, returnFocus?: HTMLElement | null): void;
   onManageSkills(targetId: string): void;
   onPreviewRollback(backupId: string): void;
@@ -157,6 +160,10 @@ const TargetRowActions = ({
   target,
   busy,
   expanded,
+  configureLabel,
+  onConfigure,
+  onRecovery,
+  onStopManaging,
   onCapture,
   onManageSkills,
   onToggleDiagnostics
@@ -164,6 +171,10 @@ const TargetRowActions = ({
   target: TargetInfo;
   busy: boolean;
   expanded: boolean;
+  configureLabel: string;
+  onConfigure(): void;
+  onRecovery?(returnFocus?: HTMLElement | null): void;
+  onStopManaging?(returnFocus?: HTMLElement | null): void;
   onCapture(returnFocus?: HTMLElement | null): void;
   onManageSkills(): void;
   onToggleDiagnostics(): void;
@@ -192,6 +203,13 @@ const TargetRowActions = ({
 
   useLayoutEffect(() => {
     if (!open) return;
+    const menu = menuRef.current;
+    if (menu) {
+      const bounds = menu.getBoundingClientRect();
+      if (bounds.bottom > window.innerHeight - 8) {
+        setStyle((current) => ({ ...current, top: Math.max(8, window.innerHeight - bounds.height - 8) }));
+      }
+    }
     focusInitialActionMenuItem(menuRef.current);
   }, [open]);
 
@@ -251,6 +269,10 @@ const TargetRowActions = ({
           menuRef={menuRef}
           style={style}
         >
+          <ActionMenuItem onClick={() => run(onConfigure)}>
+            <Layers3 size={15} aria-hidden="true" />
+            <span>{configureLabel}</span>
+          </ActionMenuItem>
           <ActionMenuItem
             disabled={!installed}
             title={installed ? undefined : t("{{name}} is not detected", { name: target.name })}
@@ -274,6 +296,14 @@ const TargetRowActions = ({
             <Activity size={15} strokeWidth={2.2} aria-hidden="true" />
             <span>{t(expanded ? "Hide diagnostics" : "Diagnostics")}</span>
           </ActionMenuItem>
+          {onRecovery ? <ActionMenuItem onClick={() => run(() => onRecovery(triggerRef.current))}>
+            <ArchiveRestore size={15} aria-hidden="true" />
+            <span>{t("Recovery")}</span>
+          </ActionMenuItem> : null}
+          {onStopManaging ? <ActionMenuItem aria-label={t("Stop managing {{name}}", { name: target.name })} onClick={() => run(() => onStopManaging(triggerRef.current))}>
+            <Power size={15} aria-hidden="true" />
+            <span>{t("Stop managing")}</span>
+          </ActionMenuItem> : null}
         </ActionMenu>,
         document.body
       ) : null}
@@ -311,6 +341,8 @@ export const TargetWorkspace = ({
   onChooseAgents,
   onConfigure,
   onReviewEnvironment,
+  onReviewLocalSkills,
+  onResolveRecovery,
   onCreateProfileFromTarget,
   onManageSkills,
   onPreviewRollback,
@@ -325,16 +357,20 @@ export const TargetWorkspace = ({
   const [draggedTargetId, setDraggedTargetId] = useState<string>();
   const [dragOverTargetId, setDragOverTargetId] = useState<string>();
   const [isRecoveryOpen, setIsRecoveryOpen] = useState(false);
+  const [recoveryTargetId, setRecoveryTargetId] = useState<string>();
   const [stopManagingTargetId, setStopManagingTargetId] = useState<string>();
   const [stopManagingMode, setStopManagingMode] = useState<StopManagingMode>("keep-current");
   const stopManagingReturnFocusRef = useRef<HTMLElement | null>(null);
   const stopManagingDialogRef = useRef<HTMLElement>(null);
   const stopManagingCancelRef = useRef<HTMLButtonElement>(null);
-  const recoveryTriggerRef = useRef<HTMLButtonElement>(null);
+  const recoveryTriggerRef = useRef<HTMLElement>(null);
   const recoveryDialogRef = useRef<HTMLElement>(null);
   const recoveryCloseRef = useRef<HTMLButtonElement>(null);
   const remoteManagerRef = useRef<RemoteDeviceManagerHandle>(null);
   const statesByTarget = new Map(targetStates.map((state) => [state.targetId, state]));
+  const recoveryBackups = recoveryTargetId
+    ? backups.filter((backup) => backup.targetId === recoveryTargetId || backup.targetIds?.includes(recoveryTargetId))
+    : backups;
   const showEnvironmentStatus = environmentReview.state === "unavailable";
   useModalDialog({
     open: Boolean(stopManagingTargetId),
@@ -371,16 +407,6 @@ export const TargetWorkspace = ({
                 {t("Shared Skills")}
               </Button>
             ) : null}
-            {backups.length > 0 ? (
-              <Button
-                ref={recoveryTriggerRef}
-                disabled={busy || isLoading}
-                icon={<ArchiveRestore size={15} strokeWidth={2.2} aria-hidden="true" />}
-                onClick={() => setIsRecoveryOpen(true)}
-              >
-                {t("Recovery")}
-              </Button>
-            ) : null}
             <RefreshAction
               disabled={busy || isLoading || freshness.status === "refreshing"}
               label={t("Refresh")}
@@ -390,6 +416,22 @@ export const TargetWorkspace = ({
             <ToolbarOverflowMenu
               disabled={busy || isLoading}
               items={[
+                {
+                  id: "local-skills",
+                  icon: <ScanLine size={15} aria-hidden="true" />,
+                  label: t("Local Skills"),
+                  onSelect: onReviewLocalSkills
+                },
+                {
+                  id: "recovery",
+                  icon: <ArchiveRestore size={15} aria-hidden="true" />,
+                  label: t("Recovery"),
+                  onSelect: (trigger) => {
+                    recoveryTriggerRef.current = trigger;
+                    setRecoveryTargetId(undefined);
+                    setIsRecoveryOpen(true);
+                  }
+                },
                 {
                   id: "add-ssh-device",
                   icon: <Server size={14} strokeWidth={2.1} aria-hidden="true" />,
@@ -519,6 +561,12 @@ export const TargetWorkspace = ({
                 <TargetEnvironmentSummary
                   lifecycle={t(state?.lifecycleStatus ? lifecycleLabel[state.lifecycleStatus] : isManaged ? "Managed by AgentEnv" : "Not managed")}
                   profileName={state?.activeProfileName}
+                  actionLabel={state?.lifecycleStatus === "recovery-required" ? t("Open Recovery") : state?.activeProfileName ? undefined : t("Configure")}
+                  onAction={() => {
+                    if (state?.lifecycleStatus === "recovery-required") {
+                      onResolveRecovery();
+                    } else onConfigure(target.id);
+                  }}
                 />
                 <span className="target-workflow-last-applied">
                   {state?.lastAppliedAt ? (
@@ -532,6 +580,18 @@ export const TargetWorkspace = ({
                   target={target}
                   busy={busy}
                   expanded={isExpanded}
+                  configureLabel={t(state?.activeProfileId ? "Open Profile" : "Configure")}
+                  onConfigure={() => onConfigure(target.id)}
+                  onRecovery={(returnFocus) => {
+                    recoveryTriggerRef.current = returnFocus ?? null;
+                    setRecoveryTargetId(target.id);
+                    setIsRecoveryOpen(true);
+                  }}
+                  onStopManaging={isManaged ? (returnFocus) => {
+                    stopManagingReturnFocusRef.current = returnFocus ?? null;
+                    setStopManagingMode("keep-current");
+                    setStopManagingTargetId(target.id);
+                  } : undefined}
                   onCapture={(returnFocus) =>
                     onCreateProfileFromTarget(target.id, returnFocus)}
                   onManageSkills={() => onManageSkills(target.id)}
@@ -636,24 +696,6 @@ export const TargetWorkspace = ({
                       </div>
                     )}
                   </div>
-                  {isManaged ? (
-                    <footer className="target-diagnostics-actions">
-                      <Button
-                        size="compact"
-                        variant="secondary"
-                        onClick={() => {
-                          stopManagingReturnFocusRef.current =
-                            document.activeElement instanceof HTMLElement
-                              ? document.activeElement
-                              : null;
-                          setStopManagingMode("keep-current");
-                          setStopManagingTargetId(target.id);
-                        }}
-                      >
-                        {t("Stop managing {{name}}", { name: target.name })}
-                      </Button>
-                    </footer>
-                  ) : null}
                 </section>
               ) : null}
             </article>
@@ -689,12 +731,12 @@ export const TargetWorkspace = ({
             <DialogHeader
               className="target-recovery-dialog__header"
               title={t("Recovery")}
-              description={t("Backups created before managed applies.")}
-              actions={<span>{t(backups.length === 1 ? "{{count}} backup" : "{{count}} backups", { count: backups.length })}</span>}
+              description={recoveryTargetId ? targets.find((target) => target.id === recoveryTargetId)?.name : t("Backups created before managed applies.")}
+              actions={<span>{t(recoveryBackups.length === 1 ? "{{count}} backup" : "{{count}} backups", { count: recoveryBackups.length })}</span>}
             />
             <DialogBody className="target-recovery-dialog__body">
               <HistoryView
-                backups={backups}
+                backups={recoveryBackups}
                 busy={busy}
                 rollbackPreview={undefined}
                 onPreviewRollback={(backupId) => {

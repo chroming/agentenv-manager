@@ -6,17 +6,25 @@ import {
 import type {
   SkillFileContent,
   SkillFileNode,
-  SkillLibraryEntry
+  SkillLibraryEntry,
+  SkillUpdateInfo
 } from "../../shared/types";
 import { languageForPath } from "../syntaxHighlighter";
 import { useI18n } from "../i18n";
 import { DocumentDialogFrame } from "./DocumentDialogFrame";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { SyntaxCodePreview } from "./SyntaxCodePreview";
-import { DisclosureIcon } from "./ui";
+import { Button, DetailList, DialogBody, DisclosureIcon, ResourcePanelToolbar, TabBar } from "./ui";
+import { skillMaintenanceLabel } from "./SkillMaintenanceStatus";
+import { skillMaintenanceState } from "../skillMaintenanceState";
 
 interface SkillFileBrowserDialogProps {
   skill: SkillLibraryEntry;
+  update?: SkillUpdateInfo;
+  profileNames?: string[];
+  installations?: Array<{ agents: string; path: string; method: string; status: string }>;
+  onUpdateSettings?(): void;
+  onReviewProfiles?(): void;
   dialogRef: RefObject<HTMLElement | null>;
   initialFocusRef: RefObject<HTMLButtonElement | null>;
   onListFiles(id: string): Promise<SkillFileNode[]>;
@@ -44,13 +52,22 @@ const findSkillMarkdown = (nodes: SkillFileNode[]): string | undefined => {
 
 export const SkillFileBrowserDialog = ({
   skill,
+  update,
+  profileNames = [],
+  installations = [],
+  onUpdateSettings,
+  onReviewProfiles,
   dialogRef,
   initialFocusRef,
   onListFiles,
   onReadFile,
   onClose
 }: SkillFileBrowserDialogProps) => {
-  const { t } = useI18n();
+  const { t, localeTag } = useI18n();
+  const formatDate = (value: string) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(localeTag, { dateStyle: "medium", timeStyle: "short" }).format(date);
+  };
   const [tree, setTree] = useState<SkillFileNode[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedPath, setSelectedPath] = useState("");
@@ -58,6 +75,28 @@ export const SkillFileBrowserDialog = ({
   const [treeLoading, setTreeLoading] = useState(true);
   const [fileLoading, setFileLoading] = useState(false);
   const [error, setError] = useState("");
+  const [tab, setTab] = useState<"files" | "details">("files");
+  useEffect(() => setTab("files"), [skill.id]);
+  const detailItems = [
+    { label: t("Description"), value: skill.description || t("Unavailable") },
+    { label: t("Status"), value: t(skillMaintenanceLabel(skillMaintenanceState(skill, update))) },
+    ...(update?.error ? [{ label: t("Check failed"), value: update.error }] : []),
+    ...(update?.sourceStatus === "removed" ? [{ label: t("Removed upstream"), value: t("The tracked source no longer contains this Skill. The Library copy is unchanged.") }] : []),
+    { label: t("Check updates"), value: skill.updatePolicy === "tracked" ? t("Enabled") : t("No update checks") },
+    { label: t("Profiles"), value: profileNames.join("\n") || t("Not referenced") },
+    { label: t("Agent copies"), value: installations.length ? installations.map((install) =>
+      `${install.agents} · ${install.method} · ${install.status}\n${install.path}`
+    ).join("\n\n") : t("Not installed") },
+    { label: t("Library path"), value: skill.path },
+    { label: t("Source"), value: skill.source ?? skill.upstream?.locator ?? t("Local") },
+    ...(skill.version ? [{ label: t("Version"), value: skill.version }] : []),
+    ...(skill.remoteRef || skill.upstream?.ref ? [{ label: t("Ref"), value: skill.remoteRef ?? skill.upstream?.ref }] : []),
+    { label: t("Library revision"), value: skill.remoteRevision ?? skill.upstream?.revision ?? t("Unavailable") },
+    ...(update?.latestRevision ? [{ label: t("Upstream revision"), value: update.latestRevision }] : []),
+    { label: t("Hash"), value: skill.contentHash },
+    { label: t("Library updated"), value: formatDate(skill.updatedAt) },
+    ...(update?.latestUpdatedAt || skill.upstream?.updatedAt ? [{ label: t("Source updated"), value: formatDate((update?.latestUpdatedAt ?? skill.upstream?.updatedAt)!) }] : []),
+  ];
 
   useEffect(() => {
     let active = true;
@@ -159,7 +198,19 @@ export const SkillFileBrowserDialog = ({
       title={skill.name}
       onClose={onClose}
     >
-      <div className="skill-file-browser__body">
+      <div className="skill-file-browser__navigation">
+      <TabBar<"files" | "details"> label={t("Skill details")} value={tab} onChange={setTab}
+        idPrefix="skill-inspector" panelId="skill-inspector-panel"
+        options={[{ value: "files", label: t("Files") }, { value: "details", label: t("Details") }]} />
+      </div>
+      <DialogBody hidden={tab !== "details"} id={tab === "details" ? "skill-inspector-panel" : undefined} role="tabpanel" aria-labelledby="skill-inspector-details">
+        {onUpdateSettings || onReviewProfiles && profileNames.length > 0 ? <ResourcePanelToolbar variant="catalog" aria-label={t("Skill actions")}>
+          {onUpdateSettings ? <Button onClick={onUpdateSettings}>{t("Update settings")}</Button> : null}
+          {onReviewProfiles && profileNames.length > 0 ? <Button onClick={onReviewProfiles}>{t("Review Profiles")}</Button> : null}
+        </ResourcePanelToolbar> : null}
+        <DetailList items={detailItems} />
+      </DialogBody>
+      <div hidden={tab !== "files"} className="skill-file-browser__body" id={tab === "files" ? "skill-inspector-panel" : undefined} role="tabpanel" aria-labelledby="skill-inspector-files">
         <aside className="skill-file-tree" aria-label={t("Skill file tree")}>
           {treeLoading ? (
             <div className="skill-file-browser__state" role="status">

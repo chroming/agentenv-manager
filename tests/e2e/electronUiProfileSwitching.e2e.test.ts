@@ -1538,6 +1538,17 @@ describe("Electron UI profile switching e2e", () => {
       const headerBackground = await agents.locator(".target-list__header").evaluate((element) => getComputedStyle(element).backgroundColor);
       const rowBackground = await agents.locator(".target-card--workflow").first().evaluate((element) => getComputedStyle(element).backgroundColor);
       expect(headerBackground).toBe(rowBackground);
+      const actionGeometry = await agents.locator(".target-workflow-environment").first().evaluate((cell) => {
+        const action = cell.querySelector("button")!;
+        const state = cell.querySelector(".target-workflow-lifecycle")!;
+        return {
+          textAligned: getComputedStyle(action).textAlign === "left",
+          sameTypeSize: getComputedStyle(action).fontSize === getComputedStyle(state).fontSize,
+          contained: action.scrollWidth <= action.clientWidth + 1,
+          sharedStart: Math.abs(action.getBoundingClientRect().left - state.getBoundingClientRect().left) <= 1
+        };
+      });
+      expect(actionGeometry).toEqual({ textAligned: true, sameTypeSize: true, contained: true, sharedStart: true });
       await page.locator(".sidebar").getByRole("button", { name: "Skills", exact: true }).click();
       await page.locator(".library-table__head").waitFor();
       expect(await page.locator(".library-table__head").evaluate((element) => getComputedStyle(element).backgroundColor)).toBe(rowBackground);
@@ -5083,24 +5094,40 @@ describe("Electron UI profile switching e2e", () => {
         source: box(".library-source-cell"),
         status: box(".library-status-cell"),
         visibleHeadings: Array.from(
-          row.parentElement?.previousElementSibling?.children ?? []
+          row.closest(".library-table")?.querySelector(".library-table__head")?.children ?? []
         ).filter((element) => getComputedStyle(element).display !== "none").length
       };
     });
     expect(skillLanes.contained).toBe(true);
-    expect(skillLanes.visibleHeadings).toBe(5);
+    expect(skillLanes.visibleHeadings).toBe(await skillRow.evaluate((row) => row.children.length));
     expect(skillLanes.resource.right).toBeLessThanOrEqual(skillLanes.source.left);
     expect(skillLanes.source.right).toBeLessThanOrEqual(skillLanes.status.left);
     expect(skillLanes.status.bottom).toBeLessThanOrEqual(skillLanes.row.bottom);
     expect(skillLanes.status.right).toBeLessThanOrEqual(skillLanes.more.left);
     expect(skillLanes.more.right).toBeLessThanOrEqual(skillLanes.row.right);
 
+    await skillRow.locator(".library-skill-name-button").click();
+    const skillInspector = page.getByRole("dialog", { name: /^Files in / });
+    await skillInspector.getByRole("tab", { name: "Details", exact: true }).click();
+    const details = skillInspector.getByRole("tabpanel", { name: "Details" });
+    await details.getByText("Library path", { exact: true }).waitFor();
+    await details.getByText("Check updates", { exact: true }).waitFor();
+    const detailsGeometry = await details.evaluate((panel) => ({
+      contained: panel.scrollWidth <= panel.clientWidth + 1,
+      selectable: Array.from(panel.querySelectorAll("dd")).every((value) => getComputedStyle(value).userSelect === "text")
+    }));
+    expect(detailsGeometry).toEqual({ contained: true, selectable: true });
+    await skillInspector.getByRole("button", { name: "Maximize preview" }).click();
+    await expect.poll(() => skillInspector.getAttribute("class")).toContain("is-maximized");
+    await skillInspector.getByRole("tab", { name: "Files", exact: true }).click();
+    await skillInspector.getByRole("button", { name: "Close", exact: true }).click();
+
     await navigation.getByRole("button", { name: "Agents", exact: true }).click();
     const targetRow = page.locator(".target-workflow-header").first();
     await targetRow.waitFor({ state: "visible" });
     const targetLanes = await targetRow.evaluate((row) => {
       const lifecycle = row.querySelector<HTMLElement>(".target-workflow-lifecycle")!.getBoundingClientRect();
-      const profile = row.querySelector<HTMLElement>(".target-workflow-profile")?.getBoundingClientRect();
+      const profile = row.querySelector<HTMLElement>(".target-workflow-environment button")?.getBoundingClientRect();
       const environment = row.querySelector<HTMLElement>(".target-workflow-environment")!.getBoundingClientRect();
       const health = row.querySelector<HTMLElement>(".target-health-status")!.getBoundingClientRect();
       const rowBox = row.getBoundingClientRect();
@@ -5109,7 +5136,7 @@ describe("Electron UI profile switching e2e", () => {
         environmentContained:
           environment.left >= rowBox.left && environment.right <= rowBox.right + 1,
         lifecycleLeft: Math.round(lifecycle.left),
-        profileLayoutCorrect: profile ? profile.top > lifecycle.top :
+        profileLayoutCorrect: profile ? profile.bottom <= lifecycle.top + 1 :
           Math.abs((lifecycle.top + lifecycle.bottom - health.top - health.bottom) / 2) <= 1,
         profileLeft: Math.round(profile?.left ?? environment.left),
         rowContained: row.scrollWidth <= row.clientWidth + 1
@@ -5181,10 +5208,9 @@ describe("Electron UI profile switching e2e", () => {
     });
     const libraryMode = await readBoxes(page.locator(".library-mode-switch"));
     const libraryModeOptions = await readBoxes(
-      page.locator(".library-mode-switch .ui-segmented-control__option")
+      page.locator(".library-mode-switch .ui-tab-bar__tab")
     );
-    expect(libraryMode[0]?.height).toBe(28);
-    expect(new Set(libraryModeOptions.map(({ height }) => height))).toEqual(new Set([24]));
+    expect(libraryModeOptions.length).toBe(3);
     const libraryRowMenus = await readBoxes(
       page.locator(".library-actions-cell .icon-action")
     );
@@ -5199,6 +5225,9 @@ describe("Electron UI profile switching e2e", () => {
     );
     expect(settingsTabs[0]?.height).toBe(35);
     expect(new Set(settingsTabOptions.map(({ height }) => height))).toEqual(new Set([34]));
+    expect(libraryMode[0]?.height).toBe(settingsTabs[0]?.height);
+    expect(new Set(libraryModeOptions.map(({ height }) => height)))
+      .toEqual(new Set(settingsTabOptions.map(({ height }) => height)));
     const assertSettingsCommandControls = async (category: string) => {
       const geometry = await page.locator(".settings-category-panel .ui-button").evaluateAll(
         (buttons) => buttons
@@ -5716,8 +5745,9 @@ describe("Electron UI profile switching e2e", () => {
           moreButtonsMatch: hasStableSizes(sizes(".target-more-action")),
           profileLanesAligned: hasStableValues(laneLefts(".target-workflow-environment")),
           singleLineCentered: rows.every((row) => {
-            if (row.querySelector(".target-workflow-profile")) return true;
+            const action = row.querySelector(".target-workflow-environment button")?.getBoundingClientRect();
             const label = row.querySelector(".target-workflow-lifecycle")!.getBoundingClientRect();
+            if (action) return Math.abs(action.left - label.left) <= 1 && action.bottom <= label.top + 1;
             const health = row.querySelector(".target-health-status")!.getBoundingClientRect();
             return Math.abs((label.top + label.bottom - health.top - health.bottom) / 2) <= 1;
           }),
@@ -5960,7 +5990,8 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() => openCodeCard.getByRole("button", { name: "More actions for OpenCode" }).getAttribute("class"))
       .toContain("ui-icon-button--ghost");
     await openAgentDiagnostics(page, openCodeCard, "OpenCode");
-    await openCodeCard.getByRole("button", { name: "Stop managing OpenCode" }).click();
+    await openCodeCard.getByRole("button", { name: "More actions for OpenCode" }).click();
+    await page.getByRole("menuitem", { name: "Stop managing OpenCode" }).click();
 
     const choiceDialog = page.getByRole("dialog", { name: "Stop managing Agent" });
     await choiceDialog.getByText("Keep current environment", { exact: true }).waitFor({
@@ -6030,7 +6061,8 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Agents", exact: true }).click();
     const openCodeCard = page.getByRole("article", { name: "Agent OpenCode" });
     await openAgentDiagnostics(page, openCodeCard, "OpenCode");
-    await openCodeCard.getByRole("button", { name: "Stop managing OpenCode" }).click();
+    await openCodeCard.getByRole("button", { name: "More actions for OpenCode" }).click();
+    await page.getByRole("menuitem", { name: "Stop managing OpenCode" }).click();
 
     const choiceDialog = page.getByRole("dialog", { name: "Stop managing Agent" });
     await choiceDialog.getByText("Restore environment before takeover", { exact: true }).click();

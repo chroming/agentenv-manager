@@ -1244,3 +1244,28 @@ button.skill-tag-chip:focus-visible {
     display: none;
   }
 }
+.ui-detail-list {
+  margin: 0;
+  font-size: var(--font-size-metadata);
+  line-height: 1.6;
+}
+
+.ui-detail-list > div {
+  display: grid;
+  grid-template-columns: minmax(100px, 144px) minmax(0, 1fr);
+  gap: var(--space-4);
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.ui-detail-list dt {
+  color: var(--muted);
+}
+
+.ui-detail-list dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  user-select: text;
+  white-space: pre-wrap;
+}
