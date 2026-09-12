@@ -10,6 +10,7 @@ import {
   FolderInput,
   FolderOpen,
   HardDrive,
+  Info,
   ListFilter,
   LoaderCircle,
   MessagesSquare,
@@ -30,6 +31,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { ProductIcon } from "../productIcons";
+import type { HistorySearchStatus } from "../../shared/conversationSearch";
+import { HistorySearchSettings } from "./HistorySearchSettings";
 import type {
   ConversationContinuationPreview,
   ConversationDetail,
@@ -93,6 +96,7 @@ export const refreshConversationIndex = () => {
   conversationRefreshOperation = window.agentEnv.refreshConversations()
     .finally(() => {
       conversationRefreshOperation = undefined;
+      invalidateConversationListPrefetch();
     });
   return conversationRefreshOperation;
 };
@@ -100,6 +104,7 @@ export const refreshConversationIndex = () => {
 export const refreshConversationIndexInBackground = async () => {
   const result = await refreshConversationIndex();
   invalidateConversationListPrefetch();
+  window.dispatchEvent(new Event("agentenv-history-indexed"));
   return result;
 };
 
@@ -678,6 +683,18 @@ export const ConversationWorkspace = ({
   onOpenProject?(project: ProjectSummary): void;
 }) => {
   const { t, formatDate, localeTag } = useI18n();
+  const [historyStatus, setHistoryStatus] = useState<HistorySearchStatus>();
+  const [sourceLocationOpen, setSourceLocationOpen] = useState(false);
+  const sourceLocationRef = useRef<HTMLElement>(null);
+  useModalDialog({open:sourceLocationOpen,dialogRef:sourceLocationRef,onDismiss:()=>setSourceLocationOpen(false)});
+  const [deviceFilter, setDeviceFilter] = useState("");
+  const [includeTools, setIncludeTools] = useState(false);
+  const [updatedAfter, setUpdatedAfter] = useState("");
+  const historyFilterRef = useRef({ deviceFilter, includeTools, updatedAfter });
+  historyFilterRef.current = { deviceFilter, includeTools, updatedAfter };
+  const historyStatusRef = useRef(historyStatus);
+  const historyFiltersChangedRef = useRef(false);
+  historyStatusRef.current = historyStatus;
   const [items, setItems] = useState<ConversationSummary[]>(
     () => initialViewState?.items ?? []
   );
@@ -904,7 +921,7 @@ export const ConversationWorkspace = ({
   useEffect(() => {
     let current = true;
     setDetailProject(undefined);
-    if (!detail?.workspacePath) return () => {
+    if (!detail?.workspacePath || (detail.origin && detail.origin.deviceId !== "local")) return () => {
       current = false;
     };
     void window.agentEnv.findProjectByPath(detail.workspacePath)
@@ -1006,15 +1023,20 @@ export const ConversationWorkspace = ({
         !nextWorkspaceFilter &&
         nextSort === "recent" &&
         limit === conversationPageSize
-        ? await preloadConversationList()
+        && !historyFilterRef.current.deviceFilter && !historyFilterRef.current.includeTools && !historyFilterRef.current.updatedAfter ? await preloadConversationList()
         : await window.agentEnv.listConversations({
             query: nextQuery || undefined,
+            includeTools: historyFilterRef.current.includeTools || undefined,
+            updatedAfter: historyFilterRef.current.updatedAfter || undefined,
+            historySourceIds: historyFilterRef.current.deviceFilter ? historyStatusRef.current?.config.sources.filter((s) => s.deviceId === historyFilterRef.current.deviceFilter).map((s) => s.id) ?? [] : undefined,
             agentIds: nextAgentFilter ? [nextAgentFilter] : undefined,
             workspacePaths: nextWorkspaceFilter ? [nextWorkspaceFilter] : undefined,
             sort: nextSort === "recent" ? undefined : nextSort,
             limit
           });
       if (requestId !== listRequestRef.current) return undefined;
+      setHistoryStatus(result.historyStatus);
+      if (result.historyStatus && !result.historyStatus.config.enabled) setDetail(undefined);
       const nextItems = preferredSummary &&
         !result.items.some((item) => item.id === preferredSummary.id)
         ? [preferredSummary, ...result.items]
@@ -1054,6 +1076,9 @@ export const ConversationWorkspace = ({
     setError("");
     try {
       const result = await window.agentEnv.listConversations({
+        includeTools: historyFilterRef.current.includeTools || undefined,
+        updatedAfter: historyFilterRef.current.updatedAfter || undefined,
+        historySourceIds: historyFilterRef.current.deviceFilter ? historyStatusRef.current?.config.sources.filter((s) => s.deviceId === historyFilterRef.current.deviceFilter).map((s) => s.id) ?? [] : undefined,
         query: queryRef.current || undefined,
         agentIds: agentFilterRef.current ? [agentFilterRef.current] : undefined,
         workspacePaths: workspaceFilterRef.current
@@ -1422,10 +1447,11 @@ export const ConversationWorkspace = ({
     return () => window.cancelAnimationFrame(frame);
   }, [detail?.id, detail?.matchedMessageId, query]);
   const filterTargets = useMemo(
-    () => targets.filter((target) =>
-      items.some((item) => item.agentId === target.id) ||
-      target.conversationCapabilities.history.state !== "unavailable"),
-    [items, targets]
+    () => [...new Map([
+      ...targets.map((target) => ({ id: target.id, name: target.name })),
+      ...(historyStatus?.availableSources.filter((s) => historyStatus.config.sources.some((a) => a.id === s.id)).map((s) => ({ id: s.agentId, name: s.agentName })) ?? [])
+    ].map((target) => [target.id, target])).values()],
+    [historyStatus, targets]
   );
   const formatListTime = (value: string) => {
     const date = new Date(value);
@@ -1461,12 +1487,35 @@ export const ConversationWorkspace = ({
     return `${day} · ${time}`;
   };
   const sourceCanOpenOriginal = Boolean(
-    detail &&
+    detail && !detail.origin?.readOnly && (!detail.origin || detail.origin.deviceId === "local") &&
     targets.find((target) => target.id === detail.agentId)
       ?.conversationCapabilities.openOriginal.state === "available"
   );
+  useEffect(() => {
+    if (!deviceFilter && !includeTools && !updatedAfter && !historyFiltersChangedRef.current) return;
+    historyFiltersChangedRef.current = true;
+    invalidateConversationListPrefetch();
+    void loadList().catch((e) => setError(String(e)));
+  }, [deviceFilter, includeTools, updatedAfter]);
+  useEffect(() => {
+    if (!historyStatus?.running && !refreshBusy) return;
+    const timer = window.setInterval(() => { void loadList().catch(() => undefined); }, 2000);
+    return () => window.clearInterval(timer);
+  }, [historyStatus?.running, refreshBusy]);
+  useEffect(() => {
+    const changed = () => {
+      invalidateConversationListPrefetch();
+      setItems([]); setDetail(undefined); setSelectedId(undefined);
+      setSourceLocationOpen(false);
+      void loadList().then(() => refresh()).catch((e) => setError(String(e)));
+    };
+    window.addEventListener("agentenv-history-changed", changed);
+    const indexed = () => { void loadList().catch(() => undefined); };
+    window.addEventListener("agentenv-history-indexed", indexed);
+    return () => { window.removeEventListener("agentenv-history-changed", changed); window.removeEventListener("agentenv-history-indexed", indexed); };
+  }, []);
   const sourceCanMove = Boolean(
-    detail && detailTarget?.conversationCapabilities.move?.state === "available"
+    detail && !detail.origin?.readOnly && (!detail.origin || detail.origin.deviceId === "local") && detailTarget?.conversationCapabilities.move?.state === "available"
   );
   const movedConversationCanOpenOriginal = Boolean(
     moveResult && targets.find((target) => target.id === moveResult.conversation.agentId)
@@ -1614,13 +1663,15 @@ export const ConversationWorkspace = ({
           title={t("Conversations")}
           help={
             <InfoTip
-              label={t("Find local Agent history and continue it in another Agent.")}
+              label={t("Search approved local and SSH histories. Background indexing runs every five minutes while the app is open.")}
             />
           }
           actions={
             <ControlGroup className="conversation-page-actions">
+              <HistorySearchSettings />
               <RefreshAction
                 busy={refreshBusy}
+                disabled={historyStatus ? !historyStatus.config.enabled || historyStatus.config.paused : false}
                 label={t("Refresh")}
                 state={freshnessStates.conversations}
                 onRefresh={() => void refresh()}
@@ -1629,7 +1680,12 @@ export const ConversationWorkspace = ({
           }
         />
 
-        <div className="conversation-layout-shell">
+        {historyStatus && !historyStatus.config.enabled ? <div className="history-search-empty">
+          <MessagesSquare size={24} />
+          <p>{t("Search local and SSH conversation histories")}</p>
+          <p>{t("Choose history sources to start. Nothing is collected until you enable search.")}</p>
+          <HistorySearchSettings />
+        </div> : <div className="conversation-layout-shell">
           <MasterDetailLayout
             appearance="canvas"
             className="conversation-layout"
@@ -1664,12 +1720,23 @@ export const ConversationWorkspace = ({
                   onChange={setSort}
                 />
                 <FilterPopover
-                  activeCount={Number(Boolean(agentFilter)) + Number(Boolean(workspaceFilter))}
+                  activeCount={Number(Boolean(agentFilter)) + Number(Boolean(workspaceFilter)) + Number(Boolean(deviceFilter)) + Number(includeTools) + Number(Boolean(updatedAfter))}
                   className="conversation-filter-popover"
                   icon={<ListFilter size={15} />}
                   label={t("Filter conversations")}
                 >
                   <div className="conversation-filter-fields">
+                    <SelectField label={t("Device")} value={deviceFilter} onChange={(e) => setDeviceFilter(e.currentTarget.value)}>
+                      <option value="">{t("All devices")}</option>
+                      {[...new Map(historyStatus?.availableSources.map((s) => [s.deviceId, s.deviceName]) ?? []).entries()].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                    </SelectField>
+                    <SelectField label={t("Search content")} value={includeTools ? "tools" : "messages"} onChange={(e) => setIncludeTools(e.currentTarget.value === "tools")}>
+                      <option value="messages">{t("Messages")}</option><option value="tools">{t("Messages and tool records")}</option>
+                    </SelectField>
+                    <SelectField label={t("Last activity")} value={updatedAfter} onChange={(e) => setUpdatedAfter(e.currentTarget.value)}>
+                      <option value="">{t("Any time")}</option>
+                      {[7,30,90].map((days) => <option key={days} value={new Date(Date.now()-days*86400000).toISOString().slice(0,10)}>{t("Last {{days}} days",{days})}</option>)}
+                    </SelectField>
                     <SelectField
                       label={t("Agent")}
                       aria-label={t("Filter by Agent")}
@@ -1709,10 +1776,11 @@ export const ConversationWorkspace = ({
                     </SelectField>
                     <Button
                       size="compact"
-                      disabled={!agentFilter && !workspaceFilter}
+                      disabled={!agentFilter && !workspaceFilter && !deviceFilter && !includeTools && !updatedAfter}
                       onClick={() => {
                         setAgentFilter("");
                         setWorkspaceFilter("");
+                        setDeviceFilter(""); setIncludeTools(false); setUpdatedAfter("");
                       }}
                     >
                       {t("Clear filters")}
@@ -1878,7 +1946,8 @@ export const ConversationWorkspace = ({
                             </span>
                             {item.agentName}
                           </span>
-                          {workspaceFilter && item.workspacePath ? (
+                          {item.origin ? <><span aria-hidden="true">·</span><OverflowTooltip className="history-device-name" text={item.origin.deviceName} /></> : null}
+                          {(workspaceFilter || query.trim()) && item.workspacePath ? (
                             <>
                               <span aria-hidden="true">·</span>
                               <OverflowTooltip
@@ -1990,7 +2059,9 @@ export const ConversationWorkspace = ({
                         </span>
                       ) : null}
                         <span className="conversation-detail-metadata__agent">
+                          {detail.origin?.deviceId !== "local" ? `${detail.origin?.deviceName ?? ""} · ` : ""}
                           {detail.agentName}
+                          {detail.origin ? <IconButton appearance="inline" label={t("History location")} onClick={()=>setSourceLocationOpen(true)}><Info size={12} /></IconButton> : null}
                         </span>
                         <span className="conversation-detail-metadata__time">
                           <Clock3 size={12} aria-hidden="true" />
@@ -2063,7 +2134,7 @@ export const ConversationWorkspace = ({
                         {t("Open Workspace")}
                       </Button>
                     ) : null}
-                    <TargetMenu
+                    {(!detail.origin || (detail.origin.deviceId === "local" && !detail.origin.readOnly)) ? <TargetMenu
                       targets={continuationDestinations}
                       sourceAgentId={detail.agentId}
                       disabled={continuationDestinations.length === 0}
@@ -2076,9 +2147,10 @@ export const ConversationWorkspace = ({
                       }
                       busy={busy}
                       onSelect={chooseTarget}
-                    />
+                    /> : null}
                   </ControlGroup>
                 </header>
+                {includeTools && detail.toolText ? <details className="history-tool-records"><summary>{t("Tool records")}</summary><pre className="selectable">{detail.toolText}</pre></details> : null}
                 {detail.detailState === "summary-only" ? (
                   <div className="conversation-summary-view">
                     <div className="conversation-summary-only inline-state">
@@ -2200,8 +2272,19 @@ export const ConversationWorkspace = ({
               <span>{t("Scanning enabled Agents and updating the local index.")}</span>
             </div>
           ) : null}
-        </div>
+        </div>}
 
+        {sourceLocationOpen && detail?.origin ? <ModalFrame className="ui-dialog-shell" ariaLabel={t("History location")} dialogRef={sourceLocationRef} onDismiss={()=>setSourceLocationOpen(false)}>
+          <DialogHeader title={t("History location")} />
+          <DialogBody><dl className="history-location-fields">
+            <dt>{t("Device")}</dt><dd>{detail.origin.deviceName}</dd>
+            <dt>{t("Connection")}</dt><dd className="selectable">{detail.origin.connection ?? t("Local history")}</dd>
+            <dt>{t("Working directory")}</dt><dd className="selectable">{detail.workspacePath ?? t("Unavailable")}</dd>
+            <dt>{t("Session ID")}</dt><dd className="selectable">{detail.sourceId}</dd>
+            <dt>{t("History file")}</dt><dd className="selectable">{detail.origin.historyPath}</dd>
+          </dl></DialogBody>
+          <DialogFooter><Button onClick={()=>setSourceLocationOpen(false)}>{t("Close")}</Button><Button icon={<Copy size={16}/>} onClick={()=>void window.agentEnv.copyText([detail.origin?.connection,detail.workspacePath,detail.sourceId,detail.origin?.historyPath].filter(Boolean).join("\n"))}>{t("Copy history location")}</Button></DialogFooter>
+        </ModalFrame> : null}
         {review ? (
           <ModalFrame
             ariaLabel={t("Review continuation")}
@@ -2409,7 +2492,8 @@ export const ConversationWorkspace = ({
       {contextMenu ? (() => {
         const item = items.find((candidate) => candidate.id === contextMenu.conversationId);
         if (!item) return null;
-        const canOpenOriginal = targets.find((target) => target.id === item.agentId)
+        const local = !item.origin || (item.origin.deviceId === "local" && !item.origin.readOnly);
+        const canOpenOriginal = local && targets.find((target) => target.id === item.agentId)
           ?.conversationCapabilities.openOriginal.state === "available";
         const closeAndRun = (action: () => Promise<unknown>) => {
           setContextMenu(undefined);
@@ -2425,7 +2509,7 @@ export const ConversationWorkspace = ({
             <ConversationActionItems
               agentName={item.agentName}
               canOpenOriginal={Boolean(canOpenOriginal)}
-              canMove={Boolean(targets.find((target) => target.id === item.agentId)
+              canMove={local && Boolean(targets.find((target) => target.id === item.agentId)
                 ?.conversationCapabilities.move?.state === "available")}
               onCopy={() => closeAndRun(() => copyConversation(item.id))}
               onOpenOriginal={() => closeAndRun(() => openOriginal(item.id))}

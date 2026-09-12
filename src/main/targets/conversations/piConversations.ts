@@ -40,7 +40,8 @@ const contentText = (content: unknown): string => {
 };
 
 const createPiAccumulator = (
-  candidate: AgentConversationCandidate
+  candidate: AgentConversationCandidate,
+  includeAllBranches = false
 ) => {
   const entries = new Map<string, any>();
   let leafId: string | undefined;
@@ -85,7 +86,7 @@ const createPiAccumulator = (
     activePath.reverse();
 
     const messages: ConversationMessage[] = [];
-    for (const entry of activePath) {
+    for (const entry of includeAllBranches ? entries.values() : activePath) {
       if (entry.type !== "message" || !entry.message) continue;
       const message = visibleMessage(
         entry.id,
@@ -118,9 +119,10 @@ const createPiAccumulator = (
 
 export const parsePiConversation = (
   candidate: AgentConversationCandidate,
-  content: string
+  content: string,
+  includeAllBranches = false
 ) => {
-  const accumulator = createPiAccumulator(candidate);
+  const accumulator = createPiAccumulator(candidate, includeAllBranches);
   for (const line of content.split(/\r?\n/)) {
     if (!line.trim()) continue;
     try {

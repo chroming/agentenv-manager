@@ -111,6 +111,7 @@ export interface AgentConversationCandidate {
 }
 
 export interface AgentConversationContext {
+  historyRoots?: string[];
   homeDir: string;
   platform?: NodeJS.Platform;
   environment?: NodeJS.ProcessEnv;

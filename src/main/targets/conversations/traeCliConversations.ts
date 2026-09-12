@@ -15,8 +15,8 @@ const agent = { id: "trae-cli", name: "Trae CLI" };
 
 export const createTraeCliConversationCapability = (): AgentConversationCapability => ({
   historyDetail: "full",
-  discover: async ({ homeDir, targetPaths }) => {
-    const runtimeRoots = [...new Set([
+  discover: async ({ homeDir, targetPaths, historyRoots }) => {
+    const runtimeRoots = historyRoots ?? [...new Set([
       targetPaths.runtimeDir,
       join(targetPaths.configDir, "cli"),
       join(homeDir, ".trae", "cli")

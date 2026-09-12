@@ -4,6 +4,8 @@
   "pixelShiftTolerance": 1,
   "maxChangedPixelRatio": 0.012,
   "captures": [
+    { "file": "history-sources-920.png" },
+    { "file": "history-remote-result.png" },
     { "file": "ai-analysis-profile-920x620.png" },
     { "file": "settings-ai-920x620.png" },
     { "file": "agents-first-run-920x620.png" },

@@ -94,7 +94,7 @@ export const parseOpenCodeExportMessages = (value: any): ConversationMessage[] =
   });
 };
 
-const opencodeDataDirs = (
+export const opencodeDataDirs = (
   homeDir: string,
   platform: NodeJS.Platform = process.platform,
   environment?: NodeJS.ProcessEnv
@@ -127,7 +127,8 @@ const listDatabases = async (dataDir: string) => {
 };
 
 const discoverSqlite = async (
-  dataDirs: string[]
+  dataDirs: string[],
+  reportedFailures?: string[]
 ): Promise<AgentConversationCandidate[]> => {
   const candidates: AgentConversationCandidate[] = [];
   const failures: string[] = [];
@@ -166,11 +167,13 @@ const discoverSqlite = async (
   if (candidates.length === 0 && failures.length > 0) {
     throw new Error(failures.join("; "));
   }
+  reportedFailures?.push(...failures);
   return candidates;
 };
 
 const discoverLegacy = async (
-  dataDirs: string[]
+  dataDirs: string[],
+  reportedFailures: string[] = []
 ): Promise<AgentConversationCandidate[]> => {
   const candidates: AgentConversationCandidate[] = [];
   for (const storageRoot of dataDirs.map((dataDir) => join(dataDir, "storage"))) {
@@ -183,9 +186,13 @@ const discoverLegacy = async (
       try {
         value = JSON.parse(await readFile(path, "utf8"));
       } catch {
+        reportedFailures.push(`${path}: OpenCode session metadata could not be read.`);
         continue;
       }
-      if (!isRecord(value)) continue;
+      if (!isRecord(value)) {
+        reportedFailures.push(`${path}: OpenCode session metadata is unsupported.`);
+        continue;
+      }
       const sourceId = trimConversationText(value.id) || sourceIdFromFilename(path);
       const messageDir = join(storageRoot, "message", sourceId);
       const messageDirInfo = await stat(messageDir).catch(() => undefined);
@@ -289,12 +296,18 @@ const readLegacyMessages = async (
     try {
       value = JSON.parse(await readFile(join(messageDir, entry.name), "utf8"));
     } catch {
-      continue;
+      throw new Error(`OpenCode message could not be read: ${join(messageDir, entry.name)}`);
     }
     if (!isRecord(value)) continue;
     const role = value.role;
+    const parts: unknown[] = [];
+    const partRoot = join(storageRoot, "part", trimConversationText(value.id) || basename(entry.name, ".json"));
+    for (const path of await listFilesRecursively(partRoot, (path) => path.endsWith(".json"))) {
+      parts.push(JSON.parse(await readFile(path, "utf8")));
+    }
     const text =
       visibleOpenCodeText(value.content) ||
+      visibleOpenCodeText(parts) ||
       trimConversationText(isRecord(value.summary) ? value.summary.body : undefined) ||
       trimConversationText(isRecord(value.summary) ? value.summary.title : undefined);
     const message = visibleMessage(
@@ -323,13 +336,13 @@ export const createOpenCodeConversationCapability = (
   const registerProject = options.registerProject ?? registerOpenCodeProject;
   return {
   historyDetail: "full",
-  discover: async ({ homeDir, executablePath, platform, environment }) => {
-    const dataDirs = opencodeDataDirs(homeDir, platform, environment);
+  discover: async ({ homeDir, executablePath, platform, environment, historyRoots }) => {
+    const dataDirs = historyRoots ?? opencodeDataDirs(homeDir, platform, environment);
     const localCandidates: AgentConversationCandidate[] = [];
     const localErrors: string[] = [];
     for (const discover of [discoverSqlite, discoverLegacy]) {
       try {
-        localCandidates.push(...await discover(dataDirs));
+        localCandidates.push(...await discover(dataDirs, localErrors));
       } catch (error) {
         localErrors.push(error instanceof Error ? error.message : String(error));
       }
@@ -370,18 +383,22 @@ export const createOpenCodeConversationCapability = (
     }
     return {
       candidates: [...bySession.values()],
-      complete: localCandidates.length > 0 || localRootObserved
+      complete: localErrors.length === 0 && (localCandidates.length > 0 || localRootObserved),
+      failures: localErrors
     };
   },
   read: async ({ executablePath }, candidate) => {
     if (candidate.source.locator.startsWith(SQLITE_PREFIX)) {
       const location = sqliteLocation(candidate.source.locator);
       let messages: ConversationMessage[];
+      let toolText: string | undefined;
       try {
-        messages = (await readOpenCodeSqliteMessages(
+        const records = await readOpenCodeSqliteMessages(
           location.dbPath,
           location.sessionId
-        )).map((message): ConversationMessage => ({
+        );
+        toolText = records.map((message) => message.toolText).filter(Boolean).join("\n");
+        messages = records.filter((message) => message.text.trim()).map((message): ConversationMessage => ({
           id: message.id,
           role: message.role,
           text: message.text,
@@ -403,7 +420,7 @@ export const createOpenCodeConversationCapability = (
           );
         }
       }
-      return createConversationDetail(agent, candidate, messages);
+      return { ...createConversationDetail(agent, candidate, messages), toolText };
     }
     if (!candidate.source.locator.startsWith(CLI_PREFIX)) {
       return createConversationDetail(agent, candidate, await readLegacyMessages(candidate));

@@ -14,6 +14,7 @@ import { sourceByteSize } from "./adapterUtils";
 import { createConversationIndexReader } from "./conversationIndexReaderWorker";
 
 interface ConversationRow {
+  origin_json: string | null;
   id: string;
   agent_id: string;
   agent_name: string;
@@ -50,6 +51,8 @@ interface ConversationIndexSearchInput extends ConversationSearchInput {
 }
 
 export interface ConversationIndexStore {
+  removeMissingSource(sourceId: string, observedIds: Set<string>): number;
+  clearSources(sourceIds?: string[]): void;
   sourceVersion(id: string): string | undefined;
   discoveryVersion(): string | undefined;
   setDiscoveryVersion(version: string): void;
@@ -74,6 +77,7 @@ const compatibleSourceVersion = (version?: string) =>
   version?.startsWith(parserVersionPrefix) ? decodeSourceVersion(version) : undefined;
 
 const summaryFromRow = (row: ConversationRow): ConversationSummary => ({
+  origin: row.origin_json ? JSON.parse(row.origin_json) : undefined,
   id: row.id,
   agentId: row.agent_id,
   agentName: row.agent_name,
@@ -97,7 +101,7 @@ const createDatabase = (path: string) => {
       (database.prepare("PRAGMA user_version").get() as { user_version: number })
         .user_version
     );
-    if (version > 4) throw new Error("Conversation cache uses a newer schema");
+    if (version > 5) throw new Error("Conversation cache uses a newer schema");
     database.exec(`
       PRAGMA foreign_keys = ON;
       PRAGMA journal_mode = WAL;
@@ -189,6 +193,12 @@ const createDatabase = (path: string) => {
         );
       }
     }
+    if (version < 5) {
+      const columns = new Set((database.prepare("PRAGMA table_info(conversations)").all() as Array<{name:string}>).map((column) => column.name));
+      for (const [name, definition] of [["history_source", "TEXT NOT NULL DEFAULT ''"], ["origin_json", "TEXT"], ["tool_text", "TEXT NOT NULL DEFAULT ''"]]) {
+        if (!columns.has(name!)) database.exec(`ALTER TABLE conversations ADD COLUMN ${name} ${definition}`);
+      }
+    }
     const searchIndexExists = Boolean(database.prepare(`
       SELECT name
       FROM sqlite_master
@@ -230,7 +240,7 @@ const createDatabase = (path: string) => {
         throw error;
       }
     }
-    database.exec("PRAGMA user_version = 4;");
+    database.exec("PRAGMA user_version = 5;");
     database.prepare(`
       SELECT id, agent_id, record_id, source_version, source_locator, search_text
       FROM conversations
@@ -297,7 +307,7 @@ export const createConversationIndexStore = async (
       id, agent_id, agent_name, record_id, source_id, source_version, source_locator,
       source_runtime_home, provider_session_kind, provider_resume_locator,
       title, snippet, workspace_path, created_at, updated_at, message_count,
-      size_bytes, detail_state, archived
+      size_bytes, detail_state, archived, origin_json
     FROM conversations
     WHERE id = ?`
   );
@@ -306,8 +316,8 @@ export const createConversationIndexStore = async (
       id, agent_id, agent_name, record_id, source_id, source_version, source_locator,
       source_runtime_home, provider_session_kind, provider_resume_locator,
       title, snippet, workspace_path, created_at, updated_at, message_count,
-      size_bytes, detail_state, archived, search_text
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      size_bytes, detail_state, archived, search_text, history_source, origin_json, tool_text
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       agent_id = excluded.agent_id,
       agent_name = excluded.agent_name,
@@ -327,7 +337,10 @@ export const createConversationIndexStore = async (
       size_bytes = excluded.size_bytes,
       detail_state = excluded.detail_state,
       archived = excluded.archived,
-      search_text = excluded.search_text
+      search_text = excluded.search_text,
+      history_source = excluded.history_source,
+      origin_json = excluded.origin_json,
+      tool_text = excluded.tool_text
   `);
   const deleteMessagesStatement = database.prepare(
     "DELETE FROM conversation_messages WHERE conversation_id = ?"
@@ -355,6 +368,30 @@ export const createConversationIndexStore = async (
   };
 
   return {
+    removeMissingSource: (sourceId, observedIds) => {
+      const rows = database.prepare("SELECT id FROM conversations WHERE history_source=?").all(sourceId) as Array<{id:string}>;
+      const missing = rows.filter((row) => !observedIds.has(row.id));
+      database.exec("BEGIN IMMEDIATE");
+      try {
+        for (const row of missing) { deleteSearchStatement?.run(row.id); database.prepare("DELETE FROM conversations WHERE id=?").run(row.id); }
+        database.exec("COMMIT");
+      } catch (error) { database.exec("ROLLBACK"); throw error; }
+      return missing.length;
+    },
+    clearSources: (sourceIds) => {
+      database.exec("PRAGMA secure_delete=ON");
+      const rows = database.prepare("SELECT id, history_source FROM conversations").all() as Array<{ id: string; history_source: string }>;
+      database.exec("BEGIN IMMEDIATE");
+      try {
+        for (const row of rows) {
+          if (sourceIds && !sourceIds.includes(row.history_source)) continue;
+          deleteSearchStatement?.run(row.id);
+          database.prepare("DELETE FROM conversations WHERE id = ?").run(row.id);
+        }
+        database.exec("COMMIT");
+      } catch (error) { database.exec("ROLLBACK"); throw error; }
+      database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+    },
     sourceVersion: (id) => {
       const row = versionStatement.get(id) as { source_version?: string } | undefined;
       return compatibleSourceVersion(row?.source_version);
@@ -398,10 +435,13 @@ export const createConversationIndexStore = async (
           detail.createdAt,
           detail.updatedAt,
           detail.messageCount,
-          sourceByteSize(candidate.source.version) ?? null,
+          detail.sizeBytes ?? sourceByteSize(candidate.source.version) ?? null,
           detail.detailState,
           detail.archived ? 1 : 0,
-          searchText
+          searchText,
+          detail.origin?.sourceKey ?? "",
+          detail.origin ? JSON.stringify(detail.origin) : null,
+          detail.toolText ?? ""
         );
         deleteSearchStatement?.run(detail.id);
         insertSearchStatement?.run(

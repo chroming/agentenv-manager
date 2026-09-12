@@ -194,8 +194,9 @@ export const buildConversationQuickOpenItems = ({
     const target = targets.find((candidate) => candidate.id === conversation.agentId);
     const icon = target ? targetIconFor(target) : undefined;
     const context = [
+      conversation.origin?.deviceName,
       conversation.agentName,
-      leafPathName(conversation.workspacePath),
+      conversation.workspacePath,
       formatDate(conversation.updatedAt)
     ].filter(Boolean).join(" · ");
     const excerpt = compactText(conversation.matchSnippet || conversation.snippet);

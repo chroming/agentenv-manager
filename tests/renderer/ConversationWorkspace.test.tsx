@@ -186,6 +186,17 @@ afterEach(() => {
 });
 
 describe("ConversationWorkspace", () => {
+  it("keeps remote history read-only even when the same Agent is installed locally", async () => {
+    const api = installApi();
+    const remote: ConversationDetail = { ...detail, origin: {sourceKey:"remote-source",deviceId:"remote",deviceName:"Build machine",historyPath:"/home/demo/history.jsonl"} };
+    api.readConversation.mockResolvedValue(remote);
+    api.listConversations.mockResolvedValue({items:[{...remote,messages:undefined}],total:1,totalSizeBytes:1,workspacePaths:[],agentCounts:{codex:1,opencode:0},lastRefreshedAt:new Date().toISOString()});
+    render(<ConversationWorkspace targets={[target("codex","Codex")]} />);
+    const row = await screen.findByRole("option",{name:/Repair release workflow/});
+    fireEvent.contextMenu(row);
+    const menu = await screen.findByRole("menu",{name:"Conversation actions"});
+    expect(within(menu).queryByRole("menuitem",{name:/Open in|Move/})).not.toBeInTheDocument();
+  });
   it("shows the latest reply date and time for every history row", async () => {
     installApi();
     render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);

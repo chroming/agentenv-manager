@@ -24,7 +24,7 @@ import { writeAtomic } from "../../fileUtils";
 const appDataDirFor = (configDir: string, appDataSubdir = "antigravity-cli") =>
   join(configDir, "..", appDataSubdir);
 
-const userRequestText = (content: string) => {
+export const userRequestText = (content: string) => {
   const request = content.match(/<USER_REQUEST>\s*([\s\S]*?)\s*<\/USER_REQUEST>/i)?.[1];
   return trimConversationText(request ?? stripConversationScaffolding(content));
 };
@@ -113,8 +113,8 @@ export const createAntigravityConversationCapability = (
 
   return {
     historyDetail: "full",
-    discover: async ({ targetPaths }) => {
-      const appDataDir = appDataDirFor(targetPaths.configDir, appDataSubdir);
+    discover: async ({ targetPaths, historyRoots }) => {
+      const appDataDir = historyRoots?.[0] ?? appDataDirFor(targetPaths.configDir, appDataSubdir);
       const summariesPath = join(appDataDir, "conversation_summaries.db");
       const candidates = new Map<string, AgentConversationCandidate>();
       let summarySourceObserved = false;

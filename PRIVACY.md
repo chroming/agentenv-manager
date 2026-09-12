@@ -17,8 +17,15 @@ Depending on the features you use, AgentEnv Manager may read:
   files and generated directories;
 - the private Git repository explicitly configured for Workspace Sync.
 
-Conversation history remains owned by the source Agent. AgentEnv stores only a
-local, deletable index and bounded handoff context.
+Conversation history remains owned by the source Agent. History search is off
+until you explicitly select and enable local or SSH sources. AgentEnv stores
+searchable message text, optional tool records, titles, timestamps and source
+paths in a deletable local cache. SSH reads do not install software or modify
+remote histories. Pausing retains searchable cached data; disabling stops search
+and collection and defaults to clearing that cache. History text is not sent to
+AI, analytics, or Workspace Sync. Existing caches require explicit consent before
+they become searchable again. Local continuation can create a bounded handoff
+context when you request it.
 
 ## Data Written Locally
 

@@ -362,6 +362,12 @@ describe("Conversations desktop workflow", () => {
     await expect.poll(() => page.evaluate(() => window.agentEnv.readStartupStatus()), {
       timeout: 15_000
     }).toEqual({ state: "ready" });
+    await page.evaluate(async () => {
+      const status = await window.agentEnv.conversationHistoryStatus();
+      await window.agentEnv.configureConversationHistory({version:1,enabled:true,paused:false,
+        sources:status.availableSources.filter((s) => s.deviceId === "local" && ["codex","opencode","antigravity","trae-cli"].includes(s.agentId)).map(({deviceName,agentName,...s})=>s)});
+      await window.agentEnv.refreshConversations();
+    });
     await expect.poll(() => page.evaluate(async (path) => (
       await window.agentEnv.findProjectByPath(path)
     )?.id, releaseWorkspace)).toBe("release-workspace");
@@ -393,11 +399,11 @@ describe("Conversations desktop workflow", () => {
       .getByRole("button", { name: "Conversations" })
       .click();
     const conversationHelp = page.getByLabel(
-      "Find local Agent history and continue it in another Agent."
+      "Search approved local and SSH histories. Background indexing runs every five minutes while the app is open."
     );
     await conversationHelp.focus();
     await page.getByRole("tooltip").filter({
-      hasText: "Find local Agent history and continue it in another Agent."
+      hasText: "Search approved local and SSH histories. Background indexing runs every five minutes while the app is open."
     }).waitFor({ state: "visible" });
     await page.mouse.move(600, 400);
     await page.getByRole("option", { name: /测试111/ }).waitFor({
@@ -761,7 +767,7 @@ describe("Conversations desktop workflow", () => {
     }).waitFor({ state: "visible", timeout: 15_000 });
     const pagedLongDetail = await page.evaluate(async () => {
       const value = await window.agentEnv.readConversation(
-        "codex:22222222-2222-4222-8222-222222222222",
+        (await window.agentEnv.listConversations({query:"Long conversation performance test"})).items[0]!.id,
         { limit: 60, tail: true }
       );
       return {
@@ -785,7 +791,7 @@ describe("Conversations desktop workflow", () => {
 
     const preview = await page.evaluate(async () =>
       window.agentEnv.previewConversationContinuation({
-        conversationId: "codex:11111111-1111-4111-8111-111111111111",
+        conversationId: (await window.agentEnv.listConversations({query:"Repair the desktop release workflow"})).items[0]!.id,
         targetId: "opencode"
       })
     );
@@ -963,10 +969,9 @@ describe("Conversations desktop workflow", () => {
     expect(movedSource.slice(1)).toEqual(
       source.trim().split("\n").slice(1).map((line) => JSON.parse(line))
     );
-    const movedDetail = await page.evaluate(async (conversationId) =>
-      window.agentEnv.readConversation(conversationId),
-    "codex:11111111-1111-4111-8111-111111111111");
-    expect(movedDetail.id).toBe("codex:11111111-1111-4111-8111-111111111111");
+    const movedDetail = await page.evaluate(async () =>
+      window.agentEnv.readConversation((await window.agentEnv.listConversations({query:"Repair the desktop release workflow"})).items[0]!.id));
+    expect(movedDetail.sourceId).toBe("11111111-1111-4111-8111-111111111111");
     expect(movedDetail.workspacePath).toBe(movedWorkspace);
     expect(movedDetail.messages.map((message) => message.text)).toEqual([
       "Repair the desktop release workflow",

@@ -735,7 +735,9 @@ source scheduling, non-blocking automatic refresh, and regression coverage are `
 
 ### 4.5 Conversations
 
-Conversations is a local index over histories owned by enabled Agents. It helps the user find
+Conversations is an explicitly enabled local index over selected local and SSH history sources,
+independent of which Agents are enabled for management. Its consent, coverage and cache rules
+are defined in [History search](conversation-history-search.md). It helps the user find
 prior work, reopen it, continue its visible context in another Agent, and explicitly move a
 supported native conversation to a different working directory. It is not a chat client or an
 archive. Discovery remains read-only; Move is the only operation in this workspace that may

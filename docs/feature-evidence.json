@@ -2,6 +2,55 @@
   "formatVersion": 1,
   "features": [
     {
+      "id": "explicit-local-ssh-history-search",
+      "summary": "Opt-in source-scoped local and SSH conversation search with transparent coverage and cancellable cache collection.",
+      "contract": {
+        "path": "docs/conversation-history-search.md",
+        "anchor": "## 功能准入"
+      },
+      "support": {
+        "opencode": "supported",
+        "claude-code": "supported",
+        "codex": "supported",
+        "antigravity": "supported",
+        "antigravity-app": "supported",
+        "trae-cli": "supported",
+        "pi": "supported"
+      },
+      "states": {
+        "idle": "No history collection before explicit source consent.",
+        "working": "Sequential bounded source refresh; existing cache stays searchable.",
+        "success": "Search returns source-scoped records with device and working directory.",
+        "error": "Source errors preserve cached results and show affected paths.",
+        "cancelled": "Pause or disable invalidates in-flight requests before persistence.",
+        "noOp": "Unchanged revisions do not reread full transcripts.",
+        "stale": "Offline sources retain dated last-good records.",
+        "partial": "Unreadable records and summary-only histories have explicit coverage.",
+        "persisted": "Consent, cached text and coverage remain device-local.",
+        "rollback": "No original history writes; aborted refresh cannot restore cleared cache."
+      },
+      "evidence": {
+        "domain": [
+          "tests/main/conversations/historySearchController.test.ts",
+          "tests/main/conversations/remoteHistoryReader.test.ts"
+        ],
+        "renderer": [
+          "tests/renderer/HistorySearchSettings.test.tsx",
+          "tests/renderer/ConversationWorkspace.test.tsx"
+        ],
+        "desktop": [
+          "tests/e2e/conversationHistorySearch.e2e.test.ts"
+        ],
+        "persistence": [
+          "tests/main/conversations/historySearchController.test.ts"
+        ],
+        "visual": [
+          "history-sources-920.png",
+          "history-remote-result.png"
+        ]
+      }
+    },
+    {
       "id": "ai-assistance-controls-and-analysis",
       "summary": "Device-local model gates and manual evidence-linked Profile, comparison and duplicate analysis.",
       "contract": { "path": "docs/ai-assistance.md", "anchor": "## 功能准入" },

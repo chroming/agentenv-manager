@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { TargetInfo } from "../../shared/types";
 import type { AppWorkspace } from "../components/ProfileSidebar";
 import type {
@@ -26,6 +26,11 @@ export const useConversationQuickOpen = ({
 }: ConversationQuickOpenOptions) => {
   const [openRequest, setOpenRequest] = useState<ConversationOpenRequest>();
   const requestIdRef = useRef(0);
+  useEffect(() => {
+    const clear = () => { requestIdRef.current++; setOpenRequest(undefined); };
+    window.addEventListener("agentenv-history-changed", clear);
+    return () => window.removeEventListener("agentenv-history-changed", clear);
+  }, []);
 
   const openConversation = useCallback((
     summary: ConversationOpenRequest["summary"],

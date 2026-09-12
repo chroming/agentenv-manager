@@ -48,6 +48,12 @@ let app: ElectronApplication | undefined;
 
 requireCurrentElectronBuild();
 
+const enableFixtureHistory = (page: Page) => page.evaluate(async () => {
+  const status = await window.agentEnv.conversationHistoryStatus();
+  const { deviceName, agentName, ...source } = status.availableSources.find((source) => source.deviceId === "local")!;
+  await window.agentEnv.configureConversationHistory({ version: 1, enabled: true, paused: true, sources: [source] });
+});
+
 const standardElectronTestTimeout = 45_000;
 
 const fileExists = async (path: string) => {
@@ -5621,10 +5627,11 @@ describe("Electron UI profile switching e2e", () => {
     expect(new Set(dialogActions.map(({ height }) => height))).toEqual(new Set([32]));
 
     await page.keyboard.press("Escape");
+    await enableFixtureHistory(page);
     await navigation.getByRole("button", { name: "Conversations", exact: true }).click();
     await page.getByRole("button", { name: "Filter conversations" }).click();
     const conversationFilters = await readBoxes(page.locator(".conversation-filter-fields select"));
-    expect(conversationFilters.length).toBe(2);
+    expect(conversationFilters.length).toBe(5);
     expect(new Set(conversationFilters.map(({ height }) => height))).toEqual(new Set([32]));
     expect(new Set(conversationFilters.map(({ borderRadius }) => borderRadius)))
       .toEqual(new Set(["6px"]));
@@ -12141,6 +12148,7 @@ describe("Electron UI profile switching e2e", () => {
         };
       });
 
+    await enableFixtureHistory(page);
     const headerMetrics: Array<{ fontSize: string; left: number; top: number }> = [];
     const workspaceSurfaceSelectors: Record<string, { radius: string; selector: string }> = {
       Skills: { radius: "0px", selector: ".skill-library-panel" },

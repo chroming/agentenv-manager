@@ -17,7 +17,7 @@ export interface SshTransport {
   execute(
     device: RemoteDevice,
     remoteCommand: string,
-    options?: { input?: Buffer; timeoutMs?: number; maxOutputBytes?: number }
+    options?: { input?: Buffer; timeoutMs?: number; maxOutputBytes?: number; signal?: AbortSignal }
   ): Promise<SshCommandResult>;
 }
 
@@ -43,6 +43,7 @@ export const createSystemSshTransport = (options: {
 
   return {
     execute: async (device, remoteCommand, commandOptions = {}) => {
+      commandOptions.signal?.throwIfAborted();
       const executable = await resolver.find("ssh");
       if (!executable) throw new Error("System OpenSSH was not found");
       const args = [
@@ -57,6 +58,7 @@ export const createSystemSshTransport = (options: {
       ];
       return await new Promise<SshCommandResult>((resolve, reject) => {
         const child = spawn(executable, args, {
+          signal: commandOptions.signal,
           env: environment,
           stdio: ["pipe", "pipe", "pipe"],
           windowsHide: true

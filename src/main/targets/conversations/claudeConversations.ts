@@ -164,10 +164,7 @@ export const createClaudeConversationCapability = (): AgentConversationCapabilit
     }
     const paths = await listFilesRecursively(
       projectsRoot,
-      (file) => file.endsWith(".jsonl"),
-      {
-        shouldEnterDirectory: (_path, name) => name !== "subagents"
-      }
+      (file) => file.endsWith(".jsonl")
     );
     const candidates = [];
     for (const path of paths) {

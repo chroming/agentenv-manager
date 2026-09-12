@@ -95,7 +95,9 @@ Before updating or adding a source Skill, inspect its files or request an AI sum
 
 ## Conversations
 
-Conversations indexes local Agent history. Search titles and messages, filter by folder, sort by latest conversation time or file size, return to the original session, or hand it off to another Agent.
+Turn on search in **History sources** and choose local or SSH Agent histories. Search titles and messages, filter by device, Agent or folder, sort by latest activity or file size, and see each conversation's original working directory. The index stays on this device. Pausing keeps cached results searchable; disabling can clear the cache without deleting original conversations.
+
+Local conversations can reopen in their original Agent or continue in another one. SSH histories currently support search, reading and copying source details, not remote resume. The remote device needs Python 3.
 
 ![Conversation history](docs/images/conversations.png)
 

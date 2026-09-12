@@ -100,7 +100,7 @@ describe("filesystem conversation adapters", () => {
     expect(launch?.args).not.toContain("Continue the work using the attached conversation context.");
   });
 
-  it("keeps large Claude transcripts and excludes subagent logs from top-level history", async () => {
+  it("keeps large Claude transcripts and includes subagent logs in searchable history", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-claude-history-"));
     const configDir = join(root, ".claude");
     const projectDir = join(configDir, "projects", "workspace");
@@ -124,7 +124,8 @@ describe("filesystem conversation adapters", () => {
     const candidates = discovery.candidates;
 
     expect(discovery.complete).toBe(true);
-    expect(candidates).toHaveLength(1);
+    expect(candidates).toHaveLength(2);
+    expect(candidates.some((candidate) => candidate.source.locator === subagentPath)).toBe(true);
     expect(candidates[0]).toMatchObject({
       recordId: "main-session",
       source: {

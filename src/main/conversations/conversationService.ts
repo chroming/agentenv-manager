@@ -37,12 +37,17 @@ import {
 } from "./conversationLauncher";
 import { stableConversationContentHash } from "./conversationMoveStorage";
 import { conversationTitleFrom } from "./adapterUtils";
+import { createHistorySearchController } from "./historySearchController";
+import type { HistorySearchConfig, HistorySearchStatus } from "../../shared/conversationSearch";
+import type { RemoteDeviceStore } from "../remoteDevices/remoteDeviceStore";
+import type { SshTransport } from "../remoteDevices/systemSshTransport";
+import { historyFilePath } from "../targets/conversations/historySourceAdapter";
 
 const MAX_CONTEXT_CHARACTERS = 120_000;
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
 const HANDOFF_TTL_MS = 24 * 60 * 60 * 1000;
 // Increment when enabled Agent discovery roots or metadata change.
-const CONVERSATION_DISCOVERY_VERSION = "4";
+const CONVERSATION_DISCOVERY_VERSION = "5";
 
 interface PendingContinuation {
   preview: ConversationContinuationPreview;
@@ -69,6 +74,8 @@ export interface ConversationClipboard {
 }
 
 export interface ConversationService {
+  historyStatus(): Promise<HistorySearchStatus>;
+  configureHistory(config: HistorySearchConfig, clearRemoved?: boolean): Promise<HistorySearchStatus>;
   list(input?: ConversationListInput): Promise<ConversationListResult>;
   search(input: ConversationSearchInput): Promise<ConversationSummary[]>;
   read(id: string, input?: ConversationReadInput): Promise<ConversationDetail>;
@@ -81,8 +88,6 @@ export interface ConversationService {
   dispose(): void;
 }
 
-const candidateId = (agentId: string, recordId: string) => `${agentId}:${recordId}`;
-
 const dedupeCandidates = (candidates: AgentConversationCandidate[]) => {
   const byRecord = new Map<string, AgentConversationCandidate>();
   for (const candidate of candidates) {
@@ -93,25 +98,6 @@ const dedupeCandidates = (candidates: AgentConversationCandidate[]) => {
   }
   return [...byRecord.values()];
 };
-
-const mapWithConcurrency = async <T, R>(
-  values: T[],
-  concurrency: number,
-  worker: (value: T) => Promise<R>
-): Promise<R[]> => {
-  const results = new Array<R>(values.length);
-  let cursor = 0;
-  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, async () => {
-    while (cursor < values.length) {
-      const index = cursor++;
-      results[index] = await worker(values[index]);
-    }
-  }));
-  return results;
-};
-
-const yieldToMainLoop = () =>
-  new Promise<void>((resolve) => setImmediate(resolve));
 
 const compactRefreshFailures = (
   failures: ConversationRefreshResult["failures"]
@@ -241,6 +227,8 @@ export const createConversationService = async (options: {
   indexStore?: ConversationIndexStore;
   launcher?: ConversationLauncher;
   now?: () => number;
+  devices?: RemoteDeviceStore;
+  transport?: SshTransport;
 }): Promise<ConversationService> => {
   const index = options.indexStore ??
     await createConversationIndexStore(options.paths.conversationIndexPath);
@@ -253,19 +241,11 @@ export const createConversationService = async (options: {
   const pendingMoves = new Map<string, PendingMove>();
   const moveLocks = new Map<string, Promise<unknown>>();
   const now = options.now ?? Date.now;
-
-  const enabledAgentIds = async () => {
-    const settings = await options.settingsStore.readSettings();
-    return new Set(
-      settings.enabledTargetIds ??
-      options.targetRegistry.list().map((target) => target.id)
-    );
-  };
+  const history = await createHistorySearchController({ paths: options.paths, registry: options.targetRegistry,
+    settings: options.settingsStore, index, devices: options.devices, transport: options.transport });
 
   const assertEnabled = async (agentId: string) => {
-    if (!(await enabledAgentIds()).has(agentId)) {
-      throw new Error("This Agent is disabled in Settings");
-    }
+    if (!history.enabled()) throw new Error("Enable history search to read cached conversations");
   };
 
   const cleanupPending = () => {
@@ -348,128 +328,47 @@ export const createConversationService = async (options: {
     input: Parameters<ConversationIndexStore["list"]>[0]
   ): Promise<ConversationListResult> => ({
     ...await index.list(input),
-    refreshRequired: index.discoveryVersion() !== CONVERSATION_DISCOVERY_VERSION,
-    lastRefreshedAt: index.lastRefreshedAt()
+    refreshRequired: history.enabled() && index.discoveryVersion() !== CONVERSATION_DISCOVERY_VERSION,
+    lastRefreshedAt: index.lastRefreshedAt(),
+    historyStatus: await history.status()
   });
 
   return {
+    historyStatus: history.status,
+    configureHistory: history.configure,
     list: async (input = {}) => {
-      const enabled = await enabledAgentIds();
-      const requested = input.agentIds?.filter((id) => enabled.has(id));
-      if (input.agentIds && requested?.length === 0) {
-        return listIndexed({
-          ...input,
-          agentIds: ["__agentenv_no_agent__"],
-          facetAgentIds: [...enabled]
-        });
-      }
-      return listIndexed({
+      const scope = history.allowedIds().filter((id) => !input.historySourceIds || input.historySourceIds.includes(id));
+      const result = await listIndexed({
         ...input,
-        agentIds: input.agentIds ? requested : [...enabled],
-        facetAgentIds: [...enabled]
+        historySourceIds: scope
       });
+      if (scope.some((id) => !history.allowedIds().includes(id))) return listIndexed({...input, historySourceIds: history.allowedIds().filter((id) => !input.historySourceIds || input.historySourceIds.includes(id))});
+      return result;
     },
     search: async (input) => {
-      const enabled = await enabledAgentIds();
-      if (enabled.size === 0) return [];
-      return index.search({
+      if (!history.enabled()) return [];
+      const results = await index.search({
         ...input,
-        agentIds: [...enabled]
+        historySourceIds: history.allowedIds()
       });
+      return results.filter((item) => item.origin && history.allowedIds().includes(item.origin.sourceKey));
     },
     read: async (id, input) => {
+      const origin = index.record(id).summary.origin;
+      if (!origin || !history.allowedIds().includes(origin.sourceKey)) throw new Error("This history source is not enabled");
       const detail = await index.read(id, input);
       await assertEnabled(detail.agentId);
+      if (!detail.origin || !history.allowedIds().includes(detail.origin.sourceKey)) throw new Error("This history source is not enabled");
       return detail;
     },
     refresh: async () => {
-      const targets = await options.targetDiscoveryService.listTargets({ forceRefresh: true });
-      const failures: ConversationRefreshResult["failures"] = [];
-      let indexed = 0;
-      let unchanged = 0;
-      let removed = 0;
-
-      await mapWithConcurrency(targets, 2, async (target) => {
-        const adapter = options.targetRegistry.get(target.id);
-        const capability = adapter.conversations;
-        if (!capability) return;
-        const context = contextFor(target, options.paths.homeDir);
-        let candidates: AgentConversationCandidate[];
-        let discoveryComplete = false;
-        try {
-          const discovery = await capability.discover(context);
-          candidates = dedupeCandidates(discovery.candidates);
-          discoveryComplete = discovery.complete;
-          for (const message of discovery.failures ?? []) {
-            failures.push({ agentId: target.id, message });
-          }
-        } catch (error) {
-          failures.push({
-            agentId: target.id,
-            message: error instanceof Error ? error.message : String(error)
-          });
-          return;
-        }
-        const observed = new Set(
-          candidates.map((candidate) => candidateId(target.id, candidate.recordId))
-        );
-        await mapWithConcurrency(candidates, 4, async (candidate) => {
-          try {
-            const id = candidateId(target.id, candidate.recordId);
-            const previousSourceVersion = index.sourceVersion(id);
-            if (previousSourceVersion === candidate.source.version) {
-              unchanged += 1;
-              return;
-            }
-            const parsed = await capability.read(
-              context,
-              candidate,
-              previousSourceVersion
-                ? {
-                    detail: await index.read(id),
-                    sourceVersion: previousSourceVersion
-                  }
-                : undefined
-            );
-            index.upsert({
-              ...parsed,
-              id,
-              agentId: target.id,
-              agentName: target.name,
-              updatedAt: candidate.updatedAt,
-              detailState: candidate.detailState,
-              archived: candidate.archived
-            }, candidate);
-            indexed += 1;
-          } catch (error) {
-            failures.push({
-              agentId: target.id,
-              message: `${candidate.recordId}: ${
-                error instanceof Error ? error.message : String(error)
-              }`
-            });
-          } finally {
-            await yieldToMainLoop();
-          }
-        });
-        if (discoveryComplete) {
-          removed += index.removeMissing(target.id, observed);
-        }
-        await yieldToMainLoop();
-      });
-      index.setDiscoveryVersion(CONVERSATION_DISCOVERY_VERSION);
-      const refreshedAt = new Date(now()).toISOString();
-      index.setLastRefreshedAt(refreshedAt);
-      return {
-        indexed,
-        unchanged,
-        removed,
-        failures: compactRefreshFailures(failures),
-        refreshedAt
-      };
+      const result = await history.refresh();
+      if (history.enabled()) index.setDiscoveryVersion(CONVERSATION_DISCOVERY_VERSION);
+      return { ...result, failures: compactRefreshFailures(result.failures) };
     },
     openOriginal: async (id) => {
       const record = index.record(id);
+      if (record.summary.origin?.deviceId !== "local" || record.summary.origin.readOnly || !history.allowedIds().includes(record.summary.origin.sourceKey)) throw new Error("This history source is read-only. Copy its connection and working directory to continue manually.");
       await assertEnabled(record.summary.agentId);
       const target = await targetFor(record.summary.agentId);
       const capability = options.targetRegistry.get(target.id).conversations;
@@ -488,6 +387,8 @@ export const createConversationService = async (options: {
       return { mode: "native", message: `Opened in ${target.name}` };
     },
     previewContinuation: async (input) => {
+      const source = index.record(input.conversationId).summary.origin;
+      if (!source || source.deviceId !== "local" || source.readOnly || !history.allowedIds().includes(source.sourceKey)) throw new Error("This history source is read-only");
       cleanupPending();
       const conversation = await index.read(input.conversationId);
       await assertEnabled(conversation.agentId);
@@ -579,6 +480,10 @@ export const createConversationService = async (options: {
       const entry = pending.get(previewId);
       if (!entry) throw new Error("Continuation review expired; choose the target again");
       pending.delete(previewId);
+      const origin = index.record(entry.preview.conversationId).summary.origin;
+      if (!origin || origin.deviceId !== "local" || origin.readOnly || !history.allowedIds().includes(origin.sourceKey)) {
+        throw new Error("This history source is no longer enabled. Review History sources before continuing.");
+      }
       await mkdir(options.paths.conversationHandoffDir, {
         recursive: true,
         mode: 0o700
@@ -613,6 +518,8 @@ export const createConversationService = async (options: {
       };
     },
     previewMove: async (input) => {
+      const origin = index.record(input.conversationId).summary.origin;
+      if (!origin || origin.deviceId !== "local" || origin.readOnly || !history.allowedIds().includes(origin.sourceKey)) throw new Error("This history source is read-only");
       cleanupPending();
       const destinationInput = input.destinationPath.trim();
       if (!destinationInput || !isAbsolute(destinationInput)) {
@@ -643,6 +550,7 @@ export const createConversationService = async (options: {
       });
       index.upsert({
         ...fresh.detail,
+        origin: record.summary.origin,
         id: input.conversationId,
         agentId: target.id,
         agentName: target.name
@@ -675,6 +583,10 @@ export const createConversationService = async (options: {
       }
       pendingMoves.delete(previewId);
       return runMoveExclusive(pendingMove.preview.conversationId, async () => {
+        const origin = index.record(pendingMove.preview.conversationId).summary.origin;
+        if (!origin || origin.deviceId !== "local" || origin.readOnly || !history.allowedIds().includes(origin.sourceKey)) {
+          throw new Error("This history source is no longer enabled. Review History sources before moving it.");
+        }
         const target = await targetFor(pendingMove.preview.agentId);
         const current = await freshConversation(
           target,
@@ -713,6 +625,7 @@ export const createConversationService = async (options: {
           }
           const conversation = {
             ...moved.detail,
+            origin: { ...origin, historyPath: historyFilePath(moved.candidate), runtimeHome: moved.candidate.source.runtimeHome },
             id: pendingMove.preview.conversationId,
             agentId: target.id,
             agentName: target.name
@@ -738,6 +651,6 @@ export const createConversationService = async (options: {
         }
       });
     },
-    dispose: () => index.close()
+    dispose: () => { history.dispose(); index.close(); }
   };
 };

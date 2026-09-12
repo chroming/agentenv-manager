@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createConversationService } from "../../../src/main/conversations/conversationService";
+import { createConversationService as createRawConversationService } from "../../../src/main/conversations/conversationService";
 import { createPaths } from "../../../src/main/paths";
 import type { SettingsStore } from "../../../src/main/settingsStore";
 import { createTargetRegistry } from "../../../src/main/targets/registry";
@@ -19,6 +19,20 @@ import type {
   ConversationDetail,
   TargetInfo
 } from "../../../src/shared/types";
+
+
+const createConversationService = async (options: Parameters<typeof createRawConversationService>[0]) => {
+  const service = await createRawConversationService(options);
+  const status = await service.historyStatus();
+  if (status.needsConsent) {
+    await service.configureHistory({version:1,enabled:true,paused:false,sources:status.availableSources
+      .filter((s) => s.deviceId === "local")
+      .map(({deviceName,agentName,...source}) => source)});
+  }
+  return service;
+};
+const indexedId = async (service: Awaited<ReturnType<typeof createRawConversationService>>, agent = "codex") =>
+  (await service.list()).items.find((item) => item.agentId === agent)!.id;
 
 let root = "";
 
@@ -122,7 +136,7 @@ describe("conversation service", () => {
       conversationIndexPath: join(root, "cache", "conversations.sqlite"),
       conversationHandoffDir: join(root, "cache", "handoffs")
     });
-    const history = join(root, "source-history.jsonl");
+    const history = join(root, "source-history.fixture");
     await writeFile(history, "source-owned data\n");
     const before = await readFile(history, "utf8");
     const candidate = sourceCandidate(history);
@@ -192,18 +206,18 @@ describe("conversation service", () => {
     expect((await service.list({ query: "failing step" })).items).toHaveLength(1);
     expect(await service.search({ query: "failing step", limit: 6 })).toEqual([
       expect.objectContaining({
-        id: "codex:session-1",
+        id: await indexedId(service),
         matchSnippet: expect.stringMatching(/failing step/i)
       })
     ]);
     enabledTargetIds = [];
-    expect(await service.search({ query: "failing step", limit: 6 })).toEqual([]);
-    expect(await service.list({ agentIds: ["disabled-agent"] })).toEqual({
+    expect(await service.search({ query: "failing step", limit: 6 })).toHaveLength(1);
+    expect(await service.list({ agentIds: ["disabled-agent"] })).toMatchObject({
       items: [],
       total: 0,
       totalSizeBytes: 0,
       workspacePaths: [],
-      agentCounts: { codex: 1 },
+      agentCounts: {},
       refreshRequired: false,
       lastRefreshedAt: expect.any(String)
     });
@@ -219,7 +233,7 @@ describe("conversation service", () => {
       conversationIndexPath: join(root, "cache", "conversations.sqlite"),
       conversationHandoffDir: join(root, "cache", "handoffs")
     });
-    const candidate = sourceCandidate(join(root, "source-history.jsonl"));
+    const candidate = sourceCandidate(join(root, "source-history.fixture"));
     const codex = {
       ...createCodexTargetAdapter(),
       conversations: {
@@ -463,10 +477,10 @@ describe("conversation service", () => {
 
     await service.refresh();
     expect((await service.list()).items[0]).toMatchObject({
-      id: "codex:history-file",
+      id: await indexedId(service),
       sourceId: "provider-session"
     });
-    await service.openOriginal("codex:history-file");
+    await service.openOriginal(await indexedId(service));
     expect(openedCandidate).toMatchObject({
       recordId: "history-file",
       providerSession: {
@@ -576,7 +590,7 @@ describe("conversation service", () => {
     await service.refresh();
 
     const preview = await service.previewContinuation({
-      conversationId: "codex:session-1",
+      conversationId: await indexedId(service),
       targetId: "opencode"
     });
     expect(preview).toMatchObject({
@@ -601,7 +615,7 @@ describe("conversation service", () => {
     expect(await readFile(contextPath!, "utf8")).toContain("I found the failing step.");
     expect((await stat(contextPath!)).mode & 0o777).toBe(0o600);
     await expect(service.previewContinuation({
-      conversationId: "codex:session-1",
+      conversationId: await indexedId(service),
       targetId: "codex"
     })).rejects.toThrow("Choose a different Agent");
     service.dispose();
@@ -651,7 +665,7 @@ describe("conversation service", () => {
     await service.refresh();
 
     const preview = await service.previewContinuation({
-      conversationId: "codex:session-1",
+      conversationId: await indexedId(service),
       targetId: "opencode"
     });
     expect(preview.sensitiveValuesRedacted).toBe(true);
@@ -718,7 +732,7 @@ describe("conversation service", () => {
     await service.refresh();
 
     const preview = await service.previewContinuation({
-      conversationId: "opencode:session-1",
+      conversationId: await indexedId(service, "opencode"),
       targetId: "codex"
     });
     expect(preview).toMatchObject({
@@ -799,7 +813,7 @@ describe("conversation service", () => {
     await service.refresh();
 
     const preview = await service.previewContinuation({
-      conversationId: "codex:session-1",
+      conversationId: await indexedId(service),
       targetId: "opencode"
     });
     expect(preview).toMatchObject({
@@ -869,7 +883,7 @@ describe("conversation service", () => {
     });
     await service.refresh();
     const preview = await service.previewContinuation({
-      conversationId: "codex:session-1",
+      conversationId: await indexedId(service),
       targetId: "opencode"
     });
 
@@ -934,7 +948,7 @@ describe("conversation service", () => {
     await service.refresh();
 
     const preview = await service.previewMove({
-      conversationId: "codex:session-1",
+      conversationId: await indexedId(service),
       destinationPath: destination
     });
     expect(preview).toMatchObject({
@@ -945,13 +959,13 @@ describe("conversation service", () => {
     const result = await service.move(preview.previewId);
 
     expect(result.conversation).toMatchObject({
-      id: "codex:session-1",
+      id: preview.conversationId,
       sourceId: "session-1",
       workspacePath: canonicalDestination,
       messageCount: 2
     });
     expect(result.conversation).not.toHaveProperty("messages");
-    expect((await service.read("codex:session-1")).workspacePath).toBe(canonicalDestination);
+    expect((await service.read(await indexedId(service))).workspacePath).toBe(canonicalDestination);
     expect(await readFile(projectSentinel, "utf8")).toBe("project-owned\n");
     expect(rollback).not.toHaveBeenCalled();
     service.dispose();
@@ -1012,7 +1026,7 @@ describe("conversation service", () => {
     });
     await service.refresh();
     const preview = await service.previewMove({
-      conversationId: "codex:session-1",
+      conversationId: await indexedId(service),
       destinationPath: destination
     });
 

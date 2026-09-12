@@ -95,7 +95,9 @@ Library 为每个 Skill 保存一份可复用内容。可以从本地目录、ZI
 
 ## Conversations
 
-Conversations 索引本机 Agent 的历史记录。可以搜索标题和消息、按目录筛选、按最近聊天时间或文件大小排序，回到原对话，或交给另一个 Agent 续接。
+在“历史来源”里主动开启搜索，选择本机或 SSH 设备上的 Agent 历史。可以搜索标题和消息，按设备、Agent、目录筛选，按最近聊天时间或文件大小排序，并查看对话原来的工作目录。索引只保存在本机；暂停后仍能搜索已有记录，关闭时可清除缓存，不会删除原始对话。
+
+本地对话可以回到原 Agent 或交给另一个 Agent 续接。SSH 对话目前支持搜索、阅读和复制来源信息，暂不支持直接恢复会话；远端需要 Python 3。
 
 ![Conversation history](docs/images/conversations.png)
 

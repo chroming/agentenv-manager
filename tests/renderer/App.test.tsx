@@ -320,6 +320,8 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
 
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
+    conversationHistoryStatus: vi.fn().mockResolvedValue({ config: { version: 1, enabled: false, paused: false, sources: [] }, needsConsent: true, running: false, sources: [], availableSources: [] }),
+    configureConversationHistory: vi.fn(),
     readAIPreferences: vi.fn().mockResolvedValue({ enabled: true, features: { summaries: true, tags: true, comparison: true, duplicates: true, profile: true } }),
     saveAIPreferences: vi.fn().mockImplementation(async (value) => value),
     onAIPreferencesChanged: vi.fn().mockReturnValue(() => undefined),
@@ -1432,7 +1434,8 @@ describe("App", () => {
       listTargets: vi.fn().mockResolvedValue([codexTarget]),
       searchConversations,
       listConversations,
-      readConversation
+      readConversation,
+      conversationHistoryStatus: vi.fn().mockResolvedValue({ config: { version: 1, enabled: true, paused: false, sources: [] }, needsConsent: false, running: false, sources: [], availableSources: [] })
     });
     render(<App />);
 
@@ -2145,7 +2148,9 @@ describe("App", () => {
       Awaited<ReturnType<AgentEnvApi["refreshConversations"]>>
     >();
     const refreshConversations = vi.fn().mockReturnValue(refreshRequest.promise);
-    installApi({ refreshConversations });
+    installApi({ refreshConversations,
+      conversationHistoryStatus: vi.fn().mockResolvedValue({ config: { version: 1, enabled: true, paused: false, sources: [] }, needsConsent: false, running: false, sources: [], availableSources: [] })
+    });
 
     render(<App />);
 

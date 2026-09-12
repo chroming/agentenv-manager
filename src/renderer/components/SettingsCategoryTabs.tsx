@@ -2,6 +2,7 @@ import type { AgentEnvSettings, AppLocale } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { SettingsPreferenceRow } from "./SettingsPreferenceRow";
 import { SelectControl, TabBar } from "./ui";
+import { HistorySearchSettings } from "./HistorySearchSettings";
 
 export type SettingsCategory = "general" | "agents" | "skills" | "ai" | "connections" | "data";
 
@@ -55,6 +56,7 @@ export const GeneralSettingsSection = ({
         <div className="resource-heading" id="appearance-heading">{t("General")}</div>
       </div>
       <div className="settings-preference-list">
+        <SettingsPreferenceRow label={t("History search")} control={<HistorySearchSettings />} />
         <SettingsPreferenceRow
           label={t("Language")}
           help={t("Uses your system language until you choose another language.")}

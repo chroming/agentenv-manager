@@ -851,3 +851,53 @@
     padding-inline: 12px;
   }
 }
+.history-search-empty {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--space-3);
+  flex: 1;
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.history-source-coverage,
+.history-extra-source {
+  padding-block: var(--space-3);
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.history-extra-source {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.history-source-path,
+.history-device-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-location-fields dd {
+  margin: 0 0 var(--space-3);
+  overflow-wrap: anywhere;
+}
+
+.history-location-fields dt {
+  color: var(--muted);
+}
+
+.history-tool-records {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.history-tool-records pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 320px;
+  overflow-y: auto;
+}

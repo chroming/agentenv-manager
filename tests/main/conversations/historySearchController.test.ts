@@ -1,0 +1,109 @@
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createPaths } from "../../../src/main/paths";
+import { createTargetRegistry } from "../../../src/main/targets/registry";
+import { createCodexTargetAdapter } from "../../../src/main/targets/codexTarget";
+import { createHistorySearchController } from "../../../src/main/conversations/historySearchController";
+import { createConversationIndexStore } from "../../../src/main/conversations/conversationIndexStore";
+import type { SettingsStore } from "../../../src/main/settingsStore";
+import type { RemoteDeviceStore } from "../../../src/main/remoteDevices/remoteDeviceStore";
+import type { SshTransport } from "../../../src/main/remoteDevices/systemSshTransport";
+
+const cleanups: Array<() => Promise<unknown>> = [];
+afterEach(async () => { for (const fn of cleanups.reverse()) await fn(); cleanups.length = 0; });
+const transcript = [
+  { type: "session_meta", payload: { id: "same-session", cwd: "/work/example" } },
+  { type: "response_item", payload: { type: "message", role: "user", content: [{type:"input_text",text:"Find the unique history needle"}] } },
+  { type: "response_item", payload: { type: "function_call", name: "exec", arguments: "tool-only-sentinel" } }
+].map((v) => JSON.stringify(v)).join("\n");
+const setup = async (transport?: SshTransport, configText?: string) => {
+  const root = await mkdtemp(join(tmpdir(), "aem-history-opt-in-"));
+  cleanups.push(() => rm(root, { recursive:true, force:true }));
+  const paths = createPaths({homeDir:join(root,"home"), appDataRoot:join(root,"data"), conversationIndexPath:join(root,"cache/index.sqlite")});
+  await mkdir(join(paths.homeDir,".codex/sessions"),{recursive:true});
+  const file = join(paths.homeDir,".codex/sessions/rollout-test.jsonl");
+  await writeFile(file, transcript);
+  const index = await createConversationIndexStore(paths.conversationIndexPath);
+  if (configText) {
+    await mkdir(paths.appDataRoot,{recursive:true});
+    await writeFile(join(paths.appDataRoot,"conversation-search.json"),configText);
+    await writeFile(join(root,"cache/conversation-coverage.json"),"null");
+  }
+  cleanups.push(async () => index.close());
+  const adapter = createCodexTargetAdapter();
+  const discover = vi.spyOn(adapter.conversations!,"discover");
+  const settings = {readSettings: async () => ({ enabledTargetIds:[] })} as unknown as SettingsStore;
+  const controller = await createHistorySearchController({paths, index, settings, registry:createTargetRegistry([adapter]), transport,
+    devices:{list: async () => [{id:"remote",name:"Build machine",host:"example.invalid"}]} as unknown as RemoteDeviceStore});
+  cleanups.push(async () => controller.dispose());
+  return {controller,index,paths,file,discover};
+};
+
+describe("explicit history search permissions", () => {
+  it("fails closed on invalid settings and lets the user repair consent without losing histories", async () => {
+    const {controller,discover,file} = await setup(undefined,"{broken");
+    await controller.refresh();
+    expect(discover).not.toHaveBeenCalled();
+    const status = await controller.status();
+    expect(status).toMatchObject({needsConsent:true,config:{enabled:false}});
+    expect(status.settingsIssue).toContain("Select and save");
+    const {deviceName,agentName,...source} = status.availableSources[0]!;
+    await controller.configure({version:1,enabled:true,paused:false,sources:[source]});
+    await controller.refresh();
+    expect((await controller.status()).settingsIssue).toBeUndefined();
+    expect(await readFile(file,"utf8")).toBe(transcript);
+  });
+  it("does not discover before consent, indexes disabled Agents after opt-in, and clears only cache", async () => {
+    const {controller,index,file,discover} = await setup();
+    await controller.refresh(); expect(discover).not.toHaveBeenCalled();
+    const status = await controller.status(); expect(status.needsConsent).toBe(true);
+    const source = status.availableSources.find((s) => s.deviceId === "local")!;
+    const {deviceName: _deviceName,agentName: _agentName,...selected} = source;
+    await controller.configure({version:1,enabled:true,paused:false,sources:[selected]});
+    await controller.refresh(); expect(discover).toHaveBeenCalledTimes(1);
+    expect((await index.list({historySourceIds:controller.allowedIds()})).total).toBe(1);
+    expect(await index.search({query:"tool-only-sentinel",historySourceIds:controller.allowedIds()})).toEqual([]);
+    expect(await index.search({query:"tool-only-sentinel",includeTools:true,historySourceIds:controller.allowedIds()})).toHaveLength(1);
+    await controller.configure({version:1,enabled:false,paused:false,sources:[selected]});
+    expect((await index.list()).total).toBe(0);
+    expect(await readFile(file,"utf8")).toBe(transcript);
+    await controller.refresh(); expect(discover).toHaveBeenCalledTimes(1);
+  });
+
+  it("separates remote identities, searches offline cache and excludes non-approved facets", async () => {
+    let offline = false;
+    const execute = vi.fn(async (_device, command: string) => {
+      if (offline) throw new Error("SSH host unavailable");
+      const scan = command.includes('"operation":"scan"');
+      return {exitCode:0,stderr:"",stdout:Buffer.from(JSON.stringify(scan ? {records:[{path:"/home/test/.codex/sessions/rollout-test.jsonl",version:"v1",updatedAt:"2026-09-12T01:00:00Z",size:200}],issues:[]} : {content:transcript}))};
+    });
+    const {controller,index} = await setup({execute} as unknown as SshTransport);
+    const sources = (await controller.status()).availableSources.map(({deviceName,agentName,...s}) => s);
+    await controller.configure({version:1,enabled:true,paused:false,sources}); await controller.refresh();
+    const result = await index.list({historySourceIds:controller.allowedIds()});
+    expect(result.items).toHaveLength(2); expect(new Set(result.items.map((s) => s.id)).size).toBe(2);
+    offline = true; await controller.refresh();
+    expect((await controller.status()).sources.some((s) => s.phase === "unavailable")).toBe(true);
+    expect((await index.list({historySourceIds:controller.allowedIds()})).total).toBe(2);
+    await controller.configure({version:1,enabled:true,paused:true,sources:[sources[0]!]},false);
+    const calls = execute.mock.calls.length; await controller.refresh(); expect(execute).toHaveBeenCalledTimes(calls);
+    const empty = await index.list({historySourceIds:[]});
+    expect(empty).toMatchObject({total:0,workspacePaths:[],agentCounts:{}});
+  });
+
+  it("cancels in-flight collection before disabling and prevents late cache writes", async () => {
+    let release: (()=>void) | undefined;
+    const gate = new Promise<void>((resolve) => {release=resolve;});
+    const execute = vi.fn(async () => { await gate; return {exitCode:0,stderr:"",stdout:Buffer.from('{"records":[],"issues":[]}')}; });
+    const {controller,index} = await setup({execute} as unknown as SshTransport);
+    const sources = (await controller.status()).availableSources.filter((s) => s.deviceId === "remote").map(({deviceName,agentName,...s})=>s);
+    await controller.configure({version:1,enabled:true,paused:false,sources});
+    const refresh = controller.refresh().catch(() => undefined);
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
+    const stopping = controller.configure({version:1,enabled:false,paused:false,sources});
+    release!(); await refresh; await stopping;
+    expect((await index.list()).total).toBe(0); expect(controller.allowedIds()).toEqual([]);
+  });
+});

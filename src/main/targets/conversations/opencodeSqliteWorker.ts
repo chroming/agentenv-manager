@@ -14,6 +14,7 @@ export interface OpenCodeSqliteMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
+  toolText?: string;
   created?: number;
 }
 
@@ -47,7 +48,7 @@ const parseRecord = (value) => {
     const parsed = JSON.parse(value);
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {
-    return {};
+    throw new Error("OpenCode history contains invalid JSON; the previous indexed conversation is kept");
   }
 };
 
@@ -72,7 +73,7 @@ const list = (path) => {
   try {
     const hasMessages = hasTable(db, "message") &&
       requiredColumns(columns(db, "message"), ["id", "session_id"]);
-    const parentFilter = sessionColumns.has("parent_id") ? "WHERE s.parent_id IS NULL" : "";
+    const parentFilter = "";
     const archived = sessionColumns.has("time_archived")
       ? "CASE WHEN s.time_archived IS NULL THEN 0 ELSE 1 END"
       : "0";
@@ -110,6 +111,7 @@ const read = (path, sessionId) => {
       throw new Error("OpenCode message schema is unsupported");
     }
     const messageTime = messageColumns.has("time_created") ? "time_created" : "0 AS time_created";
+    db.exec("BEGIN");
     const messages = db.prepare(
       "SELECT id, " + messageTime + ", data FROM message " +
       "WHERE session_id = ? ORDER BY time_created ASC, id ASC"
@@ -119,8 +121,15 @@ const read = (path, sessionId) => {
       "ORDER BY time_created ASC, id ASC"
     ).all(sessionId);
     const textByMessage = new Map();
+    const toolsByMessage = new Map();
     for (const part of parts) {
       const data = parseRecord(part.data);
+      if (data.type === "tool") {
+        const id = String(part.message_id);
+        const values = toolsByMessage.get(id) || [];
+        values.push(JSON.stringify(data));
+        toolsByMessage.set(id, values);
+      }
       if (data.type !== "text" || typeof data.text !== "string" || !data.text.trim()) continue;
       const id = String(part.message_id);
       const values = textByMessage.get(id) || [];
@@ -131,12 +140,14 @@ const read = (path, sessionId) => {
       const data = parseRecord(message.data);
       if (data.role !== "user" && data.role !== "assistant") return [];
       const text = (textByMessage.get(String(message.id)) || []).join("\n\n").trim();
-      if (!text) return [];
+      const toolText = (toolsByMessage.get(String(message.id)) || []).join("\n");
+      if (!text && !toolText) return [];
       const created = Number(data.time?.created || message.time_created || 0);
       return [{
         id: String(message.id),
         role: data.role,
         text,
+        ...(toolText ? { toolText } : {}),
         created: created || undefined
       }];
     });

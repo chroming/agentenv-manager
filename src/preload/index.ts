@@ -135,6 +135,8 @@ const api: AgentEnvApi = {
   searchConversations: (input) => ipcRenderer.invoke("conversations:search", input),
   readConversation: (id, input) => ipcRenderer.invoke("conversations:read", id, input),
   refreshConversations: () => ipcRenderer.invoke("conversations:refresh"),
+  conversationHistoryStatus: () => ipcRenderer.invoke("conversations:history-status"),
+  configureConversationHistory: (config, clearRemoved) => ipcRenderer.invoke("conversations:configure-history", config, clearRemoved),
   openOriginalConversation: (id) =>
     ipcRenderer.invoke("conversations:open-original", id),
   previewConversationContinuation: (input) =>

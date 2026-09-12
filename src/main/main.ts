@@ -1183,11 +1183,15 @@ const createServices = async (
       targetRegistry,
       targetDiscoveryService,
       settingsStore,
-      clipboard
+      clipboard,
+      devices: remoteDeviceStore,
+      transport: sshTransport
     });
     return loadedConversationService;
   };
   const conversationService: ConversationService = {
+    historyStatus: () => loadConversationService().then((service) => service.historyStatus()),
+    configureHistory: (config, clearRemoved) => loadConversationService().then((service) => service.configureHistory(config, clearRemoved)),
     list: (input) => loadConversationService().then((service) => service.list(input)),
     search: (input) =>
       loadConversationService().then((service) => service.search(input)),

@@ -18,6 +18,8 @@ export const registerConversationIpc = (
 ) => {
   const { diagnosticHandle } = handles;
   const { conversationService } = services;
+  diagnosticHandle("conversations:history-status", () => conversationService.historyStatus());
+  diagnosticHandle("conversations:configure-history", (_event, config, clearRemoved) => conversationService.configureHistory(config, clearRemoved !== false));
 
   diagnosticHandle("clipboard:write-text", (_event, text: unknown) => {
     clipboard.writeText(String(text));

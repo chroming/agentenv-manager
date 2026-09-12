@@ -281,6 +281,11 @@ const AppContent = ({
   } = useWorkspaceNavigation();
   const { sidebarCollapsed, toggleSidebar } = useSidebarState();
   const [conversationViewState, setConversationViewState] = useState<ConversationWorkspaceViewState>();
+  useEffect(() => {
+    const clear = () => setConversationViewState(undefined);
+    window.addEventListener("agentenv-history-changed", clear);
+    return () => window.removeEventListener("agentenv-history-changed", clear);
+  }, []);
   const [projectEditorGuard, setProjectEditorGuard] = useState<ProjectEditorGuard>();
   const [projectOpenRequest, setProjectOpenRequest] = useState<{ requestId: number; projectId: string }>();
   const [projects, setProjects] = useState<ProjectSummary[]>([]);

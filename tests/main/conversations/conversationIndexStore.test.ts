@@ -335,7 +335,7 @@ describe("conversation index store", () => {
     expect(
       (migrated.prepare("PRAGMA user_version").get() as { user_version: number })
         .user_version
-    ).toBe(4);
+    ).toBe(5);
     expect(
       migrated.prepare(
         "SELECT count(*) AS count FROM conversation_search"

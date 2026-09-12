@@ -36,6 +36,7 @@ const { parentPort, workerData } = require("node:worker_threads");
 const { DatabaseSync } = require("node:sqlite");
 
 const visibleColumnNames = [
+  "origin_json",
   "id",
   "agent_id",
   "agent_name",
@@ -61,6 +62,7 @@ const visibleColumns = visibleColumnNames
   .join(", ");
 
 const summaryFromRow = (row) => ({
+  origin: row.origin_json ? JSON.parse(row.origin_json) : undefined,
   id: row.id,
   agentId: row.agent_id,
   agentName: row.agent_name,
@@ -119,7 +121,7 @@ const createSearchContext = (input) => {
   const parameters = [];
   const query = String(input.query || "").trim().slice(0, 500);
   const usesFts = Boolean(
-    query &&
+    query && !input.includeTools &&
     hasSearchIndex &&
     Array.from(query).length >= 3
   );
@@ -132,16 +134,24 @@ const createSearchContext = (input) => {
       conditions.push("conversation_search MATCH ?");
       parameters.push(ftsPhrase(query));
     } else {
-      conditions.push("c.search_text LIKE ? ESCAPE '\\'");
+      conditions.push((input.includeTools ? "(c.search_text || char(10) || c.tool_text)" : "c.search_text") + " LIKE ? ESCAPE '\\'");
       parameters.push("%" + escapeLike(query) + "%");
     }
   }
   const agentIds = [...new Set(input.agentIds || [])].filter(Boolean);
+  if (input.historySourceIds) {
+    const sourceIds = [...new Set(input.historySourceIds)];
+    conditions.push(sourceIds.length ? "c.history_source IN (" + placeholders(sourceIds) + ")" : "0");
+    parameters.push(...sourceIds);
+  }
   if (agentIds.length > 0) {
     conditions.push("c.agent_id IN (" + placeholders(agentIds) + ")");
     parameters.push(...agentIds);
   }
   const workspacePaths = [...new Set(input.workspacePaths || [])].filter(Boolean);
+  if (input.updatedAfter && Number.isFinite(Date.parse(input.updatedAfter))) {
+    conditions.push("c.updated_at >= ?"); parameters.push(new Date(input.updatedAfter).toISOString());
+  }
   if (workspacePaths.length > 0) {
     conditions.push("c.workspace_path IN (" + placeholders(workspacePaths) + ")");
     parameters.push(...workspacePaths);
@@ -183,7 +193,7 @@ const selectRows = (input, maximumLimit) => {
       ? "snippet(conversation_search, -1, '', '', ' … ', 24)"
       : "NULL";
   const matchSource = context.query && !context.usesFts
-    ? ", c.search_text AS match_source"
+    ? (input.includeTools ? ", (c.search_text || char(10) || c.tool_text) AS match_source" : ", c.search_text AS match_source")
     : "";
   const relevance = context.usesFts
     ? "bm25(conversation_search, 0.0, 8.0, 4.0, 2.0, 1.0)"
@@ -232,6 +242,10 @@ const list = (input) => {
 
   const workspaceConditions = ["workspace_path IS NOT NULL", "workspace_path <> ''"];
   const workspaceParameters = [];
+  if (input.historySourceIds) {
+    workspaceConditions.push(input.historySourceIds.length ? "history_source IN (" + placeholders(input.historySourceIds) + ")" : "0");
+    workspaceParameters.push(...input.historySourceIds);
+  }
   if (context.agentIds.length > 0) {
     workspaceConditions.push("agent_id IN (" + placeholders(context.agentIds) + ")");
     workspaceParameters.push(...context.agentIds);
@@ -243,14 +257,16 @@ const list = (input) => {
   ).all(...workspaceParameters).map((row) => row.workspace_path);
 
   const facetAgentIds = [...new Set(input.facetAgentIds || context.agentIds)].filter(Boolean);
-  const agentCountWhere = facetAgentIds.length > 0
-    ? "WHERE agent_id IN (" + placeholders(facetAgentIds) + ")"
-    : "";
+  const agentCountConditions = [];
+  const agentCountParameters = [];
+  if (facetAgentIds.length) { agentCountConditions.push("agent_id IN (" + placeholders(facetAgentIds) + ")"); agentCountParameters.push(...facetAgentIds); }
+  if (input.historySourceIds) { agentCountConditions.push(input.historySourceIds.length ? "history_source IN (" + placeholders(input.historySourceIds) + ")" : "0"); agentCountParameters.push(...input.historySourceIds); }
+  const agentCountWhere = agentCountConditions.length ? "WHERE " + agentCountConditions.join(" AND ") : "";
   const agentCounts = Object.fromEntries(
     database.prepare(
       "SELECT agent_id, count(*) AS count FROM conversations " +
       agentCountWhere + " GROUP BY agent_id"
-    ).all(...facetAgentIds).map((row) => [row.agent_id, Number(row.count)])
+    ).all(...agentCountParameters).map((row) => [row.agent_id, Number(row.count)])
   );
 
   return {
@@ -270,7 +286,7 @@ const search = (input) => {
 
 const read = (id, input) => {
     const row = database.prepare(
-      "SELECT " + visibleColumns + " FROM conversations AS c WHERE c.id = ?"
+      "SELECT " + visibleColumns + ", c.tool_text FROM conversations AS c WHERE c.id = ?"
     ).get(id);
     if (!row) throw new Error("Conversation is no longer available in the local index");
     const messageCount = Number(row.message_count);
@@ -302,6 +318,7 @@ const read = (id, input) => {
     ).all(id, requestedLimit, requestedOffset);
   return {
       ...summaryFromRow(row),
+      toolText: row.tool_text || undefined,
       loadedMessageOffset: requestedOffset,
       matchedMessageId: matchedMessage?.id,
       messages: messages.map((message) => ({

@@ -469,6 +469,10 @@
   min-height: 64px;
 }
 
+.settings-preference-row.settings-preference-row--intrinsic {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .settings-preference-row + .settings-preference-row {
   border-top: 1px solid var(--border);
 }

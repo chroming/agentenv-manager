@@ -2040,6 +2040,19 @@ try {
   await capturePage(page, join(outputDir, "target-capture-review-920x620.png"));
   await page.keyboard.press("Escape");
   await targetCaptureReview.waitFor({ state: "hidden" });
+  await page.evaluate(async () => {
+    const status = await window.agentEnv.conversationHistoryStatus();
+    await window.agentEnv.configureConversationHistory({
+      version: 1,
+      enabled: true,
+      paused: false,
+      sources: status.availableSources
+        .filter((source) => source.deviceId === "local")
+        .map(({ deviceName, agentName, ...source }) => source)
+    });
+    await window.agentEnv.refreshConversations();
+    window.dispatchEvent(new Event("agentenv-history-changed"));
+  });
   await captureWorkspace(
     "Conversations",
     "conversations",

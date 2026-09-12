@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -76,6 +76,38 @@ const createTestDatabase = async (
 };
 
 describe("OpenCode local conversation storage", () => {
+  it("reads legacy message parts and reports corrupt siblings instead of declaring complete coverage", async () => {
+    root = await mkdtemp(join(tmpdir(),"aem-legacy-opencode-"));
+    const storage = join(root,".local/share/opencode/storage");
+    for (const dir of ["session/project","message/session-1","part/message-1"]) await mkdir(join(storage,dir),{recursive:true});
+    const sessionPath = join(storage,"session/project/session-1.json");
+    await writeFile(sessionPath,JSON.stringify({id:"session-1",title:"Legacy session",directory:"/work/demo"}));
+    await writeFile(join(storage,"message/session-1/message-1.json"),JSON.stringify({id:"message-1",role:"user"}));
+    await writeFile(join(storage,"part/message-1/part-1.json"),JSON.stringify({type:"text",text:"Body stored separately"}));
+    const capability = createOpenCodeConversationCapability();
+    const context = contextFor(root);
+    const inventory = await capability.discover(context);
+    expect((await capability.read(context,inventory.candidates[0]!)).messages[0]?.text).toBe("Body stored separately");
+    await writeFile(join(storage,"session/project/broken.json"),"{broken");
+    const partial = await capability.discover(context);
+    expect(partial.complete).toBe(false);
+    expect(partial.candidates).toHaveLength(1);
+    expect(partial.failures?.join(" ")).toContain("broken.json");
+  });
+
+  it("keeps tool records separate from visible SQLite conversation messages", async () => {
+    root = await mkdtemp(join(tmpdir(),"aem-opencode-tools-"));
+    const path = await createTestDatabase(root);
+    const db = new DatabaseSync(path);
+    db.prepare("INSERT INTO part VALUES (?, ?, ?, ?, ?)").run("tool-1","message-1","session-1",3000,JSON.stringify({type:"tool",state:{output:"tool-only-sentinel"}}));
+    db.close();
+    const capability = createOpenCodeConversationCapability();
+    const context = contextFor(root);
+    const inventory = await capability.discover(context);
+    const result = await capability.read(context,inventory.candidates[0]!);
+    expect(result.toolText).toContain("tool-only-sentinel");
+    expect(result.messages.map((m)=>m.text).join(" ")).not.toContain("tool-only-sentinel");
+  });
   it("discovers the native Windows LocalAppData database location", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-opencode-windows-storage-"));
     const localAppData = join(root, "AppData", "Local");
@@ -94,7 +126,7 @@ describe("OpenCode local conversation storage", () => {
     ]);
   }, 15_000);
 
-  it("reads top-level SQLite sessions off the main thread and ignores child sessions", async () => {
+  it("reads SQLite sessions off the main thread including child sessions", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-opencode-storage-"));
     const dataDir = join(root, ".local", "share", "opencode");
     const dbPath = join(dataDir, "opencode.db");
@@ -158,7 +190,7 @@ describe("OpenCode local conversation storage", () => {
     const detail = await capability.read(contextFor(root), candidates[0]);
 
     expect(discovery.complete).toBe(true);
-    expect(candidates).toHaveLength(1);
+    expect(candidates).toHaveLength(2);
     expect(candidates[0]).toMatchObject({
       recordId: "session-1",
       providerSession: { id: "session-1" },

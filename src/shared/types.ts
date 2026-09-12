@@ -178,6 +178,8 @@ export interface AgentEnvApi {
   listRemoteEndpoints?(forceRefresh?: boolean): Promise<RemoteAgentEndpoint[]>;
   listRemoteTargetStates?(): Promise<TargetManagementState[]>;
   listConversations(input?: ConversationListInput): Promise<ConversationListResult>;
+  conversationHistoryStatus(): Promise<import("./conversationSearch").HistorySearchStatus>;
+  configureConversationHistory(config: import("./conversationSearch").HistorySearchConfig, clearRemoved?: boolean): Promise<import("./conversationSearch").HistorySearchStatus>;
   searchConversations(input: ConversationSearchInput): Promise<ConversationSummary[]>;
   readConversation(id: string, input?: ConversationReadInput): Promise<ConversationDetail>;
   refreshConversations(): Promise<ConversationRefreshResult>;
@@ -467,6 +469,7 @@ export interface TargetConversationCapabilities {
 }
 
 export interface ConversationSummary {
+  origin?: import("./conversationSearch").HistoryOrigin;
   id: string;
   agentId: string;
   agentName: string;
@@ -491,6 +494,7 @@ export interface ConversationMessage {
 }
 
 export interface ConversationDetail extends ConversationSummary {
+  toolText?: string;
   loadedMessageOffset?: number;
   matchedMessageId?: string;
   messages: ConversationMessage[];
@@ -504,6 +508,9 @@ export interface ConversationReadInput {
 }
 
 export interface ConversationListInput {
+  updatedAfter?: string;
+  historySourceIds?: string[];
+  includeTools?: boolean;
   query?: string;
   agentIds?: string[];
   workspacePaths?: string[];
@@ -519,11 +526,14 @@ export type ConversationSortOrder =
   | "messages-desc";
 
 export interface ConversationSearchInput {
+  historySourceIds?: string[];
+  includeTools?: boolean;
   query: string;
   limit?: number;
 }
 
 export interface ConversationListResult {
+  historyStatus?: import("./conversationSearch").HistorySearchStatus;
   items: ConversationSummary[];
   total: number;
   totalSizeBytes?: number;
