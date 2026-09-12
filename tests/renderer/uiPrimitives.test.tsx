@@ -62,6 +62,16 @@ it("keeps compact switches accessible and interactive", () => {
   expect(onClick).toHaveBeenCalledOnce();
 });
 
+it("allows an unframed master-detail canvas without removing its panes", () => {
+  const { container } = render(<MasterDetailLayout appearance="canvas">
+    <MasterListPane aria-label="Items">Item list</MasterListPane>
+    <MasterDetailPane>Selected item</MasterDetailPane>
+  </MasterDetailLayout>);
+  expect(container.querySelector(".ui-master-detail--canvas")).not.toBeNull();
+  expect(screen.getByRole("complementary", { name: "Items" })).toBeVisible();
+  expect(screen.getByText("Selected item")).toBeVisible();
+});
+
 afterEach(cleanup);
 
 describe("renderer UI primitives", () => {

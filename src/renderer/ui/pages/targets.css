@@ -89,8 +89,6 @@
     minmax(168px, 1fr) minmax(112px, 144px) 32px;
   align-items: start;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-surface);
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -213,7 +211,7 @@
   display: grid;
   gap: 8px;
   grid-template-columns: var(--target-list-columns);
-  min-height: 60px;
+  min-height: 52px;
   min-width: 0;
 }
 
@@ -272,7 +270,7 @@
 
 .target-workflow-icon {
   align-items: center;
-  background: #f1f1ef;
+  background: transparent;
   border-radius: var(--radius-control);
   display: inline-flex;
   height: 32px;

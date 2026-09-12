@@ -19,6 +19,7 @@ interface InstructionDocumentPreviewListProps {
   documents: InstructionDocumentPreview[];
   emptyLabel?: string;
   fillAvailable?: boolean;
+  appearance?: "framed" | "canvas";
   onOpen?(document: InstructionDocumentPreview): void;
 }
 
@@ -26,6 +27,7 @@ export const InstructionDocumentPreviewList = ({
   documents,
   emptyLabel,
   fillAvailable = false,
+  appearance = "framed",
   onOpen
 }: InstructionDocumentPreviewListProps) => {
   const { t } = useI18n();
@@ -39,7 +41,7 @@ export const InstructionDocumentPreviewList = ({
   }
 
   return (
-    <div className={`instruction-documents${fillAvailable ? " instruction-documents--fill" : ""}`}>
+    <div className={`instruction-documents instruction-documents--${appearance}${fillAvailable ? " instruction-documents--fill" : ""}`}>
       {documents.map((document) => (
         <article className="instruction-document" key={document.id}>
           <header className="instruction-document__header">

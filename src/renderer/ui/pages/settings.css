@@ -216,8 +216,6 @@
 }
 
 .agent-settings-list {
-  border-bottom: 1px solid var(--border);
-  border-top: 1px solid var(--border);
   display: grid;
 }
 
@@ -253,7 +251,7 @@
 
 .agent-settings-icon {
   align-items: center;
-  background: var(--surface-muted);
+  background: transparent;
   border-radius: var(--radius-control);
   color: var(--text-secondary);
   display: inline-flex;
@@ -452,8 +450,6 @@
 }
 
 .settings-preference-list {
-  border-bottom: 1px solid var(--border);
-  border-top: 1px solid var(--border);
   display: grid;
 }
 

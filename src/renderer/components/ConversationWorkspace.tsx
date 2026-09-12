@@ -64,6 +64,7 @@ import {
   focusInitialActionMenuItem,
   IconButton,
   ModalFrame,
+  MasterDetailLayout,
   PageHeader,
   RefreshAction,
   SearchField,
@@ -1629,8 +1630,9 @@ export const ConversationWorkspace = ({
         />
 
         <div className="conversation-layout-shell">
-          <div
-            className="conversation-layout ui-surface-frame"
+          <MasterDetailLayout
+            appearance="canvas"
+            className="conversation-layout"
             inert={manualRefreshing && items.length === 0}
             aria-hidden={manualRefreshing && items.length === 0 || undefined}
           >
@@ -2191,7 +2193,7 @@ export const ConversationWorkspace = ({
               </>
             )}
           </article>
-          </div>
+          </MasterDetailLayout>
           {manualRefreshing && items.length === 0 ? (
             <div className="conversation-refresh-overlay" role="status" aria-live="polite">
               <LoaderCircle className="is-spinning" size={22} aria-hidden="true" />

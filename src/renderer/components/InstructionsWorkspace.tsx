@@ -182,7 +182,7 @@ export const InstructionsWorkspace = ({
           </>
         )}
       />
-      <MasterDetailLayout className="instructions-catalog" listWidth="compact">
+      <MasterDetailLayout className="instructions-catalog" listWidth="compact" appearance="canvas">
         <MasterListPane className="instructions-list-pane">
           <SearchField
             fieldClassName="instructions-search"
@@ -275,13 +275,13 @@ export const InstructionsWorkspace = ({
                 </div>
               ) : null}
               <InstructionDocumentPreviewList
+                appearance="canvas"
                 fillAvailable
                 documents={[{
                   id: selected.id,
                   name: "CONTENT.md",
                   syntaxPath: "CONTENT.md",
-                  content: selected.content,
-                  metadata: selected.name
+                  content: selected.content
                 }]}
                 onOpen={() => setPreviewBlock(selected)}
               />

@@ -99,6 +99,25 @@
   min-height: 0;
 }
 
+.instruction-documents--canvas,
+.instruction-documents--canvas .instruction-document__preview {
+  background: var(--surface);
+}
+
+.instruction-documents--canvas > .instruction-document {
+  border: 0;
+  border-radius: 0;
+}
+
+.instruction-documents--canvas .instruction-document__header {
+  min-height: 32px;
+  padding-block: 0;
+}
+
+.instruction-documents--canvas .instruction-document__preview {
+  border-top: 0;
+}
+
 .instruction-document__state,
 .instruction-documents__empty {
   align-items: center;

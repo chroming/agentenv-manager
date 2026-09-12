@@ -22,7 +22,6 @@
 
 .conversation-layout {
   background: var(--surface);
-  border-radius: var(--radius-surface);
   display: grid;
   grid-template-columns: clamp(280px, 32%, 340px) minmax(0, 1fr);
   height: 100%;
@@ -554,7 +553,7 @@
 
 .conversation-turn--user {
   background: var(--surface-subtle);
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-surface);
   margin: 10px 0;
   padding: 14px 16px 16px;

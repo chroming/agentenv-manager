@@ -232,6 +232,7 @@ export const AgentSettingsSection = ({
                   ) : null}
                 </div>
                 <Switch
+                  size="compact"
                   checked={enabled}
                   disabled={busy || Boolean(pendingAgentId) || recoveryRequired}
                   label={t(enabled ? "Turn off {{name}}" : "Turn on {{name}}", { name: agent.name })}

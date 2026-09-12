@@ -11,17 +11,19 @@ type MasterDetailWidth = "compact" | "default" | "wide";
 
 interface MasterDetailLayoutProps extends HTMLAttributes<HTMLDivElement> {
   listWidth?: MasterDetailWidth;
+  appearance?: "framed" | "canvas";
 }
 
 export const MasterDetailLayout = ({
   children,
   className = "",
   listWidth = "default",
+  appearance = "framed",
   ...props
 }: MasterDetailLayoutProps) => (
   <div
     {...props}
-    className={`ui-master-detail ui-master-detail--${listWidth} ${className}`.trim()}
+    className={`ui-master-detail ui-master-detail--${listWidth} ui-master-detail--${appearance} ${className}`.trim()}
   >
     {children}
   </div>

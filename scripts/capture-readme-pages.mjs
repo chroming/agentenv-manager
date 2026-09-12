@@ -13,9 +13,15 @@ export const captureReadmePages = async ({ page, windowHandle, outputDir, fixtur
   await page.reload();
   await setWindowSize(page, windowHandle, 1180, 728);
   const capture = async (name) => {
-    const heading = { agents: "Agents", profiles: "Profiles", workspaces: "Workspaces", instructions: "Instructions", "skills-list": "Skills", "skills-by-source": "Skills", conversations: "Conversations" }[name];
+    const heading = name.startsWith("settings") ? "Settings" : { agents: "Agents", profiles: "Profiles", workspaces: "Workspaces", instructions: "Instructions", "skills-list": "Skills", "skills-by-source": "Skills", conversations: "Conversations" }[name];
     await page.getByRole("heading", { name: heading, exact: true }).waitFor();
     await page.waitForTimeout(550);
+    const revealCaptureContent = async () => {
+      if (name === "settings-agents-expanded") {
+        await page.locator(".agent-path-settings[open]").scrollIntoViewIfNeeded();
+      }
+    };
+    await revealCaptureContent();
     // Only synthetic fixture paths are shortened for public screenshots.
     await page.evaluate((root) => {
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -29,6 +35,7 @@ export const captureReadmePages = async ({ page, windowHandle, outputDir, fixtur
       for (const [width, height] of [[920, 620], [1440, 900]]) {
         await setWindowSize(page, windowHandle, width, height);
         await page.waitForTimeout(150);
+        await revealCaptureContent();
         await capturePage(page, join(outputDir, `${name}-${width}.png`));
       }
       await setWindowSize(page, windowHandle, 1180, 728);
@@ -75,4 +82,12 @@ export const captureReadmePages = async ({ page, windowHandle, outputDir, fixtur
   await page.getByRole("option", { name: /Review the Agent environment before release/ }).click();
   await page.getByText("The Profile is saved and ready for a final Apply preview.").waitFor();
   await capture("conversations");
+  if (process.env.AGENTENV_CAPTURE_RESPONSIVE === "1") {
+    await open("Settings");
+    await capture("settings-general");
+    await page.getByRole("tab", { name: "Agents", exact: true }).click();
+    await capture("settings-agents");
+    await page.locator("summary").filter({ hasText: "Custom folders" }).click();
+    await capture("settings-agents-expanded");
+  }
 };
