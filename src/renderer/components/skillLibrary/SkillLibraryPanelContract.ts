@@ -68,6 +68,7 @@ export interface SkillLibraryPanelModel {
     isLoading?: boolean;
     isBusy?: boolean;
     isRefreshingInventory?: boolean;
+    inventoryScanStatus?: "checking" | "ready" | "error";
   };
   catalog: {
     librarySkills: SkillLibraryEntry[];

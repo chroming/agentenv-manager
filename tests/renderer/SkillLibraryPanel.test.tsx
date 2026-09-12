@@ -148,6 +148,30 @@ const LegacySkillLibraryPanel = (props: Record<string, any>) => (
 );
 
 describe("SkillLibraryPanel", () => {
+  it("uses refreshed Skill metadata when opening settings from an existing inspector", async () => {
+    const onListSkillFiles = vi.fn().mockResolvedValue([]);
+    const skill = { id: "example", name: "Example", description: "Example Skill", sourceType: "local",
+      source: "/tmp/old", path: "/tmp/library/example", updatePolicy: "untracked", contentHash: "hash", updatedAt: "2026-09-12T00:00:00Z" };
+    const Panel = ({ updated }: { updated: boolean }) => <SkillLibraryPanel model={{
+      status: { inventoryScanStatus: updated ? "ready" : "checking" },
+      catalog: { librarySkills: [{ ...skill, source: updated ? "/tmp/current" : skill.source,
+        updatePolicy: updated ? "tracked" : "untracked" }], skillGroups: [], skillUsage: {}, skillUpdates: [] },
+      sources: { sourceGroups: [], libraryMode: "skills" }, cleanup: { skillInventory: [], cleanupBackups: [] },
+      updates: {}, workspace: {}, view: { viewState: defaultSkillLibraryViewState }
+    } as never} actions={{ navigation: {}, inventory: {}, files: { onListSkillFiles }, repository: {},
+      sources: {}, catalog: {}, updates: {} } as never} />;
+    const { rerender } = render(<Panel updated={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Example" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Details" }));
+    expect(screen.getByRole("tabpanel")).toHaveTextContent("Checking local Skills");
+    rerender(<Panel updated />);
+    expect(screen.getByRole("tabpanel")).toHaveTextContent("/tmp/current");
+    expect(screen.getByRole("tabpanel")).toHaveTextContent("No detected copies");
+    fireEvent.click(screen.getByRole("button", { name: "Update settings" }));
+    expect(await screen.findByRole("textbox", { name: "Update source for example" })).toHaveValue("/tmp/current");
+    expect(screen.getByRole("switch", { name: "Track updates for example" })).toBeChecked();
+  });
+
   it("allocates Tags only when the Library has tags and keeps the column when a filter excludes tagged Skills", () => {
     const skills = ["plain", "tagged"].map((id) => ({
       id, name: id, description: id, path: `/tmp/library/${id}`, sourceType: "local", contentHash: id,

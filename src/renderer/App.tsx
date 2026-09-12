@@ -3700,7 +3700,8 @@ const AppContent = ({
                 status: {
                   isLoading,
                   isBusy: busy,
-                  isRefreshingInventory: skillInventoryRefreshing
+                  isRefreshingInventory: skillInventoryRefreshing,
+                  inventoryScanStatus: environmentScanStatus
                 },
                 catalog: {
                   librarySkills,

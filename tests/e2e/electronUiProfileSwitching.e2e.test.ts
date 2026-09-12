@@ -5149,6 +5149,50 @@ describe("Electron UI profile switching e2e", () => {
     expect(targetLanes.rowContained).toBe(true);
   }, standardElectronTestTimeout);
 
+  it("keeps long Skill file failures readable and retryable at supported window sizes", async () => {
+    const { app: electronApp, page } = await launchApp();
+    await electronApp.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler("skills:list-files");
+      ipcMain.handle("skills:list-files", () => {
+        throw new Error(`Cannot read /fixture/${"long-directory-name/".repeat(22)}SKILL.md: permission denied`);
+      });
+    });
+    await page.locator(".library-table-row").first().locator(".library-skill-name-button").click();
+    const dialog = page.getByRole("dialog", { name: /^Files in / });
+    await dialog.getByRole("alert").waitFor();
+    await dialog.getByText("Could not load files", { exact: true }).waitFor();
+    expect(await dialog.getByText("No previewable files", { exact: true }).count()).toBe(0);
+    const captureDir = process.env.AGENTENV_CAPTURE_INSPECTOR_DIR;
+    if (captureDir) await mkdir(captureDir, { recursive: true });
+    for (const width of [920, 1180, 1440]) {
+      await resizeAppWindow(page, width, width === 920 ? 620 : 900);
+      const geometry = await dialog.getByRole("alert").evaluate((alert) => {
+        const message = alert.querySelector("span")!.getBoundingClientRect();
+        const retry = alert.querySelector("button")!.getBoundingClientRect();
+        const bounds = alert.getBoundingClientRect();
+        return { contained: alert.scrollWidth <= alert.clientWidth + 1,
+          selectable: getComputedStyle(alert.querySelector("span")!).userSelect === "text",
+          actionsSeparate: message.right <= retry.left,
+          retryContained: retry.right <= bounds.right && retry.bottom <= bounds.bottom };
+      });
+      expect(geometry).toEqual({ contained: true, selectable: true, actionsSeparate: true, retryContained: true });
+      if (captureDir) await page.screenshot({ animations: "disabled", path: join(captureDir, `skill-file-error-${width}.png`) });
+    }
+    await electronApp.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler("skills:list-files");
+      ipcMain.handle("skills:list-files", () => [{ path: "SKILL.md", name: "SKILL.md", kind: "file" }]);
+      ipcMain.removeHandler("skills:read-file");
+      ipcMain.handle("skills:read-file", () => ({ path: "SKILL.md", kind: "text", content: "# Restored preview", sizeBytes: 18 }));
+    });
+    await dialog.getByRole("button", { name: "Retry", exact: true }).click();
+    await dialog.getByText("# Restored preview", { exact: true }).waitFor();
+    expect(await dialog.getByRole("alert").count()).toBe(0);
+    await dialog.getByRole("tab", { name: "Details", exact: true }).click();
+    if (captureDir) await page.screenshot({ animations: "disabled", path: join(captureDir, "skill-details-recovered-1440.png") });
+    await page.keyboard.press("Escape");
+    await dialog.waitFor({ state: "hidden" });
+  }, standardElectronTestTimeout);
+
   it("keeps one control taxonomy across workspaces and decision dialogs", async () => {
     const { page } = await launchApp();
     await page.setViewportSize({ width: 920, height: 620 });

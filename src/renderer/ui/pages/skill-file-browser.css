@@ -145,6 +145,14 @@
 
 .skill-file-browser__state.is-error {
   color: var(--danger);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  text-align: left;
+}
+
+.skill-file-browser__state.is-error > span {
+  overflow-wrap: anywhere;
+  user-select: text;
 }
 
 @media (max-width: 760px) {

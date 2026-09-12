@@ -169,3 +169,40 @@ only recoloring it. Agent row entry points and the scoped Shared Skills workflow
   Skill facts remain reachable without hover, and opening details makes no mutations.
 - Evidence covers macOS isolated Electron, not a packaged release or Windows/Linux.
   No backend ownership, deployment, or real Agent resources were changed.
+
+### Follow-up audit: asynchronous detail states
+
+Change evidence card:
+
+- Intent: inspect the current Skill and its usage without turning unknown data into
+  a reassuring claim. Preserve quiet catalogs and existing configuration workflows.
+- Defect class: asynchronous projections used empty inventory as installation evidence,
+  retained an old settings entry, or reused a previous Skill's file selection.
+- Owners: Library panel inventory projection and the shared Skill file inspector.
+  Siblings: name-hover usage, Details, Update settings, Files and read-error recovery.
+- Invariants: checking/failed/partial scans are not zero installs; known copies remain
+  visible. An object switch resets file state, and Retry retries the selected file
+  (or reloads a failed tree), not a different default document.
+- Effects: read-only file and inventory inspection; existing Update settings Save remains
+  the sole settings mutation. No Agent, ownership, Apply, or Library mutation changes.
+- Proof: delayed/empty/failed tree and fresh-metadata Renderer cases, native Electron
+  long-error containment/selection/Retry/Escape at 920/1180/1440, plus sibling captures.
+
+Final source: `c667e385facbc4aafa34e907bbbd80e5da17db9edac6159aef3b63227fa67537`.
+Final artifact: `778a361e773eaf5c0e75b3721f4cc4ddd5581c8274e3d22462ee6bf8fb694d85`.
+
+- 671 Renderer tests (97 files) and eight focused Electron tests passed, including
+  the isolated Workspace test. Comparison captures exercised the fake CLI runner.
+- Long read errors remain selectable and contain their Retry action. Failed trees
+  no longer present the empty-folder message. Known copies survive incomplete scans.
+- Build/typecheck, translations, shared UI contracts, CSS/module budgets and feature
+  evidence audits passed. No new dependency was introduced.
+- A fresh serial capture run on the final artifact passed all 82 critical pixel
+  comparisons without tolerance changes. Reviewed the seven destinations and updated
+  only the two inspector baselines whose empty-inventory wording changed. Separate
+  captures cover long errors at 920/1180/1440 and successful recovery.
+- Earlier overlapping capture attempts interfered through the capture runner's fixed
+  temporary fixture directory and were discarded. Do not overlap `capture-profiles`
+  invocations; those failed attempts are not evidence of product behavior.
+- This is macOS isolated Electron evidence, not a packaged or Windows/Linux release
+  approval, full backend-suite run, or a guarantee against all possible user datasets.

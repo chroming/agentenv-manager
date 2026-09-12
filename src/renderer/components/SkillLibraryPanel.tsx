@@ -221,7 +221,8 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   const {
     isLoading = false,
     isBusy = false,
-    isRefreshingInventory = false
+    isRefreshingInventory = false,
+    inventoryScanStatus = "checking"
   } = status;
   const {
     librarySkills,
@@ -746,6 +747,14 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
 
   const installsFor = (libraryId: string) =>
     skillInventory.filter((skill) => skill.libraryId === libraryId || skill.id === libraryId);
+  const inspectedSkill = browsingSkill
+    ? librarySkills.find((skill) => skill.id === browsingSkill.id) ?? browsingSkill
+    : undefined;
+  const inventoryNotice = inventoryScanStatus === "checking" || isRefreshingInventory
+    ? t("Checking local Skills")
+    : inventoryScanStatus === "error" || scanIssues.some((issue) => issue.severity !== "info")
+      ? t("Scan incomplete. Refresh Local Skills to check Agent copies.")
+      : undefined;
   const filteredSkills = librarySkills.filter((skill) => {
     const installs = installsFor(skill.id);
     const usage = skillUsage[skill.id] ?? [];
@@ -1928,11 +1937,11 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               t(usageCount === 1 ? "{{count}} Profile" : "{{count}} Profiles", {
                 count: usageCount
               }),
-              t(installedAgentCount === 1 ? "{{count}} install" : "{{count}} installs", {
+              installedAgentCount > 0 || !inventoryNotice ? t(installedAgentCount === 1 ? "{{count}} install" : "{{count}} installs", {
                 count: installedAgentCount
-              })
-            ].join(" · ");
-            const usageDetail = `${t("Profiles")}: ${(skillUsage[skill.id] ?? []).join(", ") || t("Not referenced")} · ${t("Agents")}: ${installedAgentNames.join(", ") || t("Not installed")}`;
+              }) : undefined
+            ].filter(Boolean).join(" · ");
+            const usageDetail = `${t("Profiles")}: ${(skillUsage[skill.id] ?? []).join(", ") || t("Not referenced")} · ${t("Agents")}: ${installedAgentNames.join(", ") || inventoryNotice || t("No detected copies")}`;
             const identityDetail = [
               skill.name,
               skill.description || skill.id,
@@ -2287,12 +2296,13 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         onConfirm={onUpdateLibrarySkill}
       />
 
-      {browsingSkill ? (
+      {inspectedSkill ? (
         <SkillFileBrowserDialog
-          skill={librarySkills.find((skill) => skill.id === browsingSkill.id) ?? browsingSkill}
-          update={updatesById.get(browsingSkill.id)}
-          profileNames={skillUsage[browsingSkill.id] ?? []}
-          installations={installsFor(browsingSkill.id).map((install) => ({
+          skill={inspectedSkill}
+          update={updatesById.get(inspectedSkill.id)}
+          profileNames={skillUsage[inspectedSkill.id] ?? []}
+          inventoryNotice={inventoryNotice}
+          installations={installsFor(inspectedSkill.id).map((install) => ({
             agents: install.foundIn.map((id) => targetNameFor(id, targetNames, id)).join(", "),
             path: install.path,
             method: install.installMethod === "linked" ? t("Live link") : install.installMethod === "copied" ? t("Copied") : t("Unknown"),
@@ -2300,11 +2310,11 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
           }))}
           onUpdateSettings={() => {
             setBrowsingSkill(undefined);
-            runSkillMenuAction(browsingSkill, "settings", modalFallbackFocusRef.current);
+            runSkillMenuAction(inspectedSkill, "settings", modalFallbackFocusRef.current);
           }}
           onReviewProfiles={() => {
             setBrowsingSkill(undefined);
-            runSkillMenuAction(browsingSkill, "review", modalFallbackFocusRef.current);
+            runSkillMenuAction(inspectedSkill, "review", modalFallbackFocusRef.current);
           }}
           dialogRef={modalDialogRef}
           initialFocusRef={modalInitialFocusRef}

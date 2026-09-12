@@ -645,6 +645,13 @@ implementation.
   versions, timestamps and Library path/hash without requiring hover. Metadata is selectable
   and wraps; switching tabs preserves file selection and scroll and performs no mutation.
   Update settings and Profile review reuse the existing workflows from the inspector.
+- Inventory absence is not installation evidence: checking or incomplete scans must not
+  display `Not installed` or a zero-install claim. Retain any known copies with the scan
+  status; after a complete empty scan use `No detected copies`. Inspector actions resolve
+  the latest Library metadata rather than the entry captured when the inspector opened.
+- File selection belongs to one Skill. Switching Skills clears its preview and may not
+  read the previous Skill's path under the new ID. Empty trees and failed reads are distinct;
+  errors stay selectable and offer Retry in place, without mutating Library content.
 - `Applied with local overrides` is a stable current deployment and MUST NOT be counted as an
   Agent that needs review or promoted to a separate global warning. Its machine-local exception
   remains visible on the affected Agent and Profile. Dangerous Apply/Cleanup effects, external

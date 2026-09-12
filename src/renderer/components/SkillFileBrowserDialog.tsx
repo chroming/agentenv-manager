@@ -1,7 +1,8 @@
 import { type RefObject, useEffect, useState } from "react";
 import {
   FileWarning,
-  LoaderCircle
+  LoaderCircle,
+  RefreshCw
 } from "lucide-react";
 import type {
   SkillFileContent,
@@ -23,6 +24,7 @@ interface SkillFileBrowserDialogProps {
   update?: SkillUpdateInfo;
   profileNames?: string[];
   installations?: Array<{ agents: string; path: string; method: string; status: string }>;
+  inventoryNotice?: string;
   onUpdateSettings?(): void;
   onReviewProfiles?(): void;
   dialogRef: RefObject<HTMLElement | null>;
@@ -55,6 +57,7 @@ export const SkillFileBrowserDialog = ({
   update,
   profileNames = [],
   installations = [],
+  inventoryNotice,
   onUpdateSettings,
   onReviewProfiles,
   dialogRef,
@@ -70,11 +73,16 @@ export const SkillFileBrowserDialog = ({
   };
   const [tree, setTree] = useState<SkillFileNode[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [selectedPath, setSelectedPath] = useState("");
+  const [selection, setSelection] = useState<{ skillId: string; path: string }>();
+  const selectedPath = selection?.skillId === skill.id ? selection.path : "";
   const [file, setFile] = useState<SkillFileContent>();
   const [treeLoading, setTreeLoading] = useState(true);
   const [fileLoading, setFileLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [treeError, setTreeError] = useState("");
+  const [fileError, setFileError] = useState("");
+  const [reloadVersion, setReloadVersion] = useState(0);
+  const [fileRetryVersion, setFileRetryVersion] = useState(0);
+  const error = treeError || fileError;
   const [tab, setTab] = useState<"files" | "details">("files");
   useEffect(() => setTab("files"), [skill.id]);
   const detailItems = [
@@ -84,9 +92,9 @@ export const SkillFileBrowserDialog = ({
     ...(update?.sourceStatus === "removed" ? [{ label: t("Removed upstream"), value: t("The tracked source no longer contains this Skill. The Library copy is unchanged.") }] : []),
     { label: t("Check updates"), value: skill.updatePolicy === "tracked" ? t("Enabled") : t("No update checks") },
     { label: t("Profiles"), value: profileNames.join("\n") || t("Not referenced") },
-    { label: t("Agent copies"), value: installations.length ? installations.map((install) =>
+    { label: t("Agent copies"), value: [installations.length ? installations.map((install) =>
       `${install.agents} · ${install.method} · ${install.status}\n${install.path}`
-    ).join("\n\n") : t("Not installed") },
+    ).join("\n\n") : inventoryNotice ? undefined : t("No detected copies"), inventoryNotice].filter(Boolean).join("\n\n") },
     { label: t("Library path"), value: skill.path },
     { label: t("Source"), value: skill.source ?? skill.upstream?.locator ?? t("Local") },
     ...(skill.version ? [{ label: t("Version"), value: skill.version }] : []),
@@ -101,16 +109,18 @@ export const SkillFileBrowserDialog = ({
   useEffect(() => {
     let active = true;
     setTreeLoading(true);
-    setError("");
+    setTree([]);
+    setSelection(undefined);
+    setTreeError("");
     void onListFiles(skill.id)
       .then((nodes) => {
         if (!active) return;
         setTree(nodes);
         setExpanded(new Set(nodes.filter((node) => node.kind === "directory").map((node) => node.path)));
-        setSelectedPath(findSkillMarkdown(nodes) ?? firstFilePath(nodes) ?? "");
+        setSelection({ skillId: skill.id, path: findSkillMarkdown(nodes) ?? firstFilePath(nodes) ?? "" });
       })
       .catch((unknownError) => {
-        if (active) setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+        if (active) setTreeError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       })
       .finally(() => {
         if (active) setTreeLoading(false);
@@ -118,23 +128,25 @@ export const SkillFileBrowserDialog = ({
     return () => {
       active = false;
     };
-  }, [onListFiles, skill.id]);
+  }, [onListFiles, skill.id, reloadVersion]);
 
   useEffect(() => {
     if (!selectedPath) {
+      setFile(undefined);
+      setFileError("");
       setFileLoading(false);
       return;
     }
     let active = true;
     setFileLoading(true);
-    setError("");
+    setFileError("");
     setFile(undefined);
     void onReadFile(skill.id, selectedPath)
       .then((content) => {
         if (active) setFile(content);
       })
       .catch((unknownError) => {
-        if (active) setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+        if (active) setFileError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       })
       .finally(() => {
         if (active) setFileLoading(false);
@@ -142,7 +154,7 @@ export const SkillFileBrowserDialog = ({
     return () => {
       active = false;
     };
-  }, [onReadFile, selectedPath, skill.id]);
+  }, [onReadFile, selectedPath, skill.id, fileRetryVersion]);
 
   const renderNodes = (nodes: SkillFileNode[], depth = 0) =>
     nodes.map((node) => {
@@ -177,7 +189,7 @@ export const SkillFileBrowserDialog = ({
             className={`skill-file-tree__item is-file${selectedPath === node.path ? " is-selected" : ""}`}
             type="button"
             style={{ paddingInlineStart: `${27 + depth * 14}px` }}
-            onClick={() => setSelectedPath(node.path)}
+            onClick={() => setSelection({ skillId: skill.id, path: node.path })}
           >
             <FileTypeIcon kind="file" path={node.path} />
             <span>{node.name}</span>
@@ -217,6 +229,8 @@ export const SkillFileBrowserDialog = ({
               <LoaderCircle className="is-spinning" size={16} />
               {t("Loading files")}
             </div>
+          ) : treeError ? (
+            <div className="skill-file-browser__state">{t("Could not load files")}</div>
           ) : tree.length > 0 ? (
             <ul role="tree">{renderNodes(tree)}</ul>
           ) : (
@@ -238,6 +252,9 @@ export const SkillFileBrowserDialog = ({
               <div className="skill-file-browser__state is-error" role="alert">
                 <FileWarning size={17} />
                 <span>{error}</span>
+                <Button icon={<RefreshCw size={15} />} onClick={() => treeError
+                  ? setReloadVersion((value) => value + 1)
+                  : setFileRetryVersion((value) => value + 1)}>{t("Retry")}</Button>
               </div>
             ) : file?.kind === "binary" ? (
               <div className="skill-file-browser__state">
