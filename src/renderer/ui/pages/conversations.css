@@ -509,32 +509,6 @@
   padding: 6px 0 2px;
 }
 
-.conversation-refresh-overlay {
-  align-items: center;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  border-radius: var(--radius-surface);
-  color: var(--muted);
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  inset: 0;
-  justify-content: center;
-  padding: 24px;
-  position: absolute;
-  text-align: center;
-  z-index: var(--z-sticky);
-}
-
-.conversation-refresh-overlay strong {
-  color: var(--text);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-medium);
-}
-
-.conversation-refresh-overlay span {
-  font-size: var(--font-size-metadata);
-}
-
 .conversation-turn {
   border-bottom: 1px solid var(--border);
   padding: 17px 4px 19px;

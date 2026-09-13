@@ -29,7 +29,9 @@ it.skipIf(process.platform === "win32")("requires opt-in, searches local and SSH
   }
   const originals = await Promise.all(sourceFiles.map((p)=>readFile(p,"utf8")));
   const ssh = join(bin,"ssh");
-  await writeFile(ssh,`#!/bin/sh\nexport HOME=${JSON.stringify(remoteHome)}\nfor arg do last="$arg"; done\neval "$last"\n`); await chmod(ssh,0o755);
+  const scanGate = join(root, "scan-pending");
+  await writeFile(scanGate, "pending");
+  await writeFile(ssh,`#!/bin/sh\nexport HOME=${JSON.stringify(remoteHome)}\nwhile [ -f ${JSON.stringify(scanGate)} ]; do sleep 0.1; done\nfor arg do last="$arg"; done\neval "$last"\n`); await chmod(ssh,0o755);
   await writeFile(join(data,"settings.json"),JSON.stringify({locale:"en",enabledTargetIds:[],telemetryEnabled:false,skillAutoCheckEnabled:false,agentDiscoveryVersion:1,agentDiscoveryReviewedIds:["codex"]}));
   await writeFile(join(data,"remote-devices.json"),JSON.stringify({formatVersion:1,devices:[{id:"11111111-1111-4111-8111-111111111111",name:"Build machine",host:"fixture.invalid",createdAt:"2026-09-12T00:00:00.000Z",updatedAt:"2026-09-12T00:00:00.000Z"}]}));
   app = await electron.launch({executablePath:electronPath as unknown as string,args:[`--user-data-dir=${join(root,"electron")}`,join(process.cwd(),"out/main/main.js")],env:{...process.env,AGENTENV_AUTOMATION:"1",AGENTENV_HOME:home,AGENTENV_DATA_ROOT:data,AGENTENV_CACHE_ROOT:join(root,"cache"),AGENTENV_AUTOMATION_TARGET_PATH:bin,PATH:bin+delimiter+(process.env.PATH??"")}});
@@ -62,6 +64,18 @@ it.skipIf(process.platform === "win32")("requires opt-in, searches local and SSH
   }
   await page.setViewportSize({width:920,height:620});
   await dialog.getByRole("button",{name:"Enable search",exact:true}).click();
+  try {
+    await expect.poll(() => page.evaluate(async () => (await window.agentEnv.conversationHistoryStatus()).running)).toBe(true);
+    const search = page.getByRole("searchbox", { name: "Search conversations" });
+    await search.fill("needle", { timeout: 1500 });
+    await page.getByRole("button", { name: "More", exact: true }).click({ timeout: 1500 });
+    await page.getByRole("menuitem", { name: "History sources", exact: true }).click({ timeout: 1500 });
+    await dialog.waitFor();
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await search.fill("");
+  } finally {
+    await rm(scanGate, { force: true });
+  }
   await expect.poll(async () => (await page.evaluate(()=>window.agentEnv.listConversations({query:"needle"}))).total,{timeout:20000}).toBe(2);
   const openSources = async () => {
     await page.locator(".conversation-list-toolbar").getByRole("button",{name:"More",exact:true}).click();

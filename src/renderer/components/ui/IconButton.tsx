@@ -6,6 +6,7 @@ import { HoverDetail } from "../HoverDetail";
 
 interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "aria-label"> {
   busy?: boolean;
+  allowWhileBusy?: boolean;
   appearance?: "control" | "inline";
   label: string;
   size?: Exclude<ButtonSize, "prominent">;
@@ -18,6 +19,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
     {
       children,
       busy = false,
+      allowWhileBusy = false,
       appearance = "control",
       className = "",
       label,
@@ -66,7 +68,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         aria-busy={effectiveBusy}
         aria-label={label}
         className={`ui-icon-button ui-icon-button--${variant} ui-icon-button--${resolvedSize} ${appearance === "inline" ? "ui-icon-button--inline" : ""} ${className}`.trim()}
-        disabled={props.disabled || effectiveBusy}
+        disabled={props.disabled || (effectiveBusy && !allowWhileBusy)}
         type={type}
       >
         <span className="ui-icon-button__content">{children}</span>

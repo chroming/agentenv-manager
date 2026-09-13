@@ -35,6 +35,7 @@ interface ToolbarOverflowMenuProps {
   disabled?: boolean;
   items: ToolbarOverflowMenuItem[];
   busy?: boolean;
+  allowWhileBusy?: boolean;
   reserveSpace?: boolean;
 }
 
@@ -43,7 +44,7 @@ const viewportInset = 8;
 const anchorGap = 6;
 
 export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflowMenuProps>(
-  ({ label, menuLabel, disabled = false, busy = false, items, reserveSpace = false, triggerContent, triggerVariant = "icon", variant = "secondary" }, forwardedRef) => {
+  ({ label, menuLabel, disabled = false, busy = false, allowWhileBusy = false, items, reserveSpace = false, triggerContent, triggerVariant = "icon", variant = "secondary" }, forwardedRef) => {
     const density = useControlDensity() ?? "default";
     const [open, setOpen] = useState(false);
     const [style, setStyle] = useState<CSSProperties>();
@@ -117,6 +118,7 @@ export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflow
           onClick={() => setOpen((current) => !current)}
         >{triggerContent}</TagChip> : <IconButton
           busy={busy}
+          allowWhileBusy={allowWhileBusy}
           variant={variant}
           ref={(node) => {
             triggerRef.current = node;

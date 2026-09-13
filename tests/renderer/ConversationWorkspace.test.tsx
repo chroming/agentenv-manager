@@ -976,6 +976,32 @@ describe("ConversationWorkspace", () => {
     expect(await screen.findByText("Conversation copied")).toBeInTheDocument();
   });
 
+  it("keeps first-time history indexing inside the list without covering its controls", async () => {
+    const api = installApi();
+    api.listConversations.mockResolvedValue({
+      items: [], total: 0,
+      historyStatus: { config: { version: 1, enabled: true, paused: false, sources: [] }, needsConsent: false, running: false, sources: [], availableSources: [] }
+    });
+    let finishRefresh: (() => void) | undefined;
+    api.refreshConversations.mockImplementation(() => new Promise((resolve) => {
+      finishRefresh = () => resolve({ indexed: 0, unchanged: 0, removed: 0, failures: [], refreshedAt: new Date().toISOString() });
+    }));
+    const { container } = render(<ConversationWorkspace targets={[]} />);
+    await screen.findByRole("searchbox", { name: "Search conversations" });
+    act(() => window.dispatchEvent(new Event("agentenv-history-changed")));
+    try {
+      await waitFor(() => expect(api.refreshConversations).toHaveBeenCalled());
+      expect(container.querySelector(".conversation-refresh-overlay")).toBeNull();
+      expect(within(screen.getByRole("listbox")).getByText("Refreshing conversations")).toBeInTheDocument();
+      const search = screen.getByRole("searchbox", { name: "Search conversations" });
+      fireEvent.change(search, { target: { value: "needle" } });
+      expect(search).toHaveValue("needle");
+      expect(screen.getByRole("button", { name: "More" })).toBeEnabled();
+    } finally {
+      await act(async () => finishRefresh?.());
+    }
+  });
+
   it("keeps cached history interactive while manual Refresh stays on its control", async () => {
     let finishRefresh: (() => void) | undefined;
     const api = installApi();

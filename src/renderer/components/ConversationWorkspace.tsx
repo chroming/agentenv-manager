@@ -1681,8 +1681,6 @@ export const ConversationWorkspace = ({
           <MasterDetailLayout
             appearance="canvas"
             className="conversation-layout"
-            inert={manualRefreshing && items.length === 0}
-            aria-hidden={manualRefreshing && items.length === 0 || undefined}
           >
           <aside className="conversation-list-pane" aria-label={t("Conversation list")}>
             <div className="conversation-list-toolbar">
@@ -1780,9 +1778,9 @@ export const ConversationWorkspace = ({
                   </div>
                 </FilterPopover>
                 <HistorySearchSettings renderTrigger={(openSources) => (
-                  <ToolbarOverflowMenu label={t("More")} menuLabel={t("Conversations")} busy={refreshBusy} items={[
+                  <ToolbarOverflowMenu label={t("More")} menuLabel={t("Conversations")} busy={refreshBusy} allowWhileBusy items={[
                     { id: "refresh", label: t("Refresh"), icon: <RefreshCw size={15} />,
-                      disabled: !historyStatus?.config.enabled || historyStatus.config.paused,
+                      disabled: refreshBusy || !historyStatus?.config.enabled || historyStatus.config.paused,
                       onSelect: () => void refresh() },
                     { id: "sources", label: t("History sources"), icon: <Settings2 size={15} />,
                       title: t("Search approved local and SSH histories. Background indexing runs every five minutes while the app is open."),
@@ -1807,13 +1805,18 @@ export const ConversationWorkspace = ({
               className="conversation-list"
               ref={conversationListRef}
               role="listbox"
-              aria-busy={loading || searching}
+              aria-busy={loading || searching || refreshBusy || historyStatus?.running}
               onScroll={updateConversationListEnd}
             >
               {loading ? (
                 <div className="conversation-empty">
                   <LoaderCircle className="is-spinning" size={19} aria-hidden="true" />
                   <span>{t("Loading conversations")}</span>
+                </div>
+              ) : items.length === 0 && (refreshBusy || historyStatus?.running) ? (
+                <div className="conversation-empty" role="status" aria-live="polite">
+                  <LoaderCircle className="is-spinning" size={19} aria-hidden="true" />
+                  <span>{t("Refreshing conversations")}</span>
                 </div>
               ) : items.length === 0 ? (
                 <div className="conversation-empty">
@@ -2268,13 +2271,6 @@ export const ConversationWorkspace = ({
             )}
           </article>
           </MasterDetailLayout>
-          {manualRefreshing && items.length === 0 ? (
-            <div className="conversation-refresh-overlay" role="status" aria-live="polite">
-              <LoaderCircle className="is-spinning" size={22} aria-hidden="true" />
-              <strong>{t("Refreshing conversations")}</strong>
-              <span>{t("Scanning enabled Agents and updating the local index.")}</span>
-            </div>
-          ) : null}
         </div>}
 
         {sourceLocationOpen && detail?.origin ? <ModalFrame className="ui-dialog-shell" ariaLabel={t("History location")} dialogRef={sourceLocationRef} onDismiss={()=>setSourceLocationOpen(false)}>
