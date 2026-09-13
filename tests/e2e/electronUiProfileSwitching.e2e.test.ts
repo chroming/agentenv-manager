@@ -1,3 +1,4 @@
+import { setSkillCatalogStatus, openSkillCatalogAction } from "./skillCatalogControls";
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { access } from "node:fs/promises";
@@ -1319,7 +1320,7 @@ const openSkillLibrary = async (page: Page) => {
 };
 
 const openLocalSkills = async (page: Page) => {
-  await page.getByRole("button", { name: "Local Skills", exact: true }).click();
+  await openSkillCatalogAction(page, "Local Skills");
 };
 
 const openSharedSkills = async (page: Page) => {
@@ -1535,6 +1536,59 @@ afterEach(async () => {
 });
 
 describe("Electron UI profile switching e2e", () => {
+  it.each(["en", "zh_CN"] as const)("keeps the Skill catalog to two control rows in %s", async (locale) => {
+    const { page } = await launchApp({ locale, skillGroupFixture: true, openCodeAlphaLibrarySkillCount: 12 });
+    const captureDir = process.env.AGENTENV_REVIEW_SCREENSHOTS;
+    if (captureDir) await mkdir(captureDir, { recursive: true });
+    for (const width of [920, 1180, 1440]) {
+      await resizeAppWindow(page, width, width === 920 ? 620 : 900);
+      for (let mode = 0; mode < 3; mode += 1) {
+        await page.locator(".library-page-header [role=tab]").nth(mode).click();
+        const toolbar = page.locator(".skill-library-panel [role=toolbar]:visible");
+        await toolbar.waitFor();
+        expect(await toolbar.count()).toBe(1);
+        expect(await page.locator(".library-quick-tabs").count()).toBe(0);
+        const geometry = await toolbar.evaluate((row) => {
+          const header = document.querySelector(".library-page-header")!;
+          const bounds = row.getBoundingClientRect();
+          const headerBox = header.getBoundingClientRect();
+          const controls = [...row.querySelectorAll("button,input")].map((node) => node.getBoundingClientRect()).filter((box) => box.width > 0);
+          const heading = header.querySelector("h2")!.getBoundingClientRect();
+          const tab = header.querySelector('[role="tab"]')!.getBoundingClientRect();
+          return {
+            belowHeader: bounds.top >= headerBox.bottom - 1 && bounds.top - headerBox.bottom <= 16,
+            headerAligned: Math.abs(heading.top + heading.height / 2 - tab.top - tab.height / 2) <= 8,
+            contained: controls.every((box) => box.left >= bounds.left && box.right <= bounds.right + 1),
+            aligned: controls.every((box) => Math.abs(box.top + box.height / 2 - controls[0]!.top - controls[0]!.height / 2) <= 1),
+            overflow: document.documentElement.scrollWidth > window.innerWidth
+          };
+        });
+        await page.mouse.move(4, 4);
+        await page.waitForTimeout(200);
+        if (mode === 2) {
+          const groupToggle = page.locator(".skill-group-card .ui-resource-disclosure__trigger").first();
+          if (await groupToggle.getAttribute("aria-expanded") !== "true") await groupToggle.click();
+          await page.mouse.move(4, 4);
+        }
+        if (captureDir) await page.screenshot({ animations: "disabled", path: join(captureDir, `catalog-${locale}-${mode}-${width}.png`) });
+        expect(geometry, JSON.stringify({ header: await page.locator(".library-page-header").boundingBox(), toolbar: await toolbar.boundingBox() })).toEqual({ belowHeader: true, headerAligned: true, contained: true, aligned: true, overflow: false });
+        await toolbar.locator('[aria-haspopup="dialog"]').click();
+        const filter = page.locator(".ui-filter-popover__panel");
+        await filter.waitFor();
+        const before = await toolbar.boundingBox();
+        expect(await filter.locator("select").count()).toBeGreaterThan(0);
+        expect(await filter.evaluate((panel) => panel.scrollWidth <= panel.clientWidth)).toBe(true);
+        if (captureDir && width === 920) await page.screenshot({ path: join(captureDir, `catalog-filter-${locale}-${mode}.png`) });
+        await page.keyboard.press("Escape");
+        expect(await filter.count()).toBe(0);
+        expect(await toolbar.boundingBox()).toEqual(before);
+        await toolbar.locator('[aria-haspopup="menu"]').click();
+        expect(await page.getByRole("menuitem").count()).toBeGreaterThanOrEqual(2);
+        await page.keyboard.press("Escape");
+      }
+    }
+  }, standardElectronTestTimeout);
+
   it("aligns local and linked Skill sources and uses compact single-line preferences", async () => {
     const { page, appDataRoot } = await launchApp();
     for (const { id, sourceType, source } of mixedSkillSources) {
@@ -2275,7 +2329,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await skillScroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(100);
     await page.getByRole("searchbox", { name: "Search skills" }).fill("layout-skill");
     expect(await skillScroller.evaluate((element) => element.scrollTop)).toBe(0);
-    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    await page.getByRole("button", { name: /^Filters/ }).click();
     await page.getByRole("combobox", { name: "Skill source filter" }).selectOption("local");
     await page.getByRole("combobox", { name: "Skill usage filter" }).selectOption("referenced");
     await page
@@ -2642,19 +2696,18 @@ describe("Electron UI profile switching e2e", () => {
         await search.fill("");
         await expect.poll(() => allRows.count()).toBe(testCase.count + 4);
       }
-      const statusFilter = page.getByRole("group", { name: "Skill status filters" });
       for (let run = 0; run < 4; run += 1) {
         const startedAt = await page.evaluate(() => performance.now());
-        await statusFilter.getByRole("button", { name: /^Updates/ }).click();
+        await setSkillCatalogStatus(page, "updates");
         await expect.poll(() => allRows.count()).toBe(testCase.count);
         const duration = (await page.evaluate(() => performance.now())) - startedAt;
         if (run > 0) filterRuns.push(duration);
-        await statusFilter.getByRole("button", { name: /^Enabled/ }).click();
+        await setSkillCatalogStatus(page, "enabled");
         await expect.poll(() => allRows.count()).toBe(testCase.count + 4);
       }
 
       await expect.poll(() => allRows.count()).toBe(testCase.count + 4);
-      const filtersTrigger = page.getByRole("button", { name: "Filters", exact: true });
+      const filtersTrigger = page.getByRole("button", { name: /^Filters/ });
       await filtersTrigger.click();
       const filterPanel = page.getByRole("group", { name: "Skill filters" });
       const filterGeometry = await filterPanel.evaluate((panel) => {
@@ -3736,12 +3789,12 @@ describe("Electron UI profile switching e2e", () => {
 
     const sharedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     await sharedRow.waitFor({ state: "visible" });
-    const [refreshIconClass, checkIconClass] = await Promise.all([
-      page.getByRole("button", { name: "Refresh skills" })
-        .locator(".ui-icon-button__content svg").getAttribute("class"),
-      page.getByRole("button", { name: "Check updates" })
-        .locator(".ui-button__content svg").getAttribute("class")
-    ]);
+    const checkIconClass = await page.getByRole("button", { name: "Check updates" })
+      .locator("svg").getAttribute("class");
+    await page.getByRole("button", { name: "More Skill actions" }).click();
+    const refreshIconClass = await page.getByRole("menuitem", { name: "Refresh", exact: true })
+      .locator("svg").getAttribute("class");
+    await page.keyboard.press("Escape");
     expect(refreshIconClass).toContain("lucide-refresh-cw");
     expect(checkIconClass).toContain("lucide-search-check");
     expect(checkIconClass).not.toBe(refreshIconClass);
@@ -8689,7 +8742,7 @@ describe("Electron UI profile switching e2e", () => {
       "utf8"
     );
     await search.fill("Refresh Button");
-    await page.getByRole("button", { name: "Refresh skills" }).click();
+    await openSkillCatalogAction(page, "Refresh");
 
     await page.getByRole("group", { name: "Library item refresh-button" }).waitFor({
       state: "visible"
@@ -9068,7 +9121,7 @@ describe("Electron UI profile switching e2e", () => {
     );
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Refresh skills" }).click();
+    await openSkillCatalogAction(page, "Refresh");
     await page.getByRole("button", { name: "Check updates" }).click();
     const updateRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     const staticRow = page.getByRole("group", { name: "Library item static-layout-reference" });
@@ -9239,7 +9292,7 @@ describe("Electron UI profile switching e2e", () => {
         const refreshBox = await refresh.boundingBox();
         expect(refreshBox!.width).toBe(refreshBox!.height);
         if (name !== "Groups") {
-          const filters = toolbar.getByRole("button", { name: "Filters", exact: true });
+          const filters = toolbar.getByRole("button", { name: /^Filters/ });
           expect(await filters.textContent()).toBe("");
           await filters.hover();
           await expect.poll(() => page.getByRole("tooltip").textContent()).toBe("Filters");
@@ -9286,7 +9339,7 @@ describe("Electron UI profile switching e2e", () => {
       "utf8"
     );
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Refresh skills" }).click();
+    await openSkillCatalogAction(page, "Refresh");
     await page
       .getByRole("group", { name: "Library item batch-helper" })
       .waitFor({ state: "visible" });
@@ -9461,7 +9514,7 @@ describe("Electron UI profile switching e2e", () => {
       "utf8"
     );
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Refresh skills" }).click();
+    await openSkillCatalogAction(page, "Refresh");
     await page
       .getByRole("group", { name: "Library item missing-source-helper" })
       .waitFor({ state: "visible" });
@@ -11385,8 +11438,7 @@ describe("Electron UI profile switching e2e", () => {
       )).globallyEnabled
     ).toBe(false);
     await expect.poll(() => libraryRow.count()).toBe(0);
-    const statusFilter = page.getByRole("group", { name: "Skill status filters" });
-    await statusFilter.getByRole("button", { name: /^Disabled/ }).click();
+    await setSkillCatalogStatus(page, "disabled");
     await libraryRow.waitFor({ state: "visible" });
     await expect.poll(() => libraryRow.textContent()).toContain("Disabled");
     expect(await libraryRow.getAttribute("class")).toContain("is-globally-disabled");
@@ -11396,12 +11448,12 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => libraryRow.evaluate((row) => getComputedStyle(row).boxShadow))
       .toBe("none");
-    expect(await statusFilter.getByRole("button", { name: /^Disabled/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(await page.locator(".catalog-filters__summary").textContent()).toBe("Disabled");
     expect(await page.getByRole("group", { name: /^Library item / }).count()).toBe(1);
-    await statusFilter.getByRole("button", { name: /^Updates/ }).click();
+    await setSkillCatalogStatus(page, "updates");
     expect(await page.getByRole("group", { name: "Library item layout-skill-1" }).count()).toBe(0);
-    await statusFilter.getByRole("button", { name: /^Enabled/ }).click();
-    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    await setSkillCatalogStatus(page, "enabled");
+    await page.getByRole("button", { name: /^Filters/ }).click();
     const usageFilter = page.getByRole("combobox", { name: "Skill usage filter" });
     await usageFilter.selectOption("referenced");
     expect(await page.getByRole("group", { name: "Library item layout-skill-1" }).count()).toBe(0);
@@ -11430,7 +11482,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(fileExists(installedSkillDir)).resolves.toBe(false);
 
     await openSkillLibrary(page);
-    await statusFilter.getByRole("button", { name: /^Disabled/ }).click();
+    await setSkillCatalogStatus(page, "disabled");
     await libraryRow.getByRole("button", { name: "More actions for layout-skill-1" }).click();
     await page.getByRole("menuitem", { name: /Enable globally/ }).click();
     await expect.poll(async () =>

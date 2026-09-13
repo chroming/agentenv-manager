@@ -226,12 +226,16 @@ describe("SkillLibraryPanel", () => {
       fireEvent.click(screen.getByRole("menuitem", { name: "AI tags..." }));
       return screen.getByRole("dialog", { name: "AI tags" });
     };
-    fireEvent.click(screen.getByRole("button", { name: "Updates (1)" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Skill status filters" }), { target: { value: "updates" } });
+    fireEvent.keyDown(document, { key: "Escape" });
     let dialog = await openTags();
     await waitFor(() => expect(prepare).toHaveBeenLastCalledWith(["updated"], "en"));
     expect(within(dialog).getAllByRole("checkbox", { name: /^Select / })).toHaveLength(2);
     fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
-    fireEvent.click(screen.getByRole("button", { name: "All" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Skill status filters" }), { target: { value: "all" } });
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.getByRole("button", { name: "current" })).toBeInTheDocument();
     dialog = await openTags();
     await waitFor(() => expect(prepare).toHaveBeenLastCalledWith(["updated", "current", "disabled"], "en"));
@@ -992,7 +996,7 @@ describe("SkillLibraryPanel", () => {
       search: "github",
       scrollTop: 0
     });
-    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
     expect(screen.getByRole("group", { name: "Skill filters" })).toBeInTheDocument();
     fireEvent.change(screen.getByRole("combobox", { name: "Skill usage filter" }), {
       target: { value: "referenced" }
@@ -1004,7 +1008,7 @@ describe("SkillLibraryPanel", () => {
     });
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("group", { name: "Skill filters" })).not.toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Filters" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Filters/ })).toHaveFocus());
 
     expect(screen.getByRole("region", { name: "Skill library" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Import skills" })).not.toBeInTheDocument();

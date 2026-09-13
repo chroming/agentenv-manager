@@ -2623,7 +2623,6 @@ summary {
 }
 
 .library-control-deck {
-  border-bottom: 1px solid var(--border);
   display: grid;
   gap: 0;
   position: relative;

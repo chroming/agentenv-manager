@@ -25,11 +25,13 @@ import {
   DialogHeader,
   EmptyState,
   IconButton,
+  InteractiveStatus,
   ModalFrame,
   ResourcePanelToolbar,
   ResourceDisclosureSection,
   ResourceRow,
   SearchField,
+  SelectControl,
   TextAction,
   TextField,
   ToolbarOverflowMenu
@@ -37,8 +39,11 @@ import {
 import { SkillMaintenanceStatus } from "./SkillMaintenanceStatus";
 import { SkillMaintenanceAction } from "./SkillMaintenanceAction";
 import { skillMaintenanceState } from "../skillMaintenanceState";
+import { CatalogFilters } from "./skillLibrary/CatalogFilters";
 
 interface SkillGroupViewProps {
+  catalogMenuItems?: import("./ui/ToolbarOverflowMenu").ToolbarOverflowMenuItem[];
+  onFilterChange?(filter: "all" | "updates"): void;
   filter?: "all" | "updates";
   updates?: SkillUpdateInfo[];
   updateActivity?: SkillUpdateActivity;
@@ -70,6 +75,7 @@ const emptyDraft = (): GroupDraft => ({
 });
 
 export const SkillGroupView = ({
+  catalogMenuItems = [], onFilterChange = () => undefined,
   active,
   groups = [],
   skills = [],
@@ -166,6 +172,15 @@ export const SkillGroupView = ({
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
         <div className="library-toolbar-actions">
+          <CatalogFilters count={Number(filter !== "all")} summary={t("Updates")}>
+            <div className="catalog-filter-fields"><label><span>{t("Status")}</span>
+              <SelectControl controlWidth="fill" aria-label={t("Skill status filters")} value={filter}
+                onChange={(event) => onFilterChange(event.currentTarget.value as "all" | "updates")}>
+                <option value="all">{t("All")}</option><option value="updates">{t("Updates")}</option>
+              </SelectControl></label>
+              <Button disabled={filter === "all"} onClick={() => onFilterChange("all")}>{t("Reset")}</Button>
+            </div>
+          </CatalogFilters>
           {onCheckUpdates ? <SkillMaintenanceAction action="check" busy={checkingGroup === "all"}
             disabled={Boolean(updateActivity) || visibleCheckIds.length === 0}
             onClick={() => void checkGroup("all", visibleCheckIds)} /> : null}
@@ -173,12 +188,9 @@ export const SkillGroupView = ({
             disabled={Boolean(updateActivity)}
             busy={updateActivity?.kind === "preview-skills"}
             onClick={() => void onPreviewUpdates(visibleUpdateIds)} /> : null}
-        <Button
-          icon={<Plus size={15} strokeWidth={2.2} />}
-          onClick={() => setDraft(emptyDraft())}
-        >
-          {t("New group")}
-        </Button>
+          <ToolbarOverflowMenu label={t("More Skill actions")} menuLabel={t("Skill actions")}
+            items={[{ id: "new-group", label: t("New group"), icon: <Plus size={15} />,
+              onSelect: () => setDraft(emptyDraft()) }, ...catalogMenuItems]} />
         </div>
       </ResourcePanelToolbar>
 
@@ -206,12 +218,9 @@ export const SkillGroupView = ({
               key={group.id}
               actions={(
                 <>
-                  {updateIds.length > 0 ? <SkillMaintenanceStatus state="update"
+                  {checkingGroup === group.id ? <InteractiveStatus size="metadata" statusKind="working" label={t("Checking...")} busy /> : updateIds.length > 0 ? <SkillMaintenanceStatus state="update"
                     disabled={Boolean(updateActivity)}
                     onReview={() => void onPreviewUpdates?.(updateIds)} /> : null}
-                  {onCheckUpdates && (checkIds.length > 0 || checkingGroup === group.id) ? <IconButton label={t("Check updates")} variant="ghost" size="compact"
-                    busy={checkingGroup === group.id} disabled={Boolean(updateActivity) || checkIds.length === 0}
-                    onClick={() => void checkGroup(group.id, checkIds)}><SearchCheck size={14} /></IconButton> : null}
                   <IconButton
                     label={t("Add Skills to {{name}}", { name: group.name })}
                     size="compact"
@@ -223,6 +232,9 @@ export const SkillGroupView = ({
                   <ToolbarOverflowMenu
                     variant="ghost"
                     items={[
+                      ...(onCheckUpdates ? [{ id: "check", label: t("Check updates"), icon: <SearchCheck size={14} />,
+                        disabled: Boolean(updateActivity) || Boolean(checkingGroup) || checkIds.length === 0,
+                        onSelect: () => { void checkGroup(group.id, checkIds); } }] : []),
                       {
                         id: "edit",
                         icon: <Pencil size={14} strokeWidth={2.1} />,

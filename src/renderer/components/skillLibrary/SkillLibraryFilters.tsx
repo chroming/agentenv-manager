@@ -7,6 +7,7 @@ import { Button, SelectControl } from "../ui";
 interface SkillLibraryFiltersProps {
   availableTags: readonly string[];
   activeCount: number;
+  statusFilter: SkillLibraryViewState["statusFilter"];
   sourceFilter: SkillLibraryViewState["sourceFilter"];
   tagFilter: SkillLibraryViewState["tagFilter"];
   targetFilter: SkillLibraryViewState["targetFilter"];
@@ -18,6 +19,7 @@ interface SkillLibraryFiltersProps {
 export function SkillLibraryFilters({
   availableTags,
   activeCount,
+  statusFilter,
   sourceFilter,
   tagFilter,
   targetFilter,
@@ -28,7 +30,17 @@ export function SkillLibraryFilters({
   const { t } = useI18n();
 
   return (
-    <div className="library-filter-panel" role="group" aria-label={t("Skill filters")}>
+    <div className="catalog-filter-fields" role="group" aria-label={t("Skill filters")}>
+      <label>
+        <span>{t("Status")}</span>
+        <SelectControl controlWidth="fill" aria-label={t("Skill status filters")} value={statusFilter}
+          onChange={(event) => onChange({ statusFilter: event.currentTarget.value as typeof statusFilter })}>
+          <option value="all">{t("All")}</option>
+          <option value="enabled">{t("Enabled")}</option>
+          <option value="updates">{t("Updates")}</option>
+          <option value="disabled">{t("Disabled")}</option>
+        </SelectControl>
+      </label>
       <label>
         <span>{t("Source")}</span>
         <SelectControl

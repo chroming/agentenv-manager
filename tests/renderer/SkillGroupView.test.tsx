@@ -44,7 +44,8 @@ describe("SkillGroupView", () => {
       ]}
       onCheckUpdates={onCheckUpdates} onPreviewUpdate={onPreviewUpdate} onPreviewUpdates={onPreviewUpdates}
       onCreate={vi.fn()} onUpdate={vi.fn()} onRemove={vi.fn()} />);
-    fireEvent.click(screen.getAllByRole("button", { name: "Check updates" })[1]);
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Tools" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Check updates" }));
     await waitFor(() => expect(onCheckUpdates).toHaveBeenCalledWith(["online", "gone"]));
     fireEvent.click(screen.getByRole("button", { name: "Update available" }));
     expect(onPreviewUpdates).toHaveBeenCalledWith(["online"]);
@@ -78,7 +79,10 @@ describe("SkillGroupView", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: "New group" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New group" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More Skill actions" }));
+    expect(screen.getByRole("menuitem", { name: "New group" })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.getByRole("button", { name: "Add Skills to Review pack" }))
       .toBeInTheDocument();
     expect(screen.queryByText("Organize reusable Skills for faster Profile setup.")).not.toBeInTheDocument();

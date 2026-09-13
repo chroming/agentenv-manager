@@ -874,6 +874,13 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   min-height: var(--control-height-default);
 }
 
+.ui-page-header__navigation {
+  align-self: center;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .freshness-status {
   align-items: center;
   color: var(--muted);

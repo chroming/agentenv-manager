@@ -1296,3 +1296,31 @@ button.skill-tag-chip:focus-visible {
   flex: 1 1 180px;
   min-width: 0;
 }
+.catalog-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.catalog-filters__summary {
+  color: var(--muted);
+  font-size: var(--font-size-caption);
+  white-space: nowrap;
+}
+
+.catalog-filter-fields {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.catalog-filter-fields label {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.catalog-filter-fields label > span {
+  color: var(--muted);
+  font-size: var(--font-size-caption);
+}

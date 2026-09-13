@@ -342,7 +342,7 @@ describe("SkillSourceView", () => {
       />
     );
 
-    const filters = screen.getByRole("button", { name: "Filters" });
+    const filters = screen.getByRole("button", { name: /^Filters/ });
     fireEvent.click(filters);
     fireEvent.change(screen.getByRole("combobox", { name: "Source type filter" }), {
       target: { value: "online" }
@@ -388,7 +388,8 @@ describe("SkillSourceView", () => {
     );
 
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Merge" }));
+    fireEvent.click(screen.getByRole("button", { name: "More Skill actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Merge" }));
     const checkboxes = screen.getAllByRole("checkbox");
     const rows = document.querySelectorAll<HTMLElement>(".skill-source-group");
     fireEvent.pointerDown(checkboxes[0]!.closest("label")!, { button: 0 });
@@ -427,13 +428,16 @@ describe("SkillSourceView", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Merge" }));
+    fireEvent.click(screen.getByRole("button", { name: "More Skill actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Merge" }));
     expect(screen.getAllByRole("checkbox")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Merge selected (0)" })).toBeDisabled();
     fireEvent.click(screen.getAllByRole("checkbox")[0]!);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Merge" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Merge" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More Skill actions" }));
+    expect(screen.getByRole("menuitem", { name: "Merge" })).toBeEnabled();
   });
 
   it("expands from the source row without stealing nested actions", () => {
@@ -692,7 +696,8 @@ describe("SkillSourceView", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Merge" }));
+    fireEvent.click(screen.getByRole("button", { name: "More Skill actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Merge" }));
     const checkboxes = screen.getAllByRole("checkbox");
     fireEvent.click(checkboxes[0]!);
     fireEvent.click(checkboxes[1]!);
@@ -839,7 +844,8 @@ describe("SkillSourceView", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Merge" }));
+    fireEvent.click(screen.getByRole("button", { name: "More Skill actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Merge" }));
     const checkboxes = screen.getAllByRole("checkbox");
     fireEvent.click(checkboxes[0]!);
     fireEvent.click(checkboxes[1]!);

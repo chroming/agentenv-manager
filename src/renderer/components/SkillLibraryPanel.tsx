@@ -18,11 +18,11 @@ import {
   Folder,
   GitBranch,
   Link2Off,
-  ListFilter,
   LoaderCircle,
   MoreHorizontal,
   Power,
   RefreshCw,
+  ScanLine,
   RotateCcw,
   Search,
   SearchCheck,
@@ -127,7 +127,7 @@ import { SkillTagSuggestionsDialog } from "./SkillTagSuggestionsDialog";
 import { useAIPreferences } from "../hooks/useAIPreferences";
 import { LocalSkillAnalysis } from "./LocalSkillAnalysis";
 import { SkillLibraryFilters } from "./skillLibrary/SkillLibraryFilters";
-import { FilterTrigger } from "./ui/FilterTrigger";
+import { CatalogFilters } from "./skillLibrary/CatalogFilters";
 import { CleanupBucketHeader } from "./CleanupBucketHeader";
 import { BulkSkillUpdateDialog } from "./BulkSkillUpdateDialog";
 import { SkillImportDialog } from "./SkillImportDialog";
@@ -193,6 +193,8 @@ import {
 type SkillMenuAction = "update" | "review" | "availability" | "tags" | "settings" | "merge" | "remove";
 
 interface SkillLibraryPanelProps {
+  onOpenLocalSkills?(): void;
+  onRefreshSkills?(): void;
   model: SkillLibraryPanelModel;
   actions: SkillLibraryPanelActions;
 }
@@ -200,7 +202,8 @@ interface SkillLibraryPanelProps {
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
-export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) => {
+export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefreshSkills }: SkillLibraryPanelProps) => {
+  const { formatDate, localeTag, t } = useI18n();
   const {
     status,
     catalog,
@@ -256,11 +259,16 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     updateActivity
   } = updates;
   const { activeTool, importConflictOpen = false } = workspace;
+  const catalogMenuItems = [
+    ...(onOpenLocalSkills ? [{ id: "local-skills", label: t("Local Skills"), icon: <ScanLine size={15} />,
+      onSelect: onOpenLocalSkills }] : []),
+    { id: "refresh", label: t("Refresh"), icon: <RefreshCw size={15} />,
+      disabled: status.isRefreshingInventory, onSelect: () => { if (onRefreshSkills) onRefreshSkills(); else void inventory.onRefreshInventory(); } }
+  ];
   const { viewState, searchInputRef } = view;
   const {
     onCloseTool,
     onFocusCollectionHandled,
-    onLibraryModeChange,
     onCleanupScopeChange,
     onViewStateChange,
     scrollOwnerRef
@@ -332,7 +340,6 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
     onCloseBulkUpdatePreview,
     onCheckUpdates
   } = updateActions;
-  const { formatDate, localeTag, t } = useI18n();
   const [githubUrl, setGithubUrl] = useState("");
   const [githubScanResult, setGithubScanResult] = useState<GitHubSkillScanResult>();
   const {
@@ -389,7 +396,6 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   >({});
   const [githubApiRetryAvailable, setGithubApiRetryAvailable] = useState(false);
   const { search, sourceFilter, statusFilter, tagFilter, targetFilter, usageFilter } = viewState;
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [sourceScopeFilter, setSourceScopeFilter] =
     useState<SkillSourceScopeFilter>("monitored");
   const [sourceResultFilter, setSourceResultFilter] =
@@ -494,11 +500,9 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   const modalInitialFocusRef = useRef<HTMLButtonElement>(null);
   const modalFallbackFocusRef = useRef<HTMLElement>(null);
   const actionReturnFocusRef = useRef<HTMLElement>(null);
-  const filterTriggerRef = useRef<HTMLButtonElement>(null);
   const { updatesById, skillsById, skillNameCounts, updateableSkillIds } =
     buildSkillLibraryLookups(librarySkills, skillUpdates);
   const availableTags = useMemo(() => collectSkillTags(librarySkills), [librarySkills]);
-  const availableUpdateCount = updateableSkillIds.length;
   useEffect(() => {
     if (
       tagFilter !== "all" &&
@@ -638,11 +642,6 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
         window.requestAnimationFrame(() => actionReturnFocusRef.current?.focus());
         return;
       }
-      if (filtersOpen) {
-        setFiltersOpen(false);
-        window.requestAnimationFrame(() => filterTriggerRef.current?.focus());
-        return;
-      }
       if (activeTool) {
         if (activeTool === "import" && githubOperation && !repositoryOperationCancelable) {
           return;
@@ -657,7 +656,7 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTool, filtersOpen, githubOperation, onCloseTool, openActionId, repositoryOperationCancelable]);
+  }, [activeTool, githubOperation, onCloseTool, openActionId, repositoryOperationCancelable]);
   useModalDialog({
     open: modalOpen,
     dialogRef: modalDialogRef,
@@ -1761,48 +1760,6 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
       {summaryHistoryId ? <SkillSummaryHistoryDialog id={summaryHistoryId} onClose={() => setSummaryHistoryId(undefined)} /> : null}
       {tagAnalysisSkills ? <SkillTagSuggestionsDialog skills={tagAnalysisSkills} vocabulary={availableTags} onSave={onSetTags} onClose={() => setTagAnalysisSkills(undefined)} /> : null}
       <div className="library-control-deck">
-        <div className="library-quick-tabs">
-          <TabBar
-            className="library-mode-switch"
-            label={t("Skill library view")}
-            onChange={onLibraryModeChange}
-            options={[
-              { value: "skills", label: t("Skill list") },
-              { value: "sources", label: t("By source") },
-              { value: "groups", label: t("Groups") }
-            ]}
-            value={libraryMode}
-          />
-          {libraryMode === "skills" ? (
-            <SegmentedControl
-              className="ui-segmented-control--compact"
-              label={t("Skill status filters")}
-              value={statusFilter}
-              onChange={(value) => updateControls({ statusFilter: value as SkillLibraryViewState["statusFilter"] })}
-              options={[
-                { value: "all", label: t("All") },
-                { value: "enabled", label: t("Enabled") },
-                { value: "updates", label: `${t("Updates")} (${availableUpdateCount})` },
-                { value: "disabled", label: t("Disabled") }
-              ]}
-            />
-          ) : libraryMode === "sources" ? (
-            <SegmentedControl
-              className="ui-segmented-control--compact"
-              label={t("Source check scope")}
-              value={sourceScopeFilter}
-              onChange={(value) => setSourceScopeFilter(value as SkillSourceScopeFilter)}
-              options={[
-                { value: "all", label: t("All") },
-                { value: "monitored", label: t("Monitored") },
-                { value: "manual", label: t("Manual only") }
-              ]}
-            />
-          ) : libraryMode === "groups" ? <SegmentedControl className="ui-segmented-control--compact"
-            label={t("Skill status filters")} value={groupFilter} onChange={(value) => setGroupFilter(value as "all" | "updates")}
-            options={[{ value: "all", label: t("All") },
-              { value: "updates", label: `${t("Updates")} (${skillGroups.filter((group) => group.skillIds.some((id) => updateableSkillIds.includes(id))).length})` }]} /> : null}
-        </div>
         <ResourcePanelToolbar variant="catalog" className="library-toolbar" hidden={libraryMode !== "skills"}>
           <SearchField
               fieldClassName="library-catalog-search"
@@ -1814,15 +1771,20 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               onChange={(event) => updateControls({ search: event.currentTarget.value })}
             />
           <div className="library-toolbar-actions">
-          <FilterTrigger
-            label={t("Filters")}
-            activeCount={advancedFilterCount}
-            aria-expanded={filtersOpen}
-            ref={filterTriggerRef}
-            onClick={() => setFiltersOpen((current) => !current)}
-          >
-            <ListFilter size={15} strokeWidth={2.2} />
-          </FilterTrigger>
+          <CatalogFilters count={advancedFilterCount + Number(statusFilter !== "all")}
+            summary={statusFilter === "enabled" ? t("Enabled") : statusFilter === "updates" ? t("Updates") : statusFilter === "disabled" ? t("Disabled") : undefined}>
+            <SkillLibraryFilters
+              availableTags={availableTags}
+              activeCount={advancedFilterCount + Number(statusFilter !== "all")}
+              statusFilter={statusFilter}
+              sourceFilter={sourceFilter}
+              tagFilter={tagFilter}
+              targetFilter={targetFilter}
+              usageFilter={usageFilter}
+              onChange={updateControls}
+              onReset={() => updateControls({ ...resetSkillLibraryFilterPatch, statusFilter: "all" })}
+            />
+          </CatalogFilters>
           <SkillMaintenanceAction action="check"
             busy={checkingAllUpdates}
             disabled={updateActivityBusy}
@@ -1835,23 +1797,11 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               onClick={() => onPreviewAllLibrarySkillUpdates(updateableSkillIds)}
             />
           ) : null}
-          {aiPreferences.enabled("tags") ? <ToolbarOverflowMenu label={t("More Skill actions")} menuLabel={t("Skill actions")} items={[{
+          <ToolbarOverflowMenu label={t("More Skill actions")} menuLabel={t("Skill actions")} items={[...catalogMenuItems, ...(aiPreferences.enabled("tags") ? [{
             id: "ai-tags", label: t("AI tags..."), icon: <Sparkles size={15} />, disabled: filteredSkills.length === 0,
             onSelect: () => setTagAnalysisSkills(filteredSkills)
-          }]} /> : null}
+          }] : [])]} />
           </div>
-          {filtersOpen ? (
-            <SkillLibraryFilters
-              availableTags={availableTags}
-              activeCount={advancedFilterCount}
-              sourceFilter={sourceFilter}
-              tagFilter={tagFilter}
-              targetFilter={targetFilter}
-              usageFilter={usageFilter}
-              onChange={updateControls}
-              onReset={() => updateControls(resetSkillLibraryFilterPatch)}
-            />
-          ) : null}
         </ResourcePanelToolbar>
       </div>
 
@@ -2203,6 +2153,8 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
       </section>
 
       <SkillSourceView
+        catalogMenuItems={catalogMenuItems}
+        onScopeFilterChange={setSourceScopeFilter}
         active={libraryMode === "sources"}
         updateActivity={updateActivity}
         groups={sourceGroups}
@@ -2231,6 +2183,8 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
       />
 
       <SkillGroupView
+        catalogMenuItems={catalogMenuItems}
+        onFilterChange={setGroupFilter}
         active={libraryMode === "groups"}
         filter={groupFilter}
         updates={skillUpdates}

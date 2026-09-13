@@ -14,7 +14,6 @@ import {
   EyeOff,
   ExternalLink,
   GitMerge,
-  ListFilter,
   LoaderCircle,
   MoreHorizontal,
   Pencil,
@@ -43,7 +42,7 @@ import type {
 } from "../libraryViewState";
 import type { SkillUpdateActivity } from "../skillUpdateActivity";
 import { useModalDialog } from "../hooks/useModalDialog";
-import { FilterTrigger } from "./ui/FilterTrigger";
+import { CatalogFilters } from "./skillLibrary/CatalogFilters";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
 import { SkillMaintenanceStatus } from "./SkillMaintenanceStatus";
@@ -67,6 +66,8 @@ import {
 } from "./ui";
 
 interface SkillSourceViewProps {
+  catalogMenuItems?: import("./ui/ToolbarOverflowMenu").ToolbarOverflowMenuItem[];
+  onScopeFilterChange?(filter: SkillSourceScopeFilter): void;
   active: boolean;
   updateActivity?: SkillUpdateActivity;
   groups: SkillSourceGroupView[];
@@ -128,6 +129,8 @@ const mergeErrorSummary = (message: string) => {
 };
 
 export const SkillSourceView = ({
+  catalogMenuItems = [],
+  onScopeFilterChange = () => undefined,
   active,
   updateActivity,
   groups,
@@ -153,7 +156,6 @@ export const SkillSourceView = ({
 }: SkillSourceViewProps) => {
   const { formatDate, t } = useI18n();
   const [search, setSearch] = useState("");
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [checking, setChecking] = useState<Set<string>>(new Set());
   const [checkingAll, setCheckingAll] = useState(false);
@@ -180,8 +182,6 @@ export const SkillSourceView = ({
   const renameDialogRef = useRef<HTMLElement>(null);
   const sourceMenuRef = useRef<HTMLDivElement>(null);
   const sourceMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const filterTriggerRef = useRef<HTMLButtonElement>(null);
-  const filterPanelRef = useRef<HTMLDivElement>(null);
   const selectionDragRef = useRef<{ selected: boolean; visited: Set<string> } | undefined>(undefined);
   const suppressSelectionClickRef = useRef(false);
   const normalizedSearch = search.trim().toLocaleLowerCase();
@@ -235,6 +235,10 @@ export const SkillSourceView = ({
     () => groups.filter((group) => mergeSelection.has(group.sourceId)),
     [groups, mergeSelection]
   );
+  const visibleUpdateIds = [...new Set(visibleGroups.flatMap((group) => group.candidates.flatMap((candidate) =>
+    candidate.state === "update" && candidate.libraryId && candidate.globallyEnabled !== false && candidate.updatePolicy !== "untracked"
+      ? [candidate.libraryId] : []
+  )))];
   const mergeIsLocal = selectedMergeGroups.length > 0 && selectedMergeGroups.every(
     (group) => group.sourceKind === "local"
   );
@@ -285,28 +289,6 @@ export const SkillSourceView = ({
     };
   }, [selectionDragging]);
 
-  useEffect(() => {
-    if (!filtersOpen) return;
-    const dismissFilters = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (filterPanelRef.current?.contains(target) || filterTriggerRef.current?.contains(target)) {
-        return;
-      }
-      setFiltersOpen(false);
-    };
-    const dismissFiltersOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      setFiltersOpen(false);
-      filterTriggerRef.current?.focus();
-    };
-    document.addEventListener("pointerdown", dismissFilters);
-    document.addEventListener("keydown", dismissFiltersOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", dismissFilters);
-      document.removeEventListener("keydown", dismissFiltersOnEscape);
-    };
-  }, [filtersOpen]);
 
   useEffect(() => {
     if (!sourceMenu) return;
@@ -638,21 +620,45 @@ export const SkillSourceView = ({
             value={search}
             onChange={(event) => setSearch(event.currentTarget.value)}
           />
-        <FilterTrigger
-          label={t("Filters")}
-          activeCount={activeFilterCount}
-          aria-expanded={filtersOpen}
-          ref={filterTriggerRef}
-          onClick={() => setFiltersOpen((current) => !current)}
-        >
-          <ListFilter size={15} strokeWidth={2.2} />
-        </FilterTrigger>
+        <div className="library-toolbar-actions">
+        <CatalogFilters count={activeFilterCount + Number(scopeFilter !== "all")}
+          summary={scopeFilter === "monitored" ? t("Monitored") : scopeFilter === "manual" ? t("Manual only") : undefined}>
+          <div className="catalog-filter-fields" role="group" aria-label={t("Source filters")}>
+            <label><span>{t("Source check scope")}</span>
+              <SelectControl controlWidth="fill" aria-label={t("Source check scope")} value={scopeFilter}
+                onChange={(event) => onScopeFilterChange(event.currentTarget.value as SkillSourceScopeFilter)}>
+                <option value="all">{t("All")}</option>
+                <option value="monitored">{t("Monitored")}</option>
+                <option value="manual">{t("Manual only")}</option>
+              </SelectControl>
+            </label>
+            <label><span>{t("Type")}</span>
+              <SelectControl controlWidth="fill" aria-label={t("Source type filter")} value={sourceKindFilter}
+                onChange={(event) => onSourceKindFilterChange(event.currentTarget.value as SkillSourceKindFilter)}>
+                <option value="all">{t("All types")}</option><option value="online">{t("Online")}</option><option value="local">{t("Local")}</option>
+              </SelectControl>
+            </label>
+            <label><span>{t("Result")}</span>
+              <SelectControl controlWidth="fill" aria-label={t("Source result filter")} value={resultFilter}
+                onChange={(event) => onResultFilterChange(event.currentTarget.value as SkillSourceResultFilter)}>
+                <option value="all">{t("All results")}</option><option value="changes">{t("Changes")}</option>
+                <option value="failed">{t("Failed")}</option><option value="not-checked">{t("Not checked")}</option>
+              </SelectControl>
+            </label>
+            <Button icon={<RotateCcw size={15} />} disabled={activeFilterCount === 0 && scopeFilter === "all"}
+              onClick={() => { onScopeFilterChange("all"); onSourceKindFilterChange("all"); onResultFilterChange("all"); }}>{t("Reset")}</Button>
+          </div>
+        </CatalogFilters>
         <SkillMaintenanceAction action="check" scope="sources"
           busy={activeCheckingAll}
           disabled={activeCheckingAll || checking.size > 0 || Boolean(activeCheckingSourceId) || Boolean(operation) || monitoredSourceCount === 0}
           onClick={() => void runCheckMonitored()}
         />
-        {canMergeSources ? (
+        {visibleUpdateIds.length > 0 && !mergeSelectionMode ? <SkillMaintenanceAction action="update"
+          busy={operation?.startsWith("review\0") || updateActivity?.kind === "preview-skills"}
+          disabled={activeCheckingAll || Boolean(operation) || Boolean(updateActivity)}
+          onClick={() => void runReviewUpdates(visibleUpdateIds)} /> : null}
+        {canMergeSources && mergeSelectionMode ? (
           <Button
             icon={<GitMerge size={15} strokeWidth={2.2} />}
             disabled={(mergeSelectionMode && mergeSelection.size < 2) || activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
@@ -663,6 +669,9 @@ export const SkillSourceView = ({
               : t("Merge")}
           </Button>
         ) : null}
+        <ToolbarOverflowMenu label={t("More Skill actions")} menuLabel={t("Skill actions")}
+          items={[...catalogMenuItems, ...(canMergeSources ? [{ id: "merge", label: t("Merge"), icon: <GitMerge size={15} />,
+            disabled: activeCheckingAll || Boolean(updateActivity) || Boolean(operation), onSelect: () => setMergeSelectionMode(true) }] : [])]} />
         {mergeSelectionMode ? (
           <IconButton
             className="skill-source-exit-selection"
@@ -674,57 +683,7 @@ export const SkillSourceView = ({
             <X />
           </IconButton>
         ) : null}
-        {filtersOpen ? (
-          <div
-            className="library-filter-panel skill-source-filter-panel"
-            ref={filterPanelRef}
-            role="group"
-            aria-label={t("Source filters")}
-          >
-            <label>
-              <span>{t("Type")}</span>
-              <SelectControl controlWidth="compact"
-                aria-label={t("Source type filter")}
-                value={sourceKindFilter}
-                onChange={(event) =>
-                  onSourceKindFilterChange(
-                    event.currentTarget.value as SkillSourceKindFilter
-                  )}
-              >
-                <option value="all">{t("All types")}</option>
-                <option value="online">{t("Online")}</option>
-                <option value="local">{t("Local")}</option>
-              </SelectControl>
-            </label>
-            <label>
-              <span>{t("Result")}</span>
-              <SelectControl controlWidth="compact"
-                aria-label={t("Source result filter")}
-                value={resultFilter}
-                onChange={(event) =>
-                  onResultFilterChange(
-                    event.currentTarget.value as SkillSourceResultFilter
-                  )}
-              >
-                <option value="all">{t("All results")}</option>
-                <option value="changes">{t("Changes")}</option>
-                <option value="failed">{t("Failed")}</option>
-                <option value="not-checked">{t("Not checked")}</option>
-              </SelectControl>
-            </label>
-            <Button
-              className="library-filter-reset"
-              icon={<RotateCcw size={15} strokeWidth={2.2} />}
-              disabled={activeFilterCount === 0}
-              onClick={() => {
-                onSourceKindFilterChange("all");
-                onResultFilterChange("all");
-              }}
-            >
-              {t("Reset")}
-            </Button>
-          </div>
-        ) : null}
+        </div>
       </ResourcePanelToolbar>
 
       <div

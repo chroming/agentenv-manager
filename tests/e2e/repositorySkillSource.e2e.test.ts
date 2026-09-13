@@ -1,3 +1,4 @@
+import { setSkillCatalogStatus, openSkillCatalogAction } from "./skillCatalogControls";
 import { constants } from "node:fs";
 import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
@@ -210,11 +211,13 @@ describe("Repository Skill source", () => {
 
     await page.getByRole("tab", { name: "By source" }).click();
     expect(await page.getByRole("group", { name: "Skill status filters" }).count()).toBe(0);
-    const scopeFilter = page.getByRole("group", { name: "Source check scope" });
-    expect(await scopeFilter.getByRole("button", { name: /Monitored/ }).getAttribute("aria-pressed")).toBe("true");
-    expect(await scopeFilter.getByRole("button", { name: "Manual only (0)" }).count()).toBe(1);
+    await page.getByRole("button", { name: /^Filters/ }).click();
+    const scopeFilter = page.getByRole("combobox", { name: "Source check scope" });
+    expect(await scopeFilter.inputValue()).toBe("monitored");
+    expect(await scopeFilter.locator('option[value="manual"]').count()).toBe(1);
+    await page.keyboard.press("Escape");
     expect(await page.getByRole("button", { name: "Refresh skills" }).count()).toBe(0);
-    expect(await page.getByRole("button", { name: "Refresh sources" }).count()).toBe(1);
+    expect(await page.getByRole("button", { name: "Refresh sources" }).count()).toBe(0);
     expect(await page.getByRole("button", { name: "Check updates" }).count()).toBe(1);
     const sourceGroup = page.locator(".skill-source-group");
     const sourceStatus = sourceGroup.locator(
@@ -282,7 +285,7 @@ describe("Repository Skill source", () => {
     await expectSourceLaneGeometry(1180, 760);
     await expectSourceLaneGeometry(1536, 900);
     await page.setViewportSize({ width: 920, height: 620 });
-    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    await page.getByRole("button", { name: /^Filters/ }).click();
     const sourceFilterPanel = page.getByRole("group", { name: "Source filters" });
     expect(await sourceFilterPanel.evaluate((panel) => {
       const bounds = panel.getBoundingClientRect();
@@ -474,7 +477,7 @@ describe("Repository Skill source", () => {
     await page.getByRole("tab", { name: "Skill list" }).click();
     const removedRow = page.getByRole("group", { name: "Library item release-check-internal" });
     await removedRow.getByText("Removed upstream", { exact: true }).waitFor({ state: "visible" });
-    await page.getByRole("group", { name: "Skill status filters" }).getByRole("button", { name: /^Updates/ }).click();
+    await setSkillCatalogStatus(page, "updates");
     expect(await removedRow.count()).toBe(0);
     const captureDir = "/tmp/agentenv-source-alignment-evidence"; await mkdir(captureDir, { recursive: true });
     for (const locale of ["en", "zh_CN", "zh_TW"] as const) {
@@ -523,7 +526,7 @@ describe("Repository Skill source", () => {
     await memberPreview.waitFor();
     await memberPreview.getByRole("button", { name: "Cancel", exact: true }).click();
     await page.getByRole("tab", { name: "Skill list", exact: true }).click();
-    await page.getByRole("group", { name: "Skill status filters" }).getByRole("button", { name: /^All/ }).click();
+    await setSkillCatalogStatus(page, "all");
     for (const [width, height] of [[920, 620], [1440, 900]]) {
       await page.setViewportSize({ width, height });
       await page.screenshot({ path: join(captureDir, `library-en-${width}.png`) });
@@ -587,7 +590,7 @@ describe("Repository Skill source", () => {
     await page.getByRole("tab", { name: "By source" }).click();
     await expect.poll(() => page.locator(".skill-source-group").count()).toBe(2);
     expect(await page.locator(".skill-source-list").getByRole("checkbox").count()).toBe(0);
-    await page.getByRole("button", { name: "Merge", exact: true }).click();
+    await openSkillCatalogAction(page, "Merge");
     const sourceChoices = page.locator(".skill-source-list").getByRole("checkbox");
     const selectionRails = page.locator(".skill-source-select");
     const firstChoice = await selectionRails.nth(0).boundingBox();

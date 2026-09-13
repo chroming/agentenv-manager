@@ -6,6 +6,7 @@ interface PageHeaderProps {
   className?: string;
   description?: ReactNode;
   help?: ReactNode;
+  navigation?: ReactNode;
   title: string;
 }
 
@@ -14,6 +15,7 @@ export const PageHeader = ({
   className = "",
   description,
   help,
+  navigation,
   title
 }: PageHeaderProps) => {
   const classes = Array.from(
@@ -29,6 +31,7 @@ export const PageHeader = ({
         </h2>
         {description ? <p>{description}</p> : null}
       </div>
+      {navigation ? <div className="ui-page-header__navigation">{navigation}</div> : null}
       {actions ? (
         <ControlDensityProvider density="default">
           <div className="ui-page-header__actions">{actions}</div>

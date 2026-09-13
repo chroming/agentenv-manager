@@ -1,3 +1,4 @@
+import { setSkillCatalogStatus, openSkillCatalogAction } from "./skillCatalogControls";
 import { createServer, type Server } from "node:http";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -43,7 +44,7 @@ it("analyzes two local versions before import, configures in place and leaves or
   });
   const page = await app.firstWindow(); page.setDefaultTimeout(10_000);
   await page.getByRole("button", { name: "Skills", exact: true }).click();
-  await page.getByRole("button", { name: "Local Skills", exact: true }).click();
+  await openSkillCatalogAction(page, "Local Skills");
   const group = page.getByRole("group", { name: "Cleanup group review" });
   await group.getByRole("button", { name: "Add to Library review", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Review skill cleanup" });

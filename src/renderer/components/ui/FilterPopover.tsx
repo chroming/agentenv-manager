@@ -61,7 +61,10 @@ export const FilterPopover = ({
       event.preventDefault();
       close(true);
     };
-    const dismissForViewportChange = () => close();
+    const dismissForViewportChange = (event: Event) => {
+      if (event.target instanceof Node && panelRef.current?.contains(event.target)) return;
+      close();
+    };
     document.addEventListener("mousedown", dismiss);
     document.addEventListener("keydown", escape);
     window.addEventListener("resize", dismissForViewportChange);

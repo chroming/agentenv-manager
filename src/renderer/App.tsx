@@ -145,6 +145,7 @@ import {
   InspectorHeader,
   ObjectSwitcher,
   PageHeader,
+  TabBar,
   RefreshAction,
   StatusHint,
   SingleObjectWorkspace,
@@ -3693,6 +3694,13 @@ const AppContent = ({
             <PageHeader
               className="page-header library-page-header"
               title={t("Skills")}
+              navigation={<TabBar label={t("Skill library view")} value={skillLibraryMode}
+                onChange={(value) => setSkillLibraryMode(value as "skills" | "sources" | "groups")}
+                options={[
+                  { value: "skills", label: t("Skill list") },
+                  { value: "sources", label: t("By source") },
+                  { value: "groups", label: t("Groups") }
+                ]} />}
               help={
                 <InfoTip
                   label={t("Manage reusable Skills, their sources, updates, and local copies.")}
@@ -3700,20 +3708,14 @@ const AppContent = ({
               }
               actions={
                 <LibraryHeaderActions
-                  mode={skillLibraryMode}
                   toolOpen={Boolean(skillLibraryTool)}
-                  freshness={freshnessStates["skill-library"]}
                   onImport={() => setSkillLibraryTool("import")}
-                  onScanLocal={() => {
-                    void openSkillDiscoveries();
-                  }}
-                  onRefresh={() => {
-                    void refreshSkills();
-                  }}
                 />
               }
             />
             <SkillLibraryPanel
+              onOpenLocalSkills={() => { void openSkillDiscoveries(); }}
+              onRefreshSkills={() => { void refreshSkills(); }}
               model={{
                 status: {
                   isLoading,

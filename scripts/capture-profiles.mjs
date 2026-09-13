@@ -1295,7 +1295,8 @@ try {
   await page.getByRole("dialog", { name: "Rename source" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-source-rename-920x620.png"));
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Merge", exact: true }).click();
+  await page.getByRole("button", { name: "More Skill actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Merge", exact: true }).click();
   const sourceSelections = page.locator(".skill-source-list").getByRole("checkbox");
   await sourceSelections.nth(0).check();
   await sourceSelections.nth(1).check();
@@ -1323,9 +1324,13 @@ try {
   await capturePage(page, join(outputDir, "skills-groups-expanded-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("tab", { name: "Skill list" }).click();
-  await page.getByRole("group", { name: "Skill status filters" }).getByRole("button", { name: /^Disabled/ }).click();
+  await page.getByRole("button", { name: /^Filters/ }).click();
+  await page.getByRole("combobox", { name: "Skill status filters" }).selectOption("disabled");
+  await page.keyboard.press("Escape");
   await capturePage(page, join(outputDir, "skills-disabled-920x620.png"));
-  await page.getByRole("group", { name: "Skill status filters" }).getByRole("button", { name: /^Enabled/ }).click();
+  await page.getByRole("button", { name: /^Filters/ }).click();
+  await page.getByRole("combobox", { name: "Skill status filters" }).selectOption("enabled");
+  await page.keyboard.press("Escape");
   const skillSearch = page.getByRole("searchbox", { name: "Search skills" });
   await skillSearch.fill("no-such-skill");
   await capturePage(page, join(outputDir, "skills-empty-920x620.png"));
@@ -1519,7 +1524,8 @@ try {
   await capturePage(page, join(outputDir, "skills-delete-confirmation-920x620.png"));
   await page.keyboard.press("Escape");
 
-  await page.getByRole("button", { name: "Local Skills" }).click();
+  await page.getByRole("button", { name: "More Skill actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Local Skills", exact: true }).click();
   const cleanupGroup = page.getByRole("group", {
     name: "Cleanup group cross-agent-review-workflow-with-a-long-name"
   });
@@ -1591,7 +1597,8 @@ try {
   await page.evaluate(() => window.agentEnv.setSharedSkillAreaMode("profiles-only"));
   await page.reload();
   await page.getByRole("button", { name: "Skills", exact: true }).click();
-  await page.getByRole("button", { name: "Local Skills" }).click();
+  await page.getByRole("button", { name: "More Skill actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Local Skills", exact: true }).click();
   await page.getByRole("region", { name: "Local Skills Manager" })
     .waitFor({ state: "visible", timeout: 5_000 });
   await page.getByRole("button", { name: "Review shared folder" }).click();

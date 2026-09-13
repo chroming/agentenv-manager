@@ -1042,6 +1042,9 @@ describe("renderer UI primitives", () => {
     expect(screen.getByRole("dialog", { name: "Filter conversations" }))
       .toHaveClass("ui-filter-popover__panel");
 
+    fireEvent.scroll(screen.getByRole("dialog", { name: "Filter conversations" }));
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "Filter conversations" }))
       .not.toBeInTheDocument();
