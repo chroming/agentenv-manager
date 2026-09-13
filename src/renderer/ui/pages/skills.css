@@ -158,6 +158,10 @@
   min-width: 0;
 }
 
+.skill-library-panel .skill-title-stack {
+  padding-top: 0;
+}
+
 .skill-library-panel .skill-title-preview {
   display: block;
   min-width: 0;
@@ -165,20 +169,24 @@
 }
 
 .skill-title-line .skill-title {
+  display: block;
   font-weight: var(--font-weight-medium);
+  line-height: 18px;
   min-width: 0;
   text-wrap: nowrap;
   white-space: nowrap;
 }
 
 .library-skill-name-button {
+  align-items: center;
   background: transparent;
   border: 0;
   border-radius: var(--radius-tight);
   cursor: pointer;
-  display: block;
+  display: flex;
   max-width: 100%;
   min-width: 0;
+  min-height: var(--control-height-compact);
   overflow: hidden;
   padding: 1px 2px;
   text-align: left;
@@ -224,6 +232,7 @@
 .skill-library-panel .library-source-cell,
 .skill-library-panel .library-status-cell {
   align-content: center;
+  align-items: center;
   display: grid;
   gap: 0;
   grid-template-columns: minmax(0, 1fr);

@@ -254,3 +254,8 @@
     line-height: 16px;
   }
 }
+
+.catalog-status-heading {
+  /* Match the status primitive's 13px icon and 5px gap. */
+  padding-inline-start: 18px;
+}

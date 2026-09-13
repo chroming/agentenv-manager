@@ -242,6 +242,10 @@ describe("Repository Skill source", () => {
         const statusContent = status.firstElementChild as HTMLElement;
         const statusLabel = row.querySelector<HTMLElement>(".skill-source-status-label")!;
         const more = row.querySelector<HTMLElement>(".skill-source-more")!;
+        const statusHeaderRange = document.createRange();
+        statusHeaderRange.selectNodeContents(headerCells[2]!);
+        const rowRect = row.getBoundingClientRect();
+        const labelRect = statusLabel.getBoundingClientRect();
         return {
           columnCount: getComputedStyle(row).gridTemplateColumns.replace(/\[[^\]]*\]/g, "").trim().split(/\s+/).length,
           countsHeaderLeft: headerCells[1]!.getBoundingClientRect().left,
@@ -257,7 +261,9 @@ describe("Repository Skill source", () => {
           moreRight: more.getBoundingClientRect().right,
           rowRight: row.getBoundingClientRect().right,
           rowScrollContained: row.scrollWidth <= row.clientWidth + 1,
-          statusHeaderLeft: headerCells[2]!.getBoundingClientRect().left,
+          statusHeaderLeft: statusHeaderRange.getBoundingClientRect().left,
+          statusLabelLeft: labelRect.left,
+          statusCenterOffset: Math.abs(labelRect.top + labelRect.height / 2 - rowRect.top - rowRect.height / 2),
           statusContentLeft: statusContent.getBoundingClientRect().left,
           statusLeft: status.getBoundingClientRect().left,
           statusFits: statusLabel.scrollWidth <= statusLabel.clientWidth + 1,
@@ -274,12 +280,17 @@ describe("Repository Skill source", () => {
       expect(Math.abs(geometry.identityTextLeft - geometry.sourceHeaderLeft)).toBeLessThanOrEqual(1);
       expect(geometry.statusFits).toBe(true);
       expect(Math.abs(geometry.countsLeft - geometry.countsHeaderLeft)).toBeLessThanOrEqual(1);
-      expect(Math.abs(geometry.statusLeft - geometry.statusHeaderLeft)).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.statusLabelLeft - geometry.statusHeaderLeft)).toBeLessThanOrEqual(1);
+      expect(geometry.statusCenterOffset).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.statusContentLeft - geometry.statusLeft)).toBeLessThanOrEqual(1);
       expect(geometry.statusToMoreGap).toBeGreaterThanOrEqual(7);
       expect(Math.abs(geometry.moreLeft - geometry.moreHeaderLeft)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.moreRight - geometry.rowRight + 12)).toBeLessThanOrEqual(1);
       expect(geometry.columnCount).toBe(6);
+      if (process.env.AGENTENV_LIBRARY_LAYOUT_CAPTURE_DIR) {
+        await mkdir(process.env.AGENTENV_LIBRARY_LAYOUT_CAPTURE_DIR, { recursive: true });
+        await page.screenshot({ path: join(process.env.AGENTENV_LIBRARY_LAYOUT_CAPTURE_DIR, `source-${width}.png`) });
+      }
     };
     await expectSourceLaneGeometry(920, 620);
     await expectSourceLaneGeometry(1180, 760);
@@ -316,15 +327,17 @@ describe("Repository Skill source", () => {
         const status = group.querySelector(".skill-source-status")!.getBoundingClientRect();
         const statusLabel = group.querySelector(".skill-source-status .ui-interactive-status__label")!.getBoundingClientRect();
         const actions = group.querySelector(".skill-source-more")!.getBoundingClientRect();
+        const moreButtonRight = group.querySelector(".skill-source-more button")!.getBoundingClientRect().right;
         return [...group.querySelectorAll<HTMLElement>(".skill-source-candidate")].map((row) => ({
           statusDelta: Math.abs(row.querySelector(".skill-source-state")!.getBoundingClientRect().left - status.left),
           labelDelta: Math.abs(row.querySelector(".skill-source-state .ui-interactive-status__label")!.getBoundingClientRect().left - statusLabel.left),
           actionsDelta: Math.abs(row.querySelector(".skill-source-candidate-action")!.getBoundingClientRect().left - actions.left),
+          actionButtonDelta: Math.abs((row.querySelector(".skill-source-candidate-action button")?.getBoundingClientRect().right ?? moreButtonRight) - moreButtonRight),
           overflow: row.scrollWidth > row.clientWidth + 1
         }));
       });
       expect(lanes.length).toBeGreaterThan(0);
-      expect(lanes.every((row) => row.statusDelta <= 1 && row.labelDelta <= 1 && row.actionsDelta <= 1 && !row.overflow), JSON.stringify({ width, lanes })).toBe(true);
+      expect(lanes.every((row) => row.statusDelta <= 1 && row.labelDelta <= 1 && row.actionsDelta <= 1 && row.actionButtonDelta <= 1 && !row.overflow), JSON.stringify({ width, lanes })).toBe(true);
     }
     await page.setViewportSize({ width: 920, height: 620 });
     await candidateTitle.focus();

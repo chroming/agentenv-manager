@@ -42,7 +42,16 @@ export const useModalDialog = ({
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const initialControl = initialFocusRef?.current;
     const firstControl = dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
-    (initialControl ?? firstControl ?? dialogRef.current)?.focus({ preventScroll: true });
+    const focusTarget = initialControl ?? firstControl ?? dialogRef.current;
+    // Initial dialog focus is navigation, not a request for a control tooltip.
+    if (focusTarget) {
+      focusTarget.setAttribute("data-dialog-autofocus", "true");
+      try {
+        focusTarget.focus({ preventScroll: true });
+      } finally {
+        focusTarget.removeAttribute("data-dialog-autofocus");
+      }
+    }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" && event.key !== "Tab") {

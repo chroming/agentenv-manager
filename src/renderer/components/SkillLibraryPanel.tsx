@@ -1815,7 +1815,7 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
             <span>{t("Skill")}</span>
             {availableTags.length > 0 ? <span>{t("Tags")}</span> : null}
             <span>{t("Source")}</span>
-            <span className="library-column-label">{t("Status")}</span>
+            <span className="library-column-label catalog-status-heading">{t("Status")}</span>
             <span aria-label={t("More")} />
           </div>
           {isLoading && librarySkills.length === 0 ? (

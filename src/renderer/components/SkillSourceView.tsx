@@ -696,7 +696,7 @@ export const SkillSourceView = ({
             {mergeSelectionMode ? <span aria-hidden="true" /> : null}
             <span>{t("Source")}</span>
             <span>{t("Skills")}</span>
-            <span>{t("Status")}</span>
+            <span className="catalog-status-heading">{t("Status")}</span>
             <span aria-label={t("More")} />
           </div>
         ) : null}
@@ -889,6 +889,7 @@ export const SkillSourceView = ({
                   ) : null}
                 </div>
                 <InteractiveStatus
+                  size="metadata"
                   busy={reviewingGroup}
                   className={statusClassName}
                   disabled={activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}

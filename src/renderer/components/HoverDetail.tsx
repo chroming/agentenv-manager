@@ -257,7 +257,9 @@ export const HoverDetail = ({
   const triggerProps: HTMLAttributes<HTMLElement> = {
     "aria-describedby": isOpen ? popoverId : undefined,
     onBlur: scheduleClose,
-    onFocus: open,
+    onFocus: (event) => {
+      if (!(event.target instanceof Element && event.target.closest("[data-dialog-autofocus]"))) open();
+    },
     onMouseEnter: scheduleOpen,
     onMouseLeave: () => { cancelOpen(); scheduleClose(); },
     onPointerEnter: renderTrigger ? (event) => { if (event.pointerType !== "touch") scheduleOpen(); } : undefined,

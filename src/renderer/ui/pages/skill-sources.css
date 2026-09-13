@@ -450,7 +450,7 @@
   align-items: center;
   display: flex;
   gap: 2px;
-  justify-content: flex-start;
+  justify-content: flex-end;
   min-width: 0;
 }
 

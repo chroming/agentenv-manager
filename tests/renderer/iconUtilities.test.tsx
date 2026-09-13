@@ -4,10 +4,33 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Copy, ListFilter } from "lucide-react";
 import { FilterTrigger, IconButton } from "../../src/renderer/components/ui";
+import { useModalDialog } from "../../src/renderer/hooks/useModalDialog";
 
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe("quiet icon utilities", () => {
+  it("does not show a tooltip for modal autofocus, but keeps hover and subsequent focus hints", () => {
+    vi.useFakeTimers();
+    function Dialog() {
+      const dialogRef = createRef<HTMLDivElement>();
+      const initialFocusRef = createRef<HTMLButtonElement>();
+      useModalDialog({ open: true, dialogRef, initialFocusRef, onDismiss: vi.fn() });
+      return <div ref={dialogRef} role="dialog" aria-modal="true">
+        <IconButton ref={initialFocusRef} label="Close"><Copy /></IconButton>
+      </div>;
+    }
+    render(<Dialog />);
+    const close = screen.getByRole("button", { name: "Close" });
+    expect(close).toHaveFocus();
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    fireEvent.mouseEnter(close);
+    act(() => vi.advanceTimersByTime(300));
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Close");
+    fireEvent.pointerDown(close);
+    fireEvent.blur(close);
+    fireEvent.focus(close);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Close");
+  });
   it("keeps the button as the layout and focus anchor while exposing a delayed tooltip", () => {
     vi.useFakeTimers();
     const ref = createRef<HTMLButtonElement>();

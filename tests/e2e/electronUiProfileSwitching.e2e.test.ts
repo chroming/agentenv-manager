@@ -2252,6 +2252,9 @@ describe("Electron UI profile switching e2e", () => {
     await skillNameButton.click();
     const filesDialog = page.getByRole("dialog", { name: "Files in ZIP Review" });
     await filesDialog.waitFor({ state: "visible" });
+    await expect.poll(() => filesDialog.getByRole("button", { name: "Close", exact: true })
+      .evaluate((button) => button === document.activeElement)).toBe(true);
+    expect(await page.getByRole("tooltip").filter({ hasText: /^Close$/ }).count()).toBe(0);
     const skillMarkdown = filesDialog.getByRole("button", { name: "SKILL.md" });
     await skillMarkdown.waitFor({ state: "visible" });
     await expect(skillMarkdown.locator('[data-file-icon="markdown"]').count()).resolves.toBe(1);
@@ -9321,9 +9324,12 @@ describe("Electron UI profile switching e2e", () => {
           const sourceText = source.querySelector(".library-source-name")!.getBoundingClientRect();
           const actionButton = more.querySelector("button")!.getBoundingClientRect();
           const center = rowRect.top + rowRect.height / 2;
+          const headerStatusRange = document.createRange();
+          headerStatusRange.selectNodeContents(headerCells[2]!);
           return {
             sourceHeaderOffset: sourceText.left - headerCells[1]!.getBoundingClientRect().left,
-            statusHeaderOffset: statusRect.left - headerCells[2]!.getBoundingClientRect().left,
+            statusHeaderOffset: statusLabel.getBoundingClientRect().left - headerStatusRange.getBoundingClientRect().left,
+            statusRowCenterOffset: Math.abs(statusLabel.getBoundingClientRect().top + statusLabel.getBoundingClientRect().height / 2 - center),
             actionHeaderOffset: moreRect.right - headerCells[3]!.getBoundingClientRect().right,
             sourceRowCenterOffset: Math.abs(sourceText.top + sourceText.height / 2 - center),
             actionRowCenterOffset: Math.abs(actionButton.top + actionButton.height / 2 - center),
@@ -9390,6 +9396,7 @@ describe("Electron UI profile switching e2e", () => {
         expect(Math.abs(row.statusHeaderOffset), JSON.stringify(row)).toBeLessThanOrEqual(1);
         expect(Math.abs(row.actionHeaderOffset), JSON.stringify(row)).toBeLessThanOrEqual(1);
         expect(row.sourceRowCenterOffset, JSON.stringify(row)).toBeLessThanOrEqual(1);
+        expect(row.statusRowCenterOffset, JSON.stringify(row)).toBeLessThanOrEqual(1);
         expect(row.actionRowCenterOffset, JSON.stringify(row)).toBeLessThanOrEqual(1);
         expect(row.sourceHasLeadingIcon).toBe(false);
         expect(row.actionCellCount).toBe(0);
@@ -11506,6 +11513,28 @@ describe("Electron UI profile switching e2e", () => {
         join(appDataRoot, "skills-library", "layout-skill-1", ".agentenv-skill.json")
       )).tags
     ).toEqual(["Frontend"]);
+    for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+      await resizeAppWindow(page, width!, height!);
+      const offsets = await taggedRow.evaluate((row) => {
+        const headers = [...document.querySelectorAll(".library-table__head > span")];
+        const textRect = (node: Element) => {
+          const range = document.createRange();
+          range.selectNodeContents(node);
+          return range.getBoundingClientRect();
+        };
+        const bounds = row.getBoundingClientRect();
+        return [".skill-title", ".skill-tag-cell", ".library-source-name", ".ui-interactive-status__label"].map((selector, i) => {
+          const rect = row.querySelector(selector)!.getBoundingClientRect();
+          return { x: Math.abs(rect.left - textRect(headers[i]!).left),
+            y: Math.abs(rect.top + rect.height / 2 - bounds.top - bounds.height / 2) };
+        });
+      });
+      expect(offsets.every(({ x, y }) => x <= 1 && y <= 1), JSON.stringify({ width, offsets })).toBe(true);
+      if (process.env.AGENTENV_LIBRARY_LAYOUT_CAPTURE_DIR) {
+        await page.screenshot({ path: join(process.env.AGENTENV_LIBRARY_LAYOUT_CAPTURE_DIR, `tags-${width}.png`) });
+      }
+    }
+    await resizeAppWindow(page, 920, 620);
     await taggedRow.getByRole("button", { name: "Filter by tag Frontend" }).click();
     await expect.poll(() => page.getByRole("group", { name: /^Library item / }).count()).toBe(1);
     await expect.poll(() => taggedRow.count()).toBe(1);
