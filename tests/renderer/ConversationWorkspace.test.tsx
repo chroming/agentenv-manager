@@ -105,6 +105,7 @@ const installApi = (
       items: [{ ...detail, messages: undefined }],
       total: 1,
       totalSizeBytes: 24_576,
+      historyStatus: { config: { version: 1, enabled: true, paused: false, sources: [] }, needsConsent: false, running: false, sources: [], availableSources: [] },
       workspacePaths: ["/work/project"],
       agentCounts: { codex: 1, opencode: 2 },
       lastRefreshedAt: new Date().toISOString()
@@ -724,7 +725,8 @@ describe("ConversationWorkspace", () => {
     api.listConversations.mockResolvedValue({
       items: [{ ...detail, messages: undefined }],
       total: 1,
-      lastRefreshedAt: "2026-07-29T08:00:00.000Z"
+      lastRefreshedAt: "2026-07-29T08:00:00.000Z",
+      historyStatus: { config: { version: 1, enabled: true, paused: false, sources: [] }, needsConsent: false, running: false, sources: [], availableSources: [] }
     });
     api.refreshConversations.mockReturnValue(new Promise((resolve) => {
       finishRefresh = () => resolve({
@@ -761,7 +763,8 @@ describe("ConversationWorkspace", () => {
     api.listConversations.mockResolvedValue({
       items: [{ ...detail, messages: undefined }],
       total: 1,
-      lastRefreshedAt: new Date(now).toISOString()
+      lastRefreshedAt: new Date(now).toISOString(),
+      historyStatus: { config: { version: 1, enabled: true, paused: false, sources: [] }, needsConsent: false, running: false, sources: [], availableSources: [] }
     });
     render(<ConversationWorkspace targets={[
       target("codex", "Codex"),

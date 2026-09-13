@@ -852,14 +852,18 @@
   }
 }
 .history-search-empty {
-  display: grid;
-  justify-items: center;
   align-content: center;
-  gap: var(--space-3);
   flex: 1;
-  padding: var(--space-6);
-  text-align: center;
 }
+
+.history-device-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.history-device-label svg { flex-shrink: 0; color: var(--muted); }
+.history-consent-note { color: var(--muted); font-size: var(--font-size-body); }
 
 .history-source-coverage,
 .history-extra-source {
@@ -873,6 +877,8 @@
   gap: var(--space-3);
   min-width: 0;
 }
+
+.history-source-coverage { font-size: var(--font-size-body); color: var(--muted); }
 
 .history-source-path,
 .history-device-name {

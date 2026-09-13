@@ -15,6 +15,8 @@ import {
   LoaderCircle,
   MessagesSquare,
   MoreHorizontal,
+  Pause,
+  Play,
   Search,
   TriangleAlert,
   UserRound
@@ -66,6 +68,7 @@ import {
   FilterPopover,
   focusInitialActionMenuItem,
   IconButton,
+  EmptyState,
   ModalFrame,
   MasterDetailLayout,
   PageHeader,
@@ -741,6 +744,18 @@ export const ConversationWorkspace = ({
   const [message, setMessage] = useState("");
   const [warning, setWarning] = useState("");
   const [error, setError] = useState("");
+  const [pauseBusy, setPauseBusy] = useState(false);
+  const toggleHistoryPause = async () => {
+    if (pauseBusy) return;
+    setPauseBusy(true);
+    try {
+      const current = await window.agentEnv.conversationHistoryStatus();
+      if (!current.config.enabled) return;
+      const updated = await window.agentEnv.configureConversationHistory({ ...current.config, paused: !current.config.paused }, false);
+      setHistoryStatus(updated);
+    } catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+    finally { setPauseBusy(false); }
+  };
   const [review, setReview] = useState<ConversationContinuationPreview>();
   const [movePreview, setMovePreview] = useState<ConversationMovePreview>();
   const [moveResult, setMoveResult] = useState<ConversationMoveResult>();
@@ -1667,8 +1682,10 @@ export const ConversationWorkspace = ({
             />
           }
           actions={
-            <ControlGroup className="conversation-page-actions">
-              <HistorySearchSettings />
+            historyStatus?.config.enabled ? <ControlGroup className="conversation-page-actions">
+              {historyStatus.config.paused ? <span className="history-consent-note">{t("Paused")}</span> : null}
+              <IconButton label={t(historyStatus.config.paused ? "Resume" : "Pause")} busy={pauseBusy} onClick={() => void toggleHistoryPause()}>{historyStatus.config.paused ? <Play size={16} /> : <Pause size={16} />}</IconButton>
+              <HistorySearchSettings entry="icon" />
               <RefreshAction
                 busy={refreshBusy}
                 disabled={historyStatus ? !historyStatus.config.enabled || historyStatus.config.paused : false}
@@ -1676,16 +1693,14 @@ export const ConversationWorkspace = ({
                 state={freshnessStates.conversations}
                 onRefresh={() => void refresh()}
               />
-            </ControlGroup>
+            </ControlGroup> : null
           }
         />
 
-        {historyStatus && !historyStatus.config.enabled ? <div className="history-search-empty">
-          <MessagesSquare size={24} />
-          <p>{t("Search local and SSH conversation histories")}</p>
-          <p>{t("Choose history sources to start. Nothing is collected until you enable search.")}</p>
-          <HistorySearchSettings />
-        </div> : <div className="conversation-layout-shell">
+        {historyStatus && !historyStatus.config.enabled ? <EmptyState className="history-search-empty"
+          icon={<MessagesSquare size={24} />} title={t("Search local and SSH conversation histories")}
+          description={t("Histories are indexed locally. Original files are never changed.")}
+          actions={<HistorySearchSettings entry="setup" />} /> : <div className="conversation-layout-shell">
           <MasterDetailLayout
             appearance="canvas"
             className="conversation-layout"

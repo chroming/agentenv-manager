@@ -5,6 +5,10 @@
   "maxChangedPixelRatio": 0.012,
   "captures": [
     { "file": "history-sources-920.png" },
+    { "file": "history-disabled-920.png" },
+    { "file": "history-enabled-920.png" },
+    { "file": "history-paused-920.png" },
+    { "file": "history-details-920.png" },
     { "file": "history-remote-result.png" },
     { "file": "ai-analysis-profile-920x620.png" },
     { "file": "settings-ai-920x620.png" },

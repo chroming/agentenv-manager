@@ -13,6 +13,10 @@ export type ResolvedAppLocale = Exclude<AppLocale, "system">;
 export type TranslationValues = Record<string, string | number>;
 
 const zhCN: Record<string, string> = {
+  "Paused": "已暂停",
+  "Choose devices": "选择设备",
+  "Enable search": "开启搜索",
+  "Histories are indexed locally. Original files are never changed.": "仅在本机建立索引，不修改原始记录。",
   "Device": "设备",
   "Messages": "消息",
   "History location": "对话来源",
@@ -3193,6 +3197,10 @@ const zhTW: Record<string, string> = {
   ...Object.fromEntries(
     Object.entries(zhCN).map(([message, translation]) => [message, toTraditionalChinese(translation)])
   ),
+  "Choose devices": "選擇裝置",
+  "Paused": "已暫停",
+  "Enable search": "開啟搜尋",
+  "Histories are indexed locally. Original files are never changed.": "僅在本機建立索引，不修改原始記錄。",
   "Preparing your local environment": "正在準備本機環境",
   "Finishing the automatic update…": "正在完成自動更新…",
   "Checking data and recovering interrupted operations…": "正在驗證資料並復原未完成的操作…",
