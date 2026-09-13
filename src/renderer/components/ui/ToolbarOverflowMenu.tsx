@@ -21,6 +21,7 @@ export interface ToolbarOverflowMenuItem {
   label: string;
   icon?: ReactNode;
   disabled?: boolean;
+  checked?: boolean;
   title?: string;
   onSelect(trigger: HTMLButtonElement): void;
 }
@@ -140,7 +141,8 @@ export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflow
               <button
                 key={item.id}
                 type="button"
-                role="menuitem"
+                role={item.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+                aria-checked={item.checked}
                 disabled={item.disabled}
                 title={item.title}
                 onClick={() => {

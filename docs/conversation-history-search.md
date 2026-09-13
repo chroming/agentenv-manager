@@ -21,6 +21,8 @@
 
 Conversations 和 Settings 复用 `HistorySearchSettings`。授权弹窗复用 `ModalFrame`、`DialogHeader/Body/Footer`、`SettingsPreferenceRow`、`Switch`、`SelectControl`、`TextField`、`Button` 和 `IconButton`。不增加一级导航。
 
+默认按设备显示开关，开启设备一次选择该设备的所有已知历史来源；关闭设备取消这些来源。单 Agent 的例外选择放在设备的更多菜单，部分 Agent 开启时设备仍显示开启。路径、单来源开关和覆盖报告通过菜单中的详情查看。暂停/恢复使用固定尺寸图标和悬浮提示，不随状态切换改变控件尺寸。上述修改点击保存后生效。
+
 查询默认覆盖所有授权来源的标题、项目路径、用户/助手消息；工具记录需在筛选中明确打开。设备、Agent、项目及最近活动时间可以组合筛选。分页限制只限制返回条数，不限制搜索范围。
 
 列表显示设备/Agent/时间和命中摘要，完整工作目录在详情可选择复制；来源详情包含连接、会话 ID、原始路径。远程记录不显示本地启动、续接或迁移入口。当前阶段只提供定位和复制，不恢复 SSH 会话。

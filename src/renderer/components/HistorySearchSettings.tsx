@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { FolderPlus, Pause, Play, Settings2, Trash2, X } from "lucide-react";
+import { Check, FolderPlus, Info, Pause, Play, Settings2, Trash2, X } from "lucide-react";
 import type { HistorySearchConfig, HistorySearchStatus } from "../../shared/conversationSearch";
 import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { SettingsPreferenceRow } from "./SettingsPreferenceRow";
 import { OverflowTooltip } from "./OverflowTooltip";
-import { Button, ControlGroup, DialogBody, DialogFooter, DialogHeader, IconButton, ModalFrame, Notice, SelectControl, Switch, TextField } from "./ui";
+import { Button, ControlGroup, DialogBody, DialogFooter, DialogHeader, IconButton, ModalFrame, Notice, SelectControl, Switch, TextField, ToolbarOverflowMenu } from "./ui";
 
 export const HistorySearchSettings = ({ onChanged }: { onChanged?(): void }) => {
   const { t } = useI18n();
@@ -18,6 +18,8 @@ export const HistorySearchSettings = ({ onChanged }: { onChanged?(): void }) => 
   const [extra, setExtra] = useState(false);
   const [baseId, setBaseId] = useState("");
   const [path, setPath] = useState("");
+  const [details, setDetails] = useState<string[]>([]);
+  const [removedIds, setRemovedIds] = useState<string[]>([]);
   const dialogRef = useRef<HTMLElement>(null);
   useModalDialog({ open, dialogRef, onDismiss: () => setOpen(false), dismissDisabled: busy });
   useEffect(() => {
@@ -30,7 +32,7 @@ export const HistorySearchSettings = ({ onChanged }: { onChanged?(): void }) => 
     return () => { active = false; window.clearInterval(timer); };
   }, [open]);
   const show = async () => {
-    setOpen(true); setBusy(true); setError(""); setDraft(undefined); setClearRemoved(true);
+    setOpen(true); setBusy(true); setError(""); setDraft(undefined); setClearRemoved(true); setDetails([]); setExtra(false); setRemovedIds([]);
     try { const value = await window.agentEnv.conversationHistoryStatus(); setStatus(value); setDraft(value.config); }
     catch (e) { setError(String(e)); }
     finally { setBusy(false); }
@@ -45,10 +47,18 @@ export const HistorySearchSettings = ({ onChanged }: { onChanged?(): void }) => 
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
   };
-  const sources = [...new Map([...(status?.availableSources ?? []), ...(draft?.sources ?? []).map((s) => ({ ...s,
+  const sources = [...new Map([...(status?.availableSources ?? []), ...[...(status?.config.sources ?? []), ...(draft?.sources ?? [])].map((s) => ({ ...s,
     deviceName: status?.availableSources.find((v) => v.deviceId === s.deviceId)?.deviceName ?? s.deviceId,
     agentName: status?.availableSources.find((v) => v.agentId === s.agentId)?.agentName ?? s.agentId
-  }))].map((s) => [s.id, s])).values()];
+  }))].map((s) => [s.id, s])).values()].filter((source) => !removedIds.includes(source.id));
+  const devices = [...new Set(sources.map((source) => source.deviceId))];
+  const toggleSources = (ids: string[], enabled: boolean) => {
+    if (!draft) return;
+    setDraft({ ...draft, sources: [
+      ...draft.sources.filter((source) => !ids.includes(source.id)),
+      ...(enabled ? sources.filter((source) => ids.includes(source.id)).map(({ deviceName, agentName, ...source }) => source) : [])
+    ] });
+  };
   return <>
     <Button icon={<Settings2 size={16} />} onClick={() => void show()}>{t("History sources")}</Button>
     {open ? <ModalFrame className="ui-dialog-shell" ariaLabel={t("History search")} dialogRef={dialogRef} onDismiss={() => setOpen(false)} dismissDisabled={busy}>
@@ -62,17 +72,36 @@ export const HistorySearchSettings = ({ onChanged }: { onChanged?(): void }) => 
             onClick={() => setDraft({ ...draft, enabled: !draft.enabled })} />} />
           {draft.enabled ? <>
             <SettingsPreferenceRow controlWidth="intrinsic" label={t("Background indexing")} help={t("Pause keeps existing results searchable.")}
-              control={<Button icon={draft.paused ? <Play size={16} /> : <Pause size={16} />}
-                onClick={() => setDraft({ ...draft, paused: !draft.paused })}>{t(draft.paused ? "Resume" : "Pause")}</Button>} />
-            {sources.map((source) => {
+              control={<IconButton label={t(draft.paused ? "Resume" : "Pause")}
+                onClick={() => setDraft({ ...draft, paused: !draft.paused })}>{draft.paused ? <Play size={16} /> : <Pause size={16} />}</IconButton>} />
+            {devices.map((deviceId) => {
+              const deviceSources = sources.filter((source) => source.deviceId === deviceId);
+              const deviceName = deviceId === "local" ? t(deviceSources[0].deviceName) : deviceSources[0].deviceName;
+              const enabled = deviceSources.some((source) => draft.sources.some((selected) => selected.id === source.id));
+              const agents = [...new Set(deviceSources.map((source) => source.agentId))];
+              return <div key={deviceId}>
+                <SettingsPreferenceRow controlWidth="intrinsic" label={deviceName} control={<ControlGroup>
+                  <ToolbarOverflowMenu label={`${deviceName} · ${t("More")}`} menuLabel={deviceName} items={[
+                    ...agents.map((agentId) => {
+                      const items = deviceSources.filter((source) => source.agentId === agentId);
+                      const checked = items.some((source) => draft.sources.some((selected) => selected.id === source.id));
+                      return { id: agentId, label: items[0].agentName, checked,
+                        icon: <Check size={16} style={{ visibility: checked ? "visible" : "hidden" }} />,
+                        onSelect: () => toggleSources(items.map((source) => source.id), !checked) };
+                    }),
+                    { id: "details", label: t("Details"), icon: <Info size={16} />, onSelect: () => setDetails((current) => current.includes(deviceId) ? current.filter((id) => id !== deviceId) : [...current, deviceId]) }
+                  ]} />
+                  <Switch label={deviceName} checked={enabled} onClick={() => toggleSources(deviceSources.map((source) => source.id), !enabled)} />
+                </ControlGroup>} />
+                {details.includes(deviceId) ? deviceSources.map((source) => {
               const selected = draft.sources.some((s) => s.id === source.id);
               const coverage = status?.sources.find((s) => s.sourceKey === source.id);
-              const deviceName = source.deviceId === "local" ? t(source.deviceName) : source.deviceName;
               return <div key={source.id}>
-                <SettingsPreferenceRow controlWidth="intrinsic" label={`${deviceName} · ${source.agentName}`}
+                <SettingsPreferenceRow controlWidth="intrinsic" label={source.agentName}
                   description={<OverflowTooltip className="history-source-path" text={source.root} />}
                   control={<ControlGroup>
                     {source.kind === "directory" ? <IconButton label={t("Remove source")} onClick={() => {
+                      setRemovedIds((current) => [...current, source.id]);
                       setDraft({ ...draft, sources: draft.sources.filter((s) => s.id !== source.id) });
                     }}><Trash2 size={16} /></IconButton> : null}
                     <Switch label={`${deviceName} · ${source.agentName} · ${source.root}`} checked={selected}
@@ -83,6 +112,8 @@ export const HistorySearchSettings = ({ onChanged }: { onChanged?(): void }) => 
                   <p>{t("Summary only")}: {coverage.summaryOnly} · {t("Last successful refresh")}: {coverage.lastSuccessAt ? new Date(coverage.lastSuccessAt).toLocaleString() : t("Not yet")}</p>
                   {coverage.issues.map((issue, i) => <p className="selectable" key={i}>{issue}</p>)}
                 </details> : null}
+              </div>;
+                }) : null}
               </div>;
             })}
             {extra ? <div className="history-extra-source">

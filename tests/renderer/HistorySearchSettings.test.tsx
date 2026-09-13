@@ -28,10 +28,14 @@ it("does not collect or configure anything when the entry is rendered", async ()
   expect(api.configureConversationHistory).not.toHaveBeenCalled();
 });
 
-it("shows summary-only coverage without requiring expansion and clears disabled cache by default", async () => {
+it("keeps source coverage in device details and clears disabled cache by default", async () => {
   const api = install(true);
   render(<HistorySearchSettings />);
   fireEvent.click(screen.getByRole("button",{name:"History sources"}));
+  await screen.findByRole("switch",{name:"This device"});
+  expect(screen.queryByText(/2 Summary only/)).toBeNull();
+  fireEvent.click(screen.getByRole("button",{name:"This device · More"}));
+  fireEvent.click(screen.getByRole("menuitem",{name:"Details"}));
   const summary = await screen.findByText(/2 Summary only/);
   expect(summary.tagName).toBe("SUMMARY");
   fireEvent.click(screen.getByRole("switch",{name:"History search"}));
@@ -48,6 +52,27 @@ it("keeps a save failure inside the source dialog without losing the selected so
   await screen.findByRole("switch",{name:"History search"});
   fireEvent.click(screen.getByRole("button",{name:"Save"}));
   expect(await screen.findByRole("alert")).toHaveTextContent("Cannot save history settings");
-  expect(screen.getByRole("switch",{name:/This device · Codex/})).toHaveAttribute("aria-checked","true");
+  expect(screen.getByRole("switch",{name:"This device"})).toHaveAttribute("aria-checked","true");
   expect(screen.getByRole("dialog")).toBeInTheDocument();
+});
+
+it("enables a whole device and exposes individual Agent choices only in More", async () => {
+  const api = install();
+  const status = await api.conversationHistoryStatus();
+  status.availableSources.push({...status.availableSources[0],id:"claude",agentId:"claude-code",agentName:"Claude Code",root:"/fixture/claude"});
+  render(<HistorySearchSettings />);
+  fireEvent.click(screen.getByRole("button",{name:"History sources"}));
+  fireEvent.click(await screen.findByRole("switch",{name:"History search"}));
+  expect(screen.queryByRole("switch",{name:/Codex/})).toBeNull();
+  fireEvent.click(screen.getByRole("switch",{name:"This device"}));
+  fireEvent.click(screen.getByRole("button",{name:"This device · More"}));
+  expect(screen.getByRole("menuitemcheckbox",{name:"Codex"})).toHaveAttribute("aria-checked","true");
+  fireEvent.click(screen.getByRole("menuitemcheckbox",{name:"Claude Code"}));
+  expect(screen.getByRole("switch",{name:"This device"})).toHaveAttribute("aria-checked","true");
+  const pause = screen.getByRole("button",{name:"Pause"});
+  expect(pause.textContent).toBe("");
+  fireEvent.click(pause);
+  expect(screen.getByRole("button",{name:"Resume"}).textContent).toBe("");
+  fireEvent.click(screen.getByRole("button",{name:"Save"}));
+  await waitFor(()=>expect(api.configureConversationHistory).toHaveBeenCalledWith(expect.objectContaining({paused:true,sources:[expect.objectContaining({agentId:"codex"})]}),true));
 });

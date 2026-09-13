@@ -41,8 +41,20 @@ it.skipIf(process.platform === "win32")("requires opt-in, searches local and SSH
   await page.getByRole("button",{name:"History sources",exact:true}).first().click();
   const dialog=page.getByRole("dialog",{name:"History search",exact:true});
   await dialog.getByRole("switch",{name:"History search",exact:true}).click();
-  await dialog.getByRole("switch",{name:/This Mac · Codex/}).click();
-  await dialog.getByRole("switch",{name:/Build machine · Codex/}).click();
+  await dialog.getByRole("switch",{name:"This Mac",exact:true}).click();
+  await dialog.getByRole("switch",{name:"Build machine",exact:true}).click();
+  const pause = dialog.getByRole("button",{name:"Pause",exact:true});
+  expect(await pause.innerText()).toBe("");
+  const pauseBox = await pause.boundingBox();
+  await pause.click();
+  expect(await dialog.getByRole("button",{name:"Resume",exact:true}).boundingBox()).toEqual(pauseBox);
+  await dialog.getByRole("button",{name:"Resume",exact:true}).click();
+  await dialog.getByRole("button",{name:"Build machine · More",exact:true}).click();
+  expect(await page.getByRole("menuitemcheckbox",{name:"Codex",exact:true}).getAttribute("aria-checked")).toBe("true");
+  await page.getByRole("menuitemcheckbox",{name:"Codex",exact:true}).click();
+  await dialog.getByRole("button",{name:"Build machine · More",exact:true}).click();
+  expect(await page.getByRole("menuitemcheckbox",{name:"Codex",exact:true}).getAttribute("aria-checked")).toBe("false");
+  await page.getByRole("menuitemcheckbox",{name:"Codex",exact:true}).click();
   await dialog.locator(".ui-dialog-body").evaluate((el)=>{el.scrollTop=0;});
   const output = process.env.AGENTENV_CAPTURE_HISTORY_DIR ?? "/tmp/aem-history-search-captures"; await mkdir(output,{recursive:true});
   for (const width of [920,1180,1440]) {
