@@ -549,8 +549,8 @@ export const TargetWorkspace = ({
                     </button>
                   </span>
                 </span>
-                <span className={`target-health-status target-health-status--${target.health.status}`}>
-                  {t(targetStatusLabel[target.health.status])}
+                <span className={`target-health-status target-health-status--${target.health.status}`} title={t(targetStatusLabel[target.health.status])}>
+                  <span className={target.health.status === "ready" ? "ui-visually-hidden" : undefined}>{t(targetStatusLabel[target.health.status])}</span>
                 </span>
                 <TargetEnvironmentSummary
                   lifecycleStatus={state?.lifecycleStatus}

@@ -1,4 +1,4 @@
-import { FileText, GripVertical, Plus, Trash2 } from "lucide-react";
+import { Eye, FileText, GripVertical, Plus, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import type {
   InstructionBlock,
@@ -141,12 +141,14 @@ export const ProfileInstructionsComposerSection = ({
       onPolicyChange={onPolicyChange}
     >
       <section className="profile-instructions-editor">
-        <ResourcePanelToolbar variant="embedded">
-          <Button
+        <ResourcePanelToolbar variant="embedded" placement="heading">
+          <IconButton
             size="compact"
+            variant="ghost"
+            label={t("Preview output")}
             disabled={policy !== "manage"}
             onClick={() => setDocument("compiled")}
-          >{t("Preview output")}</Button>
+          ><Eye size={14} /></IconButton>
           <IconButton
             size="compact"
             label={t("Add Instruction Blocks")}

@@ -300,7 +300,7 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
           ? t("Checking")
           : status === "ready"
             ? deviceEndpoints.length > 0
-              ? t(deviceEndpoints.length === 1 ? "Ready · 1 Agent" : "Ready · {{count}} Agents", {
+              ? t("{{count}} Agents", {
                   count: deviceEndpoints.length
                 })
               : t("No supported Agents")
@@ -390,8 +390,8 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
                         </TextAction>
                       </span>
                     </span>
-                    <span className={`target-health-status target-health-status--${available ? "ready" : "unknown"}`}>
-                      {t(available ? "Ready" : "Unavailable")}
+                    <span className={`target-health-status target-health-status--${available ? "ready" : "unknown"}`} title={t(available ? "Ready" : "Unavailable")}>
+                      <span className={available ? "ui-visually-hidden" : undefined}>{t(available ? "Ready" : "Unavailable")}</span>
                     </span>
                     <TargetEnvironmentSummary
                       lifecycleStatus={state?.lifecycleStatus}

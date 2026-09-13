@@ -185,7 +185,7 @@ export const ProfileList = ({
             <span className="profile-row__deployment-label">{deploymentLabel}</span>
           </span>
         ),
-      tooltip: profile.loadError,
+      tooltip: profile.loadError ?? profile.description,
       disabled: isLoading,
       onContextMenu: (event: ReactMouseEvent<HTMLElement>) => {
         event.preventDefault();

@@ -1,10 +1,12 @@
-import { useId, type HTMLAttributes, type ReactNode } from "react";
+import { useId, useState, type HTMLAttributes, type ReactNode } from "react";
 import { DisclosureIcon } from "./DisclosureIcon";
+import { ResourceHeadingActionsContext } from "./resourceHeadingActions";
 
 export interface ResourceDisclosureSectionProps
   extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   actions?: ReactNode;
   actionsLayout?: "compact" | "row";
+  headingCommands?: boolean;
   description?: ReactNode;
   density?: "default" | "compact";
   expanded: boolean;
@@ -26,6 +28,7 @@ export interface ResourceDisclosureSectionProps
 export const ResourceDisclosureSection = ({
   actions,
   actionsLayout = "compact",
+  headingCommands = false,
   children,
   className = "",
   description,
@@ -47,6 +50,7 @@ export const ResourceDisclosureSection = ({
   ...props
 }: ResourceDisclosureSectionProps) => {
   const generatedId = useId();
+  const [headingActions, setHeadingActions] = useState<HTMLDivElement | null>(null);
   const triggerId = `${generatedId}-trigger`;
   const descriptionId = `${generatedId}-description`;
   const summaryId = `${generatedId}-summary`;
@@ -56,10 +60,11 @@ export const ResourceDisclosureSection = ({
     .join(" ") || undefined;
 
   return (
+    <ResourceHeadingActionsContext.Provider value={headingActions}>
     <section
       {...props}
       aria-label={props["aria-label"] ?? title}
-      className={`ui-resource-disclosure is-${density}${expanded ? " is-expanded" : ""}${nested ? " is-nested" : ""}${muted ? " is-muted" : ""}${summaryWidth === "wide" ? " has-wide-summary" : ""}${panelVariant === "inset" ? " has-inset-panel" : ""}${panelScrollOwner === "child" ? " has-child-scroll" : ""}${actionsLayout === "row" ? " has-row-actions" : ""} ${className}`.trim()}
+      className={`ui-resource-disclosure is-${density}${headingCommands ? " has-heading-commands" : ""}${expanded ? " is-expanded" : ""}${nested ? " is-nested" : ""}${muted ? " is-muted" : ""}${summaryWidth === "wide" ? " has-wide-summary" : ""}${panelVariant === "inset" ? " has-inset-panel" : ""}${panelScrollOwner === "child" ? " has-child-scroll" : ""}${actionsLayout === "row" ? " has-row-actions" : ""} ${className}`.trim()}
       data-resource-disclosure-id={id}
     >
       <header className="ui-resource-disclosure__header">
@@ -111,11 +116,10 @@ export const ResourceDisclosureSection = ({
             </span>
           ) : null}
         </button>
-        {actions ? (
           <div className="ui-resource-disclosure__actions">
+            <div className="ui-resource-disclosure__commands" ref={setHeadingActions} />
             {actions}
           </div>
-        ) : null}
       </header>
       {expanded ? (
         <div
@@ -128,5 +132,6 @@ export const ResourceDisclosureSection = ({
         </div>
       ) : null}
     </section>
+    </ResourceHeadingActionsContext.Provider>
   );
 };

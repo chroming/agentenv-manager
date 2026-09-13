@@ -55,13 +55,14 @@ describe("App update settings", () => {
     const onChange = vi.fn();
     render(<AppUpdateSettings busy={false} settings={settings} onChange={onChange} />);
 
-    const channel = await screen.findByText("Installed with Homebrew");
+    const channel = await screen.findByLabelText("Installed with Homebrew");
     const statusRow = channel.closest(".settings-preference-row");
     const autoCheck = screen.getByRole("switch", { name: "Automatic update checks" });
     expect(statusRow).toHaveClass("app-update-summary", "is-success");
     expect(statusRow?.parentElement).toBe(autoCheck.closest(".settings-preference-list"));
-    expect(statusRow).toHaveTextContent("Current version 0.1.0");
-    expect(statusRow).toHaveTextContent("Latest version 0.1.0");
+    expect(statusRow).toHaveTextContent("0.1.0");
+    expect(screen.getByTitle("Current version")).toHaveTextContent("0.1.0");
+    expect(screen.queryByTitle("Latest version")).not.toBeInTheDocument();
     expect(screen.getByText("Finish updates after quitting")).toBeInTheDocument();
     expect(screen.queryByText(/quitting is not delayed/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Check now" }));
@@ -88,7 +89,6 @@ describe("App update settings", () => {
 
     expect(checkButton).toHaveAttribute("aria-busy", "true");
     expect(screen.getByText("Checking for updates…")).toBeInTheDocument();
-    expect(screen.getByText("Checking…")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Checking for updates…" }))
       .toBeInTheDocument();
 
@@ -107,7 +107,8 @@ describe("App update settings", () => {
     expect(await screen.findByText("Version 0.2.0 is available")).toBeInTheDocument();
     expect(screen.getByText("Version 0.2.0 is available").closest(".settings-preference-row"))
       .toHaveClass("is-available");
-    expect(screen.getByText("Latest version").parentElement).toHaveTextContent("0.2.0");
+    expect(screen.getByTitle("Latest version")).toHaveTextContent("0.2.0");
+    expect(screen.queryByRole("button", { name: "Check now" })).not.toBeInTheDocument();
   });
 
   it("explains why a direct install cannot update automatically", async () => {
@@ -145,7 +146,7 @@ describe("App update settings", () => {
     });
     render(<AppUpdateSettings busy={false} settings={settings} onChange={vi.fn()} />);
 
-    expect(await screen.findByText("Installed directly")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Installed directly")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Download" })).toBeInTheDocument();
     expect(screen.queryByText("Downloads and verifies the official update in the background."))
       .not.toBeInTheDocument();

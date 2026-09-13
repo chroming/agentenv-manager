@@ -78,7 +78,8 @@
 }
 
 .instruction-content-preview__toolbar {
-  justify-content: flex-start;
+  float: right;
+  margin: var(--space-2);
 }
 
 .instruction-content-preview > .document-markdown {

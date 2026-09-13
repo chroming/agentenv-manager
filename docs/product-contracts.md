@@ -2498,6 +2498,28 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 
 ### UI and accessibility
 
+- Populated Profiles and Workspaces use one shared InspectorHeader: quiet page context,
+  selected object identity, then the Agent selector and primary command at the trailing edge.
+  New objects are added through the object switcher; Refresh and metadata editing remain in
+  its More menu. Empty states retain a direct creation entry. Workspace paths remain selectable;
+  Profile descriptions remain in the object picker and metadata editor, not a permanent second row.
+- Expanded resource commands use ResourcePanelToolbar's heading placement inside the owning
+  ResourceDisclosureSection. A fixed command track prevents counts and policy controls from moving
+  when siblings expand, collapse, load, or show maintenance progress. Commands cannot be nested
+  inside the disclosure trigger. Check updates lives in the Skill group's More menu; Add remains
+  a labeled plus icon. Bulk operation behavior, item policies, and persistence do not change.
+- Conversations retain their master/detail workspace. Search, sort, filters, and Refresh share
+  one list toolbar; one quiet line reports count and size. Pause is configured in History sources,
+  and an already-paused index exposes Resume on the page. Agent, device, path, and activity time
+  remain discoverable without opening settings.
+- Instructions keep document identity and usage in the detail header, with edit/expand/menu actions.
+  Import and Refresh are in the catalog menu. The default reader provides a labeled Source code
+  icon with pressed state, without a second view-tab toolbar. Routine healthy Agent rows use a
+  quiet status dot with an accessible label; actionable problems retain readable text.
+- Update settings expose the current/candidate versions and exactly one phase-appropriate update
+  command. Working phases retain animation and progress; installation channel is available on
+  demand. Settings category navigation and consequential commands remain explicit.
+
 - The packaged desktop application owns its native menu: Settings is available through
   `Cmd/Ctrl+,`, while browser Reload, Force Reload, and developer tools are absent outside
   the development server so unsaved work cannot bypass navigation guards.

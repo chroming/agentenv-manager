@@ -62,6 +62,7 @@ export const ProfileComposerSection = ({
 
   return (
     <ResourceDisclosureSection
+      headingCommands
       className={[
         "profile-composer-section",
         countSummary ? "has-scope-summary" : "",

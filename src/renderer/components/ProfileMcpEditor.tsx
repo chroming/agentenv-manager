@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, X } from "lucide-react";
 import { useState } from "react";
 import type {
   NativeMcpConnection,
@@ -8,7 +8,7 @@ import type {
 } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
-import { Button, RefreshAction, ResourcePanelToolbar, Switch } from "./ui";
+import { IconButton, RefreshAction, ResourcePanelToolbar, Switch } from "./ui";
 import { ProductIcon } from "../productIcons";
 
 interface ProfileMcpEditorProps {
@@ -99,19 +99,21 @@ export const ProfileMcpEditor = ({
   return (
     <div className="profile-mcp-editor">
       <ResourcePanelToolbar
+        placement="heading"
         aria-label={t("Profile MCP actions")}
         className="profile-mcp-toolbar"
         variant="embedded"
       >
         <span className="profile-mcp-toolbar__actions">
           {!canManage && policy.mode !== "ignore" ? (
-            <Button
+            <IconButton
               size="compact"
-              variant="secondary"
+              variant="ghost"
+              label={t("Remove override")}
               onClick={() => updatePolicy({ mode: "ignore", selections: policy.selections })}
             >
-              {t("Remove override")}
-            </Button>
+              <X size={14} />
+            </IconButton>
           ) : null}
           <RefreshAction
             ariaLabel={t("Refresh MCP connections")}

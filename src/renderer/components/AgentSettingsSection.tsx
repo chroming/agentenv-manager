@@ -1,4 +1,4 @@
-import { GripVertical, LoaderCircle, Monitor, TriangleAlert } from "lucide-react";
+import { FolderOpen, GripVertical, LoaderCircle, Monitor, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type {
   TargetDescriptor,
@@ -326,18 +326,14 @@ export const AgentSettingsSection = ({
                     />
                   </span>
                   <span className="settings-row-actions">
-                    <Button
+                    <IconButton
                       busy={pendingAction === "choose"}
-                      busyLabel={t("Choosing...")}
+                      label={t("Choose")}
                       disabled={busy || Boolean(pendingPathAction)}
                       onClick={() => void commitPathChange(agent.id, "choose")}
                     >
-                      {pendingAction === "choose"
-                        ? t("Choosing...")
-                        : customRoot
-                          ? t("Change")
-                          : t("Choose")}
-                    </Button>
+                      <FolderOpen size={15} />
+                    </IconButton>
                     {customRoot ? (
                       <Button
                         className="agent-path-reset"

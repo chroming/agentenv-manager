@@ -1,8 +1,9 @@
 import { useState } from "react";
+import { Code } from "lucide-react";
 import { useI18n } from "../i18n";
 import { ReadOnlyMarkdown } from "./ReadOnlyMarkdown";
 import { SyntaxCodePreview } from "./SyntaxCodePreview";
-import { Notice, ResourcePanelToolbar, SegmentedControl } from "./ui";
+import { IconButton, Notice } from "./ui";
 
 export const InstructionContentPreview = ({ content, path }: { content: string; path: string }) => {
   const { t } = useI18n();
@@ -12,14 +13,11 @@ export const InstructionContentPreview = ({ content, path }: { content: string; 
   return (
     <div className="instruction-content-preview">
       {markdown ? (
-        <ResourcePanelToolbar variant="embedded" className="instruction-content-preview__toolbar">
-          <SegmentedControl<"preview" | "source">
-            label={t("Preview")}
-            value={view}
-            options={[{ value: "preview", label: t("Preview") }, { value: "source", label: t("Source code") }]}
-            onChange={setView}
-          />
-        </ResourcePanelToolbar>
+        <div className="instruction-content-preview__toolbar">
+          <IconButton label={t("Source code")} variant="ghost" size="compact"
+            aria-pressed={view === "source"}
+            onClick={() => setView(view === "source" ? "preview" : "source")}><Code size={14} /></IconButton>
+        </div>
       ) : null}
       {error ? <Notice tone="danger" role="alert">{error}</Notice> : null}
       {markdown && view === "preview" ? (

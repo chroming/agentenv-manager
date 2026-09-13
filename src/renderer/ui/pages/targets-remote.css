@@ -68,7 +68,7 @@
 }
 
 .remote-location-header__status.is-ready {
-  color: var(--success);
+  color: var(--muted);
 }
 
 .remote-location-header__status.is-unavailable,

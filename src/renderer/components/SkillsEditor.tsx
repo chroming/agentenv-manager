@@ -6,6 +6,7 @@ import {
   Link2,
   LoaderCircle,
   Plus,
+  RefreshCw,
   Clock3,
   CircleOff,
   Trash2
@@ -35,7 +36,6 @@ import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
 import { LibrarySkillSelection } from "./LibrarySkillSelection";
-import { SkillMaintenanceAction } from "./SkillMaintenanceAction";
 import type { ProfileResourcePolicy } from "./ProfileResourcePolicyControl";
 import {
   AlignedResourceList,
@@ -445,20 +445,22 @@ export const SkillsEditor = ({
       ) : null}
 
       {profileManagesSkills ? <ResourcePanelToolbar
+        placement="heading"
         aria-label={t("Profile Skill actions")}
         className="profile-skill-toolbar"
         variant="embedded"
       >
         {profileManagesSkills && onCheckSkillUpdates &&
         (checkableIds.length > 0 || checkingSkillUpdates) ? (
-          <SkillMaintenanceAction
-            action="check"
-            scope="profile"
-            label={t("Check Profile Skill updates")}
+          <ToolbarOverflowMenu
+            label={t("Profile Skill actions")}
+            menuLabel={t("Profile Skill actions")}
+            variant="ghost"
             busy={checkingSkillUpdates}
-            className="profile-skill-check"
             disabled={disabled}
-            onClick={() => onCheckSkillUpdates(checkableIds)}
+            items={[{ id: "check", label: t("Check Profile Skill updates"),
+              icon: <RefreshCw size={14} />, disabled: checkingSkillUpdates,
+              onSelect: () => onCheckSkillUpdates(checkableIds) }]}
           />
         ) : null}
         <IconButton

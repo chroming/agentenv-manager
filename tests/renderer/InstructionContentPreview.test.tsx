@@ -17,7 +17,8 @@ describe("instruction reading surface", () => {
     expect(container.querySelector(".document-markdown--wrap")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Source code" }));
     expect(container.querySelector(".syntax-code-preview")).toHaveTextContent("# Team rules");
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    expect(screen.getByRole("button", { name: "Source code" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Source code" }));
     expect(screen.getByRole("heading", { name: "Team rules" })).toBeInTheDocument();
   });
 

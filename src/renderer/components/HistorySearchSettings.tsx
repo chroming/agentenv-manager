@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, FolderPlus, Info, Monitor, RefreshCw, Server, Settings2, Trash2, TriangleAlert, X } from "lucide-react";
+import { Check, FolderPlus, Info, Monitor, Pause, Play, RefreshCw, Server, Settings2, Trash2, TriangleAlert, X } from "lucide-react";
 import type { HistorySearchConfig, HistorySearchStatus } from "../../shared/conversationSearch";
 import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
@@ -73,7 +73,13 @@ export const HistorySearchSettings = ({ onChanged, entry = "settings" }: { onCha
     {entry === "icon" ? <IconButton label={t("History sources")} onClick={() => void show()}><Settings2 size={16} /></IconButton> : <Button variant={entry === "setup" ? "primary" : "secondary"} icon={<Settings2 size={16} />} onClick={() => void show()}>{entryLabel}</Button>}
     {open ? <ModalFrame className="ui-dialog-shell" ariaLabel={t("History search")} dialogRef={dialogRef} onDismiss={() => setOpen(false)} dismissDisabled={busy}>
       <DialogHeader title={t("History sources")}
-        actions={<IconButton label={t("Close")} disabled={busy} onClick={() => setOpen(false)}><X size={16} /></IconButton>} />
+        actions={<ControlGroup>
+          {draft?.enabled && !firstSetup ? <IconButton label={t(draft.paused ? "Resume" : "Pause")} disabled={busy}
+            aria-pressed={Boolean(draft.paused)} onClick={() => setDraft({ ...draft, paused: !draft.paused })}>
+            {draft.paused ? <Play size={16} /> : <Pause size={16} />}
+          </IconButton> : null}
+          <IconButton label={t("Close")} disabled={busy} onClick={() => setOpen(false)}><X size={16} /></IconButton>
+        </ControlGroup>} />
       <DialogBody>
         {error ? <Notice tone="danger" role="alert">{error}</Notice> : null}
         {status?.settingsIssue ? <Notice tone="warning">{status.settingsIssue}</Notice> : null}

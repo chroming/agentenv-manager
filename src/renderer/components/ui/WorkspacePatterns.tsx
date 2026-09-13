@@ -178,6 +178,7 @@ export const SelectableListRow = ({
 
 interface InspectorHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   actions?: ReactNode;
+  context?: string;
   description?: ReactNode;
   icon?: ReactNode;
   responsive?: "inline" | "stack";
@@ -188,6 +189,7 @@ interface InspectorHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "title"
 export const InspectorHeader = ({
   actions,
   className = "",
+  context,
   description,
   icon,
   responsive = "inline",
@@ -197,8 +199,9 @@ export const InspectorHeader = ({
 }: InspectorHeaderProps) => (
   <header
     {...props}
-    className={`ui-inspector-header ui-inspector-header--responsive-${responsive} ${className}`.trim()}
+    className={`ui-inspector-header ui-inspector-header--responsive-${responsive}${context ? " has-context" : ""} ${className}`.trim()}
   >
+    {context ? <h2 className="ui-inspector-header__context">{context}</h2> : null}
     <div className="ui-inspector-header__identity">
       {icon ? <span className="ui-inspector-header__icon" aria-hidden="true">{icon}</span> : null}
       <div className="ui-inspector-header__copy">

@@ -15,7 +15,6 @@ import {
   LoaderCircle,
   MessagesSquare,
   MoreHorizontal,
-  Pause,
   Play,
   Search,
   TriangleAlert,
@@ -1684,15 +1683,8 @@ export const ConversationWorkspace = ({
           actions={
             historyStatus?.config.enabled ? <ControlGroup className="conversation-page-actions">
               {historyStatus.config.paused ? <span className="history-consent-note">{t("Paused")}</span> : null}
-              <IconButton label={t(historyStatus.config.paused ? "Resume" : "Pause")} busy={pauseBusy} onClick={() => void toggleHistoryPause()}>{historyStatus.config.paused ? <Play size={16} /> : <Pause size={16} />}</IconButton>
+              {historyStatus.config.paused ? <IconButton label={t("Resume")} busy={pauseBusy} onClick={() => void toggleHistoryPause()}><Play size={16} /></IconButton> : null}
               <HistorySearchSettings entry="icon" />
-              <RefreshAction
-                busy={refreshBusy}
-                disabled={historyStatus ? !historyStatus.config.enabled || historyStatus.config.paused : false}
-                label={t("Refresh")}
-                state={freshnessStates.conversations}
-                onRefresh={() => void refresh()}
-              />
             </ControlGroup> : null
           }
         />
@@ -1802,6 +1794,10 @@ export const ConversationWorkspace = ({
                     </Button>
                   </div>
                 </FilterPopover>
+                <RefreshAction busy={refreshBusy}
+                  disabled={historyStatus ? !historyStatus.config.enabled || historyStatus.config.paused : false}
+                  label={t("Refresh")} state={freshnessStates.conversations}
+                  onRefresh={() => void refresh()} />
               </div>
             </div>
             <div className="conversation-list-meta">
@@ -1812,8 +1808,8 @@ export const ConversationWorkspace = ({
                       total
                     })
                   : t("{{count}} conversations", { count: total })}
+                {" · "}{formatConversationSize(totalSizeBytes)}
               </span>
-              <span>{t("Total")} {formatConversationSize(totalSizeBytes)}</span>
             </div>
             <div
               className="conversation-list"

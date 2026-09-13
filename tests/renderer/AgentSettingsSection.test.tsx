@@ -185,13 +185,14 @@ describe("AgentSettingsSection", () => {
 
     fireEvent.click(screen.getByText("Custom folders"));
     expect(screen.getByText("Custom · config/codex")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Change" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Use default" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Change" }));
-    expect(screen.getByRole("button", { name: "Choosing..." })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Choose" }));
+    expect(screen.getByRole("button", { name: "Choose" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Choose" })).toHaveAttribute("aria-busy", "true");
     finishChoose?.();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Change" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Choose" })).toBeEnabled());
 
     fireEvent.click(screen.getByRole("button", { name: "Use default" }));
     await waitFor(() => expect(onResetConfigRoot).toHaveBeenCalledWith("codex"));

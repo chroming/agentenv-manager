@@ -4,6 +4,7 @@ import type { AgentEnvSettings, AppUpdateStatus } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { SettingsPreferenceRow } from "./SettingsPreferenceRow";
 import { Button, ProgressBar, Switch } from "./ui";
+import { InfoTip } from "./InfoTip";
 
 interface AppUpdateSettingsProps {
   busy: boolean;
@@ -104,9 +105,6 @@ export const AppUpdateSettings = ({
   const latestVersion = status?.release?.version ?? (
     status?.phase === "up-to-date" ? status.currentVersion : undefined
   );
-  const latestVersionCopy = effectivePhase === "checking"
-    ? t("Checking…")
-    : latestVersion ?? t("Not checked");
   const statusTone = working
     ? "working"
     : status?.phase === "up-to-date"
@@ -127,15 +125,16 @@ export const AppUpdateSettings = ({
           className={`app-update-summary is-${statusTone}`}
           label={(
             <span className="app-update-heading">
-              <span>{statusCopy}</span>
-              <span className="app-update-channel">{channelCopy}</span>
+              <span>{t("App updates")}</span>
+              <span className="app-update-versions" aria-label={t("Application versions")}>
+                <span title={t("Current version")}>{status?.currentVersion ?? "—"}</span>
+                {latestVersion && latestVersion !== status?.currentVersion ? <span title={t("Latest version")}>→ {latestVersion}</span> : null}
+              </span>
+              <InfoTip label={channelCopy} />
             </span>
           )}
           description={<>
-            <span className="app-update-versions" aria-label={t("Application versions")}>
-              <span>{t("Current version")} <strong>{status?.currentVersion ?? "—"}</strong></span>
-              <span>{t("Latest version")} <strong>{latestVersionCopy}</strong></span>
-            </span>
+            <span role="status">{statusCopy}</span>
             {working ? (
               <ProgressBar className="app-update-progress" label={statusCopy} />
             ) : null}
@@ -183,7 +182,7 @@ export const AppUpdateSettings = ({
               {t("Open release")}
             </Button>
           ) : null}
-          {status?.phase !== "ready" ? (
+          {(!status || ["disabled", "idle", "checking", "up-to-date", "failed"].includes(status.phase)) ? (
             <Button
               busy={pendingAction === "check" || (
                 !pendingAction && status?.phase === "checking"

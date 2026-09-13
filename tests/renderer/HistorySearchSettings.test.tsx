@@ -17,6 +17,17 @@ const install = (enabled = false) => {
   return api;
 };
 
+it("keeps pause in source settings and saves it without losing selected devices", async () => {
+  const api = install(true);
+  render(<HistorySearchSettings />);
+  fireEvent.click(screen.getByRole("button", { name: "History sources" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Pause" }));
+  expect(screen.getByRole("button", { name: "Resume" })).toHaveAttribute("aria-pressed", "true");
+  expect(api.configureConversationHistory).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(api.configureConversationHistory).toHaveBeenCalledWith(expect.objectContaining({ enabled: true, paused: true, sources: [expect.objectContaining({ agentId: "codex" })] }), true));
+});
+
 it("explains unread histories and keeps retry failures inside the dialog", async () => {
   const api = install(true);
   const status = await api.conversationHistoryStatus();

@@ -176,13 +176,13 @@ describe("ProjectsWorkspace", () => {
     expect(switcherTrigger.querySelector(".ui-object-switcher__trigger-icon")).toBeNull();
     expect(document.querySelector(".project-detail__header .ui-inspector-header__icon"))
       .not.toBeNull();
-    expect(screen.getByRole("button", { name: "Rename Workspace" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Refresh Workspace" }).closest(
-      ".ui-inspector-header__actions"
-    )).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More Workspace actions" }));
+    expect(screen.getByRole("menuitem", { name: "Rename Workspace" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Refresh Workspace" })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
     fireEvent.click(switcherTrigger);
     const switcher = await screen.findByRole("dialog", { name: "Choose Workspace" });
-    expect(within(switcher).getByRole("button", { name: "Add folder" })).toBeInTheDocument();
+    expect(within(switcher).getByRole("button", { name: "Add Workspace" })).toBeInTheDocument();
     const projectRow = within(switcher).getByRole("option", { name: /Example/ });
     expect(projectRow).toHaveClass("ui-selectable-row", "is-selected");
     expect(projectRow.closest(".ui-object-switcher__list")).toBeInTheDocument();
@@ -477,7 +477,8 @@ describe("ProjectsWorkspace", () => {
     api.listProjects.mockClear();
     api.inspectProject.mockClear();
 
-    fireEvent.click(screen.getByRole("button", { name: "Refresh Workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "More Workspace actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Refresh Workspace" }));
 
     await waitFor(() => expect(api.inspectProject).toHaveBeenCalledWith("project-1"));
     expect(api.listProjects).not.toHaveBeenCalled();
@@ -658,6 +659,7 @@ describe("ProjectsWorkspace", () => {
 
     render(<ProjectsWorkspace targets={[target]} />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Choose Workspace" }));
     fireEvent.click(await screen.findByRole("button", { name: "Add Workspace" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Add SSH remote workspace..." }));
     const dialog = await screen.findByRole("dialog", { name: "Add SSH remote workspace" });
@@ -697,6 +699,7 @@ describe("ProjectsWorkspace", () => {
       ? new Promise((resolve) => { finishFirst = resolve; })
       : Promise.resolve({ currentPath: "/second", directories: [{ name: "second-folder", path: "/second/folder" }] }));
     render(<ProjectsWorkspace targets={[target]} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose Workspace" }));
     fireEvent.click(await screen.findByRole("button", { name: "Add Workspace" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Add SSH remote workspace..." }));
     const dialog = await screen.findByRole("dialog", { name: "Add SSH remote workspace" });
@@ -713,6 +716,7 @@ describe("ProjectsWorkspace", () => {
     const api = installApi();
     api.testRemoteProjectPath.mockResolvedValue({ exists: false, error: "Permission denied (publickey)" });
     render(<ProjectsWorkspace targets={[target]} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose Workspace" }));
     fireEvent.click(await screen.findByRole("button", { name: "Add Workspace" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Add SSH remote workspace..." }));
     const dialog = await screen.findByRole("dialog", { name: "Add SSH remote workspace" });
@@ -728,7 +732,8 @@ describe("ProjectsWorkspace", () => {
     api.listRemoteDirectories.mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve; }));
     render(<ProjectsWorkspace targets={[target]} />);
     const open = async () => {
-      fireEvent.click(await screen.findByRole("button", { name: "Add Workspace" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Choose Workspace" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add Workspace" }));
       fireEvent.click(await screen.findByRole("menuitem", { name: "Add SSH remote workspace..." }));
       return screen.findByRole("dialog", { name: "Add SSH remote workspace" });
     };
@@ -747,6 +752,7 @@ describe("ProjectsWorkspace", () => {
     let finishProbe!: (value: unknown) => void;
     api.testRemoteProjectPath.mockImplementationOnce(() => new Promise((resolve) => { finishProbe = resolve; }));
     render(<ProjectsWorkspace targets={[target]} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Choose Workspace" }));
     fireEvent.click(await screen.findByRole("button", { name: "Add Workspace" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Add SSH remote workspace..." }));
     const dialog = await screen.findByRole("dialog", { name: "Add SSH remote workspace" });
@@ -778,7 +784,7 @@ describe("ProjectsWorkspace", () => {
 
     const view = render(<ProjectsWorkspace targets={[target]} />);
 
-    expect(await screen.findByRole("button", { name: "Add Workspace" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Choose Workspace" })).toBeInTheDocument();
 
     expect(screen.queryByRole("button", { name: "Copy SSH command" })).not.toBeInTheDocument();
     const copyButton = await screen.findByRole("button", { name: "Copy SSH" });

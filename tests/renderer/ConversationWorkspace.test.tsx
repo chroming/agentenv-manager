@@ -410,7 +410,7 @@ describe("ConversationWorkspace", () => {
     expect(within(option).getByText("Repair release workflow"))
       .toHaveClass("conversation-list-item__title");
     expect(document.querySelector(".conversation-list-meta"))
-      .toHaveTextContent("Total 24 KB");
+      .toHaveTextContent("1 conversations · 24 KB");
 
     chooseConversationSort("Largest");
     expect(await screen.findByRole("option", {
@@ -900,7 +900,7 @@ describe("ConversationWorkspace", () => {
       target("opencode", "OpenCode")
     ]} />);
     await screen.findByText("Repair release workflow");
-    expect(screen.getByText("1 of 2 conversations")).toBeInTheDocument();
+    expect(screen.getByText(/1 of 2 conversations/)).toBeInTheDocument();
 
     const list = screen.getByRole("listbox");
     Object.defineProperties(list, {
@@ -916,7 +916,7 @@ describe("ConversationWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Load 1 more" }));
 
     expect(await screen.findByText("Second indexed conversation")).toBeInTheDocument();
-    expect(screen.getByText("2 conversations")).toBeInTheDocument();
+    expect(screen.getByText(/2 conversations/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Load 1 more" })).toBeNull();
     expect(api.listConversations).toHaveBeenCalledWith({
       offset: 1,

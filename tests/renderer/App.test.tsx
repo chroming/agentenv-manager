@@ -1278,13 +1278,13 @@ describe("App", () => {
       lastOpenedAt: "2026-08-06T00:00:00.000Z",
       exists: true
     };
-    const listProjects = vi.fn()
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([addedProject])
-      .mockResolvedValueOnce([{ ...addedProject, lastAgentId: "opencode" }])
-      .mockResolvedValueOnce([]);
-    const addProject = vi.fn().mockResolvedValue(addedProject);
-    const removeProject = vi.fn().mockResolvedValue(undefined);
+    let projectExists = false;
+    const listProjects = vi.fn().mockImplementation(async () => projectExists ? [addedProject] : []);
+    const addProject = vi.fn().mockImplementation(async () => {
+      projectExists = true;
+      return addedProject;
+    });
+    const removeProject = vi.fn().mockImplementation(async () => { projectExists = false; });
     const inspectProject = vi.fn().mockResolvedValue({
       projectId: addedProject.id,
       projectRoot: addedProject.rootPath,
@@ -1338,6 +1338,9 @@ describe("App", () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Workspaces" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Choose Workspace" }) ?? screen.getByRole("button", { name: "Add Workspace" })).toBeEnabled());
+    const workspaceSwitcher = screen.queryByRole("button", { name: "Choose Workspace" });
+    if (workspaceSwitcher) fireEvent.click(workspaceSwitcher);
     fireEvent.click(screen.getByRole("button", { name: "Add Workspace" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Add local folder" }));
 
@@ -1391,14 +1394,13 @@ describe("App", () => {
       .toBeInTheDocument();
     expect(within(editor).getByRole("button", { name: "Import skills" }))
       .toBeInTheDocument();
-    expect(within(editor).getByRole("button", { name: "Local Skills" }))
-      .toBeInTheDocument();
+    expect(within(editor).queryByRole("button", { name: "Local Skills" })).not.toBeInTheDocument();
     expect(within(editor.querySelector<HTMLElement>(".library-page-header")!).queryByRole("button", { name: "More Skill actions" }))
       .not.toBeInTheDocument();
     expect(within(editor.querySelector<HTMLElement>(".library-toolbar")!).getByRole("button", { name: "More Skill actions" })).toBeInTheDocument();
-    const refreshSkills = within(editor).getByRole("button", { name: "Refresh skills" });
-    expect(refreshSkills).toHaveClass("ui-icon-button", "ui-icon-button--ghost");
-    expect(refreshSkills).toHaveTextContent("");
+    fireEvent.click(within(editor).getByRole("button", { name: "More Skill actions" }));
+    expect(screen.getByRole("menuitem", { name: "Refresh" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Local Skills" })).toBeInTheDocument();
   });
 
   it("opens an indexed conversation directly from Quick Open content search", async () => {
@@ -2378,7 +2380,8 @@ describe("App", () => {
       api.readGitHubAuthStatus
     ];
     unrelatedReads.forEach((read) => vi.mocked(read).mockClear());
-    fireEvent.click(screen.getByRole("button", { name: "Refresh skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "More Skill actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Refresh" }));
     await waitFor(() => expect(listSkillLibrary).toHaveBeenCalledTimes(2));
     expect(screen.queryByText("Skills refreshed")).not.toBeInTheDocument();
     expect(checkSkillLibraryUpdates).toHaveBeenCalledTimes(1);
@@ -2785,7 +2788,8 @@ describe("App", () => {
     await screen.findByRole("region", { name: "Skill library" });
     expect(api.scanSkillInventory).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Local Skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "More Skill actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Local Skills" }));
 
     expect(await screen.findByRole("region", { name: "Local Skills Manager" })).toBeInTheDocument();
     expect(api.scanSkillInventory).toHaveBeenCalledTimes(2);
@@ -2824,7 +2828,8 @@ describe("App", () => {
     render(<App />);
 
     await openLibrary();
-    fireEvent.click(screen.getByRole("button", { name: "Local Skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "More Skill actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Local Skills" }));
 
     expect(await screen.findByText("Some Skill locations could not be scanned"))
       .toBeInTheDocument();
@@ -3692,11 +3697,7 @@ describe("App", () => {
 
     await openProfiles();
     const composer = await screen.findByRole("region", { name: "Profile composer" });
-    expect(
-      screen.getByLabelText(
-        "Compose reusable resources, then preview and apply them to an Agent."
-      )
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Profiles" }).closest(".ui-inspector-header")).toBeInTheDocument();
     const instructions = within(composer).getByRole("button", { name: "Instructions" });
     const skills = within(composer).getByRole("button", { name: "Skills" });
     const mcp = within(composer).getByRole("button", { name: "MCPs" });
@@ -3813,9 +3814,8 @@ describe("App", () => {
     expect(within(skillsRegion).getByRole("switch", { name: "Enable Docs" })).not.toBeChecked();
 
     checkSkillLibraryUpdates.mockClear();
-    fireEvent.click(
-      within(skillsRegion).getByRole("button", { name: "Check Profile Skill updates" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Profile Skill actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Check Profile Skill updates" }));
     await waitFor(() =>
       expect(checkSkillLibraryUpdates).toHaveBeenCalledWith(["testing"])
     );
@@ -3900,10 +3900,8 @@ describe("App", () => {
     expect(newProfileButtons[0].closest(".ui-object-switcher__footer")).not.toBeNull();
     expect(document.querySelector(".profile-index h2")).toBeNull();
 
-    const edit = screen.getByRole("button", { name: "Edit Profile" });
+    expect(screen.queryByRole("button", { name: "Edit Profile" })).not.toBeInTheDocument();
     const more = screen.getByRole("button", { name: "More Profile actions" });
-    fireEvent.focus(edit);
-    expect(screen.getByRole("tooltip")).toHaveTextContent("Edit Profile");
     fireEvent.focus(more);
     expect(screen.getByRole("tooltip")).toHaveTextContent("More Profile actions");
     expect(more.closest(".profile-hero")).not.toBeNull();
@@ -4043,7 +4041,8 @@ describe("App", () => {
     expect(profileTrigger.querySelector(".ui-object-switcher__trigger-icon")).toBeNull();
     expect(document.querySelector(".profile-hero .ui-inspector-header__icon"))
       .not.toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Edit Profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "More Profile actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit Profile" }));
     const editDialog = await screen.findByRole("dialog", { name: "Edit Profile" });
     const icon = within(editDialog).getByRole("button", {
       name: "Change icon for Daily Coding"
@@ -4740,8 +4739,9 @@ describe("App", () => {
     const pending = deferred<ProfileDetail>();
     read.mockReturnValueOnce(pending.promise);
     const checks = vi.mocked(api.checkMonitoredSkillSourceGroups).mock.calls.length;
-    const refresh = screen.getByRole("button", { name: "Refresh Profiles" });
+    const refresh = screen.getByRole("button", { name: "More Profile actions" });
     fireEvent.click(refresh);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Refresh Profiles" }));
     await waitFor(() => expect(refresh).toHaveAttribute("aria-busy", "true"));
     expect(refresh).toBeDisabled();
     expect(document.querySelector(".profile-loading-surface")).toBeNull();
@@ -5220,7 +5220,8 @@ describe("App", () => {
 
     await openProfiles();
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit Profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "More Profile actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit Profile" }));
     const editDialog = screen.getByRole("dialog", { name: "Edit Profile" });
     expect(editDialog.parentElement).toHaveAttribute(
       "data-dismiss-policy",

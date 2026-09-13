@@ -1,4 +1,4 @@
-import { Expand, Eye, FileInput, Pencil, Plus, Trash2 } from "lucide-react";
+import { Expand, Eye, FileInput, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   useEffect,
@@ -36,7 +36,6 @@ import {
   MasterListPane,
   ModalFrame,
   PageHeader,
-  RefreshAction,
   SearchField,
   SelectableListRow,
   ToolbarOverflowMenu,
@@ -176,11 +175,11 @@ export const InstructionsWorkspace = ({
         help={<InfoTip label={t("Create reusable Instruction Blocks and combine them in Profiles.")} />}
         actions={(
           <>
-            <Button icon={<FileInput size={14} />} onClick={() => void onImport().then((initial) => {
-              if (initial) setEditor({ initial });
-            })}>{t("Import")}</Button>
-            <Button variant={blocks.length === 0 ? "primary" : "secondary"} icon={<Plus size={14} />} onClick={() => setEditor({})}>{t("New Instruction")}</Button>
-            <RefreshAction label={t("Refresh")} busy={loading} onRefresh={() => void onRefresh()} />
+            <Button variant={blocks.length === 0 ? "primary" : "secondary"} icon={<Plus size={14} />} onClick={() => setEditor({})}>{t("New")}</Button>
+            <ToolbarOverflowMenu label={t("More")} menuLabel={t("Instruction actions")} busy={loading} items={[
+              { id: "import", label: t("Import"), icon: <FileInput size={14} />, onSelect: () => void onImport().then((initial) => { if (initial) setEditor({ initial }); }) },
+              { id: "refresh", label: t("Refresh"), icon: <RefreshCw size={14} />, disabled: loading, onSelect: () => void onRefresh() }
+            ]} />
           </>
         )}
       />
@@ -195,15 +194,6 @@ export const InstructionsWorkspace = ({
           />
           <div className="instructions-list" role="list">
             {visible.map((block) => {
-              const profileCount = block.usedByProfiles?.length ?? 0;
-              const description = block.description || profileCount > 0 ? (
-                <span className="instructions-list-row__metadata">
-                  {block.description ? <span>{block.description}</span> : null}
-                  {profileCount > 0 && !block.description ? (
-                    <span>{t(profileCount === 1 ? "{{count}} Profile" : "{{count}} Profiles", { count: profileCount })}</span>
-                  ) : null}
-                </span>
-              ) : undefined;
               return (
                 <SelectableListRow
                   className="instructions-list-row"
@@ -212,8 +202,7 @@ export const InstructionsWorkspace = ({
                   icon={<ResourceIcon iconKey={block.iconKey ?? "file"} size={17} />}
                   title={block.name}
                   titleEmphasis="selected"
-                  description={description}
-                  tooltip={block.name}
+                  tooltip={[block.name, block.description].filter(Boolean).join("\n")}
                   onSelect={() => setSelectedId(block.id)}
                   onContextMenu={(event: ReactMouseEvent<HTMLElement>) => {
                     event.preventDefault();

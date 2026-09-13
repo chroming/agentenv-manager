@@ -1,5 +1,5 @@
 import type { CSSProperties, Ref } from "react";
-import { Columns2, Copy, History, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import { Columns2, Copy, History, Pencil, RefreshCw, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n";
 import { ActionMenu, ActionMenuItem } from "./ui";
 
@@ -12,6 +12,10 @@ interface ProfileActionsMenuProps {
   appliedRestoreAvailable?: boolean;
   appliedRestoreDescription?: string;
   onCompare?(): void;
+  onEdit?(): void;
+  onRefresh?(): void;
+  refreshing?: boolean;
+  refreshDisabled?: boolean;
   onAnalyze?(): void;
   onDelete(): void;
   onDuplicate(): void;
@@ -29,6 +33,10 @@ export const ProfileActionsMenu = ({
   appliedRestoreAvailable = false,
   appliedRestoreDescription,
   onCompare,
+  onEdit,
+  onRefresh,
+  refreshing,
+  refreshDisabled,
   onAnalyze,
   onDelete,
   onDuplicate,
@@ -44,6 +52,8 @@ export const ProfileActionsMenu = ({
       menuRef={menuRef}
       style={style}
     >
+      {onEdit ? <ActionMenuItem disabled={disabled} onClick={onEdit}><Pencil size={15} /><span>{t("Edit Profile")}</span></ActionMenuItem> : null}
+      {onRefresh ? <ActionMenuItem disabled={disabled || refreshing || refreshDisabled} onClick={onRefresh}><RefreshCw size={15} className={refreshing ? "is-spinning" : undefined} /><span>{t("Refresh Profiles")}</span></ActionMenuItem> : null}
       {onAnalyze ? <ActionMenuItem disabled={disabled} onClick={onAnalyze}><Sparkles size={15} aria-hidden="true" /><span>{t("Analyze Profile")}</span></ActionMenuItem> : null}
       {onCompare ? <ActionMenuItem
         disabled={disabled || compareDisabled}

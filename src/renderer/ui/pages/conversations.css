@@ -52,7 +52,7 @@
   align-items: center;
   display: grid;
   gap: 6px;
-  grid-template-columns: minmax(0, 1fr) var(--control-height-default) var(--control-height-default);
+  grid-template-columns: minmax(0, 1fr) repeat(3, var(--control-height-default));
 }
 
 .conversation-sort-button {

@@ -1738,7 +1738,8 @@ try {
 
   await selectCaptureProfile("Code Review");
   await waitForProfileTitle("Code Review");
-  await page.locator(".profile-hero").getByRole("button", { name: "Edit Profile" }).click();
+  await page.getByRole("button", { name: "More Profile actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit Profile" }).click();
   const editProfileDialog = page.getByRole("dialog", { name: "Edit Profile" });
   await editProfileDialog
     .getByRole("button", { name: "Change icon for Code Review" })
@@ -1777,7 +1778,7 @@ try {
       await capturePage(page, join(outputDir, "profile-skill-group-off-920x620.png"));
       await page.getByRole("switch", { name: "Turn on Review pack" }).click();
       await page
-        .getByRole("region", { name: "Profile Skills" })
+        .locator('[data-profile-composer-id="skills"]')
         .getByRole("button", { name: "Add Skills", exact: true })
         .click();
       const skillPicker = page.getByRole("dialog", { name: "Add library skills" });
@@ -1935,7 +1936,7 @@ try {
     .getByRole("listitem", { name: "Profile Skill testing-strategies" })
     .getByRole("switch", { name: "Disable testing-strategies" })
     .click();
-  await mixedSkillRegion.getByRole("button", { name: "Add Skills", exact: true }).click();
+  await page.locator('[data-profile-composer-id="skills"]').getByRole("button", { name: "Add Skills", exact: true }).click();
   const mixedSkillPicker = page.getByRole("dialog", { name: "Add library skills" });
   await mixedSkillPicker.getByLabel("react-best-practices", { exact: true }).check();
   await mixedSkillPicker.getByRole("button", { name: /^Add 1$/ }).click();

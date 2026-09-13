@@ -215,6 +215,12 @@
   border-color: transparent;
 }
 
+.ui-icon-button[aria-pressed="true"]:not(:disabled) {
+  background: var(--surface-muted);
+  border-color: var(--border);
+  color: var(--text);
+}
+
 .ui-button--danger,
 .ui-icon-button--danger {
   background: var(--danger);

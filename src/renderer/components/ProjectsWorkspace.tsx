@@ -18,6 +18,7 @@ import {
   Pencil,
   Plus,
   Plug,
+  RefreshCw,
   RotateCcw,
   Server,
   Terminal,
@@ -744,7 +745,7 @@ export const ProjectsWorkspace = ({
   ) => {
     if (operation) return;
     const width = 184;
-    const estimatedHeight = 160;
+    const estimatedHeight = 260;
     selectProject(project.id);
     menuReturnFocusRef.current = returnFocus;
     setProjectMenu({
@@ -945,13 +946,14 @@ export const ProjectsWorkspace = ({
 
   return (
     <section className="projects-page" aria-label={t("Workspaces")}>
-      <PageHeader
+      {!selected ? <PageHeader
         className="projects-page-header"
         title={t("Workspaces")}
         help={<InfoTip label={t("Open recurring folders with an Agent and manage only the files owned by that folder.")} />}
         actions={(
           <Button
             ref={addMenuButtonRef}
+            disabled={Boolean(operation)}
             variant="secondary"
             size="compact"
             icon={<Plus size={14} />}
@@ -962,7 +964,7 @@ export const ProjectsWorkspace = ({
             {t("Add Workspace")}
           </Button>
         )}
-      />
+      /> : null}
 
       {notice ? (
         <Notice
@@ -997,6 +999,7 @@ export const ProjectsWorkspace = ({
           {selected ? (
             <>
               <InspectorHeader
+                context={t("Workspaces")}
                 className="project-detail__header"
                 icon={selected.isRemote ? <Server size={18} strokeWidth={2} /> : <Folder size={18} strokeWidth={2} />}
                 responsive="stack"
@@ -1013,8 +1016,13 @@ export const ProjectsWorkspace = ({
                           : t("No Workspaces yet")}
                       footerAction={{
                         icon: <Plus size={15} />,
-                        label: t("Add folder"),
-                        onClick: () => void addLocalProject()
+                        label: t("Add Workspace"),
+                        onClick: (trigger) => {
+                          if (!trigger) return;
+                          setSwitcherOpen(false);
+                          addMenuButtonRef.current = trigger;
+                          toggleAddMenu(trigger);
+                        }
                       }}
                       items={switcherItems}
                       open={switcherOpen}
@@ -1039,19 +1047,6 @@ export const ProjectsWorkspace = ({
                       onSelect={selectProject}
                       triggerVariant="inline"
                     />
-                    <IconButton
-                      className="project-detail__edit"
-                      appearance="inline"
-                      label={t("Rename Workspace")}
-                      size="compact"
-                      variant="ghost"
-                      onClick={() => {
-                        setRenameValue(selected.name);
-                        setRenameOpen(true);
-                      }}
-                    >
-                      <Pencil size={13} strokeWidth={2.1} />
-                    </IconButton>
                   </span>
                 )}
                 description={(
@@ -1061,14 +1056,6 @@ export const ProjectsWorkspace = ({
                 )}
                 actions={(
                   <ControlGroup className="project-detail__actions">
-                    <RefreshAction
-                      busy={operation === "inspect"}
-                      className="project-detail__refresh"
-                      disabled={!selected.exists}
-                      label={t("Refresh Workspace")}
-                      presentation="icon"
-                      onRefresh={() => void refreshSelectedProject()}
-                    />
                     <AgentContextSwitcher
                       className="project-agent-switcher"
                       open={agentSwitcherOpen}
@@ -1110,6 +1097,7 @@ export const ProjectsWorkspace = ({
                       <IconButton
                         ref={menuTriggerRef}
                         label={t("More Workspace actions")}
+                        busy={operation === "inspect"}
                         aria-expanded={projectMenu?.projectId === selected.id}
                         aria-haspopup="menu"
                         disabled={Boolean(operation)}
@@ -1178,6 +1166,7 @@ export const ProjectsWorkspace = ({
                         expanded={expanded}
                         icon={icon}
                         id={`workspace-${kind}`}
+                        headingCommands
                         key={kind}
                         onToggle={() => toggleResourceKind(kind)}
                         nested={kind === "skill" || kind === "mcp"}
@@ -1202,6 +1191,7 @@ export const ProjectsWorkspace = ({
                       >
                         {kind === "instructions" && canCreateInstruction ? (
                           <ResourcePanelToolbar
+                            placement="heading"
                             aria-label={t("Instruction actions")}
                             className="project-resource-section__toolbar"
                             variant="embedded"
@@ -1217,6 +1207,7 @@ export const ProjectsWorkspace = ({
                           </ResourcePanelToolbar>
                         ) : kind === "skill" && writableSkillLocations.length > 0 ? (
                           <ResourcePanelToolbar
+                            placement="heading"
                             aria-label={t("Skill actions")}
                             className="project-resource-section__toolbar"
                             variant="embedded"
@@ -1354,6 +1345,12 @@ export const ProjectsWorkspace = ({
             menuRef={menuRef}
             style={{ left: projectMenu.left, top: projectMenu.top }}
           >
+            <ActionMenuItem disabled={operation === "inspect"} onClick={() => { setProjectMenu(undefined); void refreshSelectedProject(); }}>
+              <RefreshCw size={15} className={operation === "inspect" ? "is-spinning" : undefined} /><span>{t("Refresh Workspace")}</span>
+            </ActionMenuItem>
+            <ActionMenuItem onClick={() => { setProjectMenu(undefined); setRenameValue(menuProject.name); setRenameOpen(true); }}>
+              <Pencil size={15} /><span>{t("Rename Workspace")}</span>
+            </ActionMenuItem>
             <ActionMenuItem onClick={() => runProjectMenuAction(menuProject, "details")}>
               <Eye size={15} aria-hidden="true" />
               <span>{t("Loaded resource details")}</span>

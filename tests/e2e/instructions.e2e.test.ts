@@ -145,7 +145,7 @@ describe("Instruction Library desktop workflow", () => {
       }
     }
 
-    await page.getByRole("button", { name: "New Instruction", exact: true }).click();
+    await page.getByRole("button", { name: "New", exact: true }).click();
     const editor = page.getByRole("dialog", { name: "New Instruction Block" });
     await editor.getByRole("textbox", { name: "Name" }).fill("Review rules");
     await editor.getByRole("textbox", { name: "Description" }).fill("Reusable review workflow");

@@ -8,7 +8,6 @@ import {
   LoaderCircle,
   Monitor,
   MoreHorizontal,
-  Pencil,
   Plus,
   RefreshCw,
   ScanLine,
@@ -3554,6 +3553,7 @@ const AppContent = ({
         <IconButton
           ref={profileActionsButtonRef}
           className="profile-more-button"
+          busy={profileRefresh.refreshing}
           aria-expanded={isProfileActionsOpen}
           aria-haspopup="menu"
           disabled={busy || !draftProfile || draftProfile.id !== selectedProfileId}
@@ -3568,6 +3568,10 @@ const AppContent = ({
         {isProfileActionsOpen ? (
           <ProfileActionsMenu
             disabled={busy}
+            onEdit={() => { setIsProfileActionsOpen(false); openEditProfileDialog(); }}
+            onRefresh={() => { setIsProfileActionsOpen(false); void profileRefresh.refresh(); }}
+            refreshing={profileRefresh.refreshing}
+            refreshDisabled={isLoading || isProfileDirty || isProfileSaving || Boolean(profileLoadingId) || Boolean(profileMetadataSavingId)}
             compareDisabled={evaluationControl.disabled}
             compareDescription={evaluationDescription}
             menuRef={profileActionsMenuRef}
@@ -3933,7 +3937,7 @@ const AppContent = ({
           />
         ) : activeWorkspace === "profiles" ? (
           <section className="profile-page">
-              <PageHeader
+              {!draftProfile && !profileLoadingId ? <PageHeader
                 className="profile-page-header"
                 title={t("Profiles")}
                 actions={<RefreshAction
@@ -3947,7 +3951,7 @@ const AppContent = ({
                   label={t("Compose reusable resources, then preview and apply them to an Agent.")}
                 />
               }
-            />
+            /> : null}
             <SingleObjectWorkspace
               className="profile-workbench"
               surface="open"
@@ -3965,6 +3969,7 @@ const AppContent = ({
                     })}
                   >
                     <InspectorHeader
+                      context={t("Profiles")}
                       className="profile-hero profile-hero--loading"
                       responsive="stack"
                       titleLabel={loadingProfileSummary?.name ?? t("Profile")}
@@ -4031,6 +4036,7 @@ const AppContent = ({
                 ) : draftProfile ? (
                   <>
                     <InspectorHeader
+                      context={t("Profiles")}
                       className="profile-hero"
                       responsive="stack"
                       titleLabel={draftProfile.manifest.name}
@@ -4067,24 +4073,8 @@ const AppContent = ({
                             onSearchChange={setProfileSearch}
                             onSelect={selectProfile}
                           />
-                          <IconButton
-                            aria-label={t("Edit Profile")}
-                            className="profile-edit-button"
-                            appearance="inline"
-                            label={t("Edit Profile")}
-                            size="compact"
-                            variant="ghost"
-                            onClick={openEditProfileDialog}
-                          >
-                            <Pencil size={13} strokeWidth={2.1} />
-                          </IconButton>
                         </span>
                       )}
-                      description={draftProfile.manifest.description ? (
-                        <span className="profile-description">
-                          {draftProfile.manifest.description}
-                        </span>
-                      ) : undefined}
                       actions={profileObjectActions}
                     />
                     <section className="profile-composer" aria-label={t("Profile composer")}>

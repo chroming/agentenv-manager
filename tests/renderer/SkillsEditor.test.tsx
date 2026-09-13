@@ -392,10 +392,11 @@ describe("SkillsEditor v2", () => {
       />
     );
 
-    const checkButton = screen.getByRole("button", { name: "Check Profile Skill updates" });
+    const checkButton = screen.getByRole("button", { name: "Profile Skill actions" });
     expect(checkButton).toHaveClass("ui-icon-button");
     expect(checkButton.textContent).toBe("");
     fireEvent.click(checkButton);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Check Profile Skill updates" }));
     expect(onCheck).toHaveBeenCalledWith(["review"]);
   });
 
@@ -413,7 +414,7 @@ describe("SkillsEditor v2", () => {
       />
     );
 
-    const checkButton = screen.getByRole("button", { name: "Check Profile Skill updates" });
+    const checkButton = screen.getByRole("button", { name: "Profile Skill actions" });
     expect(checkButton).toHaveAttribute("aria-busy", "true");
     expect(checkButton.textContent).toBe("");
     expect(checkButton.querySelector(".is-spinning")).not.toBeNull();
@@ -433,7 +434,7 @@ describe("SkillsEditor v2", () => {
       />
     );
 
-    expect(screen.queryByRole("button", { name: "Check Profile Skill updates" }))
+    expect(screen.queryByRole("button", { name: "Profile Skill actions" }))
       .not.toBeInTheDocument();
   });
 
