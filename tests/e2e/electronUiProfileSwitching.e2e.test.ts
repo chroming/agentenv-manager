@@ -1536,6 +1536,47 @@ afterEach(async () => {
 });
 
 describe("Electron UI profile switching e2e", () => {
+  it.each(["en", "zh_CN"] as const)("keeps collection commands with their owning list in %s", async (locale) => {
+    const { page } = await launchApp({ locale, workspaceFixture: true });
+    await enableFixtureHistory(page);
+    for (const width of [920, 1180, 1440]) {
+      await resizeAppWindow(page, width, width === 920 ? 620 : 900);
+      for (const [workspace, toolbar] of [
+        ["targets", ".target-list__header"],
+        ["instructions", ".instructions-list-toolbar"],
+        ["conversations", ".conversation-list-toolbar"]
+      ]) {
+        await page.locator(`.workspace-button[data-workspace="${workspace}"]`).click();
+        const controls = page.locator(toolbar!);
+        await controls.waitFor();
+        expect(await page.locator(".ui-page-header").count()).toBe(0);
+        const bounds = await controls.evaluate((element) => {
+          const box = element.getBoundingClientRect();
+          const editor = document.querySelector(".editor-panel")!.getBoundingClientRect();
+          const visible = [...element.querySelectorAll("button,input")].map((node) => node.getBoundingClientRect()).filter((r) => r.width > 0);
+          return { top: box.top - editor.top, contained: visible.every((r) => r.left >= box.left - 1 && r.right <= box.right + 1), overflow: element.scrollWidth > element.clientWidth + 1 };
+        });
+        expect(bounds.top, JSON.stringify({ workspace, width, bounds })).toBeLessThan(64);
+        expect(bounds.contained).toBe(true);
+        expect(bounds.overflow).toBe(false);
+        if (workspace === "targets") {
+          expect(await controls.locator('[aria-hidden="true"] button').count()).toBe(0);
+          const name = controls.locator(":scope > span").nth(3);
+          const actions = controls.locator(".target-list__header-actions");
+          const a = await actions.boundingBox();
+          const n = await name.boundingBox();
+          expect(a!.x).toBeGreaterThanOrEqual(n!.x + 40);
+        }
+      }
+    }
+    if (locale === "en") {
+      await page.locator(".conversation-list-toolbar").getByRole("button", { name: "More", exact: true }).click();
+      await page.getByRole("menuitem", { name: "History sources", exact: true }).click();
+      await page.getByRole("dialog", { name: "History search", exact: true }).waitFor();
+      await page.keyboard.press("Escape");
+    }
+  }, standardElectronTestTimeout);
+
   it.each(["en", "zh_CN"] as const)("keeps object workspaces to one header and stable resource commands in %s", async (locale) => {
     const { page } = await launchApp({ locale, workspaceFixture: true, openCodeAlphaLibrarySkillCount: 8 });
     const captureDir = process.env.AGENTENV_REVIEW_SCREENSHOTS;
@@ -12250,7 +12291,7 @@ describe("Electron UI profile switching e2e", () => {
     for (const workspace of ["Skills", "Profiles", "Workspaces", "Conversations", "Agents", "Settings"]) {
       await sidebar.getByRole("button", { name: workspace, exact: true }).click();
       const header = page.locator(".ui-page-header, .ui-inspector-header.has-context").first();
-      if (workspace === "Settings") {
+      if (["Settings", "Agents", "Conversations"].includes(workspace)) {
         expect(await header.count()).toBe(0);
       } else {
         await header.waitFor({ state: "visible" });
@@ -12305,11 +12346,11 @@ describe("Electron UI profile switching e2e", () => {
     const catalogHeaderMetrics = [];
     for (const workspace of ["Agents", "Skills"]) {
       await sidebar.getByRole("button", { name: workspace, exact: true }).click();
-      catalogHeaderMetrics.push(await page.locator(".ui-page-header").first().evaluate((element) => {
+      catalogHeaderMetrics.push(await page.locator(workspace === "Agents" ? ".target-list__header" : ".ui-page-header").first().evaluate((element) => {
         const headerBox = element.getBoundingClientRect();
-        const titleBox = element.querySelector<HTMLElement>(".ui-page-header__actions")!.getBoundingClientRect();
+        const titleBox = element.querySelector<HTMLElement>(".ui-page-header__actions, .target-page-actions")!.getBoundingClientRect();
         const actionBox = element.querySelector<HTMLElement>(
-          ".ui-page-header__actions button"
+          ".ui-page-header__actions button, .target-page-actions button"
         )!.getBoundingClientRect();
         return {
           left: Math.round(headerBox.left),
@@ -12851,7 +12892,7 @@ describe("Electron UI profile switching e2e", () => {
       const actionLefts = rows.map((row) =>
         row.querySelector<HTMLElement>(".target-workflow-actions")!.getBoundingClientRect().left
       );
-      const actionsHeader = list.querySelector<HTMLElement>(".target-list__header > span:last-child")!;
+      const actionsHeader = list.querySelector<HTMLElement>(".target-list__header-actions")!;
       const identityWidth = rows[0]!
         .querySelector<HTMLElement>(".target-workflow-title")!
         .getBoundingClientRect().width;
@@ -12904,10 +12945,10 @@ describe("Electron UI profile switching e2e", () => {
     }));
     expect(targetTypography).toEqual({ name: "500", status: "400" });
     await resizeAppWindow(page, 920, 620);
-    const compactActionsHeader = page.locator(".target-list__header > span:last-child");
+    const compactActionsHeader = page.locator(".target-list__last-applied-label");
     expect(await compactActionsHeader.evaluate((element) =>
-      getComputedStyle(element).visibility
-    )).toBe("hidden");
+      getComputedStyle(element).display
+    )).toBe("none");
     const compactTargetHeader = await page.locator(".target-list").evaluate((list) => {
       const headerCells = [
         list.querySelector<HTMLElement>(".target-list__header > span:nth-child(2)")!,

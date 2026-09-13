@@ -33,7 +33,6 @@ import type {
 } from "../../shared/types";
 import { reorderPreferenceByDrop } from "../../shared/uiState";
 import { HistoryView } from "./HistoryView";
-import { InfoTip } from "./InfoTip";
 import { PreviewDialog } from "./PreviewDialog";
 import { targetIconFor } from "./ProfileSidebar";
 import { useModalDialog } from "../hooks/useModalDialog";
@@ -49,7 +48,6 @@ import {
   focusInitialActionMenuItem,
   IconButton,
   ModalFrame,
-  PageHeader,
   RefreshAction,
   ToolbarOverflowMenu
 } from "./ui";
@@ -392,21 +390,28 @@ export const TargetWorkspace = ({
 
   return (
     <section className="target-page" aria-label={t("Agents")}>
-      <PageHeader
-        className="page-header workspace-page-header"
-        title={t("Agents")}
-        help={<InfoTip label={t("Inspect each Agent and apply a saved Profile only when you choose.")} />}
-        actions={(
-          <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
-            {environmentReview.state === "shared-review" ? (
-              <Button
-                disabled={busy || isLoading}
-                icon={<ScanLine size={15} aria-hidden="true" />}
-                onClick={onReviewEnvironment}
-              >
-                {t("Shared Skills")}
-              </Button>
-            ) : null}
+      <h2 className="ui-visually-hidden">{t("Agents")}</h2>
+      {showEnvironmentStatus ? (
+        <div className="target-page__context">
+          <EnvironmentStatusStrip
+            summary={environmentReview}
+            busy={busy}
+            onRefresh={() => {
+              void onRefresh();
+            }}
+          />
+        </div>
+      ) : null}
+
+      <div className="target-list" aria-busy={isLoading}>
+        <div className="target-list__header">
+            <span />
+            <span>{t("Agent")}</span>
+            <span>{t("Status")}</span>
+            <span>{t("Profile")}</span>
+            <div className="target-list__header-actions">
+              <span className="target-list__last-applied-label">{t("Last applied")}</span>
+              <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
             <RefreshAction
               disabled={busy || isLoading || freshness.status === "refreshing"}
               label={t("Refresh")}
@@ -416,6 +421,7 @@ export const TargetWorkspace = ({
             <ToolbarOverflowMenu
               disabled={busy || isLoading}
               items={[
+                ...(environmentReview.state === "shared-review" ? [{ id: "shared-review", label: t("Shared Skills"), icon: <ScanLine size={15} />, onSelect: onReviewEnvironment }] : []),
                 {
                   id: "local-skills",
                   icon: <ScanLine size={15} aria-hidden="true" />,
@@ -442,33 +448,8 @@ export const TargetWorkspace = ({
               label={t("More Agent actions")}
               menuLabel={t("Agent actions")}
             />
-          </ControlGroup>
-        )}
-      />
-
-      {showEnvironmentStatus ? (
-        <div className="target-page__context">
-          <EnvironmentStatusStrip
-            summary={environmentReview}
-            busy={busy}
-            onRefresh={() => {
-              void onRefresh();
-            }}
-          />
-        </div>
-      ) : null}
-
-      <div className="target-list" aria-busy={isLoading}>
-        {targets.length > 0 || remoteDevices.length > 0 ? (
-          <div className="target-list__header" aria-hidden="true">
-            <span />
-            <span>{t("Agent")}</span>
-            <span>{t("Status")}</span>
-            <span>{t("Profile")}</span>
-            <span>{t("Last applied")}</span>
-            <span aria-label={t("Actions")} />
+          </ControlGroup></div>
           </div>
-        ) : null}
         {isLoading && targets.length === 0 && remoteDevices.length === 0 ? (
           <div className="target-loading-state" role="status">
             <LoaderCircle className="is-spinning" size={16} aria-hidden="true" />

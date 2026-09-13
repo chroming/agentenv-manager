@@ -748,7 +748,7 @@ describe("ConversationWorkspace", () => {
     expect(container.querySelector(".conversation-layout")).not.toHaveAttribute("inert");
     expect(screen.getByRole("searchbox", { name: "Search conversations" })).toBeEnabled();
     expect(screen.queryByText("Refreshing conversations")).toBeNull();
-    const refresh = screen.getByRole("button", { name: "Refresh" });
+    const refresh = screen.getByRole("button", { name: "More" });
     expect(refresh).toHaveAttribute("aria-busy", "true");
     expect(refresh.querySelector(".is-spinning")).not.toBeNull();
 
@@ -966,7 +966,7 @@ describe("ConversationWorkspace", () => {
     await screen.findByText("Please repair the release workflow.");
 
     const copy = screen.getByRole("button", { name: "Copy conversation" });
-    const refresh = screen.getByRole("button", { name: "Refresh" });
+    const refresh = screen.getByRole("button", { name: "More" });
     fireEvent.click(copy);
 
     expect(copy.querySelector(".is-spinning")).not.toBeNull();
@@ -991,9 +991,10 @@ describe("ConversationWorkspace", () => {
     const { container } = render(<ConversationWorkspace targets={[]} />);
     await screen.findByText("Repair release workflow");
 
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Refresh" }));
 
-    const refresh = screen.getByRole("button", { name: "Refresh" });
+    const refresh = screen.getByRole("button", { name: "More" });
     expect(refresh).toHaveAttribute("aria-busy", "true");
     expect(refresh.querySelector(".is-spinning")).not.toBeNull();
     expect(screen.queryByText("Refreshing conversations")).toBeNull();

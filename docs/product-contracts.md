@@ -2501,6 +2501,11 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Page names are supplied by the sidebar, not repeated as visible content headings. PageHeader
   retains navigation, help and commands only; when none exist it renders no row. Accessible
   page labels remain. Object names and resource headings are not page titles and remain visible.
+- Agents place global refresh and maintenance in the list header, including empty/loading states.
+  Instructions place creation and catalog maintenance alongside list search. Conversations place
+  refresh and History sources in the list menu, with Resume visible when paused. These three
+  pages do not reserve a page-wide toolbar above their actual content. List controls remain
+  accessible, contained and distinct from the selected object's actions at every supported width.
 - Populated Profiles and Workspaces use one shared InspectorHeader: nonvisual page context,
   selected object identity, then the Agent selector and primary command at the trailing edge.
   New objects are added through the object switcher; Refresh and metadata editing remain in
@@ -2511,7 +2516,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
   when siblings expand, collapse, load, or show maintenance progress. Commands cannot be nested
   inside the disclosure trigger. Check updates lives in the Skill group's More menu; Add remains
   a labeled plus icon. Bulk operation behavior, item policies, and persistence do not change.
-- Conversations retain their master/detail workspace. Search, sort, filters, and Refresh share
+- Conversations retain their master/detail workspace. Search, sort, filters, and the list menu share
   one list toolbar; one quiet line reports count and size. Pause is configured in History sources,
   and an already-paused index exposes Resume on the page. Agent, device, path, and activity time
   remain discoverable without opening settings.

@@ -17,6 +17,8 @@ import {
   MoreHorizontal,
   Play,
   Search,
+  Settings2,
+  RefreshCw,
   TriangleAlert,
   UserRound
 } from "lucide-react";
@@ -52,7 +54,6 @@ import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { AppFeedback, type AppFeedbackMessage } from "./AppFeedback";
 import { ConversationMarkdown } from "./ConversationMarkdown";
-import { InfoTip } from "./InfoTip";
 import { targetIconFor } from "./ProfileSidebar";
 import { OverflowTooltip } from "./OverflowTooltip";
 import {
@@ -70,8 +71,7 @@ import {
   EmptyState,
   ModalFrame,
   MasterDetailLayout,
-  PageHeader,
-  RefreshAction,
+  ToolbarOverflowMenu,
   SearchField,
   SelectField
 } from "./ui";
@@ -1672,22 +1672,7 @@ export const ConversationWorkspace = ({
   return (
     <>
       <section className="conversation-page">
-        <PageHeader
-          className="conversation-page-header"
-          title={t("Conversations")}
-          help={
-            <InfoTip
-              label={t("Search approved local and SSH histories. Background indexing runs every five minutes while the app is open.")}
-            />
-          }
-          actions={
-            historyStatus?.config.enabled ? <ControlGroup className="conversation-page-actions">
-              {historyStatus.config.paused ? <span className="history-consent-note">{t("Paused")}</span> : null}
-              {historyStatus.config.paused ? <IconButton label={t("Resume")} busy={pauseBusy} onClick={() => void toggleHistoryPause()}><Play size={16} /></IconButton> : null}
-              <HistorySearchSettings entry="icon" />
-            </ControlGroup> : null
-          }
-        />
+        <h2 className="ui-visually-hidden">{t("Conversations")}</h2>
 
         {historyStatus && !historyStatus.config.enabled ? <EmptyState className="history-search-empty"
           icon={<MessagesSquare size={24} />} title={t("Search local and SSH conversation histories")}
@@ -1794,13 +1779,20 @@ export const ConversationWorkspace = ({
                     </Button>
                   </div>
                 </FilterPopover>
-                <RefreshAction busy={refreshBusy}
-                  disabled={historyStatus ? !historyStatus.config.enabled || historyStatus.config.paused : false}
-                  label={t("Refresh")} state={freshnessStates.conversations}
-                  onRefresh={() => void refresh()} />
+                <HistorySearchSettings renderTrigger={(openSources) => (
+                  <ToolbarOverflowMenu label={t("More")} menuLabel={t("Conversations")} busy={refreshBusy} items={[
+                    { id: "refresh", label: t("Refresh"), icon: <RefreshCw size={15} />,
+                      disabled: !historyStatus?.config.enabled || historyStatus.config.paused,
+                      onSelect: () => void refresh() },
+                    { id: "sources", label: t("History sources"), icon: <Settings2 size={15} />,
+                      title: t("Search approved local and SSH histories. Background indexing runs every five minutes while the app is open."),
+                      onSelect: openSources }
+                  ]} />
+                )} />
               </div>
             </div>
             <div className="conversation-list-meta">
+              {historyStatus?.config.paused ? <IconButton label={t("Resume")} busy={pauseBusy} onClick={() => void toggleHistoryPause()}><Play size={16} /></IconButton> : null}
               <span>
                 {items.length < total
                   ? t("{{loaded}} of {{total}} conversations", {

@@ -313,6 +313,14 @@
   overscroll-behavior: contain;
 }
 
+.instructions-list-toolbar {
+  align-items: center;
+  display: grid;
+  gap: var(--space-1);
+  grid-template-columns: minmax(0, 1fr) repeat(2, var(--control-height-default));
+  min-width: 0;
+}
+
 .instructions-list-row__metadata {
   align-items: center;
   display: flex;

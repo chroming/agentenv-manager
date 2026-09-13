@@ -15,7 +15,6 @@ import type {
 } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
-import { InfoTip } from "./InfoTip";
 import { InstructionBlockEditorDialog } from "./InstructionBlockEditorDialog";
 import { InstructionDocumentDialog } from "./InstructionDocumentDialog";
 import { InstructionDocumentPreviewList } from "./InstructionDocumentPreviewList";
@@ -35,7 +34,6 @@ import {
   MasterDetailPane,
   MasterListPane,
   ModalFrame,
-  PageHeader,
   SearchField,
   SelectableListRow,
   ToolbarOverflowMenu,
@@ -169,22 +167,10 @@ export const InstructionsWorkspace = ({
 
   return (
     <div className="instructions-workspace">
-      <PageHeader
-        className="page-header instructions-page-header"
-        title={t("Instructions")}
-        help={<InfoTip label={t("Create reusable Instruction Blocks and combine them in Profiles.")} />}
-        actions={(
-          <>
-            <Button variant={blocks.length === 0 ? "primary" : "secondary"} icon={<Plus size={14} />} onClick={() => setEditor({})}>{t("New")}</Button>
-            <ToolbarOverflowMenu label={t("More")} menuLabel={t("Instruction actions")} busy={loading} items={[
-              { id: "import", label: t("Import"), icon: <FileInput size={14} />, onSelect: () => void onImport().then((initial) => { if (initial) setEditor({ initial }); }) },
-              { id: "refresh", label: t("Refresh"), icon: <RefreshCw size={14} />, disabled: loading, onSelect: () => void onRefresh() }
-            ]} />
-          </>
-        )}
-      />
+      <h2 className="ui-visually-hidden">{t("Instructions")}</h2>
       <MasterDetailLayout className="instructions-catalog" listWidth="compact" appearance="canvas">
         <MasterListPane className="instructions-list-pane">
+          <div className="instructions-list-toolbar" role="toolbar" aria-label={t("Instruction actions")}>
           <SearchField
             fieldClassName="instructions-search"
             label={t("Search Instructions")}
@@ -192,6 +178,13 @@ export const InstructionsWorkspace = ({
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
           />
+            <IconButton label={t("New")} variant={blocks.length === 0 ? "primary" : "secondary"} onClick={() => setEditor({})}><Plus size={15} /></IconButton>
+            <ToolbarOverflowMenu label={t("More")} menuLabel={t("Instruction actions")} busy={loading} items={[
+              { id: "import", label: t("Import"), icon: <FileInput size={14} />, onSelect: () => void onImport().then((initial) => { if (initial) setEditor({ initial }); }) },
+              { id: "refresh", label: t("Refresh"), icon: <RefreshCw size={14} />, disabled: loading, onSelect: () => void onRefresh() }
+            ]} />
+
+          </div>
           <div className="instructions-list" role="list">
             {visible.map((block) => {
               return (

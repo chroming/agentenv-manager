@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, FolderPlus, Info, Monitor, Pause, Play, RefreshCw, Server, Settings2, Trash2, TriangleAlert, X } from "lucide-react";
 import type { HistorySearchConfig, HistorySearchStatus } from "../../shared/conversationSearch";
 import { useI18n } from "../i18n";
@@ -7,7 +7,7 @@ import { SettingsPreferenceRow } from "./SettingsPreferenceRow";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { Button, ControlGroup, DialogBody, DialogFooter, DialogHeader, IconButton, ModalFrame, Notice, SelectControl, Switch, TextField, ToolbarOverflowMenu } from "./ui";
 
-export const HistorySearchSettings = ({ onChanged, entry = "settings" }: { onChanged?(): void; entry?: "settings" | "setup" | "icon" }) => {
+export const HistorySearchSettings = ({ onChanged, entry = "settings", renderTrigger }: { onChanged?(): void; entry?: "settings" | "setup" | "icon"; renderTrigger?(open: () => void): ReactNode }) => {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<HistorySearchStatus>();
@@ -70,7 +70,7 @@ export const HistorySearchSettings = ({ onChanged, entry = "settings" }: { onCha
     ] });
   };
   return <>
-    {entry === "icon" ? <IconButton label={t("History sources")} onClick={() => void show()}><Settings2 size={16} /></IconButton> : <Button variant={entry === "setup" ? "primary" : "secondary"} icon={<Settings2 size={16} />} onClick={() => void show()}>{entryLabel}</Button>}
+    {renderTrigger ? renderTrigger(() => void show()) : entry === "icon" ? <IconButton label={t("History sources")} onClick={() => void show()}><Settings2 size={16} /></IconButton> : <Button variant={entry === "setup" ? "primary" : "secondary"} icon={<Settings2 size={16} />} onClick={() => void show()}>{entryLabel}</Button>}
     {open ? <ModalFrame className="ui-dialog-shell" ariaLabel={t("History search")} dialogRef={dialogRef} onDismiss={() => setOpen(false)} dismissDisabled={busy}>
       <DialogHeader title={t("History sources")}
         actions={<ControlGroup>

@@ -1189,7 +1189,8 @@ describe("App", () => {
     render(<App />);
 
     const workspace = await screen.findByRole("region", { name: "Agents" });
-    const sharedSkills = await within(workspace).findByRole("button", { name: "Shared Skills" });
+    fireEvent.click(await within(workspace).findByRole("button", { name: "More Agent actions" }));
+    const sharedSkills = await screen.findByRole("menuitem", { name: "Shared Skills" });
     expect(within(workspace).queryByRole("region", { name: "Profile status" })).toBeNull();
     expect(within(workspace).queryByText("1 shared Skill needs review")).toBeNull();
     fireEvent.click(sharedSkills);
