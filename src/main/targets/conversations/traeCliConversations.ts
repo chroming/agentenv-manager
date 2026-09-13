@@ -66,6 +66,7 @@ export const createTraeCliConversationCapability = (): AgentConversationCapabili
           root.path,
           (path) => /^rollout-.*\.jsonl$/i.test(basename(path)),
           {
+            onIssue: (message) => failures.push(message),
             shouldEnterDirectory: (_path, name) =>
               !name.endsWith(".artifacts") && name !== "background-tasks"
           }
@@ -103,7 +104,7 @@ export const createTraeCliConversationCapability = (): AgentConversationCapabili
     }
     return {
       candidates,
-      complete: selectedRoots.some((root) => !root.archived) && failures.length === 0,
+      complete: selectedRoots.length > 0 && failures.length === 0,
       ...(failures.length > 0 ? { failures } : {})
     };
   },

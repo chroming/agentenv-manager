@@ -28,6 +28,33 @@ it("keeps pause in source settings and saves it without losing selected devices"
   await waitFor(() => expect(api.configureConversationHistory).toHaveBeenCalledWith(expect.objectContaining({ enabled: true, paused: true, sources: [expect.objectContaining({ agentId: "codex" })] }), true));
 });
 
+it("explains summary-only coverage without asking users to retry a supported limitation", async () => {
+  const api = install(true);
+  const status = await api.conversationHistoryStatus();
+  status.sources[0].phase = "partial";
+  render(<HistorySearchSettings />);
+  fireEvent.click(screen.getByRole("button",{name:"History sources"}));
+  fireEvent.click(await screen.findByRole("button",{name:"This device · More"}));
+  fireEvent.click(screen.getByRole("menuitem",{name:"Details"}));
+  expect(await screen.findByText("Full transcript is unavailable")).toBeInTheDocument();
+  expect(screen.queryByRole("button",{name:"Retry history refresh"})).toBeNull();
+});
+
+it("adds a newly discovered root only when selected and saved", async () => {
+  const api = install(true);
+  const status = await api.conversationHistoryStatus();
+  status.availableSources.push({...status.availableSources[0],id:"custom",root:"/custom/codex"});
+  render(<HistorySearchSettings />);
+  fireEvent.click(screen.getByRole("button",{name:"History sources"}));
+  fireEvent.click(await screen.findByRole("button",{name:"This device · More"}));
+  fireEvent.click(screen.getByRole("menuitem",{name:"Details"}));
+  expect(api.configureConversationHistory).not.toHaveBeenCalled();
+  fireEvent.click(await screen.findByRole("button",{name:"Add"}));
+  expect(api.configureConversationHistory).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button",{name:"Save"}));
+  await waitFor(()=>expect(api.configureConversationHistory).toHaveBeenCalledWith(expect.objectContaining({sources:expect.arrayContaining([expect.objectContaining({root:"/custom/codex"})])}),true));
+});
+
 it("explains unread histories and keeps retry failures inside the dialog", async () => {
   const api = install(true);
   const status = await api.conversationHistoryStatus();

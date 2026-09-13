@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { RemoteDevice } from "../../../shared/types";
 import { z } from "zod";
 import type { HistorySource } from "../../../shared/conversationSearch";
@@ -6,7 +7,7 @@ import { shellQuote, type SshTransport } from "../../remoteDevices/systemSshTran
 // Runs via stdin without installing a helper or writing remote files. SQLite reads
 // use one read transaction, including committed WAL content, never an immutable copy.
 export const remoteHistoryScript = String.raw`
-import os, sys, json, hashlib, sqlite3, urllib.parse, datetime, contextlib
+import os, sys, json, hashlib, sqlite3, urllib.parse, datetime, contextlib, base64
 request = json.loads(sys.argv[1])
 agent = request['agentId']
 root = os.path.abspath(os.path.expanduser(request['root']))
@@ -34,6 +35,17 @@ def database(path):
     return db
 def iso(value):
     return datetime.datetime.fromtimestamp(value/1000, datetime.timezone.utc).isoformat()
+def suggested_roots():
+    if kind != 'default': return []
+    home = os.path.expanduser('~')
+    env = os.environ
+    candidates = []
+    if agent == 'codex': candidates = [env.get('CODEX_HOME')]
+    elif agent == 'claude-code': candidates = [env.get('CLAUDE_CONFIG_DIR')]
+    elif agent == 'trae-cli': candidates = [env.get('TRAECLI_HOME'), os.path.join(env.get('TRAE_HOME',os.path.join(home,'.trae')),'cli')]
+    elif agent == 'pi': candidates = [env.get('PI_CODING_AGENT_DIR')]
+    elif agent == 'opencode': candidates = [os.path.join(env.get('XDG_DATA_HOME',os.path.join(home,'.local/share')),'opencode')]
+    return sorted(set(os.path.abspath(os.path.expanduser(p)) for p in candidates if p and os.path.isdir(os.path.expanduser(p)) and os.path.abspath(os.path.expanduser(p)) != root))
 def scan():
     records, issues, seen = [], [], set()
     titles, summaries, workspaces = {}, {}, {}
@@ -94,7 +106,6 @@ def scan():
                     continue
                 try:
                     if name.endswith('.jsonl'):
-                        if agent in ['codex','trae-cli'] and not name.startswith('rollout-'): continue
                         if agent.startswith('antigravity') and name != 'transcript.jsonl': continue
                         if name in ['history.jsonl','session_index.jsonl']: continue
                         s = os.stat(path)
@@ -126,7 +137,11 @@ def scan():
                         records.append(dict(path=path,sessionId=sid,title=data.get('title'),workspacePath=data.get('directory'),version=hashlib.sha256('|'.join(version).encode()).hexdigest(),updatedAt=iso(data.get('time',{}).get('updated',os.stat(path).st_mtime*1000))))
                 except Exception as e: issues.append(path+': '+str(e))
     records.extend(summaries.values())
-    return dict(records=records, issues=issues, missing=missing)
+    records.sort(key=lambda r: (r['path'], r.get('sessionId','')))
+    revision = hashlib.sha256(json.dumps(records,sort_keys=True).encode()).hexdigest()
+    if request.get('inventoryVersion') and request['inventoryVersion'] != revision: raise Exception('History inventory changed during paging; refresh again')
+    offset = request.get('offset',0)
+    return dict(records=records[offset:offset+500], issues=issues, missing=missing, suggestedRoots=suggested_roots(), inventoryVersion=revision, nextOffset=offset+500 if offset+500<len(records) else None)
 def read():
     path = request['path']
     if not contained(path): raise Exception('History path is outside the approved source')
@@ -150,13 +165,38 @@ def read():
         with contextlib.closing(database(path)) as db:
             sid = request['sessionId']
             messages = []
-            for row in db.execute('SELECT id,data FROM message WHERE session_id=? ORDER BY time_created,id',(sid,)):
+            version = stamp(path)+':'+(stamp(path+'-wal') if os.path.exists(path+'-wal') else '')
+            if request.get('pageVersion') and request['pageVersion'] != version: raise Exception('History changed while reading; refresh again')
+            offset = request.get('offset',0)
+            for row in db.execute('SELECT id,data FROM message WHERE session_id=? ORDER BY time_created,id LIMIT 128 OFFSET ?',(sid,offset)):
                 info = json.loads(row['data']); info['id'] = row['id']
                 parts = [json.loads(p['data']) for p in db.execute('SELECT data FROM part WHERE message_id=? ORDER BY time_created,id',(row['id'],))]
                 messages.append(dict(info=info,parts=parts))
-            return dict(content=json.dumps(dict(messages=messages)))
+            after = stamp(path)+':'+(stamp(path+'-wal') if os.path.exists(path+'-wal') else '')
+            if version != after: raise Exception('History changed while reading; refresh again')
+            return dict(content=json.dumps(dict(messages=messages)),nextOffset=offset+128 if len(messages)==128 else None,version=version)
     before = stamp(path)
-    if request.get('expectedVersion') and request['expectedVersion'] != before: raise Exception('History changed after discovery; refresh again')
+    if not request.get('identity') and request.get('expectedVersion') and request['expectedVersion'] != before: raise Exception('History changed after discovery; refresh again')
+    if request.get('chunked'):
+        offset = request.get('offset',0)
+        digest = None
+        with open(path, 'rb') as f:
+            info = os.fstat(f.fileno())
+            identity = str(info.st_dev)+':'+str(info.st_ino)
+            size = request.get('snapshotSize',info.st_size)
+            if (request.get('identity') and request['identity'] != identity) or info.st_size < size: raise Exception('History changed while reading; refresh again')
+            if offset > size: raise Exception('Invalid history chunk offset')
+            f.seek(offset); content = f.read(min(4*1024*1024,size-offset))
+            eof = offset+len(content) == size
+            if eof:
+                f.seek(0); remaining = size; hash = hashlib.sha256()
+                while remaining:
+                    part = f.read(min(4*1024*1024,remaining))
+                    if not part: raise Exception('History changed while reading; refresh again')
+                    hash.update(part); remaining -= len(part)
+                digest = hash.hexdigest()
+        return dict(bytes=base64.b64encode(content).decode(),nextOffset=offset+len(content),eof=eof,
+            version=request.get('expectedVersion') or before,identity=identity,snapshotSize=size,digest=digest)
     with open(path, 'r', encoding='utf-8') as f: content = f.read()
     if before != stamp(path): raise Exception('History changed while reading; refresh again')
     return dict(content=content)
@@ -180,27 +220,97 @@ const remoteRecordSchema = z.object({
   snippet: z.string().nullish(), detailState: z.enum(["full", "summary-only"]).optional()
 });
 
+const remoteRequestPage = async (transport: SshTransport, device: RemoteDevice,
+  request: Record<string, unknown>, signal: AbortSignal): Promise<unknown> => {
+  signal.throwIfAborted();
+  const result = await transport.execute(device, `python3 - ${shellQuote(JSON.stringify(request))}`, {
+    input: Buffer.from(remoteHistoryScript), timeoutMs: 120_000,
+    maxOutputBytes: 128 * 1024 * 1024, signal
+  });
+  if (result.exitCode !== 0) throw new Error(result.stderr || "Remote history could not be read. Check SSH access and Python 3 availability.");
+  return JSON.parse(result.stdout.toString("utf8"));
+};
+
 export const remoteHistoryRequest = async <T>(transport: SshTransport, device: RemoteDevice,
   source: HistorySource, operation: "scan" | "read", signal: AbortSignal,
   record?: RemoteHistoryRecord): Promise<T> => {
-  const request = { ...source, operation, ...(record ? { path: record.path, sessionId: record.sessionId, expectedVersion: record.fileVersion ?? record.version } : {}) };
-  const result = await transport.execute(device,
-    `python3 - ${shellQuote(JSON.stringify(request))}`, {
-      input: Buffer.from(remoteHistoryScript), timeoutMs: 120_000,
-      maxOutputBytes: 128 * 1024 * 1024, signal
-    });
-  if (result.exitCode !== 0) throw new Error(result.stderr || "Remote history could not be read. Check SSH access and Python 3 availability.");
-  const value = JSON.parse(result.stdout.toString("utf8"));
-  if (operation === "read") return z.object({ content: z.string() }).parse(value) as T;
-  const inventory = z.object({ records: z.array(z.unknown()), issues: z.array(z.string()), missing: z.boolean().optional() }).parse(value);
-  const records = inventory.records.flatMap((record, index) => {
-    const parsed = remoteRecordSchema.safeParse(record);
-    if (!parsed.success) {
-      inventory.issues.push(`History entry ${index + 1} has unsupported metadata; readable histories were kept.`);
-      return [];
+  // Retry an unstable inventory/transcript once, never publish a mixture of revisions.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const base = { ...source, operation, ...(record ? { path: record.path, sessionId: record.sessionId } : {}) };
+      if (operation === "read") {
+        const chunks: Buffer[] = [];
+        const messages: unknown[] = [];
+        let offset = 0;
+        let version: string | undefined;
+        let identity: string | undefined;
+        let snapshotSize: number | undefined;
+        const digest = createHash("sha256");
+        for (;;) {
+          const raw = await remoteRequestPage(transport, device, { ...base, chunked: true, offset,
+            expectedVersion: version ?? (attempt === 0 ? record?.fileVersion ?? record?.version : undefined),
+            pageVersion: version, identity, snapshotSize }, signal);
+          const page = z.object({ content: z.string().optional(), bytes: z.string().optional(),
+            nextOffset: z.number().int().nonnegative().nullish(), eof: z.boolean().optional(),
+            version: z.string().optional(), identity:z.string().optional(), snapshotSize:z.number().int().nonnegative().optional(), digest:z.string().nullish() }).parse(raw);
+          if (page.bytes !== undefined) {
+            const chunk = Buffer.from(page.bytes, "base64");
+            if (version && page.version !== version) throw new Error("History changed while reading; refresh again");
+            if (identity && (page.identity !== identity || page.snapshotSize !== snapshotSize)) throw new Error("History changed while reading; refresh again");
+            chunks.push(chunk);
+            digest.update(chunk);
+            if (page.eof) {
+              if (page.digest && digest.digest("hex") !== page.digest) throw new Error("History changed while reading; refresh again");
+              return { content: Buffer.concat(chunks).toString("utf8") } as T;
+            }
+            identity = page.identity;
+            snapshotSize = page.snapshotSize;
+            if (!page.version || page.nextOffset !== offset + chunk.length || !chunk.length) throw new Error("Invalid history chunk; retry refresh.");
+          } else {
+            if (page.content === undefined) throw new Error("History response has no content.");
+            if (!version && page.nextOffset == null) return { content: page.content } as T;
+            if (version && page.version !== version) throw new Error("History changed while reading; refresh again");
+            messages.push(...z.object({ messages: z.array(z.unknown()) }).parse(JSON.parse(page.content)).messages);
+            if (page.nextOffset == null) return { content: JSON.stringify({ messages }) } as T;
+          }
+          if (page.nextOffset == null || page.nextOffset <= offset || !page.version) throw new Error("Invalid history page; retry refresh.");
+          offset = page.nextOffset;
+          version = page.version;
+        }
+      }
+      const records: RemoteHistoryRecord[] = [];
+      const issues = new Set<string>();
+      const suggestedRoots = new Set<string>();
+      let offset = 0;
+      let inventoryVersion: string | undefined;
+      let missing = false;
+      for (;;) {
+        const raw = await remoteRequestPage(transport, device, { ...base, offset, inventoryVersion }, signal);
+        const page = z.object({ records: z.array(z.unknown()), issues: z.array(z.string()),
+          missing: z.boolean().optional(), suggestedRoots: z.array(z.string().max(4096)).optional(), inventoryVersion: z.string().optional(),
+          nextOffset: z.number().int().nonnegative().nullish() }).parse(raw);
+        if (inventoryVersion && inventoryVersion !== page.inventoryVersion) throw new Error("History inventory changed during paging; refresh again");
+        page.issues.forEach((issue) => issues.add(issue));
+        page.suggestedRoots?.filter((path) => path.startsWith("/") && !path.includes("\\0")).forEach((path) => suggestedRoots.add(path));
+        for (const record of page.records) {
+          const parsed = remoteRecordSchema.safeParse(record);
+          if (!parsed.success) {
+            issues.add("A history entry has unsupported metadata; readable histories were kept.");
+            continue;
+          }
+          const data = parsed.data;
+          records.push({ ...data, updatedAt: new Date(data.updatedAt).toISOString(), title: data.title ?? undefined,
+            workspacePath: data.workspacePath ?? undefined, snippet: data.snippet ?? undefined });
+        }
+        missing = Boolean(page.missing);
+        if (page.nextOffset == null) return { records, issues: [...issues], missing, suggestedRoots: [...suggestedRoots] } as T;
+        if (page.nextOffset <= offset || !page.inventoryVersion) throw new Error("Invalid history inventory page; retry refresh.");
+        offset = page.nextOffset;
+        inventoryVersion = page.inventoryVersion;
+      }
+    } catch (error) {
+      signal.throwIfAborted();
+      if (attempt >= 1 || !/History (?:inventory )?changed/.test(String(error))) throw error;
     }
-    const data = parsed.data;
-    return [{ ...data, updatedAt: new Date(data.updatedAt).toISOString(), title: data.title ?? undefined, workspacePath: data.workspacePath ?? undefined, snippet: data.snippet ?? undefined }];
-  });
-  return { records, issues: inventory.issues, missing: inventory.missing } as T;
+  }
 };

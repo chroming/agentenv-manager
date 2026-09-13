@@ -64,9 +64,9 @@ export const historyFilePath = (candidate: AgentConversationCandidate): string =
   return locator;
 };
 
-export const historyRootsFor = (agentId: string, homeDir: string, paths: {configDir: string; runtimeDir?: string}, local: boolean): string[] => {
+export const historyRootsFor = (agentId: string, homeDir: string, paths: {configDir: string; runtimeDir?: string}, local: boolean, environment: NodeJS.ProcessEnv = process.env): string[] => {
   if (!local) return defaultRemoteRoots[agentId] ? [defaultRemoteRoots[agentId]] : [];
-  if (agentId === "opencode") return opencodeDataDirs(homeDir, process.platform, process.env);
+  if (agentId === "opencode") return opencodeDataDirs(homeDir, process.platform, environment);
   if (agentId === "trae-cli") return [...new Set([paths.runtimeDir, join(paths.configDir,"cli")].filter((s):s is string=>Boolean(s)))];
   if (agentId.startsWith("antigravity")) return [join(paths.configDir,"..",agentId === "antigravity-app" ? "antigravity" : "antigravity-cli")];
   return [paths.configDir];

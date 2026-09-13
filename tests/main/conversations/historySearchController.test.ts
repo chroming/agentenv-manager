@@ -42,6 +42,55 @@ const setup = async (transport?: SshTransport, configText?: string) => {
 };
 
 describe("explicit history search permissions", () => {
+  it("persists partial record diagnostics across unchanged refreshes and clears them only after repair", async () => {
+    const {controller,index,file,paths} = await setup();
+    const {deviceName,agentName,...source} = (await controller.status()).availableSources.find((s) => s.deviceId === "local")!;
+    await writeFile(file, transcript + "\n{broken\n");
+    await controller.configure({version:1,enabled:true,paused:false,sources:[source]});
+    await controller.refresh();
+    expect((await controller.status()).sources[0]).toMatchObject({phase:"partial", indexed:1});
+    const saved = JSON.parse(await readFile(join(paths.conversationIndexPath, "../conversation-coverage.json"),"utf8"));
+    expect(Object.values(saved)[0]).toHaveProperty("recordIssues");
+    const repeat = await controller.refresh();
+    expect(repeat.unchanged).toBe(1);
+    expect((await controller.status()).sources[0]?.issues.join(" ")).toContain("unreadable records");
+    const reopened = await createHistorySearchController({paths,index,
+      registry:createTargetRegistry([createCodexTargetAdapter()]),
+      settings:{readSettings:async()=>({enabledTargetIds:[]})} as unknown as SettingsStore});
+    try {
+      expect((await reopened.refresh()).unchanged).toBe(1);
+      expect((await reopened.status()).sources[0]?.issues.join(" ")).toContain("unreadable records");
+    } finally { reopened.dispose(); }
+    expect(await index.search({query:"unique history needle",historySourceIds:controller.allowedIds()})).toHaveLength(1);
+    await writeFile(file, transcript);
+    await controller.refresh();
+    expect((await controller.status()).sources[0]).toMatchObject({phase:"ready",issues:[]});
+  });
+
+  it("offers remote custom roots without indexing them until explicitly added", async () => {
+    const execute = vi.fn(async () => ({exitCode:0,stderr:"",stdout:Buffer.from(JSON.stringify({records:[],issues:[],suggestedRoots:["/custom/codex"]}))}));
+    const {controller} = await setup({execute} as unknown as SshTransport);
+    const {deviceName,agentName,...source} = (await controller.status()).availableSources.find((s) => s.deviceId === "remote")!;
+    await controller.configure({version:1,enabled:true,paused:false,sources:[source]});
+    await controller.refresh();
+    const status = await controller.status();
+    expect(status.availableSources.some((s) => s.root === "/custom/codex")).toBe(true);
+    expect(status.config.sources).toHaveLength(1);
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps local indexing responsive while another device is waiting", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {release=resolve;});
+    const execute = vi.fn(async () => { await gate; return {exitCode:0,stderr:"",stdout:Buffer.from('{"records":[],"issues":[]}')}; });
+    const {controller,index} = await setup({execute} as unknown as SshTransport);
+    const sources = (await controller.status()).availableSources.map(({deviceName,agentName,...s})=>s).reverse();
+    await controller.configure({version:1,enabled:true,paused:false,sources});
+    const run = controller.refresh();
+    try { await vi.waitFor(async () => expect((await index.list()).total).toBe(1)); }
+    finally { release(); await run; }
+  });
+
   it("does not warn for an unused default history root, but preserves cached records if it disappears", async () => {
     const {controller,index,paths} = await setup();
     const {deviceName,agentName,...source} = (await controller.status()).availableSources.find((source) => source.deviceId === "local")!;

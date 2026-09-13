@@ -176,7 +176,8 @@ export const createPiConversationCapability = (): AgentConversationCapability =>
     try {
       files = await listFilesRecursively(
         selectedRoot,
-        (path) => path.toLowerCase().endsWith(".jsonl")
+        (path) => path.toLowerCase().endsWith(".jsonl"),
+        { onIssue: (message) => failures.push(message) }
       );
     } catch (error) {
       return {

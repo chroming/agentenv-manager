@@ -63,11 +63,18 @@ it.skipIf(process.platform === "win32")("requires opt-in, searches local and SSH
   await page.setViewportSize({width:920,height:620});
   await dialog.getByRole("button",{name:"Enable search",exact:true}).click();
   await expect.poll(async () => (await page.evaluate(()=>window.agentEnv.listConversations({query:"needle"}))).total,{timeout:20000}).toBe(2);
-  const pause = page.getByRole("button",{name:"Pause",exact:true});
+  const openSources = async () => {
+    await page.locator(".conversation-list-toolbar").getByRole("button",{name:"More",exact:true}).click();
+    await page.getByRole("menuitem",{name:"History sources",exact:true}).click();
+    await expect.poll(() => dialog.getByRole("button",{name:"Save",exact:true}).isEnabled()).toBe(true);
+  };
+  await openSources();
+  const pause = dialog.getByRole("button",{name:"Pause",exact:true});
   expect(await pause.innerText()).toBe("");
   await pause.click();
+  await dialog.getByRole("button",{name:"Save",exact:true}).click();
   await expect.poll(()=>page.evaluate(async ()=>(await window.agentEnv.conversationHistoryStatus()).config.paused)).toBe(true);
-  await page.getByText("Paused",{exact:true}).waitFor();
+  await page.getByRole("button",{name:"Resume",exact:true}).waitFor();
   await page.screenshot({path:join(output,"history-paused-920.png"),animations:"disabled"});
   await page.getByRole("button",{name:"Resume",exact:true}).click();
   await expect.poll(()=>page.evaluate(async ()=>(await window.agentEnv.conversationHistoryStatus()).config.paused)).toBe(false);
@@ -81,7 +88,7 @@ it.skipIf(process.platform === "win32")("requires opt-in, searches local and SSH
   expect(copied).toContain("fixture.invalid"); expect(copied).toContain("/work/remote/example");
   await page.getByRole("dialog",{name:"History location",exact:true}).getByRole("button",{name:"Close",exact:true}).click();
   await page.screenshot({path:join(output,"history-remote-result.png"),animations:"disabled"});
-  await page.getByRole("button",{name:"History sources",exact:true}).click();
+  await openSources();
   await expect.poll(() => dialog.getByRole("button",{name:"Save",exact:true}).isEnabled()).toBe(true);
   await page.screenshot({path:join(output,"history-enabled-920.png"),animations:"disabled"});
   await dialog.getByRole("button",{name:"Build machine · More",exact:true}).click();

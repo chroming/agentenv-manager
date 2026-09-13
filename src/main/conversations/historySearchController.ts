@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { readFile, mkdir, chmod, stat } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { readFile, mkdir, chmod, realpath, stat } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { HistorySearchConfigSchema, type HistorySearchConfig, type HistorySearchStatus, type HistorySource, type HistorySourceProgress } from "../../shared/conversationSearch";
 import type { ConversationDetail, ConversationRefreshResult, RemoteDevice } from "../../shared/types";
 import type { AgentEnvPaths } from "../paths";
@@ -12,7 +12,7 @@ import type { SshTransport } from "../remoteDevices/systemSshTransport";
 import type { AgentConversationCandidate } from "../targets/types";
 import type { ConversationIndexStore } from "./conversationIndexStore";
 import { writeAtomic } from "../fileUtils";
-import { candidateForFile, createConversationDetail, listFilesRecursively, sourceIdFromFilename } from "./adapterUtils";
+import { candidateForFile, createConversationDetail, listFilesRecursively, sourceByteSize, sourceIdFromFilename } from "./adapterUtils";
 import { remoteHistoryRequest, type RemoteHistoryRecord } from "../targets/conversations/remoteHistoryReader";
 import { historyFilePath, historyReaderPolicy, historyRootsFor, parseHistoryText } from "../targets/conversations/historySourceAdapter";
 
@@ -32,11 +32,14 @@ export const createHistorySearchController = async (options: {
   catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") settingsIssue = "History search settings could not be read. Select and save your sources again; no history has been scanned.";
   }
-  let progress: Record<string, HistorySourceProgress> = {};
+  type StoredProgress = HistorySourceProgress & { recordIssues?: Record<string, string[]>; suggestedRoots?: string[] };
+  let progress: Record<string, StoredProgress> = {};
   try {
     progress = z.record(z.string(), z.object({
       sourceKey: z.string(), phase: z.enum(["pending", "indexing", "ready", "partial", "unavailable"]),
       discovered: z.number().nonnegative(), indexed: z.number().nonnegative(), failed: z.number().nonnegative(), summaryOnly: z.number().nonnegative(),
+      suggestedRoots: z.array(z.string()).optional(),
+      recordIssues: z.record(z.string(), z.array(z.string())).optional(),
       lastAttemptAt: z.string().optional(), lastSuccessAt: z.string().optional(), issues: z.array(z.string())
     })).parse(JSON.parse(await readFile(progressPath, "utf8")));
   } catch { /* Rebuilt on explicit refresh. */ }
@@ -55,11 +58,29 @@ export const createHistorySearchController = async (options: {
       for (const adapter of options.registry.listAdapters().filter((a) => a.conversations)) {
         const agentId = adapter.descriptor.id;
         const targetPaths = adapter.createTargetPaths({homeDir:options.paths.homeDir,rootDirOverride:settings.targetConfigRoots?.[agentId],environment:process.env});
-        const roots = historyRootsFor(agentId, options.paths.homeDir, targetPaths, device.id === "local");
+        const roots = [...new Set([
+          ...historyRootsFor(agentId, options.paths.homeDir, targetPaths, device.id === "local"),
+          ...(device.id === "local" ? historyRootsFor(agentId, options.paths.homeDir,
+            adapter.createTargetPaths({homeDir: options.paths.homeDir, environment: {}}), true, {}) : [])
+        ])];
         for (const historyRoot of roots) {
           const source = { deviceId: device.id, agentId, root: historyRoot, kind: "default" as const };
           result.push({ ...source, id: keyFor(source), deviceName: device.id === "local" && process.platform !== "darwin" ? "This device" : device.name, agentName: adapter.descriptor.name });
         }
+        if (device.id === "local" && agentId === "pi" && targetPaths.runtimeDir &&
+          targetPaths.runtimeDir !== join(targetPaths.configDir, "sessions")) {
+          const source = {deviceId: device.id, agentId, root: targetPaths.runtimeDir, kind: "directory" as const};
+          result.push({...source,id:keyFor(source),deviceName:process.platform === "darwin" ? "This Mac" : "This device",agentName:adapter.descriptor.name});
+        }
+      }
+    }
+    for (const source of config.sources) {
+      const base = result.find((item) => item.deviceId === source.deviceId && item.agentId === source.agentId);
+      if (!base) continue;
+      for (const root of progress[source.id]?.suggestedRoots ?? []) {
+        const identity = { deviceId: source.deviceId, agentId: source.agentId, root, kind: "default" as const };
+        const id = keyFor(identity);
+        if (!result.some((item) => item.id === id)) result.push({ ...identity, id, deviceName: base.deviceName, agentName: base.agentName });
       }
     }
     return result;
@@ -113,12 +134,14 @@ export const createHistorySearchController = async (options: {
     const run = async () => {
       const result: ConversationRefreshResult = { indexed: 0, unchanged: 0, removed: 0, failures: [], refreshedAt: new Date().toISOString() };
       const remoteDevices = await devices();
-      for (const source of [...config.sources]) {
+      let coverageWrite = Promise.resolve();
+      const collectSource = async (source: HistorySource) => {
         current();
         const adapter = options.registry.get(source.agentId);
         const device = remoteDevices.find((d) => d.id === source.deviceId);
-        const coverage: HistorySourceProgress = { sourceKey: source.id, phase: "indexing", discovered: 0, indexed: 0, failed: 0, summaryOnly: 0,
-          lastAttemptAt: new Date().toISOString(), lastSuccessAt: progress[source.id]?.lastSuccessAt, issues: [] };
+        const previousRecordIssues = progress[source.id]?.recordIssues ?? {};
+        const coverage: StoredProgress = { sourceKey: source.id, phase: "indexing", discovered: 0, indexed: 0, failed: 0, summaryOnly: 0,
+          lastAttemptAt: new Date().toISOString(), lastSuccessAt: progress[source.id]?.lastSuccessAt, issues: [], recordIssues: {}, suggestedRoots: progress[source.id]?.suggestedRoots };
         progress[source.id] = coverage;
         try {
           const paths = adapter.createTargetPaths({ homeDir: options.paths.homeDir, rootDirOverride: source.root, environment: process.env });
@@ -129,9 +152,10 @@ export const createHistorySearchController = async (options: {
           const remoteRecords = new Map<string, RemoteHistoryRecord>();
           if (source.deviceId !== "local") {
             if (!device || !options.transport) throw new Error("SSH device is unavailable. Check its connection in Agents.");
-            const inventory = await remoteHistoryRequest<{ records: RemoteHistoryRecord[]; issues: string[]; missing?: boolean }>(options.transport, device, source, "scan", signal);
+            const inventory = await remoteHistoryRequest<{ records: RemoteHistoryRecord[]; issues: string[]; missing?: boolean; suggestedRoots?: string[] }>(options.transport, device, source, "scan", signal);
             current();
             coverage.issues.push(...inventory.issues);
+            coverage.suggestedRoots = inventory.suggestedRoots ?? [];
             if (inventory.missing && (source.kind === "directory" || options.index.hasSourceRecords(source.id))) coverage.issues.push("The history directory is unavailable. Check its path or connection; cached conversations are kept.");
             for (const record of inventory.records) {
               const recordId = record.sessionId ?? sourceIdFromFilename(record.path);
@@ -143,8 +167,9 @@ export const createHistorySearchController = async (options: {
             }
           } else if (source.kind === "directory" && reader.directoryJsonl) {
             if (!(await stat(source.root)).isDirectory()) throw new Error("History source must be a directory. Check its path in History sources.");
-            for (const path of await listFilesRecursively(source.root, (p) => p.endsWith(".jsonl"))) {
-              candidates.push(await candidateForFile(path, { recordId: sourceIdFromFilename(path), detailState: "full" }));
+            for (const path of await listFilesRecursively(source.root, (p) => p.endsWith(".jsonl"), { onIssue: (message) => coverage.issues.push(message) })) {
+              try { candidates.push(await candidateForFile(path, { recordId: sourceIdFromFilename(path), detailState: "full" })); }
+              catch (error) { coverage.issues.push(`${path}: ${String(error)}`); }
             }
           } else {
             const discovery = await adapter.conversations!.discover(context);
@@ -161,10 +186,21 @@ export const createHistorySearchController = async (options: {
             const id = `${source.id}:${createHash("sha256").update(candidate.source.locator + "\0" + nativeId).digest("hex")}`;
             if (seen.has(id)) continue;
             seen.add(id);
+            const issueStart = coverage.issues.length;
             try {
-              if (options.index.sourceVersion(id) === candidate.source.version) { result.unchanged++; coverage.indexed++; if (candidate.detailState === "summary-only") coverage.summaryOnly++; continue; }
+              if (options.index.sourceVersion(id) === candidate.source.version) { result.unchanged++; coverage.indexed++; coverage.issues.push(...previousRecordIssues[id] ?? []); if (candidate.detailState === "summary-only") coverage.summaryOnly++; continue; }
               let detail: ConversationDetail;
               let content: string | undefined;
+              const localJsonl = source.deviceId === "local" && candidate.source.locator.endsWith(".jsonl") && sourceByteSize(candidate.source.version) !== undefined;
+              const verifyLocalPath = async () => {
+                const approved = await realpath(source.root);
+                const actual = await realpath(candidate.source.locator);
+                const path = relative(approved, actual);
+                if (isAbsolute(path) || path === ".." || path.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)) {
+                  throw new Error("History link changed or leaves the approved source. Add its destination in History sources.");
+                }
+              };
+              if (localJsonl) await verifyLocalPath();
               if (source.deviceId !== "local") {
                 if (candidate.detailState === "summary-only") detail = createConversationDetail({id: source.agentId, name: adapter.descriptor.name}, candidate, [], {title: candidate.title, snippet: candidate.snippet});
                 else {
@@ -193,6 +229,13 @@ export const createHistorySearchController = async (options: {
                 const bad = lines.filter((l) => { try { JSON.parse(l); return false; } catch { return true; } }).length;
                 if (bad) coverage.issues.push(`${candidate.source.locator}: ${bad} unreadable records; readable messages were indexed.`);
               }
+              if (localJsonl) {
+                await verifyLocalPath();
+                const after = await candidateForFile(candidate.source.locator, {recordId:candidate.recordId,detailState:candidate.detailState});
+                if (candidate.source.version !== after.source.version && !candidate.source.version.startsWith(after.source.version + ":")) {
+                  throw new Error("History changed while reading. Cached text is kept; it will be retried on the next refresh.");
+                }
+              }
               current();
               options.index.upsert({ ...detail, id, agentId: source.agentId, agentName: adapter.descriptor.name,
                 sizeBytes: remoteRecords.get(candidate.recordId)?.size ?? detail.sizeBytes,
@@ -208,11 +251,15 @@ export const createHistorySearchController = async (options: {
               current(); coverage.failed++;
               coverage.issues.push(`${candidate.source.locator}: ${error instanceof Error ? error.message : String(error)}`);
             }
+            finally {
+              const issues = coverage.issues.slice(issueStart);
+              if (issues.length) coverage.recordIssues![id] = issues;
+            }
             await new Promise<void>((done) => setImmediate(done));
           }
           current();
-          coverage.phase = coverage.issues.length ? "partial" : "ready";
-          if (coverage.phase === "ready") {
+          coverage.phase = coverage.issues.length || coverage.summaryOnly ? "partial" : "ready";
+          if (!coverage.issues.length) {
             coverage.lastSuccessAt = new Date().toISOString();
             result.removed += options.index.removeMissingSource(source.id, seen);
           }
@@ -222,8 +269,23 @@ export const createHistorySearchController = async (options: {
         }
         result.failures.push(...coverage.issues.map((message) => ({ agentId: source.agentId, message })));
         current();
-        await writeAtomic(progressPath, JSON.stringify(progress));
-      }
+        coverageWrite = coverageWrite.then(async () => { current(); await writeAtomic(progressPath, JSON.stringify(progress)); });
+        await coverageWrite;
+      };
+      // One collector per device; two devices can progress independently without an SSH fan-out.
+      const groups = new Map<string, HistorySource[]>();
+      for (const source of config.sources) groups.set(source.deviceId, [...groups.get(source.deviceId) ?? [], source]);
+      const queue = [...groups.values()];
+      const worker = async () => {
+        for (;;) {
+          const sources = queue.shift();
+          if (!sources) return;
+          for (const source of sources) await collectSource(source);
+        }
+      };
+      const workers = await Promise.allSettled([worker(), worker()]);
+      const failure = workers.find((result) => result.status === "rejected");
+      if (failure?.status === "rejected") throw failure.reason;
       current(); options.index.setLastRefreshedAt(result.refreshedAt);
       return result;
     };

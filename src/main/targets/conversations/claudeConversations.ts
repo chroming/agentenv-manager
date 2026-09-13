@@ -162,12 +162,15 @@ export const createClaudeConversationCapability = (): AgentConversationCapabilit
       }
       throw error;
     }
+    const failures: string[] = [];
     const paths = await listFilesRecursively(
       projectsRoot,
-      (file) => file.endsWith(".jsonl")
+      (file) => file.endsWith(".jsonl"),
+      { onIssue: (message) => failures.push(message) }
     );
     const candidates = [];
     for (const path of paths) {
+      try {
       const sourceId = sourceIdFromFilename(path);
       candidates.push(await candidateForFile(path, {
         recordId: sourceId,
@@ -179,8 +182,9 @@ export const createClaudeConversationCapability = (): AgentConversationCapabilit
         runtimeHome: targetPaths.configDir,
         detailState: "full"
       }));
+      } catch (error) { failures.push(`${path}: ${String(error)}`); }
     }
-    return { candidates, complete: true };
+    return { candidates, complete: failures.length === 0, failures };
   },
   read: async (_context, candidate, previous) => {
     const previousSize = previous

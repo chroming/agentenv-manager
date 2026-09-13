@@ -1,13 +1,23 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { remoteHistoryScript, remoteHistoryRequest } from "../../../src/main/targets/conversations/remoteHistoryReader";
 import type { SshTransport } from "../../../src/main/remoteDevices/systemSshTransport";
 import type { RemoteDevice } from "../../../src/shared/types";
+
+const processTransport = (environment: NodeJS.ProcessEnv = process.env) => ({ execute: (_device, command, options) => new Promise((resolve, reject) => {
+  const child = spawn("/bin/sh", ["-c", command], {env:environment});
+  const out: Buffer[] = [], err: Buffer[] = [];
+  child.stdout.on("data", (data) => out.push(data));
+  child.stderr.on("data", (data) => err.push(data));
+  child.on("error", reject);
+  child.on("close", (exitCode) => resolve({exitCode:exitCode ?? 1,stdout:Buffer.concat(out),stderr:Buffer.concat(err).toString()}));
+  child.stdin.end(options?.input);
+}) }) as SshTransport;
 
 let root = "";
 afterEach(async () => { if (root) await rm(root,{recursive:true,force:true}); });
@@ -24,6 +34,64 @@ it("keeps valid remote records when a sibling has invalid metadata and normalize
     {id:"source",deviceId:"remote",agentId:"codex",root:"/history",kind:"directory"},"scan",new AbortController().signal);
   expect(result.records).toEqual([expect.objectContaining({updatedAt:"2026-09-01T10:00:00.000Z",title:undefined})]);
   expect(result.issues).toHaveLength(1);
+});
+
+it("reads paged inventories and UTF-8 transcripts across chunk boundaries with the real helper", async () => {
+  root = await mkdtemp(join(tmpdir(),"aem-history-pages-"));
+  const transport = processTransport();
+  const device = {id:"remote",host:"fixture.invalid"} as RemoteDevice;
+  const source = {id:"source",deviceId:"remote",agentId:"codex",root,kind:"directory" as const};
+  for (let i=0;i<501;i++) await writeFile(join(root,`rollout-${i}.jsonl`),"{}\n");
+  const content = "a".repeat(4*1024*1024-1) + "完整记录\n";
+  await writeFile(join(root,"rollout-0.jsonl"),content);
+  const inventory = await remoteHistoryRequest<{records:Array<any>;issues:string[]}>(transport,device,source,"scan",new AbortController().signal);
+  expect(inventory.records).toHaveLength(501);
+  expect(inventory.issues).toEqual([]);
+  const record = inventory.records.find((r)=>r.path.endsWith("rollout-0.jsonl"));
+  const result = await remoteHistoryRequest<{content:string}>(transport,device,source,"read",new AbortController().signal,record);
+  expect(result.content).toBe(content);
+},30000);
+
+it("only suggests an environment-specific remote home, without scanning it", async () => {
+  root = await mkdtemp(join(tmpdir(),"aem-history-roots-"));
+  const custom = join(root,"custom");
+  await mkdir(join(custom,"sessions"),{recursive:true});
+  await writeFile(join(custom,"sessions/rollout-private.jsonl"),"private");
+  const result = await remoteHistoryRequest<{records:unknown[];suggestedRoots:string[]}>(processTransport({...process.env,CODEX_HOME:custom}),
+    {id:"remote",host:"fixture.invalid"} as RemoteDevice,{id:"s",deviceId:"remote",agentId:"codex",root:join(root,"default"),kind:"default"},"scan",new AbortController().signal);
+  expect(result.records).toEqual([]);
+  expect(result.suggestedRoots).toEqual([custom]);
+});
+
+it("reads a verified prefix while the Agent appends more messages", async () => {
+  root = await mkdtemp(join(tmpdir(),"aem-history-append-"));
+  const path = join(root,"rollout-live.jsonl");
+  const content = "a".repeat(4*1024*1024+10);
+  await writeFile(path,content);
+  const real = processTransport();
+  let calls = 0;
+  const transport: SshTransport = {execute:async (device,command,options) => {
+    const result = await real.execute(device,command,options);
+    if (++calls === 1) await appendFile(path,"\nnext turn");
+    return result;
+  }};
+  const result = await remoteHistoryRequest<{content:string}>(transport,{id:"remote"} as RemoteDevice,
+    {id:"s",deviceId:"remote",agentId:"codex",root,kind:"directory"},"read",new AbortController().signal,
+    {path,version:"",updatedAt:"2026-09-01T00:00:00Z"});
+  expect(result.content).toBe(content);
+  expect(calls).toBe(2);
+});
+
+it("retries a changing transcript once and discards the previous attempt", async () => {
+  const execute = vi.fn()
+    .mockResolvedValueOnce({exitCode:1,stderr:"History changed after discovery; refresh again",stdout:Buffer.alloc(0)})
+    .mockResolvedValueOnce({exitCode:0,stderr:"",stdout:Buffer.from(JSON.stringify({bytes:Buffer.from("new snapshot").toString("base64"),eof:true,version:"new"}))});
+  const result = await remoteHistoryRequest<{content:string}>({execute} as unknown as SshTransport,{id:"remote"} as RemoteDevice,
+    {id:"s",deviceId:"remote",agentId:"codex",root:"/history",kind:"directory"},"read",new AbortController().signal,
+    {path:"/history/a.jsonl",version:"old",updatedAt:"2026-09-01T00:00:00Z"});
+  expect(result.content).toBe("new snapshot");
+  expect(execute).toHaveBeenCalledTimes(2);
+  expect(execute.mock.calls[1][1]).not.toContain('"expectedVersion":"old"');
 });
 it("reads full remote-shaped histories, archives and nested roots without writing or following outside links", async () => {
   root = await mkdtemp(join(tmpdir(),"aem-remote-history-"));
@@ -82,6 +150,15 @@ it("reads committed OpenCode WAL data and child sessions in a read-only transact
     expect(result.records).toHaveLength(1);
     const detail = await request({...input,operation:"read",path,sessionId:"child"});
     expect(detail.content).toContain("wal sentinel");
+    const insert = db.prepare("INSERT INTO message VALUES(?,?,?,?)");
+    for (let i=0;i<260;i++) insert.run(`extra-${i}`,"child",JSON.stringify({role:"assistant"}),2000+i);
+    const paged = await remoteHistoryRequest<{content:string}>(processTransport(),{id:"remote"} as RemoteDevice,
+      {id:"s",deviceId:"remote",agentId:"opencode",root,kind:"default"},"read",new AbortController().signal,
+      {path,sessionId:"child",version:"",updatedAt:"2026-09-01T00:00:00Z"});
+    const messages = JSON.parse(paged.content).messages;
+    expect(messages).toHaveLength(261);
+    expect(messages[0].parts[0].text).toBe("wal sentinel");
+    expect(messages[260].info.id).toBe("extra-259");
     expect(db.prepare("SELECT count(*) AS count FROM session").get()).toEqual({count:1});
   } finally { db.close(); }
 });

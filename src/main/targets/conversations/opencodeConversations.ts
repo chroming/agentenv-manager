@@ -180,7 +180,8 @@ const discoverLegacy = async (
     const sessionRoot = join(storageRoot, "session");
     for (const path of await listFilesRecursively(
       sessionRoot,
-      (candidate) => candidate.endsWith(".json")
+      (candidate) => candidate.endsWith(".json"),
+      { onIssue: (message) => reportedFailures.push(message) }
     )) {
       let value: unknown;
       try {

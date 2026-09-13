@@ -91,19 +91,24 @@ export const createCodexConversationCapability = (): AgentConversationCapability
         { path: join(targetPaths.configDir, "archived_sessions"), archived: true }
       ];
       const candidates = [];
-      let primaryRootObserved = false;
+      const failures: string[] = [];
+      let historyRootObserved = false;
       for (const root of roots) {
         try {
           await stat(root.path);
-          if (!root.archived) primaryRootObserved = true;
+          historyRootObserved = true;
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
-          throw error;
+          failures.push(`${root.path}: ${String(error)}`);
+          continue;
         }
         for (const path of await listFilesRecursively(
           root.path,
-          (file) => file.endsWith(".jsonl")
+          (file) => file.endsWith(".jsonl"),
+          { onIssue: (message) => failures.push(message),
+            shouldEnterDirectory: (_path, name) => !name.endsWith(".artifacts") && name !== "background-tasks" }
         )) {
+          try {
           const sourceId = sourceIdFromFilename(path);
           const title = titleIndexCache.titles.get(sourceId);
           const candidate = await candidateForFile(path, {
@@ -120,12 +125,13 @@ export const createCodexConversationCapability = (): AgentConversationCapability
           });
           candidate.source.version = `${candidate.source.version}:${titleVersion(title)}`;
           candidates.push(candidate);
+          } catch (error) { failures.push(`${path}: ${String(error)}`); }
         }
       }
       return {
         candidates,
-        complete: primaryRootObserved,
-        ...(titleIndex.failure ? { failures: [titleIndex.failure] } : {})
+        complete: historyRootObserved && failures.length === 0,
+        failures: [...failures, ...(titleIndex.failure ? [titleIndex.failure] : [])]
       };
     },
     read: async (_context, candidate, previous) =>

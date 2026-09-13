@@ -93,7 +93,7 @@ export const HistorySearchSettings = ({ onChanged, entry = "settings", renderTri
               const deviceName = deviceId === "local" ? t(deviceSources[0].deviceName) : deviceSources[0].deviceName;
               const enabled = deviceSources.some((source) => draft.sources.some((selected) => selected.id === source.id));
               const agents = [...new Set(deviceSources.map((source) => source.agentId))];
-              const needsAttention = status?.sources.some((coverage) => deviceSources.some((source) => source.id === coverage.sourceKey && draft.sources.some((selected) => selected.id === source.id)) && (coverage.phase === "partial" || coverage.phase === "unavailable"));
+              const needsAttention = status?.sources.some((coverage) => deviceSources.some((source) => source.id === coverage.sourceKey && draft.sources.some((selected) => selected.id === source.id)) && (coverage.issues.length > 0 || coverage.phase === "unavailable"));
               return <div key={deviceId}>
                 <SettingsPreferenceRow controlWidth="intrinsic" label={<span className="history-device-label">{deviceId === "local" ? <Monitor size={16} /> : <Server size={16} />}{deviceName}</span>} control={<ControlGroup>
                   {needsAttention ? <IconButton label={`${deviceName} · ${t("Review unread histories")}`} onClick={() => setDetails((current) => current.includes(deviceId) ? current : [...current, deviceId])}><TriangleAlert size={16} /></IconButton> : null}
@@ -121,7 +121,8 @@ export const HistorySearchSettings = ({ onChanged, entry = "settings", renderTri
                 <SettingsPreferenceRow controlWidth="intrinsic" label={source.agentName}
                   description={<OverflowTooltip className="history-source-path" text={source.root} />}
                   control={<ControlGroup>
-                    {selected && coverage && (coverage.phase === "partial" || coverage.phase === "unavailable") ? <Button onClick={() => toggleSources(deviceSources.filter((item) => item.agentId === source.agentId).map((item) => item.id), false)}>{t("Exclude Agent")}</Button> : null}
+                    {!selected ? <Button disabled={busy} onClick={() => toggleSources([source.id], true)}>{t("Add")}</Button> : null}
+                    {selected && coverage && (coverage.issues.length > 0 || coverage.phase === "unavailable") ? <Button onClick={() => toggleSources(deviceSources.filter((item) => item.agentId === source.agentId).map((item) => item.id), false)}>{t("Exclude Agent")}</Button> : null}
                     {source.kind === "directory" ? <IconButton label={t("Remove source")} onClick={() => {
                       setRemovedIds((current) => [...current, source.id]);
                       setDraft({ ...draft, sources: draft.sources.filter((s) => s.id !== source.id) });
@@ -129,7 +130,8 @@ export const HistorySearchSettings = ({ onChanged, entry = "settings", renderTri
                   </ControlGroup>} />
                 {selected && coverage ? <div className="history-source-coverage">
                   <p>{coverage.phase === "ready" && coverage.discovered === 0 ? t("No history yet") : `${t(coverage.phase)} · ${coverage.indexed}/${coverage.discovered} ${t("indexed")}`}{coverage.summaryOnly ? ` · ${coverage.summaryOnly} ${t("Summary only")}` : ""}{coverage.failed ? ` · ${coverage.failed} ${t("failed")}` : ""}</p>
-                  <p>{t("Summary only")}: {coverage.summaryOnly} · {t("Last successful refresh")}: {coverage.lastSuccessAt ? new Date(coverage.lastSuccessAt).toLocaleString() : t("Not yet")}</p>
+                  {coverage.summaryOnly > 0 ? <p>{t("Full transcript is unavailable")}</p> : null}
+                  <p>{t("Last successful refresh")}: {coverage.lastSuccessAt ? new Date(coverage.lastSuccessAt).toLocaleString() : t("Not yet")}</p>
                   {coverage.issues.map((issue, i) => <p className="selectable" key={i}>{issue}</p>)}
                 </div> : null}
               </div>;

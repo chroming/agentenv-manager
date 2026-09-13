@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { open, readdir, stat } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { open, readdir, realpath, stat } from "node:fs/promises";
+import { basename, isAbsolute, join, relative } from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 import type {
@@ -114,28 +114,53 @@ export const listFilesRecursively = async (
   accepts: (path: string) => boolean,
   options: {
     shouldEnterDirectory?: (path: string, name: string) => boolean;
+    onIssue?: (message: string) => void;
   } = {}
 ): Promise<string[]> => {
   const files: string[] = [];
+  const visited = new Set<string>();
+  const approvedRoot = await realpath(root).catch((error) => {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    if (options.onIssue) { options.onIssue(`${root}: ${String(error)}`); return undefined; }
+    throw error;
+  });
+  if (!approvedRoot) return files;
+  const issue = (path: string, error: unknown) => {
+    if (!options.onIssue) throw error;
+    options.onIssue(`${path}: ${error instanceof Error ? error.message : String(error)}`);
+  };
   const visit = async (directory: string) => {
     let entries;
     try {
       entries = await readdir(directory, { withFileTypes: true });
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-      throw error;
+      issue(directory, error);
+      return;
     }
+    entries.sort((a, b) => Number(a.isSymbolicLink()) - Number(b.isSymbolicLink()) || a.name.localeCompare(b.name));
     for (const entry of entries) {
       const path = join(directory, entry.name);
+      try {
+      const actual = await realpath(path);
+      const rel = relative(approvedRoot, actual);
+      if (isAbsolute(rel) || rel === ".." || rel.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)) {
+        issue(path, new Error("Linked history is outside the approved source. Add its destination in History sources to include it."));
+        continue;
+      }
+      if (visited.has(actual)) continue;
+      visited.add(actual);
+      const info = entry.isSymbolicLink() ? await stat(path) : entry;
       if (
-        entry.isDirectory() &&
+        info.isDirectory() &&
         (options.shouldEnterDirectory?.(path, entry.name) ?? true)
       ) {
         await visit(path);
       }
-      else if (entry.isFile() && accepts(path)) files.push(path);
+      else if (info.isFile() && accepts(path)) files.push(path);
+      } catch (error) { issue(path, error); }
     }
   };
+  visited.add(approvedRoot);
   await visit(root);
   return files;
 };

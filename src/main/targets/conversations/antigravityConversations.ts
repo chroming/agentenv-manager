@@ -117,6 +117,7 @@ export const createAntigravityConversationCapability = (
       const appDataDir = historyRoots?.[0] ?? appDataDirFor(targetPaths.configDir, appDataSubdir);
       const summariesPath = join(appDataDir, "conversation_summaries.db");
       const candidates = new Map<string, AgentConversationCandidate>();
+      const failures: string[] = [];
       let summarySourceObserved = false;
       let summaryReadFailed = false;
       try {
@@ -172,6 +173,7 @@ export const createAntigravityConversationCapability = (
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
           summaryReadFailed = true;
+          failures.push(`${summariesPath}: ${String(error)}`);
         }
       }
 
@@ -179,9 +181,11 @@ export const createAntigravityConversationCapability = (
       const workspaces = await workspaceByConversation(appDataDir);
       const transcriptPaths = await listFilesRecursively(
         brainRoot,
-        (path) => path.endsWith(join(".system_generated", "logs", "transcript.jsonl"))
+        (path) => path.endsWith(join(".system_generated", "logs", "transcript.jsonl")),
+        { onIssue: (message) => failures.push(message) }
       );
       for (const path of transcriptPaths) {
+        try {
         const conversationId = basename(dirname(dirname(dirname(path))));
         const summary = candidates.get(conversationId);
         const transcript = await candidateForFile(path, {
@@ -209,6 +213,7 @@ export const createAntigravityConversationCapability = (
             ? summary.updatedAt
             : transcript.updatedAt
         });
+        } catch (error) { failures.push(`${path}: ${String(error)}`); }
       }
 
       let transcriptSourceObserved = transcriptPaths.length > 0;
@@ -222,7 +227,8 @@ export const createAntigravityConversationCapability = (
       }
       return {
         candidates: [...candidates.values()],
-        complete: !summaryReadFailed && (summarySourceObserved || transcriptSourceObserved)
+        complete: !summaryReadFailed && failures.length === 0 && (summarySourceObserved || transcriptSourceObserved),
+        failures
       };
     },
     read: async (_context, candidate) =>
