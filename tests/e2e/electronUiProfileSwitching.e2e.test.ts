@@ -7181,8 +7181,8 @@ describe("Electron UI profile switching e2e", () => {
       .resolves.toContain("Alternative Reviewer");
     const sameNameRows = page.locator(".library-table-row", { hasText: "Shared Reviewer" });
     expect(await sameNameRows.count()).toBe(2);
-    await expect.poll(() => sameNameRows.nth(0).textContent()).toContain("shared-reviewer");
-    await expect.poll(() => sameNameRows.nth(1).textContent()).toContain("shared-reviewer-alternative");
+    expect(await sameNameRows.evaluateAll((rows) => rows.map((row) => row.getAttribute("aria-label")).sort()))
+      .toEqual(["Library item shared-reviewer", "Library item shared-reviewer-alternative"]);
 
     const originalRow = page.getByRole("group", { name: "Library item shared-reviewer", exact: true });
     await originalRow.getByRole("button", { name: "More actions for shared-reviewer", exact: true }).click();
