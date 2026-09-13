@@ -1,7 +1,3 @@
-.app-shell--conversations .editor-panel {
-  overflow: hidden;
-}
-
 .conversation-page {
   display: grid;
   gap: var(--space-3);

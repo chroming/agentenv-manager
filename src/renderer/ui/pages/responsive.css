@@ -10,9 +10,9 @@
   .app-shell--profiles .editor-panel,
   .app-shell--settings .editor-panel {
     gap: var(--window-content-gap, 12px);
-    padding:
+    padding: var(--workspace-surface-padding,
       calc(var(--window-chrome-inset-top, 12px) + 8px) 14px
-      var(--window-content-inset-bottom, 14px);
+      var(--window-content-inset-bottom, 14px));
   }
 
   .target-workflow-icon {

@@ -2506,6 +2506,10 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
   refresh and History sources in the list menu, with Resume visible when paused. These three
   pages do not reserve a page-wide toolbar above their actual content. List controls remain
   accessible, contained and distinct from the selected object's actions at every supported width.
+- Instructions and Conversations are continuous split-pane surfaces: list backgrounds and vertical
+  dividers meet the titlebar and the bottom of the content area. The shell does not inset these
+  surfaces; controls and document content own their inner spacing. Ordinary single-surface pages
+  retain content margins. Edge continuity is measured at supported widths and checked in screenshots.
 - Populated Profiles and Workspaces use one shared InspectorHeader: nonvisual page context,
   selected object identity, then the Agent selector and primary command at the trailing edge.
   New objects are added through the object switcher; Refresh and metadata editing remain in

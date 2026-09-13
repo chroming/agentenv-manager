@@ -1559,6 +1559,17 @@ describe("Electron UI profile switching e2e", () => {
         expect(bounds.top, JSON.stringify({ workspace, width, bounds })).toBeLessThan(64);
         expect(bounds.contained).toBe(true);
         expect(bounds.overflow).toBe(false);
+        if (workspace === "instructions" || workspace === "conversations") {
+          const edges = await page.locator(workspace === "instructions" ? ".instructions-catalog" : ".conversation-layout").evaluate((element) => {
+            const frame = element.getBoundingClientRect();
+            const editor = document.querySelector(".editor-panel")!.getBoundingClientRect();
+            const chrome = document.querySelector(".shell-titlebar")!.getBoundingClientRect();
+            const pane = element.querySelector(".ui-master-list, .conversation-list-pane")!.getBoundingClientRect();
+            return [frame.left - editor.left, frame.right - editor.right, frame.top - chrome.bottom,
+              frame.bottom - editor.bottom, pane.top - frame.top, pane.bottom - frame.bottom];
+          });
+          expect(edges.every((delta) => Math.abs(delta) <= 1), JSON.stringify({ workspace, width, edges })).toBe(true);
+        }
         if (workspace === "targets") {
           expect(await controls.locator('[aria-hidden="true"] button').count()).toBe(0);
           const name = controls.locator(":scope > span").nth(3);
