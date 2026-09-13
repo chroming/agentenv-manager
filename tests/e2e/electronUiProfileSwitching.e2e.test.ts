@@ -605,6 +605,11 @@ const launchApp = async (
     legacySkillManagementMarker?: boolean;
     omitUnmanagedTargetSkill?: boolean;
     initialWorkspace?: "library" | "profiles" | "conversations" | "targets" | "settings" | null;
+    beforeLaunch?: (context: {
+      opencodeDir: string;
+      homeDir: string;
+      librarySkill: { libraryDir: string };
+    }) => Promise<void>;
   } = {}
 ) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-electron-ui-"));
@@ -973,6 +978,8 @@ const launchApp = async (
 
   const initialWorkspace =
     options.initialWorkspace === undefined ? "library" : options.initialWorkspace;
+
+  await options.beforeLaunch?.({ opencodeDir, homeDir, librarySkill });
 
   const waitForRequestedWorkspace = async (page: Page) => {
     if (initialWorkspace === "library") {
@@ -2820,15 +2827,18 @@ describe("Electron UI profile switching e2e", () => {
         await search.fill("");
         await expect.poll(() => allRows.count()).toBe(testCase.count + 4);
       }
+      await page.getByRole("button", { name: /^Filters/ }).click();
+      const timedStatusFilter = page.getByRole("combobox", { name: "Skill status filters" });
       for (let run = 0; run < 4; run += 1) {
         const startedAt = await page.evaluate(() => performance.now());
-        await setSkillCatalogStatus(page, "updates");
+        await timedStatusFilter.selectOption("updates");
         await expect.poll(() => allRows.count()).toBe(testCase.count);
         const duration = (await page.evaluate(() => performance.now())) - startedAt;
         if (run > 0) filterRuns.push(duration);
-        await setSkillCatalogStatus(page, "enabled");
+        await timedStatusFilter.selectOption("enabled");
         await expect.poll(() => allRows.count()).toBe(testCase.count + 4);
       }
+      await page.keyboard.press("Escape");
 
       await expect.poll(() => allRows.count()).toBe(testCase.count + 4);
       const filtersTrigger = page.getByRole("button", { name: /^Filters/ });
@@ -8051,7 +8061,12 @@ describe("Electron UI profile switching e2e", () => {
   }, 90_000);
 
   it("auto-manages safe cleanup groups while leaving content conflicts for review", async () => {
-    const { appDataRoot, opencodeDir, homeDir, librarySkill, page } = await launchApp();
+    let sharedDuplicate = "", targetSharedDuplicate = "", brokenSharedLink = "";
+    let openCodeDuplicate = "", codexDuplicate = "";
+    const sharedDuplicateContent =
+      "---\nname: Auto Shared Reviewer\ndescription: Identical shared copies.\n---\n\n# Shared\n";
+    const { appDataRoot, opencodeDir, homeDir, librarySkill, page } = await launchApp({
+      beforeLaunch: async ({ opencodeDir, homeDir, librarySkill }) => {
     const managedSkill = join(opencodeDir, "skills", "shared-reviewer");
     await mkdir(dirname(managedSkill), { recursive: true });
     await symlink(librarySkill.libraryDir, managedSkill, "dir");
@@ -8067,8 +8082,8 @@ describe("Electron UI profile switching e2e", () => {
       "auto-local-reviewer",
       "A single safe local copy."
     );
-    const openCodeDuplicate = join(opencodeDir, "skills", "auto-duplicate-reviewer");
-    const codexDuplicate = join(homeDir, ".codex", "skills", "auto-duplicate-reviewer");
+    openCodeDuplicate = join(opencodeDir, "skills", "auto-duplicate-reviewer");
+    codexDuplicate = join(homeDir, ".codex", "skills", "auto-duplicate-reviewer");
     await mkdir(openCodeDuplicate, { recursive: true });
     await mkdir(codexDuplicate, { recursive: true });
     const duplicateContent =
@@ -8081,15 +8096,13 @@ describe("Electron UI profile switching e2e", () => {
     await mkdir(codexConflict, { recursive: true });
     await writeFile(join(openCodeConflict, "SKILL.md"), "# OpenCode version\n", "utf8");
     await writeFile(join(codexConflict, "SKILL.md"), "# Codex version\n", "utf8");
-    const sharedDuplicate = join(homeDir, ".agents", "skills", "auto-shared-reviewer");
-    const targetSharedDuplicate = join(opencodeDir, "skills", "auto-shared-reviewer");
-    const sharedDuplicateContent =
-      "---\nname: Auto Shared Reviewer\ndescription: Identical shared copies.\n---\n\n# Shared\n";
+    sharedDuplicate = join(homeDir, ".agents", "skills", "auto-shared-reviewer");
+    targetSharedDuplicate = join(opencodeDir, "skills", "auto-shared-reviewer");
     for (const path of [sharedDuplicate, targetSharedDuplicate]) {
       await mkdir(path, { recursive: true });
       await writeFile(join(path, "SKILL.md"), sharedDuplicateContent, "utf8");
     }
-    const brokenSharedLink = join(homeDir, ".agents", "skills", "auto-broken-shared");
+    brokenSharedLink = join(homeDir, ".agents", "skills", "auto-broken-shared");
     await mkdir(dirname(brokenSharedLink), { recursive: true });
     await symlink(join(root, "missing-auto-broken-shared"), brokenSharedLink, "dir");
     const openCodeClaudeCompatibility = join(
@@ -8104,6 +8117,12 @@ describe("Electron UI profile switching e2e", () => {
       "---\nname: OpenCode Claude Compatibility\ndescription: Agent-specific compatibility copy.\n---\n",
       "utf8"
     );
+      }
+    });
+
+    const migration = page.getByRole("dialog", { name: "Move legacy Skill records" });
+    await migration.getByRole("button", { name: "Not now", exact: true }).click();
+    await migration.waitFor({ state: "hidden" });
 
     await openSkillLibrary(page);
     await openLocalSkills(page);
