@@ -201,7 +201,7 @@ export const InspectorHeader = ({
     {...props}
     className={`ui-inspector-header ui-inspector-header--responsive-${responsive}${context ? " has-context" : ""} ${className}`.trim()}
   >
-    {context ? <h2 className="ui-inspector-header__context">{context}</h2> : null}
+    {context ? <h2 className="ui-visually-hidden">{context}</h2> : null}
     <div className="ui-inspector-header__identity">
       {icon ? <span className="ui-inspector-header__icon" aria-hidden="true">{icon}</span> : null}
       <div className="ui-inspector-header__copy">

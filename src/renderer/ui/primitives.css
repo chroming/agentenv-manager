@@ -842,7 +842,7 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   flex: 0 0 auto;
   gap: var(--space-4);
   justify-content: space-between;
-  min-height: var(--page-header-height);
+  min-height: var(--control-height-default);
   min-width: 0;
 }
 
@@ -877,7 +877,13 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   display: flex;
   flex: 0 0 auto;
   gap: var(--space-2);
+  margin-left: auto;
   min-height: var(--control-height-default);
+}
+
+.ui-page-header__help {
+  align-items: center;
+  display: inline-flex;
 }
 
 .ui-page-header__navigation {

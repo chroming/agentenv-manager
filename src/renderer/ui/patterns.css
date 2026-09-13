@@ -606,16 +606,8 @@
 .ui-inspector-header.has-context {
   align-items: center;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-3);
-}
-
-.ui-inspector-header__context {
-  color: var(--muted);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-regular);
-  line-height: 22px;
-  margin: 0;
 }
 
 .ui-inspector-header.has-context .ui-inspector-header__identity {

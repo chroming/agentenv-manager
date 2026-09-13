@@ -14,7 +14,8 @@ export const captureReadmePages = async ({ page, windowHandle, outputDir, fixtur
   await setWindowSize(page, windowHandle, 1180, 728);
   const capture = async (name) => {
     const heading = name.startsWith("settings") ? "Settings" : { agents: "Agents", profiles: "Profiles", workspaces: "Workspaces", instructions: "Instructions", "skills-list": "Skills", "skills-by-source": "Skills", conversations: "Conversations" }[name];
-    await page.getByRole("heading", { name: heading, exact: true }).waitFor();
+    if (heading === "Settings") await page.locator(".settings-page").waitFor();
+    else await page.getByRole("heading", { name: heading, exact: true }).waitFor();
     await page.waitForTimeout(550);
     const revealCaptureContent = async () => {
       if (name === "settings-agents-expanded") {
@@ -43,7 +44,8 @@ export const captureReadmePages = async ({ page, windowHandle, outputDir, fixtur
   };
   const open = async (name) => {
     await page.getByRole("button", { name, exact: true }).click();
-    await page.getByRole("heading", { name, exact: true }).waitFor();
+    if (name === "Settings") await page.locator(".settings-page").waitFor();
+    else await page.getByRole("heading", { name, exact: true }).waitFor();
   };
   await page.locator(".target-list[aria-busy='false']").waitFor();
   await page.waitForTimeout(5000);

@@ -2498,7 +2498,10 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 
 ### UI and accessibility
 
-- Populated Profiles and Workspaces use one shared InspectorHeader: quiet page context,
+- Page names are supplied by the sidebar, not repeated as visible content headings. PageHeader
+  retains navigation, help and commands only; when none exist it renders no row. Accessible
+  page labels remain. Object names and resource headings are not page titles and remain visible.
+- Populated Profiles and Workspaces use one shared InspectorHeader: nonvisual page context,
   selected object identity, then the Agent selector and primary command at the trailing edge.
   New objects are added through the object switcher; Refresh and metadata editing remain in
   its More menu. Empty states retain a direct creation entry. Workspace paths remain selectable;

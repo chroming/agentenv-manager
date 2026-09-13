@@ -18,23 +18,22 @@ export const PageHeader = ({
   navigation,
   title
 }: PageHeaderProps) => {
+  if (!actions && !navigation && !help && !description) return null;
   const classes = Array.from(
     new Set(["ui-page-header", "page-header", ...className.split(/\s+/).filter(Boolean)])
   ).join(" ");
 
   return (
-    <header className={classes}>
-      <div className="ui-page-header__copy">
-        <h2 aria-label={title}>
-          <span>{title}</span>
-          {help ? <span className="ui-page-header__help">{help}</span> : null}
-        </h2>
-        {description ? <p>{description}</p> : null}
-      </div>
+    <header className={classes} aria-label={title}>
+      <h2 className="ui-visually-hidden">{title}</h2>
+      {description ? <div className="ui-page-header__copy"><p>{description}</p></div> : null}
       {navigation ? <div className="ui-page-header__navigation">{navigation}</div> : null}
-      {actions ? (
+      {actions || help ? (
         <ControlDensityProvider density="default">
-          <div className="ui-page-header__actions">{actions}</div>
+          <div className="ui-page-header__actions">
+            {help ? <span className="ui-page-header__help">{help}</span> : null}
+            {actions}
+          </div>
         </ControlDensityProvider>
       ) : null}
     </header>

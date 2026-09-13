@@ -1547,7 +1547,7 @@ describe("Electron UI profile switching e2e", () => {
         const header = page.locator(workspace === "profiles" ? ".profile-hero:not(.profile-hero--loading)" : ".project-detail__header");
         await header.waitFor();
         if (workspace === "projects") await expect.poll(() => page.locator('.project-detail__actions button[aria-busy="true"]').count()).toBe(0);
-        expect(await header.locator(".ui-inspector-header__context").count()).toBe(1);
+        expect(await header.locator("h2.ui-visually-hidden").count()).toBe(1);
         expect(await page.locator(".profile-page-header, .projects-page-header").count()).toBe(0);
         const geometry = await header.evaluate((element) => {
           const box = element.getBoundingClientRect();
@@ -1610,7 +1610,7 @@ describe("Electron UI profile switching e2e", () => {
           const bounds = row.getBoundingClientRect();
           const headerBox = header.getBoundingClientRect();
           const controls = [...row.querySelectorAll("button,input")].map((node) => node.getBoundingClientRect()).filter((box) => box.width > 0);
-          const heading = header.querySelector("h2")!.getBoundingClientRect();
+          const heading = header.querySelector(".ui-page-header__actions button")!.getBoundingClientRect();
           const tab = header.querySelector('[role="tab"]')!.getBoundingClientRect();
           return {
             belowHeader: bounds.top >= headerBox.bottom - 1 && bounds.top - headerBox.bottom <= 16,
@@ -4494,7 +4494,7 @@ describe("Electron UI profile switching e2e", () => {
       const profileBounds = await page.locator(".profile-hero").boundingBox();
       expect(profileBounds!.width).toBeLessThanOrEqual(1040);
       expect(await page.locator(".profile-page-header, .profile-hero .profile-description").count()).toBe(0);
-      expect(await page.locator(".profile-hero .ui-inspector-header__context").count()).toBe(1);
+      expect(await page.locator(".profile-hero h2.ui-visually-hidden").count()).toBe(1);
       const readiness = page.locator(".profile-action-status");
       await expectInViewport(page, readiness);
       expect(await readiness.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
@@ -12239,7 +12239,6 @@ describe("Electron UI profile switching e2e", () => {
       });
 
     await enableFixtureHistory(page);
-    const headerMetrics: Array<{ fontSize: string; left: number; top: number }> = [];
     const workspaceSurfaceSelectors: Record<string, { radius: string; selector: string }> = {
       Skills: { radius: "0px", selector: ".skill-library-panel" },
       Profiles: { radius: "0px", selector: ".profile-workbench" },
@@ -12251,47 +12250,17 @@ describe("Electron UI profile switching e2e", () => {
     for (const workspace of ["Skills", "Profiles", "Workspaces", "Conversations", "Agents", "Settings"]) {
       await sidebar.getByRole("button", { name: workspace, exact: true }).click();
       const header = page.locator(".ui-page-header, .ui-inspector-header.has-context").first();
-      await header.waitFor({ state: "visible" });
-      const metrics = await header.evaluate((element) => {
-        const title = element.querySelector<HTMLElement>("h2")!;
-        const titleBox = title.getBoundingClientRect();
-        const actionHeights = Array.from(
-          element.querySelectorAll<HTMLElement>(".ui-page-header__actions button")
-        ).map((button) => button.getBoundingClientRect().height);
-        return {
-          actionHeights,
-          actionCenter: element.querySelector<HTMLElement>(".ui-page-header__actions button")
-            ? (() => {
-                const box = element.querySelector<HTMLElement>(
-                  ".ui-page-header__actions button"
-                )!.getBoundingClientRect();
-                return box.top + box.height / 2;
-              })()
-            : undefined,
-          titleCenter: titleBox.top + titleBox.height / 2,
-          fontSize: getComputedStyle(title).fontSize,
-          left: Math.round(titleBox.left),
-          top: Math.round(titleBox.top),
-          contained: element.scrollWidth <= element.clientWidth + 1
-        };
-      });
-      expect(metrics.contained).toBe(true);
-      expect(
-        metrics.actionHeights.every((height) =>
-          Math.abs(height - 32) <= 1
-        ),
-        JSON.stringify({ workspace, metrics })
-      ).toBe(true);
-      if (metrics.actionCenter !== undefined) {
-        expect(
-          Math.abs(metrics.titleCenter - metrics.actionCenter),
-          JSON.stringify({ workspace, metrics })
-        ).toBeLessThanOrEqual(1);
-      }
-      if (workspace === "Profiles" || workspace === "Workspaces") {
-        expect(metrics.fontSize).toBe("13px");
+      if (workspace === "Settings") {
+        expect(await header.count()).toBe(0);
       } else {
-        headerMetrics.push({ fontSize: metrics.fontSize, left: metrics.left, top: metrics.top });
+        await header.waitFor({ state: "visible" });
+        expect(await header.locator("h2:not(.ui-visually-hidden)").count()).toBe(0);
+        const contained = await header.evaluate((element) => element.scrollWidth <= element.clientWidth + 1);
+        expect(contained, workspace).toBe(true);
+        const heights = await header.locator("button").evaluateAll((buttons) =>
+          buttons.filter((button) => button.getBoundingClientRect().width > 0)
+            .map((button) => button.getBoundingClientRect().height));
+        expect(heights.every((height) => height <= 34 && height >= 20), JSON.stringify({workspace, heights})).toBe(true);
       }
       const surfaceContract = workspaceSurfaceSelectors[workspace];
       const surface = page.locator(surfaceContract.selector);
@@ -12331,22 +12300,20 @@ describe("Electron UI profile switching e2e", () => {
       ].join(", ")).count();
       expect(enabledPrimaryCount, `${workspace} primary action budget`).toBeLessThanOrEqual(1);
     }
-    expect(new Set(headerMetrics.map((metric) => metric.fontSize))).toEqual(new Set(["23px"]));
-    expect(Math.max(...headerMetrics.map((metric) => metric.left)) - Math.min(...headerMetrics.map((metric) => metric.left))).toBeLessThanOrEqual(1);
-    expect(Math.max(...headerMetrics.map((metric) => metric.top)) - Math.min(...headerMetrics.map((metric) => metric.top))).toBeLessThanOrEqual(1);
 
     await resizeAppWindow(page, 1180, 728);
     const catalogHeaderMetrics = [];
     for (const workspace of ["Agents", "Skills"]) {
       await sidebar.getByRole("button", { name: workspace, exact: true }).click();
       catalogHeaderMetrics.push(await page.locator(".ui-page-header").first().evaluate((element) => {
-        const titleBox = element.querySelector<HTMLElement>("h2")!.getBoundingClientRect();
+        const headerBox = element.getBoundingClientRect();
+        const titleBox = element.querySelector<HTMLElement>(".ui-page-header__actions")!.getBoundingClientRect();
         const actionBox = element.querySelector<HTMLElement>(
           ".ui-page-header__actions button"
         )!.getBoundingClientRect();
         return {
-          left: Math.round(titleBox.left),
-          top: Math.round(titleBox.top),
+          left: Math.round(headerBox.left),
+          top: Math.round(headerBox.top),
           centerDelta: Math.abs(
             titleBox.top + titleBox.height / 2 - (actionBox.top + actionBox.height / 2)
           )
@@ -12355,7 +12322,7 @@ describe("Electron UI profile switching e2e", () => {
     }
     expect(catalogHeaderMetrics[0]?.left).toBe(catalogHeaderMetrics[1]?.left);
     expect(catalogHeaderMetrics[0]?.top).toBe(catalogHeaderMetrics[1]?.top);
-    expect(catalogHeaderMetrics.every((metric) => metric.centerDelta <= 1)).toBe(true);
+    expect(catalogHeaderMetrics.every((metric) => metric.centerDelta <= 1), JSON.stringify(catalogHeaderMetrics)).toBe(true);
 
     await sidebar.getByRole("button", { name: "Skills", exact: true }).click();
     const windowChrome = await page.evaluate(() => {
@@ -12428,8 +12395,8 @@ describe("Electron UI profile switching e2e", () => {
       );
       expect(windowChrome.shellTitlebarRight).toBe(windowChrome.editorRight);
       expect(windowChrome.brandTop).toBeGreaterThanOrEqual(42);
-      expect(Math.min(...headerMetrics.map((metric) => metric.top))).toBeGreaterThanOrEqual(46);
-      expect(Math.max(...headerMetrics.map((metric) => metric.top))).toBeLessThanOrEqual(52);
+      expect(Math.min(...catalogHeaderMetrics.map((metric) => metric.top))).toBeGreaterThanOrEqual(46);
+      expect(Math.max(...catalogHeaderMetrics.map((metric) => metric.top))).toBeLessThanOrEqual(52);
     }
 
     const navigationAlignment = await sidebar.locator(".workspace-button").evaluateAll((buttons) =>
@@ -12689,7 +12656,7 @@ describe("Electron UI profile switching e2e", () => {
       const copy = header.querySelector<HTMLElement>(".ui-inspector-header__copy")!;
       const title = header.querySelector<HTMLElement>(input.titleSelector)!;
       const meta = header.querySelector<HTMLElement>(input.metaSelector) ?? title;
-      const context = header.querySelector<HTMLElement>(".ui-inspector-header__context")!;
+      const context = header.querySelector<HTMLElement>("h2.ui-visually-hidden")!;
       const headerBox = header.getBoundingClientRect();
       const actionsBox = actions.getBoundingClientRect();
       const primaryBox = primary.getBoundingClientRect();

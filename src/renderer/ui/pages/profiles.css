@@ -4,11 +4,6 @@
   outline: 0;
 }
 
-.workspace-page-header > div {
-  display: grid;
-  gap: 5px;
-}
-
 .workspace-page-header p {
   color: var(--muted);
   font-size: 13px;
