@@ -13,6 +13,11 @@ export type ResolvedAppLocale = Exclude<AppLocale, "system">;
 export type TranslationValues = Record<string, string | number>;
 
 const zhCN: Record<string, string> = {
+  "Review unread histories": "查看未读取的历史",
+  "Some histories could not be read. Cached conversations are kept. Retry, check the paths below, or exclude an Agent you do not need.": "部分历史未能读取，已缓存的对话仍保留。可重试、检查下方路径，或排除不需要的 Agent。",
+  "Retry history refresh": "重试历史刷新",
+  "Exclude Agent": "排除此 Agent",
+  "No history yet": "暂无历史记录",
   "Paused": "已暂停",
   "Choose devices": "选择设备",
   "Enable search": "开启搜索",
@@ -3198,6 +3203,11 @@ const zhTW: Record<string, string> = {
     Object.entries(zhCN).map(([message, translation]) => [message, toTraditionalChinese(translation)])
   ),
   "Choose devices": "選擇裝置",
+  "Review unread histories": "查看未讀取的歷史",
+  "Some histories could not be read. Cached conversations are kept. Retry, check the paths below, or exclude an Agent you do not need.": "部分歷史未能讀取，已快取的對話仍保留。可重試、檢查下方路徑，或排除不需要的 Agent。",
+  "Retry history refresh": "重試歷史重新整理",
+  "Exclude Agent": "排除此 Agent",
+  "No history yet": "暫無歷史記錄",
   "Paused": "已暫停",
   "Enable search": "開啟搜尋",
   "Histories are indexed locally. Original files are never changed.": "僅在本機建立索引，不修改原始記錄。",

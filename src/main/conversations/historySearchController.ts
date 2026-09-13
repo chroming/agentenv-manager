@@ -129,9 +129,10 @@ export const createHistorySearchController = async (options: {
           const remoteRecords = new Map<string, RemoteHistoryRecord>();
           if (source.deviceId !== "local") {
             if (!device || !options.transport) throw new Error("SSH device is unavailable. Check its connection in Agents.");
-            const inventory = await remoteHistoryRequest<{ records: RemoteHistoryRecord[]; issues: string[] }>(options.transport, device, source, "scan", signal);
+            const inventory = await remoteHistoryRequest<{ records: RemoteHistoryRecord[]; issues: string[]; missing?: boolean }>(options.transport, device, source, "scan", signal);
             current();
             coverage.issues.push(...inventory.issues);
+            if (inventory.missing && (source.kind === "directory" || options.index.hasSourceRecords(source.id))) coverage.issues.push("The history directory is unavailable. Check its path or connection; cached conversations are kept.");
             for (const record of inventory.records) {
               const recordId = record.sessionId ?? sourceIdFromFilename(record.path);
               const id = `${record.path}:${recordId}`;
@@ -150,7 +151,7 @@ export const createHistorySearchController = async (options: {
             current();
             candidates = discovery.candidates;
             coverage.issues.push(...discovery.failures ?? []);
-            if (!discovery.complete && !coverage.issues.length) coverage.issues.push("No complete history inventory was found at this location. Check the path or add another history directory.");
+            if (!discovery.complete && !coverage.issues.length && !(source.kind === "default" && candidates.length === 0 && !options.index.hasSourceRecords(source.id))) coverage.issues.push("No complete history inventory was found at this location. Check the path or add another history directory.");
           }
           coverage.discovered = candidates.length;
           const seen = new Set<string>();

@@ -826,13 +826,6 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
   const advancedFilterCount = [sourceFilter, tagFilter, targetFilter, usageFilter].filter(
     (value) => value !== "all"
   ).length;
-  const disabledSkillCount = librarySkills.filter(
-    (skill) => skill.globallyEnabled === false
-  ).length;
-  const monitoredSourceCount = sourceGroups.filter(
-    (group) => group.automaticChecks !== false
-  ).length;
-  const manualSourceCount = sourceGroups.length - monitoredSourceCount;
   const runAvailabilityChange = async (input: SkillAvailabilityInput) => {
     if (availabilityOperation) return;
     setAvailabilityOperation(input);
@@ -1787,10 +1780,10 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               value={statusFilter}
               onChange={(value) => updateControls({ statusFilter: value as SkillLibraryViewState["statusFilter"] })}
               options={[
-                { value: "all", label: `${t("All")} (${librarySkills.length})` },
-                { value: "enabled", label: `${t("Enabled")} (${librarySkills.length - disabledSkillCount})` },
+                { value: "all", label: t("All") },
+                { value: "enabled", label: t("Enabled") },
                 { value: "updates", label: `${t("Updates")} (${availableUpdateCount})` },
-                { value: "disabled", label: `${t("Disabled")} (${disabledSkillCount})` }
+                { value: "disabled", label: t("Disabled") }
               ]}
             />
           ) : libraryMode === "sources" ? (
@@ -1800,14 +1793,14 @@ export const SkillLibraryPanel = ({ model, actions }: SkillLibraryPanelProps) =>
               value={sourceScopeFilter}
               onChange={(value) => setSourceScopeFilter(value as SkillSourceScopeFilter)}
               options={[
-                { value: "all", label: `${t("All")} (${sourceGroups.length})` },
-                { value: "monitored", label: `${t("Monitored")} (${monitoredSourceCount})` },
-                { value: "manual", label: `${t("Manual only")} (${manualSourceCount})` }
+                { value: "all", label: t("All") },
+                { value: "monitored", label: t("Monitored") },
+                { value: "manual", label: t("Manual only") }
               ]}
             />
           ) : libraryMode === "groups" ? <SegmentedControl className="ui-segmented-control--compact"
             label={t("Skill status filters")} value={groupFilter} onChange={(value) => setGroupFilter(value as "all" | "updates")}
-            options={[{ value: "all", label: `${t("All")} (${skillGroups.length})` },
+            options={[{ value: "all", label: t("All") },
               { value: "updates", label: `${t("Updates")} (${skillGroups.filter((group) => group.skillIds.some((id) => updateableSkillIds.includes(id))).length})` }]} /> : null}
         </div>
         <ResourcePanelToolbar variant="catalog" className="library-toolbar" hidden={libraryMode !== "skills"}>

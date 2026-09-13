@@ -68,7 +68,14 @@ def scan():
                         updated = iso(modified if modified > 100000000000 else modified*1000) if isinstance(modified,(int,float)) else str(modified)
                         summaries[sid] = dict(path=dbpath,sessionId=sid,title=d.get('title'),snippet=d.get('preview'),workspacePath=workspace,updatedAt=updated,version=str(modified)+':'+str(d.get('step_count')),detailState='summary-only')
             except Exception as e: issues.append(dbpath+': '+str(e))
-    if not any(os.path.isdir(d) for d in allowed): issues.append('No history directory found. Check the source path or add the runtime history directory.')
+    found = False
+    for directory in allowed:
+        try:
+            os.stat(directory)
+            found = True
+        except FileNotFoundError: pass
+        except OSError as error: issues.append(str(error))
+    missing = not found and not issues
     def problem(error): issues.append(str(error))
     for directory in allowed:
         if not os.path.exists(directory): continue
@@ -119,7 +126,7 @@ def scan():
                         records.append(dict(path=path,sessionId=sid,title=data.get('title'),workspacePath=data.get('directory'),version=hashlib.sha256('|'.join(version).encode()).hexdigest(),updatedAt=iso(data.get('time',{}).get('updated',os.stat(path).st_mtime*1000))))
                 except Exception as e: issues.append(path+': '+str(e))
     records.extend(summaries.values())
-    return dict(records=records, issues=issues)
+    return dict(records=records, issues=issues, missing=missing)
 def read():
     path = request['path']
     if not contained(path): raise Exception('History path is outside the approved source')
@@ -185,7 +192,7 @@ export const remoteHistoryRequest = async <T>(transport: SshTransport, device: R
   if (result.exitCode !== 0) throw new Error(result.stderr || "Remote history could not be read. Check SSH access and Python 3 availability.");
   const value = JSON.parse(result.stdout.toString("utf8"));
   if (operation === "read") return z.object({ content: z.string() }).parse(value) as T;
-  const inventory = z.object({ records: z.array(z.unknown()), issues: z.array(z.string()) }).parse(value);
+  const inventory = z.object({ records: z.array(z.unknown()), issues: z.array(z.string()), missing: z.boolean().optional() }).parse(value);
   const records = inventory.records.flatMap((record, index) => {
     const parsed = remoteRecordSchema.safeParse(record);
     if (!parsed.success) {
@@ -195,5 +202,5 @@ export const remoteHistoryRequest = async <T>(transport: SshTransport, device: R
     const data = parsed.data;
     return [{ ...data, updatedAt: new Date(data.updatedAt).toISOString(), title: data.title ?? undefined, workspacePath: data.workspacePath ?? undefined, snippet: data.snippet ?? undefined }];
   });
-  return { records, issues: inventory.issues } as T;
+  return { records, issues: inventory.issues, missing: inventory.missing } as T;
 };

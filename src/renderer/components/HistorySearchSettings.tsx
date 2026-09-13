@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, FolderPlus, Info, Monitor, Server, Settings2, Trash2, TriangleAlert, X } from "lucide-react";
+import { Check, FolderPlus, Info, Monitor, RefreshCw, Server, Settings2, Trash2, TriangleAlert, X } from "lucide-react";
 import type { HistorySearchConfig, HistorySearchStatus } from "../../shared/conversationSearch";
 import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
@@ -20,6 +20,13 @@ export const HistorySearchSettings = ({ onChanged, entry = "settings" }: { onCha
   const [path, setPath] = useState("");
   const [details, setDetails] = useState<string[]>([]);
   const [removedIds, setRemovedIds] = useState<string[]>([]);
+  const [retrying, setRetrying] = useState(false);
+  const retry = async () => {
+    setRetrying(true); setError("");
+    try { await window.agentEnv.refreshConversations(); setStatus(await window.agentEnv.conversationHistoryStatus()); }
+    catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+    finally { setRetrying(false); }
+  };
   const dialogRef = useRef<HTMLElement>(null);
   useModalDialog({ open, dialogRef, onDismiss: () => setOpen(false), dismissDisabled: busy });
   useEffect(() => {
@@ -83,7 +90,7 @@ export const HistorySearchSettings = ({ onChanged, entry = "settings" }: { onCha
               const needsAttention = status?.sources.some((coverage) => deviceSources.some((source) => source.id === coverage.sourceKey && draft.sources.some((selected) => selected.id === source.id)) && (coverage.phase === "partial" || coverage.phase === "unavailable"));
               return <div key={deviceId}>
                 <SettingsPreferenceRow controlWidth="intrinsic" label={<span className="history-device-label">{deviceId === "local" ? <Monitor size={16} /> : <Server size={16} />}{deviceName}</span>} control={<ControlGroup>
-                  {needsAttention ? <IconButton label={`${deviceName} · ${t("Needs attention")}`} onClick={() => setDetails((current) => current.includes(deviceId) ? current : [...current, deviceId])}><TriangleAlert size={16} /></IconButton> : null}
+                  {needsAttention ? <IconButton label={`${deviceName} · ${t("Review unread histories")}`} onClick={() => setDetails((current) => current.includes(deviceId) ? current : [...current, deviceId])}><TriangleAlert size={16} /></IconButton> : null}
                   <ToolbarOverflowMenu label={`${deviceName} · ${t("More")}`} menuLabel={deviceName} items={[
                     ...agents.map((agentId) => {
                       const items = deviceSources.filter((source) => source.agentId === agentId);
@@ -97,6 +104,10 @@ export const HistorySearchSettings = ({ onChanged, entry = "settings" }: { onCha
                   ]} />
                   <Switch label={deviceName} checked={enabled} onClick={() => toggleSources(deviceSources.map((source) => source.id), !enabled)} />
                 </ControlGroup>} />
+                {details.includes(deviceId) && needsAttention ? <Notice tone="warning">
+                  <p>{t("Some histories could not be read. Cached conversations are kept. Retry, check the paths below, or exclude an Agent you do not need.")}</p>
+                  <Button icon={<RefreshCw size={16} />} busy={retrying} disabled={busy || Boolean(draft.paused)} onClick={() => void retry()}>{t("Retry history refresh")}</Button>
+                </Notice> : null}
                 {details.includes(deviceId) ? deviceSources.map((source) => {
               const selected = draft.sources.some((s) => s.id === source.id);
               const coverage = status?.sources.find((s) => s.sourceKey === source.id);
@@ -104,13 +115,14 @@ export const HistorySearchSettings = ({ onChanged, entry = "settings" }: { onCha
                 <SettingsPreferenceRow controlWidth="intrinsic" label={source.agentName}
                   description={<OverflowTooltip className="history-source-path" text={source.root} />}
                   control={<ControlGroup>
+                    {selected && coverage && (coverage.phase === "partial" || coverage.phase === "unavailable") ? <Button onClick={() => toggleSources(deviceSources.filter((item) => item.agentId === source.agentId).map((item) => item.id), false)}>{t("Exclude Agent")}</Button> : null}
                     {source.kind === "directory" ? <IconButton label={t("Remove source")} onClick={() => {
                       setRemovedIds((current) => [...current, source.id]);
                       setDraft({ ...draft, sources: draft.sources.filter((s) => s.id !== source.id) });
                     }}><Trash2 size={16} /></IconButton> : null}
                   </ControlGroup>} />
                 {selected && coverage ? <div className="history-source-coverage">
-                  <p>{t(coverage.phase)} · {coverage.indexed}/{coverage.discovered} {t("indexed")}{coverage.summaryOnly ? ` · ${coverage.summaryOnly} ${t("Summary only")}` : ""}{coverage.failed ? ` · ${coverage.failed} ${t("failed")}` : ""}</p>
+                  <p>{coverage.phase === "ready" && coverage.discovered === 0 ? t("No history yet") : `${t(coverage.phase)} · ${coverage.indexed}/${coverage.discovered} ${t("indexed")}`}{coverage.summaryOnly ? ` · ${coverage.summaryOnly} ${t("Summary only")}` : ""}{coverage.failed ? ` · ${coverage.failed} ${t("failed")}` : ""}</p>
                   <p>{t("Summary only")}: {coverage.summaryOnly} · {t("Last successful refresh")}: {coverage.lastSuccessAt ? new Date(coverage.lastSuccessAt).toLocaleString() : t("Not yet")}</p>
                   {coverage.issues.map((issue, i) => <p className="selectable" key={i}>{issue}</p>)}
                 </div> : null}

@@ -52,6 +52,7 @@ interface ConversationIndexSearchInput extends ConversationSearchInput {
 
 export interface ConversationIndexStore {
   removeMissingSource(sourceId: string, observedIds: Set<string>): number;
+  hasSourceRecords(sourceId: string): boolean;
   clearSources(sourceIds?: string[]): void;
   sourceVersion(id: string): string | undefined;
   discoveryVersion(): string | undefined;
@@ -368,6 +369,7 @@ export const createConversationIndexStore = async (
   };
 
   return {
+    hasSourceRecords: (sourceId) => Boolean(database.prepare("SELECT 1 FROM conversations WHERE history_source = ? LIMIT 1").get(sourceId)),
     removeMissingSource: (sourceId, observedIds) => {
       const rows = database.prepare("SELECT id FROM conversations WHERE history_source=?").all(sourceId) as Array<{id:string}>;
       const missing = rows.filter((row) => !observedIds.has(row.id));

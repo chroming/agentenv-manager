@@ -42,6 +42,23 @@ const setup = async (transport?: SshTransport, configText?: string) => {
 };
 
 describe("explicit history search permissions", () => {
+  it("does not warn for an unused default history root, but preserves cached records if it disappears", async () => {
+    const {controller,index,paths} = await setup();
+    const {deviceName,agentName,...source} = (await controller.status()).availableSources.find((source) => source.deviceId === "local")!;
+    await rm(join(paths.homeDir,".codex"),{recursive:true,force:true});
+    await controller.configure({version:1,enabled:true,paused:false,sources:[source]});
+    await controller.refresh();
+    expect((await controller.status()).sources[0]).toMatchObject({phase:"ready",discovered:0,issues:[]});
+    await mkdir(join(paths.homeDir,".codex/sessions"),{recursive:true});
+    await writeFile(join(paths.homeDir,".codex/sessions/example.jsonl"),transcript);
+    await controller.refresh();
+    const id = (await controller.status()).config.sources[0]!.id;
+    expect(index.hasSourceRecords(id)).toBe(true);
+    await rm(join(paths.homeDir,".codex"),{recursive:true,force:true});
+    await controller.refresh();
+    expect((await controller.status()).sources[0]?.phase).not.toBe("ready");
+    expect(index.hasSourceRecords(id)).toBe(true);
+  });
   it("fails closed on invalid settings and lets the user repair consent without losing histories", async () => {
     const {controller,discover,file} = await setup(undefined,"{broken");
     await controller.refresh();

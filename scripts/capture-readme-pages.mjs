@@ -78,6 +78,14 @@ export const captureReadmePages = async ({ page, windowHandle, outputDir, fixtur
   await page.getByRole("button", { name: "Expand source", exact: true }).first().click();
   await capture("skills-by-source");
 
+  await page.evaluate(async () => {
+    const status = await window.agentEnv.conversationHistoryStatus();
+    await window.agentEnv.configureConversationHistory({version:1,enabled:true,paused:false,
+      sources:status.availableSources.filter((source) => source.deviceId === "local" && source.agentId === "codex")
+        .map(({deviceName,agentName,...source}) => source)});
+    await window.agentEnv.refreshConversations();
+    window.dispatchEvent(new Event("agentenv-history-changed"));
+  });
   await open("Conversations");
   await page.getByRole("option", { name: /Review the Agent environment before release/ }).click();
   await page.getByText("The Profile is saved and ready for a final Apply preview.").waitFor();

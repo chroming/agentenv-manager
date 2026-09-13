@@ -393,8 +393,8 @@ describe("SkillsEditor v2", () => {
     );
 
     const checkButton = screen.getByRole("button", { name: "Check Profile Skill updates" });
-    expect(checkButton).toHaveClass("ui-button", "ui-button--ghost");
-    expect(checkButton).toHaveTextContent("Check updates");
+    expect(checkButton).toHaveClass("ui-icon-button");
+    expect(checkButton.textContent).toBe("");
     fireEvent.click(checkButton);
     expect(onCheck).toHaveBeenCalledWith(["review"]);
   });
@@ -415,7 +415,7 @@ describe("SkillsEditor v2", () => {
 
     const checkButton = screen.getByRole("button", { name: "Check Profile Skill updates" });
     expect(checkButton).toHaveAttribute("aria-busy", "true");
-    expect(checkButton).toHaveTextContent("Check updates");
+    expect(checkButton.textContent).toBe("");
     expect(checkButton.querySelector(".is-spinning")).not.toBeNull();
     expect(checkButton).toBeDisabled();
   });

@@ -17,6 +17,21 @@ const install = (enabled = false) => {
   return api;
 };
 
+it("explains unread histories and keeps retry failures inside the dialog", async () => {
+  const api = install(true);
+  const status = await api.conversationHistoryStatus();
+  status.sources[0].phase = "unavailable";
+  status.sources[0].issues = ["Permission denied: /fixture/history"];
+  Object.assign(api,{refreshConversations:vi.fn().mockRejectedValue(new Error("SSH connection refused"))});
+  render(<HistorySearchSettings />);
+  fireEvent.click(screen.getByRole("button",{name:"History sources"}));
+  fireEvent.click(await screen.findByRole("button",{name:"This device · Review unread histories"}));
+  expect(screen.getByText("Permission denied: /fixture/history")).toBeInTheDocument();
+  expect(screen.getByRole("button",{name:"Exclude Agent"})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button",{name:"Retry history refresh"}));
+  expect(await screen.findByRole("alert")).toHaveTextContent("SSH connection refused");
+});
+
 it("does not collect or configure anything when the entry is rendered", async () => {
   const api = install();
   render(<HistorySearchSettings />);
