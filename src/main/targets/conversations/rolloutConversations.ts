@@ -45,6 +45,9 @@ const createRolloutAccumulator = (
     candidate.recordId;
   let workspacePath = seed?.workspacePath ?? candidate.workspacePath;
   let createdAt = seed?.createdAt ?? candidate.createdAt;
+  let metadataSeen = Boolean(seed);
+  let unsupported = seed?.detailState === "summary-only";
+  let nonMetadataSeen = false;
 
   const consume = (record: any, index: number) => {
     if (record?.type === "session_meta" && record.payload && typeof record.payload === "object") {
@@ -53,17 +56,26 @@ const createRolloutAccumulator = (
         trimConversationText(record.payload.session_id) ||
         sessionId;
       workspacePath = trimConversationText(record.payload.cwd) || workspacePath;
-      createdAt = isoDate(
+      if (!metadataSeen && !createdAt) createdAt = isoDate(
         record.timestamp ?? record.payload.timestamp,
         new Date(candidate.updatedAt)
       );
+      metadataSeen = true;
       return;
     }
+    if (record?.type === "turn_context") {
+      workspacePath ||= trimConversationText(record.payload?.cwd) || undefined;
+      return;
+    }
+    nonMetadataSeen = true;
+    if (agent.id === "trae-cli" && !["response_item", "event_msg"].includes(record?.type)) unsupported = true;
     if (record?.type !== "response_item" || record.payload?.type !== "message") return;
     const message = visibleMessage(
       String(record.payload.id ?? `${sessionId}:${index}`),
       record.payload.role,
-      contentText(record.payload.content)
+      contentText(record.payload.content),
+      typeof record.timestamp === "string" && Number.isFinite(Date.parse(record.timestamp)) && Date.parse(record.timestamp) > 0
+        ? new Date(record.timestamp).toISOString() : undefined
     );
     if (message) messages.push(message);
   };
@@ -74,6 +86,8 @@ const createRolloutAccumulator = (
       agent,
       {
         ...candidate,
+        detailState: agent.id === "trae-cli" && (unsupported || (nonMetadataSeen && messages.length === 0))
+          ? "summary-only" : candidate.detailState,
         providerSession: {
           kind: "native",
           id: sessionId,

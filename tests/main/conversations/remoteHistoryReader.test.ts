@@ -25,6 +25,23 @@ const request = async (input: Record<string, unknown>) => {
   const {stdout} = await promisify(execFile)("python3",["-c",remoteHistoryScript,JSON.stringify(input)]);
   return JSON.parse(stdout);
 };
+it("includes only known Trae legacy history and keeps directory selections scoped", async () => {
+  root = await mkdtemp(join(tmpdir(), "aem-trae-remote-"));
+  const runtime = join(root, "cli");
+  await mkdir(join(runtime, "sessions"), {recursive: true});
+  await mkdir(join(root, "sessions"), {recursive: true});
+  await mkdir(join(root, "private"), {recursive: true});
+  await writeFile(join(runtime, "sessions/rollout-current.jsonl"), "{}\n");
+  await writeFile(join(root, "sessions/rollout-old.jsonl"), "{}\n");
+  await writeFile(join(root, "private/secret.jsonl"), "{}\n");
+  const input = {agentId: "trae-cli", root: runtime, kind: "default", operation: "scan"};
+  const result = await request(input);
+  expect(result.records).toHaveLength(2);
+  expect(result.records.some((r: {path: string}) => r.path.includes("private"))).toBe(false);
+  const old = result.records.find((r: {path: string}) => r.path.endsWith("rollout-old.jsonl"));
+  expect((await request({...input, operation: "read", path: old.path})).content).toBe("{}\n");
+  expect((await request({...input, kind: "directory"})).records).toHaveLength(1);
+});
 it("keeps valid remote records when a sibling has invalid metadata and normalizes timestamps", async () => {
   const transport = {execute:async()=>({exitCode:0,stderr:"",stdout:Buffer.from(JSON.stringify({records:[
     {path:"/history/a.jsonl",version:"a",updatedAt:"2026-09-01T18:00:00+08:00",title:null},

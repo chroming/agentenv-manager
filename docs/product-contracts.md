@@ -2135,12 +2135,18 @@ The TOML layout discovers MCP names only from `~/.trae/traecli.toml` and may pat
 commands, URLs, headers, environment, credentials, unknown fields, native named config files,
 project sources, plugins, and built-ins remain Agent-owned.
 
-Trae CLI Conversations reads only `rollout-*.jsonl` from
-`~/.trae/cli/sessions` and `~/.trae/cli/archived_sessions`. It ignores input history, databases,
+Trae CLI Conversations reads `rollout-*.jsonl` from the selected runtime's
+`sessions` and `archived_sessions`. For a runtime named `cli`, the matching sibling history
+folders are included as compatibility locations, never the entire parent directory. Explicit
+directory sources remain restricted to their selected directory. Physical file aliases are deduplicated.
+Unknown records are not interpreted as messages; incomplete reads report partial coverage and
+cannot replace a larger cached transcript. Metadata-only histories are distinguished from unsupported
+records. Appended metadata does not reset creation time. Parser/discovery version changes trigger
+reindexing under the existing history consent and pause settings. It ignores input history, databases,
 logs, memories, plans, tool protocol records, and per-session `.artifacts`. Native resume uses the
 provider session ID, captured working directory, and the exact `TRAE_HOME` and `TRAECLI_HOME`.
-The YAML compatibility layout exposes no Trae CLI conversation history rather than attributing another product's runtime
-files to Trae.
+No other product's runtime is attributed to Trae. Tests use synthetic histories; private reports,
+native database schemas and real transcripts are not shipped as fixtures.
 
 Pi uses `PI_CODING_AGENT_DIR` when it is available to the application and otherwise defaults to
 `~/.pi/agent`. `PI_CODING_AGENT_SESSION_DIR` selects the conversation root; otherwise a valid

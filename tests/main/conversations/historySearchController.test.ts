@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createPaths } from "../../../src/main/paths";
 import { createTargetRegistry } from "../../../src/main/targets/registry";
 import { createCodexTargetAdapter } from "../../../src/main/targets/codexTarget";
+import { createTraeCliTargetAdapter } from "../../../src/main/targets/integrations/trae-cli";
+import { DatabaseSync } from "node:sqlite";
 import { createHistorySearchController } from "../../../src/main/conversations/historySearchController";
 import { createConversationIndexStore } from "../../../src/main/conversations/conversationIndexStore";
 import type { SettingsStore } from "../../../src/main/settingsStore";
@@ -18,7 +20,7 @@ const transcript = [
   { type: "response_item", payload: { type: "message", role: "user", content: [{type:"input_text",text:"Find the unique history needle"}] } },
   { type: "response_item", payload: { type: "function_call", name: "exec", arguments: "tool-only-sentinel" } }
 ].map((v) => JSON.stringify(v)).join("\n");
-const setup = async (transport?: SshTransport, configText?: string) => {
+const setup = async (transport?: SshTransport, configText?: string, trae = false) => {
   const root = await mkdtemp(join(tmpdir(), "aem-history-opt-in-"));
   cleanups.push(() => rm(root, { recursive:true, force:true }));
   const paths = createPaths({homeDir:join(root,"home"), appDataRoot:join(root,"data"), conversationIndexPath:join(root,"cache/index.sqlite")});
@@ -32,7 +34,7 @@ const setup = async (transport?: SshTransport, configText?: string) => {
     await writeFile(join(root,"cache/conversation-coverage.json"),"null");
   }
   cleanups.push(async () => index.close());
-  const adapter = createCodexTargetAdapter();
+  const adapter = trae ? createTraeCliTargetAdapter() : createCodexTargetAdapter();
   const discover = vi.spyOn(adapter.conversations!,"discover");
   const settings = {readSettings: async () => ({ enabledTargetIds:[] })} as unknown as SettingsStore;
   const controller = await createHistorySearchController({paths, index, settings, registry:createTargetRegistry([adapter]), transport,
@@ -42,6 +44,26 @@ const setup = async (transport?: SshTransport, configText?: string) => {
 };
 
 describe("explicit history search permissions", () => {
+  it("indexes known Trae legacy history, reparses outdated cache and retains searchable text on partial reads", async () => {
+    const {controller,index,paths} = await setup(undefined, undefined, true);
+    const legacy = join(paths.homeDir, ".trae/sessions");
+    await mkdir(legacy, {recursive: true});
+    const path = join(legacy, "rollout-legacy.jsonl");
+    await writeFile(path, transcript);
+    const {deviceName,agentName,...source} = (await controller.status()).availableSources.find((s) => s.deviceId === "local")!;
+    await controller.configure({version:1,enabled:true,paused:false,sources:[source]});
+    expect((await controller.refresh()).indexed).toBe(1);
+    expect((await controller.refresh()).unchanged).toBe(1);
+    const db = new DatabaseSync(paths.conversationIndexPath);
+    try { db.exec("UPDATE conversations SET source_version = 'obsolete:' || source_version"); }
+    finally { db.close(); }
+    expect((await controller.refresh()).indexed).toBe(1);
+    await writeFile(path, JSON.stringify({type:"future_record", payload:{}}));
+    await controller.refresh();
+    expect((await controller.status()).sources[0]).toMatchObject({phase:"partial"});
+    expect((await controller.status()).sources[0].issues.join(" ")).toContain("open the original conversation");
+    expect(await index.search({query:"unique history needle",historySourceIds:controller.allowedIds()})).toHaveLength(1);
+  });
   it("persists partial record diagnostics across unchanged refreshes and clears them only after repair", async () => {
     const {controller,index,file,paths} = await setup();
     const {deviceName,agentName,...source} = (await controller.status()).availableSources.find((s) => s.deviceId === "local")!;

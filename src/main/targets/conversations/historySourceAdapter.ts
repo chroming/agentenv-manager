@@ -7,6 +7,7 @@ import { parseClaudeConversation } from "./claudeConversations";
 import { parsePiConversation } from "./piConversations";
 import { opencodeDataDirs, parseOpenCodeExportMessages } from "./opencodeConversations";
 import { userRequestText } from "./antigravityConversations";
+import { traeHistoryDirectories } from "./traeHistoryPaths";
 
 const defaultRemoteRoots: Record<string, string> = {
   codex: "~/.codex", "claude-code": "~/.claude", "trae-cli": "~/.trae/cli",
@@ -53,10 +54,15 @@ export const parseHistoryText = (agentId: string, name: string, candidate: Agent
 };
 
 export const historyReaderPolicy = (agentId: string) => ({
+  warnOnPartial: agentId === "trae-cli",
   explicitRoots: agentId === "opencode" || agentId === "trae-cli" || agentId.startsWith("antigravity"),
   directoryJsonl: agentId !== "opencode" && !agentId.startsWith("antigravity"),
   allBranches: agentId === "pi"
 });
+
+export const historyScopeRoots = (agentId: string, root: string, kind: string): string[] =>
+  agentId === "trae-cli" && kind === "default"
+    ? traeHistoryDirectories(root).map((entry) => entry.path) : [root];
 
 export const historyFilePath = (candidate: AgentConversationCandidate): string => {
   const locator = candidate.source.locator;

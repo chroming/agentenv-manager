@@ -1,4 +1,4 @@
-import { stat } from "node:fs/promises";
+import { realpath, stat } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import type {
   AgentConversationCandidate,
@@ -10,6 +10,7 @@ import {
   sourceIdFromFilename
 } from "../../conversations/adapterUtils";
 import { readRolloutConversation } from "./rolloutConversations";
+import { traeHistoryDirectories } from "./traeHistoryPaths";
 
 const agent = { id: "trae-cli", name: "Trae CLI" };
 
@@ -26,10 +27,7 @@ export const createTraeCliConversationCapability = (): AgentConversationCapabili
     let selectedRuntimeRoot: string | undefined;
     let selectedRoots: Array<{ path: string; archived: boolean }> = [];
     for (const runtimeRoot of runtimeRoots) {
-      const roots = [
-        { path: join(runtimeRoot, "sessions"), archived: false },
-        { path: join(runtimeRoot, "archived_sessions"), archived: true }
-      ];
+      const roots = traeHistoryDirectories(runtimeRoot);
       for (const root of roots) {
         try {
           const info = await stat(root.path);
@@ -59,6 +57,7 @@ export const createTraeCliConversationCapability = (): AgentConversationCapabili
         ...(failures.length > 0 ? { failures } : {})
       };
     }
+    const seenFiles = new Set<string>();
     for (const root of selectedRoots) {
       let files: string[];
       try {
@@ -82,6 +81,9 @@ export const createTraeCliConversationCapability = (): AgentConversationCapabili
       for (const path of files) {
         const sourceId = sourceIdFromFilename(path);
         try {
+          const actual = await realpath(path);
+          if (seenFiles.has(actual)) continue;
+          seenFiles.add(actual);
           candidates.push(await candidateForFile(path, {
             recordId: sourceId,
             providerSession: {

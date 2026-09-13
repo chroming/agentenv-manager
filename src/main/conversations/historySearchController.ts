@@ -14,7 +14,7 @@ import type { ConversationIndexStore } from "./conversationIndexStore";
 import { writeAtomic } from "../fileUtils";
 import { candidateForFile, createConversationDetail, listFilesRecursively, sourceByteSize, sourceIdFromFilename } from "./adapterUtils";
 import { remoteHistoryRequest, type RemoteHistoryRecord } from "../targets/conversations/remoteHistoryReader";
-import { additionalHistoryDirectoriesFor, historyFilePath, historyReaderPolicy, historyRootsFor, parseHistoryText } from "../targets/conversations/historySourceAdapter";
+import { additionalHistoryDirectoriesFor, historyFilePath, historyReaderPolicy, historyRootsFor, historyScopeRoots, parseHistoryText } from "../targets/conversations/historySourceAdapter";
 
 const emptyConfig = (): HistorySearchConfig => ({ version: 1, enabled: false, paused: false, sources: [] });
 const keyFor = (source: Omit<HistorySource, "id">) => createHash("sha256").update(JSON.stringify(source)).digest("hex").slice(0, 24);
@@ -187,15 +187,21 @@ export const createHistorySearchController = async (options: {
             seen.add(id);
             const issueStart = coverage.issues.length;
             try {
-              if (options.index.sourceVersion(id) === candidate.source.version) { result.unchanged++; coverage.indexed++; coverage.issues.push(...previousRecordIssues[id] ?? []); if (candidate.detailState === "summary-only") coverage.summaryOnly++; continue; }
+              if (options.index.sourceVersion(id) === candidate.source.version) { result.unchanged++; coverage.indexed++; coverage.issues.push(...previousRecordIssues[id] ?? []); if (options.index.record(id).summary.detailState === "summary-only") coverage.summaryOnly++; continue; }
               let detail: ConversationDetail;
               let content: string | undefined;
               const localJsonl = source.deviceId === "local" && candidate.source.locator.endsWith(".jsonl") && sourceByteSize(candidate.source.version) !== undefined;
               const verifyLocalPath = async () => {
-                const approved = await realpath(source.root);
                 const actual = await realpath(candidate.source.locator);
-                const path = relative(approved, actual);
-                if (isAbsolute(path) || path === ".." || path.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)) {
+                const roots = historyScopeRoots(source.agentId, source.root, source.kind);
+                let contained = false;
+                for (const root of roots) {
+                  const approved = await realpath(root).catch(() => undefined);
+                  if (!approved) continue;
+                  const path = relative(approved, actual);
+                  if (!isAbsolute(path) && path !== ".." && !path.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)) contained = true;
+                }
+                if (!contained) {
                   throw new Error("History link changed or leaves the approved source. Add its destination in History sources.");
                 }
               };
@@ -236,6 +242,15 @@ export const createHistorySearchController = async (options: {
                 }
               }
               current();
+              if (reader.warnOnPartial && detail.detailState === "summary-only") {
+                coverage.issues.push(`${candidate.source.locator}: Some history records are not supported. Search may be incomplete; open the original conversation in ${adapter.descriptor.name} to view it. Original files are unchanged.`);
+                // An incomplete reader must not replace previously searchable messages.
+                const previous = (() => { try { return options.index.record(id); } catch { return undefined; } })();
+                if (previous && previous.summary.messageCount > detail.messageCount) {
+                  coverage.summaryOnly++;
+                  continue;
+                }
+              }
               options.index.upsert({ ...detail, id, agentId: source.agentId, agentName: adapter.descriptor.name,
                 sizeBytes: remoteRecords.get(candidate.recordId)?.size ?? detail.sizeBytes,
                 origin: { sourceKey: source.id, deviceId: source.deviceId, deviceName: device?.name ?? "This device",

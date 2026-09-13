@@ -4,6 +4,7 @@ import {
   mkdir,
   mkdtemp,
   rm,
+  symlink,
   writeFile
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -11,6 +12,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTraeCliConversationCapability } from "../../../src/main/targets/conversations/traeCliConversations";
 import type { AgentConversationContext } from "../../../src/main/targets/types";
+import { parseHistoryText } from "../../../src/main/targets/conversations/historySourceAdapter";
 
 let root = "";
 
@@ -91,6 +93,46 @@ const rollout = (options: {
 ].join("\n") + "\n";
 
 describe("Trae CLI V2 conversations", () => {
+  it("unions known legacy folders with runtime history and deduplicates file links", async () => {
+    const { context, runtimeDir } = await setup();
+    const current = join(runtimeDir, "sessions");
+    const legacy = join(context.targetPaths.configDir, "sessions");
+    await mkdir(current, { recursive: true });
+    await mkdir(legacy, { recursive: true });
+    await writeFile(join(current, "rollout-current.jsonl"), rollout({ id: "current", cwd: "/work/demo", user: "Current" }));
+    await writeFile(join(legacy, "rollout-old.jsonl"), rollout({ id: "old", cwd: "/work/demo", user: "Older" }));
+    if (process.platform !== "win32") await symlink(current, join(context.targetPaths.configDir, "archived_sessions"));
+    const capability = createTraeCliConversationCapability();
+    const found = await capability.discover({ ...context, historyRoots: [runtimeDir] });
+    expect(found.complete).toBe(true);
+    expect(found.candidates).toHaveLength(2);
+  });
+
+  it("keeps creation time stable and reports unsupported records without inventing messages", async () => {
+    const { context, runtimeDir } = await setup();
+    await mkdir(join(runtimeDir, "sessions"), { recursive: true });
+    const path = join(runtimeDir, "sessions/rollout-meta.jsonl");
+    const content = [
+      {type: "session_meta", timestamp: "2026-01-01T00:00:00Z", payload: { id: "meta" }},
+      {type: "turn_context", payload: { cwd: "/work/demo" }},
+      {type: "session_meta", timestamp: "2026-02-01T00:00:00Z", payload: { id: "meta" }},
+      {type: "future_record", payload: { text: "Do not guess a message" }}
+    ].map((row) => JSON.stringify(row)).join("\n");
+    await writeFile(path, content);
+    const capability = createTraeCliConversationCapability();
+    const candidate = (await capability.discover(context)).candidates[0];
+    const local = await capability.read(context, candidate);
+    const remote = parseHistoryText("trae-cli", "Trae CLI", candidate, content);
+    for (const detail of [local, remote]) {
+      expect(detail.createdAt).toBe("2026-01-01T00:00:00.000Z");
+      expect(detail.workspacePath).toBe("/work/demo");
+      expect(detail.detailState).toBe("summary-only");
+      expect(detail.messages).toEqual([]);
+    }
+    const empty = parseHistoryText("trae-cli", "Trae CLI", candidate, content.split("\n")[0]);
+    expect(empty.detailState).toBe("full");
+    expect(empty.messageCount).toBe(0);
+  });
   it("discovers rollout histories and excludes artifacts and prompt history", async () => {
     const { context, runtimeDir } = await setup();
     const sessionDir = join(runtimeDir, "sessions", "2026", "07", "27");

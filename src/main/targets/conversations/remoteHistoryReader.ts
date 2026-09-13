@@ -16,7 +16,9 @@ def roots():
     if kind == 'directory': return [root]
     if agent == 'codex': return [os.path.join(root,'sessions'), os.path.join(root,'archived_sessions')]
     if agent == 'claude-code': return [os.path.join(root,'projects')]
-    if agent == 'trae-cli': return [os.path.join(root,'sessions'), os.path.join(root,'archived_sessions')]
+    if agent == 'trae-cli':
+        bases = [root] + ([os.path.dirname(root)] if os.path.basename(root) == 'cli' else [])
+        return [os.path.join(base,sub) for base in bases for sub in ['sessions','archived_sessions']]
     if agent == 'pi': return [os.path.join(root,'sessions')]
     return [root]
 allowed = roots()
@@ -48,6 +50,7 @@ def suggested_roots():
     return sorted(set(os.path.abspath(os.path.expanduser(p)) for p in candidates if p and os.path.isdir(os.path.expanduser(p)) and os.path.abspath(os.path.expanduser(p)) != root))
 def scan():
     records, issues, seen = [], [], set()
+    seen_files = set()
     titles, summaries, workspaces = {}, {}, {}
     if agent == 'codex' and kind == 'default':
         try:
@@ -108,6 +111,9 @@ def scan():
                     if name.endswith('.jsonl'):
                         if agent.startswith('antigravity') and name != 'transcript.jsonl': continue
                         if name in ['history.jsonl','session_index.jsonl']: continue
+                        actual = os.path.realpath(path)
+                        if actual in seen_files: continue
+                        seen_files.add(actual)
                         s = os.stat(path)
                         record = dict(path=path, version=stamp(path), size=s.st_size, updatedAt=iso(s.st_mtime*1000))
                         if agent == 'codex':
