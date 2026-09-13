@@ -176,6 +176,7 @@ describe("ProjectsWorkspace", () => {
     expect(switcherTrigger.querySelector(".ui-object-switcher__trigger-icon")).toBeNull();
     expect(document.querySelector(".project-detail__header .ui-inspector-header__icon"))
       .not.toBeNull();
+    await waitFor(() => expect(screen.getByRole("button", { name: "More Workspace actions" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "More Workspace actions" }));
     expect(screen.getByRole("menuitem", { name: "Rename Workspace" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Refresh Workspace" })).toBeInTheDocument();
