@@ -6,6 +6,7 @@ import electronPath from "electron";
 import { _electron as electron, type ElectronApplication } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import { requireCurrentElectronBuild } from "./currentBuild";
+import { setSkillCatalogStatus } from "./skillCatalogControls";
 
 requireCurrentElectronBuild();
 let root = "";
@@ -75,11 +76,11 @@ describe("AI tag suggestions desktop flow", () => {
         await page.screenshot({ path: join(captureDir, `tag-list-${locale}-${width}.png`) });
       }
       if (english) {
-        await page.getByRole("button", { name: "Updates (0)", exact: true }).click();
+        await setSkillCatalogStatus(page, "updates");
         await page.getByRole("button", { name: "More Skill actions", exact: true }).click();
         expect(await page.getByRole("menuitem", { name: "AI tags...", exact: true }).isDisabled()).toBe(true);
         await page.keyboard.press("Escape");
-        await page.getByRole("button", { name: "All (2)", exact: true }).click();
+        await setSkillCatalogStatus(page, "all");
       }
       await page.getByRole("button", { name: english ? "More Skill actions" : "更多 Skill 操作", exact: true }).click();
       await page.getByRole("menuitem", { name: english ? "AI tags..." : locale === "zh_CN" ? "AI 打标签…" : "AI 標籤…", exact: true }).click();

@@ -104,7 +104,7 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
     await page.getByRole("complementary", { name: "Global navigation" })
       .getByRole("button", { name: "Settings" })
       .click({ timeout: 5_000 });
-    await page.getByText("Installed with Homebrew").waitFor({ timeout: 5_000 });
+    await page.getByLabel("Installed with Homebrew", { exact: true }).waitFor({ timeout: 5_000 });
     await page.getByRole("tab", { name: "Data" }).click();
     await page.getByText("Shares one anonymous startup event per day. Turn it off at any time.")
       .waitFor({ timeout: 5_000 });
@@ -245,7 +245,7 @@ describe.skipIf(process.platform !== "darwin")("application updates", () => {
     await page.getByRole("complementary", { name: "Global navigation" })
       .getByRole("button", { name: "Settings" })
       .click({ timeout: 5_000 });
-    await page.getByText("Installed directly").waitFor({ timeout: 5_000 });
+    await page.getByLabel("Installed directly", { exact: true }).waitFor({ timeout: 5_000 });
     await page.getByRole("button", { name: "Check now" }).click({ timeout: 5_000 });
     await expect.poll(
       () => page.evaluate(() => window.agentEnv.readAppUpdateStatus()),

@@ -363,6 +363,7 @@ export const expectStructuredDialog = async (dialog: Locator) => {
           )
         : [],
       dialogBottom: box.bottom,
+      buttonHeightToken: Number.parseFloat(getComputedStyle(element).getPropertyValue("--control-height-dialog")),
       dialogOverflowY: getComputedStyle(element).overflowY,
       footerBottom: footerBox?.bottom ?? 0,
       footerTop: footerBox?.top ?? 0,
@@ -379,7 +380,8 @@ export const expectStructuredDialog = async (dialog: Locator) => {
   expect(geometry.dialogOverflowY).toBe("hidden");
   expect(["auto", "scroll"]).toContain(geometry.bodyOverflowY);
   expect(new Set(geometry.buttonHeights).size).toBeLessThanOrEqual(1);
-  expect(geometry.buttonHeights.every((height) => height === 34)).toBe(true);
+  expect(geometry.buttonHeightToken).toBeGreaterThan(0);
+  expect(geometry.buttonHeights.every((height) => height === geometry.buttonHeightToken)).toBe(true);
   expect(geometry.titleTransform).toBe("none");
   expect(geometry.titleWeight).toBeGreaterThanOrEqual(600);
 };

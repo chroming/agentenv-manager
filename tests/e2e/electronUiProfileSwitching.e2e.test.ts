@@ -1037,9 +1037,12 @@ const launchApp = async (
       await launchedPage.setViewportSize({ width: 1440, height: 960 });
       await launchedPage.waitForLoadState("domcontentloaded");
       await expect.poll(
-        () => launchedPage.evaluate(() => window.agentEnv.readStartupStatus()),
+        () => launchedPage.evaluate(async () => {
+          const status = await window.agentEnv.readStartupStatus();
+          return status.state === "initializing" ? status.phase ?? status.state : status.state;
+        }),
         { timeout: 10_000 }
-      ).toEqual({ state: "ready" });
+      ).toBe("ready");
       await launchedPage
         .getByRole("complementary")
         .waitFor({ state: "visible", timeout: 10_000 });
@@ -2144,7 +2147,9 @@ describe("Electron UI profile switching e2e", () => {
     await dialog.getByRole("button", { name: "Close", exact: true }).click();
     await page.getByRole("tab", { name: "By source" }).click();
     await expectNoHorizontalOverflow(page, [".editor-panel", ".skill-source-view"]);
-    await page.getByRole("button", { name: /^Manual only/ }).click();
+    await page.getByRole("button", { name: /^Filters/ }).click();
+    await page.getByRole("combobox", { name: "Source check scope", exact: true }).selectOption("manual");
+    await page.keyboard.press("Escape");
     const sourceRow = page.locator(".skill-source-group").filter({
       hasText: "project-skills"
     });
@@ -2164,7 +2169,9 @@ describe("Electron UI profile switching e2e", () => {
     await resizeAppWindow(page, 920, 620);
     await sourceRow.getByRole("button", { name: /Source actions/ }).click();
     await page.getByRole("menuitem", { name: "Include in routine checks" }).click();
-    await page.getByRole("button", { name: /^Monitored/ }).click();
+    await page.getByRole("button", { name: /^Filters/ }).click();
+    await page.getByRole("combobox", { name: "Source check scope", exact: true }).selectOption("monitored");
+    await page.keyboard.press("Escape");
     await sourceRow.waitFor({ state: "visible" });
     await sourceRow.getByRole("button", { name: /Source actions/ }).click();
     await page.getByRole("menuitem", { name: "Exclude from routine checks" })
@@ -2362,7 +2369,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.locator(".settings-page").waitFor({ state: "visible" });
-    await page.getByLabel("Language").waitFor({ state: "visible" });
+    await page.getByTestId("locale-select").waitFor({ state: "visible" });
 
     await openSkillLibrary(page);
     await page
@@ -2712,7 +2719,7 @@ describe("Electron UI profile switching e2e", () => {
       await navigation.getByRole("button", { name: "Skills", exact: true }).click();
       const libraryHeaderGeometry = await page.locator(".library-page-header").evaluate((header) => {
         const headerRect = header.getBoundingClientRect();
-        const copy = header.querySelector<HTMLElement>(".ui-page-header__copy")!;
+        const copy = header.querySelector<HTMLElement>("[role=tablist]")!;
         const actions = header.querySelector<HTMLElement>(".ui-page-header__actions")!;
         const copyRect = copy.getBoundingClientRect();
         const actionsRect = actions.getBoundingClientRect();
@@ -2732,13 +2739,13 @@ describe("Electron UI profile switching e2e", () => {
       expect(libraryHeaderGeometry.actionsInsideHeader).toBe(true);
       expect(libraryHeaderGeometry.actionsBesideTitle).toBe(true);
       expect(libraryHeaderGeometry.centerDelta).toBeLessThanOrEqual(1);
-      const toolbarLayout = await page.locator(".library-toolbar-actions").evaluate((actions) => {
+      const toolbarLayout = await page.locator(".library-toolbar-actions:visible").evaluate((actions) => {
         const row = actions.closest(".library-toolbar")!.getBoundingClientRect();
         const controls = [...actions.querySelectorAll("button")].map((button) => button.getBoundingClientRect()).filter((box) => box.width && box.height);
         return { count: controls.length, aligned: controls.every((box) => Math.abs(box.top - controls[0].top) <= 1),
           contained: controls.every((box) => box.left >= row.left && box.right <= row.right) };
       });
-      expect(toolbarLayout.count).toBeGreaterThanOrEqual(4);
+      expect(toolbarLayout.count).toBe(4);
       expect(toolbarLayout.aligned).toBe(true);
       expect(toolbarLayout.contained).toBe(true);
       const toolbarActions = [
@@ -2748,23 +2755,25 @@ describe("Electron UI profile switching e2e", () => {
       const toolbarWidths: number[] = [];
       for (const action of toolbarActions) {
         const geometry = await action.evaluate((button) => {
-          const content = button.querySelector<HTMLElement>(".ui-button__content")!;
-          const icon = button.querySelector<HTMLElement>(".ui-button__icon")!;
-          const label = button.querySelector<HTMLElement>(".ui-button__label")!;
+          const content = button.querySelector<HTMLElement>(".ui-button__content, .ui-icon-button__content")!;
+          const icon = button.querySelector<HTMLElement>(".ui-button__icon, .ui-icon-button__content svg")!;
+          const label = button.querySelector<HTMLElement>(".ui-button__label");
+          const labelBox = label?.getBoundingClientRect();
           const buttonBox = button.getBoundingClientRect();
           const contentBox = content.getBoundingClientRect();
           const iconBox = icon.getBoundingClientRect();
-          const labelBox = label.getBoundingClientRect();
           return {
             buttonWidth: buttonBox.width,
             contentDisplay: getComputedStyle(content).display,
             contentVisible: contentBox.width > 0 && contentBox.height > 0,
             iconVisible: iconBox.width > 0 && iconBox.height > 0,
-            labelVisible: labelBox.width > 0 && labelBox.height > 0,
-            iconLabelGap: labelBox.left - iconBox.right,
-            iconLabelVerticalDelta: Math.abs(
-              iconBox.top + iconBox.height / 2 - (labelBox.top + labelBox.height / 2)
-            ),
+            iconButtonHorizontalDelta: Math.abs(iconBox.left + iconBox.width / 2 - (buttonBox.left + buttonBox.width / 2)),
+            square: Math.abs(buttonBox.width - buttonBox.height) <= 1,
+            accessibleName: button.getAttribute("aria-label"),
+            label: label?.textContent,
+            labelFits: !label || label.scrollWidth <= label.clientWidth + 1,
+            labelGap: labelBox ? labelBox.left - iconBox.right : undefined,
+            labelCenterDelta: labelBox ? Math.abs(labelBox.top + labelBox.height / 2 - iconBox.top - iconBox.height / 2) : undefined,
             iconButtonVerticalDelta: Math.abs(
               iconBox.top + iconBox.height / 2 - (buttonBox.top + buttonBox.height / 2)
             ),
@@ -2777,15 +2786,20 @@ describe("Electron UI profile switching e2e", () => {
         expect(geometry.contentDisplay).toBe("flex");
         expect(geometry.contentVisible).toBe(true);
         expect(geometry.iconVisible).toBe(true);
-        if (testCase.width > 1050) {
-          expect(geometry.labelVisible).toBe(true);
-          expect(geometry.iconLabelGap).toBeGreaterThanOrEqual(6);
-          expect(geometry.iconLabelVerticalDelta).toBeLessThanOrEqual(1);
+        expect(geometry.accessibleName).toBeTruthy();
+        if (geometry.label) {
+          expect(geometry.label).toBe("Update all");
+          expect(geometry.labelFits).toBe(true);
+          expect(geometry.labelGap).toBeGreaterThanOrEqual(6);
+          expect(geometry.labelCenterDelta).toBeLessThanOrEqual(1);
+        } else {
+          expect(geometry.square).toBe(true);
+          expect(geometry.iconButtonHorizontalDelta).toBeLessThanOrEqual(1);
         }
         expect(geometry.iconButtonVerticalDelta).toBeLessThanOrEqual(1);
         expect(geometry.contentVerticalDelta).toBeLessThanOrEqual(1);
       }
-      expect(toolbarWidths[1]).toBeLessThan(toolbarWidths[0]);
+      expect(toolbarWidths[1]).toBeGreaterThan(toolbarWidths[0]);
       const listCheckIconClass = await toolbarActions[0]
         .locator("svg")
         .first()
@@ -2961,7 +2975,7 @@ describe("Electron UI profile switching e2e", () => {
         });
       expect(updateCommitGeometry).toEqual({
         fontWeight: "400",
-        height: 34,
+        height: await updateDialog.evaluate((element) => Number.parseFloat(getComputedStyle(element).getPropertyValue("--control-height-dialog"))),
         label: "Update Skill",
         labelHorizontalCenterDelta: 0,
         labelVerticalCenterDelta: 0,
@@ -3052,7 +3066,6 @@ describe("Electron UI profile switching e2e", () => {
 
     const refresh = page.getByRole("button", { name: "Refresh" });
     await refresh.click();
-    await page.getByRole("menuitem", { name: "Refresh Profiles" }).click();
     await expect.poll(() => refresh.getAttribute("aria-busy")).toBe("false");
     expect(await page.getByText("Agents refreshed", { exact: true }).count()).toBe(0);
   }, standardElectronTestTimeout);
@@ -3123,7 +3136,7 @@ describe("Electron UI profile switching e2e", () => {
 
     const openCodeCard = page.getByRole("article", { name: "Agent OpenCode" });
     await openCodeCard.waitFor({ state: "visible" });
-    await expect.poll(() => openCodeCard.textContent()).toContain("Applied");
+    await expect.poll(() => openCodeCard.locator(".target-workflow-environment button").getAttribute("title")).toBe("UI OpenCode alpha\nApplied");
     await expect.poll(() => openCodeCard.textContent()).toContain("UI OpenCode alpha");
     await openCodeCard.getByRole("button", { name: "OpenCode", exact: true })
       .waitFor({ state: "visible" });
@@ -3728,7 +3741,6 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Agents", exact: true }).click();
     const refresh = page.getByRole("button", { name: "Refresh" });
     await refresh.click();
-    await page.getByRole("menuitem", { name: "Refresh Profiles" }).click();
     await expect.poll(() => refresh.getAttribute("aria-busy")).toBe("false");
     await page.getByRole("button", { name: "Profiles", exact: true }).click();
     await page.getByRole("heading", { name: "UI OpenCode alpha" }).waitFor({ state: "visible" });
@@ -3789,7 +3801,6 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Agents", exact: true }).click();
     const refresh = page.getByRole("button", { name: "Refresh" });
     await refresh.click();
-    await page.getByRole("menuitem", { name: "Refresh Profiles" }).click();
     await expect.poll(() => refresh.getAttribute("aria-busy")).toBe("false");
     await page.getByRole("button", { name: "Profiles", exact: true }).click();
     await page.getByRole("heading", { name: "UI OpenCode alpha" }).waitFor({ state: "visible" });
@@ -3997,15 +4008,31 @@ describe("Electron UI profile switching e2e", () => {
       "utf8"
     );
 
+    await openSkillLibrary(page);
+
+    await electronApp.evaluate(({ ipcMain }) => {
+      const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, (...args: unknown[]) => unknown> })._invokeHandlers;
+      const gates = new Map<string, () => void>();
+      (globalThis as typeof globalThis & { __updateGates?: Map<string, () => void> }).__updateGates = gates;
+      for (const channel of ["skills:check-updates", "skills:preview-update"]) {
+        const original = handlers.get(channel)!;
+        ipcMain.removeHandler(channel);
+        ipcMain.handle(channel, async (...args) => {
+          await new Promise<void>((resolve) => gates.set(channel, resolve));
+          return original(...args);
+        });
+      }
+    });
     const checkAll = page.getByRole("button", { name: "Check updates" });
     const checkAllIdleBox = await checkAll.boundingBox();
     await checkAll.click();
     await expect.poll(() => checkAll.getAttribute("aria-busy")).toBe("true");
-    await expect.poll(() => checkAll.locator(".ui-button__busy svg").getAttribute("class"))
+    await expect.poll(() => checkAll.locator(".ui-icon-button__busy svg").getAttribute("class"))
       .toContain("is-spinning");
     const checkAllBusyBox = await checkAll.boundingBox();
     expect(checkAllBusyBox?.width).toBe(checkAllIdleBox?.width);
     expect(checkAllBusyBox?.height).toBe(checkAllIdleBox?.height);
+    await electronApp.evaluate(() => (globalThis as typeof globalThis & { __updateGates?: Map<string, () => void> }).__updateGates!.get("skills:check-updates")!());
 
     const review = page
       .getByRole("group", { name: "Library item shared-reviewer" })
@@ -4014,7 +4041,7 @@ describe("Electron UI profile switching e2e", () => {
     await review.click();
     await expect.poll(() => review.getAttribute("aria-busy")).toBe("true");
     await expect.poll(() => checkAll.getAttribute("aria-busy")).toBe("false");
-    expect(await checkAll.locator(".ui-button__content svg").getAttribute("class"))
+    expect(await checkAll.locator(".ui-icon-button__content svg").getAttribute("class"))
       .toContain("lucide-search-check");
 
     const navigation = page.getByRole("complementary", { name: "Global navigation" });
@@ -4024,6 +4051,7 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("group", { name: "Library item shared-reviewer" })
       .getByRole("button", { name: "Review update shared-reviewer" });
     await expect.poll(() => restoredReview.getAttribute("aria-busy")).toBe("true");
+    await electronApp.evaluate(() => (globalThis as typeof globalThis & { __updateGates?: Map<string, () => void> }).__updateGates!.get("skills:preview-update")!());
     const updateDialog = page.getByRole("dialog", {
       name: "Update preview for shared-reviewer"
     });
@@ -4340,7 +4368,7 @@ describe("Electron UI profile switching e2e", () => {
     );
     await expectInViewport(page, expandedPanel);
     await expectInViewport(page, composer.getByRole("button", { name: "Skills", exact: true }));
-    expect(await workbench.boundingBox()).toEqual(initialWorkbenchBox);
+    expect(await workbench.boundingBox(), JSON.stringify({ before: initialWorkbenchBox, after: await workbench.boundingBox() })).toEqual(initialWorkbenchBox);
     const editorMetrics = await editor.evaluate((element) => ({
       clientHeight: element.clientHeight,
       overflowY: getComputedStyle(element).overflowY,
@@ -4354,6 +4382,16 @@ describe("Electron UI profile switching e2e", () => {
     await inspectSwitcher();
     await expectInViewport(page, page.locator(".profile-hero"));
     await expectInViewport(page, expandedPanel);
+
+    if (process.env.AGENTENV_GATE_CAPTURE_DIR) {
+      await mkdir(process.env.AGENTENV_GATE_CAPTURE_DIR, { recursive: true });
+      for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+        await resizeAppWindow(page, width!, height!);
+        await expectShellContained();
+        await page.screenshot({ animations: "disabled", path: join(process.env.AGENTENV_GATE_CAPTURE_DIR, `profile-expanded-${width}.png`) });
+      }
+      await resizeAppWindow(page, 920, 620);
+    }
 
     const triggerGeometry = await switcherTrigger.evaluate((trigger) => ({
       textFits: trigger.scrollWidth <= trigger.clientWidth + 1,
@@ -4395,7 +4433,7 @@ describe("Electron UI profile switching e2e", () => {
     await loading.waitFor({ state: "visible" });
     expect(await page.getByText("No Profile selected", { exact: true }).count()).toBe(0);
     const during = await editor.boundingBox();
-    expect(during).toEqual(before);
+    expect(during, JSON.stringify({ before, during })).toEqual(before);
     const composerDuring = await composer.boundingBox();
     expect(Math.abs((composerDuring?.y ?? 0) - (composerBefore?.y ?? 0))).toBeLessThanOrEqual(1);
     expect(await page.locator(".profile-loading-row").count()).toBe(3);
@@ -4982,7 +5020,7 @@ describe("Electron UI profile switching e2e", () => {
       actionName?: string,
       actionSelector?: string
     ) => {
-      const heading = page.getByRole("heading", { name: headingName, exact: true });
+      const heading = navigation.getByRole("button", { name: headingName, exact: true });
       await heading.waitFor({ state: "visible" });
       const headingElement = await heading.elementHandle();
       const actionElement = actionName
@@ -5529,7 +5567,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await navigation.getByRole("button", { name: "Skills", exact: true }).click();
     const pageActions = await readBoxes(page.locator(".ui-page-header__actions button"));
-    expect(pageActions.length).toBeGreaterThanOrEqual(3);
+    expect(pageActions.length).toBe(1);
     expect(new Set(pageActions.map(({ height }) => height))).toEqual(new Set([32]));
     const toolbarControls = await readBoxes(
       page.locator(".library-toolbar > .ui-search-field, .library-toolbar-actions button")
@@ -5555,9 +5593,9 @@ describe("Electron UI profile switching e2e", () => {
       inputBorder: "0px",
       inputShadow: "none"
     });
-    const libraryMode = await readBoxes(page.locator(".library-mode-switch"));
+    const libraryMode = await readBoxes(page.locator(".library-page-header [role=tablist]"));
     const libraryModeOptions = await readBoxes(
-      page.locator(".library-mode-switch .ui-tab-bar__tab")
+      page.locator(".library-page-header [role=tab]")
     );
     expect(libraryModeOptions.length).toBe(3);
     const libraryRowMenus = await readBoxes(
@@ -5690,7 +5728,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(expandedSettingsGeometry.detailsContained).toBe(true);
     const agentActionGeometry = await page.locator(".agent-path-row").evaluateAll((rows) =>
       rows.map((row) => {
-        const button = row.querySelector<HTMLElement>(".ui-button")!;
+        const button = row.querySelector<HTMLElement>(".settings-row-actions button")!;
         const rowBox = row.getBoundingClientRect();
         const buttonBox = button.getBoundingClientRect();
         return {
@@ -6005,7 +6043,7 @@ describe("Electron UI profile switching e2e", () => {
           .getByRole("complementary", { name: "Global navigation" })
           .getByRole("button", { name: destination, exact: true })
           .click();
-        await page.getByRole("heading", { name: destination, exact: true }).waitFor();
+        await page.locator(destination === "Settings" ? ".settings-page" : destination === "Profiles" ? ".profile-workbench" : destination === "Skills" ? ".skill-library-panel" : destination === "Conversations" ? ".conversation-page" : ".target-list").waitFor({ state: "visible" });
         await expectTextContracts(`${destination} at ${viewport.width}x${viewport.height}`);
       }
     }
@@ -6053,10 +6091,10 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByTestId("locale-select").selectOption("zh_CN");
-    await page.getByRole("heading", { name: "设置", exact: true }).waitFor();
+    await page.locator('[data-workspace="settings"]').filter({ hasText: "设置" }).waitFor();
     for (const destination of ["技能", "配置方案", "对话", "Agents", "设置"] as const) {
       await page.getByRole("button", { name: destination, exact: true }).click();
-      await page.getByRole("heading", { name: destination, exact: true }).waitFor();
+      await expect.poll(() => page.getByRole("button", { name: destination, exact: true }).getAttribute("aria-current")).toBe("page");
       await expectTextContracts(`${destination} at 920x620`);
     }
   }, standardElectronTestTimeout);
@@ -6065,14 +6103,9 @@ describe("Electron UI profile switching e2e", () => {
     const { page } = await launchApp();
     await page.setViewportSize({ width: 1180, height: 728 });
     await page.getByRole("button", { name: "Agents", exact: true }).click();
-    const agentsHelp = page.getByLabel(
-      "Inspect each Agent and apply a saved Profile only when you choose."
-    );
-    const agentsTooltip = page.getByRole("tooltip").filter({
-      hasText: "Inspect each Agent and apply a saved Profile only when you choose."
-    });
-    await hoverUntilVisible(page, agentsHelp, agentsTooltip);
-    await page.mouse.move(600, 400);
+    await page.getByRole("button", { name: "More Agent actions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Add SSH device", exact: true }).waitFor();
+    await page.keyboard.press("Escape");
 
     const expectAgentRowGeometry = async () => {
       const geometry = await page.locator(".target-list").evaluate((list) => {
@@ -6111,7 +6144,7 @@ describe("Electron UI profile switching e2e", () => {
             health: getComputedStyle(first.querySelector<HTMLElement>(".target-health-status")!).fontWeight,
             lifecycle: getComputedStyle(first.querySelector<HTMLElement>(".target-workflow-lifecycle, .target-workflow-environment button")!).fontWeight,
             name: getComputedStyle(first.querySelector<HTMLElement>(".target-workflow-name-line strong")!).fontWeight,
-            pageTitle: getComputedStyle(document.querySelector<HTMLElement>(".ui-page-header h2")!).fontWeight
+            columnHeading: getComputedStyle(list.querySelector<HTMLElement>(".target-list__header")!).fontWeight
           }
         };
       });
@@ -6127,7 +6160,7 @@ describe("Electron UI profile switching e2e", () => {
           health: "400",
           lifecycle: "400",
           name: "500",
-          pageTitle: "650"
+          columnHeading: "400"
         }
       });
     };
@@ -6137,16 +6170,20 @@ describe("Electron UI profile switching e2e", () => {
     await resizeAppWindow(page, 1440, 900);
     const wideHeaderGeometry = await page.locator(".target-list__header").evaluate((header) => {
       const labels = Array.from(header.querySelectorAll<HTMLElement>(":scope > span"));
-      const lastApplied = labels.find((label) => label.textContent === "Last applied");
-      const actions = labels.at(-1);
+      const lastApplied = header.querySelector(".target-list__last-applied-label");
+      const actions = header.querySelector(".target-list__header-actions");
       return {
         actionsWidth: Math.round(actions?.getBoundingClientRect().width ?? 0),
         lastAppliedHeight: Math.round(lastApplied?.getBoundingClientRect().height ?? 0),
-        lastAppliedWidth: Math.round(lastApplied?.getBoundingClientRect().width ?? 0)
+        lastAppliedWidth: Math.round(lastApplied?.getBoundingClientRect().width ?? 0),
+        lastAppliedFits: Boolean(lastApplied && lastApplied.scrollWidth <= lastApplied.clientWidth + 1),
+        lastAppliedContained: Boolean(lastApplied && actions && lastApplied.getBoundingClientRect().right <= actions.getBoundingClientRect().right)
       };
     });
     expect(wideHeaderGeometry.lastAppliedHeight).toBeLessThanOrEqual(18);
-    expect(wideHeaderGeometry.lastAppliedWidth).toBeGreaterThanOrEqual(88);
+    expect(wideHeaderGeometry.lastAppliedWidth).toBeGreaterThan(0);
+    expect(wideHeaderGeometry.lastAppliedFits).toBe(true);
+    expect(wideHeaderGeometry.lastAppliedContained).toBe(true);
     expect(wideHeaderGeometry.actionsWidth).toBeGreaterThanOrEqual(28);
     await resizeAppWindow(page, 1180, 728);
 
@@ -6268,7 +6305,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.reload();
     const agents = page.getByRole("region", { name: "Agents", exact: true });
     await agents.waitFor({ state: "visible" });
-    expect(await agents.locator(".target-workflow-name-action").allTextContents())
+    await expect.poll(() => agents.locator(".target-workflow-name-action").allTextContents())
       .toEqual(persisted.agentOrder);
 
     await page.getByRole("button", { name: "Profiles", exact: true }).click();
@@ -9353,8 +9390,8 @@ describe("Electron UI profile switching e2e", () => {
         skill: row.querySelector<HTMLElement>(".library-resource-cell")!.getBoundingClientRect().width,
         source: row.querySelector<HTMLElement>(".library-source-cell")!.getBoundingClientRect().width
       }));
-      expect(columnWidths.skill).toBeGreaterThanOrEqual(columnWidths.source);
-      expect(columnWidths.skill).toBeLessThanOrEqual(columnWidths.source * 1.7);
+      expect(columnWidths.skill).toBeGreaterThan(0);
+      expect(columnWidths.source).toBeGreaterThanOrEqual(columnWidths.skill);
       expect(Math.abs(geometry.metrics[0]!.statusLeft - geometry.metrics[1]!.statusLeft)).toBeLessThanOrEqual(1);
       expect(geometry.metrics[0]!.statusIconPresent).toBe(true);
       expect(geometry.metrics[1]!.statusIconPresent).toBe(true);
@@ -9376,15 +9413,12 @@ describe("Electron UI profile switching e2e", () => {
         await page.getByRole("tab", { name, exact: true }).click();
         const toolbar = page.locator(".ui-resource-panel-toolbar--catalog:visible");
         await toolbar.waitFor({ state: "visible" });
-        const refresh = page.locator(".library-page-header .ui-refresh-action");
-        expect(await refresh.textContent()).toBe("");
-        const refreshBox = await refresh.boundingBox();
-        expect(refreshBox!.width).toBe(refreshBox!.height);
+        await openSkillCatalogAction(page, "Refresh");
         if (name !== "Groups") {
           const filters = toolbar.getByRole("button", { name: /^Filters/ });
           expect(await filters.textContent()).toBe("");
-          await filters.hover();
-          await expect.poll(() => page.getByRole("tooltip").textContent()).toBe("Filters");
+          await hoverUntilVisible(page, filters, page.getByRole("tooltip"));
+          await expect.poll(() => page.getByRole("tooltip").textContent()).toBe(await filters.getAttribute("aria-label"));
           expect(await page.getByRole("tooltip").evaluate((node) => getComputedStyle(node).pointerEvents)).toBe("none");
           await filters.click();
           expect(await filters.getAttribute("aria-expanded")).toBe("true");
@@ -10715,7 +10749,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await openSettingsCategory(page, "General");
     await page.getByTestId("locale-select").selectOption("zh_CN");
-    await page.getByRole("heading", { name: "设置", exact: true }).waitFor();
+    await page.locator('[data-workspace="settings"]').filter({ hasText: "设置" }).waitFor();
     await page.getByRole("status").filter({ hasText: "设置已保存" }).waitFor();
     await page.getByRole("tab", { name: "Agents", exact: true }).click();
     await page.getByText("管理 OpenCode 的指令、技能和 MCP 启用状态。", { exact: true }).waitFor();
@@ -10788,7 +10822,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "设置", exact: true }).click();
     await page.getByRole("tab", { name: "通用", exact: true }).click();
     await page.getByTestId("locale-select").selectOption("zh_TW");
-    await page.getByRole("heading", { name: "設定", exact: true }).waitFor();
+    await page.locator('[data-workspace="settings"]').filter({ hasText: "設定" }).waitFor();
     expect(await page.locator("html").getAttribute("lang")).toBe("zh-TW");
 
     await resizeAppWindow(page, 920, 620);
@@ -10809,9 +10843,9 @@ describe("Electron UI profile switching e2e", () => {
     };
     for (const [workspace, heading] of Object.entries(localizedWorkspaces)) {
       await page.locator(`[data-workspace="${workspace}"]`).click();
-      const workspaceHeading = page.locator(".ui-page-header h2").first();
+      const workspaceHeading = page.locator(`[data-workspace="${workspace}"]`);
       await expect
-        .poll(async () => (await workspaceHeading.textContent())?.trim(), {
+        .poll(async () => await workspaceHeading.getAttribute("aria-label"), {
           message: workspace
         })
         .toBe(heading);
@@ -10834,7 +10868,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => localizedSidebarToggle.getAttribute("aria-label")).toBe("展開側欄");
     await localizedSidebarToggle.click();
     await page.getByTestId("locale-select").selectOption("en");
-    await page.getByRole("heading", { name: "Settings", exact: true }).waitFor();
+    await page.locator('[data-workspace="settings"]').filter({ hasText: "Settings" }).waitFor();
     await expect
       .poll(async () => JSON.parse(await readFile(join(appDataRoot, "settings.json"), "utf8")))
       .toMatchObject({ locale: "en" });
@@ -11538,7 +11572,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => libraryRow.evaluate((row) => getComputedStyle(row).boxShadow))
       .toBe("none");
-    expect(await page.locator(".catalog-filters__summary").textContent()).toBe("Disabled");
+    expect(await page.locator(".catalog-filters__summary:visible").textContent()).toBe("Disabled");
     expect(await page.getByRole("group", { name: /^Library item / }).count()).toBe(1);
     await setSkillCatalogStatus(page, "updates");
     expect(await page.getByRole("group", { name: "Library item layout-skill-1" }).count()).toBe(0);

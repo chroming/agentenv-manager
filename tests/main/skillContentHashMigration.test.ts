@@ -15,6 +15,31 @@ afterEach(async () => {
 });
 
 describe("Skill content hash migration", () => {
+  it("finishes independent batches and retries only the corrupt member", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-hash-batches-"));
+    const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
+    const directories = Array.from({ length: 12 }, (_, index) => join(paths.skillsLibraryDir, `skill-${index}`));
+    for (const [index, directory] of directories.entries()) {
+      await mkdir(directory, { recursive: true });
+      await writeFile(join(directory, "SKILL.md"), `# Skill ${index}\n`);
+      await writeFile(join(directory, ".agentenv-skill.json"), index === 5 ? "{broken" : "{}");
+    }
+    await migrateSkillContentHashes(paths);
+    expect(await readJson(join(paths.appDataRoot, "content-hash-format.json")))
+      .toMatchObject({ pendingPaths: [directories[5]] });
+    for (const [index, directory] of directories.entries()) {
+      const metadata = await readFile(join(directory, ".agentenv-skill.json"), "utf8");
+      if (index === 5) expect(metadata).toBe("{broken");
+      else expect(JSON.parse(metadata)).toMatchObject({ contentHashVersion: 2, contentHash: await hashSkillContent(directory) });
+    }
+    const healthyMetadata = await readFile(join(directories[0]!, ".agentenv-skill.json"), "utf8");
+    await writeFile(join(directories[0]!, "SKILL.md"), "# Later external edit\n");
+    await writeFile(join(directories[5]!, ".agentenv-skill.json"), "{}");
+    await migrateSkillContentHashes(paths);
+    expect(await readFile(join(directories[0]!, ".agentenv-skill.json"), "utf8")).toBe(healthyMetadata);
+    expect(await migrateSkillContentHashes(paths)).toBe(false);
+  });
+
   it("keeps corrupt Library data intact and retries only until it becomes readable", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-hash-migration-partial-"));
     const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });

@@ -390,7 +390,7 @@
 .skill-source-candidate-identity,
 .skill-source-candidate-head > :first-child {
   grid-column: content / status;
-  padding-inline-start: calc(var(--source-candidate-indent) + 16px);
+  padding-inline-start: var(--source-candidate-indent);
 }
 
 .skill-source-candidate-identity {

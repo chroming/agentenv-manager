@@ -49,11 +49,11 @@ const rewriteLibraryHashes = async (paths: AgentEnvPaths, incomplete: (path: str
     throw error;
   }
   const hashes = new Map<string, string>();
-  for (const entry of entries.filter((candidate) => candidate.isDirectory())) {
+  const rewriteEntry = async (entry: typeof entries[number]) => {
     const skillDir = join(paths.skillsLibraryDir, entry.name);
-    if (!shouldProcess(skillDir)) continue;
+    if (!shouldProcess(skillDir)) return;
     try {
-      if (!(await pathExists(join(skillDir, "SKILL.md")))) continue;
+      if (!(await pathExists(join(skillDir, "SKILL.md")))) return;
       const contentHash = await hashSkillContent(skillDir);
       const metadataPath = join(skillDir, ".agentenv-skill.json");
       if (await pathEntryExists(metadataPath) && (await lstat(metadataPath)).isSymbolicLink()) throw new Error("Skill metadata is a link and was not modified");
@@ -64,7 +64,7 @@ const rewriteLibraryHashes = async (paths: AgentEnvPaths, incomplete: (path: str
       }
       const metadata = storedMetadata ?? {};
       hashes.set(entry.name, contentHash);
-      if (metadata.contentHash === contentHash && metadata.contentHashVersion === SKILL_CONTENT_HASH_VERSION) continue;
+      if (metadata.contentHash === contentHash && metadata.contentHashVersion === SKILL_CONTENT_HASH_VERSION) return;
       await writeAtomic(
         metadataPath,
         `${JSON.stringify({ ...metadata, contentHash, contentHashVersion: SKILL_CONTENT_HASH_VERSION }, null, 2)}\n`,
@@ -73,6 +73,13 @@ const rewriteLibraryHashes = async (paths: AgentEnvPaths, incomplete: (path: str
     } catch (error) {
       await incomplete(skillDir, error);
     }
+  };
+  const candidates = entries.filter((candidate) => candidate.isDirectory());
+  // Independent directories may migrate together, but no write may outlive the migration lock.
+  for (let offset = 0; offset < candidates.length; offset += 4) {
+    const results = await Promise.allSettled(candidates.slice(offset, offset + 4).map(rewriteEntry));
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed?.status === "rejected") throw failed.reason;
   }
   return hashes;
 };

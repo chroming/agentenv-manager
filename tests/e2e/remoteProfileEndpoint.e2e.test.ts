@@ -94,7 +94,8 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
     await remoteDeviceGroup.waitFor({ state: "visible" });
     await remoteDeviceGroup.getByText("OpenCode", { exact: true }).waitFor({ state: "visible" });
     await remoteDeviceGroup.getByRole("button", { name: "Refresh fixture-host" }).click();
-    await remoteDeviceGroup.getByText("Ready · 1 Agent", { exact: true }).waitFor({ state: "visible" });
+    await expect.poll(() => remoteDeviceGroup.getAttribute("class")).toContain("is-ready");
+    expect(await remoteDeviceGroup.locator(".target-card--workflow").count()).toBe(1);
     await remoteDeviceGroup.getByRole("button", { name: "OpenCode", exact: true }).click();
     const setup = page.getByRole("dialog", { name: /^Set up OpenCode/ });
     await setup.waitFor({ state: "visible" });

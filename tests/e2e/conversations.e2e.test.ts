@@ -398,14 +398,10 @@ describe("Conversations desktop workflow", () => {
     await navigation
       .getByRole("button", { name: "Conversations" })
       .click();
-    const conversationHelp = page.getByLabel(
-      "Search approved local and SSH histories. Background indexing runs every five minutes while the app is open."
-    );
-    await conversationHelp.focus();
-    await page.getByRole("tooltip").filter({
-      hasText: "Search approved local and SSH histories. Background indexing runs every five minutes while the app is open."
-    }).waitFor({ state: "visible" });
-    await page.mouse.move(600, 400);
+    await page.getByRole("button", { name: "More", exact: true }).click();
+    expect(await page.getByRole("menuitem", { name: "History sources", exact: true }).getAttribute("title"))
+      .toBe("Search approved local and SSH histories. Background indexing runs every five minutes while the app is open.");
+    await page.keyboard.press("Escape");
     await page.getByRole("option", { name: /测试111/ }).waitFor({
       state: "visible",
       timeout: 15_000
@@ -425,7 +421,7 @@ describe("Conversations desktop workflow", () => {
     expect(new Set(titleLayout.heights).size).toBe(1);
     expect(titleLayout.whiteSpaces).toEqual(["nowrap"]);
     await expect.poll(() => page.getByText("Could not complete this step").count()).toBe(0);
-    await page.getByText("200 of 201 conversations", { exact: true }).waitFor();
+    await expect.poll(() => page.locator(".conversation-list-meta").textContent()).toContain("200 of 201 conversations");
     const sortedConversationTitles = await page.evaluate(async () => {
       const [largest, recent] = await Promise.all([
         window.agentEnv.listConversations({ sort: "size-desc", limit: 1 }),
@@ -486,7 +482,7 @@ describe("Conversations desktop workflow", () => {
     await page.keyboard.press("Escape");
 
     await historySearch.fill("");
-    await page.getByText("200 of 201 conversations", { exact: true }).waitFor();
+    await expect.poll(() => page.locator(".conversation-list-meta").textContent()).toContain("200 of 201 conversations");
     await expect.poll(() => page.getByRole("button", { name: "Load 1 more" }).count()).toBe(0);
     await page.locator(".conversation-list").evaluate((list) => {
       list.scrollTop = list.scrollHeight;
@@ -494,7 +490,7 @@ describe("Conversations desktop workflow", () => {
     });
     await expect.poll(() => page.getByRole("button", { name: "Load 1 more" }).count()).toBe(1);
     await page.getByRole("button", { name: "Load 1 more" }).click();
-    await page.getByText("201 conversations", { exact: true }).waitFor();
+    await expect.poll(() => page.locator(".conversation-list-meta").textContent()).toMatch(/^201 conversations · /);
     await expect.poll(() => page.getByRole("button", { name: "Load 1 more" }).count()).toBe(0);
     expect(await page.locator(".conversation-list-item__agent img").count())
       .toBeGreaterThanOrEqual(4);
@@ -743,7 +739,7 @@ describe("Conversations desktop workflow", () => {
       name: /Repair the desktop release workflow/
     }).waitFor();
     await page.getByRole("searchbox", { name: "Search conversations" }).fill("");
-    await page.getByText("200 of 201 conversations", { exact: true }).waitFor();
+    await expect.poll(() => page.locator(".conversation-list-meta").textContent()).toContain("200 of 201 conversations");
     await page.waitForTimeout(450);
     await expect(page.getByRole("option", {
       name: /Long conversation performance test/
@@ -758,7 +754,8 @@ describe("Conversations desktop workflow", () => {
       });
       observer.observe(document.body, { childList: true, subtree: true });
     });
-    await page.getByRole("button", { name: "Refresh" }).click();
+    await page.getByRole("button", { name: "More", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Refresh", exact: true }).click();
     await expect.poll(() => page.evaluate(() =>
       document.body.dataset.observedConversationRefresh
     )).toBe("false");

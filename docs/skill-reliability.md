@@ -50,7 +50,9 @@ The recovery relaxation is deliberately limited to single-Skill icon, tag, avail
 - Shared source state and summaries: `tests/shared/skillSourceGrouping.test.ts`, `tests/renderer/skillUpdateSummary.test.ts`.
 - Rebuilt Electron startup with damaged metadata, healthy siblings, repair, refresh and persisted-file checks: `tests/e2e/skillReadReliability.e2e.test.ts`.
 
-## Completion evidence (2026-09-13)
+## Initial completion evidence (2026-09-13)
+
+The desktop and Target-audit failures recorded below were subsequently repaired. The complete registered gate now passes: 2,038 non-Electron tests, 182 Electron tests and all six audits. See [Desktop regression gate convergence](e2e-gate-convergence.md) for the rebuilt artifact, reports and verification boundaries. The initial results remain below as historical evidence.
 
 - Source artifact: `959a01f24e0b`; build and TypeScript checks passed.
 - Full non-Electron pool: 285 files, 2,035 tests passed.

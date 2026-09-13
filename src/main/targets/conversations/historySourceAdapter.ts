@@ -64,6 +64,11 @@ export const historyFilePath = (candidate: AgentConversationCandidate): string =
   return locator;
 };
 
+export const additionalHistoryDirectoriesFor = (agentId: string, paths: {configDir: string; runtimeDir?: string}): string[] =>
+  agentId === "pi" && paths.runtimeDir && paths.runtimeDir !== join(paths.configDir, "sessions")
+    ? [paths.runtimeDir]
+    : [];
+
 export const historyRootsFor = (agentId: string, homeDir: string, paths: {configDir: string; runtimeDir?: string}, local: boolean, environment: NodeJS.ProcessEnv = process.env): string[] => {
   if (!local) return defaultRemoteRoots[agentId] ? [defaultRemoteRoots[agentId]] : [];
   if (agentId === "opencode") return opencodeDataDirs(homeDir, process.platform, environment);

@@ -14,7 +14,7 @@ import type { ConversationIndexStore } from "./conversationIndexStore";
 import { writeAtomic } from "../fileUtils";
 import { candidateForFile, createConversationDetail, listFilesRecursively, sourceByteSize, sourceIdFromFilename } from "./adapterUtils";
 import { remoteHistoryRequest, type RemoteHistoryRecord } from "../targets/conversations/remoteHistoryReader";
-import { historyFilePath, historyReaderPolicy, historyRootsFor, parseHistoryText } from "../targets/conversations/historySourceAdapter";
+import { additionalHistoryDirectoriesFor, historyFilePath, historyReaderPolicy, historyRootsFor, parseHistoryText } from "../targets/conversations/historySourceAdapter";
 
 const emptyConfig = (): HistorySearchConfig => ({ version: 1, enabled: false, paused: false, sources: [] });
 const keyFor = (source: Omit<HistorySource, "id">) => createHash("sha256").update(JSON.stringify(source)).digest("hex").slice(0, 24);
@@ -67,9 +67,8 @@ export const createHistorySearchController = async (options: {
           const source = { deviceId: device.id, agentId, root: historyRoot, kind: "default" as const };
           result.push({ ...source, id: keyFor(source), deviceName: device.id === "local" && process.platform !== "darwin" ? "This device" : device.name, agentName: adapter.descriptor.name });
         }
-        if (device.id === "local" && agentId === "pi" && targetPaths.runtimeDir &&
-          targetPaths.runtimeDir !== join(targetPaths.configDir, "sessions")) {
-          const source = {deviceId: device.id, agentId, root: targetPaths.runtimeDir, kind: "directory" as const};
+        for (const root of device.id === "local" ? additionalHistoryDirectoriesFor(agentId, targetPaths) : []) {
+          const source = {deviceId: device.id, agentId, root, kind: "directory" as const};
           result.push({...source,id:keyFor(source),deviceName:process.platform === "darwin" ? "This Mac" : "This device",agentName:adapter.descriptor.name});
         }
       }
