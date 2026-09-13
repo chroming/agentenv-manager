@@ -59,6 +59,41 @@ const createCleanupFixture = async () => {
 };
 
 describe("Skill mutation recovery", () => {
+  it("allows a proven disjoint metadata write, but blocks overlapping and unscoped writes", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-recovery-scope-"));
+    const affected = join(root, "library", "first");
+    await mkdir(affected, { recursive: true });
+    const gate = createSkillMutationRecoveryGate({
+      appDataRoot: root, backupStore: {} as BackupStore,
+      skillLibraryStore: {
+        listPendingCleanupRecoveries: async () => ["pending"],
+        readCleanupRecoveryPaths: async () => [affected],
+        recoverInterruptedCleanupBackups: async () => ({ recoveredIds: [], recoveryRequiredIds: ["pending"] })
+      }
+    });
+    await gate.refresh();
+    await expect(gate.run("skills:set-icon", () => "done", [join(root, "library", "second", ".agentenv-skill.json")])).resolves.toBe("done");
+    await expect(gate.run("skills:set-icon", () => "unsafe", [join(affected, ".agentenv-skill.json")])).rejects.toThrow("pending");
+    await expect(gate.run("skills:update-library", () => "unsafe")).rejects.toThrow("pending");
+  });
+  it("refuses mutation when backup content no longer matches its receipt", async () => {
+    const { skillDir, store, manifest } = await createCleanupFixture();
+    await writeFile(join(manifest.entries[0].backupPath, "SKILL.md"), "# Corrupt backup\n");
+    const claim = store.createCleanupPathClaimer(manifest);
+    await expect(claim(skillDir)).rejects.toThrow("integrity check");
+    expect(await readFile(join(skillDir, "SKILL.md"), "utf8")).toBe("# Original\n");
+    expect(claim.claimedPaths.size).toBe(0);
+  });
+
+  it("refuses a backup/preimage mismatch before touching the source", async () => {
+    const { skillDir, store, manifest } = await createCleanupFixture();
+    await writeFile(join(skillDir, "SKILL.md"), "# External\n");
+    manifest.expectedPaths = await store.snapshotCleanupPaths([skillDir]);
+    await store.writeCleanupManifest(manifest);
+    const claim = store.createCleanupPathClaimer(manifest);
+    await expect(claim(skillDir)).rejects.toThrow();
+    expect(await readFile(join(skillDir, "SKILL.md"), "utf8")).toBe("# External\n");
+  });
   it("rolls back a receipted interrupted cleanup", async () => {
     const { skillDir, store, manifest } = await createCleanupFixture();
     const claim = store.createCleanupPathClaimer(manifest);

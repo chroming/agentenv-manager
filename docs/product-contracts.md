@@ -1400,6 +1400,13 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 
 ## 16. Skill Library Contract
 
+### Read Reliability
+
+- Inspection isolates unreadable Library entries and Agent locations. Last-good entries are display-only and explicitly marked; an incomplete scan MUST NOT authorize deletion or imply absence.
+- Source, Library, Local Skills and Profile projections preserve the same failure meaning. A failed check is neither current nor an available update; one unreadable Library member does not invalidate healthy siblings.
+- Mutation planning uses fresh evidence for affected paths. Candidate content and metadata commit together; preimage and backup validation precede destructive changes. Unverifiable recovery scope remains conservative.
+- The implemented boundaries, limits and verification receipt are recorded in [Skill read and mutation reliability](skill-reliability.md).
+
 ### 16.1 Import
 
 - Import from a local folder copies canonical content into the Library.

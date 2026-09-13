@@ -45,6 +45,7 @@ export const readSkillLibraryEntry = async (
 ): Promise<SkillLibraryEntry> => {
   const content = await readFile(join(skillDir, "SKILL.md"), "utf8");
   const frontmatter = parseSkillFrontmatter(content);
+  if (frontmatter.errors.length) throw new Error(`Skill frontmatter is invalid: ${frontmatter.errors.join("; ")}`);
   let metadata: SkillMetadataFile = {};
   try {
     metadata = JSON.parse(
@@ -55,7 +56,13 @@ export const readSkillLibraryEntry = async (
       throw error;
     }
   }
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    throw new Error("Skill metadata must be an object");
+  }
   const contentHash = await hashSkillContent(skillDir);
+  if (await readFile(join(skillDir, "SKILL.md"), "utf8") !== content) {
+    throw new Error(`Skill changed while reading; refresh and retry: ${skillDir}`);
+  }
   const stats = await stat(join(skillDir, "SKILL.md"));
   const tags = parseSkillTags(metadata.tags, { strict: false });
   return {

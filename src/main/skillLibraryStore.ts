@@ -122,7 +122,6 @@ import {
   createSkillSourceGroupStore,
   githubCandidateStatus,
   normalizeRepositorySkillScan,
-  resolveSkillSourceCollection,
   validateGitHubImportCollection,
   validateRepositoryImportCollection
 } from "./skillSourceLibrary";
@@ -131,7 +130,8 @@ import {
   createSkillLibraryMetadataMutations,
   type SkillMetadataWriteInput
 } from "./skillLibraryMetadataMutations";
-import { bindSkillSourceCollection, createSkillSourceRegistry } from "./skillSourceRegistry";
+import { createSkillSourceRegistry } from "./skillSourceRegistry";
+import { createSkillMetadataWriter } from "./skillMetadataWriter";
 import {
   createLocalSkillSourceCollection,
   createSingleSkillSourceCollection,
@@ -174,6 +174,7 @@ import {
 } from "./skillUpdatePreviewStore";
 import { createSkillUpdateCandidateCache } from "./skillUpdateCandidateCache";
 import { createSkillUpdateChecker } from "./skillUpdateChecker";
+import { createSkillLibraryReader } from "./skillLibraryReader";
 import {
   createSkillUpdateImpactIndex,
   skillUpdateImpactFromIndex,
@@ -260,6 +261,7 @@ const validateSkillFrontmatter = async (skillDir: string) => {
 
 interface RemoveAndCopyOptions {
   expectMissing?: boolean;
+  expectedTargetHash?: string;
   prepareStaging?: (stagingPath: string) => Promise<void>;
 }
 
@@ -272,7 +274,8 @@ const removeAndCopy = async (
     await cp(source, stagingPath, { recursive: true, dereference: true });
     await rm(join(stagingPath, ".agentenv-owner.json"), { force: true });
     await options.prepareStaging?.(stagingPath);
-  }, options.expectMissing ? { expectedTargetHash: undefined } : {});
+  }, options.expectMissing ? { expectedTargetHash: undefined }
+    : options.expectedTargetHash !== undefined ? { expectedTargetHash: options.expectedTargetHash } : {});
 };
 
 export const createSkillLibraryStore = (
@@ -562,103 +565,16 @@ export const createSkillLibraryStore = (
     }
   };
 
-  const readLibraryMetadata = async (skillDir: string) =>
-    (await readJsonIfExists<SkillMetadataFile>(join(skillDir, ".agentenv-skill.json"))) ?? {};
-
-  const writeMetadata = async (
-    skillDir: string,
-    metadata: SkillMetadataWriteInput
-  ) => {
-    const current = await readLibraryMetadata(skillDir);
-    const sourceType = metadata.sourceType ?? "local";
-    const contentHash = await computeContentHash(skillDir);
-    const sourceCollection = await bindSkillSourceCollection(
-      skillSourceRegistry,
-      resolveSkillSourceCollection(metadata.sourceCollection, current.sourceCollection)
-    );
-    const tags = metadata.tags === undefined
-      ? parseSkillTags(current.tags, { strict: false })
-      : parseSkillTags(metadata.tags);
-    await writeAtomic(
-      join(skillDir, ".agentenv-skill.json"),
-      `${JSON.stringify(
-        {
-          sourceType,
-          source: metadata.source,
-          remoteRef: metadata.remoteRef,
-          remotePath: metadata.remotePath,
-          remoteRevision: metadata.remoteRevision,
-          upstream: metadata.upstream ?? current.upstream,
-          provenance: metadata.provenance ?? current.provenance,
-          sourceCollection,
-          iconKey: metadata.iconKey === null ? undefined : metadata.iconKey ?? current.iconKey,
-          globallyEnabled: metadata.globallyEnabled ?? current.globallyEnabled ?? true,
-          tags: tags.length > 0 ? tags : undefined,
-          aiTags: splitSkillTags({ tags, aiTags: metadata.aiTags ?? current.aiTags }).ai,
-          updatePolicy:
-            metadata.updatePolicy ??
-            (typeof metadata.updateCheckEnabled === "boolean"
-              ? metadata.updateCheckEnabled
-                ? "tracked"
-                : "untracked"
-              : Object.keys(current).length > 0
-                ? updatePolicyFor(current)
-                : sourceType === "github" || sourceType === "git"
-                  ? "tracked"
-                  : "untracked"),
-          updateCheckEnabled:
-            (metadata.updatePolicy ??
-              (typeof metadata.updateCheckEnabled === "boolean"
-                ? metadata.updateCheckEnabled
-                  ? "tracked"
-                  : "untracked"
-                : Object.keys(current).length > 0
-                  ? updatePolicyFor(current)
-                  : sourceType === "github" || sourceType === "git"
-                    ? "tracked"
-                    : "untracked")) === "tracked",
-          contentHash,
-          contentHashVersion: SKILL_CONTENT_HASH_VERSION,
-          updatedAt: new Date().toISOString()
-        },
-        null,
-        2
-      )}\n`
-    );
+  const readLibraryMetadata = async (skillDir: string) => {
+    const metadata = await readJsonIfExists<SkillMetadataFile>(join(skillDir, ".agentenv-skill.json"));
+    if (metadata === undefined) return {};
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) throw new Error(`Invalid Skill metadata: ${skillDir}`);
+    return metadata;
   };
 
-  const listSkills = async () => {
-    let entries;
-    const root = await libraryDir();
-    try {
-      entries = await readdir(root, { withFileTypes: true });
-    } catch (error) {
-      if (isMissingFileError(error)) {
-        return [];
-      }
-      throw error;
-    }
+  const writeMetadata = createSkillMetadataWriter({ readLibraryMetadata, skillSourceRegistry, updatePolicyFor });
 
-    const skills = await Promise.all(
-      entries
-        .filter((entry) => entry.isDirectory())
-        .map(async (entry): Promise<SkillLibraryEntry | undefined> => {
-          const skillDir = join(root, entry.name);
-          try {
-            return await entryFor(entry.name, skillDir);
-          } catch (error) {
-            if (isMissingFileError(error)) {
-              return undefined;
-            }
-            throw error;
-          }
-        })
-    );
-
-    return skills
-      .filter((skill): skill is SkillLibraryEntry => Boolean(skill))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  };
+  const listSkills = createSkillLibraryReader(libraryDir, entryFor);
 
   const scanGitHubSkills = async (rawUrl: string): Promise<GitHubSkillScanResult> => {
     const source = await resolveGitHubLocation(rawUrl, { refresh: true });
@@ -799,9 +715,13 @@ export const createSkillLibraryStore = (
   const scanInventory = async (
     targetPaths: TargetPaths[],
     knownLibrarySkills?: SkillLibraryEntry[],
-    onIssues?: (issues: SkillRuntimeIssue[]) => void
+    onIssues?: (issues: SkillRuntimeIssue[]) => void,
+    selectedLibraryIds?: ReadonlySet<string>
   ): Promise<SkillInventoryEntry[]> => {
-    const librarySkills = knownLibrarySkills ?? await listSkills();
+    const readIssues: SkillRuntimeIssue[] = [];
+    const librarySkills = (knownLibrarySkills ?? await listSkills(onIssues
+      ? (issues) => readIssues.push(...issues)
+      : undefined)).filter((skill) => !skill.readIssue);
     const libraryIds = new Set(librarySkills.map((skill) => skill.id));
     const libraryById = new Map(librarySkills.map((skill) => [skill.id, skill]));
     const libraryBySkillKey = new Map<string, SkillLibraryEntry[]>();
@@ -813,18 +733,31 @@ export const createSkillLibraryStore = (
       await inspectSkillsCliLocks(paths.homeDir, options.skillsCliLockPaths)
     ).evidenceBySkillKey;
     const byKey = new Map<string, SkillInventoryEntry>();
+    const unreadableTargets = new Set<string>();
     const managedResourcesByTarget = await readManagedSkillResourcesByTarget(
       targetPaths,
-      targetStateRepository
+      targetStateRepository,
+      onIssues ? (targetId, error) => {
+        unreadableTargets.add(targetId);
+        readIssues.push({ code: "unreadable-native-state", severity: "warning",
+          message: `${targetId}: ${error instanceof Error ? error.message : String(error)}` });
+      } : undefined
     );
-    const snapshots = await Promise.all(targetPaths.map(async (target) => ({
-      target,
-      snapshot: await runtimeSnapshotProvider(target)
-    })));
-    onIssues?.(
-      snapshots.flatMap(({ snapshot }) => snapshot.issues)
-        .filter((issue) => issue.code === "unreadable-skill-location")
-    );
+    const snapshots = (await Promise.all(targetPaths.filter((target) => !unreadableTargets.has(target.targetId)).map(async (target) => {
+      try {
+        return { target, snapshot: await runtimeSnapshotProvider(target) };
+      } catch (error) {
+        if (!onIssues) throw error;
+        readIssues.push({ code: "unreadable-skill-location", severity: "warning",
+          message: `Could not scan ${target.targetId} Skills at ${target.skillsDir}. Refresh after checking this path. ${error instanceof Error ? error.message : String(error)}` });
+        return undefined;
+      }
+    }))).filter((item): item is NonNullable<typeof item> => Boolean(item));
+    readIssues.push(...snapshots.flatMap(({ snapshot }) => snapshot.issues)
+      .filter((issue) => issue.code === "unreadable-skill-location"));
+    if (selectedLibraryIds && readIssues.length) {
+      throw new Error(readIssues.map((issue) => issue.message).join("\n"));
+    }
     await migrateLegacySkillPolicies(snapshots);
     const unmanagedLocations = await readUnmanagedSkillLocations();
     const collectionDecisions = await readSkillCollectionDecisions();
@@ -852,6 +785,7 @@ export const createSkillLibraryStore = (
         : undefined);
     for (const { target, snapshot } of snapshots) {
       for (const observation of snapshot.observations) {
+       try {
         const deploymentName = observation.deploymentName;
         const skillDir = observation.path;
         const managedResource = managedResourcesByTarget
@@ -867,6 +801,15 @@ export const createSkillLibraryStore = (
           targetId: target.targetId,
           kind: "skill"
         });
+        const ownedId = await legacyOwnedLibraryId(skillDir);
+        const receiptLibraryId = managedResource?.source?.startsWith("skills-library/")
+          ? managedResource.source.slice("skills-library/".length)
+          : undefined;
+        if (selectedLibraryIds) {
+          const sharedId = sharedOwnershipFor({ path: skillDir, shared: observation.shared, explicitlyUnmanaged: false }).libraryId;
+          const legacyReceiptNeedsInspection = Boolean(managedResource && !receiptLibraryId);
+          if (!legacyReceiptNeedsInspection && ![receiptLibraryId, ownedId, sharedId].some((id) => id && selectedLibraryIds.has(id))) continue;
+        }
         const unreadable = observation.issues.some((issue) => issue.code === "unreadable-skill");
         if (unreadable) {
           const unmanagedLocation = unmanagedLocationFor(
@@ -953,10 +896,6 @@ export const createSkillLibraryStore = (
 
         const content = await readFile(join(skillDir, "SKILL.md"), "utf8");
         const frontmatter = parseSkillFrontmatter(content);
-        const ownedId = await legacyOwnedLibraryId(skillDir);
-        const receiptLibraryId = managedResource?.source?.startsWith("skills-library/")
-          ? managedResource.source.slice("skills-library/".length)
-          : undefined;
         const agentEnvOwned = legacyOwnershipMarkerPaths.length > 0;
         const unmanagedLocation = unmanagedLocationFor(
           target.targetId,
@@ -1091,8 +1030,14 @@ export const createSkillLibraryStore = (
           locationManagement: observation.locationManagement ?? location?.management,
           collectionLink: observation.collectionLink
         });
+       } catch (error) {
+         if (!onIssues) throw error;
+         readIssues.push({ code: "unreadable-skill", severity: "warning",
+           message: `Could not read ${observation.runtimeName} at ${observation.path}. Refresh after checking this path. ${error instanceof Error ? error.message : String(error)}` });
+       }
       }
     }
+    onIssues?.(readIssues);
     return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
   };
 
@@ -1643,7 +1588,7 @@ export const createSkillLibraryStore = (
     setSourceMonitored,
     setSourceCandidateIgnored
   } =
-    createSkillSourceGroupStore(skillSourceService, listSkills, skillSourceRegistry);
+    createSkillSourceGroupStore(skillSourceService, () => listSkills(() => undefined), skillSourceRegistry);
   const checkSourceGroup = (sourceId: string) =>
     runSkillPerformanceTrace("check-source-group", sourceId, recordPerformance, () =>
       measureSkillPerformancePhase("source-scan", () => checkSourceGroupImpl(sourceId))
@@ -2455,7 +2400,7 @@ export const createSkillLibraryStore = (
   const checkUpdatesImpl = createSkillUpdateChecker({
     computeContentHash,
     githubClient,
-    listSkills,
+    listSkills: () => listSkills(() => undefined),
     metadataHash,
     pathExists,
     readMetadata: readLibraryMetadata,
@@ -2639,14 +2584,14 @@ export const createSkillLibraryStore = (
     writeMetadata
   });
 
-  const prepareSkillUpdateImpactIndex = async (): Promise<SkillUpdateImpactIndex> => {
+  const prepareSkillUpdateImpactIndex = async (ids?: readonly string[]): Promise<SkillUpdateImpactIndex> => {
     const [profiles, inventory] = await measureSkillPerformancePhase("impact-scan", () =>
       Promise.all([
         profileStore
           ? readAllProfilesForResourceMutation(profileStore, "Skill update preview")
           : Promise.resolve([]),
-        Promise.all([targetPathsProvider(), listSkills()]).then(([targetPaths, skills]) =>
-          scanInventory(targetPaths, skills)
+        Promise.all([targetPathsProvider(), listSkills(() => undefined)]).then(([targetPaths, skills]) =>
+          scanInventory(targetPaths, skills.filter((skill) => !skill.readIssue), undefined, ids ? new Set(ids) : undefined)
         )
       ])
     );
@@ -2669,7 +2614,8 @@ export const createSkillLibraryStore = (
     const shouldRefreshSource = refreshSource ?? !recentCheck;
     const impactIndexPromise = impactIndex
       ? Promise.resolve(impactIndex)
-      : prepareSkillUpdateImpactIndex();
+      : prepareSkillUpdateImpactIndex([safeId]);
+    void impactIndexPromise.catch(() => undefined);
     const readImpact = async () => skillUpdateImpactFromIndex(
       safeId,
       await impactIndexPromise
@@ -2992,7 +2938,7 @@ export const createSkillLibraryStore = (
   const previewUpdatesImpl = async (ids: string[]): Promise<SkillUpdatePreviewBatchResult> => {
     const uniqueIds = [...new Set(ids.map((id) => SafeIdSchema.parse(id)))];
     if (uniqueIds.length === 0) return { plans: [], failed: [] };
-    const impactIndex = await prepareSkillUpdateImpactIndex();
+    const impactIndex = await prepareSkillUpdateImpactIndex(ids);
     const groups = new Map<string, string[]>();
     const metadataById = new Map<string, SkillMetadataFile>();
     for (const id of uniqueIds) {
@@ -3116,7 +3062,7 @@ export const createSkillLibraryStore = (
     }
 
     const targetPaths = await targetPathsProvider();
-    const inventory = await scanInventory(targetPaths);
+    const inventory = await scanInventory(targetPaths, [await entryFor(safeId, targetDir)], undefined, new Set([safeId]));
     const propagation = await prepareLibraryUpdatePropagation({
       inventory,
       libraryId: safeId,
@@ -3134,8 +3080,16 @@ export const createSkillLibraryStore = (
     try {
       const claimPath = createCleanupPathClaimer(backup);
       await claimPath(targetDir);
-      await removeAndCopy(pending.candidateDir, targetDir);
-      await writeMetadata(targetDir, pending.nextMetadata);
+      // Commit content and metadata together; staging is checked before the old path moves.
+      await removeAndCopy(pending.candidateDir, targetDir, {
+        expectedTargetHash: backup.expectedPaths.find((entry) => resolve(entry.path) === resolve(targetDir))?.sha256,
+        prepareStaging: async (stagingPath) => {
+          await writeMetadata(stagingPath, pending.nextMetadata);
+          if (await computeContentHash(stagingPath) !== pending.candidateContentHash) {
+            throw new Error("Skill update candidate changed before commit; review the latest version");
+          }
+        }
+      });
       await claimPath.recordMutation(targetDir);
       const updated = await entryFor(safeId, targetDir);
       if (await computeContentHash(targetDir) !== pending.candidateContentHash) {
@@ -3177,6 +3131,7 @@ export const createSkillLibraryStore = (
     recoverInterruptedCleanupBackups,
     listPendingCleanupRecoveries,
     setUnmanagedSkillLocations,
+    readCleanupRecoveryPaths: async (id) => (await readCleanupBackup(id)).manifest.expectedPaths.map((entry) => entry.path),
     setSkillCollectionDecision,
     scanUnmanaged,
     previewImport,

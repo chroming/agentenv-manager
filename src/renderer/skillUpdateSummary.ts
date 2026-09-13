@@ -14,13 +14,14 @@ export const updatesFromSourceGroups = (
 ): SkillUpdateInfo[] => {
   const skillsById = new Map(skills.map((skill) => [skill.id, skill]));
   const updates = new Map<string, SkillUpdateInfo>();
-  for (const candidate of groups.flatMap((group) => group.candidates)) {
-    if (!candidate.libraryId || candidate.state === "unchecked") continue;
+  for (const { group, candidate } of groups.flatMap((group) => group.candidates.map((candidate) => ({ group, candidate })))) {
+    if (!candidate.libraryId) continue;
     const skill = skillsById.get(candidate.libraryId);
+    if (candidate.state === "unchecked" && !group.error && !skill?.readIssue) continue;
     if (!skill || skill.globallyEnabled === false || skill.updatePolicy !== "tracked") continue;
-    const error = ["invalid", "conflict", "missing"].includes(candidate.state)
+    const error = skill.readIssue ?? group.error ?? (["invalid", "conflict", "missing"].includes(candidate.state)
       ? candidate.detail ?? "Source check failed"
-      : undefined;
+      : undefined);
     updates.set(skill.id, {
       id: skill.id,
       name: skill.name,
@@ -28,7 +29,7 @@ export const updatesFromSourceGroups = (
       currentRevision: skill.remoteRevision ?? skill.contentHash,
       latestRevision: candidate.contentRevision,
       latestUpdatedAt: candidate.upstreamUpdatedAt,
-      updateAvailable: candidate.state === "update",
+      updateAvailable: candidate.state === "update" && !error,
       sourceStatus: candidate.state === "removed" ? "removed" : undefined,
       error
     });
@@ -89,7 +90,9 @@ export const summarizeSkillUpdateResult = (
   ).length;
   return {
     state: "success",
-    message: remainingUpdates > 0
+    message: skillUpdateItems.some((update) => update.error)
+      ? t("Updated {{id}}", { id: skillId })
+      : remainingUpdates > 0
       ? t("Updated {{id}} · {{count}} updates remain", { id: skillId, count: remainingUpdates })
       : t("Updated {{id}} · All tracked skills are up to date", { id: skillId })
   };

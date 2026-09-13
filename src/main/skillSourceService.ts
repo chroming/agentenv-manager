@@ -41,7 +41,14 @@ export const createSkillSourceService = (
       skills.map((skill) => skill.sourceCollection?.canonicalLink).filter((link): link is string => Boolean(link))
     )];
     const values = await Promise.all(
-      links.map(async (link) => [link, await options.observationStore.read(link)] as const)
+      links.map(async (link) => {
+        try {
+          return [link, await options.observationStore.read(link)] as const;
+        } catch (error) {
+          errors.set(link, `Could not read the previous source check. Check this source again. ${error instanceof Error ? error.message : String(error)}`);
+          return [link, undefined] as const;
+        }
+      })
     );
     return new Map(
       values.filter((entry): entry is readonly [string, SkillSourceObservation] => Boolean(entry[1]))

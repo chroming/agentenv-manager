@@ -61,6 +61,17 @@ const observation: SkillSourceObservation = {
 };
 
 describe("skill source grouping", () => {
+  it("isolates an unreadable Library entry without disabling healthy siblings in its source", () => {
+    const [group] = deriveSkillSourceGroups([
+      { ...skill("review", "review", "old"), readIssue: "Permission denied" },
+      skill("testing", "testing", "old")
+    ], new Map([[scope.canonicalLink, observation]]));
+    expect(group.error).toBeUndefined();
+    expect(group.candidates.find((candidate) => candidate.libraryId === "review"))
+      .toMatchObject({ state: "unchecked", readIssue: "Permission denied" });
+    expect(group.candidates.find((candidate) => candidate.libraryId === "testing")?.state).toBe("update");
+    expect(group.counts.updates).toBe(1);
+  });
   it("derives explicit update, new, and removed actions from the last complete observation", () => {
     const [group] = deriveSkillSourceGroups(
       [skill("review", "review", "remote-review-1"), skill("docs", "docs", "remote-docs-1")],

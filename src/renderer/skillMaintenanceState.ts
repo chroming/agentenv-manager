@@ -1,11 +1,12 @@
 import type { SkillLibraryEntry, SkillUpdateInfo } from "../shared/types";
 
-export type SkillMaintenanceState = "disabled" | "untracked" | "unchecked" | "current" | "update" | "removed" | "error" | "new" | "ignored" | "invalid" | "conflict" | "missing";
+export type SkillMaintenanceState = "unreadable" | "disabled" | "untracked" | "unchecked" | "current" | "update" | "removed" | "error" | "new" | "ignored" | "invalid" | "conflict" | "missing";
 
 export const skillMaintenanceState = (
-  skill: Pick<SkillLibraryEntry, "globallyEnabled" | "updatePolicy">,
+  skill: Pick<SkillLibraryEntry, "globallyEnabled" | "updatePolicy" | "readIssue">,
   update?: SkillUpdateInfo
 ): SkillMaintenanceState => {
+  if (skill.readIssue) return "unreadable";
   if (skill.globallyEnabled === false) return "disabled";
   if (skill.updatePolicy !== "tracked") return "untracked";
   if (update?.sourceStatus === "removed") return "removed";

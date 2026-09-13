@@ -654,9 +654,13 @@ description: >
     await writeFile(join(paths.skillsLibraryDir, "missing-md", "README.md"), "# Nope\n");
 
     const store = createSkillLibraryStore(paths);
-    const skills = await store.listSkills();
+    const onIssues = vi.fn();
+    const skills = await store.listSkills(onIssues);
+    expect(onIssues).toHaveBeenCalledWith([expect.objectContaining({ code: "unreadable-skill" })]);
+    expect(skills.find((skill) => skill.id === "missing-md")?.readIssue).toContain("SKILL.md");
+    await expect(store.listSkills()).rejects.toThrow("missing-md");
 
-    expect(skills).toEqual([
+    expect(skills.filter((skill) => !skill.readIssue)).toEqual([
       {
         id: "reviewer",
         name: "reviewer",

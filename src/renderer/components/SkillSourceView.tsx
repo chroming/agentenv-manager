@@ -1005,7 +1005,8 @@ export const SkillSourceView = ({
                         ? `${t("Modified")}: ${formatDate(candidate.libraryUpdatedAt)}`
                         : undefined
                     ].filter(Boolean).join("\n");
-                    const maintenanceState = candidate.libraryId && candidate.globallyEnabled === false ? "disabled"
+                    const maintenanceState = candidate.readIssue ? "unreadable" : group.error ? "error"
+                      : candidate.libraryId && candidate.globallyEnabled === false ? "disabled"
                       : candidate.libraryId && candidate.updatePolicy === "untracked" ? "untracked" : candidate.state;
                     return (
                       <div
@@ -1026,11 +1027,11 @@ export const SkillSourceView = ({
                             ) : null}
                           </div>
                         </div>
-                        <SkillMaintenanceStatus state={maintenanceState} detail={candidate.detail}
+                        <SkillMaintenanceStatus state={maintenanceState} detail={candidate.readIssue ?? group.error ?? candidate.detail}
                           className="skill-source-state"
                           busy={isAdding || isUpdating || isUnignoring || isIgnoring}
                           disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
-                          onReview={candidate.state === "new" ? () => void runAdd(group, candidate)
+                          onReview={candidate.readIssue || group.error ? undefined : candidate.state === "new" ? () => void runAdd(group, candidate)
                             : candidate.state === "update" && candidate.libraryId && candidate.globallyEnabled !== false && candidate.updatePolicy !== "untracked"
                               ? () => void runUpdate(candidate.libraryId!)
                               : candidate.state === "ignored" ? () => void setCandidateIgnored(group, candidate, false) : undefined}

@@ -50,6 +50,7 @@ export const matchesSkillStatusFilter = (
   if (statusFilter === "disabled") return skill.globallyEnabled === false;
   if (skill.globallyEnabled === false) return false;
   return (
+    !skill.readIssue &&
     skill.updatePolicy === "tracked" &&
     Boolean(update?.updateAvailable) &&
     !update?.error

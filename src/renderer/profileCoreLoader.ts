@@ -30,7 +30,7 @@ export const loadProfileCoreData = async ({
   onSkillsLoaded(items: SkillLibraryEntry[]): void;
 }): Promise<ProfileCoreData> => {
   const skillItemsPromise = window.agentEnv.listSkillLibrary();
-  void skillItemsPromise.then(onSkillsLoaded);
+  void skillItemsPromise.then(onSkillsLoaded, () => undefined);
   const [supportedTargets, targets, targetStateItems, profiles, skillItems, settings, uiState] =
     await Promise.all([
       window.agentEnv.listSupportedTargets(),

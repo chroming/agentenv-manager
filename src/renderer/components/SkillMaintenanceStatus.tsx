@@ -5,6 +5,7 @@ import { useI18n } from "../i18n";
 import { InteractiveStatus, type SemanticStatusKind } from "./ui";
 
 const presentation = {
+  unreadable: { label: "Could not read", kind: "warning", icon: TriangleAlert },
   disabled: { label: "Disabled", kind: "neutral", icon: CircleSlash2 },
   untracked: { label: "No update checks", kind: "neutral", icon: Link2Off },
   unchecked: { label: "Not checked", kind: "neutral", icon: SearchCheck },

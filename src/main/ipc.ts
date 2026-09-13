@@ -10,7 +10,7 @@ import type { ProjectEnvironmentService } from "./projects/projectEnvironmentSer
 import type { ProjectLaunchService } from "./projects/projectLaunchService";
 import type { ProjectMutationService } from "./projects/projectMutationService";
 import type { ProjectRecoveryStore } from "./projects/projectRecoveryStore";
-import type { SettingsStore } from "./settingsStore";
+import { resolveSkillsLibraryDir, type SettingsStore } from "./settingsStore";
 import type { WorkspaceSyncService } from "./workspaceSync/workspaceSyncService";
 import type { SkillLibraryStore } from "./skillLibraryStore";
 import type { SkillMutationRecoveryGate } from "./skillMutationRecoveryGate";
@@ -177,6 +177,12 @@ export const registerIpcHandlers = ({
   ) => {
     diagnosticHandle(channel, (event, ...args) =>
       mutationCoordinator.runExclusive(channel, async () => {
+        const metadataOnly = ["skills:set-icon", "skills:set-tags", "skills:set-availability", "skills:set-update-settings"].includes(channel);
+        const skillId = metadataOnly ? SafeIdSchema.safeParse(args[0]?.id) : undefined;
+        const affectedPaths = skillId?.success ? [
+          join(resolveSkillsLibraryDir(paths, await settingsStore.readSettings()), skillId.data, ".agentenv-skill.json"),
+          paths.skillSourcesPath
+        ] : undefined;
         return skillMutationRecoveryGate.run(channel, async () => {
           const changesWorkspace = /^(skills|instructions|profiles|activation|targets|data|settings|workspace-sync):/.test(channel);
           if (
@@ -187,7 +193,7 @@ export const registerIpcHandlers = ({
             throw new Error("Workspace recovery is required before changing Profiles, Library resources, or Agents");
           }
           return await handler(event, ...args);
-        });
+        }, affectedPaths);
       })
     );
   };
@@ -313,7 +319,7 @@ export const registerIpcHandlers = ({
   });
   registerSkillLibraryBrowserIpc(
     { diagnosticHandle },
-    { paths, settingsStore, skillLibraryStore }
+    { paths, settingsStore, skillLibraryStore, diagnostics }
   );
   diagnosticHandle("skills:scan-inventory", async () => {
     await waitForAutomationBackgroundDelay();
@@ -324,7 +330,12 @@ export const registerIpcHandlers = ({
       throw new Error("Simulated local Skill inventory failure");
     }
     const targets = await targetDiscoveryService.listTargets();
-    return scanSkillInventoryForRenderer(skillLibraryStore, inventoryPathsFor(targets), targets);
+    const result = await scanSkillInventoryForRenderer(skillLibraryStore, inventoryPathsFor(targets), targets);
+    await diagnostics.record("skills:scan-inventory", "inventory-reviewed", {
+      outcome: result.issues.length ? "partial" : "completed",
+      context: { resourceCount: result.entries.length, errorCount: result.issues.length, issues: result.issues.slice(0, 100) }
+    });
+    return result;
   });
   diagnosticHandle("skills:list-cleanup-backups", async () =>
     (await Promise.all([

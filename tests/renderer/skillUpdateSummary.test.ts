@@ -40,6 +40,18 @@ const removedSource: SkillSourceGroupView = {
 };
 
 describe("skill update summaries", () => {
+  it("does not turn a failed source refresh with a cached observation into a current result", () => {
+    const updates = updatesFromSourceGroups([{ ...removedSource, observationState: "error", error: "Rate limited",
+      candidates: [{ ...removedSource.candidates[0], state: "current" }] }], [skill]);
+    expect(updates[0]).toMatchObject({ updateAvailable: false, error: "Rate limited" });
+    expect(summarizeSkillUpdateChecks(updates, (message) => message).state).toBe("error");
+  });
+
+  it("does not offer an update based on an unreadable Library snapshot", () => {
+    const updates = updatesFromSourceGroups([{ ...removedSource,
+      candidates: [{ ...removedSource.candidates[0], state: "update" }] }], [{ ...skill, readIssue: "Permission denied" }]);
+    expect(updates[0]).toMatchObject({ updateAvailable: false, error: "Permission denied" });
+  });
   it("projects a removed source as a non-failing Library status", () => {
     const updates = updatesFromSourceGroups([removedSource], [skill]);
 

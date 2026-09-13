@@ -280,7 +280,7 @@ export const SkillGroupView = ({
                   <ResourceRow
                     appearance="plain"
                     state={<SkillMaintenanceStatus state={skillMaintenanceState(skill, updatesById.get(skill.id))}
-                      detail={updatesById.get(skill.id)?.error}
+                      detail={skill.readIssue ?? updatesById.get(skill.id)?.error}
                       busy={updateActivity?.kind === "preview-skill" && updateActivity.skillId === skill.id}
                       disabled={Boolean(updateActivity)}
                       onReview={hasUpdate(skill) || skillMaintenanceState(skill, updatesById.get(skill.id)) === "error" ? () => void onPreviewUpdate?.(skill.id) : undefined}

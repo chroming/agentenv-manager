@@ -104,7 +104,12 @@ export const createSkillCleanupBackupStore = ({
     );
     const claimed = new Set<string>();
     const mutationHashes = new Map<string, string | undefined>();
+    let backupVerified = false;
     const claim = async (...sourcePaths: string[]) => {
+      if (!backupVerified) {
+        await readCleanupBackup(manifest.id);
+        backupVerified = true;
+      }
       for (const sourcePath of sourcePaths) {
         const path = resolve(sourcePath);
         if (claimed.has(path)) continue;

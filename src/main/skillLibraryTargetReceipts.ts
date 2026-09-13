@@ -13,11 +13,16 @@ import { managedResourceOrigin } from "../shared/managedResource";
 
 export const readManagedSkillResourcesByTarget = async (
   targetPaths: readonly TargetPaths[],
-  repository: TargetStateRepository
+  repository: TargetStateRepository,
+  onError?: (targetId: string, error: unknown) => void
 ) => new Map(await Promise.all(targetPaths.map(async (target) => {
   const resources = await repository.read(target.targetId)
     .then((file) => file.state.managedResources ?? [])
-    .catch(() => []);
+    .catch((error) => {
+      if (!onError) throw error;
+      onError(target.targetId, error);
+      return [];
+    });
   return [
     target.targetId,
     new Map(resources

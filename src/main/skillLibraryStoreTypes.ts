@@ -88,7 +88,7 @@ export interface RemoveUnavailableSkillLinksStoreInput {
 }
 
 export interface SkillLibraryStore {
-  listSkills(): Promise<SkillLibraryEntry[]>;
+  listSkills(onIssues?: (issues: SkillRuntimeIssue[]) => void): Promise<SkillLibraryEntry[]>;
   scanInventory(
     targetPaths: TargetPaths[],
     librarySkills?: SkillLibraryEntry[],
@@ -99,6 +99,7 @@ export interface SkillLibraryStore {
   previewCleanupBackup(id: string): Promise<ManagedBackupFile[]>;
   recoverInterruptedCleanupBackups(): Promise<import("./skillCleanupBackupStore").SkillCleanupRecoveryResult>;
   listPendingCleanupRecoveries(): Promise<string[]>;
+  readCleanupRecoveryPaths(id: string): Promise<string[]>;
   setUnmanagedSkillLocations(input: UnmanagedSkillLocationUpdate): Promise<UnmanagedSkillLocation[]>;
   setSkillCollectionDecision(input: SkillCollectionMemberDecisionUpdate): Promise<SkillCollectionMemberDecision[]>;
   scanUnmanaged(targetPaths: TargetPaths[]): Promise<UnmanagedSkillEntry[]>;

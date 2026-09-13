@@ -175,6 +175,15 @@ export const deriveSkillSourceGroups = (
         }
       }
 
+      for (const candidate of candidates) {
+        const skill = sourceSkills.find((entry) => entry.id === candidate.libraryId);
+        if (skill?.readIssue) {
+          candidate.state = "unchecked";
+          candidate.readIssue = skill.readIssue;
+          candidate.detail = skill.readIssue;
+        }
+      }
+
       candidates.sort((left, right) =>
         candidatePriority[left.state] - candidatePriority[right.state] ||
         left.name.localeCompare(right.name)

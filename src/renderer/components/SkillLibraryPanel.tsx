@@ -2027,10 +2027,10 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
                     <SkillMaintenanceStatus state={maintenanceState}
                       className="library-primary-status"
                       busy={previewingSkillId === skill.id}
-                      detail={updateInfo?.error}
+                      detail={skill.readIssue ?? updateInfo?.error}
                       disabled={updateActivityBusy || Boolean(previewingSkillId)}
                       reviewLabel={t("Review update {{id}}", { id: skill.id })}
-                      onReview={hasUpdate || hasError ? (event) => {
+                      onReview={!skill.readIssue && (hasUpdate || hasError) ? (event) => {
                         modalFallbackFocusRef.current = event.currentTarget;
                         void runSkillUpdatePreview(skill.id);
                       } : undefined}

@@ -37,6 +37,7 @@ export const deploySkillDirectory = async (input: {
   syncMethod: AgentEnvSettings["skillSyncMethod"];
   platform?: NodeJS.Platform;
   createSymlink?: typeof symlink;
+  expectedTargetHash?: string;
 }) => {
   const platform = input.platform ?? process.platform;
   const deployedAs: "copy" | "symlink" = input.syncMethod === "symlink"
@@ -52,7 +53,7 @@ export const deploySkillDirectory = async (input: {
       return;
     }
     await copySkillEntries(input.sourceDir, stagingPath);
-  }, { platform });
+  }, { platform, ...(input.expectedTargetHash !== undefined ? { expectedTargetHash: input.expectedTargetHash } : {}) });
 
   await rm(markerPathForFile(input.targetDir), { force: true });
   return deployedAs;

@@ -15,6 +15,33 @@ afterEach(async () => {
 });
 
 describe("Skill content hash migration", () => {
+  it("keeps corrupt Library data intact and retries only until it becomes readable", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-hash-migration-partial-"));
+    const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
+    const skill = join(paths.skillsLibraryDir, "broken");
+    await mkdir(skill, { recursive: true });
+    await writeFile(join(skill, "SKILL.md"), "# Content");
+    await writeFile(join(skill, ".agentenv-skill.json"), "{broken");
+    const deployed = join(root, "deployed");
+    await mkdir(deployed);
+    await writeFile(join(deployed, "SKILL.md"), "# Original");
+    await mkdir(paths.targetStatesDir, { recursive: true });
+    const statePath = join(paths.targetStatesDir, "codex.json");
+    await writeFile(statePath, JSON.stringify({
+      formatVersion: 3, managedMcpNames: [], managedResources: [
+        { kind: "skill", id: "working", path: deployed, contentHash: "legacy" }
+      ], skillReceipts: [], sharedSkillPreparations: []
+    }));
+    await expect(migrateSkillContentHashes(paths)).resolves.toBe(true);
+    const migratedState = await readFile(statePath, "utf8");
+    expect(await readFile(join(skill, ".agentenv-skill.json"), "utf8")).toBe("{broken");
+    expect(await readJson(join(paths.appDataRoot, "content-hash-format.json"))).toMatchObject({ pendingPaths: [skill] });
+    await writeFile(join(skill, ".agentenv-skill.json"), "{}");
+    await writeFile(join(deployed, "SKILL.md"), "# External edit after migration");
+    await expect(migrateSkillContentHashes(paths)).resolves.toBe(true);
+    expect(await readFile(statePath, "utf8")).toBe(migratedState);
+    await expect(migrateSkillContentHashes(paths)).resolves.toBe(false);
+  });
   it("rehashes Library metadata, deployed resources, and capture receipts once", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-hash-migration-"));
     const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });

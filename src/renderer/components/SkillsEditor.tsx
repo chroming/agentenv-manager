@@ -245,7 +245,7 @@ export const SkillsEditor = ({
         ? appliedRevision !== skill.contentHash
         : appliedRevision)
     );
-    const status = !groupEnabled
+    const status = skill?.readIssue ? "Could not read" : !groupEnabled
       ? "Group off"
       : sharedRuntimeControlsSkill
         ? effectiveEnabled ? "Will be on" : "Will be off"
@@ -272,11 +272,11 @@ export const SkillsEditor = ({
       status === "Disabled" ||
       status === "Group off" ||
       status === "Off for Agent";
-    const visibleDetail = skill?.version
+    const visibleDetail = skill?.readIssue ?? (skill?.version
       ? `v${skill.version}`
       : !skill
         ? t("Library skill {{id}} is missing", { id: reference.libraryId })
-        : undefined;
+        : undefined);
     const skillName = skill?.name ?? reference.targetName;
     const menuItems = options.grouped ? [] : [
       ...(!skill ? [{

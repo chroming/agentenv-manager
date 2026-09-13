@@ -79,8 +79,12 @@ export const createSkillUpdateChecker = (options: SkillUpdateCheckerOptions) =>
       githubManifests.set(key, request);
       return request;
     };
-    const results = await Promise.all(selectedSkills.map(async (skill): Promise<SkillUpdateInfo> => {
-      const metadata = await options.readMetadata(skill.path);
+    const checkSkill = async (skill: SkillLibraryEntry): Promise<SkillUpdateInfo> => {
+      let metadata: SkillMetadataFile = {};
+      try {
+      if (skill.readIssue) throw new Error(skill.readIssue);
+      metadata = await options.readMetadata(skill.path);
+      if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) throw new Error("Skill metadata must be an object");
       checkedMetadataHashes.set(skill.id, options.metadataHash(metadata));
       if (!metadata.source) {
         return {
@@ -92,7 +96,6 @@ export const createSkillUpdateChecker = (options: SkillUpdateCheckerOptions) =>
           error: "Missing update source"
         };
       }
-      try {
         if (metadata.sourceType === "local") {
           if (!(await options.pathExists(join(metadata.source, "SKILL.md")))) {
             throw new Error(`Skill source is missing SKILL.md: ${metadata.source}`);
@@ -202,6 +205,14 @@ export const createSkillUpdateChecker = (options: SkillUpdateCheckerOptions) =>
           updateAvailable: false,
           error: error instanceof Error ? error.message : String(error)
         };
+      }
+    };
+    const results = new Array<SkillUpdateInfo>(selectedSkills.length);
+    let nextIndex = 0;
+    await Promise.all(Array.from({ length: Math.min(4, selectedSkills.length) }, async () => {
+      while (nextIndex < selectedSkills.length) {
+        const index = nextIndex++;
+        results[index] = await checkSkill(selectedSkills[index]);
       }
     }));
     const checkedAt = Date.now();

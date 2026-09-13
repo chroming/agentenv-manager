@@ -613,6 +613,8 @@ export interface AdoptTargetChangesResult {
 }
 
 export interface SkillLibraryEntry {
+  /** Display-only last-good/placeholder entry; never authorizes a mutation. */
+  readIssue?: string;
   id: string;
   name: string;
   description: string;
@@ -918,6 +920,7 @@ export type SkillSourceCandidateState =
   | "unchecked";
 
 export interface SkillSourceGroupCandidate {
+  readIssue?: string;
   sourceSubpath: string;
   directory: string;
   name: string;
