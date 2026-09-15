@@ -17,6 +17,8 @@ export const captureReadmePages = async ({ page, windowHandle, outputDir, fixtur
     if (heading === "Settings") await page.locator(".settings-page").waitFor();
     else await page.getByRole("heading", { name: heading, exact: true }).waitFor();
     await page.waitForTimeout(550);
+    await page.mouse.move(1, 1);
+    await page.locator(".app-feedback--success").waitFor({ state: "hidden" });
     const revealCaptureContent = async () => {
       if (name === "settings-agents-expanded") {
         await page.locator(".agent-path-settings[open]").scrollIntoViewIfNeeded();
@@ -69,6 +71,8 @@ export const captureReadmePages = async ({ page, windowHandle, outputDir, fixtur
   await capture("instructions");
 
   await open("Skills");
+  await page.getByRole("button", { name: "Check updates", exact: true }).click();
+  await page.locator('.skill-library-panel [aria-busy="true"]').waitFor({ state: "hidden" });
   await capture("skills-list");
   await page.getByRole("tab", { name: "By source", exact: true }).click();
   await page.waitForTimeout(1500);
@@ -77,6 +81,8 @@ export const captureReadmePages = async ({ page, windowHandle, outputDir, fixtur
     console.error(await page.locator("body").innerText());
     throw error;
   });
+  await page.getByRole("button", { name: "Check updates", exact: true }).click();
+  await page.locator('.skill-source-view [aria-busy="true"]').waitFor({ state: "hidden" });
   await page.getByRole("button", { name: "Expand source", exact: true }).first().click();
   await capture("skills-by-source");
 

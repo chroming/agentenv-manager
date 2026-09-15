@@ -1,54 +1,60 @@
 {
-  "generatedAt": "2026-09-08T14:30:49.299Z",
+  "generatedAt": "2026-09-15T13:55:58.706Z",
   "mode": "mock-data",
   "comparisonRunner": "fake-cli",
   "build": {
-    "sourceFingerprint": "5b69c5eab52bd4017e9544fb421d2fbdf3de23df564524447c6859247b64f80d",
-    "artifactFingerprint": "b35af58bae22e3f2e25590cb6d1857ce0764015e5cc65df50b6493e5931c478e",
-    "generatedAt": "2026-09-08T14:18:14.790Z"
+    "sourceFingerprint": "df80cf65be2142e6d71ff18cad41ba6afcbe57a8e7a10493d4ab5ce5d04ed9eb",
+    "artifactFingerprint": "e77530b3598a82c87b80cef6fa34c2caf84396342de231f78b3f875c94de7f2c",
+    "generatedAt": "2026-09-15T13:50:53.015Z"
   },
   "files": [
     {
       "file": "agents.png",
       "width": 1180,
       "height": 728,
-      "sha256": "93aadda8399cc06fa57dddb39e57a5cdafc2ade6eee4536c3b618b77dc144cc3"
+      "sha256": "8cc31b56a63ca61d0494bbc70c069fb1e57f5d950aa79f2bab2c428f7ce2b3f5"
     },
     {
       "file": "profiles.png",
       "width": 1180,
       "height": 728,
-      "sha256": "d4ff0340746edb9a7e03739880bc69e7bcdcfb91aa8fd1f4cb75b64af83e2be0"
+      "sha256": "585b41e82796ab0f5f6273a7feb4ee42bb0c4ff0b69f71a93632e1100fc58786"
     },
     {
       "file": "workspaces.png",
       "width": 1180,
       "height": 728,
-      "sha256": "48c8552ae83b95b708a713b696f0f925630350863d88b77b0987ee6cd5debd39"
+      "sha256": "36f8f5e8e1c98debc7f1942a56c7d3ecec93cd09fac5763096546a0c052402a3"
     },
     {
       "file": "instructions.png",
       "width": 1180,
       "height": 728,
-      "sha256": "cff077db090b5095674f49fb381a760fc74a6ca1e6f42938cb4a826cc911051e"
+      "sha256": "0e0f66c3019319b18ff3292d8df68ba37dcdd3e4ebd8b1635e0e643d08930d77"
+    },
+    {
+      "file": "skills-list.png",
+      "width": 1180,
+      "height": 728,
+      "sha256": "6143cf92d38fbc7ffdaae144cbb0a73e854e9da21b1edb1519119927b45f7883"
     },
     {
       "file": "skills-by-source.png",
       "width": 1180,
       "height": 728,
-      "sha256": "fab5b9bb387b85ac11b9de0c39bbbafb9a07302439e39327c81c045c09fae99e"
+      "sha256": "7d4d673bdfc8d69da6c98e013f90fcb4b948d4d7dff34a4edc9a396571a5cbcd"
     },
     {
       "file": "conversations.png",
       "width": 1180,
       "height": 728,
-      "sha256": "b2c319bd984a6f88b5e11a71c9ff2029c8018cd71a2792624b1d784b6b7052f3"
+      "sha256": "aa7de220d8d7cff0473a95b0243734508b9a0e34ae45355f34b1969f381cb4ba"
     },
     {
       "file": "profile-compare.png",
       "width": 920,
       "height": 620,
-      "sha256": "84447291e230c4dd874eb83077c32b2716192d26076192abf5bcb2d1fc151190"
+      "sha256": "6a561e7b5933865d45c0f4eaf4a066ae0a29cd0292d8bb238c52dd380d90c29d"
     }
   ]
 }

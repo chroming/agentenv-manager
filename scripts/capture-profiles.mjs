@@ -982,10 +982,14 @@ try {
     workspaceSyncRemote
   } = await prepareFixture(fixtureRoot);
   if (readmeOnly) {
+    const devicesPath = join(appDataRoot, "remote-devices.json");
+    const devices = JSON.parse(await readFile(devicesPath, "utf8"));
+    devices.devices = devices.devices.filter((device) => device.host !== "offline-fixture");
+    await writeJson(devicesPath, devices);
     for (const id of Object.keys(repositorySourceScopes)) {
       const metadataPath = join(appDataRoot, "skills-library", id, ".agentenv-skill.json");
       const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
-      await writeJson(metadataPath, { ...metadata, iconKey: "github" });
+      await writeJson(metadataPath, { ...metadata, iconKey: "github", tags: [id === "git-workflow" ? "Workflow" : "Frontend"] });
     }
     await writeFile(join(appDataRoot, "profiles", "code-review", "INSTRUCTIONS.md"), [
       "# Code review", "", "## Focus", "",

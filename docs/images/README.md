@@ -14,6 +14,11 @@ write build fingerprints and image hashes to `capture-manifest.json` in each
 output directory. Keep the published image provenance in this directory's
 `capture-manifest.json` up to date.
 
+The README includes both `skills-list.png` (tags and per-Skill updates) and
+`skills-by-source.png` (source scope and updates). The README fixture excludes
+the offline-device failure case, waits for transient success notices to dismiss,
+and checks updates against its synthetic Git repository before capture.
+
 The page captures use a fake home, synthetic repositories and mock Agent
 commands. The comparison executes a test CLI in an isolated workspace; its
 metrics are not model benchmarks. Never capture a real user's Profiles,

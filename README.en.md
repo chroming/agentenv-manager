@@ -12,7 +12,7 @@ AgentEnv Manager keeps coding agent environments in one place. Its main features
 - **Instructions management:** Save reusable instruction blocks and compose them in order into each Agent's instruction file.
 - **Skills management:** Import Skills from local folders, ZIP archives, GitHub, or Git repositories, add tags and groups, and keep checking their sources for updates.
 - **Project environments:** Save local or SSH Linux project folders, manage their Instructions and Skills, and open an Agent or copy its launch command.
-- **Conversation history:** Search local conversations from multiple Agents, return to the original session, or continue with another Agent.
+- **Conversation search:** Search Agent histories on this computer and SSH devices from one place, with messages and full project paths. Reopen local sessions in their original Agent or hand them off to another.
 - **Try before Apply:** Preview Profile changes and run the same task with the current setup and a proposed Profile before deciding whether to apply it.
 - **AI assistance:** Summarize Skill updates, suggest tags, or analyze Profiles and comparison results. Your configured AI service is called only when you ask.
 
@@ -87,6 +87,10 @@ Open local folders with an installed Agent. For remote folders, supported integr
 
 The Library keeps one reusable copy of each Skill. Import from a local folder, ZIP archive, GitHub path, or regular Git repository, then install Skills into Agent-specific directories through Profiles. Tags help filter Skills by task. Manual Skill Groups can add a reusable set to several Profiles and keep those Profiles aligned when group membership changes.
 
+![Skill list and tags](docs/images/skills-list.png)
+
+Use Skill list to filter by tag or status, click a name to browse files, or click an update status to preview changes. Switch to By source when you want to inspect the whole source folder.
+
 ![Skills grouped by source](docs/images/skills-by-source.png)
 
 The source view shows additions, updates, and removals within a repository or folder. It also supports merging sources, ignoring entries, and disabling update checks. `Groups` maintains manual collections; turning off a group preserves each member's own switch state. `Local Skills` handles existing duplicate copies, content conflicts, broken links, and shared collections. Every cleanup action has a preview and keeps recovery records for changed files.
@@ -95,7 +99,11 @@ Before updating or adding a source Skill, inspect its files or request an AI sum
 
 ## Conversations
 
-Turn on search in **History sources** and choose local or SSH Agent histories. Search titles and messages, filter by device, Agent or folder, sort by latest activity or file size, and see each conversation's original working directory. The index stays on this device. Pausing keeps cached results searchable; disabling can clear the cache without deleting original conversations.
+Conversations does not read history until you enable it. Open **History sources** from the list's More menu and enable local or SSH history search by device. To include only certain Agents, use that device's More menu.
+
+Search titles and messages, filter by device, Agent or folder, and sort by latest activity or file size. Results identify the source device, Agent, and full working directory; the list also shows the total size of the current results. Indexing and refresh run in the background, so you can use the page before every history has been read.
+
+The index stays on this computer. Pausing keeps cached results searchable; disabling can clear the cache without deleting original conversations. If a device is offline or some history cannot be read, existing results remain available with a notice about the read problem. Search covers enabled sources and supported history formats, not necessarily every conversation on a device.
 
 Local conversations can reopen in their original Agent or continue in another one. SSH histories currently support search, reading and copying source details, not remote resume. The remote device needs Python 3.
 
