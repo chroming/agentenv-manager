@@ -141,7 +141,16 @@ describe("release packaging", () => {
     expect(cask).toContain("mac-#{arch}-homebrew.dmg");
     expect(cask).toContain("depends_on macos: :monterey");
     expect(cask).toContain('app "AgentEnv Manager.app"');
-    expect(cask).toContain('c.appdir/"AgentEnv Manager.app"');
+    expect(cask).toContain('postflight_steps do');
+    expect(cask).toContain('run "/usr/bin/xattr"');
+    expect(cask).toContain('args: ["-dr", "com.apple.quarantine", "{{appdir}}/AgentEnv Manager.app"]');
+    expect(cask).not.toMatch(/\bpostflight\s+do/);
+    expect(cask).not.toContain('system_command');
+    const template = await readFile(
+      join(process.cwd(), "packaging", "homebrew", "Casks", "agentenv-manager.rb.template"),
+      "utf8"
+    );
+    expect(renderHomebrewCask(manifest, template)).toBe(cask);
     expect(cask).toContain('"com.apple.quarantine"');
     expect(cask).not.toContain("sha256 :no_check");
     expect(cask).not.toContain("version :latest");

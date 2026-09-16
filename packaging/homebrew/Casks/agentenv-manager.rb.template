@@ -14,8 +14,8 @@ cask "agentenv-manager" do
 
   app "AgentEnv Manager.app"
 
-  postflight do |c|
-    system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", c.appdir/"AgentEnv Manager.app"]
+  postflight_steps do
+    run "/usr/bin/xattr",
+        args: ["-dr", "com.apple.quarantine", "{{appdir}}/AgentEnv Manager.app"]
   end
 end
