@@ -1938,7 +1938,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
   and one review action; paths and the complete migration plan belong in that review flow.
 - Profile Composer resource triggers remain `52px` high before, during, and after expansion. Expanding one resource MUST NOT compress, hide metadata from, or reposition its sibling triggers. The expanded trigger and editor surface MUST be visually distinguishable from ordinary collapsed rows without turning the editor into a nested card.
 - Profile Skills with zero or one item fit their content without stretching empty list space. Larger collections grow only within the available editor region and keep the Skill list as the scroll owner.
-- Agents use one continuous ordered management list at every supported width, with ordinary healthy state rendered as quiet metadata rather than a filled badge or separate card. Agent identity, health, management state, active Profile, last-applied time, and actions own stable sibling lanes. Every Capture, Profile, and Diagnostics control uses the shared control primitives and identical geometry across all Agent rows, regardless of Agent name, lifecycle state, or action label. Diagnostics expands to the full width of its owning Agent, shifts only later rows, leaves no peer-column void, and opening a second Diagnostics region closes the first.
+- Agents use one continuous ordered management list at every supported width. Health sits beside Agent identity: healthy rows use an accessible dot, while problems retain readable text. Profile and actions have stable sibling lanes; last-applied time is available in local Diagnostics or the remote Profile context tooltip, not a mostly empty column. Every Capture, Profile, and Diagnostics control uses the shared control primitives and identical geometry across all Agent rows, regardless of Agent name, lifecycle state, or action label. Diagnostics expands to the full width of its owning Agent, shifts only later rows, leaves no peer-column void, and opening a second Diagnostics region closes the first.
 - Each Agent row exposes `Configure` as its single direct destination and one trailing overflow command. Capture and Diagnostics live in that menu, use the shared renderer-menu keyboard contract, and never widen an individual row. Refresh progress belongs only to the page Refresh command; Recovery is disabled without a numeric badge when no Backup exists.
 - The Agent name and `Configure` command open the same canonical Profile editor or complete Capture entry. The name is visibly interactive without changing its identity lane geometry or duplicating the command's accessible name.
 - Settings renders ordinary preferences as stable `name and explanation -> control` rows. Labels are never detached into a separate alignment scheme, and toggles, selects, read-only values, and numeric inputs share one right-hand control lane.
@@ -2002,8 +2002,8 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - The visible Profile or Workspace name and its supporting description share one text origin even
   when the switcher keeps extra hover and click padding. Profile Agent identity and readiness use
   one icon column and one text column; the visible readiness label does not repeat the Agent name
-  already shown directly above it. The expanded sidebar's Local Agents heading and summary share
-  the same text column beside their status marker.
+  already shown directly above it. The expanded sidebar has one device-summary command; opening
+  it reveals all enabled local Agents, without a persistent second count or icon strip.
 - Composite icon-and-input controls draw one border on the parent control. Their transparent borderless input remains inside the parent's content box and MUST NOT cover the parent edge at any supported width.
 - Editable single-line text fields and selects use the shared default control height, control radius, surface fill, strong border, and accent focus ring. Read-only and disabled fields remain selectable where appropriate but are visually distinct from editable fields. Search fields in workspaces and selection dialogs use the same composite-field geometry; Quick Open is the intentional command-palette exception.
 - Apply Preview keeps its header and footer stable. One modal body owns vertical scrolling; semantic resource groups never create another vertical scroll region, and long diff content owns only its code overflow.
@@ -2237,9 +2237,10 @@ Review and canonical Agent/Profile workflows:
 
 Local Skills Manager, By source maintenance, and full Profile composition remain available for advanced migration and reuse, but a user with one Agent MUST NOT be required to understand all three before preserving and managing that Agent's Skills. The product MAY use contextual empty states for this journey; it MUST NOT require a marketing-style onboarding page.
 
-The Local Agents summary is contextual navigation, not decoration. Each visible Agent icon and
-each Agent inside the overflow list opens the same complete Agent configuration entry as the
-Agents row; its accessible name MUST describe the same destination.
+The Local Agents summary is contextual navigation, not decoration. One device-summary command
+opens the complete local Agent list in both expanded and collapsed navigation. Each Agent opens
+the same complete configuration entry as the Agents row. The popover stays inside the viewport
+after resizing, supports Escape, and returns focus to its trigger.
 
 ## 23.3 Localization Contract
 
@@ -2543,6 +2544,16 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
   one list toolbar; one quiet line reports count and size. Pause is configured in History sources,
   and an already-paused index exposes Resume on the page. Agent, device, path, and activity time
   remain discoverable without opening settings.
+- Conversation detail headers retain the title, selectable path, Agent and activity time. Per-session
+  message count and file size live in History location; current-list aggregate size stays visible.
+- Familiar toolbar utilities (Refresh, Check updates, Sort, Filters and More) use ghost IconButtons
+  without changing hit areas or busy/focus behavior. Active filters retain their state indicator.
+  Apply, Update all and consequential commands keep explicit text. Profile resource switches use
+  the shared quiet emphasis variant; settings switches keep normal emphasis. On/off position and
+  disabled states remain distinct. Repeated resource-row separators use the subtle border token.
+- By source places the total beside source identity and change counts in the existing interactive
+  status, not a separate count column. The source subdirectory remains visible. Expanded rows keep
+  aligned status/action lanes in both normal and Merge modes; checking and errors outrank counts.
 - Instructions keep document identity and usage in the detail header, with edit/expand/menu actions.
   Import and Refresh are in the catalog menu. The default reader provides a labeled Source code
   icon with pressed state, without a second view-tab toolbar. Routine healthy Agent rows use a

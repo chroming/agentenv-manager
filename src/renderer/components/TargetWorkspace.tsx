@@ -2,7 +2,6 @@ import { TargetEnvironmentSummary } from "./TargetEnvironmentSummary";
 import {
   Activity,
   ArchiveRestore,
-  Clock3,
   CopyPlus,
   Layers3,
   LoaderCircle,
@@ -407,10 +406,8 @@ export const TargetWorkspace = ({
         <div className="target-list__header">
             <span />
             <span>{t("Agent")}</span>
-            <span>{t("Status")}</span>
             <span>{t("Profile")}</span>
             <div className="target-list__header-actions">
-              <span className="target-list__last-applied-label">{t("Last applied")}</span>
               <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
             <RefreshAction
               disabled={busy || isLoading || freshness.status === "refreshing"}
@@ -528,10 +525,10 @@ export const TargetWorkspace = ({
                     >
                       <strong>{target.name}</strong>
                     </button>
+                    <span className={`target-health-status target-health-status--${target.health.status}`} title={t(targetStatusLabel[target.health.status])}>
+                      <span className={target.health.status === "ready" ? "ui-visually-hidden" : undefined}>{t(targetStatusLabel[target.health.status])}</span>
+                    </span>
                   </span>
-                </span>
-                <span className={`target-health-status target-health-status--${target.health.status}`} title={t(targetStatusLabel[target.health.status])}>
-                  <span className={target.health.status === "ready" ? "ui-visually-hidden" : undefined}>{t(targetStatusLabel[target.health.status])}</span>
                 </span>
                 <TargetEnvironmentSummary
                   lifecycleStatus={state?.lifecycleStatus}
@@ -545,14 +542,6 @@ export const TargetWorkspace = ({
                     } else onConfigure(target.id);
                   }}
                 />
-                <span className="target-workflow-last-applied">
-                  {state?.lastAppliedAt ? (
-                    <>
-                      <Clock3 size={12} />
-                      {formatLastApplied(state.lastAppliedAt, localeTag, "")}
-                    </>
-                  ) : null}
-                </span>
                 <TargetRowActions
                   target={target}
                   busy={busy}
@@ -578,6 +567,10 @@ export const TargetWorkspace = ({
               {isExpanded ? (
                 <section className="target-diagnostics" role="region" aria-label={t("{{name}} diagnostics", { name: target.name })}>
                   <div className="target-checks">
+                    {state?.lastAppliedAt ? <div className="target-check">
+                      <span>{t("Last applied")}</span>
+                      <span>{formatLastApplied(state.lastAppliedAt, localeTag, "")}</span>
+                    </div> : null}
                     <div className="target-check">
                       <div>
                         <span>{t("Detected via")}</span>

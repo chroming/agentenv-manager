@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProfileSidebar } from "../../src/renderer/components/ProfileSidebar";
 
@@ -58,5 +58,13 @@ describe("ProfileSidebar", () => {
       .toHaveClass("workspace-nav__group--settings");
     expect(within(navigation).queryByText("Workspace", { selector: ".nav-section-label" }))
       .not.toBeInTheDocument();
+    const summary = screen.getByRole("button", { name: "Show Local Agents" });
+    expect(summary).toHaveTextContent("This Mac");
+    expect(document.querySelector(".system-status-card__summary")).toBeNull();
+    fireEvent.click(summary);
+    expect(screen.getByRole("menu", { name: "Local Agents" })).toHaveTextContent("No enabled Agents");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menu", { name: "Local Agents" })).not.toBeInTheDocument();
+    expect(summary).toHaveFocus();
   });
 });

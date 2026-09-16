@@ -14,7 +14,7 @@ export const SkillMaintenanceAction = ({ action, scope = "skills", busy, disable
   const { t } = useI18n();
   const checking = action === "check";
   const text = t(checking ? "Check updates" : "Update all");
-  if (checking) return <IconButton label={label ?? text} busy={busy} disabled={disabled} onClick={onClick}
+  if (checking) return <IconButton variant="ghost" label={label ?? text} busy={busy} disabled={disabled} onClick={onClick}
     title={scope === "profile" ? label ?? text : t(scope === "sources" ? "Check all monitored sources, regardless of filters." : "Check all monitored Skills in this view, regardless of filters.")}>
     <SearchCheck size={16} />
   </IconButton>;

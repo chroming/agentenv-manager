@@ -356,6 +356,7 @@ export const SkillsEditor = ({
         actions={(
           <>
             <Switch
+              emphasis="quiet"
               size="compact"
               checked={switchChecked}
               className="profile-skill-switch"
@@ -540,6 +541,7 @@ export const SkillsEditor = ({
               actions={(
                 <>
                   <Switch
+                    emphasis="quiet"
                     size="compact"
                     checked={group.enabled}
                     disabled={disabled || !profileManagesSkills}

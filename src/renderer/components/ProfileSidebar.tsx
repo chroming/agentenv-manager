@@ -20,7 +20,6 @@ import type {
   TargetInfo
 } from "../../shared/types";
 import { useI18n } from "../i18n";
-import { OverflowTooltip } from "./OverflowTooltip";
 import { handleActionMenuKeyDown } from "./ui";
 import { ProductIcon, type ProductIconName } from "../productIcons";
 
@@ -152,6 +151,7 @@ const AgentOverflowPopover = ({
   onOpenAgents,
   statusSummary,
   summaryState,
+  compact = true,
   variant = "overflow"
 }: {
   targets: TargetInfo[];
@@ -159,6 +159,7 @@ const AgentOverflowPopover = ({
   onOpenAgents?(): void;
   statusSummary?: string;
   summaryState?: "attention" | "empty" | "loading" | "ready";
+  compact?: boolean;
   variant?: "overflow" | "summary";
 }) => {
   const { t } = useI18n();
@@ -246,9 +247,11 @@ const AgentOverflowPopover = ({
     };
     document.addEventListener("mousedown", dismiss);
     document.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("resize", updatePosition);
     return () => {
       document.removeEventListener("mousedown", dismiss);
       document.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("resize", updatePosition);
     };
   }, [open]);
 
@@ -277,7 +280,7 @@ const AgentOverflowPopover = ({
         ref={triggerRef}
         className={
           isSummary
-            ? `sidebar-agent-summary sidebar-agent-summary--${summaryState ?? "empty"}`
+            ? `sidebar-agent-summary sidebar-agent-summary--${summaryState ?? "empty"}${compact ? "" : " sidebar-agent-summary--expanded"}`
             : "agent-chip agent-chip--more"
         }
         type="button"
@@ -300,6 +303,7 @@ const AgentOverflowPopover = ({
               <Monitor size={17} strokeWidth={2.1} aria-hidden="true" />
             )}
             <span className="sidebar-agent-summary__state" aria-hidden="true" />
+            {!compact ? <span className="sidebar-agent-summary__label">{t("This Mac")} · {statusSummary}</span> : null}
           </>
         ) : (
           `+${targets.length}`
@@ -394,8 +398,6 @@ export const ProfileSidebar = ({
     window.agentEnv.platform === "darwin" ? "⌘K" : "Ctrl+K";
   const readyTargets = targets.filter((target) => target.health.status === "ready").length;
   const orderedTargets = targets;
-  const statusTargets = orderedTargets.slice(0, 3);
-  const hiddenTargets = orderedTargets.slice(statusTargets.length);
   const statusSummary = isLoading
     ? t("Detecting Agents")
     : t("{{count}} Agents", { count: targets.length });
@@ -511,9 +513,8 @@ export const ProfileSidebar = ({
         </div>
       </nav>
       <section className="system-status-card" aria-label={t("System status")}>
-        {collapsed ? (
           <AgentOverflowPopover
-            key="collapsed-agent-summary"
+            compact={collapsed}
             targets={orderedTargets}
             statusSummary={statusSummary}
             summaryState={summaryState}
@@ -521,49 +522,6 @@ export const ProfileSidebar = ({
             onAgentSelect={onAgentSelect}
             onOpenAgents={onOpenAgents}
           />
-        ) : (
-          <>
-            <div className="system-status-card__summary">
-              <span className={`status-dot${isLoading ? " is-loading" : " is-ready"}`} />
-              <strong>{t("Local Agents")}</strong>
-              <OverflowTooltip className="system-status-summary" text={statusSummary} />
-            </div>
-            <div className="agent-chip-row" aria-label={t("Enabled Agents")}>
-              {isLoading ? (
-                <span className="agent-chip-row__loading" aria-hidden="true">
-                  <LoaderCircle className="is-spinning" size={16} />
-                </span>
-              ) : null}
-              {statusTargets.map((target) => {
-                const targetIcon = targetIconFor(target);
-
-                return (
-                  <button
-                    className={`agent-chip agent-chip--${target.health.status} agent-chip--${targetIcon.flavor}`}
-                    title={`${target.name} · ${t(targetStatusMessage(target.health.status))}`}
-                    key={target.id}
-                    type="button"
-                    aria-label={t("Configure {{name}}", { name: target.name })}
-                    onClick={() => onAgentSelect(target.id)}
-                  >
-                    {targetIcon.assetUrl ? (
-                      <img className="agent-chip__logo" src={targetIcon.assetUrl} alt="" />
-                    ) : (
-                      targetInitials(target)
-                    )}
-                  </button>
-                );
-              })}
-              {hiddenTargets.length > 0 ? (
-                <AgentOverflowPopover
-                  key="expanded-agent-overflow"
-                  targets={hiddenTargets}
-                  onAgentSelect={onAgentSelect}
-                />
-              ) : null}
-            </div>
-          </>
-        )}
       </section>
     </aside>
   );

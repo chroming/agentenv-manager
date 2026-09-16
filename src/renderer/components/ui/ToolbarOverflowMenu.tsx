@@ -44,7 +44,7 @@ const viewportInset = 8;
 const anchorGap = 6;
 
 export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflowMenuProps>(
-  ({ label, menuLabel, disabled = false, busy = false, allowWhileBusy = false, items, reserveSpace = false, triggerContent, triggerVariant = "icon", variant = "secondary" }, forwardedRef) => {
+  ({ label, menuLabel, disabled = false, busy = false, allowWhileBusy = false, items, reserveSpace = false, triggerContent, triggerVariant = "icon", variant = "ghost" }, forwardedRef) => {
     const density = useControlDensity() ?? "default";
     const [open, setOpen] = useState(false);
     const [style, setStyle] = useState<CSSProperties>();

@@ -1097,6 +1097,7 @@ export const ProjectsWorkspace = ({
                       <IconButton
                         ref={menuTriggerRef}
                         label={t("More Workspace actions")}
+                        variant="ghost"
                         busy={operation === "inspect"}
                         aria-expanded={projectMenu?.projectId === selected.id}
                         aria-haspopup="menu"

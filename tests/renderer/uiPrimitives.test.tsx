@@ -69,12 +69,16 @@ it("renders plain resource rows without changing their state and action slots", 
 
 it("keeps compact switches accessible and interactive", () => {
   const onClick = vi.fn();
-  render(<Switch size="compact" checked label="Enable group" onClick={onClick} />);
+  const { rerender } = render(<Switch size="compact" emphasis="quiet" checked label="Enable group" onClick={onClick} />);
   const toggle = screen.getByRole("switch", { name: "Enable group" });
   expect(toggle).toHaveClass("ui-switch--compact");
+  expect(toggle).toHaveClass("ui-switch--quiet");
   expect(toggle).toHaveAttribute("aria-checked", "true");
   fireEvent.click(toggle);
   expect(onClick).toHaveBeenCalledOnce();
+  rerender(<Switch size="compact" emphasis="quiet" checked={false} label="Enable group" disabled />);
+  expect(toggle).toHaveAttribute("aria-checked", "false");
+  expect(toggle).toBeDisabled();
 });
 
 it("allows an unframed master-detail canvas without removing its panes", () => {

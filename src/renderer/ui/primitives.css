@@ -627,6 +627,11 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   transform: translateX(14px);
 }
 
+.ui-switch--quiet.is-on .ui-switch__track {
+  background: var(--text-secondary);
+  border-color: var(--text-secondary);
+}
+
 .ui-switch__label {
   color: var(--text);
   font-size: 12px;
@@ -928,7 +933,7 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
 .ui-resource-row {
   align-items: center;
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
   display: grid;
   gap: var(--space-3);
   grid-template-columns: var(--resource-icon-box) minmax(0, 1fr) minmax(0, auto) auto auto;

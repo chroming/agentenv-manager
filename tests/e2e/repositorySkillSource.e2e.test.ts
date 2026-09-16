@@ -237,26 +237,25 @@ describe("Repository Skill source", () => {
         const sourceHeaderRange = document.createRange();
         sourceHeaderRange.selectNodeContents(sourceHeaderCell);
         const identityScope = row.querySelector<HTMLElement>(".skill-source-checked")!;
-        const counts = row.querySelector<HTMLElement>(".skill-source-counts")!;
+        const counts = row.querySelector<HTMLElement>(".skill-source-total")!;
         const status = row.querySelector<HTMLElement>(".skill-source-status")!;
         const statusContent = status.firstElementChild as HTMLElement;
         const statusLabel = row.querySelector<HTMLElement>(".skill-source-status-label")!;
         const more = row.querySelector<HTMLElement>(".skill-source-more")!;
         const statusHeaderRange = document.createRange();
-        statusHeaderRange.selectNodeContents(headerCells[2]!);
+        statusHeaderRange.selectNodeContents(headerCells[1]!);
         const rowRect = row.getBoundingClientRect();
         const labelRect = statusLabel.getBoundingClientRect();
         return {
           columnCount: getComputedStyle(row).gridTemplateColumns.replace(/\[[^\]]*\]/g, "").trim().split(/\s+/).length,
-          countsHeaderLeft: headerCells[1]!.getBoundingClientRect().left,
-          countsLeft: counts.getBoundingClientRect().left,
+          countBesideIdentity: counts.parentElement?.classList.contains("skill-source-title-row"),
           countsFit: counts.scrollWidth <= counts.clientWidth + 1,
           documentWidth: document.documentElement.scrollWidth,
           identityScopeText: identityScope.textContent,
           identityScopeVisible: identityScope.getBoundingClientRect().width > 0,
           identityTextLeft: row.querySelector<HTMLElement>(".skill-source-link-text")!
             .getBoundingClientRect().left,
-          moreHeaderLeft: headerCells[3]!.getBoundingClientRect().left,
+          moreHeaderLeft: headerCells[2]!.getBoundingClientRect().left,
           moreLeft: more.getBoundingClientRect().left,
           moreRight: more.getBoundingClientRect().right,
           rowRight: row.getBoundingClientRect().right,
@@ -279,14 +278,14 @@ describe("Repository Skill source", () => {
       expect(geometry.identityScopeVisible).toBe(true);
       expect(Math.abs(geometry.identityTextLeft - geometry.sourceHeaderLeft)).toBeLessThanOrEqual(1);
       expect(geometry.statusFits).toBe(true);
-      expect(Math.abs(geometry.countsLeft - geometry.countsHeaderLeft)).toBeLessThanOrEqual(1);
+      expect(geometry.countBesideIdentity).toBe(true);
       expect(Math.abs(geometry.statusLabelLeft - geometry.statusHeaderLeft)).toBeLessThanOrEqual(1);
       expect(geometry.statusCenterOffset).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.statusContentLeft - geometry.statusLeft)).toBeLessThanOrEqual(1);
       expect(geometry.statusToMoreGap).toBeGreaterThanOrEqual(7);
       expect(Math.abs(geometry.moreLeft - geometry.moreHeaderLeft)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.moreRight - geometry.rowRight + 12)).toBeLessThanOrEqual(1);
-      expect(geometry.columnCount).toBe(6);
+      expect(geometry.columnCount).toBe(5);
       if (process.env.AGENTENV_LIBRARY_LAYOUT_CAPTURE_DIR) {
         await mkdir(process.env.AGENTENV_LIBRARY_LAYOUT_CAPTURE_DIR, { recursive: true });
         await page.screenshot({ path: join(process.env.AGENTENV_LIBRARY_LAYOUT_CAPTURE_DIR, `source-${width}.png`) });
@@ -349,8 +348,8 @@ describe("Repository Skill source", () => {
       name: "Ignore Release Check Internal for this source"
     }).click();
     await sourceGroup.getByText("Ignored", { exact: true }).waitFor({ state: "visible" });
-    await expect.poll(() => sourceGroup.getByLabel("Source summary").textContent())
-      .not.toContain("Changes");
+    await expect.poll(() => sourceGroup.locator(".skill-source-status-label").textContent())
+      .toBe("Up to date");
     const ignoredRegistry = JSON.parse(
       await readFile(join(appDataRoot, "skill-sources.json"), "utf8")
     ) as { sources: Array<{ ignoredSubpaths?: string[] }> };
@@ -358,8 +357,8 @@ describe("Repository Skill source", () => {
 
     await sourceGroup.getByRole("button", { name: "Unignore", exact: true }).click();
     await sourceGroup.getByText("New", { exact: true }).waitFor({ state: "visible" });
-    await expect.poll(() => sourceGroup.getByLabel("Source summary").textContent())
-      .toContain("Changes 1");
+    await expect.poll(() => sourceGroup.locator(".skill-source-status-label").textContent())
+      .toBe("1 change");
     await expect.poll(async () => {
       const restoredRegistry = JSON.parse(
         await readFile(join(appDataRoot, "skill-sources.json"), "utf8")
@@ -394,7 +393,7 @@ describe("Repository Skill source", () => {
     staleMetadata.remoteRevision = "stale-transport-revision";
     await writeFile(metadataPath, `${JSON.stringify(staleMetadata, null, 2)}\n`, "utf8");
     await checkSource();
-    await sourceStatus.filter({ hasText: /^Update available$/ })
+    await sourceStatus.filter({ hasText: /^1 update$/ })
       .waitFor({ state: "visible" });
     expect(await sourceGroup.locator(".skill-source-status").getAttribute("data-tone"))
       .toBe("accent");
@@ -405,7 +404,7 @@ describe("Repository Skill source", () => {
     await page.getByText("api-design-internal source is current", { exact: true })
       .waitFor({ state: "visible" });
     await expect.poll(() =>
-      sourceStatus.filter({ hasText: /^Update available$/ }).count()
+      sourceStatus.filter({ hasText: /^1 update$/ }).count()
     ).toBe(0);
     const reconciledMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as {
       remoteRevision?: string;
@@ -430,7 +429,7 @@ describe("Repository Skill source", () => {
     await repository.commit("update api design skill");
     await page.getByRole("tab", { name: "By source" }).click();
     await checkSource();
-    await sourceStatus.filter({ hasText: /^Update available$/ })
+    await sourceStatus.filter({ hasText: /^1 update$/ })
       .waitFor({ state: "visible" });
     const reviewSourceUpdates = sourceGroup.getByRole("button", {
       name: "Review source updates",
@@ -460,7 +459,7 @@ describe("Repository Skill source", () => {
       { exact: true }
     ).waitFor({ state: "visible" });
     await expect.poll(() =>
-      sourceStatus.filter({ hasText: /^Update available$/ }).count()
+      sourceStatus.filter({ hasText: /^1 update$/ }).count()
     ).toBe(0);
     await expect(readFile(join(librarySkill, "SKILL.md"), "utf8"))
       .resolves.toContain("Review compatibility");

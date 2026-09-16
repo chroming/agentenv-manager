@@ -126,10 +126,11 @@ describe("SkillSourceView", () => {
       />
     );
 
-    expect(screen.getByLabelText("Source summary")).toHaveTextContent("4Changes 3");
+    expect(screen.getByLabelText("Source summary")).toHaveTextContent("4");
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Merge selected/ })).not.toBeInTheDocument();
-    expect(document.querySelector(".skill-source-counts .is-change")).toHaveClass("has-value");
+    expect(screen.getByRole("button", { name: "Review source updates" })).toHaveTextContent("3 changes");
+    expect(document.querySelector(".skill-source-counts")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Review source updates" }));
     expect(onReviewUpdates).toHaveBeenCalledWith(["review"]);
     await waitFor(() =>
@@ -803,7 +804,7 @@ describe("SkillSourceView", () => {
 
     expect(screen.queryByText("Action", { selector: ".skill-source-table-head span" }))
       .not.toBeInTheDocument();
-    const status = screen.getByText("Update available", { selector: ".skill-source-status-label" });
+    const status = screen.getByText("1 update", { selector: ".skill-source-status-label" });
     const updateReview = status.closest("button");
     expect(updateReview).toHaveAccessibleName("Review source updates");
     expect(updateReview).toHaveAttribute("data-status-kind", "update-available");

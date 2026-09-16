@@ -552,6 +552,23 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
   width: 8px;
 }
 
+.sidebar-agent-summary--expanded {
+  gap: 8px;
+  justify-content: flex-start;
+  padding-inline: 4px;
+  width: 100%;
+}
+
+.sidebar-agent-summary--expanded > svg { flex: 0 0 auto; }
+.sidebar-agent-summary--expanded .sidebar-agent-summary__state { left: 15px; right: auto; }
+.sidebar-agent-summary__label {
+  font-size: var(--font-size-metadata);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sidebar-agent-summary--ready .sidebar-agent-summary__state {
   background: var(--success);
 }

@@ -8,7 +8,7 @@ export const FilterTrigger = forwardRef<HTMLButtonElement, FilterTriggerProps>(
   ({ activeCount = 0, label, className = "", children, ...props }, ref) => {
     const { t } = useI18n();
     return <span className={`ui-filter-popover${activeCount > 0 ? " has-active-filters" : ""}`}>
-      <IconButton {...props} ref={ref} className={`ui-filter-popover__trigger ${className}`}
+      <IconButton variant="ghost" {...props} ref={ref} className={`ui-filter-popover__trigger ${className}`}
         label={activeCount > 0 ? `${label}, ${t("{{count}} active filters", { count: activeCount })}` : label}>
         {children}
       </IconButton>

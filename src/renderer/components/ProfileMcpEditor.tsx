@@ -179,6 +179,7 @@ export const ProfileMcpEditor = ({
                 </span>
                 {canManage && connection.controllable ? (
                   <Switch
+                    emphasis="quiet"
                     className="profile-mcp-switch"
                     checked={effectiveEnabled}
                     disabled={!editable}

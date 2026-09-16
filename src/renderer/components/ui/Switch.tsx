@@ -4,18 +4,19 @@ interface SwitchProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "aria-checked" | "role"> {
   checked: boolean;
   size?: "default" | "compact";
+  emphasis?: "default" | "quiet";
   label: string;
   children?: ReactNode;
 }
 
 export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(
-  ({ checked, children, className = "", label, onClick, size = "default", type = "button", ...props }, ref) => (
+  ({ checked, children, className = "", emphasis = "default", label, onClick, size = "default", type = "button", ...props }, ref) => (
     <button
       {...props}
       ref={ref}
       aria-checked={checked}
       aria-label={label}
-      className={`ui-switch ui-switch--${size}${checked ? " is-on" : ""} ${className}`.trim()}
+      className={`ui-switch ui-switch--${size} ui-switch--${emphasis}${checked ? " is-on" : ""} ${className}`.trim()}
       role="switch"
       type={type}
       onClick={onClick}

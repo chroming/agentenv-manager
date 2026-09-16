@@ -1546,6 +1546,44 @@ afterEach(async () => {
 });
 
 describe("Electron UI profile switching e2e", () => {
+  it("keeps quiet Agent identities and device navigation readable across locales and widths", async () => {
+    const { page } = await launchApp();
+    for (const locale of ["en", "zh_CN", "zh_TW"]) {
+      await page.locator('[data-workspace="settings"]').click();
+      await page.getByTestId("locale-select").selectOption(locale);
+      await page.locator('[data-workspace="targets"]').click();
+      for (const width of [920, 1180, 1440]) {
+        await resizeAppWindow(page, width, 728);
+        const geometry = await page.locator(".target-list").evaluate((list) => {
+          const rangeLeft = (element: Element) => {
+            const range = document.createRange();
+            range.selectNodeContents(element);
+            return range.getBoundingClientRect().left;
+          };
+          const heading = list.querySelector(".target-list__header")!;
+          const headings = heading.querySelectorAll(":scope > span");
+          const rows = [...list.querySelectorAll<HTMLElement>(".target-workflow-header")];
+          return {
+            columns: headings.length,
+            contained: rows.every((row) => row.scrollWidth <= row.clientWidth + 1),
+            identityAligned: rows.every((row) => Math.abs(rangeLeft(row.querySelector(".target-workflow-name-action strong")!) - rangeLeft(headings[1]!)) <= 1),
+            profileAligned: rows.every((row) => Math.abs(row.querySelector(".target-workflow-environment")!.getBoundingClientRect().left - rangeLeft(headings[2]!)) <= 1),
+            healthBesideIdentity: rows.every((row) => Boolean(row.querySelector(".target-workflow-name-line .target-health-status"))),
+            summaryContained: (() => {
+              const summary = document.querySelector<HTMLElement>(".sidebar-agent-summary__label")!;
+              return summary.scrollWidth <= summary.clientWidth + 1;
+            })()
+          };
+        });
+        expect(geometry).toEqual({ columns: 3, contained: true, identityAligned: true, profileAligned: true, healthBesideIdentity: true, summaryContained: true });
+        if (process.env.AGENTENV_LIBRARY_LAYOUT_CAPTURE_DIR) {
+          await mkdir(process.env.AGENTENV_LIBRARY_LAYOUT_CAPTURE_DIR, { recursive: true });
+          await page.screenshot({ path: join(process.env.AGENTENV_LIBRARY_LAYOUT_CAPTURE_DIR, `quiet-agents-${locale}-${width}.png`) });
+        }
+      }
+    }
+  }, standardElectronTestTimeout);
+
   it.each(["en", "zh_CN"] as const)("keeps collection commands with their owning list in %s", async (locale) => {
     const { page } = await launchApp({ locale, workspaceFixture: true });
     await enableFixtureHistory(page);
@@ -4601,10 +4639,8 @@ describe("Electron UI profile switching e2e", () => {
       const readiness = page.locator(".profile-action-status");
       await expectInViewport(page, readiness);
       expect(await readiness.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-      await expectTextOriginsAligned(
-        ".system-status-card__summary strong",
-        ".system-status-card__summary .system-status-summary"
-      );
+      await expectInViewport(page, page.getByRole("button", { name: "Show Local Agents" }));
+      expect(await page.locator(".system-status-card .sidebar-agent-summary__label").count()).toBe(1);
 
       await page.locator('.workspace-button[data-workspace="projects"]').click();
       await page.locator(".project-detail__header").waitFor({ state: "visible" });
@@ -5098,7 +5134,7 @@ describe("Electron UI profile switching e2e", () => {
     ]) {
       await page.setViewportSize(viewport);
       await skillsButton.click();
-      await expectCircularControl(page.locator(".agent-chip--more"), "--agent-chip-size");
+      await expectInViewport(page, page.getByRole("button", { name: "Show Local Agents" }));
       const skillsGeometry = await readGeometry("Skills", "Import skills");
 
       const workspaces = [
@@ -5498,7 +5534,7 @@ describe("Electron UI profile switching e2e", () => {
         rowContained: row.scrollWidth <= row.clientWidth + 1
       };
     });
-    expect(targetLanes.columnCount).toBe(5);
+    expect(targetLanes.columnCount).toBe(4);
     expect(targetLanes.environmentContained).toBe(true);
     expect(targetLanes.lifecycleLeft).toBe(targetLanes.profileLeft);
     expect(targetLanes.profileLayoutCorrect).toBe(true);
@@ -6138,7 +6174,7 @@ describe("Electron UI profile switching e2e", () => {
         const first = rows[0];
         return {
           actionLanesAligned: hasStableValues(laneLefts(".target-workflow-actions")),
-          healthLanesAligned: hasStableValues(laneLefts(".target-health-status")),
+          healthBesideIdentity: rows.every((row) => row.querySelector(".target-workflow-name-line .target-health-status")),
           lifecycleLanesAligned: hasStableValues(laneLefts(".target-workflow-environment")),
           moreButtonsMatch: hasStableSizes(sizes(".target-more-action")),
           profileLanesAligned: hasStableValues(laneLefts(".target-workflow-environment")),
@@ -6163,7 +6199,7 @@ describe("Electron UI profile switching e2e", () => {
       });
       expect(geometry).toEqual({
         actionLanesAligned: true,
-        healthLanesAligned: true,
+        healthBesideIdentity: true,
         lifecycleLanesAligned: true,
         moreButtonsMatch: true,
         profileLanesAligned: true,
@@ -6194,9 +6230,7 @@ describe("Electron UI profile switching e2e", () => {
       };
     });
     expect(wideHeaderGeometry.lastAppliedHeight).toBeLessThanOrEqual(18);
-    expect(wideHeaderGeometry.lastAppliedWidth).toBeGreaterThan(0);
-    expect(wideHeaderGeometry.lastAppliedFits).toBe(true);
-    expect(wideHeaderGeometry.lastAppliedContained).toBe(true);
+    expect(wideHeaderGeometry.lastAppliedWidth).toBe(0);
     expect(wideHeaderGeometry.actionsWidth).toBeGreaterThanOrEqual(28);
     await resizeAppWindow(page, 1180, 728);
 
@@ -10321,15 +10355,15 @@ describe("Electron UI profile switching e2e", () => {
       });
   }, standardElectronTestTimeout);
 
-  it("reveals sidebar Agents hidden behind the overflow count", async () => {
+  it("reveals all sidebar Agents from the compact device summary", async () => {
     const { page } = await launchApp();
     const overflow = page.getByRole("button", {
-      name: /^Show hidden Agent list, \d+ items?$/
+      name: "Show Local Agents"
     });
     await overflow.waitFor({ state: "visible" });
 
-    await hoverFromOutside(page, overflow);
-    const popover = page.getByRole("menu", { name: "Hidden Agents" });
+    await overflow.click();
+    const popover = page.getByRole("menu", { name: "Local Agents" });
     await popover.waitFor({ state: "visible" });
     await expect.poll(() => popover.textContent()).toContain("Antigravity");
     await expect.poll(() => popover.textContent()).toContain("Trae CLI");
@@ -10344,7 +10378,7 @@ describe("Electron UI profile switching e2e", () => {
       { width: 920, height: 620 }
     ]) {
       await resizeAppWindow(page, viewport.width, viewport.height);
-      await hoverFromOutside(page, overflow);
+      if (!(await popover.isVisible())) await overflow.click();
       const box = await popover.boundingBox();
       expect(box).not.toBeNull();
       expect(box!.x).toBeGreaterThanOrEqual(0);
@@ -10364,6 +10398,7 @@ describe("Electron UI profile switching e2e", () => {
     await popover.waitFor({ state: "hidden" });
 
     await overflow.focus();
+    await page.keyboard.press("Enter");
     await popover.waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
     await popover.waitFor({ state: "hidden" });
@@ -13031,7 +13066,7 @@ describe("Electron UI profile switching e2e", () => {
       lifecycleLanesAligned: true,
       profileLanesAligned: true
     });
-    expect(targetListGeometry.identityWidth).toBeLessThanOrEqual(200);
+    expect(targetListGeometry.identityWidth).toBeLessThanOrEqual(400);
     const targetTypography = await page.locator(".target-card--workflow").first().evaluate((row) => ({
       name: getComputedStyle(row.querySelector<HTMLElement>(".target-workflow-name-line strong")!).fontWeight,
       status: getComputedStyle(row.querySelector<HTMLElement>(".target-health-status")!).fontWeight
@@ -13039,14 +13074,11 @@ describe("Electron UI profile switching e2e", () => {
     expect(targetTypography).toEqual({ name: "500", status: "400" });
     await resizeAppWindow(page, 920, 620);
     const compactActionsHeader = page.locator(".target-list__last-applied-label");
-    expect(await compactActionsHeader.evaluate((element) =>
-      getComputedStyle(element).display
-    )).toBe("none");
+    expect(await compactActionsHeader.count()).toBe(0);
     const compactTargetHeader = await page.locator(".target-list").evaluate((list) => {
       const headerCells = [
         list.querySelector<HTMLElement>(".target-list__header > span:nth-child(2)")!,
-        list.querySelector<HTMLElement>(".target-list__header > span:nth-child(3)")!,
-        list.querySelector<HTMLElement>(".target-list__header > span:nth-child(4)")!
+        list.querySelector<HTMLElement>(".target-list__header > span:nth-child(3)")!
       ];
       const textCenters = headerCells.map((cell) => {
         const range = document.createRange();

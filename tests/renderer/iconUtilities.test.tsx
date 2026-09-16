@@ -91,6 +91,7 @@ describe("quiet icon utilities", () => {
     const ref = createRef<HTMLButtonElement>();
     const { container, rerender } = render(<FilterTrigger ref={ref} label="Filters" activeCount={2}><ListFilter /></FilterTrigger>);
     const trigger = screen.getByRole("button", { name: "Filters, 2 active filters" });
+    expect(trigger).toHaveClass("ui-icon-button--ghost");
     expect(ref.current).toBe(trigger);
     expect(trigger.textContent).toBe("");
     expect(container.querySelectorAll(".ui-filter-popover__indicator")).toHaveLength(1);

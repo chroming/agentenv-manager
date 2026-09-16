@@ -695,7 +695,6 @@ export const SkillSourceView = ({
           <div className={`skill-source-table-head${mergeSelectionMode ? " can-merge" : ""}`}>
             {mergeSelectionMode ? <span aria-hidden="true" /> : null}
             <span>{t("Source")}</span>
-            <span>{t("Skills")}</span>
             <span className="catalog-status-heading">{t("Status")}</span>
             <span aria-label={t("More")} />
           </div>
@@ -775,7 +774,11 @@ export const SkillSourceView = ({
                   displayText={t(sourceStatus)}
                 />
               ) : (
-                <span className="skill-source-status-label">{t(sourceStatus)}</span>
+                <span className="skill-source-status-label">{!isChecking && changedCount > 0
+                  ? t(group.counts.updates === changedCount
+                    ? changedCount === 1 ? "{{count}} update" : "{{count}} updates"
+                    : changedCount === 1 ? "{{count}} change" : "{{count}} changes", { count: changedCount })
+                  : t(sourceStatus)}</span>
               );
           const reviewStatus = !isChecking && reviewableUpdateIds.length > 0
             ? () => void runReviewUpdates(reviewableUpdateIds)
@@ -869,24 +872,11 @@ export const SkillSourceView = ({
                         <Copy size={12} strokeWidth={2.2} />
                       )}
                     </button>
+                    <span className="skill-source-total" aria-label={t("Source summary")} title={t("{{count}} Skills", { count: group.counts.total })}>{group.counts.total}</span>
                   </div>
                   <OverflowTooltip className="skill-source-checked" text={group.displayName
                       ? `${sourceRepositoryLabel(group.repository)} · ${sourceScopeLabel(group)}`
                       : sourceScopeLabel(group)} />
-                </div>
-                <div className="skill-source-counts" aria-label={t("Source summary")}>
-                  <strong>{group.counts.total}</strong>
-                  {changedCount > 0 ? (
-                    <OverflowTooltip
-                      className="is-change has-value"
-                      displayText={`${t("Changes")} ${changedCount}`}
-                      text={[
-                        `${t("Updates")} ${group.counts.updates}`,
-                        `${t("New")} ${group.counts.new}`,
-                        `${t("Removed")} ${group.counts.removed}`
-                      ].join(" · ")}
-                    />
-                  ) : null}
                 </div>
                 <InteractiveStatus
                   size="metadata"

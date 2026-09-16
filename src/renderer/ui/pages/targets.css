@@ -19,8 +19,7 @@
 .target-list {
   flex: 1;
   --target-list-columns:
-    32px minmax(128px, 184px) minmax(84px, 104px)
-    minmax(168px, 1fr) minmax(112px, 144px) 32px;
+    32px minmax(200px, 0.8fr) minmax(168px, 1fr) 68px;
   align-items: start;
   background: var(--surface);
   display: flex;
@@ -104,9 +103,9 @@
   align-items: center;
   display: flex;
   gap: var(--space-2);
-  grid-column: 5 / -1;
+  grid-column: 4;
   grid-row: 1;
-  justify-content: space-between;
+  justify-content: flex-end;
 }
 
 .target-list__header > span {
@@ -116,7 +115,6 @@
 .target-list__header > span:nth-child(1) { grid-column: 1; }
 .target-list__header > span:nth-child(2) { grid-column: 2; }
 .target-list__header > span:nth-child(3) { grid-column: 3; }
-.target-list__header > span:nth-child(4) { grid-column: 4; }
 
 .target-workflow-environment {
   align-items: center;
@@ -252,6 +250,7 @@
   display: flex;
   gap: 9px;
   min-width: 0;
+  flex-wrap: wrap;
 }
 
 .target-workflow-name-action {
@@ -304,7 +303,7 @@
 @container (max-width: 900px) {
   .target-list {
     --target-list-columns:
-      32px minmax(112px, 160px) 76px minmax(170px, 1fr) var(--control-height-compact);
+      32px minmax(180px, 0.8fr) minmax(140px, 1fr) 68px;
   }
 
   .target-list__header,
@@ -318,7 +317,7 @@
   }
 
   .target-workflow-actions {
-    grid-column: 5;
+    grid-column: 4;
   }
 
   .target-list__header-actions {

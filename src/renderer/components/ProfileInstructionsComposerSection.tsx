@@ -216,6 +216,7 @@ export const ProfileInstructionsComposerSection = ({
                       </IconButton>
                     ) : null}
                     <Switch
+                      emphasis="quiet"
                       checked={reference.enabled}
                       disabled={policy !== "manage" || !block}
                       label={t(reference.enabled ? "Disable {{name}}" : "Enable {{name}}", { name })}

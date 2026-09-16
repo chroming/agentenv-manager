@@ -3553,6 +3553,7 @@ const AppContent = ({
         <IconButton
           ref={profileActionsButtonRef}
           className="profile-more-button"
+          variant="ghost"
           busy={profileRefresh.refreshing}
           aria-expanded={isProfileActionsOpen}
           aria-haspopup="menu"

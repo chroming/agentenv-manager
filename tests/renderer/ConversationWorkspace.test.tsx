@@ -1234,13 +1234,17 @@ describe("ConversationWorkspace", () => {
     await waitFor(() => expect(row).toHaveFocus());
   });
 
-  it("shows message count and source size in the conversation detail summary", async () => {
+  it("keeps message count and source size in accessible history details", async () => {
     installApi();
     render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);
 
     await screen.findByText("I found the failing step.");
-    expect(screen.getByText("2 messages")).toBeInTheDocument();
-    expect(screen.getAllByText("24 KB").length).toBeGreaterThan(0);
+    expect(document.querySelector(".conversation-detail-metadata__messages")).toBeNull();
+    expect(document.querySelector(".conversation-detail-metadata__size")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "History location" }));
+    const location = screen.getByRole("dialog", { name: "History location" });
+    expect(within(location).getByText("2", { exact: true })).toBeInTheDocument();
+    expect(within(location).getByText("24 KB")).toBeInTheDocument();
   });
 
   it("shows metadata-only history as an honest readable summary", async () => {

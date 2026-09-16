@@ -1,4 +1,4 @@
-import { Clock3, LoaderCircle, MonitorUp, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { LoaderCircle, MonitorUp, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { TargetEnvironmentSummary } from "./TargetEnvironmentSummary";
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type {
@@ -388,11 +388,12 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
                         >
                           <strong>{endpoint.agentName}</strong>
                         </TextAction>
+                        <span className={`target-health-status target-health-status--${available ? "ready" : "unknown"}`} title={t(available ? "Ready" : "Unavailable")}>
+                          <span className={available ? "ui-visually-hidden" : undefined}>{t(available ? "Ready" : "Unavailable")}</span>
+                        </span>
                       </span>
                     </span>
-                    <span className={`target-health-status target-health-status--${available ? "ready" : "unknown"}`} title={t(available ? "Ready" : "Unavailable")}>
-                      <span className={available ? "ui-visually-hidden" : undefined}>{t(available ? "Ready" : "Unavailable")}</span>
-                    </span>
+                    <span title={state?.lastAppliedAt ? `${t("Last applied")} · ${formatCheckedAt(state.lastAppliedAt)}` : undefined}>
                     <TargetEnvironmentSummary
                       lifecycleStatus={state?.lifecycleStatus}
                       actionOnly={!state?.activeProfileName && (!state?.lifecycleStatus || state.lifecycleStatus === "unmanaged")}
@@ -401,13 +402,6 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
                       actionLabel={state?.activeProfileName ? undefined : t("Configure")}
                       onAction={() => onOpenProfile(endpoint.id)}
                     />
-                    <span className="target-workflow-last-applied">
-                      {state?.lastAppliedAt ? (
-                        <>
-                          <Clock3 size={12} aria-hidden="true" />
-                          {formatCheckedAt(state.lastAppliedAt)}
-                        </>
-                      ) : null}
                     </span>
                     <span className="remote-agent-row__action" />
                   </header>

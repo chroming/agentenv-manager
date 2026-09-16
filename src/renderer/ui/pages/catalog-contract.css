@@ -4,7 +4,7 @@
 .skill-source-candidate-head {
   --source-candidate-indent: 72px;
   column-gap: 10px;
-  grid-template-columns: [content] 24px 28px minmax(125px, 1fr) 68px [status] minmax(110px, 0.8fr) [actions] 38px;
+  grid-template-columns: [content] 24px 28px minmax(125px, 1fr) [status] minmax(130px, 0.5fr) [actions] 38px;
 }
 
 .skill-source-table-head {
@@ -51,7 +51,7 @@
 .skill-source-list.can-merge .skill-source-candidate,
 .skill-source-list.can-merge .skill-source-candidate-head {
   --source-candidate-indent: 102px;
-  grid-template-columns: [content] 20px 24px 28px minmax(110px, 1fr) 62px [status] minmax(104px, 0.8fr) [actions] 38px;
+  grid-template-columns: [content] 20px 24px 28px minmax(110px, 1fr) [status] minmax(130px, 0.5fr) [actions] 38px;
 }
 
 .skill-source-table-head.can-merge > span:first-child {
@@ -68,7 +68,7 @@
   align-items: center;
   cursor: pointer;
   display: grid;
-  grid-template-areas: "disclosure artwork identity counts status more";
+  grid-template-areas: "disclosure artwork identity status more";
   box-sizing: border-box;
   min-height: var(--resource-row-default);
   padding: 6px 12px;
@@ -76,45 +76,14 @@
 }
 
 .skill-source-list.can-merge .skill-source-group-row {
-  grid-template-areas: "select disclosure artwork identity counts status more";
+  grid-template-areas: "select disclosure artwork identity status more";
 }
 
-.skill-source-counts {
-  align-items: flex-start;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  grid-area: counts;
-  min-width: 0;
-}
-
-.skill-source-counts > span {
+.skill-source-total {
   color: var(--muted);
-  display: grid;
   font-size: var(--font-size-metadata);
-  gap: 6px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  line-height: 18px;
-  min-width: 0;
-  white-space: nowrap;
-}
-
-.skill-source-counts .overflow-tooltip {
-  color: var(--muted);
-  display: block;
-  font-size: var(--font-size-metadata);
-  line-height: 18px;
-  min-width: 0;
-}
-
-.skill-source-counts strong {
-  color: var(--text);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-regular);
-}
-
-.skill-source-counts .is-change.has-value {
-  color: var(--warning);
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
 }
 
 .skill-source-status {
@@ -193,14 +162,14 @@
   .skill-source-group-row,
   .skill-source-candidate,
   .skill-source-candidate-head {
-    grid-template-columns: [content] 24px 28px minmax(190px, 1fr) 78px [status] minmax(118px, 0.8fr) [actions] 38px;
+    grid-template-columns: [content] 24px 28px minmax(190px, 1fr) [status] minmax(130px, 0.5fr) [actions] 38px;
   }
 
   .skill-source-table-head.can-merge,
   .skill-source-list.can-merge .skill-source-group-row,
   .skill-source-list.can-merge .skill-source-candidate,
   .skill-source-list.can-merge .skill-source-candidate-head {
-    grid-template-columns: [content] 20px 24px 28px minmax(166px, 1fr) 72px [status] minmax(114px, 0.8fr) [actions] 38px;
+    grid-template-columns: [content] 20px 24px 28px minmax(166px, 1fr) [status] minmax(130px, 0.5fr) [actions] 38px;
   }
 }
 
@@ -211,7 +180,7 @@
   .skill-source-candidate-head {
     --source-candidate-indent: 60px;
     column-gap: 8px;
-    grid-template-columns: [content] 20px 24px minmax(120px, 1fr) 58px [status] minmax(112px, 0.8fr) [actions] 38px;
+    grid-template-columns: [content] 20px 24px minmax(120px, 1fr) [status] minmax(130px, 0.5fr) [actions] 38px;
   }
 
   .skill-source-table-head.can-merge,
@@ -219,7 +188,7 @@
   .skill-source-list.can-merge .skill-source-candidate,
   .skill-source-list.can-merge .skill-source-candidate-head {
     --source-candidate-indent: 84px;
-    grid-template-columns: [content] 18px 20px 22px minmax(108px, 1fr) 54px [status] minmax(108px, 0.8fr) [actions] 38px;
+    grid-template-columns: [content] 18px 20px 22px minmax(108px, 1fr) [status] minmax(130px, 0.5fr) [actions] 38px;
   }
 
   .skill-source-table-head > span:first-child {
@@ -235,13 +204,13 @@
   }
 
   .skill-source-group-row {
-    grid-template-areas: "disclosure artwork identity counts status more";
+    grid-template-areas: "disclosure artwork identity status more";
     min-height: var(--resource-row-default);
     padding-block: 6px;
   }
 
   .skill-source-list.can-merge .skill-source-group-row {
-    grid-template-areas: "select disclosure artwork identity counts status more";
+    grid-template-areas: "select disclosure artwork identity status more";
   }
 
   .skill-source-group-row .skill-source-identity {

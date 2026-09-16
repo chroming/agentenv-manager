@@ -9,7 +9,6 @@ import {
   FolderGit2,
   FolderInput,
   FolderOpen,
-  HardDrive,
   Info,
   ListFilter,
   LoaderCircle,
@@ -271,6 +270,7 @@ const ConversationSortMenu = ({
       <IconButton
         ref={buttonRef}
         className={`conversation-sort-button${sort === "recent" ? "" : " is-active"}`}
+        variant="ghost"
         label={triggerLabel}
         title={triggerLabel}
         aria-haspopup="menu"
@@ -2067,7 +2067,7 @@ export const ConversationWorkspace = ({
                         <span className="conversation-detail-metadata__agent">
                           {detail.origin?.deviceId !== "local" ? `${detail.origin?.deviceName ?? ""} · ` : ""}
                           {detail.agentName}
-                          {detail.origin ? <IconButton appearance="inline" label={t("History location")} onClick={()=>setSourceLocationOpen(true)}><Info size={12} /></IconButton> : null}
+                          <IconButton appearance="inline" label={t("History location")} onClick={()=>setSourceLocationOpen(true)}><Info size={12} /></IconButton>
                         </span>
                         <span className="conversation-detail-metadata__time">
                           <Clock3 size={12} aria-hidden="true" />
@@ -2078,16 +2078,6 @@ export const ConversationWorkspace = ({
                             {formatDetailTime(detail.updatedAt)}
                           </time>
                         </span>
-                        <span className="conversation-detail-metadata__messages">
-                          <MessagesSquare size={12} aria-hidden="true" />
-                          {t("{{count}} messages", { count: detail.messageCount })}
-                        </span>
-                        {detail.sizeBytes !== undefined ? (
-                          <span className="conversation-detail-metadata__size">
-                            <HardDrive size={12} aria-hidden="true" />
-                            {formatConversationSize(detail.sizeBytes)}
-                          </span>
-                        ) : null}
                         {detail.archived ? <Badge>{t("Archived")}</Badge> : null}
                         {detail.detailState === "summary-only"
                           ? <Badge tone="warning">{t("Summary only")}</Badge>
@@ -2273,14 +2263,16 @@ export const ConversationWorkspace = ({
           </MasterDetailLayout>
         </div>}
 
-        {sourceLocationOpen && detail?.origin ? <ModalFrame className="ui-dialog-shell" ariaLabel={t("History location")} dialogRef={sourceLocationRef} onDismiss={()=>setSourceLocationOpen(false)}>
+        {sourceLocationOpen && detail ? <ModalFrame className="ui-dialog-shell" ariaLabel={t("History location")} dialogRef={sourceLocationRef} onDismiss={()=>setSourceLocationOpen(false)}>
           <DialogHeader title={t("History location")} />
           <DialogBody><dl className="history-location-fields">
-            <dt>{t("Device")}</dt><dd>{detail.origin.deviceName}</dd>
-            <dt>{t("Connection")}</dt><dd className="selectable">{detail.origin.connection ?? t("Local history")}</dd>
+            <dt>{t("Device")}</dt><dd>{detail.origin?.deviceName ?? t("This Mac")}</dd>
+            <dt>{t("Connection")}</dt><dd className="selectable">{detail.origin?.connection ?? t("Local history")}</dd>
             <dt>{t("Working directory")}</dt><dd className="selectable">{detail.workspacePath ?? t("Unavailable")}</dd>
             <dt>{t("Session ID")}</dt><dd className="selectable">{detail.sourceId}</dd>
-            <dt>{t("History file")}</dt><dd className="selectable">{detail.origin.historyPath}</dd>
+            <dt>{t("History file")}</dt><dd className="selectable">{detail.origin?.historyPath ?? t("Unavailable")}</dd>
+            <dt>{t("Messages")}</dt><dd>{detail.messageCount}</dd>
+            <dt>{t("Size")}</dt><dd>{detail.sizeBytes === undefined ? t("Unavailable") : formatConversationSize(detail.sizeBytes)}</dd>
           </dl></DialogBody>
           <DialogFooter><Button onClick={()=>setSourceLocationOpen(false)}>{t("Close")}</Button><Button icon={<Copy size={16}/>} onClick={()=>void window.agentEnv.copyText([detail.origin?.connection,detail.workspacePath,detail.sourceId,detail.origin?.historyPath].filter(Boolean).join("\n"))}>{t("Copy history location")}</Button></DialogFooter>
         </ModalFrame> : null}
