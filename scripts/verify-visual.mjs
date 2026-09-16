@@ -61,6 +61,10 @@ await run("node", [
   "--output",
   captureRoot
 ]);
+await run(process.platform === "win32" ? "npx.cmd" : "npx", [
+  "vitest", "run", "tests/e2e/electronUiProfileSwitching.e2e.test.ts",
+  "-t", "persists manual Skill invocation", "--maxWorkers=1"
+], { AGENTENV_STATUS_CAPTURE_DIR: captureRoot });
 const comparisonArguments = [
   "scripts/compare-ui-captures.swift",
   "--config",

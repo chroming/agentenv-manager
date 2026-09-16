@@ -4,6 +4,7 @@ import type { SkillInventoryEntry, TargetState } from "../shared/types";
 import { writeAtomic, pathExists } from "./fileUtils";
 import { deploySkillDirectory } from "./skillDeployment";
 import { hashSkillContent } from "./skillContentHash";
+import { hashInvokedSkill } from "./skillInvocation";
 import { parseTargetState } from "./targetState";
 import { hashFileContent, hashPathEntry } from "./filesystemIntegrity";
 
@@ -58,7 +59,10 @@ export const prepareLibraryUpdatePropagation = async ({
   const copiedPathHashes: Record<string, string> = {};
   for (const install of copiedInstalls) {
     const before = await hashPathEntry(install.path);
-    if (await hashSkillContent(install.path) !== currentContentHash) {
+    const expectedCurrentHash = install.invocationMode === "manual" && install.sourceContentHash === currentContentHash
+      ? install.contentHash
+      : currentContentHash;
+    if (await hashSkillContent(install.path) !== expectedCurrentHash) {
       throw new Error(
         `${install.name} changed in ${install.path}; turn off Agent copy updates or review that Agent before retrying`
       );
@@ -108,7 +112,7 @@ export const prepareLibraryUpdatePropagation = async ({
             : state.appliedLibraryVersions,
           managedResources: (state.managedResources ?? []).map((resource) =>
             ownsInstall(resource)
-              ? { ...resource, contentHash: nextContentHash }
+              ? { ...resource, contentHash: nextContentHash, sourceContentHash: nextContentHash }
               : resource
           )
         }
@@ -133,9 +137,12 @@ export const applyLibraryUpdatePropagation = async ({
       sourceDir,
       targetDir: install.path,
       syncMethod: "copy",
+      invocationMode: install.invocationMode,
+      targetId: install.invocationTargetId,
       expectedTargetHash: propagation.copiedPathHashes?.[install.path]
     });
-    if (await hashSkillContent(install.path) !== nextContentHash) {
+    const deployedHash = await hashInvokedSkill(sourceDir, install.invocationTargetId ?? "", install.invocationMode);
+    if (await hashSkillContent(install.path) !== deployedHash) {
       throw new Error(`Updated Agent copy did not match Library: ${install.path}`);
     }
   }
@@ -145,6 +152,12 @@ export const applyLibraryUpdatePropagation = async ({
     }
   }
   for (const update of propagation.stateUpdates) {
+    for (const resource of update.state.managedResources ?? []) {
+      const install = propagation.copiedInstalls.find((entry) => resolve(entry.path) === resolve(resource.path));
+      if (install?.invocationMode === "manual") {
+        resource.contentHash = await hashInvokedSkill(sourceDir, install.invocationTargetId ?? "", "manual");
+      }
+    }
     await writeAtomic(update.path, `${JSON.stringify(update.state, null, 2)}\n`,
       update.expectedPathHash ? { expectedTargetHash: update.expectedPathHash } : {});
     parseTargetState(JSON.parse(await readFile(update.path, "utf8")));

@@ -2,6 +2,31 @@
   "formatVersion": 1,
   "features": [
     {
+      "id": "profile-skill-invocation",
+      "summary": "Profile-scoped native manual invocation through private deployment copies; Library content remains unchanged.",
+      "contract": { "path": "docs/skill-invocation.md", "anchor": "## Contract" },
+      "support": { "opencode": "unsupported", "claude-code": "supported", "codex": "unsupported", "antigravity": "unsupported", "antigravity-app": "unsupported", "trae-cli": "unsupported", "pi": "unsupported" },
+      "states": {
+        "idle": "Default preserves author behavior; manual-only is a separate saved preference.",
+        "working": "Existing autosave and Apply progress own feedback.",
+        "success": "Claude receives a manual-only copy, including SSH and isolated comparison environments.",
+        "error": "Unsupported Agents or invalid frontmatter cannot silently become automatic.",
+        "cancelled": "Dismissing Apply does not alter Agent files.",
+        "noOp": "Identical transformed content and policy produce no resource changes.",
+        "stale": "Existing source and target fingerprint gates protect Apply and copy propagation.",
+        "partial": "Workspace native file editing and other Agent implementations are not exposed in this iteration.",
+        "persisted": "Profile references retain policy through enable toggles and group gating; receipts separate deployed and Library hashes.",
+        "rollback": "Existing Apply backups restore original deployment files; Library is never transformed."
+      },
+      "evidence": {
+        "domain": ["tests/main/skillInvocation.test.ts", "tests/main/activationService.test.ts", "tests/main/skillLibraryUpdatePropagation.test.ts", "tests/main/remoteDevices/remoteActivationService.test.ts"],
+        "renderer": ["tests/renderer/SkillsEditor.test.tsx"],
+        "desktop": ["tests/e2e/electronUiProfileSwitching.e2e.test.ts"],
+        "persistence": ["tests/main/activationService.test.ts", "tests/main/skillLibraryUpdatePropagation.test.ts"],
+        "visual": ["skill-invocation-920.png", "skill-invocation-1180.png", "skill-invocation-1440.png"]
+      }
+    },
+    {
       "id": "explicit-local-ssh-history-search",
       "summary": "Opt-in source-scoped local and SSH conversation search with transparent coverage and cancellable cache collection.",
       "contract": {

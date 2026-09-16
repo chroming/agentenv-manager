@@ -4,6 +4,8 @@ import { ProfileManifestSchema, ProfileResourcesSchema, SafeIdSchema } from "../
 import { withManagedResourceSemantics } from "../shared/managedResource";
 
 const ManagedResourceSchema = z.object({
+  invocationMode: z.enum(["default", "manual"]).optional(),
+  sourceContentHash: z.string().optional(),
   kind: z.enum(["instructions", "config", "mcp", "skill", "agent", "file", "directory"]),
   id: z.string().min(1),
   path: z.string().min(1),
@@ -34,6 +36,7 @@ const LegacyTargetKeptOutsideSkillSchema = z.object({
 });
 
 const AppliedSkillReceiptSchema = z.object({
+  invocationMode: z.literal("manual").optional(),
   libraryId: z.string().min(1),
   targetName: z.string().min(1),
   path: z.string().min(1).optional(),

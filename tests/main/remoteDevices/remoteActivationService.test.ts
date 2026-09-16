@@ -12,6 +12,7 @@ import type {
 } from "../../../src/main/remoteDevices/systemSshTransport";
 import { createSkillLibraryStore } from "../../../src/main/skillLibraryStore";
 import { createOpenCodeTargetAdapter } from "../../../src/main/targets/opencodeTarget";
+import { createClaudeCodeTargetAdapter } from "../../../src/main/targets/claudeCodeTarget";
 import { createTargetRegistry } from "../../../src/main/targets/registry";
 
 let root = "";
@@ -60,7 +61,8 @@ const createLocalSshFixture = (remoteHome: string): SshTransport => ({
 
 const createFixture = async (
   transportFactory: (remoteHome: string) => SshTransport = createLocalSshFixture,
-  extraSkillFiles = 0
+  extraSkillFiles = 0,
+  agentId = "opencode"
 ) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-remote-activation-"));
   const appDataRoot = join(root, "data");
@@ -106,7 +108,7 @@ const createFixture = async (
     },
     expectedContentHash: created.contentHash
   });
-  const targetRegistry = createTargetRegistry([createOpenCodeTargetAdapter()]);
+  const targetRegistry = createTargetRegistry([agentId === "claude-code" ? createClaudeCodeTargetAdapter() : createOpenCodeTargetAdapter()]);
   const service = createRemoteActivationService({
     paths,
     profileStore,
@@ -130,6 +132,30 @@ const createFixture = async (
 };
 
 describe("remote Profile activation", () => {
+  it("keeps manual-only policy in the SSH copy and reaches a no-op on the next preview", async () => {
+    const fixture = await createFixture((home) => ({
+      execute: async (device, command, options) => {
+        const result = await createLocalSshFixture(home).execute(device, command, options);
+        return command.includes("uname -s")
+          ? { ...result, stdout: Buffer.from(result.stdout.toString().replace("CMD\topencode\t/usr/bin/opencode", "CMD\tclaude\t/usr/bin/claude")) }
+          : result;
+      }
+    }), 0, "claude-code");
+    const { profile, profileStore, service, endpoint, remoteHome } = fixture;
+    expect(endpoint.agentId).toBe("claude-code");
+    await profileStore.saveProfile({ ...profile, expectedContentHash: profile.contentHash,
+      resources: { ...profile.resources, skills: profile.resources.skills.map((reference) => ({ ...reference, invocationMode: "manual" })) }
+    });
+    const preview = await service.previewProfile(profile.id, endpoint.id);
+    expect(preview.issues.filter((issue) => issue.disposition === "block")).toEqual([]);
+    expect(await service.applyProfile(profile.id, preview.id)).toMatchObject({ ok: true });
+    expect(await readFile(join(remoteHome, ".claude", "skills", "review", "SKILL.md"), "utf8"))
+      .toContain("disable-model-invocation: true");
+    const again = await service.previewProfile(profile.id, endpoint.id);
+    expect(again.resourceChanges).toEqual([]);
+    expect(again.changes).toEqual([]);
+    expect(again.targetStateChanges).toEqual([]);
+  });
   it("keeps an unavailable SSH device saved so the user can reconnect later", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-remote-offline-"));
     const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });

@@ -35,6 +35,8 @@ const writeFrame = (
 };
 
 export interface SkillHashOptions {
+  /** Internal materialization preview; keys must name existing regular files. */
+  fileOverrides?: ReadonlyMap<string, Buffer>;
   maxEntries?: number;
   maxBytes?: number;
   maxDepth?: number;
@@ -97,6 +99,11 @@ const hashSnapshot = async (rootPath: string, options: SkillHashOptions) => {
           if (!before.isFile()) throw new Error(`Skill entry is not a regular file: ${child}`);
           bytes += before.size;
           if (bytes > (options.maxBytes ?? 512 * 1024 * 1024)) throw new Error(`Skill exceeds the content read limit: ${rootPath}`);
+          const override = options.fileOverrides?.get(relativePath.split(sep).join("/"));
+          if (override) {
+            writeFrame(hash, "file", relativePath, override);
+            continue;
+          }
           const pathBytes = Buffer.from(relativePath.split(sep).join("/"), "utf8");
           hash.update("F");
           writeLength(hash, pathBytes.length);

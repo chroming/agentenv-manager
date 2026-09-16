@@ -54,6 +54,7 @@ import {
   Switch
 } from "./ui";
 import { StatusHint } from "./ui";
+import { skillInvocationMenuItems } from "./skillInvocationMenu";
 
 interface SkillsEditorProps {
   value: ProfileResources;
@@ -240,9 +241,13 @@ export const SkillsEditor = ({
         entry.targetName === reference.targetName
     );
     const sharedRuntimeControlsSkill = sharedRuntimeLibraryIds.has(reference.libraryId);
+    const appliedReceipt = skillReceipts.find((entry) =>
+      entry.libraryId === reference.libraryId && entry.targetName === reference.targetName
+    );
     const deploymentPending = Boolean(
       profileManagesSkills && !sharedRuntimeControlsSkill && !localOverride && skill && appliedSkillVersions && (effectiveEnabled
-        ? appliedRevision !== skill.contentHash
+        ? appliedRevision !== skill.contentHash || (appliedReceipt &&
+            (reference.invocationMode === "manual") !== (appliedReceipt.invocationMode === "manual"))
         : appliedRevision)
     );
     const status = skill?.readIssue ? "Could not read" : !groupEnabled
@@ -278,7 +283,16 @@ export const SkillsEditor = ({
         ? t("Library skill {{id}} is missing", { id: reference.libraryId })
         : undefined);
     const skillName = skill?.name ?? reference.targetName;
-    const menuItems = options.grouped ? [] : [
+    const invocationItems = skillInvocationMenuItems({
+      mode: reference.invocationMode, targetId: selectedTargetId, t,
+      onChange: (invocationMode) => onChange({
+        ...value,
+        skills: value.skills.map((entry, currentIndex) => currentIndex === index
+          ? { ...entry, invocationMode: invocationMode === "default" ? undefined : invocationMode }
+          : entry)
+      })
+    });
+    const menuItems = [...invocationItems, ...(options.grouped ? [] : [
       ...(!skill ? [{
         id: "relink",
         icon: <Link2 size={14} strokeWidth={2.2} aria-hidden="true" />,
@@ -294,7 +308,7 @@ export const SkillsEditor = ({
           skills: value.skills.filter((_, currentIndex) => currentIndex !== index)
         })
       }
-    ];
+    ])];
     return (
       <ResourceRow
         appearance="plain"
@@ -352,6 +366,14 @@ export const SkillsEditor = ({
           </span>
         )}
         title={<OverflowTooltip className="profile-skill-name" text={skillName} />}
+        titleAside={reference.invocationMode === "manual" ? (
+            <ToolbarOverflowMenu
+              triggerVariant="tag" triggerContent={t("Manual only")}
+              label={t("Skill invocation")} menuLabel={t("Skill invocation")}
+              disabled={disabled || !profileManagesSkills}
+              items={invocationItems}
+            />
+          ) : undefined}
         tone={effectiveEnabled ? "default" : "disabled"}
         actions={(
           <>

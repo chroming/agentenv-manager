@@ -72,6 +72,7 @@ import type { AgentEnvPaths } from "./paths";
 import type { ProfileStore } from "./profileStore";
 import { DEFAULT_SETTINGS, resolveSkillsLibraryDir, type SettingsStore } from "./settingsStore";
 import { parseSkillFrontmatter } from "./skillFrontmatter";
+import { hashInvokedSkill } from "./skillInvocation";
 import { inspectSkillsCliLocks } from "./skillsCliInspector";
 import { removeSkillDeployment } from "./skillDeployment";
 import { createSkillLibraryTargetDeployer } from "./skillLibraryTargetDeployment";
@@ -966,7 +967,9 @@ export const createSkillLibraryStore = (
         const skillFileLinkStats = await lstat(join(skillDir, "SKILL.md"));
         const skillFileStats = await stat(join(skillDir, "SKILL.md"));
         const contentMatchesLibrary = libraryId
-          ? libraryById.get(libraryId)?.contentHash === contentHash
+          ? managedResource?.invocationMode === "manual" && libraryById.has(libraryId)
+            ? await hashInvokedSkill(libraryById.get(libraryId)!.path, target.targetId, "manual") === contentHash
+            : libraryById.get(libraryId)?.contentHash === contentHash
           : undefined;
         const linkedInstall = skillDirStats.isSymbolicLink() || skillFileLinkStats.isSymbolicLink();
         const libraryCanonicalPath = libraryId
@@ -1021,6 +1024,9 @@ export const createSkillLibraryStore = (
               : "copied"
             : undefined,
           contentMatchesLibrary,
+          invocationMode: managedResource?.invocationMode,
+          invocationTargetId: managedResource?.invocationMode === "manual" ? target.targetId : undefined,
+          sourceContentHash: managedResource?.sourceContentHash,
           externalEvidence,
           locationRole: observation.locationRole,
           sharedLocation: observation.shared,

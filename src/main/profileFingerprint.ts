@@ -54,7 +54,8 @@ export const createProfileContentHash = (
           .map((reference) => ({
             libraryId: reference.libraryId,
             targetName: reference.targetName,
-            enabled: true
+            enabled: true,
+            ...(reference.invocationMode === "manual" ? { invocationMode: "manual" } : {})
           }))
           .sort(
             (left, right) =>

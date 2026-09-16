@@ -75,7 +75,7 @@ export const skillReceiptsFor = ({
       ? inventoryByPath.get(resolve(targetPath))
       : undefined;
     if (observation) matchedPaths.add(resolve(observation.path));
-    return toAppliedSkillReceipt(
+    const receipt = toAppliedSkillReceipt(
       reconcileSkill({
         libraryId: reference.libraryId,
         targetName: reference.targetName,
@@ -98,6 +98,9 @@ export const skillReceiptsFor = ({
             : undefined
       })
     );
+    return reference.enabled && reference.invocationMode === "manual"
+      ? { ...receipt, invocationMode: "manual" as const }
+      : receipt;
   });
 
   for (const observation of inventory) {

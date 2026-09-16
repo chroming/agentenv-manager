@@ -16,6 +16,9 @@ import {
   markerPathForFile
 } from "./ownershipMarkers";
 import { isPathInside } from "./platformPaths";
+import { hashInvokedSkill } from "./skillInvocation";
+import { supportsManualSkillInvocation } from "../shared/skillInvocation";
+import type { ProfileSkill } from "../shared/schemas";
 import type { SkillRootTransition } from "./skillRootTopology";
 import {
   managedResourceMaterialization,
@@ -55,6 +58,8 @@ export const snapshotManagedResources = async (
     replacedPaths?: ReadonlySet<string>;
     adoptedPaths?: ReadonlySet<string>;
     legacyOwnedPaths?: ReadonlySet<string>;
+    skillReferences?: readonly ProfileSkill[];
+    skillLibraryDir?: string;
   } = {}
 ) => {
   const snapshots: ManagedResourceSnapshot[] = [];
@@ -83,10 +88,19 @@ export const snapshotManagedResources = async (
           : replaced || mutated || legacyOwned
             ? "replaced" as const
             : "unknown" as const;
+    const skillReference = identity.kind === "skill"
+      ? options.skillReferences?.find((reference) => reference.targetName === identity.id)
+      : undefined;
     snapshots.push({
       ...identity,
       path,
       contentHash,
+      ...(skillReference?.invocationMode === "manual" ? {
+        invocationMode: "manual" as const,
+        sourceContentHash: options.skillLibraryDir
+          ? await hashManagedResourcePath(join(options.skillLibraryDir, skillReference.libraryId), "skill")
+          : undefined
+      } : {}),
       source: options.sourceByPath?.get(resolve(path)) ?? previous?.source ?? "profile-apply",
       materialization,
       origin,
@@ -110,6 +124,7 @@ export const desiredAssetResources = (
     resource: Omit<PlannedResourceChange, "action" | "path">;
     sourcePath: string;
     markerSource: string;
+    invocationMode?: ProfileSkill["invocationMode"];
   }>();
   if (!profileManagesResource(profile.resources, targetPaths.targetId, "skills")) return desired;
   for (const skillRef of profile.resources.skills.filter((reference) => reference.enabled)) {
@@ -118,10 +133,11 @@ export const desiredAssetResources = (
       resource: {
         kind: "skill",
         name: skillRef.targetName,
-        source: `Library / ${skillRef.libraryId}`
+        source: `Library / ${skillRef.libraryId}${skillRef.invocationMode === "manual" ? " · Manual only · Managed copy" : ""}`
       },
       sourcePath: join(skillLibraryDir, skillRef.libraryId),
-      markerSource: `skills-library/${skillRef.libraryId}`
+      markerSource: `skills-library/${skillRef.libraryId}`,
+      invocationMode: skillRef.invocationMode
     });
   }
   return desired;
@@ -192,8 +208,15 @@ export const planAssetResources = async (input: {
     if (resource) {
       const exists = !behindTransitionedRoot && await pathEntryExists(path);
       const stats = exists ? await lstat(path) : undefined;
-      const contentMatches = exists &&
-        (await hashComparablePath(resource.sourcePath)) === (await hashComparablePath(path));
+      // Validation reports unavailable or malformed manual sources as blocking issues.
+      const expectedContentHash = await pathEntryExists(resource.sourcePath)
+        ? resource.invocationMode === "manual"
+          ? await hashInvokedSkill(resource.sourcePath, targetPaths.targetId,
+              supportsManualSkillInvocation(targetPaths.targetId) ? "manual" : undefined).catch(() => undefined)
+          : await hashManagedResourcePath(resource.sourcePath, "skill")
+        : undefined;
+      const contentMatches = exists && expectedContentHash !== undefined &&
+        expectedContentHash === await hashManagedResourcePath(path, "skill");
       const matchingMarkerPaths = exists
         ? await legacyOwnerMarkerPathsFor(path, {
             targetId: targetPaths.targetId,
@@ -206,7 +229,7 @@ export const planAssetResources = async (input: {
           legacyOwnedResourcePaths.push(path);
           continue;
         }
-        const shouldBeLinked = skillSyncMethod === "symlink";
+        const shouldBeLinked = skillSyncMethod === "symlink" && resource.invocationMode !== "manual";
         const topologyMatchesPolicy = shouldBeLinked
           ? stats?.isSymbolicLink() === true
           : stats?.isSymbolicLink() !== true;

@@ -30,6 +30,7 @@ import type {
   TargetSkillLocation
 } from "../../shared/types";
 import { createUnifiedDiff } from "../diff";
+import { skillInvocationOverrides, writeSkillInvocationOverrides } from "../skillInvocation";
 import { hashPathEntry } from "../filesystemIntegrity";
 import { isMissingFileError, writeAtomic } from "../fileUtils";
 import type { GitCommandRunner } from "../skillSources/gitCommandRunner";
@@ -712,6 +713,8 @@ export const createEvaluationWorkspace = (
             platform,
             input.signal
           );
+          await writeSkillInvocationOverrides(destination,
+            await skillInvocationOverrides(destination, input.adapter.descriptor.id, reference.invocationMode));
           skillContentHashes[reference.targetName] = copied.contentHash;
           warnings.push(...copied.warnings.map((warning) => `${reference.targetName}: ${warning}`));
           includedSkills += 1;

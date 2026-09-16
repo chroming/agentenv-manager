@@ -1107,6 +1107,9 @@ export type SkillInventoryStatus =
   | "left-unmanaged";
 
 export interface SkillInventoryEntry extends UnmanagedSkillEntry {
+  invocationMode?: "default" | "manual";
+  invocationTargetId?: string;
+  sourceContentHash?: string;
   status: SkillInventoryStatus;
   canonicalPath?: string;
   version?: string;
@@ -1367,6 +1370,7 @@ export interface SkillReconciliationResult {
 }
 
 export interface AppliedSkillReceipt {
+  invocationMode?: "manual";
   libraryId: string;
   targetName: string;
   path?: string;
@@ -2034,6 +2038,8 @@ export type ManagedResourceKind =
   | "directory";
 
 export interface ManagedResourceSnapshot {
+  invocationMode?: "default" | "manual";
+  sourceContentHash?: string;
   kind: ManagedResourceKind;
   id: string;
   path: string;

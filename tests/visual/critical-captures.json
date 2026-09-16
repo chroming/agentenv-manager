@@ -4,6 +4,9 @@
   "pixelShiftTolerance": 1,
   "maxChangedPixelRatio": 0.012,
   "captures": [
+    { "file": "skill-invocation-920.png" },
+    { "file": "skill-invocation-1180.png" },
+    { "file": "skill-invocation-1440.png" },
     { "file": "history-sources-920.png" },
     { "file": "history-disabled-920.png" },
     { "file": "history-enabled-920.png" },

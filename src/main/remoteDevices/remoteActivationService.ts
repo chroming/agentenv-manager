@@ -46,6 +46,7 @@ import type { AgentEnvPaths } from "../paths";
 import { createProfileContentHash, createProfileSnapshotHash } from "../profileFingerprint";
 import type { ProfileStore } from "../profileStore";
 import { hashSkillContent } from "../skillContentHash";
+import { hashInvokedSkill, skillInvocationOverrides, writeSkillInvocationOverrides } from "../skillInvocation";
 import type { SkillLibraryStore } from "../skillLibraryStore";
 import type { TargetRegistry } from "../targets/registry";
 import { createRemoteDeviceStore, type RemoteDeviceStore } from "./remoteDeviceStore";
@@ -874,12 +875,26 @@ export const createRemoteActivationService = (options: {
         }
         const remotePath = posix.join(skillsDir, reference.targetName);
         desiredRemotePaths.add(remotePath);
+        let overrides: ReadonlyMap<string, Buffer>;
+        let expectedHash: string;
+        try {
+          overrides = await skillInvocationOverrides(librarySkill.path, endpoint.agentId, reference.invocationMode);
+          expectedHash = await hashInvokedSkill(librarySkill.path, endpoint.agentId, reference.invocationMode);
+        } catch (error) {
+          issues.push({
+            id: `remote-invocation-${reference.libraryId}`,
+            code: "unsupported-skill-management", disposition: "block", resolution: "edit-profile",
+            resourceKind: "skill", resourceId: reference.libraryId,
+            message: `${reference.targetName}: ${error instanceof Error ? error.message : String(error)}`
+          });
+          continue;
+        }
         const skillRelative = relativeToRemoteHome(endpoint.homeDir, remotePath);
         const currentPath = localPathFor(currentRoot, skillRelative);
         const desiredPath = localPathFor(desiredRoot, skillRelative);
         const existing = await pathEntryExists(currentPath);
         const currentHash = existing ? await hashSkillContent(currentPath).catch(() => undefined) : undefined;
-        const unchanged = currentHash === librarySkill.contentHash;
+        const unchanged = currentHash === expectedHash;
         const previousManagedResource = managedSkillResources.find(
           (resource) => resource.path === remotePath
         );
@@ -888,6 +903,7 @@ export const createRemoteActivationService = (options: {
           await rm(desiredPath, { recursive: true, force: true });
           await mkdir(dirname(desiredPath), { recursive: true, mode: 0o700 });
           await cp(librarySkill.path, desiredPath, { recursive: true, dereference: true });
+          await writeSkillInvocationOverrides(desiredPath, overrides);
           await Promise.all(LIBRARY_METADATA_FILES.map((name) => rm(join(desiredPath, name), { force: true })));
           operations.push({
             relativePath: skillRelative,
@@ -926,7 +942,9 @@ export const createRemoteActivationService = (options: {
             ? {
                 ...previousManagedResource,
                 id: reference.libraryId,
-                contentHash: librarySkill.contentHash,
+                contentHash: expectedHash,
+                invocationMode: reference.invocationMode ?? "default",
+                sourceContentHash: librarySkill.contentHash,
                 source: librarySkill.path,
                 paused: undefined
               }
@@ -934,7 +952,9 @@ export const createRemoteActivationService = (options: {
                 kind: "skill",
                 id: reference.libraryId,
                 path: remotePath,
-                contentHash: librarySkill.contentHash,
+                contentHash: expectedHash,
+                invocationMode: reference.invocationMode ?? "default",
+                sourceContentHash: librarySkill.contentHash,
                 source: librarySkill.path,
                 materialization: "copy",
                 origin: unchanged && !previouslyManaged ? "adopted" : existing ? "replaced" : "created"

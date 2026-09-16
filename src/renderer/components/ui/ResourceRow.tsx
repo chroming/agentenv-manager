@@ -12,6 +12,7 @@ interface ResourceRowProps extends Omit<HTMLAttributes<HTMLDivElement>, "title">
   metadata?: ReactNode;
   state?: ReactNode;
   title: ReactNode;
+  titleAside?: ReactNode;
   tone?: ResourceRowTone;
   appearance?: "default" | "plain";
 }
@@ -26,6 +27,7 @@ export const ResourceRow = ({
   metadata,
   state,
   title,
+  titleAside,
   tone = "default",
   appearance = "default",
   ...props
@@ -38,7 +40,9 @@ export const ResourceRow = ({
       {icon}
     </span>
     <div className="ui-resource-row__identity">
-      <strong>{title}</strong>
+      <strong className={titleAside ? "ui-resource-row__title-with-aside" : undefined}>
+        {titleAside ? <><span>{title}</span>{titleAside}</> : title}
+      </strong>
       {description ? <span>{description}</span> : null}
     </div>
     {metadata ? <div className="ui-resource-row__metadata">{metadata}</div> : null}

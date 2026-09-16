@@ -349,7 +349,11 @@ export const buildSkillCleanupGroups = (
           activeItems.map((item) => [item.canonicalPath ?? item.path, item])
         ).values()
       ];
-      const hashes = new Set(activeItems.map((item) => item.contentHash).filter(Boolean));
+      const hashes = new Set(activeItems.map((item) =>
+        item.invocationMode === "manual" && item.status === "managed" && item.contentMatchesLibrary
+          ? item.sourceContentHash ?? item.contentHash
+          : item.contentHash
+      ).filter(Boolean));
       const statuses = new Set(activeItems.map((item) => item.status));
       const allLeftUnmanaged = activeItems.length === 0;
       const allManaged =

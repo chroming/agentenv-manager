@@ -10,6 +10,8 @@ AI tag suggestions follow [the tag suggestion contract](skill-ai-tags.md): expli
 
 Skill update summaries follow the [manual-only summary contract](skill-update-summaries.md). Summary generation never runs as part of update checks or Apply and never grants external Skill text tool access.
 
+Profile Skill invocation follows the [invocation policy contract](skill-invocation.md): enabled state and invocation are independent, author defaults are preserved, and native overrides never modify Library source files.
+
 AgentEnv Manager is a local-first desktop application for saving reusable agent environments as Profiles and safely deploying a complete Profile to local agent tools. Local Skill cleanup is an on-demand recovery and migration workflow, not a prerequisite for ordinary Profile use.
 
 The product succeeds when a user can answer all of these questions without inspecting implementation files:

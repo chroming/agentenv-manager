@@ -686,6 +686,14 @@ export const buildSkillDeploymentPlan = ({
     }
   }
 
+  for (const reference of enabledReferences) {
+    if (reference.invocationMode === "manual" && deferredReferences.has(referenceKey(reference))) {
+      issues.push(createApplyIssue({
+        code: "unsupported-skill-management", resourceKind: "skill", resourceId: reference.libraryId,
+        message: `${reference.targetName} is kept outside Profile control. Manage its local copies first, or choose Default invocation; manual-only cannot be enforced on an external copy.`
+      }));
+    }
+  }
   return {
     effectiveSkills: [...profile.resources.skills, ...syntheticDisabledReferences].filter(
       (reference) => !deferredReferences.has(referenceKey(reference))

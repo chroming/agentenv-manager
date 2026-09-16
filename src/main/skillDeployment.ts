@@ -10,6 +10,8 @@ import {
 } from "node:fs/promises";
 import { join } from "node:path";
 import type { AgentEnvSettings } from "../shared/types";
+import type { SkillInvocationMode } from "../shared/skillInvocation";
+import { skillInvocationOverrides, writeSkillInvocationOverrides } from "./skillInvocation";
 import { isMissingFileError, replacePathAtomically } from "./fileUtils";
 import { isPathInside } from "./platformPaths";
 import {
@@ -38,9 +40,12 @@ export const deploySkillDirectory = async (input: {
   platform?: NodeJS.Platform;
   createSymlink?: typeof symlink;
   expectedTargetHash?: string;
+  invocationMode?: SkillInvocationMode;
+  targetId?: string;
 }) => {
+  const overrides = await skillInvocationOverrides(input.sourceDir, input.targetId ?? "", input.invocationMode);
   const platform = input.platform ?? process.platform;
-  const deployedAs: "copy" | "symlink" = input.syncMethod === "symlink"
+  const deployedAs: "copy" | "symlink" = input.syncMethod === "symlink" && input.invocationMode !== "manual"
     ? "symlink"
     : "copy";
   await replacePathAtomically(input.targetDir, async (stagingPath) => {
@@ -53,6 +58,7 @@ export const deploySkillDirectory = async (input: {
       return;
     }
     await copySkillEntries(input.sourceDir, stagingPath);
+    await writeSkillInvocationOverrides(stagingPath, overrides);
   }, { platform, ...(input.expectedTargetHash !== undefined ? { expectedTargetHash: input.expectedTargetHash } : {}) });
 
   await rm(markerPathForFile(input.targetDir), { force: true });

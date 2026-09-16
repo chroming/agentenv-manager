@@ -4,6 +4,7 @@ import type { ApplyIssue, TargetPaths } from "../../shared/types";
 import { profileManagesResource } from "../../shared/profileResources";
 import { pathEntryExists, pathExists } from "../fileUtils";
 import { hashSkillContent } from "../skillContentHash";
+import { skillInvocationOverrides } from "../skillInvocation";
 import {
   isAgentEnvOwnedDir,
   markerPathForFile
@@ -110,6 +111,16 @@ export const validateSkillRefs = async ({
       }));
       continue;
     }
+    try {
+      await skillInvocationOverrides(sourceDir, targetPaths.targetId, skillRef.invocationMode);
+    } catch (error) {
+      issues.push(createApplyIssue({
+        code: "unsupported-skill-management",
+        resourceKind: "skill",
+        resourceId: skillRef.libraryId,
+        message: `${skillRef.targetName}: ${error instanceof Error ? error.message : String(error)}`
+      }));
+    }
     const approvedHash = approvedUnmanagedSkillHashes?.get(resolve(targetDir));
     const matchingUnmanaged = Boolean(
       targetExists &&
@@ -200,7 +211,9 @@ export const applySkillRefs = async ({
     await deploySkillDirectory({
       sourceDir,
       targetDir,
-      syncMethod: skillSyncMethod
+      syncMethod: skillSyncMethod,
+      invocationMode: skillRef.invocationMode,
+      targetId: targetPaths.targetId
     });
     await claimMutationPath?.recordMutation?.(
       targetDir,

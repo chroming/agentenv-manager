@@ -42,6 +42,7 @@ import type { RuntimeDiagnostics } from "./runtimeDiagnostics";
 import { createSkillChanges } from "./skillFileChanges";
 
 interface CapturedSkill {
+  invocationMode?: "default" | "manual";
   targetName: string;
   libraryId: string;
   sourcePath: string;
@@ -213,7 +214,9 @@ export const createTargetCaptureService = ({
       const identicalConflict = importPreview.conflicts.find(
         (conflict) => conflict.contentIdentical
       );
-      const existing = identicalConflict
+      const existing = preferredEntry.invocationMode === "manual" && preferredEntry.contentMatchesLibrary
+        ? librarySkills.find((skill) => skill.id === preferredEntry.libraryId)
+        : identicalConflict
         ? librarySkills.find((skill) => skill.id === identicalConflict.existing.id)
         : undefined;
       const libraryId = existing?.id ?? requestedLibraryId;
@@ -221,6 +224,7 @@ export const createTargetCaptureService = ({
         ? { action: "keep-both" as const, id: libraryId }
         : undefined;
       const skill: CapturedSkill = {
+        invocationMode: preferredEntry.invocationMode,
         targetName,
         libraryId,
         sourcePath,
@@ -621,6 +625,8 @@ export const createTargetCaptureService = ({
           skills: resolvedSkills.map((skill) => ({
             libraryId: skill.libraryId,
             targetName: skill.targetName,
+            ...(skill.invocationMode === "manual"
+              ? { invocationMode: "manual" as const } : {}),
             enabled: true
           })),
           managementByTarget: {

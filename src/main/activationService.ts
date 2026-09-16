@@ -798,11 +798,12 @@ export const createActivationService = ({
     const protectedAssetBackupPaths = assetBackupPaths.filter((path) =>
       resourceMutationPaths.has(resolve(path)) || alwaysProtectedAssetPaths.has(resolve(path))
     );
-    const desiredPaths = [...desiredAssetResources(
+    const desiredResources = desiredAssetResources(
       materializedProfile,
       targetPaths,
       skillLibraryDir
-    ).keys()];
+    );
+    const desiredPaths = [...desiredResources.keys()];
     const plannedWritePaths = new Set(
       assetPlan.resourceChanges
         .filter((change) => change.action === "install" || change.action === "replace")
@@ -811,7 +812,7 @@ export const createActivationService = ({
     const liveLinks = (
       await Promise.all(desiredPaths.map(async (path) => {
         if (plannedWritePaths.has(resolve(path))) {
-          return settings.skillSyncMethod === "symlink" ? 1 : 0;
+          return settings.skillSyncMethod === "symlink" && desiredResources.get(path)?.invocationMode !== "manual" ? 1 : 0;
         }
         return (await lstat(path).catch(() => undefined))?.isSymbolicLink() ? 1 : 0;
       }))
@@ -1376,6 +1377,8 @@ export const createActivationService = ({
           targetPaths,
           {
             sourceByPath,
+            skillReferences: preview.skillDeployment.profile.resources.skills,
+            skillLibraryDir,
             previousResources: preOperationState.managedResources,
             mutatedPaths: mutatedAssetPaths,
             createdPaths: createdAssetPaths,

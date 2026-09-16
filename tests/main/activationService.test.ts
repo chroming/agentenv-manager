@@ -78,6 +78,30 @@ const writeCodexLiveFiles = async (paths: ReturnType<typeof createPaths>) => {
 };
 
 describe("activation service v2", () => {
+  it("applies a manual-only Skill as a copy and recognizes a repeat Apply as unchanged", async () => {
+    const { paths, service, profileStore, profile, skillLibraryStore, settingsStore } = await makeEnv();
+    await settingsStore.updateSettings({ enabledTargetIds: ["claude-code", "codex"], skillSyncMethod: "symlink" });
+    await profileStore.saveProfile({ ...profile, expectedContentHash: profile.contentHash, resources: {
+      ...profile.resources, mcpByTarget: {},
+      skills: profile.resources.skills.map((reference) => ({ ...reference, invocationMode: "manual" }))
+    } });
+    const preview = await service.previewProfile(profile.id, "claude-code");
+    expect(blockingMessages(preview.issues)).toEqual([]);
+    expect(await service.applyProfile(profile.id, preview.id)).toMatchObject({ ok: true });
+    const targetDir = join(paths.homeDir, ".claude", "skills", "review");
+    expect((await lstat(targetDir)).isSymbolicLink()).toBe(false);
+    expect(await readFile(join(targetDir, "SKILL.md"), "utf8")).toContain("disable-model-invocation: true");
+    const again = await service.previewProfile(profile.id, "claude-code");
+    expect(again.resourceChanges).toEqual([]);
+    expect(again.changes).toEqual([]);
+    expect(blockingMessages(again.issues)).toEqual([]);
+    const states = await service.listTargetStates();
+    expect(states.find((state) => state.targetId === "claude-code")?.lifecycleStatus).toBe("applied");
+    const library = await skillLibraryStore.listSkills();
+    expect(await readFile(join(library[0].path, "SKILL.md"), "utf8")).not.toContain("disable-model-invocation");
+    const unsupported = await service.previewProfile(profile.id, "codex");
+    expect(blockingMessages(unsupported.issues).join(" ")).toContain("Default invocation");
+  });
   it("fails closed when persisted Agent management state is invalid", async () => {
     const { paths, service } = await makeEnv();
     await mkdir(paths.targetStatesDir, { recursive: true });

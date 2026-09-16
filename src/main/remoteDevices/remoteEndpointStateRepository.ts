@@ -12,6 +12,8 @@ import type { AgentEnvPaths } from "../paths";
 import { isMissingFileError, writeAtomic } from "../fileUtils";
 
 const ManagedResourceSchema = z.object({
+  invocationMode: z.enum(["default", "manual"]).optional(),
+  sourceContentHash: z.string().optional(),
   kind: z.enum(["instructions", "config", "mcp", "skill", "agent", "file", "directory"]),
   id: z.string().min(1),
   path: z.string().min(1),

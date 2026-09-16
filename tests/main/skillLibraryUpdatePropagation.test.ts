@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import type { SkillInventoryEntry } from "../../src/shared/types";
 import { hashSkillContent } from "../../src/main/skillContentHash";
+import { hashInvokedSkill } from "../../src/main/skillInvocation";
+import { deploySkillDirectory } from "../../src/main/skillDeployment";
 import { applyLibraryUpdatePropagation, prepareLibraryUpdatePropagation } from "../../src/main/skillLibraryUpdatePropagation";
 
 let root = "";
@@ -49,6 +51,35 @@ it("updates every owning Agent receipt without changing an observing Agent's sta
     expect(state.appliedLibraryVersions.skills.review).toBe(f.nextContentHash);
   }
   expect(await readFile(join(f.states, "opencode.json"), "utf8")).toBe(observer);
+});
+
+it("retains a manual invocation override and separate source/deployment hashes during update", async () => {
+  const f = await fixture();
+  const original = "---\nname: review\ndescription: Review\n---\nOld body\n";
+  await writeFile(join(f.source, "SKILL.md"), original);
+  const currentContentHash = await hashSkillContent(f.source);
+  await deploySkillDirectory({ sourceDir: f.source, targetDir: f.installed, syncMethod: "copy", targetId: "claude-code", invocationMode: "manual" });
+  const installedHash = await hashSkillContent(f.installed);
+  const statePath = join(f.states, "claude-code.json");
+  const state = JSON.parse(await readFile(statePath, "utf8"));
+  state.managedResources[0] = { ...state.managedResources[0], contentHash: installedHash, sourceContentHash: currentContentHash, invocationMode: "manual" };
+  await writeFile(statePath, JSON.stringify(state));
+  await writeFile(join(f.source, "SKILL.md"), original.replace("Old body", "New body"));
+  const nextContentHash = await hashSkillContent(f.source);
+  const propagation = await prepareLibraryUpdatePropagation({
+    inventory: [{ id: "review", name: "review", description: "", skillKey: "review", libraryId: "review",
+      path: f.installed, contentHash: installedHash, sourceContentHash: currentContentHash,
+      invocationMode: "manual", invocationTargetId: "claude-code", foundIn: ["claude-code"],
+      status: "managed", installMethod: "copied", contentMatchesLibrary: true }],
+    libraryId: "review", currentContentHash, nextContentHash, targetStatesDir: f.states, syncCopiedInstalls: true
+  });
+  await applyLibraryUpdatePropagation({ sourceDir: f.source, nextContentHash, propagation });
+  const updated = JSON.parse(await readFile(statePath, "utf8"));
+  expect(updated.managedResources[0].contentHash).toBe(await hashInvokedSkill(f.source, "claude-code", "manual"));
+  expect(updated.managedResources[0].sourceContentHash).toBe(nextContentHash);
+  expect(updated.appliedLibraryVersions.skills.review).toBe(nextContentHash);
+  expect(await readFile(join(f.installed, "SKILL.md"), "utf8")).toContain("disable-model-invocation: true");
+  expect(await readFile(join(f.source, "SKILL.md"), "utf8")).not.toContain("disable-model-invocation");
 });
 
 it("preserves an Agent copy changed after preparation", async () => {

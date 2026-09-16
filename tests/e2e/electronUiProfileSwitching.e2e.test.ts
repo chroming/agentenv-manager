@@ -1546,6 +1546,31 @@ afterEach(async () => {
 });
 
 describe("Electron UI profile switching e2e", () => {
+  it("persists manual Skill invocation without moving switches at desktop widths", async () => {
+    const { page } = await launchApp({ includeClaudeTarget: true, enabledTargetIds: ["opencode", "claude-code"] });
+    await selectProfile(page, "UI OpenCode alpha");
+    await selectTarget(page, "Claude Code");
+    await expandComposerSection(page, "Skills");
+    const row = page.getByRole("listitem", { name: "Profile Skill ui-alpha-skill" });
+    await row.getByRole("button", { name: "More actions for ui-alpha-skill" }).focus();
+    await row.getByRole("button", { name: "More actions for ui-alpha-skill" }).click();
+    await page.getByRole("menuitemcheckbox", { name: "Manual only", exact: true }).click();
+    await expect.poll(async () => (await page.evaluate(() => window.agentEnv.readProfile("ui-opencode-alpha"))).resources.skills[0]?.invocationMode).toBe("manual");
+    await row.getByRole("button", { name: "Skill invocation" }).waitFor({ state: "visible" });
+    for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+      await resizeAppWindow(page, width!, height!);
+      await expectNoHorizontalOverflow(page);
+      await expectNoOverlap(row.getByRole("button", { name: "Skill invocation" }), row.getByRole("switch"));
+      await expectTextFits(row.getByRole("button", { name: "Skill invocation" }));
+      if (process.env.AGENTENV_STATUS_CAPTURE_DIR) {
+        await mkdir(process.env.AGENTENV_STATUS_CAPTURE_DIR, { recursive: true });
+        await page.screenshot({ path: join(process.env.AGENTENV_STATUS_CAPTURE_DIR, `skill-invocation-${width}.png`) });
+      }
+    }
+    await row.getByRole("button", { name: "Skill invocation" }).click();
+    await page.getByRole("menuitemcheckbox", { name: "Default invocation" }).click();
+    await expect.poll(async () => (await page.evaluate(() => window.agentEnv.readProfile("ui-opencode-alpha"))).resources.skills[0]?.invocationMode).toBeUndefined();
+  }, standardElectronTestTimeout);
   it("keeps quiet Agent identities and device navigation readable across locales and widths", async () => {
     const { page } = await launchApp();
     for (const locale of ["en", "zh_CN", "zh_TW"]) {

@@ -162,6 +162,7 @@ export const ProfileSkillSchema = z.object({
   libraryId: SafeIdSchema,
   targetName: TargetResourceNameSchema,
   enabled: z.boolean().default(true),
+  invocationMode: z.enum(["default", "manual"]).optional(),
   direct: z.boolean().optional(),
   groupIds: z.array(SafeIdSchema).optional()
 });
