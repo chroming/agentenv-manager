@@ -614,6 +614,19 @@ Preview/Apply transaction, never a second editor or a reduced resource model.
 - Every launch opens Agents as the stable top-level workspace. Navigation chosen by the user
   remains stable for the rest of that application session; startup or background work MUST NOT
   restore, replace, or otherwise override it.
+- Startup recovery reads cleanup journal status first and validates full payloads only for
+  unfinished operations. Completed backup payloads are still fully verified before inspection
+  or restoration. Already-migrated Profile instructions must not be compiled during startup
+  migration. Homebrew installation-channel discovery is background work, not a startup gate.
+  Startup diagnostics record phase durations and total elapsed time.
+- Sidebar collapse changes geometry once, without animating the whole workspace grid.
+  Agent refresh preserves the latest user-defined order, keeps existing rows in place, and
+  does not wait for recovery-history enumeration before publishing Agent results.
+- Settings groups conversation collection and terminal preferences under Conversations.
+  The shared Conversation sources dialog retains explicit collection opt-in; opening Settings
+  does not enable collection. Sidebar device summaries show a monitor/local count and a
+  server/remote count with accessible labels and drill-down. Agents retains separate remote
+  device identities and the same monitor/server icon vocabulary.
 
 Status: read-only installed-Agent suggestion, explicit Enable, ephemeral post-enable setup,
 one Agent-to-Profile configuration entry, complete Capture, canonical Profile composition,

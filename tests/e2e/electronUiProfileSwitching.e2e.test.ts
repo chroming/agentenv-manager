@@ -1655,8 +1655,8 @@ describe("Electron UI profile switching e2e", () => {
     }
     if (locale === "en") {
       await page.locator(".conversation-list-toolbar").getByRole("button", { name: "More", exact: true }).click();
-      await page.getByRole("menuitem", { name: "History sources", exact: true }).click();
-      await page.getByRole("dialog", { name: "History search", exact: true }).waitFor();
+      await page.getByRole("menuitem", { name: "Conversation sources", exact: true }).click();
+      await page.getByRole("dialog", { name: "Conversation sources", exact: true }).waitFor();
       await page.keyboard.press("Escape");
     }
   }, standardElectronTestTimeout);

@@ -428,15 +428,22 @@ export const createProfileStore = (
     if (!instructionLibraryStore) return { migrated: 0, skipped: [] };
     const ids = profileId
       ? [parseProfileId(profileId)]
-      : (await listProfiles())
-          .filter((profile) => !profile.loadError)
-          .map((profile) => profile.id);
+      : await readdir(paths.profilesDir, { withFileTypes: true })
+          .then((entries) => entries.filter((entry) => entry.isDirectory() &&
+            !entry.name.startsWith(".") && !entry.name.includes(".agentenv-")).map((entry) => entry.name))
+          .catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return []; throw error; });
     let migrated = 0;
     const skipped: Array<{ profileId: string; error: string }> = [];
     for (const id of ids) {
-      const current = await readProfile(id);
-      if (!current.instructions.trim()) continue;
       try {
+        const safeId = parseProfileId(id);
+        const profileDir = join(paths.profilesDir, safeId);
+        const stats = await lstat(profileDir);
+        if (!stats.isDirectory() || stats.isSymbolicLink()) throw new Error(`Profile storage must be a real directory: ${safeId}`);
+        // Migrated Profiles have empty inline content. Do not compile Library
+        // references and all Target fingerprints just to discover that fact.
+        if (!(await readFile(join(profileDir, PROFILE_INSTRUCTIONS_FILE), "utf8")).trim()) continue;
+        const current = await readProfile(id);
         await saveProfile({
           manifest: current.manifest,
           instructions: current.instructions,

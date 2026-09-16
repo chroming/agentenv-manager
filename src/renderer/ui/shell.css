@@ -556,8 +556,11 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
   gap: 8px;
   justify-content: flex-start;
   padding-inline: 4px;
-  width: 100%;
+  width: auto;
 }
+
+.sidebar-device-summaries { display: flex; gap: 16px; align-items: center; }
+.global-sidebar--collapsed .sidebar-device-summaries { flex-direction: column; gap: 4px; }
 
 .sidebar-agent-summary--expanded > svg { flex: 0 0 auto; }
 .sidebar-agent-summary--expanded .sidebar-agent-summary__state { left: 15px; right: auto; }
@@ -828,12 +831,5 @@ html[data-platform="darwin"] .global-sidebar--collapsed {
   color: var(--text);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .app-shell {
-    transition: grid-template-columns var(--motion-standard);
-  }
-
-  html:not([data-platform="darwin"]) .shell-sidebar-toggle {
-    transition: left var(--motion-standard);
-  }
-}
+/* Change the rail in one layout pass; animating grid tracks reflows every list
+   and editor for each frame and moves controls under the pointer. */

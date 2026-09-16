@@ -399,7 +399,7 @@ describe("Conversations desktop workflow", () => {
       .getByRole("button", { name: "Conversations" })
       .click();
     await page.getByRole("button", { name: "More", exact: true }).click();
-    expect(await page.getByRole("menuitem", { name: "History sources", exact: true }).getAttribute("title"))
+    expect(await page.getByRole("menuitem", { name: "Conversation sources", exact: true }).getAttribute("title"))
       .toBe("Search approved local and SSH histories. Background indexing runs every five minutes while the app is open.");
     await page.keyboard.press("Escape");
     await page.getByRole("option", { name: /测试111/ }).waitFor({

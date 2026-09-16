@@ -5,6 +5,7 @@ import {
   CopyPlus,
   Layers3,
   LoaderCircle,
+  Monitor,
   MoreHorizontal,
   Power,
   ScanLine,
@@ -404,7 +405,7 @@ export const TargetWorkspace = ({
 
       <div className="target-list" aria-busy={isLoading}>
         <div className="target-list__header">
-            <span />
+            <span title={t("Local Agents")} aria-label={t("Local Agents")}><Monitor size={16} aria-hidden="true" /></span>
             <span>{t("Agent")}</span>
             <span>{t("Profile")}</span>
             <div className="target-list__header-actions">

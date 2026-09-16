@@ -1,4 +1,4 @@
-import { LoaderCircle, MonitorUp, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { LoaderCircle, Server, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { TargetEnvironmentSummary } from "./TargetEnvironmentSummary";
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type {
@@ -300,7 +300,7 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
           ? t("Checking")
           : status === "ready"
             ? deviceEndpoints.length > 0
-              ? t("{{count}} Agents", {
+              ? t(deviceEndpoints.length === 1 ? "{{count}} Agent" : "{{count}} Agents", {
                   count: deviceEndpoints.length
                 })
               : t("No supported Agents")
@@ -311,7 +311,7 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
           <section className={`remote-location-group is-${status}`} key={device.id}>
             <header className="remote-location-header">
               <span className="remote-location-header__icon" aria-hidden="true">
-                <MonitorUp size={16} strokeWidth={2.1} />
+                <Server size={16} strokeWidth={2.1} />
               </span>
               <span className="remote-location-header__identity">
                 <span className="remote-location-header__name">{device.name}</span>

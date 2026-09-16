@@ -60,7 +60,7 @@ export const HistorySearchSettings = ({ onChanged, entry = "settings", renderTri
   }))].map((s) => [s.id, s])).values()].filter((source) => !removedIds.includes(source.id));
   const devices = [...new Set(sources.map((source) => source.deviceId))];
   const firstSetup = !status?.config.enabled;
-  const entryLabel = entry === "setup" ? t("Choose devices") : t("History sources");
+  const entryLabel = entry === "setup" ? t("Choose devices") : t("Conversation sources");
   const removesCachedSources = Boolean(status?.config.sources.length && draft && (!draft.enabled || status.config.sources.some((source) => !draft.sources.some((selected) => selected.id === source.id))));
   const toggleSources = (ids: string[], enabled: boolean) => {
     if (!draft) return;
@@ -70,9 +70,9 @@ export const HistorySearchSettings = ({ onChanged, entry = "settings", renderTri
     ] });
   };
   return <>
-    {renderTrigger ? renderTrigger(() => void show()) : entry === "icon" ? <IconButton label={t("History sources")} onClick={() => void show()}><Settings2 size={16} /></IconButton> : <Button variant={entry === "setup" ? "primary" : "secondary"} icon={<Settings2 size={16} />} onClick={() => void show()}>{entryLabel}</Button>}
-    {open ? <ModalFrame className="ui-dialog-shell" ariaLabel={t("History search")} dialogRef={dialogRef} onDismiss={() => setOpen(false)} dismissDisabled={busy}>
-      <DialogHeader title={t("History sources")}
+    {renderTrigger ? renderTrigger(() => void show()) : entry === "icon" ? <IconButton label={t("Conversation sources")} onClick={() => void show()}><Settings2 size={16} /></IconButton> : <Button variant={entry === "setup" ? "primary" : "secondary"} icon={<Settings2 size={16} />} onClick={() => void show()}>{entryLabel}</Button>}
+    {open ? <ModalFrame className="ui-dialog-shell" ariaLabel={t("Conversation sources")} dialogRef={dialogRef} onDismiss={() => setOpen(false)} dismissDisabled={busy}>
+      <DialogHeader title={t("Conversation sources")}
         actions={<ControlGroup>
           {draft?.enabled && !firstSetup ? <IconButton label={t(draft.paused ? "Resume" : "Pause")} disabled={busy}
             aria-pressed={Boolean(draft.paused)} onClick={() => setDraft({ ...draft, paused: !draft.paused })}>
@@ -84,7 +84,7 @@ export const HistorySearchSettings = ({ onChanged, entry = "settings", renderTri
         {error ? <Notice tone="danger" role="alert">{error}</Notice> : null}
         {status?.settingsIssue ? <Notice tone="warning">{status.settingsIssue}</Notice> : null}
         {draft ? <>
-          {!firstSetup ? <SettingsPreferenceRow controlWidth="intrinsic" label={t("History search")} control={<Switch label={t("History search")} checked={draft.enabled}
+          {!firstSetup ? <SettingsPreferenceRow controlWidth="intrinsic" label={t("Search conversations")} control={<Switch label={t("Search conversations")} checked={draft.enabled}
             onClick={() => setDraft({ ...draft, enabled: !draft.enabled })} />} />
           : null}
           {draft.enabled ? <>

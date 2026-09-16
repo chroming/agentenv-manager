@@ -112,7 +112,7 @@
   grid-row: 1;
 }
 
-.target-list__header > span:nth-child(1) { grid-column: 1; }
+.target-list__header > span:nth-child(1) { grid-column: 1; display: flex; justify-content: center; }
 .target-list__header > span:nth-child(2) { grid-column: 2; }
 .target-list__header > span:nth-child(3) { grid-column: 3; }
 

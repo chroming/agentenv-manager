@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createProfileStore } from "../../src/main/profileStore";
 import { createInstructionLibraryStore } from "../../src/main/instructionLibraryStore";
 import { createPaths } from "../../src/main/paths";
@@ -68,7 +68,9 @@ describe("profile store v2", () => {
     });
     await expect(readFile(join(migrated.profileDir!, "INSTRUCTIONS.md"), "utf8"))
       .resolves.toBe("");
+    const compile = vi.spyOn(instructionLibrary, "compile");
     await expect(store.migrateInlineInstructions()).resolves.toEqual({ migrated: 0, skipped: [] });
+    expect(compile).not.toHaveBeenCalled();
     await expect(instructionLibrary.list()).resolves.toHaveLength(1);
   });
 

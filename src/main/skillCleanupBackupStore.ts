@@ -546,6 +546,16 @@ export const createSkillCleanupBackupStore = ({
     throw new Error(`${label} failed and was rolled back: ${operationMessage}`);
   };
 
+  // Startup needs journal state, not a rehash of every completed historical backup.
+  // Pending operations still pass readCleanupBackup's full validation before any write.
+  const hasPendingJournal = async (id: string) => {
+    try {
+      const candidate = JSON.parse(await readFile(join(cleanupBackupRoot(), id, "manifest.json"), "utf8")) as Partial<SkillCleanupBackupManifest> | null;
+      return candidate?.formatVersion === 2 &&
+        ["prepared", "rollback-prepared", "recovery-required"].includes(String(candidate.status));
+    } catch { return false; }
+  };
+
   const recoverInterruptedCleanupBackups = async (): Promise<SkillCleanupRecoveryResult> => {
     let entries: Dirent[];
     try {
@@ -561,23 +571,12 @@ export const createSkillCleanupBackupStore = ({
     const recoveryRequiredIds: string[] = [];
     for (const entry of entries.filter((candidate) => candidate.isDirectory())) {
       if (!SafeIdSchema.safeParse(entry.name).success) continue;
+      if (!(await hasPendingJournal(entry.name))) continue;
       let manifest: SkillCleanupBackupManifest;
       try {
         ({ manifest } = await readCleanupBackup(entry.name));
       } catch {
-        const pending = await readFile(
-          join(cleanupBackupRoot(), entry.name, "manifest.json"),
-          "utf8"
-        )
-          .then((content) => JSON.parse(content) as Partial<SkillCleanupBackupManifest>)
-          .then((candidate) =>
-            candidate.formatVersion === 2 &&
-            ["prepared", "rollback-prepared", "recovery-required"].includes(
-              String(candidate.status)
-            )
-          )
-          .catch(() => false);
-        if (pending) recoveryRequiredIds.push(entry.name);
+        recoveryRequiredIds.push(entry.name);
         continue;
       }
       if (manifest.status === "recovery-required" || manifest.status === "rollback-prepared") {
@@ -654,26 +653,7 @@ export const createSkillCleanupBackupStore = ({
     const pending: string[] = [];
     for (const entry of entries.filter((candidate) => candidate.isDirectory())) {
       if (!SafeIdSchema.safeParse(entry.name).success) continue;
-      try {
-        const { manifest } = await readCleanupBackup(entry.name);
-        if (["prepared", "rollback-prepared", "recovery-required"].includes(manifest.status)) {
-          pending.push(entry.name);
-        }
-      } catch {
-        const isPending = await readFile(
-          join(cleanupBackupRoot(), entry.name, "manifest.json"),
-          "utf8"
-        )
-          .then((content) => JSON.parse(content) as Partial<SkillCleanupBackupManifest>)
-          .then((candidate) =>
-            candidate.formatVersion === 2 &&
-            ["prepared", "rollback-prepared", "recovery-required"].includes(
-              String(candidate.status)
-            )
-          )
-          .catch(() => false);
-        if (isPending) pending.push(entry.name);
-      }
+      if (await hasPendingJournal(entry.name)) pending.push(entry.name);
     }
     return pending.sort();
   };

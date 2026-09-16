@@ -4,12 +4,13 @@ import { SettingsPreferenceRow } from "./SettingsPreferenceRow";
 import { SelectControl, TabBar } from "./ui";
 import { HistorySearchSettings } from "./HistorySearchSettings";
 
-export type SettingsCategory = "general" | "agents" | "skills" | "ai" | "connections" | "data";
+export type SettingsCategory = "general" | "agents" | "skills" | "conversations" | "ai" | "connections" | "data";
 
 const categories = [
   ["general", "General"],
   ["agents", "Agents"],
   ["skills", "Skills"],
+  ["conversations", "Conversations"],
   ["ai", "AI assistance"],
   ["connections", "Connections"],
   ["data", "Data"]
@@ -38,16 +39,10 @@ export const SettingsCategoryTabs = ({
 
 export const GeneralSettingsSection = ({
   locale,
-  onLocaleChange,
-  conversationTerminal,
-  onConversationTerminalChange
+  onLocaleChange
 }: {
   locale: AppLocale;
   onLocaleChange(locale: AppLocale): void;
-  conversationTerminal: AgentEnvSettings["conversationTerminal"];
-  onConversationTerminalChange(
-    terminal: AgentEnvSettings["conversationTerminal"]
-  ): void;
 }) => {
   const { t } = useI18n();
   return (
@@ -56,7 +51,6 @@ export const GeneralSettingsSection = ({
         <div className="resource-heading" id="appearance-heading">{t("General")}</div>
       </div>
       <div className="settings-preference-list">
-        <SettingsPreferenceRow label={t("History search")} control={<HistorySearchSettings />} />
         <SettingsPreferenceRow
           label={t("Language")}
           help={t("Uses your system language until you choose another language.")}
@@ -73,6 +67,25 @@ export const GeneralSettingsSection = ({
             <option value="zh_TW">{t("Traditional Chinese")}</option>
           </SelectControl>}
         />
+      </div>
+    </section>
+  );
+};
+
+export const ConversationSettingsSection = ({
+  conversationTerminal, onConversationTerminalChange
+}: {
+  conversationTerminal: AgentEnvSettings["conversationTerminal"];
+  onConversationTerminalChange(terminal: AgentEnvSettings["conversationTerminal"]): void;
+}) => {
+  const { t } = useI18n();
+  return (
+    <section className="resource-section settings-section" aria-labelledby="conversations-settings-heading">
+      <div className="settings-section-title">
+        <div className="resource-heading" id="conversations-settings-heading">{t("Conversations")}</div>
+      </div>
+      <div className="settings-preference-list">
+        <SettingsPreferenceRow label={t("Conversation sources")} control={<HistorySearchSettings entry="icon" />} />
         <SettingsPreferenceRow
           label={t("Conversation terminal")}
           help={t("Used when opening or continuing CLI conversations.")}

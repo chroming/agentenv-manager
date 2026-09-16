@@ -98,7 +98,7 @@ import { ProfileAnalysisDialog } from "./components/ProfileAnalysisDialog";
 import { useAIPreferences } from "./hooks/useAIPreferences";
 import { ProfileComposerSection } from "./components/ProfileComposerSection";
 import { ProfileInstructionsComposerSection } from "./components/ProfileInstructionsComposerSection";
-import { GeneralSettingsSection, SettingsCategoryTabs, type SettingsCategory } from "./components/SettingsCategoryTabs";
+import { ConversationSettingsSection, GeneralSettingsSection, SettingsCategoryTabs, type SettingsCategory } from "./components/SettingsCategoryTabs";
 import {
   appShellClassName, ProfileSidebar, type AppWorkspace
 } from "./components/ProfileSidebar";
@@ -3656,7 +3656,7 @@ const AppContent = ({
       />
       {profileAnalysis ? <ProfileAnalysisDialog {...profileAnalysis} onClose={() => setProfileAnalysis(undefined)} /> : null}
       <ProfileSidebar
-        targets={targets}
+        targets={profileTargets}
         profiles={profiles}
         isLoading={isLoading}
         collapsed={sidebarCollapsed}
@@ -4502,9 +4502,6 @@ const AppContent = ({
               <GeneralSettingsSection
                 locale={skillSettings.locale}
                 onLocaleChange={(locale) => updateSkillSettings({ locale })}
-                conversationTerminal={skillSettings.conversationTerminal}
-                onConversationTerminalChange={(conversationTerminal) =>
-                  updateSkillSettings({ conversationTerminal })}
               />
               <AppUpdateSettings
                 busy={busy}
@@ -4513,6 +4510,12 @@ const AppContent = ({
                 onOpenConnections={openGitHubConnectionSettings}
               />
               </>
+            ) : null}
+            {settingsCategory === "conversations" ? (
+              <ConversationSettingsSection
+                conversationTerminal={skillSettings.conversationTerminal}
+                onConversationTerminalChange={(conversationTerminal) => updateSkillSettings({ conversationTerminal })}
+              />
             ) : null}
             {settingsCategory === "agents" ? (
             <AgentSettingsSection

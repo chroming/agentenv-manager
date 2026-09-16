@@ -11,6 +11,7 @@ import {
   LoaderCircle,
   Monitor,
   Search,
+  Server,
 } from "lucide-react";
 import type {
   ProfileSummary,
@@ -152,6 +153,7 @@ const AgentOverflowPopover = ({
   statusSummary,
   summaryState,
   compact = true,
+  remote = false,
   variant = "overflow"
 }: {
   targets: TargetInfo[];
@@ -160,6 +162,7 @@ const AgentOverflowPopover = ({
   statusSummary?: string;
   summaryState?: "attention" | "empty" | "loading" | "ready";
   compact?: boolean;
+  remote?: boolean;
   variant?: "overflow" | "summary";
 }) => {
   const { t } = useI18n();
@@ -262,11 +265,12 @@ const AgentOverflowPopover = ({
   }, [open, targets.length, variant]);
 
   const isSummary = variant === "summary";
+  const summaryLabel = t(remote ? "Remote Agents" : "Local Agents");
   const label = isSummary
-    ? t("Local Agents")
+    ? summaryLabel
     : t("{{count}} more Agents", { count: targets.length });
   const triggerLabel = isSummary
-    ? t("Show Local Agents")
+    ? t(remote ? "Show Remote Agents" : "Show Local Agents")
     : t(
         targets.length === 1
           ? "Show hidden Agent list, {{count}} item"
@@ -288,7 +292,7 @@ const AgentOverflowPopover = ({
         aria-controls={open ? popoverId : undefined}
         aria-expanded={open}
         aria-haspopup="menu"
-        title={label}
+        title={isSummary ? `${label} · ${statusSummary}` : label}
         onBlur={isSummary ? undefined : scheduleClose}
         onClick={isSummary ? toggle : show}
         onFocus={isSummary ? undefined : show}
@@ -300,10 +304,10 @@ const AgentOverflowPopover = ({
             {summaryState === "loading" ? (
               <LoaderCircle className="is-spinning" size={17} aria-hidden="true" />
             ) : (
-              <Monitor size={17} strokeWidth={2.1} aria-hidden="true" />
+              remote ? <Server size={17} strokeWidth={2.1} aria-hidden="true" /> : <Monitor size={17} strokeWidth={2.1} aria-hidden="true" />
             )}
             <span className="sidebar-agent-summary__state" aria-hidden="true" />
-            {!compact ? <span className="sidebar-agent-summary__label">{t("This Mac")} · {statusSummary}</span> : null}
+            {!compact ? <span className="sidebar-agent-summary__label">{targets.length}</span> : null}
           </>
         ) : (
           `+${targets.length}`
@@ -316,7 +320,7 @@ const AgentOverflowPopover = ({
               className="agent-overflow-popover"
               id={popoverId}
               role="menu"
-              aria-label={isSummary ? t("Local Agents") : t("Hidden Agents")}
+              aria-label={isSummary ? summaryLabel : t("Hidden Agents")}
               style={position}
               onKeyDown={handleActionMenuKeyDown}
               onMouseEnter={cancelClose}
@@ -324,7 +328,7 @@ const AgentOverflowPopover = ({
             >
               {isSummary ? (
                 <div className="agent-overflow-popover__header">
-                  <strong>{t("Local Agents")}</strong>
+                  <strong>{summaryLabel}</strong>
                   {statusSummary ? <small>{statusSummary}</small> : null}
                 </div>
               ) : null}
@@ -332,7 +336,7 @@ const AgentOverflowPopover = ({
                 <p className="agent-overflow-popover__empty">{t("No enabled Agents")}</p>
               ) : targets.map((target) => {
                 const targetIcon = targetIconFor(target);
-                const status = t(targetStatusMessage(target.health.status));
+                const status = [target.location?.deviceName, t(targetStatusMessage(target.health.status))].filter(Boolean).join(" · ");
                 return (
                   <button
                     className="agent-overflow-popover__item"
@@ -355,7 +359,7 @@ const AgentOverflowPopover = ({
                       )}
                     </span>
                     <span className="agent-overflow-popover__copy">
-                      <strong>{target.name}</strong>
+                      <strong>{target.location?.agentName ?? target.name}</strong>
                       <small>{status}</small>
                     </span>
                   </button>
@@ -396,18 +400,8 @@ export const ProfileSidebar = ({
   const { t } = useI18n();
   const quickOpenShortcut =
     window.agentEnv.platform === "darwin" ? "⌘K" : "Ctrl+K";
-  const readyTargets = targets.filter((target) => target.health.status === "ready").length;
-  const orderedTargets = targets;
-  const statusSummary = isLoading
-    ? t("Detecting Agents")
-    : t("{{count}} Agents", { count: targets.length });
-  const summaryState = isLoading
-    ? "loading"
-    : targets.length === 0
-      ? "empty"
-      : readyTargets === targets.length
-        ? "ready"
-        : "attention";
+  const localTargets = targets.filter((target) => !target.location);
+  const remoteTargets = targets.filter((target) => target.location?.kind === "ssh");
 
   const primaryWorkspaceItems: Array<{
     id: AppWorkspace;
@@ -513,15 +507,21 @@ export const ProfileSidebar = ({
         </div>
       </nav>
       <section className="system-status-card" aria-label={t("System status")}>
+        <div className="sidebar-device-summaries">
+        {[localTargets, remoteTargets].map((items, index) => index === 1 && items.length === 0 ? null : (
           <AgentOverflowPopover
+            key={index}
+            remote={index === 1}
             compact={collapsed}
-            targets={orderedTargets}
-            statusSummary={statusSummary}
-            summaryState={summaryState}
+            targets={items}
+            statusSummary={isLoading && !items.length ? t("Detecting Agents") : t(items.length === 1 ? "{{count}} Agent" : "{{count}} Agents", { count: items.length })}
+            summaryState={isLoading && !items.length ? "loading" : !items.length ? "empty" : items.every((item) => item.health.status === "ready") ? "ready" : "attention"}
             variant="summary"
             onAgentSelect={onAgentSelect}
             onOpenAgents={onOpenAgents}
           />
+        ))}
+        </div>
       </section>
     </aside>
   );

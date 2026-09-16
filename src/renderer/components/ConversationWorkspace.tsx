@@ -1782,7 +1782,7 @@ export const ConversationWorkspace = ({
                     { id: "refresh", label: t("Refresh"), icon: <RefreshCw size={15} />,
                       disabled: refreshBusy || !historyStatus?.config.enabled || historyStatus.config.paused,
                       onSelect: () => void refresh() },
-                    { id: "sources", label: t("History sources"), icon: <Settings2 size={15} />,
+                    { id: "sources", label: t("Conversation sources"), icon: <Settings2 size={15} />,
                       title: t("Search approved local and SSH histories. Background indexing runs every five minutes while the app is open."),
                       onSelect: openSources }
                   ]} />

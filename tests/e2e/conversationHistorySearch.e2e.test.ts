@@ -40,13 +40,13 @@ it.skipIf(process.platform === "win32")("requires opt-in, searches local and SSH
   expect(await page.evaluate(()=>window.agentEnv.searchConversations({query:"needle"}))).toEqual([]);
   await page.getByRole("complementary",{name:"Global navigation"}).getByRole("button",{name:"Conversations",exact:true}).click();
   await page.getByText("Histories are indexed locally. Original files are never changed.").waitFor();
-  expect(await page.getByRole("button",{name:"History sources",exact:true}).count()).toBe(0);
+  expect(await page.getByRole("button",{name:"Conversation sources",exact:true}).count()).toBe(0);
   const output = process.env.AGENTENV_CAPTURE_HISTORY_DIR ?? "/tmp/aem-history-search-captures"; await mkdir(output,{recursive:true});
   await page.setViewportSize({width:920,height:620});
   await page.screenshot({path:join(output,"history-disabled-920.png"),animations:"disabled"});
   await page.getByRole("button",{name:"Choose devices",exact:true}).click();
-  const dialog=page.getByRole("dialog",{name:"History search",exact:true});
-  expect(await dialog.getByRole("switch",{name:"History search",exact:true}).count()).toBe(0);
+  const dialog=page.getByRole("dialog",{name:"Conversation sources",exact:true});
+  expect(await dialog.getByRole("switch",{name:"Search conversations",exact:true}).count()).toBe(0);
   await dialog.getByRole("switch",{name:"This Mac",exact:true}).click();
   await dialog.getByRole("switch",{name:"Build machine",exact:true}).click();
   await dialog.getByRole("button",{name:"Build machine · More",exact:true}).click();
@@ -69,7 +69,7 @@ it.skipIf(process.platform === "win32")("requires opt-in, searches local and SSH
     const search = page.getByRole("searchbox", { name: "Search conversations" });
     await search.fill("needle", { timeout: 1500 });
     await page.getByRole("button", { name: "More", exact: true }).click({ timeout: 1500 });
-    await page.getByRole("menuitem", { name: "History sources", exact: true }).click({ timeout: 1500 });
+    await page.getByRole("menuitem", { name: "Conversation sources", exact: true }).click({ timeout: 1500 });
     await dialog.waitFor();
     await dialog.getByRole("button", { name: "Close", exact: true }).click();
     await search.fill("");
@@ -79,7 +79,7 @@ it.skipIf(process.platform === "win32")("requires opt-in, searches local and SSH
   await expect.poll(async () => (await page.evaluate(()=>window.agentEnv.listConversations({query:"needle"}))).total,{timeout:20000}).toBe(2);
   const openSources = async () => {
     await page.locator(".conversation-list-toolbar").getByRole("button",{name:"More",exact:true}).click();
-    await page.getByRole("menuitem",{name:"History sources",exact:true}).click();
+    await page.getByRole("menuitem",{name:"Conversation sources",exact:true}).click();
     await expect.poll(() => dialog.getByRole("button",{name:"Save",exact:true}).isEnabled()).toBe(true);
   };
   await openSources();
@@ -111,12 +111,12 @@ it.skipIf(process.platform === "win32")("requires opt-in, searches local and SSH
   await expectNoHorizontalOverflow(page);
   expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
   await page.screenshot({path:join(output,"history-details-920.png"),animations:"disabled"});
-  await dialog.getByRole("switch",{name:"History search",exact:true}).click();
+  await dialog.getByRole("switch",{name:"Search conversations",exact:true}).click();
   await dialog.getByRole("button",{name:"Save",exact:true}).click();
   await page.getByRole("button",{name:"Choose devices",exact:true}).waitFor();
   expect(await page.evaluate(()=>window.agentEnv.searchConversations({query:"needle"}))).toEqual([]);
   expect(await Promise.all(sourceFiles.map((p)=>readFile(p,"utf8")))).toEqual(originals);
-  for (const [locale,navLabel,sourcesLabel,searchLabel] of [["zh_CN","对话","选择设备","历史搜索"],["zh_TW","對話","選擇裝置","歷史搜尋"]] as const) {
+  for (const [locale,navLabel,sourcesLabel,searchLabel] of [["zh_CN","对话","选择设备","搜索对话"],["zh_TW","對話","選擇裝置","搜尋對話"]] as const) {
   await page.evaluate((locale)=>window.agentEnv.updateSettings({locale}),locale);
   await page.reload();
   await page.getByRole("complementary").getByRole("button",{name:navLabel,exact:true}).click();

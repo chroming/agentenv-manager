@@ -1313,18 +1313,29 @@ const initializeServices = () => {
   startupStatus = { state: "initializing" };
   broadcastStartupStatus();
   startupAttempt = (async () => {
+    const startedAt = Date.now();
+    let phaseStartedAt = startedAt;
+    let activePhase: string | undefined;
     await startupDiagnostics?.record("startup-begin", { dataRoot: startupDataRoot });
     const startupOperationId = await runtimeDiagnostics?.record("app:startup", "started", {
       context: { dataRoot: startupDataRoot }
     });
     try {
       const services = await createServices((phase) => {
+        if (activePhase) void runtimeDiagnostics?.record("app:startup", `${activePhase}-completed`, {
+          reference: startupOperationId, outcome: "completed", durationMs: Date.now() - phaseStartedAt
+        });
+        activePhase = phase;
+        phaseStartedAt = Date.now();
         startupStatus = { state: "initializing", phase };
         broadcastStartupStatus();
         void runtimeDiagnostics?.record("app:startup", phase ?? "initializing", {
           reference: startupOperationId,
           context: { dataRoot: startupDataRoot }
         });
+      });
+      if (activePhase) void runtimeDiagnostics?.record("app:startup", `${activePhase}-completed`, {
+        reference: startupOperationId, outcome: "completed", durationMs: Date.now() - phaseStartedAt
       });
       activeAppUpdateService = services.appUpdateService;
       installActiveAppUpdate = async () => {
@@ -1334,11 +1345,12 @@ const initializeServices = () => {
       };
       const settings = await services.settingsStore.readSettings();
       rebuildApplicationMenu(resolveApplicationMenuLocale(settings.locale, app.getLocale()));
-      updateApplicationMenuForAppUpdate(
-        Menu.getApplicationMenu(),
-        await services.appUpdateService.readStatus(),
-        activeApplicationMenuLocale
-      );
+      // Installation-channel discovery can invoke Homebrew. It is not a
+      // prerequisite for opening the workspace or recovering user data.
+      void services.appUpdateService.readStatus().then((status) => {
+        if (activeAppUpdateService !== services.appUpdateService) return;
+        updateApplicationMenuForAppUpdate(Menu.getApplicationMenu(), status, activeApplicationMenuLocale);
+      }).catch((error) => { void startupDiagnostics?.record("update-channel-check-failed", error); });
       let removeWorkspaceSyncFocusListener: () => void = () => undefined;
       let removeAppUpdateFocusListener: () => void = () => undefined;
       runtimeDiagnosticContextProvider = async () => {
@@ -1480,6 +1492,7 @@ const initializeServices = () => {
       await runtimeDiagnostics?.record("app:startup", "completed", {
         reference: startupOperationId,
         outcome: "completed",
+        durationMs: Date.now() - startedAt,
         context: { dataRoot: startupDataRoot }
       });
       broadcastStartupStatus();

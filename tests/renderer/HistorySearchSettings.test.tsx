@@ -20,7 +20,7 @@ const install = (enabled = false) => {
 it("keeps pause in source settings and saves it without losing selected devices", async () => {
   const api = install(true);
   render(<HistorySearchSettings />);
-  fireEvent.click(screen.getByRole("button", { name: "History sources" }));
+  fireEvent.click(screen.getByRole("button", { name: "Conversation sources" }));
   fireEvent.click(await screen.findByRole("button", { name: "Pause" }));
   expect(screen.getByRole("button", { name: "Resume" })).toHaveAttribute("aria-pressed", "true");
   expect(api.configureConversationHistory).not.toHaveBeenCalled();
@@ -33,7 +33,7 @@ it("explains summary-only coverage without asking users to retry a supported lim
   const status = await api.conversationHistoryStatus();
   status.sources[0].phase = "partial";
   render(<HistorySearchSettings />);
-  fireEvent.click(screen.getByRole("button",{name:"History sources"}));
+  fireEvent.click(screen.getByRole("button",{name:"Conversation sources"}));
   fireEvent.click(await screen.findByRole("button",{name:"This device · More"}));
   fireEvent.click(screen.getByRole("menuitem",{name:"Details"}));
   expect(await screen.findByText("Full transcript is unavailable")).toBeInTheDocument();
@@ -45,7 +45,7 @@ it("adds a newly discovered root only when selected and saved", async () => {
   const status = await api.conversationHistoryStatus();
   status.availableSources.push({...status.availableSources[0],id:"custom",root:"/custom/codex"});
   render(<HistorySearchSettings />);
-  fireEvent.click(screen.getByRole("button",{name:"History sources"}));
+  fireEvent.click(screen.getByRole("button",{name:"Conversation sources"}));
   fireEvent.click(await screen.findByRole("button",{name:"This device · More"}));
   fireEvent.click(screen.getByRole("menuitem",{name:"Details"}));
   expect(api.configureConversationHistory).not.toHaveBeenCalled();
@@ -62,7 +62,7 @@ it("explains unread histories and keeps retry failures inside the dialog", async
   status.sources[0].issues = ["Permission denied: /fixture/history"];
   Object.assign(api,{refreshConversations:vi.fn().mockRejectedValue(new Error("SSH connection refused"))});
   render(<HistorySearchSettings />);
-  fireEvent.click(screen.getByRole("button",{name:"History sources"}));
+  fireEvent.click(screen.getByRole("button",{name:"Conversation sources"}));
   fireEvent.click(await screen.findByRole("button",{name:"This device · Review unread histories"}));
   expect(screen.getByText("Permission denied: /fixture/history")).toBeInTheDocument();
   expect(screen.getByRole("button",{name:"Exclude Agent"})).toBeInTheDocument();
@@ -74,8 +74,8 @@ it("does not collect or configure anything when the entry is rendered", async ()
   const api = install();
   render(<HistorySearchSettings />);
   expect(api.conversationHistoryStatus).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button",{name:"History sources"}));
-  const dialog = await screen.findByRole("dialog",{name:"History search"});
+  fireEvent.click(screen.getByRole("button",{name:"Conversation sources"}));
+  const dialog = await screen.findByRole("dialog",{name:"Conversation sources"});
   await within(dialog).findByRole("switch",{name:"This device"});
   fireEvent.click(within(dialog).getByRole("button",{name:"Cancel"}));
   expect(api.configureConversationHistory).not.toHaveBeenCalled();
@@ -84,14 +84,14 @@ it("does not collect or configure anything when the entry is rendered", async ()
 it("keeps source coverage in device details and clears disabled cache by default", async () => {
   const api = install(true);
   render(<HistorySearchSettings />);
-  fireEvent.click(screen.getByRole("button",{name:"History sources"}));
+  fireEvent.click(screen.getByRole("button",{name:"Conversation sources"}));
   await screen.findByRole("switch",{name:"This device"});
   expect(screen.queryByText(/2 Summary only/)).toBeNull();
   fireEvent.click(screen.getByRole("button",{name:"This device · More"}));
   fireEvent.click(screen.getByRole("menuitem",{name:"Details"}));
   const summary = await screen.findByText(/2 Summary only/);
   expect(summary.tagName).toBe("P");
-  fireEvent.click(screen.getByRole("switch",{name:"History search"}));
+  fireEvent.click(screen.getByRole("switch",{name:"Search conversations"}));
   fireEvent.click(screen.getByRole("button",{name:"Save"}));
   await waitFor(()=>expect(api.configureConversationHistory).toHaveBeenCalledWith(expect.objectContaining({enabled:false}),true));
   await waitFor(()=>expect(screen.queryByRole("dialog")).toBeNull());
@@ -101,8 +101,8 @@ it("keeps a save failure inside the source dialog without losing the selected so
   const api = install(true);
   api.configureConversationHistory.mockRejectedValue(new Error("Cannot save history settings"));
   render(<HistorySearchSettings />);
-  fireEvent.click(screen.getByRole("button",{name:"History sources"}));
-  await screen.findByRole("switch",{name:"History search"});
+  fireEvent.click(screen.getByRole("button",{name:"Conversation sources"}));
+  await screen.findByRole("switch",{name:"Search conversations"});
   fireEvent.click(screen.getByRole("button",{name:"Save"}));
   expect(await screen.findByRole("alert")).toHaveTextContent("Cannot save history settings");
   expect(screen.getByRole("switch",{name:"This device"})).toHaveAttribute("aria-checked","true");
@@ -114,9 +114,9 @@ it("enables a whole device and exposes individual Agent choices only in More", a
   const status = await api.conversationHistoryStatus();
   status.availableSources.push({...status.availableSources[0],id:"claude",agentId:"claude-code",agentName:"Claude Code",root:"/fixture/claude"});
   render(<HistorySearchSettings />);
-  fireEvent.click(screen.getByRole("button",{name:"History sources"}));
+  fireEvent.click(screen.getByRole("button",{name:"Conversation sources"}));
   await screen.findByRole("switch",{name:"This device"});
-  expect(screen.queryByRole("switch",{name:"History search"})).toBeNull();
+  expect(screen.queryByRole("switch",{name:"Search conversations"})).toBeNull();
   expect(screen.queryByRole("switch",{name:/Codex/})).toBeNull();
   fireEvent.click(screen.getByRole("switch",{name:"This device"}));
   fireEvent.click(screen.getByRole("button",{name:"This device · More"}));
