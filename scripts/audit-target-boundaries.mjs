@@ -31,6 +31,8 @@ const allowedFiles = new Set([
   "src/main/paths.ts",
   "src/shared/schemas.ts",
   "src/shared/types.ts",
+  // Native invocation support is shared by deployment validation and renderer controls.
+  "src/shared/skillInvocation.ts",
   "src/renderer/components/ProfileSidebar.tsx",
   "src/renderer/styles.css"
 ]);
