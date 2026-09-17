@@ -475,10 +475,12 @@ describe("ProjectsWorkspace", () => {
     const api = installApi();
     render(<ProjectsWorkspace targets={[target]} />);
     await screen.findByRole("button", { name: "Expand Instructions" });
+    const actions = screen.getByRole("button", { name: "More Workspace actions" });
+    await waitFor(() => expect(actions).toBeEnabled());
     api.listProjects.mockClear();
     api.inspectProject.mockClear();
 
-    fireEvent.click(screen.getByRole("button", { name: "More Workspace actions" }));
+    fireEvent.click(actions);
     fireEvent.click(screen.getByRole("menuitem", { name: "Refresh Workspace" }));
 
     await waitFor(() => expect(api.inspectProject).toHaveBeenCalledWith("project-1"));
