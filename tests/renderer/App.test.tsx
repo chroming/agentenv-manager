@@ -1664,7 +1664,7 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Skills" }));
   };
 
-  const openSettingsCategory = async (category: "General" | "Agents" | "Skills" | "Connections" | "Data") => {
+  const openSettingsCategory = async (category: "General" | "Agents" | "Skills" | "Conversations" | "Connections" | "Data") => {
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
     fireEvent.click(screen.getByRole("tab", { name: category }));
   };
@@ -1734,8 +1734,8 @@ describe("App", () => {
       within(navigation).getByRole("button", { name: "Agents" })
     ).toBeInTheDocument();
     expect(
-      within(navigation).getByRole("region", { name: "System status" })
-    ).toHaveTextContent("Detecting Agents");
+      within(navigation).getByRole("button", { name: "Show Local Agents" })
+    ).toHaveAttribute("title", expect.stringContaining("Detecting Agents"));
 
     fireEvent.click(within(navigation).getByRole("button", { name: /^Quick open/ }));
     const quickOpen = screen.getByRole("dialog", { name: "Quick open" });
@@ -3188,7 +3188,7 @@ describe("App", () => {
     const api = installApi();
     render(<App />);
 
-    await openSettingsCategory("General");
+    await openSettingsCategory("Conversations");
     fireEvent.change(screen.getByTestId("conversation-terminal-select"), {
       target: { value: "ghostty" }
     });

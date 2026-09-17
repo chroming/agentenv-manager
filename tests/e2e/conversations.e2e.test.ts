@@ -382,7 +382,7 @@ describe("Conversations desktop workflow", () => {
       timeout: 15_000
     });
     await expect.poll(() => navigation.getByRole("button", {
-      name: "Agents"
+      name: "Agents", exact: true
     }).getAttribute("aria-current")).toBe("page");
     await expect.poll(() => page.evaluate(async () => {
       const result = await window.agentEnv.listConversations({
@@ -392,7 +392,7 @@ describe("Conversations desktop workflow", () => {
       return result.total;
     }), { timeout: 15_000 }).toBeGreaterThan(0);
     expect(await navigation.getByRole("button", {
-      name: "Agents"
+      name: "Agents", exact: true
     }).getAttribute("aria-current")).toBe("page");
 
     await navigation

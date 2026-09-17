@@ -178,12 +178,9 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
         ) <= 1,
         profileAligned: Math.abs(
           remoteProfile.getBoundingClientRect().left -
-          (tableHeader.children[3] as HTMLElement).getBoundingClientRect().left
-        ) <= 1,
-        statusAligned: Math.abs(
-          remoteStatus.getBoundingClientRect().left -
           (tableHeader.children[2] as HTMLElement).getBoundingClientRect().left
         ) <= 1,
+        statusInline: remoteStatus.parentElement === remoteName.closest(".target-workflow-name-line"),
         statusText: remoteStatus.textContent?.trim()
       };
     });
@@ -192,7 +189,7 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
       actionSizes: ["28x28", "28x28"],
       nameAligned: true,
       profileAligned: true,
-      statusAligned: true,
+      statusInline: true,
       statusText: "Ready"
     });
 
@@ -201,14 +198,13 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
       expect(await page.locator(".target-location-divider").count()).toBe(0);
       const centers = await page.locator(".target-workflow-environment").evaluateAll((cells) =>
         cells.map((cell) => {
-          const label = cell.querySelector(".target-workflow-lifecycle")?.getBoundingClientRect();
-          const health = cell.parentElement!.querySelector(".target-health-status")!.getBoundingClientRect();
+          const health = cell.closest(".target-workflow-header")!.querySelector(".target-health-status")!.getBoundingClientRect();
           const action = cell.querySelector("button")!.getBoundingClientRect();
           const box = cell.getBoundingClientRect();
           return Math.max(
             Math.abs((box.top + box.bottom - health.top - health.bottom) / 2),
-            Math.abs(action.left - (label ?? box).left),
-            label ? Math.max(0, action.bottom - label.top) : Math.abs((action.top + action.bottom - box.top - box.bottom) / 2)
+            Math.abs(action.left - box.left),
+            Math.abs((action.top + action.bottom - box.top - box.bottom) / 2)
           );
         })
       );

@@ -1387,7 +1387,7 @@ const captureAgent = async (
   await menu.getByRole("menuitem", { name: "Capture" }).click();
 };
 
-type SettingsCategoryName = "General" | "Agents" | "Skills" | "Connections" | "Data";
+type SettingsCategoryName = "General" | "Agents" | "Skills" | "Conversations" | "Connections" | "Data";
 
 const openSettingsCategory = async (page: Page, category: SettingsCategoryName) => {
   await page
@@ -1645,7 +1645,7 @@ describe("Electron UI profile switching e2e", () => {
         }
         if (workspace === "targets") {
           expect(await controls.locator('[aria-hidden="true"] button').count()).toBe(0);
-          const name = controls.locator(":scope > span").nth(3);
+          const name = controls.locator(":scope > span").nth(2);
           const actions = controls.locator(".target-list__header-actions");
           const a = await actions.boundingBox();
           const n = await name.boundingBox();
@@ -3119,7 +3119,7 @@ describe("Electron UI profile switching e2e", () => {
   it("shows target readiness from installed commands and writable local paths", async () => {
     const { homeDir, page } = await launchApp();
 
-    await page.getByRole("button", { name: "Agents" }).click();
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
     const targetsPage = page.getByRole("region", { name: "Agents", exact: true });
     await targetsPage.waitFor({ state: "visible" });
 
@@ -3149,7 +3149,7 @@ describe("Electron UI profile switching e2e", () => {
   it("shows desktop application evidence without creating another Target", async () => {
     const { page } = await launchApp({ openCodeDesktopOnly: true });
 
-    await page.getByRole("button", { name: "Agents" }).click();
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
     const openCodeCards = page.getByRole("article", { name: "Agent OpenCode" });
     await expect.poll(() => openCodeCards.count()).toBe(1);
     const openCodeCard = openCodeCards.first();
@@ -3208,7 +3208,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await selectProfile(page, "UI OpenCode alpha");
     await previewAndApply(page, "OpenCode");
-    await page.getByRole("button", { name: "Agents" }).click();
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
 
     const openCodeCard = page.getByRole("article", { name: "Agent OpenCode" });
     await openCodeCard.waitFor({ state: "visible" });
@@ -3349,7 +3349,7 @@ describe("Electron UI profile switching e2e", () => {
     await chmod(configPath, 0o444);
     await chmod(opencodeDir, 0o555);
     try {
-      await page.getByRole("button", { name: "Agents" }).click();
+      await page.getByRole("button", { name: "Agents", exact: true }).click();
       await page.getByRole("button", { name: "Refresh" }).click();
       const openCodeCard = page.getByRole("article", { name: "Agent OpenCode" });
       await expect.poll(() => openCodeCard.textContent()).toContain("Needs setup");
@@ -4664,7 +4664,7 @@ describe("Electron UI profile switching e2e", () => {
       const readiness = page.locator(".profile-action-status");
       await expectInViewport(page, readiness);
       expect(await readiness.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-      await expectInViewport(page, page.getByRole("button", { name: "Show Local Agents" }));
+      await expectInViewport(page, page.locator(".system-status-card .sidebar-agent-summary"));
       expect(await page.locator(".system-status-card .sidebar-agent-summary__label").count()).toBe(1);
 
       await page.locator('.workspace-button[data-workspace="projects"]').click();
@@ -5014,7 +5014,7 @@ describe("Electron UI profile switching e2e", () => {
     await profileSwitcher.getByRole("option", { name: /UI Codex alpha/ }).waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
 
-    await page.getByRole("button", { name: "Agents" }).click();
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
     for (const targetName of ["OpenCode", "Claude Code", "Codex"]) {
       await expectInViewport(page, page.getByRole("article", { name: `Agent ${targetName}` }));
     }
@@ -5721,7 +5721,7 @@ describe("Electron UI profile switching e2e", () => {
     const settingsSelects = await readBoxes(
       page.locator(".settings-category-panel select")
     );
-    expect(settingsSelects.length).toBeGreaterThanOrEqual(2);
+    expect(settingsSelects.length).toBe(1);
     expect(new Set(settingsSelects.map(({ height }) => height))).toEqual(new Set([32]));
     expect(new Set(settingsSelects.map(({ borderRadius }) => borderRadius)))
       .toEqual(new Set(["6px"]));
@@ -10419,7 +10419,7 @@ describe("Electron UI profile switching e2e", () => {
       popoverBox!.y + popoverBox!.height / 2
     );
     await expect.poll(() => popover.isVisible()).toBe(true);
-    await page.getByRole("button", { name: "Skills", exact: true }).hover();
+    await page.locator(".shell-titlebar").hover();
     await popover.waitFor({ state: "hidden" });
 
     await overflow.focus();
@@ -11002,7 +11002,7 @@ describe("Electron UI profile switching e2e", () => {
   it("persists the preferred conversation terminal", async () => {
     const { appDataRoot, page } = await launchApp();
 
-    await openSettingsCategory(page, "General");
+    await openSettingsCategory(page, "Conversations");
     const terminalSelect = page.getByTestId("conversation-terminal-select");
     await terminalSelect.selectOption("ghostty");
     await page.getByRole("status").filter({ hasText: "Settings saved" }).waitFor();
@@ -11011,7 +11011,7 @@ describe("Electron UI profile switching e2e", () => {
       .toMatchObject({ conversationTerminal: "ghostty" });
 
     await page.reload();
-    await openSettingsCategory(page, "General");
+    await openSettingsCategory(page, "Conversations");
     await expect.poll(() => terminalSelect.inputValue()).toBe("ghostty");
   }, standardElectronTestTimeout);
 

@@ -56,7 +56,7 @@
     "test:quick": "node scripts/run-changed-tests.mjs",
     "test:feature": "node scripts/run-feature-tests.mjs",
     "test:full": "npm run build && node scripts/run-vitest-groups.mjs",
-    "test:targets": "vitest run tests/e2e/targetConformance.e2e.test.ts tests/e2e/targetCompatibilityFixtures.e2e.test.ts tests/e2e/activationFailureMatrix.e2e.test.ts tests/e2e/appDataUpgradeMatrix.e2e.test.ts tests/e2e/startupRecoveryMatrix.e2e.test.ts",
+    "test:targets": "vitest run tests/e2e/targetConformance.e2e.test.ts tests/e2e/targetCompatibilityFixtures.e2e.test.ts tests/e2e/activationFailureMatrix.e2e.test.ts tests/e2e/appDataUpgradeMatrix.e2e.test.ts tests/e2e/startupRecoveryMatrix.e2e.test.ts --maxWorkers=1",
     "test:targets:platform": "npm run test:targets",
     "test:scenario": "node scripts/run-machine-scenario.mjs",
     "test:compat:installed": "node scripts/probe-installed-agents.mjs",
