@@ -1,3 +1,3 @@
 import type { ReleaseManifest } from "./release-manifest.mjs";
 
-export function renderHomebrewCask(manifest: ReleaseManifest): string;
+export function renderHomebrewCask(manifest: ReleaseManifest, template?: string): string;
