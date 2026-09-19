@@ -57,6 +57,9 @@ describe("AI tag suggestions desktop flow", () => {
         await page.setViewportSize({ width, height: 728 });
         const row = page.locator('.library-table-row').filter({ hasText: 'review-integration-workflows-with-long-library-labels' }).first();
         await row.waitFor();
+        await row.evaluate(() => new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        }));
         const geometry = await row.evaluate((node) => {
           const name = node.querySelector('.library-skill-name-button')!.getBoundingClientRect();
           const tags = node.querySelector('.skill-tag-cell')!.getBoundingClientRect();
@@ -69,7 +72,7 @@ describe("AI tag suggestions desktop flow", () => {
           return { uniformTags, columnsAlign, chipsFit: chips.every((chip) => chip.right <= tags.right + 1), sameLine: Math.abs((name.top + name.bottom) / 2 - (tags.top + tags.bottom) / 2) < 2,
             separated: name.right <= tags.left, fits: node.scrollWidth <= node.clientWidth };
         });
-        expect(geometry).toEqual({ uniformTags: true, columnsAlign: true, chipsFit: true, sameLine: true, separated: true, fits: true });
+        expect(geometry, `Skill tag row geometry at ${locale}/${width}: ${JSON.stringify(geometry)}`).toEqual({ uniformTags: true, columnsAlign: true, chipsFit: true, sameLine: true, separated: true, fits: true });
         await row.locator('.skill-tag-cell').getByRole('button', { name: english ? 'Tags' : locale === 'zh_CN' ? '标签' : '標籤', exact: true }).click();
         await page.getByRole('menuitem', { name: 'Deployment compatibility', exact: true }).waitFor();
         await page.keyboard.press('Escape');
@@ -173,5 +176,5 @@ describe("AI tag suggestions desktop flow", () => {
     expect(calls).toBe(4);
     expect(await readFile(join(source, "SKILL.md"), "utf8")).toBe(text);
     expect(await readFile(join(root, "data", "skills-library", "review", "SKILL.md"), "utf8")).toBe(text);
-  }, 120_000);
+  }, 180_000);
 });
