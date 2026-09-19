@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -318,7 +319,7 @@ export const WorkspaceSyncSettings = ({
           </span>
           <span>
             <strong>{t("Could not check")}</strong>
-            <small>{error || status.message}</small>
+            <small><DiagnosticMessage message={error || status.message || ""} /></small>
           </span>
           <Button
             variant="secondary"
@@ -395,7 +396,7 @@ export const WorkspaceSyncSettings = ({
         </>
       )}
       {connected && statusMessage ? (
-        <div className="workspace-sync-error" role="alert">{statusMessage}</div>
+        <div className="workspace-sync-error" role="alert"><DiagnosticMessage message={statusMessage} /></div>
       ) : null}
 
       {review ? (
@@ -447,7 +448,7 @@ export const WorkspaceSyncSettings = ({
                   <span><strong>{t("Linked Skills change immediately")}</strong><small>{t("{{skills}} linked Skills may immediately affect {{agents}} Agents.", { skills: review.liveSkillIds.length, agents: review.liveAgentIds.length })}</small></span>
                 </label>
               ) : null}
-              {error ? <div className="workspace-sync-error" role="alert">{error}</div> : null}
+              {error ? <div className="workspace-sync-error" role="alert"><DiagnosticMessage message={error} /></div> : null}
             </div>
             <footer className="preview-actions workspace-sync-review-actions ui-dialog-footer">
               <Button variant="secondary" disabled={Boolean(working)} onClick={() => setReview(undefined)}>{t("Cancel")}</Button>

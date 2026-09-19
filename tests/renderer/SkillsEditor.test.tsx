@@ -126,16 +126,16 @@ describe("SkillsEditor v2", () => {
       }],
       mcpByTarget: {}
     };
-    render(<SkillsEditor value={groupedResources} librarySkills={skills} onChange={onChange} />);
+    const view = render(<SkillsEditor value={groupedResources} librarySkills={skills} onChange={onChange} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle Review pack" }));
     const group = screen.getByRole("region", { name: "Review pack" });
     expect(group).toHaveClass("is-nested");
     expect(group).not.toHaveClass("has-inset-panel");
     expect(within(group).queryByText("Manual Group")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Group off").length).toBeGreaterThan(0);
+    expect(within(group).getByTitle("Group off")).toHaveTextContent("0/2");
     expect(screen.getByRole("switch", { name: "Enable the Group to change Code Review" }))
-      .toHaveAttribute("aria-checked", "true");
+      .toHaveAttribute("aria-checked", "false");
     expect(screen.getByRole("switch", { name: "Enable the Group to change Docs" }))
       .toHaveAttribute("aria-checked", "false");
     expect(screen.getAllByRole("switch", { name: /Enable the Group/ }).every((control) => control.hasAttribute("disabled")))
@@ -146,6 +146,10 @@ describe("SkillsEditor v2", () => {
       ...groupedResources,
       skillGroups: [{ ...groupedResources.skillGroups![0], enabled: true }]
     });
+    expect(screen.getByRole("button", { name: "Toggle Review pack" })).toHaveAttribute("aria-expanded", "true");
+    view.rerender(<SkillsEditor value={onChange.mock.calls[0][0]} librarySkills={skills} onChange={onChange} />);
+    expect(screen.getByRole("switch", { name: "Disable Code Review" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("switch", { name: "Enable Docs" })).toHaveAttribute("aria-checked", "false");
   });
 
   it("adds a reusable manual Group from the shared resource picker", () => {

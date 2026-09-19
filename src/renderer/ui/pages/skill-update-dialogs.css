@@ -98,26 +98,67 @@
   min-width: 0;
 }
 
-.skill-summary-findings {
-  display: grid;
-  gap: var(--space-3);
-  margin: 0;
+.skill-summary-content > .ai-review-findings {
+  list-style: none;
+  gap: 14px;
+  padding: 4px 0;
 }
 
-.skill-summary-findings > div {
+.ai-review-findings:empty,
+.ai-review-evidence:empty {
+  display: none;
+}
+
+.ai-review-finding {
   display: grid;
-  gap: var(--space-2);
-  grid-template-columns: minmax(90px, 0.24fr) minmax(0, 1fr);
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 8px;
   align-items: start;
 }
 
-.skill-summary-findings dt {
-  color: var(--text-secondary);
+.ai-review-finding__marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  color: var(--muted);
 }
 
-.skill-summary-findings dd {
-  margin: 0;
+.ai-review-finding.is-risk > .ai-review-finding__marker {
+  color: var(--warning-text);
+}
+
+.ai-review-finding__copy {
+  display: grid;
+  gap: 4px;
   min-width: 0;
+  line-height: 1.6;
+}
+
+.ai-review-finding__copy h4 {
+  font-size: inherit;
+  font-weight: var(--font-weight-medium);
+}
+
+.ai-review-overview {
+  line-height: 1.6;
+  max-width: 76ch;
+}
+
+.ai-review-details {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+
+.ai-review-details > .skill-summary-content {
+  padding-top: 12px;
+}
+
+.ai-review-evidence {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding-left: 20px;
 }
 
 .skill-ai-tags-body,

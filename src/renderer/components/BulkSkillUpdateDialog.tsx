@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 import {
   CheckCircle2,
   ChevronDown,
@@ -19,7 +20,6 @@ import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
 import { SkillSummaryReview } from "./SkillSummaryReview";
-import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
 import {
   Button,
   ChoiceInput,
@@ -231,7 +231,7 @@ export const BulkSkillUpdateDialog = ({
                 {failures.map((failure) => (
                   <div className="bulk-update-failure" key={failure.id}>
                     <strong>{failure.id}</strong>
-                    <PreviewText className="bulk-update-failure__error" text={failure.error} />
+                    <div className="bulk-update-failure__error"><DiagnosticMessage message={failure.error} /></div>
                   </div>
                 ))}
               </section>
@@ -300,10 +300,10 @@ export const BulkSkillUpdateDialog = ({
                       })}
                     </p>
                   ) : null}
-                  {plan.errors.map((error) => <p className="error" key={error}>{error}</p>)}
+                  {plan.errors.map((error) => <p className="error" key={error}><DiagnosticMessage message={error} /></p>)}
                   {progress?.error ? (
                     <div className="bulk-update-run-error">
-                      <PreviewText className="bulk-update-run-error__message" text={progress.error} />
+                      <div className="bulk-update-run-error__message"><DiagnosticMessage message={progress.error} /></div>
                       <Button disabled={isBusy || running} size="compact" onClick={() => onUpdate([plan], syncCopiedInstalls)}>
                         {t("Retry")}
                       </Button>

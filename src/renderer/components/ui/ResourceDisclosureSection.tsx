@@ -9,6 +9,7 @@ export interface ResourceDisclosureSectionProps
   headingCommands?: boolean;
   description?: ReactNode;
   density?: "default" | "compact";
+  appearance?: "section" | "list";
   expanded: boolean;
   icon?: ReactNode;
   id: string;
@@ -33,6 +34,7 @@ export const ResourceDisclosureSection = ({
   className = "",
   description,
   density = "default",
+  appearance = "section",
   expanded,
   icon,
   id,
@@ -66,6 +68,7 @@ export const ResourceDisclosureSection = ({
       aria-label={props["aria-label"] ?? title}
       className={`ui-resource-disclosure is-${density}${headingCommands ? " has-heading-commands" : ""}${expanded ? " is-expanded" : ""}${nested ? " is-nested" : ""}${muted ? " is-muted" : ""}${summaryWidth === "wide" ? " has-wide-summary" : ""}${panelVariant === "inset" ? " has-inset-panel" : ""}${panelScrollOwner === "child" ? " has-child-scroll" : ""}${actionsLayout === "row" ? " has-row-actions" : ""} ${className}`.trim()}
       data-resource-disclosure-id={id}
+      data-appearance={appearance}
     >
       <header className="ui-resource-disclosure__header">
         <button

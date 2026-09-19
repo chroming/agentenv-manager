@@ -38,10 +38,12 @@ export const ActionMenu = ({
 );
 
 interface ActionMenuItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  appearance?: "command" | "object";
   tone?: "default" | "danger";
 }
 
 export const ActionMenuItem = ({
+  appearance = "command",
   children,
   className = "",
   role = "menuitem",
@@ -51,7 +53,7 @@ export const ActionMenuItem = ({
 }: ActionMenuItemProps) => (
   <button
     {...props}
-    className={`ui-action-menu__item ui-action-menu__item--${tone} ${className}`.trim()}
+    className={`ui-action-menu__item ui-action-menu__item--${tone} ui-action-menu__item--${appearance} ${className}`.trim()}
     role={role}
     type={type}
   >

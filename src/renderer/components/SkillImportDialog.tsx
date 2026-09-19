@@ -1,4 +1,5 @@
 import type { RefObject } from "react";
+import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 import {
   CheckCircle2,
   ChevronDown,
@@ -23,7 +24,7 @@ import type { GitHubSkillImportProgress } from "../skillLibraryContracts";
 import { InfoTip } from "./InfoTip";
 import { ProjectSkillDiscoveryPanel } from "./ProjectSkillDiscoveryPanel";
 import { RepositorySkillCandidateList } from "./RepositorySkillCandidateList";
-import { Button, IconButton, ModalFrame, SelectControl } from "./ui";
+import { Button, DialogHeader, IconButton, ModalFrame, SelectControl, SegmentedControl } from "./ui";
 
 interface LocalImportImpact {
   message: string;
@@ -139,9 +140,7 @@ export const SkillImportDialog = ({
       onDismiss={onClose}
       suspended={suspended}
     >
-      <header className="profile-dialog-header library-import-header ui-dialog-header">
-        <div className="section-title ui-dialog-title">{t("Import skills")}</div>
-        <IconButton
+      <DialogHeader title={t("Import skills")} actions={<IconButton
           label={t("Close import")}
           disabled={localImportOperation || dismissDisabled}
           onClick={onClose}
@@ -149,32 +148,21 @@ export const SkillImportDialog = ({
           variant="ghost"
         >
           <X size={16} strokeWidth={2.2} />
-        </IconButton>
-      </header>
+        </IconButton>}
+      />
 
-      <div className="library-import-source-tabs" role="tablist" aria-label={t("Import source")}>
-        <button
-          className={source === "local" ? "is-active" : ""}
-          type="button"
-          role="tab"
-          aria-selected={source === "local"}
+      <div className="library-import-source-tabs">
+        <SegmentedControl
+          label={t("Import source")}
+          semantics="tabs"
+          value={source}
           disabled={Boolean(githubOperation) || localImportOperation}
-          onClick={() => onSourceChange("local")}
-        >
-          <Folder size={15} strokeWidth={2.2} aria-hidden="true" />
-          {t("Local")}
-        </button>
-        <button
-          className={source === "github" ? "is-active" : ""}
-          type="button"
-          role="tab"
-          aria-selected={source === "github"}
-          disabled={Boolean(githubOperation) || localImportOperation}
-          onClick={() => onSourceChange("github")}
-        >
-          <GitBranch size={15} strokeWidth={2.2} aria-hidden="true" />
-          {t("Repository")}
-        </button>
+          onChange={onSourceChange}
+          options={[
+            { value: "local", label: <><Folder size={16} aria-hidden="true" />{t("Local")}</> },
+            { value: "github", label: <><GitBranch size={16} aria-hidden="true" />{t("Repository")}</> }
+          ]}
+        />
       </div>
 
       {source === "local" ? (
@@ -314,7 +302,7 @@ export const SkillImportDialog = ({
       {githubOperationError ? (
         <div className="inline-state inline-state--error import-inline-error" role="alert">
           <TriangleAlert size={15} aria-hidden="true" />
-          <span>{githubOperationError}</span>
+          <DiagnosticMessage message={githubOperationError} />
           {githubApiRetryAvailable ? (
             <button
               className="inline-state-action"

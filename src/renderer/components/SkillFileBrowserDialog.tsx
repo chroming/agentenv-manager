@@ -1,4 +1,5 @@
 import { type RefObject, useEffect, useState } from "react";
+import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 import {
   FileWarning,
   LoaderCircle,
@@ -249,7 +250,7 @@ export const SkillFileBrowserDialog = ({
             ) : error ? (
               <div className="skill-file-browser__state is-error" role="alert">
                 <FileWarning size={17} />
-                <span>{error}</span>
+                <DiagnosticMessage message={error} />
                 <Button icon={<RefreshCw size={15} />} onClick={() => treeError
                   ? setReloadVersion((value) => value + 1)
                   : setFileRetryVersion((value) => value + 1)}>{t("Retry")}</Button>

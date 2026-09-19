@@ -29,27 +29,12 @@
 .profile-skill-group__members {
   --resource-row-actions-standard: 72px;
   --resource-row-state-track: 132px;
-  max-height: min(292px, 38vh);
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-}
-
-/* Keep actions aligned with members when native scrollbars consume inline space. */
-.profile-skill-group > .ui-resource-disclosure__header,
-.profile-skill-row.is-direct {
-  overflow-y: hidden;
-  scrollbar-gutter: stable;
+  overflow: visible;
 }
 
 .profile-skill-row.is-group-member {
   background: transparent;
-}
-
-/* Direct Skills reserve the disclosure lane used by sibling Group headers. */
-.profile-skill-row.is-direct {
-  padding-left: 34px;
 }
 
 @media (hover: hover) and (pointer: fine) {

@@ -44,6 +44,27 @@ import { OverflowTooltip } from "../../src/renderer/components/OverflowTooltip";
 import { InfoTip } from "../../src/renderer/components/InfoTip";
 import { useModalDialog } from "../../src/renderer/hooks/useModalDialog";
 
+it("separates active filter state from an open menu without changing button variants", () => {
+  const { rerender } = render(<IconButton label="Sort" variant="ghost" aria-expanded active><RefreshCw /></IconButton>);
+  expect(screen.getByRole("button", { name: "Sort" })).toHaveClass("ui-icon-button--active", "ui-icon-button--ghost");
+  rerender(<IconButton label="Sort" variant="ghost" aria-expanded disabled><RefreshCw /></IconButton>);
+  expect(screen.getByRole("button", { name: "Sort" })).not.toHaveClass("ui-icon-button--active");
+  expect(screen.getByRole("button", { name: "Sort" })).toBeDisabled();
+});
+
+it("uses shared command and object menu variants with the same disabled semantics", () => {
+  const onClick = vi.fn();
+  render(<ActionMenu ariaLabel="Actions">
+    <ActionMenuItem>Copy</ActionMenuItem>
+    <ActionMenuItem appearance="object" disabled onClick={onClick}>Codex</ActionMenuItem>
+  </ActionMenu>);
+  expect(screen.getByRole("menuitem", { name: "Copy" })).toHaveClass("ui-action-menu__item--command");
+  const object = screen.getByRole("menuitem", { name: "Codex" });
+  expect(object).toHaveClass("ui-action-menu__item--object");
+  fireEvent.click(object);
+  expect(onClick).not.toHaveBeenCalled();
+});
+
 it("keeps detail actions beside their owning value without losing selectable metadata", () => {
   const action = vi.fn();
   const { container } = render(<DetailList items={[

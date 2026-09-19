@@ -215,10 +215,17 @@
   border-color: transparent;
 }
 
-.ui-icon-button[aria-pressed="true"]:not(:disabled) {
+.ui-icon-button[aria-pressed="true"]:not(:disabled),
+.ui-icon-button[aria-expanded="true"]:not(:disabled) {
   background: var(--surface-muted);
   border-color: var(--border);
   color: var(--text);
+}
+
+.ui-icon-button.ui-icon-button--active:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--active-control-border);
+  color: var(--accent);
 }
 
 .ui-button--danger,
@@ -240,6 +247,45 @@
   background: var(--surface-muted);
   border-color: var(--border);
   color: var(--subtle);
+  opacity: 1;
+}
+
+.ui-button--ghost:disabled,
+.ui-icon-button--ghost:disabled {
+  background: transparent;
+  border-color: transparent;
+}
+
+.ui-button--primary:disabled,
+.ui-icon-button--primary:disabled,
+.ui-button--danger:disabled,
+.ui-icon-button--danger:disabled {
+  color: #fff;
+  opacity: 0.45;
+}
+
+.ui-button--primary:disabled,
+.ui-icon-button--primary:disabled {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.ui-button--danger:disabled,
+.ui-icon-button--danger:disabled {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.ui-button--warning:disabled,
+.ui-icon-button--warning:disabled {
+  background: var(--warning-bg);
+  border-color: var(--border);
+  color: var(--warning-strong);
+  opacity: 0.45;
+}
+
+.ui-button[aria-busy="true"],
+.ui-icon-button[aria-busy="true"] {
   opacity: 1;
 }
 
@@ -389,6 +435,9 @@
 }
 
 .ui-segmented-control__label {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -549,12 +598,6 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   width: var(--control-height-default);
 }
 
-.ui-filter-popover.has-active-filters .ui-filter-popover__trigger {
-  background: var(--accent-soft);
-  border-color: color-mix(in srgb, var(--accent) 28%, var(--border-strong));
-  color: var(--accent);
-}
-
 .ui-filter-popover__indicator {
   background: var(--accent);
   border: 2px solid var(--surface);
@@ -582,6 +625,10 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
 }
 
 .ui-switch {
+  --switch-width: 38px;
+  --switch-height: 22px;
+  --switch-thumb: 16px;
+  --switch-inset: 3px;
   align-items: center;
   background: transparent;
   border: 0;
@@ -596,40 +643,36 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
 }
 
 .ui-switch__track {
-  background: #cbd5e1;
+  background: var(--switch-off);
   border: 1px solid rgba(100, 116, 139, 0.12);
   border-radius: var(--radius-pill);
-  display: inline-flex;
-  flex: 0 0 38px;
-  height: 22px;
-  padding: 2px 3px;
+  position: relative;
+  flex: 0 0 var(--switch-width);
+  height: var(--switch-height);
   transition: background-color var(--motion-fast), border-color var(--motion-fast);
-  width: 38px;
+  width: var(--switch-width);
 }
 
 .ui-switch__thumb {
   background: #fff;
   border-radius: 50%;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
-  flex: 0 0 16px;
-  height: 16px;
+  position: absolute;
+  left: calc(var(--switch-inset) - 1px);
+  top: calc(50% - var(--switch-thumb) / 2);
+  height: var(--switch-thumb);
   transform: translateX(0);
   transition: transform var(--motion-fast);
-  width: 16px;
+  width: var(--switch-thumb);
 }
 
 .ui-switch.is-on .ui-switch__track {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--switch-on);
+  border-color: var(--switch-on);
 }
 
 .ui-switch.is-on .ui-switch__thumb {
-  transform: translateX(14px);
-}
-
-.ui-switch--quiet.is-on .ui-switch__track {
-  background: var(--text-secondary);
-  border-color: var(--text-secondary);
+  transform: translateX(calc(var(--switch-width) - 2 * var(--switch-inset) - var(--switch-thumb)));
 }
 
 .ui-switch__label {
@@ -641,24 +684,10 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
 
 /* Keep the hit area while reducing repeated control emphasis in inventories. */
 .ui-switch--compact {
+  --switch-width: 30px;
+  --switch-height: 18px;
+  --switch-thumb: 12px;
   min-width: 38px;
-}
-
-.ui-switch--compact .ui-switch__track {
-  flex-basis: 30px;
-  width: 30px;
-  height: 18px;
-  padding: 2px;
-}
-
-.ui-switch--compact .ui-switch__thumb {
-  flex-basis: 12px;
-  width: 12px;
-  height: 12px;
-}
-
-.ui-switch--compact.is-on .ui-switch__thumb {
-  transform: translateX(10px);
 }
 
 .ui-switch:disabled {
@@ -823,7 +852,11 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
 
 .ui-composite-field:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
+  box-shadow: var(--focus-ring);
+}
+
+.ui-composite-field:hover:not(:focus-within):not(:has(input:disabled)):not(:has(input[readonly])) {
+  border-color: var(--control-hover-border);
 }
 
 .ui-composite-field > input {
@@ -1108,9 +1141,29 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   color: var(--text);
   display: grid;
   gap: var(--space-2);
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   min-height: 42px;
   padding: 8px 10px;
+}
+
+.ui-notice:has(> .ui-notice__icon) {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.ui-diagnostic-message {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  max-width: 100%;
+}
+
+.ui-diagnostic-message > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ui-diagnostic-message > button {
+  flex-shrink: 0;
 }
 
 .ui-notice--warning {
@@ -1178,6 +1231,15 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   padding: 6px 9px;
   text-align: left;
   width: 100%;
+}
+
+.ui-action-menu__item--object {
+  min-height: 42px;
+  padding: 5px 9px;
+}
+
+.ui-action-menu__item:disabled {
+  color: var(--subtle);
 }
 
 .ui-action-menu > button:hover:not(:disabled),

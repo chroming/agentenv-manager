@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DiagnosticCopyButton } from "./ui/DiagnosticCopyButton";
 import {
   CheckCircle2,
   TriangleAlert
@@ -172,6 +173,7 @@ export const ProjectSkillDiscoveryPanel = ({
         <div className="inline-state inline-state--error" role="alert">
           <TriangleAlert size={15} aria-hidden="true" />
           <OverflowTooltip className="project-skill-error" text={error} />
+          <DiagnosticCopyButton message={error} />
         </div>
       ) : null}
 

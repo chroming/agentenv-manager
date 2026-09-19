@@ -32,7 +32,7 @@
 
 .conversation-list-toolbar {
   display: block;
-  padding: 10px 10px 6px;
+  padding: var(--list-pane-inset) var(--list-pane-inset) 6px;
 }
 
 .conversation-search {
@@ -51,12 +51,6 @@
   height: var(--control-height-default);
   min-height: var(--control-height-default);
   width: var(--control-height-default);
-}
-
-.conversation-sort-button.is-active {
-  background: var(--accent-soft);
-  border-color: color-mix(in srgb, var(--accent) 28%, var(--border-strong));
-  color: var(--accent);
 }
 
 .conversation-sort-menu {
@@ -145,7 +139,7 @@
   cursor: pointer;
   display: block;
   min-height: 52px;
-  padding: 7px 9px;
+  padding: 7px var(--list-pane-inset);
   text-align: left;
   width: 100%;
 }
@@ -413,14 +407,6 @@
   font-weight: var(--font-weight-medium);
   line-height: 16px;
   padding: 5px 8px 7px;
-}
-
-.conversation-target-menu.ui-action-menu > button {
-  background: transparent;
-  border: 0;
-  min-height: 42px;
-  padding: 5px 8px;
-  width: 100%;
 }
 
 .conversation-target-menu.ui-action-menu > button > .conversation-target-menu__row {

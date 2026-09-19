@@ -230,9 +230,7 @@ export const SkillsEditor = ({
     const effectiveEnabled = profileDisablesSkills
       ? false
       : Boolean(skill && profileSkillEnabled(value, reference) && globallyEnabled);
-    const switchChecked = !profileDisablesSkills && !groupEnabled
-      ? preferenceEnabled
-      : effectiveEnabled;
+    const switchChecked = effectiveEnabled;
     const appliedRevision = appliedSkillVersions?.[reference.libraryId];
     const localOverride = skillReceipts.find(
       (entry) =>
@@ -560,6 +558,7 @@ export const SkillsEditor = ({
           const expanded = expandedGroupIds.includes(group.id);
           return (
             <ResourceDisclosureSection
+              appearance="list"
               actions={(
                 <>
                   <Switch
@@ -607,12 +606,10 @@ export const SkillsEditor = ({
               nested
               muted={!group.enabled}
               panelScrollOwner="child"
-              summary={[
-                group.enabled
-                  ? t("{{enabled}} of {{total}} on", { enabled: preferredCount, total: members.length })
-                  : t("Group off")
-              ].filter(Boolean).join(" · ")}
-              summaryWidth="wide"
+              summary={`${group.enabled ? preferredCount : 0}/${members.length}`}
+              summaryTitle={group.enabled
+                ? t("{{enabled}} of {{total}} on", { enabled: preferredCount, total: members.length })
+                : t("Group off")}
               title={group.name}
               toggleLabel={t("Toggle {{name}}", { name: group.name })}
             >

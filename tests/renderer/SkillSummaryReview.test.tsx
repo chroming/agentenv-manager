@@ -58,7 +58,7 @@ describe("Skill summary review", () => {
     await screen.findByText("Adds log upload");
     expect(screen.queryByText("Generate summaries?")).not.toBeInTheDocument();
     expect(api.generateSkillSummary).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByText("Details"));
+    fireEvent.click(screen.getByText("Evidence and scope"));
     fireEvent.click(screen.getByRole("button", { name: "SKILL.md" }));
     expect(view).toHaveBeenCalledWith(plan, "SKILL.md", expect.objectContaining({ skillId: "review" }));
   });

@@ -61,7 +61,7 @@ button {
 }
 
 button:hover:not(:disabled) {
-  background: #eaeaed;
+  background: var(--control-hover);
   border-color: var(--border-strong);
 }
 
@@ -73,12 +73,12 @@ button:focus-visible,
 select:focus-visible,
 input:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid rgba(0, 122, 255, 0.22);
+  outline: var(--focus-outline);
   outline-offset: 2px;
 }
 
 button:disabled {
-  color: #99a3b3;
+  color: var(--subtle);
   cursor: not-allowed;
 }
 
@@ -160,8 +160,8 @@ input[type="radio"] {
 input:not([type="checkbox"]):not([type="radio"]):hover:not(:disabled):not([readonly]),
 select:hover:not(:disabled),
 textarea:hover:not(:disabled):not([readonly]) {
-  background-color: #fbfdff;
-  border-color: #b9c8dc;
+  background-color: var(--surface);
+  border-color: var(--control-hover-border);
 }
 
 input:not([type="checkbox"]):not([type="radio"]):focus,
@@ -169,7 +169,7 @@ select:focus,
 textarea:focus {
   background-color: var(--surface);
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
+  box-shadow: var(--focus-ring);
   outline: 0;
 }
 

@@ -5,6 +5,7 @@ import { useControlDensity } from "./controlDensity";
 import { HoverDetail } from "../HoverDetail";
 
 interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "aria-label"> {
+  active?: boolean;
   busy?: boolean;
   allowWhileBusy?: boolean;
   appearance?: "control" | "inline";
@@ -18,6 +19,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
   (
     {
       children,
+      active = false,
       busy = false,
       allowWhileBusy = false,
       appearance = "control",
@@ -67,7 +69,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         ref={setRef}
         aria-busy={effectiveBusy}
         aria-label={label}
-        className={`ui-icon-button ui-icon-button--${variant} ui-icon-button--${resolvedSize} ${appearance === "inline" ? "ui-icon-button--inline" : ""} ${className}`.trim()}
+        className={`ui-icon-button ui-icon-button--${variant} ui-icon-button--${resolvedSize} ${active ? "ui-icon-button--active" : ""} ${appearance === "inline" ? "ui-icon-button--inline" : ""} ${className}`.trim()}
         disabled={props.disabled || (effectiveBusy && !allowWhileBusy)}
         type={type}
       >

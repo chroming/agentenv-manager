@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 import {
   CheckCircle2,
   CircleAlert,
@@ -81,7 +82,7 @@ const SkillUpdateChange = ({
           <span>{t("Loading preview")}</span>
         </div>
       ) : null}
-      {open && error ? <p className="field-error">{error}</p> : null}
+      {open && error ? <p className="field-error"><DiagnosticMessage message={error} /></p> : null}
       {open && !loading && !error ? (
         contentOnly ? <SyntaxCodePreview path={visibleChange.path} code={visibleChange.after} />
           : <DiffViewer path={visibleChange.path} diff={visibleChange.diff} />
@@ -234,7 +235,7 @@ export const SkillUpdateDialog = ({
                 <span>
                   <strong>{progressLabel}</strong>
                   {completionError || progress?.error ? (
-                    <small>{completionError ?? progress?.error}</small>
+                    <small><DiagnosticMessage message={completionError ?? progress?.error ?? ""} /></small>
                   ) : null}
                 </span>
               </div>

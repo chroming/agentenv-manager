@@ -302,8 +302,7 @@
 .instructions-list-pane {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3);
+  gap: 6px;
 }
 
 .instructions-list {
@@ -319,6 +318,7 @@
   gap: var(--space-1);
   grid-template-columns: minmax(0, 1fr) repeat(2, var(--control-height-default));
   min-width: 0;
+  padding: var(--list-pane-inset) var(--list-pane-inset) 0;
 }
 
 .instructions-list-row__metadata {

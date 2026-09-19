@@ -1,6 +1,7 @@
 import type { SkillSummary, SkillSummaryCategory } from "../../shared/skillSummaries";
 import { useI18n } from "../i18n";
 import { Notice, TextAction } from "./ui";
+import { AIReviewFindings, splitAIReviewFindings } from "./AIReviewFindings";
 
 const categories: Array<[SkillSummaryCategory, string]> = [
   ["important", "Important changes"], ["usage", "Usage impact"],
@@ -16,27 +17,26 @@ export const SkillSummaryContent = ({ summary, onViewFile }: {
   const evidence = (paths: string[]) => <div className="skill-summary-files">{paths.map((path) => onViewFile
     ? <TextAction key={path} onClick={() => onViewFile(path)}>{path}</TextAction>
     : <code key={path}>{path}</code>)}</div>;
-  const finding = (item: SkillSummary["items"][number], index: number) => <div key={index}>
-    <dt>{t(categories.find(([category]) => category === item.category)![1])}</dt>
-    <dd>{item.category === "security"
-      ? <Notice tone="warning">{item.fact}{item.implication ? <p>{item.implication}</p> : null}</Notice>
-      : <><p>{item.fact}</p>{item.implication ? <p className="muted">{item.implication}</p> : null}</>}
-      {evidence(item.paths)}
-    </dd>
-  </div>;
+  const { visible, remaining } = splitAIReviewFindings(items.map((item) => ({
+    detail: item.fact, suggestion: item.implication, risk: item.category === "security",
+    note: item.evidenceStatus === "unverified" ? <p className="muted">{t("File references could not be verified. Check this finding against the original diff.")}</p> : undefined
+  })));
   return <div className="skill-summary-content">
-    <p>{summary.overview}</p>
-    <dl className="skill-summary-findings">
-    {items.slice(0, 3).map(finding)}
-    </dl>
+    <p className="ai-review-overview">{summary.overview}</p>
+    <AIReviewFindings items={visible} />
     {summary.coverage === "partial" ? <Notice tone="warning" title={t("Partial analysis")}>
       {t("Some changed content was not analyzed. Review the coverage in Details.")}
     </Notice> : null}
-    <details>
-    <summary>{items.length > 3 ? t("More findings ({{count}})", { count: items.length - 3 }) : t("Details")}</summary>
+    <details className="ai-review-details">
+    <summary>{remaining.length ? t("More findings ({{count}})", { count: remaining.length }) : t("Evidence and scope")}</summary>
     <div className="skill-summary-content">
     <p className="muted">{t("AI-generated")} · {summary.model} · {new Date(summary.generatedAt).toLocaleString()}</p>
-    {items.length > 3 ? <dl className="skill-summary-findings">{items.slice(3).map(finding)}</dl> : null}
+    <AIReviewFindings items={remaining} />
+    <ol className="ai-review-evidence">{items.map((item, index) => <li key={index}>
+      <span className="muted">{t(categories.find(([category]) => category === item.category)![1])}</span>
+      <p>{item.fact}</p>
+      {evidence(item.paths)}
+    </li>)}</ol>
     {summary.changeInventory ? <ul>{summary.changeInventory.map((file) => {
       const actionLabel = file.action === "added" ? "Added" : file.action === "removed" ? "Removed" : "Modified";
       const coverageLabel = file.coverage === "full" ? "Analyzed" : file.coverage === "partial" ? "Partial analysis" : "Not analyzed";

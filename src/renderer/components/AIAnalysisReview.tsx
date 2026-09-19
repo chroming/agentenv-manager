@@ -7,6 +7,7 @@ import { Button, DialogBody, DialogFooter, EmptyState, IconButton, Notice, TextA
 import { AIReviewHeading } from "./AIReviewHeading";
 import { SyntaxCodePreview } from "./SyntaxCodePreview";
 import { AIServiceForm } from "./SkillSummarySettings";
+import { AIReviewFindings, splitAIReviewFindings } from "./AIReviewFindings";
 
 export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRef }: {
   subject: AIAnalysisSubject; standalone?: boolean; onClose?(): void; closeRef?: Ref<HTMLButtonElement>;
@@ -65,19 +66,13 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
   const heading = subject.kind === "duplicates" ? "Duplicate Skill analysis" : "AI analysis";
   const shownDocument = record?.documents.find((doc) => doc.id === evidence);
   const priority = { risk: 0, suggestion: 1, observation: 2 };
-  const findings = subject.kind === "profile"
-    ? [...(record?.findings ?? [])].sort((a, b) => priority[a.category] - priority[b.category])
-    : record?.findings ?? [];
-  const visibleFindings = subject.kind === "profile" ? findings.slice(0, 3) : findings;
-  const remainingFindings = findings.slice(visibleFindings.length);
-  const findingContent = (finding: AIAnalysisRecord["findings"][number], index: number) => <section key={index}>
-    <h4>{finding.title || ({ risk: t("Potential risk"), suggestion: t("Suggestion"), observation: t("Observation") })[finding.category]}</h4>
-    <p>{finding.detail}</p>{finding.suggestion ? <p className="muted">{finding.suggestion}</p> : null}
-  </section>;
+  const findings = [...(record?.findings ?? [])].sort((a, b) => priority[a.category] - priority[b.category])
+    .map((finding) => ({ ...finding, risk: finding.category === "risk" }));
+  const { visible: visibleFindings, remaining: remainingFindings } = splitAIReviewFindings(findings);
   if (!allowed && !record && !standalone) return null;
   const actions = <>
     {busy === "generating" ? <Button onClick={() => void window.agentEnv.cancelAIAnalysis(request.current)}>{t("Stop")}</Button> : null}
-    {allowed && record && !standalone ? <IconButton label={t("Regenerate")} busy={Boolean(busy)} disabled={configuring} onClick={() => void prepare()}><RotateCw size={15} /></IconButton>
+    {allowed && record ? <IconButton label={t("Regenerate")} busy={Boolean(busy)} disabled={configuring} onClick={() => void prepare()}><RotateCw size={15} /></IconButton>
       : allowed ? <Button variant={standalone && !record ? "primary" : "secondary"} icon={record ? <RotateCw size={15} /> : <Sparkles size={15} />} busy={Boolean(busy)} disabled={Boolean(busy || configuring)} onClick={() => void prepare()}>{t(record ? "Regenerate" : action)}</Button> : null}
   </>;
   const closeAction = <Button ref={closeRef} variant={record ? "primary" : "secondary"} onClick={onClose}>{t("Close")}</Button>;
@@ -90,11 +85,12 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
     {configuring ? <AIServiceForm onCancel={() => setConfiguring(false)} onSaved={() => { setConfiguring(false); setNeedsConfig(false); setError(""); }} /> : null}
     {record ? <div className="skill-summary-content">
       {(!preview || record.key !== preview.key) ? <Notice tone="warning">{t("Inputs changed. This is the previous analysis; regenerate to analyze the current content.")}</Notice> : null}
-      <p>{record.overview}</p>
+      {standalone ? <AIReviewHeading title={t("AI analysis")} actions={actions} /> : null}
+      <p className="ai-review-overview">{record.overview}</p>
       {record.partial ? <Notice tone="warning">{t("Partial analysis: long content is truncated. Only the displayed scope is analyzed.")}</Notice> : null}
-      {visibleFindings.map(findingContent)}
-      <details><summary>{remainingFindings.length ? t("More findings ({{count}})", { count: remainingFindings.length }) : t("Details")}</summary><div className="skill-summary-content">
-      {remainingFindings.map(findingContent)}
+      <AIReviewFindings items={visibleFindings} />
+      <details className="ai-review-details"><summary>{remainingFindings.length ? t("More findings ({{count}})", { count: remainingFindings.length }) : t("Evidence and scope")}</summary><div className="skill-summary-content">
+      <AIReviewFindings items={remainingFindings} />
       <p className="muted">{t("AI-generated")} · {record.model} · {formatDate(record.generatedAt)}</p>
       <div className="skill-summary-files">{[...new Set(record.findings.flatMap((finding) => finding.evidence))].map((id) => <TextAction key={id} onClick={() => setEvidence(evidence === id ? "" : id)}>{record.documents.find((doc) => doc.id === id)?.label ?? id}</TextAction>)}</div>
       {shownDocument ? <SyntaxCodePreview path="evidence.md" code={shownDocument.content} /> : null}
@@ -105,7 +101,7 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
   </>;
   return standalone ? <>
     <DialogBody><div className="skill-summary-content">{content}</div></DialogBody>
-    <DialogFooter>{record ? <>{actions}{closeAction}</> : <>{closeAction}{actions}</>}</DialogFooter>
+    <DialogFooter>{record ? closeAction : <>{closeAction}{actions}</>}</DialogFooter>
   </> : <section className="skill-summary-review skill-summary-review--embedded" aria-label={t("AI analysis")}>
     <AIReviewHeading title={record ? t(heading) : undefined} actions={actions} />
     {content}

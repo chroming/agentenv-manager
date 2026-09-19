@@ -1,4 +1,5 @@
 import { AlertTriangle, Expand, FileText, LoaderCircle } from "lucide-react";
+import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 import { useI18n } from "../i18n";
 import { InstructionContentPreview } from "./InstructionContentPreview";
 import { IconButton } from "./ui";
@@ -84,7 +85,7 @@ export const InstructionDocumentPreviewList = ({
             ) : document.error ? (
               <div className="instruction-document__state is-error" role="alert">
                 <AlertTriangle size={15} />
-                <span>{document.error}</span>
+                <DiagnosticMessage message={document.error} />
               </div>
             ) : document.content ? (
               <InstructionContentPreview content={document.content} path={document.syntaxPath ?? document.name} />

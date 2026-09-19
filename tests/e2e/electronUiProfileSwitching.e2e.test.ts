@@ -1,5 +1,11 @@
 import { setSkillCatalogStatus, openSkillCatalogAction } from "./skillCatalogControls";
 import { createHash } from "node:crypto";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { DiagnosticIssueDialog } from "../../src/renderer/components/DiagnosticIssueDialog";
+import { Notice } from "../../src/renderer/components/ui/Notice";
+import { I18nProvider } from "../../src/renderer/i18n";
+import { SkillSummaryContent } from "../../src/renderer/components/SkillSummaryContent";
 import { constants } from "node:fs";
 import { access } from "node:fs/promises";
 import {
@@ -1689,6 +1695,11 @@ describe("Electron UI profile switching e2e", () => {
         for (let index = 0; index < 3; index += 1) {
           const trigger = sections.nth(index).locator(":scope > header > button");
           if (await trigger.getAttribute("aria-expanded") !== "true") await trigger.click();
+          if (index === 1) {
+            const child = sections.nth(index).locator(".ui-resource-row").first();
+            await child.waitFor();
+            expect(await child.evaluate((node) => getComputedStyle(node).paddingLeft)).toBe("34px");
+          }
           expect(await summaryOrigins()).toEqual(before);
           expect(await sections.locator(":scope > .ui-resource-disclosure__panel .ui-resource-panel-toolbar").count()).toBe(0);
           const actions = sections.nth(index).locator(":scope > header .ui-resource-panel-toolbar");
@@ -1876,7 +1887,7 @@ describe("Electron UI profile switching e2e", () => {
     }
   }, standardElectronTestTimeout);
 
-  it("balances compact catalog rows and bounded settings at desktop widths", async () => {
+  it("prioritizes catalog identity and shares full-width settings boundaries at desktop widths", async () => {
     const { page } = await launchApp();
     for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
       await resizeAppWindow(page, width!, height!);
@@ -1891,10 +1902,30 @@ describe("Electron UI profile switching e2e", () => {
       expect(geometry.height).toBeGreaterThanOrEqual(38);
       expect(geometry.height).toBeLessThanOrEqual(44);
       expect(geometry.contained).toBe(true);
+      const columns = await row.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").map(Number.parseFloat));
+      expect(columns[0]).toBeGreaterThanOrEqual(210);
+      const sourceColumn = await row.evaluate((element) => Number.parseInt(getComputedStyle(element).getPropertyValue("--skill-source-column")) - 1);
+      expect(columns[0]).toBeGreaterThan(columns[sourceColumn]!);
+      await expectNoHorizontalOverflow(page);
       await openSettingsCategory(page, "General");
-      const settings = await page.locator(".settings-category-panel > .resource-section").first().boundingBox();
-      expect(settings!.width).toBeLessThanOrEqual(1040);
+      const section = page.locator(".settings-category-panel > .resource-section").first();
+      const settings = await section.boundingBox();
+      const bounds = await section.evaluate((element) => ({
+        parentWidth: element.parentElement!.clientWidth,
+        width: element.getBoundingClientRect().width
+      }));
+      expect(Math.abs(bounds.width - bounds.parentWidth)).toBeLessThanOrEqual(1);
       expect(settings!.x + settings!.width).toBeLessThanOrEqual(width!);
+      await page.getByRole("button", { name: "Agents", exact: true }).click();
+      const agentColumns = await page.locator(".target-list__header").evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").map(Number.parseFloat));
+      expect(agentColumns[1]).toBeLessThanOrEqual(280);
+      await page.getByRole("button", { name: "Instructions", exact: true }).click();
+      const list = page.locator(".instructions-list");
+      await list.waitFor();
+      expect(await list.evaluate((element) => {
+        const pane = element.closest(".ui-master-list")!;
+        return Math.abs(element.getBoundingClientRect().left - pane.getBoundingClientRect().left);
+      })).toBeLessThanOrEqual(1);
     }
   }, standardElectronTestTimeout);
 
@@ -2286,6 +2317,22 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("button", { name: "Import skills" }).click();
     const importDialog = page.getByRole("dialog", { name: "Import skills" });
+    const sourceTabs = importDialog.getByRole("tablist", { name: "Import source" });
+    expect(await sourceTabs.getAttribute("class")).toContain("ui-segmented-control");
+    await sourceTabs.getByRole("tab", { name: "Local", exact: true }).focus();
+    await page.keyboard.press("ArrowRight");
+    expect(await sourceTabs.getByRole("tab", { name: "Repository", exact: true }).getAttribute("aria-selected")).toBe("true");
+    await page.keyboard.press("ArrowLeft");
+    for (const [width, height] of desktopReviewSizes) {
+      await resizeAppWindow(page, width!, height!);
+      await expectNoHorizontalOverflow(page, [".library-import-dialog"]);
+      await expectInViewport(page, sourceTabs);
+      if (process.env.AGENTENV_REVIEW_SCREENSHOTS) {
+        await mkdir(process.env.AGENTENV_REVIEW_SCREENSHOTS, { recursive: true });
+        await page.screenshot({ path: join(process.env.AGENTENV_REVIEW_SCREENSHOTS, `import-controls-${width}.png`) });
+      }
+    }
+    await resizeAppWindow(page, 1180, 728);
     await importDialog.getByRole("button", { name: "Choose local Skill source" }).click();
     await importDialog.getByText("Skills in this ZIP", { exact: true }).waitFor({ state: "visible" });
     await importDialog.getByRole("button", { name: "Import all", exact: true }).click();
@@ -5608,6 +5655,42 @@ describe("Electron UI profile switching e2e", () => {
     if (captureDir) await page.screenshot({ animations: "disabled", path: join(captureDir, "skill-details-recovered-1440.png") });
     await page.keyboard.press("Escape");
     await dialog.waitFor({ state: "hidden" });
+  }, standardElectronTestTimeout);
+
+  it("preserves shared control surfaces through disabled, busy, active and expanded states", async () => {
+    const { page } = await launchApp();
+    const styles = await page.evaluate(() => {
+      const fixture = document.createElement("div");
+      fixture.style.cssText = "position:fixed;left:-1000px;top:0";
+      document.body.append(fixture);
+      const read = (className: string, disabled = false, attributes: Record<string, string> = {}) => {
+        const button = document.createElement("button");
+        button.className = className;
+        button.disabled = disabled;
+        for (const [key, value] of Object.entries(attributes)) button.setAttribute(key, value);
+        fixture.append(button);
+        const style = getComputedStyle(button);
+        return { background: style.backgroundColor, border: style.borderTopColor, color: style.color, opacity: style.opacity };
+      };
+      try {
+        return {
+          ghost: read("ui-icon-button ui-icon-button--ghost", true),
+          primary: read("ui-button ui-button--primary"),
+          disabledPrimary: read("ui-button ui-button--primary", true),
+          busyPrimary: read("ui-button ui-button--primary", true, { "aria-busy": "true" }),
+          active: read("ui-icon-button ui-icon-button--ghost ui-icon-button--active"),
+          expanded: read("ui-icon-button ui-icon-button--ghost", false, { "aria-expanded": "true" }),
+          activeExpanded: read("ui-icon-button ui-icon-button--ghost ui-icon-button--active", false, { "aria-expanded": "true" })
+        };
+      } finally { fixture.remove(); }
+    });
+    expect(styles.ghost.background).toBe("rgba(0, 0, 0, 0)");
+    expect(styles.ghost.border).toBe("rgba(0, 0, 0, 0)");
+    expect(styles.disabledPrimary.background).toBe(styles.primary.background);
+    expect(Number(styles.disabledPrimary.opacity)).toBeLessThan(1);
+    expect(styles.busyPrimary.opacity).toBe("1");
+    expect(styles.activeExpanded).toEqual(styles.active);
+    expect(styles.expanded.background).not.toBe(styles.active.background);
   }, standardElectronTestTimeout);
 
   it("keeps one control taxonomy across workspaces and decision dialogs", async () => {
@@ -9476,7 +9559,7 @@ describe("Electron UI profile switching e2e", () => {
         source: row.querySelector<HTMLElement>(".library-source-cell")!.getBoundingClientRect().width
       }));
       expect(columnWidths.skill).toBeGreaterThan(0);
-      expect(columnWidths.source).toBeGreaterThanOrEqual(columnWidths.skill);
+      expect(columnWidths.skill).toBeGreaterThanOrEqual(columnWidths.source);
       expect(Math.abs(geometry.metrics[0]!.statusLeft - geometry.metrics[1]!.statusLeft)).toBeLessThanOrEqual(1);
       expect(geometry.metrics[0]!.statusIconPresent).toBe(true);
       expect(geometry.metrics[1]!.statusIconPresent).toBe(true);
@@ -11411,9 +11494,21 @@ describe("Electron UI profile switching e2e", () => {
       await resizeAppWindow(page, width, height);
       const switches = await group.getByRole("switch").evaluateAll((items) => items.map((item) => item.getBoundingClientRect().x));
       expect(Math.max(...switches) - Math.min(...switches)).toBeLessThanOrEqual(1);
+      const switchGeometry = await group.getByRole("switch").evaluateAll((items) => items.map((item) => {
+        const track = item.querySelector('.ui-switch__track')!.getBoundingClientRect();
+        const thumb = item.querySelector('.ui-switch__thumb')!.getBoundingClientRect();
+        return { inset: track.right - thumb.right, top: thumb.top - track.top,
+          bottom: track.bottom - thumb.bottom, width: thumb.width, height: thumb.height };
+      }));
+      for (const geometry of switchGeometry) {
+        expect(Math.abs(geometry.inset - 3)).toBeLessThanOrEqual(0.5);
+        expect(Math.abs(geometry.top - geometry.bottom)).toBeLessThanOrEqual(0.5);
+        expect(geometry.width).toBe(geometry.height);
+      }
       const captureDir = process.env.AGENTENV_SKILL_GROUP_CAPTURE_DIR;
       if (captureDir) {
         await mkdir(captureDir, { recursive: true });
+        await page.mouse.move(0, 0);
         await page.screenshot({ path: join(captureDir, `group-${scrollbarWidth}px-${width}x${height}.png`) });
       }
     }
@@ -11423,8 +11518,22 @@ describe("Electron UI profile switching e2e", () => {
     const memberSwitches = group.getByRole("switch", { name: /Enable the Group to change/ });
     await expect.poll(() => memberSwitches.count()).toBe(2);
     for (const control of await memberSwitches.all()) {
-      expect(await control.getAttribute("aria-checked")).toBe("true");
+      expect(await control.getAttribute("aria-checked")).toBe("false");
       expect(await control.isDisabled()).toBe(true);
+    }
+    await expect.poll(() => memberSwitches.first().evaluate((item) => {
+      const track = item.querySelector('.ui-switch__track')!.getBoundingClientRect();
+      const thumb = item.querySelector('.ui-switch__thumb')!.getBoundingClientRect();
+      return Math.abs(thumb.left - track.left - 3);
+    })).toBeLessThanOrEqual(0.5);
+    const captureDir = process.env.AGENTENV_SKILL_GROUP_CAPTURE_DIR;
+    if (captureDir) {
+      await page.mouse.move(0, 0);
+      await page.screenshot({ path: join(captureDir, `group-off-${scrollbarWidth}px-920x620.png`) });
+      await group.getByRole("button", { name: "Toggle Review pack" }).click();
+      await page.mouse.move(0, 0);
+      await page.screenshot({ path: join(captureDir, `group-collapsed-${scrollbarWidth}px-920x620.png`) });
+      await group.getByRole("button", { name: "Toggle Review pack" }).click();
     }
     await saveProfile(page);
     await expect.poll(async () => {
@@ -11466,7 +11575,7 @@ describe("Electron UI profile switching e2e", () => {
     }).toBe(0);
   }, standardElectronTestTimeout);
 
-  it("keeps a large Profile Skill Group scrollable inside the expanded Group", async () => {
+  it("scrolls large Profile Skill Groups through one Skills panel", async () => {
     const { page } = await launchApp({
       skillGroupFixture: true,
       openCodeAlphaLibrarySkillCount: 18
@@ -11479,7 +11588,8 @@ describe("Electron UI profile switching e2e", () => {
     const members = group.locator(".profile-skill-group__members");
     const panel = group.locator(":scope > .ui-resource-disclosure__panel");
     await expect.poll(() => members.getByRole("listitem").count()).toBe(20);
-    const scrollOwners = await Promise.all([panel, members].map((locator) =>
+    const skillsPanel = page.locator('[data-profile-composer-id="skills"] > .ui-resource-disclosure__panel');
+    const scrollOwners = await Promise.all([panel, members, skillsPanel].map((locator) =>
       locator.evaluate((element) => ({
         clientHeight: element.clientHeight,
         overflowY: window.getComputedStyle(element).overflowY,
@@ -11490,8 +11600,9 @@ describe("Electron UI profile switching e2e", () => {
     expect(scrollOwners[0]?.scrollHeight).toBeLessThanOrEqual(
       (scrollOwners[0]?.clientHeight ?? 0) + 1
     );
-    expect(scrollOwners[1]?.overflowY).toBe("auto");
-    const before = await members.evaluate((element) => ({
+    expect(scrollOwners[1]?.overflowY).toBe("visible");
+    expect(scrollOwners[2]?.overflowY).toBe("auto");
+    const before = await skillsPanel.evaluate((element) => ({
       clientHeight: element.clientHeight,
       scrollHeight: element.scrollHeight,
       scrollTop: element.scrollTop
@@ -11499,17 +11610,18 @@ describe("Electron UI profile switching e2e", () => {
     expect(before.scrollHeight).toBeGreaterThan(before.clientHeight);
     const lastRow = members.getByRole("listitem", { name: "Profile Skill layout-skill-18" });
     await expect.poll(async () => {
-      await members.hover();
+      await skillsPanel.hover();
       for (let step = 0; step < 4; step += 1) {
         await page.mouse.wheel(0, 120);
       }
       return lastRow.evaluate((row) => {
         const rowBox = row.getBoundingClientRect();
-        const listBox = row.parentElement!.getBoundingClientRect();
+        const listBox = document.querySelector('[data-profile-composer-id="skills"] > .ui-resource-disclosure__panel')!.getBoundingClientRect();
         return rowBox.top >= listBox.top - 1 && rowBox.bottom <= listBox.bottom + 1;
       });
     }).toBe(true);
-    expect(await members.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    expect(await skillsPanel.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    expect(await members.evaluate((element) => element.scrollTop)).toBe(0);
     expect(await panel.evaluate((element) => element.scrollTop)).toBe(0);
   }, standardElectronTestTimeout);
 
@@ -13292,5 +13404,111 @@ describe("Electron UI profile switching e2e", () => {
     expect(issue?.error.stack).toContain("file://~/");
     expect(issue?.error.stack).toContain("/out/main/main.js");
     expect(issue?.error.stack).not.toContain(homedir());
+  }, 60_000);
+
+  it("keeps long diagnostic details scrollable above an inset shared footer", async () => {
+    const { page } = await launchApp();
+    const markup = renderToStaticMarkup(createElement(DiagnosticIssueDialog, {
+      onDismiss: () => undefined,
+      issue: {
+        reference: "AEM-20260918-ABC123", action: "targets:list-states", category: "targets",
+        occurredAt: "2026-09-18T11:52:50.621Z", durationMs: 61748, events: [],
+        error: { name: "Error", message: "Skill read timed out. Refresh after checking this path.\n".repeat(30),
+          stack: "at readSkill /example/skills/library/example\n".repeat(40), causes: [] }
+      }
+    }));
+    await page.evaluate((html) => {
+      const fixture = document.createElement("div");
+      fixture.id = "diagnostic-layout-fixture";
+      fixture.innerHTML = html;
+      document.body.append(fixture);
+    }, markup);
+    for (const width of [920, 1180, 1440]) {
+      await resizeAppWindow(page, width, 680);
+      const geometry = await page.locator(".diagnostic-issue-dialog").evaluate((dialog) => {
+        const bounds = dialog.getBoundingClientRect();
+        const footer = dialog.querySelector("footer")!.getBoundingClientRect();
+        const body = dialog.querySelector(".diagnostic-issue-content")!;
+        const buttons = [...dialog.querySelectorAll("footer button")].map((button) => button.getBoundingClientRect());
+        return {
+          inset: Math.min(...buttons.map((button) => bounds.bottom - button.bottom)),
+          fits: bounds.bottom <= window.innerHeight && bounds.top >= 0,
+          separate: body.getBoundingClientRect().bottom <= footer.top + 1,
+          scrolls: body.scrollHeight > body.clientHeight
+        };
+      });
+      expect(geometry.inset).toBeGreaterThanOrEqual(12);
+      expect(geometry).toMatchObject({ fits: true, separate: true, scrolls: true });
+      await page.screenshot({ path: `/tmp/agentenv-diagnostic-${width}.png` });
+    }
+  }, 60_000);
+
+  it("keeps diagnostic copy actions and unverified summary findings readable across widths and locales", async () => {
+    const { page } = await launchApp();
+    for (const locale of ["en", "zh_CN", "zh_TW"] as const) {
+      const error = "The service could not complete this request. ".repeat(6) + "Diagnostic reference: AEM-20260918-ABC123";
+      const content = createElement("div", { className: "ui-dialog-body" },
+        createElement(Notice, { tone: "warning", role: "alert", children: error }),
+        createElement(SkillSummaryContent, { summary: {
+          schemaVersion: 1, key: "fixture", skillId: "fixture", beforeHash: "old", afterHash: "new",
+          overview: "The update removes a validation step.", model: "fixture", generatedAt: "2026-09-18T12:00:00Z",
+          redacted: false, coverage: "complete", omittedPaths: [], files: [],
+          items: [{ category: "security", fact: "Input validation was removed.", implication: "Review inputs before use.", paths: [], evidenceStatus: "unverified" }]
+        } }));
+      const html = renderToStaticMarkup(createElement(I18nProvider, { preference: locale, children: content }));
+      await page.evaluate((markup) => {
+        document.getElementById("summary-diagnostic-fixture")?.remove();
+        const backdrop = document.createElement("div");
+        backdrop.className = "preview-modal-backdrop";
+        backdrop.id = "summary-diagnostic-fixture";
+        const dialog = document.createElement("section");
+        dialog.className = "profile-form-dialog";
+        dialog.innerHTML = markup;
+        backdrop.append(dialog);
+        document.body.append(backdrop);
+      }, html);
+      for (const width of [920, 1180, 1440]) {
+        await resizeAppWindow(page, width, 680);
+        const notice = page.locator("#summary-diagnostic-fixture .ui-notice").first();
+        const geometry = await notice.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          const copy = element.querySelector(".ui-notice__copy")!.getBoundingClientRect();
+          const button = element.querySelector("button")!.getBoundingClientRect();
+          return { fits: element.scrollWidth <= element.clientWidth + 1,
+            separate: copy.right <= button.left, inset: bounds.right - button.right,
+            buttonWidth: button.width, buttonHeight: button.height };
+        });
+        expect(geometry).toMatchObject({ fits: true, separate: true });
+        expect(geometry.inset).toBeGreaterThanOrEqual(8);
+        expect(geometry.buttonWidth).toBeGreaterThanOrEqual(24);
+        expect(geometry.buttonHeight).toBeGreaterThanOrEqual(24);
+        await page.screenshot({ path: `/tmp/agentenv-summary-diagnostic-${locale}-${width}.png` });
+      }
+    }
+  }, 60_000);
+
+  it("keeps device summary hover quiet and stable", async () => {
+    const { page } = await launchApp();
+    const trigger = page.locator(".sidebar-agent-summary").first();
+    for (const width of [920, 1440]) {
+      await resizeAppWindow(page, width, 728);
+      await page.mouse.move(500, 100);
+      const before = await trigger.boundingBox();
+      await trigger.hover();
+      const state = await trigger.evaluate((button) => {
+        const style = getComputedStyle(button);
+        const icon = button.querySelector(".sidebar-agent-summary__device")!.getBoundingClientRect();
+        const label = button.querySelector(".sidebar-agent-summary__label")!.getBoundingClientRect();
+        const bounds = button.getBoundingClientRect();
+        return { border: style.borderTopColor, left: icon.left - bounds.left, right: bounds.right - label.right,
+          centered: Math.abs(icon.top + icon.height / 2 - bounds.top - bounds.height / 2) };
+      });
+      expect(state.border).toBe("rgba(0, 0, 0, 0)");
+      expect(state.left).toBeGreaterThanOrEqual(8);
+      expect(state.right).toBeGreaterThanOrEqual(8);
+      expect(state.centered).toBeLessThanOrEqual(1);
+      expect(await trigger.boundingBox()).toEqual(before);
+      await page.screenshot({ path: `/tmp/agentenv-device-hover-${width}.png` });
+    }
   }, 60_000);
 });

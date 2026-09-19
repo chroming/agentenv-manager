@@ -1,4 +1,5 @@
 import { LoaderCircle, Server, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 import { TargetEnvironmentSummary } from "./TargetEnvironmentSummary";
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type {
@@ -505,7 +506,7 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
                 />
               </div>
             ) : null}
-            {error ? <p className="ui-field__error" role="alert">{error}</p> : null}
+            {error ? <p className="ui-field__error" role="alert"><DiagnosticMessage message={error} /></p> : null}
           </DialogBody>
           <DialogFooter>
             <Button disabled={busy} onClick={close}>{t(connectionIssue ? "Close" : "Cancel")}</Button>
@@ -539,7 +540,7 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
             title={t("Remove {{name}}?", { name: removingDevice.name })}
             description={t("This removes the saved connection and local status history. Files on the Linux device are not changed.")}
           />
-          {error ? <DialogBody><p className="ui-field__error" role="alert">{error}</p></DialogBody> : null}
+          {error ? <DialogBody><p className="ui-field__error" role="alert"><DiagnosticMessage message={error} /></p></DialogBody> : null}
           <DialogFooter>
             <Button disabled={busy} onClick={close}>{t("Cancel")}</Button>
             <Button

@@ -7,6 +7,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes
 } from "react";
+import { DiagnosticMessage } from "./DiagnosticCopyButton";
 
 interface FieldFrameProps {
   children: ReactNode;
@@ -31,7 +32,7 @@ const FieldFrame = ({
     <span className={`ui-field__label${labelHidden ? " ui-visually-hidden" : ""}`}>{label}</span>
     {children}
     {description ? <span className="ui-field__description">{description}</span> : null}
-    {error ? <span className="ui-field__error" role="alert">{error}</span> : null}
+    {error ? <span className="ui-field__error" role="alert">{typeof error === "string" ? <DiagnosticMessage message={error} /> : error}</span> : null}
   </label>
 );
 

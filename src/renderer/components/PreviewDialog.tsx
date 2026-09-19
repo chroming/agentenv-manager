@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 import {
   AlertTriangle,
   Ban,
@@ -681,7 +682,7 @@ export const PreviewDialog = ({
 
           {errorMessage ? (
             <p className="error preview-action-error" role="alert">
-              {errorMessage}
+              <DiagnosticMessage message={errorMessage} />
             </p>
           ) : null}
         </div>

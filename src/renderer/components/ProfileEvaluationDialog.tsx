@@ -1,4 +1,5 @@
 import { AIAnalysisReview } from "./AIAnalysisReview";
+import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 import {
   AlertTriangle,
   Check,
@@ -704,7 +705,7 @@ export const ProfileEvaluationDialog = ({
           {error ? (
             <div className="profile-comparison-notice is-error" role="alert">
               <XCircle size={16} />
-              <p>{error}</p>
+              <p><DiagnosticMessage message={error} /></p>
               {!run ? (
                 <Button size="compact" busy={previewing} onClick={() => void reviewWorkspace(workspaceInput)}>
                   {t("Review again")}

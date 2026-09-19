@@ -8,6 +8,7 @@ export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from ".
 export { ChoiceInput, type ChoiceInputProps } from "./ChoiceInput";
 export { ControlGroup } from "./ControlGroup";
 export { DialogBody, DialogFooter, DialogHeader } from "./DialogParts";
+export { DiagnosticCopyButton, DiagnosticMessage } from "./DiagnosticCopyButton";
 export { DetailList } from "./DetailList";
 export { DisclosureIcon } from "./DisclosureIcon";
 export { FilterPopover } from "./FilterPopover";

@@ -51,7 +51,7 @@
   padding: 8px 16px;
   box-sizing: border-box;
   width: 100%;
-  max-width: 1040px;
+  max-width: none;
 }
 
 .settings-category-panel > .resource-section + .resource-section {

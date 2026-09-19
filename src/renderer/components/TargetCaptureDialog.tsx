@@ -1,3 +1,4 @@
+import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 import {
   ArrowLeft,
   Check,
@@ -301,7 +302,7 @@ export const TargetCaptureDialog = ({
                   <TriangleAlert size={16} aria-hidden="true" />
                   <span>
                     <strong>{t("Capture is blocked")}</strong>
-                    {preview.errors.map((error) => <small key={error}>{error}</small>)}
+                    {preview.errors.map((error) => <small key={error}><DiagnosticMessage message={error} /></small>)}
                   </span>
                   <div className="capture-errors__actions">
                     <IconButton
@@ -537,7 +538,7 @@ export const TargetCaptureDialog = ({
           {flowError ? (
             <div className="capture-flow-error" role="alert">
               <TriangleAlert size={16} aria-hidden="true" />
-              <span><strong>{t("Could not complete this step")}</strong><small>{flowError}</small></span>
+              <span><strong>{t("Could not complete this step")}</strong><small><DiagnosticMessage message={flowError} /></small></span>
               <Button size="compact" variant="ghost" disabled={isBusy} onClick={onRefreshReview}>
                 {t("Refresh review")}
               </Button>

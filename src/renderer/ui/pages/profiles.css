@@ -598,17 +598,23 @@
 }
 
 .profile-action-status--applied {
-  color: #168455;
+  color: var(--success);
 }
 
 .profile-action-status--dirty,
-.profile-action-status--save-failed,
-.profile-action-status--apply-pending,
+.profile-action-status--apply-pending {
+  color: var(--muted);
+}
+
 .profile-action-status--target-unavailable,
+.profile-action-status--review-required {
+  color: var(--warning);
+}
+
+.profile-action-status--save-failed,
 .profile-action-status--validation-error,
-.profile-action-status--review-required,
 .profile-action-status--preview-error {
-  color: #a86b14;
+  color: var(--danger);
 }
 
 .profile-composer-section__count-scope {

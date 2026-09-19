@@ -19,7 +19,7 @@
 .target-list {
   flex: 1;
   --target-list-columns:
-    32px minmax(200px, 0.8fr) minmax(168px, 1fr) 68px;
+    32px clamp(200px, 28%, 280px) minmax(168px, 1fr) 68px;
   align-items: start;
   background: var(--surface);
   display: flex;

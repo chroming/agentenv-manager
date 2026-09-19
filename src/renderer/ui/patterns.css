@@ -490,7 +490,7 @@
   gap: var(--space-2);
   grid-template-columns: 28px minmax(0, 1fr) auto;
   min-height: 54px;
-  padding: 7px 10px;
+  padding: 7px var(--list-pane-inset);
   text-align: left;
   width: 100%;
 }
@@ -899,7 +899,23 @@
 
 /* Nested rows use indentation rather than connector lines or a colored container. */
 .ui-resource-disclosure.is-nested > .ui-resource-disclosure__panel .ui-resource-row {
-  padding-left: 42px;
+  padding-left: var(--resource-child-inset);
+}
+
+/* List groups share the row action rail; only their identity is indented. */
+.ui-resource-disclosure[data-appearance="list"] {
+  --resource-disclosure-header-height: 38px;
+}
+
+.ui-resource-disclosure[data-appearance="list"] > .ui-resource-disclosure__panel {
+  border-top: 0;
+  margin: 0;
+  max-width: none;
+  padding: 0;
+}
+
+.ui-resource-disclosure[data-appearance="list"] > .ui-resource-disclosure__panel .ui-resource-row {
+  padding-left: calc(var(--resource-child-inset) + var(--resource-depth-step));
 }
 
 .ui-menu-placeholder {
@@ -1099,7 +1115,11 @@
 
 .ui-search-field:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
+  box-shadow: var(--focus-ring);
+}
+
+.ui-search-field:hover:not(:focus-within):not(:has(input:disabled)):not(:has(input[readonly])) {
+  border-color: var(--control-hover-border);
 }
 
 .ui-search-field__icon {

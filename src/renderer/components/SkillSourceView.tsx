@@ -1,3 +1,4 @@
+import { DiagnosticCopyButton } from "./ui/DiagnosticCopyButton";
 import {
   useEffect,
   useMemo,
@@ -1115,6 +1116,7 @@ export const SkillSourceView = ({
                   text={mergeError}
                   tooltipClassName="library-source-tooltip"
                 />
+                <DiagnosticCopyButton message={mergeError} />
               </div>
             ) : null}
           </DialogBody>

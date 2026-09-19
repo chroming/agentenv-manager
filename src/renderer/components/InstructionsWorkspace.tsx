@@ -1,4 +1,5 @@
 import { Expand, Eye, FileInput, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 import {
   type MouseEvent as ReactMouseEvent,
   useEffect,
@@ -336,7 +337,7 @@ export const InstructionsWorkspace = ({
                 <p>{t("Agent files stay unchanged until those Profiles are applied again.")}</p>
               </div>
             ) : null}
-            {deleteError ? <p className="ui-field-error" role="alert">{deleteError}</p> : null}
+            {deleteError ? <p className="ui-field-error" role="alert"><DiagnosticMessage message={deleteError} /></p> : null}
           </DialogBody>
           <DialogFooter>
             <Button ref={deleteCancelRef} disabled={deleting} onClick={closeDeleteDialog}>

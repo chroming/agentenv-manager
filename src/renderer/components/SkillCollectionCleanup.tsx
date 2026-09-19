@@ -1,4 +1,5 @@
 import { useCallback, useState, type RefObject } from "react";
+import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 import { createPortal } from "react-dom";
 import {
   CheckCircle2,
@@ -513,7 +514,7 @@ export const SkillCollectionDialog = ({
                     ? t("Save Profile before moving")
                     : t("Could not move collection")}
                 </strong>
-                <small>{t(moveIssue.message)}</small>
+                <small><DiagnosticMessage message={t(moveIssue.message)} /></small>
               </span>
             </div>
           ) : null}

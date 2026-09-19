@@ -1,3 +1,4 @@
+import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 import {
   ArrowUpDown,
   ArrowRight,
@@ -269,7 +270,8 @@ const ConversationSortMenu = ({
     <>
       <IconButton
         ref={buttonRef}
-        className={`conversation-sort-button${sort === "recent" ? "" : " is-active"}`}
+        className="conversation-sort-button"
+        active={sort !== "recent"}
         variant="ghost"
         label={triggerLabel}
         title={triggerLabel}
@@ -449,7 +451,7 @@ const TargetMenu = ({
                     ? "Open and copy prompt"
                     : "Open with handoff";
                 return (
-                  <button
+                  <ActionMenuItem appearance="object"
                     type="button"
                     role="menuitem"
                     key={target.id}
@@ -483,7 +485,7 @@ const TargetMenu = ({
                           : t(methodLabel)}
                       </span>
                     </span>
-                  </button>
+                  </ActionMenuItem>
                 );
               })}
             </ActionMenu>,
@@ -2429,7 +2431,7 @@ export const ConversationWorkspace = ({
                   </div>
                 </div>
               ) : null}
-              {moveError ? <p className="ui-field__error" role="alert">{moveError}</p> : null}
+              {moveError ? <p className="ui-field__error" role="alert"><DiagnosticMessage message={moveError} /></p> : null}
             </DialogBody>
             <DialogFooter className="preview-actions">
               {movePreview ? (

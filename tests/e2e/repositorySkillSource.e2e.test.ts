@@ -327,7 +327,9 @@ describe("Repository Skill source", () => {
         const statusLabel = group.querySelector(".skill-source-status .ui-interactive-status__label")!.getBoundingClientRect();
         const actions = group.querySelector(".skill-source-more")!.getBoundingClientRect();
         const moreButtonRight = group.querySelector(".skill-source-more button")!.getBoundingClientRect().right;
+        const parentTitleLeft = group.querySelector(".skill-source-link-text")!.getBoundingClientRect().left;
         return [...group.querySelectorAll<HTMLElement>(".skill-source-candidate")].map((row) => ({
+          identityIndent: row.querySelector(".skill-source-candidate-title")!.getBoundingClientRect().left - parentTitleLeft,
           statusDelta: Math.abs(row.querySelector(".skill-source-state")!.getBoundingClientRect().left - status.left),
           labelDelta: Math.abs(row.querySelector(".skill-source-state .ui-interactive-status__label")!.getBoundingClientRect().left - statusLabel.left),
           actionsDelta: Math.abs(row.querySelector(".skill-source-candidate-action")!.getBoundingClientRect().left - actions.left),
@@ -336,6 +338,8 @@ describe("Repository Skill source", () => {
         }));
       });
       expect(lanes.length).toBeGreaterThan(0);
+      expect(lanes.every((row) => Math.abs(row.identityIndent - 24) <= 1), JSON.stringify({ width, lanes })).toBe(true);
+      expect(await sourceGroup.locator(".skill-source-candidates").evaluate((element) => getComputedStyle(element).borderTopWidth)).toBe("0px");
       expect(lanes.every((row) => row.statusDelta <= 1 && row.labelDelta <= 1 && row.actionsDelta <= 1 && row.actionButtonDelta <= 1 && !row.overflow), JSON.stringify({ width, lanes })).toBe(true);
     }
     await page.setViewportSize({ width: 920, height: 620 });

@@ -301,12 +301,14 @@ const AgentOverflowPopover = ({
       >
         {isSummary ? (
           <>
+            <span className="sidebar-agent-summary__device">
             {summaryState === "loading" ? (
               <LoaderCircle className="is-spinning" size={17} aria-hidden="true" />
             ) : (
               remote ? <Server size={17} strokeWidth={2.1} aria-hidden="true" /> : <Monitor size={17} strokeWidth={2.1} aria-hidden="true" />
             )}
             <span className="sidebar-agent-summary__state" aria-hidden="true" />
+            </span>
             {!compact ? <span className="sidebar-agent-summary__label">{targets.length}</span> : null}
           </>
         ) : (

@@ -24,6 +24,21 @@ const install = (cached = false, prefs = defaultAIPreferences()) => {
   return api;
 };
 describe("AI assistance surfaces", () => {
+  it.each(["duplicates", "comparison"] as const)("keeps %s concise without hiding concrete risks", async (kind) => {
+    const api = install();
+    api.prepareAIAnalysis.mockResolvedValue({ key: "key", documents: record.documents, warnings: [], partial: false, cached: {
+      ...record, kind, findings: Array.from({ length: 7 }, (_, index) => ({
+        category: index > 4 ? "risk" : "observation", detail: `Finding ${index}`, suggestion: "", evidence: ["proposed"]
+      }))
+    } });
+    const subject = kind === "duplicates" ? { kind, documents: record.documents } : { kind, runId: "one" };
+    const { container } = render(<AIAnalysisReview subject={subject} />);
+    await screen.findByText("Finding 6");
+    for (const index of [5, 6]) expect(screen.getByText(`Finding ${index}`).closest("details")).toBeNull();
+    expect([...container.querySelectorAll(".ai-review-finding")].filter((node) => !node.closest("details"))).toHaveLength(5);
+    expect(screen.getByText("Finding 4").closest("details")).not.toBeNull();
+    expect(api.generateAIAnalysis).not.toHaveBeenCalled();
+  });
   it("prioritizes three Profile findings without losing older cached details or evidence", async () => {
     const api = install();
     api.prepareAIAnalysis.mockResolvedValue({ key: "key", documents: record.documents, warnings: [], partial: false, cached: {
@@ -34,9 +49,9 @@ describe("AI assistance surfaces", () => {
     const { container } = render(<AIAnalysisReview subject={{ kind: "profile", profileId: "review", targetId: "codex" }} />);
     await screen.findByText("Issue 5");
     const headings = [...container.querySelectorAll("h4")].filter((node) => !node.closest("details"));
-    expect(headings.map((node) => node.textContent)).toEqual(["Issue 5", "Issue 0", "Issue 1"]);
+    expect(headings.map((node) => node.textContent)).toEqual(["Issue 5", "Issue 0", "Issue 1", "Issue 2"]);
     expect(screen.getByText("Issue 4").closest("details")).not.toBeNull();
-    fireEvent.click(screen.getByText("More findings (3)"));
+    fireEvent.click(screen.getByText("More findings (2)"));
     expect(screen.getByText("Edit 4")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "With Profile" }));
     await screen.findByText("test added");
@@ -50,7 +65,8 @@ describe("AI assistance surfaces", () => {
     expect(container.querySelector(".ui-dialog-body .ui-resource-panel-toolbar")).toBeNull();
     fireEvent.click(analyze);
     await screen.findByText("Adds a test");
-    expect(screen.getByRole("button", { name: "Regenerate" })).toHaveTextContent("Regenerate");
+    expect(screen.getByRole("button", { name: "Regenerate" })).toHaveClass("ui-icon-button");
+    expect(screen.getByRole("button", { name: "Regenerate" }).closest("footer")).toBeNull();
     expect(screen.getByRole("button", { name: "Close" })).toHaveClass("ui-button--primary");
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(close).toHaveBeenCalledTimes(1);
@@ -104,7 +120,7 @@ describe("AI assistance surfaces", () => {
     const api = install(); render(<AIAnalysisReview subject={{ kind: "comparison", runId: "run" }} />);
     fireEvent.click(await screen.findByRole("button", { name: "Analyze results" }));
     await screen.findByText("Adds a test");
-    fireEvent.click(screen.getByText("Details"));
+    fireEvent.click(screen.getByText("Evidence and scope"));
     fireEvent.click(screen.getByRole("button", { name: "With Profile" })); await screen.findByText("test added");
     expect(api.generateAIAnalysis).toHaveBeenCalledTimes(1);
   });
