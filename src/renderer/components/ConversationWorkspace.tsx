@@ -1931,11 +1931,38 @@ export const ConversationWorkspace = ({
                         document.getElementById(`conversation-option-${nextIndex}`)?.focus();
                       }}
                     >
+                      <span
+                        className={`conversation-agent-icon conversation-agent-icon--${icon.flavor} conversation-list-item__icon`}
+                        aria-hidden="true"
+                      >
+                        {icon.assetUrl
+                          ? <img src={icon.assetUrl} alt="" />
+                          : item.agentName.slice(0, 1)}
+                      </span>
                       <span className="conversation-list-item__copy">
-                        <OverflowTooltip
-                          className="conversation-list-item__title"
-                          text={item.title}
-                        />
+                        <span className="conversation-list-item__primary">
+                          <OverflowTooltip
+                            className="conversation-list-item__title"
+                            text={item.title}
+                          />
+                          <span className="conversation-list-item__metric">
+                            {sort === "size-desc" && item.sizeBytes !== undefined ? (
+                              formatConversationSize(item.sizeBytes)
+                            ) : (
+                              <time
+                                aria-label={t("Last reply {{time}}", {
+                                  time: formatDetailTime(item.updatedAt)
+                                })}
+                                dateTime={item.updatedAt}
+                                title={t("Last reply {{time}}", {
+                                  time: formatDetailTime(item.updatedAt)
+                                })}
+                              >
+                                {formatListTime(item.updatedAt)}
+                              </time>
+                            )}
+                          </span>
+                        </span>
                         {showSearchPreview ? (
                           <OverflowTooltip
                             className="conversation-list-item__snippet"
@@ -1943,19 +1970,14 @@ export const ConversationWorkspace = ({
                           />
                         ) : null}
                         <small>
-                          <span className="conversation-list-item__agent">
-                            <span
-                              className={`conversation-agent-icon conversation-agent-icon--${icon.flavor}`}
-                              aria-hidden="true"
-                            >
-                              {icon.assetUrl
-                                ? <img src={icon.assetUrl} alt="" />
-                                : item.agentName.slice(0, 1)}
-                            </span>
-                            {item.agentName}
-                          </span>
-                          {item.origin ? <><span aria-hidden="true">·</span><OverflowTooltip className="history-device-name" text={item.origin.deviceName} /></> : null}
-                          {(workspaceFilter || query.trim()) && item.workspacePath ? (
+                          <span className="conversation-list-item__agent">{item.agentName}</span>
+                          {item.origin && item.origin.deviceId !== "local" ? (
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <OverflowTooltip className="history-device-name" text={item.origin.deviceName} />
+                            </>
+                          ) : null}
+                          {item.workspacePath ? (
                             <>
                               <span aria-hidden="true">·</span>
                               <OverflowTooltip
@@ -1965,24 +1987,20 @@ export const ConversationWorkspace = ({
                               />
                             </>
                           ) : null}
-                          <span aria-hidden="true">·</span>
-                          <time
-                            aria-label={t("Last reply {{time}}", {
-                              time: formatDetailTime(item.updatedAt)
-                            })}
-                            dateTime={item.updatedAt}
-                            title={t("Last reply {{time}}", {
-                              time: formatDetailTime(item.updatedAt)
-                            })}
-                          >
-                            {formatListTime(item.updatedAt)}
-                          </time>
-                          {sort === "size-desc" && item.sizeBytes !== undefined ? (
+                          {sort === "size-desc" ? (
                             <>
                               <span aria-hidden="true">·</span>
-                              <span className="conversation-list-item__size">
-                                {formatConversationSize(item.sizeBytes)}
-                              </span>
+                              <time
+                                aria-label={t("Last reply {{time}}", {
+                                  time: formatDetailTime(item.updatedAt)
+                                })}
+                                dateTime={item.updatedAt}
+                                title={t("Last reply {{time}}", {
+                                  time: formatDetailTime(item.updatedAt)
+                                })}
+                              >
+                                {formatListTime(item.updatedAt)}
+                              </time>
                             </>
                           ) : null}
                         </small>

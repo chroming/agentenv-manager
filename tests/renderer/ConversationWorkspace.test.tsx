@@ -1025,7 +1025,7 @@ describe("ConversationWorkspace", () => {
     expect(refresh.querySelector(".is-spinning")).not.toBeNull();
     expect(screen.queryByText("Refreshing conversations")).toBeNull();
     expect(
-      container.querySelector(".conversation-list-item__agent img")
+      container.querySelector(".conversation-list-item__icon img")
     ).not.toBeNull();
     expect(container.querySelector(".conversation-layout")).not.toHaveAttribute("inert");
     expect(screen.getByRole("searchbox", { name: "Search conversations" })).toBeEnabled();

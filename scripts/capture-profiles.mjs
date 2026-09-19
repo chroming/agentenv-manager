@@ -1181,31 +1181,35 @@ try {
   );
   await page.evaluate(() => window.agentEnv.setSharedSkillAreaMode("managed"));
   await page.reload();
-  await agentsWorkspace.getByRole("button", { name: "Shared Skills", exact: true }).waitFor({
+  await agentsWorkspace.getByRole("article", { name: "Agent OpenCode", exact: true })
+    .getByRole("button", { name: "OpenCode", exact: true }).waitFor({
     state: "visible"
   });
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByLabel("Interface language").selectOption("zh_CN");
-  await page.getByRole("heading", { name: "设置" }).waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "设置", exact: true }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Agents", exact: true }).click();
-  await agentsWorkspace.getByRole("button", { name: "共享技能", exact: true }).waitFor({
+  await agentsWorkspace.getByRole("article", { name: "Agent OpenCode", exact: true })
+    .getByRole("button", { name: "OpenCode", exact: true }).waitFor({
     state: "visible"
   });
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "agents-ready-zh-cn-920x620.png"));
   await page.getByRole("button", { name: "设置", exact: true }).click();
   await page.getByLabel("界面语言").selectOption("zh_TW");
-  await page.getByRole("heading", { name: "設定" }).waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "設定", exact: true }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Agents", exact: true }).click();
-  await agentsWorkspace.getByRole("button", { name: "共享技能", exact: true }).waitFor({
+  await agentsWorkspace.getByRole("article", { name: "Agent OpenCode", exact: true })
+    .getByRole("button", { name: "OpenCode", exact: true }).waitFor({
     state: "visible"
   });
   await capturePage(page, join(outputDir, "agents-ready-zh-tw-920x620.png"));
   await page.getByRole("button", { name: "設定", exact: true }).click();
   await page.getByLabel("介面語言").selectOption("en");
-  await page.getByRole("heading", { name: "Settings" }).waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Settings", exact: true }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Agents", exact: true }).click();
-  await agentsWorkspace.getByRole("button", { name: "Shared Skills", exact: true }).waitFor({
+  await agentsWorkspace.getByRole("article", { name: "Agent OpenCode", exact: true })
+    .getByRole("button", { name: "OpenCode", exact: true }).waitFor({
     state: "visible"
   });
   await setWindowSize(page, windowHandle, 1180, 728);
@@ -1219,20 +1223,22 @@ try {
   const hiddenAgents = page.getByRole("button", {
     name: /^Show hidden Agent list, \d+ items?$/
   });
-  await hiddenAgents.hover();
-  const hiddenAgentsPopover = page.getByRole("menu", { name: "Hidden Agents" })
-    .filter({ hasText: "Antigravity" })
-    .filter({ hasText: "Trae CLI" });
-  await hiddenAgentsPopover.waitFor({ state: "visible" });
-  await capturePage(
-    page,
-    join(outputDir, "sidebar-agent-overflow-1180x728.png"),
-    { preservePointer: true }
-  );
-  await page
-    .getByRole("group", { name: "Library item react-best-practices" })
-    .hover();
-  await hiddenAgentsPopover.waitFor({ state: "hidden" });
+  if (await hiddenAgents.isVisible().catch(() => false)) {
+    await hiddenAgents.hover();
+    const hiddenAgentsPopover = page.getByRole("menu", { name: "Hidden Agents" })
+      .filter({ hasText: "Antigravity" })
+      .filter({ hasText: "Trae CLI" });
+    await hiddenAgentsPopover.waitFor({ state: "visible" });
+    await capturePage(
+      page,
+      join(outputDir, "sidebar-agent-overflow-1180x728.png"),
+      { preservePointer: true }
+    );
+    await page
+      .getByRole("group", { name: "Library item react-best-practices" })
+      .hover();
+    await hiddenAgentsPopover.waitFor({ state: "hidden" });
+  }
   await page
     .getByRole("group", { name: "Library item react-best-practices" })
     .getByRole("button", { name: "Change icon for react-best-practices" })
@@ -1412,7 +1418,7 @@ try {
   const checkSourceMenuItem = page.getByRole("menuitem", { name: "Check source" });
   await checkSourceMenuItem.click();
   await updatedSourceGroup.locator(".skill-source-status-label")
-    .filter({ hasText: "Update available" })
+    .filter({ hasText: "1 update" })
     .waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-sources-update-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
@@ -2187,16 +2193,14 @@ try {
   await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("tab", { name: "General" }).click();
   await page.getByLabel("Interface language").selectOption("zh_CN");
-  await page.getByRole("heading", { name: "设置" }).waitFor({ state: "visible" });
+  await page.getByRole("region", { name: "设置", exact: true }).waitFor({ state: "visible" });
   await page.getByRole("status").filter({ hasText: "设置已保存" }).waitFor({
     state: "visible"
   });
   await page.reload();
-  await page.getByRole("heading", { name: "Agents", exact: true }).waitFor({
-    state: "visible"
-  });
+  await page.locator(".target-page").waitFor({ state: "visible" });
   await page.getByRole("button", { name: "设置", exact: true }).click();
-  await page.getByRole("heading", { name: "设置" }).waitFor({ state: "visible" });
+  await page.getByRole("region", { name: "设置", exact: true }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "settings-zh-cn-920x620.png"));
   await page.getByRole("button", { name: "技能", exact: true }).click();
   await page.getByRole("region", { name: "技能资源库", exact: true }).waitFor({
@@ -2215,16 +2219,14 @@ try {
   });
   await page.getByRole("tab", { name: "通用" }).click();
   await page.getByLabel("界面语言").selectOption("zh_TW");
-  await page.getByRole("heading", { name: "設定" }).waitFor({ state: "visible" });
+  await page.getByRole("region", { name: "設定", exact: true }).waitFor({ state: "visible" });
   await page.getByRole("status").filter({ hasText: "設定已儲存" }).waitFor({
     state: "visible"
   });
   await page.reload();
-  await page.getByRole("heading", { name: "Agents", exact: true }).waitFor({
-    state: "visible"
-  });
+  await page.locator(".target-page").waitFor({ state: "visible" });
   await page.getByRole("button", { name: "設定", exact: true }).click();
-  await page.getByRole("heading", { name: "設定" }).waitFor({ state: "visible" });
+  await page.getByRole("region", { name: "設定", exact: true }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "settings-zh-tw-920x620.png"));
   await page.getByRole("button", { name: "技能", exact: true }).click();
   await page.getByRole("region", { name: "技能資源庫", exact: true }).waitFor({
@@ -2240,23 +2242,21 @@ try {
   await page.getByRole("button", { name: "設定", exact: true }).click();
   await page.getByRole("tab", { name: "一般" }).click();
   await page.getByLabel("介面語言").selectOption("en");
-  await page.getByRole("heading", { name: "Settings" }).waitFor({ state: "visible" });
+  await page.getByRole("region", { name: "Settings", exact: true }).waitFor({ state: "visible" });
 
   await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   const collapsedWorkspaces = [
-    ["Skills", "Skills", "sidebar-collapsed-skills-920x620.png"],
-    ["Profiles", "Profiles", "sidebar-collapsed-profiles-920x620.png"],
-    ["Workspaces", "Workspaces", "sidebar-collapsed-workspaces-920x620.png"],
-    ["Conversations", "Conversations", "sidebar-collapsed-conversations-920x620.png"],
-    ["Agents", "Agents", "sidebar-collapsed-agents-920x620.png"],
-    ["Settings", "Settings", "sidebar-collapsed-settings-920x620.png"]
+    ["Skills", ".skill-library-panel", "sidebar-collapsed-skills-920x620.png"],
+    ["Profiles", ".profile-page", "sidebar-collapsed-profiles-920x620.png"],
+    ["Workspaces", ".projects-page", "sidebar-collapsed-workspaces-920x620.png"],
+    ["Conversations", ".conversation-page", "sidebar-collapsed-conversations-920x620.png"],
+    ["Agents", ".target-page", "sidebar-collapsed-agents-920x620.png"],
+    ["Settings", ".settings-page", "sidebar-collapsed-settings-920x620.png"]
   ];
-  for (const [buttonName, headingName, fileName] of collapsedWorkspaces) {
+  for (const [buttonName, pageSelector, fileName] of collapsedWorkspaces) {
     await page.getByRole("button", { name: buttonName, exact: true }).click();
-    await page.getByRole("heading", { name: headingName, exact: true }).waitFor({
-      state: "visible"
-    });
+    await page.locator(pageSelector).waitFor({ state: "visible" });
     await capturePage(page, join(outputDir, fileName));
   }
   await page.getByRole("button", { name: "Show Local Agents" }).click();

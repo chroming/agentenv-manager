@@ -105,12 +105,12 @@
 }
 
 .conversation-date-group {
-  background: color-mix(in srgb, var(--surface-subtle) 96%, transparent);
+  background: color-mix(in srgb, var(--surface-subtle) 98%, transparent);
   color: var(--subtle);
   font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-regular);
   line-height: 18px;
-  padding: 5px 10px 3px;
+  padding: 4px var(--list-pane-inset) 2px;
   position: sticky;
   top: 0;
   z-index: var(--z-raised);
@@ -131,14 +131,17 @@
 }
 
 .conversation-list-item {
+  align-items: start;
   background: transparent;
   border: 0;
   border-bottom: 1px solid var(--border);
   border-radius: 0;
   color: var(--text);
   cursor: pointer;
-  display: block;
-  min-height: 52px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  min-height: 54px;
   padding: 7px var(--list-pane-inset);
   text-align: left;
   width: 100%;
@@ -149,7 +152,7 @@
 }
 
 .conversation-list-item.is-selected {
-  background: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface-subtle));
   box-shadow: none;
 }
 
@@ -162,6 +165,35 @@
   display: grid;
   gap: 2px;
   min-width: 0;
+}
+
+.conversation-list-item__primary {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.conversation-list-item > .conversation-list-item__icon {
+  align-self: start;
+  border-radius: var(--radius-tight);
+  height: 18px;
+  margin-top: 0;
+  width: 18px;
+}
+
+.conversation-list-item > .conversation-list-item__icon img {
+  height: 15px;
+  width: 15px;
+}
+
+.conversation-list-item__metric {
+  color: var(--subtle);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-regular);
+  line-height: 18px;
+  white-space: nowrap;
 }
 
 .conversation-list-item__snippet,
@@ -203,22 +235,23 @@
   gap: 4px;
   line-height: 16px;
   min-width: 0;
+  overflow: hidden;
   white-space: nowrap;
 }
 
 .conversation-list-item__copy small > .conversation-list-item__workspace {
   flex: 1 1 auto;
+  min-width: 24px;
 }
 
 .conversation-list-item__copy small > .conversation-list-item__agent,
-.conversation-list-item__copy small > .conversation-list-item__size,
 .conversation-list-item__copy small > time,
 .conversation-list-item__copy small > span[aria-hidden="true"] {
   flex: 0 0 auto;
 }
 
 .conversation-list-item.has-search-preview {
-  min-height: 70px;
+  min-height: 72px;
 }
 
 .conversation-list-item.has-search-preview .conversation-list-item__title {
@@ -246,24 +279,6 @@
   height: 19px;
   object-fit: contain;
   width: 19px;
-}
-
-.conversation-list-item__copy small .conversation-list-item__agent {
-  align-items: center;
-  display: inline-flex;
-  gap: 5px;
-}
-
-.conversation-list-item__agent .conversation-agent-icon {
-  flex-basis: 16px;
-  font-size: 9px;
-  height: 16px;
-  width: 16px;
-}
-
-.conversation-list-item__agent .conversation-agent-icon img {
-  height: 13px;
-  width: 13px;
 }
 
 .conversation-detail {
@@ -497,25 +512,28 @@
 
 .conversation-turn {
   border-bottom: 1px solid var(--border);
-  padding: 17px 4px 19px;
+  column-gap: 10px;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  padding: 16px 4px 18px;
 }
 
 .conversation-turn--user {
-  background: var(--surface-subtle);
-  border: 0;
-  border-radius: var(--radius-surface);
-  margin: 10px 0;
-  padding: 14px 16px 16px;
+  background: transparent;
+  border-radius: 0;
+  margin: 0;
 }
 
 .conversation-turn__header {
   align-items: center;
   color: var(--muted);
-  display: flex;
+  display: grid;
   font-size: var(--font-size-caption);
-  gap: 7px;
+  gap: 10px;
+  grid-column: 1 / -1;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
   line-height: 20px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .conversation-turn__header strong {
@@ -525,24 +543,23 @@
 
 .conversation-turn__header time {
   color: var(--subtle);
-  margin-left: auto;
+  white-space: nowrap;
 }
 
 .conversation-turn__avatar {
   align-items: center;
   border-radius: var(--radius-tight);
   display: inline-flex;
-  flex: 0 0 24px;
-  height: 24px;
+  height: 20px;
   justify-content: center;
   overflow: hidden;
-  width: 24px;
+  width: 20px;
 }
 
 .conversation-turn__avatar img {
-  height: 17px;
+  height: 15px;
   object-fit: contain;
-  width: 17px;
+  width: 15px;
 }
 
 .conversation-turn__avatar--user {
@@ -553,6 +570,7 @@
 .conversation-turn__messages {
   display: grid;
   gap: 12px;
+  grid-column: 2;
 }
 
 .conversation-message {

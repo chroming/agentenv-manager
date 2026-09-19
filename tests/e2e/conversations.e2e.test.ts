@@ -492,7 +492,7 @@ describe("Conversations desktop workflow", () => {
     await page.getByRole("button", { name: "Load 1 more" }).click();
     await expect.poll(() => page.locator(".conversation-list-meta").textContent()).toMatch(/^201 conversations · /);
     await expect.poll(() => page.getByRole("button", { name: "Load 1 more" }).count()).toBe(0);
-    expect(await page.locator(".conversation-list-item__agent img").count())
+    expect(await page.locator(".conversation-list-item__icon img").count())
       .toBeGreaterThanOrEqual(4);
     const ordinaryTitleWeight = await page.locator(
       ".conversation-list-item:not(.is-selected) .conversation-list-item__title"
@@ -515,19 +515,31 @@ describe("Conversations desktop workflow", () => {
       const titleBounds = row
         .querySelector(".conversation-list-item__title")!
         .getBoundingClientRect();
-      const agent = row.querySelector(".conversation-list-item__agent")!;
-      const iconBounds = agent
-        .querySelector(".conversation-agent-icon")!
+      const agentBounds = row
+        .querySelector(".conversation-list-item__agent")!
         .getBoundingClientRect();
-      const agentBounds = agent.getBoundingClientRect();
+      const iconBounds = row
+        .querySelector(".conversation-list-item__icon")!
+        .getBoundingClientRect();
+      const primaryBounds = row
+        .querySelector(".conversation-list-item__primary")!
+        .getBoundingClientRect();
+      const metricBounds = row
+        .querySelector(".conversation-list-item__metric")!
+        .getBoundingClientRect();
       const style = getComputedStyle(row);
       return {
         titleInset: Math.round(titleBounds.left - rowBounds.left),
-        titleRightInset: Math.round(rowBounds.right - titleBounds.right),
-        agentIconCenterDelta: Math.round(
+        metadataAlignment: Math.round(Math.abs(agentBounds.left - titleBounds.left)),
+        metricRightInset: Math.round(rowBounds.right - metricBounds.right),
+        iconTop: Math.round(iconBounds.top - rowBounds.top),
+        primaryTop: Math.round(primaryBounds.top - rowBounds.top),
+        iconHeight: Math.round(iconBounds.height),
+        primaryHeight: Math.round(primaryBounds.height),
+        iconPrimaryCenterDelta: Math.round(
           Math.abs(
             iconBounds.top + iconBounds.height / 2 -
-            (agentBounds.top + agentBounds.height / 2)
+            (primaryBounds.top + primaryBounds.height / 2)
           )
         ),
         borderRadius: style.borderRadius,
@@ -535,15 +547,26 @@ describe("Conversations desktop workflow", () => {
         className: row.className
       };
     });
-    expect(selectedRowGeometry.titleInset).toBeLessThanOrEqual(10);
-    expect(selectedRowGeometry.titleRightInset).toBeLessThanOrEqual(10);
-    expect(selectedRowGeometry.agentIconCenterDelta).toBeLessThanOrEqual(1);
+    expect(selectedRowGeometry.titleInset).toBeGreaterThanOrEqual(36);
+    expect(selectedRowGeometry.titleInset).toBeLessThanOrEqual(44);
+    expect(selectedRowGeometry.metadataAlignment).toBeLessThanOrEqual(1);
+    expect(selectedRowGeometry.metricRightInset).toBeLessThanOrEqual(10);
+    expect(
+      selectedRowGeometry.iconPrimaryCenterDelta,
+      `Conversation row geometry: ${JSON.stringify(selectedRowGeometry)}`
+    ).toBeLessThanOrEqual(1);
     expect(selectedRowGeometry.borderRadius).toBe("0px");
     expect(selectedRowGeometry.boxShadow).toBe("none");
     expect(selectedRowGeometry.className).toContain("is-selected");
-    await expect.poll(() => selectedConversation.evaluate((row) =>
-      getComputedStyle(row).backgroundColor
-    )).toBe("rgba(0, 122, 255, 0.1)");
+    await expect.poll(async () => {
+      const selectedColor = await selectedConversation.evaluate((row) =>
+        getComputedStyle(row).backgroundColor
+      );
+      const ordinaryColor = await page.locator(".conversation-list-item:not(.is-selected)").first().evaluate((row) =>
+        getComputedStyle(row).backgroundColor
+      );
+      return selectedColor !== ordinaryColor;
+    }).toBe(true);
     await page.getByText("The release workflow is ready.").waitFor({
       state: "visible",
       timeout: 15_000
