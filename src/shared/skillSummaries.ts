@@ -26,6 +26,7 @@ export interface SkillSummary {
     fact: string;
     implication: string;
     paths: string[];
+    evidenceStatus?: "unverified";
   }>;
   coverage: "complete" | "partial";
   omittedPaths: string[];

@@ -34,6 +34,23 @@ const setup = async (fetchImpl = vi.fn<typeof fetch>().mockImplementation(async 
 };
 
 describe("manual Skill update summaries", () => {
+  it("sends an explicit evidence allowlist and persists canonical citations without extra requests", async () => {
+    const output = { ...result, items: [{ ...result.items[0], paths: ["`./references/guide.md`"] }] };
+    const { service, readInput, fetchImpl, store } = await setup(vi.fn<typeof fetch>().mockImplementation(async () => response(output)));
+    readInput.mockResolvedValue({ ...snapshot, files: [{ path: "references/guide.md", diff: "+ Updated behavior" }], omittedPaths: ["SKILL.md"] });
+    const summary = await service.generate(input());
+    expect(summary.items[0].paths).toEqual(["references/guide.md"]);
+    expect(await store.read(summary.key, "review")).toEqual(summary);
+    const messages = JSON.parse(String(fetchImpl.mock.calls[0][1]?.body)).messages;
+    expect(JSON.parse(messages[1].content).allowedEvidencePaths).toEqual(["references/guide.md"]);
+    expect(messages[0].content).not.toContain('"SKILL.md"');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    fetchImpl.mockImplementation(async () => response({ ...result, items: [{ ...result.items[0], paths: ["SKILL.md"] }] }));
+    const regenerated = await service.generate({ ...input(), regenerate: true });
+    expect(regenerated.items[0]).toMatchObject({ paths: [], evidenceStatus: "unverified" });
+    expect(await store.read(summary.key, "review")).toEqual(regenerated);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
   it("persists normalized categories without retry and keeps prior evidence on invalid regeneration", async () => {
     const output = { ...result, items: [result.items[0],
       { ...result.items[0], category: "breaking_changes" },
@@ -151,9 +168,10 @@ describe("manual Skill update summaries", () => {
     expect((await service.generate(input())).overview).toBe(result.overview);
   });
 
-  it("rejects invented file evidence", async () => {
+  it("preserves analysis but never links invented file evidence", async () => {
     const { service } = await setup(vi.fn<typeof fetch>().mockResolvedValue(response({ ...result, items: [{ ...result.items[0], paths: ["/etc/passwd"] }] })));
-    await expect(service.generate(input())).rejects.toThrow("invalid file references");
+    const summary = await service.generate(input());
+    expect(summary.items[0]).toEqual({ ...result.items[0], paths: [], evidenceStatus: "unverified" });
   });
 
   it("keeps partial coverage explicit and unknown usage unavailable", async () => {

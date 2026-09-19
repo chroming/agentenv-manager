@@ -53,6 +53,18 @@ describe("AI assistance privacy gates", () => {
   });
 });
 describe("immutable AI analyses", () => {
+  it.each(["duplicates", "comparison"] as const)("requests a concise decision brief for %s without changing cached results", async (kind) => {
+    const f = await fixture();
+    const selected: AIAnalysisSubject = kind === "duplicates" ? subject : { kind, runId: "fixture" };
+    const preview = await f.service.prepare(selected, "en");
+    const result = await f.service.generate({ ...f.args, subject: selected, expectedKey: preview.key });
+    const prompt = f.request.mock.calls[0][0].system;
+    expect(prompt).toContain("at most three ordinary findings");
+    expect(prompt).toContain("retain additional distinct concrete risks");
+    expect(prompt.toLowerCase()).toContain("do not repeat the overview");
+    expect((await f.service.prepare(selected, "en")).cached).toEqual(result);
+    expect(f.request).toHaveBeenCalledTimes(1);
+  });
   it("requests a focused Profile brief and preserves issue titles across cached reads", async () => {
     const f = await fixture();
     const profile: AIAnalysisSubject = { kind: "profile", profileId: "review", targetId: "codex" };

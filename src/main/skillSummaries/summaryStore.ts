@@ -16,7 +16,8 @@ export const SummarySchema = z.object({
   items: z.array(z.object({
     category: z.enum(["important", "usage", "security", "other"]),
     fact: z.string().max(1500), implication: z.string().max(1500),
-    paths: z.array(z.string()).max(20)
+    paths: z.array(z.string()).max(20),
+    evidenceStatus: z.literal("unverified").optional()
   })).max(30),
   coverage: z.enum(["complete", "partial"]), omittedPaths: z.array(z.string()),
   redacted: z.boolean(),

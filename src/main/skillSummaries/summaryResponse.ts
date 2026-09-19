@@ -11,7 +11,9 @@ const categoryAliases = new Map<string, string>([
 const ItemSchema = SummarySchema.shape.items.element;
 // Normalize only equivalent transport labels. Stored categories and evidence remain strict.
 const OutputSchema = SummarySchema.pick({ overview: true }).extend({
-  items: z.array(ItemSchema.extend({ category: z.preprocess((value) => {
+  items: z.array(ItemSchema.omit({ evidenceStatus: true }).extend({
+    paths: z.preprocess((value) => value == null ? [] : typeof value === "string" ? [value] : value, ItemSchema.shape.paths),
+    category: z.preprocess((value) => {
     if (typeof value !== "string") return value;
     const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
     return categoryAliases.get(normalized) ?? normalized;
@@ -48,9 +50,23 @@ export const parseSummaryResponse = (response: unknown, suppliedPaths: string[])
     return fail(`The AI summary has invalid fields (${issues}).`);
   }
   const paths = new Set(suppliedPaths);
-  const invalid = parsed.data.items.filter((item) => !item.paths.length || item.paths.some((path) => !paths.has(path))).length;
-  if (invalid) return fail(`The summary contains invalid file references in ${invalid} findings. References must match the supplied changed files.`);
+  const canonicalPath = (path: string) => {
+    if (paths.has(path)) return path;
+    let normalized = path.trim();
+    if (/^`[^`]+`$/.test(normalized)) normalized = normalized.slice(1, -1);
+    normalized = normalized.replace(/^(\.\/)+/, "");
+    return paths.has(normalized) ? normalized : undefined;
+  };
+  const items = parsed.data.items.map((item) => {
+    const resolved = item.paths.map(canonicalPath);
+    const unverified = !resolved.length || resolved.some((path) => path === undefined);
+    return {
+      ...item,
+      paths: [...new Set(resolved.filter((path): path is string => path !== undefined))],
+      ...(unverified ? { evidenceStatus: "unverified" as const } : {})
+    };
+  });
   // Optional billing metadata must not invalidate an otherwise valid summary.
   const usage = z.object({ prompt_tokens: z.number().nonnegative().optional(), completion_tokens: z.number().nonnegative().optional() }).safeParse(envelope.data.usage);
-  return { parsed: parsed.data, usage: usage.success ? { inputTokens: usage.data.prompt_tokens, outputTokens: usage.data.completion_tokens } : undefined };
+  return { parsed: { ...parsed.data, items }, usage: usage.success ? { inputTokens: usage.data.prompt_tokens, outputTokens: usage.data.completion_tokens } : undefined };
 };
