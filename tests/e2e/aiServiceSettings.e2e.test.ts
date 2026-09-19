@@ -28,6 +28,10 @@ it("saves without shifting actions and tests only synthetic content on explicit 
       AGENTENV_HOME: join(root, "home"), AGENTENV_CACHE_ROOT: join(root, "cache"), AGENTENV_AUTOMATION_TARGET_PATH: join(root, "bin") } });
   try {
     const page = await app.firstWindow();
+    await expect.poll(
+      () => page.evaluate(() => window.agentEnv.readStartupStatus()),
+      { timeout: 10_000 }
+    ).toEqual({ state: "ready" });
     await page.getByRole("button", { name: "Settings", exact: true }).waitFor();
     await page.evaluate((endpoint) => window.agentEnv.saveSkillSummaryConfig({ endpoint, model: "fixture" }), `http://127.0.0.1:${port}/v1`);
     await page.getByRole("button", { name: "Settings", exact: true }).click();

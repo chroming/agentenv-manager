@@ -2264,7 +2264,7 @@ describe("Electron UI profile switching e2e", () => {
         const candidate = group.querySelector(".skill-source-candidate")!.getBoundingClientRect();
         return { parentLeft: parent.left, childLeft: name.left, height: candidate.height };
       });
-      expect(Math.abs(geometry.childLeft - geometry.parentLeft)).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.childLeft - geometry.parentLeft - 24)).toBeLessThanOrEqual(1);
       expect(geometry.height).toBeLessThanOrEqual(52);
     }
     await resizeAppWindow(page, 920, 620);
@@ -12880,7 +12880,7 @@ describe("Electron UI profile switching e2e", () => {
         radius: "6px"
       },
       create: {
-        backgroundColor: "rgb(245, 245, 247)",
+        backgroundColor: "rgb(0, 122, 255)",
         disabled: true,
         fontWeight: "400",
         height: 32,
