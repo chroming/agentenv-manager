@@ -32,6 +32,26 @@ it("isolates an unreadable sibling and fails closed for mutation callers", async
   await expect(reader()).rejects.toThrow("Permission denied");
 });
 
+it("coalesces overlapping display scans but keeps strict reads fresh", async () => {
+  await setup();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const readEntry = vi.fn(async (id: string, path: string) => {
+    await gate;
+    return entry(id, path);
+  });
+  const reader = createSkillLibraryReader(async () => root, readEntry);
+  const first = reader(() => undefined);
+  const second = reader(() => undefined);
+  release();
+  expect(await first).toEqual(await second);
+  expect(readEntry).toHaveBeenCalledTimes(2);
+  await reader();
+  expect(readEntry).toHaveBeenCalledTimes(4);
+  await reader(() => undefined);
+  expect(readEntry).toHaveBeenCalledTimes(6);
+});
+
 it("retains last-good content only for display and clears the issue after recovery", async () => {
   await setup();
   let failed = false;

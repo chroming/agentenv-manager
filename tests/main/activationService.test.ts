@@ -78,6 +78,24 @@ const writeCodexLiveFiles = async (paths: ReturnType<typeof createPaths>) => {
 };
 
 describe("activation service v2", () => {
+  it("isolates unreadable Library entries in status reads without trusting stale content for Apply", async () => {
+    const { paths, service, profile } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const preview = await service.previewProfile(profile.id, "codex");
+    expect(await service.applyProfile(profile.id, preview.id)).toMatchObject({ ok: true });
+    const statePath = join(paths.targetStatesDir, "codex.json");
+    const before = await readFile(statePath, "utf8");
+    const unrelated = join(paths.skillsLibraryDir, "unreadable");
+    await mkdir(unrelated);
+    expect((await service.listTargetStates())[0].lifecycleStatus).toBe("applied");
+    await writeFile(join(paths.skillsLibraryDir, "review", ".agentenv-skill.json"), "null");
+    expect((await service.listTargetStates())[0]).toMatchObject({
+      targetId: "codex", activeProfileId: profile.id, lifecycleStatus: "pending", errorCount: 1,
+      lifecycleReason: expect.stringContaining("Could not read Skill")
+    });
+    await expect(service.previewProfile(profile.id, "codex")).rejects.toThrow("Could not read Skill");
+    expect(await readFile(statePath, "utf8")).toBe(before);
+  });
   it("applies a manual-only Skill as a copy and recognizes a repeat Apply as unchanged", async () => {
     const { paths, service, profileStore, profile, skillLibraryStore, settingsStore } = await makeEnv();
     await settingsStore.updateSettings({ enabledTargetIds: ["claude-code", "codex"], skillSyncMethod: "symlink" });

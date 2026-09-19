@@ -12,7 +12,7 @@ export const createSkillLibraryReader = (
   // Display cache only. Strict callers never receive these snapshots on failure.
   const lastGood = new Map<string, SkillLibraryEntry>();
   let lastRoot: string | undefined;
-  return async (onIssues?: (issues: SkillRuntimeIssue[]) => void): Promise<SkillLibraryEntry[]> => {
+  const read = async (onIssues?: (issues: SkillRuntimeIssue[]) => void): Promise<SkillLibraryEntry[]> => {
     const root = await rootFor();
     if (lastRoot !== root) lastGood.clear();
     lastRoot = root;
@@ -58,5 +58,19 @@ export const createSkillLibraryReader = (
     if (!onIssues && issues.length) throw new Error(issues.map((issue) => issue.message).join("\n"));
     onIssues?.(issues);
     return result.sort((a, b) => a.name.localeCompare(b.name));
+  };
+  let displayRead: Promise<{ entries: SkillLibraryEntry[]; issues: SkillRuntimeIssue[] }> | undefined;
+  return async (onIssues?: (issues: SkillRuntimeIssue[]) => void): Promise<SkillLibraryEntry[]> => {
+    if (!onIssues) return read();
+    // Share only overlapping display reads, never a mutation's freshness check.
+    if (!displayRead) {
+      let issues: SkillRuntimeIssue[] = [];
+      displayRead = read((value) => { issues = value; })
+        .then((entries) => ({ entries, issues }))
+        .finally(() => { displayRead = undefined; });
+    }
+    const result = await displayRead;
+    onIssues(result.issues);
+    return result.entries.map((entry) => ({ ...entry }));
   };
 };

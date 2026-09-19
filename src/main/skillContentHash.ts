@@ -55,10 +55,11 @@ const hashSnapshot = async (rootPath: string, options: SkillHashOptions) => {
   const started = Date.now();
   let count = 0;
   let bytes = 0;
+  const buffer = Buffer.allocUnsafe(64 * 1024);
   const check = () => {
     options.signal?.throwIfAborted();
     if (Date.now() - started > (options.timeoutMs ?? 30_000)) {
-      throw new Error(`Skill read timed out; inspect the folder and retry: ${rootPath}`);
+      throw new Error(`Skill read timed out; inspect the folder and retry: ${rootPath} (elapsed ${Date.now() - started} ms, ${count} entries, ${bytes} bytes)`);
     }
   };
   const remember = async (path: string) => {
@@ -111,7 +112,6 @@ const hashSnapshot = async (rootPath: string, options: SkillHashOptions) => {
           writeLength(hash, before.size);
           let readBytes = 0;
           // Stream bounded chunks instead of allocating each complete file.
-          const buffer = Buffer.allocUnsafe(64 * 1024);
           while (readBytes < before.size) {
             check();
             const read = await file.read(buffer, 0, Math.min(buffer.length, before.size - readBytes), readBytes);
@@ -131,10 +131,16 @@ const hashSnapshot = async (rootPath: string, options: SkillHashOptions) => {
     }
   };
   await hashDirectory(rootPath);
-  for (const [path, expected] of stamps) {
-    check();
-    if (stamp(await lstat(path)) !== expected) throw new ChangedSkillError(`Skill changed while reading: ${path}`);
-  }
+  // Verification order does not affect the digest. Bound filesystem concurrency.
+  const pending = [...stamps];
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(8, pending.length) }, async () => {
+    while (next < pending.length) {
+      const [path, expected] = pending[next++];
+      check();
+      if (stamp(await lstat(path)) !== expected) throw new ChangedSkillError(`Skill changed while reading: ${path}`);
+    }
+  }));
   return hash.digest("hex");
 };
 

@@ -268,7 +268,8 @@ export const createActivationService = ({
     const entries = await readdir(paths.targetStatesDir, { withFileTypes: true });
     const enabledTargetIds = new Set(await targetScope.listEnabledIds());
     const supportedTargetIds = new Set(targetRegistry.list().map((target) => target.id));
-    const skillLibrary = await skillLibraryStore.listSkills();
+    // Status reads can be partial; mutation previews still use the strict reader.
+    const skillLibrary = await skillLibraryStore.listSkills(() => undefined);
     const states = await Promise.all(
       entries
         .filter(
@@ -296,6 +297,26 @@ export const createActivationService = ({
             const activeProfile = state.activeProfileId
               ? await profileStore.readProfile(state.activeProfileId).catch(() => undefined)
               : undefined;
+            const unreadableSkills = skillLibrary.filter((skill) => skill.readIssue &&
+              activeProfile?.resources.skills.some((reference) => reference.libraryId === skill.id));
+            if (unreadableSkills.length && !state.recoveryRequired) {
+              return {
+                targetId,
+                activeProfileId: state.activeProfileId,
+                activeProfileName: activeProfile?.manifest.name,
+                appliedProfileHash: state.appliedProfileHash,
+                appliedLibraryVersions: state.appliedLibraryVersions,
+                lastAppliedAt: state.lastAppliedAt,
+                status: state.activeProfileId ? "managed" : "unmanaged",
+                lifecycleStatus: "pending",
+                lifecycleReason: unreadableSkills.map((skill) => skill.readIssue).join("\n"),
+                managedResourceCount: activeManagedResources.length,
+                skillReceipts: state.skillReceipts ?? [],
+                sharedSkillPreparations: state.sharedSkillPreparations ?? [],
+                warningCount: unreadableSkills.length,
+                errorCount: unreadableSkills.length
+              };
+            }
             const activeTargetPaths = activeProfile ? await targetPathsFor(targetId) : undefined;
             const activeDeploymentProfile = activeProfile
               ? profileWithoutLocalSkillOverrides(
