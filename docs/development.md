@@ -83,7 +83,7 @@ presented and registered as partial; shared interfaces do not imply support.
 ## Target Integrations
 
 Built-in integrations currently cover OpenCode, Claude Code, Codex,
-Antigravity CLI, Trae CLI, and Pi Coding Agent. Target-specific installation
+Antigravity CLI, Antigravity App, Trae CLI, Pi Coding Agent, and WorkBuddy. Target-specific installation
 evidence, paths, Instructions, Skills, native MCP behavior, capture, and
 deployment facts live under `src/main/targets/integrations/`.
 
@@ -168,7 +168,7 @@ npm run dist:linux
 and Linux CI build platform packages and run packaged workflows against an
 isolated home with fake Agent commands. This proves the packaged Electron
 binary starts and exercises the tested preload, IPC, persistence, Git import,
-and six-Agent Apply paths. It does not prove every real third-party CLI version
+and built-in-Agent Apply paths. It does not prove every real third-party CLI version
 or each graphical installer flow.
 
 The tag workflow in `.github/workflows/release.yml` is the public release owner.

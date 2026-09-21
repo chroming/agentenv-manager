@@ -15,6 +15,7 @@ import { createTargetScope } from "../../src/main/targets/targetScope";
 import { createAntigravityTargetAdapter } from "../../src/main/targets/integrations/antigravity";
 import { createPiTargetAdapter } from "../../src/main/targets/integrations/pi";
 import { createTraeCliTargetAdapter } from "../../src/main/targets/integrations/trae-cli";
+import { createWorkBuddyTargetAdapter } from "../../src/main/targets/integrations/workbuddy";
 import { createFixtureAgentAdapter } from "../fixtures/targets/fixtureAgent";
 
 let root = "";
@@ -22,6 +23,7 @@ let root = "";
 const makeService = async (options: {
   platform?: NodeJS.Platform;
   macApplicationDiscovery?: MacApplicationDiscovery;
+  allowSystemApplicationLookup?: boolean;
 } = {}) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-discovery-"));
   const binDir = join(root, "bin");
@@ -36,7 +38,8 @@ const makeService = async (options: {
     createClaudeCodeTargetAdapter(),
     createCodexTargetAdapter(),
     createTraeCliTargetAdapter(),
-    createPiTargetAdapter()
+    createPiTargetAdapter(),
+    createWorkBuddyTargetAdapter()
   ]);
   const settingsStore = createSettingsStore(paths, {
     supportedTargetIds: targetRegistry.list().map((target) => target.id)
@@ -51,7 +54,8 @@ const makeService = async (options: {
     targetScope,
     pathEnv: binDir,
     platform: options.platform,
-    macApplicationDiscovery: options.macApplicationDiscovery
+    macApplicationDiscovery: options.macApplicationDiscovery,
+    allowSystemApplicationLookup: options.allowSystemApplicationLookup
   });
 
   return { binDir, paths, service, settingsStore, targetRegistry, targetScope };
@@ -245,6 +249,43 @@ describe("target discovery", () => {
 
     expect(opencode?.health.status).toBe("ready");
     expect(opencode?.health.canWrite).toBe(true);
+  });
+
+  it("checks only declared resource paths for a Skills-only desktop Agent", async () => {
+    let applicationPath = "";
+    const macApplicationDiscovery: MacApplicationDiscovery = {
+      findApplicationsByBundleIdentifier: async (bundleIdentifier) =>
+        bundleIdentifier === "com.tencent.workbuddy.mac" ? [applicationPath] : [],
+      readBundleIdentifier: async (path) =>
+        path === applicationPath ? "com.tencent.workbuddy.mac" : undefined,
+      probeExecutable: async () => ({ status: "missing" })
+    };
+    const environment = await makeService({
+      platform: "darwin",
+      macApplicationDiscovery,
+      allowSystemApplicationLookup: true
+    });
+    applicationPath = join(root, "WorkBuddy.app");
+    await mkdir(applicationPath, { recursive: true });
+
+    const targets = await environment.service.listTargets({ forceRefresh: true });
+    const workBuddy = targets.find((target) => target.id === "workbuddy");
+
+    expect(workBuddy?.health).toMatchObject({
+      status: "ready",
+      installationFound: true,
+      executableFound: false,
+      canWrite: true
+    });
+    expect(workBuddy?.health.checks.map((check) => check.id)).toEqual([
+      "configDir",
+      "skillsDir"
+    ]);
+    expect(workBuddy?.conversationCapabilities).toMatchObject({
+      history: { state: "unsupported" },
+      openOriginal: { state: "unsupported" },
+      continue: { state: "degraded" }
+    });
   });
 
   it("reports the resolved Trae V2 runtime separately from its resource root", async () => {

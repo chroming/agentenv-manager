@@ -139,7 +139,12 @@ describe("target integration contract", () => {
         implemented: false,
         reason: "Trae CLI does not expose a verified one-shot command, so isolated comparison is unavailable."
       },
-      pi: { declared: true, implemented: true, reason: undefined }
+      pi: { declared: true, implemented: true, reason: undefined },
+      workbuddy: {
+        declared: false,
+        implemented: false,
+        reason: "WorkBuddy does not expose a verified isolated one-shot runtime for Profile comparison."
+      }
     });
   });
 
@@ -158,7 +163,8 @@ describe("target integration contract", () => {
       antigravity: ["agy"],
       "antigravity-app": ["Antigravity", "antigravity"],
       "trae-cli": ["traecli", "trae-cli", "trae-agent"],
-      pi: ["pi"]
+      pi: ["pi"],
+      workbuddy: []
     });
   });
 
@@ -244,7 +250,8 @@ describe("target integration contract", () => {
         mcp: { inspect: "unsupported", mutate: "unsupported" },
         effectivePreview: "partial",
         cliLaunch: "supported"
-      }
+      },
+      workbuddy: undefined
     });
   });
 
@@ -329,6 +336,14 @@ describe("target integration contract", () => {
         mcp: [],
         compare: ["AGENTS.md", "CLAUDE.md", ".pi", ".agents"],
         evaluationOwnsPaths: true
+      },
+      workbuddy: {
+        instructions: undefined,
+        instructionCreateFile: undefined,
+        skills: undefined,
+        mcp: undefined,
+        compare: undefined,
+        evaluationOwnsPaths: false
       }
     });
   });

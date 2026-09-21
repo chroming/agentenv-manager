@@ -13,6 +13,7 @@ import { createTargetScope, type TargetScope } from "./targets/targetScope";
 import { createSettingsStore, type SettingsStore } from "./settingsStore";
 import { targetPathInputFor } from "./targets/pathInput";
 import type {
+  TargetCapabilities,
   TargetHealth,
   TargetHealthStatus,
   TargetExecutableSource,
@@ -97,14 +98,21 @@ const checkPath = async (
   required
 });
 
-const createChecks = async (paths: TargetPaths): Promise<TargetPathCheck[]> => {
+const createChecks = async (
+  paths: TargetPaths,
+  capabilities: TargetCapabilities
+): Promise<TargetPathCheck[]> => {
   const checks = await Promise.all([
     checkPath("configDir", "Config directory", paths.configDir, true),
     paths.runtimeDir
       ? checkPath("runtimeDir", "Runtime directory", paths.runtimeDir, false)
       : undefined,
-    checkPath("instructions", "Instructions", paths.instructionsPath, true),
-    checkPath("config", "Config", paths.configPath, true),
+    capabilities.instructions
+      ? checkPath("instructions", "Instructions", paths.instructionsPath, true)
+      : undefined,
+    capabilities.nativeConfig !== false
+      ? checkPath("config", "Config", paths.configPath, true)
+      : undefined,
     paths.mcpConfigPath
       ? checkPath("mcpConfig", "MCP config", paths.mcpConfigPath, false)
       : undefined,
@@ -401,7 +409,10 @@ export const createTargetDiscoveryService = (
           : executableError || installation.runtime?.status === "unknown"
             ? "unknown" as const
             : "missing" as const;
-        const checks = await createChecks(targetPaths);
+        const checks = await createChecks(
+          targetPaths,
+          adapter.descriptor.capabilities
+        );
         const requiredChecks = checks.filter((check) => check.required);
         const missingRequiredPaths = requiredChecks.filter((check) => !check.exists).length;
         const requiredPathsWritable = requiredChecks.every((check) => check.writable);

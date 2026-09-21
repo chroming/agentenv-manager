@@ -450,7 +450,7 @@ try {
   const migratedTargetState = JSON.parse(await readFile(legacyTargetState, "utf8"));
   assert.deepEqual(migratedTargetState.managedResources, []);
   assert.equal(await readFile(legacyOwnerSidecar, "utf8"), legacyOwnerContent);
-  await runPackagedStep("verify six Agent cards", async () => {
+  await runPackagedStep("verify built-in Agent cards", async () => {
     await page.getByRole("button", { name: "Agents", exact: true }).click();
     for (const target of packagedTargets) {
       const agent = page.getByRole("article", { name: `Agent ${target.name}` });
@@ -658,7 +658,7 @@ try {
   application = undefined;
   applicationProcess = undefined;
   process.stdout.write(
-    `Packaged ${process.platform} six-Agent Apply, Project, restart, and Repository workflows passed\n`
+    `Packaged ${process.platform} built-in-Agent Apply, Project, restart, and Repository workflows passed\n`
   );
   packagedWorkflowCompleted = true;
 } catch (error) {

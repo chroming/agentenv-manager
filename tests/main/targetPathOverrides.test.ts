@@ -13,7 +13,8 @@ describe("target configuration root overrides", () => {
       antigravity: join(override, "config"),
       "antigravity-app": join(override, "antigravity"),
       "trae-cli": override,
-      pi: override
+      pi: override,
+      workbuddy: override
     };
 
     for (const adapter of createTargetRegistry().listAdapters()) {

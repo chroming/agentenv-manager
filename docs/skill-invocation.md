@@ -7,8 +7,8 @@ invoked. `default` preserves the Library author's behavior; `manual` requests
 explicit invocation only. Disabling a Skill or its group retains this preference.
 Saving a Profile does not modify an Agent. Apply remains the write boundary.
 
-The first native implementation is Claude Code's documented
-`disable-model-invocation: true` frontmatter. Other targets must reject an active
+Claude Code and WorkBuddy implement native manual invocation through the documented
+`disable-model-invocation: true` frontmatter and an explicit `user-invocable: true` override. Other targets must reject an active
 manual-only reference with an actionable explanation, never silently deploy it as
 automatic. This is invocation control, not a security sandbox against file access.
 

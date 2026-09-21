@@ -1132,6 +1132,9 @@ const zhCN: Record<string, string> = {
 };
 
 Object.assign(zhCN, {
+  "Manage WorkBuddy user Skills without changing WorkBuddy settings or data.": "管理 WorkBuddy 用户 Skill，不修改 WorkBuddy 的设置或数据。",
+  "WorkBuddy does not expose a verified isolated one-shot runtime for Profile comparison.": "WorkBuddy 尚未提供经过验证的隔离单次运行入口，因此无法进行 Profile 对比。",
+  "copied": "已复制",
   "Inputs changed. This is the previous analysis; regenerate to analyze the current content.": "内容已变化。这是之前的分析；请重新生成以分析当前内容。",
   "Move legacy Skill records": "迁移旧版 Skill 管理记录",
   "This cleanup does not change Skill content, timestamps, or whether an existing install is a link or copy. Your current deployment preference is preserved.": "此清理不会改变 Skill 内容、时间戳或现有安装的链接/副本形式，并会保留当前部署偏好。",
@@ -3765,6 +3768,9 @@ Object.assign(zhCN, {
 });
 
 Object.assign(zhTW, {
+  "Manage WorkBuddy user Skills without changing WorkBuddy settings or data.": "管理 WorkBuddy 使用者 Skill，不修改 WorkBuddy 的設定或資料。",
+  "WorkBuddy does not expose a verified isolated one-shot runtime for Profile comparison.": "WorkBuddy 尚未提供經過驗證的隔離單次執行入口，因此無法進行 Profile 比較。",
+  "copied": "已複製",
   "Inputs changed. This is the previous analysis; regenerate to analyze the current content.": "內容已變更。這是先前的分析；請重新產生以分析目前內容。",
   "Move legacy Skill records": "遷移舊版 Skill 管理記錄",
   "This cleanup does not change Skill content, timestamps, or whether an existing install is a link or copy. Your current deployment preference is preserved.": "此清理不會改變 Skill 內容、時間戳或現有安裝的連結/副本形式，並會保留目前部署偏好。",

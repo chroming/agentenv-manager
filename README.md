@@ -120,6 +120,7 @@ Library 为每个 Skill 保存一份可复用内容。可以从本地目录、ZI
 - Antigravity 桌面端
 - Trae CLI
 - Pi Coding Agent
+- WorkBuddy（管理用户 Skills；设置、Connector、Memory 和会话仍由 WorkBuddy 管理）
 
 不同 Agent 支持的 Instructions、MCP、Conversations 和 Compare 能力并不完全相同。应用只显示当前 Agent 实际支持的操作。
 

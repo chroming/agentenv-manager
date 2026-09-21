@@ -35,18 +35,21 @@ const traeIconUrl = new URL("../assets/target-icons/trae.png", import.meta.url).
 export const supportedAgentIconOptions: ReadonlyArray<{
   key: ResourceIconKey;
   label: string;
-  assetUrl: string;
+  assetUrl?: string;
 }> = [
   { key: "opencode", label: "OpenCode", assetUrl: openCodeIconUrl },
   { key: "codex", label: "Codex CLI", assetUrl: openAiIconUrl },
   { key: "claude", label: "Claude Code", assetUrl: claudeIconUrl },
   { key: "antigravity", label: "Antigravity CLI", assetUrl: antigravityIconUrl },
   { key: "trae", label: "Trae CLI", assetUrl: traeIconUrl },
-  { key: "pi", label: "Pi", assetUrl: piIconUrl }
+  { key: "pi", label: "Pi", assetUrl: piIconUrl },
+  { key: "workbuddy", label: "WorkBuddy" }
 ];
 
 const agentIconUrlByKey = new Map(
-  supportedAgentIconOptions.map((option) => [option.key, option.assetUrl])
+  supportedAgentIconOptions
+    .filter((option): option is typeof option & { assetUrl: string } => Boolean(option.assetUrl))
+    .map((option) => [option.key, option.assetUrl])
 );
 
 export const agentIconUrlFor = (iconKey: ResourceIconKey) =>
@@ -113,7 +116,8 @@ export const targetIconFor = (
     antigravity: "antigravity",
     "antigravity-app": "antigravity",
     "trae-cli": "trae",
-    pi: "pi"
+    pi: "pi",
+    workbuddy: "workbuddy"
   } as Record<string, string>)[target.id];
   if (iconKey === "opencode") {
     return { flavor: "opencode", assetUrl: openCodeIconUrl };

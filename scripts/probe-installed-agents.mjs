@@ -6,14 +6,29 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
-const CODEX_BUNDLE_IDENTIFIER = "com.openai.codex";
 const agents = [
   { id: "opencode", commands: ["opencode"] },
   { id: "claude-code", commands: ["claude"] },
-  { id: "codex", commands: ["codex"] },
+  {
+    id: "codex",
+    commands: ["codex"],
+    macApplication: {
+      bundleIdentifier: "com.openai.codex",
+      bundleNames: ["ChatGPT.app", "Codex.app"],
+      bundledExecutable: "Contents/Resources/codex"
+    }
+  },
   { id: "antigravity", commands: ["agy"] },
   { id: "trae-cli", commands: ["traecli", "traex"] },
-  { id: "pi", commands: ["pi"] }
+  { id: "pi", commands: ["pi"] },
+  {
+    id: "workbuddy",
+    commands: [],
+    macApplication: {
+      bundleIdentifier: "com.tencent.workbuddy.mac",
+      bundleNames: ["WorkBuddy.app"]
+    }
+  }
 ];
 const required = new Set(
   (process.env.AGENTENV_REQUIRE_REAL_AGENTS ?? "")
@@ -69,18 +84,16 @@ const readBundleIdentifier = async (applicationPath) => {
   }
 };
 
-const findCodexApplication = async () => {
+const findMacApplication = async ({ bundleIdentifier, bundleNames }) => {
   if (process.platform !== "darwin") return undefined;
-  const direct = [
-    join(homedir(), "Applications", "ChatGPT.app"),
-    "/Applications/ChatGPT.app",
-    join(homedir(), "Applications", "Codex.app"),
-    "/Applications/Codex.app"
-  ];
+  const direct = bundleNames.flatMap((bundleName) => [
+    join(homedir(), "Applications", bundleName),
+    join("/Applications", bundleName)
+  ]);
   let spotlight = [];
   try {
     const { stdout } = await execFileAsync("/usr/bin/mdfind", [
-      `kMDItemCFBundleIdentifier == \"${CODEX_BUNDLE_IDENTIFIER}\"`
+      `kMDItemCFBundleIdentifier == \"${bundleIdentifier}\"`
     ], { timeout: 2_000, maxBuffer: 256 * 1024 });
     spotlight = stdout.split(/\r?\n/).map((value) => value.trim()).filter(Boolean);
   } catch {
@@ -92,7 +105,7 @@ const findCodexApplication = async () => {
     } catch {
       continue;
     }
-    if (await readBundleIdentifier(applicationPath) === CODEX_BUNDLE_IDENTIFIER) {
+    if (await readBundleIdentifier(applicationPath) === bundleIdentifier) {
       return applicationPath;
     }
   }
@@ -125,11 +138,23 @@ for (const agent of agents) {
     ? undefined
     : await findExecutable(agent.commands);
   const runtimeSource = executablePath ? "path" : undefined;
-  const desktopApplication = agent.id === "codex"
-    ? await findCodexApplication()
+  const desktopApplication = agent.macApplication
+    ? await findMacApplication(agent.macApplication)
     : undefined;
   if (!executablePath && desktopApplication) {
-    const bundledRuntime = join(desktopApplication, "Contents", "Resources", "codex");
+    if (!agent.macApplication?.bundledExecutable) {
+      results.push({
+        id: agent.id,
+        status: "ready",
+        installation: "desktop-app",
+        desktopApplication
+      });
+      continue;
+    }
+    const bundledRuntime = join(
+      desktopApplication,
+      agent.macApplication.bundledExecutable
+    );
     const bundledProbe = await probeVersion(bundledRuntime);
     if (bundledProbe.status === "ready") {
       results.push({

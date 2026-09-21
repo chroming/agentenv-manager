@@ -36,6 +36,17 @@ it("materializes a private copy, hashes the actual output, and restores Default 
   expect(await hashSkillContent(targetDir)).toBe(await hashInvokedSkill(sourceDir, "claude-code", "manual"));
   expect(await hashSkillContent(sourceDir)).toBe(sourceHash);
   expect(await readFile(join(sourceDir, "SKILL.md"), "utf8")).toBe(original);
+  const workBuddyDir = join(root, "workbuddy", "review");
+  await deploySkillDirectory({
+    sourceDir,
+    targetDir: workBuddyDir,
+    syncMethod: "symlink",
+    targetId: "workbuddy",
+    invocationMode: "manual"
+  });
+  expect((await lstat(workBuddyDir)).isSymbolicLink()).toBe(false);
+  expect(await readFile(join(workBuddyDir, "SKILL.md"), "utf8"))
+    .toContain("disable-model-invocation: true");
   await expect(deploySkillDirectory({ sourceDir, targetDir, syncMethod: "copy", targetId: "opencode", invocationMode: "manual" })).rejects.toThrow("does not support");
   expect(await readFile(join(targetDir, "SKILL.md"), "utf8")).toContain("disable-model-invocation: true");
   await deploySkillDirectory({ sourceDir, targetDir, syncMethod: "copy", invocationMode: "default" });

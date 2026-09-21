@@ -5,7 +5,7 @@
       "id": "profile-skill-invocation",
       "summary": "Profile-scoped native manual invocation through private deployment copies; Library content remains unchanged.",
       "contract": { "path": "docs/skill-invocation.md", "anchor": "## Contract" },
-      "support": { "opencode": "unsupported", "claude-code": "supported", "codex": "unsupported", "antigravity": "unsupported", "antigravity-app": "unsupported", "trae-cli": "unsupported", "pi": "unsupported" },
+      "support": { "opencode": "unsupported", "claude-code": "supported", "codex": "unsupported", "antigravity": "unsupported", "antigravity-app": "unsupported", "trae-cli": "unsupported", "pi": "unsupported", "workbuddy": "supported" },
       "states": {
         "idle": "Default preserves author behavior; manual-only is a separate saved preference.",
         "working": "Existing autosave and Apply progress own feedback.",
@@ -19,7 +19,7 @@
         "rollback": "Existing Apply backups restore original deployment files; Library is never transformed."
       },
       "evidence": {
-        "domain": ["tests/main/skillInvocation.test.ts", "tests/main/activationService.test.ts", "tests/main/skillLibraryUpdatePropagation.test.ts", "tests/main/remoteDevices/remoteActivationService.test.ts"],
+        "domain": ["tests/main/skillInvocation.test.ts", "tests/main/targets/workbuddyTarget.test.ts", "tests/main/activationService.test.ts", "tests/main/skillLibraryUpdatePropagation.test.ts", "tests/main/remoteDevices/remoteActivationService.test.ts"],
         "renderer": ["tests/renderer/SkillsEditor.test.tsx"],
         "desktop": ["tests/e2e/electronUiProfileSwitching.e2e.test.ts"],
         "persistence": ["tests/main/activationService.test.ts", "tests/main/skillLibraryUpdatePropagation.test.ts"],
@@ -40,7 +40,7 @@
         "antigravity": "supported",
         "antigravity-app": "supported",
         "trae-cli": "supported",
-        "pi": "supported"
+        "pi": "supported", "workbuddy": "unsupported"
       },
       "states": {
         "idle": "No history collection before explicit source consent.",
@@ -79,7 +79,7 @@
       "id": "ai-assistance-controls-and-analysis",
       "summary": "Device-local model gates and manual evidence-linked Profile, comparison and duplicate analysis.",
       "contract": { "path": "docs/ai-assistance.md", "anchor": "## 功能准入" },
-      "support": { "opencode": "supported", "claude-code": "supported", "codex": "supported", "antigravity": "supported", "antigravity-app": "supported", "trae-cli": "supported", "pi": "supported" },
+      "support": { "opencode": "supported", "claude-code": "supported", "codex": "supported", "antigravity": "supported", "antigravity-app": "supported", "trae-cli": "supported", "pi": "supported", "workbuddy": "supported" },
       "states": {
         "idle": "Only cached results are read; generation requires confirmation.",
         "working": "A bounded single model request shows progress and Stop.",
@@ -104,7 +104,7 @@
       "id": "manual-ai-skill-tags",
       "summary": "Manually generate and accept cached task-oriented tag suggestions using the shared AI service, for one Skill or a selected batch.",
       "contract": { "path": "docs/skill-ai-tags.md", "anchor": "所有标签共用一套筛选词表，但区分固定标签和 AI 标签" },
-      "support": { "opencode": "not-applicable", "claude-code": "not-applicable", "codex": "not-applicable", "antigravity": "not-applicable", "antigravity-app": "not-applicable", "trae-cli": "not-applicable", "pi": "not-applicable" },
+      "support": { "opencode": "not-applicable", "claude-code": "not-applicable", "codex": "not-applicable", "antigravity": "not-applicable", "antigravity-app": "not-applicable", "trae-cli": "not-applicable", "pi": "not-applicable", "workbuddy": "not-applicable" },
       "states": {
         "idle": "Opening reads cached suggestions only; no model request.",
         "working": "Confirmed requests run sequentially with per-Skill progress and Stop.",
@@ -129,7 +129,7 @@
       "id": "manual-skill-update-summaries",
       "summary": "Manually summarize selected Skill update diffs using a configured text-only API, preserve content-addressed evidence, and choose which Skills to update.",
       "contract": { "path": "docs/skill-update-summaries.md", "anchor": "Skill 更新摘要仅由用户手动触发。" },
-      "support": { "opencode": "not-applicable", "claude-code": "not-applicable", "codex": "not-applicable", "antigravity": "not-applicable", "antigravity-app": "not-applicable", "trae-cli": "not-applicable", "pi": "not-applicable" },
+      "support": { "opencode": "not-applicable", "claude-code": "not-applicable", "codex": "not-applicable", "antigravity": "not-applicable", "antigravity-app": "not-applicable", "trae-cli": "not-applicable", "pi": "not-applicable", "workbuddy": "not-applicable" },
       "states": {
         "idle": "Preview reads cached summaries only; update checks and startup never call a model.",
         "working": "Each selected Skill is prepared and generated sequentially; bounded evidence prioritizes instructions and runtime changes. The initiating action shows progress and Stop prevents further requests.",
@@ -164,7 +164,7 @@
         "antigravity": "supported",
         "antigravity-app": "supported",
         "trae-cli": "supported",
-        "pi": "supported"
+        "pi": "supported", "workbuddy": "unsupported"
       },
       "states": {
         "idle": "Recent or Best match keeps the existing local index order and selection.",
@@ -213,7 +213,7 @@
         "antigravity": "supported",
         "antigravity-app": "supported",
         "trae-cli": "unsupported",
-        "pi": "supported"
+        "pi": "supported", "workbuddy": "unsupported"
       },
       "states": {
         "idle": "The working-directory row and existing action menus expose Move only when the selected Agent adapter advertises native support.",
@@ -262,7 +262,7 @@
         "antigravity": "not-applicable",
         "antigravity-app": "not-applicable",
         "trae-cli": "not-applicable",
-        "pi": "not-applicable"
+        "pi": "not-applicable", "workbuddy": "not-applicable"
       },
       "states": {
         "idle": "The selected Profile or Workspace owns the full framed work surface and the switcher trigger identifies the current object.",
@@ -320,7 +320,7 @@
         "antigravity": "partial",
         "antigravity-app": "partial",
         "trae-cli": "partial",
-        "pi": "partial"
+        "pi": "partial", "workbuddy": "unsupported"
       },
       "states": {
         "idle": "Workspaces lists device-local directory references and reads selected project-owned resources only on demand.",
@@ -382,7 +382,7 @@
         "antigravity": "supported",
         "antigravity-app": "supported",
         "trae-cli": "supported",
-        "pi": "supported"
+        "pi": "supported", "workbuddy": "supported"
       },
       "states": {
         "idle": "Settings shows the install channel and current version without blocking startup.",
@@ -433,7 +433,7 @@
         "antigravity": "supported",
         "antigravity-app": "supported",
         "trae-cli": "supported",
-        "pi": "supported"
+        "pi": "supported", "workbuddy": "supported"
       },
       "states": {
         "idle": "A first-run decision is unresolved; previewing the allowlist creates no installation identity and sends no request.",
@@ -482,7 +482,7 @@
         "antigravity": "supported",
         "antigravity-app": "supported",
         "trae-cli": "unsupported",
-        "pi": "supported"
+        "pi": "supported", "workbuddy": "unsupported"
       },
       "states": {
         "idle": "Compare is available only for a saved Profile with an implemented Agent capability.",
@@ -537,7 +537,7 @@
         "antigravity": "supported",
         "antigravity-app": "supported",
         "trae-cli": "supported",
-        "pi": "supported"
+        "pi": "supported", "workbuddy": "unsupported"
       },
       "states": {
         "idle": "The outer collection is summarized as one review boundary with member progress.",
@@ -586,7 +586,7 @@
         "antigravity": "not-applicable",
         "antigravity-app": "not-applicable",
         "trae-cli": "not-applicable",
-        "pi": "not-applicable"
+        "pi": "not-applicable", "workbuddy": "not-applicable"
       },
       "states": {
         "idle": "Normal workflows retain their existing commands, layout, IPC contracts, and persisted effects.",
@@ -639,7 +639,7 @@
         "antigravity": "not-applicable",
         "antigravity-app": "not-applicable",
         "trae-cli": "not-applicable",
-        "pi": "not-applicable"
+        "pi": "not-applicable", "workbuddy": "not-applicable"
       },
       "states": {
         "idle": "Completed and rolled-back journals do not affect normal Library, Profile, Agent, or Workspace operations.",
@@ -688,7 +688,7 @@
         "antigravity": "supported",
         "antigravity-app": "supported",
         "trae-cli": "supported",
-        "pi": "supported"
+        "pi": "supported", "workbuddy": "supported"
       },
       "states": {
         "idle": "Preview reads the selected Agent and names the exact local footprint without writing.",
@@ -738,7 +738,7 @@
         "antigravity": "supported",
         "antigravity-app": "supported",
         "trae-cli": "supported",
-        "pi": "supported"
+        "pi": "supported", "workbuddy": "unsupported"
       },
       "states": {
         "idle": "Instructions lists reusable Blocks separately from Profiles; each Profile shows its ordered references and Profile-specific content.",
@@ -794,7 +794,7 @@
         "antigravity": "supported",
         "antigravity-app": "supported",
         "trae-cli": "supported",
-        "pi": "supported"
+        "pi": "supported", "workbuddy": "supported"
       },
       "states": {
         "idle": "Groups is a dedicated Library view with searchable manual groups and stable member counts.",
@@ -853,7 +853,7 @@
         "antigravity": "partial",
         "antigravity-app": "partial",
         "trae-cli": "partial",
-        "pi": "partial"
+        "pi": "partial", "workbuddy": "unsupported"
       },
       "states": {
         "idle": "Agents groups local and SSH Agent endpoints by location; SSH device setup stays in the page action menu and remote Profile choices carry a device badge.",
@@ -907,7 +907,7 @@
         "antigravity": "supported",
         "antigravity-app": "supported",
         "trae-cli": "supported",
-        "pi": "supported"
+        "pi": "supported", "workbuddy": "unsupported"
       },
       "states": {
         "idle": "Scan observes the shared directory without claiming it or interrupting first Agent setup; Local Skills exposes the optional folder review.",

@@ -49,7 +49,13 @@ const validatePaths = (descriptor: TargetDescriptor, paths: TargetPaths): Target
       `Target ${descriptor.id} returned paths for ${paths.targetId || "an empty target id"}.`
     );
   }
-  if (!paths.configDir || !paths.instructionsPath || !paths.configPath) {
+  const requiresInstructions = descriptor.capabilities.instructions;
+  const requiresNativeConfig = descriptor.capabilities.nativeConfig !== false;
+  if (
+    !paths.configDir ||
+    (requiresInstructions && !paths.instructionsPath) ||
+    (requiresNativeConfig && !paths.configPath)
+  ) {
     throw new Error(`Target ${descriptor.id} returned incomplete required paths.`);
   }
   return paths;

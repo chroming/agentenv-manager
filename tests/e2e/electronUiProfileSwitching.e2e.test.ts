@@ -10708,12 +10708,20 @@ describe("Electron UI profile switching e2e", () => {
     expect(await dialog.getByRole("checkbox", { name: "Antigravity App", exact: true }).isChecked()).toBe(false);
     expect(await dialog.getByRole("checkbox", { name: "Trae CLI" }).isChecked()).toBe(false);
     expect(await dialog.getByRole("checkbox", { name: "Pi" }).isChecked()).toBe(false);
+    expect(await dialog.getByRole("checkbox", { name: "WorkBuddy" }).isChecked()).toBe(false);
     if (process.env.AGENTENV_AGENT_DISCOVERY_CAPTURE_DIR) {
       await mkdir(process.env.AGENTENV_AGENT_DISCOVERY_CAPTURE_DIR, { recursive: true });
       await page.screenshot({
         path: join(
           process.env.AGENTENV_AGENT_DISCOVERY_CAPTURE_DIR,
           "agent-recalibration-920x620.png"
+        )
+      });
+      await dialog.getByRole("checkbox", { name: "WorkBuddy" }).scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: join(
+          process.env.AGENTENV_AGENT_DISCOVERY_CAPTURE_DIR,
+          "agent-recalibration-workbuddy-920x620.png"
         )
       });
     }
@@ -10773,7 +10781,7 @@ describe("Electron UI profile switching e2e", () => {
           };
         })
       );
-      expect(rowGeometry).toHaveLength(7);
+      expect(rowGeometry).toHaveLength(8);
       for (const geometry of rowGeometry) {
         for (const child of geometry.children) {
           expect(child.left).toBeGreaterThanOrEqual(geometry.row.left);

@@ -7,6 +7,7 @@ import { createAntigravityTargetAdapter } from "./antigravity";
 import { createAntigravityAppTargetAdapter } from "./antigravity-app";
 import { createPiTargetAdapter } from "./pi";
 import { createTraeCliTargetAdapter } from "./trae-cli";
+import { createWorkBuddyTargetAdapter } from "./workbuddy";
 
 const composeBuiltInIntegration = (
   adapter: AgentTargetAdapter
@@ -42,5 +43,6 @@ export const createBuiltInTargetAdapters = (): AgentTargetAdapter[] => [
   createAntigravityTargetAdapter(),
   createAntigravityAppTargetAdapter(),
   createTraeCliTargetAdapter(),
-  createPiTargetAdapter()
+  createPiTargetAdapter(),
+  createWorkBuddyTargetAdapter()
 ];

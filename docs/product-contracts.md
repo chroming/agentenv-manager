@@ -24,7 +24,7 @@ The product succeeds when a user can answer all of these questions without inspe
 6. How can the user recover or stop AgentEnv management?
 
 User-facing product language uses **Agent** for a local coding tool such as OpenCode, Codex,
-Claude Code, Antigravity, Trae CLI, or Pi. The implementation keeps `Target`, `TargetAdapter`, and `targetId` as stable internal
+Claude Code, Antigravity, Trae CLI, Pi, or WorkBuddy. The implementation keeps `Target`, `TargetAdapter`, and `targetId` as stable internal
 architecture terms. Internal names MUST NOT leak into navigation, commands, status, confirmation,
 or recovery copy.
 
@@ -70,7 +70,7 @@ Product ratings:
 - System Git runs without a shell, with terminal prompts disabled, credentials redacted, `core.autocrlf=false`, and `core.filemode=false`. Cancellation terminates the complete child process tree using the platform-native mechanism.
 - Conversation launch uses a private temporary POSIX shell script on macOS/Linux and a private PowerShell script on Windows. Terminal preference MUST expose only choices supported by the current platform.
 - macOS uses its integrated hidden title bar. Windows and Linux retain native title bars and conventional File/Edit/View/Window/Help menu placement.
-- A platform is release-verified only after its native runner builds the installer target and passes the packaged six-Agent Apply, restart, sparse-PATH discovery, Repository import, persistence, and viewport smoke. Pure policy tests and a package built on another operating system are insufficient.
+- A platform is release-verified only after its native runner builds the installer target and passes the packaged built-in-Agent Apply, restart, sparse-PATH discovery, Repository import, persistence, and viewport smoke. Pure policy tests and a package built on another operating system are insufficient.
 
 Avoid:
 
@@ -95,6 +95,15 @@ Agent compatibility is capability-based, not one binary supported/unsupported cl
 - ChatGPT's Codex view and the legacy Codex desktop application remain one `codex` Target. Chat and Work are outside AgentEnv's ownership; diagnostics expose whether Codex was detected through a shell command, ChatGPT application, or bundled runtime without creating a second Agent.
 - Agent-specific launch and resume behavior returns structured executable, argument, working-directory, and environment data. Shared code MUST NOT infer resume syntax from the Agent name or concatenate an untrusted shell command.
 - Adding an Agent requires registry contract coverage for executable candidates and every declared optional capability. Platform-specific command behavior requires synthetic platform tests plus packaged verification on that platform.
+
+#### WorkBuddy capability boundary
+
+- WorkBuddy is detected on macOS only through a verified `com.tencent.workbuddy.mac` application bundle. A matching application name or a leftover `~/.workbuddy` directory is not installation evidence.
+- AgentEnv manages only direct user Skills under `~/.workbuddy/skills`. Capture is observational; Apply may adopt, create, replace, or remove only the exact Skill paths named by its reviewed plan.
+- WorkBuddy settings, Skill enablement overrides, databases and journals, Connectors and credentials, Memory, plugins, and caches remain WorkBuddy-owned. Profile Apply MUST NOT inspect them to infer management authority or modify them as a side effect.
+- WorkBuddy has no AgentEnv-managed Instructions or MCP capability. The UI MUST omit or mark those resource categories unavailable rather than presenting synthetic files or disabled controls as if they were configurable.
+- WorkBuddy supports Profile `manual` Skill invocation through a transformed managed copy using the documented `disable-model-invocation` and `user-invocable` frontmatter. Library bytes remain unchanged and the deployment MUST NOT be a live link.
+- WorkBuddy Conversation history, Workspace launch, SSH runtime, native resume, and Profile Compare remain unsupported until each has a verified public or locally stable contract and dedicated evidence. Application discovery alone MUST NOT imply these capabilities.
 
 ## 3. Normative Language And Implementation Status
 
