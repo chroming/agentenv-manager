@@ -1,60 +1,70 @@
 {
-  "generatedAt": "2026-09-15T13:55:58.706Z",
-  "mode": "mock-data",
-  "comparisonRunner": "fake-cli",
+  "generatedAt": "2026-09-22T13:39:36.799Z",
   "build": {
-    "sourceFingerprint": "df80cf65be2142e6d71ff18cad41ba6afcbe57a8e7a10493d4ab5ce5d04ed9eb",
-    "artifactFingerprint": "e77530b3598a82c87b80cef6fa34c2caf84396342de231f78b3f875c94de7f2c",
-    "generatedAt": "2026-09-15T13:50:53.015Z"
+    "sourceFingerprint": "a1b159c324a5211d61d11f6c484f12f03503d462db6ee38407fa4f037b0063b5",
+    "artifactFingerprint": "f66bc5683c2928f730ac1927dafb7950c73144c4b2171582cec81cfa069a1b83",
+    "generatedAt": "2026-09-22T13:38:39.397Z"
   },
+  "viewports": [
+    "1180x728"
+  ],
   "files": [
     {
       "file": "agents.png",
+      "bytes": 66320,
+      "sha256": "551433b5adf82a4443c4e11659921d15571a1801e4f226f8d2324e7922688b4d",
       "width": 1180,
-      "height": 728,
-      "sha256": "8cc31b56a63ca61d0494bbc70c069fb1e57f5d950aa79f2bab2c428f7ce2b3f5"
-    },
-    {
-      "file": "profiles.png",
-      "width": 1180,
-      "height": 728,
-      "sha256": "585b41e82796ab0f5f6273a7feb4ee42bb0c4ff0b69f71a93632e1100fc58786"
-    },
-    {
-      "file": "workspaces.png",
-      "width": 1180,
-      "height": 728,
-      "sha256": "36f8f5e8e1c98debc7f1942a56c7d3ecec93cd09fac5763096546a0c052402a3"
-    },
-    {
-      "file": "instructions.png",
-      "width": 1180,
-      "height": 728,
-      "sha256": "0e0f66c3019319b18ff3292d8df68ba37dcdd3e4ebd8b1635e0e643d08930d77"
-    },
-    {
-      "file": "skills-list.png",
-      "width": 1180,
-      "height": 728,
-      "sha256": "6143cf92d38fbc7ffdaae144cbb0a73e854e9da21b1edb1519119927b45f7883"
-    },
-    {
-      "file": "skills-by-source.png",
-      "width": 1180,
-      "height": 728,
-      "sha256": "7d4d673bdfc8d69da6c98e013f90fcb4b948d4d7dff34a4edc9a396571a5cbcd"
+      "height": 728
     },
     {
       "file": "conversations.png",
+      "bytes": 74721,
+      "sha256": "28e24146f3916ecaaae77e4703ca7f8234dff682b8602c38771502f3907579f1",
       "width": 1180,
-      "height": 728,
-      "sha256": "aa7de220d8d7cff0473a95b0243734508b9a0e34ae45355f34b1969f381cb4ba"
+      "height": 728
+    },
+    {
+      "file": "instructions.png",
+      "bytes": 79102,
+      "sha256": "938c1774dc1c8cde81e945d642d622572b6212b373a8ce6c5b6c90a5357d61f7",
+      "width": 1180,
+      "height": 728
+    },
+    {
+      "file": "profiles.png",
+      "bytes": 60447,
+      "sha256": "b2d399595c95f06e7a9d28607a75c4603a0c8b74cfccb0de32fb979371a50694",
+      "width": 1180,
+      "height": 728
+    },
+    {
+      "file": "skills-by-source.png",
+      "bytes": 55617,
+      "sha256": "d94dc7c0c2fea20df72060fd7e8642f2bbfe95f5da11d8762ba43bd7cf129b9f",
+      "width": 1180,
+      "height": 728
+    },
+    {
+      "file": "skills-list.png",
+      "bytes": 74650,
+      "sha256": "0628ac781372b948660363bdb05df92ff8884caa86f7cefb95c46e5d1b17ad7a",
+      "width": 1180,
+      "height": 728
+    },
+    {
+      "file": "workspaces.png",
+      "bytes": 42511,
+      "sha256": "f62a8f62f741134dae2f1b20bedcd3ef605643198e64d36be0dd3abc66349a1a",
+      "width": 1180,
+      "height": 728
     },
     {
       "file": "profile-compare.png",
       "width": 920,
       "height": 620,
-      "sha256": "6a561e7b5933865d45c0f4eaf4a066ae0a29cd0292d8bb238c52dd380d90c29d"
+      "sha256": "2c770752b158def0751f78b735fc8d4d7e2591bb657e542e3c1ff56bb111b438"
     }
-  ]
+  ],
+  "mode": "mock-data",
+  "comparisonRunner": "fake-cli"
 }

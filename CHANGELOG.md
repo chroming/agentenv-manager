@@ -7,6 +7,16 @@ versioning after its first stable release.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-22
+
+- Add WorkBuddy user Skill management and distinguish Agent-provided Skills during capture.
+- Consolidate Agent settings on the Agents page and improve diagnostics and compact layouts.
+- Avoid reading volatile runtime files during capture and reuse Skill inventories.
+- Refine conversation browsing and refresh bilingual documentation and demo screenshots.
+
+See the [release notes](docs/releases/v0.2.1.md) for details. Earlier release notes
+are available on [GitHub Releases](https://github.com/chroming/agentenv-manager/releases).
+
 ## [0.1.1] - 2026-08-05
 
 ### Fixed

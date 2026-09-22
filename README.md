@@ -43,7 +43,7 @@ macOS 正式安装包使用项目固定的自签名身份，但没有 Developer 
 ## 第一次使用
 
 1. 启动应用，确认自动检测到的 Agent。没有安装的 Agent 默认保持关闭；需要管理远程环境时，可以从 SSH 配置添加 Linux 设备。
-2. 在 Agents 中配置一个 Agent，把当前设置和需要复用的 Skills 保存到 Profile 与 Library，或从空 Profile 开始。
+2. 在 Agents 中配置一个 Agent，把当前设置和需要复用的用户 Skills 保存到 Profile 与 Library，或从空 Profile 开始。Agent 自带或插件提供的 Skills 会单独列出，仍由原 Agent 管理，不会自动导入 Profile。
 3. 修改会自动保存到 Profile。查看 Apply 预览，确认变化后再写入 Agent。AgentEnv 会先创建恢复点，并在写入失败时尝试自动回滚。
 4. 只有 Capture 或 Apply 发现相关的本地 Skill 需要确认时，才进入 Local Skills Manager。需要整理整台设备时，也可以从 Skills 页面主动打开它。
 
@@ -123,6 +123,8 @@ Library 为每个 Skill 保存一份可复用内容。可以从本地目录、ZI
 - WorkBuddy（管理用户 Skills；设置、Connector、Memory 和会话仍由 WorkBuddy 管理）
 
 不同 Agent 支持的 Instructions、MCP、Conversations 和 Compare 能力并不完全相同。应用只显示当前 Agent 实际支持的操作。
+
+Agent 的启用、排序、检测偏好和自定义路径都在 Agents 页面管理，不必再去设置里找。关闭一个 Agent 只会从日常操作中隐藏它，不会删除文件或停止接管；停止接管是独立操作。
 
 Agents 页面还可以读取当前用户的 SSH 配置并添加 Linux 设备。远程 Profile Apply 使用系统 SSH，只管理适配器明确支持的远程 Instructions 和复制到远程目录的 Skills；远程 MCP 定义和凭据仍由对应 Agent 管理。
 

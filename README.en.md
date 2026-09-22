@@ -43,7 +43,7 @@ Formal macOS packages use the project's fixed self-signed identity, without a De
 ## First run
 
 1. Launch the app and confirm the Agents it detected. Agents that are not installed stay disabled by default. To manage a remote environment, add a Linux device from your SSH configuration.
-2. Configure an Agent from the Agents page. Save its current setup and reusable Skills to a Profile and the Library, or start with an empty Profile.
+2. Configure an Agent from the Agents page. Save its current setup and reusable user Skills to a Profile and the Library, or start with an empty Profile. Built-in and plugin-provided Skills are listed separately, remain Agent-owned, and are not automatically imported into the Profile.
 3. Changes are saved to the Profile automatically. Review the Apply preview before writing to the Agent. AgentEnv creates a recovery point first and attempts an automatic rollback after a failed write.
 4. Local Skills Manager appears only when Capture or Apply finds relevant local Skills that need confirmation. You can also open it from Skills when you want to organize the whole device.
 
@@ -120,8 +120,11 @@ Browsing and searching are read-only. For supported Agents, you can explicitly m
 - Antigravity desktop app
 - Trae CLI
 - Pi Coding Agent
+- WorkBuddy (user Skills management; settings, Connectors, Memory, and conversations remain WorkBuddy-owned)
 
 Instructions, MCP, Conversations, and Compare support differs between Agents. The app shows only actions supported by the current Agent.
+
+Enable and reorder Agents, adjust discovery preferences, and set custom paths directly on the Agents page. Turning an Agent off hides it from everyday actions without deleting files or stopping management; stopping management is a separate action.
 
 The Agents page can also read the current user's SSH configuration and add Linux devices. Remote Profile Apply uses system SSH and manages only adapter-supported remote Instructions and copied Skills. Remote MCP definitions and credentials remain owned by the Agent.
 
