@@ -1045,13 +1045,23 @@ try {
   await capturePage(page, join(outputDir, "agents-first-run-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "agents-first-run-920x620.png"));
+  const enabledBeforeReview = await page.evaluate(async () =>
+    (await window.agentEnv.readSettings()).enabledTargetIds ?? []
+  );
+  const selectedForReview = await agentDiscoveryDialog.locator('input[type="checkbox"]:checked')
+    .evaluateAll((inputs) => inputs.map((input) => input.id.replace("agent-discovery-", "")));
+  const hasNewlyEnabledAgents = selectedForReview.some((id) => !enabledBeforeReview.includes(id));
   await agentDiscoveryDialog
     .getByRole("button", { name: /^Enable \d+ Agents$/ })
     .click();
+  await agentDiscoveryDialog.waitFor({ state: "hidden" });
+  // Already-enabled fixture Agents do not need the post-enable setup step.
   const agentSetupDialog = page.getByRole("dialog", { name: "Agents enabled" });
-  await agentSetupDialog.waitFor({ state: "visible" });
-  await agentSetupDialog.getByRole("button", { name: "Set up later" }).click();
-  await agentSetupDialog.waitFor({ state: "hidden" });
+  if (hasNewlyEnabledAgents) {
+    await agentSetupDialog.waitFor({ state: "visible" });
+    await agentSetupDialog.getByRole("button", { name: "Set up later" }).click();
+    await agentSetupDialog.waitFor({ state: "hidden" });
+  }
   await setWindowSize(page, windowHandle, 1180, 728);
   const agentsWorkspace = page.getByRole("region", { name: "Agents", exact: true });
   await agentsWorkspace.waitFor({ state: "visible" });
@@ -1059,7 +1069,10 @@ try {
     state: "visible"
   });
   const agentsRefresh = agentsWorkspace.getByRole("button", { name: "Refresh", exact: true });
-  await agentsRefresh.click();
+  await agentsRefresh.click().catch(async (error) => {
+    console.error(await page.locator('[role="dialog"]').allTextContents());
+    throw error;
+  });
   await agentsRefresh.waitFor({ state: "visible" });
   await page.waitForFunction(() =>
     document
