@@ -8,7 +8,13 @@ import type {
 } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
-import { IconButton, RefreshAction, ResourcePanelToolbar, Switch } from "./ui";
+import {
+  EmptyState,
+  IconButton,
+  RefreshAction,
+  ResourcePanelToolbar,
+  Switch
+} from "./ui";
 import { ProductIcon } from "../productIcons";
 
 interface ProfileMcpEditorProps {
@@ -42,7 +48,14 @@ export const ProfileMcpEditor = ({
   };
 
   if (!target) {
-    return <div className="profile-mcp-empty">{t("Select an Agent to inspect MCP connections.")}</div>;
+    return (
+      <EmptyState
+        density="compact"
+        icon={<ProductIcon name="mcps" size={17} strokeWidth={2} />}
+        role="status"
+        title={t("Select an Agent to inspect MCP connections.")}
+      />
+    );
   }
 
   const canManage = target.capabilities.mcpActivation === true;
@@ -126,7 +139,12 @@ export const ProfileMcpEditor = ({
       </ResourcePanelToolbar>
 
       {connections === undefined ? (
-        <div className="profile-mcp-empty">{t("Loading MCP connections...")}</div>
+        <EmptyState
+          density="compact"
+          icon={<ProductIcon name="mcps" size={17} strokeWidth={2} />}
+          role="status"
+          title={t("Loading MCP connections...")}
+        />
       ) : targetIssues.length > 0 ? (
         <div className="profile-mcp-inspection-error" role="alert">
           <AlertTriangle size={17} strokeWidth={2.2} aria-hidden="true" />
@@ -144,10 +162,12 @@ export const ProfileMcpEditor = ({
           />
         </div>
       ) : rows.length === 0 ? (
-        <div className="profile-mcp-empty">
-          <ProductIcon name="mcps" size={17} strokeWidth={2} />
-          <span>{t("No MCP connections are configured in {{name}}.", { name: target.name })}</span>
-        </div>
+        <EmptyState
+          density="compact"
+          icon={<ProductIcon name="mcps" size={17} strokeWidth={2} />}
+          role="status"
+          title={t("No MCP connections are configured in {{name}}.", { name: target.name })}
+        />
       ) : (
         <div className="ui-resource-children profile-mcp-list">
           {rows.map((connection) => {

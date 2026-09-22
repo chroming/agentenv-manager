@@ -256,8 +256,6 @@
   border-color: transparent;
 }
 
-.ui-button--primary:disabled,
-.ui-icon-button--primary:disabled,
 .ui-button--danger:disabled,
 .ui-icon-button--danger:disabled {
   color: #fff;
@@ -266,8 +264,10 @@
 
 .ui-button--primary:disabled,
 .ui-icon-button--primary:disabled {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--surface-muted);
+  border-color: var(--border);
+  color: var(--subtle);
+  opacity: 1;
 }
 
 .ui-button--danger:disabled,

@@ -1,7 +1,7 @@
-import { CheckCircle2, Monitor } from "lucide-react";
+import { CheckCircle2, Monitor, TriangleAlert } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { isTargetInstalled } from "../../shared/targetHealth";
-import type { TargetInfo } from "../../shared/types";
+import type { TargetInfo, TargetManagementState } from "../../shared/types";
 import type { AgentSetupAction } from "../agentSetup";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
@@ -12,12 +12,16 @@ interface AgentDiscoveryDialogProps {
   agents: TargetInfo[];
   allowSuggestionPreferences: boolean;
   busy: boolean;
+  enabledAgentIds: string[];
+  managementStates?: TargetManagementState[];
+  manualSelection: boolean;
   open: boolean;
   phase: "choose" | "setup";
   setupActions: Record<string, AgentSetupAction>;
   onConfigure(agentId: string): void;
   onDismiss(): void;
   onEnable(agentIds: string[]): Promise<void>;
+  onRecovery?(agentId: string): void;
   onSuppress(agentId: string): Promise<void>;
 }
 
@@ -25,31 +29,42 @@ export const AgentDiscoveryDialog = ({
   agents,
   allowSuggestionPreferences,
   busy,
+  enabledAgentIds,
+  managementStates,
+  manualSelection,
   open,
   phase,
   setupActions,
   onConfigure,
   onDismiss,
   onEnable,
+  onRecovery,
   onSuppress
 }: AgentDiscoveryDialogProps) => {
   const { t } = useI18n();
   const dialogRef = useRef<HTMLElement>(null);
   const dismissRef = useRef<HTMLButtonElement>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const recoveryAgentIds = useMemo(() => new Set(
+    (managementStates ?? [])
+      .filter((state) => state.lifecycleStatus === "recovery-required")
+      .map((state) => state.targetId)
+  ), [managementStates]);
   const agentKey = agents
     .map((agent) => `${agent.id}:${isTargetInstalled(agent.health) ? "installed" : "missing"}`)
     .join(":");
 
   useLayoutEffect(() => {
     if (open && phase === "choose") {
-      setSelectedIds(
-        agents
-          .filter((agent) => isTargetInstalled(agent.health))
-          .map((agent) => agent.id)
-      );
+      const defaults = manualSelection
+        ? agents.filter((agent) => enabledAgentIds.includes(agent.id)).map((agent) => agent.id)
+        : agents.filter((agent) => isTargetInstalled(agent.health)).map((agent) => agent.id);
+      setSelectedIds([...new Set([
+        ...defaults,
+        ...agents.filter((agent) => recoveryAgentIds.has(agent.id)).map((agent) => agent.id)
+      ])]);
     }
-  }, [agentKey, open, phase]);
+  }, [agentKey, enabledAgentIds, manualSelection, open, phase, recoveryAgentIds]);
 
   useModalDialog({
     open,
@@ -60,12 +75,19 @@ export const AgentDiscoveryDialog = ({
   });
 
   const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const managedTurnOffCount = (managementStates ?? []).filter((state) =>
+    state.status === "managed" &&
+    enabledAgentIds.includes(state.targetId) &&
+    !selected.has(state.targetId)
+  ).length;
   if (!open) return null;
   const setupPhase = phase === "setup";
   const dialogTitle = setupPhase ? t("Agents enabled") : t("Choose Agents");
   const dialogDescription = setupPhase
     ? t("Agent files have not changed. Review an Agent now, or continue later from Agents.")
-    : t("AgentEnv found installed Agents. Enabling only adds them to AgentEnv; it does not Capture, Apply, or change Agent files.");
+    : manualSelection
+      ? t("Choose which local Agents appear in AgentEnv. Turning one off keeps its files and management records unchanged.")
+      : t("AgentEnv found installed Agents. Enabling only adds them to AgentEnv; it does not Capture, Apply, or change Agent files.");
   const dismissLabel = setupPhase ? t("Set up later") : t("Not now");
 
   return (
@@ -108,6 +130,7 @@ export const AgentDiscoveryDialog = ({
                 ? t("Custom command")
                 : t("Detected");
           const checked = selected.has(agent.id);
+          const recoveryRequired = recoveryAgentIds.has(agent.id);
           const setupAction = setupActions[agent.id] ?? { kind: "review-current" as const };
           const setupCopy = setupAction.kind === "open-profile"
             ? t("{{name}} is active", { name: setupAction.profileName })
@@ -131,7 +154,7 @@ export const AgentDiscoveryDialog = ({
                   type="checkbox"
                   aria-label={agent.name}
                   checked={checked}
-                  disabled={busy}
+                  disabled={busy || recoveryRequired}
                   onChange={() => setSelectedIds((current) =>
                     checked
                       ? current.filter((id) => id !== agent.id)
@@ -154,7 +177,9 @@ export const AgentDiscoveryDialog = ({
                     : evidence ?? detectionSummary}
                   >
                     {phase === "setup"
-                      ? setupCopy
+                    ? setupCopy
+                    : recoveryRequired
+                      ? t("Recovery required")
                       : detectionSummary}
                   </small>
                 </span>
@@ -162,6 +187,16 @@ export const AgentDiscoveryDialog = ({
               {phase === "setup" ? (
                 <Button size="compact" disabled={busy} onClick={() => onConfigure(agent.id)}>
                   {setupLabel}
+                </Button>
+              ) : recoveryRequired && onRecovery ? (
+                <Button
+                  size="compact"
+                  variant="ghost"
+                  icon={<TriangleAlert size={14} />}
+                  disabled={busy}
+                  onClick={() => onRecovery(agent.id)}
+                >
+                  {t("Open Recovery")}
                 </Button>
               ) : allowSuggestionPreferences && installed ? (
                 <button
@@ -179,6 +214,18 @@ export const AgentDiscoveryDialog = ({
         })}
       </div>
 
+      {manualSelection && managedTurnOffCount > 0 ? (
+        <div className="inline-state agent-discovery-impact" role="status">
+          <span className="inline-state__icon" aria-hidden="true"><Monitor size={15} /></span>
+          <span>{t(
+            managedTurnOffCount === 1
+              ? "Turning off 1 managed Agent keeps its files and management records."
+              : "Turning off {{count}} managed Agents keeps their files and management records.",
+            { count: managedTurnOffCount }
+          )}</span>
+        </div>
+      ) : null}
+
       <footer className="preview-actions">
         <Button ref={dismissRef} disabled={busy} onClick={onDismiss}>
           {dismissLabel}
@@ -187,12 +234,16 @@ export const AgentDiscoveryDialog = ({
           <Button
             variant="primary"
             busy={busy}
-            disabled={selectedIds.length === 0}
-            onClick={() => void onEnable(selectedIds)}
+            disabled={!manualSelection && selectedIds.length === 0}
+            onClick={() => void onEnable([
+              ...new Set([...selectedIds, ...recoveryAgentIds])
+            ])}
           >
-            {t(selectedIds.length === 1 ? "Enable 1 Agent" : "Enable {{count}} Agents", {
-              count: selectedIds.length
-            })}
+            {manualSelection
+              ? t("Save Agent choices")
+              : t(selectedIds.length === 1 ? "Enable 1 Agent" : "Enable {{count}} Agents", {
+                  count: selectedIds.length
+                })}
           </Button>
         ) : null}
       </footer>

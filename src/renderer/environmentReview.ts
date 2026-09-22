@@ -22,6 +22,7 @@ export type EnvironmentReviewState =
 
 export interface EnvironmentReviewSummary {
   state: EnvironmentReviewState;
+  unavailableReason?: string;
   installedTargetIds: string[];
   installedAgentCount: number;
   usableProfileCount: number;
@@ -34,6 +35,7 @@ export interface EnvironmentReviewSummary {
 
 interface EnvironmentReviewInput {
   scanStatus: EnvironmentScanStatus;
+  scanError?: string;
   inventory: SkillInventoryEntry[];
   installedTargetIds: string[];
   profiles: ProfileSummary[];
@@ -47,6 +49,7 @@ const attentionLifecycleStatuses = new Set<
 
 export const deriveEnvironmentReview = ({
   scanStatus,
+  scanError,
   inventory,
   installedTargetIds,
   profiles,
@@ -96,7 +99,7 @@ export const deriveEnvironmentReview = ({
     return { ...summary, state: "checking" };
   }
   if (scanStatus === "error") {
-    return { ...summary, state: "unavailable" };
+    return { ...summary, state: "unavailable", unavailableReason: scanError };
   }
   if (installedTargetIds.length === 0) {
     return { ...summary, state: "no-agents" };

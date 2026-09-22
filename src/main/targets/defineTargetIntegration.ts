@@ -83,7 +83,7 @@ export const defineTargetIntegration = (
     conversations: integration.conversations,
     evaluations: integration.evaluations,
     createDefaultProfile: (id) => integration.profile.createDefaultProfile(id),
-    captureProfile: (targetPaths) => integration.profile.captureProfile(targetPaths),
+    captureProfile: (targetPaths, context) => integration.profile.captureProfile(targetPaths, context),
     createPreview: (input) => integration.preview.createPreview(input),
     validateAssets: (input) => integration.assets.validateAssets(input),
     getAssetBackupPaths: (input) => integration.assets.getAssetBackupPaths(input),

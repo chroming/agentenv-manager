@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import {
   faviconUrlFor,
+  ResourceIcon,
   ResourceIconArtwork,
   ResourceIconPicker
 } from "../../src/renderer/components/ResourceIconPicker";
@@ -60,5 +61,13 @@ describe("ResourceIconPicker", () => {
     for (const name of ["OpenCode", "Codex CLI", "Claude Code", "Antigravity CLI", "Trae CLI"]) {
       expect(within(menu).getByRole("menuitemradio", { name })).toBeInTheDocument();
     }
+  });
+
+  it("renders the WorkBuddy product artwork instead of a generic Agent icon", () => {
+    const { container } = render(<ResourceIcon iconKey="workbuddy" />);
+
+    expect(container.querySelector("img.resource-agent-icon"))
+      .toHaveAttribute("src", expect.stringContaining("workbuddy"));
+    expect(container.querySelector("svg")).toBeNull();
   });
 });

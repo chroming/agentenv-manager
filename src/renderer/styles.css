@@ -917,7 +917,8 @@ h2 {
   color: var(--success);
 }
 
-.capture-resource--exclude > svg {
+.capture-resource--exclude > svg,
+.capture-resource--observe > svg {
   color: var(--muted);
 }
 
@@ -951,7 +952,8 @@ h2 {
   white-space: nowrap;
 }
 
-.capture-resource--exclude em {
+.capture-resource--exclude em,
+.capture-resource--observe em {
   color: var(--muted);
 }
 

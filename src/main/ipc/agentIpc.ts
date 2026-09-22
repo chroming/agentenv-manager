@@ -10,6 +10,7 @@ export const registerAgentIpc = (
   handles: Pick<IpcRegistrationHandles, "diagnosticHandle" | "handleMutation">,
   services: {
     activationService: ActivationService;
+    beforeForcedRefresh?: () => Promise<void>;
     remoteActivationService: RemoteActivationService;
     targetDiscoveryService: TargetDiscoveryService;
     targetRegistry: TargetRegistry;

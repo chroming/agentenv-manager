@@ -31,6 +31,7 @@ const openAiIconUrl = new URL("../assets/target-icons/openai.svg", import.meta.u
 const openCodeIconUrl = new URL("../assets/target-icons/opencode.svg", import.meta.url).href;
 const piIconUrl = new URL("../assets/target-icons/pi.svg", import.meta.url).href;
 const traeIconUrl = new URL("../assets/target-icons/trae.png", import.meta.url).href;
+const workBuddyIconUrl = new URL("../assets/target-icons/workbuddy.png", import.meta.url).href;
 
 export const supportedAgentIconOptions: ReadonlyArray<{
   key: ResourceIconKey;
@@ -43,7 +44,7 @@ export const supportedAgentIconOptions: ReadonlyArray<{
   { key: "antigravity", label: "Antigravity CLI", assetUrl: antigravityIconUrl },
   { key: "trae", label: "Trae CLI", assetUrl: traeIconUrl },
   { key: "pi", label: "Pi", assetUrl: piIconUrl },
-  { key: "workbuddy", label: "WorkBuddy" }
+  { key: "workbuddy", label: "WorkBuddy", assetUrl: workBuddyIconUrl }
 ];
 
 const agentIconUrlByKey = new Map(
@@ -92,6 +93,7 @@ type TargetIconFlavor =
   | "antigravity"
   | "trae"
   | "pi"
+  | "workbuddy"
   | "generic";
 
 const targetInitials = (target: Pick<TargetDescriptor, "id" | "name">) => {
@@ -136,6 +138,9 @@ export const targetIconFor = (
   }
   if (iconKey === "pi") {
     return { flavor: "pi", assetUrl: piIconUrl };
+  }
+  if (iconKey === "workbuddy") {
+    return { flavor: "workbuddy", assetUrl: workBuddyIconUrl };
   }
 
   return { flavor: "generic" };

@@ -195,6 +195,24 @@ describe("domain IPC registrars", () => {
     });
   });
 
+  it("delays only an explicit forced Target refresh when a test boundary is provided", async () => {
+    const { handles, handlers } = collectChannels();
+    const beforeForcedRefresh = vi.fn().mockResolvedValue(undefined);
+    const listTargets = vi.fn().mockResolvedValue([]);
+    registerTargetIpc(handles, {
+      activationService: service(),
+      beforeForcedRefresh,
+      targetDiscoveryService: { listTargets } as any,
+      targetRegistry: service()
+    });
+
+    await handlers.get("targets:list")!(event, false);
+    expect(beforeForcedRefresh).not.toHaveBeenCalled();
+    await handlers.get("targets:list")!(event, true);
+    expect(beforeForcedRefresh).toHaveBeenCalledOnce();
+    expect(listTargets).toHaveBeenLastCalledWith({ forceRefresh: true });
+  });
+
   it("registers SSH device and endpoint channels only when the remote capability is present", () => {
     const { handles, registrations } = collectChannels();
     registerRemoteDeviceIpc(handles, { remoteActivationService: service() });

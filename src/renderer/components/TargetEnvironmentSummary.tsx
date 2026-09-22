@@ -1,24 +1,27 @@
 import { CircleAlert, Clock3, Info, TriangleAlert } from "lucide-react";
 import type { TargetLifecycleStatus } from "../../shared/types";
-import { StatusHint, TextAction } from "./ui";
+import { StatusHint } from "./ui";
 
-export const TargetEnvironmentSummary = ({ lifecycle, lifecycleStatus, profileName, actionLabel, onAction, actionOnly = false }: {
+export const TargetEnvironmentSummary = ({ lifecycle, lifecycleStatus, profileName, emptyLabel }: {
   lifecycle: string;
   lifecycleStatus?: TargetLifecycleStatus;
   profileName?: string;
-  actionLabel?: string;
-  onAction?: () => void;
-  actionOnly?: boolean;
-}) => (
-  <span className="target-workflow-environment">
-    {onAction ? <TextAction title={[profileName, !actionOnly && lifecycle].filter(Boolean).join("\n")} onClick={onAction}>{actionLabel ?? profileName ?? lifecycle}</TextAction>
-      : <span className="target-workflow-profile" title={lifecycle}>{profileName ?? lifecycle}</span>}
-    {!actionOnly && lifecycleStatus && lifecycleStatus !== "applied" && lifecycleStatus !== "unmanaged" ? (
+  emptyLabel: string;
+}) => {
+  const exceptional = Boolean(
+    lifecycleStatus && lifecycleStatus !== "applied" && lifecycleStatus !== "unmanaged"
+  );
+  const primary = profileName ?? (exceptional ? lifecycle : emptyLabel);
+  return (
+    <span className="target-workflow-environment">
+      <span className="target-workflow-profile" title={lifecycle}>{primary}</span>
+      {profileName && exceptional ? (
       <StatusHint
         label={lifecycle}
         detail={profileName}
         icon={lifecycleStatus === "pending" ? <Clock3 /> : lifecycleStatus === "recovery-required" ? <TriangleAlert /> : lifecycleStatus === "drifted" ? <CircleAlert /> : <Info />}
       />
-    ) : null}
-  </span>
-);
+      ) : null}
+    </span>
+  );
+};

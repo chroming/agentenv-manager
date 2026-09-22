@@ -397,11 +397,9 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
                     <span title={state?.lastAppliedAt ? `${t("Last applied")} · ${formatCheckedAt(state.lastAppliedAt)}` : undefined}>
                     <TargetEnvironmentSummary
                       lifecycleStatus={state?.lifecycleStatus}
-                      actionOnly={!state?.activeProfileName && (!state?.lifecycleStatus || state.lifecycleStatus === "unmanaged")}
                       lifecycle={state?.lifecycleStatus ? remoteLifecycleLabel(state.lifecycleStatus, t) : t("Not managed")}
                       profileName={state?.activeProfileName}
-                      actionLabel={state?.activeProfileName ? undefined : t("Configure")}
-                      onAction={() => onOpenProfile(endpoint.id)}
+                      emptyLabel={t("Not configured")}
                     />
                     </span>
                     <span className="remote-agent-row__action" />

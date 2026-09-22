@@ -301,10 +301,10 @@ export const registerIpcHandlers = ({
     deviceStore: remoteDeviceStore,
     sshTransport
   });
-  registerAgentIpc(
-    { diagnosticHandle, handleMutation },
-    { activationService, remoteActivationService, targetDiscoveryService, targetRegistry }
-  );
+  registerAgentIpc({ diagnosticHandle, handleMutation }, {
+    activationService, beforeForcedRefresh: waitForAutomationBackgroundDelay,
+    remoteActivationService, targetDiscoveryService, targetRegistry
+  });
   registerSharedSkillAreaIpc(
     { diagnosticHandle, handleMutation, handleWorkspaceSyncMutation },
     { skillLibraryStore, resolveSharedSkillPaths }

@@ -32,6 +32,33 @@ const baselineBlock: InstructionBlock = {
 };
 
 describe("ProfileInstructionsComposerSection", () => {
+  it("uses a compact, actionable empty state when the Profile has no Instructions", () => {
+    render(
+      <ProfileInstructionsComposerSection
+        profile={{
+          ...profile,
+          instructions: "",
+          resources: { ...profile.resources, instructions: [] }
+        }}
+        blocks={[]}
+        summary={{ count: 0, total: 0, mode: "manage" }}
+        policy="manage"
+        capabilityAvailable
+        expanded
+        targetName="Codex"
+        fileName="AGENTS.md"
+        onToggle={vi.fn()}
+        onPolicyChange={vi.fn()}
+        onChange={vi.fn()}
+        onUpdateBlock={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("No Instructions in this Profile");
+    expect(screen.getByRole("button", { name: "Add Instruction Blocks" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Preview output" })).not.toBeInTheDocument();
+  });
+
   it("adds selected Instruction Blocks to the Profile in user-selected order", async () => {
     const onChange = vi.fn();
     render(

@@ -23,6 +23,7 @@ import type {
   SkillImportPreviewInput,
   SkillInventoryEntry,
   SkillRuntimeIssue,
+  SkillRuntimeSnapshot,
   SkillLibraryEntry,
   SkillMergeInput,
   SkillMergePreview,
@@ -92,7 +93,9 @@ export interface SkillLibraryStore {
   scanInventory(
     targetPaths: TargetPaths[],
     librarySkills?: SkillLibraryEntry[],
-    onIssues?: (issues: SkillRuntimeIssue[]) => void
+    onIssues?: (issues: SkillRuntimeIssue[]) => void,
+    selectedLibraryIds?: ReadonlySet<string>,
+    runtimeSnapshots?: ReadonlyMap<string, SkillRuntimeSnapshot>
   ): Promise<SkillInventoryEntry[]>;
   findManagedInstallPaths(libraryId: string, targetPaths: TargetPaths[]): Promise<string[]>;
   listCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;

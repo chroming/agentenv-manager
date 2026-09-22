@@ -67,7 +67,8 @@ const resourceActionLabels: Record<TargetCaptureResource["action"], string> = {
   include: "Add to Profile",
   reuse: "Use Library copy",
   import: "Import to Library",
-  exclude: "Leave untouched"
+  exclude: "Leave untouched",
+  observe: "Agent controlled"
 };
 
 export const TargetCaptureDialog = ({
@@ -97,6 +98,7 @@ export const TargetCaptureDialog = ({
   const [exportingIssueId, setExportingIssueId] = useState<string>();
   const [diffCandidate, setDiffCandidate] = useState<TargetCaptureSkillCandidate>();
   const [advisoryExpanded, setAdvisoryExpanded] = useState(false);
+  const [providedExpanded, setProvidedExpanded] = useState(false);
   const diffReturnFocusRef = useRef<HTMLButtonElement>(null);
   const isReview = Boolean(preview);
   const isBusy = activity !== "idle";
@@ -110,12 +112,14 @@ export const TargetCaptureDialog = ({
       ? "Creating..."
       : submitLabel;
   const targetIcon = target ? targetIconFor(target) : undefined;
-  const includedResources = preview?.resources.filter((resource) => resource.action !== "exclude") ?? [];
+  const includedResources = preview?.resources.filter(
+    (resource) => resource.action !== "exclude" && resource.action !== "observe"
+  ) ?? [];
   const importedResources = preview?.resources.filter((resource) => resource.action === "import") ?? [];
   const groupedResources = resourceKindOrder
     .map((kind) => ({
       kind,
-      resources: preview?.resources.filter((resource) => resource.kind === kind) ?? []
+      resources: preview?.resources.filter((resource) => resource.kind === kind && resource.action !== "observe") ?? []
     }))
     .filter((group) => group.resources.length > 0);
   const captureIssues = preview?.issues ?? [];
@@ -280,6 +284,7 @@ export const TargetCaptureDialog = ({
                   </small>
                 </span>
               </div>
+
             </div>
           ) : (
             <div className="capture-review" role="region" aria-label={t("Capture impact")}>
@@ -507,11 +512,17 @@ export const TargetCaptureDialog = ({
               <div className="capture-resource-groups">
                 {groupedResources.map((group) => (
                   <section className="capture-resource-group" aria-label={t(resourceKindLabels[group.kind])} key={group.kind}>
-                    <header><strong>{t(resourceKindLabels[group.kind])}</strong><span>{group.resources.length}</span></header>
+                    <header>
+                      <strong>{t(resourceKindLabels[group.kind])}</strong>
+                      <span>{group.resources.reduce((total, resource) => total + (resource.count ?? 1), 0)}</span>
+                    </header>
                     {group.resources.map((resource) => {
                       const sourceCopyMatch = resource.detail?.match(/^(\d+) source copies stay unchanged$/);
                       const alternateImportMatch = resource.detail?.match(
                         /^Import Agent copy as (.+); existing same-name Library Skill stays unchanged$/
+                      );
+                      const agentControlledMatch = resource.detail?.match(
+                        /^(\d+) Skills are available through (.+) and remain Agent-controlled\.$/
                       );
                       const detail = sourceCopyMatch
                         ? t("{{count}} source copies stay unchanged", { count: sourceCopyMatch[1] })
@@ -519,11 +530,18 @@ export const TargetCaptureDialog = ({
                           ? t("Import Agent copy as {{id}}; existing same-name Library Skill stays unchanged", {
                               id: alternateImportMatch[1]
                             })
+                          : agentControlledMatch
+                            ? t("{{count}} Skills are available through {{provider}} and remain Agent-controlled.", {
+                                count: agentControlledMatch[1],
+                                provider: agentControlledMatch[2]
+                              })
                           : resource.detail;
                       const fullDetail = [resource.sourcePath, resource.detail].filter(Boolean).join(" · ");
                       return (
                         <div className={`capture-resource capture-resource--${resource.action}`} key={`${resource.kind}:${resource.id}`}>
-                          <CheckCircle2 size={15} strokeWidth={2.1} aria-hidden="true" />
+                          {resource.action === "observe"
+                            ? <ShieldCheck size={15} strokeWidth={2.1} aria-hidden="true" />
+                            : <CheckCircle2 size={15} strokeWidth={2.1} aria-hidden="true" />}
                           <span title={fullDetail || undefined}><strong>{resource.name}</strong>{detail ? <small>{detail}</small> : null}</span>
                           <em className="capture-resource__status">{t(resourceActionLabels[resource.action])}</em>
                         </div>
@@ -532,6 +550,27 @@ export const TargetCaptureDialog = ({
                   </section>
                 ))}
               </div>
+              {preview?.resources.some((resource) => resource.action === "observe") ? (
+                <section aria-label={t("Provided by Agent")}>
+                  <Button variant="ghost" aria-expanded={providedExpanded}
+                    icon={<ChevronDown size={15} aria-hidden="true" />}
+                    onClick={() => setProvidedExpanded((value) => !value)}>
+                    {t("Provided by Agent")}
+                  </Button>
+                  {providedExpanded ? preview?.resources.filter((resource) => resource.action === "observe").map((resource) => (
+                    <section className="capture-resource-group" key={resource.id}>
+                      <header><strong>{resource.name}</strong><span>{resource.count}</span></header>
+                      {resource.observedSkills?.map((skill) => (
+                        <div className="capture-resource capture-resource--observe" key={skill.path}>
+                          <ShieldCheck size={15} aria-hidden="true" />
+                          <span title={skill.path}><strong>{skill.name}</strong><small>{skill.path}</small></span>
+                          <em className="capture-resource__status">{skill.availability === "bundled" ? t("Bundled; activation unknown") : t("Activation unknown")}</em>
+                        </div>
+                      ))}
+                    </section>
+                  )) : null}
+                </section>
+              ) : null}
             </div>
           )}
 

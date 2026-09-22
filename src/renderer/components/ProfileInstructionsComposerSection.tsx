@@ -23,6 +23,7 @@ import {
   DialogBody,
   DialogFooter,
   DialogHeader,
+  EmptyState,
   IconButton,
   ModalFrame,
   ResourcePanelToolbar,
@@ -84,6 +85,10 @@ export const ProfileInstructionsComposerSection = ({
     .filter((reference) => reference.enabled)
     .map((reference) => blockById.get(reference.libraryId)?.content ?? "");
   const compiled = joinInstructionContents([...enabledContents, profile.instructions]);
+  const hasCompiledInstructions = Boolean(compiled.trim());
+  const hasVisibleInstructions = policy === "ignore"
+    ? currentValueAvailable
+    : references.length > 0 || Boolean(profile.instructions.trim());
   const activeDocument = document === "compiled"
     ? { name: fileName, value: compiled, path: t("Compiled for {{name}}", { name: targetName }), editable: false }
     : document === "legacy"
@@ -141,23 +146,27 @@ export const ProfileInstructionsComposerSection = ({
       onPolicyChange={onPolicyChange}
     >
       <section className="profile-instructions-editor">
-        <ResourcePanelToolbar variant="embedded" placement="heading">
-          <IconButton
-            size="compact"
-            variant="ghost"
-            label={t("Preview output")}
-            disabled={policy !== "manage"}
-            onClick={() => setDocument("compiled")}
-          ><Eye size={14} /></IconButton>
-          <IconButton
-            size="compact"
-            label={t("Add Instruction Blocks")}
-            variant="ghost"
-            disabled={policy !== "manage"}
-            onClick={() => setPickerOpen(true)}
-          ><Plus size={14} /></IconButton>
-        </ResourcePanelToolbar>
-        <AlignedResourceList actionTrack="standard">
+        {capabilityAvailable ? (
+          <ResourcePanelToolbar variant="embedded" placement="heading">
+            {hasCompiledInstructions ? (
+              <IconButton
+                size="compact"
+                variant="ghost"
+                label={t("Preview output")}
+                disabled={policy !== "manage"}
+                onClick={() => setDocument("compiled")}
+              ><Eye size={14} /></IconButton>
+            ) : null}
+            <IconButton
+              size="compact"
+              label={t("Add Instruction Blocks")}
+              variant="ghost"
+              disabled={policy !== "manage"}
+              onClick={() => setPickerOpen(true)}
+            ><Plus size={14} /></IconButton>
+          </ResourcePanelToolbar>
+        ) : null}
+        {hasVisibleInstructions ? <AlignedResourceList actionTrack="standard">
           {policy === "ignore" && currentValueAvailable ? (
             <ResourceRow
               className="ui-resource-children__item"
@@ -253,7 +262,18 @@ export const ProfileInstructionsComposerSection = ({
               state={t("Needs review")}
             />
           ) : null}
-        </AlignedResourceList>
+        </AlignedResourceList> : (
+          <EmptyState
+            density="compact"
+            icon={<ProductIcon name="instructions" size={16} strokeWidth={2} />}
+            role="status"
+            title={!capabilityAvailable
+              ? t("{{name}} does not support managed Instructions.", { name: targetName })
+              : policy === "ignore"
+                ? t("No instruction file found in {{name}}.", { name: targetName })
+                : t("No Instructions in this Profile")}
+          />
+        )}
       </section>
       {pickerOpen ? (
         <ModalFrame

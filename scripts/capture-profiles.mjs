@@ -1038,7 +1038,7 @@ try {
   await firstRunAgentsWorkspace.locator(".target-list[aria-busy='false']").waitFor({
     state: "visible"
   });
-  await firstRunAgentsWorkspace.getByRole("button", { name: "Configure", exact: true }).first().waitFor({
+  await firstRunAgentsWorkspace.locator(".target-workflow-name-action").first().waitFor({
     state: "visible"
   });
   await setWindowSize(page, windowHandle, 1180, 728);
@@ -1058,13 +1058,22 @@ try {
   await agentsWorkspace.getByRole("article", { name: "Agent OpenCode" }).waitFor({
     state: "visible"
   });
-  await agentsWorkspace
-    .getByText("Checking local Skills", { exact: true })
-    .waitFor({ state: "visible", timeout: 5_000 })
-    .catch(() => undefined);
+  const agentsRefresh = agentsWorkspace.getByRole("button", { name: "Refresh", exact: true });
+  await agentsRefresh.click();
+  await agentsRefresh.waitFor({ state: "visible" });
+  await page.waitForFunction(() =>
+    document
+      .querySelector('[aria-label="Agents"] button[aria-label="Refresh"]')
+      ?.getAttribute("aria-busy") === "true"
+  );
   await capturePage(page, join(outputDir, "agents-checking-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "agents-checking-920x620.png"));
+  await page.waitForFunction(() =>
+    document
+      .querySelector('[aria-label="Agents"] button[aria-label="Refresh"]')
+      ?.getAttribute("aria-busy") === "false"
+  );
   await app.evaluate(() => {
     delete process.env.AGENTENV_AUTOMATION_BACKGROUND_DELAY_MS;
   });
@@ -1163,7 +1172,7 @@ try {
     process.env.AGENTENV_AUTOMATION_SKILL_SCAN_FAILURE = "1";
   });
   await page.reload();
-  await agentsWorkspace.getByText("Profile check unavailable", { exact: true }).waitFor({
+  await agentsWorkspace.getByText("Simulated local Skill inventory failure", { exact: true }).waitFor({
     state: "visible"
   });
   await setWindowSize(page, windowHandle, 920, 620);
@@ -2128,18 +2137,19 @@ try {
   await setWindowSize(page, windowHandle, 1440, 900);
   await capturePage(page, join(outputDir, "settings-general-1440x900.png"));
   await setWindowSize(page, windowHandle, 920, 620);
-  await page.getByRole("tab", { name: "Agents" }).click();
-  const customFolders = page.locator("details.agent-path-settings").filter({
-    has: page.getByText("Custom folders", { exact: true })
-  });
-  await customFolders.getByText("Custom folders", { exact: true }).click();
-  await customFolders.scrollIntoViewIfNeeded();
-  await capturePage(page, join(outputDir, "settings-custom-folders-920x620.png"));
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
+  const advancedSetupAgent = page.getByRole("article", { name: "Agent OpenCode" });
+  await advancedSetupAgent.getByRole("button", { name: "More actions for OpenCode" }).click();
+  await page.getByRole("menuitem", { name: "Advanced setup" }).click();
+  const advancedSetup = page.getByRole("dialog", { name: "Advanced setup for OpenCode" });
+  await advancedSetup.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "agents-advanced-setup-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
-  await customFolders.scrollIntoViewIfNeeded();
-  await capturePage(page, join(outputDir, "settings-custom-folders-1180x728.png"));
-  await customFolders.getByText("Custom folders", { exact: true }).click();
+  await capturePage(page, join(outputDir, "agents-advanced-setup-1180x728.png"));
+  await page.keyboard.press("Escape");
+  await advancedSetup.waitFor({ state: "hidden" });
   await setWindowSize(page, windowHandle, 920, 620);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("tab", { name: "Skills" }).click();
   await capturePage(page, join(outputDir, "settings-controls-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);

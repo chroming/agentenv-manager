@@ -199,7 +199,7 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
       const centers = await page.locator(".target-workflow-environment").evaluateAll((cells) =>
         cells.map((cell) => {
           const health = cell.closest(".target-workflow-header")!.querySelector(".target-health-status")!.getBoundingClientRect();
-          const action = cell.querySelector("button")!.getBoundingClientRect();
+          const action = cell.querySelector(".target-workflow-profile")!.getBoundingClientRect();
           const box = cell.getBoundingClientRect();
           return Math.max(
             Math.abs((box.top + box.bottom - health.top - health.bottom) / 2),

@@ -13,6 +13,7 @@ it("keeps conversation collection and terminal preferences together, outside Gen
   render(<><SettingsCategoryTabs active="conversations" onChange={vi.fn()} />
     <ConversationSettingsSection conversationTerminal="default" onConversationTerminalChange={vi.fn()} /></>);
   expect(screen.getByRole("tab", { name: "Conversations" })).toHaveAttribute("aria-selected", "true");
+  expect(screen.queryByRole("tab", { name: "Agents" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Conversation sources" })).toBeInTheDocument();
   expect(screen.getByRole("combobox", { name: "Conversation terminal" })).toBeInTheDocument();
 });

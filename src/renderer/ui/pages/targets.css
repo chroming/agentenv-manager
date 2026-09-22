@@ -173,6 +173,22 @@
   z-index: var(--z-popover);
 }
 
+.target-row-action-menu__ownership {
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-control) var(--radius-control);
+  margin-top: 3px;
+  padding-top: 8px;
+}
+
+.target-workflow-reorder {
+  cursor: grab;
+  justify-self: end;
+}
+
+.target-workflow-reorder:active {
+  cursor: grabbing;
+}
+
 .target-health-status {
   align-items: center;
   color: var(--muted);
@@ -221,17 +237,14 @@
 .target-workflow-icon {
   align-items: center;
   background: transparent;
+  border: 0;
   border-radius: var(--radius-control);
+  color: inherit;
   display: inline-flex;
   height: 32px;
   justify-content: center;
+  padding: 0;
   width: 32px;
-}
-.target-workflow-icon[draggable="true"] {
-  cursor: grab;
-}
-.target-workflow-icon[draggable="true"]:active {
-  cursor: grabbing;
 }
 .target-workflow-icon img {
   height: 20px;

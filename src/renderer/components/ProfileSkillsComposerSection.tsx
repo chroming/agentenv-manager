@@ -73,12 +73,6 @@ export const ProfileSkillsComposerSection = ({
     inventory: currentSkills,
     librarySkills
   });
-  const sharedRuntimeSummary = sharedBoundary.migrationPaths.length > 0
-    ? t("Needs review")
-    : sharedBoundary.activePaths.length > 0
-      ? t("Shared")
-        : undefined;
-
   return (
     <ProfileComposerSection
       id="skills"
@@ -86,8 +80,6 @@ export const ProfileSkillsComposerSection = ({
       title={t("Skills")}
       count={summary.total}
       enabledCount={summary.count}
-      countSummary={sharedRuntimeSummary}
-      countStatusKind={sharedBoundary.migrationPaths.length > 0 ? "warning" : undefined}
       chipNames={summary.names}
       policy={summary.mode}
       policyDisabled={!capabilityAvailable}

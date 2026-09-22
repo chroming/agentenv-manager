@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentDiscoveryDialog } from "../../src/renderer/components/AgentDiscoveryDialog";
 import type { TargetInfo } from "../../src/shared/types";
@@ -63,6 +63,8 @@ describe("AgentDiscoveryDialog", () => {
         ]}
         allowSuggestionPreferences={false}
         busy={false}
+        enabledAgentIds={[]}
+        manualSelection={false}
         open
         phase="choose"
         setupActions={{}}
@@ -79,6 +81,35 @@ describe("AgentDiscoveryDialog", () => {
     expect(within(dialog).getByText("Not detected")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Enable 1 Agent" }))
       .toBeEnabled();
+  });
+
+  it("saves the complete enabled set when opened manually", () => {
+    const onEnable = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AgentDiscoveryDialog
+        agents={[
+          agent("opencode", "OpenCode", true),
+          agent("codex", "Codex", false)
+        ]}
+        allowSuggestionPreferences={false}
+        busy={false}
+        enabledAgentIds={["codex"]}
+        manualSelection
+        open
+        phase="choose"
+        setupActions={{}}
+        onConfigure={vi.fn()}
+        onDismiss={vi.fn()}
+        onEnable={onEnable}
+        onSuppress={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    expect(screen.getByRole("checkbox", { name: "OpenCode" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Codex" })).toBeChecked();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Codex" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Agent choices" }));
+    expect(onEnable).toHaveBeenCalledWith([]);
   });
 
   it("identifies Codex through ChatGPT instead of presenting the bundled binary as the app", () => {
@@ -100,6 +131,8 @@ describe("AgentDiscoveryDialog", () => {
         agents={[codex]}
         allowSuggestionPreferences={false}
         busy={false}
+        enabledAgentIds={[codex.id]}
+        manualSelection
         open
         phase="choose"
         setupActions={{}}
@@ -113,5 +146,42 @@ describe("AgentDiscoveryDialog", () => {
     expect(screen.getByText("Detected via desktop app"))
       .toHaveAttribute("title", "/Applications/ChatGPT.app");
     expect(screen.queryByText(/Contents\/Resources\/codex/)).not.toBeInTheDocument();
+  });
+
+  it("keeps recovery-required Agents enabled and opens Recovery from the chooser", () => {
+    const onEnable = vi.fn().mockResolvedValue(undefined);
+    const onRecovery = vi.fn();
+    render(
+      <AgentDiscoveryDialog
+        agents={[agent("opencode", "OpenCode", true)]}
+        allowSuggestionPreferences={false}
+        busy={false}
+        enabledAgentIds={["opencode"]}
+        managementStates={[{
+          targetId: "opencode",
+          status: "managed",
+          lifecycleStatus: "recovery-required",
+          managedResourceCount: 1,
+          warningCount: 0,
+          errorCount: 1
+        }]}
+        manualSelection
+        open
+        phase="choose"
+        setupActions={{}}
+        onConfigure={vi.fn()}
+        onDismiss={vi.fn()}
+        onEnable={onEnable}
+        onRecovery={onRecovery}
+        onSuppress={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+
+    expect(screen.getByRole("checkbox", { name: "OpenCode" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "OpenCode" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Open Recovery" }));
+    expect(onRecovery).toHaveBeenCalledWith("opencode");
+    fireEvent.click(screen.getByRole("button", { name: "Save Agent choices" }));
+    expect(onEnable).toHaveBeenCalledWith(["opencode"]);
   });
 });

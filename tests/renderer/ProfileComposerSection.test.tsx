@@ -266,6 +266,28 @@ describe("ProfileComposerSection", () => {
     expect(screen.queryByRole("group")).not.toBeInTheDocument();
   });
 
+  it("omits a zero-of-zero summary when the resource group is empty", () => {
+    render(
+      <ProfileComposerSection
+        id="profile-instructions"
+        icon={<BookOpen />}
+        title="Instructions"
+        count={0}
+        enabledCount={0}
+        chipNames={[]}
+        policy="manage"
+        policyLabel="Instructions application policy for OpenCode"
+        expanded
+        onToggle={vi.fn()}
+        onPolicyChange={vi.fn()}
+      >
+        <div>No Instructions in this Profile</div>
+      </ProfileComposerSection>
+    );
+
+    expect(document.querySelector(".ui-resource-disclosure__summary")).toBeNull();
+  });
+
   it("keeps Profile content inspectable without adding an unmanaged explanation row", () => {
     render(
       <ProfileComposerSection

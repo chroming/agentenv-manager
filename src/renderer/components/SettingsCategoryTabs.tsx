@@ -4,11 +4,10 @@ import { SettingsPreferenceRow } from "./SettingsPreferenceRow";
 import { SelectControl, TabBar } from "./ui";
 import { HistorySearchSettings } from "./HistorySearchSettings";
 
-export type SettingsCategory = "general" | "agents" | "skills" | "conversations" | "ai" | "connections" | "data";
+export type SettingsCategory = "general" | "skills" | "conversations" | "ai" | "connections" | "data";
 
 const categories = [
   ["general", "General"],
-  ["agents", "Agents"],
   ["skills", "Skills"],
   ["conversations", "Conversations"],
   ["ai", "AI assistance"],

@@ -218,7 +218,8 @@
   padding: 0 7px;
 }
 
-.capture-resource--exclude .capture-resource__status {
+.capture-resource--exclude .capture-resource__status,
+.capture-resource--observe .capture-resource__status {
   background: #f3f5f8;
   color: var(--muted);
 }

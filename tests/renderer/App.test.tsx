@@ -1064,7 +1064,7 @@ describe("App", () => {
     expect(within(workspace).queryByRole("region", { name: "Profile status" })).toBeNull();
     expect(within(workspace).getByRole("button", { name: "Codex" })).toBeEnabled();
     const openCode = within(workspace).getByRole("article", { name: "Agent OpenCode" });
-    fireEvent.click(within(openCode).getByRole("button", { name: "Configure" }));
+    fireEvent.click(within(openCode).getByRole("button", { name: "OpenCode" }));
     const dialog = await screen.findByRole("dialog", { name: "Set up OpenCode" });
     expect(within(dialog).getByRole("button", { name: "Create from current environment" }))
       .toBeEnabled();
@@ -1140,14 +1140,14 @@ describe("App", () => {
 
     const workspace = await screen.findByRole("region", { name: "Agents" });
     expect(
-      await within(workspace).findByText("Profile check unavailable")
+      await within(workspace).findByText("Local inventory is temporarily unavailable")
     ).toBeInTheDocument();
     expect(
       within(workspace).getByRole("button", { name: "OpenCode" })
     ).toBeEnabled();
     expect(
       within(
-        within(workspace).getByRole("region", { name: "Profile status" })
+        within(workspace).getByRole("region", { name: "Agent status" })
       ).getByRole("button", { name: "Retry check" })
     ).toBeEnabled();
     expect(warning).toHaveBeenCalledWith(
@@ -1664,7 +1664,7 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Skills" }));
   };
 
-  const openSettingsCategory = async (category: "General" | "Agents" | "Skills" | "Conversations" | "Connections" | "Data") => {
+  const openSettingsCategory = async (category: "General" | "Skills" | "Conversations" | "Connections" | "Data") => {
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
     fireEvent.click(screen.getByRole("tab", { name: category }));
   };
@@ -1829,7 +1829,8 @@ describe("App", () => {
     const agentsWorkspace = await screen.findByRole("region", { name: "Agents" });
     fireEvent.click(within(agentsWorkspace).getByRole("button", { name: "Choose Agents" }));
     const reopened = screen.getByRole("dialog", { name: "Choose Agents" });
-    fireEvent.click(within(reopened).getByRole("button", { name: "Enable 1 Agent" }));
+    fireEvent.click(within(reopened).getByRole("checkbox", { name: "OpenCode" }));
+    fireEvent.click(within(reopened).getByRole("button", { name: "Save Agent choices" }));
 
     await waitFor(() => expect(updateSettings).toHaveBeenCalledWith({
       enabledTargetIds: ["opencode"],
@@ -2132,18 +2133,18 @@ describe("App", () => {
     }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Choose Agents" })).not.toBeInTheDocument());
 
-    await openSettingsCategory("Agents");
-    expect(screen.queryByRole("button", { name: "Suggest OpenCode again" }))
-      .not.toBeInTheDocument();
-    fireEvent.click(screen.getByText("Future Agent suggestions"));
-    expect(screen.getByText("Won't suggest: OpenCode")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Allow future suggestions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    const agentsWorkspace = await screen.findByRole("region", { name: "Agents" });
+    fireEvent.click(within(agentsWorkspace).getByRole("button", { name: "More Agent actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Ignored Agent suggestions (1)" }));
+    const preferences = screen.getByRole("dialog", { name: "Agent suggestions" });
+    expect(preferences).toHaveTextContent("OpenCode");
+    fireEvent.click(within(preferences).getByRole("button", { name: "Allow future suggestions" }));
     await waitFor(() => expect(updateSettings).toHaveBeenLastCalledWith({
       agentDiscoveryReviewedIds: [],
       suppressedAgentSuggestionIds: []
     }));
-    expect(await screen.findByText("No Agent suggestions are ignored"))
-      .toBeInTheDocument();
+    await waitFor(() => expect(preferences).toHaveTextContent("None"));
   });
 
   it("refreshes Conversations in the background without changing the active workspace", async () => {
@@ -3118,13 +3119,13 @@ describe("App", () => {
     generalTab.focus();
     fireEvent.keyDown(generalTab, { key: "ArrowRight" });
 
-    const agentsTab = screen.getByRole("tab", { name: "Agents" });
-    expect(agentsTab).toHaveFocus();
-    expect(agentsTab).toHaveAttribute("aria-selected", "true");
+    const skillsTab = screen.getByRole("tab", { name: "Skills" });
+    expect(skillsTab).toHaveFocus();
+    expect(skillsTab).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByTestId("locale-select")).not.toBeInTheDocument();
-    expect(await screen.findByRole("switch", { name: "Turn off OpenCode" })).toBeInTheDocument();
+    expect(await screen.findByText("Skills library")).toBeInTheDocument();
 
-    fireEvent.keyDown(agentsTab, { key: "End" });
+    fireEvent.keyDown(skillsTab, { key: "End" });
     const dataTab = screen.getByRole("tab", { name: "Data" });
     expect(dataTab).toHaveFocus();
     expect(dataTab).toHaveAttribute("aria-selected", "true");
@@ -3201,7 +3202,7 @@ describe("App", () => {
 
   it("turns Agents off and removes their operational UI", async () => {
     let enabledTargetIds = ["opencode", "codex"];
-    let agentDiscoveryReviewedIds: string[] = [];
+    let agentDiscoveryReviewedIds: string[] = ["opencode", "codex"];
     let suppressedAgentSuggestionIds: string[] = [];
     const allTargets = [target, codexTarget];
     const listTargets = vi.fn(async () =>
@@ -3246,35 +3247,22 @@ describe("App", () => {
     });
     render(<App />);
 
-    await openSettingsCategory("Agents");
-    fireEvent.click(screen.getByRole("switch", { name: "Turn off Codex" }));
-
-    await waitFor(() =>
-      expect(updateSettings).toHaveBeenCalledWith({
-        enabledTargetIds: ["opencode"],
-        agentDiscoveryReviewedIds: ["codex"],
-        suppressedAgentSuggestionIds: []
-      })
-    );
-    await waitFor(() =>
-      expect(screen.getByRole("switch", { name: "Turn on Codex" })).toHaveAttribute(
-        "aria-checked",
-        "false"
-      )
-    );
-    expect(listTargets).toHaveBeenLastCalledWith(true);
-
-    fireEvent.click(screen.getByRole("switch", { name: "Turn off OpenCode" }));
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    const agentsWorkspace = await screen.findByRole("region", { name: "Agents" });
+    fireEvent.click(within(agentsWorkspace).getByRole("button", { name: "Choose Agents" }));
+    const chooser = screen.getByRole("dialog", { name: "Choose Agents" });
+    fireEvent.click(within(chooser).getByRole("checkbox", { name: "Codex" }));
+    fireEvent.click(within(chooser).getByRole("checkbox", { name: "OpenCode" }));
+    fireEvent.click(within(chooser).getByRole("button", { name: "Save Agent choices" }));
     await waitFor(() =>
       expect(updateSettings).toHaveBeenLastCalledWith({
         enabledTargetIds: [],
-        agentDiscoveryReviewedIds: ["codex", "opencode"],
+        agentDiscoveryVersion: 1,
+        agentDiscoveryReviewedIds: ["opencode", "codex"],
         suppressedAgentSuggestionIds: []
       })
     );
-    const agentsNavigation = screen.getByRole("button", { name: "Agents" });
-    expect(agentsNavigation).toBeInTheDocument();
-    fireEvent.click(agentsNavigation);
+    expect(listTargets).toHaveBeenLastCalledWith(true);
     expect(
       await screen.findByRole("region", { name: "Agents" })
     ).toHaveTextContent("No enabled Agents");
@@ -3286,14 +3274,17 @@ describe("App", () => {
     expect(api.listSupportedTargets).toHaveBeenCalled();
   });
 
-  it("persists Agent order from Settings and applies it to the Agents workspace", async () => {
+  it("persists Agent order from the Agents workspace", async () => {
     const api = installApi({
       listSupportedTargets: vi.fn().mockResolvedValue([target, codexTarget]),
       listTargets: vi.fn().mockResolvedValue([target, codexTarget])
     });
     render(<App />);
 
-    await openSettingsCategory("Agents");
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    await screen.findByRole("region", { name: "Agents" });
+    fireEvent.click(screen.getByRole("button", { name: "More Agent actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Reorder Agents" }));
     fireEvent.keyDown(screen.getByRole("button", { name: "Reorder OpenCode" }), {
       altKey: true,
       key: "ArrowDown"
@@ -3302,8 +3293,6 @@ describe("App", () => {
     await waitFor(() => expect(api.updateUiState).toHaveBeenCalledWith({
       agentOrder: ["codex", "opencode"]
     }));
-    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
-    expect(await screen.findByRole("region", { name: "Agents" })).toBeInTheDocument();
     expect([...document.querySelectorAll(".target-workflow-name-action")]
       .map((item) => item.textContent)).toEqual(["Codex", "OpenCode"]);
   });
@@ -3333,23 +3322,22 @@ describe("App", () => {
     });
     render(<App />);
 
-    await openSettingsCategory("Agents");
-    const agentSwitch = screen.getByRole("switch", { name: "Turn off OpenCode" });
-    agentSwitch.focus();
-    fireEvent.click(agentSwitch);
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    const agentsWorkspace = await screen.findByRole("region", { name: "Agents" });
+    const more = within(agentsWorkspace).getByRole("button", { name: "More actions for OpenCode" });
+    more.focus();
+    fireEvent.click(more);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Turn off Agent" }));
 
     const dialog = screen.getByRole("dialog", { name: "Turn off OpenCode?" });
-    expect(dialog).toHaveTextContent("Existing managed files stay in place");
-    expect(dialog).toHaveTextContent("turn this Agent on again before changing or recovering them");
+    expect(dialog).toHaveTextContent("files stay unchanged");
     expect(updateSettings).not.toHaveBeenCalled();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Turn off OpenCode" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Turn off Agent" }));
     await waitFor(() => expect(updateSettings).toHaveBeenCalledWith({
       enabledTargetIds: [],
       agentDiscoveryReviewedIds: ["opencode"],
       suppressedAgentSuggestionIds: []
     }));
-    const agentStatus = document.querySelector(".agent-settings-status") as HTMLElement;
-    expect(within(agentStatus).getByText("Saving...")).toBeInTheDocument();
     act(() => settingsUpdate.resolve({
       locale: "system",
       conversationTerminal: "default",
@@ -3360,8 +3348,37 @@ describe("App", () => {
       backupRetentionDays: null,
       enabledTargetIds
     }));
-    await waitFor(() => expect(within(agentStatus).queryByText("Saving...")).not.toBeInTheDocument());
-    await waitFor(() => expect(agentSwitch).toHaveFocus());
+    await waitFor(() => expect(screen.queryByRole("article", { name: "Agent OpenCode" })).not.toBeInTheDocument());
+  });
+
+  it("keeps the turn-off confirmation open when settings cannot be saved", async () => {
+    const updateSettings = vi.fn().mockRejectedValue(new Error("Settings are unavailable"));
+    installApi({
+      listSupportedTargets: vi.fn().mockResolvedValue([target]),
+      listTargets: vi.fn().mockResolvedValue([target]),
+      readSettings: vi.fn().mockResolvedValue({
+        locale: "system",
+        skillSyncMethod: "symlink",
+        skillStorageLocation: "appData",
+        skillAutoCheckEnabled: true,
+        skillAutoCheckIntervalMinutes: 60,
+        backupRetentionDays: null,
+        enabledTargetIds: ["opencode"]
+      }),
+      updateSettings
+    });
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    const agentsWorkspace = await screen.findByRole("region", { name: "Agents" });
+    fireEvent.click(within(agentsWorkspace).getByRole("button", { name: "More actions for OpenCode" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Turn off Agent" }));
+    const dialog = screen.getByRole("dialog", { name: "Turn off OpenCode?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Turn off Agent" }));
+
+    await waitFor(() => expect(updateSettings).toHaveBeenCalled());
+    expect(screen.getByRole("dialog", { name: "Turn off OpenCode?" })).toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "Agent OpenCode" })).toBeInTheDocument();
   });
 
   it("keeps an Agent enabled while recovery is required", async () => {
@@ -3385,12 +3402,11 @@ describe("App", () => {
     });
     render(<App />);
 
-    await openSettingsCategory("Agents");
-
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    const agentsWorkspace = await screen.findByRole("region", { name: "Agents" });
     expect(await screen.findByText("Recovery required")).toBeInTheDocument();
-    expect(screen.getByRole("switch", { name: "Turn off OpenCode" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Open Recovery" }));
-    expect(await screen.findByRole("region", { name: "Agents" })).toBeInTheDocument();
+    fireEvent.click(within(agentsWorkspace).getByRole("button", { name: "More actions for OpenCode" }));
+    expect(screen.getByRole("menuitem", { name: "Turn off Agent" })).toBeDisabled();
     expect(updateSettings).not.toHaveBeenCalled();
   });
 
@@ -4864,8 +4880,7 @@ describe("App", () => {
     await screen.findByRole("region", { name: "Agents" });
 
     const openCodeCard = await screen.findByRole("article", { name: "Agent OpenCode" });
-    expect(within(openCodeCard).getByRole("button", { name: "Daily Coding" })).toHaveAttribute("title", "Daily Coding\nApplied");
-    expect(within(openCodeCard).getByText("Daily Coding")).toBeInTheDocument();
+    expect(within(openCodeCard).getByText("Daily Coding")).toHaveAttribute("title", "Applied");
   });
 
   it("opens an Agent's active Profile in the canonical full editor", async () => {
@@ -5319,6 +5334,14 @@ describe("App", () => {
             id: "instructions",
             name: "AGENTS.md",
             action: "include"
+          },
+          {
+            kind: "skill",
+            id: "agent-controlled:workbuddy",
+            name: "WorkBuddy",
+            count: 5,
+            action: "observe",
+            detail: "5 Skills are available through WorkBuddy and remain Agent-controlled."
           }
         ],
         warnings: [],
@@ -5350,7 +5373,11 @@ describe("App", () => {
     dialog = screen.getByRole("dialog", { name: "Review OpenCode capture" });
     const impact = within(dialog).getByRole("region", { name: "Capture impact" });
     expect(within(impact).getByLabelText("Capture summary")).toHaveTextContent("0Source changes");
+    expect(within(impact).getByLabelText("Capture summary")).toHaveTextContent("2Profile resources");
     expect(within(dialog).getByText("2 source copies stay unchanged")).toBeInTheDocument();
+    expect(within(dialog).queryByText("WorkBuddy")).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Provided by Agent" }));
+    expect(within(dialog).getByText("WorkBuddy")).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Back" }));
     dialog = screen.getByRole("dialog", { name: "Create Profile from OpenCode" });
     expect(within(dialog).getByLabelText("Profile name")).toHaveValue("OpenCode");
@@ -5699,11 +5726,29 @@ describe("App", () => {
   });
 
   it("routes a recovery-required Agent to recovery tools without requiring a Profile detour", async () => {
-    installApi({ listTargetStates: vi.fn().mockResolvedValue([managedState({ lifecycleStatus: "recovery-required" })]) });
+    installApi({
+      listTargetStates: vi.fn().mockResolvedValue([
+        managedState({ lifecycleStatus: "recovery-required" })
+      ]),
+      listBackups: vi.fn().mockResolvedValue([backup])
+    });
     render(<App />);
     const workspace = await screen.findByRole("region", { name: "Agents" });
-    fireEvent.click(await within(workspace).findByRole("button", { name: "Open Recovery" }));
-    expect(await screen.findByRole("tab", { name: "Data" })).toHaveAttribute("aria-selected", "true");
+    const openCode = await within(workspace).findByRole("article", { name: "Agent OpenCode" });
+    fireEvent.click(within(openCode).getByRole("button", { name: "More actions for OpenCode" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Recovery" }));
+    expect(await screen.findByRole("dialog", { name: "Recovery" })).toBeInTheDocument();
+  });
+
+  it("disables Agent recovery when no recovery point exists", async () => {
+    installApi({ listBackups: vi.fn().mockResolvedValue([]) });
+    render(<App />);
+    const workspace = await screen.findByRole("region", { name: "Agents" });
+    const openCode = await within(workspace).findByRole("article", { name: "Agent OpenCode" });
+    fireEvent.click(within(openCode).getByRole("button", { name: "More actions for OpenCode" }));
+    const recovery = screen.getByRole("menuitem", { name: "Recovery" });
+    expect(recovery).toBeDisabled();
+    expect(recovery).toHaveAttribute("title", "No recovery points for this Agent.");
   });
 
   it("uses the confirmation preview when recovery starts from Targets", async () => {

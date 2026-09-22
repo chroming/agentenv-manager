@@ -6,10 +6,13 @@ import type { EnvironmentReviewSummary, EnvironmentReviewState } from "../../src
 
 afterEach(cleanup);
 
-const summary = (state: EnvironmentReviewState): EnvironmentReviewSummary => ({
+const summary = (
+  state: EnvironmentReviewState,
+  unavailableReason?: string
+): EnvironmentReviewSummary => ({
   state, installedTargetIds: ["codex"], installedAgentCount: 1, usableProfileCount: 1,
   sharedSkillCount: 4, sharedAutomaticCount: 2, sharedDecisionCount: 2,
-  affectedTargetIds: ["codex"], attentionTargetIds: ["codex"]
+  affectedTargetIds: ["codex"], attentionTargetIds: ["codex"], unavailableReason
 });
 
 describe("default attention budget", () => {
@@ -22,11 +25,12 @@ describe("default attention budget", () => {
 
   it("keeps an actual scan failure visible, retryable, and guarded while busy", () => {
     const onRefresh = vi.fn();
-    const { rerender } = render(<EnvironmentStatusStrip summary={summary("unavailable")} busy={false} onRefresh={onRefresh} />);
-    expect(screen.getByRole("status")).toHaveTextContent("Profile check unavailable");
+    const { rerender } = render(<EnvironmentStatusStrip summary={summary("unavailable", "Local inventory is temporarily unavailable")} busy={false} onRefresh={onRefresh} />);
+    expect(screen.getByRole("region", { name: "Agent status" })).toHaveTextContent("Agent status could not be checked");
+    expect(screen.getByRole("status")).toHaveTextContent("Local inventory is temporarily unavailable");
     fireEvent.click(screen.getByRole("button", { name: "Retry check" }));
     expect(onRefresh).toHaveBeenCalledOnce();
-    rerender(<EnvironmentStatusStrip summary={summary("unavailable")} busy onRefresh={onRefresh} />);
+    rerender(<EnvironmentStatusStrip summary={summary("unavailable", "Local inventory is temporarily unavailable")} busy onRefresh={onRefresh} />);
     expect(screen.getByRole("button", { name: "Retry check" })).toBeDisabled();
   });
 });

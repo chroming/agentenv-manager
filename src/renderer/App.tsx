@@ -61,7 +61,6 @@ import { collectLibraryResourceVersions, libraryResourceVersionsEqual } from "..
 import { isTargetInstalled } from "../shared/targetHealth";
 import { isExternalSkillImportable } from "../shared/skillIdentity";
 import { AgentDiscoveryDialog } from "./components/AgentDiscoveryDialog";
-import { AgentSettingsSection } from "./components/AgentSettingsSection";
 import {
   AppFeedback,
   type AppFeedbackMessage
@@ -253,8 +252,8 @@ const AppContent = ({
   const [skillUpdates, setSkillUpdates] = useState<SkillUpdateInfo[]>([]);
   const [skillInventory, setSkillInventory] = useState<SkillInventoryEntry[]>([]);
   const [skillInventoryIssues, setSkillInventoryIssues] = useState<SkillRuntimeIssue[]>([]);
-  const [environmentScanStatus, setEnvironmentScanStatus] =
-    useState<EnvironmentScanStatus>("checking");
+  const [environmentScanStatus, setEnvironmentScanStatus] = useState<EnvironmentScanStatus>("checking");
+  const [environmentScanError, setEnvironmentScanError] = useState<string>();
   const [skillInventoryRefreshing, setSkillInventoryRefreshing] = useState(false);
   const [skillCleanupBackups, setSkillCleanupBackups] = useState<SkillCleanupBackupSummary[]>([]);
   const [skillCleanupResult, setSkillCleanupResult] = useState<SkillCleanupResult>();
@@ -614,6 +613,7 @@ const AppContent = ({
   ) => {
     if (shouldApply()) {
       setEnvironmentScanStatus("checking");
+      setEnvironmentScanError(undefined);
     }
     const skillUpdateResultRevision = skillUpdateResultRevisionRef.current;
     const {
@@ -716,16 +716,15 @@ const AppContent = ({
       setSkillInventory(skillInventoryResult.value.entries);
       setSkillInventoryIssues(skillInventoryResult.value.issues);
       setEnvironmentScanStatus("ready");
+      setEnvironmentScanError(undefined);
       markFresh("local-skills");
     } else {
+      const message = skillInventoryResult.reason instanceof Error
+        ? skillInventoryResult.reason.message
+        : String(skillInventoryResult.reason);
       setEnvironmentScanStatus("error");
-      console.warn(
-        `[AgentEnv] Local Skill inventory is unavailable: ${
-          skillInventoryResult.reason instanceof Error
-            ? skillInventoryResult.reason.message
-            : String(skillInventoryResult.reason)
-        }`
-      );
+      setEnvironmentScanError(message);
+      console.warn(`[AgentEnv] Local Skill inventory is unavailable: ${message}`);
     }
     githubConnection.actions.acceptAuthStatus(githubStatus);
     if (checkedSources) {
@@ -880,6 +879,7 @@ const AppContent = ({
     try {
       await runFreshness("skill-library", reason, async () => {
         setEnvironmentScanStatus("checking");
+        setEnvironmentScanError(undefined);
         const inventoryPromise = runFreshness(
           "local-skills",
           reason,
@@ -889,8 +889,13 @@ const AppContent = ({
           issues: skillInventoryIssues
         });
         void inventoryPromise.then(
-          () => setEnvironmentScanStatus("ready"),
-          () => setEnvironmentScanStatus("error")
+          () => { setEnvironmentScanStatus("ready"); setEnvironmentScanError(undefined); },
+          (unknownError) => {
+            setEnvironmentScanStatus("error");
+            setEnvironmentScanError(
+              unknownError instanceof Error ? unknownError.message : String(unknownError)
+            );
+          }
         );
         const [skillItems, inventoryItems, , sourceGroupItems] =
           await Promise.all([
@@ -903,6 +908,7 @@ const AppContent = ({
         setSkillInventory(inventoryItems.entries);
         setSkillInventoryIssues(inventoryItems.issues);
         setEnvironmentScanStatus("ready");
+        setEnvironmentScanError(undefined);
         setSkillSourceGroups(sourceGroupItems);
         return skillItems;
       });
@@ -1641,10 +1647,11 @@ const AppContent = ({
     telemetryConsent.blocksAgentSuggestions || skillManagementMigration.open
   );
   const {
-    agentProbeComplete, allowSuggestionPreferences, detectedDisabledAgents,
+    allowSuggestionPreferences, detectedDisabledAgents,
     dialogPhase: agentDiscoveryDialogPhase,
     dialogOpen: agentDiscoveryDialogOpen,
-    discoveredTargets, enabledAgentIds, visibleAgentSuggestions,
+    manualSelection: agentDiscoveryManualSelection,
+    enabledAgentIds, visibleAgentSuggestions,
     chooseTargetConfigRoot, dismissAgentSuggestions, enableSuggestedAgents,
     openAgentChooser, openAgentSetup, probeSupportedAgents, resetTargetConfigRoot,
     restoreAllAgentSuggestions, setAgentEnabled, setDiscoveredTargets, setTargetCommandOverride,
@@ -1854,6 +1861,7 @@ const AppContent = ({
     () =>
       deriveEnvironmentReview({
         scanStatus: environmentScanStatus,
+        scanError: environmentScanError,
         inventory: skillInventory,
         installedTargetIds: installedTargets.map((target) => target.id),
         profiles,
@@ -1862,6 +1870,7 @@ const AppContent = ({
       }),
     [
       environmentScanStatus,
+      environmentScanError,
       installedTargets,
       preparedSkillTargetsBySkill,
       profiles,
@@ -2562,11 +2571,13 @@ const AppContent = ({
       await runFreshness("local-skills", reason, async () => {
         setSkillInventoryRefreshing(true);
         setEnvironmentScanStatus("checking");
+        setEnvironmentScanError(undefined);
         try {
           const inventory = await window.agentEnv.scanSkillInventory();
           setSkillInventory(inventory.entries);
           setSkillInventoryIssues(inventory.issues);
           setEnvironmentScanStatus("ready");
+          setEnvironmentScanError(undefined);
           return inventory;
         } finally {
           setSkillInventoryRefreshing(false);
@@ -2575,6 +2586,7 @@ const AppContent = ({
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
       setEnvironmentScanStatus("error");
+      setEnvironmentScanError(message);
       if (announce) {
         setError(message);
       }
@@ -4452,6 +4464,11 @@ const AppContent = ({
               isLoading={isLoading}
               busy={busy}
               freshness={freshnessStates.agents}
+              suppressedAgentNames={supportedTargets
+                .filter((target) => (skillSettings.suppressedAgentSuggestionIds ?? []).includes(target.id))
+                .map((target) => target.name)}
+              configRoots={skillSettings.targetConfigRoots ?? {}}
+              commandOverrides={skillSettings.targetCommandOverrides ?? {}}
               onRefresh={async () => {
                 await Promise.all([refreshTargets(), remote.refresh(true)]);
               }}
@@ -4462,14 +4479,14 @@ const AppContent = ({
               onRefreshRemoteDevice={remote.refreshDevice}
               onReorder={reorderAgents}
               onChooseAgents={openAgentChooser}
+              onTurnOffAgent={(targetId) => setAgentEnabled(targetId, false)}
+              onRestoreAgentSuggestions={restoreAllAgentSuggestions}
+              onChooseConfigRoot={chooseTargetConfigRoot}
+              onResetConfigRoot={resetTargetConfigRoot}
+              onSetCommandOverride={setTargetCommandOverride}
               onConfigure={openAgentConfiguration}
               onReviewEnvironment={openEnvironmentReview}
               onReviewLocalSkills={openSkillDiscoveries}
-              onResolveRecovery={() => {
-                setSettingsCategory("data");
-                openWorkspaceNow("settings");
-                backupRecovery.actions.revealManager();
-              }}
               onCreateProfileFromTarget={(targetId, returnFocus) =>
                 openCreateFromTargetDialog(targetId, "all", returnFocus)}
               onManageSkills={openTargetSkillManager}
@@ -4516,27 +4533,6 @@ const AppContent = ({
                 conversationTerminal={skillSettings.conversationTerminal}
                 onConversationTerminalChange={(conversationTerminal) => updateSkillSettings({ conversationTerminal })}
               />
-            ) : null}
-            {settingsCategory === "agents" ? (
-            <AgentSettingsSection
-              supportedAgents={supportedTargets}
-              enabledAgentIds={
-                enabledAgentIds
-              }
-              agents={agentProbeComplete ? discoveredTargets : targets}
-              agentStates={targetStates}
-              suppressedAgentIds={skillSettings.suppressedAgentSuggestionIds ?? []}
-              busy={busy}
-              onReorder={reorderAgents}
-              onSetEnabled={setAgentEnabled}
-              onRestoreAgentSuggestions={restoreAllAgentSuggestions}
-              onOpenRecovery={() => openWorkspaceNow("targets")}
-              configRoots={skillSettings.targetConfigRoots ?? {}}
-              commandOverrides={skillSettings.targetCommandOverrides ?? {}}
-              onChooseConfigRoot={chooseTargetConfigRoot}
-              onResetConfigRoot={resetTargetConfigRoot}
-              onSetCommandOverride={setTargetCommandOverride}
-            />
             ) : null}
             {settingsCategory === "skills" ? (
               <SkillSettingsSection
@@ -4743,11 +4739,20 @@ const AppContent = ({
           agents={visibleAgentSuggestions}
           allowSuggestionPreferences={allowSuggestionPreferences}
           busy={busy}
+          enabledAgentIds={enabledAgentIds}
+          managementStates={targetStates}
+          manualSelection={agentDiscoveryManualSelection}
           open={agentDiscoveryDialogOpen}
           phase={agentDiscoveryDialogPhase}
           setupActions={agentSetupActions}
           onDismiss={dismissAgentSuggestions}
           onEnable={enableSuggestedAgents}
+          onRecovery={() => {
+            dismissAgentSuggestions();
+            setSettingsCategory("data");
+            openWorkspaceNow("settings");
+            backupRecovery.actions.revealManager();
+          }}
           onConfigure={(targetId) => {
             dismissAgentSuggestions();
             openAgentConfiguration(targetId);

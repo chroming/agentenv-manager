@@ -1802,9 +1802,11 @@ export interface TargetCaptureResource {
   kind: "instructions" | "skill" | "mcp";
   id: string;
   name: string;
+  count?: number;
+  observedSkills?: Array<{ name: string; path: string; availability: "bundled" | "unknown" }>;
   sourcePath?: string;
   libraryId?: string;
-  action: "include" | "reuse" | "import" | "exclude";
+  action: "include" | "reuse" | "import" | "exclude" | "observe";
   detail?: string;
 }
 

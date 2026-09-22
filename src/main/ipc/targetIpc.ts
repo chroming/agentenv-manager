@@ -7,6 +7,7 @@ import type { IpcRegistrationHandles } from "./registration";
 
 interface TargetIpcServices {
   activationService: ActivationService;
+  beforeForcedRefresh?: () => Promise<void>;
   targetDiscoveryService: TargetDiscoveryService;
   targetRegistry: TargetRegistry;
 }
@@ -15,13 +16,15 @@ export const registerTargetIpc = (
   { diagnosticHandle }: Pick<IpcRegistrationHandles, "diagnosticHandle">,
   {
     activationService,
+    beforeForcedRefresh,
     targetDiscoveryService,
     targetRegistry
   }: TargetIpcServices
 ) => {
-  diagnosticHandle("targets:list", (_event, forceRefresh: unknown) =>
-    targetDiscoveryService.listTargets({ forceRefresh: forceRefresh === true })
-  );
+  diagnosticHandle("targets:list", async (_event, forceRefresh: unknown) => {
+    if (forceRefresh === true) await beforeForcedRefresh?.();
+    return targetDiscoveryService.listTargets({ forceRefresh: forceRefresh === true });
+  });
   diagnosticHandle("targets:probe-supported", (_event, forceRefresh: unknown) =>
     targetDiscoveryService.probeSupportedTargets({ forceRefresh: forceRefresh === true })
   );

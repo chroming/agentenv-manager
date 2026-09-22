@@ -257,6 +257,7 @@ export const ResourceSection = ({
 interface EmptyStateProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   actions?: ReactNode;
   description?: ReactNode;
+  density?: "default" | "compact";
   icon?: ReactNode;
   title: ReactNode;
 }
@@ -265,11 +266,15 @@ export const EmptyState = ({
   actions,
   className = "",
   description,
+  density = "default",
   icon,
   title,
   ...props
 }: EmptyStateProps) => (
-  <div {...props} className={`ui-empty-state ${className}`.trim()}>
+  <div
+    {...props}
+    className={`ui-empty-state ui-empty-state--${density} ${className}`.trim()}
+  >
     {icon ? <span className="ui-empty-state__icon" aria-hidden="true">{icon}</span> : null}
     <strong>{title}</strong>
     {description ? <span>{description}</span> : null}

@@ -37,6 +37,7 @@ interface AgentDiscoveryController {
   detectedDisabledAgents: TargetInfo[];
   dialogPhase: "choose" | "setup";
   dialogOpen: boolean;
+  manualSelection: boolean;
   discoveredTargets: TargetInfo[];
   enabledAgentIds: string[];
   allowSuggestionPreferences: boolean;
@@ -50,7 +51,7 @@ interface AgentDiscoveryController {
   restoreAllAgentSuggestions(): Promise<void>;
   resetTargetConfigRoot(targetId: string): Promise<void>;
   setTargetCommandOverride(targetId: string, command?: string): Promise<void>;
-  setAgentEnabled(targetId: string, enabled: boolean): Promise<void>;
+  setAgentEnabled(targetId: string, enabled: boolean): Promise<boolean>;
   setDiscoveredTargets: Dispatch<SetStateAction<TargetInfo[]>>;
   suppressAgentSuggestion(targetId: string): Promise<void>;
 }
@@ -114,7 +115,7 @@ export const useAgentDiscovery = ({
   const visibleAgentSuggestions = agentSuggestionMode === "setup"
     ? orderedDiscoveredTargets.filter((target) => recentlyEnabledAgentIds.includes(target.id))
     : agentSuggestionMode === "manual"
-      ? detectedDisabledAgents
+      ? orderedDiscoveredTargets
       : automaticAgentSuggestions;
 
   useEffect(() => {
@@ -167,13 +168,14 @@ export const useAgentDiscovery = ({
       : enabledAgentIds.filter((id) => id !== targetId);
     const suppressed = new Set(settings.suppressedAgentSuggestionIds ?? []);
     if (enabled) suppressed.delete(targetId);
-    await updateSettings({
+    const next = await updateSettings({
       enabledTargetIds: nextIds,
       agentDiscoveryReviewedIds: [
         ...new Set([...(settings.agentDiscoveryReviewedIds ?? []), targetId])
       ],
       suppressedAgentSuggestionIds: [...suppressed]
     });
+    return Boolean(next);
   };
 
   const enableSuggestedAgents = async (agentIds: string[]) => {
@@ -202,8 +204,10 @@ export const useAgentDiscovery = ({
     });
     if (!next) return;
     setSessionDismissedAgentIds((current) => [...new Set([...current, ...skippedIds])]);
-    setRecentlyEnabledAgentIds(agentIds);
-    setAgentSuggestionMode("setup");
+    const previouslyEnabled = new Set(enabledAgentIds);
+    const newlyEnabled = agentIds.filter((id) => !previouslyEnabled.has(id));
+    setRecentlyEnabledAgentIds(newlyEnabled);
+    setAgentSuggestionMode(newlyEnabled.length > 0 ? "setup" : undefined);
   };
 
   const suppressAgentSuggestion = async (targetId: string) => {
@@ -267,6 +271,7 @@ export const useAgentDiscovery = ({
     detectedDisabledAgents,
     dialogPhase: agentSuggestionMode === "setup" ? "setup" : "choose",
     dialogOpen: Boolean(agentSuggestionMode),
+    manualSelection: agentSuggestionMode === "manual",
     discoveredTargets: orderedDiscoveredTargets,
     enabledAgentIds,
     visibleAgentSuggestions,

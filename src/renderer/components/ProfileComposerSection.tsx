@@ -56,7 +56,8 @@ export const ProfileComposerSection = ({
       enabled: enabledCount,
       total: count
     });
-  const accessibleSummary = [countLabel, uniqueChipNames.join(", ")]
+  const showSummary = Boolean(countSummary) || count > 0;
+  const accessibleSummary = [showSummary ? countLabel : "", uniqueChipNames.join(", ")]
     .filter(Boolean)
     .join(" ");
 
@@ -85,7 +86,7 @@ export const ProfileComposerSection = ({
       onToggle={onToggle}
       nested={id === "instructions" || id === "skills" || id === "mcp"}
       muted={policyDisabled || policy !== "manage"}
-      summary={countSummary && countStatusKind ? (
+      summary={!showSummary ? undefined : countSummary && countStatusKind ? (
         <InteractiveStatus
           className="profile-composer-section__count-scope"
           label={countSummary}
@@ -104,7 +105,7 @@ export const ProfileComposerSection = ({
         </span>
       )}
       summaryLabel={accessibleSummary}
-      summaryTitle={countLabel}
+      summaryTitle={showSummary ? countLabel : undefined}
       summaryWidth={countSummary ? "wide" : "compact"}
       title={title}
       toggleLabel={title}

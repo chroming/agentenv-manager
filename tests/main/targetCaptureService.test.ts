@@ -1,7 +1,7 @@
 import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createPaths } from "../../src/main/paths";
 import { createInstructionLibraryStore } from "../../src/main/instructionLibraryStore";
 import { createProfileStore } from "../../src/main/profileStore";
@@ -23,7 +23,8 @@ const discovery = (id: string, installed = true): TargetDiscoveryService => ({
   probeSupportedTargets: async () => [],
   listTargets: async () => [{
     id,
-    health: { executableFound: installed, installationFound: installed }
+    health: { executableFound: installed, installationFound: installed,
+      installationEvidence: id === "workbuddy" ? [{ kind: "desktop-app", label: "WorkBuddy", path: join(root, "home", "Applications", "WorkBuddy.app") }] : [] }
   } as TargetInfo]
 });
 
@@ -40,7 +41,9 @@ const setup = async (targetId: string, installed = true) => {
     targetRegistry,
     instructionLibraryStore
   );
-  const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
+  const inventoryRuntime = vi.fn((targetPaths: import("../../src/shared/types").TargetPaths) =>
+    targetRegistry.get(targetPaths.targetId).skills.inspectRuntime(targetPaths));
+  const skillLibraryStore = createSkillLibraryStore(paths, settingsStore, { runtimeSnapshotProvider: inventoryRuntime });
   const diagnostics = createRuntimeDiagnostics({
     directory: join(root, "logs"),
     homeDir,
@@ -67,11 +70,41 @@ const setup = async (targetId: string, installed = true) => {
     targetRegistry,
     settingsStore,
     service,
-    diagnostics
+    diagnostics,
+    inventoryRuntime
   };
 };
 
 describe("target capture service v2", () => {
+  it("reuses the captured runtime snapshot for inventory enrichment", async () => {
+    const { service, targetRegistry, inventoryRuntime } = await setup("opencode");
+    const inspect = vi.spyOn(targetRegistry.get("opencode").skills, "inspectRuntime");
+    await service.previewTarget("opencode");
+    expect(inspect).toHaveBeenCalledTimes(1);
+    expect(inventoryRuntime).not.toHaveBeenCalled();
+  });
+  it.each([
+    "opencode",
+    "codex",
+    "claude-code",
+    "antigravity",
+    "antigravity-app",
+    "trae-cli",
+    "pi",
+    "workbuddy"
+  ])("does not traverse unrelated volatile runtime entries when capturing %s", async (targetId) => {
+    const { homeDir, service, targetRegistry } = await setup(targetId);
+    const targetPaths = targetRegistry.get(targetId).createTargetPaths({ homeDir });
+    const runtimeDir = join(targetPaths.configDir, "app");
+    await mkdir(runtimeDir, { recursive: true });
+    await symlink(join(runtimeDir, "missing-cookie-target"), join(runtimeDir, "SingletonCookie"));
+
+    await expect(service.previewTarget(targetId)).resolves.toMatchObject({
+      targetId,
+      errors: []
+    });
+  });
+
   it("blocks capture when the Agent command is missing", async () => {
     const { service, profileStore } = await setup("opencode", false);
 
@@ -636,6 +669,141 @@ describe("target capture service v2", () => {
     });
     await expect(readFile(join(piDir, "settings.json"), "utf8"))
       .resolves.toBe(`${settings}\n`);
+  });
+
+  it("ignores volatile WorkBuddy runtime files while capturing user Skills", async () => {
+    const { homeDir, service } = await setup("workbuddy");
+    const workBuddyDir = join(homeDir, ".workbuddy");
+    const skillDir = join(workBuddyDir, "skills", "review-workflow");
+    const bundledSkillDir = join(
+      homeDir,
+      "Applications",
+      "WorkBuddy.app",
+      "Contents",
+      "Resources",
+      "app.asar.unpacked",
+      "resources",
+      "plugins",
+      "workbuddy-builtin",
+      "skills",
+      "bundled-review"
+    );
+    await mkdir(skillDir, { recursive: true });
+    await mkdir(join(workBuddyDir, "app"), { recursive: true });
+    await mkdir(bundledSkillDir, { recursive: true });
+    await mkdir(
+      join(
+        homeDir,
+        "Applications",
+        "WorkBuddy.app",
+        "Contents",
+        "Resources",
+        "app.asar.unpacked",
+        "resources",
+        "plugins",
+        "workbuddy-builtin",
+        ".codebuddy-plugin"
+      ),
+      { recursive: true }
+    );
+    await writeFile(
+      join(skillDir, "SKILL.md"),
+      "---\nname: review-workflow\ndescription: Review changes.\n---\n# Review\n"
+    );
+    await writeFile(join(bundledSkillDir, "SKILL.md"), "---\nname: bundled-review\n---\n");
+    await writeFile(
+      join(
+        homeDir,
+        "Applications",
+        "WorkBuddy.app",
+        "Contents",
+        "Resources",
+        "app.asar.unpacked",
+        "resources",
+        "plugins",
+        "workbuddy-builtin",
+        ".codebuddy-plugin",
+        "marketplace.json"
+      ),
+      "{}"
+    );
+    await symlink(
+      join(workBuddyDir, "app", "missing-cookie-target"),
+      join(workBuddyDir, "app", "SingletonCookie")
+    );
+
+    const preview = await service.previewTarget("workbuddy");
+
+    expect(preview.errors).toEqual([]);
+    expect(preview.resources).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "skill",
+        name: "WorkBuddy",
+        count: 1,
+        action: "observe"
+      }),
+      expect.objectContaining({
+        kind: "skill",
+        id: "review-workflow",
+        action: "import",
+        sourcePath: skillDir
+      })
+    ]));
+    const result = await service.createFromTarget({
+      previewId: preview.id,
+      name: "WorkBuddy captured"
+    });
+    expect(result.profile.resources.skills).toEqual([
+      { libraryId: "review-workflow", targetName: "review-workflow", enabled: true }
+    ]);
+  });
+
+  it("shows enabled Claude plugin Skills as Agent controlled without capturing them", async () => {
+    const { homeDir, service, targetRegistry } = await setup("claude-code");
+    const targetPaths = targetRegistry.get("claude-code").createTargetPaths({ homeDir });
+    const pluginRoot = join(homeDir, "plugins", "review");
+    const pluginSkill = join(pluginRoot, "skills", "plugin-review");
+    await mkdir(join(pluginRoot, ".claude-plugin"), { recursive: true });
+    await mkdir(pluginSkill, { recursive: true });
+    await mkdir(join(targetPaths.configDir, "plugins"), { recursive: true });
+    await writeFile(join(pluginRoot, ".claude-plugin", "plugin.json"), "{}\n", "utf8");
+    await writeFile(
+      join(pluginSkill, "SKILL.md"),
+      "---\nname: plugin-review\ndescription: Review from a plugin.\n---\n# Review\n",
+      "utf8"
+    );
+    await writeFile(
+      targetPaths.configPath,
+      JSON.stringify({ enabledPlugins: { "review@marketplace": true } }),
+      "utf8"
+    );
+    await writeFile(
+      join(targetPaths.configDir, "plugins", "installed_plugins.json"),
+      JSON.stringify({
+        plugins: {
+          "review@marketplace": [{
+            scope: "user",
+            installPath: pluginRoot,
+            lastUpdated: "2026-09-22T00:00:00Z"
+          }]
+        }
+      }),
+      "utf8"
+    );
+
+    const preview = await service.previewTarget("claude-code");
+
+    expect(preview.resources).toContainEqual(expect.objectContaining({
+      kind: "skill",
+      name: "Claude Code plugin",
+      count: 1,
+      action: "observe"
+    }));
+    const result = await service.createFromTarget({
+      previewId: preview.id,
+      name: "Claude plugin capture"
+    });
+    expect(result.profile.resources.skills).toEqual([]);
   });
 
   it("warns and skips a broken Trae Skill link without blocking Profile capture", async () => {

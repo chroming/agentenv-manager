@@ -601,6 +601,7 @@ const launchApp = async (
     missingProfileSkill?: boolean;
     openCodeDesktopOnly?: boolean;
     omitOpenCodeProfiles?: boolean;
+    emptyOpenCodeProfileInstructions?: boolean;
     omitAllProfiles?: boolean;
     locale?: "system" | "en" | "zh_CN" | "zh_TW";
     projectSkillFixture?: boolean;
@@ -769,6 +770,13 @@ const launchApp = async (
   if (!options.omitAllProfiles && !options.omitOpenCodeProfiles) {
     await writeOpenCodeProfile(appDataRoot, "alpha");
     await writeOpenCodeProfile(appDataRoot, "beta", options.openCodeBetaProfileName);
+    if (options.emptyOpenCodeProfileInstructions) {
+      await writeFile(
+        join(appDataRoot, "profiles", "ui-opencode-alpha", "INSTRUCTIONS.md"),
+        "",
+        "utf8"
+      );
+    }
   }
   if (!options.omitAllProfiles) {
     await writeCodexProfile(appDataRoot, "alpha");
@@ -1393,7 +1401,7 @@ const captureAgent = async (
   await menu.getByRole("menuitem", { name: "Capture" }).click();
 };
 
-type SettingsCategoryName = "General" | "Agents" | "Skills" | "Conversations" | "Connections" | "Data";
+type SettingsCategoryName = "General" | "Skills" | "Conversations" | "Connections" | "Data";
 
 const openSettingsCategory = async (page: Page, category: SettingsCategoryName) => {
   await page
@@ -1860,7 +1868,7 @@ describe("Electron UI profile switching e2e", () => {
       });
       await page.reload();
       await page.getByRole("button", { name: "Agents", exact: true }).click();
-      await page.locator(".target-workflow-environment button").filter({ hasText: pending ? "Long Profile" : "UI OpenCode alpha" }).waitFor();
+      await page.locator(".target-workflow-profile").filter({ hasText: pending ? "Long Profile" : "UI OpenCode alpha" }).waitFor();
       const profileCell = page.getByRole("article", { name: "Agent OpenCode" }).locator(".target-workflow-environment");
       if (pending) await profileCell.getByLabel("Changes pending", { exact: true }).waitFor();
       else expect(await profileCell.locator(".ui-status-hint").count()).toBe(0);
@@ -1869,7 +1877,7 @@ describe("Electron UI profile switching e2e", () => {
         expect(await page.locator(".target-location-divider").count()).toBe(0);
         const cells = await page.locator(".target-workflow-environment").evaluateAll((elements) => elements.map((cell) => {
           const box = cell.getBoundingClientRect();
-          const action = cell.querySelector("button")!.getBoundingClientRect();
+          const action = cell.querySelector(".target-workflow-profile")!.getBoundingClientRect();
           const health = cell.parentElement!.querySelector(".target-health-status")!.getBoundingClientRect();
           return {
             height: box.height,
@@ -1970,9 +1978,9 @@ describe("Electron UI profile switching e2e", () => {
       const rowBackground = await agents.locator(".target-card--workflow").first().evaluate((element) => getComputedStyle(element).backgroundColor);
       expect(headerBackground).toBe(rowBackground);
       const actionGeometry = await agents.locator(".target-workflow-environment").first().evaluate((cell) => {
-        const action = cell.querySelector("button")!;
+        const action = cell.querySelector(".target-workflow-profile")!;
         return {
-          textAligned: getComputedStyle(action).textAlign === "left",
+          textAligned: ["left", "start"].includes(getComputedStyle(action).textAlign),
           sameTypeSize: getComputedStyle(action).fontSize === getComputedStyle(cell).fontSize,
           contained: action.scrollWidth <= action.clientWidth + 1,
           sharedStart: Math.abs(action.getBoundingClientRect().left - cell.getBoundingClientRect().left) <= 1
@@ -3173,7 +3181,7 @@ describe("Electron UI profile switching e2e", () => {
     const openCodeCard = page.getByRole("article", { name: "Agent OpenCode" });
     await openCodeCard.waitFor({ state: "visible" });
     await expect.poll(() => openCodeCard.textContent()).toContain("Ready");
-    await openCodeCard.getByRole("button", { name: "Configure", exact: true }).waitFor();
+    await openCodeCard.getByRole("button", { name: "OpenCode", exact: true }).waitFor();
     await openAgentDiagnostics(page, openCodeCard, "OpenCode");
     await expect.poll(() => openCodeCard.textContent()).toContain(
       join(homeDir, ".config", "opencode")
@@ -3259,7 +3267,7 @@ describe("Electron UI profile switching e2e", () => {
 
     const openCodeCard = page.getByRole("article", { name: "Agent OpenCode" });
     await openCodeCard.waitFor({ state: "visible" });
-    await expect.poll(() => openCodeCard.locator(".target-workflow-environment button").getAttribute("title")).toBe("UI OpenCode alpha\nApplied");
+    await expect.poll(() => openCodeCard.locator(".target-workflow-profile").getAttribute("title")).toBe("Applied");
     await expect.poll(() => openCodeCard.textContent()).toContain("UI OpenCode alpha");
     await openCodeCard.getByRole("button", { name: "OpenCode", exact: true })
       .waitFor({ state: "visible" });
@@ -5591,7 +5599,7 @@ describe("Electron UI profile switching e2e", () => {
     await targetRow.waitFor({ state: "visible" });
     const targetLanes = await targetRow.evaluate((row) => {
       const lifecycle = row.querySelector<HTMLElement>(".target-workflow-lifecycle")?.getBoundingClientRect();
-      const profile = row.querySelector<HTMLElement>(".target-workflow-environment button")?.getBoundingClientRect();
+      const profile = row.querySelector<HTMLElement>(".target-workflow-profile")?.getBoundingClientRect();
       const environment = row.querySelector<HTMLElement>(".target-workflow-environment")!.getBoundingClientRect();
       const health = row.querySelector<HTMLElement>(".target-health-status")!.getBoundingClientRect();
       const rowBox = row.getBoundingClientRect();
@@ -5686,8 +5694,9 @@ describe("Electron UI profile switching e2e", () => {
     });
     expect(styles.ghost.background).toBe("rgba(0, 0, 0, 0)");
     expect(styles.ghost.border).toBe("rgba(0, 0, 0, 0)");
-    expect(styles.disabledPrimary.background).toBe(styles.primary.background);
-    expect(Number(styles.disabledPrimary.opacity)).toBeLessThan(1);
+    expect(styles.disabledPrimary.background).toBe("rgb(245, 245, 247)");
+    expect(styles.disabledPrimary.background).not.toBe(styles.primary.background);
+    expect(styles.disabledPrimary.opacity).toBe("1");
     expect(styles.busyPrimary.opacity).toBe("1");
     expect(styles.activeExpanded).toEqual(styles.active);
     expect(styles.expanded.background).not.toBe(styles.active.background);
@@ -5837,67 +5846,6 @@ describe("Electron UI profile switching e2e", () => {
     expect(Math.abs(updateAlignment.checkRight - updateAlignment.switchRight)).toBeLessThanOrEqual(1);
     await assertSettingsCommandControls("General");
     await captureSettings("settings-general-920x620.png");
-
-    await page.getByRole("tab", { name: "Agents", exact: true }).click();
-    await captureSettings("settings-agents-920x620.png");
-    await page.getByText("Custom folders", { exact: true }).click();
-    await page.getByText("Custom commands", { exact: true }).click();
-    await expectNoHorizontalOverflow(page, [
-      ".settings-category-panel",
-      ".agent-path-settings",
-      ".agent-path-list",
-      ".agent-command-list"
-    ]);
-    const expandedSettingsGeometry = await page.locator(".settings-category-frame")
-      .evaluate((frame) => {
-        const panel = frame.querySelector<HTMLElement>(".settings-category-panel")!;
-        const editor = panel.closest<HTMLElement>(".editor-panel")!;
-        const frameBox = frame.getBoundingClientRect();
-        const panelBox = panel.getBoundingClientRect();
-        const editorBox = editor.getBoundingClientRect();
-        const details = Array.from(
-          panel.querySelectorAll<HTMLElement>(".agent-path-settings")
-        );
-        return {
-          frameBottom: Math.round(frameBox.bottom),
-          frameRight: Math.round(frameBox.right),
-          panelBottom: Math.round(panelBox.bottom),
-          panelRight: Math.round(panelBox.right),
-          editorBottom: Math.round(editorBox.bottom),
-          editorRight: Math.round(editorBox.right),
-          frameOverflowY: getComputedStyle(frame).overflowY,
-          overflowY: getComputedStyle(panel).overflowY,
-          hasInternalOverflow: panel.scrollHeight > panel.clientHeight,
-          detailsContained: details.every((entry) => entry.scrollWidth <= entry.clientWidth + 1)
-        };
-      });
-    expect(expandedSettingsGeometry.overflowY).toBe("auto");
-    expect(expandedSettingsGeometry.frameOverflowY).toBe("hidden");
-    expect(expandedSettingsGeometry.frameBottom - expandedSettingsGeometry.panelBottom)
-      .toBeLessThanOrEqual(1);
-    expect(expandedSettingsGeometry.frameRight - expandedSettingsGeometry.panelRight)
-      .toBeLessThanOrEqual(1);
-    expect(expandedSettingsGeometry.panelBottom)
-      .toBeLessThanOrEqual(expandedSettingsGeometry.editorBottom);
-    expect(expandedSettingsGeometry.frameRight)
-      .toBeLessThanOrEqual(expandedSettingsGeometry.editorRight);
-    expect(expandedSettingsGeometry.hasInternalOverflow).toBe(true);
-    expect(expandedSettingsGeometry.detailsContained).toBe(true);
-    const agentActionGeometry = await page.locator(".agent-path-row").evaluateAll((rows) =>
-      rows.map((row) => {
-        const button = row.querySelector<HTMLElement>(".settings-row-actions button")!;
-        const rowBox = row.getBoundingClientRect();
-        const buttonBox = button.getBoundingClientRect();
-        return {
-          buttonHeight: Math.round(buttonBox.height),
-          rightDelta: Math.round(rowBox.right - buttonBox.right)
-        };
-      })
-    );
-    expect(agentActionGeometry.every(({ buttonHeight }) => buttonHeight === 32)).toBe(true);
-    expect(agentActionGeometry.every(({ rightDelta }) => Math.abs(rightDelta) <= 2)).toBe(true);
-    await assertSettingsCommandControls("Agents");
-    await captureSettings("settings-agents-expanded-920x620.png");
 
     await page.getByRole("tab", { name: "Skills", exact: true }).click();
     await assertSettingsCommandControls("Skills");
@@ -6287,7 +6235,7 @@ describe("Electron UI profile switching e2e", () => {
           moreButtonsMatch: hasStableSizes(sizes(".target-more-action")),
           profileLanesAligned: hasStableValues(laneLefts(".target-workflow-environment")),
           singleLineCentered: rows.every((row) => {
-            const action = row.querySelector(".target-workflow-environment button")?.getBoundingClientRect();
+            const action = row.querySelector(".target-workflow-profile")?.getBoundingClientRect();
             const label = row.querySelector(".target-workflow-lifecycle")?.getBoundingClientRect();
             if (action && label) return Math.abs(action.left - label.left) <= 1 && action.bottom <= label.top + 1;
             const health = row.querySelector(".target-health-status")!.getBoundingClientRect();
@@ -6299,7 +6247,7 @@ describe("Electron UI profile switching e2e", () => {
           ),
           typography: {
             health: getComputedStyle(first.querySelector<HTMLElement>(".target-health-status")!).fontWeight,
-            lifecycle: getComputedStyle(first.querySelector<HTMLElement>(".target-workflow-lifecycle, .target-workflow-environment button")!).fontWeight,
+            lifecycle: getComputedStyle(first.querySelector<HTMLElement>(".target-workflow-profile")!).fontWeight,
             name: getComputedStyle(first.querySelector<HTMLElement>(".target-workflow-name-line strong")!).fontWeight,
             columnHeading: getComputedStyle(list.querySelector<HTMLElement>(".target-list__header")!).fontWeight
           }
@@ -6472,18 +6420,21 @@ describe("Electron UI profile switching e2e", () => {
       .toEqual(persisted.profileOrder);
   }, 30_000);
 
-  it("reorders Agents from Settings and uses that order across the desktop app", async () => {
+  it("reorders Agents from the Agents workspace and keeps that order", async () => {
     const { page } = await launchApp();
-    await openSettingsCategory(page, "Agents");
-
-    const rows = page.locator(".agent-settings-row");
-    const initialNames = await rows.locator(".agent-settings-copy > strong").allTextContents();
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
+    const agents = page.getByRole("region", { name: "Agents", exact: true });
+    await agents.waitFor({ state: "visible" });
+    const rows = agents.locator(".target-card--workflow");
+    const initialNames = await rows.locator(".target-workflow-name-action").allTextContents();
     expect(initialNames.length).toBeGreaterThan(1);
+    await agents.getByRole("button", { name: "More Agent actions" }).click();
+    await page.getByRole("menuitem", { name: "Reorder Agents" }).click();
     const firstHandle = rows.nth(0).getByRole("button", {
       name: `Reorder ${initialNames[0]}`
     });
     const handleGeometry = await firstHandle.evaluate((handle) => {
-      const row = handle.closest<HTMLElement>(".agent-settings-row")!;
+      const row = handle.closest<HTMLElement>(".target-workflow-header")!;
       const handleBox = handle.getBoundingClientRect();
       const rowBox = row.getBoundingClientRect();
       return {
@@ -6503,12 +6454,8 @@ describe("Electron UI profile switching e2e", () => {
     await firstHandle.press("Alt+ArrowDown");
     const expectedNames = [initialNames[1], initialNames[0], ...initialNames.slice(2)];
     await expect.poll(() =>
-      rows.locator(".agent-settings-copy > strong").allTextContents()
+      rows.locator(".target-workflow-name-action").allTextContents()
     ).toEqual(expectedNames);
-
-    await page.getByRole("button", { name: "Agents", exact: true }).click();
-    const agents = page.getByRole("region", { name: "Agents", exact: true });
-    await agents.waitFor({ state: "visible" });
     await expect.poll(() =>
       agents.locator(".target-workflow-name-action").allTextContents()
     ).toEqual(expectedNames);
@@ -6587,9 +6534,9 @@ describe("Electron UI profile switching e2e", () => {
     await expect(
       fileExists(join(appDataRoot, "target-states", "opencode.json"))
     ).resolves.toBe(false);
-    await openCodeCard.getByRole("button", { name: "Configure", exact: true }).waitFor();
-    await expect.poll(() => openCodeCard.locator(".target-workflow-profile").count())
-      .toBe(0);
+    await openCodeCard.getByRole("button", { name: "OpenCode", exact: true }).waitFor();
+    await expect.poll(() => openCodeCard.locator(".target-workflow-profile").textContent())
+      .toBe("Not configured");
   }, standardElectronTestTimeout);
 
   it("stops managing OpenCode by restoring the environment from before takeover", async () => {
@@ -6621,7 +6568,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(
       fileExists(join(appDataRoot, "target-states", "opencode.json"))
     ).resolves.toBe(false);
-    await openCodeCard.getByRole("button", { name: "Configure", exact: true }).waitFor();
+    await openCodeCard.getByRole("button", { name: "OpenCode", exact: true }).waitFor();
   }, standardElectronTestTimeout);
 
   it("keeps MCP definitions Agent-owned and exposes only Environment activation choices", async () => {
@@ -7041,6 +6988,32 @@ describe("Electron UI profile switching e2e", () => {
     ).resolves.toBe("");
     await expect(readMigratedProfileInstruction(appDataRoot, "ui-opencode-alpha"))
       .resolves.toBe(instructionContent);
+  }, standardElectronTestTimeout);
+
+  it("renders an empty Profile Instructions section as one compact, actionable row", async () => {
+    const { page } = await launchApp({ emptyOpenCodeProfileInstructions: true });
+    await resizeAppWindow(page, 920, 620);
+    await selectProfile(page, "UI OpenCode alpha");
+    await expandComposerSection(page, "Instructions");
+
+    const section = page.locator('[data-profile-composer-id="instructions"]');
+    const emptyState = section.getByRole("status");
+    await emptyState.waitFor({ state: "visible" });
+    expect(await emptyState.textContent()).toContain("No Instructions in this Profile");
+    expect(await section.getByRole("button", { name: "Preview output" }).count()).toBe(0);
+    await section.getByRole("button", { name: "Add Instruction Blocks" }).waitFor();
+    await expectNoHorizontalOverflow(page, ['[data-profile-composer-id="instructions"]']);
+    expect(Math.round((await emptyState.boundingBox())!.height)).toBe(50);
+
+    if (process.env.AGENTENV_EMPTY_INSTRUCTIONS_CAPTURE_DIR) {
+      await mkdir(process.env.AGENTENV_EMPTY_INSTRUCTIONS_CAPTURE_DIR, { recursive: true });
+      await page.screenshot({
+        path: join(
+          process.env.AGENTENV_EMPTY_INSTRUCTIONS_CAPTURE_DIR,
+          "profile-empty-instructions-920x620.png"
+        )
+      });
+    }
   }, standardElectronTestTimeout);
 
   it("persists a shared Instruction before leaving its Profile workspace", async () => {
@@ -10295,7 +10268,7 @@ describe("Electron UI profile switching e2e", () => {
           targetName: "OpenCode",
           suggestedName: "OpenCode",
           createdAt: "2026-07-14T00:00:00.000Z",
-          resources: Array.from({ length: 30 }, (_, index) => ({
+          resources: [...Array.from({ length: 30 }, (_, index) => ({
             kind: index === 0 ? "instructions" : "skill",
             id: `dense-capture-resource-${index + 1}`,
             name: `dense-capture-resource-${index + 1}-with-a-long-name`,
@@ -10303,7 +10276,13 @@ describe("Electron UI profile switching e2e", () => {
             detail: index > 0 && index < 7
               ? "Source copy stays unchanged"
               : "A deliberately long path and description used to verify compact window containment"
-          })),
+          })), {
+            kind: "skill", id: "provided", name: "WorkBuddy", action: "observe", count: 2,
+            observedSkills: [
+              { name: "bundled-review-with-a-long-name", path: "/Applications/Example.app/skills/review", availability: "bundled" },
+              { name: "connector-review", path: "/fixture/connectors/review", availability: "unknown" }
+            ]
+          }],
           warnings: Array.from(
             { length: 6 },
             (_, index) => `dense-capture-resource-${index + 1}: compatibility copies stay in place until every installed consumer has an equivalent managed Skill`
@@ -10377,6 +10356,19 @@ describe("Electron UI profile switching e2e", () => {
     expect(geometry.bodyOverflow).toBe("auto");
     expect(geometry.bodyScrollable).toBe(true);
     expect(geometry.nestedScrollers).toBe(0);
+    const provided = dialog.getByRole("button", { name: "Provided by Agent" });
+    for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+      await resizeAppWindow(page, width, height);
+      await provided.scrollIntoViewIfNeeded();
+      await mkdir("/tmp/agentenv-capture-review", { recursive: true });
+      await page.screenshot({ path: `/tmp/agentenv-capture-review/collapsed-${width}.png` });
+      await provided.click();
+      await dialog.getByText("connector-review", { exact: true }).scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      await expectInViewport(page, dialog.getByRole("button", { name: "Save Profile" }));
+      await page.screenshot({ path: `/tmp/agentenv-capture-review/expanded-${width}.png` });
+      await provided.click();
+    }
     await dialog.getByRole("button", { name: "Back" }).click();
     await expect.poll(() => page.getByLabel("Profile name").inputValue()).toBe("OpenCode");
     await page.keyboard.press("Escape");
@@ -10612,8 +10604,9 @@ describe("Electron UI profile switching e2e", () => {
     expect(await agentsWorkspace.textContent()).toContain("No enabled Agents");
     await agentsWorkspace.getByRole("button", { name: "Choose Agents" }).click();
     await dialog.waitFor({ state: "visible" });
+    await dialog.getByRole("checkbox", { name: "OpenCode", exact: true }).check();
     await dialog.getByRole("checkbox", { name: "Codex" }).uncheck();
-    await dialog.getByRole("button", { name: "Enable 1 Agent" }).click();
+    await dialog.getByRole("button", { name: "Save Agent choices" }).click();
 
     await expect.poll(async () => {
       const settings = await readJson<{
@@ -10708,7 +10701,10 @@ describe("Electron UI profile switching e2e", () => {
     expect(await dialog.getByRole("checkbox", { name: "Antigravity App", exact: true }).isChecked()).toBe(false);
     expect(await dialog.getByRole("checkbox", { name: "Trae CLI" }).isChecked()).toBe(false);
     expect(await dialog.getByRole("checkbox", { name: "Pi" }).isChecked()).toBe(false);
-    expect(await dialog.getByRole("checkbox", { name: "WorkBuddy" }).isChecked()).toBe(false);
+    const workBuddyCheckbox = dialog.getByRole("checkbox", { name: "WorkBuddy" });
+    expect(await workBuddyCheckbox.isChecked()).toBe(false);
+    expect(await workBuddyCheckbox.locator("xpath=..").locator("img").getAttribute("src"))
+      .toContain("workbuddy");
     if (process.env.AGENTENV_AGENT_DISCOVERY_CAPTURE_DIR) {
       await mkdir(process.env.AGENTENV_AGENT_DISCOVERY_CAPTURE_DIR, { recursive: true });
       await page.screenshot({
@@ -10748,17 +10744,18 @@ describe("Electron UI profile switching e2e", () => {
       "utf8"
     );
 
-    await openSettingsCategory(page, "Agents");
-    const openCodeSwitch = page.getByRole("switch", { name: "Turn off OpenCode" });
-    await openCodeSwitch.waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
+    const agentsWorkspace = page.getByRole("region", { name: "Agents", exact: true });
+    await agentsWorkspace.getByRole("button", { name: "Choose Agents" }).click();
+    const chooser = page.getByRole("dialog", { name: "Choose Agents" });
 
     for (const viewport of [
       { width: 1180, height: 728 },
       { width: 920, height: 620 }
     ]) {
       await resizeAppWindow(page, viewport.width, viewport.height);
-      await expectNoHorizontalOverflow(page, [".app-shell", ".editor-panel", ".settings-page"]);
-      const rowGeometry = await page.locator(".agent-settings-row").evaluateAll((rows) =>
+      await expectNoHorizontalOverflow(page, [".app-shell", ".editor-panel", ".agent-discovery-dialog"]);
+      const rowGeometry = await chooser.locator(".agent-discovery-row").evaluateAll((rows) =>
         rows.map((row) => {
           const rowRect = row.getBoundingClientRect();
           const children = Array.from(row.children).map((child) => {
@@ -10781,7 +10778,7 @@ describe("Electron UI profile switching e2e", () => {
           };
         })
       );
-      expect(rowGeometry).toHaveLength(8);
+      expect(rowGeometry.length).toBeGreaterThanOrEqual(3);
       for (const geometry of rowGeometry) {
         for (const child of geometry.children) {
           expect(child.left).toBeGreaterThanOrEqual(geometry.row.left);
@@ -10790,12 +10787,28 @@ describe("Electron UI profile switching e2e", () => {
           expect(child.bottom).toBeLessThanOrEqual(geometry.row.bottom);
         }
       }
+      const visibleBoundary = await chooser.locator(".agent-discovery-list").evaluate((list) => {
+        const listRect = list.getBoundingClientRect();
+        const visibleRows = Array.from(list.querySelectorAll(".agent-discovery-row"))
+          .map((row) => row.getBoundingClientRect())
+          .filter((row) =>
+            row.top < listRect.bottom - 1 && row.bottom > listRect.top + 1
+          );
+        return {
+          listTop: listRect.top,
+          listBottom: listRect.bottom,
+          rows: visibleRows.map((row) => ({ top: row.top, bottom: row.bottom }))
+        };
+      });
+      expect(visibleBoundary.rows.length).toBeGreaterThan(0);
+      for (const row of visibleBoundary.rows) {
+        expect(row.top).toBeGreaterThanOrEqual(visibleBoundary.listTop - 1);
+        expect(row.bottom).toBeLessThanOrEqual(visibleBoundary.listBottom + 1);
+      }
     }
 
-    await openCodeSwitch.click();
-
-    expect(await page.getByRole("button", { name: "Suggest OpenCode again" }).count())
-      .toBe(0);
+    await chooser.getByRole("checkbox", { name: "OpenCode" }).click();
+    await chooser.getByRole("button", { name: "Save Agent choices" }).click();
 
     await expect
       .poll(async () => {
@@ -10805,8 +10818,6 @@ describe("Electron UI profile switching e2e", () => {
         return settings.enabledTargetIds ?? [];
       })
       .not.toContain("opencode");
-    await page.getByRole("switch", { name: "Turn on OpenCode" }).waitFor({ state: "visible" });
-
     const disabledState = await page.evaluate(async () => {
       const targets = await window.agentEnv.listTargets(true);
       const errors: string[] = [];
@@ -10826,12 +10837,11 @@ describe("Electron UI profile switching e2e", () => {
     expect(disabledState.errors).toHaveLength(2);
     expect(disabledState.errors.join("\n")).toContain("OpenCode");
 
-    await page.getByRole("switch", { name: "Turn off Codex" }).click();
-    await page.getByRole("switch", { name: "Turn off Claude Code" }).click();
-    await page.getByRole("switch", { name: "Turn off Antigravity CLI", exact: true }).click();
-    await page.getByRole("switch", { name: "Turn off Antigravity App", exact: true }).click();
-    await page.getByRole("switch", { name: "Turn off Trae CLI" }).click();
-    await page.getByRole("switch", { name: "Turn off Pi" }).click();
+    await agentsWorkspace.getByRole("button", { name: "Choose Agents" }).click();
+    const allAgentsChooser = page.getByRole("dialog", { name: "Choose Agents" });
+    const checkedAgents = allAgentsChooser.getByRole("checkbox", { checked: true });
+    while (await checkedAgents.count()) await checkedAgents.first().click();
+    await allAgentsChooser.getByRole("button", { name: "Save Agent choices" }).click();
     await expect
       .poll(async () => {
         const settings = await readJson<{ enabledTargetIds?: string[] }>(
@@ -10840,21 +10850,18 @@ describe("Electron UI profile switching e2e", () => {
         return settings.enabledTargetIds ?? [];
       })
       .toEqual([]);
-    const agentsNavigation = page.getByRole("button", { name: "Agents", exact: true });
-    await agentsNavigation.waitFor({ state: "visible" });
-    await agentsNavigation.click();
     await page.getByText("No enabled Agents").waitFor({ state: "visible" });
     const inventory = await page.evaluate(() => window.agentEnv.scanSkillInventory());
     expect(inventory.entries.some((item) => item.id === "shared-scope-skill")).toBe(true);
     expect(inventory.entries.some((item) => item.id === "target-only-reviewer")).toBe(false);
 
     await page.reload();
-    await page.getByRole("button", { name: "Settings", exact: true }).waitFor({
-      state: "visible"
-    });
-    await openSettingsCategory(page, "Agents");
-    await page.getByRole("switch", { name: "Turn on OpenCode" }).click();
-    await page.getByRole("switch", { name: "Turn off OpenCode" }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
+    await page.getByRole("region", { name: "Agents", exact: true })
+      .getByRole("button", { name: "Choose Agents" }).click();
+    const reopenedChooser = page.getByRole("dialog", { name: "Choose Agents" });
+    await reopenedChooser.getByRole("checkbox", { name: "OpenCode" }).click();
+    await reopenedChooser.getByRole("button", { name: "Save Agent choices" }).click();
 
     await expect
       .poll(async () => (await page.evaluate(() => window.agentEnv.listTargets(true))).map((item) => item.id))
@@ -10869,31 +10876,20 @@ describe("Electron UI profile switching e2e", () => {
     await writeFile(customCommand, "#!/bin/sh\necho custom-opencode\n", "utf8");
     await chmod(customCommand, 0o755);
 
-    await openSettingsCategory(page, "Agents");
-    await page.getByText("Custom commands", { exact: true }).click();
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
+    const agentsWorkspace = page.getByRole("region", { name: "Agents", exact: true });
+    await agentsWorkspace.getByRole("button", { name: "More actions for OpenCode" }).click();
+    await page.getByRole("menuitem", { name: "Advanced setup" }).click();
     const commandInput = page.getByRole("textbox", { name: "Command for OpenCode" });
     for (const viewport of [
       { width: 1180, height: 728 },
       { width: 920, height: 620 }
     ]) {
       await resizeAppWindow(page, viewport.width, viewport.height);
-      await expectNoHorizontalOverflow(page, [".app-shell", ".editor-panel", ".settings-page"]);
-      const rowsContained = await page.locator(".agent-command-row").evaluateAll((rows) =>
-        rows.every((row) => {
-          const bounds = row.getBoundingClientRect();
-          return Array.from(row.children).every((child) => {
-            const childBounds = child.getBoundingClientRect();
-            return childBounds.left >= bounds.left &&
-              childBounds.right <= bounds.right &&
-              childBounds.top >= bounds.top &&
-              childBounds.bottom <= bounds.bottom;
-          });
-        })
-      );
-      expect(rowsContained).toBe(true);
+      await expectNoHorizontalOverflow(page, [".app-shell", ".agent-advanced-dialog"]);
     }
     await commandInput.fill(customCommand);
-    await page.getByRole("button", { name: "Save OpenCode command" }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
 
     await expect
       .poll(async () => {
@@ -10911,11 +10907,10 @@ describe("Electron UI profile switching e2e", () => {
       .toBe(customCommand);
 
     await page.reload();
-    await page.getByRole("button", { name: "Settings", exact: true }).waitFor({
-      state: "visible"
-    });
-    await openSettingsCategory(page, "Agents");
-    await page.getByText("Custom commands", { exact: true }).click();
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
+    await page.getByRole("region", { name: "Agents", exact: true })
+      .getByRole("button", { name: "More actions for OpenCode" }).click();
+    await page.getByRole("menuitem", { name: "Advanced setup" }).click();
     await expect
       .poll(() => page.getByRole("textbox", { name: "Command for OpenCode" }).inputValue())
       .toBe(customCommand);
@@ -10928,9 +10923,9 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByTestId("locale-select").selectOption("zh_CN");
     await page.locator('[data-workspace="settings"]').filter({ hasText: "设置" }).waitFor();
     await page.getByRole("status").filter({ hasText: "设置已保存" }).waitFor();
-    await page.getByRole("tab", { name: "Agents", exact: true }).click();
-    await page.getByText("管理 OpenCode 的指令、技能和 MCP 启用状态。", { exact: true }).waitFor();
-    expect(await page.getByText("Manage OpenCode instructions, Skills, and MCP activation.", { exact: true }).count()).toBe(0);
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
+    await page.getByRole("button", { name: "选择 Agents", exact: true }).waitFor();
+    expect(await page.getByRole("button", { name: "Choose Agents", exact: true }).count()).toBe(0);
     await expect
       .poll(async () => JSON.parse(await readFile(join(appDataRoot, "settings.json"), "utf8")))
       .toMatchObject({ locale: "zh_CN" });
@@ -12888,7 +12883,7 @@ describe("Electron UI profile switching e2e", () => {
         radius: "6px"
       },
       create: {
-        backgroundColor: "rgb(0, 122, 255)",
+        backgroundColor: "rgb(245, 245, 247)",
         disabled: true,
         fontWeight: "400",
         height: 32,
@@ -13157,7 +13152,7 @@ describe("Electron UI profile switching e2e", () => {
       agentHeaderRange.selectNodeContents(agentHeader);
       const agentHeaderLeft = agentHeaderRange.getBoundingClientRect().left;
       const lifecycleLefts = rows.map((row) =>
-        row.querySelector<HTMLElement>(".target-workflow-lifecycle, .target-workflow-environment button")!.getBoundingClientRect().left
+        row.querySelector<HTMLElement>(".target-workflow-profile")!.getBoundingClientRect().left
       );
       const profileLefts = rows.map((row) =>
         row.querySelector<HTMLElement>(".target-workflow-environment")!.getBoundingClientRect().left

@@ -145,12 +145,38 @@ export const createTargetCaptureService = ({
           warnings: [],
           excluded: []
         }
-      : await adapter.captureProfile(targetPaths);
-    const librarySkills = await skillLibraryStore.listSkills();
+      : await adapter.captureProfile(targetPaths, { installationEvidence: target.health.installationEvidence });
+    const [librarySkills, runtimeSnapshot] = await Promise.all([
+      skillLibraryStore.listSkills(),
+      adapter.skills.inspectRuntime(targetPaths)
+    ]);
     const inventory = await skillLibraryStore.scanInventory(
       [targetPaths],
-      librarySkills
+      librarySkills,
+      undefined,
+      undefined,
+      new Map([[targetId, runtimeSnapshot]])
     );
+    const agentControlledSkillCounts = new Map<string, number>();
+    const agentControlledDetails = new Map<string, NonNullable<TargetCaptureResource["observedSkills"]>>();
+    for (const entry of runtimeSnapshot.observations) {
+      if (
+        entry.locationRole !== "discovery-only" ||
+        entry.locationManagement !== "observed" ||
+        entry.issues.some((issue) => issue.code === "unreadable-skill")
+      ) {
+        continue;
+      }
+      const provider = entry.externalEvidence?.displayName ?? adapter.descriptor.name;
+      agentControlledDetails.set(provider, [
+        ...(agentControlledDetails.get(provider) ?? []),
+        { name: entry.runtimeName, path: entry.path, availability: "unknown" }
+      ]);
+      agentControlledSkillCounts.set(
+        provider,
+        (agentControlledSkillCounts.get(provider) ?? 0) + 1
+      );
+    }
     const runtimeInventory = inventory.filter(
       (entry) =>
         entry.locationRole !== "discovery-only" ||
@@ -173,6 +199,29 @@ export const createTargetCaptureService = ({
     const resources: TargetCaptureResource[] = [];
     const errors: string[] = [];
     const warnings = scope === "all" ? [...captured.warnings] : [];
+    if (scope === "all") {
+      for (const resource of captured.agentControlledResources ?? []) {
+        agentControlledDetails.set(resource.provider, [
+          ...(agentControlledDetails.get(resource.provider) ?? []),
+          ...(resource.skills ?? [])
+        ]);
+        agentControlledSkillCounts.set(
+          resource.provider,
+          (agentControlledSkillCounts.get(resource.provider) ?? 0) + resource.count
+        );
+      }
+      for (const [provider, count] of agentControlledSkillCounts) {
+        resources.push({
+          kind: "skill",
+          id: `agent-controlled:${safeId(provider)}`,
+          name: provider,
+          count,
+          action: "observe",
+          observedSkills: agentControlledDetails.get(provider),
+          detail: `${count} Skills are available through ${provider} and remain Agent-controlled.`
+        });
+      }
+    }
     for (const entry of unavailableInventory) {
       const runtimeIssue = entry.runtimeIssues?.find(
         (issue) => issue.code === "unreadable-skill"
@@ -385,12 +434,18 @@ export const createTargetCaptureService = ({
       }
     }
 
+    const capturesInstructions = adapter.descriptor.capabilities.instructions;
+    const capturesMcp = adapter.descriptor.capabilities.mcpTransports.length > 0;
     const fingerprintPaths = new Set([
       ...(scope === "all"
         ? [
-            targetPaths.instructionsPath,
-            targetPaths.configPath,
-            ...(targetPaths.mcpConfigPath ? [targetPaths.mcpConfigPath] : [])
+            ...(capturesInstructions ? [targetPaths.instructionsPath] : []),
+            ...(capturesMcp
+              ? [
+                  targetPaths.configPath,
+                  ...(targetPaths.mcpConfigPath ? [targetPaths.mcpConfigPath] : [])
+                ]
+              : [])
           ]
         : []),
       ...skills.flatMap((skill) => skill.sourcePaths),

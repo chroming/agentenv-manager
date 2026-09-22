@@ -1013,6 +1013,34 @@
   gap: var(--space-2);
 }
 
+.ui-empty-state--compact {
+  align-content: initial;
+  align-items: center;
+  gap: var(--space-2);
+  grid-template-columns: 18px minmax(0, 1fr);
+  justify-items: start;
+  min-height: 50px;
+  padding: 9px 12px 9px 56px;
+  text-align: left;
+}
+
+.ui-empty-state--compact > strong {
+  color: var(--muted);
+  font-size: var(--font-size-metadata);
+  font-weight: var(--font-weight-regular);
+  line-height: 18px;
+}
+
+.ui-empty-state--compact > span:not(.ui-empty-state__icon),
+.ui-empty-state--compact > .ui-empty-state__actions {
+  grid-column: 2;
+}
+
+.ui-empty-state--compact > .ui-empty-state__icon {
+  height: 18px;
+  width: 18px;
+}
+
 @container (max-width: 560px) {
   .ui-inspector-header--responsive-stack {
     align-items: stretch;

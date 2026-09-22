@@ -10,12 +10,6 @@
   gap: 6px;
 }
 
-.profile-mcp-empty {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
 .profile-mcp-list {
   display: grid;
 }
@@ -82,14 +76,6 @@
 
 .profile-mcp-switch {
   justify-self: end;
-}
-
-.profile-mcp-empty {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-  min-height: 50px;
-  padding: 9px 12px 9px 56px;
 }
 
 .profile-mcp-inspection-error {

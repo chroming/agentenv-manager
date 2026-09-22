@@ -53,6 +53,12 @@ export interface TargetPreviewInput extends TargetAssetInput {
 export interface CapturedTargetProfile {
   instructions: string;
   mcpConnections?: NativeMcpConnection[];
+  agentControlledResources?: Array<{
+    kind: "skill";
+    provider: string;
+    count: number;
+    skills?: Array<{ name: string; path: string; availability: "bundled" | "unknown" }>;
+  }>;
   warnings: string[];
   excluded: string[];
 }
@@ -300,7 +306,7 @@ export interface AgentTargetAdapter {
   conversations?: AgentConversationCapability;
   evaluations?: AgentEvaluationCapability;
   createDefaultProfile(id: string): Omit<ProfileDetail, "profileDir">;
-  captureProfile(targetPaths: TargetPaths): Promise<CapturedTargetProfile>;
+  captureProfile(targetPaths: TargetPaths, context?: { installationEvidence?: TargetInstallationEvidence[] }): Promise<CapturedTargetProfile>;
   createPreview(input: TargetPreviewInput): Promise<TargetActivationPreview>;
   validateAssets(input: TargetAssetInput): Promise<ApplyIssue[]>;
   getAssetBackupPaths(input: TargetAssetInput): Promise<string[]>;

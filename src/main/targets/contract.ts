@@ -29,7 +29,8 @@ export interface TargetPathDriver {
 export interface TargetProfileDriver {
   createDefaultProfile(id: string): Omit<ProfileDetail, "profileDir">;
   captureProfile(
-    targetPaths: ReturnType<AgentTargetAdapter["createTargetPaths"]>
+    targetPaths: ReturnType<AgentTargetAdapter["createTargetPaths"]>,
+    context?: Parameters<AgentTargetAdapter["captureProfile"]>[1]
   ): Promise<CapturedTargetProfile>;
 }
 

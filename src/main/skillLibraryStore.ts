@@ -717,7 +717,8 @@ export const createSkillLibraryStore = (
     targetPaths: TargetPaths[],
     knownLibrarySkills?: SkillLibraryEntry[],
     onIssues?: (issues: SkillRuntimeIssue[]) => void,
-    selectedLibraryIds?: ReadonlySet<string>
+    selectedLibraryIds?: ReadonlySet<string>,
+    runtimeSnapshots?: ReadonlyMap<string, SkillRuntimeSnapshot>
   ): Promise<SkillInventoryEntry[]> => {
     const readIssues: SkillRuntimeIssue[] = [];
     const librarySkills = (knownLibrarySkills ?? await listSkills(onIssues
@@ -746,7 +747,7 @@ export const createSkillLibraryStore = (
     );
     const snapshots = (await Promise.all(targetPaths.filter((target) => !unreadableTargets.has(target.targetId)).map(async (target) => {
       try {
-        return { target, snapshot: await runtimeSnapshotProvider(target) };
+        return { target, snapshot: runtimeSnapshots?.get(target.targetId) ?? await runtimeSnapshotProvider(target) };
       } catch (error) {
         if (!onIssues) throw error;
         readIssues.push({ code: "unreadable-skill-location", severity: "warning",

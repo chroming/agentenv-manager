@@ -58,6 +58,16 @@ describe("environment review", () => {
     expect(derive({ scanStatus: "checking" }).state).toBe("checking");
   });
 
+  it("preserves the scan failure reason for an actionable retry state", () => {
+    expect(derive({
+      scanStatus: "error",
+      scanError: "Local inventory is temporarily unavailable"
+    })).toMatchObject({
+      state: "unavailable",
+      unavailableReason: "Local inventory is temporarily unavailable"
+    });
+  });
+
   it("prioritizes actionable shared compatibility Skills", () => {
     const result = derive({
       inventory: [sharedSkill({ sharedAreaMode: "managed" })],

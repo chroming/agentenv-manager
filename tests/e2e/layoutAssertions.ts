@@ -222,7 +222,6 @@ export const findVisibleTextLayoutDefects = async (page: Page) =>
       ".profile-skill-state",
       ".capture-resource__status",
       ".ui-resource-disclosure__summary",
-      ".agent-settings-status",
       ".target-health-status"
     ];
     const contractCandidates = new Set(

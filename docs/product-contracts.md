@@ -100,7 +100,8 @@ Agent compatibility is capability-based, not one binary supported/unsupported cl
 
 - WorkBuddy is detected on macOS only through a verified `com.tencent.workbuddy.mac` application bundle. A matching application name or a leftover `~/.workbuddy` directory is not installation evidence.
 - AgentEnv manages only direct user Skills under `~/.workbuddy/skills`. Capture is observational; Apply may adopt, create, replace, or remove only the exact Skill paths named by its reviewed plan.
-- WorkBuddy settings, Skill enablement overrides, databases and journals, Connectors and credentials, Memory, plugins, and caches remain WorkBuddy-owned. Profile Apply MUST NOT inspect them to infer management authority or modify them as a side effect.
+- Capture reads bundled Skills from the application path returned by verified installation discovery, independently of the configured resource directory. Bundled content and Connector enablement records are read-only evidence, not proof of current-session activation. Capture provides expandable names and paths, labels unknown activation explicitly, and reports incomplete reads without blocking ordinary user Skill capture. These resources are never imported into Library, persisted as Profile resources, included in Apply, or presented as missing managed content. Marketplace cache alone is not discovery evidence.
+- WorkBuddy settings, Skill enablement overrides, databases and journals, Connectors and credentials, Memory, plugins, and caches remain WorkBuddy-owned. Profile Apply MUST NOT modify them or use them as management authority. The read-only activation evidence used for an Agent-controlled Capture summary does not grant ownership.
 - WorkBuddy has no AgentEnv-managed Instructions or MCP capability. The UI MUST omit or mark those resource categories unavailable rather than presenting synthetic files or disabled controls as if they were configurable.
 - WorkBuddy supports Profile `manual` Skill invocation through a transformed managed copy using the documented `disable-model-invocation` and `user-invocable` frontmatter. Library bytes remain unchanged and the deployment MUST NOT be a live link.
 - WorkBuddy Conversation history, Workspace launch, SSH runtime, native resume, and Profile Compare remain unsupported until each has a verified public or locally stable contract and dedicated evidence. Application discovery alone MUST NOT imply these capabilities.
@@ -239,7 +240,7 @@ Validated legacy ownership files appear as `Legacy records` in Local Skills Mana
 - System Git authentication belongs to the operating system SSH Agent or credential helper. AgentEnv MUST NOT store repository passwords, tokens, or private keys, modify global Git configuration, run repository hooks, sign commits, or prompt through a hidden terminal.
 - Ordinary non-AgentEnv files in the repository remain untouched. Only `agentenv-sync.json` and `workspace/` are managed.
 - A remote Skill content change that affects a currently linked deployment has immediate runtime impact. Review MUST identify that impact and require separate confirmation. Copy deployments and Profile-only changes remain pending until ordinary Profile Apply.
-- Immediate linked-Skill impact is calculated only for Agents currently enabled in Settings.
+- Immediate linked-Skill impact is calculated only for Agents currently enabled from Agents.
 - Connect treats a new repository and branch as a candidate. It MUST validate access, remote format, workspace identity, and the initial comparison before replacing an existing connection. Candidate failure preserves the previous connection, accepted base, status, Profiles, and Library. Reconnecting the same repository and branch is an ordinary Check.
 - A successful connection change starts a new three-way base unless local and remote portable snapshots are identical. Disconnect removes only device-local Sync state and cache; it MUST NOT change Profile, Library, Target, remote repository, or operating-system Git credentials.
 
@@ -531,12 +532,13 @@ An Agent is a supported local coding tool and its deployment locations. OpenCode
 
 ### 4.4.1 Enabled Agent Scope
 
-Settings owns the explicit set of enabled Agents.
+Agents owns the explicit set of enabled Agents. Settings MUST NOT duplicate Agent enablement,
+ordering, discovery preferences, or per-Agent path and command controls.
 
-- Settings also owns one device-local Agent display order. Reordering uses the same dedicated
+- Agents also owns one device-local Agent display order. Reordering uses the same dedicated
   drag handle and `Alt+Arrow` keyboard contract as other ordered object switchers; selecting or
   copying row content MUST NOT begin a drag. The persisted order is the single renderer source for
-  Settings, Agents, Profile and Workspace Agent selectors, Conversations, Quick Open, status
+  Agents, Profile and Workspace Agent selectors, Conversations, Quick Open, status
   summaries, and every other multi-Agent list. Discovery and refresh may append newly supported
   Agents but MUST NOT restore adapter registration order over the user's preference.
 - Existing installations without an Agent scope MUST migrate with every currently supported Agent enabled.
@@ -597,9 +599,9 @@ Preview/Apply transaction, never a second editor or a reduced resource model.
 - `Not now`, closing the dialog, and Escape skip only the current application launch. A user MAY
   suppress one detected Agent persistently with `Don't suggest again`. Turning an Agent off also
   counts as reviewing that Agent, so it remains off without creating a second row-level action.
-  Explicitly suppressed reminders are reversible from the advanced discovery-reminder section in
-  Settings; restoring them changes only future suggestions, never Agent enablement or Agent files,
-  and the Settings result MUST be immediately visible.
+  Explicitly suppressed reminders are reversible from the Agents page's discovery preferences;
+  restoring them changes only future suggestions, never Agent enablement or Agent files, and the
+  result MUST be immediately visible.
 - Existing installations whose stored settings predate the enabled-Agent field preserve the
   previous all-enabled scope during migration. An explicit empty enabled list MUST remain empty.
 - Agent discovery review is persisted independently from enabled scope and carries a review-version
@@ -616,8 +618,15 @@ Preview/Apply transaction, never a second editor or a reduced resource model.
 - Supported, detected, enabled, and managed are distinct states. The all-supported detection
   probe is read-only and MUST NOT weaken operation guards: operational Target APIs continue to
   expose enabled Agents only.
-- When no Agent is enabled, Agents provides `Choose Agents`, which opens the same selection
-  dialog on demand, including candidates skipped for the current launch or suppressed earlier.
+- Agents always provides `Choose Agents`, which opens the same selection dialog on demand and
+  saves the complete enabled set, including the valid empty set. Candidates skipped for the
+  current launch or suppressed earlier remain available there. Turning an Agent off preserves its
+  files and management records; `Stop managing` remains a separate resource-ownership operation.
+  The chooser and row command share one guard: a recovery-required Agent remains enabled and cannot
+  be unchecked until Recovery completes. Turning off managed Agents summarizes the preserved local
+  effect before Save instead of silently bypassing the row-level confirmation.
+- Per-Agent custom folders and command overrides belong to `Advanced setup` in that Agent row.
+  These device-local overrides do not change Profile intent or managed path boundaries.
 - An empty workspace MUST remain empty until the user explicitly creates or captures a
   Profile. Startup MUST NOT seed a sample, adapter-default, or otherwise invented Profile.
 - Every launch opens Agents as the stable top-level workspace. Navigation chosen by the user
@@ -1757,6 +1766,9 @@ Status: native discovery across Agents with built-in MCP configuration, per-Targ
 Create from Target gives an existing native environment a reusable Profile representation before the user decides whether AgentEnv should manage it.
 
 - Capture MUST read only paths declared by the selected Target adapter.
+- Capture freshness fingerprints MUST also honor the adapter's resource capabilities. A
+  placeholder path for an unsupported resource category is never readable Capture evidence and
+  MUST NOT cause AgentEnv to traverse an Agent configuration or runtime directory.
 - Blank Profile creation MUST start with empty Instructions, Skills, and MCP policy. Native Agent resources are discovery candidates only and MUST NOT be adopted until the user explicitly adds an override; only Create from Target may intentionally capture the current environment.
 - Create from Target defaults the Profile name to the Agent display name. The default MUST NOT add transient state words such as `Current`; users may edit the name before saving.
 - A Target-row capture command MUST keep the invoking Targets workspace visible until the user confirms. Cancel and Escape return focus to that exact command without changing workspace.
@@ -1769,7 +1781,9 @@ Create from Target gives an existing native environment a reusable Profile repre
 - Profiles may offer a general `From Target` entry, but a Target-row entry MUST bind the source Target directly and MUST NOT ask the user to choose Blank versus From Target again.
 - Capture uses two explicit steps: setup and capture review. Review provides Back without losing the Profile name or selected Target.
 - Preview MUST list portable resources to include or reuse, new Skill Library imports, discovered native MCP activation choices, excluded resources, and conflicts.
+- Skills supplied by an enabled Agent plugin, verified application bundle, or other read-only external provider MAY be summarized as `Agent controlled` when the adapter has reliable activation evidence. They MUST NOT count as Profile resources or Library imports, participate in Capture conflicts, authorize Apply, or create Local Skills cleanup work. Downloaded marketplace content without activation evidence remains invisible to Capture.
 - Capture review MUST summarize Profile resources, Library imports, and zero source changes before the detailed resource list.
+- Agent-provided resources have a separate collapsed disclosure and never inflate the portable Skills group count. Capture reuses its runtime snapshot for inventory enrichment so both projections refer to the same read.
 - Capture resource outcomes such as `Import to Library` and `Use Library copy` are neutral status badges, not link-colored commands.
 - Blocking errors and excluded-resource advisories MUST appear before long resource details. Repeated warnings MUST be aggregated with expandable details.
 - Review and Save expose local working and error states. Review MUST enter a visible animated busy state immediately, keep the action geometry stable, expose `aria-busy`, and block duplicate submission until the preview resolves. A stale or failed review remains in the dialog and offers `Refresh review`.
@@ -1965,12 +1979,18 @@ Status: shared transient success, persistent error, background progress, GitHub 
   and one review action; paths and the complete migration plan belong in that review flow.
 - Profile Composer resource triggers remain `52px` high before, during, and after expansion. Expanding one resource MUST NOT compress, hide metadata from, or reposition its sibling triggers. The expanded trigger and editor surface MUST be visually distinguishable from ordinary collapsed rows without turning the editor into a nested card.
 - Profile Skills with zero or one item fit their content without stretching empty list space. Larger collections grow only within the available editor region and keep the Skill list as the scroll owner.
-- Agents use one continuous ordered management list at every supported width. Health sits beside Agent identity: healthy rows use an accessible dot, while problems retain readable text. Profile and actions have stable sibling lanes; last-applied time is available in local Diagnostics or the remote Profile context tooltip, not a mostly empty column. Every Capture, Profile, and Diagnostics control uses the shared control primitives and identical geometry across all Agent rows, regardless of Agent name, lifecycle state, or action label. Diagnostics expands to the full width of its owning Agent, shifts only later rows, leaves no peer-column void, and opening a second Diagnostics region closes the first.
-- Each Agent row exposes `Configure` as its single direct destination and one trailing overflow command. Capture and Diagnostics live in that menu, use the shared renderer-menu keyboard contract, and never widen an individual row. Refresh progress belongs only to the page Refresh command; Recovery is disabled without a numeric badge when no Backup exists.
-- The Agent name and `Configure` command open the same canonical Profile editor or complete Capture entry. The name is visibly interactive without changing its identity lane geometry or duplicating the command's accessible name.
+- Agents use one continuous ordered management list at every supported width. Health sits beside Agent identity: healthy rows use an accessible dot, while problems retain readable text. Profile and actions have stable sibling lanes; the Profile lane contains only the active Profile identity or a truthful compact state, never a repeated `Configure` command. Last-applied time is available in local Diagnostics or the remote Profile context tooltip, not a mostly empty column. Every Capture, Profile, and Diagnostics control uses the shared control primitives and identical geometry across all Agent rows, regardless of Agent name, lifecycle state, or action label. Diagnostics expands to the full width of its owning Agent, shifts only later rows, leaves no peer-column void, and opening a second Diagnostics region closes the first.
+- Each Agent row exposes its Agent name as the single direct configuration destination and one trailing overflow command. Capture and Diagnostics live in that menu, use the shared renderer-menu keyboard contract, and never widen an individual row. Refresh progress belongs only to the page Refresh command; Recovery is disabled without a numeric badge when no Backup exists. Reordering is an explicit temporary mode with a dedicated grip in the action lane; the Agent identity icon never doubles as an undisclosed drag control.
+- The first-run Agent chooser reserves an integral number of complete Agent rows at every supported window height. It MUST NOT reveal a clipped partial row beneath the footer; additional Agents remain reachable through the list's native scroll region.
+- A failed Agent environment scan preserves the current Agent list and names the shortest available failure reason at the retry decision point. A diagnostic reference, when present, is directly copyable there; the interface MUST NOT replace every failure with an unexplained generic unavailable state.
+- Adjacent Agent menu commands with different effects use distinct icon families. `Open Profile`, `Review local Skills`, diagnostics, recovery, and ownership changes MUST remain distinguishable without reading every label.
+- Disabled primary commands use the shared neutral disabled treatment. Accent fill is reserved for an executable current command and MUST NOT make a disabled command compete with active work.
+- Visual capture scripts MUST fail when a required loading, error, expanded, or other named state was not reached. Swallowing a missing-state assertion and saving a ready-state image under a working-state filename is invalid release evidence.
+- `Turn off Agent` and `Stop AgentEnv management` remain visually and semantically distinct menu groups. Turn off preserves files and ownership records; Stop managing enters the reviewed detach flow. They MUST NOT share an icon that implies identical effects.
 - Settings renders ordinary preferences as stable `name and explanation -> control` rows. Labels are never detached into a separate alignment scheme, and toggles, selects, read-only values, and numeric inputs share one right-hand control lane.
 - Settings is one continuous, restrained preference surface rather than a stack of feature cards. Its content width and control lane remain bounded so short controls stay close to their labels; account, data, and diagnostic commands use the same Button primitive and only the current continuation receives accent fill.
-- Settings MAY override one configuration root per Agent. The Adapter remains the sole owner of deriving Instructions, Skills, and native configuration paths below that root. Selecting a root performs no migration, does not move existing files, and performs no Agent write. All later reads and writes use the same resolved paths. An Agent with retained AgentEnv ownership state MUST be stopped before its root can change even when that Agent is disabled and hidden from ordinary active-state lists. Full custom paths use the shared selectable overflow-detail behavior, and Choose, Change, and Use default show progress on their owning row.
+- An Agent's `Advanced setup` MAY override one configuration root for that Agent. The Adapter remains the sole owner of deriving Instructions, Skills, and native configuration paths below that root. Selecting a root performs no migration, does not move existing files, and performs no Agent write. All later reads and writes use the same resolved paths. An Agent with retained AgentEnv ownership state MUST be stopped before its root can change even when that Agent is disabled and hidden from ordinary active-state lists. Advanced setup disables root-changing controls before a picker opens, explains the exact prerequisite inline, and provides the matching Stop management or Recovery continuation; command override remains independently editable. Full custom paths use the shared selectable overflow-detail behavior, and Choose, Change, and Use default show progress on their owning row.
+- Profile-wide readiness is the only collapsed summary of an Apply prerequisite. A resource row shows its ordinary count and policy without repeating `Needs review`; the expanded resource editor owns the specific reason and review command at the decision point.
 - Truncated values and contextual explanations use one shared hover-detail primitive with two explicit interaction modes. Overflow and decision details open only when measurably clipped and remain selectable and pointer-enterable for copying. Brief `InfoTip` explanations are passive, non-interactive tooltips: they MUST NOT intercept a command underneath or prevent focus from moving to the next control. Both modes use regular body weight and neutral overlay styling, stay inside the viewport, close on Escape or owning-list scroll, and never rely on a browser `title` as the only readable copy. Wheel input at an interactive detail layer's scroll boundary continues scrolling the nearest owning list rather than making the interface appear frozen.
 - At narrow widths, Profile readiness is read before its Agent and Apply command group. Secondary Profile commands MUST NOT duplicate a direct command already visible beside the selected Profile name, and expanded Skills and MCP resources share one flat list hierarchy rather than introducing resource-specific nested cards.
 - Comparable actions in one command group use the same control height. Profile and Workspace Agent selectors use the same shared trigger width, icon slot, typography, and responsive variant rather than page-specific geometry.

@@ -3,6 +3,8 @@ import {
   Activity,
   ArchiveRestore,
   CopyPlus,
+  Check,
+  GripVertical,
   Layers3,
   LoaderCircle,
   Monitor,
@@ -10,7 +12,10 @@ import {
   Power,
   ScanLine,
   Server,
-  TerminalSquare
+  Settings2,
+  UserRoundPlus,
+  TerminalSquare,
+  Unplug
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
@@ -31,7 +36,7 @@ import type {
   CreateRemoteDeviceInput,
   UpdateRemoteDeviceInput
 } from "../../shared/types";
-import { reorderPreferenceByDrop } from "../../shared/uiState";
+import { reorderPreferenceByDrop, reorderPreferenceByOffset } from "../../shared/uiState";
 import { HistoryView } from "./HistoryView";
 import { PreviewDialog } from "./PreviewDialog";
 import { targetIconFor } from "./ProfileSidebar";
@@ -60,6 +65,7 @@ import {
   RemoteDeviceManager,
   type RemoteDeviceManagerHandle
 } from "./RemoteDeviceManager";
+import { AgentAdvancedSetupDialog } from "./AgentAdvancedSetupDialog";
 
 interface TargetWorkspaceProps {
   targets: TargetInfo[];
@@ -80,6 +86,9 @@ interface TargetWorkspaceProps {
   isLoading: boolean;
   busy: boolean;
   freshness: FreshnessState;
+  suppressedAgentNames: string[];
+  configRoots: Record<string, string>;
+  commandOverrides: Record<string, string>;
   onRefresh(): Promise<void>;
   onAddRemoteDevice(input: CreateRemoteDeviceInput): Promise<{
     device: RemoteDevice;
@@ -95,10 +104,14 @@ interface TargetWorkspaceProps {
   onRefreshRemoteDevice(id: string): Promise<void>;
   onReorder?(targetIds: string[]): void;
   onChooseAgents(): void;
+  onTurnOffAgent(targetId: string): Promise<boolean>;
+  onRestoreAgentSuggestions(): Promise<void>;
+  onChooseConfigRoot(targetId: string): Promise<void>;
+  onResetConfigRoot(targetId: string): Promise<void>;
+  onSetCommandOverride(targetId: string, command?: string): Promise<void>;
   onConfigure(targetId: string): void;
   onReviewEnvironment(): void;
   onReviewLocalSkills(): void;
-  onResolveRecovery(): void;
   onCreateProfileFromTarget(targetId: string, returnFocus?: HTMLElement | null): void;
   onManageSkills(targetId: string): void;
   onPreviewRollback(backupId: string): void;
@@ -161,7 +174,11 @@ const TargetRowActions = ({
   configureLabel,
   onConfigure,
   onRecovery,
+  recoveryCount,
   onStopManaging,
+  onAdvancedSetup,
+  onTurnOff,
+  turnOffDisabled,
   onCapture,
   onManageSkills,
   onToggleDiagnostics
@@ -172,7 +189,11 @@ const TargetRowActions = ({
   configureLabel: string;
   onConfigure(): void;
   onRecovery?(returnFocus?: HTMLElement | null): void;
+  recoveryCount: number;
   onStopManaging?(returnFocus?: HTMLElement | null): void;
+  onAdvancedSetup(): void;
+  onTurnOff(): void;
+  turnOffDisabled: boolean;
   onCapture(returnFocus?: HTMLElement | null): void;
   onManageSkills(): void;
   onToggleDiagnostics(): void;
@@ -276,7 +297,7 @@ const TargetRowActions = ({
             title={installed ? undefined : t("{{name}} is not detected", { name: target.name })}
             onClick={() => run(onManageSkills)}
           >
-            <Layers3 size={15} strokeWidth={2.2} aria-hidden="true" />
+            <ScanLine size={15} strokeWidth={2.2} aria-hidden="true" />
             <span>{t("Review local Skills")}</span>
           </ActionMenuItem>
           <ActionMenuItem
@@ -294,14 +315,30 @@ const TargetRowActions = ({
             <Activity size={15} strokeWidth={2.2} aria-hidden="true" />
             <span>{t(expanded ? "Hide diagnostics" : "Diagnostics")}</span>
           </ActionMenuItem>
-          {onRecovery ? <ActionMenuItem onClick={() => run(() => onRecovery(triggerRef.current))}>
+          <ActionMenuItem onClick={() => run(onAdvancedSetup)}>
+            <Settings2 size={15} strokeWidth={2.1} aria-hidden="true" />
+            <span>{t("Advanced setup")}</span>
+          </ActionMenuItem>
+          {onRecovery ? <ActionMenuItem
+            disabled={recoveryCount === 0}
+            title={recoveryCount === 0 ? t("No recovery points for this Agent.") : undefined}
+            onClick={() => run(() => onRecovery(triggerRef.current))}
+          >
             <ArchiveRestore size={15} aria-hidden="true" />
             <span>{t("Recovery")}</span>
           </ActionMenuItem> : null}
-          {onStopManaging ? <ActionMenuItem aria-label={t("Stop managing {{name}}", { name: target.name })} onClick={() => run(() => onStopManaging(triggerRef.current))}>
-            <Power size={15} aria-hidden="true" />
-            <span>{t("Stop managing")}</span>
+          {onStopManaging ? <ActionMenuItem className="target-row-action-menu__ownership" aria-label={t("Stop managing {{name}}", { name: target.name })} onClick={() => run(() => onStopManaging(triggerRef.current))}>
+            <Unplug size={15} aria-hidden="true" />
+            <span>{t("Stop AgentEnv management")}</span>
           </ActionMenuItem> : null}
+          <ActionMenuItem
+            disabled={turnOffDisabled}
+            title={turnOffDisabled ? t("Resolve recovery before turning this Agent off") : undefined}
+            onClick={() => run(onTurnOff)}
+          >
+            <Power size={15} aria-hidden="true" />
+            <span>{t("Turn off Agent")}</span>
+          </ActionMenuItem>
         </ActionMenu>,
         document.body
       ) : null}
@@ -328,6 +365,9 @@ export const TargetWorkspace = ({
   isLoading,
   busy,
   freshness,
+  suppressedAgentNames,
+  configRoots,
+  commandOverrides,
   onRefresh,
   onAddRemoteDevice,
   onListSshConfigHosts,
@@ -337,10 +377,14 @@ export const TargetWorkspace = ({
   onRefreshRemoteDevice,
   onReorder = () => undefined,
   onChooseAgents,
+  onTurnOffAgent,
+  onRestoreAgentSuggestions,
+  onChooseConfigRoot,
+  onResetConfigRoot,
+  onSetCommandOverride,
   onConfigure,
   onReviewEnvironment,
   onReviewLocalSkills,
-  onResolveRecovery,
   onCreateProfileFromTarget,
   onManageSkills,
   onPreviewRollback,
@@ -354,16 +398,25 @@ export const TargetWorkspace = ({
   const [expandedTargetId, setExpandedTargetId] = useState<string>();
   const [draggedTargetId, setDraggedTargetId] = useState<string>();
   const [dragOverTargetId, setDragOverTargetId] = useState<string>();
+  const [reorderMode, setReorderMode] = useState(false);
   const [isRecoveryOpen, setIsRecoveryOpen] = useState(false);
   const [recoveryTargetId, setRecoveryTargetId] = useState<string>();
   const [stopManagingTargetId, setStopManagingTargetId] = useState<string>();
   const [stopManagingMode, setStopManagingMode] = useState<StopManagingMode>("keep-current");
+  const [advancedTargetId, setAdvancedTargetId] = useState<string>();
+  const [turnOffTargetId, setTurnOffTargetId] = useState<string>();
+  const [suggestionPreferencesOpen, setSuggestionPreferencesOpen] = useState(false);
+  const [restoringSuggestions, setRestoringSuggestions] = useState(false);
   const stopManagingReturnFocusRef = useRef<HTMLElement | null>(null);
   const stopManagingDialogRef = useRef<HTMLElement>(null);
   const stopManagingCancelRef = useRef<HTMLButtonElement>(null);
   const recoveryTriggerRef = useRef<HTMLElement>(null);
   const recoveryDialogRef = useRef<HTMLElement>(null);
   const recoveryCloseRef = useRef<HTMLButtonElement>(null);
+  const turnOffDialogRef = useRef<HTMLElement>(null);
+  const turnOffCancelRef = useRef<HTMLButtonElement>(null);
+  const suggestionDialogRef = useRef<HTMLElement>(null);
+  const suggestionCloseRef = useRef<HTMLButtonElement>(null);
   const remoteManagerRef = useRef<RemoteDeviceManagerHandle>(null);
   const statesByTarget = new Map(targetStates.map((state) => [state.targetId, state]));
   const recoveryBackups = recoveryTargetId
@@ -377,6 +430,22 @@ export const TargetWorkspace = ({
     fallbackFocusRef: stopManagingReturnFocusRef,
     onDismiss: () => setStopManagingTargetId(undefined),
     dismissDisabled: busy
+  });
+
+  useModalDialog({
+    open: Boolean(turnOffTargetId),
+    dialogRef: turnOffDialogRef,
+    initialFocusRef: turnOffCancelRef,
+    onDismiss: () => setTurnOffTargetId(undefined),
+    dismissDisabled: busy
+  });
+
+  useModalDialog({
+    open: suggestionPreferencesOpen,
+    dialogRef: suggestionDialogRef,
+    initialFocusRef: suggestionCloseRef,
+    onDismiss: () => setSuggestionPreferencesOpen(false),
+    dismissDisabled: restoringSuggestions
   });
 
   useModalDialog({
@@ -409,7 +478,15 @@ export const TargetWorkspace = ({
             <span>{t("Agent")}</span>
             <span>{t("Profile")}</span>
             <div className="target-list__header-actions">
-              <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
+          <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
+            <Button
+              size="compact"
+              icon={<UserRoundPlus size={15} />}
+              disabled={busy || isLoading}
+              onClick={onChooseAgents}
+            >
+              {t("Choose Agents")}
+            </Button>
             <RefreshAction
               disabled={busy || isLoading || freshness.status === "refreshing"}
               label={t("Refresh")}
@@ -436,6 +513,20 @@ export const TargetWorkspace = ({
                     setIsRecoveryOpen(true);
                   }
                 },
+                ...(targets.length > 1 ? [{
+                  id: "reorder-agents",
+                  icon: reorderMode
+                    ? <Check size={15} aria-hidden="true" />
+                    : <GripVertical size={15} aria-hidden="true" />,
+                  label: t(reorderMode ? "Done reordering" : "Reorder Agents"),
+                  onSelect: () => setReorderMode((current) => !current)
+                }] : []),
+                ...(suppressedAgentNames.length > 0 ? [{
+                  id: "agent-suggestions",
+                  icon: <UserRoundPlus size={15} aria-hidden="true" />,
+                  label: t("Ignored Agent suggestions ({{count}})", { count: suppressedAgentNames.length }),
+                  onSelect: () => setSuggestionPreferencesOpen(true)
+                }] : []),
                 {
                   id: "add-ssh-device",
                   icon: <Server size={14} strokeWidth={2.1} aria-hidden="true" />,
@@ -466,7 +557,6 @@ export const TargetWorkspace = ({
                   : t("Install a supported Agent, then Refresh.")}
               </small>
             </span>
-            <Button size="compact" onClick={onChooseAgents}>{t("Choose Agents")}</Button>
           </div>
         ) : null}
         {targets.map((target) => {
@@ -500,20 +590,7 @@ export const TargetWorkspace = ({
               }}
             >
               <header className="target-workflow-header">
-                <span
-                  className={`target-workflow-icon target-workflow-icon--${icon.flavor}`}
-                  aria-hidden="true"
-                  draggable={targets.length > 1}
-                  onDragEnd={() => {
-                    setDraggedTargetId(undefined);
-                    setDragOverTargetId(undefined);
-                  }}
-                  onDragStart={(event) => {
-                    event.dataTransfer.effectAllowed = "move";
-                    event.dataTransfer.setData("text/plain", target.id);
-                    setDraggedTargetId(target.id);
-                  }}
-                >
+                <span className={`target-workflow-icon target-workflow-icon--${icon.flavor}`} aria-hidden="true">
                   {icon.assetUrl ? <img src={icon.assetUrl} alt="" /> : <TerminalSquare size={20} />}
                 </span>
                 <span className="target-workflow-title">
@@ -533,20 +610,45 @@ export const TargetWorkspace = ({
                 </span>
                 <TargetEnvironmentSummary
                   lifecycleStatus={state?.lifecycleStatus}
-                  actionOnly={!state?.activeProfileName && (!state?.lifecycleStatus || state.lifecycleStatus === "unmanaged") && !isManaged}
                   lifecycle={t(state?.lifecycleStatus ? lifecycleLabel[state.lifecycleStatus] : isManaged ? "Managed by AgentEnv" : "Not managed")}
                   profileName={state?.activeProfileName}
-                  actionLabel={state?.lifecycleStatus === "recovery-required" ? t("Open Recovery") : state?.activeProfileName ? undefined : t("Configure")}
-                  onAction={() => {
-                    if (state?.lifecycleStatus === "recovery-required") {
-                      onResolveRecovery();
-                    } else onConfigure(target.id);
-                  }}
+                  emptyLabel={t("Not configured")}
                 />
-                <TargetRowActions
+                {reorderMode ? (
+                  <IconButton
+                    appearance="inline"
+                    className="target-workflow-reorder"
+                    label={t("Reorder {{name}}", { name: target.name })}
+                    draggable
+                    disabled={busy}
+                    onDragEnd={() => {
+                      setDraggedTargetId(undefined);
+                      setDragOverTargetId(undefined);
+                    }}
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", target.id);
+                      setDraggedTargetId(target.id);
+                    }}
+                    onKeyDown={(event) => {
+                      if (!event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+                      event.preventDefault();
+                      onReorder(reorderPreferenceByOffset(
+                        targets.map((item) => item.id),
+                        target.id,
+                        event.key === "ArrowUp" ? -1 : 1
+                      ));
+                    }}
+                  >
+                    <GripVertical size={16} aria-hidden="true" />
+                  </IconButton>
+                ) : <TargetRowActions
                   target={target}
                   busy={busy}
                   expanded={isExpanded}
+                  recoveryCount={backups.filter(
+                    (backup) => backup.targetId === target.id || backup.targetIds?.includes(target.id)
+                  ).length}
                   configureLabel={t(state?.activeProfileId ? "Open Profile" : "Configure")}
                   onConfigure={() => onConfigure(target.id)}
                   onRecovery={(returnFocus) => {
@@ -563,7 +665,10 @@ export const TargetWorkspace = ({
                     onCreateProfileFromTarget(target.id, returnFocus)}
                   onManageSkills={() => onManageSkills(target.id)}
                   onToggleDiagnostics={() => setExpandedTargetId(isExpanded ? undefined : target.id)}
-                />
+                  onAdvancedSetup={() => setAdvancedTargetId(target.id)}
+                  onTurnOff={() => setTurnOffTargetId(target.id)}
+                  turnOffDisabled={state?.lifecycleStatus === "recovery-required"}
+                />}
               </header>
               {isExpanded ? (
                 <section className="target-diagnostics" role="region" aria-label={t("{{name}} diagnostics", { name: target.name })}>
@@ -769,6 +874,90 @@ export const TargetWorkspace = ({
                 setStopManagingTargetId(undefined);
               }}>{t("Review changes")}</Button>
             </DialogFooter>
+        </ModalFrame>
+      ) : null}
+      <AgentAdvancedSetupDialog
+        open={Boolean(advancedTargetId)}
+        target={targets.find((target) => target.id === advancedTargetId)}
+        busy={busy}
+        configRoot={advancedTargetId ? configRoots[advancedTargetId] : undefined}
+        commandOverride={advancedTargetId ? commandOverrides[advancedTargetId] : undefined}
+        managementState={advancedTargetId ? statesByTarget.get(advancedTargetId) : undefined}
+        onClose={() => setAdvancedTargetId(undefined)}
+        onResolveOwnership={(targetId) => {
+          const state = statesByTarget.get(targetId);
+          setAdvancedTargetId(undefined);
+          if (state?.lifecycleStatus === "recovery-required") {
+            setRecoveryTargetId(targetId);
+            setIsRecoveryOpen(true);
+          } else {
+            setStopManagingMode("keep-current");
+            setStopManagingTargetId(targetId);
+          }
+        }}
+        onChooseConfigRoot={onChooseConfigRoot}
+        onResetConfigRoot={onResetConfigRoot}
+        onSetCommandOverride={onSetCommandOverride}
+      />
+      {turnOffTargetId ? (
+        <ModalFrame
+          ariaLabel={t("Turn off {{name}}?", { name: targets.find((target) => target.id === turnOffTargetId)?.name ?? "" })}
+          className="profile-form-dialog profile-form-dialog--compact ui-dialog-shell"
+          dialogRef={turnOffDialogRef}
+          dismissDisabled={busy}
+          onDismiss={() => setTurnOffTargetId(undefined)}
+        >
+          <DialogHeader
+            title={t("Turn off {{name}}?", { name: targets.find((target) => target.id === turnOffTargetId)?.name ?? "" })}
+            description={t("Its files stay unchanged. AgentEnv will hide this Agent and stop checking or applying to it until you turn it on again.")}
+          />
+          <DialogFooter>
+            <Button ref={turnOffCancelRef} disabled={busy} onClick={() => setTurnOffTargetId(undefined)}>{t("Cancel")}</Button>
+            <Button
+              variant="primary"
+              busy={busy}
+              onClick={() => void onTurnOffAgent(turnOffTargetId).then((saved) => {
+                if (saved) setTurnOffTargetId(undefined);
+              })}
+            >
+              {t("Turn off Agent")}
+            </Button>
+          </DialogFooter>
+        </ModalFrame>
+      ) : null}
+      {suggestionPreferencesOpen ? (
+        <ModalFrame
+          ariaLabel={t("Agent suggestions")}
+          className="profile-form-dialog profile-form-dialog--compact ui-dialog-shell"
+          dialogRef={suggestionDialogRef}
+          dismissDisabled={restoringSuggestions}
+          onDismiss={() => setSuggestionPreferencesOpen(false)}
+        >
+          <DialogHeader
+            title={t("Agent suggestions")}
+            description={t("Choose whether AgentEnv may suggest Agents you previously ignored when they are detected again.")}
+          />
+          <DialogBody>
+            <div className="agent-suggestion-summary">
+              <span>{t("Ignored suggestions")}</span>
+              <strong>{suppressedAgentNames.length > 0 ? suppressedAgentNames.join(", ") : t("None")}</strong>
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button ref={suggestionCloseRef} disabled={restoringSuggestions} onClick={() => setSuggestionPreferencesOpen(false)}>{t("Close")}</Button>
+            {suppressedAgentNames.length > 0 ? (
+              <Button
+                variant="primary"
+                busy={restoringSuggestions}
+                onClick={() => {
+                  setRestoringSuggestions(true);
+                  void onRestoreAgentSuggestions().finally(() => setRestoringSuggestions(false));
+                }}
+              >
+                {t("Allow future suggestions")}
+              </Button>
+            ) : null}
+          </DialogFooter>
         </ModalFrame>
       ) : null}
       {stopManagingPreview ? (
