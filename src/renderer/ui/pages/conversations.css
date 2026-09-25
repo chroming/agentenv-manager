@@ -657,6 +657,7 @@
 .conversation-move-route {
   display: grid;
   gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .conversation-move-route__arrow {
@@ -744,6 +745,7 @@
 .conversation-review-workspace [data-ui-overflow-detail] {
   font-family: var(--font-mono);
   font-size: var(--font-size-metadata);
+  overflow-wrap: anywhere;
 }
 
 .conversation-review-warning {

@@ -258,6 +258,16 @@ const prepareFixture = async (root) => {
   await mkdir(appDataRoot, { recursive: true });
   await writeJson(join(appDataRoot, "agentenv-data.json"), { formatVersion: 2 });
   await mkdir(binDir, { recursive: true });
+  // Desktop discovery must be identical on a developer Mac and the CI runner.
+  for (const [bundleName, bundleIdentifier] of [
+    ["Antigravity.app", "com.google.antigravity"],
+    ["WorkBuddy.app", "com.tencent.workbuddy.mac"]
+  ]) {
+    const contents = join(homeDir, "Applications", bundleName, "Contents");
+    await mkdir(contents, { recursive: true });
+    await writeFile(join(contents, "Info.plist"),
+      `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>${bundleIdentifier}</string></dict></plist>\n`);
+  }
   await mkdir(opencodeDir, { recursive: true });
   await mkdir(codexDir, { recursive: true });
   await mkdir(join(workspaceRoot, ".agents", "skills", "release-safety"), { recursive: true });
@@ -1018,6 +1028,7 @@ try {
       AGENTENV_FAKE_HOME: join(fixtureRoot, "fake-home"),
       AGENTENV_GITHUB_FIXTURE_ROOT: githubFixtureRoot,
       AGENTENV_HOME: homeDir,
+      AGENTENV_AUTOMATION_TARGET_PATH: binDir,
       GIT_ALLOW_PROTOCOL: "file:https:ssh",
       GIT_CONFIG_COUNT: "1",
       GIT_CONFIG_KEY_0: `url.${pathToFileURL(gitFixtureRepo).toString()}.insteadOf`,
@@ -1050,6 +1061,10 @@ try {
   );
   const selectedForReview = await agentDiscoveryDialog.locator('input[type="checkbox"]:checked')
     .evaluateAll((inputs) => inputs.map((input) => input.id.replace("agent-discovery-", "")));
+  const expectedAgents = ["opencode", "claude-code", "codex", "antigravity", "antigravity-app", "trae-cli", "pi", "workbuddy"];
+  if (JSON.stringify([...selectedForReview].sort()) !== JSON.stringify(expectedAgents.sort())) {
+    throw new Error(`Visual fixture Agent discovery changed: ${selectedForReview.join(", ")}`);
+  }
   const hasNewlyEnabledAgents = selectedForReview.some((id) => !enabledBeforeReview.includes(id));
   await agentDiscoveryDialog
     .getByRole("button", { name: /^Enable \d+ Agents$/ })
@@ -1786,6 +1801,7 @@ try {
   });
   await capturePage(page, join(outputDir, "profile-policy-use-profile-920x620.png"));
   await skillsPolicy.selectOption("disable");
+  await page.getByText("Saving...", { exact: true }).waitFor({ state: "hidden" });
   await capturePage(page, join(outputDir, "profile-policy-turn-off-920x620.png"));
   await skillsPolicy.selectOption("ignore");
   await capturePage(page, join(outputDir, "profile-policy-keep-current-920x620.png"));
@@ -1807,6 +1823,7 @@ try {
       await groupToggle.click();
       await capturePage(page, join(outputDir, "profile-skill-group-on-920x620.png"));
       await page.getByRole("switch", { name: "Turn off Review pack" }).click();
+      await page.getByText("Saving...", { exact: true }).waitFor({ state: "hidden" });
       await capturePage(page, join(outputDir, "profile-skill-group-off-920x620.png"));
       await page.getByRole("switch", { name: "Turn on Review pack" }).click();
       await page
@@ -2030,6 +2047,10 @@ try {
   await capturePage(page, join(outputDir, "target-diagnostics-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await openCodeAgent.getByRole("button", { name: "More actions for OpenCode" }).click();
+  const menuTextFits = await page.getByRole("menu", { name: "Agent actions" }).evaluate((menu) =>
+    [...menu.querySelectorAll("button > span")].every((label) => label.scrollWidth <= label.clientWidth + 1)
+  );
+  if (!menuTextFits) throw new Error("Agent action menu labels must fit at minimum window width");
   await capturePage(page, join(outputDir, "agents-actions-920x620.png"), { preserveFocus: true });
   await page.getByRole("menuitem", { name: "Stop managing OpenCode" }).click();
   const stopManagingDialog = page.getByRole("dialog", { name: "Stop managing Agent" });
@@ -2136,6 +2157,13 @@ try {
     .click();
   const moveDialog = page.getByRole("dialog", { name: "Move conversation" });
   await moveDialog.waitFor({ state: "visible" });
+  const movePathsFit = await moveDialog.evaluate((dialog) =>
+    [...dialog.querySelectorAll(".conversation-review-workspace__path")].every((path) =>
+      path.scrollWidth <= path.clientWidth + 1 &&
+      path.getBoundingClientRect().right <= dialog.getBoundingClientRect().right - 16
+    )
+  );
+  if (!movePathsFit) throw new Error("Conversation move paths must wrap inside the dialog");
   await capturePage(page, join(outputDir, "conversations-detail-920x620-move.png"));
   await page.keyboard.press("Escape");
   await moveDialog.waitFor({ state: "hidden" });

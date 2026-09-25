@@ -1,0 +1,482 @@
+{
+  "formatVersion": 1,
+  "reviewedAt": "2026-09-23T01:59:18.021Z",
+  "applicationVersion": "0.2.1",
+  "baseCommit": "007e97cc",
+  "build": {
+    "sourceFingerprint": "b8eef0ee9306653b0235e91db2ba8153f7ad4c976c5abe94f36fa8e541278109",
+    "artifactFingerprint": "583207aada88e1847543eb6d576bce311f5733cc638f29dacba545eb132e2cd8",
+    "generatedAt": "2026-09-23T01:53:55.510Z"
+  },
+  "review": {
+    "scenarios": 91,
+    "method": "All contract screenshots visually inspected; affected layouts also inspected at native size and checked with runtime containment assertions",
+    "scope": "Mock Electron workflows on macOS; no real Agent resources or model requests",
+    "thresholdsChanged": false
+  },
+  "files": [
+    {
+      "file": "skill-invocation-920.png",
+      "sha256": "239de61f5b347c79a2b348ed9c74572d9c13a1d4006ebb917531fe3375ebeac2",
+      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+    },
+    {
+      "file": "skill-invocation-1180.png",
+      "sha256": "4c4bbc0e15813b72b6a73c7bc8afc34893c1d02de254a0da2bdd81914ccfe850",
+      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+    },
+    {
+      "file": "skill-invocation-1440.png",
+      "sha256": "c269d64efa86bc23fa548b5af4212e73ccb0439089aee68f7fa72c1f37494c33",
+      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+    },
+    {
+      "file": "history-sources-920.png",
+      "sha256": "dcc496978d9fce707f921d49be920ed67c43062d425af896e71e1ad5371a81d8",
+      "reviewReason": "Device-level source controls; distinct fixture timestamps and explicit selection stabilize local/remote ordering"
+    },
+    {
+      "file": "history-disabled-920.png",
+      "sha256": "3d78ba3907eedc0be3bed5c110091257d4a5b0817bd23f57caff8fcb0f298dd0",
+      "reviewReason": "Device-level source controls; distinct fixture timestamps and explicit selection stabilize local/remote ordering"
+    },
+    {
+      "file": "history-enabled-920.png",
+      "sha256": "5c2962da2b97da1138a5df97d244e746834bb6a66ba09ceb1427e8b244d0ba79",
+      "reviewReason": "Device-level source controls; distinct fixture timestamps and explicit selection stabilize local/remote ordering"
+    },
+    {
+      "file": "history-paused-920.png",
+      "sha256": "7c172e0bf92f9dfdfeb30dfbf070665852921fda410620ddddee508b36ec56b4",
+      "reviewReason": "Device-level source controls; distinct fixture timestamps and explicit selection stabilize local/remote ordering"
+    },
+    {
+      "file": "history-details-920.png",
+      "sha256": "be2258cccdb2cb4fbbec152056949e651cc3af1c2fd50c1d3dcdd24439e65cd0",
+      "reviewReason": "Device-level source controls; distinct fixture timestamps and explicit selection stabilize local/remote ordering"
+    },
+    {
+      "file": "history-remote-result.png",
+      "sha256": "742dd8e37039205cf4f6fc4356390969c50add1a908237bf9232f98e8f3cf8da",
+      "reviewReason": "Device-level source controls; distinct fixture timestamps and explicit selection stabilize local/remote ordering"
+    },
+    {
+      "file": "ai-analysis-profile-920x620.png",
+      "sha256": "eb1a12121881487d8a50fbb97d963d3ff4f538e4f9745324119a363f6b8e88bf",
+      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+    },
+    {
+      "file": "settings-ai-920x620.png",
+      "sha256": "8a69c03af6b18d9c8b03aca5d64ea8ee77d606a6bf59fd3b01b64fc5ee84ffa2",
+      "reviewReason": "Current Settings categories and shared controls"
+    },
+    {
+      "file": "agents-first-run-920x620.png",
+      "sha256": "d11bbeea6c6b61c166316b30d41251bfc479dce19e98ba1d8d44b4d5b663224d",
+      "reviewReason": "Unified Agent management and deterministic eight-Agent discovery"
+    },
+    {
+      "file": "agents-setup-920x620.png",
+      "sha256": "927af5521d8951cb55e23a67683c4d45243724419577caab353d65b600a86ca4",
+      "reviewReason": "Unified Agent management and deterministic eight-Agent discovery"
+    },
+    {
+      "file": "agents-setup-1180x728.png",
+      "sha256": "66a3551652b4153cbbb357033aea11f672be2ac36f8f3c28467df3e1888dcea1",
+      "reviewReason": "Unified Agent management and deterministic eight-Agent discovery"
+    },
+    {
+      "file": "agents-ready-920x620.png",
+      "sha256": "927af5521d8951cb55e23a67683c4d45243724419577caab353d65b600a86ca4",
+      "reviewReason": "Unified Agent management and deterministic eight-Agent discovery"
+    },
+    {
+      "file": "agents-actions-920x620.png",
+      "sha256": "e7d6962e299d5607bd556b6db420af0189c732b13d1e569d062664062fdb99c0",
+      "reviewReason": "Agent menu uses the shared 220px width; labels fit without edge clipping"
+    },
+    {
+      "file": "agents-add-ssh-device-920x620.png",
+      "sha256": "a8497621f750c99ffdf08e21a521a14e7da494b903aa215034e3dcb09ae929d4",
+      "reviewReason": "Unified Agent management and deterministic eight-Agent discovery"
+    },
+    {
+      "file": "agents-ready-1180x728.png",
+      "sha256": "66a3551652b4153cbbb357033aea11f672be2ac36f8f3c28467df3e1888dcea1",
+      "reviewReason": "Unified Agent management and deterministic eight-Agent discovery"
+    },
+    {
+      "file": "profiles-920x620.png",
+      "sha256": "50b669596f27fdda1e5eccaeaaebd138d6f2430633a7ec904743f2e8a80e0c86",
+      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+    },
+    {
+      "file": "project-empty-resources-920x620.png",
+      "sha256": "532eccdb4ac9242167216ebd21c6c776c6c89746b9a5fd731997efaa73d08d52",
+      "reviewReason": "Shared object and resource layout in Workspace workflows"
+    },
+    {
+      "file": "project-instruction-editor-920x620.png",
+      "sha256": "f0238ea545bc456872596924e917de3db8fb5744ed246e744f5d6f1f31cd0096",
+      "reviewReason": "Shared object and resource layout in Workspace workflows"
+    },
+    {
+      "file": "project-add-skill-920x620.png",
+      "sha256": "4034572bab0a5af71e6ed96e65cc63bc314f5fd0520375a3d3691264e7fe3b92",
+      "reviewReason": "Shared object and resource layout in Workspace workflows"
+    },
+    {
+      "file": "project-recovery-920x620.png",
+      "sha256": "ce842ed3357c5299a5ddd034a472b90ab451ab3bca8678c17ec4aabd5a51ffe8",
+      "reviewReason": "Shared object and resource layout in Workspace workflows"
+    },
+    {
+      "file": "projects-empty-920x620.png",
+      "sha256": "7ce762825c393e3b355f51a34c00ae68a19626f08d05d6482e615af6d4323bb2",
+      "reviewReason": "Shared object and resource layout in Workspace workflows"
+    },
+    {
+      "file": "projects-selected-920x620.png",
+      "sha256": "56b0be7c5b3fbd51261bdc674747c61a3af179e5c5ca177344478c3eee4160c6",
+      "reviewReason": "Shared object and resource layout in Workspace workflows"
+    },
+    {
+      "file": "project-environment-preview-920x620.png",
+      "sha256": "8b34640778ae2619f2134555c8ccdef7647c547d0cc67dfb55352c5d17712f06",
+      "reviewReason": "Shared object and resource layout in Workspace workflows"
+    },
+    {
+      "file": "projects-selected-1180x728.png",
+      "sha256": "9d3f1143a214c9155c709c6f8f39399faece7a9c55fab7ebe8c05e5e9c6e1aa3",
+      "reviewReason": "Shared object and resource layout in Workspace workflows"
+    },
+    {
+      "file": "profile-loading-920x620.png",
+      "sha256": "0c5f93999c7de03d7ddda9dac2802e25641dacc89cc7e1721f9eaad5f2513043",
+      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+    },
+    {
+      "file": "profile-skills-920x620.png",
+      "sha256": "a606fc1570768913cd670829ffb571f210be12457f60503b60b9f15ba2c855de",
+      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+    },
+    {
+      "file": "profile-skill-group-on-920x620.png",
+      "sha256": "70f1a59dfd0ab4c402b651042c52d2e1422b9aa5e1150d9478051d55cab14f0e",
+      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+    },
+    {
+      "file": "profile-skill-group-off-920x620.png",
+      "sha256": "402564a6f48469c1ac7236a0129802129f89c1245507806a7016407f98f880e4",
+      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+    },
+    {
+      "file": "profile-skill-group-picker-920x620.png",
+      "sha256": "b8d70c2b86e42b41e3aed2fbaee9ff624264eae2c2d72a62ce2365f258fd8973",
+      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+    },
+    {
+      "file": "profile-skills-applied-920x620.png",
+      "sha256": "a606fc1570768913cd670829ffb571f210be12457f60503b60b9f15ba2c855de",
+      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+    },
+    {
+      "file": "workspaces-skills-expanded-920x620.png",
+      "sha256": "d4aba5a2f992ed73752925d143df205095a26ce49adeef5907f692d1bf759e65",
+      "reviewReason": "Shared object and resource layout in Workspace workflows"
+    },
+    {
+      "file": "workspaces-skill-picker-920x620.png",
+      "sha256": "66ffe3f9d34de181f762a912cd54bd04a4d4c50f73b9680f58282bf7737714ab",
+      "reviewReason": "Shared object and resource layout in Workspace workflows"
+    },
+    {
+      "file": "workspaces-skill-group-picker-920x620.png",
+      "sha256": "251fd132d41ce2aa68c93f526b62d5918ae9fcca62583794d1916b2b6c4366a7",
+      "reviewReason": "Shared object and resource layout in Workspace workflows"
+    },
+    {
+      "file": "workspaces-resource-exclusive-920x620.png",
+      "sha256": "1967c7fbe9e995c0359d3012fc67aa798563aca834b14740f586cf2ae1e476ef",
+      "reviewReason": "Shared object and resource layout in Workspace workflows"
+    },
+    {
+      "file": "workspaces-resources-region-920.png",
+      "sha256": "298db0a7d0d5bbfa2a357453422c7fef3679942fed4607775ad55b855a0151ba",
+      "reviewReason": "Shared object and resource layout in Workspace workflows"
+    },
+    {
+      "file": "profile-mcps-920x620.png",
+      "sha256": "500b65a105dbe07aa2132d262f2ee2956b025a5f740cbf1b19ebcd4e1b2873f5",
+      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+    },
+    {
+      "file": "profile-resource-exclusive-920x620.png",
+      "sha256": "079325a76d513a208c5f13af874f609b74594fd6a7f8dd22dffe314733c6d09c",
+      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+    },
+    {
+      "file": "profile-skills-region-920.png",
+      "sha256": "15635c2dc17c34021b683bf397fdd9173b504f0435e9fd39e0c77098a92eee78",
+      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+    },
+    {
+      "file": "profile-policy-turn-off-920x620.png",
+      "sha256": "0ec828a52ee3602fdfaa99c3f56eb28f792fda91186cb6a3bb3509e18bbd8272",
+      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+    },
+    {
+      "file": "comparison-setup-1180x728.png",
+      "sha256": "b122185bd033a327064dcc8ad364d5ac519a82768565726fd6dc767f19ebf252",
+      "reviewReason": "Current comparison layout and shared dialog controls"
+    },
+    {
+      "file": "comparison-maximized-920x620.png",
+      "sha256": "f18cf822db7b38cbbf8b9f897e188ad1c87571d330e738d6a10f8abe4bf4eece",
+      "reviewReason": "Current comparison layout and shared dialog controls"
+    },
+    {
+      "file": "comparison-overview-920x620.png",
+      "sha256": "94fde1ceac4a3751439c2be894b2c1bf79e5fc305a5545757f83e933ad55ebe6",
+      "reviewReason": "Current comparison layout and shared dialog controls"
+    },
+    {
+      "file": "comparison-result-920x620.png",
+      "sha256": "55ea6f155e90f91812e000d6b18239f6f43e43d86c7101316e311e19fd37d70c",
+      "reviewReason": "Current comparison layout and shared dialog controls"
+    },
+    {
+      "file": "apply-preview-920x620.png",
+      "sha256": "5bd26d9046f72a55edf299d8f5d4f6eb83416f601e7451a53306800d2f59af7e",
+      "reviewReason": "Current Apply ownership and shared-Skill review"
+    },
+    {
+      "file": "apply-preview-review-required-920x620.png",
+      "sha256": "f99bfe7b3bf9ef95335934c87a0f36bce2b1b26d879ad712e21d46274e716e5d",
+      "reviewReason": "Current Apply ownership and shared-Skill review"
+    },
+    {
+      "file": "target-stop-managing-choice-920x620.png",
+      "sha256": "ded3d3f926e7620a3bc4ae13fcbeef24b0e91ea100d0bf819bb86421bdaf321f",
+      "reviewReason": "Unified Agent management and deterministic eight-Agent discovery"
+    },
+    {
+      "file": "target-stop-managing-preview-920x620.png",
+      "sha256": "9ea8a933ae0dec1c3e5e168f8c8a1ac16f57dd378632bbb7e418cf58e3b2b7fe",
+      "reviewReason": "Unified Agent management and deterministic eight-Agent discovery"
+    },
+    {
+      "file": "skills-920x620.png",
+      "sha256": "a0a06362a9fad45c5fa13f007051a0cbe1ae21bd73fa2812872519cbe9150362",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-file-details-920x620.png",
+      "sha256": "b1b73457dc41c8d1ae934f7c4b740db3ba2e178b08232787614d5bb27634cd1c",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-file-details-maximized-920x620.png",
+      "sha256": "db912c55729bbef211b4bcf502ac06065e8d67a86d207342b837ce4627fee2c4",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "instructions-920x620.png",
+      "sha256": "993fb00610a14c0755d01a41eaf802976d4c490059b363adfd353b72ef10019a",
+      "reviewReason": "Current instruction library split view"
+    },
+    {
+      "file": "instructions-1180x728.png",
+      "sha256": "228a5d1323209c9a77344c9240f465ae31d7df7aec145e4d5b01a3a1f32fe453",
+      "reviewReason": "Current instruction library split view"
+    },
+    {
+      "file": "instructions-1440x900.png",
+      "sha256": "cf924f0f6b2c945aec2f1bb3197c1c28d4b94abfd3c6e30a8ffc02c73709aea3",
+      "reviewReason": "Current instruction library split view"
+    },
+    {
+      "file": "skills-sources-920x620.png",
+      "sha256": "6c688c856c79945a011a4dc01b82c1877f6d56f16d3d20653131fc33bc4d9a72",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-sources-expanded-920x620.png",
+      "sha256": "dad40039de1e161cc05d49bf0cb1b90c62695d5eb421c1eb5d7995f314b1ec85",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-sources-expanded-1180x728.png",
+      "sha256": "9adb06b0987897ee067de73a1a430ea860267bd44088fa1c95b6a5a09fed0b06",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-sources-expanded-1440x900.png",
+      "sha256": "51248c9354979c505c15a9d91ba4feadb5b15e22a2bebc5b1f287c6180818d8a",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-groups-920x620.png",
+      "sha256": "ae309b37991707d7fce4c5d99cfced4d81d885ed941ec71456e5b98ff25e552c",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-groups-expanded-920x620.png",
+      "sha256": "82652c8c372294e8835cade0a7e6c58ddf9785d9079f0fd8d30e237ffc62f987",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-groups-expanded-1180x728.png",
+      "sha256": "7f2c96d24c0b41e7b1f603e3c572dab204cc11a81cf4e1a561c0098d1aad3d2f",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-group-icon-picker-920x620.png",
+      "sha256": "d7a8411efb698c59f24545f016423a6da7858fb1724cdd72973a65ee7b01c9a8",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-update-920x620.png",
+      "sha256": "1052a4e978685ab56378b945595ab45649892457ed8157e47c7bd2b401103dee",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-update-review-920x620.png",
+      "sha256": "3f81017f91245e680182cf6deed3e927543e6be9865c32383f01d144ed52a169",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-ai-tags-920x620.png",
+      "sha256": "7d2fdd628c9041b5e87151e45e34541821d53e51c9a0c1467d5ba7f54862572d",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-update-1180x728.png",
+      "sha256": "ceda755add48d455a9d72c6962357961e0469887ee5d6aaf2bd21d1af7ca0adf",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-sources-update-920x620.png",
+      "sha256": "def378481e902109dfc5404bd1de420f1a21e7af139f824d567718beeb601edc",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-sources-update-1180x728.png",
+      "sha256": "20aa96f467a847b123801a991d29ec47bf7f89b04c2ef350068c18f987bd390c",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-bulk-update-ready-920x620.png",
+      "sha256": "3b00fb9e95c2d8ec6400cce03863508608f098f4bf075deced8125052a71144b",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-bulk-update-complete-920x620.png",
+      "sha256": "edbcdb77d6bbd99f1d99676d48fa78bd1b238336dc0aa669d657eabb5de8059d",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "sidebar-collapsed-skills-920x620.png",
+      "sha256": "03a05159f35fe0826e5805f45232d182afd0092b6e5e41d11cafca808c1ead53",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "sidebar-collapsed-agents-menu-920x620.png",
+      "sha256": "757b67602299ea93453018c632fedeec99b01eef1b5cbe654879bd1adcd6a19a",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-import-results-920x620.png",
+      "sha256": "8362d9f4fb307efc9f0048a4b6f5603f4dab530fccd5704e4f9f079896479908",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-cleanup-review-920x620.png",
+      "sha256": "d6f9b7826ca958b246b0efd836de9ed6e1b272e780ab6c2cd087d35df94c44e2",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-shared-folder-920x620.png",
+      "sha256": "9a4dae2126b0bd4257da1a123b9cda296efc1ac5b1b39f18f8a697691f684b72",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-shared-folder-behavior-920x620.png",
+      "sha256": "8468c08d1763113a7884c0ea0d59cfb001779e7346184b6661712c7cd2df905b",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-shared-folder-1180x728.png",
+      "sha256": "b5967d180f0e41ce556ab74848fe2524c6329cbd63b7bd3530e6c7ce13ddf3db",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-shared-folder-profiles-only-920x620.png",
+      "sha256": "2743548c89c51c48b17632c8e13147c2319b762eb1a5a4d850013896127427be",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "skills-shared-folder-profiles-only-1180x728.png",
+      "sha256": "da5971bd3b7b2adc41263300f6f64471bff27d8c4572efbecdfa960776754da9",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "conversations-detail-920x620.png",
+      "sha256": "5f8d1a3237988aff29e40fac6fe88b6104cc4970ce187ef3c4c77d87c4dbd6b2",
+      "reviewReason": "Existing reviewed layout retained with current mock runtime rendering"
+    },
+    {
+      "file": "conversations-largest-920x620.png",
+      "sha256": "844749a4dc50567ceed3f4d6ae3fd92d396a26165fdfa62256f8853cf3046384",
+      "reviewReason": "Existing reviewed layout retained with current mock runtime rendering"
+    },
+    {
+      "file": "conversations-list-region-920.png",
+      "sha256": "14f2924b0b25132a2de237f819f2671c92058e736261086e04855129199d4f89",
+      "reviewReason": "Existing reviewed layout retained with current mock runtime rendering"
+    },
+    {
+      "file": "conversations-continue-menu-920x620.png",
+      "sha256": "031fbbe45841464fe269fac18e4b054fdcff9486073f5856b640b0506447f5fd",
+      "reviewReason": "Existing reviewed layout retained with current mock runtime rendering"
+    },
+    {
+      "file": "conversations-detail-920x620-move.png",
+      "sha256": "88365f8376c8cdce3b879984059c56a7642f2279e81ec9cd586f6bc7a628fe33",
+      "reviewReason": "Long destination paths wrap inside the move dialog"
+    },
+    {
+      "file": "settings-connections-920x620.png",
+      "sha256": "01e9afb7a336d663ee4c2a1ebf6019b0570f1dcfd23562439033c9838c91b2d5",
+      "reviewReason": "Current Settings categories and shared controls"
+    },
+    {
+      "file": "settings-general-920x620.png",
+      "sha256": "77760e7924326441299b3bdcef94caf67ca36dfa781cae0b74a5c52c8759fa34",
+      "reviewReason": "Current Settings categories and shared controls"
+    },
+    {
+      "file": "skills-zh-cn-920x620.png",
+      "sha256": "96b43469c92e3586c6a9c640c26621265f292398e26051f5233b4133a1f305b9",
+      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+    },
+    {
+      "file": "profiles-zh-tw-920x620.png",
+      "sha256": "48f21ac6bb2380600dcdf624bdc15c4288a59b539513bb793ea8d31a0c897dcf",
+      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+    },
+    {
+      "file": "startup-failure-920x620.png",
+      "sha256": "fe987f620e118e0139c05d5df5e9871194b25ef4d36553849b63d019142fad8c",
+      "reviewReason": "Existing reviewed layout retained with current mock runtime rendering"
+    }
+  ],
+  "independentVerification": {
+    "command": "npm run verify:visual",
+    "completedAt": "2026-09-23T02:12:28Z",
+    "passed": true,
+    "passedScenarios": 91,
+    "totalScenarios": 91,
+    "reportSha256": "99b7ffb64ce84eda595b70a48e88901db8338a3854387428fe518547ab53b7be"
+  }
+}

@@ -957,6 +957,18 @@ describe("Conversations desktop workflow", () => {
     await moveDialog.getByText("Project files will not be moved or modified.").waitFor();
     await expectInViewport(page, moveDialog);
     await expectTopmost(moveDialog);
+    const pathLayout = await moveDialog.locator(".conversation-review-workspace__path").evaluateAll((paths) =>
+      paths.map((path) => ({
+        width: path.clientWidth,
+        scrollWidth: path.scrollWidth,
+        right: path.getBoundingClientRect().right,
+        dialogRight: path.closest('[role="dialog"]')!.getBoundingClientRect().right
+      }))
+    );
+    for (const path of pathLayout) {
+      expect(path.scrollWidth).toBeLessThanOrEqual(path.width + 1);
+      expect(path.right).toBeLessThanOrEqual(path.dialogRight - 16);
+    }
     if (process.env.AGENTENV_CAPTURE_CONVERSATIONS) {
       await page.screenshot({
         path: process.env.AGENTENV_CAPTURE_CONVERSATIONS.replace(

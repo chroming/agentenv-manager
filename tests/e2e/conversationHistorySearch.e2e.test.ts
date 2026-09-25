@@ -25,7 +25,8 @@ it.skipIf(process.platform === "win32")("requires opt-in, searches local and SSH
       {type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:`${label} searchable history fixture`}]}},
       {type:"response_item",payload:{type:"message",role:"assistant",content:[{type:"output_text",text:"The needle appears at the end of this conversation."}]}}
     ].map((v)=>JSON.stringify(v)).join("\n"));
-    await utimes(file,new Date("2026-09-01T10:00:00Z"),new Date("2026-09-01T10:00:00Z"));
+    const modifiedAt = new Date(label === "Remote" ? "2026-09-01T10:00:00Z" : "2026-09-01T09:00:00Z");
+    await utimes(file, modifiedAt, modifiedAt);
   }
   const originals = await Promise.all(sourceFiles.map((p)=>readFile(p,"utf8")));
   const ssh = join(bin,"ssh");
@@ -89,11 +90,14 @@ it.skipIf(process.platform === "win32")("requires opt-in, searches local and SSH
   await dialog.getByRole("button",{name:"Save",exact:true}).click();
   await expect.poll(()=>page.evaluate(async ()=>(await window.agentEnv.conversationHistoryStatus()).config.paused)).toBe(true);
   await page.getByRole("button",{name:"Resume",exact:true}).waitFor();
+  await page.getByRole("option", { name: /Local searchable history fixture/ }).click();
+  await page.getByText("/work/local/example", { exact: true }).waitFor();
   await page.screenshot({path:join(output,"history-paused-920.png"),animations:"disabled"});
   await page.getByRole("button",{name:"Resume",exact:true}).click();
   await expect.poll(()=>page.evaluate(async ()=>(await window.agentEnv.conversationHistoryStatus()).config.paused)).toBe(false);
   await page.getByRole("searchbox",{name:"Search conversations"}).fill("needle");
   await page.getByRole("option",{name:/Remote searchable history fixture/}).click();
+  await expect.poll(() => page.getByRole("option").first().innerText()).toContain("Remote searchable");
   await page.getByText("/work/remote/example",{exact:true}).waitFor();
   expect(await page.getByRole("button",{name:"Open original",exact:true}).count()).toBe(0);
   await page.getByRole("button",{name:"History location",exact:true}).click();

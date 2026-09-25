@@ -208,7 +208,7 @@ const TargetRowActions = ({
   const show = () => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const width = 200;
+    const width = 220;
     const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
     const spaceBelow = window.innerHeight - rect.bottom;
     setStyle({
