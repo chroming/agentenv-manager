@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { WorktreeDialog } from "../../src/renderer/components/WorktreeDialog";
+import { WorktreeDialog, WorktreeWorkspace } from "../../src/renderer/components/WorktreeDialog";
 import type { AgentEnvApi } from "../../src/shared/types";
 import type { WorktreeEntry, WorktreeInventory } from "../../src/shared/worktrees";
 
@@ -18,7 +18,7 @@ const dirty: WorktreeEntry = {
   cleanupReviewAvailable: false
 };
 const inventory: WorktreeInventory = {
-  scanRoots: ["/projects"], configuredRoots: ["/projects"], entries: [clean, dirty],
+  scanRoots: ["/projects"], configuredRoots: ["/projects"], builtinRoots: [], entries: [clean, dirty],
   issues: [], incomplete: false, scannedAt: "2026-09-24T00:00:00.000Z"
 };
 
@@ -29,7 +29,8 @@ const installApi = () => {
     selectWorktreeScanRoot: vi.fn().mockResolvedValue(undefined),
     previewWorktreeCleanup: vi.fn().mockResolvedValue({
       previewId: "review-1", entry: clean, fingerprint: "b".repeat(64),
-      checkedAt: inventory.scannedAt, backupRequired: true, forceRequired: false
+      checkedAt: inventory.scannedAt, backupRequired: true, forceRequired: false,
+      savedWorkspace: false
     }),
     listWorktreeRecovery: vi.fn().mockResolvedValue({ records: [], issues: [] }),
     copyText: vi.fn().mockResolvedValue(undefined)
@@ -44,6 +45,19 @@ afterEach(() => {
 });
 
 describe("WorktreeDialog", () => {
+  it("keeps common scan locations read-only on the standalone page", async () => {
+    const api = installApi();
+    api.inventoryWorktrees.mockResolvedValue({
+      ...inventory, scanRoots: ["/projects", "/home/user/.config/superpowers/worktrees"],
+      builtinRoots: ["/home/user/.config/superpowers/worktrees"]
+    });
+    render(<WorktreeWorkspace />);
+    await screen.findByText("/projects/_worktrees/clean");
+    fireEvent.click(screen.getByText("Scan locations · 2"));
+    expect(screen.getByText("/home/user/.config/superpowers/worktrees")).toBeInTheDocument();
+    expect(screen.getByText("Common location")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Remove scan location" })).toHaveLength(1);
+  });
   it("keeps batch cleanup limited to clean trees and requires explicit review for dirty trees", async () => {
     const api = installApi();
     render(<WorktreeDialog open onClose={vi.fn()} />);

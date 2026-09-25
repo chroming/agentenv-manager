@@ -269,8 +269,12 @@ Quick Open is a navigation accelerator, not a second command model.
 A Workspace is a device-local reference to a real working directory. It is not an
 AgentEnv-owned copy of the folder and does not require Git.
 
-Worktree cleanup is a separate local inventory reached from Workspaces. Its saved scan
-locations and keep decisions are device-local and do not create Workspace references.
+Worktrees is a separate local inventory beside Workspaces. Its saved scan locations
+and keep decisions are device-local and do not create Workspace references. The
+inventory includes existing common worktree locations (including Superpowers) and
+saved local Workspace roots, but it never scans the whole home directory by default.
+The visible scan scope must distinguish built-in, saved-Workspace, and manually added
+locations. A missing result only means no worktree was found within that scope.
 Git's worktree registration is the source of truth for linked and main worktrees;
 directory names alone are never proof. The inventory reports its scan scope and failures.
 Removing a Workspace reference never removes a worktree. A worktree cleanup preview

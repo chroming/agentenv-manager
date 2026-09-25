@@ -21,7 +21,7 @@ afterEach(async () => {
 }, 30_000);
 
 describe("Worktrees desktop workflow", () => {
-  it("shows local linked worktrees in a scrollable dialog at minimum and regular sizes", async () => {
+  it("shows local linked worktrees on a dedicated page at minimum and regular sizes", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-worktrees-e2e-"));
     const home = join(root, "home");
     const data = join(root, "data");
@@ -62,13 +62,12 @@ describe("Worktrees desktop workflow", () => {
     const page = await app.firstWindow();
     const notNow = page.getByRole("button", { name: "Not now", exact: true });
     if (await notNow.isVisible().catch(() => false)) await notNow.click();
-    await page.getByRole("button", { name: "Workspaces", exact: true }).click();
     await page.getByRole("button", { name: "Worktrees", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "Worktrees" });
-    await dialog.getByText(linked).waitFor();
+    const workspace = page.locator(".worktree-workspace");
+    await workspace.getByText(linked).waitFor();
     for (const viewport of [{ width: 920, height: 620 }, { width: 1180, height: 728 }]) {
       await page.setViewportSize(viewport);
-      const geometry = await dialog.evaluate((element) => {
+      const geometry = await workspace.evaluate((element) => {
         const frame = element.getBoundingClientRect();
         const body = element.querySelector(".worktree-dialog__body")!;
         return {
@@ -85,15 +84,22 @@ describe("Worktrees desktop workflow", () => {
         await page.screenshot({ path: join(captureDir, `worktrees-${viewport.width}.png`) });
       }
     }
-    const linkedRow = dialog.locator(".ui-resource-row").filter({ hasText: "review-change" });
+    const linkedRow = workspace.locator(".ui-resource-row").filter({ hasText: "review-change" });
     await linkedRow.getByRole("button", { name: "Review" }).click();
-    await dialog.getByRole("button", { name: "Review cleanup" }).click();
-    await dialog.getByRole("button", { name: "Remove Worktrees" }).click();
-    await dialog.getByText(/Removed: .*review-change/).waitFor();
-    await dialog.getByRole("button", { name: "Back", exact: true }).click();
-    await dialog.getByRole("button", { name: "Worktree recovery" }).click();
-    await page.getByRole("dialog", { name: "Worktree recovery" })
-      .getByRole("button", { name: "Restore", exact: true }).click();
+    await page.setViewportSize({ width: 920, height: 620 });
+    if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) {
+      await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, "worktrees-detail-920.png") });
+    }
+    await workspace.getByRole("button", { name: "Review cleanup" }).click();
+    await workspace.getByRole("button", { name: "Remove Worktree", exact: true }).waitFor();
+    if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) {
+      await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, "worktrees-confirm-920.png") });
+    }
+    await workspace.getByRole("button", { name: "Remove Worktree", exact: true }).click();
+    await workspace.getByText(/Removed: .*review-change/).waitFor();
+    await workspace.getByRole("button", { name: "Worktrees", exact: true }).click();
+    await workspace.getByRole("button", { name: "Worktree recovery" }).click();
+    await workspace.getByRole("button", { name: "Restore", exact: true }).click();
     await expect.poll(() => readFile(join(linked, "README.md"), "utf8")).toBe("base\n");
   }, 90_000);
 });

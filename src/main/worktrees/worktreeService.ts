@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { cp, lstat, mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { homedir } from "node:os";
 import { z } from "zod";
 import type {
   WorktreeCleanupPreview,
@@ -110,10 +111,12 @@ export interface WorktreeService {
 
 export const createWorktreeService = ({
   appDataRoot,
+  homeDir = homedir(),
   projectStore,
   resolveRunner
 }: {
   appDataRoot: string;
+  homeDir?: string;
   projectStore: ProjectStore;
   resolveRunner(): Promise<GitCommandRunner | undefined>;
 }): WorktreeService => {
@@ -125,6 +128,12 @@ export const createWorktreeService = ({
   }>();
   const discovered = new Set<string>();
   const discoveredKey = (commonDir: string, path: string) => `${commonDir}\0${path}`;
+  const builtinCandidates = [
+    join(homeDir, ".config", "superpowers", "worktrees"),
+    join(homeDir, "_worktrees"),
+    join(homeDir, "worktrees"),
+    join(homeDir, "Worktrees")
+  ];
 
   const readSettings = async () => {
     try {
@@ -292,11 +301,20 @@ export const createWorktreeService = ({
       discovered.clear();
       const settings = await readSettings();
       const projects = await projectStore.listLocalRootPaths();
+      const issues: string[] = [];
+      const builtinRoots: string[] = [];
+      for (const candidate of builtinCandidates) {
+        try {
+          if ((await stat(candidate)).isDirectory()) builtinRoots.push(await realpath(candidate));
+        } catch (error) {
+          if (!isMissingFileError(error)) issues.push(`${candidate}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
       const scanRoots = [...new Set([
         ...settings.scanRoots,
+        ...builtinRoots,
         ...projects
       ])];
-      const issues: string[] = [];
       const entries: WorktreeEntry[] = [];
       const found = new Set<string>();
       const visited = new Set<string>();
@@ -363,7 +381,8 @@ export const createWorktreeService = ({
       discovered.clear();
       for (const key of found) discovered.add(key);
       return {
-        scanRoots, configuredRoots: settings.scanRoots, entries, issues, incomplete: issues.length > 0,
+        scanRoots, configuredRoots: settings.scanRoots, builtinRoots, entries, issues,
+        incomplete: issues.length > 0,
         scannedAt: new Date().toISOString()
       };
     },
@@ -380,6 +399,8 @@ export const createWorktreeService = ({
         throw new Error(`Review this worktree before cleanup: ${entry.reasons.join("; ") || entry.state}`);
       }
       const contentHash = await hashWorktreeTree(entry.path);
+      const savedWorkspace = (await projectStore.listLocalRootPaths())
+        .some((root) => resolve(root) === entry.path);
       const previewId = randomUUID();
       issuedPreviews.set(previewId, {
         commonDir, path, fingerprint: contentHash,
@@ -388,7 +409,8 @@ export const createWorktreeService = ({
       return {
         previewId, entry, fingerprint: contentHash, checkedAt: new Date().toISOString(),
         backupRequired: Boolean(entry.changes.length || entry.ignored.length),
-        forceRequired: Boolean(entry.changes.length || entry.ignored.length)
+        forceRequired: Boolean(entry.changes.length || entry.ignored.length),
+        savedWorkspace
       };
     },
     remove: async (preview) => {

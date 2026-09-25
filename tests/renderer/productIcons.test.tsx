@@ -16,6 +16,7 @@ describe("product icon semantics", () => {
     const names: ProductIconName[] = [
       "agents",
       "profiles",
+      "worktrees",
       "conversations",
       "skills",
       "instructions",
@@ -75,6 +76,7 @@ describe("product icon semantics", () => {
       ["workspace:targets", "agents"],
       ["workspace:profiles", "profiles"],
       ["workspace:projects", "projects"],
+      ["workspace:worktrees", "worktrees"],
       ["workspace:conversations", "conversations"],
       ["workspace:skills", "skills"],
       ["workspace:settings", "settings"],
@@ -83,6 +85,9 @@ describe("product icon semantics", () => {
       ["skill:review", "skills"],
       ["target:codex", "agents"]
     ]);
+
+    items.find((candidate) => candidate.id === "workspace:worktrees")?.onSelect();
+    expect(noop).toHaveBeenCalledWith("worktrees");
 
     for (const [id, iconName] of expected) {
       const item = items.find((candidate) => candidate.id === id);

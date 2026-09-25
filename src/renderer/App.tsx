@@ -168,9 +168,8 @@ import { useAgentDiscovery } from "./hooks/useAgentDiscovery";
 import { useAgentRefresh } from "./hooks/useAgentRefresh";
 import { useWorkspaceFreshness } from "./hooks/useWorkspaceFreshness";
 import { useWorkspaceNavigation } from "./hooks/useWorkspaceNavigation";
-import {
-  ProjectsWorkspace,
-} from "./components/ProjectsWorkspace";
+import { ProjectsWorkspace } from "./components/ProjectsWorkspace";
+import { WorktreeWorkspace } from "./components/WorktreeDialog";
 import type { ProjectEditorGuard } from "./components/ProjectResourceEditorDialog";
 import { useSidebarState } from "./hooks/useSidebarState";
 import { useConversationQuickOpen } from "./hooks/useConversationQuickOpen";
@@ -1179,6 +1178,7 @@ const AppContent = ({
       library: "open Skills",
       instructions: "open Instructions",
       projects: "open Projects",
+      worktrees: "open Worktrees",
       profiles: "open Profiles",
       conversations: "open Conversations",
       targets: "open Agents",
@@ -4431,8 +4431,9 @@ const AppContent = ({
             openRequest={projectOpenRequest}
             editorGuardPromptOpen={Boolean(pendingProfileAction && projectEditorGuard?.dirty)}
             onConfigureRemoteDevices={() => selectWorkspace("targets")}
+            onOpenWorktrees={() => selectWorkspace("worktrees")}
           />
-        ) : activeWorkspace === "conversations" ? (
+        ) : activeWorkspace === "worktrees" ? <WorktreeWorkspace /> : activeWorkspace === "conversations" ? (
           <ConversationWorkspace
             targets={targets}
             initialViewState={conversationViewState}

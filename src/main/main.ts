@@ -987,6 +987,7 @@ const createServices = async (
   });
   const worktreeService = createWorktreeService({
     appDataRoot: paths.appDataRoot,
+    homeDir: paths.homeDir,
     projectStore,
     resolveRunner: async () => {
       if (projectGitRunner) return projectGitRunner;

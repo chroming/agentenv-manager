@@ -32,6 +32,7 @@ const fixture = async () => {
   const runner = createGitCommandRunner({ executablePath: gitPath });
   const service = createWorktreeService({
     appDataRoot: join(root, "data"),
+    homeDir: join(root, "home"),
     projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
     resolveRunner: async () => runner
   });
@@ -72,6 +73,29 @@ describe("worktree inventory and cleanup", () => {
     expect(await readFile(join(linked, "README.md"), "utf8")).toBe("base\n");
   });
 
+  it("finds existing Superpowers and common worktree folders without saving them as user locations", async () => {
+    const { root, repo, linked } = await fixture();
+    const homeDir = join(root, "home");
+    const superpowersRoot = join(homeDir, ".config", "superpowers", "worktrees");
+    await mkdir(superpowersRoot, { recursive: true });
+    const superpowersTree = join(superpowersRoot, "project", "feature-two");
+    await run("git", ["-C", repo, "worktree", "add", "-b", "feature-two", superpowersTree]);
+    const gitPath = await findExecutable("git", {
+      environment: process.env, homeDir: homedir(), platform: process.platform
+    });
+    if (!gitPath) throw new Error("Git is required for the worktree fixture");
+    const service = createWorktreeService({
+      appDataRoot: join(root, "builtin-data"), homeDir,
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
+      resolveRunner: async () => createGitCommandRunner({ executablePath: gitPath })
+    });
+    const inventory = await service.inventory();
+    expect(inventory.builtinRoots).toContain(superpowersRoot);
+    expect(inventory.configuredRoots).toEqual([]);
+    expect(inventory.entries.map((entry) => entry.path)).toContain(superpowersTree);
+    expect(inventory.entries.map((entry) => entry.path)).toContain(linked);
+  });
+
   it("keeps dirty or stale worktrees and does not discard their files", async () => {
     const { linked, service } = await fixture();
     const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
@@ -89,6 +113,21 @@ describe("worktree inventory and cleanup", () => {
     const kept = (await service.inventory()).entries.find((item) => item.path === linked)!;
     expect(kept.state).toBe("kept");
     await expect(service.preview(entry.commonDir, linked)).rejects.toThrow("Review this worktree");
+  });
+
+  it("reports when cleanup would leave a saved Workspace pointing at a removed folder", async () => {
+    const { root, linked } = await fixture();
+    const gitPath = await findExecutable("git", {
+      environment: process.env, homeDir: homedir(), platform: process.platform
+    });
+    if (!gitPath) throw new Error("Git is required for the worktree fixture");
+    const service = createWorktreeService({
+      appDataRoot: join(root, "workspace-data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [linked] } as unknown as ProjectStore,
+      resolveRunner: async () => createGitCommandRunner({ executablePath: gitPath })
+    });
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    expect((await service.preview(entry.commonDir, linked)).savedWorkspace).toBe(true);
   });
 
   it("requires explicit dirty review and restores both files and staged state", async () => {

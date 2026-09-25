@@ -5505,6 +5505,9 @@ Object.assign(zhTW, {
 
 Object.assign(zhCN, {
   "Worktrees": "工作树", "Worktree recovery": "工作树恢复", "Working directories found in your local scan locations": "本机扫描位置中发现的工作目录",
+  "Local Git working directories": "本机 Git 工作目录", "Worktree filter": "工作树筛选",
+  "Added location": "手动添加的位置", "Common location": "常用位置",
+  "A saved Workspace points to a selected Worktree. Its shortcut will remain, but the folder will be unavailable after removal.": "已保存的工作区指向选中的工作树。移除后快捷入口仍在，但目录将不可用。",
   "Back to Worktrees": "返回工作树", "Restore window size": "恢复窗口大小", "Maximize window": "最大化窗口",
   "Add location": "添加位置", "Refresh Worktrees": "刷新工作树", "Review selected": "检查选中项",
   "Scan locations": "扫描位置", "Remove scan location": "移除扫描位置", "Some locations could not be fully scanned": "部分位置未能完整扫描",
@@ -5514,6 +5517,7 @@ Object.assign(zhCN, {
   "No local file changes found. Review the purpose of this worktree before removing it.": "未发现本地文件变更。移除前请确认这个工作树的任务已完成。",
   "Changed and untracked paths": "已修改和未跟踪路径", "Ignored paths": "已忽略路径", "Copy path": "复制路径",
   "Remove {{count}} Worktrees?": "移除 {{count}} 个工作树？",
+  "Remove this Worktree?": "移除这个工作树？", "Remove Worktree": "移除工作树",
   "Only working directories are removed. Git commits are retained; local-only files receive a verified recovery copy first.": "只移除工作目录并保留 Git 提交；包含本地独有文件时，会先保存并校验恢复副本。",
   "Cleanup results": "清理结果", "No Worktree recovery points": "没有工作树恢复点", "Remove Worktrees": "移除工作树",
   "Remove keep marker": "取消保留", "Keep Worktree": "保留工作树", "Review cleanup": "检查清理",
@@ -5528,6 +5532,9 @@ Object.assign(zhCN, {
 });
 Object.assign(zhTW, {
   "Worktrees": "工作樹", "Worktree recovery": "工作樹復原", "Working directories found in your local scan locations": "本機掃描位置中找到的工作目錄",
+  "Local Git working directories": "本機 Git 工作目錄", "Worktree filter": "工作樹篩選",
+  "Added location": "手動新增的位置", "Common location": "常用位置",
+  "A saved Workspace points to a selected Worktree. Its shortcut will remain, but the folder will be unavailable after removal.": "已儲存的工作區指向所選工作樹。移除後捷徑仍在，但目錄將無法使用。",
   "Back to Worktrees": "返回工作樹", "Restore window size": "還原視窗大小", "Maximize window": "最大化視窗",
   "Add location": "新增位置", "Refresh Worktrees": "重新整理工作樹", "Review selected": "檢查所選項目",
   "Scan locations": "掃描位置", "Remove scan location": "移除掃描位置", "Some locations could not be fully scanned": "部分位置未能完整掃描",
@@ -5537,6 +5544,7 @@ Object.assign(zhTW, {
   "No local file changes found. Review the purpose of this worktree before removing it.": "未發現本機檔案變更。移除前請確認這個工作樹的任務已完成。",
   "Changed and untracked paths": "已修改與未追蹤路徑", "Ignored paths": "已忽略路徑", "Copy path": "複製路徑",
   "Remove {{count}} Worktrees?": "移除 {{count}} 個工作樹？",
+  "Remove this Worktree?": "移除這個工作樹？", "Remove Worktree": "移除工作樹",
   "Only working directories are removed. Git commits are retained; local-only files receive a verified recovery copy first.": "只移除工作目錄並保留 Git 提交；包含本機獨有檔案時，會先儲存及驗證復原副本。",
   "Cleanup results": "清理結果", "No Worktree recovery points": "沒有工作樹復原點", "Remove Worktrees": "移除工作樹",
   "Remove keep marker": "取消保留", "Keep Worktree": "保留工作樹", "Review cleanup": "檢查清理",

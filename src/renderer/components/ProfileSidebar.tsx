@@ -60,6 +60,7 @@ export type AppWorkspace =
   | "library"
   | "instructions"
   | "projects"
+  | "worktrees"
   | "profiles"
   | "conversations"
   | "targets"
@@ -423,6 +424,7 @@ export const ProfileSidebar = ({
     { id: "targets", label: t("Agents"), detail: t("Configure and inspect"), icon: "agents" },
     { id: "profiles", label: t("Profiles"), detail: t("Compose reusable Agent setups"), icon: "profiles" },
     { id: "projects", label: t("Workspaces"), detail: t("Recurring project folders"), icon: "projects" },
+    { id: "worktrees", label: t("Worktrees"), detail: t("Local Git working directories"), icon: "worktrees" },
     {
       id: "conversations",
       label: t("Conversations"),

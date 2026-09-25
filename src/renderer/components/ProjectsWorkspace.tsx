@@ -61,7 +61,6 @@ import {
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ProjectEnvironmentPreviewDialog } from "./ProjectEnvironmentPreviewDialog";
 import { ProjectRecoveryDialog } from "./ProjectRecoveryDialog";
-import { WorktreeDialog } from "./WorktreeDialog";
 import { AgentContextSwitcher } from "./AgentContextSwitcher";
 import {
   ProjectResourceEditorDialog,
@@ -121,7 +120,8 @@ export const ProjectsWorkspace = ({
   onEditorGuardChange,
   openRequest,
   editorGuardPromptOpen = false,
-  onConfigureRemoteDevices
+  onConfigureRemoteDevices,
+  onOpenWorktrees
 }: {
   initialProjects?: ProjectSummary[];
   onProjectsChange?(projects: ProjectSummary[]): void;
@@ -134,6 +134,7 @@ export const ProjectsWorkspace = ({
   openRequest?: { requestId: number; projectId: string };
   editorGuardPromptOpen?: boolean;
   onConfigureRemoteDevices?(): void;
+  onOpenWorktrees?(): void;
 }) => {
   const { t } = useI18n();
   const orderProjects = (items: ProjectSummary[]) =>
@@ -167,7 +168,6 @@ export const ProjectsWorkspace = ({
   const [modalError, setModalError] = useState("");
   const [projectMenu, setProjectMenu] = useState<ProjectMenuState>();
   const [removeCandidate, setRemoveCandidate] = useState<ProjectSummary>();
-  const [worktreesOpen, setWorktreesOpen] = useState(false);
   const initialSnapshot = uiState.selectedWorkspaceId
     ? projectSnapshotCache.get(uiState.selectedWorkspaceId)
     : undefined;
@@ -955,7 +955,6 @@ export const ProjectsWorkspace = ({
         help={<InfoTip label={t("Open recurring folders with an Agent and manage only the files owned by that folder.")} />}
         actions={(
           <ControlGroup>
-          <IconButton label={t("Worktrees")} variant="ghost" onClick={() => setWorktreesOpen(true)}><FolderGit2 size={17} /></IconButton>
           <Button
             ref={addMenuButtonRef}
             disabled={Boolean(operation)}
@@ -1099,7 +1098,7 @@ export const ProjectsWorkspace = ({
                         ? t("Copy SSH")
                         : t("Open")}
                     </Button>
-                    <IconButton label={t("Worktrees")} variant="ghost" onClick={() => setWorktreesOpen(true)}><FolderGit2 size={17} /></IconButton>
+                    {!selected.isRemote ? <IconButton label={t("Worktrees")} variant="ghost" onClick={onOpenWorktrees}><FolderGit2 size={17} /></IconButton> : null}
                     <div className="project-actions-menu-wrap">
                       <IconButton
                         ref={menuTriggerRef}
@@ -1342,7 +1341,6 @@ export const ProjectsWorkspace = ({
           )}
         </div>
       </SingleObjectWorkspace>
-      <WorktreeDialog open={worktreesOpen} onClose={() => setWorktreesOpen(false)} />
 
       {projectMenu ? (() => {
         const menuProject = projects.find((project) => project.id === projectMenu.projectId);

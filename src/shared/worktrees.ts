@@ -31,6 +31,7 @@ export interface WorktreeEntry {
 export interface WorktreeInventory {
   scanRoots: string[];
   configuredRoots: string[];
+  builtinRoots: string[];
   entries: WorktreeEntry[];
   issues: string[];
   incomplete: boolean;
@@ -44,6 +45,7 @@ export interface WorktreeCleanupPreview {
   checkedAt: string;
   backupRequired: boolean;
   forceRequired: boolean;
+  savedWorkspace: boolean;
 }
 
 export interface WorktreeRecoveryRecord {
