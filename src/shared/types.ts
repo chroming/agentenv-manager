@@ -144,6 +144,16 @@ export interface AgentEnvApi {
   selectTargetConfigRoot(targetId: string): Promise<string | undefined>;
   selectComparisonWorkspace(): Promise<string | undefined>;
   selectProjectFolder(): Promise<string | undefined>;
+  selectWorktreeScanRoot(): Promise<string | undefined>;
+  inventoryWorktrees(): Promise<import("./worktrees").WorktreeInventory>;
+  cancelWorktreeScan(): Promise<void>;
+  addWorktreeScanRoot(path: string): Promise<void>;
+  removeWorktreeScanRoot(path: string): Promise<void>;
+  setWorktreeKeep(commonDir: string, path: string, reason?: string): Promise<void>;
+  previewWorktreeCleanup(commonDir: string, path: string, allowDirty?: boolean): Promise<import("./worktrees").WorktreeCleanupPreview>;
+  removeWorktree(preview: import("./worktrees").WorktreeCleanupPreview): Promise<import("./worktrees").WorktreeRecoveryRecord>;
+  listWorktreeRecovery(): Promise<import("./worktrees").WorktreeRecoveryInventory>;
+  restoreWorktree(id: string): Promise<import("./worktrees").WorktreeRecoveryRecord>;
   selectConversationWorkspace(): Promise<string | undefined>;
   listProjects(): Promise<ProjectSummary[]>;
   findProjectByPath(rootPath: string, deviceId?: string): Promise<ProjectSummary | undefined>;

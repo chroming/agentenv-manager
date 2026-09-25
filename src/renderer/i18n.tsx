@@ -5502,3 +5502,50 @@ Object.assign(zhTW, {
   "A single comparison cannot establish consistent superiority. Missing metrics are unavailable, not zero.": "單次比較不能證明穩定優劣；缺失指標不可用，不代表零。",
   "Agent-controlled resources are not read. Analysis covers only this Profile's managed intent.": "不會讀取由 Agent 自行管理的資源，僅分析此 Profile 的受管設定意圖。"
 });
+
+Object.assign(zhCN, {
+  "Worktrees": "工作树", "Worktree recovery": "工作树恢复", "Working directories found in your local scan locations": "本机扫描位置中发现的工作目录",
+  "Back to Worktrees": "返回工作树", "Restore window size": "恢复窗口大小", "Maximize window": "最大化窗口",
+  "Add location": "添加位置", "Refresh Worktrees": "刷新工作树", "Review selected": "检查选中项",
+  "Scan locations": "扫描位置", "Remove scan location": "移除扫描位置", "Some locations could not be fully scanned": "部分位置未能完整扫描",
+  "Scanning Worktrees...": "正在扫描工作树…", "No Worktrees found": "未发现工作树",
+  "Add a scan location to look for local Git working directories.": "添加扫描位置以查找本机 Git 工作目录。",
+  "Detached HEAD": "游离 HEAD", "Main": "主工作目录", "Review clean": "检查清理", "Select Worktree for review": "选择要检查的工作树",
+  "No local file changes found. Review the purpose of this worktree before removing it.": "未发现本地文件变更。移除前请确认这个工作树的任务已完成。",
+  "Changed and untracked paths": "已修改和未跟踪路径", "Ignored paths": "已忽略路径", "Copy path": "复制路径",
+  "Remove {{count}} Worktrees?": "移除 {{count}} 个工作树？",
+  "Only working directories are removed. Git commits are retained; local-only files receive a verified recovery copy first.": "只移除工作目录并保留 Git 提交；包含本地独有文件时，会先保存并校验恢复副本。",
+  "Cleanup results": "清理结果", "No Worktree recovery points": "没有工作树恢复点", "Remove Worktrees": "移除工作树",
+  "Remove keep marker": "取消保留", "Keep Worktree": "保留工作树", "Review cleanup": "检查清理",
+  "I reviewed this worktree and want to remove its local contents after a verified recovery copy is saved.": "我已检查这个工作树，并同意在保存和校验恢复副本后移除本地内容。",
+  "These worktrees contain local files. Git will force-remove only the reviewed paths after their recovery copies are verified.": "这些工作树含有本地文件。校验恢复副本后，Git 仅强制移除已审核的路径。",
+  "Recovery copies of local-only files remain in AgentEnv data and may still use disk space.": "本地独有文件的恢复副本会保留在 AgentEnv 数据中，可能仍占用磁盘空间。",
+  "Review whether this work is complete. MR status and squash integration are not verified automatically.": "请确认这项工作是否完成。软件不会自动确认 MR 状态或 squash 合入结果。",
+  "Confirm each selected task is finished; code integration is not inferred from commit IDs.": "请确认选中任务均已完成；软件不会只凭提交编号判断代码已合入。",
+  "Some recovery records need review": "部分恢复记录需要检查", "Stop scanning": "停止扫描",
+  "From a saved Workspace": "来自已保存的工作区", "Restored": "已恢复", "Unchanged": "未变更", "Prepared": "已准备",
+  "Local files": "本地文件", "Last modified": "最近修改"
+});
+Object.assign(zhTW, {
+  "Worktrees": "工作樹", "Worktree recovery": "工作樹復原", "Working directories found in your local scan locations": "本機掃描位置中找到的工作目錄",
+  "Back to Worktrees": "返回工作樹", "Restore window size": "還原視窗大小", "Maximize window": "最大化視窗",
+  "Add location": "新增位置", "Refresh Worktrees": "重新整理工作樹", "Review selected": "檢查所選項目",
+  "Scan locations": "掃描位置", "Remove scan location": "移除掃描位置", "Some locations could not be fully scanned": "部分位置未能完整掃描",
+  "Scanning Worktrees...": "正在掃描工作樹…", "No Worktrees found": "找不到工作樹",
+  "Add a scan location to look for local Git working directories.": "新增掃描位置以尋找本機 Git 工作目錄。",
+  "Detached HEAD": "游離 HEAD", "Main": "主要工作目錄", "Review clean": "檢查清理", "Select Worktree for review": "選擇要檢查的工作樹",
+  "No local file changes found. Review the purpose of this worktree before removing it.": "未發現本機檔案變更。移除前請確認這個工作樹的任務已完成。",
+  "Changed and untracked paths": "已修改與未追蹤路徑", "Ignored paths": "已忽略路徑", "Copy path": "複製路徑",
+  "Remove {{count}} Worktrees?": "移除 {{count}} 個工作樹？",
+  "Only working directories are removed. Git commits are retained; local-only files receive a verified recovery copy first.": "只移除工作目錄並保留 Git 提交；包含本機獨有檔案時，會先儲存及驗證復原副本。",
+  "Cleanup results": "清理結果", "No Worktree recovery points": "沒有工作樹復原點", "Remove Worktrees": "移除工作樹",
+  "Remove keep marker": "取消保留", "Keep Worktree": "保留工作樹", "Review cleanup": "檢查清理",
+  "I reviewed this worktree and want to remove its local contents after a verified recovery copy is saved.": "我已檢查這個工作樹，並同意在儲存及驗證復原副本後移除本機內容。",
+  "These worktrees contain local files. Git will force-remove only the reviewed paths after their recovery copies are verified.": "這些工作樹含有本機檔案。驗證復原副本後，Git 僅強制移除已審核的路徑。",
+  "Recovery copies of local-only files remain in AgentEnv data and may still use disk space.": "本機獨有檔案的復原副本會保留在 AgentEnv 資料中，可能仍佔用磁碟空間。",
+  "Review whether this work is complete. MR status and squash integration are not verified automatically.": "請確認這項工作是否完成。軟體不會自動確認 MR 狀態或 squash 合入結果。",
+  "Confirm each selected task is finished; code integration is not inferred from commit IDs.": "請確認所選任務均已完成；軟體不會只憑提交編號判斷程式碼已合入。",
+  "Some recovery records need review": "部分復原紀錄需要檢查", "Stop scanning": "停止掃描",
+  "From a saved Workspace": "來自已儲存的工作區", "Restored": "已復原", "Unchanged": "未變更", "Prepared": "已準備",
+  "Local files": "本機檔案", "Last modified": "最近修改"
+});

@@ -315,6 +315,7 @@ describe("project mutation service", () => {
 
     const mockProjectStore = {
       listProjects: async () => [project],
+      listLocalRootPaths: async () => [],
       findProjectByPath: async () => project,
       addProject: async () => project,
       updateProject: async () => project,

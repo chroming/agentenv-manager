@@ -31,6 +31,7 @@ export interface ProjectStoreOptions extends PathOverrides {
 
 export interface ProjectStore {
   listProjects(): Promise<ProjectSummary[]>;
+  listLocalRootPaths(): Promise<string[]>;
   findProjectByPath(rootPath: string, deviceId?: string): Promise<ProjectSummary | undefined>;
   addProject(rootPathOrInput: string | AddProjectInput, name?: string): Promise<ProjectSummary>;
   updateProject(input: UpdateProjectInput): Promise<ProjectSummary>;
@@ -252,5 +253,11 @@ export const createProjectStore = (options: ProjectStoreOptions): ProjectStore =
     await writeStored({ ...stored, projects });
   };
 
-  return { listProjects, findProjectByPath, addProject, updateProject, removeProject };
+  return {
+    listProjects,
+    listLocalRootPaths: async () => (await readStored()).projects
+      .filter((project) => !project.deviceId)
+      .map((project) => project.rootPath),
+    findProjectByPath, addProject, updateProject, removeProject
+  };
 };

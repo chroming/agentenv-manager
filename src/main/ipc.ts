@@ -6,6 +6,8 @@ import type { BackupStore } from "./backupStore";
 import type { GitHubAuthService } from "./githubAuthService";
 import type { ProfileStore } from "./profileStore";
 import type { ProjectStore } from "./projects/projectStore";
+import type { WorktreeService } from "./worktrees/worktreeService";
+import { registerWorktreeIpc } from "./worktrees/worktreeIpc";
 import type { ProjectEnvironmentService } from "./projects/projectEnvironmentService";
 import type { ProjectLaunchService } from "./projects/projectLaunchService";
 import type { ProjectMutationService } from "./projects/projectMutationService";
@@ -89,6 +91,7 @@ import {
 export interface IpcServices {
   profileStore: ProfileStore;
   projectStore: ProjectStore;
+  worktreeService: WorktreeService;
   projectEnvironmentService: ProjectEnvironmentService;
   projectLaunchService: ProjectLaunchService;
   projectMutationService: ProjectMutationService;
@@ -132,6 +135,7 @@ const parseId = (value: unknown, label: string): string => {
 export const registerIpcHandlers = ({
   profileStore,
   projectStore,
+  worktreeService,
   projectEnvironmentService,
   projectLaunchService,
   projectMutationService,
@@ -286,10 +290,7 @@ export const registerIpcHandlers = ({
     });
   };
 
-  registerConversationIpc(
-    { diagnosticHandle },
-    { conversationService }
-  );
+  registerConversationIpc({ diagnosticHandle }, { conversationService });
   registerDialogIpc({ diagnosticHandle }, { targetRegistry });
   registerProjectIpc({ diagnosticHandle, handleMutation }, {
     projectEnvironmentService,
@@ -301,14 +302,12 @@ export const registerIpcHandlers = ({
     deviceStore: remoteDeviceStore,
     sshTransport
   });
+  registerWorktreeIpc({ diagnosticHandle, handleMutation }, worktreeService);
   registerAgentIpc({ diagnosticHandle, handleMutation }, {
     activationService, beforeForcedRefresh: waitForAutomationBackgroundDelay,
     remoteActivationService, targetDiscoveryService, targetRegistry
   });
-  registerSharedSkillAreaIpc(
-    { diagnosticHandle, handleMutation, handleWorkspaceSyncMutation },
-    { skillLibraryStore, resolveSharedSkillPaths }
-  );
+  registerSharedSkillAreaIpc({ diagnosticHandle, handleMutation, handleWorkspaceSyncMutation }, { skillLibraryStore, resolveSharedSkillPaths });
   registerInstructionIpc({ diagnosticHandle, handleMutation }, { backupStore, instructionLibraryStore, profileStore });
   registerSkillGroupIpc({ diagnosticHandle, handleMutation }, skillGroupStore);
   registerSkillRemovalIpc({ handleMutation }, {

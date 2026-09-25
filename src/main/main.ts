@@ -43,6 +43,7 @@ import { createProjectLaunchService } from "./projects/projectLaunchService";
 import { createProjectMutationService } from "./projects/projectMutationService";
 import { createProjectRecoveryStore } from "./projects/projectRecoveryStore";
 import { createProjectGitService } from "./projects/projectGitService";
+import { createWorktreeService } from "./worktrees/worktreeService";
 import { createSettingsStore } from "./settingsStore";
 import { createSkillLibraryStore } from "./skillLibraryStore";
 import { createInstructionLibraryStore } from "./instructionLibraryStore";
@@ -984,6 +985,21 @@ const createServices = async (
       return projectGitRunner;
     }
   });
+  const worktreeService = createWorktreeService({
+    appDataRoot: paths.appDataRoot,
+    projectStore,
+    resolveRunner: async () => {
+      if (projectGitRunner) return projectGitRunner;
+      const executablePath = await findExecutable("git", {
+        environment: process.env,
+        homeDir: paths.homeDir,
+        platform: process.platform
+      });
+      if (!executablePath) return undefined;
+      projectGitRunner = createGitCommandRunner({ executablePath });
+      return projectGitRunner;
+    }
+  });
   const projectEnvironmentService = createProjectEnvironmentService({
     projectStore,
     targetRegistry,
@@ -1266,6 +1282,7 @@ const createServices = async (
     paths,
     profileStore,
     projectStore,
+    worktreeService,
     uiStateStore,
     remoteDeviceStore,
     sshTransport,

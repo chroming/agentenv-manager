@@ -269,6 +269,21 @@ Quick Open is a navigation accelerator, not a second command model.
 A Workspace is a device-local reference to a real working directory. It is not an
 AgentEnv-owned copy of the folder and does not require Git.
 
+Worktree cleanup is a separate local inventory reached from Workspaces. Its saved scan
+locations and keep decisions are device-local and do not create Workspace references.
+Git's worktree registration is the source of truth for linked and main worktrees;
+directory names alone are never proof. The inventory reports its scan scope and failures.
+Removing a Workspace reference never removes a worktree. A worktree cleanup preview
+identifies the exact directory and retains its branch, repository, and Conversations.
+Cleanup requires a fresh Git check before invoking `git worktree remove`. Clean trees
+retain their exact commit through a recovery ref without duplicating their files. Dirty
+or ignored-content trees require a verified full recovery copy and individual review
+and explicit consent before Git's force option can be used; they never enter batch
+selection. Main, locked, missing, and submodule worktrees are not cleanup candidates.
+Detached commits without another ref receive a recovery ref before removal.
+An operation cannot claim success until the directory and Git registration are both
+verified absent. Recovery must not overwrite a path created after cleanup.
+
 - AgentEnv persists only the Workspace ID, canonical root path, display name, creation and
   last-opened times, and last-used Agent. Workspace resources remain canonical in the selected
   directory. Removing a Workspace removes only this reference and MUST NOT remove, move, rewrite,

@@ -119,6 +119,112 @@
   width: min(760px, calc(100vw - 64px));
 }
 
+.worktree-dialog {
+  height: auto;
+  max-height: min(700px, calc(100vh - 48px));
+}
+
+.worktree-dialog__body {
+  display: block;
+}
+
+.worktree-dialog__toolbar,
+.worktree-dialog__group-title,
+.worktree-dialog__working {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.worktree-dialog__toolbar {
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.worktree-dialog__locations {
+  align-items: center;
+  color: var(--text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.worktree-dialog__location {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-1);
+  max-width: 100%;
+}
+
+.worktree-dialog__location > span {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worktree-dialog__working {
+  color: var(--text-secondary);
+  min-height: 36px;
+}
+
+.worktree-dialog__group + .worktree-dialog__group {
+  margin-top: var(--space-4);
+}
+
+.worktree-dialog__group-title {
+  color: var(--text-secondary);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+}
+
+.worktree-dialog__group-title > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worktree-dialog__group-title > span:last-child {
+  margin-left: auto;
+}
+
+.worktree-dialog__detail {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.worktree-dialog__detail h3,
+.worktree-dialog__detail h4,
+.worktree-dialog__detail p {
+  margin: 0;
+}
+
+.worktree-dialog__detail pre {
+  background: var(--surface-muted);
+  max-height: 220px;
+  overflow: auto;
+  padding: var(--space-3);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.worktree-dialog__confirmation {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--space-2);
+  line-height: var(--line-height-body);
+}
+
+@media (max-width: 760px) {
+  .worktree-dialog__toolbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
 .project-recovery-dialog__body {
   max-height: 400px;
   min-height: 0;
@@ -513,4 +619,3 @@
 .remote-directory-browser__item-open:hover {
   color: var(--text);
 }
-

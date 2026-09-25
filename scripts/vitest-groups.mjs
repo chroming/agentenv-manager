@@ -16,7 +16,8 @@ export const electronE2eTestFiles = [
   "tests/e2e/remoteProfileEndpoint.e2e.test.ts",
   "tests/e2e/repositorySkillSource.e2e.test.ts",
   "tests/e2e/startupRecovery.e2e.test.ts",
-  "tests/e2e/workspaceSync.e2e.test.ts"
+  "tests/e2e/workspaceSync.e2e.test.ts",
+  "tests/e2e/worktrees.e2e.test.ts"
 ];
 
 export const heavyElectronE2eTestFile =
@@ -27,4 +28,4 @@ export const exclusiveElectronE2eTestNames = [
 ];
 
 export const electronE2eExcludeGlob =
-  "**/tests/e2e/{aiAssistance,aiServiceSettings,conversations,conversationHistorySearch,desktopShell,desktopRefreshLayout,electronAppUpdates,electronUiProfileSwitching,instructions,profileEvaluation,projects,remoteProfileEndpoint,repositorySkillSource,skillReadReliability,skillSummaries,skillTagSuggestions,startupRecovery,workspaceSync}.e2e.test.ts";
+  "**/tests/e2e/{aiAssistance,aiServiceSettings,conversations,conversationHistorySearch,desktopShell,desktopRefreshLayout,electronAppUpdates,electronUiProfileSwitching,instructions,profileEvaluation,projects,remoteProfileEndpoint,repositorySkillSource,skillReadReliability,skillSummaries,skillTagSuggestions,startupRecovery,workspaceSync,worktrees}.e2e.test.ts";

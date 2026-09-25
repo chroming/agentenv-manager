@@ -149,7 +149,8 @@ const installApi = () => {
       status: "saved",
       results: [{ libraryId: "testing", status: "saved", contentHash: "added" }]
     }),
-    removeProjectSkill: vi.fn().mockResolvedValue({ status: "saved", contentHash: "absent" })
+    removeProjectSkill: vi.fn().mockResolvedValue({ status: "saved", contentHash: "absent" }),
+    cancelWorktreeScan: vi.fn().mockResolvedValue(undefined)
   };
   Object.defineProperty(window, "agentEnv", {
     configurable: true,
