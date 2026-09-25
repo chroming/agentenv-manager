@@ -83,4 +83,29 @@ describe("WorktreeDialog", () => {
     await waitFor(() => expect(api.listWorktreeRecovery).toHaveBeenCalledOnce());
     expect(screen.getByText("No Worktree recovery points")).toBeInTheDocument();
   });
+
+  it("distinguishes an empty filter from an empty inventory", async () => {
+    const api = installApi();
+    api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [{ ...clean, state: "candidate" }] });
+    render(<WorktreeWorkspace />);
+    await screen.findByText("/projects/_worktrees/clean");
+    expect(screen.getByText("Clean")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Kept" }));
+    expect(screen.getByText("No kept Worktrees")).toBeInTheDocument();
+    expect(screen.queryByText("No Worktrees found")).not.toBeInTheDocument();
+  });
+
+  it("does not offer Restore for an interrupted cleanup", async () => {
+    const api = installApi();
+    api.listWorktreeRecovery.mockResolvedValue({ records: [{
+      id: "recovery-1", path: "/projects/_worktrees/clean", repositoryPath: "/projects/app",
+      head: "a".repeat(40), createdAt: inventory.scannedAt, status: "prepared"
+    }], issues: [] });
+    render(<WorktreeWorkspace />);
+    await screen.findByText("/projects/_worktrees/clean");
+    fireEvent.click(screen.getByRole("button", { name: "Worktree recovery" }));
+    await screen.findByText("Cleanup interrupted");
+    expect(screen.queryByRole("button", { name: "Restore" })).not.toBeInTheDocument();
+    expect(screen.getByText(/original folder and Git registration/)).toBeInTheDocument();
+  });
 });

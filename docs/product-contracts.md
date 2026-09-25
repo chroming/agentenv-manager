@@ -279,6 +279,8 @@ Git's worktree registration is the source of truth for linked and main worktrees
 directory names alone are never proof. The inventory reports its scan scope and failures.
 Removing a Workspace reference never removes a worktree. A worktree cleanup preview
 identifies the exact directory and retains its branch, repository, and Conversations.
+It warns when any saved local Workspace is inside the directory being removed, including
+a Workspace rooted in a subdirectory; the Workspace shortcut itself is preserved.
 Cleanup requires a fresh Git check before invoking `git worktree remove`. Clean trees
 retain their exact commit through a recovery ref without duplicating their files. Dirty
 or ignored-content trees require a verified full recovery copy and individual review
@@ -287,6 +289,10 @@ selection. Main, locked, missing, and submodule worktrees are not cleanup candid
 Detached commits without another ref receive a recovery ref before removal.
 An operation cannot claim success until the directory and Git registration are both
 verified absent. Recovery must not overwrite a path created after cleanup.
+Interrupted cleanup records are reconciled against the original directory and Git
+registration before Restore is offered. An interrupted restore can continue only when
+the partially restored directory still matches the recorded attempt; otherwise the
+recovery copy is retained for manual inspection without overwriting new changes.
 
 - AgentEnv persists only the Workspace ID, canonical root path, display name, creation and
   last-opened times, and last-used Agent. Workspace resources remain canonical in the selected

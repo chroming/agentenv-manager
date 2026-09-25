@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -37,7 +37,7 @@ const fixture = async () => {
     resolveRunner: async () => runner
   });
   await service.addScanRoot(root);
-  return { root, repo, linked, service };
+  return { root, repo, linked, runner, service };
 };
 
 describe("worktree inventory and cleanup", () => {
@@ -117,17 +117,129 @@ describe("worktree inventory and cleanup", () => {
 
   it("reports when cleanup would leave a saved Workspace pointing at a removed folder", async () => {
     const { root, linked } = await fixture();
+    const alias = join(root, "workspace-alias");
+    await symlink(linked, alias, "dir");
+    let savedRoots = [join(linked, "nested", "project")];
     const gitPath = await findExecutable("git", {
       environment: process.env, homeDir: homedir(), platform: process.platform
     });
     if (!gitPath) throw new Error("Git is required for the worktree fixture");
     const service = createWorktreeService({
       appDataRoot: join(root, "workspace-data"), homeDir: join(root, "home"),
-      projectStore: { listLocalRootPaths: async () => [linked] } as unknown as ProjectStore,
+      projectStore: { listLocalRootPaths: async () => savedRoots } as unknown as ProjectStore,
       resolveRunner: async () => createGitCommandRunner({ executablePath: gitPath })
     });
+    await service.addScanRoot(root);
     const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
     expect((await service.preview(entry.commonDir, linked)).savedWorkspace).toBe(true);
+    savedRoots = [alias];
+    expect((await service.preview(entry.commonDir, linked)).savedWorkspace).toBe(true);
+  });
+
+  it("does not offer Restore when cleanup stopped before removing a changed original", async () => {
+    const { root, linked, runner } = await fixture();
+    let changed = false;
+    const service = createWorktreeService({
+      appDataRoot: join(root, "data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
+      resolveRunner: async () => ({ ...runner, run: async (args, options) => {
+        const result = await runner.run(args, options);
+        if (!changed && args[0] === "update-ref") {
+          changed = true;
+          await writeFile(join(linked, "README.md"), "external change\n");
+        }
+        return result;
+      } })
+    });
+    await service.addScanRoot(root);
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    await expect(service.remove(await service.preview(entry.commonDir, linked)))
+      .rejects.toThrow("changed after backup");
+    const pending = (await service.listRecovery()).records[0];
+    expect(pending.status).toBe("prepared");
+    await expect(service.restore(pending.id)).rejects.toThrow("Cleanup is incomplete");
+    expect(await readFile(join(linked, "README.md"), "utf8")).toBe("external change\n");
+    await writeFile(join(linked, "README.md"), "base\n");
+    expect((await service.listRecovery()).records[0].status).toBe("unchanged");
+  });
+
+  it("resumes a partial restore only while its files remain unchanged", async () => {
+    const { root, linked, runner, service } = await fixture();
+    await writeFile(join(linked, "note.txt"), "important\n");
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const removed = await service.remove(await service.preview(entry.commonDir, linked, true));
+    let interrupted = false;
+    const resuming = createWorktreeService({
+      appDataRoot: join(root, "data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
+      resolveRunner: async () => ({ ...runner, run: async (args, options) => {
+        const result = await runner.run(args, options);
+        if (!interrupted && args[0] === "worktree" && args[1] === "add") {
+          interrupted = true;
+          throw new Error("Simulated interruption after checkout");
+        }
+        return result;
+      } })
+    });
+    await expect(resuming.restore(removed.id)).rejects.toThrow("Simulated interruption");
+    expect((await resuming.listRecovery()).records[0]).toMatchObject({
+      status: "restoring", restoreAttemptHash: expect.stringMatching(/^[0-9a-f]{64}$/)
+    });
+    await writeFile(join(linked, "external.txt"), "do not overwrite\n");
+    await expect(resuming.restore(removed.id)).rejects.toThrow("unverified files");
+    expect(await readFile(join(linked, "external.txt"), "utf8")).toBe("do not overwrite\n");
+    await rm(join(linked, "external.txt"));
+    expect((await resuming.restore(removed.id)).status).toBe("restored");
+    expect(await readFile(join(linked, "note.txt"), "utf8")).toBe("important\n");
+  });
+
+  it("recognizes a removal completed before its result was recorded", async () => {
+    const { root, linked, runner } = await fixture();
+    let interrupted = false;
+    const service = createWorktreeService({
+      appDataRoot: join(root, "data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
+      resolveRunner: async () => ({ ...runner, run: async (args, options) => {
+        const result = await runner.run(args, options);
+        if (!interrupted && args[0] === "worktree" && args[1] === "remove") {
+          interrupted = true;
+          throw new Error("Simulated interruption after removal");
+        }
+        return result;
+      } })
+    });
+    await service.addScanRoot(root);
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    await expect(service.remove(await service.preview(entry.commonDir, linked)))
+      .rejects.toThrow("needs recovery");
+    const record = (await service.listRecovery()).records[0];
+    expect(record.status).toBe("removed");
+    expect((await service.restore(record.id)).status).toBe("restored");
+    expect(await readFile(join(linked, "README.md"), "utf8")).toBe("base\n");
+  });
+
+  it("can finish restoring staged files after an interrupted index copy", async () => {
+    const { root, linked, runner, service } = await fixture();
+    await writeFile(join(linked, "README.md"), "staged\n");
+    await run("git", ["-C", linked, "add", "README.md"]);
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const removed = await service.remove(await service.preview(entry.commonDir, linked, true));
+    let interrupted = false;
+    const resuming = createWorktreeService({
+      appDataRoot: join(root, "data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
+      resolveRunner: async () => ({ ...runner, run: async (args, options) => {
+        if (!interrupted && args[0] === "rev-parse" && args[1] === "--git-dir" && options?.cwd === linked) {
+          interrupted = true;
+          throw new Error("Simulated interruption before index copy");
+        }
+        return runner.run(args, options);
+      } })
+    });
+    await expect(resuming.restore(removed.id)).rejects.toThrow("Simulated interruption");
+    expect((await resuming.listRecovery()).records[0].status).toBe("restoring");
+    expect((await resuming.restore(removed.id)).status).toBe("restored");
+    expect((await run("git", ["-C", linked, "status", "--porcelain=v1"])).stdout).toContain("M  README.md");
   });
 
   it("requires explicit dirty review and restores both files and staged state", async () => {

@@ -99,6 +99,10 @@ describe("Worktrees desktop workflow", () => {
     await workspace.getByText(/Removed: .*review-change/).waitFor();
     await workspace.getByRole("button", { name: "Worktrees", exact: true }).click();
     await workspace.getByRole("button", { name: "Worktree recovery" }).click();
+    await workspace.getByText("Removed", { exact: true }).waitFor();
+    if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) {
+      await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, "worktrees-recovery-920.png") });
+    }
     await workspace.getByRole("button", { name: "Restore", exact: true }).click();
     await expect.poll(() => readFile(join(linked, "README.md"), "utf8")).toBe("base\n");
   }, 90_000);

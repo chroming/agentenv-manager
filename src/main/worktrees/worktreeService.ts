@@ -28,10 +28,12 @@ const RecoverySchema = z.object({
   head: z.string().regex(/^[0-9a-f]{40,64}$/),
   branch: z.string().optional(),
   createdAt: z.string(),
-  status: z.enum(["prepared", "removed", "restored", "unchanged"]),
+  status: z.enum(["prepared", "removed", "restoring", "restored", "unchanged"]),
   protectedRef: z.string().optional(),
   backupHash: z.string().length(64).optional(),
-  indexHash: z.string().length(64).optional()
+  indexHash: z.string().length(64).optional(),
+  sourceHash: z.string().length(64).optional(),
+  restoreAttemptHash: z.string().length(64).optional()
 }).strict();
 
 const MAX_DIRECTORIES = 5_000;
@@ -399,8 +401,14 @@ export const createWorktreeService = ({
         throw new Error(`Review this worktree before cleanup: ${entry.reasons.join("; ") || entry.state}`);
       }
       const contentHash = await hashWorktreeTree(entry.path);
-      const savedWorkspace = (await projectStore.listLocalRootPaths())
-        .some((root) => resolve(root) === entry.path);
+      const savedRoots = await projectStore.listLocalRootPaths();
+      const savedWorkspace = (await Promise.all(savedRoots.map(async (root) => {
+        const canonical = await realpath(root).catch((error) => {
+          if (isMissingFileError(error)) return resolve(root);
+          throw error;
+        });
+        return isWithin(entry.path, canonical);
+      }))).some(Boolean);
       const previewId = randomUUID();
       issuedPreviews.set(previewId, {
         commonDir, path, fingerprint: contentHash,
@@ -435,7 +443,7 @@ export const createWorktreeService = ({
       const record: WorktreeRecoveryRecord = {
         id: randomUUID(), path: fresh.path, repositoryPath: fresh.repositoryPath,
         head: fresh.head!, branch: fresh.branch, createdAt: new Date().toISOString(),
-        status: "prepared"
+        status: "prepared", sourceHash: preview.fingerprint
       };
       const backup = backupPath(record.id);
       const runner = await git();
@@ -498,12 +506,37 @@ export const createWorktreeService = ({
       try {
         const files = (await readdir(recoveryRoot)).filter((name) => /^[0-9a-f-]{36}\.json$/.test(name));
         const results = await Promise.allSettled(files.map((name) => readRecovery(name.slice(0, -5))));
+        const issues: string[] = [];
+        const records: WorktreeRecoveryRecord[] = [];
+        for (const [index, result] of results.entries()) {
+          if (result.status === "rejected") {
+            issues.push(`${files[index]}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
+            continue;
+          }
+          let record = result.value;
+          if (record.status === "prepared") {
+            try {
+              const runner = await git();
+              const registration = await readRegistration(runner, record.repositoryPath);
+              const registered = registration.some((item) => resolve(item.path) === record.path);
+              const exists = await pathExists(record.path);
+              if (!registered && !exists) {
+                record = { ...record, status: "removed" };
+                await saveRecovery(record);
+              } else if (registered && exists && record.sourceHash &&
+                         await hashWorktreeTree(record.path) === record.sourceHash) {
+                record = { ...record, status: "unchanged" };
+                await saveRecovery(record);
+              }
+            } catch (error) {
+              issues.push(`${record.path}: ${error instanceof Error ? error.message : String(error)}`);
+            }
+          }
+          records.push(record);
+        }
         return {
-          records: results.flatMap((result) => result.status === "fulfilled" ? [result.value] : [])
-            .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
-          issues: results.flatMap((result, index) => result.status === "rejected"
-            ? [`${files[index]}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`]
-            : [])
+          records: records.sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+          issues
         };
       } catch (error) {
         if (isMissingFileError(error)) return { records: [], issues: [] };
@@ -511,12 +544,10 @@ export const createWorktreeService = ({
       }
     },
     restore: async (id) => {
-      const record = await readRecovery(id);
+      let record = await readRecovery(id);
       if (record.status === "restored") return record;
       if (record.status === "unchanged") throw new Error("This worktree was not removed; the original directory is still present");
-      if (await lstat(record.path).then(() => true, (error) => !isMissingFileError(error))) {
-        throw new Error("The original path is occupied. Recovery will not overwrite it.");
-      }
+      if (record.status === "prepared") throw new Error("Cleanup is incomplete. Check the original directory and Git registration before restoring.");
       const backup = backupPath(record.id);
       if (record.backupHash && await hashWorktreeTree(backup) !== record.backupHash) {
         throw new Error("Worktree recovery copy failed its integrity check");
@@ -527,49 +558,82 @@ export const createWorktreeService = ({
       }
       const runner = await git();
       const registration = await readRegistration(runner, record.repositoryPath);
-      if (registration.some((item) => resolve(item.path) === record.path)) {
-        throw new Error("Git still registers this worktree. Inspect it before recovery.");
-      }
-      let useBranch = false;
-      if (record.branch) {
-        const currentBranch = await runner.run(["rev-parse", "--verify", `refs/heads/${record.branch}`], {
-          cwd: record.repositoryPath, timeoutMs: 8_000, maxOutputBytes: 100_000
-        }).then((result) => result.stdout.trim(), () => undefined);
-        useBranch = currentBranch === record.head;
-      }
-      await runner.run(["worktree", "add", ...(useBranch ? [] : ["--detach"]),
-        record.path, useBranch ? record.branch! : record.head], {
-        cwd: record.repositoryPath, timeoutMs: 60_000, maxOutputBytes: 1_000_000
-      });
-      if (record.backupHash) {
-        for (const file of await readdir(backup)) {
-          if (file === ".git") continue;
-          await cp(join(backup, file), join(record.path, file), {
-            recursive: true, force: true, dereference: false, verbatimSymlinks: true,
-            preserveTimestamps: true
-          });
+      const isRegistered = registration.some((item) => resolve(item.path) === record.path);
+      const exists = await pathExists(record.path);
+      if (exists || isRegistered) {
+        if (record.status !== "restoring" || !record.restoreAttemptHash || !exists || !isRegistered ||
+            await hashWorktreeTree(record.path) !== record.restoreAttemptHash) {
+          throw new Error("The recovery path contains unverified files or Git registration. Nothing was overwritten; inspect it before retrying.");
         }
-      }
-      if (record.indexHash) {
-        const gitDirOutput = await runner.run(["rev-parse", "--git-dir"], {
-          cwd: record.path, timeoutMs: 8_000, maxOutputBytes: 32_000
-        });
-        await cp(join(recoveryRoot, id, "index"), resolve(record.path, gitDirOutput.stdout.trim(), "index"));
-      }
-      if (record.backupHash) {
-        if (await hashWorktreeTree(record.path, { omitGitFile: true }) !==
-            await hashWorktreeTree(backup, { omitGitFile: true })) {
-          throw new Error("Restored files need review. The recovery copy remains available.");
-        }
-      } else {
-        const restoredHead = await runner.run(["rev-parse", "HEAD"], {
+        const currentHead = await runner.run(["rev-parse", "HEAD"], {
           cwd: record.path, timeoutMs: 8_000, maxOutputBytes: 100_000
         });
-        if (restoredHead.stdout.trim() !== record.head) {
-          throw new Error("Restored Git commit does not match the recovery point");
+        if (currentHead.stdout.trim() !== record.head) {
+          throw new Error("The recovery worktree changed commit. Nothing was overwritten; inspect it before retrying.");
+        }
+      } else {
+        record = { ...record, status: "restoring", restoreAttemptHash: undefined };
+        await saveRecovery(record);
+        try {
+          let useBranch = false;
+          if (record.branch) {
+            const currentBranch = await runner.run(["rev-parse", "--verify", `refs/heads/${record.branch}`], {
+              cwd: record.repositoryPath, timeoutMs: 8_000, maxOutputBytes: 100_000
+            }).then((result) => result.stdout.trim(), () => undefined);
+            useBranch = currentBranch === record.head;
+          }
+          await runner.run(["worktree", "add", ...(useBranch ? [] : ["--detach"]),
+            record.path, useBranch ? record.branch! : record.head], {
+            cwd: record.repositoryPath, timeoutMs: 60_000, maxOutputBytes: 1_000_000
+          });
+          record = { ...record, restoreAttemptHash: await hashWorktreeTree(record.path) };
+          await saveRecovery(record);
+        } catch (error) {
+          if (await pathExists(record.path)) {
+            const current = await readRegistration(runner, record.repositoryPath);
+            if (current.some((item) => resolve(item.path) === record.path)) {
+              record = { ...record, restoreAttemptHash: await hashWorktreeTree(record.path) };
+              await saveRecovery(record);
+            }
+          }
+          throw error;
         }
       }
-      const restored = { ...record, status: "restored" as const };
+      try {
+        if (record.backupHash) {
+          for (const file of await readdir(backup)) {
+            if (file === ".git") continue;
+            await cp(join(backup, file), join(record.path, file), {
+              recursive: true, force: true, dereference: false, verbatimSymlinks: true,
+              preserveTimestamps: true
+            });
+          }
+        }
+        if (record.indexHash) {
+          const gitDirOutput = await runner.run(["rev-parse", "--git-dir"], {
+            cwd: record.path, timeoutMs: 8_000, maxOutputBytes: 32_000
+          });
+          await cp(join(recoveryRoot, id, "index"), resolve(record.path, gitDirOutput.stdout.trim(), "index"));
+        }
+        if (record.backupHash) {
+          if (await hashWorktreeTree(record.path, { omitGitFile: true }) !==
+              await hashWorktreeTree(backup, { omitGitFile: true })) {
+            throw new Error("Restored files need review. The recovery copy remains available.");
+          }
+        } else {
+          const restoredHead = await runner.run(["rev-parse", "HEAD"], {
+            cwd: record.path, timeoutMs: 8_000, maxOutputBytes: 100_000
+          });
+          if (restoredHead.stdout.trim() !== record.head) {
+            throw new Error("Restored Git commit does not match the recovery point");
+          }
+        }
+      } catch (error) {
+        record = { ...record, restoreAttemptHash: await hashWorktreeTree(record.path) };
+        await saveRecovery(record);
+        throw error;
+      }
+      const restored = { ...record, status: "restored" as const, restoreAttemptHash: undefined };
       await saveRecovery(restored);
       return restored;
     }

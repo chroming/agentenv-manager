@@ -55,10 +55,12 @@ export interface WorktreeRecoveryRecord {
   head: string;
   branch?: string;
   createdAt: string;
-  status: "prepared" | "removed" | "restored" | "unchanged";
+  status: "prepared" | "removed" | "restoring" | "restored" | "unchanged";
   protectedRef?: string;
   backupHash?: string;
   indexHash?: string;
+  sourceHash?: string;
+  restoreAttemptHash?: string;
 }
 
 export interface WorktreeRecoveryInventory {
